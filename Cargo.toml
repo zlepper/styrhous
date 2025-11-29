@@ -6,3 +6,9 @@ edition = "2024"
 [dependencies]
 eframe = "0.33"
 egui = "0.33"
+kube = "2.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+tokio = { version = "1.48", features = ["rt-multi-thread"] }
+k8s-openapi = { version = "0.26", features = ["v1_31"] }
+anyhow = "1.0"
