@@ -157,6 +157,7 @@ pub struct TailwindCombobox<Filter> {
     id_salt: Id,
     label: Option<WidgetText>,
     placeholder: Option<String>,
+    selected_text: Option<String>,
     width: Option<f32>,
     filter: Filter,
 }
@@ -168,6 +169,7 @@ impl TailwindCombobox<NoFilter> {
             id_salt: Id::new(id_salt),
             label: None,
             placeholder: None,
+            selected_text: None,
             width: None,
             filter: NoFilter,
         }
@@ -180,6 +182,7 @@ impl TailwindCombobox<NoFilter> {
             id_salt: Id::new(label.text()),
             label: Some(label),
             placeholder: None,
+            selected_text: None,
             width: None,
             filter: NoFilter,
         }
@@ -203,6 +206,7 @@ impl TailwindCombobox<NoFilter> {
             id_salt: self.id_salt,
             label: self.label,
             placeholder: self.placeholder,
+            selected_text: self.selected_text,
             width: self.width,
             filter: WithFilter(filter_fn),
         }
@@ -213,6 +217,16 @@ impl<Filter> TailwindCombobox<Filter> {
     /// Set the placeholder text shown when the input is empty
     pub fn placeholder(mut self, placeholder: impl Into<String>) -> Self {
         self.placeholder = Some(placeholder.into());
+        self
+    }
+
+    /// Set the text displayed when the combobox is closed
+    ///
+    /// This is typically used to show a summary of selected items (e.g., "ns1, ns2, ns3"
+    /// or "3 items selected"). When the dropdown opens, this text is replaced by a
+    /// search input field.
+    pub fn selected_text(mut self, text: impl Into<String>) -> Self {
+        self.selected_text = Some(text.into());
         self
     }
 
@@ -245,6 +259,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             id_salt,
             label,
             placeholder,
+            selected_text,
             width,
             filter: WithFilter(filter_fn),
         } = self;
@@ -263,13 +278,24 @@ impl<F> TailwindCombobox<WithFilter<F>> {
 
         // Render the input field with chevron
         let width = width.unwrap_or(DEFAULT_WIDTH);
-        // First pass: render without knowing is_open state (affects focus ring only)
-        let input_response =
-            Self::render_input(ui, &mut state, width, false, placeholder.as_deref());
 
-        // Get popup_id from the rendered response
+        // Precompute expected popup ID to check if open before rendering
+        // This allows us to show selected_text when closed vs filter input when open
+        let base_id = ui.make_persistent_id(id_salt);
+        let expected_popup_id = base_id.with("popup");
+        let is_open = Popup::is_id_open(ui.ctx(), expected_popup_id);
+
+        let input_response = Self::render_input(
+            ui,
+            &mut state,
+            width,
+            is_open,
+            placeholder.as_deref(),
+            selected_text.as_deref(),
+        );
+
+        // Get popup_id from the rendered response (should match our precomputed one)
         let popup_id = Popup::default_response_id(&input_response);
-        let is_open = Popup::is_id_open(ui.ctx(), popup_id);
 
         // Handle keyboard navigation
         let enter_pressed = Self::handle_keyboard(ui, &mut state, is_open, popup_id);
@@ -326,6 +352,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
         width: f32,
         is_open: bool,
         placeholder: Option<&str>,
+        selected_text: Option<&str>,
     ) -> Response {
         let corner_radius = CornerRadius::same(CORNER_RADIUS);
 
@@ -375,12 +402,44 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             icons::chevron_down(&mut icon_ui, ICON_SIZE, gray::_400);
         }
 
-        // Text input area (inside the rect)
+        // Text area (inside the rect)
         let input_rect = Rect::from_min_max(
             rect.min + Vec2::new(INPUT_PADDING_X, 0.0),
             rect.max - Vec2::new(ICON_AREA_WIDTH, 0.0), // Leave space for chevron
         );
 
+        // When closed and we have selected_text, show it as a label
+        // When open, show the filter text input
+        if !is_open {
+            if let Some(text) = selected_text {
+                if !text.is_empty() {
+                    // Draw the selected text as a label (truncated if needed)
+                    let text_pos = input_rect.left_center();
+                    let galley = ui.painter().layout(
+                        text.to_string(),
+                        FontId::proportional(FONT_SIZE),
+                        gray::_900,
+                        input_rect.width(),
+                    );
+                    ui.painter().galley(text_pos - Vec2::new(0.0, galley.size().y / 2.0), galley, gray::_900);
+                    return response;
+                }
+            }
+            // Fall through to show placeholder or empty input
+            if let Some(placeholder) = placeholder {
+                let text_pos = input_rect.left_center();
+                ui.painter().text(
+                    text_pos,
+                    Align2::LEFT_CENTER,
+                    placeholder,
+                    FontId::proportional(FONT_SIZE),
+                    gray::_400,
+                );
+            }
+            return response;
+        }
+
+        // When open, show the filter text input
         let mut input_ui = ui.new_child(
             egui::UiBuilder::new()
                 .max_rect(input_rect)
@@ -399,6 +458,13 @@ impl<F> TailwindCombobox<WithFilter<F>> {
         }
 
         let text_response = input_ui.add(text_edit);
+
+        // Request focus on the text input when opening
+        if !state.filter_text.is_empty() || text_response.gained_focus() {
+            // Keep focus
+        } else {
+            text_response.request_focus();
+        }
 
         // Merge responses - Popup::menu will handle opening based on click state
         response | text_response

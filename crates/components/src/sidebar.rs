@@ -160,7 +160,7 @@ impl<'a> SidebarContentCore<'a> {
         let text = text.into();
         let text_str = text.text();
 
-        let (_, inner_rect, response) = allocate_item(self.ui, self.item_height);
+        let (rect, inner_rect, response) = allocate_item(self.ui, self.item_height);
         let colors = ItemColors::navigation(selected, response.hovered());
 
         draw_background(self.ui.painter(), inner_rect, colors.background);
@@ -169,7 +169,8 @@ impl<'a> SidebarContentCore<'a> {
             render_icon(self.ui, icon_rect_wide(inner_rect, self.item_height), icon, colors.icon);
             render_text(self.ui.painter(), text_pos_after_icon(inner_rect, self.item_height), text_str, colors.text);
         } else {
-            render_icon(self.ui, icon_rect_centered(inner_rect), icon, colors.icon);
+            // For narrow mode, center icon within full rect (not inner_rect)
+            render_icon(self.ui, icon_rect_centered(rect), icon, colors.icon);
         }
 
         add_button_accessibility(&response, self.ui, text_str);
@@ -180,7 +181,7 @@ impl<'a> SidebarContentCore<'a> {
         let text = text.into();
         let text_str = text.text();
 
-        let (_, inner_rect, response) = allocate_item(self.ui, self.item_height);
+        let (rect, inner_rect, response) = allocate_item(self.ui, self.item_height);
         let colors = ItemColors::navigation(selected, response.hovered());
 
         draw_background(self.ui.painter(), inner_rect, colors.background);
@@ -191,7 +192,8 @@ impl<'a> SidebarContentCore<'a> {
             render_avatar(self.ui.painter(), avatar_center, initial);
             render_text(self.ui.painter(), text_pos_after_icon(inner_rect, self.item_height), text_str, colors.text);
         } else {
-            render_avatar(self.ui.painter(), inner_rect.center(), initial);
+            // For narrow mode, center avatar within full rect (not inner_rect)
+            render_avatar(self.ui.painter(), rect.center(), initial);
         }
 
         add_button_accessibility(&response, self.ui, text_str);
@@ -218,8 +220,9 @@ fn render_sidebar<R>(
     default_width: f32,
     add_contents: impl FnOnce(&mut Ui) -> R,
 ) -> R {
-    let width = width.unwrap_or(default_width);
     let rect = ui.available_rect_before_wrap();
+    // Use specified width, or available width capped at default (handles being inside a SidePanel)
+    let width = width.unwrap_or_else(|| rect.width().min(default_width));
     let sidebar_rect = egui::Rect::from_min_size(rect.min, Vec2::new(width, rect.height()));
     ui.painter().rect_filled(sidebar_rect, 0.0, WHITE);
 
@@ -530,6 +533,19 @@ mod tests {
         });
 
         harness.snapshot("sidebar_narrow");
+    }
+
+    #[test]
+    fn test_sidebar_narrow_avatars() {
+        let mut harness = create_harness(|ui| {
+            NarrowSidebar::new().show(ui, |sidebar| {
+                sidebar.avatar_item("Production", "P", true);
+                sidebar.avatar_item("Development", "D", false);
+                sidebar.avatar_item("Staging", "S", false);
+            });
+        });
+
+        harness.snapshot("sidebar_narrow_avatars");
     }
 
     #[test]

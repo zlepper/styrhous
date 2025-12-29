@@ -3,7 +3,8 @@ use crate::cluster_connection_manager::ClusterConnection;
 use crate::helpers::SetExt;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::worker::{Worker, WorkerCommand, WorkerResult, WorkerTrait};
-use egui::{Button, PopupCloseBehavior, Ui, Widget};
+use components::{NarrowSidebar, TailwindCombobox, WideSidebar};
+use components::icons::folder_icon;
 use itertools::Itertools;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use tracing::{error, info};
@@ -55,11 +56,6 @@ pub enum ClusterConnectionState {
     Connected(ClusterConnection),
 }
 
-impl ClusterState {
-    pub fn display_select_button(&self, ui: &mut Ui) -> bool {
-        Button::new(&self.name).corner_radius(5.0).ui(ui).clicked()
-    }
-}
 
 impl UiState {
     fn update<W: WorkerTrait>(&mut self, worker: &mut W) {
@@ -155,7 +151,9 @@ impl UiState {
 }
 
 impl<W: WorkerTrait> MyEguiApp<W> {
-    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        // Install image loaders for SVG icons
+        egui_extras::install_image_loaders(&cc.egui_ctx);
         Self::default()
     }
 
@@ -174,12 +172,18 @@ impl<W: WorkerTrait> eframe::App for MyEguiApp<W> {
 
         self.ui_state.update(&mut self.worker);
 
-        egui::SidePanel::left("left_panel")
-            .exact_width(64f32)
+        // Cluster selection sidebar (narrow, icon-only style with avatar initials)
+        egui::SidePanel::left("cluster-panel")
+            .exact_width(72.0)
+            .frame(egui::Frame::NONE.fill(egui::Color32::WHITE))
             .show(ctx, |ui| {
-                ui.vertical_centered(|ui| {
-                    for (cluster_key, cluster) in &mut self.ui_state.clusters {
-                        if cluster.display_select_button(ui) {
+                NarrowSidebar::new().show(ui, |sidebar| {
+                    for (cluster_key, cluster) in &self.ui_state.clusters {
+                        let initial = cluster.name.chars().next()
+                            .unwrap_or('?').to_uppercase().to_string();
+                        let selected = self.ui_state.selected_cluster == Some(*cluster_key);
+
+                        if sidebar.avatar_item(&cluster.name, &initial, selected).clicked() {
                             info!("Cluster '{}' selected", cluster.name);
                             if let ClusterConnectionState::Disconnected = cluster.connection {
                                 info!("Connecting to cluster");
@@ -191,62 +195,55 @@ impl<W: WorkerTrait> eframe::App for MyEguiApp<W> {
                             self.ui_state.selected_cluster = Some(*cluster_key);
                         }
                     }
-                })
+                });
             });
 
         if let Some(selected_cluster_id) = self.ui_state.selected_cluster {
             if let Some(cluster) = self.ui_state.clusters.get_mut(&selected_cluster_id) {
                 egui::CentralPanel::default().show(ctx, |ui| {
+                    // Namespace selector with fuzzy filtering
                     ui.horizontal(|ui| {
-                        ui.horizontal(|ui| {
-                            ui.set_width(350.0);
-                            let selected_namespaces_label =
-                                cluster.selected_namespaces.iter().join(", ");
-                            egui::ComboBox::from_label("Namespace")
-                                .selected_text(selected_namespaces_label)
-                                .truncate()
-                                .width(350.0)
-                                .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
-                                .show_ui(ui, |ui| {
-                                    for (_, ns) in &cluster.namespaces {
-                                        let response = ui.selectable_label(
-                                            cluster.selected_namespaces.contains(&ns.name),
-                                            ns.get_name_to_display(),
-                                        );
-                                        if response.clicked() {
-                                            if response.ctx.input(|i| i.modifiers.shift) {
-                                                cluster.selected_namespaces.toggle(ns.name.clone());
-                                            } else {
-                                                cluster.selected_namespaces = HashSet::new();
-                                                cluster.selected_namespaces.insert(ns.name.clone());
-                                                ui.close();
-                                            }
+                        let selected_text = cluster.selected_namespaces.iter().join(", ");
+                        let namespaces: Vec<_> = cluster.namespaces.values().collect();
+
+                        TailwindCombobox::from_label("Namespace")
+                            .placeholder("Search namespaces...")
+                            .selected_text(selected_text)
+                            .width(350.0)
+                            .filter_by(|ns: &&MinimalNamespace| ns.get_name_to_display())
+                            .show_items(ui, &namespaces, |cb, ns| {
+                                let is_selected = cluster.selected_namespaces.contains(&ns.name);
+                                if cb.item(ns.get_name_to_display(), is_selected).clicked() {
+                                    cluster.selected_namespaces.toggle(ns.name.clone());
+                                }
+                            });
+                    });
+
+                    // API resource tree sidebar
+                    egui::SidePanel::left("api-selector").show(ui.ctx(), |ui| {
+                        WideSidebar::new().show(ui, |sidebar| {
+                            for (api_group_name, api_resources) in &cluster.api_resource_groups {
+                                let display_name = if api_group_name.is_empty() {
+                                    "core"
+                                } else {
+                                    api_group_name.as_str()
+                                };
+
+                                sidebar.expandable(display_name, folder_icon(), false, |sidebar| {
+                                    for api_resource in &api_resources.api_resources {
+                                        let selected = cluster.selected_api_resource
+                                            .as_ref()
+                                            .is_some_and(|r| r == api_resource);
+
+                                        if sidebar.child_item(&api_resource.name, selected).clicked() {
+                                            cluster.selected_api_resource = Some(api_resource.clone());
                                         }
                                     }
                                 });
+                            }
                         });
                     });
 
-
-
-                    egui::SidePanel::left("api-selector").show(ui.ctx(), |ui| {
-
-                        ui.vertical(|ui| {
-                            for (api_group_name, api_resources) in &mut cluster.api_resource_groups {
-                                ui.collapsing(api_group_name, |ui| {
-                                    ui.vertical(|ui| {
-                                        for api_resource in &api_resources.api_resources {
-                                            if ui.selectable_label(false, &api_resource.name).clicked() {
-                                                cluster.selected_api_resource = Some(api_resource.clone());
-                                            }
-                                        }
-                                    });
-                                });
-                            }
-
-                        })
-
-                    });
                     ui.heading("Hello World!");
                 });
             }
@@ -264,6 +261,9 @@ mod tests {
     #[test]
     fn test_ui_flow() {
         let mut harness = Harness::new_eframe(|_cc| MyEguiApp::<MockWorker>::default());
+
+        // Install image loaders for SVG icons in tests
+        egui_extras::install_image_loaders(&harness.ctx);
 
         // Initial empty state
         harness.run();
@@ -290,6 +290,9 @@ mod tests {
     #[ignore] // Run with: cargo test -- --ignored
     fn test_real_cluster_connection() {
         let mut harness = Harness::new_eframe(|_cc| MyEguiApp::<Worker>::default());
+
+        // Install image loaders for SVG icons
+        egui_extras::install_image_loaders(&harness.ctx);
 
         // Run multiple frames to allow worker to start and load clusters
         for _ in 0..10 {
