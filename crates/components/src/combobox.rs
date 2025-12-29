@@ -16,6 +16,20 @@
 //!     });
 //! ```
 
+// Layout constants
+const ITEM_HEIGHT: f32 = 36.0;
+const INPUT_HEIGHT: f32 = 40.0;
+const CORNER_RADIUS: u8 = 6;
+const FOCUS_RING_RADIUS: u8 = 8;
+const FOCUS_RING_WIDTH: f32 = 2.0;
+const ICON_SIZE: f32 = 20.0;
+const DROPDOWN_MAX_HEIGHT: f32 = 300.0;
+const DEFAULT_WIDTH: f32 = 256.0;
+const ITEM_PADDING_X: f32 = 12.0;
+const INPUT_PADDING_X: f32 = 12.0;
+const ICON_AREA_WIDTH: f32 = 36.0;
+const FONT_SIZE: f32 = 14.0;
+
 use egui::{
     Align2, Color32, CornerRadius, FontId, Id, InnerResponse, Key, Popup, PopupCloseBehavior,
     Rect, Response, ScrollArea, Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2, WidgetText,
@@ -69,17 +83,22 @@ impl<'a> ComboboxUi<'a> {
     ///
     /// Returns an ItemResponse that can be checked for `.clicked()` to handle selection.
     /// The `is_selected` parameter controls the selected visual state (indigo background).
+    ///
+    /// # Important
+    ///
+    /// Items must be rendered in the same order they were filtered. This method
+    /// internally tracks item indices for keyboard navigation - calling it out of
+    /// order or skipping items will cause incorrect focus behavior.
     pub fn item(&mut self, label: impl Into<WidgetText>, is_selected: bool) -> ItemResponse {
         let label = label.into();
         let is_focused = self.current_index == self.focused_index;
         self.current_index += 1;
 
         // Allocate space for the item
-        let item_height = 36.0;
         let available_width = self.ui.available_width();
         let (rect, response) =
             self.ui
-                .allocate_exact_size(Vec2::new(available_width, item_height), Sense::click());
+                .allocate_exact_size(Vec2::new(available_width, ITEM_HEIGHT), Sense::click());
 
         // Check if this item was selected via keyboard
         let keyboard_selected = is_focused && self.enter_pressed;
@@ -102,12 +121,12 @@ impl<'a> ComboboxUi<'a> {
             }
 
             // Paint text
-            let text_pos = rect.left_center() + Vec2::new(12.0, 0.0);
+            let text_pos = rect.left_center() + Vec2::new(ITEM_PADDING_X, 0.0);
             self.ui.painter().text(
                 text_pos,
                 Align2::LEFT_CENTER,
                 label.text(),
-                FontId::proportional(14.0),
+                FontId::proportional(FONT_SIZE),
                 text_color,
             );
         }
@@ -124,53 +143,46 @@ impl<'a> ComboboxUi<'a> {
     }
 }
 
+/// Marker type for combobox without a filter function set
+pub struct NoFilter;
+
+/// Wrapper type indicating filter function is configured
+pub struct WithFilter<F>(F);
+
 /// A Tailwind-styled filterable combobox
 ///
-/// Generic over `F` which is the filter function type.
-pub struct TailwindCombobox<F> {
+/// Generic over `Filter` which represents the filter configuration state.
+/// Use [`NoFilter`] for unconfigured state, [`WithFilter<F>`] after calling `filter_by`.
+pub struct TailwindCombobox<Filter> {
     id_salt: Id,
     label: Option<WidgetText>,
     placeholder: Option<String>,
     width: Option<f32>,
-    filter_fn: Option<F>,
+    filter: Filter,
 }
 
-impl TailwindCombobox<fn(&()) -> &str> {
+impl TailwindCombobox<NoFilter> {
     /// Create a new combobox with an explicit ID
-    pub fn new(id_salt: impl std::hash::Hash) -> TailwindCombobox<fn(&()) -> &str> {
+    pub fn new(id_salt: impl std::hash::Hash) -> Self {
         TailwindCombobox {
             id_salt: Id::new(id_salt),
             label: None,
             placeholder: None,
             width: None,
-            filter_fn: None,
+            filter: NoFilter,
         }
     }
 
     /// Create a new combobox with the label as the ID source
-    pub fn from_label(label: impl Into<WidgetText>) -> TailwindCombobox<fn(&()) -> &str> {
+    pub fn from_label(label: impl Into<WidgetText>) -> Self {
         let label = label.into();
         TailwindCombobox {
             id_salt: Id::new(label.text()),
             label: Some(label),
             placeholder: None,
             width: None,
-            filter_fn: None,
+            filter: NoFilter,
         }
-    }
-}
-
-impl<F> TailwindCombobox<F> {
-    /// Set the placeholder text shown when the input is empty
-    pub fn placeholder(mut self, placeholder: impl Into<String>) -> Self {
-        self.placeholder = Some(placeholder.into());
-        self
-    }
-
-    /// Set the width of the combobox
-    pub fn width(mut self, width: f32) -> Self {
-        self.width = Some(width);
-        self
     }
 
     /// Set the filter function that extracts searchable text from each item
@@ -183,21 +195,35 @@ impl<F> TailwindCombobox<F> {
     /// - "mf" matches "Michael Foster"
     /// - "cafe" matches "Café"
     /// - "fobr" matches "foobar"
-    pub fn filter_by<T, F2>(self, filter_fn: F2) -> TailwindCombobox<F2>
+    pub fn filter_by<T, F>(self, filter_fn: F) -> TailwindCombobox<WithFilter<F>>
     where
-        F2: Fn(&T) -> &str,
+        F: Fn(&T) -> &str,
     {
         TailwindCombobox {
             id_salt: self.id_salt,
             label: self.label,
             placeholder: self.placeholder,
             width: self.width,
-            filter_fn: Some(filter_fn),
+            filter: WithFilter(filter_fn),
         }
     }
 }
 
-impl<F> TailwindCombobox<F> {
+impl<Filter> TailwindCombobox<Filter> {
+    /// Set the placeholder text shown when the input is empty
+    pub fn placeholder(mut self, placeholder: impl Into<String>) -> Self {
+        self.placeholder = Some(placeholder.into());
+        self
+    }
+
+    /// Set the width of the combobox (clamped to non-negative)
+    pub fn width(mut self, width: f32) -> Self {
+        self.width = Some(width.max(0.0));
+        self
+    }
+}
+
+impl<F> TailwindCombobox<WithFilter<F>> {
     /// Show the combobox with the given items
     ///
     /// The `render` callback is called once for each item that matches the filter.
@@ -220,20 +246,15 @@ impl<F> TailwindCombobox<F> {
             label,
             placeholder,
             width,
-            filter_fn,
+            filter: WithFilter(filter_fn),
         } = self;
 
-        let filter_fn = filter_fn.expect("filter_by() must be called before show_items()");
-
-        let id = ui.make_persistent_id(id_salt);
-        let popup_id = id.with("popup");
+        let state_id = ui.make_persistent_id(id_salt);
 
         // Load state from memory
         let mut state = ui
             .ctx()
-            .memory_mut(|mem| mem.data.get_temp::<ComboboxState>(id).unwrap_or_default());
-
-        let is_open = Popup::is_id_open(ui.ctx(), popup_id);
+            .memory_mut(|mem| mem.data.get_temp::<ComboboxState>(state_id).unwrap_or_default());
 
         // Render label if present
         if let Some(label) = &label {
@@ -241,22 +262,20 @@ impl<F> TailwindCombobox<F> {
         }
 
         // Render the input field with chevron
-        let width = width.unwrap_or(256.0);
+        let width = width.unwrap_or(DEFAULT_WIDTH);
+        // First pass: render without knowing is_open state (affects focus ring only)
         let input_response =
-            Self::render_input_static(ui, &mut state, width, is_open, placeholder.as_deref());
+            Self::render_input(ui, &mut state, width, false, placeholder.as_deref());
+
+        // Get popup_id from the rendered response
+        let popup_id = Popup::default_response_id(&input_response);
+        let is_open = Popup::is_id_open(ui.ctx(), popup_id);
 
         // Handle keyboard navigation
-        let enter_pressed = Self::handle_keyboard_static(ui, &mut state, is_open);
+        let enter_pressed = Self::handle_keyboard(ui, &mut state, is_open, popup_id);
 
-        // Update cached normalized filter chars if filter text changed
-        let current_filter_chars: Vec<char> = normalize_for_search(&state.filter_text).collect();
-        if state.filter_chars != current_filter_chars {
-            state.filter_chars = current_filter_chars;
-        }
-
-        // Store updated state
-        ui.ctx()
-            .memory_mut(|mem| mem.data.insert_temp(id, state.clone()));
+        // Update normalized filter chars for fuzzy matching
+        state.filter_chars = normalize_for_search(&state.filter_text).collect();
 
         // Collect filtered items using fuzzy subsequence matching
         let filtered_items: Vec<_> = items
@@ -268,18 +287,18 @@ impl<F> TailwindCombobox<F> {
         let item_count = filtered_items.len();
         if item_count > 0 {
             state.focused_index = state.focused_index.min(item_count.saturating_sub(1));
-            // Update stored state with clamped value
-            ui.ctx()
-                .memory_mut(|mem| mem.data.insert_temp(id, state.clone()));
         }
 
-        // Show popup
+        // Store state once after all modifications
+        ui.ctx()
+            .memory_mut(|mem| mem.data.insert_temp(state_id, state.clone()));
+
+        // Show popup (uses default ID derived from input_response.id)
         let _inner = Popup::menu(&input_response)
-            .id(popup_id)
             .width(width)
             .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
             .show(|ui| {
-                ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
+                ScrollArea::vertical().max_height(DROPDOWN_MAX_HEIGHT).show(ui, |ui| {
                     let mut cb = ComboboxUi {
                         ui,
                         focused_index: state.focused_index,
@@ -300,19 +319,18 @@ impl<F> TailwindCombobox<F> {
         }
     }
 
-    /// Render the styled input field with chevron icon (static version)
-    fn render_input_static(
+    /// Render the styled input field with chevron icon
+    fn render_input(
         ui: &mut Ui,
         state: &mut ComboboxState,
         width: f32,
         is_open: bool,
         placeholder: Option<&str>,
     ) -> Response {
-        let height = 40.0;
-        let corner_radius = CornerRadius::same(6);
+        let corner_radius = CornerRadius::same(CORNER_RADIUS);
 
         // Allocate the full input area
-        let (rect, response) = ui.allocate_exact_size(Vec2::new(width, height), Sense::click());
+        let (rect, response) = ui.allocate_exact_size(Vec2::new(width, INPUT_HEIGHT), Sense::click());
 
         let has_focus = response.has_focus()
             || ui.memory(|m| m.has_focus(response.id.with("input")))
@@ -333,20 +351,19 @@ impl<F> TailwindCombobox<F> {
 
             // Focus ring (outer glow)
             if has_focus {
-                let focus_rect = rect.expand(2.0);
+                let focus_rect = rect.expand(FOCUS_RING_WIDTH);
                 ui.painter().rect_stroke(
                     focus_rect,
-                    CornerRadius::same(8),
-                    Stroke::new(2.0, indigo::_500.gamma_multiply(0.5)),
+                    CornerRadius::same(FOCUS_RING_RADIUS),
+                    Stroke::new(FOCUS_RING_WIDTH, indigo::_500.gamma_multiply(0.5)),
                     StrokeKind::Outside,
                 );
             }
 
             // Chevron icon on the right
-            let icon_size = 20.0;
             let icon_rect = Rect::from_center_size(
-                rect.right_center() - Vec2::new(icon_size / 2.0 + 8.0, 0.0),
-                Vec2::splat(icon_size),
+                rect.right_center() - Vec2::new(ICON_SIZE / 2.0 + 8.0, 0.0),
+                Vec2::splat(ICON_SIZE),
             );
 
             // Create a child UI for the icon
@@ -355,13 +372,13 @@ impl<F> TailwindCombobox<F> {
                     .max_rect(icon_rect)
                     .layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight)),
             );
-            icons::chevron_down(&mut icon_ui, icon_size, gray::_400);
+            icons::chevron_down(&mut icon_ui, ICON_SIZE, gray::_400);
         }
 
         // Text input area (inside the rect)
         let input_rect = Rect::from_min_max(
-            rect.min + Vec2::new(12.0, 0.0),
-            rect.max - Vec2::new(36.0, 0.0), // Leave space for chevron
+            rect.min + Vec2::new(INPUT_PADDING_X, 0.0),
+            rect.max - Vec2::new(ICON_AREA_WIDTH, 0.0), // Leave space for chevron
         );
 
         let mut input_ui = ui.new_child(
@@ -383,17 +400,12 @@ impl<F> TailwindCombobox<F> {
 
         let text_response = input_ui.add(text_edit);
 
-        // Open popup when input gains focus or is clicked
-        if text_response.gained_focus() || response.clicked() {
-            Popup::open_id(ui.ctx(), response.id.with("popup"));
-        }
-
-        // Return the outer response but merge with text response for focus tracking
+        // Merge responses - Popup::menu will handle opening based on click state
         response | text_response
     }
 
-    /// Handle keyboard navigation (static version)
-    fn handle_keyboard_static(ui: &mut Ui, state: &mut ComboboxState, is_open: bool) -> bool {
+    /// Handle keyboard navigation
+    fn handle_keyboard(ui: &mut Ui, state: &mut ComboboxState, is_open: bool, popup_id: Id) -> bool {
         if !is_open {
             return false;
         }
@@ -409,6 +421,9 @@ impl<F> TailwindCombobox<F> {
             }
             if i.key_pressed(Key::Enter) {
                 enter_pressed = true;
+            }
+            if i.key_pressed(Key::Escape) {
+                Popup::close_id(ui.ctx(), popup_id);
             }
         });
 
@@ -494,6 +509,9 @@ mod tests {
                     }
                 });
         });
+
+        // Install image loaders for SVG icons
+        egui_extras::install_image_loaders(&harness.ctx);
 
         // 1. Initial closed state
         harness.run();

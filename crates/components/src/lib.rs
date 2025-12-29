@@ -28,5 +28,5 @@ pub mod icons;
 pub mod sidebar;
 
 pub use button::{ButtonRounding, ButtonSize, ButtonVariant, TailwindButton};
-pub use combobox::{ComboboxUi, ItemResponse, TailwindCombobox};
+pub use combobox::{ComboboxUi, ItemResponse, NoFilter, TailwindCombobox, WithFilter};
 pub use sidebar::{Sidebar, SidebarContent, SidebarMode};
