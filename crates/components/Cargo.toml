@@ -5,3 +5,6 @@ edition = "2024"
 
 [dependencies]
 egui = "0.33"
+
+[dev-dependencies]
+egui_kittest = { version = "0.33", features = ["eframe", "wgpu", "snapshot"] }
