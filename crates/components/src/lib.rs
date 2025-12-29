@@ -21,5 +21,8 @@
 
 pub mod button;
 pub mod colors;
+pub mod icons;
+pub mod sidebar;
 
 pub use button::{ButtonRounding, ButtonSize, ButtonVariant, TailwindButton};
+pub use sidebar::{Sidebar, SidebarContent, SidebarMode};
