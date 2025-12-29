@@ -5,23 +5,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Test Commands
 
 ```bash
-# Build
+# Build (entire workspace)
 cargo build
 
 # Run the application
-cargo run
+cargo run -p kubernetes-dev-ui
 
 # Run all tests
-cargo test
+cargo test -p kubernetes-dev-ui
 
 # Run tests with snapshot updates (for UI tests)
-UPDATE_SNAPSHOTS=1 cargo test
+UPDATE_SNAPSHOTS=1 cargo test -p kubernetes-dev-ui
 
 # Run a single test
-cargo test test_ui_flow
+cargo test -p kubernetes-dev-ui test_ui_flow
 
 # Run ignored tests (requires real cluster connection)
-cargo test -- --ignored
+cargo test -p kubernetes-dev-ui -- --ignored
 ```
 
 ## Development Environment
@@ -39,20 +39,20 @@ This is a Kubernetes development UI built with egui/eframe. The application uses
 
 ### Core Components
 
-**UI Layer (`ui.rs`)**
+**UI Layer (`crates/app/src/ui.rs`)**
 - `MyEguiApp<W: WorkerTrait>` - Main application struct, generic over worker for testability
 - `UiState` - Holds all UI state including clusters, namespaces, and selections
 - `ClusterState` - Per-cluster state (connection, namespaces, API resources)
 - Receives updates from worker via `WorkerResult` enum and sends commands via `WorkerCommand`
 
-**Worker Layer (`worker.rs`)**
+**Worker Layer (`crates/app/src/worker.rs`)**
 - `Worker` - Production implementation running Kubernetes operations on a background thread
 - `WorkerTrait` - Abstraction enabling mock injection for tests
 - `MockWorker` - Test double with `VecDeque<WorkerResult>` for injecting responses
 - Uses `mpsc` channels for UI-worker communication
 - Spawns a tokio runtime for async Kubernetes operations
 
-**Kubernetes Integration (`cluster_connection_manager.rs`)**
+**Kubernetes Integration (`crates/app/src/cluster_connection_manager.rs`)**
 - `ClusterConnection` - Manages active cluster connections with background watchers
 - `KubernetesNamespaceWatcher` - Watches namespace changes via kube-rs watcher API
 - `KubernetesApiInspector` - Discovers available API resources in a cluster
@@ -78,7 +78,7 @@ harness.run();
 harness.snapshot("name");
 ```
 
-Snapshots are stored in `tests/snapshots/`.
+Snapshots are stored in `crates/app/tests/snapshots/`.
 
 ### Helper Types
 
