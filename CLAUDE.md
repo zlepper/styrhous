@@ -85,3 +85,4 @@ Snapshots are stored in `crates/app/tests/snapshots/`.
 - `SortedName` - Case-insensitive sortable string wrapper for BTreeMap keys
 - `MinimalNamespace` - Lightweight namespace representation with optional display name from `tesseract.dev/display-name` annotation
 - `ApiResource` - Kubernetes API resource descriptor (group, version, kind, name)
+- Breaking changes are always allowed. Nobody is using this project yet.
