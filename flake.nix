@@ -16,6 +16,7 @@ outputs = { self, nixpkgs}:
           libxkbcommon
           openssl
           wayland
+          kind
           jetbrains.rust-rover
 
              xorg.libXcursor
