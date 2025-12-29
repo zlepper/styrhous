@@ -25,4 +25,6 @@ pub mod icons;
 pub mod sidebar;
 
 pub use button::{ButtonRounding, ButtonSize, ButtonVariant, TailwindButton};
-pub use sidebar::{Sidebar, SidebarContent, SidebarMode};
+pub use sidebar::{
+    ExpandableResponse, NarrowSidebar, NarrowSidebarContent, WideSidebar, WideSidebarContent,
+};
