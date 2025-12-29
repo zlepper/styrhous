@@ -6,6 +6,7 @@
 //! # Components
 //!
 //! - [`TailwindButton`] - A styled button with Primary, Secondary, and Soft variants
+//! - [`TailwindCombobox`] - A filterable combobox with dropdown
 //!
 //! # Example
 //!
@@ -21,11 +22,14 @@
 
 pub mod button;
 pub mod colors;
+pub mod combobox;
+pub mod fuzzy;
 pub mod icons;
 pub mod sidebar;
 pub mod tabs;
 
 pub use button::{ButtonRounding, ButtonSize, ButtonVariant, TailwindButton};
+pub use combobox::{ComboboxUi, ItemResponse, NoFilter, TailwindCombobox, WithFilter};
 pub use sidebar::{
     ExpandableResponse, NarrowSidebar, NarrowSidebarContent, WideSidebar, WideSidebarContent,
 };
