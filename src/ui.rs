@@ -121,10 +121,10 @@ impl UiState {
                         cluster.api_resource_groups = BTreeMap::new();
                         for resource in api_resources {
                             cluster.api_resource_groups.entry(resource.group.clone())
-                                .and_modify(|e| e.api_resources.push(resource))
+                                .and_modify(|e| e.api_resources.push(resource.clone()))
                                 .or_insert_with(|| ApiResourceGroupState {
                                     open: false,
-                                    api_resources: vec![resource],
+                                    api_resources: vec![resource.clone()],
                                 });
                         }
 
