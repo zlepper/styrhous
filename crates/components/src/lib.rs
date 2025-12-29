@@ -23,6 +23,7 @@
 pub mod button;
 pub mod colors;
 pub mod combobox;
+pub mod fuzzy;
 pub mod icons;
 pub mod sidebar;
 
