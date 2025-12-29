@@ -164,6 +164,11 @@ impl<W: WorkerTrait> MyEguiApp<W> {
             ui_state: UiState::default(),
         }
     }
+
+    #[cfg(test)]
+    pub fn select_cluster(&mut self, cluster_key: i32) {
+        self.ui_state.selected_cluster = Some(cluster_key);
+    }
 }
 
 impl<W: WorkerTrait> eframe::App for MyEguiApp<W> {
@@ -198,9 +203,48 @@ impl<W: WorkerTrait> eframe::App for MyEguiApp<W> {
                 });
             });
 
+        // Track clicked API resource to apply mutation after UI rendering
+        let mut clicked_api_resource: Option<ApiResource> = None;
+
+        // API resource tree sidebar (shown before CentralPanel, only when cluster is selected)
+        if let Some(selected_cluster_id) = self.ui_state.selected_cluster {
+            if let Some(cluster) = self.ui_state.clusters.get(&selected_cluster_id) {
+                egui::SidePanel::left("api-selector")
+                    .default_width(256.0)
+                    .min_width(200.0)
+                    .frame(egui::Frame::NONE.fill(egui::Color32::WHITE))
+                    .show(ctx, |ui| {
+                        WideSidebar::new().show(ui, |sidebar| {
+                            for (api_group_name, api_resources) in &cluster.api_resource_groups {
+                                let display_name = if api_group_name.is_empty() {
+                                    "core"
+                                } else {
+                                    api_group_name.as_str()
+                                };
+
+                                sidebar.expandable(display_name, folder_icon(), false, |sidebar| {
+                                    for api_resource in &api_resources.api_resources {
+                                        let selected = cluster.selected_api_resource
+                                            .as_ref()
+                                            .is_some_and(|r| r == api_resource);
+
+                                        if sidebar.child_item(&api_resource.name, selected).clicked() {
+                                            clicked_api_resource = Some(api_resource.clone());
+                                        }
+                                    }
+                                });
+                            }
+                        });
+                    });
+            }
+        }
+
+        // Central panel with main content
         if let Some(selected_cluster_id) = self.ui_state.selected_cluster {
             if let Some(cluster) = self.ui_state.clusters.get_mut(&selected_cluster_id) {
-                egui::CentralPanel::default().show(ctx, |ui| {
+                egui::CentralPanel::default()
+                    .frame(egui::Frame::NONE.fill(egui::Color32::WHITE))
+                    .show(ctx, |ui| {
                     // Namespace selector with fuzzy filtering
                     ui.horizontal(|ui| {
                         let selected_text = cluster.selected_namespaces.iter().join(", ");
@@ -219,33 +263,13 @@ impl<W: WorkerTrait> eframe::App for MyEguiApp<W> {
                             });
                     });
 
-                    // API resource tree sidebar
-                    egui::SidePanel::left("api-selector").show(ui.ctx(), |ui| {
-                        WideSidebar::new().show(ui, |sidebar| {
-                            for (api_group_name, api_resources) in &cluster.api_resource_groups {
-                                let display_name = if api_group_name.is_empty() {
-                                    "core"
-                                } else {
-                                    api_group_name.as_str()
-                                };
-
-                                sidebar.expandable(display_name, folder_icon(), false, |sidebar| {
-                                    for api_resource in &api_resources.api_resources {
-                                        let selected = cluster.selected_api_resource
-                                            .as_ref()
-                                            .is_some_and(|r| r == api_resource);
-
-                                        if sidebar.child_item(&api_resource.name, selected).clicked() {
-                                            cluster.selected_api_resource = Some(api_resource.clone());
-                                        }
-                                    }
-                                });
-                            }
-                        });
-                    });
-
                     ui.heading("Hello World!");
                 });
+
+                // Apply clicked API resource selection
+                if let Some(api_resource) = clicked_api_resource {
+                    cluster.selected_api_resource = Some(api_resource);
+                }
             }
         }
     }
@@ -284,6 +308,45 @@ mod tests {
         );
         harness.run();
         harness.snapshot("02_clusters_loaded");
+
+        // Select the dev cluster (key 1)
+        harness.state_mut().select_cluster(1);
+        harness.run();
+        harness.snapshot("03_cluster_selected_empty");
+
+        // Add namespaces
+        harness.state_mut().worker.results.push_back(
+            WorkerResult::KubernetesNamespacesReplaced {
+                cluster_key: 1,
+                namespaces: vec![
+                    MinimalNamespace { name: "default".into(), display_name: None },
+                    MinimalNamespace { name: "kube-system".into(), display_name: None },
+                    MinimalNamespace { name: "monitoring".into(), display_name: Some("Monitoring Stack".into()) },
+                ],
+            },
+        );
+        harness.run();
+        harness.snapshot("04_namespaces_loaded");
+
+        // Add API resources
+        harness.state_mut().worker.results.push_back(
+            WorkerResult::KubernetesApisLoaded {
+                cluster_key: 1,
+                api_resources: vec![
+                    // Core resources (empty group displayed as "core")
+                    ApiResource { group: "".into(), version: "v1".into(), kind: "Pod".into(), name: "pods".into() },
+                    ApiResource { group: "".into(), version: "v1".into(), kind: "Service".into(), name: "services".into() },
+                    ApiResource { group: "".into(), version: "v1".into(), kind: "ConfigMap".into(), name: "configmaps".into() },
+                    // apps group
+                    ApiResource { group: "apps".into(), version: "v1".into(), kind: "Deployment".into(), name: "deployments".into() },
+                    ApiResource { group: "apps".into(), version: "v1".into(), kind: "StatefulSet".into(), name: "statefulsets".into() },
+                    // networking.k8s.io group
+                    ApiResource { group: "networking.k8s.io".into(), version: "v1".into(), kind: "Ingress".into(), name: "ingresses".into() },
+                ],
+            },
+        );
+        harness.run();
+        harness.snapshot("05_api_resources_loaded");
     }
 
     #[test]
