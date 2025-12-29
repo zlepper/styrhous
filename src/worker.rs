@@ -145,7 +145,6 @@ pub enum WorkerResult {
         cluster_key: i32,
         runner: ClusterConnection,
     },
-    None,
 }
 
 pub type WorkerResultSender = mpsc::SyncSender<WorkerResult>;

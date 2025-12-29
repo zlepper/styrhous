@@ -1,4 +1,4 @@
-use crate::SortedName::SortedName;
+use crate::sorted_name::SortedName;
 use crate::cluster_connection_manager::ClusterConnection;
 use crate::helpers::SetExt;
 use crate::minimal_namespace::MinimalNamespace;
@@ -149,7 +149,6 @@ impl UiState {
                         cluster.connection = ClusterConnectionState::Connected(runner);
                     }
                 }
-                WorkerResult::None => {}
             }
         }
     }
@@ -160,6 +159,7 @@ impl<W: WorkerTrait> MyEguiApp<W> {
         Self::default()
     }
 
+    #[cfg(test)]
     pub fn with_worker(worker: W) -> Self {
         Self {
             worker,
