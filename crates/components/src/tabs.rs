@@ -21,7 +21,7 @@
 //! });
 //! ```
 
-use egui::{Color32, Image, Response, ScrollArea, Sense, Ui, Vec2};
+use egui::{Color32, CursorIcon, Image, Response, ScrollArea, Sense, Ui, Vec2};
 
 use crate::colors::{gray, indigo};
 
@@ -98,11 +98,18 @@ impl Tabs {
         // Load persisted selection
         let selected: usize = ui.data(|d| d.get_temp(id)).unwrap_or(0);
 
-        // Calculate header row height
-        let header_height = TAB_PADDING_Y * 2.0 + TEXT_FONT_SIZE;
+        // Calculate header row height based on actual text metrics
+        let sample_galley = ui.painter().layout_no_wrap(
+            "Xg".to_string(), // Use characters with ascenders/descenders
+            egui::FontId::proportional(TEXT_FONT_SIZE),
+            Color32::PLACEHOLDER,
+        );
+        let header_height = TAB_PADDING_Y * 2.0 + sample_galley.size().y.max(ICON_SIZE);
 
         // Reserve space for headers at the top (will render into this later)
-        let header_rect = ui.allocate_space(Vec2::new(ui.available_width(), header_height)).1;
+        let header_rect = ui
+            .allocate_space(Vec2::new(ui.available_width(), header_height))
+            .1;
 
         // Collect headers and render content for selected tab
         let mut new_selected = selected;
@@ -118,9 +125,10 @@ impl Tabs {
 
             add_tabs(&mut tabs_content);
         }
-        // Borrow of ui ends here, headers is now independent
 
-        // Now render headers into the reserved space
+        let tab_count = headers.len();
+
+        // Render headers into the reserved space
         {
             let mut header_ui = ui.new_child(egui::UiBuilder::new().max_rect(header_rect));
 
@@ -128,10 +136,10 @@ impl Tabs {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = TAB_GAP;
 
-                    for (index, header) in headers.into_iter().enumerate() {
+                    for (index, header) in headers.iter().enumerate() {
                         let is_selected = index == selected;
                         let response =
-                            render_tab_header(ui, &header.label, header.icon, is_selected);
+                            render_tab_header(ui, &header.label, header.icon.as_ref(), is_selected);
 
                         if response.clicked() {
                             new_selected = index;
@@ -141,10 +149,20 @@ impl Tabs {
             });
         }
 
+        // Keyboard navigation (arrow keys)
+        if tab_count > 0 {
+            if ui.input(|i| i.key_pressed(egui::Key::ArrowLeft)) && new_selected > 0 {
+                new_selected -= 1;
+            }
+            if ui.input(|i| i.key_pressed(egui::Key::ArrowRight)) && new_selected < tab_count - 1 {
+                new_selected += 1;
+            }
+        }
+
         // Draw separator line at the bottom of the header area
         let separator_rect = egui::Rect::from_min_size(
             header_rect.left_bottom(),
-            Vec2::new(ui.available_width().max(header_rect.width()), SEPARATOR_HEIGHT),
+            Vec2::new(header_rect.width(), SEPARATOR_HEIGHT),
         );
         ui.painter().rect_filled(separator_rect, 0.0, gray::_200);
 
@@ -161,12 +179,17 @@ impl Tabs {
 }
 
 /// Render a single tab header, returning its Response
-fn render_tab_header(ui: &mut Ui, label: &str, icon: Option<Image<'_>>, is_selected: bool) -> Response {
-    // Calculate tab size
-    let text_galley = ui.painter().layout_no_wrap(
+fn render_tab_header(
+    ui: &mut Ui,
+    label: &str,
+    icon: Option<&Image<'_>>,
+    is_selected: bool,
+) -> Response {
+    // Create galley for measurement (use PLACEHOLDER so fallback_color works when painting)
+    let galley = ui.painter().layout_no_wrap(
         label.to_string(),
         egui::FontId::proportional(TEXT_FONT_SIZE),
-        Color32::WHITE,
+        Color32::PLACEHOLDER,
     );
 
     let icon_width = if icon.is_some() {
@@ -175,43 +198,44 @@ fn render_tab_header(ui: &mut Ui, label: &str, icon: Option<Image<'_>>, is_selec
         0.0
     };
 
-    let tab_width = TAB_PADDING_X * 2.0 + icon_width + text_galley.size().x;
-    let tab_height = TAB_PADDING_Y * 2.0 + TEXT_FONT_SIZE;
+    // Use galley's actual height for proper vertical centering
+    let text_height = galley.size().y;
+    let content_height = text_height.max(ICON_SIZE);
+    let tab_width = TAB_PADDING_X * 2.0 + icon_width + galley.size().x;
+    let tab_height = TAB_PADDING_Y * 2.0 + content_height;
 
     // Allocate space and get response
     let (rect, response) = ui.allocate_exact_size(Vec2::new(tab_width, tab_height), Sense::click());
+    let response = response.on_hover_cursor(CursorIcon::PointingHand);
 
     // Determine colors based on state
     let colors = TabColors::for_state(is_selected, response.hovered());
 
-    // Draw icon if present
+    // Calculate content vertical center
+    let content_center_y = rect.center().y;
+
+    // Draw icon if present (paint directly, no child UI needed)
     let mut text_x = rect.min.x + TAB_PADDING_X;
     if let Some(icon) = icon {
         let icon_x = text_x + ICON_MARGIN_LEFT;
-        let icon_y = rect.center().y - ICON_SIZE / 2.0;
+        let icon_y = content_center_y - ICON_SIZE / 2.0;
         let icon_rect =
             egui::Rect::from_min_size(egui::pos2(icon_x, icon_y), Vec2::splat(ICON_SIZE));
 
-        let mut icon_ui = ui.new_child(
-            egui::UiBuilder::new()
-                .max_rect(icon_rect)
-                .layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight)),
-        );
-        icon_ui.add(
-            icon.fit_to_exact_size(Vec2::splat(ICON_SIZE))
-                .tint(colors.icon),
-        );
+        // Paint icon directly with tint
+        icon.clone()
+            .fit_to_exact_size(Vec2::splat(ICON_SIZE))
+            .tint(colors.icon)
+            .paint_at(ui, icon_rect);
 
         text_x = icon_x + ICON_SIZE + ICON_MARGIN_RIGHT;
     }
 
-    // Draw text
-    let text_y = rect.center().y - TEXT_FONT_SIZE / 2.0;
-    ui.painter().text(
+    // Draw text using the galley (proper vertical centering using actual text height)
+    let text_y = content_center_y - text_height / 2.0;
+    ui.painter().galley(
         egui::pos2(text_x, text_y),
-        egui::Align2::LEFT_TOP,
-        label,
-        egui::FontId::proportional(TEXT_FONT_SIZE),
+        galley,
         colors.text,
     );
 
@@ -256,11 +280,8 @@ impl<'a> TabsContent<'a> {
         let label = label.into();
         let is_selected = self.current_index == self.selected;
 
-        // Store header info for later rendering
-        self.headers.push(TabHeader {
-            label: label.clone(),
-            icon,
-        });
+        // Store header info for later rendering (take ownership, no clone)
+        self.headers.push(TabHeader { label, icon });
 
         // Render content immediately if this tab is selected
         if is_selected {
@@ -274,21 +295,9 @@ impl<'a> TabsContent<'a> {
 /// Response from showing a tabs component.
 pub struct TabsResponse {
     /// The index of the currently selected tab.
-    selected: usize,
+    pub selected: usize,
     /// Whether the selection changed this frame.
-    changed: bool,
-}
-
-impl TabsResponse {
-    /// Get the index of the currently selected tab.
-    pub fn selected(&self) -> usize {
-        self.selected
-    }
-
-    /// Returns true if the selection changed this frame.
-    pub fn changed(&self) -> bool {
-        self.changed
-    }
+    pub changed: bool,
 }
 
 #[cfg(test)]
@@ -319,9 +328,6 @@ mod tests {
     #[test]
     fn test_tabs_with_icons() {
         let mut harness = Harness::new_ui(|ui| {
-            egui_extras::install_image_loaders(ui.ctx());
-
-            // No clone needed - FnOnce closure is only called once
             let home_icon = Image::new(egui::include_image!("icons/home.svg"));
             let users_icon = Image::new(egui::include_image!("icons/users.svg"));
             let folder_icon = Image::new(egui::include_image!("icons/folder.svg"));
@@ -359,7 +365,7 @@ mod tests {
             });
 
             // Show which tab is selected
-            ui.label(format!("Selected: {}", response.selected()));
+            ui.label(format!("Selected: {}", response.selected));
         });
 
         harness.run();
