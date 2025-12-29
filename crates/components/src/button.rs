@@ -1,8 +1,8 @@
 //! Tailwind-styled button component for egui
 
-use egui::{Button, Color32, CornerRadius, Response, Stroke, Ui, Vec2, WidgetText};
+use egui::{Button, Color32, CornerRadius, Response, Shadow, Stroke, Ui, Vec2, WidgetText};
 
-use crate::colors::{gray, indigo, WHITE};
+use crate::colors::{gray, indigo, BLACK, WHITE};
 
 /// Button color variant
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -115,6 +115,7 @@ impl<'a> TailwindButton<'a> {
         let (fill, fill_hovered, fill_active, text_color, stroke) = self.variant_colors();
         let (padding, min_height) = self.size_metrics();
         let corner_radius = self.corner_radius();
+        let shadow = self.shadow();
 
         // Save current widget visuals
         let saved_widgets = ui.visuals().widgets.clone();
@@ -148,7 +149,14 @@ impl<'a> TailwindButton<'a> {
         ui.spacing_mut().button_padding = padding;
 
         // Create and render the button
-        let response = ui.add(Button::new(self.text).min_size(Vec2::new(0.0, min_height)));
+        let button = Button::new(self.text).min_size(Vec2::new(0.0, min_height));
+        let response = ui.add(button);
+
+        // Draw shadow behind the button (painted on layer below)
+        if shadow != Shadow::NONE {
+            let shadow_shape = shadow.as_shape(response.rect, corner_radius);
+            ui.painter().add(shadow_shape);
+        }
 
         // Restore original visuals
         ui.visuals_mut().widgets = saved_widgets;
@@ -203,12 +211,26 @@ impl<'a> TailwindButton<'a> {
             ButtonRounding::Pill => CornerRadius::same(255), // max u8 for pill shape
         }
     }
+
+    /// Get shadow for the current variant
+    /// Tailwind shadow-xs: box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05)
+    fn shadow(&self) -> Shadow {
+        match self.variant {
+            ButtonVariant::Secondary => Shadow {
+                offset: [0, 1], // 0 horizontal, 1px down
+                blur: 2,
+                spread: 0,
+                color: BLACK.gamma_multiply(0.05),
+            },
+            _ => Shadow::NONE,
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use egui_kittest::Harness;
+    use egui_kittest::{kittest::Queryable, Harness, SnapshotResults};
 
     const SIZES: [(ButtonSize, &str); 5] = [
         (ButtonSize::Xs, "Xs"),
@@ -270,5 +292,141 @@ mod tests {
             });
         });
         harness.snapshot("buttons");
+    }
+
+    /// Test button hover and active (pressed) states
+    /// Each snapshot shows a reference button (default) next to the interactive button
+    #[test]
+    fn test_button_interaction_states() {
+        let mut results = SnapshotResults::new();
+
+        // Test Primary button - hovered
+        {
+            let mut harness = Harness::new_ui(|ui| {
+                ui.vertical(|ui| {
+                    ui.label("Primary: Default vs Hovered");
+                    ui.horizontal(|ui| {
+                        TailwindButton::primary("Default").show(ui);
+                        TailwindButton::primary("Hovered").show(ui);
+                    });
+                });
+            });
+            harness.get_by_label("Hovered").hover();
+            harness.run_ok();
+            results.add(harness.try_snapshot("primary_hovered"));
+        }
+
+        // Test Primary button - pressed
+        {
+            let mut harness = Harness::new_ui(|ui| {
+                ui.vertical(|ui| {
+                    ui.label("Primary: Default vs Pressed");
+                    ui.horizontal(|ui| {
+                        TailwindButton::primary("Default").show(ui);
+                        TailwindButton::primary("Pressed").show(ui);
+                    });
+                });
+            });
+            let button = harness.get_by_label("Pressed");
+            let center = button.rect().center();
+            harness
+                .input_mut()
+                .events
+                .push(egui::Event::PointerMoved(center));
+            harness.input_mut().events.push(egui::Event::PointerButton {
+                pos: center,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: egui::Modifiers::default(),
+            });
+            harness.step();
+            results.add(harness.try_snapshot("primary_pressed"));
+        }
+
+        // Test Secondary button - hovered
+        {
+            let mut harness = Harness::new_ui(|ui| {
+                ui.vertical(|ui| {
+                    ui.label("Secondary: Default vs Hovered");
+                    ui.horizontal(|ui| {
+                        TailwindButton::secondary("Default").show(ui);
+                        TailwindButton::secondary("Hovered").show(ui);
+                    });
+                });
+            });
+            harness.get_by_label("Hovered").hover();
+            harness.run_ok();
+            results.add(harness.try_snapshot("secondary_hovered"));
+        }
+
+        // Test Secondary button - pressed
+        {
+            let mut harness = Harness::new_ui(|ui| {
+                ui.vertical(|ui| {
+                    ui.label("Secondary: Default vs Pressed");
+                    ui.horizontal(|ui| {
+                        TailwindButton::secondary("Default").show(ui);
+                        TailwindButton::secondary("Pressed").show(ui);
+                    });
+                });
+            });
+            let button = harness.get_by_label("Pressed");
+            let center = button.rect().center();
+            harness
+                .input_mut()
+                .events
+                .push(egui::Event::PointerMoved(center));
+            harness.input_mut().events.push(egui::Event::PointerButton {
+                pos: center,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: egui::Modifiers::default(),
+            });
+            harness.step();
+            results.add(harness.try_snapshot("secondary_pressed"));
+        }
+
+        // Test Soft button - hovered
+        {
+            let mut harness = Harness::new_ui(|ui| {
+                ui.vertical(|ui| {
+                    ui.label("Soft: Default vs Hovered");
+                    ui.horizontal(|ui| {
+                        TailwindButton::soft("Default").show(ui);
+                        TailwindButton::soft("Hovered").show(ui);
+                    });
+                });
+            });
+            harness.get_by_label("Hovered").hover();
+            harness.run_ok();
+            results.add(harness.try_snapshot("soft_hovered"));
+        }
+
+        // Test Soft button - pressed
+        {
+            let mut harness = Harness::new_ui(|ui| {
+                ui.vertical(|ui| {
+                    ui.label("Soft: Default vs Pressed");
+                    ui.horizontal(|ui| {
+                        TailwindButton::soft("Default").show(ui);
+                        TailwindButton::soft("Pressed").show(ui);
+                    });
+                });
+            });
+            let button = harness.get_by_label("Pressed");
+            let center = button.rect().center();
+            harness
+                .input_mut()
+                .events
+                .push(egui::Event::PointerMoved(center));
+            harness.input_mut().events.push(egui::Event::PointerButton {
+                pos: center,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: egui::Modifiers::default(),
+            });
+            harness.step();
+            results.add(harness.try_snapshot("soft_pressed"));
+        }
     }
 }
