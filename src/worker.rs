@@ -5,9 +5,17 @@ use crate::cluster_connection_manager::{
 use crate::helpers::ResultExt;
 use crate::minimal_namespace::MinimalNamespace;
 use anyhow::Error;
-use std::collections::HashMap;
-use std::sync::{Arc, mpsc};
-use tracing::{info, warn};
+#[cfg(test)]
+use std::collections::VecDeque;
+use std::sync::mpsc;
+use tracing::info;
+
+/// Trait abstracting the worker interface for testability
+pub trait WorkerTrait: Default {
+    fn start(&mut self);
+    fn get_next_message(&mut self) -> Option<WorkerResult>;
+    fn send_command(&mut self, command: WorkerCommand);
+}
 
 #[derive(Default)]
 pub struct Worker {
@@ -56,6 +64,43 @@ impl Worker {
                 .send(command)
                 .log_if_error("Failed to send command");
         }
+    }
+}
+
+impl WorkerTrait for Worker {
+    fn start(&mut self) {
+        Worker::start(self)
+    }
+
+    fn get_next_message(&mut self) -> Option<WorkerResult> {
+        Worker::get_next_message(self)
+    }
+
+    fn send_command(&mut self, command: WorkerCommand) {
+        Worker::send_command(self, command)
+    }
+}
+
+/// Mock worker for testing - allows injecting predefined results
+#[cfg(test)]
+#[derive(Default)]
+pub struct MockWorker {
+    pub results: VecDeque<WorkerResult>,
+    pub commands: Vec<WorkerCommand>,
+}
+
+#[cfg(test)]
+impl WorkerTrait for MockWorker {
+    fn start(&mut self) {
+        // No-op for mock
+    }
+
+    fn get_next_message(&mut self) -> Option<WorkerResult> {
+        self.results.pop_front()
+    }
+
+    fn send_command(&mut self, command: WorkerCommand) {
+        self.commands.push(command);
     }
 }
 

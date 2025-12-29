@@ -1,19 +1,26 @@
 use crate::SortedName::SortedName;
-use crate::cluster_connection_manager::{Cluster, ClusterConnection};
+use crate::cluster_connection_manager::ClusterConnection;
 use crate::helpers::SetExt;
 use crate::minimal_namespace::MinimalNamespace;
-use crate::worker::{Worker, WorkerCommand, WorkerResult};
-use egui::{Button, Direction, Layout, PopupCloseBehavior, Ui, Vec2, Widget};
+use crate::worker::{Worker, WorkerCommand, WorkerResult, WorkerTrait};
+use egui::{Button, PopupCloseBehavior, Ui, Widget};
 use itertools::Itertools;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use tracing::{error, info};
 use crate::api_resource::ApiResource;
 
-#[derive(Default)]
-pub struct MyEguiApp {
-    counter_value: i32,
-    worker: Worker,
+pub struct MyEguiApp<W: WorkerTrait = Worker> {
+    worker: W,
     ui_state: UiState,
+}
+
+impl<W: WorkerTrait> Default for MyEguiApp<W> {
+    fn default() -> Self {
+        Self {
+            worker: W::default(),
+            ui_state: UiState::default(),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -55,7 +62,7 @@ impl ClusterState {
 }
 
 impl UiState {
-    fn update(&mut self, worker: &mut Worker) {
+    fn update<W: WorkerTrait>(&mut self, worker: &mut W) {
         while let Some(result) = worker.get_next_message() {
             match result {
                 WorkerResult::CommandFailed { error, command } => {
@@ -148,17 +155,20 @@ impl UiState {
     }
 }
 
-impl MyEguiApp {
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
-        // Restore app state using cc.storage (requires the "persistence" feature).
-        // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
-        // for e.g. egui::PaintCallback.
+impl<W: WorkerTrait> MyEguiApp<W> {
+    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         Self::default()
+    }
+
+    pub fn with_worker(worker: W) -> Self {
+        Self {
+            worker,
+            ui_state: UiState::default(),
+        }
     }
 }
 
-impl eframe::App for MyEguiApp {
+impl<W: WorkerTrait> eframe::App for MyEguiApp<W> {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.worker.start();
 
@@ -238,23 +248,55 @@ impl eframe::App for MyEguiApp {
 
                     });
                     ui.heading("Hello World!");
-
-                    ui_counter(ui, &mut self.counter_value)
                 });
             }
         }
     }
 }
 
-fn ui_counter(ui: &mut Ui, counter: &mut i32) {
-    // Put the buttons and label on the same row:
-    ui.horizontal(|ui| {
-        if ui.button("−").clicked() {
-            *counter -= 1;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cluster_connection_manager::Cluster;
+    use crate::worker::MockWorker;
+    use egui_kittest::Harness;
+
+    #[test]
+    fn test_ui_flow() {
+        let mut harness = Harness::new_eframe(|_cc| MyEguiApp::<MockWorker>::default());
+
+        // Initial empty state
+        harness.run();
+        harness.snapshot("01_empty_state");
+
+        // Clusters arrive from worker
+        harness.state_mut().worker.results.push_back(
+            WorkerResult::KubernetesClustersUpdated(vec![
+                Cluster {
+                    name: "dev".into(),
+                    cluster: None,
+                },
+                Cluster {
+                    name: "prod".into(),
+                    cluster: Some("production".into()),
+                },
+            ]),
+        );
+        harness.run();
+        harness.snapshot("02_clusters_loaded");
+    }
+
+    #[test]
+    #[ignore] // Run with: cargo test -- --ignored
+    fn test_real_cluster_connection() {
+        let mut harness = Harness::new_eframe(|_cc| MyEguiApp::<Worker>::default());
+
+        // Run multiple frames to allow worker to start and load clusters
+        for _ in 0..10 {
+            harness.run();
+            std::thread::sleep(std::time::Duration::from_millis(100));
         }
-        ui.label(counter.to_string());
-        if ui.button("+").clicked() {
-            *counter += 1;
-        }
-    });
+
+        harness.snapshot("real_clusters");
+    }
 }

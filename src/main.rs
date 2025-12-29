@@ -17,7 +17,7 @@ fn main() {
     eframe::run_native(
         "Kubernetes dev UI",
         native_options,
-        Box::new(|cc| Ok(Box::new(MyEguiApp::new(cc)))),
+        Box::new(|cc| Ok(Box::new(MyEguiApp::<worker::Worker>::new(cc)))),
     )
     .expect("eframe failed to start");
 }
