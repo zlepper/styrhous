@@ -2255,8 +2255,10 @@ name = "kubernetes-dev-ui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "components",
  "eframe",
  "egui",
+ "egui_extras",
  "egui_kittest",
  "futures-util",
  "itertools",
