@@ -23,8 +23,10 @@ pub mod button;
 pub mod colors;
 pub mod icons;
 pub mod sidebar;
+pub mod tabs;
 
 pub use button::{ButtonRounding, ButtonSize, ButtonVariant, TailwindButton};
 pub use sidebar::{
     ExpandableResponse, NarrowSidebar, NarrowSidebarContent, WideSidebar, WideSidebarContent,
 };
+pub use tabs::{Tabs, TabsContent, TabsResponse};
