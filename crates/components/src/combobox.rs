@@ -20,6 +20,7 @@ use egui::{
     Align2, Color32, CornerRadius, FontId, Id, InnerResponse, Key, Popup, PopupCloseBehavior,
     Rect, Response, ScrollArea, Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2, WidgetText,
 };
+use unicode_normalization::UnicodeNormalization;
 
 use crate::colors::{gray, indigo, WHITE};
 use crate::icons;
@@ -28,7 +29,68 @@ use crate::icons;
 #[derive(Default, Clone)]
 struct ComboboxState {
     filter_text: String,
+    /// Pre-computed normalized filter chars for efficient matching.
+    /// Uses NFKD normalization + accent stripping + case folding.
+    filter_chars: Vec<char>,
     focused_index: usize,
+}
+
+/// Check if a character is a combining diacritical mark.
+///
+/// Covers the main Unicode blocks for combining marks:
+/// - U+0300..U+036F: Combining Diacritical Marks
+/// - U+1AB0..U+1AFF: Combining Diacritical Marks Extended
+/// - U+1DC0..U+1DFF: Combining Diacritical Marks Supplement
+/// - U+20D0..U+20FF: Combining Diacritical Marks for Symbols
+/// - U+FE20..U+FE2F: Combining Half Marks
+#[inline]
+fn is_combining_mark(c: char) -> bool {
+    matches!(
+        c,
+        '\u{0300}'..='\u{036F}'
+            | '\u{1AB0}'..='\u{1AFF}'
+            | '\u{1DC0}'..='\u{1DFF}'
+            | '\u{20D0}'..='\u{20FF}'
+            | '\u{FE20}'..='\u{FE2F}'
+    )
+}
+
+/// Normalize a string for search: NFKD decomposition, strip accents, lowercase.
+///
+/// This enables accent-insensitive and case-insensitive matching:
+/// - "Café" → "cafe"
+/// - "naïve" → "naive"
+/// - "MÜNCHEN" → "munchen"
+fn normalize_for_search(s: &str) -> impl Iterator<Item = char> + '_ {
+    s.nfkd()
+        .filter(|&c| !is_combining_mark(c))
+        .flat_map(char::to_lowercase)
+}
+
+/// Fuzzy subsequence match: needle chars must appear in order, but not consecutively.
+///
+/// Uses NFKD normalization to decompose characters, strips combining
+/// diacritical marks, and applies Unicode case folding. Allocation-free
+/// for the haystack - single pass through both strings.
+///
+/// Examples:
+/// - "foobar" matches "fobr" (f→o→b→r appear in order)
+/// - "Michael Foster" matches "mf" (M→F appear in order)
+/// - "Café" matches "cafe" (accent-insensitive)
+fn matches_fuzzy(haystack: &str, needle_chars: &[char]) -> bool {
+    let mut needle_iter = needle_chars.iter();
+    let mut current = needle_iter.next();
+
+    for h in normalize_for_search(haystack) {
+        if let Some(&n) = current {
+            if h == n {
+                current = needle_iter.next();
+            }
+        }
+    }
+
+    // All needle chars consumed = match
+    current.is_none()
 }
 
 /// Response from a combobox item
@@ -171,7 +233,14 @@ impl<F> TailwindCombobox<F> {
 
     /// Set the filter function that extracts searchable text from each item
     ///
-    /// The component will perform case-insensitive substring matching.
+    /// The component performs fuzzy subsequence matching: characters must appear
+    /// in order but not consecutively. Uses Unicode NFKD normalization for
+    /// accent-insensitive, case-insensitive matching.
+    ///
+    /// Examples:
+    /// - "mf" matches "Michael Foster"
+    /// - "cafe" matches "Café"
+    /// - "fobr" matches "foobar"
     pub fn filter_by<T, F2>(self, filter_fn: F2) -> TailwindCombobox<F2>
     where
         F2: Fn(&T) -> &str,
@@ -237,21 +306,20 @@ impl<F> TailwindCombobox<F> {
         // Handle keyboard navigation
         let enter_pressed = Self::handle_keyboard_static(ui, &mut state, is_open);
 
+        // Update cached normalized filter chars if filter text changed
+        let current_filter_chars: Vec<char> = normalize_for_search(&state.filter_text).collect();
+        if state.filter_chars != current_filter_chars {
+            state.filter_chars = current_filter_chars;
+        }
+
         // Store updated state
         ui.ctx()
             .memory_mut(|mem| mem.data.insert_temp(id, state.clone()));
 
-        // Collect filtered items first to know the count
-        let filter_lower = state.filter_text.to_lowercase();
+        // Collect filtered items using fuzzy subsequence matching
         let filtered_items: Vec<_> = items
             .into_iter()
-            .filter(|item| {
-                if filter_lower.is_empty() {
-                    true
-                } else {
-                    filter_fn(item).to_lowercase().contains(&filter_lower)
-                }
-            })
+            .filter(|item| matches_fuzzy(filter_fn(item), &state.filter_chars))
             .collect();
 
         // Clamp focused index to valid range
@@ -519,5 +587,35 @@ mod tests {
         click_at(&mut harness, input_pos);
         harness.run();
         harness.snapshot("combobox_selected");
+    }
+
+    #[test]
+    fn test_fuzzy_matching() {
+        // Helper to normalize needle like the component does
+        let needle = |s: &str| -> Vec<char> { normalize_for_search(s).collect() };
+
+        // Basic fuzzy matching - chars in order but not consecutive
+        assert!(matches_fuzzy("foobar", &needle("fobr")));
+        assert!(matches_fuzzy("Michael Foster", &needle("mf")));
+        assert!(matches_fuzzy("Michael Foster", &needle("mifr")));
+
+        // Case insensitive
+        assert!(matches_fuzzy("Michael Foster", &needle("MICHAEL")));
+        assert!(matches_fuzzy("FOOBAR", &needle("foobar")));
+
+        // Accent insensitive (Unicode NFKD normalization)
+        assert!(matches_fuzzy("Café", &needle("cafe")));
+        assert!(matches_fuzzy("naïve", &needle("naive")));
+        assert!(matches_fuzzy("MÜNCHEN", &needle("munchen")));
+        assert!(matches_fuzzy("Ångström", &needle("angstrom")));
+
+        // Empty needle matches everything
+        assert!(matches_fuzzy("anything", &needle("")));
+        assert!(matches_fuzzy("", &needle("")));
+
+        // Non-matches
+        assert!(!matches_fuzzy("foobar", &needle("baz")));
+        assert!(!matches_fuzzy("abc", &needle("cba"))); // Wrong order
+        assert!(!matches_fuzzy("short", &needle("shorterlonger")));
     }
 }
