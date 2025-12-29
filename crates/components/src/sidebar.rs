@@ -1,38 +1,32 @@
-//! Tailwind-styled sidebar component for egui
+//! Tailwind-styled sidebar components for egui
 //!
-//! Provides a navigation sidebar with support for:
-//! - Wide mode (icons + text) and Narrow mode (icons only)
-//! - Expandable/collapsible sections
-//! - Selection state highlighting
-//! - Accessible buttons for screen readers
+//! Provides two sidebar variants:
+//! - [`WideSidebar`] - Full-featured navigation with icons, text, expandable sections
+//! - [`NarrowSidebar`] - Compact icon-only navigation
 //!
-//! # Example
+//! # Example: Wide Sidebar
 //! ```ignore
 //! use egui::{include_image, Image};
 //!
 //! let home_icon = Image::new(include_image!("icons/home.svg"));
 //! let folder_icon = Image::new(include_image!("icons/folder.svg"));
 //!
-//! Sidebar::new()
-//!     .mode(SidebarMode::Wide)
-//!     .show(ui, |sidebar| {
-//!         sidebar.item("Dashboard", home_icon, true);
-//!         sidebar.item("Team", home_icon.clone(), false);
-//!         sidebar.section_header("Your teams");
-//!         sidebar.expandable("Projects", folder_icon, false, |sidebar| {
-//!             sidebar.child_item("Alpha", false);
-//!             sidebar.child_item("Beta", true);
-//!         });
+//! WideSidebar::new().show(ui, |sidebar| {
+//!     sidebar.item("Dashboard", home_icon, true);
+//!     sidebar.section_header("Your teams");
+//!     sidebar.expandable("Projects", folder_icon, false, |sidebar| {
+//!         sidebar.child_item("Alpha", false);
+//!         sidebar.child_item("Beta", true);
 //!     });
+//! });
 //! ```
 //!
-//! ## Handling Selection
-//!
-//! Items return a `Response` for detecting clicks:
+//! # Example: Narrow Sidebar
 //! ```ignore
-//! if sidebar.item("Dashboard", home_icon, selected == "Dashboard").clicked() {
-//!     selected = "Dashboard";
-//! }
+//! NarrowSidebar::new().show(ui, |sidebar| {
+//!     sidebar.item("Dashboard", home_icon, true);
+//!     sidebar.item("Settings", settings_icon, false);
+//! });
 //! ```
 
 use egui::{
@@ -42,36 +36,202 @@ use egui::{
 
 use crate::colors::{gray, indigo, WHITE};
 
-/// Sidebar display mode
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum SidebarMode {
-    /// Wide mode: shows icons and text labels
-    #[default]
-    Wide,
-    /// Narrow mode: shows only icons, dark background
-    Narrow,
+const WIDE_WIDTH: f32 = 256.0;
+const NARROW_WIDTH: f32 = 72.0;
+const WIDE_ITEM_HEIGHT: f32 = 40.0;
+const NARROW_ITEM_HEIGHT: f32 = 48.0;
+const ITEM_PADDING_X: f32 = 12.0;
+const ITEM_CORNER_RADIUS: u8 = 6;
+const ICON_SIZE: f32 = 24.0;
+const ICON_TEXT_SPACING: f32 = 12.0;
+const CHEVRON_SIZE: f32 = 20.0;
+const CHEVRON_GAP: f32 = 12.0;
+const TEXT_FONT_SIZE: f32 = 14.0;
+const AVATAR_FONT_SIZE: f32 = 12.0;
+
+struct ItemColors {
+    background: Color32,
+    text: Color32,
+    icon: Color32,
 }
 
-/// Default width for wide mode
-const WIDE_WIDTH: f32 = 256.0;
-/// Default width for narrow mode
-const NARROW_WIDTH: f32 = 72.0;
-/// Item height in wide mode
-const WIDE_ITEM_HEIGHT: f32 = 40.0;
-/// Item height in narrow mode
-const NARROW_ITEM_HEIGHT: f32 = 48.0;
-/// Horizontal padding for items
-const ITEM_PADDING_X: f32 = 12.0;
-/// Corner radius for item backgrounds
-const ITEM_CORNER_RADIUS: u8 = 6;
-/// Icon size
-const ICON_SIZE: f32 = 24.0;
-/// Spacing between icon and text
-const ICON_TEXT_SPACING: f32 = 12.0;
-/// Chevron icon size (Tailwind size-5 = 20px)
-const CHEVRON_SIZE: f32 = 20.0;
-/// Gap between chevron and next element (Tailwind gap-x-3 = 12px)
-const CHEVRON_GAP: f32 = 12.0;
+impl ItemColors {
+    const fn new(background: Color32, text: Color32, icon: Color32) -> Self {
+        Self { background, text, icon }
+    }
+
+    fn navigation(selected: bool, hovered: bool) -> Self {
+        match (selected, hovered) {
+            (true, _) => Self::new(indigo::_50, indigo::_600, indigo::_600),
+            (_, true) => Self::new(gray::_50, gray::_700, gray::_500),
+            _ => Self::new(Color32::TRANSPARENT, gray::_700, gray::_500),
+        }
+    }
+
+    fn child(selected: bool, hovered: bool) -> Self {
+        match (selected, hovered) {
+            (true, _) => Self::new(gray::_100, gray::_900, gray::_600),
+            (_, true) => Self::new(gray::_50, gray::_700, gray::_500),
+            _ => Self::new(Color32::TRANSPARENT, gray::_600, gray::_500),
+        }
+    }
+
+    fn expandable(hovered: bool, pressed: bool) -> Self {
+        match (pressed, hovered) {
+            (true, _) => Self::new(gray::_100, gray::_700, gray::_500),
+            (_, true) => Self::new(gray::_50, gray::_700, gray::_500),
+            _ => Self::new(Color32::TRANSPARENT, gray::_700, gray::_500),
+        }
+    }
+}
+
+fn allocate_item(ui: &mut Ui, height: f32) -> (egui::Rect, egui::Rect, Response) {
+    let available_width = ui.available_width();
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(available_width, height), Sense::click());
+    let inner_rect = rect.shrink2(Vec2::new(ITEM_PADDING_X, 0.0));
+    (rect, inner_rect, response)
+}
+
+fn draw_background(painter: &egui::Painter, rect: egui::Rect, color: Color32) {
+    if color != Color32::TRANSPARENT {
+        painter.rect_filled(rect, CornerRadius::same(ITEM_CORNER_RADIUS), color);
+    }
+}
+
+fn render_icon(ui: &mut Ui, rect: egui::Rect, icon: Image<'_>, tint: Color32) {
+    let mut icon_ui = ui.new_child(
+        UiBuilder::new()
+            .max_rect(rect)
+            .layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight)),
+    );
+    icon_ui.add(icon.fit_to_exact_size(Vec2::splat(ICON_SIZE)).tint(tint));
+}
+
+fn render_text(painter: &egui::Painter, pos: egui::Pos2, text: &str, color: Color32) {
+    painter.text(pos, egui::Align2::LEFT_TOP, text, egui::FontId::proportional(TEXT_FONT_SIZE), color);
+}
+
+fn render_avatar(painter: &egui::Painter, center: egui::Pos2, initial: &str) {
+    painter.circle_filled(center, ICON_SIZE / 2.0, gray::_200);
+    painter.text(center, egui::Align2::CENTER_CENTER, initial, egui::FontId::proportional(AVATAR_FONT_SIZE), gray::_600);
+}
+
+fn add_button_accessibility(response: &Response, ui: &Ui, label: &str) {
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label));
+}
+
+fn icon_rect_wide(inner_rect: egui::Rect, item_height: f32) -> egui::Rect {
+    let icon_x = CHEVRON_SIZE + CHEVRON_GAP;
+    egui::Rect::from_min_size(
+        inner_rect.min + Vec2::new(icon_x, (item_height - ICON_SIZE) / 2.0),
+        Vec2::splat(ICON_SIZE),
+    )
+}
+
+fn icon_rect_centered(inner_rect: egui::Rect) -> egui::Rect {
+    egui::Rect::from_center_size(inner_rect.center(), Vec2::splat(ICON_SIZE))
+}
+
+fn text_pos_after_icon(inner_rect: egui::Rect, item_height: f32) -> egui::Pos2 {
+    let text_x = CHEVRON_SIZE + CHEVRON_GAP + ICON_SIZE + ICON_TEXT_SPACING;
+    inner_rect.min + Vec2::new(text_x, (item_height - TEXT_FONT_SIZE) / 2.0)
+}
+
+struct SidebarContentCore<'a> {
+    ui: &'a mut Ui,
+    item_height: f32,
+    show_text: bool,
+}
+
+impl<'a> SidebarContentCore<'a> {
+    fn wide(ui: &'a mut Ui) -> Self {
+        Self { ui, item_height: WIDE_ITEM_HEIGHT, show_text: true }
+    }
+
+    fn narrow(ui: &'a mut Ui) -> Self {
+        Self { ui, item_height: NARROW_ITEM_HEIGHT, show_text: false }
+    }
+
+    fn ui_mut(&mut self) -> &mut Ui {
+        self.ui
+    }
+
+    fn item(&mut self, text: impl Into<WidgetText>, icon: Image<'_>, selected: bool) -> Response {
+        let text = text.into();
+        let text_str = text.text();
+
+        let (_, inner_rect, response) = allocate_item(self.ui, self.item_height);
+        let colors = ItemColors::navigation(selected, response.hovered());
+
+        draw_background(self.ui.painter(), inner_rect, colors.background);
+
+        if self.show_text {
+            render_icon(self.ui, icon_rect_wide(inner_rect, self.item_height), icon, colors.icon);
+            render_text(self.ui.painter(), text_pos_after_icon(inner_rect, self.item_height), text_str, colors.text);
+        } else {
+            render_icon(self.ui, icon_rect_centered(inner_rect), icon, colors.icon);
+        }
+
+        add_button_accessibility(&response, self.ui, text_str);
+        response
+    }
+
+    fn avatar_item(&mut self, text: impl Into<WidgetText>, initial: &str, selected: bool) -> Response {
+        let text = text.into();
+        let text_str = text.text();
+
+        let (_, inner_rect, response) = allocate_item(self.ui, self.item_height);
+        let colors = ItemColors::navigation(selected, response.hovered());
+
+        draw_background(self.ui.painter(), inner_rect, colors.background);
+
+        if self.show_text {
+            let avatar_x = CHEVRON_SIZE + CHEVRON_GAP;
+            let avatar_center = inner_rect.min + Vec2::new(avatar_x + ICON_SIZE / 2.0, self.item_height / 2.0);
+            render_avatar(self.ui.painter(), avatar_center, initial);
+            render_text(self.ui.painter(), text_pos_after_icon(inner_rect, self.item_height), text_str, colors.text);
+        } else {
+            render_avatar(self.ui.painter(), inner_rect.center(), initial);
+        }
+
+        add_button_accessibility(&response, self.ui, text_str);
+        response
+    }
+
+    fn separator(&mut self) {
+        self.ui.add_space(8.0);
+        let available_width = self.ui.available_width();
+        let rect = self.ui.allocate_exact_size(Vec2::new(available_width, 1.0), Sense::hover()).0;
+        let line_rect = rect.shrink2(Vec2::new(ITEM_PADDING_X, 0.0));
+        self.ui.painter().line_segment(
+            [line_rect.left_center(), line_rect.right_center()],
+            Stroke::new(1.0, gray::_200),
+        );
+        self.ui.add_space(8.0);
+    }
+}
+
+/// Shared sidebar shell - draws background and creates child UI
+fn render_sidebar<R>(
+    ui: &mut Ui,
+    width: Option<f32>,
+    default_width: f32,
+    add_contents: impl FnOnce(&mut Ui) -> R,
+) -> R {
+    let width = width.unwrap_or(default_width);
+    let rect = ui.available_rect_before_wrap();
+    let sidebar_rect = egui::Rect::from_min_size(rect.min, Vec2::new(width, rect.height()));
+    ui.painter().rect_filled(sidebar_rect, 0.0, WHITE);
+
+    let mut child_ui = ui.new_child(
+        UiBuilder::new()
+            .max_rect(sidebar_rect)
+            .layout(egui::Layout::top_down(egui::Align::LEFT)),
+    );
+    child_ui.add_space(8.0);
+
+    add_contents(&mut child_ui)
+}
 
 /// Response from an expandable sidebar section
 pub struct ExpandableResponse<R> {
@@ -83,325 +243,127 @@ pub struct ExpandableResponse<R> {
     pub is_open: bool,
 }
 
-/// A Tailwind-styled sidebar builder for egui
-pub struct Sidebar {
-    mode: SidebarMode,
+/// A full-featured sidebar with icons, text, and expandable sections
+pub struct WideSidebar {
     width: Option<f32>,
 }
 
-impl Default for Sidebar {
+impl Default for WideSidebar {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Sidebar {
-    /// Create a new sidebar with default settings
+impl WideSidebar {
+    /// Create a new wide sidebar with default settings
     pub fn new() -> Self {
-        Self {
-            mode: SidebarMode::Wide,
-            width: None,
-        }
+        Self { width: None }
     }
 
-    /// Set the display mode (Wide or Narrow)
-    pub fn mode(mut self, mode: SidebarMode) -> Self {
-        self.mode = mode;
-        self
-    }
-
-    /// Override the default width
+    /// Override the default width (256px)
     pub fn width(mut self, width: f32) -> Self {
         self.width = Some(width);
         self
     }
 
     /// Show the sidebar with the given content builder
-    pub fn show<R>(self, ui: &mut Ui, add_contents: impl FnOnce(&mut SidebarContent<'_>) -> R) -> R {
-        let width = self.width.unwrap_or(match self.mode {
-            SidebarMode::Wide => WIDE_WIDTH,
-            SidebarMode::Narrow => NARROW_WIDTH,
-        });
-
-        // Both modes use light theme
-        let background = WHITE;
-
-        // Draw background
-        let rect = ui.available_rect_before_wrap();
-        let sidebar_rect = egui::Rect::from_min_size(rect.min, Vec2::new(width, rect.height()));
-        ui.painter().rect_filled(sidebar_rect, 0.0, background);
-
-        // Create a child UI with constrained width
-        let mut child_ui = ui.new_child(
-            UiBuilder::new()
-                .max_rect(sidebar_rect)
-                .layout(egui::Layout::top_down(egui::Align::LEFT)),
-        );
-
-        // Add padding
-        child_ui.add_space(8.0);
-
-        let mut content = SidebarContent {
-            ui: &mut child_ui,
-            mode: self.mode,
-        };
-
-        add_contents(&mut content)
+    pub fn show<R>(self, ui: &mut Ui, add_contents: impl FnOnce(&mut WideSidebarContent<'_>) -> R) -> R {
+        render_sidebar(ui, self.width, WIDE_WIDTH, |child_ui| {
+            let mut content = WideSidebarContent { core: SidebarContentCore::wide(child_ui) };
+            add_contents(&mut content)
+        })
     }
 }
 
-/// Context for building sidebar content
-///
-/// This is passed to the closure in `Sidebar::show()` and provides
-/// methods for adding navigation items, sections, and expandable groups.
-pub struct SidebarContent<'a> {
-    ui: &'a mut Ui,
-    mode: SidebarMode,
+/// Content builder for wide sidebar
+pub struct WideSidebarContent<'a> {
+    core: SidebarContentCore<'a>,
 }
 
-impl<'a> SidebarContent<'a> {
-    /// Get the current sidebar mode
-    pub fn mode(&self) -> SidebarMode {
-        self.mode
-    }
-
+impl<'a> WideSidebarContent<'a> {
     /// Get mutable access to the underlying Ui
     pub fn ui_mut(&mut self) -> &mut Ui {
-        self.ui
+        self.core.ui_mut()
     }
 
     /// Add a navigation item with icon and text
-    ///
-    /// In narrow mode, only the icon is shown.
-    ///
-    /// # Arguments
-    /// * `text` - The label text (shown in wide mode only)
-    /// * `icon` - Icon image to display
-    /// * `selected` - Whether this item is currently selected
-    ///
-    /// # Returns
-    /// Response indicating if the item was clicked
     pub fn item(&mut self, text: impl Into<WidgetText>, icon: Image<'_>, selected: bool) -> Response {
-        let text = text.into();
-        let item_height = match self.mode {
-            SidebarMode::Wide => WIDE_ITEM_HEIGHT,
-            SidebarMode::Narrow => NARROW_ITEM_HEIGHT,
-        };
-
-        let available_width = self.ui.available_width();
-        let sized_icon = icon.fit_to_exact_size(Vec2::splat(ICON_SIZE));
-
-        // Allocate the full row as clickable
-        let (rect, response) = self.ui.allocate_exact_size(
-            Vec2::new(available_width, item_height),
-            Sense::click(),
-        );
-
-        let inner_rect = rect.shrink2(Vec2::new(ITEM_PADDING_X, 0.0));
-
-        // Determine colors based on state (same colors for both modes - light theme)
-        let (bg_color, text_color, icon_color) = if selected {
-            (indigo::_50, indigo::_600, indigo::_600)
-        } else if response.hovered() {
-            (gray::_50, gray::_700, gray::_500)
-        } else {
-            (Color32::TRANSPARENT, gray::_700, gray::_500)
-        };
-
-        // Draw background
-        if bg_color != Color32::TRANSPARENT {
-            self.ui.painter().rect_filled(
-                inner_rect,
-                CornerRadius::same(ITEM_CORNER_RADIUS),
-                bg_color,
-            );
-        }
-
-        match self.mode {
-            SidebarMode::Wide => {
-                // Reserve chevron space for alignment with expandable items
-                let icon_x = CHEVRON_SIZE + CHEVRON_GAP;
-                let icon_rect = egui::Rect::from_min_size(
-                    inner_rect.min + Vec2::new(icon_x, (item_height - ICON_SIZE) / 2.0),
-                    Vec2::splat(ICON_SIZE),
-                );
-                let mut icon_ui = self.ui.new_child(
-                    UiBuilder::new()
-                        .max_rect(icon_rect)
-                        .layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight)),
-                );
-                icon_ui.add(sized_icon.tint(icon_color));
-
-                // Text
-                let text_x = icon_x + ICON_SIZE + ICON_TEXT_SPACING;
-                let text_pos = inner_rect.min + Vec2::new(text_x, (item_height - 14.0) / 2.0);
-                self.ui.painter().text(
-                    text_pos,
-                    egui::Align2::LEFT_TOP,
-                    text.text(),
-                    egui::FontId::proportional(14.0),
-                    text_color,
-                );
-            }
-            SidebarMode::Narrow => {
-                // Center icon only
-                let icon_rect = egui::Rect::from_center_size(inner_rect.center(), Vec2::splat(ICON_SIZE));
-                let mut icon_ui = self.ui.new_child(
-                    UiBuilder::new()
-                        .max_rect(icon_rect)
-                        .layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight)),
-                );
-                icon_ui.add(sized_icon.tint(icon_color));
-            }
-        }
-
-        // Add accessibility info
-        response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, self.ui.is_enabled(), text.text()));
-
-        response
+        self.core.item(text, icon, selected)
     }
 
-    /// Add a section header label (only visible in wide mode)
-    ///
-    /// Section headers are uppercase, smaller text used to group navigation items.
+    /// Add an avatar item with a circular initial badge
+    pub fn avatar_item(&mut self, text: impl Into<WidgetText>, initial: &str, selected: bool) -> Response {
+        self.core.avatar_item(text, initial, selected)
+    }
+
+    /// Add a section header label
     pub fn section_header(&mut self, text: &str) {
-        if self.mode == SidebarMode::Narrow {
-            return; // Hidden in narrow mode
-        }
-
-        self.ui.add_space(16.0);
-
-        let padding = Vec2::new(ITEM_PADDING_X + 8.0, 4.0);
-        self.ui.horizontal(|ui| {
-            ui.add_space(padding.x);
-            ui.label(
-                RichText::new(text.to_uppercase())
-                    .size(11.0)
-                    .color(gray::_500),
-            );
+        self.core.ui.add_space(16.0);
+        let padding_x = ITEM_PADDING_X + 8.0;
+        self.core.ui.horizontal(|ui| {
+            ui.add_space(padding_x);
+            ui.label(RichText::new(text.to_uppercase()).size(11.0).color(gray::_500));
         });
-
-        self.ui.add_space(4.0);
+        self.core.ui.add_space(4.0);
     }
 
     /// Add an expandable section with child items
-    ///
-    /// In narrow mode, returns a dummy response (expandable sections are hidden).
-    ///
-    /// # Arguments
-    /// * `text` - The section header text
-    /// * `icon` - Icon image to display
-    /// * `default_open` - Whether the section starts expanded
-    /// * `add_children` - Closure to add child items
     pub fn expandable<R>(
         &mut self,
         text: impl Into<WidgetText>,
         icon: Image<'_>,
         default_open: bool,
-        add_children: impl FnOnce(&mut SidebarContent<'_>) -> R,
+        add_children: impl FnOnce(&mut WideSidebarContent<'_>) -> R,
     ) -> ExpandableResponse<R> {
-        if self.mode == SidebarMode::Narrow {
-            // Hidden in narrow mode - return dummy response
-            let dummy = self.ui.allocate_response(Vec2::ZERO, Sense::click());
-            return ExpandableResponse {
-                header: dummy,
-                children: None,
-                is_open: false,
-            };
-        }
-
         let text = text.into();
-        let id = self.ui.make_persistent_id(text.text());
-        let mut state = CollapsingState::load_with_default_open(self.ui.ctx(), id, default_open);
+        let text_str = text.text();
+
+        let id = self.core.ui.make_persistent_id(text_str);
+        let mut state = CollapsingState::load_with_default_open(self.core.ui.ctx(), id, default_open);
         let is_open = state.is_open();
 
-        let item_height = WIDE_ITEM_HEIGHT;
-        let available_width = self.ui.available_width();
-
-        // Get the appropriate chevron image
+        // Chevron
         let chevron = if is_open {
             Image::new(egui::include_image!("icons/chevron-down.svg"))
         } else {
             Image::new(egui::include_image!("icons/chevron-right.svg"))
         };
         let chevron = chevron.fit_to_exact_size(Vec2::splat(CHEVRON_SIZE)).tint(gray::_400);
-        let sized_icon = icon.fit_to_exact_size(Vec2::splat(ICON_SIZE));
 
-        // Create the entire row as a single clickable button with chevron + icon + text
-        // Use a horizontal layout inside an allocate_ui_with_layout for proper sizing
-        let (rect, response) = self.ui.allocate_exact_size(
-            Vec2::new(available_width, item_height),
-            Sense::click(),
-        );
+        let (_, inner_rect, response) = allocate_item(self.core.ui, WIDE_ITEM_HEIGHT);
+        let colors = ItemColors::expandable(response.hovered(), response.is_pointer_button_down_on());
 
-        // Draw hover/press background
-        if response.hovered() || response.is_pointer_button_down_on() {
-            let inner_rect = rect.shrink2(Vec2::new(ITEM_PADDING_X, 0.0));
-            self.ui.painter().rect_filled(
-                inner_rect,
-                CornerRadius::same(ITEM_CORNER_RADIUS),
-                if response.is_pointer_button_down_on() { gray::_100 } else { gray::_50 },
-            );
-        }
-
-        // Draw content manually
-        let inner_rect = rect.shrink2(Vec2::new(ITEM_PADDING_X, 0.0));
+        draw_background(self.core.ui.painter(), inner_rect, colors.background);
 
         // Chevron
         let chevron_rect = egui::Rect::from_min_size(
-            inner_rect.min + Vec2::new(0.0, (item_height - CHEVRON_SIZE) / 2.0),
+            inner_rect.min + Vec2::new(0.0, (WIDE_ITEM_HEIGHT - CHEVRON_SIZE) / 2.0),
             Vec2::splat(CHEVRON_SIZE),
         );
-        let mut chevron_ui = self.ui.new_child(
+        let mut chevron_ui = self.core.ui.new_child(
             UiBuilder::new()
                 .max_rect(chevron_rect)
                 .layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight)),
         );
         chevron_ui.add(chevron);
 
-        // Icon (tinted for visibility)
-        let icon_x = CHEVRON_SIZE + CHEVRON_GAP;
-        let icon_rect = egui::Rect::from_min_size(
-            inner_rect.min + Vec2::new(icon_x, (item_height - ICON_SIZE) / 2.0),
-            Vec2::splat(ICON_SIZE),
-        );
-        let mut icon_ui = self.ui.new_child(
-            UiBuilder::new()
-                .max_rect(icon_rect)
-                .layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight)),
-        );
-        icon_ui.add(sized_icon.tint(gray::_500));
+        // Icon
+        render_icon(self.core.ui, icon_rect_wide(inner_rect, WIDE_ITEM_HEIGHT), icon, colors.icon);
 
         // Text
-        let text_x = icon_x + ICON_SIZE + ICON_TEXT_SPACING;
-        let text_pos = inner_rect.min + Vec2::new(text_x, (item_height - 14.0) / 2.0);
-        self.ui.painter().text(
-            text_pos,
-            egui::Align2::LEFT_TOP,
-            text.text(),
-            egui::FontId::proportional(14.0),
-            gray::_700,
-        );
+        render_text(self.core.ui.painter(), text_pos_after_icon(inner_rect, WIDE_ITEM_HEIGHT), text_str, colors.text);
+        add_button_accessibility(&response, self.core.ui, text_str);
 
-        // Add accessibility info
-        response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, self.ui.is_enabled(), text.text()));
-
-        // Handle click to toggle
         if response.clicked() {
-            state.toggle(self.ui);
+            state.toggle(self.core.ui);
         }
+        state.store(self.core.ui.ctx());
 
-        // Store state to persist across frames (critical for egui immediate mode!)
-        state.store(self.ui.ctx());
-
-        // Re-check state after potential toggle for children rendering
         let is_open_now = state.is_open();
-
-        // Draw children if open
         let children = if is_open_now {
-            self.ui.add_space(2.0);
+            self.core.ui.add_space(2.0);
             let result = add_children(self);
-            self.ui.add_space(2.0);
+            self.core.ui.add_space(2.0);
             Some(result)
         } else {
             None
@@ -415,160 +377,92 @@ impl<'a> SidebarContent<'a> {
     }
 
     /// Add a child item (indented, no icon)
-    ///
-    /// Used inside `expandable()` sections.
     pub fn child_item(&mut self, text: impl Into<WidgetText>, selected: bool) -> Response {
         let text = text.into();
-        let item_height = WIDE_ITEM_HEIGHT;
-        let available_width = self.ui.available_width();
+        let text_str = text.text();
 
-        // Allocate the full row as clickable
-        let (rect, response) = self.ui.allocate_exact_size(
-            Vec2::new(available_width, item_height),
-            Sense::click(),
-        );
-
-        // Text position aligned with parent item text (after chevron + icon space)
-        let text_x = ITEM_PADDING_X + CHEVRON_SIZE + CHEVRON_GAP + ICON_SIZE + ICON_TEXT_SPACING;
+        let (rect, _, response) = allocate_item(self.core.ui, WIDE_ITEM_HEIGHT);
+        let colors = ItemColors::child(selected, response.hovered());
 
         // Background rect starts slightly before text for visual grouping
+        let text_x = ITEM_PADDING_X + CHEVRON_SIZE + CHEVRON_GAP + ICON_SIZE + ICON_TEXT_SPACING;
         let bg_indent = text_x - 8.0;
         let bg_rect = egui::Rect::from_min_max(
             rect.min + Vec2::new(bg_indent, 0.0),
             rect.max - Vec2::new(ITEM_PADDING_X, 0.0),
         );
 
-        // Determine colors
-        let (bg_color, text_color) = if selected {
-            (gray::_100, gray::_900)
-        } else if response.hovered() {
-            (gray::_50, gray::_700)
-        } else {
-            (Color32::TRANSPARENT, gray::_600)
-        };
+        draw_background(self.core.ui.painter(), bg_rect, colors.background);
 
-        // Draw background
-        if bg_color != Color32::TRANSPARENT {
-            self.ui.painter().rect_filled(
-                bg_rect,
-                CornerRadius::same(ITEM_CORNER_RADIUS),
-                bg_color,
-            );
-        }
-
-        // Text
-        let text_pos = rect.min + Vec2::new(text_x, (item_height - 14.0) / 2.0);
-        self.ui.painter().text(
-            text_pos,
-            egui::Align2::LEFT_TOP,
-            text.text(),
-            egui::FontId::proportional(14.0),
-            text_color,
-        );
-
-        // Add accessibility info
-        response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, self.ui.is_enabled(), text.text()));
+        let text_pos = rect.min + Vec2::new(text_x, (WIDE_ITEM_HEIGHT - TEXT_FONT_SIZE) / 2.0);
+        render_text(self.core.ui.painter(), text_pos, text_str, colors.text);
+        add_button_accessibility(&response, self.core.ui, text_str);
 
         response
     }
 
     /// Add a visual separator line
     pub fn separator(&mut self) {
-        self.ui.add_space(8.0);
-        let available_width = self.ui.available_width();
-        let rect = self.ui.allocate_exact_size(Vec2::new(available_width, 1.0), Sense::hover()).0;
-        let line_rect = rect.shrink2(Vec2::new(ITEM_PADDING_X, 0.0));
-        self.ui.painter().line_segment(
-            [line_rect.left_center(), line_rect.right_center()],
-            Stroke::new(1.0, gray::_200),
-        );
-        self.ui.add_space(8.0);
+        self.core.separator();
+    }
+}
+
+/// A compact icon-only sidebar
+pub struct NarrowSidebar {
+    width: Option<f32>,
+}
+
+impl Default for NarrowSidebar {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl NarrowSidebar {
+    /// Create a new narrow sidebar with default settings
+    pub fn new() -> Self {
+        Self { width: None }
     }
 
-    /// Add an avatar item with a circular initial badge
-    ///
-    /// This is a specialized item that shows a circular avatar with an initial letter
-    /// instead of an icon image.
+    /// Override the default width (72px)
+    pub fn width(mut self, width: f32) -> Self {
+        self.width = Some(width);
+        self
+    }
+
+    /// Show the sidebar with the given content builder
+    pub fn show<R>(self, ui: &mut Ui, add_contents: impl FnOnce(&mut NarrowSidebarContent<'_>) -> R) -> R {
+        render_sidebar(ui, self.width, NARROW_WIDTH, |child_ui| {
+            let mut content = NarrowSidebarContent { core: SidebarContentCore::narrow(child_ui) };
+            add_contents(&mut content)
+        })
+    }
+}
+
+/// Content builder for narrow sidebar
+pub struct NarrowSidebarContent<'a> {
+    core: SidebarContentCore<'a>,
+}
+
+impl<'a> NarrowSidebarContent<'a> {
+    /// Get mutable access to the underlying Ui
+    pub fn ui_mut(&mut self) -> &mut Ui {
+        self.core.ui_mut()
+    }
+
+    /// Add a navigation item (icon only, text used for accessibility)
+    pub fn item(&mut self, text: impl Into<WidgetText>, icon: Image<'_>, selected: bool) -> Response {
+        self.core.item(text, icon, selected)
+    }
+
+    /// Add an avatar item (initial only, text used for accessibility)
     pub fn avatar_item(&mut self, text: impl Into<WidgetText>, initial: &str, selected: bool) -> Response {
-        let text = text.into();
-        let item_height = match self.mode {
-            SidebarMode::Wide => WIDE_ITEM_HEIGHT,
-            SidebarMode::Narrow => NARROW_ITEM_HEIGHT,
-        };
+        self.core.avatar_item(text, initial, selected)
+    }
 
-        let available_width = self.ui.available_width();
-
-        // Allocate the full row as clickable
-        let (rect, response) = self.ui.allocate_exact_size(
-            Vec2::new(available_width, item_height),
-            Sense::click(),
-        );
-
-        let inner_rect = rect.shrink2(Vec2::new(ITEM_PADDING_X, 0.0));
-
-        // Determine colors based on state (same light theme for both modes)
-        let (bg_color, text_color) = if selected {
-            (indigo::_50, indigo::_600)
-        } else if response.hovered() {
-            (gray::_50, gray::_700)
-        } else {
-            (Color32::TRANSPARENT, gray::_700)
-        };
-
-        // Draw background
-        if bg_color != Color32::TRANSPARENT {
-            self.ui.painter().rect_filled(
-                inner_rect,
-                CornerRadius::same(ITEM_CORNER_RADIUS),
-                bg_color,
-            );
-        }
-
-        match self.mode {
-            SidebarMode::Wide => {
-                // Reserve chevron space for alignment
-                let avatar_x = CHEVRON_SIZE + CHEVRON_GAP;
-                let avatar_center = inner_rect.min + Vec2::new(avatar_x + ICON_SIZE / 2.0, item_height / 2.0);
-
-                // Draw avatar circle
-                self.ui.painter().circle_filled(avatar_center, ICON_SIZE / 2.0, gray::_200);
-                self.ui.painter().text(
-                    avatar_center,
-                    egui::Align2::CENTER_CENTER,
-                    initial,
-                    egui::FontId::proportional(12.0),
-                    gray::_600,
-                );
-
-                // Text
-                let text_x = avatar_x + ICON_SIZE + ICON_TEXT_SPACING;
-                let text_pos = inner_rect.min + Vec2::new(text_x, (item_height - 14.0) / 2.0);
-                self.ui.painter().text(
-                    text_pos,
-                    egui::Align2::LEFT_TOP,
-                    text.text(),
-                    egui::FontId::proportional(14.0),
-                    text_color,
-                );
-            }
-            SidebarMode::Narrow => {
-                // Center avatar only
-                let avatar_center = inner_rect.center();
-                self.ui.painter().circle_filled(avatar_center, ICON_SIZE / 2.0, gray::_200);
-                self.ui.painter().text(
-                    avatar_center,
-                    egui::Align2::CENTER_CENTER,
-                    initial,
-                    egui::FontId::proportional(12.0),
-                    gray::_600,
-                );
-            }
-        }
-
-        // Add accessibility info
-        response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, self.ui.is_enabled(), text.text()));
-
-        response
+    /// Add a visual separator line
+    pub fn separator(&mut self) {
+        self.core.separator();
     }
 }
 
@@ -578,7 +472,6 @@ mod tests {
     use egui_kittest::kittest::Queryable;
     use egui_kittest::Harness;
 
-    /// Create a test harness with image loaders installed
     fn create_harness<'a>(app: impl FnMut(&mut Ui) + 'a) -> Harness<'a> {
         let mut harness = Harness::new_ui(app);
         egui_extras::install_image_loaders(&harness.ctx);
@@ -586,45 +479,38 @@ mod tests {
         harness
     }
 
-    // Icon helpers for testing
-    fn home_icon() -> Image<'static> {
-        Image::new(egui::include_image!("icons/home.svg"))
+    macro_rules! test_icon {
+        ($name:ident, $path:literal) => {
+            fn $name() -> Image<'static> {
+                Image::new(egui::include_image!($path))
+            }
+        };
     }
-    fn users_icon() -> Image<'static> {
-        Image::new(egui::include_image!("icons/users.svg"))
-    }
-    fn folder_icon() -> Image<'static> {
-        Image::new(egui::include_image!("icons/folder.svg"))
-    }
-    fn calendar_icon() -> Image<'static> {
-        Image::new(egui::include_image!("icons/calendar.svg"))
-    }
-    fn document_icon() -> Image<'static> {
-        Image::new(egui::include_image!("icons/document.svg"))
-    }
-    fn chart_icon() -> Image<'static> {
-        Image::new(egui::include_image!("icons/chart-bar.svg"))
-    }
+
+    test_icon!(home_icon, "icons/home.svg");
+    test_icon!(users_icon, "icons/users.svg");
+    test_icon!(folder_icon, "icons/folder.svg");
+    test_icon!(calendar_icon, "icons/calendar.svg");
+    test_icon!(document_icon, "icons/document.svg");
+    test_icon!(chart_icon, "icons/chart-bar.svg");
 
     #[test]
     fn test_sidebar_wide_mode() {
         let mut harness = create_harness(|ui| {
-            Sidebar::new()
-                .mode(SidebarMode::Wide)
-                .show(ui, |sidebar| {
-                    sidebar.item("Dashboard", home_icon(), true);
-                    sidebar.item("Team", users_icon(), false);
-                    sidebar.item("Projects", folder_icon(), false);
-                    sidebar.item("Calendar", calendar_icon(), false);
-                    sidebar.item("Documents", document_icon(), false);
-                    sidebar.item("Reports", chart_icon(), false);
+            WideSidebar::new().show(ui, |sidebar| {
+                sidebar.item("Dashboard", home_icon(), true);
+                sidebar.item("Team", users_icon(), false);
+                sidebar.item("Projects", folder_icon(), false);
+                sidebar.item("Calendar", calendar_icon(), false);
+                sidebar.item("Documents", document_icon(), false);
+                sidebar.item("Reports", chart_icon(), false);
 
-                    sidebar.section_header("Your teams");
+                sidebar.section_header("Your teams");
 
-                    sidebar.avatar_item("Heroicons", "H", false);
-                    sidebar.avatar_item("Tailwind Labs", "T", false);
-                    sidebar.avatar_item("Workcation", "W", false);
-                });
+                sidebar.avatar_item("Heroicons", "H", false);
+                sidebar.avatar_item("Tailwind Labs", "T", false);
+                sidebar.avatar_item("Workcation", "W", false);
+            });
         });
 
         harness.snapshot("sidebar_wide");
@@ -633,16 +519,14 @@ mod tests {
     #[test]
     fn test_sidebar_narrow_mode() {
         let mut harness = create_harness(|ui| {
-            Sidebar::new()
-                .mode(SidebarMode::Narrow)
-                .show(ui, |sidebar| {
-                    sidebar.item("Dashboard", home_icon(), true);
-                    sidebar.item("Team", users_icon(), false);
-                    sidebar.item("Projects", folder_icon(), false);
-                    sidebar.item("Calendar", calendar_icon(), false);
-                    sidebar.item("Documents", document_icon(), false);
-                    sidebar.item("Reports", chart_icon(), false);
-                });
+            NarrowSidebar::new().show(ui, |sidebar| {
+                sidebar.item("Dashboard", home_icon(), true);
+                sidebar.item("Team", users_icon(), false);
+                sidebar.item("Projects", folder_icon(), false);
+                sidebar.item("Calendar", calendar_icon(), false);
+                sidebar.item("Documents", document_icon(), false);
+                sidebar.item("Reports", chart_icon(), false);
+            });
         });
 
         harness.snapshot("sidebar_narrow");
@@ -651,26 +535,24 @@ mod tests {
     #[test]
     fn test_sidebar_expandable_sections() {
         let mut harness = create_harness(|ui| {
-            Sidebar::new()
-                .mode(SidebarMode::Wide)
-                .show(ui, |sidebar| {
-                    sidebar.item("Dashboard", home_icon(), true);
+            WideSidebar::new().show(ui, |sidebar| {
+                sidebar.item("Dashboard", home_icon(), true);
 
-                    sidebar.expandable("Teams", users_icon(), true, |sidebar| {
-                        sidebar.child_item("Engineering", false);
-                        sidebar.child_item("Human Resources", false);
-                        sidebar.child_item("Customer Success", false);
-                    });
-
-                    sidebar.expandable("Projects", folder_icon(), false, |sidebar| {
-                        sidebar.child_item("Alpha", false);
-                        sidebar.child_item("Beta", false);
-                    });
-
-                    sidebar.item("Calendar", calendar_icon(), false);
-                    sidebar.item("Documents", document_icon(), false);
-                    sidebar.item("Reports", chart_icon(), false);
+                sidebar.expandable("Teams", users_icon(), true, |sidebar| {
+                    sidebar.child_item("Engineering", false);
+                    sidebar.child_item("Human Resources", false);
+                    sidebar.child_item("Customer Success", false);
                 });
+
+                sidebar.expandable("Projects", folder_icon(), false, |sidebar| {
+                    sidebar.child_item("Alpha", false);
+                    sidebar.child_item("Beta", false);
+                });
+
+                sidebar.item("Calendar", calendar_icon(), false);
+                sidebar.item("Documents", document_icon(), false);
+                sidebar.item("Reports", chart_icon(), false);
+            });
         });
 
         harness.snapshot("sidebar_expandable");
@@ -679,27 +561,22 @@ mod tests {
     #[test]
     fn test_sidebar_expandable_toggle() {
         let mut harness = Harness::new_ui(|ui| {
-            Sidebar::new()
-                .mode(SidebarMode::Wide)
-                .show(ui, |sidebar| {
-                    sidebar.item("Dashboard", home_icon(), true);
-                    sidebar.expandable("Teams", users_icon(), false, |sidebar| {
-                        sidebar.child_item("Engineering", false);
-                        sidebar.child_item("Design", false);
-                    });
+            WideSidebar::new().show(ui, |sidebar| {
+                sidebar.item("Dashboard", home_icon(), true);
+                sidebar.expandable("Teams", users_icon(), false, |sidebar| {
+                    sidebar.child_item("Engineering", false);
+                    sidebar.child_item("Design", false);
                 });
+            });
         });
         egui_extras::install_image_loaders(&harness.ctx);
         harness.run();
 
-        // Snapshot: collapsed (no children visible)
         harness.snapshot("expandable_toggle_collapsed");
 
-        // Click the "Teams" row - get its rect from the accessibility label
         let teams_node = harness.get_by_label("Teams");
         let center = teams_node.rect().center();
 
-        // Frame 1: Press down
         harness.input_mut().events.push(egui::Event::PointerMoved(center));
         harness.input_mut().events.push(egui::Event::PointerButton {
             pos: center,
@@ -709,7 +586,6 @@ mod tests {
         });
         harness.run();
 
-        // Frame 2: Release - this triggers clicked()
         harness.input_mut().events.push(egui::Event::PointerButton {
             pos: center,
             button: egui::PointerButton::Primary,
@@ -718,7 +594,6 @@ mod tests {
         });
         harness.run();
 
-        // Snapshot: expanded (children now visible)
         harness.snapshot("expandable_toggle_expanded");
     }
 }
