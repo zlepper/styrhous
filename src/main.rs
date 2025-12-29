@@ -1,9 +1,8 @@
-mod kubernetes_data;
 mod cluster_connection_manager;
 mod worker;
 mod ui;
 mod resource_extensions;
-mod SortedName;
+mod sorted_name;
 mod helpers;
 mod minimal_namespace;
 mod api_resource;
