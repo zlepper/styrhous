@@ -26,11 +26,15 @@ pub mod combobox;
 pub mod fuzzy;
 pub mod icons;
 pub mod sidebar;
+pub mod table;
 pub mod tabs;
 
 pub use button::{ButtonRounding, ButtonSize, ButtonVariant, TailwindButton};
 pub use combobox::{ComboboxUi, ItemResponse, NoFilter, TailwindCombobox, WithFilter};
 pub use sidebar::{
     ExpandableResponse, NarrowSidebar, NarrowSidebarContent, WideSidebar, WideSidebarContent,
+};
+pub use table::{
+    SortDirection, SortState, TableColumnBuilder, TableRowBuilder, TailwindTable,
 };
 pub use tabs::{Tabs, TabsContent, TabsResponse};

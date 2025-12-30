@@ -44,6 +44,32 @@ pub fn chevron_down(ui: &mut Ui, size: f32, color: Color32) -> Response {
     ui.add(image)
 }
 
+/// Render a chevron-up icon
+///
+/// # Arguments
+/// * `ui` - The UI to render into
+/// * `size` - Icon size in pixels
+/// * `color` - Icon color (applied as tint)
+pub fn chevron_up(ui: &mut Ui, size: f32, color: Color32) -> Response {
+    let image = Image::new(include_image!("icons/chevron-up.svg"))
+        .fit_to_exact_size(Vec2::splat(size))
+        .tint(color);
+    ui.add(image)
+}
+
+/// Render a bars-3 (hamburger menu) icon
+///
+/// # Arguments
+/// * `ui` - The UI to render into
+/// * `size` - Icon size in pixels
+/// * `color` - Icon color (applied as tint)
+pub fn bars_3(ui: &mut Ui, size: f32, color: Color32) -> Response {
+    let image = Image::new(include_image!("icons/bars-3.svg"))
+        .fit_to_exact_size(Vec2::splat(size))
+        .tint(color);
+    ui.add(image)
+}
+
 // Icon factory functions - return unsized Image for use in components
 
 /// Returns a home icon image
