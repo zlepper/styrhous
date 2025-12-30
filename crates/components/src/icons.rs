@@ -101,3 +101,75 @@ pub fn document_icon() -> Image<'static> {
 pub fn chart_bar_icon() -> Image<'static> {
     Image::new(include_image!("icons/chart-bar.svg"))
 }
+
+/// Render a trash (delete) icon (non-interactive)
+///
+/// For a clickable button version, use `trash_button()` instead.
+///
+/// # Arguments
+/// * `ui` - The UI to render into
+/// * `size` - Icon size in pixels
+/// * `color` - Icon color (applied as tint)
+pub fn trash(ui: &mut Ui, size: f32, color: Color32) -> Response {
+    let image = Image::new(include_image!("icons/trash.svg"))
+        .fit_to_exact_size(Vec2::splat(size))
+        .tint(color);
+    ui.add(image)
+}
+
+/// Render a pencil (edit) icon (non-interactive)
+///
+/// For a clickable button version, use `pencil_button()` instead.
+///
+/// # Arguments
+/// * `ui` - The UI to render into
+/// * `size` - Icon size in pixels
+/// * `color` - Icon color (applied as tint)
+pub fn pencil(ui: &mut Ui, size: f32, color: Color32) -> Response {
+    let image = Image::new(include_image!("icons/pencil.svg"))
+        .fit_to_exact_size(Vec2::splat(size))
+        .tint(color);
+    ui.add(image)
+}
+
+/// Render a clickable trash (delete) icon button using native egui Button
+///
+/// Uses Button::image_and_text() with zero-width space for proper accessibility.
+/// The label appears in screen readers and kittest but not visually.
+///
+/// # Arguments
+/// * `ui` - The UI to render into
+/// * `size` - Icon size in pixels
+/// * `color` - Icon color (applied as tint)
+/// * `label` - Accessibility label for the button (e.g., "Delete my-resource")
+pub fn trash_button(ui: &mut Ui, size: f32, color: Color32, label: &str) -> Response {
+    let image = Image::new(include_image!("icons/trash.svg"))
+        .fit_to_exact_size(Vec2::splat(size))
+        .tint(color);
+    // Button::image_and_text gives us both the icon and accessibility via the text label
+    // The text is the accessibility label that kittest can find
+    let button = egui::Button::image_and_text(image, label)
+        .frame(false);
+    ui.add(button)
+}
+
+/// Render a clickable pencil (edit) icon button using native egui Button
+///
+/// Uses Button::image_and_text() with zero-width space for proper accessibility.
+/// The label appears in screen readers and kittest but not visually.
+///
+/// # Arguments
+/// * `ui` - The UI to render into
+/// * `size` - Icon size in pixels
+/// * `color` - Icon color (applied as tint)
+/// * `label` - Accessibility label for the button (e.g., "Edit my-resource")
+pub fn pencil_button(ui: &mut Ui, size: f32, color: Color32, label: &str) -> Response {
+    let image = Image::new(include_image!("icons/pencil.svg"))
+        .fit_to_exact_size(Vec2::splat(size))
+        .tint(color);
+    // Button::image_and_text gives us both the icon and accessibility via the text label
+    // The text is the accessibility label that kittest can find
+    let button = egui::Button::image_and_text(image, label)
+        .frame(false);
+    ui.add(button)
+}
