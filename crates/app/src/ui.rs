@@ -2,8 +2,9 @@ use crate::sorted_name::SortedName;
 use crate::cluster_connection_manager::ClusterConnection;
 use crate::helpers::SetExt;
 use crate::minimal_namespace::MinimalNamespace;
+use crate::minimal_resource::MinimalResource;
 use crate::worker::{Worker, WorkerCommand, WorkerResult, WorkerTrait};
-use components::{NarrowSidebar, TailwindCombobox, WideSidebar};
+use components::{NarrowSidebar, TailwindCombobox, TailwindTable, TableRowBuilder, WideSidebar};
 use components::icons::folder_icon;
 use itertools::Itertools;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -31,6 +32,18 @@ pub struct UiState {
     selected_cluster: Option<i32>,
 }
 
+/// Key for identifying a resource watcher (api_resource + namespace)
+pub type ResourceWatchKey = (ApiResource, String);
+
+/// State for a single resource watch
+#[derive(Debug, Default)]
+pub struct ResourceWatchState {
+    /// Resources indexed by UID
+    pub resources: BTreeMap<String, MinimalResource>,
+    /// Whether initial sync is complete
+    pub is_synced: bool,
+}
+
 #[derive(Debug)]
 pub struct ClusterState {
     pub name: String,
@@ -40,7 +53,11 @@ pub struct ClusterState {
     pub connection: ClusterConnectionState,
     pub selected_namespaces: HashSet<String>,
     pub api_resource_groups: BTreeMap<String, ApiResourceGroupState>,
-    pub selected_api_resource: Option<ApiResource>
+    pub selected_api_resource: Option<ApiResource>,
+    /// Resource cache - persists across API resource selection changes
+    pub resource_cache: HashMap<ResourceWatchKey, ResourceWatchState>,
+    /// Track active watchers
+    pub active_watchers: HashSet<ResourceWatchKey>,
 }
 
 #[derive(Debug)]
@@ -80,6 +97,8 @@ impl UiState {
                                     selected_namespaces: HashSet::new(),
                                     selected_api_resource: None,
                                     api_resource_groups: BTreeMap::new(),
+                                    resource_cache: HashMap::new(),
+                                    active_watchers: HashSet::new(),
                                 },
                             )
                         })
@@ -145,6 +164,60 @@ impl UiState {
                         cluster.connection = ClusterConnectionState::Connected(runner);
                     }
                 }
+                WorkerResult::KubernetesResourceAdded {
+                    cluster_key,
+                    api_resource,
+                    namespace,
+                    resource,
+                } => {
+                    info!("Resource added: {}", resource.name);
+                    if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
+                        let key = (api_resource, namespace);
+                        let state = cluster.resource_cache.entry(key).or_default();
+                        state.resources.insert(resource.uid.clone(), resource);
+                    }
+                }
+                WorkerResult::KubernetesResourceDeleted {
+                    cluster_key,
+                    api_resource,
+                    namespace,
+                    resource_uid,
+                } => {
+                    info!("Resource deleted: {}", resource_uid);
+                    if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
+                        let key = (api_resource, namespace);
+                        if let Some(state) = cluster.resource_cache.get_mut(&key) {
+                            state.resources.remove(&resource_uid);
+                        }
+                    }
+                }
+                WorkerResult::KubernetesResourcesReplaced {
+                    cluster_key,
+                    api_resource,
+                    namespace,
+                    resources,
+                } => {
+                    info!("Resources replaced: {} resources", resources.len());
+                    if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
+                        let key = (api_resource, namespace);
+                        let state = cluster.resource_cache.entry(key).or_default();
+                        state.resources = resources
+                            .into_iter()
+                            .map(|r| (r.uid.clone(), r))
+                            .collect();
+                        state.is_synced = true;
+                    }
+                }
+                WorkerResult::KubernetesResourceWatchStarted {
+                    cluster_key,
+                    api_resource,
+                    namespace,
+                } => {
+                    info!("Resource watch started for {}/{}", api_resource.group, api_resource.name);
+                    if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
+                        cluster.active_watchers.insert((api_resource, namespace));
+                    }
+                }
             }
         }
     }
@@ -167,7 +240,43 @@ impl<W: WorkerTrait> MyEguiApp<W> {
 
     #[cfg(test)]
     pub fn select_cluster(&mut self, cluster_key: i32) {
+        // Set the selected cluster
         self.ui_state.selected_cluster = Some(cluster_key);
+
+        // Also trigger connection if disconnected (like the UI does on click)
+        if let Some(cluster) = self.ui_state.clusters.get(&cluster_key) {
+            if let ClusterConnectionState::Disconnected = cluster.connection {
+                self.worker.send_command(WorkerCommand::ConnectToCluster {
+                    cluster: cluster.name.clone(),
+                    cluster_key,
+                });
+            }
+        }
+    }
+
+    #[cfg(test)]
+    pub fn select_namespace(&mut self, cluster_key: i32, namespace: &str) {
+        if let Some(cluster) = self.ui_state.clusters.get_mut(&cluster_key) {
+            cluster.selected_namespaces.insert(namespace.to_string());
+        }
+    }
+
+    #[cfg(test)]
+    pub fn select_api_resource(&mut self, cluster_key: i32, api_resource: ApiResource) {
+        if let Some(cluster) = self.ui_state.clusters.get_mut(&cluster_key) {
+            // Start watcher for selected namespaces
+            for namespace in cluster.selected_namespaces.clone() {
+                let key = (api_resource.clone(), namespace.clone());
+                if !cluster.active_watchers.contains(&key) {
+                    self.worker.send_command(WorkerCommand::StartResourceWatch {
+                        cluster_key,
+                        api_resource: api_resource.clone(),
+                        namespace: namespace.clone(),
+                    });
+                }
+            }
+            cluster.selected_api_resource = Some(api_resource);
+        }
     }
 }
 
@@ -239,6 +348,9 @@ impl<W: WorkerTrait> eframe::App for MyEguiApp<W> {
             }
         }
 
+        // Track commands to send (deferred to avoid borrow issues)
+        let mut commands_to_send: Vec<WorkerCommand> = Vec::new();
+
         // Central panel with main content
         if let Some(selected_cluster_id) = self.ui_state.selected_cluster {
             if let Some(cluster) = self.ui_state.clusters.get_mut(&selected_cluster_id) {
@@ -258,19 +370,103 @@ impl<W: WorkerTrait> eframe::App for MyEguiApp<W> {
                             .show_items(ui, &namespaces, |cb, ns| {
                                 let is_selected = cluster.selected_namespaces.contains(&ns.name);
                                 if cb.item(ns.get_name_to_display(), is_selected).clicked() {
+                                    let was_selected = cluster.selected_namespaces.contains(&ns.name);
                                     cluster.selected_namespaces.toggle(ns.name.clone());
+
+                                    // Start watcher for newly selected namespace if API resource is selected
+                                    if !was_selected {
+                                        if let Some(api_resource) = &cluster.selected_api_resource {
+                                            let key = (api_resource.clone(), ns.name.clone());
+                                            if !cluster.active_watchers.contains(&key) {
+                                                commands_to_send.push(WorkerCommand::StartResourceWatch {
+                                                    cluster_key: cluster.cluster_key,
+                                                    api_resource: api_resource.clone(),
+                                                    namespace: ns.name.clone(),
+                                                });
+                                            }
+                                        }
+                                    }
                                 }
                             });
                     });
 
-                    ui.heading("Hello World!");
+                    ui.add_space(16.0);
+
+                    // Resource table
+                    if let Some(api_resource) = &cluster.selected_api_resource {
+                        // Collect resources from all selected namespaces
+                        let show_namespace_column = cluster.selected_namespaces.len() > 1;
+                        let mut all_resources: Vec<&MinimalResource> = Vec::new();
+
+                        for ns in &cluster.selected_namespaces {
+                            let key = (api_resource.clone(), ns.clone());
+                            if let Some(state) = cluster.resource_cache.get(&key) {
+                                all_resources.extend(state.resources.values());
+                            }
+                        }
+
+                        // Sort by name
+                        all_resources.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+
+                        // Build and show table
+                        let mut table = TailwindTable::new(format!("resource-table-{}", api_resource.name))
+                            .column("name", "Name", |col| col.sortable().initial_width(250.0));
+
+                        if show_namespace_column {
+                            table = table.column("namespace", "Namespace", |col| col.sortable().initial_width(120.0));
+                        }
+
+                        table = table
+                            .column("status", "Status", |col| col.sortable().initial_width(100.0))
+                            .column("ready", "Ready", |col| col.initial_width(80.0))
+                            .column("age", "Age", |col| col.sortable().initial_width(80.0));
+
+                        table.show(ui, &all_resources, |ui, resource, col_index| {
+                            // Adjust column indices based on whether namespace column is shown
+                            let (name_idx, ns_idx, status_idx, ready_idx, age_idx) = if show_namespace_column {
+                                (0, Some(1), 2, 3, 4)
+                            } else {
+                                (0, None, 1, 2, 3)
+                            };
+
+                            if col_index == name_idx {
+                                TableRowBuilder::text(ui, &resource.name, true);
+                            } else if Some(col_index) == ns_idx {
+                                TableRowBuilder::text(ui, resource.namespace.as_deref().unwrap_or("-"), false);
+                            } else if col_index == status_idx {
+                                TableRowBuilder::text(ui, resource.display_status(), false);
+                            } else if col_index == ready_idx {
+                                TableRowBuilder::text(ui, resource.display_ready(), false);
+                            } else if col_index == age_idx {
+                                TableRowBuilder::text(ui, &resource.age(), false);
+                            }
+                        });
+                    } else {
+                        ui.label("Select an API resource from the sidebar to view resources.");
+                    }
                 });
 
-                // Apply clicked API resource selection
+                // Apply clicked API resource selection and start watchers
                 if let Some(api_resource) = clicked_api_resource {
+                    // Start watchers for all selected namespaces
+                    for namespace in &cluster.selected_namespaces {
+                        let key = (api_resource.clone(), namespace.clone());
+                        if !cluster.active_watchers.contains(&key) {
+                            commands_to_send.push(WorkerCommand::StartResourceWatch {
+                                cluster_key: cluster.cluster_key,
+                                api_resource: api_resource.clone(),
+                                namespace: namespace.clone(),
+                            });
+                        }
+                    }
                     cluster.selected_api_resource = Some(api_resource);
                 }
             }
+        }
+
+        // Send deferred commands
+        for command in commands_to_send {
+            self.worker.send_command(command);
         }
     }
 }
@@ -280,6 +476,7 @@ mod tests {
     use super::*;
     use crate::cluster_connection_manager::Cluster;
     use crate::worker::MockWorker;
+    use egui_kittest::kittest::Queryable;
     use egui_kittest::Harness;
 
     #[test]
@@ -364,5 +561,123 @@ mod tests {
         }
 
         harness.snapshot("real_clusters");
+    }
+
+    /// Integration test for resource watcher using accessibility-based UI interactions.
+    /// Requires a Kind cluster to be running locally.
+    /// Run with: cargo test -p kubernetes-dev-ui test_resource_watcher_integration -- --ignored
+    #[test]
+    #[ignore]
+    fn test_resource_watcher_integration() {
+        let mut harness = Harness::new_eframe(|_cc| MyEguiApp::<Worker>::default());
+        egui_extras::install_image_loaders(&harness.ctx);
+
+        // Helper: run frames with sleep until condition is met or timeout
+        fn wait_for<T>(
+            harness: &mut Harness<MyEguiApp<Worker>>,
+            condition: impl Fn(&MyEguiApp<Worker>) -> Option<T>,
+            max_ms: u64,
+        ) -> Option<T> {
+            let start = std::time::Instant::now();
+            while start.elapsed().as_millis() < max_ms as u128 {
+                harness.run();
+                if let Some(result) = condition(harness.state()) {
+                    return Some(result);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            None
+        }
+
+        // 1. Wait for clusters to load
+        wait_for(&mut harness, |app| {
+            if app.ui_state.clusters.is_empty() { None } else { Some(()) }
+        }, 5000).expect("Clusters should load");
+
+        // 2. Click on the Kind cluster via accessibility
+        harness.get_by_label("kind-kind").click();
+        harness.run();
+
+        // Get cluster_key for later use
+        let cluster_key = harness.state().ui_state.selected_cluster
+            .expect("Cluster should be selected after click");
+
+        // 3. Wait for namespaces to load
+        wait_for(&mut harness, |app| {
+            let cluster = app.ui_state.clusters.get(&cluster_key);
+            if let Some(c) = cluster {
+                if !c.namespaces.is_empty() {
+                    return Some(());
+                }
+            }
+            None
+        }, 10000).expect("Namespaces should load");
+
+        // 4. Wait for API resources to load
+        wait_for(&mut harness, |app| {
+            app.ui_state.clusters.get(&cluster_key)
+                .filter(|c| !c.api_resource_groups.is_empty())
+                .map(|_| ())
+        }, 5000).expect("API resources should load");
+
+        // 5. Click on namespace combobox to open it
+        harness.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace").click();
+        harness.run();
+
+        // 6. Click on kube-system namespace
+        harness.get_by_label("kube-system").click();
+        harness.run();
+
+        // Verify namespace was selected
+        let namespaces_selected = harness.state().ui_state.clusters.get(&cluster_key)
+            .map(|c| c.selected_namespaces.contains("kube-system"))
+            .unwrap_or(false);
+        assert!(namespaces_selected, "kube-system namespace should be selected after click. Selected: {:?}",
+            harness.state().ui_state.clusters.get(&cluster_key).map(|c| &c.selected_namespaces));
+
+        // 7. Click on "core" group to expand it (it should default to closed)
+        harness.get_by_label("core").click();
+        harness.run();
+        harness.run(); // Extra run to ensure expandable section is fully rendered
+
+        // 8. Click "pods" using accesskit action (handles off-screen elements)
+        harness.get_by_label("pods").click_accesskit();
+        harness.run();
+
+        // Use the actual selected API resource (group/version may differ from hardcoded values)
+        let pods_resource = harness.state().ui_state.clusters.get(&cluster_key)
+            .and_then(|c| c.selected_api_resource.clone())
+            .expect("pods API resource should be selected");
+
+        // 9. Wait for resources to sync
+        wait_for(&mut harness, |app| {
+            app.ui_state.selected_cluster.and_then(|k| {
+                app.ui_state.clusters.get(&k)
+                    .and_then(|c| c.resource_cache.get(&(pods_resource.clone(), "kube-system".to_string())))
+                    .filter(|s| s.is_synced)
+                    .map(|_| ())
+            })
+        }, 10000).expect("Resources should sync");
+
+        // 10. Verify we have pods
+        let resource_count = harness.state().ui_state.selected_cluster
+            .and_then(|k| harness.state().ui_state.clusters.get(&k))
+            .and_then(|c| c.resource_cache.get(&(pods_resource.clone(), "kube-system".to_string())))
+            .map(|s| s.resources.len())
+            .unwrap_or(0);
+
+        assert!(resource_count > 0, "Should have at least one pod, got {}", resource_count);
+
+        // 11. Check for known pods (coredns is always in kube-system on Kind)
+        let has_coredns = harness.state().ui_state.selected_cluster
+            .and_then(|k| harness.state().ui_state.clusters.get(&k))
+            .and_then(|c| c.resource_cache.get(&(pods_resource.clone(), "kube-system".to_string())))
+            .map(|s| s.resources.values().any(|r| r.name.starts_with("coredns")))
+            .unwrap_or(false);
+
+        assert!(has_coredns, "Should have coredns pod");
+
+        // 12. Take a snapshot for visual verification
+        harness.snapshot("integration_resource_table");
     }
 }

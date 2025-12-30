@@ -231,9 +231,14 @@ fn render_sidebar<R>(
             .max_rect(sidebar_rect)
             .layout(egui::Layout::top_down(egui::Align::LEFT)),
     );
-    child_ui.add_space(8.0);
 
-    add_contents(&mut child_ui)
+    egui::ScrollArea::vertical()
+        .auto_shrink(false)
+        .show(&mut child_ui, |ui| {
+            ui.add_space(8.0);
+            add_contents(ui)
+        })
+        .inner
 }
 
 /// Response from an expandable sidebar section
@@ -474,6 +479,8 @@ mod tests {
     use super::*;
     use egui_kittest::kittest::Queryable;
     use egui_kittest::Harness;
+    use std::cell::RefCell;
+    use std::rc::Rc;
 
     fn create_harness<'a>(app: impl FnMut(&mut Ui) + 'a) -> Harness<'a> {
         let mut harness = Harness::new_ui(app);
@@ -611,5 +618,34 @@ mod tests {
         harness.run();
 
         harness.snapshot("expandable_toggle_expanded");
+    }
+
+    #[test]
+    fn test_sidebar_child_item_click() {
+        let clicked: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
+        let clicked_clone = clicked.clone();
+
+        let mut harness = Harness::new_ui(move |ui| {
+            WideSidebar::new().show(ui, |sidebar| {
+                sidebar.item("Dashboard", home_icon(), true);
+                sidebar.expandable("Teams", users_icon(), true, |sidebar| {
+                    if sidebar.child_item("Engineering", false).clicked() {
+                        *clicked_clone.borrow_mut() = Some("Engineering".to_string());
+                    }
+                    if sidebar.child_item("Design", false).clicked() {
+                        *clicked_clone.borrow_mut() = Some("Design".to_string());
+                    }
+                });
+            });
+        });
+        egui_extras::install_image_loaders(&harness.ctx);
+        harness.run();
+
+        // Click on Engineering using accessibility
+        harness.get_by_label("Engineering").click();
+        harness.run();
+
+        assert_eq!(*clicked.borrow(), Some("Engineering".to_string()),
+            "Engineering should be clicked via accessibility");
     }
 }

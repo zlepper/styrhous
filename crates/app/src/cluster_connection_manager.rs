@@ -6,18 +6,22 @@ use kube::config::Kubeconfig;
 use futures_util::future::try_join_all;
 use futures_util::pin_mut;
 use k8s_openapi::api::core::v1::Namespace;
-use kube::{Api};
+use kube::Api;
+use kube::api::DynamicObject;
 use kube::config::KubeConfigOptions;
+use kube::api::GroupVersionKind;
 use kube::runtime::watcher;
 use tokio::task::JoinHandle;
 use futures_util::stream::StreamExt;
 use itertools::Itertools;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::{APIGroup, GroupVersionForDiscovery};
 use kube::runtime::watcher::{Event, ListSemantic};
-use tracing::info;
+use time::OffsetDateTime;
+use tracing::{info, warn};
 use crate::api_resource::ApiResource;
 use crate::helpers::ResultExt;
 use crate::minimal_namespace::MinimalNamespace;
+use crate::minimal_resource::MinimalResource;
 
 #[derive(Debug, Clone)]
 pub struct Cluster {
@@ -55,6 +59,11 @@ impl Debug for ClusterConnection {
 }
 
 impl ClusterConnection {
+    /// Get a clone of the kube client for starting additional watchers
+    pub fn client(&self) -> kube::Client {
+        self.client.clone()
+    }
+
     pub async fn new(cluster_key: i32, context_name: &str, event_output: WorkerResultSender) -> Result<Self> {
         let config = kube::Config::from_kubeconfig(&KubeConfigOptions {
             context: Some(context_name.to_string()),
@@ -160,23 +169,23 @@ impl KubernetesApiInspector {
     async fn get_core_api_resources(&self) -> Result<Vec<ApiResource>> {
         let core_api_versions = self.client.list_core_api_versions().await?;
 
-        let tasks = core_api_versions.versions.iter().map(|version| {
-            self.client.list_core_api_resources(&version)
-        });
-
         let mut resources = Vec::new();
 
-        for resource in try_join_all(tasks).await?.into_iter().flat_map(|r| r.resources) {
-            if resource.name.contains("/") {
-                continue;
-            }
+        for version in &core_api_versions.versions {
+            let api_resources = self.client.list_core_api_resources(version).await?;
 
-            resources.push(ApiResource {
-                group: "core".to_string(),
-                version: resource.version.clone().unwrap_or("".to_string()),
-                kind: resource.kind.clone(),
-                name: resource.name.clone(),
-            });
+            for resource in api_resources.resources {
+                if resource.name.contains("/") {
+                    continue;
+                }
+
+                resources.push(ApiResource {
+                    group: "core".to_string(),
+                    version: version.clone(),
+                    kind: resource.kind.clone(),
+                    name: resource.name.clone(),
+                });
+            }
         }
 
         Ok(resources)
@@ -280,4 +289,267 @@ pub async fn start_cluster_connection(cluster_key: i32, cluster_name: &str, even
         cluster_key,
         runner,
     })
+}
+
+/// Start watching resources of a specific type in a specific namespace
+pub async fn start_resource_watcher(
+    cluster_key: i32,
+    client: kube::Client,
+    api_resource: ApiResource,
+    namespace: String,
+    event_sender: WorkerResultSender,
+) -> Result<WorkerResult> {
+    info!(
+        "Starting resource watcher for {}/{} in namespace {}",
+        api_resource.group, api_resource.name, namespace
+    );
+
+    let watcher = KubernetesResourceWatcher {
+        client,
+        event_sender: event_sender.clone(),
+        cluster_key,
+        api_resource: api_resource.clone(),
+        namespace: namespace.clone(),
+    };
+
+    tokio::spawn(watcher.watch_resources());
+
+    Ok(WorkerResult::KubernetesResourceWatchStarted {
+        cluster_key,
+        api_resource,
+        namespace,
+    })
+}
+
+struct KubernetesResourceWatcher {
+    client: kube::Client,
+    event_sender: WorkerResultSender,
+    cluster_key: i32,
+    api_resource: ApiResource,
+    namespace: String,
+}
+
+impl KubernetesResourceWatcher {
+    async fn watch_resources(self) {
+        // Convert our ApiResource to kube's ApiResource using discovery
+        let group = if self.api_resource.group == "core" {
+            ""
+        } else {
+            &self.api_resource.group
+        };
+
+        let gvk = GroupVersionKind::gvk(
+            group,
+            &self.api_resource.version,
+            &self.api_resource.kind,
+        );
+
+        let discovery_result = kube::discovery::pinned_kind(&self.client, &gvk).await;
+        let (ar, caps) = match discovery_result {
+            Ok(r) => r,
+            Err(e) => {
+                warn!(
+                    "Failed to discover API resource {}/{}: {}",
+                    self.api_resource.group, self.api_resource.name, e
+                );
+                return;
+            }
+        };
+
+        // Create namespaced or cluster-scoped API based on capabilities
+        let api: Api<DynamicObject> = if caps.scope == kube::discovery::Scope::Namespaced {
+            Api::namespaced_with(self.client.clone(), &self.namespace, &ar)
+        } else {
+            Api::all_with(self.client.clone(), &ar)
+        };
+
+        let mut buffer = Vec::<MinimalResource>::new();
+
+        let stream = watcher(api, watcher_config()).filter_map(|p| async {
+            match &p {
+                Ok(_) => {}
+                Err(e) => warn!("Resource watcher error: {:?}", e),
+            }
+            p.ok()
+        });
+
+        pin_mut!(stream);
+
+        while let Some(ev) = stream.next().await {
+            match ev {
+                Event::Apply(item) => {
+                    let resource = extract_minimal_resource(&item, &self.api_resource);
+                    self.event_sender
+                        .send(WorkerResult::KubernetesResourceAdded {
+                            cluster_key: self.cluster_key,
+                            api_resource: self.api_resource.clone(),
+                            namespace: self.namespace.clone(),
+                            resource,
+                        })
+                        .log_if_error("Failed to send resource added");
+                }
+                Event::Delete(item) => {
+                    let uid = get_resource_uid(&item);
+                    self.event_sender
+                        .send(WorkerResult::KubernetesResourceDeleted {
+                            cluster_key: self.cluster_key,
+                            api_resource: self.api_resource.clone(),
+                            namespace: self.namespace.clone(),
+                            resource_uid: uid,
+                        })
+                        .log_if_error("Failed to send resource deleted");
+                }
+                Event::Init => {
+                    buffer.clear();
+                }
+                Event::InitApply(item) => {
+                    buffer.push(extract_minimal_resource(&item, &self.api_resource));
+                }
+                Event::InitDone => {
+                    self.event_sender
+                        .send(WorkerResult::KubernetesResourcesReplaced {
+                            cluster_key: self.cluster_key,
+                            api_resource: self.api_resource.clone(),
+                            namespace: self.namespace.clone(),
+                            resources: buffer,
+                        })
+                        .log_if_error("Failed to send resources replaced");
+                    buffer = Vec::new();
+                }
+            }
+        }
+    }
+}
+
+/// Get a unique identifier for a resource
+fn get_resource_uid(obj: &DynamicObject) -> String {
+    obj.metadata
+        .uid
+        .clone()
+        .unwrap_or_else(|| {
+            format!(
+                "{}/{}",
+                obj.metadata.namespace.as_deref().unwrap_or(""),
+                obj.metadata.name.as_deref().unwrap_or("")
+            )
+        })
+}
+
+/// Extract a MinimalResource from a DynamicObject
+fn extract_minimal_resource(obj: &DynamicObject, api_resource: &ApiResource) -> MinimalResource {
+    let metadata = &obj.metadata;
+    let uid = get_resource_uid(obj);
+
+    // Parse creation timestamp
+    let creation_timestamp = metadata
+        .creation_timestamp
+        .as_ref()
+        .and_then(|ts| {
+            OffsetDateTime::parse(&ts.0.to_rfc3339(), &time::format_description::well_known::Rfc3339).ok()
+        });
+
+    // Extract status/phase based on resource type
+    let (phase, ready_status) = extract_status(obj, api_resource);
+
+    MinimalResource {
+        uid,
+        name: metadata.name.clone().unwrap_or_default(),
+        namespace: metadata.namespace.clone(),
+        creation_timestamp,
+        phase,
+        ready_status,
+    }
+}
+
+/// Extract status information based on resource type
+fn extract_status(obj: &DynamicObject, api_resource: &ApiResource) -> (Option<String>, Option<String>) {
+    let status = obj.data.get("status");
+
+    match api_resource.kind.as_str() {
+        "Pod" => {
+            let phase = status
+                .and_then(|s| s.get("phase"))
+                .and_then(|p| p.as_str())
+                .map(String::from);
+
+            // Count ready containers
+            let ready_status = status
+                .and_then(|s| s.get("containerStatuses"))
+                .and_then(|cs| cs.as_array())
+                .map(|containers| {
+                    let total = containers.len();
+                    let ready = containers
+                        .iter()
+                        .filter(|c| c.get("ready").and_then(|r| r.as_bool()).unwrap_or(false))
+                        .count();
+                    format!("{}/{}", ready, total)
+                });
+
+            (phase, ready_status)
+        }
+        "Deployment" | "ReplicaSet" | "StatefulSet" => {
+            let ready = status
+                .and_then(|s| s.get("readyReplicas"))
+                .and_then(|r| r.as_i64())
+                .unwrap_or(0);
+            let desired = status
+                .and_then(|s| s.get("replicas"))
+                .and_then(|r| r.as_i64())
+                .unwrap_or(0);
+
+            let ready_status = Some(format!("{}/{}", ready, desired));
+            let phase = if ready == desired && desired > 0 {
+                Some("Ready".to_string())
+            } else if ready > 0 {
+                Some("Progressing".to_string())
+            } else {
+                Some("Pending".to_string())
+            };
+
+            (phase, ready_status)
+        }
+        "Service" => {
+            let svc_type = obj
+                .data
+                .get("spec")
+                .and_then(|s| s.get("type"))
+                .and_then(|t| t.as_str())
+                .map(String::from);
+            (svc_type, None)
+        }
+        "Job" => {
+            let succeeded = status
+                .and_then(|s| s.get("succeeded"))
+                .and_then(|r| r.as_i64())
+                .unwrap_or(0);
+            let failed = status
+                .and_then(|s| s.get("failed"))
+                .and_then(|r| r.as_i64())
+                .unwrap_or(0);
+            let active = status
+                .and_then(|s| s.get("active"))
+                .and_then(|r| r.as_i64())
+                .unwrap_or(0);
+
+            let phase = if succeeded > 0 {
+                Some("Complete".to_string())
+            } else if failed > 0 {
+                Some("Failed".to_string())
+            } else if active > 0 {
+                Some("Running".to_string())
+            } else {
+                Some("Pending".to_string())
+            };
+
+            (phase, None)
+        }
+        _ => {
+            // Generic: try to extract a "phase" or "state" field
+            let phase = status
+                .and_then(|s| s.get("phase").or_else(|| s.get("state")))
+                .and_then(|p| p.as_str())
+                .map(String::from);
+            (phase, None)
+        }
+    }
 }
