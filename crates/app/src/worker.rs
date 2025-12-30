@@ -1,13 +1,17 @@
 use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::{
     Cluster, ClusterConnection, reload_kubeconfig, start_cluster_connection,
+    start_resource_watcher,
 };
 use crate::helpers::ResultExt;
 use crate::minimal_namespace::MinimalNamespace;
+use crate::minimal_resource::MinimalResource;
 use anyhow::Error;
 #[cfg(test)]
 use std::collections::VecDeque;
-use std::sync::mpsc;
+use std::collections::HashMap;
+use std::sync::{Arc, mpsc};
+use tokio::sync::RwLock;
 use tracing::info;
 
 /// Trait abstracting the worker interface for testability
@@ -32,9 +36,14 @@ impl Worker {
                 .send(WorkerCommand::LoadClusters)
                 .expect("Failed to send initial LoadClusters command");
 
+            let shared = Arc::new(SharedWorkerState {
+                clients: RwLock::new(HashMap::new()),
+            });
+
             let worker = WorkerRuntime {
                 sender: result_channel_sender,
                 receiver: command_channel_receiver,
+                shared,
             };
 
             let worker_thread = std::thread::spawn(move || {
@@ -115,6 +124,11 @@ struct WorkerInner {
 pub enum WorkerCommand {
     LoadClusters,
     ConnectToCluster { cluster: String, cluster_key: i32 },
+    StartResourceWatch {
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: String,
+    },
 }
 
 /// Messages that can be received from the worker
@@ -145,13 +159,47 @@ pub enum WorkerResult {
         cluster_key: i32,
         runner: ClusterConnection,
     },
+    /// A resource was added or updated
+    KubernetesResourceAdded {
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: String,
+        resource: MinimalResource,
+    },
+    /// A resource was deleted
+    KubernetesResourceDeleted {
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: String,
+        resource_uid: String,
+    },
+    /// Initial resource list complete
+    KubernetesResourcesReplaced {
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: String,
+        resources: Vec<MinimalResource>,
+    },
+    /// Resource watcher started successfully
+    KubernetesResourceWatchStarted {
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: String,
+    },
 }
 
 pub type WorkerResultSender = mpsc::SyncSender<WorkerResult>;
 
+/// Shared state accessible from spawned async tasks
+struct SharedWorkerState {
+    /// Kube clients indexed by cluster_key
+    clients: RwLock<HashMap<i32, kube::Client>>,
+}
+
 struct WorkerRuntime {
     sender: mpsc::SyncSender<WorkerResult>,
     receiver: mpsc::Receiver<WorkerCommand>,
+    shared: Arc<SharedWorkerState>,
 }
 
 impl WorkerRuntime {
@@ -163,17 +211,51 @@ impl WorkerRuntime {
 
         info!("Worker thread running");
         while let Ok(command) = self.receiver.recv() {
-            runtime.spawn(WorkerRuntime::handle_command(self.sender.clone(), command));
+            runtime.spawn(WorkerRuntime::handle_command(
+                self.sender.clone(),
+                self.shared.clone(),
+                command,
+            ));
         }
     }
 
-    async fn handle_command(result_channel: WorkerResultSender, command: WorkerCommand) {
+    async fn handle_command(
+        result_channel: WorkerResultSender,
+        shared: Arc<SharedWorkerState>,
+        command: WorkerCommand,
+    ) {
         let result = match &command {
             WorkerCommand::LoadClusters => reload_kubeconfig().await,
             WorkerCommand::ConnectToCluster {
                 cluster_key,
                 cluster,
-            } => start_cluster_connection(*cluster_key, cluster, result_channel.clone()).await,
+            } => {
+                let res = start_cluster_connection(*cluster_key, cluster, result_channel.clone()).await;
+                // Store the client for later use by resource watchers
+                if let Ok(WorkerResult::KubernetesClusterConnectionCreated { cluster_key, runner }) = &res {
+                    let client = runner.client();
+                    shared.clients.write().await.insert(*cluster_key, client);
+                }
+                res
+            }
+            WorkerCommand::StartResourceWatch {
+                cluster_key,
+                api_resource,
+                namespace,
+            } => {
+                let clients = shared.clients.read().await;
+                if let Some(client) = clients.get(cluster_key) {
+                    start_resource_watcher(
+                        *cluster_key,
+                        client.clone(),
+                        api_resource.clone(),
+                        namespace.clone(),
+                        result_channel.clone(),
+                    ).await
+                } else {
+                    Err(anyhow::anyhow!("No client found for cluster_key {}", cluster_key))
+                }
+            }
         };
 
         match result {
@@ -183,7 +265,7 @@ impl WorkerRuntime {
                         command: Some(command),
                         error: e,
                     })
-                    .log_if_error("Failed to send commend failed notification");
+                    .log_if_error("Failed to send command failed notification");
             }
             Ok(result) => {
                 result_channel

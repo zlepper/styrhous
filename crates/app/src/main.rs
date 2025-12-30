@@ -5,6 +5,7 @@ mod resource_extensions;
 mod sorted_name;
 mod helpers;
 mod minimal_namespace;
+mod minimal_resource;
 mod api_resource;
 
 use crate::ui::MyEguiApp;

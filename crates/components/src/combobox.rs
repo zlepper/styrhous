@@ -91,6 +91,7 @@ impl<'a> ComboboxUi<'a> {
     /// order or skipping items will cause incorrect focus behavior.
     pub fn item(&mut self, label: impl Into<WidgetText>, is_selected: bool) -> ItemResponse {
         let label = label.into();
+        let label_text = label.text().to_owned();
         let is_focused = self.current_index == self.focused_index;
         self.current_index += 1;
 
@@ -125,11 +126,17 @@ impl<'a> ComboboxUi<'a> {
             self.ui.painter().text(
                 text_pos,
                 Align2::LEFT_CENTER,
-                label.text(),
+                &label_text,
                 FontId::proportional(FONT_SIZE),
                 text_color,
             );
         }
+
+        // Add accessibility info for screen readers and kittest
+        let is_enabled = self.ui.is_enabled();
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Button, is_enabled, &label_text)
+        });
 
         ItemResponse {
             response,
@@ -293,6 +300,14 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             placeholder.as_deref(),
             selected_text.as_deref(),
         );
+
+        // Add accessibility info for the combobox input
+        let is_enabled = ui.is_enabled();
+        let label_text = label.as_ref().map(|l| l.text().to_owned());
+        input_response.widget_info(|| {
+            let label_str = label_text.as_deref().unwrap_or("Combobox");
+            egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, is_enabled, label_str)
+        });
 
         // Get popup_id from the rendered response (should match our precomputed one)
         let popup_id = Popup::default_response_id(&input_response);
@@ -500,6 +515,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use egui_kittest::kittest::Queryable;
     use egui_kittest::Harness;
     use std::cell::RefCell;
     use std::collections::HashSet;
@@ -613,5 +629,47 @@ mod tests {
         click_at(&mut harness, input_pos);
         harness.run();
         harness.snapshot("combobox_selected");
+    }
+
+    #[test]
+    fn test_combobox_accessibility_click() {
+        let people = test_people();
+        let selected: Rc<RefCell<HashSet<u32>>> = Rc::new(RefCell::new(HashSet::new()));
+        let selected_clone = selected.clone();
+
+        let mut harness = Harness::new_ui(move |ui| {
+            let mut selected = selected_clone.borrow_mut();
+            TailwindCombobox::from_label("People")
+                .placeholder("Search...")
+                .width(250.0)
+                .filter_by(|p: &Person| &p.name)
+                .show_items(ui, &people, |cb, person| {
+                    let is_selected = selected.contains(&person.id);
+                    if cb.item(&person.name, is_selected).clicked() {
+                        if is_selected {
+                            selected.remove(&person.id);
+                        } else {
+                            selected.insert(person.id);
+                        }
+                    }
+                });
+        });
+
+        egui_extras::install_image_loaders(&harness.ctx);
+        harness.run();
+
+        // Open the combobox by clicking on it via accessibility
+        harness.get_by_role_and_label(egui::accesskit::Role::ComboBox, "People").click();
+        harness.run();
+
+        // Now click on "Michael Foster" item using accessibility
+        harness.get_by_label("Michael Foster").click();
+        harness.run();
+
+        // Verify selection
+        assert!(
+            selected.borrow().contains(&1),
+            "Michael Foster (id=1) should be selected after accessibility click"
+        );
     }
 }
