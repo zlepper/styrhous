@@ -1,7 +1,7 @@
 use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::{
     Cluster, ClusterConnection, reload_kubeconfig, start_cluster_connection,
-    start_resource_watcher,
+    start_resource_watcher, get_resource_yaml, delete_resource, apply_resource_yaml,
 };
 use crate::helpers::ResultExt;
 use crate::minimal_namespace::MinimalNamespace;
@@ -129,6 +129,25 @@ pub enum WorkerCommand {
         api_resource: ApiResource,
         namespace: String,
     },
+    GetResourceYaml {
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: String,
+        resource_name: String,
+    },
+    DeleteResource {
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: String,
+        resource_name: String,
+    },
+    ApplyResourceYaml {
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: String,
+        resource_name: String,
+        yaml: String,
+    },
 }
 
 /// Messages that can be received from the worker
@@ -185,6 +204,28 @@ pub enum WorkerResult {
         cluster_key: i32,
         api_resource: ApiResource,
         namespace: String,
+    },
+    /// Resource YAML fetched for viewing/editing
+    ResourceYamlFetched {
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: String,
+        resource_name: String,
+        yaml: String,
+    },
+    /// Resource was successfully deleted
+    ResourceDeleteCompleted {
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: String,
+        resource_name: String,
+    },
+    /// Resource YAML was successfully applied
+    ResourceApplyCompleted {
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: String,
+        resource_name: String,
     },
 }
 
@@ -251,6 +292,65 @@ impl WorkerRuntime {
                         api_resource.clone(),
                         namespace.clone(),
                         result_channel.clone(),
+                    ).await
+                } else {
+                    Err(anyhow::anyhow!("No client found for cluster_key {}", cluster_key))
+                }
+            }
+            WorkerCommand::GetResourceYaml {
+                cluster_key,
+                api_resource,
+                namespace,
+                resource_name,
+            } => {
+                let clients = shared.clients.read().await;
+                if let Some(client) = clients.get(cluster_key) {
+                    get_resource_yaml(
+                        *cluster_key,
+                        client.clone(),
+                        api_resource.clone(),
+                        namespace.clone(),
+                        resource_name.clone(),
+                    ).await
+                } else {
+                    Err(anyhow::anyhow!("No client found for cluster_key {}", cluster_key))
+                }
+            }
+            WorkerCommand::DeleteResource {
+                cluster_key,
+                api_resource,
+                namespace,
+                resource_name,
+            } => {
+                let clients = shared.clients.read().await;
+                if let Some(client) = clients.get(cluster_key) {
+                    delete_resource(
+                        *cluster_key,
+                        client.clone(),
+                        api_resource.clone(),
+                        namespace.clone(),
+                        resource_name.clone(),
+                    ).await
+                } else {
+                    Err(anyhow::anyhow!("No client found for cluster_key {}", cluster_key))
+                }
+            }
+            WorkerCommand::ApplyResourceYaml {
+                cluster_key,
+                api_resource,
+                namespace,
+                resource_name,
+                yaml,
+            } => {
+                let clients = shared.clients.read().await;
+                if let Some(client) = clients.get(cluster_key) {
+                    apply_resource_yaml(
+                        *cluster_key,
+                        client.clone(),
+                        api_resource.clone(),
+                        namespace.clone(),
+                        resource_name.clone(),
+                        yaml.clone(),
                     ).await
                 } else {
                     Err(anyhow::anyhow!("No client found for cluster_key {}", cluster_key))

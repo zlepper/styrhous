@@ -461,6 +461,140 @@ fn extract_minimal_resource(obj: &DynamicObject, api_resource: &ApiResource) -> 
     }
 }
 
+/// Helper to create a namespaced or cluster-scoped API for a given resource type
+async fn create_dynamic_api(
+    client: &kube::Client,
+    api_resource: &ApiResource,
+    namespace: &str,
+) -> Result<Api<DynamicObject>> {
+    let group = if api_resource.group == "core" {
+        ""
+    } else {
+        &api_resource.group
+    };
+
+    let gvk = GroupVersionKind::gvk(group, &api_resource.version, &api_resource.kind);
+    let (ar, caps) = kube::discovery::pinned_kind(client, &gvk).await?;
+
+    let api = if caps.scope == kube::discovery::Scope::Namespaced {
+        Api::namespaced_with(client.clone(), namespace, &ar)
+    } else {
+        Api::all_with(client.clone(), &ar)
+    };
+
+    Ok(api)
+}
+
+/// Fetch a resource's full YAML representation
+pub async fn get_resource_yaml(
+    cluster_key: i32,
+    client: kube::Client,
+    api_resource: ApiResource,
+    namespace: String,
+    resource_name: String,
+) -> Result<WorkerResult> {
+    info!(
+        "Getting YAML for {}/{} {} in namespace {}",
+        api_resource.group, api_resource.name, resource_name, namespace
+    );
+
+    let api = create_dynamic_api(&client, &api_resource, &namespace).await?;
+    let mut obj = api.get(&resource_name).await?;
+
+    // Strip server-managed fields that clutter the editor and cause issues on apply
+    if let Some(metadata) = obj.data.get_mut("metadata") {
+        if let Some(meta_obj) = metadata.as_object_mut() {
+            meta_obj.remove("managedFields");
+            meta_obj.remove("resourceVersion");
+            meta_obj.remove("uid");
+            meta_obj.remove("creationTimestamp");
+        }
+    }
+    obj.metadata.managed_fields = None;
+    obj.metadata.resource_version = None;
+    obj.metadata.uid = None;
+    obj.metadata.creation_timestamp = None;
+
+    let yaml = serde_yaml::to_string(&obj)?;
+
+    Ok(WorkerResult::ResourceYamlFetched {
+        cluster_key,
+        api_resource,
+        namespace,
+        resource_name,
+        yaml,
+    })
+}
+
+/// Delete a resource
+pub async fn delete_resource(
+    cluster_key: i32,
+    client: kube::Client,
+    api_resource: ApiResource,
+    namespace: String,
+    resource_name: String,
+) -> Result<WorkerResult> {
+    info!(
+        "Deleting {}/{} {} in namespace {}",
+        api_resource.group, api_resource.name, resource_name, namespace
+    );
+
+    let api = create_dynamic_api(&client, &api_resource, &namespace).await?;
+    api.delete(&resource_name, &Default::default()).await?;
+
+    Ok(WorkerResult::ResourceDeleteCompleted {
+        cluster_key,
+        api_resource,
+        namespace,
+        resource_name,
+    })
+}
+
+/// Apply (replace) a resource from YAML
+pub async fn apply_resource_yaml(
+    cluster_key: i32,
+    client: kube::Client,
+    api_resource: ApiResource,
+    namespace: String,
+    resource_name: String,
+    yaml: String,
+) -> Result<WorkerResult> {
+    info!(
+        "Applying YAML for {}/{} {} in namespace {}",
+        api_resource.group, api_resource.name, resource_name, namespace
+    );
+
+    let mut obj: DynamicObject = serde_yaml::from_str(&yaml)?;
+
+    // Strip fields that cannot be sent with server-side apply
+    if let Some(metadata) = obj.data.get_mut("metadata") {
+        if let Some(meta_obj) = metadata.as_object_mut() {
+            meta_obj.remove("managedFields");
+            meta_obj.remove("resourceVersion");
+            meta_obj.remove("uid");
+            meta_obj.remove("creationTimestamp");
+        }
+    }
+    // Also clear from the typed metadata
+    obj.metadata.managed_fields = None;
+    obj.metadata.resource_version = None;
+    obj.metadata.uid = None;
+    obj.metadata.creation_timestamp = None;
+
+    let api = create_dynamic_api(&client, &api_resource, &namespace).await?;
+
+    // Use server-side apply with force to take ownership of fields
+    let patch_params = kube::api::PatchParams::apply("kubernetes-dev-ui").force();
+    api.patch(&resource_name, &patch_params, &kube::api::Patch::Apply(&obj)).await?;
+
+    Ok(WorkerResult::ResourceApplyCompleted {
+        cluster_key,
+        api_resource,
+        namespace,
+        resource_name,
+    })
+}
+
 /// Extract status information based on resource type
 fn extract_status(obj: &DynamicObject, api_resource: &ApiResource) -> (Option<String>, Option<String>) {
     let status = obj.data.get("status");
