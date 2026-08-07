@@ -22,6 +22,15 @@ pub(super) type ResourceWatchKey = (ApiResource, String);
 pub(super) struct ResourceWatchState {
     pub(super) resources: BTreeMap<String, MinimalResource>,
     pub(super) is_synced: bool,
+    pub(super) error: Option<String>,
+}
+
+#[derive(Debug, Default)]
+pub(super) enum ClusterLoadState {
+    #[default]
+    Loading,
+    Ready,
+    Failed(String),
 }
 
 #[derive(Debug, Clone)]
@@ -59,6 +68,8 @@ pub(super) struct ClusterState {
     pub(super) cluster_key: i32,
     pub(super) namespaces: BTreeMap<SortedName, MinimalNamespace>,
     pub(super) connection: ClusterConnectionState,
+    pub(super) namespaces_load: ClusterLoadState,
+    pub(super) api_resources_load: ClusterLoadState,
     pub(super) selected_namespaces: HashSet<String>,
     pub(super) resource_navigation: ResourceNavigation,
     pub(super) selected_api_resource: Option<ApiResource>,
@@ -75,6 +86,7 @@ pub(super) enum ClusterConnectionState {
     /// A live connection is present in production. Snapshot fixtures can represent
     /// the same visible state without constructing a Kubernetes client.
     Connected(Option<ClusterConnection>),
+    Failed(String),
 }
 
 impl UiState {
@@ -84,12 +96,27 @@ impl UiState {
     ) -> Option<crate::worker::WorkerCommand> {
         self.selected_cluster = Some(cluster_key);
 
-        let cluster = self.clusters.get(&cluster_key)?;
-        matches!(cluster.connection, ClusterConnectionState::Disconnected).then(|| {
-            crate::worker::WorkerCommand::ConnectToCluster {
-                cluster: cluster.name.clone(),
-                cluster_key,
-            }
+        let cluster = self.clusters.get_mut(&cluster_key)?;
+        if matches!(
+            &cluster.connection,
+            ClusterConnectionState::Connected(_) | ClusterConnectionState::Connecting
+        ) {
+            return None;
+        }
+
+        cluster.connection = ClusterConnectionState::Connecting;
+        cluster.namespaces_load = ClusterLoadState::Loading;
+        cluster.api_resources_load = ClusterLoadState::Loading;
+        cluster.namespaces.clear();
+        cluster.resource_navigation = ResourceNavigation::default();
+        cluster.selected_namespaces.clear();
+        cluster.selected_api_resource = None;
+        cluster.resource_cache.clear();
+        cluster.active_watchers.clear();
+
+        Some(crate::worker::WorkerCommand::ConnectToCluster {
+            cluster: cluster.name.clone(),
+            cluster_key,
         })
     }
 
@@ -103,17 +130,12 @@ impl UiState {
             return;
         };
 
-        for namespace in &cluster.selected_namespaces {
-            let key = (api_resource.clone(), namespace.clone());
-            if !cluster.active_watchers.contains(&key) {
-                commands_to_send.push(crate::worker::WorkerCommand::StartResourceWatch {
-                    cluster_key: cluster.cluster_key,
-                    api_resource: api_resource.clone(),
-                    namespace: namespace.clone(),
-                });
-            }
-        }
         cluster.selected_api_resource = Some(api_resource);
+        let api_resource = cluster
+            .selected_api_resource
+            .clone()
+            .expect("selected API resource was just set");
+        Self::request_selected_resource_watches(cluster, &api_resource, commands_to_send);
     }
 
     pub(super) fn toggle_namespace(
@@ -132,20 +154,74 @@ impl UiState {
             return;
         }
 
-        let Some(api_resource) = &cluster.selected_api_resource else {
+        let Some(api_resource) = cluster.selected_api_resource.clone() else {
             return;
         };
-        let key = (api_resource.clone(), namespace.clone());
-        if !cluster.active_watchers.contains(&key) {
-            commands_to_send.push(crate::worker::WorkerCommand::StartResourceWatch {
-                cluster_key: cluster.cluster_key,
-                api_resource: api_resource.clone(),
-                namespace,
-            });
+        Self::request_resource_watch(cluster, &api_resource, namespace, commands_to_send);
+    }
+
+    pub(super) fn retry_selected_load(
+        &mut self,
+        cluster_key: i32,
+        commands_to_send: &mut Vec<crate::worker::WorkerCommand>,
+    ) {
+        let retry_connection = self.clusters.get(&cluster_key).is_some_and(|cluster| {
+            matches!(&cluster.connection, ClusterConnectionState::Failed(_))
+                || matches!(&cluster.namespaces_load, ClusterLoadState::Failed(_))
+                || matches!(&cluster.api_resources_load, ClusterLoadState::Failed(_))
+        });
+        if retry_connection {
+            if let Some(command) = self.select_cluster(cluster_key) {
+                commands_to_send.push(command);
+            }
+            return;
+        }
+
+        let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
+            return;
+        };
+        let Some(api_resource) = cluster.selected_api_resource.clone() else {
+            return;
+        };
+        Self::request_selected_resource_watches(cluster, &api_resource, commands_to_send);
+    }
+
+    fn request_selected_resource_watches(
+        cluster: &mut ClusterState,
+        api_resource: &ApiResource,
+        commands_to_send: &mut Vec<crate::worker::WorkerCommand>,
+    ) {
+        let namespaces = cluster.selected_namespaces.clone();
+        for namespace in namespaces {
+            Self::request_resource_watch(cluster, api_resource, namespace, commands_to_send);
         }
     }
 
-    pub(super) fn update<W: WorkerTrait>(&mut self, worker: &mut W) {
+    fn request_resource_watch(
+        cluster: &mut ClusterState,
+        api_resource: &ApiResource,
+        namespace: String,
+        commands_to_send: &mut Vec<crate::worker::WorkerCommand>,
+    ) {
+        let key = (api_resource.clone(), namespace.clone());
+        let watch = cluster.resource_cache.entry(key.clone()).or_default();
+        if watch.is_synced || cluster.active_watchers.contains(&key) {
+            return;
+        }
+        watch.error = None;
+        cluster.active_watchers.insert(key);
+        commands_to_send.push(crate::worker::WorkerCommand::StartResourceWatch {
+            cluster_key: cluster.cluster_key,
+            api_resource: api_resource.clone(),
+            namespace,
+        });
+    }
+
+    pub(super) fn update<W: WorkerTrait>(
+        &mut self,
+        worker: &mut W,
+    ) -> Vec<crate::worker::WorkerCommand> {
+        let mut commands_to_send = Vec::new();
         while let Some(result) = worker.get_next_message() {
             match result {
                 WorkerResult::CommandFailed {
@@ -153,31 +229,66 @@ impl UiState {
                     command,
                 } => {
                     error!("Command '{command:?}' failed with error: {message}");
+                    let message = format!("{message:#?}");
+                    match command {
+                        Some(crate::worker::WorkerCommand::ConnectToCluster {
+                            cluster_key,
+                            ..
+                        }) => {
+                            if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
+                                cluster.connection = ClusterConnectionState::Failed(message);
+                            }
+                        }
+                        Some(crate::worker::WorkerCommand::StartResourceWatch {
+                            cluster_key,
+                            api_resource,
+                            namespace,
+                        }) => {
+                            self.resource_watch_failed(
+                                cluster_key,
+                                api_resource,
+                                namespace,
+                                message,
+                            );
+                        }
+                        _ => {}
+                    }
                 }
                 WorkerResult::KubernetesClustersUpdated(clusters) => {
-                    self.clusters = clusters
-                        .into_iter()
-                        .map(|cluster| {
-                            self.next_cluster_key += 1;
-                            (
-                                self.next_cluster_key,
-                                ClusterState {
-                                    cluster_key: self.next_cluster_key,
-                                    name: cluster.name,
-                                    cluster: cluster.cluster,
-                                    namespaces: BTreeMap::new(),
-                                    connection: ClusterConnectionState::Disconnected,
-                                    selected_namespaces: HashSet::new(),
-                                    selected_api_resource: None,
-                                    resource_navigation: ResourceNavigation::default(),
-                                    resource_cache: HashMap::new(),
-                                    active_watchers: HashSet::new(),
-                                    yaml_panel: None,
-                                    pending_delete: None,
-                                },
-                            )
-                        })
-                        .collect();
+                    self.clusters.clear();
+                    self.selected_cluster = None;
+                    let mut current_cluster_key = None;
+                    for cluster in clusters {
+                        self.next_cluster_key += 1;
+                        let cluster_key = self.next_cluster_key;
+                        if cluster.is_current {
+                            current_cluster_key = Some(cluster_key);
+                        }
+                        self.clusters.insert(
+                            cluster_key,
+                            ClusterState {
+                                cluster_key,
+                                name: cluster.name,
+                                cluster: cluster.cluster,
+                                namespaces: BTreeMap::new(),
+                                connection: ClusterConnectionState::Disconnected,
+                                namespaces_load: ClusterLoadState::Loading,
+                                api_resources_load: ClusterLoadState::Loading,
+                                selected_namespaces: HashSet::new(),
+                                selected_api_resource: None,
+                                resource_navigation: ResourceNavigation::default(),
+                                resource_cache: HashMap::new(),
+                                active_watchers: HashSet::new(),
+                                yaml_panel: None,
+                                pending_delete: None,
+                            },
+                        );
+                    }
+                    if let Some(cluster_key) = current_cluster_key {
+                        if let Some(command) = self.select_cluster(cluster_key) {
+                            commands_to_send.push(command);
+                        }
+                    }
                 }
                 WorkerResult::KubernetesNamespacesAdded {
                     cluster_key,
@@ -209,6 +320,12 @@ impl UiState {
                             .into_iter()
                             .map(|namespace| (SortedName::new(&namespace.name), namespace))
                             .collect();
+                        cluster.namespaces_load = ClusterLoadState::Ready;
+                    }
+                }
+                WorkerResult::KubernetesNamespacesLoadFailed { cluster_key, error } => {
+                    if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
+                        cluster.namespaces_load = ClusterLoadState::Failed(error);
                     }
                 }
                 WorkerResult::KubernetesApisLoaded {
@@ -218,6 +335,12 @@ impl UiState {
                     info!("Kubernetes API loaded");
                     if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
                         cluster.resource_navigation = build_resource_navigation(api_resources);
+                        cluster.api_resources_load = ClusterLoadState::Ready;
+                    }
+                }
+                WorkerResult::KubernetesApisLoadFailed { cluster_key, error } => {
+                    if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
+                        cluster.api_resources_load = ClusterLoadState::Failed(error);
                     }
                 }
                 WorkerResult::KubernetesClusterConnectionCreated {
@@ -226,7 +349,7 @@ impl UiState {
                 } => {
                     info!("Cluster connection created");
                     if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
-                        cluster.connection = ClusterConnectionState::Connected(Some(runner));
+                        cluster.connection = ClusterConnectionState::Connected(runner);
                     }
                 }
                 WorkerResult::KubernetesResourceAdded {
@@ -276,6 +399,7 @@ impl UiState {
                             .map(|resource| (resource.uid.clone(), resource))
                             .collect();
                         watch.is_synced = true;
+                        watch.error = None;
                     }
                 }
                 WorkerResult::KubernetesResourceWatchStarted {
@@ -290,6 +414,14 @@ impl UiState {
                     if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
                         cluster.active_watchers.insert((api_resource, namespace));
                     }
+                }
+                WorkerResult::KubernetesResourceWatchFailed {
+                    cluster_key,
+                    api_resource,
+                    namespace,
+                    error,
+                } => {
+                    self.resource_watch_failed(cluster_key, api_resource, namespace, error);
                 }
                 WorkerResult::ResourceYamlFetched {
                     cluster_key,
@@ -331,6 +463,23 @@ impl UiState {
                     }
                 }
             }
+        }
+        commands_to_send
+    }
+
+    fn resource_watch_failed(
+        &mut self,
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: String,
+        error: String,
+    ) {
+        if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
+            let key = (api_resource, namespace);
+            cluster.active_watchers.remove(&key);
+            let watch = cluster.resource_cache.entry(key).or_default();
+            watch.is_synced = false;
+            watch.error = Some(error);
         }
     }
 }

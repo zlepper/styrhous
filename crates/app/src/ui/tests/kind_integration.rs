@@ -100,7 +100,7 @@ fn wait_for<T>(
 ) -> T {
     let start = std::time::Instant::now();
     while start.elapsed().as_millis() < max_ms as u128 {
-        harness.run();
+        harness.run_steps(1);
         if let Some(result) = condition(harness.state()) {
             return result;
         }
@@ -116,8 +116,10 @@ fn connected_kind_harness() -> (Harness<'static, MyEguiApp<Worker>>, i32) {
         |app| (!app.ui_state.clusters.is_empty()).then_some(()),
         5_000,
     );
-    harness.get_by_label("kind-kind").click();
-    harness.run();
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::Button, "kind-kind")
+        .click();
+    harness.run_steps(1);
     let cluster_key = harness
         .state()
         .ui_state
@@ -159,7 +161,7 @@ fn select_resource(
     harness.run();
     harness.run();
     harness.get_by_label(resource_name).click_accesskit();
-    harness.run();
+    harness.run_steps(1);
     let cluster_key = harness
         .state()
         .ui_state

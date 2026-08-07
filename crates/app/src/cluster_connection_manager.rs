@@ -27,10 +27,12 @@ use tracing::{info, warn};
 pub struct Cluster {
     pub name: String,
     pub cluster: Option<String>,
+    pub is_current: bool,
 }
 
 pub async fn reload_kubeconfig() -> Result<WorkerResult> {
     let cfg = Kubeconfig::read().with_context(|| "Error reading kubeconfig")?;
+    let current_context = cfg.current_context.clone();
 
     let mut clusters = Vec::new();
 
@@ -38,6 +40,7 @@ pub async fn reload_kubeconfig() -> Result<WorkerResult> {
         clusters.push(Cluster {
             name: named_context.name.clone(),
             cluster: named_context.context.map(|c| c.cluster).clone(),
+            is_current: current_context.as_deref() == Some(named_context.name.as_str()),
         });
     }
 
@@ -98,10 +101,10 @@ impl ClusterConnection {
 
             async move {
                 match api_resource_inspector.inspect_api().await {
-                    Err(e) => event_output
-                        .send(WorkerResult::CommandFailed {
-                            command: None,
-                            error: e,
+                    Err(error) => event_output
+                        .send(WorkerResult::KubernetesApisLoadFailed {
+                            cluster_key,
+                            error: format!("{error:#?}"),
                         })
                         .log_if_error("Failed to send error from inspecting resource api"),
                     Ok(apis) => event_output
@@ -241,14 +244,23 @@ impl KubernetesNamespaceWatcher {
 
         let mut buffer = Vec::<MinimalNamespace>::new();
 
-        let stream = watcher(namespace_api, watcher_config()).filter_map(|p| async {
-            info!("ev: {:?}", p);
-            p.ok()
-        });
-
+        let stream = watcher(namespace_api, watcher_config());
         pin_mut!(stream);
 
-        while let Some(ev) = stream.next().await {
+        while let Some(event) = stream.next().await {
+            let ev = match event {
+                Ok(event) => event,
+                Err(error) => {
+                    warn!("Namespace watcher error: {error:?}");
+                    self.event_sender
+                        .send(WorkerResult::KubernetesNamespacesLoadFailed {
+                            cluster_key: self.cluster_key,
+                            error: format!("{error:#?}"),
+                        })
+                        .log_if_error("Failed to send namespace watcher error");
+                    return;
+                }
+            };
             match ev {
                 Event::Apply(item) => {
                     self.event_sender
@@ -307,7 +319,7 @@ pub async fn start_cluster_connection(
 
     Ok(WorkerResult::KubernetesClusterConnectionCreated {
         cluster_key,
-        runner,
+        runner: Some(runner),
     })
 }
 
@@ -363,11 +375,19 @@ impl KubernetesResourceWatcher {
         let discovery_result = kube::discovery::pinned_kind(&self.client, &gvk).await;
         let (ar, caps) = match discovery_result {
             Ok(r) => r,
-            Err(e) => {
+            Err(error) => {
                 warn!(
                     "Failed to discover API resource {}/{}: {}",
-                    self.api_resource.group, self.api_resource.name, e
+                    self.api_resource.group, self.api_resource.name, error
                 );
+                self.event_sender
+                    .send(WorkerResult::KubernetesResourceWatchFailed {
+                        cluster_key: self.cluster_key,
+                        api_resource: self.api_resource.clone(),
+                        namespace: self.namespace.clone(),
+                        error: format!("{error:#?}"),
+                    })
+                    .log_if_error("Failed to send resource watcher discovery error");
                 return;
             }
         };
@@ -381,17 +401,25 @@ impl KubernetesResourceWatcher {
 
         let mut buffer = Vec::<MinimalResource>::new();
 
-        let stream = watcher(api, watcher_config()).filter_map(|p| async {
-            match &p {
-                Ok(_) => {}
-                Err(e) => warn!("Resource watcher error: {:?}", e),
-            }
-            p.ok()
-        });
-
+        let stream = watcher(api, watcher_config());
         pin_mut!(stream);
 
-        while let Some(ev) = stream.next().await {
+        while let Some(event) = stream.next().await {
+            let ev = match event {
+                Ok(event) => event,
+                Err(error) => {
+                    warn!("Resource watcher error: {error:?}");
+                    self.event_sender
+                        .send(WorkerResult::KubernetesResourceWatchFailed {
+                            cluster_key: self.cluster_key,
+                            api_resource: self.api_resource.clone(),
+                            namespace: self.namespace.clone(),
+                            error: format!("{error:#?}"),
+                        })
+                        .log_if_error("Failed to send resource watcher error");
+                    return;
+                }
+            };
             match ev {
                 Event::Apply(item) => {
                     let resource = extract_minimal_resource(&item, &self.api_resource);

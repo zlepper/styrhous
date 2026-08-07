@@ -1,5 +1,7 @@
 use super::super::MyEguiApp;
-use super::super::state::{ClusterConnectionState, ClusterState, ResourceWatchState, UiState};
+use super::super::state::{
+    ClusterConnectionState, ClusterLoadState, ClusterState, ResourceWatchState, UiState,
+};
 use crate::api_resource::ApiResource;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
@@ -23,6 +25,8 @@ pub(super) fn fixture_cluster(cluster_key: i32, name: &str) -> ClusterState {
         cluster_key,
         namespaces: BTreeMap::new(),
         connection: ClusterConnectionState::Disconnected,
+        namespaces_load: ClusterLoadState::Ready,
+        api_resources_load: ClusterLoadState::Ready,
         selected_namespaces: HashSet::new(),
         resource_navigation: ResourceNavigation::default(),
         selected_api_resource: None,
@@ -116,6 +120,7 @@ pub(super) fn oracle_resource_table_state() -> UiState {
             .map(|(index, name)| (format!("fixture-{index}"), fixture_resource(index, name)))
             .collect(),
             is_synced: true,
+            error: None,
         },
     );
     UiState {

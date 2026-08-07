@@ -38,6 +38,9 @@ pub(super) fn show(
                             ClusterConnectionState::Connecting => {
                                 ("Connecting", egui::Color32::from_rgb(202, 138, 4))
                             }
+                            ClusterConnectionState::Failed(_) => {
+                                ("Connection failed", egui::Color32::from_rgb(220, 38, 38))
+                            }
                             ClusterConnectionState::Disconnected => ("Disconnected", gray::_500),
                         };
                         let tooltip = format!("{cluster_name} — {status_label}");

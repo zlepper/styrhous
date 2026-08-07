@@ -173,13 +173,21 @@ pub enum WorkerResult {
         cluster_key: i32,
         namespaces: Vec<MinimalNamespace>,
     },
+    KubernetesNamespacesLoadFailed {
+        cluster_key: i32,
+        error: String,
+    },
     KubernetesApisLoaded {
         cluster_key: i32,
         api_resources: Vec<ApiResource>,
     },
+    KubernetesApisLoadFailed {
+        cluster_key: i32,
+        error: String,
+    },
     KubernetesClusterConnectionCreated {
         cluster_key: i32,
-        runner: ClusterConnection,
+        runner: Option<ClusterConnection>,
     },
     /// A resource was added or updated
     KubernetesResourceAdded {
@@ -207,6 +215,12 @@ pub enum WorkerResult {
         cluster_key: i32,
         api_resource: ApiResource,
         namespace: String,
+    },
+    KubernetesResourceWatchFailed {
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: String,
+        error: String,
     },
     /// Resource YAML fetched for viewing/editing
     ResourceYamlFetched {
@@ -279,7 +293,7 @@ impl WorkerRuntime {
                 // Store the client for later use by resource watchers
                 if let Ok(WorkerResult::KubernetesClusterConnectionCreated {
                     cluster_key,
-                    runner,
+                    runner: Some(runner),
                 }) = &res
                 {
                     let client = runner.client();
