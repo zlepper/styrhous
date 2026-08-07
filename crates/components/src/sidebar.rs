@@ -30,7 +30,7 @@
 //! ```
 
 use egui::{
-    collapsing_header::CollapsingState, Color32, CornerRadius, Image, Response, RichText, Sense,
+    collapsing_header::CollapsingState, Color32, CornerRadius, Id, Image, Response, RichText, Sense,
     Stroke, Ui, UiBuilder, Vec2, WidgetText,
 };
 
@@ -139,17 +139,20 @@ fn text_pos_after_icon(inner_rect: egui::Rect, item_height: f32) -> egui::Pos2 {
 
 struct SidebarContentCore<'a> {
     ui: &'a mut Ui,
+    id: Id,
     item_height: f32,
     show_text: bool,
 }
 
 impl<'a> SidebarContentCore<'a> {
     fn wide(ui: &'a mut Ui) -> Self {
-        Self { ui, item_height: WIDE_ITEM_HEIGHT, show_text: true }
+        let id = ui.auto_id_with("wide-sidebar");
+        Self { ui, id, item_height: WIDE_ITEM_HEIGHT, show_text: true }
     }
 
     fn narrow(ui: &'a mut Ui) -> Self {
-        Self { ui, item_height: NARROW_ITEM_HEIGHT, show_text: false }
+        let id = ui.auto_id_with("narrow-sidebar");
+        Self { ui, id, item_height: NARROW_ITEM_HEIGHT, show_text: false }
     }
 
     fn ui_mut(&mut self) -> &mut Ui {
@@ -232,7 +235,9 @@ fn render_sidebar<R>(
             .layout(egui::Layout::top_down(egui::Align::LEFT)),
     );
 
+    let scroll_id = ui.auto_id_with("sidebar-scroll");
     egui::ScrollArea::vertical()
+        .id_salt(scroll_id)
         .auto_shrink(false)
         .show(&mut child_ui, |ui| {
             ui.add_space(8.0);
@@ -326,7 +331,7 @@ impl<'a> WideSidebarContent<'a> {
         let text = text.into();
         let text_str = text.text();
 
-        let id = self.core.ui.make_persistent_id(text_str);
+        let id = self.core.id.with(text_str);
         let mut state = CollapsingState::load_with_default_open(self.core.ui.ctx(), id, default_open);
         let is_open = state.is_open();
 
@@ -523,7 +528,7 @@ mod tests {
             });
         });
 
-        harness.snapshot("sidebar_wide");
+        harness.snapshot("sidebars/wide");
     }
 
     #[test]
@@ -539,7 +544,7 @@ mod tests {
             });
         });
 
-        harness.snapshot("sidebar_narrow");
+        harness.snapshot("sidebars/narrow");
     }
 
     #[test]
@@ -552,7 +557,7 @@ mod tests {
             });
         });
 
-        harness.snapshot("sidebar_narrow_avatars");
+        harness.snapshot("sidebars/narrow_avatars");
     }
 
     #[test]
@@ -578,7 +583,7 @@ mod tests {
             });
         });
 
-        harness.snapshot("sidebar_expandable");
+        harness.snapshot("sidebars/expandable");
     }
 
     #[test]
@@ -595,7 +600,7 @@ mod tests {
         egui_extras::install_image_loaders(&harness.ctx);
         harness.run();
 
-        harness.snapshot("expandable_toggle_collapsed");
+        harness.snapshot("sidebars/expandable_toggle_collapsed");
 
         let teams_node = harness.get_by_label("Teams");
         let center = teams_node.rect().center();
@@ -617,7 +622,7 @@ mod tests {
         });
         harness.run();
 
-        harness.snapshot("expandable_toggle_expanded");
+        harness.snapshot("sidebars/expandable_toggle_expanded");
     }
 
     #[test]

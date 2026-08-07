@@ -4,7 +4,10 @@ use crate::helpers::SetExt;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use crate::worker::{Worker, WorkerCommand, WorkerResult, WorkerTrait};
-use components::{NarrowSidebar, TailwindCombobox, TailwindTable, TableRowBuilder, WideSidebar};
+use components::{
+    apply_light_theme, NarrowSidebar, TailwindCombobox, TailwindTable, TableRowBuilder,
+    WideSidebar,
+};
 use components::icons::folder_icon;
 use components::colors::gray;
 use itertools::Itertools;
@@ -309,6 +312,7 @@ impl<W: WorkerTrait> MyEguiApp<W> {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // Install image loaders for SVG icons
         egui_extras::install_image_loaders(&cc.egui_ctx);
+        apply_light_theme(&cc.egui_ctx);
         Self::default()
     }
 

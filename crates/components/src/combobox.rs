@@ -597,13 +597,13 @@ mod tests {
 
         // 1. Initial closed state
         harness.run();
-        harness.snapshot("combobox_closed");
+        harness.snapshot("comboboxes/closed");
 
         // 2. Click to open dropdown
         let input_pos = egui::pos2(125.0, 40.0);
         click_at(&mut harness, input_pos);
         harness.run();
-        harness.snapshot("combobox_open");
+        harness.snapshot("comboboxes/open");
 
         // 3. Type "mi" to filter (shows Michael Foster, Emily Selman)
         harness
@@ -611,7 +611,7 @@ mod tests {
             .events
             .push(egui::Event::Text("mi".into()));
         harness.run();
-        harness.snapshot("combobox_filtered");
+        harness.snapshot("comboboxes/filtered");
 
         // 4. Click on first filtered item (Michael Foster) to select it
         // Dropdown items start below input (~60px), each item is 36px tall
@@ -628,7 +628,7 @@ mod tests {
         // 5. Re-open to show selected state
         click_at(&mut harness, input_pos);
         harness.run();
-        harness.snapshot("combobox_selected");
+        harness.snapshot("comboboxes/selected");
     }
 
     #[test]

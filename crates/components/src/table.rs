@@ -167,6 +167,7 @@ impl TailwindTable {
 
         // Build columns for egui_extras::TableBuilder
         let mut table = TableBuilder::new(ui)
+            .id_salt(self.id)
             .striped(false) // We handle striping ourselves for correct colors
             .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
             .max_scroll_height(available_height);
@@ -336,6 +337,7 @@ impl TailwindTable {
 
         // Build columns for egui_extras::TableBuilder
         let mut table = TableBuilder::new(ui)
+            .id_salt(self.id)
             .striped(false)
             .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
             .max_scroll_height(available_height);
@@ -462,6 +464,7 @@ impl TailwindTable {
 
         // Build columns for egui_extras::TableBuilder
         let mut table = TableBuilder::new(ui)
+            .id_salt(self.id)
             .striped(false)
             .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
             .max_scroll_height(available_height);
@@ -601,6 +604,7 @@ impl TailwindTable {
 
         // Build columns for egui_extras::TableBuilder
         let mut table = TableBuilder::new(ui)
+            .id_salt(self.id)
             .striped(false)
             .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
             .max_scroll_height(available_height);
@@ -778,7 +782,7 @@ mod tests {
         });
 
         harness.run();
-        harness.snapshot("table_basic");
+        harness.snapshot("tables/basic");
     }
 
     #[test]
@@ -800,7 +804,7 @@ mod tests {
         });
 
         harness.run();
-        harness.snapshot("table_alternating_rows");
+        harness.snapshot("tables/alternating_rows");
     }
 
     #[test]
@@ -824,7 +828,7 @@ mod tests {
         });
 
         harness.run();
-        harness.snapshot("table_with_selection");
+        harness.snapshot("tables/with_selection");
     }
 
     #[test]
@@ -849,7 +853,7 @@ mod tests {
         });
 
         harness.run();
-        harness.snapshot("table_select_all");
+        harness.snapshot("tables/select_all");
     }
 
     #[test]
@@ -876,7 +880,7 @@ mod tests {
         });
 
         harness.run();
-        harness.snapshot("table_select_all_indeterminate");
+        harness.snapshot("tables/select_all_indeterminate");
     }
 
     /// Helper function to sort users based on sort state
@@ -924,7 +928,7 @@ mod tests {
         });
         egui_extras::install_image_loaders(&harness.ctx);
         harness.run();
-        harness.snapshot("table_sorting_unsorted");
+        harness.snapshot("tables/sorting_unsorted");
 
         // --- Snapshot 2: Sort by name ascending ---
         // Sort state is set before rendering, and data is sorted accordingly
@@ -949,7 +953,7 @@ mod tests {
         });
         egui_extras::install_image_loaders(&harness.ctx);
         harness.run();
-        harness.snapshot("table_sorting_name_asc");
+        harness.snapshot("tables/sorting_name_asc");
 
         // --- Snapshot 3: Sort by title descending ---
         let mut users = test_users();
@@ -973,7 +977,7 @@ mod tests {
         });
         egui_extras::install_image_loaders(&harness.ctx);
         harness.run();
-        harness.snapshot("table_sorting_title_desc");
+        harness.snapshot("tables/sorting_title_desc");
     }
 
     #[test]
@@ -999,7 +1003,7 @@ mod tests {
 
         egui_extras::install_image_loaders(&harness.ctx);
         harness.run();
-        harness.snapshot("table_column_toggle_menu");
+        harness.snapshot("tables/column_toggle_menu");
     }
 
     #[test]
@@ -1026,6 +1030,6 @@ mod tests {
 
         egui_extras::install_image_loaders(&harness.ctx);
         harness.run();
-        harness.snapshot("table_hidden_column");
+        harness.snapshot("tables/hidden_column");
     }
 }
