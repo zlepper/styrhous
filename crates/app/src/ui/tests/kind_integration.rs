@@ -1,9 +1,97 @@
 use super::super::MyEguiApp;
+use super::super::state::ClusterConnectionState;
 use super::fixtures::application_harness;
 use crate::api_resource::ApiResource;
+use crate::sorted_name::SortedName;
 use crate::worker::Worker;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
+use k8s_openapi::api::core::v1::{ConfigMap, Namespace};
+use kube::{Api, Client};
+use std::collections::BTreeMap;
+
+const WATCHER_CONFIGMAP_NAME: &str = "resource-watcher";
+const ACTIONS_CONFIGMAP_NAME: &str = "resource-actions";
+
+struct IntegrationConfigMap {
+    runtime: tokio::runtime::Runtime,
+    namespaces: Api<Namespace>,
+    configmaps: Api<ConfigMap>,
+    namespace: String,
+    name: String,
+}
+
+impl IntegrationConfigMap {
+    fn create(test_name: &str, name: &str, value: &str) -> Self {
+        let runtime = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+        let client = runtime.block_on(async {
+            Client::try_default()
+                .await
+                .expect("Failed to create Kubernetes client")
+        });
+        let namespaces: Api<Namespace> = Api::all(client.clone());
+        let namespace = format!(
+            "kdui-it-{test_name}-{}-{:x}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system time should be after the Unix epoch")
+                .as_nanos()
+        );
+        runtime.block_on(async {
+            namespaces
+                .create(
+                    &Default::default(),
+                    &Namespace {
+                        metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                            name: Some(namespace.clone()),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    },
+                )
+                .await
+                .expect("Failed to create integration namespace");
+        });
+
+        let configmaps: Api<ConfigMap> = Api::namespaced(client, &namespace);
+        runtime.block_on(async {
+            configmaps
+                .create(
+                    &Default::default(),
+                    &ConfigMap {
+                        metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                            name: Some(name.to_owned()),
+                            namespace: Some(namespace.clone()),
+                            ..Default::default()
+                        },
+                        data: Some(BTreeMap::from([(String::from("key1"), value.to_owned())])),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .expect("Failed to create integration ConfigMap");
+        });
+
+        Self {
+            runtime,
+            namespaces,
+            configmaps,
+            namespace,
+            name: name.to_owned(),
+        }
+    }
+}
+
+impl Drop for IntegrationConfigMap {
+    fn drop(&mut self) {
+        let _ = self.runtime.block_on(async {
+            self.namespaces
+                .delete(&self.namespace, &Default::default())
+                .await
+        });
+    }
+}
 
 fn wait_for<T>(
     harness: &mut Harness<MyEguiApp<Worker>>,
@@ -105,102 +193,81 @@ fn wait_for_resource_sync(
     );
 }
 
-/// Snapshot test for the configured local Kind cluster.
+/// Verifies that the worker can connect to Kind and discover cluster data.
 #[test]
 fn test_real_cluster_connection() {
-    let mut harness = application_harness::<Worker>();
-    for _ in 0..10 {
-        harness.run();
-        std::thread::sleep(std::time::Duration::from_millis(100));
-    }
-    harness.snapshot("real_clusters");
+    let (mut harness, cluster_key) = connected_kind_harness();
+    wait_for_cluster_data(&mut harness, cluster_key);
+
+    let cluster = &harness.state().ui_state.clusters[&cluster_key];
+    assert_eq!(cluster.name, "kind-kind");
+    assert!(matches!(
+        cluster.connection,
+        ClusterConnectionState::Connected(_)
+    ));
+    assert!(cluster.namespaces.contains_key(&SortedName::new("default")));
+    assert!(
+        !cluster.resource_navigation.curated_sections.is_empty()
+            || !cluster.resource_navigation.other_api_groups.is_empty(),
+        "Kind should advertise Kubernetes API resources"
+    );
 }
 
 /// Integration test for a real resource watcher using accessibility interactions.
 #[test]
 fn test_resource_watcher_integration() {
+    let fixture =
+        IntegrationConfigMap::create("resource-watcher", WATCHER_CONFIGMAP_NAME, "watcher-value");
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
-    select_namespace(&mut harness, "kube-system");
+    select_namespace(&mut harness, &fixture.namespace);
     assert!(
         harness.state().ui_state.clusters[&cluster_key]
             .selected_namespaces
-            .contains("kube-system")
+            .contains(&fixture.namespace)
     );
 
-    let pods_resource = select_resource(&mut harness, "Apps & Containers", "pods");
-    wait_for_resource_sync(
-        &mut harness,
-        cluster_key,
-        pods_resource.clone(),
-        "kube-system",
-    );
-
-    let resources = &harness.state().ui_state.clusters[&cluster_key].resource_cache
-        [&(pods_resource, "kube-system".to_owned())]
-        .resources;
-    assert!(!resources.is_empty(), "Kind should have kube-system pods");
-    assert!(
-        resources
-            .values()
-            .any(|resource| resource.name.starts_with("coredns")),
-        "Kind should have a CoreDNS pod"
-    );
-    harness.snapshot("integration_resource_table");
-}
-
-/// Creates a ConfigMap, edits it through the UI, and then deletes it through the UI.
-#[test]
-fn test_resource_actions_integration() {
-    use k8s_openapi::api::core::v1::ConfigMap;
-    use kube::{Api, Client};
-    use std::collections::BTreeMap;
-
-    let runtime = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
-    let test_configmap_name = "test-cm-integration".to_owned();
-    let client = runtime.block_on(async {
-        Client::try_default()
-            .await
-            .expect("Failed to create kube client")
-    });
-    let configmaps: Api<ConfigMap> = Api::namespaced(client, "default");
-    runtime.block_on(async {
-        let _ = configmaps
-            .delete(&test_configmap_name, &Default::default())
-            .await;
-        configmaps
-            .create(
-                &Default::default(),
-                &ConfigMap {
-                    metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
-                        name: Some(test_configmap_name.clone()),
-                        namespace: Some("default".to_owned()),
-                        ..Default::default()
-                    },
-                    data: Some(BTreeMap::from([(
-                        String::from("key1"),
-                        String::from("original-value"),
-                    )])),
-                    ..Default::default()
-                },
-            )
-            .await
-            .expect("Failed to create test ConfigMap");
-    });
-
-    let (mut harness, cluster_key) = connected_kind_harness();
-    wait_for_cluster_data(&mut harness, cluster_key);
-    select_namespace(&mut harness, "default");
     let configmaps_resource = select_resource(&mut harness, "Config", "configmaps");
     wait_for_resource_sync(
         &mut harness,
         cluster_key,
         configmaps_resource.clone(),
-        "default",
+        &fixture.namespace,
+    );
+
+    let resources = &harness.state().ui_state.clusters[&cluster_key].resource_cache
+        [&(configmaps_resource, fixture.namespace.clone())]
+        .resources;
+    assert!(
+        resources
+            .values()
+            .any(|resource| resource.name == fixture.name),
+        "resource watcher should report the integration ConfigMap"
+    );
+}
+
+/// Creates a ConfigMap, edits it through the UI, and then deletes it through the UI.
+#[test]
+fn test_resource_actions_integration() {
+    let fixture =
+        IntegrationConfigMap::create("resource-actions", ACTIONS_CONFIGMAP_NAME, "original-value");
+    let test_configmap_name = fixture.name.clone();
+    let runtime = &fixture.runtime;
+    let configmaps = &fixture.configmaps;
+
+    let (mut harness, cluster_key) = connected_kind_harness();
+    wait_for_cluster_data(&mut harness, cluster_key);
+    select_namespace(&mut harness, &fixture.namespace);
+    let configmaps_resource = select_resource(&mut harness, "Config", "configmaps");
+    wait_for_resource_sync(
+        &mut harness,
+        cluster_key,
+        configmaps_resource.clone(),
+        &fixture.namespace,
     );
     assert!(
         harness.state().ui_state.clusters[&cluster_key].resource_cache
-            [&(configmaps_resource.clone(), "default".to_owned())]
+            [&(configmaps_resource.clone(), fixture.namespace.clone())]
             .resources
             .values()
             .any(|resource| resource.name == test_configmap_name)
@@ -288,7 +355,7 @@ fn test_resource_actions_integration() {
         &mut harness,
         |app| {
             let resources = &app.ui_state.clusters[&cluster_key].resource_cache
-                [&(configmaps_resource.clone(), "default".to_owned())]
+                [&(configmaps_resource.clone(), fixture.namespace.clone())]
                 .resources;
             (!resources
                 .values()
