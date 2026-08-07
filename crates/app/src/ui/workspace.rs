@@ -3,8 +3,8 @@ use super::state::{
     UiState,
 };
 use super::widgets::{
-    display_resource_title, resource_status, workspace_empty_state, workspace_error_state,
-    workspace_loading_state, workspace_search_error_state,
+    container_indicators, display_resource_title, resource_status, workspace_empty_state,
+    workspace_error_state, workspace_loading_state, workspace_search_error_state,
 };
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::{MinimalResource, format_age};
@@ -680,6 +680,7 @@ fn show_resource_cell(ui: &mut egui::Ui, cell: Option<&CellValue>) {
         CellValue::Number(value) => TableRowBuilder::text(ui, &value.to_string(), false),
         CellValue::Timestamp(value) => TableRowBuilder::text(ui, &format_age(Some(*value)), false),
         CellValue::Status { label, tone } => resource_status(ui, label, *tone),
+        CellValue::ContainerIndicators(indicators) => container_indicators(ui, indicators),
         CellValue::List(values) => TableRowBuilder::text(ui, &values.join(", "), false),
         CellValue::Empty => TableRowBuilder::text(ui, "-", false),
     }

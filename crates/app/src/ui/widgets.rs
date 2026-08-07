@@ -1,4 +1,4 @@
-use crate::resource_table::StatusTone;
+use crate::resource_table::{ContainerIndicator, StatusTone};
 use components::colors::{SUCCESS, gray};
 use components::{TableRowBuilder, TailwindButton, WorkspaceEmptyState};
 
@@ -13,12 +13,7 @@ pub(super) fn display_resource_title(resource_name: &str) -> String {
 }
 
 pub(super) fn resource_status(ui: &mut egui::Ui, status: &str, tone: StatusTone) {
-    let color = match tone {
-        StatusTone::Success => SUCCESS,
-        StatusTone::Warning => egui::Color32::from_rgb(202, 138, 4),
-        StatusTone::Danger => egui::Color32::from_rgb(220, 38, 38),
-        StatusTone::Neutral => gray::_400,
-    };
+    let color = status_color(tone);
     ui.horizontal(|ui| {
         ui.add_space(-13.0);
         let (dot_rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
@@ -26,6 +21,57 @@ pub(super) fn resource_status(ui: &mut egui::Ui, status: &str, tone: StatusTone)
         ui.add_space(5.0);
         TableRowBuilder::text(ui, status, false);
     });
+}
+
+pub(super) fn container_indicators(ui: &mut egui::Ui, indicators: &[ContainerIndicator]) {
+    if indicators.is_empty() {
+        TableRowBuilder::text(ui, "-", false);
+        return;
+    }
+
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 5.0;
+        for indicator in indicators {
+            let label = format!("{}: {}", indicator.kind.label(), indicator.name);
+            let (rect, response) =
+                ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
+            ui.painter().rect_filled(
+                rect,
+                egui::CornerRadius::same(2),
+                status_color(indicator.tone),
+            );
+            response
+                .on_hover_text(container_indicator_tooltip(indicator))
+                .widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::WidgetType::Image, true, label.clone())
+                });
+        }
+    });
+}
+
+fn container_indicator_tooltip(indicator: &ContainerIndicator) -> String {
+    let mut lines = vec![
+        format!("{}: {}", indicator.kind.label(), indicator.name),
+        format!("State: {}", indicator.state),
+        format!("Ready: {}", if indicator.ready { "Yes" } else { "No" }),
+        format!("Restarts: {}", indicator.restart_count),
+    ];
+    if let Some(reason) = &indicator.reason {
+        lines.push(format!("Reason: {reason}"));
+    }
+    if let Some(message) = &indicator.message {
+        lines.push(format!("Message: {message}"));
+    }
+    lines.join("\n")
+}
+
+fn status_color(tone: StatusTone) -> egui::Color32 {
+    match tone {
+        StatusTone::Success => SUCCESS,
+        StatusTone::Warning => egui::Color32::from_rgb(202, 138, 4),
+        StatusTone::Danger => egui::Color32::from_rgb(220, 38, 38),
+        StatusTone::Neutral => gray::_400,
+    }
 }
 
 pub(super) fn workspace_empty_state(ui: &mut egui::Ui, title: &str, message: &str) {
