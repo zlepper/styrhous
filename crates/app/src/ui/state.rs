@@ -78,6 +78,73 @@ pub(super) enum ClusterConnectionState {
 }
 
 impl UiState {
+    pub(super) fn select_cluster(
+        &mut self,
+        cluster_key: i32,
+    ) -> Option<crate::worker::WorkerCommand> {
+        self.selected_cluster = Some(cluster_key);
+
+        let cluster = self.clusters.get(&cluster_key)?;
+        matches!(cluster.connection, ClusterConnectionState::Disconnected).then(|| {
+            crate::worker::WorkerCommand::ConnectToCluster {
+                cluster: cluster.name.clone(),
+                cluster_key,
+            }
+        })
+    }
+
+    pub(super) fn select_api_resource(
+        &mut self,
+        cluster_key: i32,
+        api_resource: ApiResource,
+        commands_to_send: &mut Vec<crate::worker::WorkerCommand>,
+    ) {
+        let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
+            return;
+        };
+
+        for namespace in &cluster.selected_namespaces {
+            let key = (api_resource.clone(), namespace.clone());
+            if !cluster.active_watchers.contains(&key) {
+                commands_to_send.push(crate::worker::WorkerCommand::StartResourceWatch {
+                    cluster_key: cluster.cluster_key,
+                    api_resource: api_resource.clone(),
+                    namespace: namespace.clone(),
+                });
+            }
+        }
+        cluster.selected_api_resource = Some(api_resource);
+    }
+
+    pub(super) fn toggle_namespace(
+        &mut self,
+        cluster_key: i32,
+        namespace: String,
+        commands_to_send: &mut Vec<crate::worker::WorkerCommand>,
+    ) {
+        let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
+            return;
+        };
+
+        let was_selected = !cluster.selected_namespaces.insert(namespace.clone());
+        if was_selected {
+            cluster.selected_namespaces.remove(&namespace);
+            return;
+        }
+
+        let Some(api_resource) = &cluster.selected_api_resource else {
+            return;
+        };
+        let key = (api_resource.clone(), namespace.clone());
+        if !cluster.active_watchers.contains(&key) {
+            commands_to_send.push(crate::worker::WorkerCommand::StartResourceWatch {
+                cluster_key: cluster.cluster_key,
+                api_resource: api_resource.clone(),
+                namespace,
+            });
+        }
+    }
+
     pub(super) fn update<W: WorkerTrait>(&mut self, worker: &mut W) {
         while let Some(result) = worker.get_next_message() {
             match result {
