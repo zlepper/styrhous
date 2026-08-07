@@ -1,0 +1,19 @@
+nextest-version = { required = "0.9.98" }
+experimental = ["setup-scripts"]
+
+[scripts.setup.ensure-kind-cluster]
+command = ["bash", "scripts/ensure-kind-cluster.sh"]
+slow-timeout = { period = "2m", terminate-after = 1, grace-period = "10s" }
+capture-stdout = true
+capture-stderr = true
+
+[test-groups.kind-integration]
+max-threads = 1
+
+[[profile.default.overrides]]
+filter = 'test(/test_(real_cluster_connection|resource_watcher_integration|resource_actions_integration)$/)'
+test-group = "kind-integration"
+
+[[profile.default.scripts]]
+filter = 'test(/test_(real_cluster_connection|resource_watcher_integration|resource_actions_integration)$/)'
+setup = "ensure-kind-cluster"

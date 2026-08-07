@@ -17,6 +17,8 @@ outputs = { self, nixpkgs}:
           openssl
           wayland
           kind
+          kubectl
+          cargo-nextest
           jetbrains.rust-rover
 
              xorg.libXcursor

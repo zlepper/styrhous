@@ -1,88 +1,73 @@
-# CLAUDE.md
+# Kubernetes Dev UI
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Rust/egui desktop UI for exploring Kubernetes clusters. The UI runs separately from
+Kubernetes I/O: a background worker owns cluster connections and watchers, while the
+UI receives `WorkerResult` updates and sends `WorkerCommand`s.
 
-## Build & Test Commands
+## Development
 
-```bash
-# Build (entire workspace)
-cargo build
+Enter the Nix shell before local development; it provides the native graphics libraries,
+`cargo-nextest`, `kind`, and `kubectl`.
 
-# Run the application
-cargo run -p kubernetes-dev-ui
-
-# Run all tests
-cargo test -p kubernetes-dev-ui
-
-# Run tests with snapshot updates (for UI tests)
-UPDATE_SNAPSHOTS=1 cargo test -p kubernetes-dev-ui
-
-# Run a single test
-cargo test -p kubernetes-dev-ui test_ui_flow
-
-# Run ignored tests (requires real cluster connection)
-cargo test -p kubernetes-dev-ui -- --ignored
-```
-
-## Development Environment
-
-Uses Nix flakes for development dependencies. Enter the dev shell with:
 ```bash
 nix develop
+
+# Build or run the app
+cargo build
+cargo run -p kubernetes-dev-ui
 ```
 
-Local Kubernetes testing uses `kind` (included in flake.nix).
+## Testing
+
+Use nextest for all normal test runs. Do not use `cargo test` for the package test suite.
+
+```bash
+# Entire application suite
+cargo nextest run -p kubernetes-dev-ui
+
+# One test
+cargo nextest run -p kubernetes-dev-ui test_ui_flow
+
+# Update egui snapshot fixtures intentionally
+UPDATE_SNAPSHOTS=1 cargo nextest run -p kubernetes-dev-ui
+```
+
+`egui_kittest` snapshots live in `crates/app/tests/snapshots/`. Review generated
+`*.new.png` files before accepting them; never update snapshots merely to make a test pass.
+
+### Kind-backed integration tests
+
+`test_real_cluster_connection`, `test_resource_watcher_integration`, and
+`test_resource_actions_integration` are regular nextest tests. `.config/nextest.toml`
+assigns them to a single-threaded `kind-integration` group and runs
+`scripts/ensure-kind-cluster.sh` before them.
+
+The script uses the default cluster/context pair (`kind` / `kind-kind`): it creates a
+missing cluster, starts existing Kind node containers, exports its kubeconfig, and waits
+for the API server, nodes, and CoreDNS. It leaves the cluster running. A pre-existing,
+unhealthy cluster is reported as a failure rather than deleted or recreated.
+
+These tests use the real local Kubernetes cluster and may create, edit, or delete their
+own test resources. Keep them serialized and do not mark them `#[ignore]`.
 
 ## Architecture
 
-This is a Kubernetes development UI built with egui/eframe. The application uses a multi-threaded architecture separating UI from Kubernetes operations.
+- `crates/app/src/ui.rs`: `MyEguiApp<W: WorkerTrait>`, UI state, accessibility-driven UI
+  tests, and snapshot tests.
+- `crates/app/src/worker.rs`: background Tokio worker, command/result channel types, and
+  `MockWorker` used by deterministic UI tests.
+- `crates/app/src/cluster_connection_manager.rs`: kubeconfig discovery, cluster
+  connections, namespace/API discovery, and resource watchers.
+- `crates/components/`: reusable egui components and their snapshot tests.
 
-### Core Components
+For UI tests, inject `MockWorker` and drive `WorkerResult` values through the harness.
+Use a real `Worker` only when testing the Kind integration path.
 
-**UI Layer (`crates/app/src/ui.rs`)**
-- `MyEguiApp<W: WorkerTrait>` - Main application struct, generic over worker for testability
-- `UiState` - Holds all UI state including clusters, namespaces, and selections
-- `ClusterState` - Per-cluster state (connection, namespaces, API resources)
-- Receives updates from worker via `WorkerResult` enum and sends commands via `WorkerCommand`
+## Project conventions
 
-**Worker Layer (`crates/app/src/worker.rs`)**
-- `Worker` - Production implementation running Kubernetes operations on a background thread
-- `WorkerTrait` - Abstraction enabling mock injection for tests
-- `MockWorker` - Test double with `VecDeque<WorkerResult>` for injecting responses
-- Uses `mpsc` channels for UI-worker communication
-- Spawns a tokio runtime for async Kubernetes operations
-
-**Kubernetes Integration (`crates/app/src/cluster_connection_manager.rs`)**
-- `ClusterConnection` - Manages active cluster connections with background watchers
-- `KubernetesNamespaceWatcher` - Watches namespace changes via kube-rs watcher API
-- `KubernetesApiInspector` - Discovers available API resources in a cluster
-- Reads kubeconfig contexts to populate cluster list
-
-### Data Flow
-
-1. UI calls `worker.start()` which spawns background thread with tokio runtime
-2. Worker sends initial `LoadClusters` command to itself
-3. Worker reads kubeconfig and sends `KubernetesClustersUpdated` result
-4. On cluster selection, UI sends `ConnectToCluster` command
-5. Worker creates `ClusterConnection` which spawns namespace watcher and API inspector
-6. Real-time namespace updates flow back via `KubernetesNamespacesAdded/Deleted/Replaced`
-
-### Testing
-
-Uses `egui_kittest` for snapshot testing. Tests inject `MockWorker` to control worker responses:
-
-```rust
-let mut harness = Harness::new_eframe(|_cc| MyEguiApp::<MockWorker>::default());
-harness.state_mut().worker.results.push_back(WorkerResult::...);
-harness.run();
-harness.snapshot("name");
-```
-
-Snapshots are stored in `crates/app/tests/snapshots/`.
-
-### Helper Types
-
-- `SortedName` - Case-insensitive sortable string wrapper for BTreeMap keys
-- `MinimalNamespace` - Lightweight namespace representation with optional display name from `tesseract.dev/display-name` annotation
-- `ApiResource` - Kubernetes API resource descriptor (group, version, kind, name)
-- Breaking changes are always allowed. Nobody is using this project yet.
+- Prefer behavior-focused tests and real interactions; mock only external, uncontrollable
+  processes.
+- Keep UI and Kubernetes operations separated through the worker commands/results.
+- API resources and namespaces are keyed using the project helper types (`ApiResource`,
+  `MinimalNamespace`, and `SortedName`); preserve their ordering/display semantics.
+- Breaking changes are permitted: this project has no external users yet.

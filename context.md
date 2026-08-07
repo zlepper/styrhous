@@ -73,8 +73,8 @@ Fixed panel ordering and styling:
 
 ### New Test
 - `test_resource_watcher_integration` - Integration test against real Kind cluster
-- Marked `#[ignore]` - requires running Kind cluster
-- Run with: `cargo test -p kubernetes-dev-ui -- --ignored`
+- Run with: `cargo nextest run -p kubernetes-dev-ui test_resource_watcher_integration`
+- Nextest creates or reuses the default Kind cluster before running the test.
 
 ### Test Flow (Accessibility-Driven)
 1. Wait for clusters to load from kubeconfig
@@ -174,8 +174,8 @@ This provides a cleaner YAML editing experience and avoids apply conflicts.
 
 ### New Test
 - `test_resource_actions_integration` - Tests Edit YAML and Delete against real Kind cluster
-- Marked `#[ignore]` - requires running Kind cluster
-- Run with: `cargo test -p kubernetes-dev-ui test_resource_actions_integration -- --ignored`
+- Run with: `cargo nextest run -p kubernetes-dev-ui test_resource_actions_integration`
+- Nextest creates or reuses the default Kind cluster before running the test.
 
 ### Test Flow (Accessibility-Driven UI Clicks)
 1. Cleanup: Delete any leftover `test-cm-*` ConfigMaps from previous runs

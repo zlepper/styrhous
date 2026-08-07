@@ -244,7 +244,7 @@ select_api_resource(cluster_key: i32, api_resource: ApiResource)
 ### 3. Integration Test (`crates/app/src/ui.rs`)
 
 **Test**: `test_resource_watcher_integration`
-- Marked `#[ignore]` (requires real Kind cluster)
+- Nextest creates or reuses the default Kind cluster before running the test.
 - Uses real `Worker` (not mock)
 
 **Test Flow**:
@@ -275,14 +275,11 @@ Polls condition every 50ms until met or timeout.
 ## Running the Test
 
 ```bash
-# Requires Kind cluster running
-kind create cluster
-
 # Run integration test
-cargo test -p kubernetes-dev-ui test_resource_watcher_integration -- --ignored
+cargo nextest run -p kubernetes-dev-ui test_resource_watcher_integration
 
 # Update snapshots
-UPDATE_SNAPSHOTS=1 cargo test -p kubernetes-dev-ui -- --ignored
+UPDATE_SNAPSHOTS=1 cargo nextest run -p kubernetes-dev-ui
 ```
 
 ## Notes
@@ -467,11 +464,11 @@ let patch_params = kube::api::PatchParams::apply("kubernetes-dev-ui").force();
 
 **Location**: `crates/app/src/ui.rs`
 
-**Prerequisites**: Running Kind cluster (`kind create cluster`)
+**Prerequisites**: `kind` and `kubectl` available in the environment. Nextest creates or reuses the default Kind cluster.
 
 **Run Command**:
 ```bash
-cargo test -p kubernetes-dev-ui test_resource_actions_integration -- --ignored
+cargo nextest run -p kubernetes-dev-ui test_resource_actions_integration
 ```
 
 ### Test Flow
