@@ -1,4 +1,5 @@
 use super::super::dialogs::show_delete_confirmation;
+use super::super::state::ClusterConnectionState;
 use super::super::state::{PendingDelete, UiState};
 use super::fixtures::{
     application_harness, fixture_api_resource, fixture_cluster, oracle_resource_table_state,
@@ -21,6 +22,40 @@ fn oracle_resource_table_snapshot_uses_injected_cluster_state() {
     harness.get_by_label("Apps & Containers").click_accesskit();
     harness.run();
     harness.snapshot("oracle_resource_table_injected");
+}
+
+#[test]
+fn resource_table_reflows_after_viewport_resize() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness.run();
+    harness.get_by_label("Apps & Containers").click_accesskit();
+    harness.run();
+
+    harness.set_size(egui::vec2(1024.0, 1024.0));
+    harness.run();
+    harness.snapshot("resource_table_narrow");
+
+    harness.set_size(super::fixtures::APP_SNAPSHOT_SIZE);
+    harness.run();
+    harness.snapshot("resource_table_resized");
+}
+
+#[test]
+fn cluster_rail_shows_connection_status_marker_and_tooltip() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    state
+        .clusters
+        .get_mut(&1)
+        .expect("dev fixture exists")
+        .connection = ClusterConnectionState::Connecting;
+    harness.state_mut().ui_state = state;
+    harness.run();
+
+    harness.get_by_label("dev").hover();
+    harness.run();
+    harness.snapshot("cluster_rail_connection_status");
 }
 
 #[test]

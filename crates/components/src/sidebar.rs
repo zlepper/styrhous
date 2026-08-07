@@ -43,7 +43,6 @@ const NARROW_WIDTH: f32 = 68.0;
 // comfortably sized active target.
 const WIDE_ITEM_HEIGHT: f32 = 41.8;
 const WIDE_GROUP_HEIGHT: f32 = 52.0;
-const OPEN_RESOURCE_GROUP_HEIGHT: f32 = 45.0;
 const NARROW_ITEM_HEIGHT: f32 = 62.0;
 const NARROW_AVATAR_SIZE: f32 = 28.0;
 const ITEM_PADDING_X: f32 = 8.0;
@@ -170,15 +169,16 @@ fn render_text(
     text: &str,
     color: Color32,
     max_width: f32,
-) {
-    let text = truncate_text(painter, text, color, max_width.max(0.0));
+) -> bool {
+    let rendered_text = truncate_text(painter, text, color, max_width.max(0.0));
     painter.text(
         pos,
         egui::Align2::LEFT_TOP,
-        text,
+        &rendered_text,
         egui::FontId::proportional(TEXT_FONT_SIZE),
         color,
     );
+    rendered_text != text
 }
 
 fn render_avatar(
@@ -287,20 +287,23 @@ impl<'a> SidebarContentCore<'a> {
                 icon,
                 colors.icon,
             );
-            render_text(
+            let text_is_truncated = render_text(
                 self.ui.painter(),
                 text_pos_after_icon(inner_rect, self.item_height),
                 text_str,
                 colors.text,
                 inner_rect.right() - text_pos_after_icon(inner_rect, self.item_height).x,
             );
+            if text_is_truncated {
+                response.clone().on_hover_text(text_str);
+            }
         } else {
             // For narrow mode, center icon within full rect (not inner_rect)
             render_icon(self.ui, icon_rect_centered(rect), icon, colors.icon);
+            response.clone().on_hover_text(text_str);
         }
 
         add_button_accessibility(&response, self.ui, text_str);
-        response.clone().on_hover_text(text_str);
         response
     }
 
@@ -310,8 +313,19 @@ impl<'a> SidebarContentCore<'a> {
         initial: &str,
         selected: bool,
     ) -> Response {
+        self.avatar_item_with_tooltip(text, initial, selected, None)
+    }
+
+    fn avatar_item_with_tooltip(
+        &mut self,
+        text: impl Into<WidgetText>,
+        initial: &str,
+        selected: bool,
+        tooltip: Option<&str>,
+    ) -> Response {
         let text = text.into();
         let text_str = text.text();
+        let tooltip = tooltip.unwrap_or(text_str);
 
         let (rect, inner_rect, response) = allocate_item(self.ui, self.item_height);
         let colors = ItemColors::navigation(selected, response.hovered(), self.dark);
@@ -334,13 +348,16 @@ impl<'a> SidebarContentCore<'a> {
                 self.dark,
                 ICON_SIZE,
             );
-            render_text(
+            let text_is_truncated = render_text(
                 self.ui.painter(),
                 text_pos_after_icon(inner_rect, self.item_height),
                 text_str,
                 colors.text,
                 inner_rect.right() - text_pos_after_icon(inner_rect, self.item_height).x,
             );
+            if text_is_truncated {
+                response.clone().on_hover_text(tooltip);
+            }
         } else {
             // For narrow mode, center avatar within full rect (not inner_rect)
             render_avatar(
@@ -350,10 +367,10 @@ impl<'a> SidebarContentCore<'a> {
                 self.dark,
                 NARROW_AVATAR_SIZE,
             );
+            response.clone().on_hover_text(tooltip);
         }
 
         add_button_accessibility(&response, self.ui, text_str);
-        response.clone().on_hover_text(text_str);
         response
     }
 
@@ -555,14 +572,14 @@ impl<'a> WideSidebarContent<'a> {
                     gray::_400
                 });
 
-        let (_, inner_rect, response) = allocate_item(self.core.ui, WIDE_GROUP_HEIGHT);
+        let (rect, inner_rect, response) = allocate_item(self.core.ui, WIDE_GROUP_HEIGHT);
         let colors = ItemColors::expandable(
             response.hovered(),
             response.is_pointer_button_down_on(),
             self.core.dark,
         );
 
-        draw_background(self.core.ui.painter(), inner_rect, colors.background);
+        draw_background(self.core.ui.painter(), rect, colors.background);
 
         // Chevron
         let chevron_rect = egui::Rect::from_min_size(
@@ -586,7 +603,7 @@ impl<'a> WideSidebarContent<'a> {
         );
 
         // Text
-        render_text(
+        let text_is_truncated = render_text(
             self.core.ui.painter(),
             text_pos_after_icon(inner_rect, WIDE_GROUP_HEIGHT),
             text_str,
@@ -594,7 +611,9 @@ impl<'a> WideSidebarContent<'a> {
             inner_rect.right() - text_pos_after_icon(inner_rect, WIDE_GROUP_HEIGHT).x,
         );
         add_button_accessibility(&response, self.core.ui, text_str);
-        response.clone().on_hover_text(text_str);
+        if text_is_truncated {
+            response.clone().on_hover_text(text_str);
+        }
 
         if response.clicked() {
             state.toggle(self.core.ui);
@@ -673,28 +692,17 @@ impl<'a> WideSidebarContent<'a> {
             gray::_400
         });
 
-        let group_height = if is_open {
-            OPEN_RESOURCE_GROUP_HEIGHT
-        } else {
-            WIDE_GROUP_HEIGHT
-        };
-        // Keep the label and chevron on the original baseline while reducing
-        // only the gap between an open group and its leaves.
-        let open_group_offset = if is_open { 5.5 } else { 0.0 };
-        let (_, inner_rect, response) = allocate_item(self.core.ui, group_height);
+        let group_height = WIDE_GROUP_HEIGHT;
+        let (rect, inner_rect, response) = allocate_item(self.core.ui, group_height);
         let colors = ItemColors::expandable(
             response.hovered(),
             response.is_pointer_button_down_on(),
             self.core.dark,
         );
-        draw_background(self.core.ui.painter(), inner_rect, colors.background);
+        draw_background(self.core.ui.painter(), rect, colors.background);
 
         let chevron_rect = egui::Rect::from_min_size(
-            inner_rect.min
-                + Vec2::new(
-                    12.0 + indent,
-                    (group_height - CHEVRON_SIZE) / 2.0 + open_group_offset,
-                ),
+            inner_rect.min + Vec2::new(12.0 + indent, (group_height - CHEVRON_SIZE) / 2.0),
             Vec2::splat(CHEVRON_SIZE),
         );
         let mut chevron_ui =
@@ -705,9 +713,8 @@ impl<'a> WideSidebarContent<'a> {
                 ));
         chevron_ui.add(chevron);
 
-        let text_pos =
-            text_pos_after_chevron(inner_rect, group_height) + Vec2::new(indent, open_group_offset);
-        render_text(
+        let text_pos = text_pos_after_chevron(inner_rect, group_height) + Vec2::new(indent, 0.0);
+        let text_is_truncated = render_text(
             self.core.ui.painter(),
             text_pos,
             text_str,
@@ -715,7 +722,9 @@ impl<'a> WideSidebarContent<'a> {
             inner_rect.right() - text_pos.x,
         );
         add_button_accessibility(&response, self.core.ui, text_str);
-        response.clone().on_hover_text(text_str);
+        if text_is_truncated {
+            response.clone().on_hover_text(text_str);
+        }
 
         if response.clicked() {
             state.toggle(self.core.ui);
@@ -772,7 +781,7 @@ impl<'a> WideSidebarContent<'a> {
         draw_background(self.core.ui.painter(), bg_rect, colors.background);
 
         let text_pos = rect.min + Vec2::new(text_x, (WIDE_ITEM_HEIGHT - TEXT_FONT_SIZE) / 2.0);
-        render_text(
+        let text_is_truncated = render_text(
             self.core.ui.painter(),
             text_pos,
             text_str,
@@ -780,7 +789,9 @@ impl<'a> WideSidebarContent<'a> {
             rect.right() - ITEM_PADDING_X - text_pos.x,
         );
         add_button_accessibility(&response, self.core.ui, text_str);
-        response.clone().on_hover_text(text_str);
+        if text_is_truncated {
+            response.clone().on_hover_text(text_str);
+        }
 
         response
     }
@@ -889,6 +900,18 @@ impl<'a> NarrowSidebarContent<'a> {
         selected: bool,
     ) -> Response {
         self.core.avatar_item(text, initial, selected)
+    }
+
+    /// Add an avatar item with caller-provided tooltip text.
+    pub fn avatar_item_with_tooltip(
+        &mut self,
+        text: impl Into<WidgetText>,
+        initial: &str,
+        tooltip: &str,
+        selected: bool,
+    ) -> Response {
+        self.core
+            .avatar_item_with_tooltip(text, initial, selected, Some(tooltip))
     }
 
     /// Add a visual separator line
@@ -1060,6 +1083,65 @@ mod tests {
         harness.run();
 
         harness.snapshot("sidebars/expandable_toggle_expanded");
+    }
+
+    #[test]
+    fn test_sidebar_parent_hover_is_a_full_rounded_row() {
+        let mut harness = create_harness(|ui| {
+            WideSidebar::new().dark().show(ui, |sidebar| {
+                sidebar.expandable_text("Apps & Containers", true, |sidebar| {
+                    sidebar.child_item("pods", false);
+                    sidebar.child_item("deployments", false);
+                });
+            });
+        });
+
+        harness.get_by_label("Apps & Containers").hover();
+        harness.run();
+
+        harness.snapshot("sidebars/resource_parent_hover");
+    }
+
+    #[test]
+    fn test_sidebar_open_resource_parent_keeps_the_closed_row_height() {
+        let heights = Rc::new(RefCell::new((0.0, 0.0)));
+        let heights_for_ui = heights.clone();
+        let _harness = create_harness(move |ui| {
+            WideSidebar::new().dark().show(ui, |sidebar| {
+                let open = sidebar.expandable_text("Open resources", true, |_sidebar| {});
+                heights_for_ui.borrow_mut().0 = open.header.rect.height();
+
+                let closed = sidebar.expandable_text("Closed resources", false, |_sidebar| {});
+                heights_for_ui.borrow_mut().1 = closed.header.rect.height();
+            });
+        });
+
+        let (open_height, closed_height) = *heights.borrow();
+        assert_eq!(open_height, closed_height);
+        assert_eq!(open_height, WIDE_GROUP_HEIGHT);
+    }
+
+    #[test]
+    fn test_sidebar_full_text_tooltips_only_appear_when_truncated() {
+        let mut visible_label = create_harness(|ui| {
+            WideSidebar::new().dark().show(ui, |sidebar| {
+                sidebar.child_item("pods", false);
+            });
+        });
+        visible_label.get_by_label("pods").hover();
+        visible_label.run();
+        visible_label.snapshot("sidebars/tooltip_visible_label");
+
+        let mut truncated_label = create_harness(|ui| {
+            WideSidebar::new().width(160.0).dark().show(ui, |sidebar| {
+                sidebar.child_item("very-long-resource-name-that-needs-truncation", false);
+            });
+        });
+        truncated_label
+            .get_by_label("very-long-resource-name-that-needs-truncation")
+            .hover();
+        truncated_label.run();
+        truncated_label.snapshot("sidebars/tooltip_truncated_label");
     }
 
     #[test]

@@ -1,7 +1,5 @@
-use super::state::{ClusterConnectionState, PendingDelete, ResourceAction, UiState};
-use super::widgets::{
-    connection_status, display_resource_title, resource_status, workspace_empty_state,
-};
+use super::state::{PendingDelete, ResourceAction, UiState};
+use super::widgets::{display_resource_title, resource_status, workspace_empty_state};
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use crate::worker::WorkerCommand;
@@ -135,11 +133,6 @@ fn show_toolbar(
     let resource_title = selected_api_resource
         .map(|resource| display_resource_title(&resource.name))
         .unwrap_or_else(|| "Resources".to_owned());
-    let connection_label = match cluster.connection {
-        ClusterConnectionState::Disconnected => "Not connected",
-        ClusterConnectionState::Connecting => "Connecting",
-        ClusterConnectionState::Connected(_) => "Connected",
-    };
     let selected_text = match cluster.selected_namespaces.len() {
         0 => "Select namespaces".to_owned(),
         1 => cluster
@@ -158,32 +151,6 @@ fn show_toolbar(
         egui::Layout::left_to_right(egui::Align::Center),
         |ui| {
             ui.add_space(37.0);
-            ui.label(
-                egui::RichText::new(&cluster.name)
-                    .size(20.0)
-                    .color(gray::_700),
-            );
-            ui.add_space(4.0);
-            connection_status(ui, connection_label);
-            ui.add_space(10.0);
-            ui.separator();
-            ui.add_space(18.0);
-            ui.label(
-                egui::RichText::new(resource_title)
-                    .size(20.0)
-                    .color(gray::_900),
-            );
-            if selected_api_resource.is_some() {
-                ui.add_space(4.0);
-                ui.label(
-                    egui::RichText::new(format!("{resource_count} items"))
-                        .size(18.0)
-                        .color(gray::_500),
-                );
-            }
-            ui.add_space(15.0);
-            ui.separator();
-            ui.add_space(10.0);
             ui.label(
                 egui::RichText::new("Namespace")
                     .size(17.0)
@@ -209,6 +176,22 @@ fn show_toolbar(
             namespace_response.response.widget_info(|| {
                 egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, ui.is_enabled(), "Namespace")
             });
+            if selected_api_resource.is_some() {
+                ui.add_space(15.0);
+                ui.separator();
+                ui.add_space(18.0);
+                ui.label(
+                    egui::RichText::new(resource_title)
+                        .size(20.0)
+                        .color(gray::_900),
+                );
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new(format!("{resource_count} items"))
+                        .size(18.0)
+                        .color(gray::_500),
+                );
+            }
         },
     );
 }
@@ -223,7 +206,7 @@ fn show_resource_table(
     let mut table = TailwindTable::new(format!("resource-table-{}", api_resource.name)).column(
         "name",
         "Name",
-        |col| col.sortable().initial_width(798.0),
+        |col| col.sortable().fill_remaining(),
     );
     if show_namespace_column {
         table = table.column("namespace", "Namespace", |col| {
