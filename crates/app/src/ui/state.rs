@@ -2,6 +2,7 @@ use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::ClusterConnection;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
+use crate::resource_catalog::{ResourceNavigation, build_resource_navigation};
 use crate::sorted_name::SortedName;
 use crate::worker::{WorkerResult, WorkerTrait};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -59,18 +60,12 @@ pub(super) struct ClusterState {
     pub(super) namespaces: BTreeMap<SortedName, MinimalNamespace>,
     pub(super) connection: ClusterConnectionState,
     pub(super) selected_namespaces: HashSet<String>,
-    pub(super) api_resource_groups: BTreeMap<String, ApiResourceGroupState>,
+    pub(super) resource_navigation: ResourceNavigation,
     pub(super) selected_api_resource: Option<ApiResource>,
     pub(super) resource_cache: HashMap<ResourceWatchKey, ResourceWatchState>,
     pub(super) active_watchers: HashSet<ResourceWatchKey>,
     pub(super) yaml_panel: Option<YamlPanelState>,
     pub(super) pending_delete: Option<PendingDelete>,
-}
-
-#[derive(Debug)]
-pub(super) struct ApiResourceGroupState {
-    pub(super) open: bool,
-    pub(super) api_resources: Vec<ApiResource>,
 }
 
 #[derive(Debug)]
@@ -107,7 +102,7 @@ impl UiState {
                                     connection: ClusterConnectionState::Disconnected,
                                     selected_namespaces: HashSet::new(),
                                     selected_api_resource: None,
-                                    api_resource_groups: BTreeMap::new(),
+                                    resource_navigation: ResourceNavigation::default(),
                                     resource_cache: HashMap::new(),
                                     active_watchers: HashSet::new(),
                                     yaml_panel: None,
@@ -155,22 +150,7 @@ impl UiState {
                 } => {
                     info!("Kubernetes API loaded");
                     if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
-                        cluster.api_resource_groups.clear();
-                        for resource in api_resources {
-                            cluster
-                                .api_resource_groups
-                                .entry(resource.group.clone())
-                                .and_modify(|group| group.api_resources.push(resource.clone()))
-                                .or_insert_with(|| ApiResourceGroupState {
-                                    open: false,
-                                    api_resources: vec![resource.clone()],
-                                });
-                        }
-                        for group in cluster.api_resource_groups.values_mut() {
-                            group
-                                .api_resources
-                                .sort_by(|left, right| left.name.cmp(&right.name));
-                        }
+                        cluster.resource_navigation = build_resource_navigation(api_resources);
                     }
                 }
                 WorkerResult::KubernetesClusterConnectionCreated {

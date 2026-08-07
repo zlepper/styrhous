@@ -629,9 +629,35 @@ impl<'a> WideSidebarContent<'a> {
         add_children: impl FnOnce(&mut WideSidebarContent<'_>) -> R,
     ) -> ExpandableResponse<R> {
         let text = text.into();
+        let id = self.core.id.with(text.text());
+        self.expandable_text_with_layout(id, text, default_open, 0.0, add_children)
+    }
+
+    /// Add an indented expandable resource group with a caller-provided stable ID.
+    ///
+    /// This is useful for nested groups that share a display label, such as the
+    /// `Other` subgroup below several API groups.
+    pub fn nested_expandable_text<R>(
+        &mut self,
+        id_source: impl std::hash::Hash,
+        text: impl Into<WidgetText>,
+        default_open: bool,
+        add_children: impl FnOnce(&mut WideSidebarContent<'_>) -> R,
+    ) -> ExpandableResponse<R> {
+        let id = self.core.id.with(id_source);
+        self.expandable_text_with_layout(id, text.into(), default_open, 20.0, add_children)
+    }
+
+    fn expandable_text_with_layout<R>(
+        &mut self,
+        id: Id,
+        text: WidgetText,
+        default_open: bool,
+        indent: f32,
+        add_children: impl FnOnce(&mut WideSidebarContent<'_>) -> R,
+    ) -> ExpandableResponse<R> {
         let text_str = text.text();
 
-        let id = self.core.id.with(text_str);
         let mut state =
             CollapsingState::load_with_default_open(self.core.ui.ctx(), id, default_open);
         let is_open = state.is_open();
@@ -666,7 +692,7 @@ impl<'a> WideSidebarContent<'a> {
         let chevron_rect = egui::Rect::from_min_size(
             inner_rect.min
                 + Vec2::new(
-                    12.0,
+                    12.0 + indent,
                     (group_height - CHEVRON_SIZE) / 2.0 + open_group_offset,
                 ),
             Vec2::splat(CHEVRON_SIZE),
@@ -680,7 +706,7 @@ impl<'a> WideSidebarContent<'a> {
         chevron_ui.add(chevron);
 
         let text_pos =
-            text_pos_after_chevron(inner_rect, group_height) + Vec2::new(0.0, open_group_offset);
+            text_pos_after_chevron(inner_rect, group_height) + Vec2::new(indent, open_group_offset);
         render_text(
             self.core.ui.painter(),
             text_pos,
@@ -715,7 +741,20 @@ impl<'a> WideSidebarContent<'a> {
 
     /// Add a child item (indented, no icon)
     pub fn child_item(&mut self, text: impl Into<WidgetText>, selected: bool) -> Response {
-        let text = text.into();
+        self.child_item_with_indent(text.into(), selected, 0.0)
+    }
+
+    /// Add a leaf item nested below a child expandable group.
+    pub fn nested_child_item(&mut self, text: impl Into<WidgetText>, selected: bool) -> Response {
+        self.child_item_with_indent(text.into(), selected, 40.0)
+    }
+
+    fn child_item_with_indent(
+        &mut self,
+        text: WidgetText,
+        selected: bool,
+        indent: f32,
+    ) -> Response {
         let text_str = text.text();
 
         let (rect, _, response) = allocate_item(self.core.ui, WIDE_ITEM_HEIGHT);
@@ -723,8 +762,8 @@ impl<'a> WideSidebarContent<'a> {
 
         // Child text aligns with the parent disclosure control. The absence of a
         // chevron communicates that it is a leaf without spending width on a gutter.
-        let text_x = ITEM_PADDING_X + CHEVRON_SIZE + CHEVRON_GAP;
-        let bg_indent = ITEM_PADDING_X + 8.0;
+        let text_x = ITEM_PADDING_X + CHEVRON_SIZE + CHEVRON_GAP + indent;
+        let bg_indent = ITEM_PADDING_X + 8.0 + indent;
         let bg_rect = egui::Rect::from_min_max(
             rect.min + Vec2::new(bg_indent, 0.0),
             rect.max - Vec2::new(44.0, if selected { -3.8 } else { 0.0 }),

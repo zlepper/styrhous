@@ -164,15 +164,9 @@ impl<W: WorkerTrait> eframe::App for MyEguiApp<W> {
                                 );
                             });
                             sidebar.ui_mut().add_space(17.0);
-                            for (api_group_name, api_resources) in &cluster.api_resource_groups {
-                                let display_name = if api_group_name.is_empty() {
-                                    "core"
-                                } else {
-                                    api_group_name.as_str()
-                                };
-
-                                sidebar.expandable_text(display_name, false, |sidebar| {
-                                    for api_resource in &api_resources.api_resources {
+                            for section in &cluster.resource_navigation.curated_sections {
+                                sidebar.expandable_text(section.name, false, |sidebar| {
+                                    for api_resource in &section.api_resources {
                                         let selected = cluster
                                             .selected_api_resource
                                             .as_ref()
@@ -185,6 +179,33 @@ impl<W: WorkerTrait> eframe::App for MyEguiApp<W> {
                                             clicked_api_resource = Some(api_resource.clone());
                                         }
                                     }
+                                });
+                            }
+                            for (api_group_name, api_resources) in
+                                &cluster.resource_navigation.other_api_groups
+                            {
+                                sidebar.expandable_text(api_group_name, false, |sidebar| {
+                                    sidebar.nested_expandable_text(
+                                        format!("other-{api_group_name}"),
+                                        "Other",
+                                        false,
+                                        |sidebar| {
+                                            for api_resource in api_resources {
+                                                let selected = cluster
+                                                    .selected_api_resource
+                                                    .as_ref()
+                                                    .is_some_and(|r| r == api_resource);
+
+                                                if sidebar
+                                                    .nested_child_item(&api_resource.name, selected)
+                                                    .clicked()
+                                                {
+                                                    clicked_api_resource =
+                                                        Some(api_resource.clone());
+                                                }
+                                            }
+                                        },
+                                    );
                                 });
                             }
                         });
@@ -575,9 +596,10 @@ impl<W: WorkerTrait> eframe::App for MyEguiApp<W> {
 
 #[cfg(test)]
 mod tests {
-    use super::state::{ApiResourceGroupState, ClusterState, ResourceWatchState};
+    use super::state::{ClusterState, ResourceWatchState};
     use super::*;
     use crate::cluster_connection_manager::Cluster;
+    use crate::resource_catalog::{ResourceNavigation, build_resource_navigation};
     use crate::worker::{MockWorker, WorkerResult};
     use egui_kittest::Harness;
     use egui_kittest::kittest::Queryable;
@@ -599,7 +621,7 @@ mod tests {
             namespaces: BTreeMap::new(),
             connection: ClusterConnectionState::Disconnected,
             selected_namespaces: HashSet::new(),
-            api_resource_groups: BTreeMap::new(),
+            resource_navigation: ResourceNavigation::default(),
             selected_api_resource: None,
             resource_cache: HashMap::new(),
             active_watchers: HashSet::new(),
@@ -649,7 +671,7 @@ mod tests {
         ]
         .into_iter()
         .map(|(kind, name)| fixture_api_resource("core", kind, name))
-        .collect();
+        .collect::<Vec<_>>();
 
         let mut kind = fixture_cluster(2, "kind-kind");
         kind.connection = ClusterConnectionState::Connected(None);
@@ -662,40 +684,17 @@ mod tests {
         );
         kind.selected_namespaces.insert("kube-system".into());
         kind.selected_api_resource = Some(pods.clone());
-        kind.api_resource_groups = BTreeMap::from([
-            (
-                "apps".into(),
-                ApiResourceGroupState {
-                    open: false,
-                    api_resources: vec![fixture_api_resource("apps", "Deployment", "deployments")],
-                },
+        let mut discovered_resources = core_resources;
+        discovered_resources.extend([
+            fixture_api_resource("apps", "Deployment", "deployments"),
+            fixture_api_resource(
+                "autoscaling",
+                "HorizontalPodAutoscaler",
+                "horizontalpodautoscalers",
             ),
-            (
-                "autoscaling".into(),
-                ApiResourceGroupState {
-                    open: false,
-                    api_resources: vec![fixture_api_resource(
-                        "autoscaling",
-                        "HorizontalPodAutoscaler",
-                        "horizontalpodautoscalers",
-                    )],
-                },
-            ),
-            (
-                "batch".into(),
-                ApiResourceGroupState {
-                    open: false,
-                    api_resources: vec![fixture_api_resource("batch", "Job", "jobs")],
-                },
-            ),
-            (
-                "core".into(),
-                ApiResourceGroupState {
-                    open: true,
-                    api_resources: core_resources,
-                },
-            ),
+            fixture_api_resource("batch", "Job", "jobs"),
         ]);
+        kind.resource_navigation = build_resource_navigation(discovered_resources);
         kind.resource_cache.insert(
             (pods, "kube-system".into()),
             ResourceWatchState {
@@ -733,7 +732,7 @@ mod tests {
         let mut harness = application_harness::<MockWorker>();
         harness.state_mut().ui_state = oracle_resource_table_state();
         harness.run();
-        harness.get_by_label("core").click_accesskit();
+        harness.get_by_label("Apps & Containers").click_accesskit();
         harness.run();
 
         harness.snapshot("oracle_resource_table_injected");
@@ -760,7 +759,7 @@ mod tests {
                     namespaces: BTreeMap::new(),
                     connection: ClusterConnectionState::Disconnected,
                     selected_namespaces: HashSet::new(),
-                    api_resource_groups: BTreeMap::new(),
+                    resource_navigation: ResourceNavigation::default(),
                     selected_api_resource: Some(api_resource),
                     resource_cache: HashMap::new(),
                     active_watchers: HashSet::new(),
@@ -798,6 +797,73 @@ mod tests {
                 .get(&1)
                 .and_then(|cluster| cluster.pending_delete.as_ref())
                 .is_none()
+        );
+    }
+
+    #[test]
+    fn resource_navigation_selects_curated_and_other_resources() {
+        let mut cluster = fixture_cluster(1, "dev");
+        cluster.selected_namespaces.insert("default".into());
+        cluster.resource_navigation = build_resource_navigation(vec![
+            fixture_api_resource("core", "Pod", "pods"),
+            fixture_api_resource("apps", "Deployment", "deployments"),
+            fixture_api_resource("apps", "ControllerRevision", "controllerrevisions"),
+        ]);
+
+        let mut harness = application_harness::<MockWorker>();
+        harness.state_mut().ui_state = UiState {
+            clusters: HashMap::from([(1, cluster)]),
+            next_cluster_key: 1,
+            selected_cluster: Some(1),
+        };
+        harness.run();
+
+        harness.get_by_label("Apps & Containers").click_accesskit();
+        harness.run();
+        harness.get_by_label("pods").click_accesskit();
+        harness.run();
+
+        assert_eq!(
+            harness
+                .state()
+                .ui_state
+                .clusters
+                .get(&1)
+                .and_then(|cluster| cluster.selected_api_resource.as_ref())
+                .map(|resource| resource.name.as_str()),
+            Some("pods")
+        );
+
+        harness.get_by_label("apps").click_accesskit();
+        harness.run();
+        harness.get_by_label("Other").click_accesskit();
+        harness.run();
+        harness
+            .get_by_label("controllerrevisions")
+            .click_accesskit();
+        harness.run();
+
+        let app = harness.state();
+        assert_eq!(
+            app.ui_state
+                .clusters
+                .get(&1)
+                .and_then(|cluster| cluster.selected_api_resource.as_ref())
+                .map(|resource| resource.name.as_str()),
+            Some("controllerrevisions")
+        );
+        assert_eq!(
+            app.worker
+                .commands
+                .iter()
+                .filter_map(|command| match command {
+                    WorkerCommand::StartResourceWatch { api_resource, .. } => {
+                        Some(api_resource.name.as_str())
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>(),
+            vec!["pods", "controllerrevisions"]
         );
     }
 
@@ -1002,7 +1068,10 @@ mod tests {
                 app.ui_state
                     .clusters
                     .get(&cluster_key)
-                    .filter(|c| !c.api_resource_groups.is_empty())
+                    .filter(|c| {
+                        !c.resource_navigation.curated_sections.is_empty()
+                            || !c.resource_navigation.other_api_groups.is_empty()
+                    })
                     .map(|_| ())
             },
             5000,
@@ -1038,8 +1107,8 @@ mod tests {
                 .map(|c| &c.selected_namespaces)
         );
 
-        // 7. Click on "core" group to expand it (it should default to closed)
-        harness.get_by_label("core").click_accesskit();
+        // 7. Click on the curated Apps & Containers group to expand it.
+        harness.get_by_label("Apps & Containers").click_accesskit();
         harness.run();
         harness.run(); // Extra run to ensure expandable section is fully rendered
 
@@ -1222,7 +1291,11 @@ mod tests {
                 app.ui_state
                     .clusters
                     .get(&cluster_key)
-                    .filter(|c| !c.namespaces.is_empty() && !c.api_resource_groups.is_empty())
+                    .filter(|c| {
+                        !c.namespaces.is_empty()
+                            && (!c.resource_navigation.curated_sections.is_empty()
+                                || !c.resource_navigation.other_api_groups.is_empty())
+                    })
                     .map(|_| ())
             },
             10000,
@@ -1237,8 +1310,8 @@ mod tests {
         harness.get_by_label("default").click();
         harness.run();
 
-        // 5. Expand "core" group and select "configmaps"
-        harness.get_by_label("core").click();
+        // 5. Expand the curated Config group and select "configmaps"
+        harness.get_by_label("Config").click();
         harness.run();
         harness.run();
 
