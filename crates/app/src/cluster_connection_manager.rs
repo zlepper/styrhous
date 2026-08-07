@@ -134,10 +134,6 @@ impl KubernetesApiInspector {
         api_group: APIGroup,
         versions: Vec<GroupVersionForDiscovery>,
     ) -> Result<Vec<ApiResource>> {
-        if api_group.name.ends_with(".k8s.io") {
-            return Ok(Vec::new());
-        }
-
         let tasks = versions.iter().map(|api_group_version| {
             self.client
                 .list_api_group_resources(&api_group_version.group_version)

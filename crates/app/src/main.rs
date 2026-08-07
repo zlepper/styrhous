@@ -3,6 +3,7 @@ mod cluster_connection_manager;
 mod helpers;
 mod minimal_namespace;
 mod minimal_resource;
+mod resource_catalog;
 mod resource_extensions;
 mod sorted_name;
 mod ui;
