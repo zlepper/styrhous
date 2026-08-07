@@ -2,6 +2,8 @@ use crate::api_resource::ApiResource;
 use crate::helpers::ResultExt;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
+use crate::resource_handlers;
+use crate::resource_table::{CellValue, CustomResourceColumn};
 use crate::worker::{WorkerResult, WorkerResultSender};
 use anyhow::{Context, Result, bail};
 use futures_util::future::try_join_all;
@@ -9,15 +11,20 @@ use futures_util::pin_mut;
 use futures_util::stream::StreamExt;
 use itertools::Itertools;
 use k8s_openapi::api::core::v1::Namespace;
+use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::{APIGroup, GroupVersionForDiscovery};
-use kube::Api;
+use k8s_openapi::{ClusterResourceScope, NamespaceResourceScope};
 use kube::api::DynamicObject;
 use kube::api::GroupVersionKind;
 use kube::config::KubeConfigOptions;
 use kube::config::Kubeconfig;
 use kube::runtime::watcher;
 use kube::runtime::watcher::{Event, ListSemantic};
+use kube::{Api, Resource};
+use std::collections::BTreeMap;
 use std::fmt::Debug;
+use std::future::Future;
+use std::pin::Pin;
 use time::OffsetDateTime;
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
@@ -106,12 +113,20 @@ impl ClusterConnection {
                             error: format!("{error:#?}"),
                         })
                         .log_if_error("Failed to send error from inspecting resource api"),
-                    Ok(apis) => event_output
-                        .send(WorkerResult::KubernetesApisLoaded {
-                            cluster_key,
-                            api_resources: apis,
-                        })
-                        .log_if_error("Failed to send kubernetes API resources"),
+                    Ok(inspection) => {
+                        event_output
+                            .send(WorkerResult::KubernetesApisLoaded {
+                                cluster_key,
+                                api_resources: inspection.api_resources,
+                            })
+                            .log_if_error("Failed to send kubernetes API resources");
+                        event_output
+                            .send(WorkerResult::KubernetesCustomResourceColumnsLoaded {
+                                cluster_key,
+                                columns: inspection.custom_resource_columns,
+                            })
+                            .log_if_error("Failed to send custom resource columns");
+                    }
                 }
             }
         };
@@ -128,6 +143,11 @@ impl ClusterConnection {
 
 struct KubernetesApiInspector {
     client: kube::Client,
+}
+
+struct ApiInspection {
+    api_resources: Vec<ApiResource>,
+    custom_resource_columns: BTreeMap<ApiResource, Vec<CustomResourceColumn>>,
 }
 
 impl KubernetesApiInspector {
@@ -199,7 +219,7 @@ impl KubernetesApiInspector {
         Ok(resources)
     }
 
-    pub async fn inspect_api(&self) -> Result<Vec<ApiResource>> {
+    pub async fn inspect_api(&self) -> Result<ApiInspection> {
         let api_groups = self.client.list_api_groups().await?;
 
         let tasks = api_groups.groups.into_iter().map(|api_group| {
@@ -221,7 +241,51 @@ impl KubernetesApiInspector {
             .collect_vec();
         resources.extend(core_resources);
 
-        Ok(resources)
+        let custom_resource_columns = self.custom_resource_columns().await;
+        Ok(ApiInspection {
+            api_resources: resources,
+            custom_resource_columns,
+        })
+    }
+
+    async fn custom_resource_columns(&self) -> BTreeMap<ApiResource, Vec<CustomResourceColumn>> {
+        let crds = Api::<CustomResourceDefinition>::all(self.client.clone());
+        let Ok(crds) = crds.list(&Default::default()).await else {
+            // Access to CRDs is commonly restricted. Dynamic resources still work without
+            // their optional columns, so do not fail API discovery in that case.
+            return BTreeMap::new();
+        };
+
+        crds.items
+            .iter()
+            .flat_map(|crd| {
+                let spec = &crd.spec;
+                spec.versions.iter().filter_map(move |version| {
+                    version.additional_printer_columns.as_ref().map(|columns| {
+                        (
+                            ApiResource {
+                                group: spec.group.clone(),
+                                version: version.name.clone(),
+                                kind: spec.names.kind.clone(),
+                                name: spec.names.plural.clone(),
+                                namespaced: spec.scope == "Namespaced",
+                            },
+                            columns
+                                .iter()
+                                .enumerate()
+                                .map(|(index, column)| CustomResourceColumn {
+                                    id: format!("crd-{index}"),
+                                    label: column.name.clone(),
+                                    json_path: column.json_path.clone(),
+                                    type_: column.type_.clone(),
+                                    format: column.format.clone(),
+                                })
+                                .collect(),
+                        )
+                    })
+                })
+            })
+            .collect()
     }
 }
 
@@ -339,12 +403,37 @@ pub async fn start_resource_watcher(
         namespace.as_deref().unwrap_or("cluster-wide scope")
     );
 
-    let watcher = KubernetesResourceWatcher {
-        client,
+    let context = TypedWatcherContext {
+        client: client.clone(),
         event_sender: event_sender.clone(),
         cluster_key,
         api_resource: api_resource.clone(),
         namespace: namespace.clone(),
+    };
+    let watcher = if let Some(watcher) = resource_handlers::watcher_for(context) {
+        watcher
+    } else {
+        let custom_columns = KubernetesApiInspector {
+            client: client.clone(),
+        }
+        .custom_resource_columns()
+        .await
+        .remove(&api_resource)
+        .unwrap_or_default();
+        event_sender
+            .send(WorkerResult::KubernetesCustomResourceColumnsLoaded {
+                cluster_key,
+                columns: BTreeMap::from([(api_resource.clone(), custom_columns.clone())]),
+            })
+            .log_if_error("Failed to send custom resource columns");
+        Box::new(DynamicKubernetesResourceWatcher {
+            client,
+            event_sender,
+            cluster_key,
+            api_resource: api_resource.clone(),
+            namespace: namespace.clone(),
+            custom_columns,
+        })
     };
 
     tokio::spawn(watcher.watch_resources());
@@ -356,15 +445,32 @@ pub async fn start_resource_watcher(
     })
 }
 
-struct KubernetesResourceWatcher {
+type ResourceWatcherFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+
+/// Object-safe dispatch point for concrete Kubernetes resource watchers.
+pub(crate) trait ResourceWatcher: Send {
+    fn watch_resources(self: Box<Self>) -> ResourceWatcherFuture;
+}
+
+#[derive(Clone)]
+pub(crate) struct TypedWatcherContext {
+    pub(crate) client: kube::Client,
+    pub(crate) event_sender: WorkerResultSender,
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+}
+
+struct DynamicKubernetesResourceWatcher {
     client: kube::Client,
     event_sender: WorkerResultSender,
     cluster_key: i32,
     api_resource: ApiResource,
     namespace: Option<String>,
+    custom_columns: Vec<CustomResourceColumn>,
 }
 
-impl KubernetesResourceWatcher {
+impl DynamicKubernetesResourceWatcher {
     async fn watch_resources(self) {
         // Convert our ApiResource to kube's ApiResource using discovery
         let group = if self.api_resource.group == "core" {
@@ -439,7 +545,7 @@ impl KubernetesResourceWatcher {
             };
             match ev {
                 Event::Apply(item) => {
-                    let resource = extract_minimal_resource(&item, &self.api_resource);
+                    let resource = extract_minimal_resource(&item, &self.custom_columns);
                     self.event_sender
                         .send(WorkerResult::KubernetesResourceAdded {
                             cluster_key: self.cluster_key,
@@ -464,7 +570,7 @@ impl KubernetesResourceWatcher {
                     buffer.clear();
                 }
                 Event::InitApply(item) => {
-                    buffer.push(extract_minimal_resource(&item, &self.api_resource));
+                    buffer.push(extract_minimal_resource(&item, &self.custom_columns));
                 }
                 Event::InitDone => {
                     self.event_sender
@@ -482,19 +588,287 @@ impl KubernetesResourceWatcher {
     }
 }
 
+impl ResourceWatcher for DynamicKubernetesResourceWatcher {
+    fn watch_resources(self: Box<Self>) -> ResourceWatcherFuture {
+        Box::pin(async move { (*self).watch_resources().await })
+    }
+}
+
+struct TypedKubernetesResourceWatcher<T> {
+    client: kube::Client,
+    event_sender: WorkerResultSender,
+    cluster_key: i32,
+    api_resource: ApiResource,
+    namespace: Option<String>,
+    extract: fn(&T) -> MinimalResource,
+}
+
+impl<T> TypedKubernetesResourceWatcher<T>
+where
+    T: Resource<DynamicType = (), Scope = NamespaceResourceScope>
+        + Clone
+        + Debug
+        + Send
+        + Sync
+        + for<'de> k8s_openapi::serde::Deserialize<'de>
+        + 'static,
+{
+    async fn watch_resources(self) {
+        let Some(namespace) = self.namespace.as_deref() else {
+            self.event_sender
+                .send(WorkerResult::KubernetesResourceWatchFailed {
+                    cluster_key: self.cluster_key,
+                    api_resource: self.api_resource,
+                    namespace: None,
+                    error: "A namespaced typed watcher was started without a namespace".to_owned(),
+                })
+                .log_if_error("Failed to send resource watcher scope error");
+            return;
+        };
+
+        let api = Api::<T>::namespaced(self.client.clone(), namespace);
+        let mut buffer = Vec::<MinimalResource>::new();
+        let stream = watcher(api, watcher_config());
+        pin_mut!(stream);
+
+        while let Some(event) = stream.next().await {
+            let event = match event {
+                Ok(event) => event,
+                Err(error) => {
+                    warn!("Typed resource watcher error: {error:?}");
+                    self.event_sender
+                        .send(WorkerResult::KubernetesResourceWatchFailed {
+                            cluster_key: self.cluster_key,
+                            api_resource: self.api_resource.clone(),
+                            namespace: self.namespace.clone(),
+                            error: format!("{error:#?}"),
+                        })
+                        .log_if_error("Failed to send typed resource watcher error");
+                    return;
+                }
+            };
+
+            match event {
+                Event::Apply(item) => self
+                    .event_sender
+                    .send(WorkerResult::KubernetesResourceAdded {
+                        cluster_key: self.cluster_key,
+                        api_resource: self.api_resource.clone(),
+                        namespace: self.namespace.clone(),
+                        resource: (self.extract)(&item),
+                    })
+                    .log_if_error("Failed to send typed resource added"),
+                Event::Delete(item) => self
+                    .event_sender
+                    .send(WorkerResult::KubernetesResourceDeleted {
+                        cluster_key: self.cluster_key,
+                        api_resource: self.api_resource.clone(),
+                        namespace: self.namespace.clone(),
+                        resource_uid: get_resource_uid(&item),
+                    })
+                    .log_if_error("Failed to send typed resource deleted"),
+                Event::Init => buffer.clear(),
+                Event::InitApply(item) => buffer.push((self.extract)(&item)),
+                Event::InitDone => {
+                    self.event_sender
+                        .send(WorkerResult::KubernetesResourcesReplaced {
+                            cluster_key: self.cluster_key,
+                            api_resource: self.api_resource.clone(),
+                            namespace: self.namespace.clone(),
+                            resources: buffer,
+                        })
+                        .log_if_error("Failed to send typed resources replaced");
+                    buffer = Vec::new();
+                }
+            }
+        }
+    }
+}
+
+impl<T> ResourceWatcher for TypedKubernetesResourceWatcher<T>
+where
+    T: Resource<DynamicType = (), Scope = NamespaceResourceScope>
+        + Clone
+        + Debug
+        + Send
+        + Sync
+        + for<'de> k8s_openapi::serde::Deserialize<'de>
+        + 'static,
+{
+    fn watch_resources(self: Box<Self>) -> ResourceWatcherFuture {
+        Box::pin(async move { (*self).watch_resources().await })
+    }
+}
+
+pub(crate) fn namespaced_typed_watcher<T>(
+    context: TypedWatcherContext,
+    extract: fn(&T) -> MinimalResource,
+) -> Box<dyn ResourceWatcher>
+where
+    T: Resource<DynamicType = (), Scope = NamespaceResourceScope>
+        + Clone
+        + Debug
+        + Send
+        + Sync
+        + for<'de> k8s_openapi::serde::Deserialize<'de>
+        + 'static,
+{
+    Box::new(TypedKubernetesResourceWatcher {
+        client: context.client,
+        event_sender: context.event_sender,
+        cluster_key: context.cluster_key,
+        api_resource: context.api_resource,
+        namespace: context.namespace,
+        extract,
+    })
+}
+
+struct ClusterTypedKubernetesResourceWatcher<T> {
+    client: kube::Client,
+    event_sender: WorkerResultSender,
+    cluster_key: i32,
+    api_resource: ApiResource,
+    namespace: Option<String>,
+    extract: fn(&T) -> MinimalResource,
+}
+
+impl<T> ClusterTypedKubernetesResourceWatcher<T>
+where
+    T: Resource<DynamicType = (), Scope = ClusterResourceScope>
+        + Clone
+        + Debug
+        + Send
+        + Sync
+        + for<'de> k8s_openapi::serde::Deserialize<'de>
+        + 'static,
+{
+    async fn watch_resources(self) {
+        if self.namespace.is_some() {
+            self.event_sender
+                .send(WorkerResult::KubernetesResourceWatchFailed {
+                    cluster_key: self.cluster_key,
+                    api_resource: self.api_resource,
+                    namespace: self.namespace,
+                    error: "A cluster-scoped typed watcher was started with a namespace".to_owned(),
+                })
+                .log_if_error("Failed to send resource watcher scope error");
+            return;
+        }
+
+        let api = Api::<T>::all(self.client.clone());
+        let mut buffer = Vec::<MinimalResource>::new();
+        let stream = watcher(api, watcher_config());
+        pin_mut!(stream);
+
+        while let Some(event) = stream.next().await {
+            let event = match event {
+                Ok(event) => event,
+                Err(error) => {
+                    warn!("Typed resource watcher error: {error:?}");
+                    self.event_sender
+                        .send(WorkerResult::KubernetesResourceWatchFailed {
+                            cluster_key: self.cluster_key,
+                            api_resource: self.api_resource.clone(),
+                            namespace: None,
+                            error: format!("{error:#?}"),
+                        })
+                        .log_if_error("Failed to send typed resource watcher error");
+                    return;
+                }
+            };
+
+            match event {
+                Event::Apply(item) => self
+                    .event_sender
+                    .send(WorkerResult::KubernetesResourceAdded {
+                        cluster_key: self.cluster_key,
+                        api_resource: self.api_resource.clone(),
+                        namespace: None,
+                        resource: (self.extract)(&item),
+                    })
+                    .log_if_error("Failed to send typed resource added"),
+                Event::Delete(item) => self
+                    .event_sender
+                    .send(WorkerResult::KubernetesResourceDeleted {
+                        cluster_key: self.cluster_key,
+                        api_resource: self.api_resource.clone(),
+                        namespace: None,
+                        resource_uid: get_resource_uid(&item),
+                    })
+                    .log_if_error("Failed to send typed resource deleted"),
+                Event::Init => buffer.clear(),
+                Event::InitApply(item) => buffer.push((self.extract)(&item)),
+                Event::InitDone => {
+                    self.event_sender
+                        .send(WorkerResult::KubernetesResourcesReplaced {
+                            cluster_key: self.cluster_key,
+                            api_resource: self.api_resource.clone(),
+                            namespace: None,
+                            resources: buffer,
+                        })
+                        .log_if_error("Failed to send typed resources replaced");
+                    buffer = Vec::new();
+                }
+            }
+        }
+    }
+}
+
+impl<T> ResourceWatcher for ClusterTypedKubernetesResourceWatcher<T>
+where
+    T: Resource<DynamicType = (), Scope = ClusterResourceScope>
+        + Clone
+        + Debug
+        + Send
+        + Sync
+        + for<'de> k8s_openapi::serde::Deserialize<'de>
+        + 'static,
+{
+    fn watch_resources(self: Box<Self>) -> ResourceWatcherFuture {
+        Box::pin(async move { (*self).watch_resources().await })
+    }
+}
+
+pub(crate) fn cluster_typed_watcher<T>(
+    context: TypedWatcherContext,
+    extract: fn(&T) -> MinimalResource,
+) -> Box<dyn ResourceWatcher>
+where
+    T: Resource<DynamicType = (), Scope = ClusterResourceScope>
+        + Clone
+        + Debug
+        + Send
+        + Sync
+        + for<'de> k8s_openapi::serde::Deserialize<'de>
+        + 'static,
+{
+    Box::new(ClusterTypedKubernetesResourceWatcher {
+        client: context.client,
+        event_sender: context.event_sender,
+        cluster_key: context.cluster_key,
+        api_resource: context.api_resource,
+        namespace: context.namespace,
+        extract,
+    })
+}
+
 /// Get a unique identifier for a resource
-fn get_resource_uid(obj: &DynamicObject) -> String {
-    obj.metadata.uid.clone().unwrap_or_else(|| {
+fn get_resource_uid<T: Resource>(obj: &T) -> String {
+    let metadata = obj.meta();
+    metadata.uid.clone().unwrap_or_else(|| {
         format!(
             "{}/{}",
-            obj.metadata.namespace.as_deref().unwrap_or(""),
-            obj.metadata.name.as_deref().unwrap_or("")
+            metadata.namespace.as_deref().unwrap_or(""),
+            metadata.name.as_deref().unwrap_or("")
         )
     })
 }
 
 /// Extract a MinimalResource from a DynamicObject
-fn extract_minimal_resource(obj: &DynamicObject, api_resource: &ApiResource) -> MinimalResource {
+fn extract_minimal_resource(
+    obj: &DynamicObject,
+    custom_columns: &[CustomResourceColumn],
+) -> MinimalResource {
     let metadata = &obj.metadata;
     let uid = get_resource_uid(obj);
 
@@ -507,16 +881,88 @@ fn extract_minimal_resource(obj: &DynamicObject, api_resource: &ApiResource) -> 
         .ok()
     });
 
-    // Extract status/phase based on resource type
-    let (phase, ready_status) = extract_status(obj, api_resource);
-
     MinimalResource {
         uid,
         name: metadata.name.clone().unwrap_or_default(),
         namespace: metadata.namespace.clone(),
         creation_timestamp,
-        phase,
-        ready_status,
+        cells: extract_custom_cells(&obj.data, custom_columns),
+    }
+}
+
+fn extract_custom_cells(
+    data: &k8s_openapi::serde_json::Value,
+    columns: &[CustomResourceColumn],
+) -> BTreeMap<String, CellValue> {
+    use jsonpath_rust::JsonPath;
+
+    columns
+        .iter()
+        .filter_map(|column| {
+            let path = JsonPath::try_from(column.json_path.as_str()).ok()?;
+            let value = path.find(data);
+            let values = value.as_array()?.iter().cloned().collect::<Vec<_>>();
+            custom_cell_value(column, &values).map(|cell| (column.id.clone(), cell))
+        })
+        .collect()
+}
+
+fn custom_cell_value(
+    column: &CustomResourceColumn,
+    values: &[k8s_openapi::serde_json::Value],
+) -> Option<CellValue> {
+    let value = values.first()?;
+    if values.len() == 1 {
+        if matches!(column.type_.as_str(), "integer" | "number") {
+            if let Some(number) = value.as_i64() {
+                return Some(CellValue::Number(number));
+            }
+        }
+        if matches!(column.type_.as_str(), "date" | "date-time") {
+            if let Some(value) = value.as_str().and_then(parse_timestamp) {
+                return Some(CellValue::Timestamp(value));
+            }
+        }
+        return json_value_to_text(value).map(CellValue::Text);
+    }
+
+    let values = values.iter().filter_map(json_value_to_text).collect();
+    Some(CellValue::List(values))
+}
+
+fn parse_timestamp(value: &str) -> Option<OffsetDateTime> {
+    OffsetDateTime::parse(value, &time::format_description::well_known::Rfc3339).ok()
+}
+
+fn json_value_to_text(value: &k8s_openapi::serde_json::Value) -> Option<String> {
+    match value {
+        k8s_openapi::serde_json::Value::Null => None,
+        k8s_openapi::serde_json::Value::String(value) => Some(value.clone()),
+        k8s_openapi::serde_json::Value::Bool(value) => Some(value.to_string()),
+        k8s_openapi::serde_json::Value::Number(value) => Some(value.to_string()),
+        other => Some(other.to_string()),
+    }
+}
+
+pub(crate) fn minimal_resource_from_typed<T: Resource>(
+    obj: &T,
+    cells: BTreeMap<String, CellValue>,
+) -> MinimalResource {
+    let metadata = obj.meta();
+    let creation_timestamp = metadata.creation_timestamp.as_ref().and_then(|timestamp| {
+        OffsetDateTime::parse(
+            &timestamp.0.to_rfc3339(),
+            &time::format_description::well_known::Rfc3339,
+        )
+        .ok()
+    });
+
+    MinimalResource {
+        uid: get_resource_uid(obj),
+        name: metadata.name.clone().unwrap_or_default(),
+        namespace: metadata.namespace.clone(),
+        creation_timestamp,
+        cells,
     }
 }
 
@@ -672,98 +1118,121 @@ pub async fn apply_resource_yaml(
     })
 }
 
-/// Extract status information based on resource type
-fn extract_status(
-    obj: &DynamicObject,
-    api_resource: &ApiResource,
-) -> (Option<String>, Option<String>) {
-    let status = obj.data.get("status");
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::resource_table::{
+        AVAILABLE_COLUMN, READY_COLUMN, RESTARTS_COLUMN, STATUS_COLUMN, UP_TO_DATE_COLUMN,
+    };
+    use k8s_openapi::api::apps::v1::{Deployment, DeploymentStatus};
+    use k8s_openapi::api::core::v1::{ContainerStatus, Pod, PodStatus};
+    use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 
-    match api_resource.kind.as_str() {
-        "Pod" => {
-            let phase = status
-                .and_then(|s| s.get("phase"))
-                .and_then(|p| p.as_str())
-                .map(String::from);
+    #[test]
+    fn pod_extractor_populates_ready_status_and_restarts() {
+        let pod = Pod {
+            metadata: ObjectMeta {
+                name: Some("api".to_owned()),
+                namespace: Some("default".to_owned()),
+                uid: Some("pod-uid".to_owned()),
+                ..Default::default()
+            },
+            status: Some(PodStatus {
+                phase: Some("Running".to_owned()),
+                container_statuses: Some(vec![
+                    ContainerStatus {
+                        ready: true,
+                        restart_count: 2,
+                        ..Default::default()
+                    },
+                    ContainerStatus {
+                        ready: false,
+                        restart_count: 3,
+                        ..Default::default()
+                    },
+                ]),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
 
-            // Count ready containers
-            let ready_status = status
-                .and_then(|s| s.get("containerStatuses"))
-                .and_then(|cs| cs.as_array())
-                .map(|containers| {
-                    let total = containers.len();
-                    let ready = containers
-                        .iter()
-                        .filter(|c| c.get("ready").and_then(|r| r.as_bool()).unwrap_or(false))
-                        .count();
-                    format!("{}/{}", ready, total)
-                });
+        let resource = crate::resource_handlers::pod::extract(&pod);
 
-            (phase, ready_status)
-        }
-        "Deployment" | "ReplicaSet" | "StatefulSet" => {
-            let ready = status
-                .and_then(|s| s.get("readyReplicas"))
-                .and_then(|r| r.as_i64())
-                .unwrap_or(0);
-            let desired = status
-                .and_then(|s| s.get("replicas"))
-                .and_then(|r| r.as_i64())
-                .unwrap_or(0);
+        assert_eq!(resource.uid, "pod-uid");
+        assert_eq!(
+            resource.cells.get(READY_COLUMN),
+            Some(&CellValue::Text("1/2".to_owned()))
+        );
+        assert_eq!(
+            resource.cells.get(STATUS_COLUMN),
+            Some(&CellValue::Status {
+                label: "Running".to_owned(),
+                tone: crate::resource_table::StatusTone::Success,
+            })
+        );
+        assert_eq!(
+            resource.cells.get(RESTARTS_COLUMN),
+            Some(&CellValue::Number(5))
+        );
+    }
 
-            let ready_status = Some(format!("{}/{}", ready, desired));
-            let phase = if ready == desired && desired > 0 {
-                Some("Ready".to_string())
-            } else if ready > 0 {
-                Some("Progressing".to_string())
-            } else {
-                Some("Pending".to_string())
-            };
+    #[test]
+    fn deployment_extractor_populates_replica_columns() {
+        let deployment = Deployment {
+            metadata: ObjectMeta {
+                name: Some("api".to_owned()),
+                namespace: Some("default".to_owned()),
+                ..Default::default()
+            },
+            status: Some(DeploymentStatus {
+                replicas: Some(4),
+                ready_replicas: Some(3),
+                updated_replicas: Some(2),
+                available_replicas: Some(3),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
 
-            (phase, ready_status)
-        }
-        "Service" => {
-            let svc_type = obj
-                .data
-                .get("spec")
-                .and_then(|s| s.get("type"))
-                .and_then(|t| t.as_str())
-                .map(String::from);
-            (svc_type, None)
-        }
-        "Job" => {
-            let succeeded = status
-                .and_then(|s| s.get("succeeded"))
-                .and_then(|r| r.as_i64())
-                .unwrap_or(0);
-            let failed = status
-                .and_then(|s| s.get("failed"))
-                .and_then(|r| r.as_i64())
-                .unwrap_or(0);
-            let active = status
-                .and_then(|s| s.get("active"))
-                .and_then(|r| r.as_i64())
-                .unwrap_or(0);
+        let resource = crate::resource_handlers::deployment::extract(&deployment);
 
-            let phase = if succeeded > 0 {
-                Some("Complete".to_string())
-            } else if failed > 0 {
-                Some("Failed".to_string())
-            } else if active > 0 {
-                Some("Running".to_string())
-            } else {
-                Some("Pending".to_string())
-            };
+        assert_eq!(
+            resource.cells.get(READY_COLUMN),
+            Some(&CellValue::Text("3/4".to_owned()))
+        );
+        assert_eq!(
+            resource.cells.get(UP_TO_DATE_COLUMN),
+            Some(&CellValue::Number(2))
+        );
+        assert_eq!(
+            resource.cells.get(AVAILABLE_COLUMN),
+            Some(&CellValue::Number(3))
+        );
+    }
 
-            (phase, None)
-        }
-        _ => {
-            // Generic: try to extract a "phase" or "state" field
-            let phase = status
-                .and_then(|s| s.get("phase").or_else(|| s.get("state")))
-                .and_then(|p| p.as_str())
-                .map(String::from);
-            (phase, None)
-        }
+    #[test]
+    fn dynamic_resource_extractor_evaluates_custom_printer_columns_locally() {
+        let columns = vec![CustomResourceColumn {
+            id: "crd-0".to_owned(),
+            label: "State".to_owned(),
+            json_path: ".status.conditions[*].type".to_owned(),
+            type_: "string".to_owned(),
+            format: None,
+        }];
+
+        let cells = extract_custom_cells(
+            &k8s_openapi::serde_json::json!({
+                "status": { "conditions": [{ "type": "Ready" }, { "type": "Synced" }] }
+            }),
+            &columns,
+        );
+
+        assert_eq!(
+            cells.get("crd-0"),
+            Some(&CellValue::List(vec![
+                "Ready".to_owned(),
+                "Synced".to_owned()
+            ]))
+        );
     }
 }

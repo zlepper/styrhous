@@ -2271,6 +2271,7 @@ dependencies = [
  "egui_kittest",
  "futures-util",
  "itertools",
+ "jsonpath-rust",
  "k8s-openapi",
  "kube",
  "regex",

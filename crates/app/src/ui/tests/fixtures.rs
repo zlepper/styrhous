@@ -6,6 +6,7 @@ use crate::api_resource::ApiResource;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use crate::resource_catalog::{ResourceNavigation, build_resource_navigation};
+use crate::resource_table::{CellValue, READY_COLUMN, RESTARTS_COLUMN, STATUS_COLUMN, StatusTone};
 use crate::worker::WorkerTrait;
 use egui_kittest::Harness;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -29,6 +30,7 @@ pub(super) fn fixture_cluster(cluster_key: i32, name: &str) -> ClusterState {
         api_resources_load: ClusterLoadState::Ready,
         selected_namespaces: HashSet::new(),
         resource_navigation: ResourceNavigation::default(),
+        custom_resource_columns: BTreeMap::new(),
         selected_api_resource: None,
         resource_cache: HashMap::new(),
         active_watchers: HashSet::new(),
@@ -65,8 +67,17 @@ fn fixture_resource(index: usize, name: &str) -> MinimalResource {
         name: name.into(),
         namespace: Some("kube-system".into()),
         creation_timestamp: Some(time::OffsetDateTime::now_utc() - time::Duration::days(220)),
-        phase: Some("Running".into()),
-        ready_status: Some("1/1".into()),
+        cells: BTreeMap::from([
+            (READY_COLUMN.to_owned(), CellValue::Text("1/1".into())),
+            (
+                STATUS_COLUMN.to_owned(),
+                CellValue::Status {
+                    label: "Running".into(),
+                    tone: StatusTone::Success,
+                },
+            ),
+            (RESTARTS_COLUMN.to_owned(), CellValue::Number(0)),
+        ]),
     }
 }
 

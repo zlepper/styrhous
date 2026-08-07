@@ -3,6 +3,7 @@ use crate::cluster_connection_manager::ClusterConnection;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use crate::resource_catalog::{ResourceNavigation, build_resource_navigation};
+use crate::resource_table::CustomResourceColumn;
 use crate::sorted_name::SortedName;
 use crate::worker::{WorkerResult, WorkerTrait};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -84,6 +85,7 @@ pub(super) struct ClusterState {
     pub(super) api_resources_load: ClusterLoadState,
     pub(super) selected_namespaces: HashSet<String>,
     pub(super) resource_navigation: ResourceNavigation,
+    pub(super) custom_resource_columns: BTreeMap<ApiResource, Vec<CustomResourceColumn>>,
     pub(super) selected_api_resource: Option<ApiResource>,
     pub(super) resource_cache: HashMap<ResourceWatchKey, ResourceWatchState>,
     pub(super) active_watchers: HashSet<ResourceWatchKey>,
@@ -122,6 +124,7 @@ impl UiState {
         cluster.api_resources_load = ClusterLoadState::Loading;
         cluster.namespaces.clear();
         cluster.resource_navigation = ResourceNavigation::default();
+        cluster.custom_resource_columns.clear();
         cluster.selected_namespaces.clear();
         cluster.selected_api_resource = None;
         cluster.resource_cache.clear();
@@ -348,6 +351,7 @@ impl UiState {
                                 selected_namespaces: HashSet::new(),
                                 selected_api_resource: None,
                                 resource_navigation: ResourceNavigation::default(),
+                                custom_resource_columns: BTreeMap::new(),
                                 resource_cache: HashMap::new(),
                                 active_watchers: HashSet::new(),
                                 resource_searches: HashMap::new(),
@@ -408,6 +412,14 @@ impl UiState {
                     if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
                         cluster.resource_navigation = build_resource_navigation(api_resources);
                         cluster.api_resources_load = ClusterLoadState::Ready;
+                    }
+                }
+                WorkerResult::KubernetesCustomResourceColumnsLoaded {
+                    cluster_key,
+                    columns,
+                } => {
+                    if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
+                        cluster.custom_resource_columns.extend(columns);
                     }
                 }
                 WorkerResult::KubernetesApisLoadFailed { cluster_key, error } => {

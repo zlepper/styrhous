@@ -10,11 +10,12 @@ use crate::cluster_connection_manager::Cluster;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use crate::resource_catalog::build_resource_navigation;
+use crate::resource_table::{AVAILABLE_COLUMN, CellValue, READY_COLUMN, UP_TO_DATE_COLUMN};
 use crate::worker::{MockWorker, WorkerCommand, WorkerResult};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
 
 fn select_namespace(harness: &mut Harness<MyEguiApp<MockWorker>>, namespace: &str) {
@@ -213,8 +214,7 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
                 name: "kind-control-plane".into(),
                 namespace: None,
                 creation_timestamp: None,
-                phase: Some("Ready".into()),
-                ready_status: None,
+                cells: Default::default(),
             }],
         });
     harness.run();
@@ -313,6 +313,47 @@ fn oracle_resource_table_snapshot_uses_injected_cluster_state() {
     harness.get_by_label("Apps & Containers").click_accesskit();
     harness.run();
     harness.snapshot("oracle_resource_table_injected");
+}
+
+#[test]
+fn deployment_resource_table_snapshot_uses_typed_columns() {
+    let deployment = fixture_api_resource("apps", "Deployment", "deployments");
+    let mut state = oracle_resource_table_state();
+    let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
+    cluster.selected_api_resource = Some(deployment.clone());
+    cluster.resource_cache.insert(
+        (deployment, Some("kube-system".to_owned())),
+        ResourceWatchState {
+            resources: BTreeMap::from([(
+                "deployment-uid".to_owned(),
+                MinimalResource {
+                    uid: "deployment-uid".to_owned(),
+                    name: "coredns".to_owned(),
+                    namespace: Some("kube-system".to_owned()),
+                    creation_timestamp: Some(
+                        time::OffsetDateTime::now_utc() - time::Duration::days(220),
+                    ),
+                    cells: BTreeMap::from([
+                        (READY_COLUMN.to_owned(), CellValue::Text("3/4".to_owned())),
+                        (UP_TO_DATE_COLUMN.to_owned(), CellValue::Number(3)),
+                        (AVAILABLE_COLUMN.to_owned(), CellValue::Number(3)),
+                    ]),
+                },
+            )]),
+            is_synced: true,
+            error: None,
+        },
+    );
+
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = state;
+    harness.run();
+    harness.get_by_label("Apps & Containers").click_accesskit();
+    harness.run();
+    harness.get_by_label("deployments").click_accesskit();
+    harness.run();
+
+    harness.snapshot("deployment_resource_table_typed_columns");
 }
 
 #[test]
