@@ -9,17 +9,6 @@ pub(super) fn display_resource_title(resource_name: &str) -> String {
     }
 }
 
-pub(super) fn connection_status(ui: &mut egui::Ui, label: &str) {
-    let color = match label {
-        "Connected" => SUCCESS,
-        "Connecting" => egui::Color32::from_rgb(202, 138, 4),
-        _ => gray::_500,
-    };
-    let (dot_rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-    ui.painter().circle_filled(dot_rect.center(), 4.0, color);
-    ui.label(egui::RichText::new(label).size(18.0).color(gray::_600));
-}
-
 pub(super) fn resource_status(ui: &mut egui::Ui, status: &str) {
     let color = match status {
         "Running" | "Succeeded" | "Active" | "Bound" => SUCCESS,
