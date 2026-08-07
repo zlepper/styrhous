@@ -352,6 +352,8 @@ mod tests {
                 button_row(ui, ButtonVariant::Soft, ButtonRounding::Pill);
             });
         });
+        crate::test_support::setup_egui(&harness.ctx);
+        harness.run();
         harness.snapshot("buttons/variants");
     }
 
@@ -372,6 +374,8 @@ mod tests {
                     });
                 });
             });
+            crate::test_support::setup_egui(&harness.ctx);
+            harness.run();
             harness.get_by_label("Hovered").hover();
             harness.run_ok();
             results.add(harness.try_snapshot("buttons/primary_hovered"));
@@ -388,6 +392,8 @@ mod tests {
                     });
                 });
             });
+            crate::test_support::setup_egui(&harness.ctx);
+            harness.run();
             let button = harness.get_by_label("Pressed");
             let center = button.rect().center();
             harness
@@ -415,6 +421,8 @@ mod tests {
                     });
                 });
             });
+            crate::test_support::setup_egui(&harness.ctx);
+            harness.run();
             harness.get_by_label("Hovered").hover();
             harness.run_ok();
             results.add(harness.try_snapshot("buttons/secondary_hovered"));
@@ -431,6 +439,8 @@ mod tests {
                     });
                 });
             });
+            crate::test_support::setup_egui(&harness.ctx);
+            harness.run();
             let button = harness.get_by_label("Pressed");
             let center = button.rect().center();
             harness
@@ -458,6 +468,8 @@ mod tests {
                     });
                 });
             });
+            crate::test_support::setup_egui(&harness.ctx);
+            harness.run();
             harness.get_by_label("Hovered").hover();
             harness.run_ok();
             results.add(harness.try_snapshot("buttons/soft_hovered"));
@@ -474,6 +486,8 @@ mod tests {
                     });
                 });
             });
+            crate::test_support::setup_egui(&harness.ctx);
+            harness.run();
             let button = harness.get_by_label("Pressed");
             let center = button.rect().center();
             harness

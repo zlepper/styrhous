@@ -29,11 +29,16 @@ pub mod more_button;
 pub mod sidebar;
 pub mod table;
 pub mod tabs;
+#[doc(hidden)]
+pub mod test_support;
 pub mod theme;
 pub mod workspace;
 
 pub use button::{ButtonRounding, ButtonSize, ButtonVariant, TailwindButton};
-pub use combobox::{ComboboxUi, ItemResponse, NoFilter, TailwindCombobox, WithFilter};
+pub use combobox::{
+    ComboboxResponse, ComboboxUi, ItemResponse, NoFilter, SelectionAction, TailwindCombobox,
+    WithFilter,
+};
 pub use more_button::{MoreButton, MoreMenu};
 pub use sidebar::{
     ExpandableResponse, NarrowSidebar, NarrowSidebarContent, WideSidebar, WideSidebarContent,

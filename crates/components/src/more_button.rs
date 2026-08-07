@@ -217,7 +217,7 @@ mod tests {
             });
         });
 
-        egui_extras::install_image_loaders(&harness.ctx);
+        crate::test_support::setup_egui(&harness.ctx);
         harness.run();
         harness
             .get_by_label("More actions for coredns")

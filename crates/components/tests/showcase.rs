@@ -10,31 +10,36 @@ use components::colors::WHITE;
 use components::icons::{calendar_icon, document_icon, folder_icon, home_icon, users_icon};
 use components::{
     ButtonRounding, ButtonSize, ButtonVariant, SortDirection, SortState, TableRowBuilder, Tabs,
-    TailwindButton, TailwindCombobox, TailwindTable, WideSidebar, apply_light_theme,
+    TailwindButton, TailwindCombobox, TailwindTable, WideSidebar,
 };
 use egui_kittest::{Harness, kittest::Queryable};
 
 struct Person {
     name: &'static str,
     role: &'static str,
+    active: bool,
 }
 
 const PEOPLE: [Person; 4] = [
     Person {
         name: "Michael Foster",
         role: "Designer",
+        active: true,
     },
     Person {
         name: "Emily Selman",
         role: "Engineer",
+        active: false,
     },
     Person {
         name: "Floyd Miles",
         role: "Product",
+        active: false,
     },
     Person {
         name: "Courtney Henry",
         role: "Admin",
+        active: true,
     },
 ];
 
@@ -45,7 +50,7 @@ fn showcase_title(ui: &mut egui::Ui, title: &str) {
 }
 
 fn apply_reference_theme(harness: &mut Harness<'_>) {
-    apply_light_theme(&harness.ctx);
+    components::test_support::setup_egui(&harness.ctx);
 }
 
 fn show_people_table(ui: &mut egui::Ui, people: &[Person]) {
@@ -126,10 +131,30 @@ fn showcase_comboboxes() {
 
         TailwindCombobox::from_label("Selected value")
             .selected_text("Michael Foster")
+            .selected_status(Some(true))
             .width(280.0)
             .filter_by(|person: &Person| person.name)
             .show_items(ui, &PEOPLE, |combobox, person| {
-                combobox.item(person.name, person.name == "Michael Foster");
+                combobox.item_with_status(
+                    person.name,
+                    person.name == "Michael Foster",
+                    Some(person.active),
+                );
+            });
+
+        ui.add_space(12.0);
+
+        TailwindCombobox::from_label("Multi-select")
+            .selected_text("2 people selected")
+            .width(280.0)
+            .select_all(false)
+            .filter_by(|person: &Person| person.name)
+            .show_items(ui, &PEOPLE, |combobox, person| {
+                combobox.item_with_status(
+                    person.name,
+                    matches!(person.name, "Michael Foster" | "Emily Selman"),
+                    Some(person.active),
+                );
             });
 
         ui.add_space(12.0);
@@ -144,16 +169,10 @@ fn showcase_comboboxes() {
     });
 
     apply_reference_theme(&mut harness);
-    egui_extras::install_image_loaders(&harness.ctx);
     harness.run();
     harness
-        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Filter results")
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Multi-select")
         .click();
-    harness.run();
-    harness
-        .input_mut()
-        .events
-        .push(egui::Event::Text("mi".into()));
     harness.run();
     harness.snapshot("showcase/comboboxes");
 }
@@ -193,7 +212,6 @@ fn showcase_sidebars() {
     });
 
     apply_reference_theme(&mut harness);
-    egui_extras::install_image_loaders(&harness.ctx);
     harness.run();
     harness.snapshot("showcase/sidebars");
 }
@@ -272,7 +290,6 @@ fn showcase_tables() {
     });
 
     apply_reference_theme(&mut harness);
-    egui_extras::install_image_loaders(&harness.ctx);
     harness.run();
     harness.snapshot("showcase/tables");
 }
@@ -310,7 +327,6 @@ fn showcase_tabs() {
     });
 
     apply_reference_theme(&mut harness);
-    egui_extras::install_image_loaders(&harness.ctx);
     harness.run();
     harness.snapshot("showcase/tabs");
 }

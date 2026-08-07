@@ -1,7 +1,7 @@
 use super::super::MyEguiApp;
 use super::super::dialogs::show_delete_confirmation;
 use super::super::state::ClusterConnectionState;
-use super::super::state::{PendingDelete, UiState};
+use super::super::state::{PendingDelete, ResourceWatchState, UiState};
 use super::fixtures::{
     application_harness, fixture_api_resource, fixture_cluster, oracle_resource_table_state,
 };
@@ -12,7 +12,7 @@ use crate::worker::{MockWorker, WorkerCommand, WorkerResult};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 fn select_namespace(harness: &mut Harness<MyEguiApp<MockWorker>>, namespace: &str) {
@@ -22,6 +22,174 @@ fn select_namespace(harness: &mut Harness<MyEguiApp<MockWorker>>, namespace: &st
     harness.run();
     harness.get_by_label(namespace).click();
     harness.run();
+}
+
+#[test]
+fn namespace_selector_replaces_toggles_and_selects_all_without_stopping_watches() {
+    let pods = fixture_api_resource("", "Pod", "pods");
+    let mut cluster = fixture_cluster(1, "dev");
+    cluster.connection = ClusterConnectionState::Connected(None);
+    cluster.resource_navigation = build_resource_navigation(vec![pods.clone()]);
+    for namespace in ["default", "kube-system", "monitoring"] {
+        cluster.namespaces.insert(
+            namespace.into(),
+            MinimalNamespace {
+                name: namespace.into(),
+                display_name: None,
+            },
+        );
+    }
+
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = UiState {
+        clusters: HashMap::from([(1, cluster)]),
+        next_cluster_key: 1,
+        selected_cluster: Some(1),
+    };
+    harness.run();
+
+    select_namespace(&mut harness, "default");
+    assert_eq!(
+        harness.state().ui_state.clusters[&1].selected_namespaces,
+        HashSet::from(["default".to_owned()])
+    );
+
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
+        .click();
+    harness.run();
+    let namespace_position = harness.get_by_label("kube-system").rect().center();
+    let modifiers = egui::Modifiers {
+        ctrl: true,
+        ..Default::default()
+    };
+    harness.input_mut().modifiers = modifiers;
+    harness.event(egui::Event::PointerMoved(namespace_position));
+    harness.event(egui::Event::PointerButton {
+        pos: namespace_position,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers,
+    });
+    harness.event(egui::Event::PointerButton {
+        pos: namespace_position,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers,
+    });
+    harness.run();
+    harness.input_mut().modifiers = egui::Modifiers::default();
+    assert_eq!(
+        harness.state().ui_state.clusters[&1].selected_namespaces,
+        HashSet::from(["default".to_owned(), "kube-system".to_owned()])
+    );
+
+    harness.get_by_label("default").click();
+    harness.run();
+    assert_eq!(
+        harness.state().ui_state.clusters[&1].selected_namespaces,
+        HashSet::from(["default".to_owned()])
+    );
+
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
+        .click();
+    harness.run();
+
+    harness.get_by_label("Select all").click();
+    harness.run();
+    assert_eq!(
+        harness.state().ui_state.clusters[&1].selected_namespaces,
+        HashSet::from([
+            "default".to_owned(),
+            "kube-system".to_owned(),
+            "monitoring".to_owned(),
+        ])
+    );
+
+    harness.get_by_label("Select all").click();
+    harness.run();
+    assert!(
+        harness.state().ui_state.clusters[&1]
+            .selected_namespaces
+            .is_empty()
+    );
+
+    harness.get_by_label("Select all").click();
+    harness.run();
+
+    let mut commands = Vec::new();
+    harness
+        .state_mut()
+        .ui_state
+        .select_api_resource(1, pods.clone(), &mut commands);
+    harness.state_mut().ui_state.replace_selected_namespaces(
+        1,
+        ["default".to_owned()],
+        &mut commands,
+    );
+    let cluster = &harness.state().ui_state.clusters[&1];
+    assert_eq!(
+        cluster.selected_namespaces,
+        HashSet::from(["default".to_owned()])
+    );
+    assert!(
+        cluster
+            .active_watchers
+            .contains(&(pods.clone(), "kube-system".to_owned()))
+    );
+    assert!(
+        cluster
+            .active_watchers
+            .contains(&(pods.clone(), "monitoring".to_owned()))
+    );
+    assert_eq!(
+        commands
+            .iter()
+            .filter(|command| matches!(command, WorkerCommand::StartResourceWatch { .. }))
+            .count(),
+        3
+    );
+}
+
+#[test]
+fn namespace_selector_search_snapshot_shows_active_watches() {
+    let pods = fixture_api_resource("core", "Pod", "pods");
+    let mut state = oracle_resource_table_state();
+    let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
+    cluster.namespaces.insert(
+        "monitoring".into(),
+        MinimalNamespace {
+            name: "monitoring".into(),
+            display_name: Some("Monitoring".into()),
+        },
+    );
+    cluster.selected_namespaces = HashSet::from(["kube-system".into(), "monitoring".into()]);
+    cluster.resource_cache.insert(
+        (pods.clone(), "monitoring".into()),
+        ResourceWatchState {
+            is_synced: true,
+            ..Default::default()
+        },
+    );
+    cluster.active_watchers = HashSet::from([
+        (pods.clone(), "kube-system".into()),
+        (pods, "monitoring".into()),
+    ]);
+
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = state;
+    harness.run();
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
+        .click();
+    harness.run();
+    harness
+        .input_mut()
+        .events
+        .push(egui::Event::Text("m".into()));
+    harness.run();
+    harness.snapshot("namespace_selector_open_filtered_active_watches");
 }
 
 #[test]

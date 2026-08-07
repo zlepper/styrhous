@@ -160,6 +160,54 @@ impl UiState {
         Self::request_resource_watch(cluster, &api_resource, namespace, commands_to_send);
     }
 
+    /// Replace the visible namespace scope without cancelling existing watches.
+    pub(super) fn replace_selected_namespaces<I>(
+        &mut self,
+        cluster_key: i32,
+        namespaces: I,
+        commands_to_send: &mut Vec<crate::worker::WorkerCommand>,
+    ) where
+        I: IntoIterator<Item = String>,
+    {
+        let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
+            return;
+        };
+
+        cluster.selected_namespaces = namespaces.into_iter().collect();
+        let Some(api_resource) = cluster.selected_api_resource.clone() else {
+            return;
+        };
+        Self::request_selected_resource_watches(cluster, &api_resource, commands_to_send);
+    }
+
+    /// Select every discovered namespace without cancelling existing watches.
+    pub(super) fn select_all_namespaces(
+        &mut self,
+        cluster_key: i32,
+        commands_to_send: &mut Vec<crate::worker::WorkerCommand>,
+    ) {
+        let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
+            return;
+        };
+
+        cluster.selected_namespaces = cluster
+            .namespaces
+            .values()
+            .map(|namespace| namespace.name.clone())
+            .collect();
+        let Some(api_resource) = cluster.selected_api_resource.clone() else {
+            return;
+        };
+        Self::request_selected_resource_watches(cluster, &api_resource, commands_to_send);
+    }
+
+    /// Clear the visible namespace scope without cancelling existing watches.
+    pub(super) fn clear_selected_namespaces(&mut self, cluster_key: i32) {
+        if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
+            cluster.selected_namespaces.clear();
+        }
+    }
+
     pub(super) fn retry_selected_load(
         &mut self,
         cluster_key: i32,
