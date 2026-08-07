@@ -132,7 +132,7 @@ impl Tabs {
         {
             let mut header_ui = ui.new_child(egui::UiBuilder::new().max_rect(header_rect));
 
-            ScrollArea::horizontal().show(&mut header_ui, |ui| {
+            ScrollArea::horizontal().id_salt(id.with("header-scroll")).show(&mut header_ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = TAB_GAP;
 
@@ -322,7 +322,7 @@ mod tests {
         });
 
         harness.run();
-        harness.snapshot("tabs_no_icons");
+        harness.snapshot("tabs/no_icons");
     }
 
     #[test]
@@ -347,7 +347,7 @@ mod tests {
 
         egui_extras::install_image_loaders(&harness.ctx);
         harness.run();
-        harness.snapshot("tabs_with_icons");
+        harness.snapshot("tabs/with_icons");
     }
 
     #[test]
@@ -369,13 +369,13 @@ mod tests {
         });
 
         harness.run();
-        harness.snapshot("tabs_selection_initial");
+        harness.snapshot("tabs/selection_initial");
 
         // Click on "Second" tab
         let second_tab = harness.get_by_label("Second");
         second_tab.click();
         harness.run();
 
-        harness.snapshot("tabs_selection_changed");
+        harness.snapshot("tabs/selection_changed");
     }
 }

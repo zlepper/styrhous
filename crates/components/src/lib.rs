@@ -28,6 +28,7 @@ pub mod icons;
 pub mod sidebar;
 pub mod table;
 pub mod tabs;
+pub mod theme;
 
 pub use button::{ButtonRounding, ButtonSize, ButtonVariant, TailwindButton};
 pub use combobox::{ComboboxUi, ItemResponse, NoFilter, TailwindCombobox, WithFilter};
@@ -38,3 +39,4 @@ pub use table::{
     SortDirection, SortState, TableColumnBuilder, TableRowBuilder, TailwindTable,
 };
 pub use tabs::{Tabs, TabsContent, TabsResponse};
+pub use theme::apply_light_theme;

@@ -291,7 +291,7 @@ mod tests {
                 button_row(ui, ButtonVariant::Soft, ButtonRounding::Pill);
             });
         });
-        harness.snapshot("buttons");
+        harness.snapshot("buttons/variants");
     }
 
     /// Test button hover and active (pressed) states
@@ -313,7 +313,7 @@ mod tests {
             });
             harness.get_by_label("Hovered").hover();
             harness.run_ok();
-            results.add(harness.try_snapshot("primary_hovered"));
+            results.add(harness.try_snapshot("buttons/primary_hovered"));
         }
 
         // Test Primary button - pressed
@@ -340,7 +340,7 @@ mod tests {
                 modifiers: egui::Modifiers::default(),
             });
             harness.step();
-            results.add(harness.try_snapshot("primary_pressed"));
+            results.add(harness.try_snapshot("buttons/primary_pressed"));
         }
 
         // Test Secondary button - hovered
@@ -356,7 +356,7 @@ mod tests {
             });
             harness.get_by_label("Hovered").hover();
             harness.run_ok();
-            results.add(harness.try_snapshot("secondary_hovered"));
+            results.add(harness.try_snapshot("buttons/secondary_hovered"));
         }
 
         // Test Secondary button - pressed
@@ -383,7 +383,7 @@ mod tests {
                 modifiers: egui::Modifiers::default(),
             });
             harness.step();
-            results.add(harness.try_snapshot("secondary_pressed"));
+            results.add(harness.try_snapshot("buttons/secondary_pressed"));
         }
 
         // Test Soft button - hovered
@@ -399,7 +399,7 @@ mod tests {
             });
             harness.get_by_label("Hovered").hover();
             harness.run_ok();
-            results.add(harness.try_snapshot("soft_hovered"));
+            results.add(harness.try_snapshot("buttons/soft_hovered"));
         }
 
         // Test Soft button - pressed
@@ -426,7 +426,7 @@ mod tests {
                 modifiers: egui::Modifiers::default(),
             });
             harness.step();
-            results.add(harness.try_snapshot("soft_pressed"));
+            results.add(harness.try_snapshot("buttons/soft_pressed"));
         }
     }
 }
