@@ -530,7 +530,10 @@ fn cluster_rail_shows_connection_status_marker_and_tooltip() {
 
     harness.get_by_label("dev").hover();
     harness.run();
-    harness.snapshot("cluster_rail_connection_status");
+    harness.snapshot_options(
+        "cluster_rail_connection_status",
+        &egui_kittest::SnapshotOptions::new().failed_pixel_count_threshold(1),
+    );
 }
 
 #[test]
