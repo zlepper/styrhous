@@ -819,7 +819,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Run with: cargo test -- --ignored
     fn test_real_cluster_connection() {
         let mut harness = Harness::new_eframe(|_cc| MyEguiApp::<Worker>::default());
 
@@ -836,10 +835,9 @@ mod tests {
     }
 
     /// Integration test for resource watcher using accessibility-based UI interactions.
-    /// Requires a Kind cluster to be running locally.
-    /// Run with: cargo test -p kubernetes-dev-ui test_resource_watcher_integration -- --ignored
+    /// Nextest creates or reuses the default Kind cluster before running this test.
+    /// Run with: cargo nextest run -p kubernetes-dev-ui test_resource_watcher_integration
     #[test]
-    #[ignore]
     fn test_resource_watcher_integration() {
         let mut harness = Harness::new_eframe(|_cc| MyEguiApp::<Worker>::default());
         egui_extras::install_image_loaders(&harness.ctx);
@@ -955,9 +953,9 @@ mod tests {
 
     /// Integration test for resource actions (Edit YAML, Delete) against a real Kind cluster.
     /// Creates a test ConfigMap, edits it, then deletes it.
-    /// Run with: cargo test -p kubernetes-dev-ui test_resource_actions_integration -- --ignored
+    /// Nextest creates or reuses the default Kind cluster before running this test.
+    /// Run with: cargo nextest run -p kubernetes-dev-ui test_resource_actions_integration
     #[test]
-    #[ignore]
     fn test_resource_actions_integration() {
         use kube::{Api, Client};
         use k8s_openapi::api::core::v1::ConfigMap;
