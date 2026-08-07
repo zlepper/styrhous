@@ -229,7 +229,7 @@ fn test_resource_watcher_integration() {
             .contains(&fixture.namespace)
     );
 
-    let configmaps_resource = select_resource(&mut harness, "Config", "configmaps");
+    let configmaps_resource = select_resource(&mut harness, "Config", "Config Maps");
     wait_for_resource_sync(
         &mut harness,
         cluster_key,
@@ -260,7 +260,7 @@ fn test_resource_actions_integration() {
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
     select_namespace(&mut harness, &fixture.namespace);
-    let configmaps_resource = select_resource(&mut harness, "Config", "configmaps");
+    let configmaps_resource = select_resource(&mut harness, "Config", "Config Maps");
     wait_for_resource_sync(
         &mut harness,
         cluster_key,
