@@ -409,6 +409,46 @@ fn pod_resource_table_shows_per_container_status_indicators() {
 }
 
 #[test]
+fn resource_table_snapshot_keeps_namespace_column_readable() {
+    let pods = fixture_api_resource("core", "Pod", "pods");
+    let mut state = oracle_resource_table_state();
+    let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
+    cluster.namespaces.insert(
+        "default".into(),
+        MinimalNamespace {
+            name: "default".into(),
+            display_name: None,
+        },
+    );
+    cluster.selected_namespaces = HashSet::from(["default".into(), "kube-system".into()]);
+    cluster.resource_cache.insert(
+        (pods, Some("default".into())),
+        ResourceWatchState {
+            resources: BTreeMap::from([(
+                "default-pod".into(),
+                MinimalResource {
+                    uid: "default-pod".into(),
+                    name: "default-pod".into(),
+                    namespace: Some("default".into()),
+                    creation_timestamp: None,
+                    cells: Default::default(),
+                },
+            )]),
+            is_synced: true,
+            error: None,
+        },
+    );
+
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = state;
+    harness.run();
+    harness.get_by_label("Apps & Containers").click_accesskit();
+    harness.run();
+
+    harness.snapshot("resource_table_multiple_namespaces");
+}
+
+#[test]
 fn deployment_resource_table_snapshot_uses_typed_columns() {
     let deployment = fixture_api_resource("apps", "Deployment", "deployments");
     let mut state = oracle_resource_table_state();
