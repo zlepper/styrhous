@@ -13,14 +13,35 @@ mod worker;
 
 use crate::ui::MyEguiApp;
 
+fn native_options() -> eframe::NativeOptions {
+    eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([1200.0, 800.0])
+            .with_min_inner_size([1000.0, 600.0]),
+        ..Default::default()
+    }
+}
+
 fn main() {
     tracing_subscriber::fmt().init();
 
-    let native_options = eframe::NativeOptions::default();
     eframe::run_native(
         "Kubernetes dev UI",
-        native_options,
+        native_options(),
         Box::new(|cc| Ok(Box::new(MyEguiApp::<worker::Worker>::new(cc)))),
     )
     .expect("eframe failed to start");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::native_options;
+
+    #[test]
+    fn native_window_starts_wide_and_has_a_minimum_width() {
+        let viewport = native_options().viewport;
+
+        assert_eq!(viewport.inner_size, Some(egui::vec2(1200.0, 800.0)));
+        assert_eq!(viewport.min_inner_size, Some(egui::vec2(1000.0, 600.0)));
+    }
 }

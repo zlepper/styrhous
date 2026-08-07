@@ -605,7 +605,7 @@ fn show_resource_table(
     .column("name", "Name", |col| col.sortable().fill_remaining());
     if show_namespace_column {
         table = table.column("namespace", "Namespace", |col| {
-            col.sortable().initial_width(75.0)
+            col.sortable().initial_width(180.0)
         });
     }
     for column in &definition.columns {
