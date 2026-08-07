@@ -102,6 +102,16 @@ pub fn chart_bar_icon() -> Image<'static> {
     Image::new(include_image!("icons/chart-bar.svg"))
 }
 
+/// Returns a horizontal ellipsis icon image for compact action menus.
+pub fn ellipsis_horizontal_icon() -> Image<'static> {
+    Image::new(include_image!("icons/ellipsis-horizontal.svg"))
+}
+
+/// Returns a trash icon image for destructive menu actions.
+pub fn trash_icon() -> Image<'static> {
+    Image::new(include_image!("icons/trash.svg"))
+}
+
 /// Render a trash (delete) icon (non-interactive)
 ///
 /// For a clickable button version, use `trash_button()` instead.
