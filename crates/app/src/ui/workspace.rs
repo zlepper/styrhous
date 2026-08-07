@@ -5,8 +5,9 @@ use crate::minimal_resource::MinimalResource;
 use crate::worker::WorkerCommand;
 use components::colors::{TOOLBAR_BACKGROUND, gray};
 use components::{
-    MoreButton, TableRowBuilder, TailwindCombobox, TailwindTable, WorkspacePage, icons,
+    MoreButton, MoreMenu, TableRowBuilder, TailwindCombobox, TailwindTable, WorkspacePage, icons,
 };
+use std::cell::RefCell;
 
 pub(super) fn show(
     ctx: &egui::Context,
@@ -205,7 +206,7 @@ fn show_resource_table(
     resources: &[&MinimalResource],
     show_namespace_column: bool,
 ) -> Option<ResourceAction> {
-    let mut pending_action = None;
+    let pending_action = RefCell::new(None);
     let mut table = TailwindTable::new(format!("resource-table-{}", api_resource.name)).column(
         "name",
         "Name",
@@ -225,30 +226,39 @@ fn show_resource_table(
         .column("actions", "", |col| col.initial_width(104.0))
         .fill_available_height();
 
-    table.show(ui, resources, |ui, resource, column_index| {
-        let (namespace_index, status_index, ready_index, age_index, actions_index) =
-            if show_namespace_column {
-                (Some(1), 2, 3, 4, 5)
-            } else {
-                (None, 1, 2, 3, 4)
-            };
-        match column_index {
-            0 => TableRowBuilder::text(ui, &resource.name, true),
-            index if Some(index) == namespace_index => {
-                TableRowBuilder::text(ui, resource.namespace.as_deref().unwrap_or("-"), false);
+    table.show_with_row_response(
+        ui,
+        resources,
+        |ui, resource, column_index| {
+            let (namespace_index, status_index, ready_index, age_index, actions_index) =
+                if show_namespace_column {
+                    (Some(1), 2, 3, 4, 5)
+                } else {
+                    (None, 1, 2, 3, 4)
+                };
+            match column_index {
+                0 => TableRowBuilder::text(ui, &resource.name, true),
+                index if Some(index) == namespace_index => {
+                    TableRowBuilder::text(ui, resource.namespace.as_deref().unwrap_or("-"), false);
+                }
+                index if index == status_index => resource_status(ui, resource.display_status()),
+                index if index == ready_index => {
+                    TableRowBuilder::text(ui, resource.display_ready(), false)
+                }
+                index if index == age_index => TableRowBuilder::text(ui, &resource.age(), false),
+                index if index == actions_index => {
+                    show_resource_actions(ui, resource, &mut pending_action.borrow_mut())
+                }
+                _ => {}
             }
-            index if index == status_index => resource_status(ui, resource.display_status()),
-            index if index == ready_index => {
-                TableRowBuilder::text(ui, resource.display_ready(), false)
-            }
-            index if index == age_index => TableRowBuilder::text(ui, &resource.age(), false),
-            index if index == actions_index => {
-                show_resource_actions(ui, resource, &mut pending_action)
-            }
-            _ => {}
-        }
-    });
-    pending_action
+        },
+        |row_response, resource| {
+            MoreButton::show_context_menu(row_response, |menu| {
+                show_resource_action_items(menu, resource, &mut pending_action.borrow_mut());
+            });
+        },
+    );
+    pending_action.into_inner()
 }
 
 fn show_resource_actions(
@@ -271,36 +281,44 @@ fn show_resource_actions(
             .layout(egui::Layout::left_to_right(egui::Align::Center)),
     );
     MoreButton::new(format!("More actions for {}", resource.name)).show(&mut action_ui, |menu| {
-        if menu
-            .action_with_icon(
-                "Edit YAML",
-                icons::document_icon()
-                    .fit_to_exact_size(egui::Vec2::splat(16.0))
-                    .tint(gray::_500),
-            )
-            .clicked()
-            && pending_action.is_none()
-        {
-            *pending_action = Some(ResourceAction::EditYaml {
-                name: resource.name.clone(),
-                namespace: resource.namespace.clone().unwrap_or_default(),
-            });
-        }
-        menu.separator();
-        if menu
-            .destructive_action_with_icon(
-                "Delete",
-                icons::trash_icon()
-                    .fit_to_exact_size(egui::Vec2::splat(16.0))
-                    .tint(egui::Color32::from_rgb(185, 28, 28)),
-            )
-            .clicked()
-            && pending_action.is_none()
-        {
-            *pending_action = Some(ResourceAction::RequestDelete {
-                name: resource.name.clone(),
-                namespace: resource.namespace.clone().unwrap_or_default(),
-            });
-        }
+        show_resource_action_items(menu, resource, pending_action);
     });
+}
+
+fn show_resource_action_items(
+    menu: &mut MoreMenu<'_>,
+    resource: &MinimalResource,
+    pending_action: &mut Option<ResourceAction>,
+) {
+    if menu
+        .action_with_icon(
+            "Edit YAML",
+            icons::document_icon()
+                .fit_to_exact_size(egui::Vec2::splat(16.0))
+                .tint(gray::_500),
+        )
+        .clicked()
+        && pending_action.is_none()
+    {
+        *pending_action = Some(ResourceAction::EditYaml {
+            name: resource.name.clone(),
+            namespace: resource.namespace.clone().unwrap_or_default(),
+        });
+    }
+    menu.separator();
+    if menu
+        .destructive_action_with_icon(
+            "Delete",
+            icons::trash_icon()
+                .fit_to_exact_size(egui::Vec2::splat(16.0))
+                .tint(egui::Color32::from_rgb(185, 28, 28)),
+        )
+        .clicked()
+        && pending_action.is_none()
+    {
+        *pending_action = Some(ResourceAction::RequestDelete {
+            name: resource.name.clone(),
+            namespace: resource.namespace.clone().unwrap_or_default(),
+        });
+    }
 }

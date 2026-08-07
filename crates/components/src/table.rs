@@ -200,6 +200,28 @@ impl TailwindTable {
         items: &'a [T],
         mut render_cell: impl FnMut(&mut Ui, &'a T, usize),
     ) {
+        self.show_with_row_response(
+            ui,
+            items,
+            move |ui, item, column_index| {
+                render_cell(ui, item, column_index);
+            },
+            |_, _| {},
+        );
+    }
+
+    /// Show the table and receive an interactive response for every cell.
+    ///
+    /// Callers can attach the same row-level interaction, such as a context
+    /// menu, to every cell response. This makes the interaction available from
+    /// anywhere in a row while preserving egui's per-widget interaction model.
+    pub fn show_with_row_response<'a, T>(
+        self,
+        ui: &mut Ui,
+        items: &'a [T],
+        mut render_cell: impl FnMut(&mut Ui, &'a T, usize),
+        mut render_row: impl FnMut(&egui::Response, &'a T),
+    ) {
         let available_height = ui.available_height();
         let num_columns = self.columns.len();
         let original_item_spacing = ui.spacing().item_spacing;
@@ -259,8 +281,14 @@ impl TailwindTable {
 
                     // Render each column
                     for col_index in 0..num_columns {
+                        let mut interaction = None;
                         row.col(|ui| {
                             let rect = ui.max_rect();
+                            interaction = Some(ui.interact(
+                                rect,
+                                ui.id().with("row-context-menu"),
+                                egui::Sense::click(),
+                            ));
                             ui.painter().rect_filled(rect, 0.0, CONTENT_BACKGROUND);
                             ui.painter().line_segment(
                                 [rect.left_bottom(), rect.right_bottom()],
@@ -273,6 +301,9 @@ impl TailwindTable {
                                 render_cell(ui, item, col_index);
                             });
                         });
+
+                        let response = interaction.expect("table cell should register interaction");
+                        render_row(&response, item);
                     }
                 });
             });

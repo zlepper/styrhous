@@ -58,6 +58,37 @@ impl MoreButton {
 
         trigger
     }
+
+    /// Show the same action menu when an arbitrary response is right-clicked.
+    ///
+    /// The popup is anchored below the cursor, which makes it suitable for
+    /// row-level context menus.
+    pub fn show_context_menu(response: &Response, add_contents: impl FnOnce(&mut MoreMenu<'_>)) {
+        let popup_id = Popup::default_response_id(response);
+        let ctx = response.ctx.clone();
+        let secondary_click_position = ctx.input(|input| {
+            input
+                .pointer
+                .button_clicked(egui::PointerButton::Secondary)
+                .then(|| input.pointer.latest_pos())
+                .flatten()
+        });
+        if secondary_click_position
+            .is_some_and(|position| response.interact_rect.contains(position))
+        {
+            #[allow(deprecated)]
+            ctx.memory_mut(|memory| memory.open_popup_at(popup_id, secondary_click_position));
+        }
+        let _popup = Popup::context_menu(response)
+            .gap(4.0)
+            .width(MENU_WIDTH)
+            .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
+            .frame(menu_frame())
+            .show(|ui| {
+                let mut menu = MoreMenu { ui, popup_id };
+                add_contents(&mut menu);
+            });
+    }
 }
 
 /// Builder passed to [`MoreButton::show`] for adding menu content.
