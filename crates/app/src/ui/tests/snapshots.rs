@@ -335,12 +335,16 @@ fn delete_confirmation_can_be_cancelled_without_sending_a_command() {
 }
 
 #[test]
-fn resource_navigation_selects_curated_and_other_resources() {
+fn resource_navigation_selects_primary_curated_gateway_and_other_resources() {
     let mut cluster = fixture_cluster(1, "dev");
     cluster.selected_namespaces.insert("default".into());
     cluster.resource_navigation = build_resource_navigation(vec![
+        fixture_api_resource("core", "Node", "nodes"),
+        fixture_api_resource("core", "Namespace", "namespaces"),
+        fixture_api_resource("core", "Event", "events"),
         fixture_api_resource("core", "Pod", "pods"),
         fixture_api_resource("apps", "Deployment", "deployments"),
+        fixture_api_resource("gateway.networking.k8s.io", "HTTPRoute", "httproutes"),
         fixture_api_resource("apps", "ControllerRevision", "controllerrevisions"),
     ]);
     let mut harness = application_harness::<MockWorker>();
@@ -350,6 +354,28 @@ fn resource_navigation_selects_curated_and_other_resources() {
         selected_cluster: Some(1),
     };
     harness.run();
+
+    harness.get_by_label("nodes").click_accesskit();
+    harness.run();
+    assert_eq!(
+        harness.state().ui_state.clusters[&1]
+            .selected_api_resource
+            .as_ref()
+            .map(|resource| resource.name.as_str()),
+        Some("nodes")
+    );
+
+    harness.get_by_label("namespaces").click_accesskit();
+    harness.run();
+    harness.get_by_label("events").click_accesskit();
+    harness.run();
+    assert_eq!(
+        harness.state().ui_state.clusters[&1]
+            .selected_api_resource
+            .as_ref()
+            .map(|resource| resource.name.as_str()),
+        Some("events")
+    );
 
     harness.get_by_label("Apps & Containers").click_accesskit();
     harness.run();
@@ -363,9 +389,21 @@ fn resource_navigation_selects_curated_and_other_resources() {
         Some("pods")
     );
 
-    harness.get_by_label("apps").click_accesskit();
+    harness.get_by_label("Gateway API").click_accesskit();
     harness.run();
-    harness.get_by_label("Other").click_accesskit();
+    harness.get_by_label("httproutes").click_accesskit();
+    harness.run();
+    assert_eq!(
+        harness.state().ui_state.clusters[&1]
+            .selected_api_resource
+            .as_ref()
+            .map(|resource| resource.name.as_str()),
+        Some("httproutes")
+    );
+
+    harness.get_by_label("Other Resources").click_accesskit();
+    harness.run();
+    harness.get_by_label("apps").click_accesskit();
     harness.run();
     harness
         .get_by_label("controllerrevisions")
@@ -390,7 +428,14 @@ fn resource_navigation_selects_curated_and_other_resources() {
                 _ => None,
             })
             .collect::<Vec<_>>(),
-        vec!["pods", "controllerrevisions"]
+        vec![
+            "nodes",
+            "namespaces",
+            "events",
+            "pods",
+            "httproutes",
+            "controllerrevisions",
+        ]
     );
 }
 
