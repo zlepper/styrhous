@@ -522,6 +522,30 @@ impl<'a> WideSidebarContent<'a> {
         self.core.avatar_item(text, initial, selected)
     }
 
+    /// Add a full-width primary navigation item without an icon or disclosure control.
+    pub fn primary_text_item(&mut self, text: impl Into<WidgetText>, selected: bool) -> Response {
+        let text = text.into();
+        let text_str = text.text();
+        let (rect, inner_rect, response) = allocate_item(self.core.ui, WIDE_ITEM_HEIGHT);
+        let colors = ItemColors::navigation(selected, response.hovered(), self.core.dark);
+        draw_background(self.core.ui.painter(), inner_rect, colors.background);
+
+        let text_pos = inner_rect.min + Vec2::new(24.0, (WIDE_ITEM_HEIGHT - TEXT_FONT_SIZE) / 2.0);
+        let text_is_truncated = render_text(
+            self.core.ui.painter(),
+            text_pos,
+            text_str,
+            colors.text,
+            rect.right() - ITEM_PADDING_X - text_pos.x,
+        );
+        add_button_accessibility(&response, self.core.ui, text_str);
+        if text_is_truncated {
+            response.clone().on_hover_text(text_str);
+        }
+
+        response
+    }
+
     /// Add a section header label
     pub fn section_header(&mut self, text: &str) {
         self.core.ui.add_space(12.0);
@@ -1015,6 +1039,18 @@ mod tests {
         });
 
         harness.snapshot("sidebars/dark");
+    }
+
+    #[test]
+    fn test_sidebar_primary_text_item() {
+        let mut harness = create_harness(|ui| {
+            WideSidebar::new().dark().show(ui, |sidebar| {
+                sidebar.primary_text_item("nodes", true);
+                sidebar.primary_text_item("namespaces", false);
+            });
+        });
+
+        harness.snapshot("sidebars/primary_text_item");
     }
 
     #[test]

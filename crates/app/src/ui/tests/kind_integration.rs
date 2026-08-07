@@ -134,7 +134,7 @@ fn wait_for_cluster_data(harness: &mut Harness<MyEguiApp<Worker>>, cluster_key: 
         |app| {
             app.ui_state.clusters.get(&cluster_key).and_then(|cluster| {
                 (!cluster.namespaces.is_empty()
-                    && (!cluster.resource_navigation.curated_sections.is_empty()
+                    && (!cluster.resource_navigation.curated_entries.is_empty()
                         || !cluster.resource_navigation.other_api_groups.is_empty()))
                 .then_some(())
             })
@@ -209,7 +209,7 @@ fn test_real_cluster_connection() {
     ));
     assert!(cluster.namespaces.contains_key(&SortedName::new("default")));
     assert!(
-        !cluster.resource_navigation.curated_sections.is_empty()
+        !cluster.resource_navigation.curated_entries.is_empty()
             || !cluster.resource_navigation.other_api_groups.is_empty(),
         "Kind should advertise Kubernetes API resources"
     );
