@@ -1,15 +1,15 @@
 use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::{
-    Cluster, ClusterConnection, reload_kubeconfig, start_cluster_connection,
-    start_resource_watcher, get_resource_yaml, delete_resource, apply_resource_yaml,
+    Cluster, ClusterConnection, apply_resource_yaml, delete_resource, get_resource_yaml,
+    reload_kubeconfig, start_cluster_connection, start_resource_watcher,
 };
 use crate::helpers::ResultExt;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use anyhow::Error;
+use std::collections::HashMap;
 #[cfg(test)]
 use std::collections::VecDeque;
-use std::collections::HashMap;
 use std::sync::{Arc, mpsc};
 use tokio::sync::RwLock;
 use tracing::info;
@@ -123,7 +123,10 @@ struct WorkerInner {
 #[derive(Debug)]
 pub enum WorkerCommand {
     LoadClusters,
-    ConnectToCluster { cluster: String, cluster_key: i32 },
+    ConnectToCluster {
+        cluster: String,
+        cluster_key: i32,
+    },
     StartResourceWatch {
         cluster_key: i32,
         api_resource: ApiResource,
@@ -271,9 +274,14 @@ impl WorkerRuntime {
                 cluster_key,
                 cluster,
             } => {
-                let res = start_cluster_connection(*cluster_key, cluster, result_channel.clone()).await;
+                let res =
+                    start_cluster_connection(*cluster_key, cluster, result_channel.clone()).await;
                 // Store the client for later use by resource watchers
-                if let Ok(WorkerResult::KubernetesClusterConnectionCreated { cluster_key, runner }) = &res {
+                if let Ok(WorkerResult::KubernetesClusterConnectionCreated {
+                    cluster_key,
+                    runner,
+                }) = &res
+                {
                     let client = runner.client();
                     shared.clients.write().await.insert(*cluster_key, client);
                 }
@@ -292,9 +300,13 @@ impl WorkerRuntime {
                         api_resource.clone(),
                         namespace.clone(),
                         result_channel.clone(),
-                    ).await
+                    )
+                    .await
                 } else {
-                    Err(anyhow::anyhow!("No client found for cluster_key {}", cluster_key))
+                    Err(anyhow::anyhow!(
+                        "No client found for cluster_key {}",
+                        cluster_key
+                    ))
                 }
             }
             WorkerCommand::GetResourceYaml {
@@ -311,9 +323,13 @@ impl WorkerRuntime {
                         api_resource.clone(),
                         namespace.clone(),
                         resource_name.clone(),
-                    ).await
+                    )
+                    .await
                 } else {
-                    Err(anyhow::anyhow!("No client found for cluster_key {}", cluster_key))
+                    Err(anyhow::anyhow!(
+                        "No client found for cluster_key {}",
+                        cluster_key
+                    ))
                 }
             }
             WorkerCommand::DeleteResource {
@@ -330,9 +346,13 @@ impl WorkerRuntime {
                         api_resource.clone(),
                         namespace.clone(),
                         resource_name.clone(),
-                    ).await
+                    )
+                    .await
                 } else {
-                    Err(anyhow::anyhow!("No client found for cluster_key {}", cluster_key))
+                    Err(anyhow::anyhow!(
+                        "No client found for cluster_key {}",
+                        cluster_key
+                    ))
                 }
             }
             WorkerCommand::ApplyResourceYaml {
@@ -351,9 +371,13 @@ impl WorkerRuntime {
                         namespace.clone(),
                         resource_name.clone(),
                         yaml.clone(),
-                    ).await
+                    )
+                    .await
                 } else {
-                    Err(anyhow::anyhow!("No client found for cluster_key {}", cluster_key))
+                    Err(anyhow::anyhow!(
+                        "No client found for cluster_key {}",
+                        cluster_key
+                    ))
                 }
             }
         };

@@ -20,6 +20,7 @@ outputs = { self, nixpkgs}:
           kubectl
           cargo-nextest
           jetbrains.rust-rover
+          imagemagick
 
              xorg.libXcursor
                       xorg.libXrandr

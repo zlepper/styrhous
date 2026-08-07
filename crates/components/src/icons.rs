@@ -16,7 +16,7 @@
 //! icons::chevron_right(ui, 16.0, gray::_400);
 //! ```
 
-use egui::{include_image, Color32, Image, Response, Ui, Vec2};
+use egui::{Color32, Image, Response, Ui, Vec2, include_image};
 
 /// Render a chevron-right icon
 ///
@@ -146,11 +146,11 @@ pub fn trash_button(ui: &mut Ui, size: f32, color: Color32, label: &str) -> Resp
     let image = Image::new(include_image!("icons/trash.svg"))
         .fit_to_exact_size(Vec2::splat(size))
         .tint(color);
-    // Button::image_and_text gives us both the icon and accessibility via the text label
-    // The text is the accessibility label that kittest can find
-    let button = egui::Button::image_and_text(image, label)
-        .frame(false);
-    ui.add(button)
+    let response = ui.add(egui::Button::image(image).frame(false));
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label)
+    });
+    response
 }
 
 /// Render a clickable pencil (edit) icon button using native egui Button
@@ -167,9 +167,9 @@ pub fn pencil_button(ui: &mut Ui, size: f32, color: Color32, label: &str) -> Res
     let image = Image::new(include_image!("icons/pencil.svg"))
         .fit_to_exact_size(Vec2::splat(size))
         .tint(color);
-    // Button::image_and_text gives us both the icon and accessibility via the text label
-    // The text is the accessibility label that kittest can find
-    let button = egui::Button::image_and_text(image, label)
-        .frame(false);
-    ui.add(button)
+    let response = ui.add(egui::Button::image(image).frame(false));
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label)
+    });
+    response
 }

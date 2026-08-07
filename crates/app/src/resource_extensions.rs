@@ -4,7 +4,10 @@ pub(crate) trait ResourceExt {
     fn try_get_display_name(&self) -> Option<String>;
 }
 
-impl<K> ResourceExt for K where K: Resource {
+impl<K> ResourceExt for K
+where
+    K: Resource,
+{
     fn try_get_display_name(&self) -> Option<String> {
         let metadata = self.meta();
 

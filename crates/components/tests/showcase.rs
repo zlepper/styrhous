@@ -9,10 +9,10 @@ use std::collections::HashSet;
 use components::colors::WHITE;
 use components::icons::{calendar_icon, document_icon, folder_icon, home_icon, users_icon};
 use components::{
-    apply_light_theme, ButtonRounding, ButtonSize, ButtonVariant, SortDirection, SortState,
-    TableRowBuilder, Tabs, TailwindButton, TailwindCombobox, TailwindTable, WideSidebar,
+    ButtonRounding, ButtonSize, ButtonVariant, SortDirection, SortState, TableRowBuilder, Tabs,
+    TailwindButton, TailwindCombobox, TailwindTable, WideSidebar, apply_light_theme,
 };
-use egui_kittest::{kittest::Queryable, Harness};
+use egui_kittest::{Harness, kittest::Queryable};
 
 struct Person {
     name: &'static str,

@@ -30,24 +30,30 @@
 //! ```
 
 use egui::{
-    collapsing_header::CollapsingState, Color32, CornerRadius, Id, Image, Response, RichText, Sense,
-    Stroke, Ui, UiBuilder, Vec2, WidgetText,
+    Color32, CornerRadius, Id, Image, Response, RichText, Sense, Stroke, Ui, UiBuilder, Vec2,
+    WidgetText, collapsing_header::CollapsingState,
 };
 
-use crate::colors::{gray, indigo, WHITE};
+use crate::colors::{NAVIGATION_BACKGROUND, WHITE, gray, indigo};
 
-const WIDE_WIDTH: f32 = 256.0;
-const NARROW_WIDTH: f32 = 72.0;
-const WIDE_ITEM_HEIGHT: f32 = 40.0;
-const NARROW_ITEM_HEIGHT: f32 = 48.0;
-const ITEM_PADDING_X: f32 = 12.0;
+const WIDE_WIDTH: f32 = 292.0;
+const NARROW_WIDTH: f32 = 68.0;
+// Resource leaves use a slightly denser allocation than their 44px selection
+// treatment. This preserves the oracle's vertical rhythm while leaving a clear,
+// comfortably sized active target.
+const WIDE_ITEM_HEIGHT: f32 = 41.8;
+const WIDE_GROUP_HEIGHT: f32 = 52.0;
+const OPEN_RESOURCE_GROUP_HEIGHT: f32 = 45.0;
+const NARROW_ITEM_HEIGHT: f32 = 62.0;
+const NARROW_AVATAR_SIZE: f32 = 28.0;
+const ITEM_PADDING_X: f32 = 8.0;
 const ITEM_CORNER_RADIUS: u8 = 6;
-const ICON_SIZE: f32 = 24.0;
-const ICON_TEXT_SPACING: f32 = 12.0;
-const CHEVRON_SIZE: f32 = 20.0;
-const CHEVRON_GAP: f32 = 12.0;
-const TEXT_FONT_SIZE: f32 = 14.0;
-const AVATAR_FONT_SIZE: f32 = 12.0;
+const ICON_SIZE: f32 = 20.0;
+const ICON_TEXT_SPACING: f32 = 10.0;
+const CHEVRON_SIZE: f32 = 16.0;
+const CHEVRON_GAP: f32 = 8.0;
+const TEXT_FONT_SIZE: f32 = 18.0;
+const AVATAR_FONT_SIZE: f32 = 14.0;
 
 struct ItemColors {
     background: Color32,
@@ -57,10 +63,21 @@ struct ItemColors {
 
 impl ItemColors {
     const fn new(background: Color32, text: Color32, icon: Color32) -> Self {
-        Self { background, text, icon }
+        Self {
+            background,
+            text,
+            icon,
+        }
     }
 
-    fn navigation(selected: bool, hovered: bool) -> Self {
+    fn navigation(selected: bool, hovered: bool, dark: bool) -> Self {
+        if dark {
+            return match (selected, hovered) {
+                (true, _) => Self::new(indigo::_600, WHITE, WHITE),
+                (_, true) => Self::new(gray::_800, gray::_100, gray::_300),
+                _ => Self::new(Color32::TRANSPARENT, gray::_300, gray::_400),
+            };
+        }
         match (selected, hovered) {
             (true, _) => Self::new(indigo::_50, indigo::_600, indigo::_600),
             (_, true) => Self::new(gray::_50, gray::_700, gray::_500),
@@ -68,7 +85,14 @@ impl ItemColors {
         }
     }
 
-    fn child(selected: bool, hovered: bool) -> Self {
+    fn child(selected: bool, hovered: bool, dark: bool) -> Self {
+        if dark {
+            return match (selected, hovered) {
+                (true, _) => Self::new(indigo::_600, WHITE, WHITE),
+                (_, true) => Self::new(gray::_800, gray::_100, gray::_300),
+                _ => Self::new(Color32::TRANSPARENT, gray::_200, gray::_400),
+            };
+        }
         match (selected, hovered) {
             (true, _) => Self::new(gray::_100, gray::_900, gray::_600),
             (_, true) => Self::new(gray::_50, gray::_700, gray::_500),
@@ -76,7 +100,13 @@ impl ItemColors {
         }
     }
 
-    fn expandable(hovered: bool, pressed: bool) -> Self {
+    fn expandable(hovered: bool, pressed: bool, dark: bool) -> Self {
+        if dark {
+            return match (pressed, hovered) {
+                (true, _) | (_, true) => Self::new(gray::_800, gray::_100, gray::_300),
+                _ => Self::new(Color32::TRANSPARENT, gray::_200, gray::_400),
+            };
+        }
         match (pressed, hovered) {
             (true, _) => Self::new(gray::_100, gray::_700, gray::_500),
             (_, true) => Self::new(gray::_50, gray::_700, gray::_500),
@@ -87,7 +117,8 @@ impl ItemColors {
 
 fn allocate_item(ui: &mut Ui, height: f32) -> (egui::Rect, egui::Rect, Response) {
     let available_width = ui.available_width();
-    let (rect, response) = ui.allocate_exact_size(Vec2::new(available_width, height), Sense::click());
+    let (rect, response) =
+        ui.allocate_exact_size(Vec2::new(available_width, height), Sense::click());
     let inner_rect = rect.shrink2(Vec2::new(ITEM_PADDING_X, 0.0));
     (rect, inner_rect, response)
 }
@@ -99,25 +130,83 @@ fn draw_background(painter: &egui::Painter, rect: egui::Rect, color: Color32) {
 }
 
 fn render_icon(ui: &mut Ui, rect: egui::Rect, icon: Image<'_>, tint: Color32) {
-    let mut icon_ui = ui.new_child(
-        UiBuilder::new()
-            .max_rect(rect)
-            .layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight)),
-    );
+    let mut icon_ui = ui.new_child(UiBuilder::new().max_rect(rect).layout(
+        egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+    ));
     icon_ui.add(icon.fit_to_exact_size(Vec2::splat(ICON_SIZE)).tint(tint));
 }
 
-fn render_text(painter: &egui::Painter, pos: egui::Pos2, text: &str, color: Color32) {
-    painter.text(pos, egui::Align2::LEFT_TOP, text, egui::FontId::proportional(TEXT_FONT_SIZE), color);
+fn truncate_text(painter: &egui::Painter, text: &str, color: Color32, max_width: f32) -> String {
+    let font = egui::FontId::proportional(TEXT_FONT_SIZE);
+    if painter
+        .layout_no_wrap(text.to_owned(), font.clone(), color)
+        .size()
+        .x
+        <= max_width
+    {
+        return text.to_owned();
+    }
+
+    let ellipsis = "…";
+    let mut truncated = String::new();
+    for character in text.chars() {
+        let candidate = format!("{truncated}{character}{ellipsis}");
+        if painter
+            .layout_no_wrap(candidate, font.clone(), color)
+            .size()
+            .x
+            > max_width
+        {
+            break;
+        }
+        truncated.push(character);
+    }
+    format!("{truncated}{ellipsis}")
 }
 
-fn render_avatar(painter: &egui::Painter, center: egui::Pos2, initial: &str) {
-    painter.circle_filled(center, ICON_SIZE / 2.0, gray::_200);
-    painter.text(center, egui::Align2::CENTER_CENTER, initial, egui::FontId::proportional(AVATAR_FONT_SIZE), gray::_600);
+fn render_text(
+    painter: &egui::Painter,
+    pos: egui::Pos2,
+    text: &str,
+    color: Color32,
+    max_width: f32,
+) {
+    let text = truncate_text(painter, text, color, max_width.max(0.0));
+    painter.text(
+        pos,
+        egui::Align2::LEFT_TOP,
+        text,
+        egui::FontId::proportional(TEXT_FONT_SIZE),
+        color,
+    );
+}
+
+fn render_avatar(
+    painter: &egui::Painter,
+    center: egui::Pos2,
+    initial: &str,
+    dark: bool,
+    size: f32,
+) {
+    let (fill, text) = if dark {
+        (gray::_700, gray::_100)
+    } else {
+        (gray::_200, gray::_600)
+    };
+    painter.circle_filled(center, size / 2.0, fill);
+    painter.text(
+        center,
+        egui::Align2::CENTER_CENTER,
+        initial,
+        egui::FontId::proportional(AVATAR_FONT_SIZE),
+        text,
+    );
 }
 
 fn add_button_accessibility(response: &Response, ui: &Ui, label: &str) {
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label));
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label)
+    });
 }
 
 fn icon_rect_wide(inner_rect: egui::Rect, item_height: f32) -> egui::Rect {
@@ -137,22 +226,40 @@ fn text_pos_after_icon(inner_rect: egui::Rect, item_height: f32) -> egui::Pos2 {
     inner_rect.min + Vec2::new(text_x, (item_height - TEXT_FONT_SIZE) / 2.0)
 }
 
+fn text_pos_after_chevron(inner_rect: egui::Rect, item_height: f32) -> egui::Pos2 {
+    let text_x = CHEVRON_SIZE + CHEVRON_GAP + 24.0;
+    inner_rect.min + Vec2::new(text_x, (item_height - TEXT_FONT_SIZE) / 2.0)
+}
+
 struct SidebarContentCore<'a> {
     ui: &'a mut Ui,
     id: Id,
     item_height: f32,
     show_text: bool,
+    dark: bool,
 }
 
 impl<'a> SidebarContentCore<'a> {
-    fn wide(ui: &'a mut Ui) -> Self {
+    fn wide(ui: &'a mut Ui, dark: bool) -> Self {
         let id = ui.auto_id_with("wide-sidebar");
-        Self { ui, id, item_height: WIDE_ITEM_HEIGHT, show_text: true }
+        Self {
+            ui,
+            id,
+            item_height: WIDE_ITEM_HEIGHT,
+            show_text: true,
+            dark,
+        }
     }
 
-    fn narrow(ui: &'a mut Ui) -> Self {
+    fn narrow(ui: &'a mut Ui, dark: bool) -> Self {
         let id = ui.auto_id_with("narrow-sidebar");
-        Self { ui, id, item_height: NARROW_ITEM_HEIGHT, show_text: false }
+        Self {
+            ui,
+            id,
+            item_height: NARROW_ITEM_HEIGHT,
+            show_text: false,
+            dark,
+        }
     }
 
     fn ui_mut(&mut self) -> &mut Ui {
@@ -164,53 +271,103 @@ impl<'a> SidebarContentCore<'a> {
         let text_str = text.text();
 
         let (rect, inner_rect, response) = allocate_item(self.ui, self.item_height);
-        let colors = ItemColors::navigation(selected, response.hovered());
+        let colors = ItemColors::navigation(selected, response.hovered(), self.dark);
 
-        draw_background(self.ui.painter(), inner_rect, colors.background);
+        let background_rect = if self.show_text {
+            inner_rect
+        } else {
+            inner_rect.shrink2(Vec2::new(0.0, 2.0))
+        };
+        draw_background(self.ui.painter(), background_rect, colors.background);
 
         if self.show_text {
-            render_icon(self.ui, icon_rect_wide(inner_rect, self.item_height), icon, colors.icon);
-            render_text(self.ui.painter(), text_pos_after_icon(inner_rect, self.item_height), text_str, colors.text);
+            render_icon(
+                self.ui,
+                icon_rect_wide(inner_rect, self.item_height),
+                icon,
+                colors.icon,
+            );
+            render_text(
+                self.ui.painter(),
+                text_pos_after_icon(inner_rect, self.item_height),
+                text_str,
+                colors.text,
+                inner_rect.right() - text_pos_after_icon(inner_rect, self.item_height).x,
+            );
         } else {
             // For narrow mode, center icon within full rect (not inner_rect)
             render_icon(self.ui, icon_rect_centered(rect), icon, colors.icon);
         }
 
         add_button_accessibility(&response, self.ui, text_str);
+        response.clone().on_hover_text(text_str);
         response
     }
 
-    fn avatar_item(&mut self, text: impl Into<WidgetText>, initial: &str, selected: bool) -> Response {
+    fn avatar_item(
+        &mut self,
+        text: impl Into<WidgetText>,
+        initial: &str,
+        selected: bool,
+    ) -> Response {
         let text = text.into();
         let text_str = text.text();
 
         let (rect, inner_rect, response) = allocate_item(self.ui, self.item_height);
-        let colors = ItemColors::navigation(selected, response.hovered());
+        let colors = ItemColors::navigation(selected, response.hovered(), self.dark);
 
-        draw_background(self.ui.painter(), inner_rect, colors.background);
+        let background_rect = if self.show_text {
+            inner_rect
+        } else {
+            inner_rect.shrink2(Vec2::new(0.0, 2.0))
+        };
+        draw_background(self.ui.painter(), background_rect, colors.background);
 
         if self.show_text {
             let avatar_x = CHEVRON_SIZE + CHEVRON_GAP;
-            let avatar_center = inner_rect.min + Vec2::new(avatar_x + ICON_SIZE / 2.0, self.item_height / 2.0);
-            render_avatar(self.ui.painter(), avatar_center, initial);
-            render_text(self.ui.painter(), text_pos_after_icon(inner_rect, self.item_height), text_str, colors.text);
+            let avatar_center =
+                inner_rect.min + Vec2::new(avatar_x + ICON_SIZE / 2.0, self.item_height / 2.0);
+            render_avatar(
+                self.ui.painter(),
+                avatar_center,
+                initial,
+                self.dark,
+                ICON_SIZE,
+            );
+            render_text(
+                self.ui.painter(),
+                text_pos_after_icon(inner_rect, self.item_height),
+                text_str,
+                colors.text,
+                inner_rect.right() - text_pos_after_icon(inner_rect, self.item_height).x,
+            );
         } else {
             // For narrow mode, center avatar within full rect (not inner_rect)
-            render_avatar(self.ui.painter(), rect.center(), initial);
+            render_avatar(
+                self.ui.painter(),
+                rect.center(),
+                initial,
+                self.dark,
+                NARROW_AVATAR_SIZE,
+            );
         }
 
         add_button_accessibility(&response, self.ui, text_str);
+        response.clone().on_hover_text(text_str);
         response
     }
 
     fn separator(&mut self) {
         self.ui.add_space(8.0);
         let available_width = self.ui.available_width();
-        let rect = self.ui.allocate_exact_size(Vec2::new(available_width, 1.0), Sense::hover()).0;
+        let rect = self
+            .ui
+            .allocate_exact_size(Vec2::new(available_width, 1.0), Sense::hover())
+            .0;
         let line_rect = rect.shrink2(Vec2::new(ITEM_PADDING_X, 0.0));
         self.ui.painter().line_segment(
             [line_rect.left_center(), line_rect.right_center()],
-            Stroke::new(1.0, gray::_200),
+            Stroke::new(1.0, if self.dark { gray::_800 } else { gray::_200 }),
         );
         self.ui.add_space(8.0);
     }
@@ -221,13 +378,15 @@ fn render_sidebar<R>(
     ui: &mut Ui,
     width: Option<f32>,
     default_width: f32,
+    background: Color32,
+    top_padding: f32,
     add_contents: impl FnOnce(&mut Ui) -> R,
 ) -> R {
     let rect = ui.available_rect_before_wrap();
     // Use specified width, or available width capped at default (handles being inside a SidePanel)
     let width = width.unwrap_or_else(|| rect.width().min(default_width));
     let sidebar_rect = egui::Rect::from_min_size(rect.min, Vec2::new(width, rect.height()));
-    ui.painter().rect_filled(sidebar_rect, 0.0, WHITE);
+    ui.painter().rect_filled(sidebar_rect, 0.0, background);
 
     let mut child_ui = ui.new_child(
         UiBuilder::new()
@@ -240,7 +399,7 @@ fn render_sidebar<R>(
         .id_salt(scroll_id)
         .auto_shrink(false)
         .show(&mut child_ui, |ui| {
-            ui.add_space(8.0);
+            ui.add_space(top_padding);
             add_contents(ui)
         })
         .inner
@@ -259,6 +418,7 @@ pub struct ExpandableResponse<R> {
 /// A full-featured sidebar with icons, text, and expandable sections
 pub struct WideSidebar {
     width: Option<f32>,
+    dark: bool,
 }
 
 impl Default for WideSidebar {
@@ -270,7 +430,10 @@ impl Default for WideSidebar {
 impl WideSidebar {
     /// Create a new wide sidebar with default settings
     pub fn new() -> Self {
-        Self { width: None }
+        Self {
+            width: None,
+            dark: false,
+        }
     }
 
     /// Override the default width (256px)
@@ -279,12 +442,35 @@ impl WideSidebar {
         self
     }
 
+    /// Use the dark navigation treatment intended for application shells.
+    pub fn dark(mut self) -> Self {
+        self.dark = true;
+        self
+    }
+
     /// Show the sidebar with the given content builder
-    pub fn show<R>(self, ui: &mut Ui, add_contents: impl FnOnce(&mut WideSidebarContent<'_>) -> R) -> R {
-        render_sidebar(ui, self.width, WIDE_WIDTH, |child_ui| {
-            let mut content = WideSidebarContent { core: SidebarContentCore::wide(child_ui) };
-            add_contents(&mut content)
-        })
+    pub fn show<R>(
+        self,
+        ui: &mut Ui,
+        add_contents: impl FnOnce(&mut WideSidebarContent<'_>) -> R,
+    ) -> R {
+        render_sidebar(
+            ui,
+            self.width,
+            WIDE_WIDTH,
+            if self.dark {
+                NAVIGATION_BACKGROUND
+            } else {
+                WHITE
+            },
+            6.0,
+            |child_ui| {
+                let mut content = WideSidebarContent {
+                    core: SidebarContentCore::wide(child_ui, self.dark),
+                };
+                add_contents(&mut content)
+            },
+        )
     }
 }
 
@@ -300,24 +486,42 @@ impl<'a> WideSidebarContent<'a> {
     }
 
     /// Add a navigation item with icon and text
-    pub fn item(&mut self, text: impl Into<WidgetText>, icon: Image<'_>, selected: bool) -> Response {
+    pub fn item(
+        &mut self,
+        text: impl Into<WidgetText>,
+        icon: Image<'_>,
+        selected: bool,
+    ) -> Response {
         self.core.item(text, icon, selected)
     }
 
     /// Add an avatar item with a circular initial badge
-    pub fn avatar_item(&mut self, text: impl Into<WidgetText>, initial: &str, selected: bool) -> Response {
+    pub fn avatar_item(
+        &mut self,
+        text: impl Into<WidgetText>,
+        initial: &str,
+        selected: bool,
+    ) -> Response {
         self.core.avatar_item(text, initial, selected)
     }
 
     /// Add a section header label
     pub fn section_header(&mut self, text: &str) {
-        self.core.ui.add_space(16.0);
-        let padding_x = ITEM_PADDING_X + 8.0;
+        self.core.ui.add_space(12.0);
+        let padding_x = ITEM_PADDING_X + 4.0;
         self.core.ui.horizontal(|ui| {
             ui.add_space(padding_x);
-            ui.label(RichText::new(text.to_uppercase()).size(11.0).color(gray::_500));
+            ui.label(
+                RichText::new(text.to_uppercase())
+                    .size(11.0)
+                    .color(if self.core.dark {
+                        gray::_400
+                    } else {
+                        gray::_500
+                    }),
+            );
         });
-        self.core.ui.add_space(4.0);
+        self.core.ui.add_space(2.0);
     }
 
     /// Add an expandable section with child items
@@ -332,7 +536,8 @@ impl<'a> WideSidebarContent<'a> {
         let text_str = text.text();
 
         let id = self.core.id.with(text_str);
-        let mut state = CollapsingState::load_with_default_open(self.core.ui.ctx(), id, default_open);
+        let mut state =
+            CollapsingState::load_with_default_open(self.core.ui.ctx(), id, default_open);
         let is_open = state.is_open();
 
         // Chevron
@@ -341,31 +546,55 @@ impl<'a> WideSidebarContent<'a> {
         } else {
             Image::new(egui::include_image!("icons/chevron-right.svg"))
         };
-        let chevron = chevron.fit_to_exact_size(Vec2::splat(CHEVRON_SIZE)).tint(gray::_400);
+        let chevron =
+            chevron
+                .fit_to_exact_size(Vec2::splat(CHEVRON_SIZE))
+                .tint(if self.core.dark {
+                    gray::_500
+                } else {
+                    gray::_400
+                });
 
-        let (_, inner_rect, response) = allocate_item(self.core.ui, WIDE_ITEM_HEIGHT);
-        let colors = ItemColors::expandable(response.hovered(), response.is_pointer_button_down_on());
+        let (_, inner_rect, response) = allocate_item(self.core.ui, WIDE_GROUP_HEIGHT);
+        let colors = ItemColors::expandable(
+            response.hovered(),
+            response.is_pointer_button_down_on(),
+            self.core.dark,
+        );
 
         draw_background(self.core.ui.painter(), inner_rect, colors.background);
 
         // Chevron
         let chevron_rect = egui::Rect::from_min_size(
-            inner_rect.min + Vec2::new(0.0, (WIDE_ITEM_HEIGHT - CHEVRON_SIZE) / 2.0),
+            inner_rect.min + Vec2::new(8.0, (WIDE_GROUP_HEIGHT - CHEVRON_SIZE) / 2.0),
             Vec2::splat(CHEVRON_SIZE),
         );
-        let mut chevron_ui = self.core.ui.new_child(
-            UiBuilder::new()
-                .max_rect(chevron_rect)
-                .layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight)),
-        );
+        let mut chevron_ui =
+            self.core
+                .ui
+                .new_child(UiBuilder::new().max_rect(chevron_rect).layout(
+                    egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+                ));
         chevron_ui.add(chevron);
 
         // Icon
-        render_icon(self.core.ui, icon_rect_wide(inner_rect, WIDE_ITEM_HEIGHT), icon, colors.icon);
+        render_icon(
+            self.core.ui,
+            icon_rect_wide(inner_rect, WIDE_ITEM_HEIGHT),
+            icon,
+            colors.icon,
+        );
 
         // Text
-        render_text(self.core.ui.painter(), text_pos_after_icon(inner_rect, WIDE_ITEM_HEIGHT), text_str, colors.text);
+        render_text(
+            self.core.ui.painter(),
+            text_pos_after_icon(inner_rect, WIDE_GROUP_HEIGHT),
+            text_str,
+            colors.text,
+            inner_rect.right() - text_pos_after_icon(inner_rect, WIDE_GROUP_HEIGHT).x,
+        );
         add_button_accessibility(&response, self.core.ui, text_str);
+        response.clone().on_hover_text(text_str);
 
         if response.clicked() {
             state.toggle(self.core.ui);
@@ -389,27 +618,130 @@ impl<'a> WideSidebarContent<'a> {
         }
     }
 
+    /// Add an expandable resource group without an icon.
+    ///
+    /// This compact treatment keeps the disclosure chevron as the only hierarchy
+    /// cue, leaving resource names as far left as possible.
+    pub fn expandable_text<R>(
+        &mut self,
+        text: impl Into<WidgetText>,
+        default_open: bool,
+        add_children: impl FnOnce(&mut WideSidebarContent<'_>) -> R,
+    ) -> ExpandableResponse<R> {
+        let text = text.into();
+        let text_str = text.text();
+
+        let id = self.core.id.with(text_str);
+        let mut state =
+            CollapsingState::load_with_default_open(self.core.ui.ctx(), id, default_open);
+        let is_open = state.is_open();
+        let chevron = if is_open {
+            Image::new(egui::include_image!("icons/chevron-down.svg"))
+        } else {
+            Image::new(egui::include_image!("icons/chevron-right.svg"))
+        }
+        .fit_to_exact_size(Vec2::splat(CHEVRON_SIZE))
+        .tint(if self.core.dark {
+            gray::_500
+        } else {
+            gray::_400
+        });
+
+        let group_height = if is_open {
+            OPEN_RESOURCE_GROUP_HEIGHT
+        } else {
+            WIDE_GROUP_HEIGHT
+        };
+        // Keep the label and chevron on the original baseline while reducing
+        // only the gap between an open group and its leaves.
+        let open_group_offset = if is_open { 5.5 } else { 0.0 };
+        let (_, inner_rect, response) = allocate_item(self.core.ui, group_height);
+        let colors = ItemColors::expandable(
+            response.hovered(),
+            response.is_pointer_button_down_on(),
+            self.core.dark,
+        );
+        draw_background(self.core.ui.painter(), inner_rect, colors.background);
+
+        let chevron_rect = egui::Rect::from_min_size(
+            inner_rect.min
+                + Vec2::new(
+                    12.0,
+                    (group_height - CHEVRON_SIZE) / 2.0 + open_group_offset,
+                ),
+            Vec2::splat(CHEVRON_SIZE),
+        );
+        let mut chevron_ui =
+            self.core
+                .ui
+                .new_child(UiBuilder::new().max_rect(chevron_rect).layout(
+                    egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+                ));
+        chevron_ui.add(chevron);
+
+        let text_pos =
+            text_pos_after_chevron(inner_rect, group_height) + Vec2::new(0.0, open_group_offset);
+        render_text(
+            self.core.ui.painter(),
+            text_pos,
+            text_str,
+            colors.text,
+            inner_rect.right() - text_pos.x,
+        );
+        add_button_accessibility(&response, self.core.ui, text_str);
+        response.clone().on_hover_text(text_str);
+
+        if response.clicked() {
+            state.toggle(self.core.ui);
+        }
+        state.store(self.core.ui.ctx());
+
+        let is_open_now = state.is_open();
+        let children = if is_open_now {
+            self.core.ui.add_space(6.0);
+            let result = add_children(self);
+            self.core.ui.add_space(2.0);
+            Some(result)
+        } else {
+            None
+        };
+
+        ExpandableResponse {
+            header: response,
+            children,
+            is_open: is_open_now,
+        }
+    }
+
     /// Add a child item (indented, no icon)
     pub fn child_item(&mut self, text: impl Into<WidgetText>, selected: bool) -> Response {
         let text = text.into();
         let text_str = text.text();
 
         let (rect, _, response) = allocate_item(self.core.ui, WIDE_ITEM_HEIGHT);
-        let colors = ItemColors::child(selected, response.hovered());
+        let colors = ItemColors::child(selected, response.hovered(), self.core.dark);
 
-        // Background rect starts slightly before text for visual grouping
-        let text_x = ITEM_PADDING_X + CHEVRON_SIZE + CHEVRON_GAP + ICON_SIZE + ICON_TEXT_SPACING;
-        let bg_indent = text_x - 8.0;
+        // Child text aligns with the parent disclosure control. The absence of a
+        // chevron communicates that it is a leaf without spending width on a gutter.
+        let text_x = ITEM_PADDING_X + CHEVRON_SIZE + CHEVRON_GAP;
+        let bg_indent = ITEM_PADDING_X + 8.0;
         let bg_rect = egui::Rect::from_min_max(
             rect.min + Vec2::new(bg_indent, 0.0),
-            rect.max - Vec2::new(ITEM_PADDING_X, 0.0),
+            rect.max - Vec2::new(44.0, if selected { -3.8 } else { 0.0 }),
         );
 
         draw_background(self.core.ui.painter(), bg_rect, colors.background);
 
         let text_pos = rect.min + Vec2::new(text_x, (WIDE_ITEM_HEIGHT - TEXT_FONT_SIZE) / 2.0);
-        render_text(self.core.ui.painter(), text_pos, text_str, colors.text);
+        render_text(
+            self.core.ui.painter(),
+            text_pos,
+            text_str,
+            colors.text,
+            rect.right() - ITEM_PADDING_X - text_pos.x,
+        );
         add_button_accessibility(&response, self.core.ui, text_str);
+        response.clone().on_hover_text(text_str);
 
         response
     }
@@ -423,6 +755,8 @@ impl<'a> WideSidebarContent<'a> {
 /// A compact icon-only sidebar
 pub struct NarrowSidebar {
     width: Option<f32>,
+    dark: bool,
+    background: Option<Color32>,
 }
 
 impl Default for NarrowSidebar {
@@ -434,7 +768,11 @@ impl Default for NarrowSidebar {
 impl NarrowSidebar {
     /// Create a new narrow sidebar with default settings
     pub fn new() -> Self {
-        Self { width: None }
+        Self {
+            width: None,
+            dark: false,
+            background: None,
+        }
     }
 
     /// Override the default width (72px)
@@ -443,12 +781,43 @@ impl NarrowSidebar {
         self
     }
 
+    /// Use the dark navigation treatment intended for application shells.
+    pub fn dark(mut self) -> Self {
+        self.dark = true;
+        self
+    }
+
+    /// Use a distinct dark surface while preserving dark navigation affordances.
+    pub fn dark_background(mut self, background: Color32) -> Self {
+        self.dark = true;
+        self.background = Some(background);
+        self
+    }
+
     /// Show the sidebar with the given content builder
-    pub fn show<R>(self, ui: &mut Ui, add_contents: impl FnOnce(&mut NarrowSidebarContent<'_>) -> R) -> R {
-        render_sidebar(ui, self.width, NARROW_WIDTH, |child_ui| {
-            let mut content = NarrowSidebarContent { core: SidebarContentCore::narrow(child_ui) };
-            add_contents(&mut content)
-        })
+    pub fn show<R>(
+        self,
+        ui: &mut Ui,
+        add_contents: impl FnOnce(&mut NarrowSidebarContent<'_>) -> R,
+    ) -> R {
+        render_sidebar(
+            ui,
+            self.width,
+            NARROW_WIDTH,
+            self.background.unwrap_or(if self.dark {
+                NAVIGATION_BACKGROUND
+            } else {
+                WHITE
+            }),
+            9.0,
+            |child_ui| {
+                child_ui.spacing_mut().item_spacing.y = 0.0;
+                let mut content = NarrowSidebarContent {
+                    core: SidebarContentCore::narrow(child_ui, self.dark),
+                };
+                add_contents(&mut content)
+            },
+        )
     }
 }
 
@@ -464,12 +833,22 @@ impl<'a> NarrowSidebarContent<'a> {
     }
 
     /// Add a navigation item (icon only, text used for accessibility)
-    pub fn item(&mut self, text: impl Into<WidgetText>, icon: Image<'_>, selected: bool) -> Response {
+    pub fn item(
+        &mut self,
+        text: impl Into<WidgetText>,
+        icon: Image<'_>,
+        selected: bool,
+    ) -> Response {
         self.core.item(text, icon, selected)
     }
 
     /// Add an avatar item (initial only, text used for accessibility)
-    pub fn avatar_item(&mut self, text: impl Into<WidgetText>, initial: &str, selected: bool) -> Response {
+    pub fn avatar_item(
+        &mut self,
+        text: impl Into<WidgetText>,
+        initial: &str,
+        selected: bool,
+    ) -> Response {
         self.core.avatar_item(text, initial, selected)
     }
 
@@ -482,8 +861,8 @@ impl<'a> NarrowSidebarContent<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use egui_kittest::kittest::Queryable;
     use egui_kittest::Harness;
+    use egui_kittest::kittest::Queryable;
     use std::cell::RefCell;
     use std::rc::Rc;
 
@@ -561,6 +940,22 @@ mod tests {
     }
 
     #[test]
+    fn test_sidebar_dark_mode() {
+        let mut harness = create_harness(|ui| {
+            WideSidebar::new().dark().show(ui, |sidebar| {
+                sidebar.section_header("Resources");
+                sidebar.expandable("core", folder_icon(), true, |sidebar| {
+                    sidebar.child_item("pods", true);
+                    sidebar.child_item("services", false);
+                });
+                sidebar.expandable("apps", folder_icon(), false, |_sidebar| {});
+            });
+        });
+
+        harness.snapshot("sidebars/dark");
+    }
+
+    #[test]
     fn test_sidebar_expandable_sections() {
         let mut harness = create_harness(|ui| {
             WideSidebar::new().show(ui, |sidebar| {
@@ -605,7 +1000,10 @@ mod tests {
         let teams_node = harness.get_by_label("Teams");
         let center = teams_node.rect().center();
 
-        harness.input_mut().events.push(egui::Event::PointerMoved(center));
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::PointerMoved(center));
         harness.input_mut().events.push(egui::Event::PointerButton {
             pos: center,
             button: egui::PointerButton::Primary,
@@ -650,7 +1048,10 @@ mod tests {
         harness.get_by_label("Engineering").click();
         harness.run();
 
-        assert_eq!(*clicked.borrow(), Some("Engineering".to_string()),
-            "Engineering should be clicked via accessibility");
+        assert_eq!(
+            *clicked.borrow(),
+            Some("Engineering".to_string()),
+            "Engineering should be clicked via accessibility"
+        );
     }
 }
