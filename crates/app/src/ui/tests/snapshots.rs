@@ -39,6 +39,38 @@ fn resource_table_more_actions_snapshot() {
 }
 
 #[test]
+fn resource_table_row_context_menu_snapshot() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness.run();
+    harness.get_by_label("Apps & Containers").click_accesskit();
+    harness.run();
+
+    let resource_name_rect = harness.get_by_label("coredns-66bc5c9577-ffw2s").rect();
+    let click_position = egui::pos2(
+        resource_name_rect.right() + 32.0,
+        resource_name_rect.center().y,
+    );
+    harness.event(egui::Event::PointerMoved(click_position));
+    harness.event(egui::Event::PointerButton {
+        pos: click_position,
+        button: egui::PointerButton::Secondary,
+        pressed: true,
+        modifiers: egui::Modifiers::default(),
+    });
+    harness.event(egui::Event::PointerButton {
+        pos: click_position,
+        button: egui::PointerButton::Secondary,
+        pressed: false,
+        modifiers: egui::Modifiers::default(),
+    });
+    harness.run();
+
+    harness.get_by_label("Edit YAML");
+    harness.snapshot("oracle_resource_table_row_context_actions");
+}
+
+#[test]
 fn resource_table_reflows_after_viewport_resize() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = oracle_resource_table_state();
