@@ -5,6 +5,8 @@ mod minimal_namespace;
 mod minimal_resource;
 mod resource_catalog;
 mod resource_extensions;
+mod resource_handlers;
+mod resource_table;
 mod sorted_name;
 mod ui;
 mod worker;

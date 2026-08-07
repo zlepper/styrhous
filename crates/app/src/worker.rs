@@ -6,6 +6,7 @@ use crate::cluster_connection_manager::{
 use crate::helpers::ResultExt;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
+use crate::resource_table::CustomResourceColumn;
 use anyhow::Error;
 use std::collections::HashMap;
 #[cfg(test)]
@@ -180,6 +181,10 @@ pub enum WorkerResult {
     KubernetesApisLoaded {
         cluster_key: i32,
         api_resources: Vec<ApiResource>,
+    },
+    KubernetesCustomResourceColumnsLoaded {
+        cluster_key: i32,
+        columns: std::collections::BTreeMap<ApiResource, Vec<CustomResourceColumn>>,
     },
     KubernetesApisLoadFailed {
         cluster_key: i32,

@@ -7,7 +7,9 @@ use super::widgets::{
     workspace_loading_state, workspace_search_error_state,
 };
 use crate::minimal_namespace::MinimalNamespace;
-use crate::minimal_resource::MinimalResource;
+use crate::minimal_resource::{MinimalResource, format_age};
+use crate::resource_handlers::table_definition;
+use crate::resource_table::{CellValue, CustomResourceColumn};
 use crate::worker::WorkerCommand;
 use components::colors::{TOOLBAR_BACKGROUND, gray};
 use components::fuzzy::{matches_fuzzy, normalize_for_search};
@@ -176,6 +178,11 @@ pub(super) fn show(
                 } else if let Some(action) = show_resource_table(
                     ui,
                     api_resource,
+                    cluster
+                        .custom_resource_columns
+                        .get(api_resource)
+                        .map(Vec::as_slice)
+                        .unwrap_or_default(),
                     &filtered_resources.resources,
                     all_resources.len() - filtered_resources.resources.len(),
                     api_resource.namespaced && cluster.selected_namespaces.len() > 1,
@@ -577,6 +584,7 @@ fn resource_count_label(
 fn show_resource_table(
     ui: &mut egui::Ui,
     api_resource: &crate::api_resource::ApiResource,
+    custom_columns: &[CustomResourceColumn],
     resources: &[MinimalResource],
     hidden_resource_count: usize,
     show_namespace_column: bool,
@@ -589,21 +597,24 @@ fn show_resource_table(
     if hidden_resource_count > 0 {
         rows.push(ResourceTableRow::HiddenBySearch(hidden_resource_count));
     }
-    let mut table = TailwindTable::new(format!("resource-table-{}", api_resource.name)).column(
-        "name",
-        "Name",
-        |col| col.sortable().fill_remaining(),
-    );
+    let definition = table_definition(api_resource, custom_columns);
+    let mut table = TailwindTable::new(format!(
+        "resource-table-{}-{}-{}",
+        api_resource.group, api_resource.version, api_resource.name
+    ))
+    .column("name", "Name", |col| col.sortable().fill_remaining());
     if show_namespace_column {
         table = table.column("namespace", "Namespace", |col| {
             col.sortable().initial_width(75.0)
         });
     }
+    for column in &definition.columns {
+        table = table.column(column.id.clone(), column.label.clone(), |col| {
+            let col = col.initial_width(column.initial_width);
+            if column.sortable { col.sortable() } else { col }
+        });
+    }
     table = table
-        .column("status", "Status", |col| {
-            col.sortable().initial_width(124.0)
-        })
-        .column("ready", "Ready", |col| col.initial_width(95.0))
         .column("age", "Age", |col| col.sortable().initial_width(77.0))
         .column("actions", "", |col| col.initial_width(104.0))
         .fill_available_height();
@@ -612,12 +623,10 @@ fn show_resource_table(
         ui,
         &rows,
         |ui, row, column_index| {
-            let (namespace_index, status_index, ready_index, age_index, actions_index) =
-                if show_namespace_column {
-                    (Some(1), 2, 3, 4, 5)
-                } else {
-                    (None, 1, 2, 3, 4)
-                };
+            let namespace_index = show_namespace_column.then_some(1);
+            let type_specific_start = 1 + usize::from(show_namespace_column);
+            let age_index = type_specific_start + definition.columns.len();
+            let actions_index = age_index + 1;
             match row {
                 ResourceTableRow::Resource(resource) => match column_index {
                     0 => TableRowBuilder::text(ui, &resource.name, true),
@@ -628,11 +637,12 @@ fn show_resource_table(
                             false,
                         );
                     }
-                    index if index == status_index => {
-                        resource_status(ui, resource.display_status())
-                    }
-                    index if index == ready_index => {
-                        TableRowBuilder::text(ui, resource.display_ready(), false)
+                    index
+                        if index >= type_specific_start
+                            && index < type_specific_start + definition.columns.len() =>
+                    {
+                        let column = &definition.columns[index - type_specific_start];
+                        show_resource_cell(ui, resource.cells.get(&column.id));
                     }
                     index if index == age_index => {
                         TableRowBuilder::text(ui, &resource.age(), false)
@@ -662,6 +672,17 @@ fn show_resource_table(
         },
     );
     pending_action.into_inner()
+}
+
+fn show_resource_cell(ui: &mut egui::Ui, cell: Option<&CellValue>) {
+    match cell.unwrap_or(&CellValue::Empty) {
+        CellValue::Text(value) => TableRowBuilder::text(ui, value, false),
+        CellValue::Number(value) => TableRowBuilder::text(ui, &value.to_string(), false),
+        CellValue::Timestamp(value) => TableRowBuilder::text(ui, &format_age(Some(*value)), false),
+        CellValue::Status { label, tone } => resource_status(ui, label, *tone),
+        CellValue::List(values) => TableRowBuilder::text(ui, &values.join(", "), false),
+        CellValue::Empty => TableRowBuilder::text(ui, "-", false),
+    }
 }
 
 fn show_resource_actions(
@@ -736,8 +757,7 @@ mod tests {
             name: name.into(),
             namespace: Some("default".into()),
             creation_timestamp: None,
-            phase: None,
-            ready_status: None,
+            cells: Default::default(),
         }
     }
 

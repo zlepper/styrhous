@@ -1,3 +1,4 @@
+use crate::resource_table::StatusTone;
 use components::colors::{SUCCESS, gray};
 use components::{TableRowBuilder, TailwindButton, WorkspaceEmptyState};
 
@@ -11,12 +12,12 @@ pub(super) fn display_resource_title(resource_name: &str) -> String {
     }
 }
 
-pub(super) fn resource_status(ui: &mut egui::Ui, status: &str) {
-    let color = match status {
-        "Running" | "Succeeded" | "Active" | "Bound" => SUCCESS,
-        "Pending" | "ContainerCreating" | "Terminating" => egui::Color32::from_rgb(202, 138, 4),
-        "Failed" | "Unknown" => egui::Color32::from_rgb(220, 38, 38),
-        _ => gray::_400,
+pub(super) fn resource_status(ui: &mut egui::Ui, status: &str, tone: StatusTone) {
+    let color = match tone {
+        StatusTone::Success => SUCCESS,
+        StatusTone::Warning => egui::Color32::from_rgb(202, 138, 4),
+        StatusTone::Danger => egui::Color32::from_rgb(220, 38, 38),
+        StatusTone::Neutral => gray::_400,
     };
     ui.horizontal(|ui| {
         ui.add_space(-13.0);
