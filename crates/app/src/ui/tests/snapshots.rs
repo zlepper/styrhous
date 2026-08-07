@@ -10,7 +10,10 @@ use crate::cluster_connection_manager::Cluster;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use crate::resource_catalog::build_resource_navigation;
-use crate::resource_table::{AVAILABLE_COLUMN, CellValue, READY_COLUMN, UP_TO_DATE_COLUMN};
+use crate::resource_table::{
+    AVAILABLE_COLUMN, CONTAINERS_COLUMN, CellValue, ContainerIndicator, ContainerKind,
+    READY_COLUMN, RESTARTS_COLUMN, STATUS_COLUMN, StatusTone, UP_TO_DATE_COLUMN,
+};
 use crate::worker::{MockWorker, WorkerCommand, WorkerResult};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
@@ -313,6 +316,96 @@ fn oracle_resource_table_snapshot_uses_injected_cluster_state() {
     harness.get_by_label("Apps & Containers").click_accesskit();
     harness.run();
     harness.snapshot("oracle_resource_table_injected");
+}
+
+#[test]
+fn pod_resource_table_shows_per_container_status_indicators() {
+    let pods = fixture_api_resource("core", "Pod", "pods");
+    let mut state = oracle_resource_table_state();
+    let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
+    cluster.resource_cache.insert(
+        (pods, Some("kube-system".into())),
+        ResourceWatchState {
+            resources: BTreeMap::from([(
+                "api-pod".into(),
+                MinimalResource {
+                    uid: "api-pod".into(),
+                    name: "api-pod".into(),
+                    namespace: Some("kube-system".into()),
+                    creation_timestamp: None,
+                    cells: BTreeMap::from([
+                        (READY_COLUMN.to_owned(), CellValue::Text("1/2".to_owned())),
+                        (
+                            CONTAINERS_COLUMN.to_owned(),
+                            CellValue::ContainerIndicators(vec![
+                                ContainerIndicator {
+                                    name: "setup".into(),
+                                    kind: ContainerKind::Init,
+                                    state: "Terminated".into(),
+                                    reason: Some("Completed".into()),
+                                    message: None,
+                                    ready: false,
+                                    restart_count: 0,
+                                    tone: StatusTone::Success,
+                                },
+                                ContainerIndicator {
+                                    name: "api".into(),
+                                    kind: ContainerKind::App,
+                                    state: "Running".into(),
+                                    reason: None,
+                                    message: None,
+                                    ready: true,
+                                    restart_count: 2,
+                                    tone: StatusTone::Success,
+                                },
+                                ContainerIndicator {
+                                    name: "sidecar".into(),
+                                    kind: ContainerKind::App,
+                                    state: "Waiting".into(),
+                                    reason: Some("ContainerCreating".into()),
+                                    message: Some("Waiting for volume mount".into()),
+                                    ready: false,
+                                    restart_count: 3,
+                                    tone: StatusTone::Warning,
+                                },
+                                ContainerIndicator {
+                                    name: "debugger".into(),
+                                    kind: ContainerKind::Ephemeral,
+                                    state: "Terminated".into(),
+                                    reason: Some("Error".into()),
+                                    message: None,
+                                    ready: false,
+                                    restart_count: 1,
+                                    tone: StatusTone::Danger,
+                                },
+                            ]),
+                        ),
+                        (
+                            STATUS_COLUMN.to_owned(),
+                            CellValue::Status {
+                                label: "Running".into(),
+                                tone: StatusTone::Success,
+                            },
+                        ),
+                        (RESTARTS_COLUMN.to_owned(), CellValue::Number(5)),
+                    ]),
+                },
+            )]),
+            is_synced: true,
+            error: None,
+        },
+    );
+
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = state;
+    harness.run();
+    harness.get_by_label("Apps & Containers").click_accesskit();
+    harness.run();
+    harness.snapshot("pod_resource_table_container_indicators");
+
+    harness.get_by_label("Container: sidecar").hover();
+    harness.run();
+    harness.snapshot("pod_resource_table_container_indicators_tooltip");
 }
 
 #[test]

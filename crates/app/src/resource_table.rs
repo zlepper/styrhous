@@ -1,6 +1,7 @@
 use time::OffsetDateTime;
 
 pub(crate) const READY_COLUMN: &str = "ready";
+pub(crate) const CONTAINERS_COLUMN: &str = "containers";
 pub(crate) const STATUS_COLUMN: &str = "status";
 pub(crate) const RESTARTS_COLUMN: &str = "restarts";
 pub(crate) const UP_TO_DATE_COLUMN: &str = "up-to-date";
@@ -44,8 +45,41 @@ pub(crate) enum CellValue {
     Number(i64),
     Timestamp(OffsetDateTime),
     Status { label: String, tone: StatusTone },
+    ContainerIndicators(Vec<ContainerIndicator>),
     List(Vec<String>),
     Empty,
+}
+
+/// A compact container state summary transported from the Kubernetes worker to
+/// the Pod table. Rendering stays in the UI, while Kubernetes-specific state
+/// interpretation remains in the worker-side extractor.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct ContainerIndicator {
+    pub(crate) name: String,
+    pub(crate) kind: ContainerKind,
+    pub(crate) state: String,
+    pub(crate) reason: Option<String>,
+    pub(crate) message: Option<String>,
+    pub(crate) ready: bool,
+    pub(crate) restart_count: i32,
+    pub(crate) tone: StatusTone,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) enum ContainerKind {
+    Init,
+    App,
+    Ephemeral,
+}
+
+impl ContainerKind {
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Init => "Init container",
+            Self::App => "Container",
+            Self::Ephemeral => "Ephemeral container",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
