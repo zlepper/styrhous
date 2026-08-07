@@ -4,14 +4,6 @@ use components::{TableRowBuilder, TailwindButton, WorkspaceEmptyState};
 
 const STATE_MARGIN: i8 = 32;
 
-pub(super) fn display_resource_title(resource_name: &str) -> String {
-    let mut characters = resource_name.chars();
-    match characters.next() {
-        Some(first) => first.to_uppercase().collect::<String>() + characters.as_str(),
-        None => "Resources".to_owned(),
-    }
-}
-
 pub(super) fn resource_status(ui: &mut egui::Ui, status: &str, tone: StatusTone) {
     let color = status_color(tone);
     ui.horizontal(|ui| {
