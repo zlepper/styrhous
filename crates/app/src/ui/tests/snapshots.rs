@@ -25,6 +25,20 @@ fn oracle_resource_table_snapshot_uses_injected_cluster_state() {
 }
 
 #[test]
+fn resource_table_more_actions_snapshot() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness.run();
+    harness.get_by_label("Apps & Containers").click_accesskit();
+    harness.run();
+    harness
+        .get_by_label("More actions for coredns-66bc5c9577-ffw2s")
+        .click_accesskit();
+    harness.run();
+    harness.snapshot("oracle_resource_table_actions");
+}
+
+#[test]
 fn resource_table_reflows_after_viewport_resize() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = oracle_resource_table_state();

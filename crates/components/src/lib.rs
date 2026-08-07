@@ -25,6 +25,7 @@ pub mod colors;
 pub mod combobox;
 pub mod fuzzy;
 pub mod icons;
+pub mod more_button;
 pub mod sidebar;
 pub mod table;
 pub mod tabs;
@@ -33,6 +34,7 @@ pub mod workspace;
 
 pub use button::{ButtonRounding, ButtonSize, ButtonVariant, TailwindButton};
 pub use combobox::{ComboboxUi, ItemResponse, NoFilter, TailwindCombobox, WithFilter};
+pub use more_button::{MoreButton, MoreMenu};
 pub use sidebar::{
     ExpandableResponse, NarrowSidebar, NarrowSidebarContent, WideSidebar, WideSidebarContent,
 };

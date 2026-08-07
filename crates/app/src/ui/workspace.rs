@@ -4,7 +4,9 @@ use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use crate::worker::WorkerCommand;
 use components::colors::{TOOLBAR_BACKGROUND, gray};
-use components::{TableRowBuilder, TailwindCombobox, TailwindTable, WorkspacePage};
+use components::{
+    MoreButton, TableRowBuilder, TailwindCombobox, TailwindTable, WorkspacePage, icons,
+};
 
 pub(super) fn show(
     ctx: &egui::Context,
@@ -171,6 +173,7 @@ fn show_toolbar(
                         .clicked()
                     {
                         *toggled_namespace = Some(ns.name.clone());
+                        cb.close();
                     }
                 });
             namespace_response.response.widget_info(|| {
@@ -219,7 +222,7 @@ fn show_resource_table(
         })
         .column("ready", "Ready", |col| col.initial_width(95.0))
         .column("age", "Age", |col| col.sortable().initial_width(77.0))
-        .column("actions", "", |col| col.initial_width(82.0))
+        .column("actions", "", |col| col.initial_width(104.0))
         .fill_available_height();
 
     table.show(ui, resources, |ui, resource, column_index| {
@@ -255,44 +258,49 @@ fn show_resource_actions(
 ) {
     let mut action_ui = ui.new_child(
         egui::UiBuilder::new()
-            .max_rect(ui.max_rect().translate(egui::vec2(0.0, -6.0)))
+            // The table cell's content cursor sits below the row centre after
+            // its horizontal padding has been applied. Keep the square action
+            // control visually centred with the row's text and status marker.
+            // The horizontal inset makes Actions read as its own column rather
+            // than an extension of the Age value.
+            .max_rect(
+                ui.max_rect()
+                    .shrink2(egui::vec2(28.0, 0.0))
+                    .translate(egui::vec2(0.0, -8.0)),
+            )
             .layout(egui::Layout::left_to_right(egui::Align::Center)),
     );
-    #[allow(deprecated)]
-    let menu = egui::menu::menu_custom_button(
-        &mut action_ui,
-        egui::Button::new("...")
-            .min_size(egui::vec2(26.0, 29.0))
-            .fill(egui::Color32::from_gray(238))
-            .corner_radius(4),
-        |ui| {
-            if ui.button("Edit YAML").clicked() && pending_action.is_none() {
-                *pending_action = Some(ResourceAction::EditYaml {
-                    name: resource.name.clone(),
-                    namespace: resource.namespace.clone().unwrap_or_default(),
-                });
-                ui.close();
-            }
-            if ui
-                .add(egui::Button::new(
-                    egui::RichText::new("Delete").color(egui::Color32::from_rgb(185, 28, 28)),
-                ))
-                .clicked()
-                && pending_action.is_none()
-            {
-                *pending_action = Some(ResourceAction::RequestDelete {
-                    name: resource.name.clone(),
-                    namespace: resource.namespace.clone().unwrap_or_default(),
-                });
-                ui.close();
-            }
-        },
-    );
-    menu.response.widget_info(|| {
-        egui::WidgetInfo::labeled(
-            egui::WidgetType::Button,
-            ui.is_enabled(),
-            format!("More actions for {}", resource.name),
-        )
+    MoreButton::new(format!("More actions for {}", resource.name)).show(&mut action_ui, |menu| {
+        if menu
+            .action_with_icon(
+                "Edit YAML",
+                icons::document_icon()
+                    .fit_to_exact_size(egui::Vec2::splat(16.0))
+                    .tint(gray::_500),
+            )
+            .clicked()
+            && pending_action.is_none()
+        {
+            *pending_action = Some(ResourceAction::EditYaml {
+                name: resource.name.clone(),
+                namespace: resource.namespace.clone().unwrap_or_default(),
+            });
+        }
+        menu.separator();
+        if menu
+            .destructive_action_with_icon(
+                "Delete",
+                icons::trash_icon()
+                    .fit_to_exact_size(egui::Vec2::splat(16.0))
+                    .tint(egui::Color32::from_rgb(185, 28, 28)),
+            )
+            .clicked()
+            && pending_action.is_none()
+        {
+            *pending_action = Some(ResourceAction::RequestDelete {
+                name: resource.name.clone(),
+                namespace: resource.namespace.clone().unwrap_or_default(),
+            });
+        }
     });
 }

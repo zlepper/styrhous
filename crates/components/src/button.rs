@@ -1,6 +1,6 @@
 //! Tailwind-styled button component for egui
 
-use egui::{Button, Color32, CornerRadius, Response, Shadow, Stroke, Ui, Vec2, WidgetText};
+use egui::{Button, Color32, CornerRadius, Image, Response, Shadow, Stroke, Ui, Vec2, WidgetText};
 
 use crate::colors::{BLACK, WHITE, gray, indigo};
 
@@ -56,11 +56,16 @@ pub enum ButtonRounding {
 ///     .show(ui);
 /// ```
 pub struct TailwindButton<'a> {
-    text: WidgetText,
+    content: ButtonContent<'a>,
     variant: ButtonVariant,
     size: ButtonSize,
     rounding: ButtonRounding,
-    _marker: std::marker::PhantomData<&'a ()>,
+    accessibility_label: Option<String>,
+}
+
+enum ButtonContent<'a> {
+    Text(WidgetText),
+    Icon(Image<'a>),
 }
 
 impl<'a> TailwindButton<'a> {
@@ -69,11 +74,25 @@ impl<'a> TailwindButton<'a> {
     /// Defaults to Primary variant, Md size, and Default rounding
     pub fn new(text: impl Into<WidgetText>) -> Self {
         Self {
-            text: text.into(),
+            content: ButtonContent::Text(text.into()),
             variant: ButtonVariant::Primary,
             size: ButtonSize::Md,
             rounding: ButtonRounding::Default,
-            _marker: std::marker::PhantomData,
+            accessibility_label: None,
+        }
+    }
+
+    /// Create an icon-only button.
+    ///
+    /// Call [`Self::accessibility_label`] to provide a label for assistive
+    /// technologies and UI tests.
+    pub fn icon(icon: Image<'a>) -> Self {
+        Self {
+            content: ButtonContent::Icon(icon),
+            variant: ButtonVariant::Primary,
+            size: ButtonSize::Md,
+            rounding: ButtonRounding::Default,
+            accessibility_label: None,
         }
     }
 
@@ -110,12 +129,36 @@ impl<'a> TailwindButton<'a> {
         self
     }
 
+    /// Set an accessible label for an icon-only button.
+    pub fn accessibility_label(mut self, label: impl Into<String>) -> Self {
+        self.accessibility_label = Some(label.into());
+        self
+    }
+
     /// Show the button and return the response
     pub fn show(self, ui: &mut Ui) -> Response {
         let (fill, fill_hovered, fill_active, text_color, stroke) = self.variant_colors();
-        let (padding, min_height) = self.size_metrics();
+        let (text_padding, text_min_height) = self.size_metrics();
+        let (padding, min_size) = if matches!(&self.content, ButtonContent::Icon(_)) {
+            let button_size = self.icon_button_size();
+            // Icon-only buttons use a square hit target rather than text-button
+            // padding. The supplied icon should normally be 16×16px.
+            (
+                Vec2::splat((button_size - 16.0) / 2.0),
+                Vec2::splat(button_size),
+            )
+        } else {
+            (text_padding, Vec2::new(0.0, text_min_height))
+        };
         let corner_radius = self.corner_radius();
-        let shadow = self.shadow();
+        // The current shadow renderer is composited after the button itself.
+        // Keep icon-only secondary controls clean white until shadows can be
+        // painted on a layer below their background.
+        let shadow = if matches!(&self.content, ButtonContent::Icon(_)) {
+            Shadow::NONE
+        } else {
+            self.shadow()
+        };
 
         // Save current widget visuals
         let saved_widgets = ui.visuals().widgets.clone();
@@ -149,7 +192,11 @@ impl<'a> TailwindButton<'a> {
         ui.spacing_mut().button_padding = padding;
 
         // Create and render the button
-        let button = Button::new(self.text).min_size(Vec2::new(0.0, min_height));
+        let button = match self.content {
+            ButtonContent::Text(text) => Button::new(text),
+            ButtonContent::Icon(icon) => Button::image(icon),
+        }
+        .min_size(min_size);
         let response = ui.add(button);
 
         // Draw shadow behind the button (painted on layer below)
@@ -161,6 +208,12 @@ impl<'a> TailwindButton<'a> {
         // Restore original visuals
         ui.visuals_mut().widgets = saved_widgets;
         ui.spacing_mut().button_padding = saved_button_padding;
+
+        if let Some(label) = self.accessibility_label {
+            response.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label.clone())
+            });
+        }
 
         response
     }
@@ -200,6 +253,18 @@ impl<'a> TailwindButton<'a> {
             ButtonSize::Md => (Vec2::new(16.0, 8.0), 36.0),
             ButtonSize::Lg => (Vec2::new(20.0, 10.0), 44.0),
             ButtonSize::Xl => (Vec2::new(24.0, 12.0), 52.0),
+        }
+    }
+
+    /// Square hit-target sizes for icon-only buttons, following Tailwind's
+    /// compact control rhythm rather than text-button line heights.
+    fn icon_button_size(&self) -> f32 {
+        match self.size {
+            ButtonSize::Xs => 32.0,
+            ButtonSize::Sm => 36.0,
+            ButtonSize::Md => 40.0,
+            ButtonSize::Lg => 44.0,
+            ButtonSize::Xl => 52.0,
         }
     }
 
