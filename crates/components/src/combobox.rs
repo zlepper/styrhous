@@ -1,27 +1,11 @@
-//! Tailwind-styled filterable combobox component for egui
+//! Tailwind-styled searchable combobox component for egui.
 //!
-//! A text input with dropdown that filters options as the user types.
-//!
-//! # Example
-//!
-//! ```ignore
-//! TailwindCombobox::from_label("Assigned to")
-//!     .placeholder("Search...")
-//!     .filter_by(|person| &person.name)
-//!     .show_items(ui, &people, |cb, person| {
-//!         let is_selected = selected.contains(&person.id);
-//!         if cb.item(&person.name, is_selected).clicked() {
-//!             selected.insert(person.id);
-//!         }
-//!     });
-//! ```
+//! The component owns presentation, filtering, keyboard navigation, and the
+//! selection gestures. Callers continue to own their selected values.
 
-// Layout constants
 const ITEM_HEIGHT: f32 = 36.0;
 const INPUT_HEIGHT: f32 = 50.0;
 const CORNER_RADIUS: u8 = 6;
-const FOCUS_RING_RADIUS: u8 = 8;
-const FOCUS_RING_WIDTH: f32 = 2.0;
 const ICON_SIZE: f32 = 20.0;
 const DROPDOWN_MAX_HEIGHT: f32 = 300.0;
 const DEFAULT_WIDTH: f32 = 256.0;
@@ -31,108 +15,235 @@ const ICON_AREA_WIDTH: f32 = 36.0;
 const FONT_SIZE: f32 = 18.0;
 
 use egui::{
-    Align2, Color32, CornerRadius, FontId, Id, InnerResponse, Key, Popup, PopupCloseBehavior, Rect,
-    Response, ScrollArea, Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2, WidgetText,
+    Align, Align2, Color32, CornerRadius, FontId, Id, Key, Modifiers, Popup, PopupCloseBehavior,
+    Rect, Response, ScrollArea, Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2, WidgetText,
 };
+use std::sync::Arc;
 
-use crate::colors::{WHITE, gray, indigo};
+use crate::colors::{SUCCESS, WHITE, gray, indigo};
 use crate::fuzzy::{matches_fuzzy, normalize_for_search};
 use crate::icons;
+use crate::semibold_font;
 
-/// Internal state persisted across frames via egui memory
+fn layout_truncated_text(
+    ui: &Ui,
+    text: &str,
+    font_id: FontId,
+    color: Color32,
+    max_width: f32,
+) -> Arc<egui::text::Galley> {
+    let mut job = egui::text::LayoutJob::simple_singleline(text.to_owned(), font_id, color);
+    job.wrap = egui::text::TextWrapping::truncate_at_width(max_width.max(0.0));
+    ui.fonts_mut(|fonts| fonts.layout_job(job))
+}
+
+/// Internal state persisted across frames via egui memory.
 #[derive(Default, Clone)]
 struct ComboboxState {
     filter_text: String,
     /// Pre-computed normalized filter chars for efficient matching.
-    /// Uses NFKD normalization + accent stripping + case folding.
     filter_chars: Vec<char>,
     focused_index: usize,
+    was_open: bool,
 }
 
-/// Response from a combobox item
-///
-/// Wraps egui's Response and adds keyboard selection support.
+#[derive(Default)]
+struct KeyboardInput {
+    enter_pressed: bool,
+    close_requested: bool,
+    scroll_to_focused: bool,
+}
+
+/// The intent produced when a user activates an option.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectionAction {
+    /// Replace the current selection with this option.
+    Replace,
+    /// Add this option to, or remove it from, the current selection.
+    Toggle,
+}
+
+/// Response from rendering a combobox.
+pub struct ComboboxResponse {
+    /// Response for the combobox trigger.
+    pub response: Response,
+    /// Whether the optional Select all row was activated.
+    pub select_all_clicked: bool,
+}
+
+/// Response from a combobox item.
 pub struct ItemResponse {
     response: Response,
     keyboard_selected: bool,
+    selection_action: Option<SelectionAction>,
 }
 
 impl ItemResponse {
-    /// Returns true if the item was clicked (mouse) or selected via keyboard (Enter key)
+    /// Returns true if the item was clicked or selected via Enter.
     pub fn clicked(&self) -> bool {
         self.response.clicked() || self.keyboard_selected
     }
 
-    /// Returns the underlying egui Response
+    /// Returns the selection intent, if the item was activated.
+    ///
+    /// Plain clicks and keyboard activation replace the selection. Ctrl-click
+    /// (or Command-click on macOS) toggles this item within the selection.
+    pub fn selection_action(&self) -> Option<SelectionAction> {
+        self.selection_action
+    }
+
+    /// Returns the underlying egui response.
     pub fn response(&self) -> &Response {
         &self.response
     }
 }
 
-/// Context passed to the render callback for each filtered item
+/// Context passed to the render callback for each filtered option.
 pub struct ComboboxUi<'a> {
     ui: &'a mut Ui,
     focused_index: usize,
     current_index: usize,
     popup_id: Id,
     enter_pressed: bool,
+    scroll_to_focused: bool,
 }
 
 impl<'a> ComboboxUi<'a> {
-    /// Render a styled item row
-    ///
-    /// Returns an ItemResponse that can be checked for `.clicked()` to handle selection.
-    /// The `is_selected` parameter controls the selected visual state (indigo background).
-    ///
-    /// # Important
-    ///
-    /// Items must be rendered in the same order they were filtered. This method
-    /// internally tracks item indices for keyboard navigation - calling it out of
-    /// order or skipping items will cause incorrect focus behavior.
+    /// Render a styled option row.
     pub fn item(&mut self, label: impl Into<WidgetText>, is_selected: bool) -> ItemResponse {
+        self.item_with_status(label, is_selected, None)
+    }
+
+    /// Render an option row with an optional status marker.
+    ///
+    /// `Some(true)` paints a green marker, `Some(false)` a neutral marker, and
+    /// `None` omits the marker entirely.
+    pub fn item_with_status(
+        &mut self,
+        label: impl Into<WidgetText>,
+        is_selected: bool,
+        status: Option<bool>,
+    ) -> ItemResponse {
+        self.item_internal(label, is_selected, status, true)
+    }
+
+    fn select_all_item(&mut self, all_selected: bool) -> ItemResponse {
+        self.item_internal("Select all", all_selected, None, false)
+    }
+
+    fn item_internal(
+        &mut self,
+        label: impl Into<WidgetText>,
+        is_selected: bool,
+        status: Option<bool>,
+        close_on_replace: bool,
+    ) -> ItemResponse {
         let label = label.into();
         let label_text = label.text().to_owned();
         let is_focused = self.current_index == self.focused_index;
         self.current_index += 1;
 
-        // Allocate space for the item
         let available_width = self.ui.available_width();
         let (rect, response) = self
             .ui
             .allocate_exact_size(Vec2::new(available_width, ITEM_HEIGHT), Sense::click());
 
-        // Check if this item was selected via keyboard
-        let keyboard_selected = is_focused && self.enter_pressed;
+        if is_focused && self.scroll_to_focused {
+            response.scroll_to_me(Some(Align::Center));
+        }
 
+        let keyboard_selected = is_focused && self.enter_pressed;
+        let clicked = response.clicked() || keyboard_selected;
+        let selection_action = clicked.then(|| {
+            if !keyboard_selected
+                && self
+                    .ui
+                    .input(|input| input.modifiers.ctrl || input.modifiers.command)
+            {
+                SelectionAction::Toggle
+            } else {
+                SelectionAction::Replace
+            }
+        });
+
+        if close_on_replace && matches!(selection_action, Some(SelectionAction::Replace)) {
+            Popup::close_id(self.ui.ctx(), self.popup_id);
+        }
+
+        let mut is_truncated = false;
         if self.ui.is_rect_visible(rect) {
-            // Determine colors based on state
-            let (bg_color, text_color) = if is_selected {
-                (indigo::_50, indigo::_600)
-            } else if is_focused {
-                (gray::_100, gray::_900)
+            let (background, text_color) = if is_focused {
+                (indigo::_600, WHITE)
             } else if response.hovered() {
                 (gray::_50, gray::_900)
             } else {
                 (Color32::TRANSPARENT, gray::_900)
             };
-
-            // Paint background
-            if bg_color != Color32::TRANSPARENT {
-                self.ui.painter().rect_filled(rect, 0.0, bg_color);
+            if background != Color32::TRANSPARENT {
+                self.ui.painter().rect_filled(rect, 0.0, background);
             }
 
-            // Paint text
-            let text_pos = rect.left_center() + Vec2::new(ITEM_PADDING_X, 0.0);
-            self.ui.painter().text(
-                text_pos,
-                Align2::LEFT_CENTER,
+            if let Some(is_active) = status {
+                let marker_color = if is_focused {
+                    WHITE
+                } else if is_active {
+                    SUCCESS
+                } else {
+                    gray::_200
+                };
+                self.ui.painter().circle_filled(
+                    rect.left_center() + Vec2::new(ITEM_PADDING_X + 5.0, 0.0),
+                    5.0,
+                    marker_color,
+                );
+            }
+
+            let text_offset = ITEM_PADDING_X + if status.is_some() { 20.0 } else { 0.0 };
+            let text_width =
+                rect.width() - text_offset - ITEM_PADDING_X - if is_selected { 30.0 } else { 0.0 };
+            let galley = layout_truncated_text(
+                self.ui,
                 &label_text,
-                FontId::proportional(FONT_SIZE),
+                if is_selected {
+                    semibold_font(FONT_SIZE)
+                } else {
+                    FontId::proportional(FONT_SIZE)
+                },
+                text_color,
+                text_width,
+            );
+            is_truncated = galley.elided;
+            self.ui.painter().galley(
+                rect.left_center() + Vec2::new(text_offset, 0.0)
+                    - Vec2::new(0.0, galley.size().y / 2.0),
+                galley,
                 text_color,
             );
+
+            if is_selected {
+                let check_color = if is_focused { WHITE } else { indigo::_600 };
+                let check_center = rect.right_center() - Vec2::new(22.0, 0.0);
+                let stroke = Stroke::new(2.0, check_color);
+                self.ui.painter().line_segment(
+                    [
+                        check_center + Vec2::new(-6.0, 0.0),
+                        check_center + Vec2::new(-1.5, 4.5),
+                    ],
+                    stroke,
+                );
+                self.ui.painter().line_segment(
+                    [
+                        check_center + Vec2::new(-1.5, 4.5),
+                        check_center + Vec2::new(7.0, -5.0),
+                    ],
+                    stroke,
+                );
+            }
         }
 
-        // Add accessibility info for screen readers and kittest
+        if is_truncated && response.hovered() {
+            response.show_tooltip_text(&label_text);
+        }
         let is_enabled = self.ui.is_enabled();
         response.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Button, is_enabled, &label_text)
@@ -141,48 +252,50 @@ impl<'a> ComboboxUi<'a> {
         ItemResponse {
             response,
             keyboard_selected,
+            selection_action,
         }
     }
 
-    /// Close the dropdown programmatically
+    /// Close the dropdown programmatically.
     pub fn close(&self) {
         Popup::close_id(self.ui.ctx(), self.popup_id);
     }
 }
 
-/// Marker type for combobox without a filter function set
+/// Marker type for comboboxes without a filter function.
 pub struct NoFilter;
 
-/// Wrapper type indicating filter function is configured
+/// Wrapper type indicating that a filter function is configured.
 pub struct WithFilter<F>(F);
 
-/// A Tailwind-styled filterable combobox
-///
-/// Generic over `Filter` which represents the filter configuration state.
-/// Use [`NoFilter`] for unconfigured state, [`WithFilter<F>`] after calling `filter_by`.
+/// A Tailwind-styled searchable combobox.
 pub struct TailwindCombobox<Filter> {
     id_salt: Id,
     label: Option<WidgetText>,
     placeholder: Option<String>,
     selected_text: Option<String>,
+    selected_status: Option<bool>,
     width: Option<f32>,
+    select_all: Option<bool>,
     filter: Filter,
 }
 
 impl TailwindCombobox<NoFilter> {
-    /// Create a new combobox with an explicit ID
+    /// Create a new combobox with an explicit ID.
     pub fn new(id_salt: impl std::hash::Hash) -> Self {
         TailwindCombobox {
             id_salt: Id::new(id_salt),
             label: None,
             placeholder: None,
             selected_text: None,
+            selected_status: None,
             width: None,
+            select_all: None,
             filter: NoFilter,
         }
     }
 
-    /// Create a new combobox with the label as the ID source
+    /// Create a new combobox with the label as the ID source.
     pub fn from_label(label: impl Into<WidgetText>) -> Self {
         let label = label.into();
         TailwindCombobox {
@@ -190,21 +303,14 @@ impl TailwindCombobox<NoFilter> {
             label: Some(label),
             placeholder: None,
             selected_text: None,
+            selected_status: None,
             width: None,
+            select_all: None,
             filter: NoFilter,
         }
     }
 
-    /// Set the filter function that extracts searchable text from each item
-    ///
-    /// The component performs fuzzy subsequence matching: characters must appear
-    /// in order but not consecutively. Uses Unicode NFKD normalization for
-    /// accent-insensitive, case-insensitive matching.
-    ///
-    /// Examples:
-    /// - "mf" matches "Michael Foster"
-    /// - "cafe" matches "Café"
-    /// - "fobr" matches "foobar"
+    /// Configure the text used for fuzzy filtering.
     pub fn filter_by<T, F>(self, filter_fn: F) -> TailwindCombobox<WithFilter<F>>
     where
         F: Fn(&T) -> &str,
@@ -214,81 +320,83 @@ impl TailwindCombobox<NoFilter> {
             label: self.label,
             placeholder: self.placeholder,
             selected_text: self.selected_text,
+            selected_status: self.selected_status,
             width: self.width,
+            select_all: self.select_all,
             filter: WithFilter(filter_fn),
         }
     }
 }
 
 impl<Filter> TailwindCombobox<Filter> {
-    /// Set the placeholder text shown when the input is empty
+    /// Set the placeholder shown when the input is empty.
     pub fn placeholder(mut self, placeholder: impl Into<String>) -> Self {
         self.placeholder = Some(placeholder.into());
         self
     }
 
-    /// Set the text displayed when the combobox is closed
-    ///
-    /// This is typically used to show a summary of selected items (e.g., "ns1, ns2, ns3"
-    /// or "3 items selected"). When the dropdown opens, this text is replaced by a
-    /// search input field.
+    /// Set the text displayed while the combobox is closed.
     pub fn selected_text(mut self, text: impl Into<String>) -> Self {
         self.selected_text = Some(text.into());
         self
     }
 
-    /// Set the width of the combobox (clamped to non-negative)
+    /// Set the optional status marker shown beside the closed selected value.
+    pub fn selected_status(mut self, status: Option<bool>) -> Self {
+        self.selected_status = status;
+        self
+    }
+
+    /// Set the width of the combobox.
     pub fn width(mut self, width: f32) -> Self {
         self.width = Some(width.max(0.0));
+        self
+    }
+
+    /// Enable a Select all row while the search field is empty.
+    ///
+    /// `all_selected` controls its checkmark. Its activation is reported by
+    /// [`ComboboxResponse::select_all_clicked`].
+    pub fn select_all(mut self, all_selected: bool) -> Self {
+        self.select_all = Some(all_selected);
         self
     }
 }
 
 impl<F> TailwindCombobox<WithFilter<F>> {
-    /// Show the combobox with the given items
-    ///
-    /// The `render` callback is called once for each item that matches the filter.
-    /// Use `cb.item(label, is_selected)` to render each row.
-    pub fn show_items<'a, T, I, R>(self, ui: &mut Ui, items: I, mut render: R) -> InnerResponse<()>
+    /// Show the combobox and call `render` for every filtered option.
+    pub fn show_items<'a, T, I, R>(self, ui: &mut Ui, items: I, mut render: R) -> ComboboxResponse
     where
         F: Fn(&T) -> &str,
         I: IntoIterator<Item = &'a T>,
         T: 'a,
         R: FnMut(&mut ComboboxUi<'_>, &T),
     {
-        // Destructure self to avoid partial move issues
         let TailwindCombobox {
             id_salt,
             label,
             placeholder,
             selected_text,
+            selected_status,
             width,
+            select_all,
             filter: WithFilter(filter_fn),
         } = self;
 
         let state_id = ui.make_persistent_id(id_salt);
-
-        // Load state from memory
         let mut state = ui.ctx().memory_mut(|mem| {
             mem.data
                 .get_temp::<ComboboxState>(state_id)
                 .unwrap_or_default()
         });
 
-        // Render label if present
         if let Some(label) = &label {
             ui.label(label.clone());
         }
 
-        // Render the input field with chevron
         let width = width.unwrap_or(DEFAULT_WIDTH);
-
-        // Precompute expected popup ID to check if open before rendering
-        // This allows us to show selected_text when closed vs filter input when open
-        let base_id = ui.make_persistent_id(id_salt);
-        let expected_popup_id = base_id.with("popup");
-        let is_open = Popup::is_id_open(ui.ctx(), expected_popup_id);
-
+        let is_open = state.was_open;
+        let keyboard = Self::handle_keyboard(ui, &mut state, is_open);
         let input_response = Self::render_input(
             ui,
             &mut state,
@@ -296,56 +404,61 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             is_open,
             placeholder.as_deref(),
             selected_text.as_deref(),
+            selected_status,
         );
 
-        // Add accessibility info for the combobox input
         let is_enabled = ui.is_enabled();
-        let label_text = label.as_ref().map(|l| l.text().to_owned());
+        let label_text = label.as_ref().map(|label| label.text().to_owned());
         input_response.widget_info(|| {
-            let label_str = label_text.as_deref().unwrap_or("Combobox");
-            egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, is_enabled, label_str)
+            egui::WidgetInfo::labeled(
+                egui::WidgetType::ComboBox,
+                is_enabled,
+                label_text.as_deref().unwrap_or("Combobox"),
+            )
         });
 
-        // Get popup_id from the rendered response (should match our precomputed one)
         let popup_id = Popup::default_response_id(&input_response);
-
-        // Handle keyboard navigation
-        let enter_pressed = Self::handle_keyboard(ui, &mut state, is_open, popup_id);
-
-        // Update normalized filter chars for fuzzy matching
         state.filter_chars = normalize_for_search(&state.filter_text).collect();
 
-        // Collect filtered items using fuzzy subsequence matching
         let filtered_items: Vec<_> = items
             .into_iter()
             .filter(|item| matches_fuzzy(filter_fn(item), &state.filter_chars))
             .collect();
-
-        // Clamp focused index to valid range
-        let item_count = filtered_items.len();
+        let select_all_visible = select_all.is_some() && state.filter_text.is_empty();
+        let item_count = filtered_items.len() + usize::from(select_all_visible);
+        let item_spacing = ui.spacing().item_spacing.y;
+        let content_height =
+            item_count as f32 * ITEM_HEIGHT + item_count.saturating_sub(1) as f32 * item_spacing;
+        let dropdown_height = content_height.clamp(ITEM_HEIGHT, DROPDOWN_MAX_HEIGHT);
+        let scroll_to_focused = keyboard.scroll_to_focused && content_height > DROPDOWN_MAX_HEIGHT;
         if item_count > 0 {
-            state.focused_index = state.focused_index.min(item_count.saturating_sub(1));
+            state.focused_index = state.focused_index.min(item_count - 1);
         }
 
-        // Store state once after all modifications
-        ui.ctx()
-            .memory_mut(|mem| mem.data.insert_temp(state_id, state.clone()));
-
-        // Show popup (uses default ID derived from input_response.id)
-        let _inner = Popup::menu(&input_response)
+        let mut select_all_clicked = false;
+        Popup::menu(&input_response)
             .width(width)
             .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
             .show(|ui| {
+                ui.set_min_height(dropdown_height);
                 ScrollArea::vertical()
-                    .max_height(DROPDOWN_MAX_HEIGHT)
+                    .max_height(dropdown_height)
+                    .min_scrolled_height(dropdown_height)
                     .show(ui, |ui| {
                         let mut cb = ComboboxUi {
                             ui,
                             focused_index: state.focused_index,
                             current_index: 0,
                             popup_id,
-                            enter_pressed,
+                            enter_pressed: keyboard.enter_pressed,
+                            scroll_to_focused,
                         };
+
+                        if let Some(all_selected) = select_all.filter(|_| select_all_visible)
+                            && cb.select_all_item(all_selected).clicked()
+                        {
+                            select_all_clicked = true;
+                        }
 
                         for item in &filtered_items {
                             render(&mut cb, item);
@@ -353,13 +466,25 @@ impl<F> TailwindCombobox<WithFilter<F>> {
                     });
             });
 
-        InnerResponse {
-            inner: (),
+        if keyboard.close_requested {
+            Popup::close_id(ui.ctx(), popup_id);
+        }
+        let is_open_after = Popup::is_id_open(ui.ctx(), popup_id);
+        if state.was_open && !is_open_after {
+            state.filter_text.clear();
+            state.filter_chars.clear();
+            state.focused_index = 0;
+        }
+        state.was_open = is_open_after;
+        ui.ctx()
+            .memory_mut(|mem| mem.data.insert_temp(state_id, state));
+
+        ComboboxResponse {
             response: input_response,
+            select_all_clicked,
         }
     }
 
-    /// Render the styled input field with chevron icon
     fn render_input(
         ui: &mut Ui,
         state: &mut ComboboxState,
@@ -367,86 +492,75 @@ impl<F> TailwindCombobox<WithFilter<F>> {
         is_open: bool,
         placeholder: Option<&str>,
         selected_text: Option<&str>,
+        selected_status: Option<bool>,
     ) -> Response {
         let corner_radius = CornerRadius::same(CORNER_RADIUS);
-
-        // Allocate the full input area
         let (rect, response) =
             ui.allocate_exact_size(Vec2::new(width, INPUT_HEIGHT), Sense::click());
-
         let has_focus = response.has_focus()
-            || ui.memory(|m| m.has_focus(response.id.with("input")))
+            || ui.memory(|memory| memory.has_focus(response.id.with("input")))
             || is_open;
 
         if ui.is_rect_visible(rect) {
-            // Background
             ui.painter().rect_filled(rect, corner_radius, WHITE);
-
-            // Border
-            let border_color = if has_focus { indigo::_500 } else { gray::_300 };
             ui.painter().rect_stroke(
                 rect,
                 corner_radius,
-                Stroke::new(1.0, border_color),
+                Stroke::new(
+                    if has_focus { 2.0 } else { 1.0 },
+                    if has_focus { indigo::_500 } else { gray::_300 },
+                ),
                 StrokeKind::Inside,
             );
 
-            // Focus ring (outer glow)
-            if has_focus {
-                let focus_rect = rect.expand(FOCUS_RING_WIDTH);
-                ui.painter().rect_stroke(
-                    focus_rect,
-                    CornerRadius::same(FOCUS_RING_RADIUS),
-                    Stroke::new(FOCUS_RING_WIDTH, indigo::_500.gamma_multiply(0.5)),
-                    StrokeKind::Outside,
-                );
-            }
-
-            // Chevron icon on the right
             let icon_rect = Rect::from_center_size(
                 rect.right_center() - Vec2::new(ICON_SIZE / 2.0 + 8.0, 0.0),
                 Vec2::splat(ICON_SIZE),
             );
-
-            // Create a child UI for the icon
             let mut icon_ui = ui.new_child(egui::UiBuilder::new().max_rect(icon_rect).layout(
                 egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
             ));
             icons::chevron_down(&mut icon_ui, ICON_SIZE, gray::_400);
         }
 
-        // Text area (inside the rect)
         let input_rect = Rect::from_min_max(
             rect.min + Vec2::new(INPUT_PADDING_X, 0.0),
-            rect.max - Vec2::new(ICON_AREA_WIDTH, 0.0), // Leave space for chevron
+            rect.max - Vec2::new(ICON_AREA_WIDTH, 0.0),
         );
 
-        // When closed and we have selected_text, show it as a label
-        // When open, show the filter text input
         if !is_open {
-            if let Some(text) = selected_text {
-                if !text.is_empty() {
-                    // Draw the selected text as a label (truncated if needed)
-                    let text_pos = input_rect.left_center();
-                    let galley = ui.painter().layout(
-                        text.to_string(),
-                        FontId::proportional(FONT_SIZE),
-                        gray::_900,
-                        input_rect.width(),
+            if let Some(text) = selected_text.filter(|text| !text.is_empty()) {
+                if let Some(is_active) = selected_status {
+                    ui.painter().circle_filled(
+                        input_rect.left_center() + Vec2::new(5.0, 0.0),
+                        5.0,
+                        if is_active { SUCCESS } else { gray::_200 },
                     );
-                    ui.painter().galley(
-                        text_pos - Vec2::new(0.0, galley.size().y / 2.0),
-                        galley,
-                        gray::_900,
-                    );
-                    return response;
                 }
+                let text_pos = input_rect.left_center()
+                    + Vec2::new(if selected_status.is_some() { 20.0 } else { 0.0 }, 0.0);
+                let galley = layout_truncated_text(
+                    ui,
+                    text,
+                    FontId::proportional(FONT_SIZE),
+                    gray::_900,
+                    input_rect.width(),
+                );
+                let is_truncated = galley.elided;
+                ui.painter().galley(
+                    text_pos - Vec2::new(0.0, galley.size().y / 2.0),
+                    galley,
+                    gray::_900,
+                );
+                return if is_truncated {
+                    response.on_hover_text(text)
+                } else {
+                    response
+                };
             }
-            // Fall through to show placeholder or empty input
             if let Some(placeholder) = placeholder {
-                let text_pos = input_rect.left_center();
                 ui.painter().text(
-                    text_pos,
+                    input_rect.left_center(),
                     Align2::LEFT_CENTER,
                     placeholder,
                     FontId::proportional(FONT_SIZE),
@@ -456,66 +570,49 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             return response;
         }
 
-        // When open, show the filter text input
         let mut input_ui = ui.new_child(
             egui::UiBuilder::new()
                 .max_rect(input_rect)
                 .layout(egui::Layout::left_to_right(egui::Align::Center)),
         );
-
-        // Style the text edit to be invisible (we draw the frame ourselves)
         let mut text_edit = TextEdit::singleline(&mut state.filter_text)
             .frame(false)
             .desired_width(input_rect.width())
             .vertical_align(egui::Align::Center)
             .id(response.id.with("input"));
-
         if let Some(placeholder) = placeholder {
             text_edit = text_edit.hint_text(placeholder);
         }
-
         let text_response = input_ui.add(text_edit);
-
-        // Request focus on the text input when opening
-        if !state.filter_text.is_empty() || text_response.gained_focus() {
-            // Keep focus
-        } else {
+        if !text_response.has_focus() {
             text_response.request_focus();
         }
-
-        // Merge responses - Popup::menu will handle opening based on click state
         response | text_response
     }
 
-    /// Handle keyboard navigation
-    fn handle_keyboard(
-        ui: &mut Ui,
-        state: &mut ComboboxState,
-        is_open: bool,
-        popup_id: Id,
-    ) -> bool {
+    fn handle_keyboard(ui: &mut Ui, state: &mut ComboboxState, is_open: bool) -> KeyboardInput {
         if !is_open {
-            return false;
+            return KeyboardInput::default();
         }
 
-        let mut enter_pressed = false;
-
-        ui.input(|i| {
-            if i.key_pressed(Key::ArrowDown) {
+        let mut keyboard = KeyboardInput::default();
+        ui.input_mut(|input| {
+            if input.consume_key(Modifiers::NONE, Key::ArrowDown) {
                 state.focused_index = state.focused_index.saturating_add(1);
+                keyboard.scroll_to_focused = true;
             }
-            if i.key_pressed(Key::ArrowUp) {
+            if input.consume_key(Modifiers::NONE, Key::ArrowUp) {
                 state.focused_index = state.focused_index.saturating_sub(1);
+                keyboard.scroll_to_focused = true;
             }
-            if i.key_pressed(Key::Enter) {
-                enter_pressed = true;
+            if input.consume_key(Modifiers::NONE, Key::Enter) {
+                keyboard.enter_pressed = true;
             }
-            if i.key_pressed(Key::Escape) {
-                Popup::close_id(ui.ctx(), popup_id);
+            if input.consume_key(Modifiers::NONE, Key::Escape) {
+                keyboard.close_requested = true;
             }
         });
-
-        enter_pressed
+        keyboard
     }
 }
 
@@ -531,88 +628,77 @@ mod tests {
     struct Person {
         name: String,
         id: u32,
+        active: bool,
     }
 
     fn test_people() -> Vec<Person> {
         vec![
             Person {
-                name: "Michael Foster".to_string(),
+                name: "Michael Foster".into(),
                 id: 1,
+                active: true,
             },
             Person {
-                name: "Floyd Miles".to_string(),
+                name: "Floyd Miles".into(),
                 id: 2,
+                active: false,
             },
             Person {
-                name: "Emily Selman".to_string(),
+                name: "Emily Selman".into(),
                 id: 3,
+                active: false,
             },
             Person {
-                name: "Benjamin Russel".to_string(),
+                name: "Benjamin Russel".into(),
                 id: 4,
+                active: true,
             },
         ]
-    }
-
-    /// Helper to simulate a click at a position
-    fn click_at(harness: &mut Harness<'_>, pos: egui::Pos2) {
-        harness
-            .input_mut()
-            .events
-            .push(egui::Event::PointerMoved(pos));
-        harness.input_mut().events.push(egui::Event::PointerButton {
-            pos,
-            button: egui::PointerButton::Primary,
-            pressed: true,
-            modifiers: egui::Modifiers::default(),
-        });
-        harness.input_mut().events.push(egui::Event::PointerButton {
-            pos,
-            button: egui::PointerButton::Primary,
-            pressed: false,
-            modifiers: egui::Modifiers::default(),
-        });
     }
 
     #[test]
     fn test_combobox_flow() {
         let people = test_people();
-        // Use Rc<RefCell> so the closure can mutate selection state
-        let selected: Rc<RefCell<HashSet<u32>>> = Rc::new(RefCell::new(HashSet::new()));
-        let selected_clone = selected.clone();
-
+        let selected = Rc::new(RefCell::new(HashSet::new()));
+        let selected_for_ui = selected.clone();
         let mut harness = Harness::new_ui(move |ui| {
-            let mut selected = selected_clone.borrow_mut();
+            let mut selected = selected_for_ui.borrow_mut();
             TailwindCombobox::from_label("Assigned to")
                 .placeholder("Search...")
                 .width(250.0)
-                .filter_by(|p: &Person| &p.name)
+                .select_all(selected.len() == people.len())
+                .filter_by(|person: &Person| &person.name)
                 .show_items(ui, &people, |cb, person| {
                     let is_selected = selected.contains(&person.id);
-                    if cb.item(&person.name, is_selected).clicked() {
-                        if is_selected {
-                            selected.remove(&person.id);
-                        } else {
-                            selected.insert(person.id);
+                    if let Some(action) = cb
+                        .item_with_status(&person.name, is_selected, Some(person.active))
+                        .selection_action()
+                    {
+                        match action {
+                            SelectionAction::Replace => {
+                                selected.clear();
+                                selected.insert(person.id);
+                            }
+                            SelectionAction::Toggle => {
+                                if !selected.insert(person.id) {
+                                    selected.remove(&person.id);
+                                }
+                            }
                         }
                     }
                 });
         });
+        crate::test_support::setup_egui(&harness.ctx);
 
-        // Install image loaders for SVG icons
-        egui_extras::install_image_loaders(&harness.ctx);
-
-        // 1. Initial closed state
         harness.run();
         harness.snapshot("comboboxes/closed");
 
-        // 2. Click to open dropdown
-        let input_pos = egui::pos2(125.0, 40.0);
-        click_at(&mut harness, input_pos);
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Assigned to")
+            .click();
         harness.run();
         harness.snapshot("comboboxes/open");
 
-        // 3. Type "mi" to filter (shows Michael Foster, Emily Selman)
         harness
             .input_mut()
             .events
@@ -620,65 +706,351 @@ mod tests {
         harness.run();
         harness.snapshot("comboboxes/filtered");
 
-        // 4. Click on first filtered item (Michael Foster) to select it
-        // Dropdown items start below the 50px input (~70px), each item is 36px tall.
-        let first_item_pos = egui::pos2(125.0, 90.0);
-        click_at(&mut harness, first_item_pos);
+        harness.get_by_label("Michael Foster").click();
         harness.run();
+        assert_eq!(*selected.borrow(), HashSet::from([1]));
 
-        // Verify selection was toggled
-        assert!(
-            selected.borrow().contains(&1),
-            "Michael Foster (id=1) should be selected"
-        );
-
-        // 5. Re-open to show selected state
-        click_at(&mut harness, input_pos);
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Assigned to")
+            .click();
         harness.run();
         harness.snapshot("comboboxes/selected");
     }
 
     #[test]
-    fn test_combobox_accessibility_click() {
+    fn modifier_click_toggles_without_closing() {
         let people = test_people();
-        let selected: Rc<RefCell<HashSet<u32>>> = Rc::new(RefCell::new(HashSet::new()));
-        let selected_clone = selected.clone();
-
+        let selected = Rc::new(RefCell::new(HashSet::from([1])));
+        let selected_for_ui = selected.clone();
+        let select_all_activated = Rc::new(RefCell::new(false));
+        let select_all_for_ui = select_all_activated.clone();
         let mut harness = Harness::new_ui(move |ui| {
-            let mut selected = selected_clone.borrow_mut();
+            let mut selected = selected_for_ui.borrow_mut();
+            let response = TailwindCombobox::from_label("People")
+                .placeholder("Search...")
+                .width(250.0)
+                .select_all(selected.len() == people.len())
+                .filter_by(|person: &Person| &person.name)
+                .show_items(ui, &people, |cb, person| {
+                    let is_selected = selected.contains(&person.id);
+                    if let Some(action) = cb.item(&person.name, is_selected).selection_action() {
+                        match action {
+                            SelectionAction::Replace => {
+                                selected.clear();
+                                selected.insert(person.id);
+                            }
+                            SelectionAction::Toggle => {
+                                if !selected.insert(person.id) {
+                                    selected.remove(&person.id);
+                                }
+                            }
+                        }
+                    }
+                });
+            if response.select_all_clicked {
+                *select_all_for_ui.borrow_mut() = true;
+            }
+        });
+        crate::test_support::setup_egui(&harness.ctx);
+        harness.run();
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::ComboBox, "People")
+            .click();
+        harness.run();
+        harness.get_by_label("Select all");
+
+        let floyd_position = harness.get_by_label("Floyd Miles").rect().center();
+        let modifiers = egui::Modifiers {
+            ctrl: true,
+            ..Default::default()
+        };
+        harness.input_mut().modifiers = modifiers;
+        harness.event(egui::Event::PointerMoved(floyd_position));
+        harness.event(egui::Event::PointerButton {
+            pos: floyd_position,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers,
+        });
+        harness.event(egui::Event::PointerButton {
+            pos: floyd_position,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers,
+        });
+        harness.run();
+        harness.input_mut().modifiers = egui::Modifiers::default();
+        assert_eq!(*selected.borrow(), HashSet::from([1, 2]));
+        harness.get_by_label("Select all");
+        assert!(!*select_all_activated.borrow());
+    }
+
+    #[test]
+    fn select_all_is_hidden_while_searching() {
+        let people = test_people();
+        let mut harness = Harness::new_ui(move |ui| {
             TailwindCombobox::from_label("People")
                 .placeholder("Search...")
                 .width(250.0)
-                .filter_by(|p: &Person| &p.name)
+                .select_all(false)
+                .filter_by(|person: &Person| &person.name)
                 .show_items(ui, &people, |cb, person| {
-                    let is_selected = selected.contains(&person.id);
-                    if cb.item(&person.name, is_selected).clicked() {
-                        if is_selected {
-                            selected.remove(&person.id);
-                        } else {
-                            selected.insert(person.id);
+                    cb.item(&person.name, false);
+                });
+        });
+        crate::test_support::setup_egui(&harness.ctx);
+        harness.run();
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::ComboBox, "People")
+            .click();
+        harness.run();
+        harness.run();
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::Text("flo".into()));
+        harness.run();
+
+        assert!(harness.query_by_label("Select all").is_none());
+        harness.get_by_label("Floyd Miles");
+    }
+
+    #[test]
+    fn keyboard_navigation_moves_focus_and_selects_the_focused_item() {
+        let people = test_people();
+        let selected = Rc::new(RefCell::new(HashSet::new()));
+        let selected_for_ui = selected.clone();
+        let mut harness = Harness::new_ui(move |ui| {
+            let mut selected = selected_for_ui.borrow_mut();
+            TailwindCombobox::from_label("People")
+                .placeholder("Search...")
+                .width(250.0)
+                .filter_by(|person: &Person| &person.name)
+                .show_items(ui, &people, |cb, person| {
+                    if let Some(action) = cb
+                        .item(&person.name, selected.contains(&person.id))
+                        .selection_action()
+                    {
+                        match action {
+                            SelectionAction::Replace => {
+                                selected.clear();
+                                selected.insert(person.id);
+                            }
+                            SelectionAction::Toggle => unreachable!("keyboard activation replaces"),
                         }
                     }
                 });
         });
-
-        egui_extras::install_image_loaders(&harness.ctx);
+        crate::test_support::setup_egui(&harness.ctx);
         harness.run();
-
-        // Open the combobox by clicking on it via accessibility
         harness
             .get_by_role_and_label(egui::accesskit::Role::ComboBox, "People")
             .click();
         harness.run();
 
-        // Now click on "Michael Foster" item using accessibility
-        harness.get_by_label("Michael Foster").click();
+        harness.key_down(Key::ArrowDown);
+        harness.run();
+        harness.key_down(Key::Enter);
         harness.run();
 
-        // Verify selection
-        assert!(
-            selected.borrow().contains(&1),
-            "Michael Foster (id=1) should be selected after accessibility click"
-        );
+        assert_eq!(*selected.borrow(), HashSet::from([2]));
+        assert!(harness.query_by_label("Michael Foster").is_none());
+    }
+
+    #[test]
+    fn long_namespace_names_are_truncated_without_hiding_selection_affordances() {
+        let namespaces = [
+            "namespace-with-a-very-long-name-that-must-not-overlap-the-status-or-checkmark",
+            "default",
+        ];
+        let selected_namespace = namespaces[0];
+        let mut harness = Harness::new_ui(move |ui| {
+            TailwindCombobox::from_label("Namespaces")
+                .selected_text(selected_namespace)
+                .selected_status(Some(true))
+                .width(230.0)
+                .filter_by(|namespace: &&str| *namespace)
+                .show_items(ui, &namespaces, |cb, namespace| {
+                    cb.item_with_status(*namespace, *namespace == selected_namespace, Some(true));
+                });
+        });
+        crate::test_support::setup_egui(&harness.ctx);
+        harness.run();
+        harness.snapshot("comboboxes/long_namespace_closed");
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespaces")
+            .hover();
+        harness.run();
+        harness.snapshot("comboboxes/long_namespace_closed_tooltip");
+
+        let namespaces = [
+            "namespace-with-a-very-long-name-that-must-not-overlap-the-status-or-checkmark",
+            "default",
+        ];
+        let mut open_harness = Harness::new_ui(move |ui| {
+            TailwindCombobox::from_label("Namespaces")
+                .selected_text(selected_namespace)
+                .selected_status(Some(true))
+                .width(230.0)
+                .filter_by(|namespace: &&str| *namespace)
+                .show_items(ui, &namespaces, |cb, namespace| {
+                    cb.item_with_status(*namespace, *namespace == selected_namespace, Some(true));
+                });
+        });
+        crate::test_support::setup_egui(&open_harness.ctx);
+        open_harness.run();
+        open_harness
+            .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespaces")
+            .click();
+        open_harness.run();
+        open_harness.snapshot("comboboxes/long_namespace_open");
+        open_harness.get_by_label(selected_namespace).hover();
+        open_harness.run_ok();
+        open_harness.snapshot("comboboxes/long_namespace_open_tooltip");
+    }
+
+    #[test]
+    fn keyboard_navigation_does_not_scroll_a_three_item_result_list() {
+        let namespaces = ["system", "staging", "sandbox", "default"];
+        let selected = Rc::new(RefCell::new(None));
+        let selected_for_ui = selected.clone();
+        let mut harness = Harness::new_ui(move |ui| {
+            TailwindCombobox::from_label("Namespaces")
+                .placeholder("Search namespaces...")
+                .width(250.0)
+                .filter_by(|namespace: &&str| *namespace)
+                .show_items(ui, &namespaces, |cb, namespace| {
+                    if cb.item(*namespace, false).clicked() {
+                        *selected_for_ui.borrow_mut() = Some(*namespace);
+                    }
+                });
+        });
+        crate::test_support::setup_egui(&harness.ctx);
+        harness.run();
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespaces")
+            .click();
+        harness.run();
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::Text("s".into()));
+        harness.run();
+
+        let system_rect = harness.get_by_label("system").rect();
+        let staging_rect = harness.get_by_label("staging").rect();
+        let sandbox_rect = harness.get_by_label("sandbox").rect();
+
+        harness.key_down(Key::ArrowDown);
+        harness.run();
+        harness.key_down(Key::ArrowDown);
+        harness.run();
+
+        assert_eq!(harness.get_by_label("system").rect(), system_rect);
+        assert_eq!(harness.get_by_label("staging").rect(), staging_rect);
+        assert_eq!(harness.get_by_label("sandbox").rect(), sandbox_rect);
+        harness.snapshot("comboboxes/three_filtered_results");
+
+        harness.key_down(Key::Enter);
+        harness.run();
+        assert_eq!(*selected.borrow(), Some("sandbox"));
+    }
+
+    #[test]
+    fn keyboard_navigation_scrolls_a_focused_item_into_view() {
+        let namespaces = (0..20)
+            .map(|index| format!("namespace-{index:03}"))
+            .collect::<Vec<_>>();
+        let selected = Rc::new(RefCell::new(None));
+        let selected_for_ui = selected.clone();
+        let mut harness = Harness::new_ui(move |ui| {
+            TailwindCombobox::from_label("Namespaces")
+                .placeholder("Search namespaces...")
+                .width(250.0)
+                .filter_by(|namespace: &String| namespace)
+                .show_items(ui, &namespaces, |cb, namespace| {
+                    if cb.item(namespace, false).clicked() {
+                        *selected_for_ui.borrow_mut() = Some(namespace.clone());
+                    }
+                });
+        });
+        crate::test_support::setup_egui(&harness.ctx);
+        harness.run();
+        let combobox_rect = harness
+            .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespaces")
+            .rect();
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespaces")
+            .click();
+        harness.run();
+
+        for _ in 0..10 {
+            harness.key_down(Key::ArrowDown);
+            harness.run();
+        }
+
+        let focused_rect = harness.get_by_label("namespace-010").rect();
+        assert!(focused_rect.top() >= combobox_rect.bottom());
+        assert!(focused_rect.bottom() <= combobox_rect.bottom() + DROPDOWN_MAX_HEIGHT);
+        harness.snapshot("comboboxes/keyboard_scroll_into_view");
+
+        harness.key_down(Key::Enter);
+        harness.run();
+        assert_eq!(selected.borrow().as_deref(), Some("namespace-010"));
+    }
+
+    #[test]
+    fn dropdown_expands_after_backspacing_to_more_search_results() {
+        let namespaces = ["system", "staging", "sandbox", "services"];
+        let mut harness = Harness::new_ui(move |ui| {
+            TailwindCombobox::from_label("Namespaces")
+                .placeholder("Search namespaces...")
+                .width(250.0)
+                .filter_by(|namespace: &&str| *namespace)
+                .show_items(ui, &namespaces, |cb, namespace| {
+                    cb.item(*namespace, false);
+                });
+        });
+        crate::test_support::setup_egui(&harness.ctx);
+        harness.run();
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespaces")
+            .click();
+        harness.run();
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::Text("sy".into()));
+        harness.run();
+        harness.get_by_label("system");
+
+        harness.key_down(Key::Backspace);
+        harness.run();
+        harness.get_by_label("staging");
+        harness.get_by_label("sandbox");
+        harness.snapshot("comboboxes/filter_expands");
+    }
+
+    #[test]
+    fn dropdown_with_two_hundred_items_is_capped_to_a_scrollable_height() {
+        let namespaces = (0..200)
+            .map(|index| format!("namespace-{index:03}"))
+            .collect::<Vec<_>>();
+        let mut harness = Harness::new_ui(move |ui| {
+            TailwindCombobox::from_label("Namespaces")
+                .placeholder("Search namespaces...")
+                .width(250.0)
+                .filter_by(|namespace: &String| namespace)
+                .show_items(ui, &namespaces, |cb, namespace| {
+                    cb.item(namespace, false);
+                });
+        });
+        crate::test_support::setup_egui(&harness.ctx);
+        harness.run();
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespaces")
+            .click();
+        harness.run();
+        harness.snapshot("comboboxes/two_hundred_items");
     }
 }

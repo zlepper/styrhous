@@ -10,16 +10,24 @@ use crate::minimal_resource::MinimalResource;
 use crate::worker::WorkerCommand;
 use components::colors::{TOOLBAR_BACKGROUND, gray};
 use components::{
-    MoreButton, MoreMenu, TableRowBuilder, TailwindCombobox, TailwindTable, WorkspacePage, icons,
+    MoreButton, MoreMenu, SelectionAction, TableRowBuilder, TailwindCombobox, TailwindTable,
+    WorkspacePage, icons,
 };
 use std::cell::RefCell;
+
+enum NamespaceSelection {
+    Replace(String),
+    Toggle(String),
+    SelectAll,
+    ClearAll,
+}
 
 pub(super) fn show(
     ctx: &egui::Context,
     ui_state: &mut UiState,
     commands_to_send: &mut Vec<WorkerCommand>,
 ) {
-    let mut toggled_namespace = None;
+    let mut namespace_selection = None;
     let mut retry_requested = false;
     egui::CentralPanel::default()
         .frame(WorkspacePage::frame())
@@ -97,7 +105,7 @@ pub(super) fn show(
                     cluster,
                     selected_api_resource.as_ref(),
                     all_resources.len(),
-                    &mut toggled_namespace,
+                    &mut namespace_selection,
                 );
                 ui.add_space(20.0);
                 ui.separator();
@@ -156,8 +164,21 @@ pub(super) fn show(
             });
         });
 
-    if let (Some(cluster_key), Some(namespace)) = (ui_state.selected_cluster, toggled_namespace) {
-        ui_state.toggle_namespace(cluster_key, namespace, commands_to_send);
+    if let (Some(cluster_key), Some(selection)) = (ui_state.selected_cluster, namespace_selection) {
+        match selection {
+            NamespaceSelection::Replace(namespace) => {
+                ui_state.replace_selected_namespaces(cluster_key, [namespace], commands_to_send);
+            }
+            NamespaceSelection::Toggle(namespace) => {
+                ui_state.toggle_namespace(cluster_key, namespace, commands_to_send);
+            }
+            NamespaceSelection::SelectAll => {
+                ui_state.select_all_namespaces(cluster_key, commands_to_send);
+            }
+            NamespaceSelection::ClearAll => {
+                ui_state.clear_selected_namespaces(cluster_key);
+            }
+        }
     }
     if retry_requested {
         if let Some(cluster_key) = ui_state.selected_cluster {
@@ -215,7 +236,7 @@ fn show_toolbar(
     cluster: &super::state::ClusterState,
     selected_api_resource: Option<&crate::api_resource::ApiResource>,
     resource_count: usize,
-    toggled_namespace: &mut Option<String>,
+    namespace_selection: &mut Option<NamespaceSelection>,
 ) {
     let resource_title = selected_api_resource
         .map(|resource| display_resource_title(&resource.name))
@@ -231,6 +252,24 @@ fn show_toolbar(
         count => format!("{count} namespaces"),
     };
     let namespaces: Vec<&MinimalNamespace> = cluster.namespaces.values().collect();
+    let all_namespaces_selected = !namespaces.is_empty()
+        && namespaces
+            .iter()
+            .all(|namespace| cluster.selected_namespaces.contains(&namespace.name));
+    let selected_status = if cluster.selected_namespaces.len() == 1 {
+        selected_api_resource.map(|api_resource| {
+            let namespace = cluster
+                .selected_namespaces
+                .iter()
+                .next()
+                .expect("selection length was checked");
+            cluster
+                .active_watchers
+                .contains(&(api_resource.clone(), namespace.clone()))
+        })
+    } else {
+        None
+    };
 
     ui.add_space(26.0);
     ui.allocate_ui_with_layout(
@@ -247,20 +286,39 @@ fn show_toolbar(
             let namespace_response = TailwindCombobox::new("namespace-selector")
                 .placeholder("Search namespaces...")
                 .selected_text(selected_text)
+                .selected_status(selected_status)
                 .width(230.0)
+                .select_all(all_namespaces_selected)
                 .filter_by(|ns: &&MinimalNamespace| ns.get_name_to_display())
                 .show_items(ui, &namespaces, |cb, ns| {
-                    if cb
-                        .item(
+                    let status = selected_api_resource.map(|api_resource| {
+                        cluster
+                            .active_watchers
+                            .contains(&(api_resource.clone(), ns.name.clone()))
+                    });
+                    if let Some(action) = cb
+                        .item_with_status(
                             ns.get_name_to_display(),
                             cluster.selected_namespaces.contains(&ns.name),
+                            status,
                         )
-                        .clicked()
+                        .selection_action()
                     {
-                        *toggled_namespace = Some(ns.name.clone());
-                        cb.close();
+                        *namespace_selection = Some(match action {
+                            SelectionAction::Replace => {
+                                NamespaceSelection::Replace(ns.name.clone())
+                            }
+                            SelectionAction::Toggle => NamespaceSelection::Toggle(ns.name.clone()),
+                        });
                     }
                 });
+            if namespace_response.select_all_clicked {
+                *namespace_selection = Some(if all_namespaces_selected {
+                    NamespaceSelection::ClearAll
+                } else {
+                    NamespaceSelection::SelectAll
+                });
+            }
             namespace_response.response.widget_info(|| {
                 egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, ui.is_enabled(), "Namespace")
             });

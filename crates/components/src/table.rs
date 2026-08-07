@@ -880,6 +880,7 @@ mod tests {
                 });
         });
 
+        crate::test_support::setup_egui(&harness.ctx);
         harness.run();
         harness.snapshot("tables/basic");
     }
@@ -902,6 +903,7 @@ mod tests {
                 });
         });
 
+        crate::test_support::setup_egui(&harness.ctx);
         harness.run();
         harness.snapshot("tables/alternating_rows");
     }
@@ -932,6 +934,7 @@ mod tests {
                 );
         });
 
+        crate::test_support::setup_egui(&harness.ctx);
         harness.run();
         harness.snapshot("tables/with_selection");
     }
@@ -963,6 +966,7 @@ mod tests {
                 );
         });
 
+        crate::test_support::setup_egui(&harness.ctx);
         harness.run();
         harness.snapshot("tables/select_all");
     }
@@ -996,6 +1000,7 @@ mod tests {
                 );
         });
 
+        crate::test_support::setup_egui(&harness.ctx);
         harness.run();
         harness.snapshot("tables/select_all_indeterminate");
     }
@@ -1043,7 +1048,7 @@ mod tests {
                     TableRowBuilder::text(ui, text, col_index == 0);
                 });
         });
-        egui_extras::install_image_loaders(&harness.ctx);
+        crate::test_support::setup_egui(&harness.ctx);
         harness.run();
         harness.snapshot("tables/sorting_unsorted");
 
@@ -1068,7 +1073,7 @@ mod tests {
                     TableRowBuilder::text(ui, text, col_index == 0);
                 });
         });
-        egui_extras::install_image_loaders(&harness.ctx);
+        crate::test_support::setup_egui(&harness.ctx);
         harness.run();
         harness.snapshot("tables/sorting_name_asc");
 
@@ -1092,7 +1097,7 @@ mod tests {
                     TableRowBuilder::text(ui, text, col_index == 0);
                 });
         });
-        egui_extras::install_image_loaders(&harness.ctx);
+        crate::test_support::setup_egui(&harness.ctx);
         harness.run();
         harness.snapshot("tables/sorting_title_desc");
     }
@@ -1118,7 +1123,7 @@ mod tests {
                 });
         });
 
-        egui_extras::install_image_loaders(&harness.ctx);
+        crate::test_support::setup_egui(&harness.ctx);
         harness.run();
         harness.snapshot("tables/column_toggle_menu");
     }
@@ -1145,7 +1150,7 @@ mod tests {
                 });
         });
 
-        egui_extras::install_image_loaders(&harness.ctx);
+        crate::test_support::setup_egui(&harness.ctx);
         harness.run();
         harness.snapshot("tables/hidden_column");
     }
