@@ -2,7 +2,7 @@
 
 use egui::{Button, Color32, CornerRadius, Response, Shadow, Stroke, Ui, Vec2, WidgetText};
 
-use crate::colors::{gray, indigo, BLACK, WHITE};
+use crate::colors::{BLACK, WHITE, gray, indigo};
 
 /// Button color variant
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -169,25 +169,25 @@ impl<'a> TailwindButton<'a> {
     fn variant_colors(&self) -> (Color32, Color32, Color32, Color32, Stroke) {
         match self.variant {
             ButtonVariant::Primary => (
-                indigo::_600,         // fill
-                indigo::_700,         // fill_hovered
-                indigo::_800,         // fill_active
-                WHITE,                // text_color
-                Stroke::NONE,         // stroke
+                indigo::_600, // fill
+                indigo::_700, // fill_hovered
+                indigo::_800, // fill_active
+                WHITE,        // text_color
+                Stroke::NONE, // stroke
             ),
             ButtonVariant::Secondary => (
-                WHITE,                // fill
-                gray::_50,            // fill_hovered
-                gray::_100,           // fill_active
-                gray::_700,           // text_color
+                WHITE,                        // fill
+                gray::_50,                    // fill_hovered
+                gray::_100,                   // fill_active
+                gray::_700,                   // text_color
                 Stroke::new(1.0, gray::_300), // stroke
             ),
             ButtonVariant::Soft => (
-                indigo::_50,          // fill
-                indigo::_100,         // fill_hovered
-                indigo::_200,         // fill_active
-                indigo::_600,         // text_color
-                Stroke::NONE,         // stroke
+                indigo::_50,  // fill
+                indigo::_100, // fill_hovered
+                indigo::_200, // fill_active
+                indigo::_600, // text_color
+                Stroke::NONE, // stroke
             ),
         }
     }
@@ -230,7 +230,7 @@ impl<'a> TailwindButton<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use egui_kittest::{kittest::Queryable, Harness, SnapshotResults};
+    use egui_kittest::{Harness, SnapshotResults, kittest::Queryable};
 
     const SIZES: [(ButtonSize, &str); 5] = [
         (ButtonSize::Xs, "Xs"),
@@ -246,11 +246,7 @@ mod tests {
         ui.add_space(4.0);
     }
 
-    fn button_row(
-        ui: &mut Ui,
-        variant: ButtonVariant,
-        rounding: ButtonRounding,
-    ) {
+    fn button_row(ui: &mut Ui, variant: ButtonVariant, rounding: ButtonRounding) {
         ui.horizontal(|ui| {
             for (size, _) in SIZES {
                 TailwindButton::new("Button text")

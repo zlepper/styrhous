@@ -35,6 +35,9 @@ UPDATE_SNAPSHOTS=1 cargo nextest run -p kubernetes-dev-ui
 `egui_kittest` snapshots live in `crates/app/tests/snapshots/`. Review generated
 `*.new.png` files before accepting them; never update snapshots merely to make a test pass.
 
+When matching a UI to a design oracle, use `scripts/compare-oracle-snapshot.sh` for
+ImageMagick metrics/diffs and `scripts/review-oracle-diff.sh` for the Codex CLI visual review.
+
 ### Kind-backed integration tests
 
 `test_real_cluster_connection`, `test_resource_watcher_integration`, and

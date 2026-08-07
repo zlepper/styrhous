@@ -18,7 +18,7 @@
 
 // Layout constants
 const ITEM_HEIGHT: f32 = 36.0;
-const INPUT_HEIGHT: f32 = 40.0;
+const INPUT_HEIGHT: f32 = 50.0;
 const CORNER_RADIUS: u8 = 6;
 const FOCUS_RING_RADIUS: u8 = 8;
 const FOCUS_RING_WIDTH: f32 = 2.0;
@@ -28,14 +28,14 @@ const DEFAULT_WIDTH: f32 = 256.0;
 const ITEM_PADDING_X: f32 = 12.0;
 const INPUT_PADDING_X: f32 = 12.0;
 const ICON_AREA_WIDTH: f32 = 36.0;
-const FONT_SIZE: f32 = 14.0;
+const FONT_SIZE: f32 = 18.0;
 
 use egui::{
-    Align2, Color32, CornerRadius, FontId, Id, InnerResponse, Key, Popup, PopupCloseBehavior,
-    Rect, Response, ScrollArea, Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2, WidgetText,
+    Align2, Color32, CornerRadius, FontId, Id, InnerResponse, Key, Popup, PopupCloseBehavior, Rect,
+    Response, ScrollArea, Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2, WidgetText,
 };
 
-use crate::colors::{gray, indigo, WHITE};
+use crate::colors::{WHITE, gray, indigo};
 use crate::fuzzy::{matches_fuzzy, normalize_for_search};
 use crate::icons;
 
@@ -97,9 +97,9 @@ impl<'a> ComboboxUi<'a> {
 
         // Allocate space for the item
         let available_width = self.ui.available_width();
-        let (rect, response) =
-            self.ui
-                .allocate_exact_size(Vec2::new(available_width, ITEM_HEIGHT), Sense::click());
+        let (rect, response) = self
+            .ui
+            .allocate_exact_size(Vec2::new(available_width, ITEM_HEIGHT), Sense::click());
 
         // Check if this item was selected via keyboard
         let keyboard_selected = is_focused && self.enter_pressed;
@@ -249,12 +249,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
     ///
     /// The `render` callback is called once for each item that matches the filter.
     /// Use `cb.item(label, is_selected)` to render each row.
-    pub fn show_items<'a, T, I, R>(
-        self,
-        ui: &mut Ui,
-        items: I,
-        mut render: R,
-    ) -> InnerResponse<()>
+    pub fn show_items<'a, T, I, R>(self, ui: &mut Ui, items: I, mut render: R) -> InnerResponse<()>
     where
         F: Fn(&T) -> &str,
         I: IntoIterator<Item = &'a T>,
@@ -274,9 +269,11 @@ impl<F> TailwindCombobox<WithFilter<F>> {
         let state_id = ui.make_persistent_id(id_salt);
 
         // Load state from memory
-        let mut state = ui
-            .ctx()
-            .memory_mut(|mem| mem.data.get_temp::<ComboboxState>(state_id).unwrap_or_default());
+        let mut state = ui.ctx().memory_mut(|mem| {
+            mem.data
+                .get_temp::<ComboboxState>(state_id)
+                .unwrap_or_default()
+        });
 
         // Render label if present
         if let Some(label) = &label {
@@ -339,19 +336,21 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             .width(width)
             .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
             .show(|ui| {
-                ScrollArea::vertical().max_height(DROPDOWN_MAX_HEIGHT).show(ui, |ui| {
-                    let mut cb = ComboboxUi {
-                        ui,
-                        focused_index: state.focused_index,
-                        current_index: 0,
-                        popup_id,
-                        enter_pressed,
-                    };
+                ScrollArea::vertical()
+                    .max_height(DROPDOWN_MAX_HEIGHT)
+                    .show(ui, |ui| {
+                        let mut cb = ComboboxUi {
+                            ui,
+                            focused_index: state.focused_index,
+                            current_index: 0,
+                            popup_id,
+                            enter_pressed,
+                        };
 
-                    for item in &filtered_items {
-                        render(&mut cb, item);
-                    }
-                });
+                        for item in &filtered_items {
+                            render(&mut cb, item);
+                        }
+                    });
             });
 
         InnerResponse {
@@ -372,7 +371,8 @@ impl<F> TailwindCombobox<WithFilter<F>> {
         let corner_radius = CornerRadius::same(CORNER_RADIUS);
 
         // Allocate the full input area
-        let (rect, response) = ui.allocate_exact_size(Vec2::new(width, INPUT_HEIGHT), Sense::click());
+        let (rect, response) =
+            ui.allocate_exact_size(Vec2::new(width, INPUT_HEIGHT), Sense::click());
 
         let has_focus = response.has_focus()
             || ui.memory(|m| m.has_focus(response.id.with("input")))
@@ -409,11 +409,9 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             );
 
             // Create a child UI for the icon
-            let mut icon_ui = ui.new_child(
-                egui::UiBuilder::new()
-                    .max_rect(icon_rect)
-                    .layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight)),
-            );
+            let mut icon_ui = ui.new_child(egui::UiBuilder::new().max_rect(icon_rect).layout(
+                egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+            ));
             icons::chevron_down(&mut icon_ui, ICON_SIZE, gray::_400);
         }
 
@@ -436,7 +434,11 @@ impl<F> TailwindCombobox<WithFilter<F>> {
                         gray::_900,
                         input_rect.width(),
                     );
-                    ui.painter().galley(text_pos - Vec2::new(0.0, galley.size().y / 2.0), galley, gray::_900);
+                    ui.painter().galley(
+                        text_pos - Vec2::new(0.0, galley.size().y / 2.0),
+                        galley,
+                        gray::_900,
+                    );
                     return response;
                 }
             }
@@ -486,7 +488,12 @@ impl<F> TailwindCombobox<WithFilter<F>> {
     }
 
     /// Handle keyboard navigation
-    fn handle_keyboard(ui: &mut Ui, state: &mut ComboboxState, is_open: bool, popup_id: Id) -> bool {
+    fn handle_keyboard(
+        ui: &mut Ui,
+        state: &mut ComboboxState,
+        is_open: bool,
+        popup_id: Id,
+    ) -> bool {
         if !is_open {
             return false;
         }
@@ -515,8 +522,8 @@ impl<F> TailwindCombobox<WithFilter<F>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use egui_kittest::kittest::Queryable;
     use egui_kittest::Harness;
+    use egui_kittest::kittest::Queryable;
     use std::cell::RefCell;
     use std::collections::HashSet;
     use std::rc::Rc;
@@ -614,8 +621,8 @@ mod tests {
         harness.snapshot("comboboxes/filtered");
 
         // 4. Click on first filtered item (Michael Foster) to select it
-        // Dropdown items start below input (~60px), each item is 36px tall
-        let first_item_pos = egui::pos2(125.0, 80.0);
+        // Dropdown items start below the 50px input (~70px), each item is 36px tall.
+        let first_item_pos = egui::pos2(125.0, 90.0);
         click_at(&mut harness, first_item_pos);
         harness.run();
 
@@ -659,7 +666,9 @@ mod tests {
         harness.run();
 
         // Open the combobox by clicking on it via accessibility
-        harness.get_by_role_and_label(egui::accesskit::Role::ComboBox, "People").click();
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::ComboBox, "People")
+            .click();
         harness.run();
 
         // Now click on "Michael Foster" item using accessibility

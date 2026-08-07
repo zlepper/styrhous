@@ -1,27 +1,27 @@
-use std::fmt::Debug;
-use crate::worker::{WorkerResult, WorkerResultSender};
-use anyhow::Context;
-use anyhow::Result;
-use kube::config::Kubeconfig;
-use futures_util::future::try_join_all;
-use futures_util::pin_mut;
-use k8s_openapi::api::core::v1::Namespace;
-use kube::Api;
-use kube::api::DynamicObject;
-use kube::config::KubeConfigOptions;
-use kube::api::GroupVersionKind;
-use kube::runtime::watcher;
-use tokio::task::JoinHandle;
-use futures_util::stream::StreamExt;
-use itertools::Itertools;
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::{APIGroup, GroupVersionForDiscovery};
-use kube::runtime::watcher::{Event, ListSemantic};
-use time::OffsetDateTime;
-use tracing::{info, warn};
 use crate::api_resource::ApiResource;
 use crate::helpers::ResultExt;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
+use crate::worker::{WorkerResult, WorkerResultSender};
+use anyhow::Context;
+use anyhow::Result;
+use futures_util::future::try_join_all;
+use futures_util::pin_mut;
+use futures_util::stream::StreamExt;
+use itertools::Itertools;
+use k8s_openapi::api::core::v1::Namespace;
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::{APIGroup, GroupVersionForDiscovery};
+use kube::Api;
+use kube::api::DynamicObject;
+use kube::api::GroupVersionKind;
+use kube::config::KubeConfigOptions;
+use kube::config::Kubeconfig;
+use kube::runtime::watcher;
+use kube::runtime::watcher::{Event, ListSemantic};
+use std::fmt::Debug;
+use time::OffsetDateTime;
+use tokio::task::JoinHandle;
+use tracing::{info, warn};
 
 #[derive(Debug, Clone)]
 pub struct Cluster {
@@ -64,13 +64,19 @@ impl ClusterConnection {
         self.client.clone()
     }
 
-    pub async fn new(cluster_key: i32, context_name: &str, event_output: WorkerResultSender) -> Result<Self> {
+    pub async fn new(
+        cluster_key: i32,
+        context_name: &str,
+        event_output: WorkerResultSender,
+    ) -> Result<Self> {
         let config = kube::Config::from_kubeconfig(&KubeConfigOptions {
             context: Some(context_name.to_string()),
             ..Default::default()
-        }).await.with_context(|| "Error creating Kubernetes config")?;
-        let client = kube::Client::try_from(config).with_context(|| "Error creating Kubernetes client")?;
-
+        })
+        .await
+        .with_context(|| "Error creating Kubernetes config")?;
+        let client =
+            kube::Client::try_from(config).with_context(|| "Error creating Kubernetes client")?;
 
         let namespaces_task = {
             let namespace_watcher = KubernetesNamespaceWatcher {
@@ -92,20 +98,19 @@ impl ClusterConnection {
 
             async move {
                 match api_resource_inspector.inspect_api().await {
-                    Err(e) => {
-                        event_output.send(WorkerResult::CommandFailed {
+                    Err(e) => event_output
+                        .send(WorkerResult::CommandFailed {
                             command: None,
-                            error: e
-                        }).log_if_error("Failed to send error from inspecting resource api")
-                    }
-                    Ok(apis) => {
-                        event_output.send(WorkerResult::KubernetesApisLoaded {
+                            error: e,
+                        })
+                        .log_if_error("Failed to send error from inspecting resource api"),
+                    Ok(apis) => event_output
+                        .send(WorkerResult::KubernetesApisLoaded {
                             cluster_key,
-                            api_resources: apis
-                        }).log_if_error("Failed to send kubernetes API resources")
-                    }
+                            api_resources: apis,
+                        })
+                        .log_if_error("Failed to send kubernetes API resources"),
                 }
-
             }
         };
 
@@ -114,7 +119,7 @@ impl ClusterConnection {
         Ok(Self {
             client,
             join_handles: vec![namespaces_handle, api_resources_handle],
-            cluster_key
+            cluster_key,
         })
     }
 }
@@ -124,18 +129,23 @@ struct KubernetesApiInspector {
 }
 
 impl KubernetesApiInspector {
-    async fn get_api_resources_for_group_versions(&self, api_group: APIGroup, versions: Vec<GroupVersionForDiscovery>) -> Result<Vec<ApiResource>> {
-
+    async fn get_api_resources_for_group_versions(
+        &self,
+        api_group: APIGroup,
+        versions: Vec<GroupVersionForDiscovery>,
+    ) -> Result<Vec<ApiResource>> {
         if api_group.name.ends_with(".k8s.io") {
             return Ok(Vec::new());
         }
 
         let tasks = versions.iter().map(|api_group_version| {
-            self.client.list_api_group_resources(&api_group_version.group_version)
+            self.client
+                .list_api_group_resources(&api_group_version.group_version)
         });
 
         let api_group_name = api_group.name;
-        let resources = try_join_all(tasks).await?
+        let resources = try_join_all(tasks)
+            .await?
             .iter()
             .zip(versions)
             .flat_map(|(resources, version)| {
@@ -144,7 +154,6 @@ impl KubernetesApiInspector {
                 let mut temp = Vec::new();
 
                 for resource in &resources.resources {
-
                     // Skip resources like "Status" and "Scale"
                     if resource.name.contains('/') {
                         continue;
@@ -157,7 +166,6 @@ impl KubernetesApiInspector {
                         name: resource.name.clone(),
                     });
                 }
-
 
                 temp
             })
@@ -195,20 +203,26 @@ impl KubernetesApiInspector {
         let api_groups = self.client.list_api_groups().await?;
 
         let tasks = api_groups.groups.into_iter().map(|api_group| {
-            let versions = api_group.preferred_version.clone().map(|v| vec![v]).unwrap_or_else(|| api_group.versions.clone());
+            let versions = api_group
+                .preferred_version
+                .clone()
+                .map(|v| vec![v])
+                .unwrap_or_else(|| api_group.versions.clone());
 
             self.get_api_resources_for_group_versions(api_group, versions)
         });
 
-
         let core_resources = self.get_core_api_resources().await?;
 
-        let mut resources = try_join_all(tasks).await?.into_iter().flatten().collect_vec();
+        let mut resources = try_join_all(tasks)
+            .await?
+            .into_iter()
+            .flatten()
+            .collect_vec();
         resources.extend(core_resources);
 
         Ok(resources)
     }
-
 }
 
 impl Drop for ClusterConnection {
@@ -226,34 +240,38 @@ struct KubernetesNamespaceWatcher {
 }
 
 impl KubernetesNamespaceWatcher {
-
     async fn watch_namespaces(self) {
         let namespace_api = Api::<Namespace>::all(self.client.clone());
 
         let mut buffer = Vec::<MinimalNamespace>::new();
 
-
-        let stream = watcher(namespace_api, watcher_config())
-            .filter_map(|p| async {
-                info!("ev: {:?}", p);
-                p.ok()
-            });
+        let stream = watcher(namespace_api, watcher_config()).filter_map(|p| async {
+            info!("ev: {:?}", p);
+            p.ok()
+        });
 
         pin_mut!(stream);
 
         while let Some(ev) = stream.next().await {
             match ev {
                 Event::Apply(item) => {
-                    self.event_sender.send(WorkerResult::KubernetesNamespacesAdded {
-                        namespace: item.into(),
-                        cluster_key: self.cluster_key,
-                    }).log_if_error("Failed to send updated namespace");
+                    self.event_sender
+                        .send(WorkerResult::KubernetesNamespacesAdded {
+                            namespace: item.into(),
+                            cluster_key: self.cluster_key,
+                        })
+                        .log_if_error("Failed to send updated namespace");
                 }
                 Event::Delete(item) => {
-                    self.event_sender.send(WorkerResult::KubernetesNamespacesDeleted {
-                        cluster_key: self.cluster_key,
-                        namespace_name: item.metadata.namespace.expect("Namespace from the api server did not have a name"),
-                    }).log_if_error("Failed to send notification about deleted namespace");
+                    self.event_sender
+                        .send(WorkerResult::KubernetesNamespacesDeleted {
+                            cluster_key: self.cluster_key,
+                            namespace_name: item
+                                .metadata
+                                .namespace
+                                .expect("Namespace from the api server did not have a name"),
+                        })
+                        .log_if_error("Failed to send notification about deleted namespace");
                 }
                 Event::Init => {
                     buffer.clear();
@@ -262,10 +280,12 @@ impl KubernetesNamespaceWatcher {
                     buffer.push(item.into());
                 }
                 Event::InitDone => {
-                    self.event_sender.send(WorkerResult::KubernetesNamespacesReplaced {
-                        cluster_key: self.cluster_key,
-                        namespaces: buffer,
-                    }).log_if_error("Failed to send entire replaced namespace list");
+                    self.event_sender
+                        .send(WorkerResult::KubernetesNamespacesReplaced {
+                            cluster_key: self.cluster_key,
+                            namespaces: buffer,
+                        })
+                        .log_if_error("Failed to send entire replaced namespace list");
                     buffer = Vec::new();
                 }
             }
@@ -276,12 +296,16 @@ impl KubernetesNamespaceWatcher {
 fn watcher_config() -> watcher::Config {
     watcher::Config {
         list_semantic: ListSemantic::Any,
-        initial_list_strategy:  watcher::InitialListStrategy::ListWatch,
+        initial_list_strategy: watcher::InitialListStrategy::ListWatch,
         ..Default::default()
     }
 }
 
-pub async fn start_cluster_connection(cluster_key: i32, cluster_name: &str, event_sender: WorkerResultSender) -> Result<WorkerResult> {
+pub async fn start_cluster_connection(
+    cluster_key: i32,
+    cluster_name: &str,
+    event_sender: WorkerResultSender,
+) -> Result<WorkerResult> {
     info!("Starting cluster connection: {}", cluster_name);
     let runner = ClusterConnection::new(cluster_key, cluster_name, event_sender).await?;
 
@@ -338,11 +362,7 @@ impl KubernetesResourceWatcher {
             &self.api_resource.group
         };
 
-        let gvk = GroupVersionKind::gvk(
-            group,
-            &self.api_resource.version,
-            &self.api_resource.kind,
-        );
+        let gvk = GroupVersionKind::gvk(group, &self.api_resource.version, &self.api_resource.kind);
 
         let discovery_result = kube::discovery::pinned_kind(&self.client, &gvk).await;
         let (ar, caps) = match discovery_result {
@@ -423,16 +443,13 @@ impl KubernetesResourceWatcher {
 
 /// Get a unique identifier for a resource
 fn get_resource_uid(obj: &DynamicObject) -> String {
-    obj.metadata
-        .uid
-        .clone()
-        .unwrap_or_else(|| {
-            format!(
-                "{}/{}",
-                obj.metadata.namespace.as_deref().unwrap_or(""),
-                obj.metadata.name.as_deref().unwrap_or("")
-            )
-        })
+    obj.metadata.uid.clone().unwrap_or_else(|| {
+        format!(
+            "{}/{}",
+            obj.metadata.namespace.as_deref().unwrap_or(""),
+            obj.metadata.name.as_deref().unwrap_or("")
+        )
+    })
 }
 
 /// Extract a MinimalResource from a DynamicObject
@@ -441,12 +458,13 @@ fn extract_minimal_resource(obj: &DynamicObject, api_resource: &ApiResource) -> 
     let uid = get_resource_uid(obj);
 
     // Parse creation timestamp
-    let creation_timestamp = metadata
-        .creation_timestamp
-        .as_ref()
-        .and_then(|ts| {
-            OffsetDateTime::parse(&ts.0.to_rfc3339(), &time::format_description::well_known::Rfc3339).ok()
-        });
+    let creation_timestamp = metadata.creation_timestamp.as_ref().and_then(|ts| {
+        OffsetDateTime::parse(
+            &ts.0.to_rfc3339(),
+            &time::format_description::well_known::Rfc3339,
+        )
+        .ok()
+    });
 
     // Extract status/phase based on resource type
     let (phase, ready_status) = extract_status(obj, api_resource);
@@ -585,7 +603,12 @@ pub async fn apply_resource_yaml(
 
     // Use server-side apply with force to take ownership of fields
     let patch_params = kube::api::PatchParams::apply("kubernetes-dev-ui").force();
-    api.patch(&resource_name, &patch_params, &kube::api::Patch::Apply(&obj)).await?;
+    api.patch(
+        &resource_name,
+        &patch_params,
+        &kube::api::Patch::Apply(&obj),
+    )
+    .await?;
 
     Ok(WorkerResult::ResourceApplyCompleted {
         cluster_key,
@@ -596,7 +619,10 @@ pub async fn apply_resource_yaml(
 }
 
 /// Extract status information based on resource type
-fn extract_status(obj: &DynamicObject, api_resource: &ApiResource) -> (Option<String>, Option<String>) {
+fn extract_status(
+    obj: &DynamicObject,
+    api_resource: &ApiResource,
+) -> (Option<String>, Option<String>) {
     let status = obj.data.get("status");
 
     match api_resource.kind.as_str() {

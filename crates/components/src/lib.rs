@@ -29,14 +29,16 @@ pub mod sidebar;
 pub mod table;
 pub mod tabs;
 pub mod theme;
+pub mod workspace;
 
 pub use button::{ButtonRounding, ButtonSize, ButtonVariant, TailwindButton};
 pub use combobox::{ComboboxUi, ItemResponse, NoFilter, TailwindCombobox, WithFilter};
 pub use sidebar::{
     ExpandableResponse, NarrowSidebar, NarrowSidebarContent, WideSidebar, WideSidebarContent,
 };
-pub use table::{
-    SortDirection, SortState, TableColumnBuilder, TableRowBuilder, TailwindTable,
-};
+pub use table::{SortDirection, SortState, TableColumnBuilder, TableRowBuilder, TailwindTable};
 pub use tabs::{Tabs, TabsContent, TabsResponse};
-pub use theme::apply_light_theme;
+pub use theme::{apply_light_theme, semibold_font};
+pub use workspace::{
+    WorkspaceCard, WorkspaceDrawer, WorkspaceEmptyState, WorkspacePage, workspace_section_header,
+};

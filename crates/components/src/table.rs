@@ -25,15 +25,34 @@ use egui_extras::{Column, TableBuilder};
 use std::collections::HashSet;
 use std::hash::Hash;
 
-use crate::colors::{gray, indigo, WHITE};
+use crate::colors::{
+    CONTENT_BACKGROUND, TABLE_BORDER, TABLE_HEADER_BACKGROUND, WHITE, gray, indigo,
+};
 use crate::icons;
 
+fn egui_column(column: &TableColumn) -> Column {
+    let column = if column.fill_remaining {
+        Column::remainder()
+            .at_least(column.initial_width)
+            .clip(true)
+    } else {
+        Column::initial(column.initial_width).clip(true)
+    };
+    // Permanent resize gutters make narrow, data-heavy tables look like a grid of
+    // unrelated boxes. Keep the default surface quiet; callers can add explicit
+    // sizing controls if a future workflow needs them.
+    column.resizable(false)
+}
+
 // Layout constants (from Tailwind classes)
-const ROW_HEIGHT: f32 = 52.0; // py-4 + content
-const HEADER_HEIGHT: f32 = 48.0; // py-3.5 + content
-const CELL_PADDING_X: f32 = 12.0; // px-3
-const TEXT_FONT_SIZE: f32 = 14.0; // text-sm
-const HEADER_BG: egui::Color32 = WHITE;
+// The primary resource table is deliberately spacious. The larger rhythm makes the
+// workspace read as one continuous surface at desktop resolutions, instead of a
+// compact widget stranded in the top-left corner.
+const ROW_HEIGHT: f32 = 81.25;
+const HEADER_HEIGHT: f32 = 64.0;
+const CELL_PADDING_X: f32 = 30.0;
+const TEXT_FONT_SIZE: f32 = 18.0;
+const HEADER_BG: egui::Color32 = TABLE_HEADER_BACKGROUND;
 const CHECKBOX_SIZE: f32 = 16.0;
 const CHECKBOX_COL_WIDTH: f32 = 48.0;
 const SORT_ICON_SIZE: f32 = 12.0;
@@ -67,6 +86,7 @@ pub struct TableColumn {
     id: String,
     header: String,
     initial_width: f32,
+    fill_remaining: bool,
     sortable: bool,
     hideable: bool,
 }
@@ -77,6 +97,7 @@ impl TableColumn {
             id: id.into(),
             header: header.into(),
             initial_width: 100.0,
+            fill_remaining: false,
             sortable: false,
             hideable: true,
         }
@@ -101,6 +122,12 @@ impl TableColumnBuilder {
         self
     }
 
+    /// Make this column consume space remaining after fixed-width columns.
+    pub fn fill_remaining(mut self) -> Self {
+        self.column.fill_remaining = true;
+        self
+    }
+
     /// Make this column sortable
     pub fn sortable(mut self) -> Self {
         self.column.sortable = true;
@@ -120,6 +147,7 @@ pub struct TailwindTable {
     id: Id,
     columns: Vec<TableColumn>,
     is_selectable: bool,
+    fill_available_height: bool,
 }
 
 impl TailwindTable {
@@ -129,6 +157,7 @@ impl TailwindTable {
             id: Id::new(id_source),
             columns: Vec::new(),
             is_selectable: false,
+            fill_available_height: false,
         }
     }
 
@@ -152,6 +181,15 @@ impl TailwindTable {
         self
     }
 
+    /// Expand the table's scroll surface to the remaining available height.
+    ///
+    /// This is useful for primary workspace tables, where a short result set should
+    /// still read as a deliberate working surface instead of a floating list.
+    pub fn fill_available_height(mut self) -> Self {
+        self.fill_available_height = true;
+        self
+    }
+
     /// Show the table with the given items
     ///
     /// The `render_cell` closure is called for each cell with (ui, item, column_index).
@@ -164,6 +202,8 @@ impl TailwindTable {
     ) {
         let available_height = ui.available_height();
         let num_columns = self.columns.len();
+        let original_item_spacing = ui.spacing().item_spacing;
+        ui.spacing_mut().item_spacing.x = 0.0;
 
         // Build columns for egui_extras::TableBuilder
         let mut table = TableBuilder::new(ui)
@@ -172,9 +212,15 @@ impl TailwindTable {
             .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
             .max_scroll_height(available_height);
 
+        if self.fill_available_height {
+            table = table
+                .auto_shrink([false, false])
+                .min_scrolled_height((available_height - HEADER_HEIGHT).max(0.0));
+        }
+
         // Add columns
         for col in &self.columns {
-            table = table.column(Column::initial(col.initial_width).resizable(true));
+            table = table.column(egui_column(col));
         }
 
         table
@@ -184,8 +230,17 @@ impl TailwindTable {
                         // White background for header
                         let rect = ui.max_rect();
                         ui.painter().rect_filled(rect, 0.0, HEADER_BG);
+                        ui.painter().line_segment(
+                            [rect.left_bottom(), rect.right_bottom()],
+                            egui::Stroke::new(1.0, TABLE_BORDER),
+                        );
 
-                        ui.horizontal(|ui| {
+                        let mut label_ui = ui.new_child(
+                            egui::UiBuilder::new()
+                                .max_rect(rect.translate(egui::vec2(0.0, -4.0)))
+                                .layout(egui::Layout::left_to_right(egui::Align::Center)),
+                        );
+                        label_ui.horizontal(|ui| {
                             ui.add_space(CELL_PADDING_X);
                             ui.label(
                                 egui::RichText::new(&col.header)
@@ -205,14 +260,12 @@ impl TailwindTable {
                     // Render each column
                     for col_index in 0..num_columns {
                         row.col(|ui| {
-                            // Apply alternating row background (odd rows get gray-100 for visibility)
-                            let bg_color = if row_index % 2 == 1 {
-                                gray::_100
-                            } else {
-                                WHITE
-                            };
                             let rect = ui.max_rect();
-                            ui.painter().rect_filled(rect, 0.0, bg_color);
+                            ui.painter().rect_filled(rect, 0.0, CONTENT_BACKGROUND);
+                            ui.painter().line_segment(
+                                [rect.left_bottom(), rect.right_bottom()],
+                                egui::Stroke::new(1.0, TABLE_BORDER),
+                            );
 
                             // Add padding and render cell content
                             ui.horizontal(|ui| {
@@ -223,6 +276,7 @@ impl TailwindTable {
                     }
                 });
             });
+        ui.spacing_mut().item_spacing = original_item_spacing;
     }
 }
 
@@ -295,7 +349,10 @@ fn render_checkbox(ui: &mut Ui, state: CheckboxState) -> egui::Response {
                 let center = rect.center();
                 let half_width = CHECKBOX_SIZE * 0.25;
                 painter.line_segment(
-                    [center - egui::vec2(half_width, 0.0), center + egui::vec2(half_width, 0.0)],
+                    [
+                        center - egui::vec2(half_width, 0.0),
+                        center + egui::vec2(half_width, 0.0),
+                    ],
                     stroke,
                 );
             }
@@ -324,9 +381,14 @@ impl TailwindTable {
         let available_height = ui.available_height();
         let num_columns = self.columns.len();
         let num_items = items.len();
+        let original_item_spacing = ui.spacing().item_spacing;
+        ui.spacing_mut().item_spacing.x = 0.0;
 
         // Determine select-all checkbox state
-        let selected_count = items.iter().filter(|item| selection.contains(&key_fn(item))).count();
+        let selected_count = items
+            .iter()
+            .filter(|item| selection.contains(&key_fn(item)))
+            .count();
         let select_all_state = if selected_count == 0 {
             CheckboxState::Unchecked
         } else if selected_count == num_items {
@@ -347,7 +409,7 @@ impl TailwindTable {
 
         // Add data columns
         for col in &self.columns {
-            table = table.column(Column::initial(col.initial_width).resizable(true));
+            table = table.column(egui_column(col));
         }
 
         table
@@ -384,7 +446,7 @@ impl TailwindTable {
                     let row_index = row.index();
                     let item = &items[row_index];
                     let is_selected = selection.contains(&key_fn(item));
-                    let bg_color = if row_index % 2 == 1 { gray::_100 } else { WHITE };
+                    let bg_color = WHITE;
 
                     // Checkbox column
                     row.col(|ui| {
@@ -414,6 +476,7 @@ impl TailwindTable {
                     }
                 });
             });
+        ui.spacing_mut().item_spacing = original_item_spacing;
     }
 
     /// Show the table with sortable columns
@@ -458,6 +521,8 @@ impl TailwindTable {
     ) -> bool {
         let available_height = ui.available_height();
         let num_columns = self.columns.len();
+        let original_item_spacing = ui.spacing().item_spacing;
+        ui.spacing_mut().item_spacing.x = 0.0;
 
         // Track which column header was clicked
         let clicked_column = std::cell::RefCell::new(None::<String>);
@@ -471,7 +536,7 @@ impl TailwindTable {
 
         // Add columns
         for col in &self.columns {
-            table = table.column(Column::initial(col.initial_width).resizable(true));
+            table = table.column(egui_column(col));
         }
 
         table
@@ -493,11 +558,8 @@ impl TailwindTable {
 
                         // Make sortable headers clickable
                         let response = if col.sortable {
-                            let response = ui.interact(
-                                rect,
-                                ui.id().with(&col.id),
-                                egui::Sense::click(),
-                            );
+                            let response =
+                                ui.interact(rect, ui.id().with(&col.id), egui::Sense::click());
                             if response.clicked() {
                                 *clicked_column.borrow_mut() = Some(col.id.clone());
                             }
@@ -534,7 +596,7 @@ impl TailwindTable {
                 body.rows(ROW_HEIGHT, items.len(), |mut row| {
                     let row_index = row.index();
                     let item = &items[row_index];
-                    let bg_color = if row_index % 2 == 1 { gray::_100 } else { WHITE };
+                    let bg_color = WHITE;
 
                     for col_index in 0..num_columns {
                         row.col(|ui| {
@@ -548,6 +610,8 @@ impl TailwindTable {
                     }
                 });
             });
+
+        ui.spacing_mut().item_spacing = original_item_spacing;
 
         // Handle sort state update
         if let Some(clicked_col_id) = clicked_column.borrow_mut().take() {
@@ -591,6 +655,8 @@ impl TailwindTable {
         mut render_cell: impl FnMut(&mut Ui, &'a T, usize),
     ) {
         let available_height = ui.available_height();
+        let original_item_spacing = ui.spacing().item_spacing;
+        ui.spacing_mut().item_spacing.x = 0.0;
 
         // Filter visible columns and track original indices
         let visible_columns: Vec<(usize, &TableColumn)> = self
@@ -611,7 +677,7 @@ impl TailwindTable {
 
         // Add visible columns + one narrow column for the settings icon
         for (_, col) in &visible_columns {
-            table = table.column(Column::initial(col.initial_width).resizable(true));
+            table = table.column(egui_column(col));
         }
         // Add settings column (narrow, at the end)
         table = table.column(Column::exact(32.0));
@@ -648,7 +714,7 @@ impl TailwindTable {
                 body.rows(ROW_HEIGHT, items.len(), |mut row| {
                     let row_index = row.index();
                     let item = &items[row_index];
-                    let bg_color = if row_index % 2 == 1 { gray::_100 } else { WHITE };
+                    let bg_color = WHITE;
 
                     // Visible data columns
                     for (original_index, _) in &visible_columns {
@@ -669,6 +735,8 @@ impl TailwindTable {
                     });
                 });
             });
+
+        ui.spacing_mut().item_spacing = original_item_spacing;
 
         // Note: The gear icon menu interaction would be implemented here
         // For now, we just show the icon - actual menu requires mutable hidden_columns
@@ -817,14 +885,20 @@ mod tests {
                 .column("name", "Name", |col| col.initial_width(150.0))
                 .column("title", "Title", |col| col.initial_width(150.0))
                 .selectable()
-                .show_selectable(ui, &users, &selection, |user| user.id, |ui, user, col_index| {
-                    let text = match col_index {
-                        0 => &user.name,
-                        1 => &user.title,
-                        _ => return,
-                    };
-                    TableRowBuilder::text(ui, text, col_index == 0);
-                });
+                .show_selectable(
+                    ui,
+                    &users,
+                    &selection,
+                    |user| user.id,
+                    |ui, user, col_index| {
+                        let text = match col_index {
+                            0 => &user.name,
+                            1 => &user.title,
+                            _ => return,
+                        };
+                        TableRowBuilder::text(ui, text, col_index == 0);
+                    },
+                );
         });
 
         harness.run();
@@ -842,14 +916,20 @@ mod tests {
                 .column("name", "Name", |col| col.initial_width(150.0))
                 .column("title", "Title", |col| col.initial_width(150.0))
                 .selectable()
-                .show_selectable(ui, &users, &selection, |user| user.id, |ui, user, col_index| {
-                    let text = match col_index {
-                        0 => &user.name,
-                        1 => &user.title,
-                        _ => return,
-                    };
-                    TableRowBuilder::text(ui, text, col_index == 0);
-                });
+                .show_selectable(
+                    ui,
+                    &users,
+                    &selection,
+                    |user| user.id,
+                    |ui, user, col_index| {
+                        let text = match col_index {
+                            0 => &user.name,
+                            1 => &user.title,
+                            _ => return,
+                        };
+                        TableRowBuilder::text(ui, text, col_index == 0);
+                    },
+                );
         });
 
         harness.run();
@@ -869,14 +949,20 @@ mod tests {
                 .column("name", "Name", |col| col.initial_width(150.0))
                 .column("title", "Title", |col| col.initial_width(150.0))
                 .selectable()
-                .show_selectable(ui, &users, &selection, |user| user.id, |ui, user, col_index| {
-                    let text = match col_index {
-                        0 => &user.name,
-                        1 => &user.title,
-                        _ => return,
-                    };
-                    TableRowBuilder::text(ui, text, col_index == 0);
-                });
+                .show_selectable(
+                    ui,
+                    &users,
+                    &selection,
+                    |user| user.id,
+                    |ui, user, col_index| {
+                        let text = match col_index {
+                            0 => &user.name,
+                            1 => &user.title,
+                            _ => return,
+                        };
+                        TableRowBuilder::text(ui, text, col_index == 0);
+                    },
+                );
         });
 
         harness.run();

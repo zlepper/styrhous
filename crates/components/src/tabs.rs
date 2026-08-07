@@ -132,21 +132,27 @@ impl Tabs {
         {
             let mut header_ui = ui.new_child(egui::UiBuilder::new().max_rect(header_rect));
 
-            ScrollArea::horizontal().id_salt(id.with("header-scroll")).show(&mut header_ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = TAB_GAP;
+            ScrollArea::horizontal()
+                .id_salt(id.with("header-scroll"))
+                .show(&mut header_ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = TAB_GAP;
 
-                    for (index, header) in headers.iter().enumerate() {
-                        let is_selected = index == selected;
-                        let response =
-                            render_tab_header(ui, &header.label, header.icon.as_ref(), is_selected);
+                        for (index, header) in headers.iter().enumerate() {
+                            let is_selected = index == selected;
+                            let response = render_tab_header(
+                                ui,
+                                &header.label,
+                                header.icon.as_ref(),
+                                is_selected,
+                            );
 
-                        if response.clicked() {
-                            new_selected = index;
+                            if response.clicked() {
+                                new_selected = index;
+                            }
                         }
-                    }
+                    });
                 });
-            });
         }
 
         // Keyboard navigation (arrow keys)
@@ -233,11 +239,8 @@ fn render_tab_header(
 
     // Draw text using the galley (proper vertical centering using actual text height)
     let text_y = content_center_y - text_height / 2.0;
-    ui.painter().galley(
-        egui::pos2(text_x, text_y),
-        galley,
-        colors.text,
-    );
+    ui.painter()
+        .galley(egui::pos2(text_x, text_y), galley, colors.text);
 
     // Draw underline (border)
     if colors.border != Color32::TRANSPARENT {
@@ -250,7 +253,12 @@ fn render_tab_header(
 
     // Add accessibility info
     response.widget_info(|| {
-        egui::WidgetInfo::selected(egui::WidgetType::Button, ui.is_enabled(), is_selected, label)
+        egui::WidgetInfo::selected(
+            egui::WidgetType::Button,
+            ui.is_enabled(),
+            is_selected,
+            label,
+        )
     });
 
     response

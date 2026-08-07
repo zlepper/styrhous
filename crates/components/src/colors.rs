@@ -41,3 +41,15 @@ pub mod gray {
 /// Common color constants
 pub const WHITE: Color32 = Color32::from_rgb(255, 255, 255);
 pub const BLACK: Color32 = Color32::from_rgb(0, 0, 0);
+
+/// Surface tones sampled from the native-resolution workspace reference.
+///
+/// They deliberately sit just off pure white so the navigation, toolbar, and
+/// data canvas read as related planes without card-like chrome.
+pub const CONTENT_BACKGROUND: Color32 = Color32::from_rgb(253, 253, 253);
+pub const TOOLBAR_BACKGROUND: Color32 = Color32::from_rgb(249, 249, 251);
+pub const TABLE_HEADER_BACKGROUND: Color32 = Color32::from_rgb(249, 249, 250);
+pub const CLUSTER_RAIL_BACKGROUND: Color32 = Color32::from_rgb(3, 9, 18);
+pub const NAVIGATION_BACKGROUND: Color32 = Color32::from_rgb(10, 18, 29);
+pub const TABLE_BORDER: Color32 = Color32::from_rgb(234, 235, 238);
+pub const SUCCESS: Color32 = Color32::from_rgb(14, 150, 30);
