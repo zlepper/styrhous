@@ -188,7 +188,7 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
         selected_cluster: Some(1),
     };
     harness.run();
-    harness.get_by_label("nodes").click_accesskit();
+    harness.get_by_label("Nodes").click_accesskit();
     harness.run_steps(1);
 
     assert!(
@@ -483,7 +483,7 @@ fn deployment_resource_table_snapshot_uses_typed_columns() {
     harness.run();
     harness.get_by_label("Apps & Containers").click_accesskit();
     harness.run();
-    harness.get_by_label("deployments").click_accesskit();
+    harness.get_by_label("Deployments").click_accesskit();
     harness.run();
 
     harness.snapshot("deployment_resource_table_typed_columns");
@@ -542,11 +542,11 @@ fn resource_search_filters_rows_and_restores_its_mode_per_resource_type() {
     harness.get_by_label("7 resources hidden by search");
     harness.snapshot("resource_search_filtered");
 
-    harness.get_by_label("nodes").click_accesskit();
+    harness.get_by_label("Nodes").click_accesskit();
     harness.run();
     harness.get_by_label("Apps & Containers").click_accesskit();
     harness.run();
-    harness.get_by_label("pods").click_accesskit();
+    harness.get_by_label("Pods").click_accesskit();
     harness.run();
     assert_eq!(
         harness.state().ui_state.clusters[&2].resource_searches[&pods].query,
@@ -722,7 +722,7 @@ fn resource_navigation_selects_primary_curated_gateway_and_other_resources() {
     };
     harness.run();
 
-    harness.get_by_label("nodes").click_accesskit();
+    harness.get_by_label("Nodes").click_accesskit();
     harness.run();
     assert_eq!(
         harness.state().ui_state.clusters[&1]
@@ -732,9 +732,9 @@ fn resource_navigation_selects_primary_curated_gateway_and_other_resources() {
         Some("nodes")
     );
 
-    harness.get_by_label("namespaces").click_accesskit();
+    harness.get_by_label("Namespaces").click_accesskit();
     harness.run();
-    harness.get_by_label("events").click_accesskit();
+    harness.get_by_label("Events").click_accesskit();
     harness.run();
     assert_eq!(
         harness.state().ui_state.clusters[&1]
@@ -746,7 +746,7 @@ fn resource_navigation_selects_primary_curated_gateway_and_other_resources() {
 
     harness.get_by_label("Apps & Containers").click_accesskit();
     harness.run();
-    harness.get_by_label("pods").click_accesskit();
+    harness.get_by_label("Pods").click_accesskit();
     harness.run();
     assert_eq!(
         harness.state().ui_state.clusters[&1]
@@ -758,7 +758,7 @@ fn resource_navigation_selects_primary_curated_gateway_and_other_resources() {
 
     harness.get_by_label("Gateway API").click_accesskit();
     harness.run();
-    harness.get_by_label("httproutes").click_accesskit();
+    harness.get_by_label("HTTP Routes").click_accesskit();
     harness.run();
     assert_eq!(
         harness.state().ui_state.clusters[&1]
@@ -773,7 +773,7 @@ fn resource_navigation_selects_primary_curated_gateway_and_other_resources() {
     harness.get_by_label("apps").click_accesskit();
     harness.run();
     harness
-        .get_by_label("controllerrevisions")
+        .get_by_label("Controller Revisions")
         .click_accesskit();
     harness.run();
 
@@ -907,7 +907,7 @@ fn test_ui_flow() {
     select_namespace(&mut harness, "default");
     harness.get_by_label("Apps & Containers").click_accesskit();
     harness.run();
-    harness.get_by_label("pods").click_accesskit();
+    harness.get_by_label("Pods").click_accesskit();
     harness.run_steps(1);
     harness.run_steps(1);
 

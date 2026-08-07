@@ -31,7 +31,7 @@ pub(super) fn show(ctx: &egui::Context, ui_state: &UiState) -> Option<ApiResourc
                             let selected =
                                 cluster.selected_api_resource.as_ref() == Some(api_resource);
                             if sidebar
-                                .primary_text_item(&api_resource.name, selected)
+                                .primary_text_item(api_resource.display_name(), selected)
                                 .clicked()
                             {
                                 clicked_api_resource = Some(api_resource.clone());
@@ -42,7 +42,10 @@ pub(super) fn show(ctx: &egui::Context, ui_state: &UiState) -> Option<ApiResourc
                                 for api_resource in &section.api_resources {
                                     let selected = cluster.selected_api_resource.as_ref()
                                         == Some(api_resource);
-                                    if sidebar.child_item(&api_resource.name, selected).clicked() {
+                                    if sidebar
+                                        .child_item(api_resource.display_name(), selected)
+                                        .clicked()
+                                    {
                                         clicked_api_resource = Some(api_resource.clone());
                                     }
                                 }
@@ -64,7 +67,10 @@ pub(super) fn show(ctx: &egui::Context, ui_state: &UiState) -> Option<ApiResourc
                                         let selected = cluster.selected_api_resource.as_ref()
                                             == Some(api_resource);
                                         if sidebar
-                                            .nested_child_item(&api_resource.name, selected)
+                                            .nested_child_item(
+                                                api_resource.display_name(),
+                                                selected,
+                                            )
                                             .clicked()
                                         {
                                             clicked_api_resource = Some(api_resource.clone());
