@@ -25,6 +25,12 @@ pub(super) struct ResourceWatchState {
     pub(super) error: Option<String>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub(super) struct ResourceSearchState {
+    pub(super) query: String,
+    pub(super) regex_mode: bool,
+}
+
 #[derive(Debug, Default)]
 pub(super) enum ClusterLoadState {
     #[default]
@@ -81,6 +87,7 @@ pub(super) struct ClusterState {
     pub(super) selected_api_resource: Option<ApiResource>,
     pub(super) resource_cache: HashMap<ResourceWatchKey, ResourceWatchState>,
     pub(super) active_watchers: HashSet<ResourceWatchKey>,
+    pub(super) resource_searches: HashMap<ApiResource, ResourceSearchState>,
     pub(super) yaml_panel: Option<YamlPanelState>,
     pub(super) pending_delete: Option<PendingDelete>,
 }
@@ -119,6 +126,7 @@ impl UiState {
         cluster.selected_api_resource = None;
         cluster.resource_cache.clear();
         cluster.active_watchers.clear();
+        cluster.resource_searches.clear();
 
         Some(crate::worker::WorkerCommand::ConnectToCluster {
             cluster: cluster.name.clone(),
@@ -342,6 +350,7 @@ impl UiState {
                                 resource_navigation: ResourceNavigation::default(),
                                 resource_cache: HashMap::new(),
                                 active_watchers: HashSet::new(),
+                                resource_searches: HashMap::new(),
                                 yaml_panel: None,
                                 pending_delete: None,
                             },

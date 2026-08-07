@@ -1,19 +1,35 @@
 use super::state::{
-    ClusterConnectionState, ClusterLoadState, PendingDelete, ResourceAction, UiState,
+    ClusterConnectionState, ClusterLoadState, PendingDelete, ResourceAction, ResourceSearchState,
+    UiState,
 };
 use super::widgets::{
     display_resource_title, resource_status, workspace_empty_state, workspace_error_state,
-    workspace_loading_state,
+    workspace_loading_state, workspace_search_error_state,
 };
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use crate::worker::WorkerCommand;
 use components::colors::{TOOLBAR_BACKGROUND, gray};
+use components::fuzzy::{matches_fuzzy, normalize_for_search};
 use components::{
     MoreButton, MoreMenu, SelectionAction, TableRowBuilder, TailwindCombobox, TailwindTable,
     WorkspacePage, icons,
 };
+use egui_extras::{Size, StripBuilder};
 use std::cell::RefCell;
+
+const RESOURCE_SEARCH_WIDTH: f32 = 210.0;
+const TOOLBAR_RIGHT_INSET: f32 = 24.0;
+
+struct FilteredResources {
+    resources: Vec<MinimalResource>,
+    regex_error: Option<String>,
+}
+
+enum ResourceTableRow<'a> {
+    Resource(&'a MinimalResource),
+    HiddenBySearch(usize),
+}
 
 enum NamespaceSelection {
     Replace(String),
@@ -100,13 +116,24 @@ pub(super) fn show(
 
                 let selected_api_resource = cluster.selected_api_resource.clone();
                 let all_resources = selected_resources(cluster, selected_api_resource.as_ref());
-                show_toolbar(
+                let mut resource_search = selected_api_resource
+                    .as_ref()
+                    .and_then(|api_resource| cluster.resource_searches.get(api_resource))
+                    .cloned()
+                    .unwrap_or_default();
+                let filtered_resources = show_toolbar(
                     ui,
                     cluster,
                     selected_api_resource.as_ref(),
-                    all_resources.len(),
+                    &all_resources,
+                    &mut resource_search,
                     &mut namespace_selection,
                 );
+                if let Some(api_resource) = &selected_api_resource {
+                    cluster
+                        .resource_searches
+                        .insert(api_resource.clone(), resource_search);
+                }
                 ui.add_space(20.0);
                 ui.separator();
 
@@ -138,10 +165,19 @@ pub(super) fn show(
                         "No resources found",
                         "This resource type has no items in the selected namespace scope.",
                     );
+                } else if let Some(error) = filtered_resources.regex_error {
+                    workspace_search_error_state(ui, &error);
+                } else if filtered_resources.resources.is_empty() {
+                    workspace_empty_state(
+                        ui,
+                        "No matching resources",
+                        "Try a different search term.",
+                    );
                 } else if let Some(action) = show_resource_table(
                     ui,
                     api_resource,
-                    &all_resources,
+                    &filtered_resources.resources,
+                    all_resources.len() - filtered_resources.resources.len(),
                     api_resource.namespaced && cluster.selected_namespaces.len() > 1,
                 ) {
                     match action {
@@ -218,7 +254,7 @@ fn selected_watches_are_loading(
 fn selected_resources<'a>(
     cluster: &'a super::state::ClusterState,
     api_resource: Option<&crate::api_resource::ApiResource>,
-) -> Vec<&'a MinimalResource> {
+) -> Vec<MinimalResource> {
     let Some(api_resource) = api_resource else {
         return Vec::new();
     };
@@ -228,7 +264,7 @@ fn selected_resources<'a>(
             .resource_cache
             .get(&(api_resource.clone(), namespace))
         {
-            resources.extend(state.resources.values());
+            resources.extend(state.resources.values().cloned());
         }
     }
     resources.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
@@ -255,9 +291,10 @@ fn show_toolbar(
     ui: &mut egui::Ui,
     cluster: &super::state::ClusterState,
     selected_api_resource: Option<&crate::api_resource::ApiResource>,
-    resource_count: usize,
+    all_resources: &[MinimalResource],
+    resource_search: &mut ResourceSearchState,
     namespace_selection: &mut Option<NamespaceSelection>,
-) {
+) -> FilteredResources {
     let resource_title = selected_api_resource
         .map(|resource| display_resource_title(&resource.name))
         .unwrap_or_else(|| "Resources".to_owned());
@@ -297,100 +334,261 @@ fn show_toolbar(
         None
     };
 
+    let mut filtered_resources = filter_resources(all_resources, resource_search);
+
     ui.add_space(26.0);
     ui.allocate_ui_with_layout(
         egui::vec2(ui.available_width(), 50.0),
-        egui::Layout::left_to_right(egui::Align::Center),
+        egui::Layout::top_down(egui::Align::Min),
         |ui| {
-            ui.add_space(37.0);
-            if selected_api_resource.is_some_and(|resource| !resource.namespaced) {
-                ui.label(egui::RichText::new("Scope").size(17.0).color(gray::_700));
-                ui.add_space(7.0);
-                ui.label(
-                    egui::RichText::new("Cluster-wide")
-                        .size(17.0)
-                        .color(gray::_700),
-                );
-            } else {
-                ui.label(
-                    egui::RichText::new("Namespace")
-                        .size(17.0)
-                        .color(gray::_700),
-                );
-                ui.add_space(7.0);
-                let namespace_response = TailwindCombobox::new("namespace-selector")
-                    .placeholder("Search namespaces...")
-                    .selected_text(selected_text)
-                    .selected_status(selected_status)
-                    .width(230.0)
-                    .select_all(all_namespaces_selected)
-                    .filter_by(|ns: &&MinimalNamespace| ns.get_name_to_display())
-                    .show_items(ui, &namespaces, |cb, ns| {
-                        let status = selected_api_resource.map(|api_resource| {
-                            cluster
-                                .active_watchers
-                                .contains(&(api_resource.clone(), Some(ns.name.clone())))
-                        });
-                        if let Some(action) = cb
-                            .item_with_status(
-                                ns.get_name_to_display(),
-                                cluster.selected_namespaces.contains(&ns.name),
-                                status,
-                            )
-                            .selection_action()
-                        {
-                            *namespace_selection = Some(match action {
-                                SelectionAction::Replace => {
-                                    NamespaceSelection::Replace(ns.name.clone())
-                                }
-                                SelectionAction::Toggle => {
-                                    NamespaceSelection::Toggle(ns.name.clone())
-                                }
+            StripBuilder::new(ui)
+                .size(Size::exact(360.0))
+                .size(Size::remainder())
+                .size(Size::exact(
+                    selected_api_resource.map_or(0.0, |_| RESOURCE_SEARCH_WIDTH),
+                ))
+                .size(Size::exact(TOOLBAR_RIGHT_INSET))
+                .clip(true)
+                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                .horizontal(|mut strip| {
+                    strip.cell(|ui| {
+                        ui.add_space(37.0);
+                        if selected_api_resource.is_some_and(|resource| !resource.namespaced) {
+                            ui.label(egui::RichText::new("Scope").size(14.0).color(gray::_700));
+                            ui.add_space(7.0);
+                            ui.label(
+                                egui::RichText::new("Cluster-wide")
+                                    .size(14.0)
+                                    .color(gray::_700),
+                            );
+                        } else {
+                            ui.label(
+                                egui::RichText::new("Namespace")
+                                    .size(14.0)
+                                    .color(gray::_700),
+                            );
+                            ui.add_space(7.0);
+                            let namespace_response = TailwindCombobox::new("namespace-selector")
+                                .placeholder("Search namespaces...")
+                                .selected_text(selected_text)
+                                .selected_status(selected_status)
+                                .width(230.0)
+                                .compact()
+                                .select_all(all_namespaces_selected)
+                                .filter_by(|ns: &&MinimalNamespace| ns.get_name_to_display())
+                                .show_items(ui, &namespaces, |cb, ns| {
+                                    let status = selected_api_resource.map(|api_resource| {
+                                        cluster.active_watchers.contains(&(
+                                            api_resource.clone(),
+                                            Some(ns.name.clone()),
+                                        ))
+                                    });
+                                    if let Some(action) = cb
+                                        .item_with_status(
+                                            ns.get_name_to_display(),
+                                            cluster.selected_namespaces.contains(&ns.name),
+                                            status,
+                                        )
+                                        .selection_action()
+                                    {
+                                        *namespace_selection = Some(match action {
+                                            SelectionAction::Replace => {
+                                                NamespaceSelection::Replace(ns.name.clone())
+                                            }
+                                            SelectionAction::Toggle => {
+                                                NamespaceSelection::Toggle(ns.name.clone())
+                                            }
+                                        });
+                                    }
+                                });
+                            if namespace_response.select_all_clicked {
+                                *namespace_selection = Some(if all_namespaces_selected {
+                                    NamespaceSelection::ClearAll
+                                } else {
+                                    NamespaceSelection::SelectAll
+                                });
+                            }
+                            namespace_response.response.widget_info(|| {
+                                egui::WidgetInfo::labeled(
+                                    egui::WidgetType::ComboBox,
+                                    ui.is_enabled(),
+                                    "Namespace",
+                                )
                             });
                         }
                     });
-                if namespace_response.select_all_clicked {
-                    *namespace_selection = Some(if all_namespaces_selected {
-                        NamespaceSelection::ClearAll
-                    } else {
-                        NamespaceSelection::SelectAll
+                    strip.cell(|ui| {
+                        if selected_api_resource.is_some() {
+                            ui.add_space(15.0);
+                            ui.separator();
+                            ui.add_space(18.0);
+                            ui.label(
+                                egui::RichText::new(resource_title)
+                                    .size(20.0)
+                                    .color(gray::_900),
+                            );
+                            ui.add_space(4.0);
+                            ui.label(
+                                egui::RichText::new(resource_count_label(
+                                    all_resources.len(),
+                                    filtered_resources.resources.len(),
+                                    !resource_search.query.is_empty(),
+                                ))
+                                .size(18.0)
+                                .color(gray::_500),
+                            );
+                        }
                     });
-                }
-                namespace_response.response.widget_info(|| {
-                    egui::WidgetInfo::labeled(
-                        egui::WidgetType::ComboBox,
-                        ui.is_enabled(),
-                        "Namespace",
-                    )
+                    strip.cell(|ui| {
+                        if selected_api_resource.is_some() {
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(RESOURCE_SEARCH_WIDTH, 36.0),
+                                egui::Layout::left_to_right(egui::Align::Center),
+                                |ui| show_resource_search(ui, resource_search),
+                            );
+                            filtered_resources = filter_resources(all_resources, resource_search);
+                        }
+                    });
+                    strip.empty();
                 });
-            }
-            if selected_api_resource.is_some() {
-                ui.add_space(15.0);
-                ui.separator();
-                ui.add_space(18.0);
-                ui.label(
-                    egui::RichText::new(resource_title)
-                        .size(20.0)
-                        .color(gray::_900),
-                );
-                ui.add_space(4.0);
-                ui.label(
-                    egui::RichText::new(format!("{resource_count} items"))
-                        .size(18.0)
-                        .color(gray::_500),
-                );
-            }
         },
     );
+
+    filtered_resources
+}
+
+fn show_resource_search(ui: &mut egui::Ui, resource_search: &mut ResourceSearchState) {
+    let stroke_color = if regex_error(resource_search).is_some() {
+        egui::Color32::from_rgb(185, 28, 28)
+    } else {
+        gray::_300
+    };
+    egui::Frame::new()
+        .fill(egui::Color32::WHITE)
+        .stroke(egui::Stroke::new(1.0, stroke_color))
+        .corner_radius(egui::CornerRadius::same(6))
+        .inner_margin(egui::Margin::symmetric(8, 5))
+        .show(ui, |ui| {
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                let text_response = ui.add_sized(
+                    egui::vec2(150.0, 24.0),
+                    egui::TextEdit::singleline(&mut resource_search.query)
+                        .hint_text("Search resources...")
+                        .frame(false)
+                        .font(egui::FontId::proportional(14.0))
+                        .id_salt("resource-search-input"),
+                );
+                text_response.widget_info(|| {
+                    egui::WidgetInfo::labeled(
+                        egui::WidgetType::TextEdit,
+                        ui.is_enabled(),
+                        "Search resources",
+                    )
+                });
+
+                ui.separator();
+                let toggle_response = ui.toggle_value(
+                    &mut resource_search.regex_mode,
+                    egui::RichText::new(".*").size(14.0),
+                );
+                toggle_response.widget_info(|| {
+                    egui::WidgetInfo::labeled(
+                        egui::WidgetType::Checkbox,
+                        ui.is_enabled(),
+                        "Use regex search",
+                    )
+                });
+            });
+        });
+}
+
+fn filter_resources(
+    all_resources: &[MinimalResource],
+    resource_search: &ResourceSearchState,
+) -> FilteredResources {
+    if resource_search.query.is_empty() {
+        return FilteredResources {
+            resources: all_resources.to_vec(),
+            regex_error: None,
+        };
+    }
+
+    if resource_search.regex_mode {
+        let regex = match regex::RegexBuilder::new(&resource_search.query)
+            .case_insensitive(true)
+            .build()
+        {
+            Ok(regex) => regex,
+            Err(error) => {
+                return FilteredResources {
+                    resources: Vec::new(),
+                    regex_error: Some(error.to_string()),
+                };
+            }
+        };
+        return FilteredResources {
+            resources: all_resources
+                .iter()
+                .filter(|resource| {
+                    let normalized_name: String = normalize_for_search(&resource.name).collect();
+                    regex.is_match(&normalized_name)
+                })
+                .cloned()
+                .collect(),
+            regex_error: None,
+        };
+    }
+
+    let query: Vec<char> = normalize_for_search(&resource_search.query).collect();
+    FilteredResources {
+        resources: all_resources
+            .iter()
+            .filter(|resource| matches_fuzzy(&resource.name, &query))
+            .cloned()
+            .collect(),
+        regex_error: None,
+    }
+}
+
+fn regex_error(resource_search: &ResourceSearchState) -> Option<String> {
+    if resource_search.regex_mode && !resource_search.query.is_empty() {
+        regex::RegexBuilder::new(&resource_search.query)
+            .case_insensitive(true)
+            .build()
+            .err()
+            .map(|error| format!("Invalid regular expression: {error}"))
+    } else {
+        None
+    }
+}
+
+fn resource_count_label(
+    total_count: usize,
+    visible_count: usize,
+    search_is_active: bool,
+) -> String {
+    if search_is_active {
+        format!("{visible_count} of {total_count} items")
+    } else {
+        format!("{total_count} items")
+    }
 }
 
 fn show_resource_table(
     ui: &mut egui::Ui,
     api_resource: &crate::api_resource::ApiResource,
-    resources: &[&MinimalResource],
+    resources: &[MinimalResource],
+    hidden_resource_count: usize,
     show_namespace_column: bool,
 ) -> Option<ResourceAction> {
     let pending_action = RefCell::new(None);
+    let mut rows = resources
+        .iter()
+        .map(ResourceTableRow::Resource)
+        .collect::<Vec<_>>();
+    if hidden_resource_count > 0 {
+        rows.push(ResourceTableRow::HiddenBySearch(hidden_resource_count));
+    }
     let mut table = TailwindTable::new(format!("resource-table-{}", api_resource.name)).column(
         "name",
         "Name",
@@ -412,34 +610,55 @@ fn show_resource_table(
 
     table.show_with_row_response(
         ui,
-        resources,
-        |ui, resource, column_index| {
+        &rows,
+        |ui, row, column_index| {
             let (namespace_index, status_index, ready_index, age_index, actions_index) =
                 if show_namespace_column {
                     (Some(1), 2, 3, 4, 5)
                 } else {
                     (None, 1, 2, 3, 4)
                 };
-            match column_index {
-                0 => TableRowBuilder::text(ui, &resource.name, true),
-                index if Some(index) == namespace_index => {
-                    TableRowBuilder::text(ui, resource.namespace.as_deref().unwrap_or("-"), false);
-                }
-                index if index == status_index => resource_status(ui, resource.display_status()),
-                index if index == ready_index => {
-                    TableRowBuilder::text(ui, resource.display_ready(), false)
-                }
-                index if index == age_index => TableRowBuilder::text(ui, &resource.age(), false),
-                index if index == actions_index => {
-                    show_resource_actions(ui, resource, &mut pending_action.borrow_mut())
+            match row {
+                ResourceTableRow::Resource(resource) => match column_index {
+                    0 => TableRowBuilder::text(ui, &resource.name, true),
+                    index if Some(index) == namespace_index => {
+                        TableRowBuilder::text(
+                            ui,
+                            resource.namespace.as_deref().unwrap_or("-"),
+                            false,
+                        );
+                    }
+                    index if index == status_index => {
+                        resource_status(ui, resource.display_status())
+                    }
+                    index if index == ready_index => {
+                        TableRowBuilder::text(ui, resource.display_ready(), false)
+                    }
+                    index if index == age_index => {
+                        TableRowBuilder::text(ui, &resource.age(), false)
+                    }
+                    index if index == actions_index => {
+                        show_resource_actions(ui, resource, &mut pending_action.borrow_mut())
+                    }
+                    _ => {}
+                },
+                ResourceTableRow::HiddenBySearch(hidden_count) if column_index == 0 => {
+                    let label = if *hidden_count == 1 {
+                        "1 resource hidden by search".to_owned()
+                    } else {
+                        format!("{hidden_count} resources hidden by search")
+                    };
+                    TableRowBuilder::text(ui, &label, false);
                 }
                 _ => {}
             }
         },
-        |row_response, resource| {
-            MoreButton::show_context_menu(row_response, |menu| {
-                show_resource_action_items(menu, resource, &mut pending_action.borrow_mut());
-            });
+        |row_response, row| {
+            if let ResourceTableRow::Resource(resource) = row {
+                MoreButton::show_context_menu(row_response, |menu| {
+                    show_resource_action_items(menu, resource, &mut pending_action.borrow_mut());
+                });
+            }
         },
     );
     pending_action.into_inner()
@@ -504,5 +723,84 @@ fn show_resource_action_items(
             name: resource.name.clone(),
             namespace: resource.namespace.clone(),
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn resource(name: &str) -> MinimalResource {
+        MinimalResource {
+            uid: name.into(),
+            name: name.into(),
+            namespace: Some("default".into()),
+            creation_timestamp: None,
+            phase: None,
+            ready_status: None,
+        }
+    }
+
+    #[test]
+    fn fuzzy_search_matches_normalized_resource_names() {
+        let resources = vec![resource("Café-API"), resource("worker")];
+        let filtered = filter_resources(
+            &resources,
+            &ResourceSearchState {
+                query: "cfa".into(),
+                regex_mode: false,
+            },
+        );
+
+        assert_eq!(
+            filtered
+                .resources
+                .iter()
+                .map(|resource| resource.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Café-API"]
+        );
+        assert!(filtered.regex_error.is_none());
+    }
+
+    #[test]
+    fn regex_search_matches_normalized_resource_names_case_insensitively() {
+        let resources = vec![resource("Café-API"), resource("worker")];
+        let filtered = filter_resources(
+            &resources,
+            &ResourceSearchState {
+                query: "CAFE-.*".into(),
+                regex_mode: true,
+            },
+        );
+
+        assert_eq!(filtered.resources.len(), 1);
+        assert_eq!(filtered.resources[0].name, "Café-API");
+        assert!(filtered.regex_error.is_none());
+    }
+
+    #[test]
+    fn invalid_regex_has_no_results_and_an_error() {
+        let filtered = filter_resources(
+            &[resource("pod")],
+            &ResourceSearchState {
+                query: "[".into(),
+                regex_mode: true,
+            },
+        );
+
+        assert!(filtered.resources.is_empty());
+        assert!(
+            filtered
+                .regex_error
+                .as_deref()
+                .is_some_and(|error| error.starts_with("regex parse error:"))
+        );
+    }
+
+    #[test]
+    fn resource_count_includes_the_total_while_searching() {
+        assert_eq!(resource_count_label(8, 1, true), "1 of 8 items");
+        assert_eq!(resource_count_label(8, 8, false), "8 items");
     }
 }

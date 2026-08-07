@@ -32,6 +32,7 @@ pub(super) fn fixture_cluster(cluster_key: i32, name: &str) -> ClusterState {
         selected_api_resource: None,
         resource_cache: HashMap::new(),
         active_watchers: HashSet::new(),
+        resource_searches: HashMap::new(),
         yaml_panel: None,
         pending_delete: None,
     }
