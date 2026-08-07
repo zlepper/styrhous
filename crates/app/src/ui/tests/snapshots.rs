@@ -1,3 +1,4 @@
+use super::super::MyEguiApp;
 use super::super::dialogs::show_delete_confirmation;
 use super::super::state::ClusterConnectionState;
 use super::super::state::{PendingDelete, UiState};
@@ -13,6 +14,35 @@ use egui_kittest::kittest::Queryable;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+
+fn select_namespace(harness: &mut Harness<MyEguiApp<MockWorker>>, namespace: &str) {
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
+        .click();
+    harness.run();
+    harness.get_by_label(namespace).click();
+    harness.run();
+}
+
+#[test]
+fn no_current_context_leaves_cluster_selection_manual() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.run();
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(WorkerResult::KubernetesClustersUpdated(vec![Cluster {
+            name: "dev".into(),
+            cluster: None,
+            is_current: false,
+        }]));
+
+    harness.run();
+
+    assert_eq!(harness.state().ui_state.selected_cluster, None);
+    assert!(harness.state().worker.commands.is_empty());
+}
 
 #[test]
 fn oracle_resource_table_snapshot_uses_injected_cluster_state() {
@@ -198,6 +228,20 @@ fn resource_navigation_selects_curated_and_other_resources() {
 
 #[test]
 fn test_ui_flow() {
+    let watch_error = r#"InitialListFailed(
+    Service(
+        hyper_util::client::legacy::Error(
+            Connect,
+            ConnectError(
+                "dns error",
+                Custom {
+                    kind: Uncategorized,
+                    error: "failed to lookup address information: Name or service not known",
+                },
+            ),
+        ),
+    ),
+)"#;
     let mut harness = application_harness::<MockWorker>();
     harness.run();
     harness.snapshot("01_empty_state");
@@ -210,18 +254,35 @@ fn test_ui_flow() {
             Cluster {
                 name: "dev".into(),
                 cluster: None,
+                is_current: true,
             },
             Cluster {
                 name: "prod".into(),
                 cluster: Some("production".into()),
+                is_current: false,
             },
         ]));
-    harness.run();
-    harness.snapshot("02_clusters_loaded");
+    harness.run_steps(1);
+    assert_eq!(harness.state().ui_state.selected_cluster, Some(1));
+    assert!(matches!(
+        harness.state().ui_state.clusters[&1].connection,
+        ClusterConnectionState::Connecting
+    ));
+    assert!(matches!(
+        harness.state().worker.commands.as_slice(),
+        [WorkerCommand::ConnectToCluster {
+            cluster_key: 1,
+            cluster,
+        }] if cluster == "dev"
+    ));
+    harness.snapshot("current_context_connecting");
 
-    harness.state_mut().select_cluster(1);
-    harness.run();
-    harness.snapshot("03_cluster_selected_empty");
+    harness.state_mut().worker.results.push_back(
+        WorkerResult::KubernetesClusterConnectionCreated {
+            cluster_key: 1,
+            runner: None,
+        },
+    );
 
     harness
         .state_mut()
@@ -244,8 +305,7 @@ fn test_ui_flow() {
                 },
             ],
         });
-    harness.run();
-    harness.snapshot("04_namespaces_loaded");
+    harness.run_steps(1);
 
     harness
         .state_mut()
@@ -263,5 +323,70 @@ fn test_ui_flow() {
             ],
         });
     harness.run();
-    harness.snapshot("05_api_resources_loaded");
+
+    select_namespace(&mut harness, "default");
+    harness.get_by_label("Apps & Containers").click_accesskit();
+    harness.run();
+    harness.get_by_label("pods").click_accesskit();
+    harness.run_steps(1);
+    harness.run_steps(1);
+
+    let pods = fixture_api_resource("", "Pod", "pods");
+    assert!(
+        harness
+            .state()
+            .worker
+            .commands
+            .iter()
+            .any(|command| matches!(
+                command,
+                WorkerCommand::StartResourceWatch {
+                    cluster_key: 1,
+                    api_resource,
+                    namespace,
+                } if api_resource == &pods && namespace == "default"
+            ))
+    );
+    harness.get_by_label("Loading resources");
+    harness.snapshot("resource_watch_loading");
+
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(WorkerResult::KubernetesResourcesReplaced {
+            cluster_key: 1,
+            api_resource: pods.clone(),
+            namespace: "default".into(),
+            resources: Vec::new(),
+        });
+    harness.run();
+    harness.get_by_label("No resources found");
+
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(WorkerResult::KubernetesResourceWatchFailed {
+            cluster_key: 1,
+            api_resource: pods,
+            namespace: "default".into(),
+            error: watch_error.into(),
+        });
+    harness.run();
+    harness.get_by_label("Unable to load resources");
+    harness.get_by_label(watch_error);
+    harness.snapshot("resource_watch_error");
+    harness.get_by_label("Retry").click_accesskit();
+    harness.run_steps(1);
+    assert_eq!(
+        harness
+            .state()
+            .worker
+            .commands
+            .iter()
+            .filter(|command| matches!(command, WorkerCommand::StartResourceWatch { .. }))
+            .count(),
+        2
+    );
 }

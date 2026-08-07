@@ -1,5 +1,10 @@
-use super::state::{PendingDelete, ResourceAction, UiState};
-use super::widgets::{display_resource_title, resource_status, workspace_empty_state};
+use super::state::{
+    ClusterConnectionState, ClusterLoadState, PendingDelete, ResourceAction, UiState,
+};
+use super::widgets::{
+    display_resource_title, resource_status, workspace_empty_state, workspace_error_state,
+    workspace_loading_state,
+};
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use crate::worker::WorkerCommand;
@@ -15,6 +20,7 @@ pub(super) fn show(
     commands_to_send: &mut Vec<WorkerCommand>,
 ) {
     let mut toggled_namespace = None;
+    let mut retry_requested = false;
     egui::CentralPanel::default()
         .frame(WorkspacePage::frame())
         .show(ctx, |ui| {
@@ -43,6 +49,47 @@ pub(super) fn show(
                     return;
                 };
 
+                match &cluster.connection {
+                    ClusterConnectionState::Connecting => {
+                        workspace_loading_state(
+                            ui,
+                            "Connecting to cluster",
+                            "Establishing a connection to the selected Kubernetes context.",
+                        );
+                        return;
+                    }
+                    ClusterConnectionState::Failed(error) => {
+                        retry_requested = workspace_error_state(ui, "Unable to connect", error);
+                        return;
+                    }
+                    ClusterConnectionState::Disconnected => {
+                        workspace_empty_state(
+                            ui,
+                            "Choose a cluster",
+                            "Select a Kubernetes context from the cluster rail to begin exploring.",
+                        );
+                        return;
+                    }
+                    ClusterConnectionState::Connected(_) => {}
+                }
+
+                match (&cluster.namespaces_load, &cluster.api_resources_load) {
+                    (ClusterLoadState::Failed(error), _) | (_, ClusterLoadState::Failed(error)) => {
+                        retry_requested =
+                            workspace_error_state(ui, "Unable to load cluster data", error);
+                        return;
+                    }
+                    (ClusterLoadState::Ready, ClusterLoadState::Ready) => {}
+                    _ => {
+                        workspace_loading_state(
+                            ui,
+                            "Loading cluster data",
+                            "Discovering namespaces and API resources.",
+                        );
+                        return;
+                    }
+                }
+
                 let selected_api_resource = cluster.selected_api_resource.clone();
                 let all_resources = selected_resources(cluster, selected_api_resource.as_ref());
                 show_toolbar(
@@ -68,6 +115,14 @@ pub(super) fn show(
                         ui,
                         "Choose a namespace",
                         "Select one or more namespaces to start watching resources.",
+                    );
+                } else if let Some(error) = selected_watch_error(cluster, api_resource) {
+                    retry_requested = workspace_error_state(ui, "Unable to load resources", &error);
+                } else if selected_watches_are_loading(cluster, api_resource) {
+                    workspace_loading_state(
+                        ui,
+                        "Loading resources",
+                        "Waiting for the selected namespace resources to synchronize.",
                     );
                 } else if all_resources.is_empty() {
                     workspace_empty_state(
@@ -104,6 +159,35 @@ pub(super) fn show(
     if let (Some(cluster_key), Some(namespace)) = (ui_state.selected_cluster, toggled_namespace) {
         ui_state.toggle_namespace(cluster_key, namespace, commands_to_send);
     }
+    if retry_requested {
+        if let Some(cluster_key) = ui_state.selected_cluster {
+            ui_state.retry_selected_load(cluster_key, commands_to_send);
+        }
+    }
+}
+
+fn selected_watch_error(
+    cluster: &super::state::ClusterState,
+    api_resource: &crate::api_resource::ApiResource,
+) -> Option<String> {
+    cluster.selected_namespaces.iter().find_map(|namespace| {
+        cluster
+            .resource_cache
+            .get(&(api_resource.clone(), namespace.clone()))
+            .and_then(|watch| watch.error.clone())
+    })
+}
+
+fn selected_watches_are_loading(
+    cluster: &super::state::ClusterState,
+    api_resource: &crate::api_resource::ApiResource,
+) -> bool {
+    cluster.selected_namespaces.iter().any(|namespace| {
+        cluster
+            .resource_cache
+            .get(&(api_resource.clone(), namespace.clone()))
+            .is_none_or(|watch| !watch.is_synced)
+    })
 }
 
 fn selected_resources<'a>(

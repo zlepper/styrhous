@@ -8,7 +8,7 @@ use egui::{Color32, CornerRadius, Frame, Margin, RichText, Stroke, Ui};
 use crate::colors::{CONTENT_BACKGROUND, WHITE, gray};
 
 const CARD_MARGIN: i8 = 12;
-const EMPTY_STATE_MARGIN: i8 = 24;
+const STATE_MARGIN: i8 = 32;
 const SURFACE_RADIUS: u8 = 8;
 
 /// The light content canvas used beside the dark application navigation.
@@ -73,20 +73,24 @@ impl<'a> WorkspaceEmptyState<'a> {
     }
 
     pub fn show(self, ui: &mut Ui) {
-        WorkspaceCard::new()
-            .padding(EMPTY_STATE_MARGIN)
+        Frame::new()
+            .inner_margin(Margin::same(STATE_MARGIN))
             .show(ui, |ui| {
-                ui.set_min_height(140.0);
-                ui.vertical_centered(|ui| {
-                    ui.add_space(26.0);
-                    ui.label(
-                        RichText::new(self.title)
-                            .size(18.0)
-                            .strong()
-                            .color(gray::_800),
+                ui.horizontal_centered(|ui| {
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(ui.available_width(), 44.0),
+                        egui::Layout::top_down(egui::Align::Center),
+                        |ui| {
+                            ui.label(
+                                RichText::new(self.title)
+                                    .size(18.0)
+                                    .strong()
+                                    .color(gray::_800),
+                            );
+                            ui.add_space(6.0);
+                            ui.label(RichText::new(self.message).size(13.0).color(gray::_500));
+                        },
                     );
-                    ui.add_space(6.0);
-                    ui.label(RichText::new(self.message).size(13.0).color(gray::_500));
                 });
             });
     }
