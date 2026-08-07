@@ -31,6 +31,10 @@ pub(super) fn workspace_empty_state(ui: &mut egui::Ui, title: &str, message: &st
     WorkspaceEmptyState::new(title, message).show(ui);
 }
 
+pub(super) fn workspace_search_error_state(ui: &mut egui::Ui, message: &str) {
+    workspace_error_details(ui, "Invalid regular expression", message, 0.0, |_| ());
+}
+
 pub(super) fn workspace_loading_state(ui: &mut egui::Ui, title: &str, message: &str) {
     show_state_area(ui, 74.0, |ui| {
         ui.add(egui::Spinner::new().size(22.0));
@@ -47,9 +51,23 @@ pub(super) fn workspace_loading_state(ui: &mut egui::Ui, title: &str, message: &
 }
 
 pub(super) fn workspace_error_state(ui: &mut egui::Ui, title: &str, message: &str) -> bool {
+    workspace_error_details(ui, title, message, 42.0, |ui| {
+        ui.add_space(12.0);
+        ui.vertical_centered(|ui| TailwindButton::primary("Retry").show(ui).clicked())
+            .inner
+    })
+}
+
+fn workspace_error_details<R>(
+    ui: &mut egui::Ui,
+    title: &str,
+    message: &str,
+    footer_height: f32,
+    show_footer: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
     let code_line_height = ui.text_style_height(&egui::TextStyle::Monospace);
     let code_height = 16.0 + code_line_height * message.lines().count().max(1) as f32;
-    let content_height = 22.0 + 6.0 + 16.0 + 4.0 + code_height + 12.0 + 30.0;
+    let content_height = 22.0 + 6.0 + 16.0 + 4.0 + code_height + footer_height;
 
     show_state_area(ui, content_height, |ui| {
         ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
@@ -79,9 +97,7 @@ pub(super) fn workspace_error_state(ui: &mut egui::Ui, title: &str, message: &st
                     ui.set_min_width((code_width - 16.0).max(0.0));
                     ui.code(message);
                 });
-            ui.add_space(12.0);
-            ui.vertical_centered(|ui| TailwindButton::primary("Retry").show(ui).clicked())
-                .inner
+            show_footer(ui)
         })
         .inner
     })

@@ -13,6 +13,8 @@ const ITEM_PADDING_X: f32 = 12.0;
 const INPUT_PADDING_X: f32 = 12.0;
 const ICON_AREA_WIDTH: f32 = 36.0;
 const FONT_SIZE: f32 = 18.0;
+const COMPACT_INPUT_HEIGHT: f32 = 36.0;
+const COMPACT_FONT_SIZE: f32 = 14.0;
 
 use egui::{
     Align, Align2, Color32, CornerRadius, FontId, Id, Key, Modifiers, Popup, PopupCloseBehavior,
@@ -268,6 +270,42 @@ pub struct NoFilter;
 /// Wrapper type indicating that a filter function is configured.
 pub struct WithFilter<F>(F);
 
+#[derive(Clone, Copy)]
+enum ComboboxSize {
+    Default,
+    Compact,
+}
+
+impl ComboboxSize {
+    fn input_height(self) -> f32 {
+        match self {
+            Self::Default => INPUT_HEIGHT,
+            Self::Compact => COMPACT_INPUT_HEIGHT,
+        }
+    }
+
+    fn font_size(self) -> f32 {
+        match self {
+            Self::Default => FONT_SIZE,
+            Self::Compact => COMPACT_FONT_SIZE,
+        }
+    }
+
+    fn icon_size(self) -> f32 {
+        match self {
+            Self::Default => ICON_SIZE,
+            Self::Compact => 16.0,
+        }
+    }
+
+    fn icon_area_width(self) -> f32 {
+        match self {
+            Self::Default => ICON_AREA_WIDTH,
+            Self::Compact => 32.0,
+        }
+    }
+}
+
 /// A Tailwind-styled searchable combobox.
 pub struct TailwindCombobox<Filter> {
     id_salt: Id,
@@ -276,6 +314,7 @@ pub struct TailwindCombobox<Filter> {
     selected_text: Option<String>,
     selected_status: Option<bool>,
     width: Option<f32>,
+    size: ComboboxSize,
     select_all: Option<bool>,
     filter: Filter,
 }
@@ -290,6 +329,7 @@ impl TailwindCombobox<NoFilter> {
             selected_text: None,
             selected_status: None,
             width: None,
+            size: ComboboxSize::Default,
             select_all: None,
             filter: NoFilter,
         }
@@ -305,6 +345,7 @@ impl TailwindCombobox<NoFilter> {
             selected_text: None,
             selected_status: None,
             width: None,
+            size: ComboboxSize::Default,
             select_all: None,
             filter: NoFilter,
         }
@@ -322,6 +363,7 @@ impl TailwindCombobox<NoFilter> {
             selected_text: self.selected_text,
             selected_status: self.selected_status,
             width: self.width,
+            size: self.size,
             select_all: self.select_all,
             filter: WithFilter(filter_fn),
         }
@@ -353,6 +395,12 @@ impl<Filter> TailwindCombobox<Filter> {
         self
     }
 
+    /// Use the smaller sizing intended for dense toolbar controls.
+    pub fn compact(mut self) -> Self {
+        self.size = ComboboxSize::Compact;
+        self
+    }
+
     /// Enable a Select all row while the search field is empty.
     ///
     /// `all_selected` controls its checkmark. Its activation is reported by
@@ -379,6 +427,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             selected_text,
             selected_status,
             width,
+            size,
             select_all,
             filter: WithFilter(filter_fn),
         } = self;
@@ -405,6 +454,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             placeholder.as_deref(),
             selected_text.as_deref(),
             selected_status,
+            size,
         );
 
         let is_enabled = ui.is_enabled();
@@ -493,10 +543,11 @@ impl<F> TailwindCombobox<WithFilter<F>> {
         placeholder: Option<&str>,
         selected_text: Option<&str>,
         selected_status: Option<bool>,
+        size: ComboboxSize,
     ) -> Response {
         let corner_radius = CornerRadius::same(CORNER_RADIUS);
         let (rect, response) =
-            ui.allocate_exact_size(Vec2::new(width, INPUT_HEIGHT), Sense::click());
+            ui.allocate_exact_size(Vec2::new(width, size.input_height()), Sense::click());
         let has_focus = response.has_focus()
             || ui.memory(|memory| memory.has_focus(response.id.with("input")))
             || is_open;
@@ -514,18 +565,18 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             );
 
             let icon_rect = Rect::from_center_size(
-                rect.right_center() - Vec2::new(ICON_SIZE / 2.0 + 8.0, 0.0),
-                Vec2::splat(ICON_SIZE),
+                rect.right_center() - Vec2::new(size.icon_size() / 2.0 + 8.0, 0.0),
+                Vec2::splat(size.icon_size()),
             );
             let mut icon_ui = ui.new_child(egui::UiBuilder::new().max_rect(icon_rect).layout(
                 egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
             ));
-            icons::chevron_down(&mut icon_ui, ICON_SIZE, gray::_400);
+            icons::chevron_down(&mut icon_ui, size.icon_size(), gray::_400);
         }
 
         let input_rect = Rect::from_min_max(
             rect.min + Vec2::new(INPUT_PADDING_X, 0.0),
-            rect.max - Vec2::new(ICON_AREA_WIDTH, 0.0),
+            rect.max - Vec2::new(size.icon_area_width(), 0.0),
         );
 
         if !is_open {
@@ -542,7 +593,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
                 let galley = layout_truncated_text(
                     ui,
                     text,
-                    FontId::proportional(FONT_SIZE),
+                    FontId::proportional(size.font_size()),
                     gray::_900,
                     input_rect.width(),
                 );
@@ -563,7 +614,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
                     input_rect.left_center(),
                     Align2::LEFT_CENTER,
                     placeholder,
-                    FontId::proportional(FONT_SIZE),
+                    FontId::proportional(size.font_size()),
                     gray::_400,
                 );
             }
@@ -580,6 +631,9 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             .desired_width(input_rect.width())
             .vertical_align(egui::Align::Center)
             .id(response.id.with("input"));
+        if matches!(size, ComboboxSize::Compact) {
+            text_edit = text_edit.font(FontId::proportional(size.font_size()));
+        }
         if let Some(placeholder) = placeholder {
             text_edit = text_edit.hint_text(placeholder);
         }

@@ -18,6 +18,7 @@ futures-util = "0.3"
 itertools = "0.14"
 time = { version = "0.3", features = ["parsing"] }
 serde_yaml = "0.9"
+regex = "1.12"
 
 [dev-dependencies]
 egui_kittest = { version = "0.33", features = ["eframe", "wgpu", "snapshot"] }
