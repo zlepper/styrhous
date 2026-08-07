@@ -35,14 +35,11 @@ pub(super) fn show_delete_confirmation(
                     .color(gray::_900),
             );
             ui.add_space(8.0);
-            ui.label(
-                egui::RichText::new(format!(
-                    "This will delete the resource from namespace {}.",
-                    pending.namespace
-                ))
-                .size(13.0)
-                .color(gray::_600),
+            let scope_text = pending.namespace.as_deref().map_or_else(
+                || "This will delete the cluster-wide resource.".to_owned(),
+                |namespace| format!("This will delete the resource from namespace {namespace}."),
             );
+            ui.label(egui::RichText::new(scope_text).size(13.0).color(gray::_600));
             ui.add_space(16.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui

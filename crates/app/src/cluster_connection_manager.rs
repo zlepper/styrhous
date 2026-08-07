@@ -3,8 +3,7 @@ use crate::helpers::ResultExt;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use crate::worker::{WorkerResult, WorkerResultSender};
-use anyhow::Context;
-use anyhow::Result;
+use anyhow::{Context, Result, bail};
 use futures_util::future::try_join_all;
 use futures_util::pin_mut;
 use futures_util::stream::StreamExt;
@@ -163,6 +162,7 @@ impl KubernetesApiInspector {
                         version: version_name.clone(),
                         kind: resource.kind.clone(),
                         name: resource.name.clone(),
+                        namespaced: resource.namespaced,
                     });
                 }
 
@@ -191,6 +191,7 @@ impl KubernetesApiInspector {
                     version: version.clone(),
                     kind: resource.kind.clone(),
                     name: resource.name.clone(),
+                    namespaced: resource.namespaced,
                 });
             }
         }
@@ -323,17 +324,19 @@ pub async fn start_cluster_connection(
     })
 }
 
-/// Start watching resources of a specific type in a specific namespace
+/// Start watching a resource type in its selected namespace scope.
 pub async fn start_resource_watcher(
     cluster_key: i32,
     client: kube::Client,
     api_resource: ApiResource,
-    namespace: String,
+    namespace: Option<String>,
     event_sender: WorkerResultSender,
 ) -> Result<WorkerResult> {
     info!(
-        "Starting resource watcher for {}/{} in namespace {}",
-        api_resource.group, api_resource.name, namespace
+        "Starting resource watcher for {}/{} in {}",
+        api_resource.group,
+        api_resource.name,
+        namespace.as_deref().unwrap_or("cluster-wide scope")
     );
 
     let watcher = KubernetesResourceWatcher {
@@ -358,7 +361,7 @@ struct KubernetesResourceWatcher {
     event_sender: WorkerResultSender,
     cluster_key: i32,
     api_resource: ApiResource,
-    namespace: String,
+    namespace: Option<String>,
 }
 
 impl KubernetesResourceWatcher {
@@ -392,11 +395,25 @@ impl KubernetesResourceWatcher {
             }
         };
 
-        // Create namespaced or cluster-scoped API based on capabilities
-        let api: Api<DynamicObject> = if caps.scope == kube::discovery::Scope::Namespaced {
-            Api::namespaced_with(self.client.clone(), &self.namespace, &ar)
-        } else {
-            Api::all_with(self.client.clone(), &ar)
+        let api: Api<DynamicObject> = match (caps.scope, self.namespace.as_deref()) {
+            (kube::discovery::Scope::Namespaced, Some(namespace)) => {
+                Api::namespaced_with(self.client.clone(), namespace, &ar)
+            }
+            (kube::discovery::Scope::Cluster, None) => Api::all_with(self.client.clone(), &ar),
+            (scope, namespace) => {
+                let error = format!(
+                    "Resource scope mismatch: discovered {scope:?} scope with namespace {namespace:?}"
+                );
+                self.event_sender
+                    .send(WorkerResult::KubernetesResourceWatchFailed {
+                        cluster_key: self.cluster_key,
+                        api_resource: self.api_resource.clone(),
+                        namespace: self.namespace.clone(),
+                        error,
+                    })
+                    .log_if_error("Failed to send resource watcher scope error");
+                return;
+            }
         };
 
         let mut buffer = Vec::<MinimalResource>::new();
@@ -507,7 +524,7 @@ fn extract_minimal_resource(obj: &DynamicObject, api_resource: &ApiResource) -> 
 async fn create_dynamic_api(
     client: &kube::Client,
     api_resource: &ApiResource,
-    namespace: &str,
+    namespace: Option<&str>,
 ) -> Result<Api<DynamicObject>> {
     let group = if api_resource.group == "core" {
         ""
@@ -518,10 +535,14 @@ async fn create_dynamic_api(
     let gvk = GroupVersionKind::gvk(group, &api_resource.version, &api_resource.kind);
     let (ar, caps) = kube::discovery::pinned_kind(client, &gvk).await?;
 
-    let api = if caps.scope == kube::discovery::Scope::Namespaced {
-        Api::namespaced_with(client.clone(), namespace, &ar)
-    } else {
-        Api::all_with(client.clone(), &ar)
+    let api = match (caps.scope, namespace) {
+        (kube::discovery::Scope::Namespaced, Some(namespace)) => {
+            Api::namespaced_with(client.clone(), namespace, &ar)
+        }
+        (kube::discovery::Scope::Cluster, None) => Api::all_with(client.clone(), &ar),
+        (scope, namespace) => bail!(
+            "Resource scope mismatch: discovered {scope:?} scope with namespace {namespace:?}"
+        ),
     };
 
     Ok(api)
@@ -532,15 +553,18 @@ pub async fn get_resource_yaml(
     cluster_key: i32,
     client: kube::Client,
     api_resource: ApiResource,
-    namespace: String,
+    namespace: Option<String>,
     resource_name: String,
 ) -> Result<WorkerResult> {
     info!(
-        "Getting YAML for {}/{} {} in namespace {}",
-        api_resource.group, api_resource.name, resource_name, namespace
+        "Getting YAML for {}/{} {} in {}",
+        api_resource.group,
+        api_resource.name,
+        resource_name,
+        namespace.as_deref().unwrap_or("cluster-wide scope")
     );
 
-    let api = create_dynamic_api(&client, &api_resource, &namespace).await?;
+    let api = create_dynamic_api(&client, &api_resource, namespace.as_deref()).await?;
     let mut obj = api.get(&resource_name).await?;
 
     // Strip server-managed fields that clutter the editor and cause issues on apply
@@ -573,15 +597,18 @@ pub async fn delete_resource(
     cluster_key: i32,
     client: kube::Client,
     api_resource: ApiResource,
-    namespace: String,
+    namespace: Option<String>,
     resource_name: String,
 ) -> Result<WorkerResult> {
     info!(
-        "Deleting {}/{} {} in namespace {}",
-        api_resource.group, api_resource.name, resource_name, namespace
+        "Deleting {}/{} {} in {}",
+        api_resource.group,
+        api_resource.name,
+        resource_name,
+        namespace.as_deref().unwrap_or("cluster-wide scope")
     );
 
-    let api = create_dynamic_api(&client, &api_resource, &namespace).await?;
+    let api = create_dynamic_api(&client, &api_resource, namespace.as_deref()).await?;
     api.delete(&resource_name, &Default::default()).await?;
 
     Ok(WorkerResult::ResourceDeleteCompleted {
@@ -597,13 +624,16 @@ pub async fn apply_resource_yaml(
     cluster_key: i32,
     client: kube::Client,
     api_resource: ApiResource,
-    namespace: String,
+    namespace: Option<String>,
     resource_name: String,
     yaml: String,
 ) -> Result<WorkerResult> {
     info!(
-        "Applying YAML for {}/{} {} in namespace {}",
-        api_resource.group, api_resource.name, resource_name, namespace
+        "Applying YAML for {}/{} {} in {}",
+        api_resource.group,
+        api_resource.name,
+        resource_name,
+        namespace.as_deref().unwrap_or("cluster-wide scope")
     );
 
     let mut obj: DynamicObject = serde_yaml::from_str(&yaml)?;
@@ -623,7 +653,7 @@ pub async fn apply_resource_yaml(
     obj.metadata.uid = None;
     obj.metadata.creation_timestamp = None;
 
-    let api = create_dynamic_api(&client, &api_resource, &namespace).await?;
+    let api = create_dynamic_api(&client, &api_resource, namespace.as_deref()).await?;
 
     // Use server-side apply with force to take ownership of fields
     let patch_params = kube::api::PatchParams::apply("kubernetes-dev-ui").force();

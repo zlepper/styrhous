@@ -130,24 +130,24 @@ pub enum WorkerCommand {
     StartResourceWatch {
         cluster_key: i32,
         api_resource: ApiResource,
-        namespace: String,
+        namespace: Option<String>,
     },
     GetResourceYaml {
         cluster_key: i32,
         api_resource: ApiResource,
-        namespace: String,
+        namespace: Option<String>,
         resource_name: String,
     },
     DeleteResource {
         cluster_key: i32,
         api_resource: ApiResource,
-        namespace: String,
+        namespace: Option<String>,
         resource_name: String,
     },
     ApplyResourceYaml {
         cluster_key: i32,
         api_resource: ApiResource,
-        namespace: String,
+        namespace: Option<String>,
         resource_name: String,
         yaml: String,
     },
@@ -193,40 +193,40 @@ pub enum WorkerResult {
     KubernetesResourceAdded {
         cluster_key: i32,
         api_resource: ApiResource,
-        namespace: String,
+        namespace: Option<String>,
         resource: MinimalResource,
     },
     /// A resource was deleted
     KubernetesResourceDeleted {
         cluster_key: i32,
         api_resource: ApiResource,
-        namespace: String,
+        namespace: Option<String>,
         resource_uid: String,
     },
     /// Initial resource list complete
     KubernetesResourcesReplaced {
         cluster_key: i32,
         api_resource: ApiResource,
-        namespace: String,
+        namespace: Option<String>,
         resources: Vec<MinimalResource>,
     },
     /// Resource watcher started successfully
     KubernetesResourceWatchStarted {
         cluster_key: i32,
         api_resource: ApiResource,
-        namespace: String,
+        namespace: Option<String>,
     },
     KubernetesResourceWatchFailed {
         cluster_key: i32,
         api_resource: ApiResource,
-        namespace: String,
+        namespace: Option<String>,
         error: String,
     },
     /// Resource YAML fetched for viewing/editing
     ResourceYamlFetched {
         cluster_key: i32,
         api_resource: ApiResource,
-        namespace: String,
+        namespace: Option<String>,
         resource_name: String,
         yaml: String,
     },
@@ -234,14 +234,14 @@ pub enum WorkerResult {
     ResourceDeleteCompleted {
         cluster_key: i32,
         api_resource: ApiResource,
-        namespace: String,
+        namespace: Option<String>,
         resource_name: String,
     },
     /// Resource YAML was successfully applied
     ResourceApplyCompleted {
         cluster_key: i32,
         api_resource: ApiResource,
-        namespace: String,
+        namespace: Option<String>,
         resource_name: String,
     },
 }

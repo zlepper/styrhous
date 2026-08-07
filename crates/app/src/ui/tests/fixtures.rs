@@ -43,6 +43,18 @@ pub(super) fn fixture_api_resource(group: &str, kind: &str, name: &str) -> ApiRe
         version: "v1".into(),
         kind: kind.into(),
         name: name.into(),
+        namespaced: true,
+    }
+}
+
+pub(super) fn fixture_cluster_scoped_api_resource(
+    group: &str,
+    kind: &str,
+    name: &str,
+) -> ApiResource {
+    ApiResource {
+        namespaced: false,
+        ..fixture_api_resource(group, kind, name)
     }
 }
 
@@ -103,7 +115,7 @@ pub(super) fn oracle_resource_table_state() -> UiState {
     ]);
     kind.resource_navigation = build_resource_navigation(discovered_resources);
     kind.resource_cache.insert(
-        (pods, "kube-system".into()),
+        (pods, Some("kube-system".into())),
         ResourceWatchState {
             resources: [
                 "coredns-66bc5c9577-ffw2s",

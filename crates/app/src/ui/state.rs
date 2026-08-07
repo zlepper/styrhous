@@ -15,8 +15,8 @@ pub(super) struct UiState {
     pub(super) selected_cluster: Option<i32>,
 }
 
-/// Key for identifying a resource watcher (API resource + namespace).
-pub(super) type ResourceWatchKey = (ApiResource, String);
+/// Key for identifying a resource watcher (API resource + optional namespace).
+pub(super) type ResourceWatchKey = (ApiResource, Option<String>);
 
 #[derive(Debug, Default)]
 pub(super) struct ResourceWatchState {
@@ -36,7 +36,7 @@ pub(super) enum ClusterLoadState {
 #[derive(Debug, Clone)]
 pub(super) struct YamlPanelState {
     pub(super) api_resource: ApiResource,
-    pub(super) namespace: String,
+    pub(super) namespace: Option<String>,
     pub(super) resource_name: String,
     pub(super) original_yaml: String,
     pub(super) edited_yaml: String,
@@ -52,13 +52,19 @@ impl YamlPanelState {
 #[derive(Debug, Clone)]
 pub(super) struct PendingDelete {
     pub(super) resource_name: String,
-    pub(super) namespace: String,
+    pub(super) namespace: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 pub(super) enum ResourceAction {
-    EditYaml { name: String, namespace: String },
-    RequestDelete { name: String, namespace: String },
+    EditYaml {
+        name: String,
+        namespace: Option<String>,
+    },
+    RequestDelete {
+        name: String,
+        namespace: Option<String>,
+    },
 }
 
 #[derive(Debug)]
@@ -157,7 +163,7 @@ impl UiState {
         let Some(api_resource) = cluster.selected_api_resource.clone() else {
             return;
         };
-        Self::request_resource_watch(cluster, &api_resource, namespace, commands_to_send);
+        Self::request_resource_watch(cluster, &api_resource, Some(namespace), commands_to_send);
     }
 
     /// Replace the visible namespace scope without cancelling existing watches.
@@ -239,16 +245,25 @@ impl UiState {
         api_resource: &ApiResource,
         commands_to_send: &mut Vec<crate::worker::WorkerCommand>,
     ) {
-        let namespaces = cluster.selected_namespaces.clone();
-        for namespace in namespaces {
-            Self::request_resource_watch(cluster, api_resource, namespace, commands_to_send);
+        if api_resource.namespaced {
+            let namespaces = cluster.selected_namespaces.clone();
+            for namespace in namespaces {
+                Self::request_resource_watch(
+                    cluster,
+                    api_resource,
+                    Some(namespace),
+                    commands_to_send,
+                );
+            }
+        } else {
+            Self::request_resource_watch(cluster, api_resource, None, commands_to_send);
         }
     }
 
     fn request_resource_watch(
         cluster: &mut ClusterState,
         api_resource: &ApiResource,
-        namespace: String,
+        namespace: Option<String>,
         commands_to_send: &mut Vec<crate::worker::WorkerCommand>,
     ) {
         let key = (api_resource.clone(), namespace.clone());
@@ -519,7 +534,7 @@ impl UiState {
         &mut self,
         cluster_key: i32,
         api_resource: ApiResource,
-        namespace: String,
+        namespace: Option<String>,
         error: String,
     ) {
         if let Some(cluster) = self.clusters.get_mut(&cluster_key) {

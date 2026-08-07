@@ -118,7 +118,7 @@ pub(super) fn show(
                     );
                     return;
                 };
-                if cluster.selected_namespaces.is_empty() {
+                if api_resource.namespaced && cluster.selected_namespaces.is_empty() {
                     workspace_empty_state(
                         ui,
                         "Choose a namespace",
@@ -142,7 +142,7 @@ pub(super) fn show(
                     ui,
                     api_resource,
                     &all_resources,
-                    cluster.selected_namespaces.len() > 1,
+                    api_resource.namespaced && cluster.selected_namespaces.len() > 1,
                 ) {
                     match action {
                         ResourceAction::EditYaml { name, namespace } => {
@@ -191,24 +191,28 @@ fn selected_watch_error(
     cluster: &super::state::ClusterState,
     api_resource: &crate::api_resource::ApiResource,
 ) -> Option<String> {
-    cluster.selected_namespaces.iter().find_map(|namespace| {
-        cluster
-            .resource_cache
-            .get(&(api_resource.clone(), namespace.clone()))
-            .and_then(|watch| watch.error.clone())
-    })
+    resource_watch_namespaces(cluster, api_resource)
+        .into_iter()
+        .find_map(|namespace| {
+            cluster
+                .resource_cache
+                .get(&(api_resource.clone(), namespace))
+                .and_then(|watch| watch.error.clone())
+        })
 }
 
 fn selected_watches_are_loading(
     cluster: &super::state::ClusterState,
     api_resource: &crate::api_resource::ApiResource,
 ) -> bool {
-    cluster.selected_namespaces.iter().any(|namespace| {
-        cluster
-            .resource_cache
-            .get(&(api_resource.clone(), namespace.clone()))
-            .is_none_or(|watch| !watch.is_synced)
-    })
+    resource_watch_namespaces(cluster, api_resource)
+        .into_iter()
+        .any(|namespace| {
+            cluster
+                .resource_cache
+                .get(&(api_resource.clone(), namespace))
+                .is_none_or(|watch| !watch.is_synced)
+        })
 }
 
 fn selected_resources<'a>(
@@ -219,16 +223,32 @@ fn selected_resources<'a>(
         return Vec::new();
     };
     let mut resources = Vec::new();
-    for namespace in &cluster.selected_namespaces {
+    for namespace in resource_watch_namespaces(cluster, api_resource) {
         if let Some(state) = cluster
             .resource_cache
-            .get(&(api_resource.clone(), namespace.clone()))
+            .get(&(api_resource.clone(), namespace))
         {
             resources.extend(state.resources.values());
         }
     }
     resources.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     resources
+}
+
+fn resource_watch_namespaces(
+    cluster: &super::state::ClusterState,
+    api_resource: &crate::api_resource::ApiResource,
+) -> Vec<Option<String>> {
+    if api_resource.namespaced {
+        cluster
+            .selected_namespaces
+            .iter()
+            .cloned()
+            .map(Some)
+            .collect()
+    } else {
+        vec![None]
+    }
 }
 
 fn show_toolbar(
@@ -256,7 +276,13 @@ fn show_toolbar(
         && namespaces
             .iter()
             .all(|namespace| cluster.selected_namespaces.contains(&namespace.name));
-    let selected_status = if cluster.selected_namespaces.len() == 1 {
+    let selected_status = if !selected_api_resource.is_some_and(|resource| resource.namespaced) {
+        selected_api_resource.map(|api_resource| {
+            cluster
+                .active_watchers
+                .contains(&(api_resource.clone(), None))
+        })
+    } else if cluster.selected_namespaces.len() == 1 {
         selected_api_resource.map(|api_resource| {
             let namespace = cluster
                 .selected_namespaces
@@ -265,7 +291,7 @@ fn show_toolbar(
                 .expect("selection length was checked");
             cluster
                 .active_watchers
-                .contains(&(api_resource.clone(), namespace.clone()))
+                .contains(&(api_resource.clone(), Some(namespace.clone())))
         })
     } else {
         None
@@ -277,51 +303,67 @@ fn show_toolbar(
         egui::Layout::left_to_right(egui::Align::Center),
         |ui| {
             ui.add_space(37.0);
-            ui.label(
-                egui::RichText::new("Namespace")
-                    .size(17.0)
-                    .color(gray::_700),
-            );
-            ui.add_space(7.0);
-            let namespace_response = TailwindCombobox::new("namespace-selector")
-                .placeholder("Search namespaces...")
-                .selected_text(selected_text)
-                .selected_status(selected_status)
-                .width(230.0)
-                .select_all(all_namespaces_selected)
-                .filter_by(|ns: &&MinimalNamespace| ns.get_name_to_display())
-                .show_items(ui, &namespaces, |cb, ns| {
-                    let status = selected_api_resource.map(|api_resource| {
-                        cluster
-                            .active_watchers
-                            .contains(&(api_resource.clone(), ns.name.clone()))
-                    });
-                    if let Some(action) = cb
-                        .item_with_status(
-                            ns.get_name_to_display(),
-                            cluster.selected_namespaces.contains(&ns.name),
-                            status,
-                        )
-                        .selection_action()
-                    {
-                        *namespace_selection = Some(match action {
-                            SelectionAction::Replace => {
-                                NamespaceSelection::Replace(ns.name.clone())
-                            }
-                            SelectionAction::Toggle => NamespaceSelection::Toggle(ns.name.clone()),
+            if selected_api_resource.is_some_and(|resource| !resource.namespaced) {
+                ui.label(egui::RichText::new("Scope").size(17.0).color(gray::_700));
+                ui.add_space(7.0);
+                ui.label(
+                    egui::RichText::new("Cluster-wide")
+                        .size(17.0)
+                        .color(gray::_700),
+                );
+            } else {
+                ui.label(
+                    egui::RichText::new("Namespace")
+                        .size(17.0)
+                        .color(gray::_700),
+                );
+                ui.add_space(7.0);
+                let namespace_response = TailwindCombobox::new("namespace-selector")
+                    .placeholder("Search namespaces...")
+                    .selected_text(selected_text)
+                    .selected_status(selected_status)
+                    .width(230.0)
+                    .select_all(all_namespaces_selected)
+                    .filter_by(|ns: &&MinimalNamespace| ns.get_name_to_display())
+                    .show_items(ui, &namespaces, |cb, ns| {
+                        let status = selected_api_resource.map(|api_resource| {
+                            cluster
+                                .active_watchers
+                                .contains(&(api_resource.clone(), Some(ns.name.clone())))
                         });
-                    }
-                });
-            if namespace_response.select_all_clicked {
-                *namespace_selection = Some(if all_namespaces_selected {
-                    NamespaceSelection::ClearAll
-                } else {
-                    NamespaceSelection::SelectAll
+                        if let Some(action) = cb
+                            .item_with_status(
+                                ns.get_name_to_display(),
+                                cluster.selected_namespaces.contains(&ns.name),
+                                status,
+                            )
+                            .selection_action()
+                        {
+                            *namespace_selection = Some(match action {
+                                SelectionAction::Replace => {
+                                    NamespaceSelection::Replace(ns.name.clone())
+                                }
+                                SelectionAction::Toggle => {
+                                    NamespaceSelection::Toggle(ns.name.clone())
+                                }
+                            });
+                        }
+                    });
+                if namespace_response.select_all_clicked {
+                    *namespace_selection = Some(if all_namespaces_selected {
+                        NamespaceSelection::ClearAll
+                    } else {
+                        NamespaceSelection::SelectAll
+                    });
+                }
+                namespace_response.response.widget_info(|| {
+                    egui::WidgetInfo::labeled(
+                        egui::WidgetType::ComboBox,
+                        ui.is_enabled(),
+                        "Namespace",
+                    )
                 });
             }
-            namespace_response.response.widget_info(|| {
-                egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, ui.is_enabled(), "Namespace")
-            });
             if selected_api_resource.is_some() {
                 ui.add_space(15.0);
                 ui.separator();
@@ -444,7 +486,7 @@ fn show_resource_action_items(
     {
         *pending_action = Some(ResourceAction::EditYaml {
             name: resource.name.clone(),
-            namespace: resource.namespace.clone().unwrap_or_default(),
+            namespace: resource.namespace.clone(),
         });
     }
     menu.separator();
@@ -460,7 +502,7 @@ fn show_resource_action_items(
     {
         *pending_action = Some(ResourceAction::RequestDelete {
             name: resource.name.clone(),
-            namespace: resource.namespace.clone().unwrap_or_default(),
+            namespace: resource.namespace.clone(),
         });
     }
 }

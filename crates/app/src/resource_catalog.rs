@@ -317,6 +317,7 @@ mod tests {
             version: "v1".to_owned(),
             kind: name.to_owned(),
             name: name.to_owned(),
+            namespaced: true,
         }
     }
 

@@ -3,10 +3,12 @@ use super::super::dialogs::show_delete_confirmation;
 use super::super::state::ClusterConnectionState;
 use super::super::state::{PendingDelete, ResourceWatchState, UiState};
 use super::fixtures::{
-    application_harness, fixture_api_resource, fixture_cluster, oracle_resource_table_state,
+    application_harness, fixture_api_resource, fixture_cluster,
+    fixture_cluster_scoped_api_resource, oracle_resource_table_state,
 };
 use crate::cluster_connection_manager::Cluster;
 use crate::minimal_namespace::MinimalNamespace;
+use crate::minimal_resource::MinimalResource;
 use crate::resource_catalog::build_resource_navigation;
 use crate::worker::{MockWorker, WorkerCommand, WorkerResult};
 use egui_kittest::Harness;
@@ -136,12 +138,12 @@ fn namespace_selector_replaces_toggles_and_selects_all_without_stopping_watches(
     assert!(
         cluster
             .active_watchers
-            .contains(&(pods.clone(), "kube-system".to_owned()))
+            .contains(&(pods.clone(), Some("kube-system".to_owned())))
     );
     assert!(
         cluster
             .active_watchers
-            .contains(&(pods.clone(), "monitoring".to_owned()))
+            .contains(&(pods.clone(), Some("monitoring".to_owned())))
     );
     assert_eq!(
         commands
@@ -149,6 +151,81 @@ fn namespace_selector_replaces_toggles_and_selects_all_without_stopping_watches(
             .filter(|command| matches!(command, WorkerCommand::StartResourceWatch { .. }))
             .count(),
         3
+    );
+}
+
+#[test]
+fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
+    let nodes = fixture_cluster_scoped_api_resource("core", "Node", "nodes");
+    let mut cluster = fixture_cluster(1, "dev");
+    cluster.connection = ClusterConnectionState::Connected(None);
+    cluster.resource_navigation = build_resource_navigation(vec![nodes.clone()]);
+
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = UiState {
+        clusters: HashMap::from([(1, cluster)]),
+        next_cluster_key: 1,
+        selected_cluster: Some(1),
+    };
+    harness.run();
+    harness.get_by_label("nodes").click_accesskit();
+    harness.run_steps(1);
+
+    assert!(
+        harness.state().ui_state.clusters[&1]
+            .selected_namespaces
+            .is_empty()
+    );
+    assert!(matches!(
+        harness.state().worker.commands.as_slice(),
+        [WorkerCommand::StartResourceWatch {
+            cluster_key: 1,
+            api_resource,
+            namespace: None,
+        }] if api_resource == &nodes
+    ));
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(WorkerResult::KubernetesResourcesReplaced {
+            cluster_key: 1,
+            api_resource: nodes.clone(),
+            namespace: None,
+            resources: vec![MinimalResource {
+                uid: "node-uid".into(),
+                name: "kind-control-plane".into(),
+                namespace: None,
+                creation_timestamp: None,
+                phase: Some("Ready".into()),
+                ready_status: None,
+            }],
+        });
+    harness.run();
+    harness.get_by_label("Cluster-wide");
+    harness.get_by_label("kind-control-plane");
+
+    let cluster = harness.state_mut().ui_state.clusters.get_mut(&1).unwrap();
+    cluster.selected_namespaces = HashSet::from(["default".into(), "kube-system".into()]);
+    harness.run();
+    assert_eq!(
+        harness.state().ui_state.clusters[&1]
+            .resource_cache
+            .get(&(nodes, None))
+            .expect("cluster-scoped watch state should be retained")
+            .resources
+            .len(),
+        1
+    );
+    assert_eq!(
+        harness
+            .state()
+            .worker
+            .commands
+            .iter()
+            .filter(|command| matches!(command, WorkerCommand::StartResourceWatch { .. }))
+            .count(),
+        1
     );
 }
 
@@ -166,15 +243,15 @@ fn namespace_selector_search_snapshot_shows_active_watches() {
     );
     cluster.selected_namespaces = HashSet::from(["kube-system".into(), "monitoring".into()]);
     cluster.resource_cache.insert(
-        (pods.clone(), "monitoring".into()),
+        (pods.clone(), Some("monitoring".into())),
         ResourceWatchState {
             is_synced: true,
             ..Default::default()
         },
     );
     cluster.active_watchers = HashSet::from([
-        (pods.clone(), "kube-system".into()),
-        (pods, "monitoring".into()),
+        (pods.clone(), Some("kube-system".into())),
+        (pods, Some("monitoring".into())),
     ]);
 
     let mut harness = application_harness::<MockWorker>();
@@ -308,7 +385,7 @@ fn delete_confirmation_can_be_cancelled_without_sending_a_command() {
     cluster.selected_api_resource = Some(fixture_api_resource("", "ConfigMap", "configmaps"));
     cluster.pending_delete = Some(PendingDelete {
         resource_name: "important-config".into(),
-        namespace: "default".into(),
+        namespace: Some("default".into()),
     });
     let state = Rc::new(RefCell::new(UiState {
         clusters: HashMap::from([(1, cluster)]),
@@ -557,7 +634,7 @@ fn test_ui_flow() {
                     cluster_key: 1,
                     api_resource,
                     namespace,
-                } if api_resource == &pods && namespace == "default"
+                } if api_resource == &pods && namespace.as_deref() == Some("default")
             ))
     );
     harness.get_by_label("Loading resources");
@@ -570,7 +647,7 @@ fn test_ui_flow() {
         .push_back(WorkerResult::KubernetesResourcesReplaced {
             cluster_key: 1,
             api_resource: pods.clone(),
-            namespace: "default".into(),
+            namespace: Some("default".into()),
             resources: Vec::new(),
         });
     harness.run();
@@ -583,7 +660,7 @@ fn test_ui_flow() {
         .push_back(WorkerResult::KubernetesResourceWatchFailed {
             cluster_key: 1,
             api_resource: pods,
-            namespace: "default".into(),
+            namespace: Some("default".into()),
             error: watch_error.into(),
         });
     harness.run();
