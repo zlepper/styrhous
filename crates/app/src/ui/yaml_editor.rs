@@ -33,13 +33,14 @@ pub(super) fn show(
                         .size(14.0)
                         .color(WHITE),
                 );
+                let resource_scope = yaml_panel.namespace.as_deref().map_or_else(
+                    || format!("{} / Cluster-wide", yaml_panel.api_resource.kind),
+                    |namespace| format!("{} / {namespace}", yaml_panel.api_resource.kind),
+                );
                 ui.label(
-                    egui::RichText::new(format!(
-                        "{} / {}",
-                        yaml_panel.api_resource.kind, yaml_panel.namespace
-                    ))
-                    .size(12.0)
-                    .color(gray::_400),
+                    egui::RichText::new(resource_scope)
+                        .size(12.0)
+                        .color(gray::_400),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui

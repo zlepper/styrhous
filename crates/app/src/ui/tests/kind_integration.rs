@@ -186,7 +186,7 @@ fn wait_for_resource_sync(
             app.ui_state.clusters.get(&cluster_key).and_then(|cluster| {
                 cluster
                     .resource_cache
-                    .get(&(api_resource.clone(), namespace.clone()))
+                    .get(&(api_resource.clone(), Some(namespace.clone())))
                     .filter(|state| state.is_synced)
                     .map(|_| ())
             })
@@ -238,7 +238,7 @@ fn test_resource_watcher_integration() {
     );
 
     let resources = &harness.state().ui_state.clusters[&cluster_key].resource_cache
-        [&(configmaps_resource, fixture.namespace.clone())]
+        [&(configmaps_resource, Some(fixture.namespace.clone()))]
         .resources;
     assert!(
         resources
@@ -269,7 +269,7 @@ fn test_resource_actions_integration() {
     );
     assert!(
         harness.state().ui_state.clusters[&cluster_key].resource_cache
-            [&(configmaps_resource.clone(), fixture.namespace.clone())]
+            [&(configmaps_resource.clone(), Some(fixture.namespace.clone()))]
             .resources
             .values()
             .any(|resource| resource.name == test_configmap_name)
@@ -357,7 +357,7 @@ fn test_resource_actions_integration() {
         &mut harness,
         |app| {
             let resources = &app.ui_state.clusters[&cluster_key].resource_cache
-                [&(configmaps_resource.clone(), fixture.namespace.clone())]
+                [&(configmaps_resource.clone(), Some(fixture.namespace.clone()))]
                 .resources;
             (!resources
                 .values()

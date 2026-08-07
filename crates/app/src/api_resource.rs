@@ -4,4 +4,5 @@ pub struct ApiResource {
     pub version: String,
     pub kind: String,
     pub name: String,
+    pub namespaced: bool,
 }
