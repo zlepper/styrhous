@@ -2,7 +2,7 @@
 
 use egui::{
     Button, Color32, CornerRadius, Frame, Image, Margin, Popup, PopupCloseBehavior, Response,
-    Shadow, Stroke, Ui, Vec2,
+    SetOpenCommand, Shadow, Stroke, Ui, Vec2,
 };
 
 use crate::{
@@ -65,21 +65,22 @@ impl MoreButton {
     /// row-level context menus.
     pub fn show_context_menu(response: &Response, add_contents: impl FnOnce(&mut MoreMenu<'_>)) {
         let popup_id = Popup::default_response_id(response);
-        let ctx = response.ctx.clone();
-        let secondary_click_position = ctx.input(|input| {
-            input
-                .pointer
-                .button_clicked(egui::PointerButton::Secondary)
-                .then(|| input.pointer.latest_pos())
-                .flatten()
+        let secondary_clicked_in_response = response.ctx.input(|input| {
+            input.pointer.button_clicked(egui::PointerButton::Secondary)
+                && input
+                    .pointer
+                    .latest_pos()
+                    .is_some_and(|position| response.interact_rect.contains(position))
         });
-        if secondary_click_position
-            .is_some_and(|position| response.interact_rect.contains(position))
-        {
-            #[allow(deprecated)]
-            ctx.memory_mut(|memory| memory.open_popup_at(popup_id, secondary_click_position));
-        }
+        let set_open = if secondary_clicked_in_response {
+            Some(SetOpenCommand::Bool(true))
+        } else if response.clicked() {
+            Some(SetOpenCommand::Bool(false))
+        } else {
+            None
+        };
         let _popup = Popup::context_menu(response)
+            .open_memory(set_open)
             .gap(4.0)
             .width(MENU_WIDTH)
             .close_behavior(PopupCloseBehavior::CloseOnClickOutside)

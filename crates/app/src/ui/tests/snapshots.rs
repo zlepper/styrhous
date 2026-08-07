@@ -26,6 +26,22 @@ fn select_namespace(harness: &mut Harness<MyEguiApp<MockWorker>>, namespace: &st
     harness.run();
 }
 
+fn secondary_click(harness: &mut Harness<MyEguiApp<MockWorker>>, position: egui::Pos2) {
+    harness.event(egui::Event::PointerMoved(position));
+    harness.event(egui::Event::PointerButton {
+        pos: position,
+        button: egui::PointerButton::Secondary,
+        pressed: true,
+        modifiers: egui::Modifiers::default(),
+    });
+    harness.event(egui::Event::PointerButton {
+        pos: position,
+        button: egui::PointerButton::Secondary,
+        pressed: false,
+        modifiers: egui::Modifiers::default(),
+    });
+}
+
 #[test]
 fn namespace_selector_replaces_toggles_and_selects_all_without_stopping_watches() {
     let pods = fixture_api_resource("", "Pod", "pods");
@@ -326,23 +342,29 @@ fn resource_table_row_context_menu_snapshot() {
         resource_name_rect.right() + 32.0,
         resource_name_rect.center().y,
     );
-    harness.event(egui::Event::PointerMoved(click_position));
-    harness.event(egui::Event::PointerButton {
-        pos: click_position,
-        button: egui::PointerButton::Secondary,
-        pressed: true,
-        modifiers: egui::Modifiers::default(),
-    });
-    harness.event(egui::Event::PointerButton {
-        pos: click_position,
-        button: egui::PointerButton::Secondary,
-        pressed: false,
-        modifiers: egui::Modifiers::default(),
-    });
+    secondary_click(&mut harness, click_position);
     harness.run();
 
     harness.get_by_label("Edit YAML");
     harness.snapshot("oracle_resource_table_row_context_actions");
+}
+
+#[test]
+fn resource_table_row_context_menu_opens_when_right_clicking_resource_text() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness.run();
+    harness.get_by_label("Apps & Containers").click_accesskit();
+    harness.run();
+
+    let text_position = harness
+        .get_by_label("coredns-66bc5c9577-ffw2s")
+        .rect()
+        .center();
+    secondary_click(&mut harness, text_position);
+    harness.run();
+
+    harness.get_by_label("Edit YAML");
 }
 
 #[test]
