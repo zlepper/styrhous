@@ -3,8 +3,8 @@ use super::state::{
     UiState,
 };
 use super::widgets::{
-    container_indicators, display_resource_title, resource_status, workspace_empty_state,
-    workspace_error_state, workspace_loading_state, workspace_search_error_state,
+    container_indicators, resource_status, workspace_empty_state, workspace_error_state,
+    workspace_loading_state, workspace_search_error_state,
 };
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::{MinimalResource, format_age};
@@ -22,6 +22,9 @@ use std::cell::RefCell;
 
 const RESOURCE_SEARCH_WIDTH: f32 = 210.0;
 const TOOLBAR_RIGHT_INSET: f32 = 24.0;
+const TOOLBAR_HEIGHT: f32 = 64.0;
+const TOOLBAR_CONTENT_HEIGHT: f32 = 50.0;
+const TOOLBAR_VERTICAL_PADDING: f32 = (TOOLBAR_HEIGHT - TOOLBAR_CONTENT_HEIGHT) / 2.0;
 
 struct FilteredResources {
     resources: Vec<MinimalResource>,
@@ -53,7 +56,7 @@ pub(super) fn show(
             WorkspacePage::show(ui, |ui| {
                 let toolbar_rect = egui::Rect::from_min_size(
                     ui.max_rect().min,
-                    egui::vec2(ui.available_width(), 102.0),
+                    egui::vec2(ui.available_width(), TOOLBAR_HEIGHT),
                 );
                 ui.painter()
                     .rect_filled(toolbar_rect, 0.0, TOOLBAR_BACKGROUND);
@@ -136,8 +139,11 @@ pub(super) fn show(
                         .resource_searches
                         .insert(api_resource.clone(), resource_search);
                 }
-                ui.add_space(20.0);
-                ui.separator();
+                ui.add_space(TOOLBAR_VERTICAL_PADDING);
+                ui.painter().line_segment(
+                    [toolbar_rect.left_bottom(), toolbar_rect.right_bottom()],
+                    ui.visuals().widgets.noninteractive.bg_stroke,
+                );
 
                 let Some(api_resource) = &selected_api_resource else {
                     workspace_empty_state(
@@ -302,9 +308,6 @@ fn show_toolbar(
     resource_search: &mut ResourceSearchState,
     namespace_selection: &mut Option<NamespaceSelection>,
 ) -> FilteredResources {
-    let resource_title = selected_api_resource
-        .map(|resource| display_resource_title(&resource.name))
-        .unwrap_or_else(|| "Resources".to_owned());
     let selected_text = match cluster.selected_namespaces.len() {
         0 => "Select namespaces".to_owned(),
         1 => cluster
@@ -343,9 +346,9 @@ fn show_toolbar(
 
     let mut filtered_resources = filter_resources(all_resources, resource_search);
 
-    ui.add_space(26.0);
+    ui.add_space(TOOLBAR_VERTICAL_PADDING);
     ui.allocate_ui_with_layout(
-        egui::vec2(ui.available_width(), 50.0),
+        egui::vec2(ui.available_width(), TOOLBAR_CONTENT_HEIGHT),
         egui::Layout::top_down(egui::Align::Min),
         |ui| {
             StripBuilder::new(ui)
@@ -429,12 +432,6 @@ fn show_toolbar(
                             ui.add_space(15.0);
                             ui.separator();
                             ui.add_space(18.0);
-                            ui.label(
-                                egui::RichText::new(resource_title)
-                                    .size(20.0)
-                                    .color(gray::_900),
-                            );
-                            ui.add_space(4.0);
                             ui.label(
                                 egui::RichText::new(resource_count_label(
                                     all_resources.len(),
