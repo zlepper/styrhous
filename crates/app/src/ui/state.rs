@@ -117,7 +117,11 @@ impl PodLogWindowState {
         }
         let bytes = rows
             .iter()
-            .map(|row| row.text.len() + row.match_ranges.len() * 2 * std::mem::size_of::<usize>())
+            .map(|row| {
+                row.text.len()
+                    + row.style_spans.len() * std::mem::size_of::<crate::ansi::AnsiStyleSpan>()
+                    + row.match_ranges.len() * 2 * std::mem::size_of::<usize>()
+            })
             .sum();
         self.page_cache_bytes += bytes;
         self.pages.insert(key, LogPage { rows, bytes });
@@ -1699,6 +1703,7 @@ mod tests {
             display_row,
             line_index: display_row,
             text: text.to_owned(),
+            style_spans: Vec::new(),
             match_ranges: Vec::new(),
         }
     }

@@ -4,6 +4,7 @@
 //! owns the API stream; the UI forwards its bounded batches here and consumes
 //! this service's paged results.
 
+use crate::ansi::{AnsiStyleSpan, parse_log_line};
 use regex::Regex;
 use std::collections::HashMap;
 use std::fs::File;
@@ -39,6 +40,7 @@ pub(crate) struct LogPageRow {
     pub(crate) display_row: usize,
     pub(crate) line_index: usize,
     pub(crate) text: String,
+    pub(crate) style_spans: Vec<AnsiStyleSpan>,
     pub(crate) match_ranges: Vec<(usize, usize)>,
 }
 
@@ -523,9 +525,10 @@ impl LogStore {
             data.write_all(&length.to_le_bytes())?;
             data.write_all(bytes)?;
             next_offset += u64::from(length) + 4;
+            let visible_line = parse_log_line(line);
             if completed_matcher
                 .as_ref()
-                .is_some_and(|matcher| matcher.is_match(line))
+                .is_some_and(|matcher| matcher.is_match(&visible_line.text))
             {
                 matching_line_indices.push(first_line_index + relative_line_index);
             }
@@ -648,7 +651,7 @@ impl LogStore {
         // here before the index becomes visible.
         for line_index in scanned_lines..self.total_lines {
             let line = self.read_line(line_index)?;
-            if matcher.is_match(&line) {
+            if matcher.is_match(&parse_log_line(&line).text) {
                 tail_matches.push(line_index);
             }
         }
@@ -714,12 +717,12 @@ impl LogStore {
             } else {
                 display_row
             };
-            let text = self.read_line(line_index)?;
+            let parsed = parse_log_line(&self.read_line(line_index)?);
             let match_ranges = matcher
                 .as_ref()
                 .map(|matcher| {
                     matcher
-                        .find_iter(&text)
+                        .find_iter(&parsed.text)
                         .map(|range| (range.start(), range.end()))
                         .collect()
                 })
@@ -727,7 +730,8 @@ impl LogStore {
             rows.push(LogPageRow {
                 display_row,
                 line_index,
-                text,
+                text: parsed.text,
+                style_spans: parsed.style_spans,
                 match_ranges,
             });
         }
@@ -797,7 +801,7 @@ fn scan_records(
         if data.read_exact(&mut bytes).is_err() {
             return;
         }
-        if matcher.is_match(&String::from_utf8_lossy(&bytes)) {
+        if matcher.is_match(&parse_log_line(&String::from_utf8_lossy(&bytes)).text) {
             match_lines.push(scanned_lines);
         }
         scanned_lines += 1;
@@ -954,6 +958,50 @@ mod tests {
         };
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].match_ranges, vec![(0, 3)]);
+    }
+
+    #[test]
+    fn search_ignores_ansi_sequences_and_matches_across_style_boundaries() {
+        let service = LogStoreService::default();
+        service.append(
+            5,
+            vec!["\u{1b}[31map\u{1b}[0mi ready".into(), "worker ready".into()],
+        );
+        let _ = wait_for(&service, |result| {
+            matches!(result, LogStoreResult::Updated { .. })
+        });
+
+        service.search(5, 1, "api".into(), false);
+        let LogStoreResult::SearchCompleted { match_count, .. } = wait_for(&service, |result| {
+            matches!(
+                result,
+                LogStoreResult::SearchCompleted { generation: 1, .. }
+            )
+        }) else {
+            unreachable!()
+        };
+        assert_eq!(match_count, 1);
+
+        service.load_page(5, 1, true, 0);
+        let LogStoreResult::PageLoaded { rows, .. } = wait_for(&service, |result| {
+            matches!(result, LogStoreResult::PageLoaded { generation: 1, .. })
+        }) else {
+            unreachable!()
+        };
+        assert_eq!(rows[0].text, "api ready");
+        assert_eq!(rows[0].match_ranges, vec![(0, 3)]);
+        assert_eq!(rows[0].style_spans[0].range, (0, 2));
+
+        service.search(5, 2, "a.i".into(), true);
+        let LogStoreResult::SearchCompleted { match_count, .. } = wait_for(&service, |result| {
+            matches!(
+                result,
+                LogStoreResult::SearchCompleted { generation: 2, .. }
+            )
+        }) else {
+            unreachable!()
+        };
+        assert_eq!(match_count, 1);
     }
 
     #[test]
