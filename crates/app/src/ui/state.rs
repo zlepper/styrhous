@@ -71,6 +71,8 @@ pub(super) struct ResourceDetailPanelState {
     pub(super) namespace: Option<String>,
     pub(super) resource_name: String,
     pub(super) resource_uid: String,
+    /// Stable identity of this visit in the inspector history.
+    pub(super) history_entry_id: u64,
     pub(super) selection_generation: u64,
     pub(super) detail: Option<ResourceDetail>,
     pub(super) events: Vec<ResourceEvent>,
@@ -88,12 +90,16 @@ pub(super) struct ResourceDetailPanelState {
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum ResourceDetailTransition {
+    Opening,
     Forward,
     Back,
+    Closing,
 }
 
 #[derive(Debug, Clone)]
 pub(super) struct ResourceDetailHistoryEntry {
+    /// Distinguishes repeated visits to the same Kubernetes resource.
+    pub(super) history_entry_id: u64,
     pub(super) api_resource: ApiResource,
     pub(super) namespace: Option<String>,
     pub(super) resource_name: String,
@@ -110,6 +116,7 @@ pub(super) struct ResourceDetailHistoryEntry {
 impl ResourceDetailPanelState {
     fn history_entry(&self) -> ResourceDetailHistoryEntry {
         ResourceDetailHistoryEntry {
+            history_entry_id: self.history_entry_id,
             api_resource: self.api_resource.clone(),
             namespace: self.namespace.clone(),
             resource_name: self.resource_name.clone(),
@@ -125,6 +132,7 @@ impl ResourceDetailPanelState {
     }
 
     fn replace_current(&mut self, entry: ResourceDetailHistoryEntry, selection_generation: u64) {
+        self.history_entry_id = entry.history_entry_id;
         self.api_resource = entry.api_resource;
         self.namespace = entry.namespace;
         self.resource_name = entry.resource_name;
@@ -394,6 +402,7 @@ impl UiState {
             namespace: namespace.clone(),
             resource_name: name.clone(),
             resource_uid: uid.clone(),
+            history_entry_id: selection_generation,
             selection_generation,
             detail: None,
             events: Vec::new(),
@@ -404,7 +413,7 @@ impl UiState {
             data_editor: None,
             back_stack: Vec::new(),
             forward_stack: Vec::new(),
-            transition: None,
+            transition: Some(ResourceDetailTransition::Opening),
             dismiss_on_outside_click: false,
         });
         commands_to_send.push(crate::worker::WorkerCommand::StartResourceDetailWatch {
@@ -438,6 +447,7 @@ impl UiState {
         let selection_generation = cluster.next_detail_generation;
         panel.replace_current(
             ResourceDetailHistoryEntry {
+                history_entry_id: selection_generation,
                 api_resource: api_resource.clone(),
                 namespace: namespace.clone(),
                 resource_name: name.clone(),
@@ -524,6 +534,21 @@ impl UiState {
                 cluster_key: cluster.cluster_key,
             });
         }
+    }
+
+    pub(super) fn begin_close_resource_detail(&mut self, cluster_key: i32) -> bool {
+        let Some(panel) = self
+            .clusters
+            .get_mut(&cluster_key)
+            .and_then(|cluster| cluster.resource_detail_panel.as_mut())
+        else {
+            return false;
+        };
+        if matches!(panel.transition, Some(ResourceDetailTransition::Closing)) {
+            return false;
+        }
+        panel.transition = Some(ResourceDetailTransition::Closing);
+        true
     }
 
     pub(super) fn close_all_resource_details(
