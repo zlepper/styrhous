@@ -206,21 +206,21 @@ impl TailwindTable {
             move |ui, item, column_index| {
                 render_cell(ui, item, column_index);
             },
-            |_, _| {},
+            |_, _, _| {},
         );
     }
 
     /// Show the table and receive an interactive response for every cell.
     ///
-    /// Callers can attach the same row-level interaction, such as a context
-    /// menu, to every cell response. This makes the interaction available from
-    /// anywhere in a row while preserving egui's per-widget interaction model.
+    /// Callers receive every cell response with its column index, so they can
+    /// attach a context menu across the row or keep a primary action scoped to
+    /// a specific cell while preserving egui's per-widget interaction model.
     pub fn show_with_row_response<'a, T>(
         self,
         ui: &mut Ui,
         items: &'a [T],
         mut render_cell: impl FnMut(&mut Ui, &'a T, usize),
-        mut render_row: impl FnMut(&egui::Response, &'a T),
+        mut render_row: impl FnMut(&egui::Response, &'a T, usize),
     ) {
         let available_height = ui.available_height();
         let num_columns = self.columns.len();
@@ -303,7 +303,7 @@ impl TailwindTable {
                         });
 
                         let response = interaction.expect("table cell should register interaction");
-                        render_row(&response, item);
+                        render_row(&response, item, col_index);
                     }
                 });
             });

@@ -10,6 +10,11 @@ use crate::cluster_connection_manager::Cluster;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use crate::resource_catalog::build_resource_navigation;
+use crate::resource_detail::{
+    PodConditionDetail, PodContainerDetail, PodDetail, PodEnvironmentVariableDetail,
+    PodEnvironmentVariableSource, PodVolumeDetail, ResourceDetail, ResourceDetailPayload,
+    ResourceEvent,
+};
 use crate::resource_table::{
     AVAILABLE_COLUMN, CONTAINERS_COLUMN, CellValue, ContainerIndicator, ContainerKind,
     READY_COLUMN, RESTARTS_COLUMN, STATUS_COLUMN, StatusTone, UP_TO_DATE_COLUMN,
@@ -41,6 +46,22 @@ fn secondary_click(harness: &mut Harness<MyEguiApp<MockWorker>>, position: egui:
     harness.event(egui::Event::PointerButton {
         pos: position,
         button: egui::PointerButton::Secondary,
+        pressed: false,
+        modifiers: egui::Modifiers::default(),
+    });
+}
+
+fn primary_click(harness: &mut Harness<MyEguiApp<MockWorker>>, position: egui::Pos2) {
+    harness.event(egui::Event::PointerMoved(position));
+    harness.event(egui::Event::PointerButton {
+        pos: position,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::default(),
+    });
+    harness.event(egui::Event::PointerButton {
+        pos: position,
+        button: egui::PointerButton::Primary,
         pressed: false,
         modifiers: egui::Modifiers::default(),
     });
@@ -630,6 +651,222 @@ fn resource_table_row_context_menu_opens_when_right_clicking_resource_text() {
     harness.run();
 
     harness.get_by_label("Edit YAML");
+}
+
+#[test]
+fn resource_name_opens_and_closes_a_live_detail_inspector() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness.run();
+    harness.get_by_label("Apps & Containers").click_accesskit();
+    harness.run();
+
+    let name = "coredns-66bc5c9577-ffw2s";
+    let resource_position = harness.get_by_label(name).rect().center();
+    primary_click(&mut harness, resource_position);
+    harness.run_steps(1);
+
+    assert!(
+        matches!(
+            harness.state().worker.commands.last(),
+            Some(WorkerCommand::StartResourceDetailWatch {
+                cluster_key: 2,
+                resource_name,
+                resource_uid,
+                selection_generation: 1,
+                ..
+            }) if resource_name == name && resource_uid == "fixture-0"
+        ),
+        "commands: {:?}",
+        harness.state().worker.commands
+    );
+
+    let pods = fixture_api_resource("core", "Pod", "pods");
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(WorkerResult::ResourceDetailUpdated {
+            cluster_key: 2,
+            selection_generation: 1,
+            detail: ResourceDetail {
+                api_resource: pods,
+                name: name.into(),
+                namespace: Some("kube-system".into()),
+                uid: "fixture-0".into(),
+                creation_timestamp: None,
+                owner: None,
+                labels: BTreeMap::new(),
+                annotations: BTreeMap::new(),
+                payload: ResourceDetailPayload::Generic,
+            },
+        });
+    harness.run();
+    assert!(
+        harness.state().ui_state.clusters[&2]
+            .resource_detail_panel
+            .as_ref()
+            .and_then(|panel| panel.detail.as_ref())
+            .is_some()
+    );
+    harness.get_by_label("×").click_accesskit();
+    harness.run();
+
+    assert!(
+        harness.state().ui_state.clusters[&2]
+            .resource_detail_panel
+            .is_none()
+    );
+    assert!(matches!(
+        harness.state().worker.commands.last(),
+        Some(WorkerCommand::StopResourceDetailWatch { cluster_key: 2 })
+    ));
+}
+
+#[test]
+fn pod_resource_detail_inspector_snapshot() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness.run();
+    harness.get_by_label("Apps & Containers").click_accesskit();
+    harness.run();
+
+    let name = "coredns-66bc5c9577-ffw2s";
+    let resource_position = harness.get_by_label(name).rect().center();
+    primary_click(&mut harness, resource_position);
+    harness.run_steps(1);
+    let pods = fixture_api_resource("core", "Pod", "pods");
+    harness.state_mut().worker.results.extend([
+        WorkerResult::ResourceDetailUpdated {
+            cluster_key: 2,
+            selection_generation: 1,
+            detail: ResourceDetail {
+                api_resource: pods,
+                name: name.into(),
+                namespace: Some("kube-system".into()),
+                uid: "fixture-0".into(),
+                creation_timestamp: None,
+                owner: None,
+                labels: BTreeMap::from([("k8s-app".into(), "kube-dns".into())]),
+                annotations: BTreeMap::new(),
+                payload: ResourceDetailPayload::Pod(PodDetail {
+                    phase: "Running".into(),
+                    conditions: vec![PodConditionDetail {
+                        type_: "Ready".into(),
+                        status: "True".into(),
+                        reason: None,
+                        message: None,
+                    }],
+                    node_name: Some("kind-control-plane".into()),
+                    pod_ip: Some("10.244.0.3".into()),
+                    host_ip: Some("172.18.0.2".into()),
+                    qos_class: Some("Burstable".into()),
+                    restart_policy: Some("Always".into()),
+                    service_account_name: Some("coredns".into()),
+                    dns_policy: Some("ClusterFirst".into()),
+                    containers: vec![PodContainerDetail {
+                        name: "coredns".into(),
+                        image: "registry.k8s.io/coredns/coredns:v1.11.1".into(),
+                        ready: true,
+                        restart_count: 0,
+                        state: "Running".into(),
+                        reason: None,
+                        message: None,
+                        command: vec!["/coredns".into()],
+                        args: vec![
+                            "-conf".into(),
+                            "/etc/coredns/Corefile".into(),
+                            "--cluster-domain=cluster.local --feature-gates=VeryLongFeature=true --request-timeout=60s".into(),
+                        ],
+                        ports: vec!["53/UDP".into()],
+                        environment_variables: vec![
+                            PodEnvironmentVariableDetail {
+                                name: "LOG_LEVEL".into(),
+                                value: Some("info".into()),
+                                source: PodEnvironmentVariableSource::Literal,
+                            },
+                            PodEnvironmentVariableDetail {
+                                name: "KUBERNETES_SERVICE_HOST".into(),
+                                value: Some("10.244.0.3".into()),
+                                source: PodEnvironmentVariableSource::Field {
+                                    path: "status.podIP".into(),
+                                },
+                            },
+                            PodEnvironmentVariableDetail {
+                                name: "DNS_LOG_FORMAT".into(),
+                                value: Some("json".into()),
+                                source: PodEnvironmentVariableSource::ConfigMapKey {
+                                    name: "coredns-settings".into(),
+                                    key: "log-format".into(),
+                                    optional: false,
+                                },
+                            },
+                            PodEnvironmentVariableDetail {
+                                name: "API_TOKEN".into(),
+                                value: Some("test-token".into()),
+                                source: PodEnvironmentVariableSource::SecretKey {
+                                    name: "api-credentials".into(),
+                                    key: "token".into(),
+                                    optional: false,
+                                },
+                            },
+                        ],
+                    }],
+                    volumes: vec![
+                        PodVolumeDetail {
+                            name: "config-volume".into(),
+                            kind: "ConfigMap".into(),
+                            source: "coredns".into(),
+                            mount_path: Some("/etc/coredns".into()),
+                            read_only: false,
+                        },
+                        PodVolumeDetail {
+                            name: "kube-api-access".into(),
+                            kind: "Projected".into(),
+                            source: "kube-api-access".into(),
+                            mount_path: Some(
+                                "/var/run/secrets/kubernetes.io/serviceaccount".into(),
+                            ),
+                            read_only: true,
+                        },
+                    ],
+                }),
+            },
+        },
+        WorkerResult::ResourceEventsReplaced {
+            cluster_key: 2,
+            selection_generation: 1,
+            events: vec![ResourceEvent {
+                uid: "event-1".into(),
+                type_: "Normal".into(),
+                reason: "Started".into(),
+                message: "Started container coredns".into(),
+                source: Some("kubelet".into()),
+                count: 1,
+                last_timestamp: None,
+            }],
+        },
+    ]);
+    harness.run();
+
+    let first_arg_top = harness.get_by_label("-conf").rect().top();
+    let second_arg_top = harness.get_by_label("/etc/coredns/Corefile").rect().top();
+    let long_arg_top = harness
+        .get_by_label(
+            "--cluster-domain=cluster.local --feature-gates=VeryLongFeature=true --request-timeout=60s",
+        )
+        .rect()
+        .top();
+    assert_eq!(first_arg_top, second_arg_top);
+    assert_eq!(second_arg_top, long_arg_top);
+
+    harness.snapshot_options(
+        "pod_resource_detail_inspector",
+        &egui_kittest::SnapshotOptions::new().failed_pixel_count_threshold(1),
+    );
+    harness.get_by_label("Reveal").click_accesskit();
+    harness.run();
+    harness.get_by_label("test-token");
 }
 
 #[test]

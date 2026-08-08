@@ -15,6 +15,7 @@ pub(crate) mod storage_class;
 
 use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::{ResourceWatcher, TypedWatcherContext};
+use crate::resource_detail::ResourceDetailPayload;
 use crate::resource_table::{
     CustomResourceColumn, ResourceTableDefinition, custom_table_definition,
 };
@@ -177,4 +178,16 @@ pub(crate) fn watcher_for(context: TypedWatcherContext) -> Option<Box<dyn Resour
     HANDLERS
         .iter()
         .find_map(|handler| handler.watcher(context.clone()))
+}
+
+/// Builds the resource-specific portion of a detail response. The generic metadata
+/// is always present, even when no handler recognises the resource.
+pub(crate) fn detail_payload(
+    api_resource: &ApiResource,
+    object: &kube::api::DynamicObject,
+) -> ResourceDetailPayload {
+    if matches_namespaced_api_resource::<k8s_openapi::api::core::v1::Pod>(api_resource) {
+        return pod::detail_payload(object).unwrap_or(ResourceDetailPayload::Generic);
+    }
+    ResourceDetailPayload::Generic
 }

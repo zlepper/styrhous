@@ -2,6 +2,10 @@ use crate::api_resource::ApiResource;
 use crate::helpers::ResultExt;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
+use crate::resource_detail::{
+    PodEnvironmentVariableDetail, PodEnvironmentVariableSource, ResourceDetail,
+    ResourceDetailPayload, ResourceEvent, ResourceOwner,
+};
 use crate::resource_handlers;
 use crate::resource_table::{CellValue, CustomResourceColumn};
 use crate::worker::{WorkerResult, WorkerResultSender};
@@ -10,7 +14,7 @@ use futures_util::future::try_join_all;
 use futures_util::pin_mut;
 use futures_util::stream::StreamExt;
 use itertools::Itertools;
-use k8s_openapi::api::core::v1::Namespace;
+use k8s_openapi::api::core::v1::{ConfigMap, Event as KubernetesEvent, Namespace, Secret};
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::{APIGroup, GroupVersionForDiscovery};
 use k8s_openapi::{ClusterResourceScope, NamespaceResourceScope};
@@ -21,7 +25,7 @@ use kube::config::Kubeconfig;
 use kube::runtime::watcher;
 use kube::runtime::watcher::{Event, ListSemantic};
 use kube::{Api, Resource};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
@@ -966,6 +970,460 @@ pub(crate) fn minimal_resource_from_typed<T: Resource>(
     }
 }
 
+/// Keep the inspector current independently of the compact resource-table watcher.
+/// This task is owned and cancelled by the worker when its selection changes.
+pub async fn watch_resource_detail(
+    cluster_key: i32,
+    client: kube::Client,
+    api_resource: ApiResource,
+    namespace: Option<String>,
+    resource_name: String,
+    resource_uid: String,
+    selection_generation: u64,
+    event_sender: WorkerResultSender,
+) {
+    tokio::join!(
+        watch_detail_object(
+            cluster_key,
+            client.clone(),
+            api_resource.clone(),
+            namespace.clone(),
+            resource_name,
+            selection_generation,
+            event_sender.clone(),
+        ),
+        watch_detail_events(
+            cluster_key,
+            client,
+            namespace,
+            resource_uid,
+            selection_generation,
+            event_sender,
+        ),
+    );
+}
+
+async fn watch_detail_object(
+    cluster_key: i32,
+    client: kube::Client,
+    api_resource: ApiResource,
+    namespace: Option<String>,
+    resource_name: String,
+    selection_generation: u64,
+    event_sender: WorkerResultSender,
+) {
+    let api = match create_dynamic_api(&client, &api_resource, namespace.as_deref()).await {
+        Ok(api) => api,
+        Err(error) => {
+            send_detail_error(
+                &event_sender,
+                cluster_key,
+                selection_generation,
+                false,
+                error,
+            );
+            return;
+        }
+    };
+    let config = watcher_config().fields(&format!("metadata.name={resource_name}"));
+    let stream = watcher(api, config);
+    pin_mut!(stream);
+    let mut found_during_initial_list = false;
+    while let Some(event) = stream.next().await {
+        let event = match event {
+            Ok(event) => event,
+            Err(error) => {
+                send_detail_error(
+                    &event_sender,
+                    cluster_key,
+                    selection_generation,
+                    false,
+                    error,
+                );
+                return;
+            }
+        };
+        match event {
+            Event::Apply(object) => {
+                event_sender
+                    .send(WorkerResult::ResourceDetailUpdated {
+                        cluster_key,
+                        selection_generation,
+                        detail: resource_detail_from_dynamic(&client, api_resource.clone(), object)
+                            .await,
+                    })
+                    .log_if_error("Failed to send resource detail update");
+            }
+            Event::InitApply(object) => {
+                found_during_initial_list = true;
+                event_sender
+                    .send(WorkerResult::ResourceDetailUpdated {
+                        cluster_key,
+                        selection_generation,
+                        detail: resource_detail_from_dynamic(&client, api_resource.clone(), object)
+                            .await,
+                    })
+                    .log_if_error("Failed to send resource detail update");
+            }
+            Event::Delete(_) => event_sender
+                .send(WorkerResult::ResourceDetailDeleted {
+                    cluster_key,
+                    selection_generation,
+                })
+                .log_if_error("Failed to send resource detail deletion"),
+            Event::Init => found_during_initial_list = false,
+            Event::InitDone if !found_during_initial_list => event_sender
+                .send(WorkerResult::ResourceDetailDeleted {
+                    cluster_key,
+                    selection_generation,
+                })
+                .log_if_error("Failed to send missing resource detail deletion"),
+            Event::InitDone => {}
+        }
+    }
+}
+
+async fn watch_detail_events(
+    cluster_key: i32,
+    client: kube::Client,
+    namespace: Option<String>,
+    resource_uid: String,
+    selection_generation: u64,
+    event_sender: WorkerResultSender,
+) {
+    let api: Api<KubernetesEvent> = match namespace.as_deref() {
+        Some(namespace) => Api::namespaced(client, namespace),
+        None => Api::all(client),
+    };
+    let config = watcher_config().fields(&format!("involvedObject.uid={resource_uid}"));
+    let stream = watcher(api, config);
+    pin_mut!(stream);
+    let mut events = BTreeMap::new();
+    while let Some(event) = stream.next().await {
+        let event = match event {
+            Ok(event) => event,
+            Err(error) => {
+                send_detail_error(
+                    &event_sender,
+                    cluster_key,
+                    selection_generation,
+                    true,
+                    error,
+                );
+                return;
+            }
+        };
+        match event {
+            Event::Init => events.clear(),
+            Event::InitApply(event) | Event::Apply(event) => {
+                events.insert(
+                    get_resource_uid(&event),
+                    resource_event_from_kubernetes(event),
+                );
+            }
+            Event::Delete(event) => {
+                events.remove(&get_resource_uid(&event));
+            }
+            Event::InitDone => {}
+        }
+        send_detail_events(&event_sender, cluster_key, selection_generation, &events);
+    }
+}
+
+fn send_detail_events(
+    event_sender: &WorkerResultSender,
+    cluster_key: i32,
+    selection_generation: u64,
+    events: &BTreeMap<String, ResourceEvent>,
+) {
+    let mut events = events.values().cloned().collect::<Vec<_>>();
+    events.sort_by(|left, right| right.last_timestamp.cmp(&left.last_timestamp));
+    event_sender
+        .send(WorkerResult::ResourceEventsReplaced {
+            cluster_key,
+            selection_generation,
+            events,
+        })
+        .log_if_error("Failed to send resource event update");
+}
+
+fn send_detail_error(
+    event_sender: &WorkerResultSender,
+    cluster_key: i32,
+    selection_generation: u64,
+    events: bool,
+    error: impl std::fmt::Debug,
+) {
+    event_sender
+        .send(WorkerResult::ResourceDetailWatchFailed {
+            cluster_key,
+            selection_generation,
+            events,
+            error: format!("{error:#?}"),
+        })
+        .log_if_error("Failed to send resource detail watch failure");
+}
+
+async fn resource_detail_from_dynamic(
+    client: &kube::Client,
+    api_resource: ApiResource,
+    object: DynamicObject,
+) -> ResourceDetail {
+    let metadata = &object.metadata;
+    let creation_timestamp = metadata.creation_timestamp.as_ref().and_then(|timestamp| {
+        OffsetDateTime::parse(
+            &timestamp.0.to_rfc3339(),
+            &time::format_description::well_known::Rfc3339,
+        )
+        .ok()
+    });
+    let mut detail = ResourceDetail {
+        api_resource: api_resource.clone(),
+        name: metadata.name.clone().unwrap_or_default(),
+        namespace: metadata.namespace.clone(),
+        uid: get_resource_uid(&object),
+        creation_timestamp,
+        owner: metadata
+            .owner_references
+            .as_ref()
+            .and_then(|owners| owners.first())
+            .map(|owner| ResourceOwner {
+                kind: owner.kind.clone(),
+                name: owner.name.clone(),
+            }),
+        labels: metadata.labels.clone().unwrap_or_default(),
+        annotations: metadata.annotations.clone().unwrap_or_default(),
+        payload: resource_handlers::detail_payload(&api_resource, &object),
+    };
+    if let (Some(namespace), ResourceDetailPayload::Pod(pod)) =
+        (detail.namespace.as_deref(), &mut detail.payload)
+    {
+        resolve_pod_environment_variables(client, namespace, pod).await;
+    }
+    detail
+}
+
+async fn resolve_pod_environment_variables(
+    client: &kube::Client,
+    namespace: &str,
+    pod: &mut crate::resource_detail::PodDetail,
+) {
+    let mut config_map_names = BTreeSet::new();
+    let mut secret_names = BTreeSet::new();
+    for container in &pod.containers {
+        for variable in &container.environment_variables {
+            match &variable.source {
+                PodEnvironmentVariableSource::ConfigMapKey { name, .. }
+                | PodEnvironmentVariableSource::ConfigMapImport { name, .. } => {
+                    config_map_names.insert(name.clone());
+                }
+                PodEnvironmentVariableSource::SecretKey { name, .. }
+                | PodEnvironmentVariableSource::SecretImport { name, .. } => {
+                    secret_names.insert(name.clone());
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let config_maps = fetch_config_maps(client, namespace, config_map_names).await;
+    let secrets = fetch_secrets(client, namespace, secret_names).await;
+    for container in &mut pod.containers {
+        let variables = std::mem::take(&mut container.environment_variables);
+        let mut variables = variables
+            .into_iter()
+            .flat_map(|variable| resolve_environment_variable(variable, &config_maps, &secrets))
+            .collect::<Vec<_>>();
+        expand_environment_variable_references(&mut variables);
+        container.environment_variables = variables;
+    }
+}
+
+async fn fetch_config_maps(
+    client: &kube::Client,
+    namespace: &str,
+    names: BTreeSet<String>,
+) -> BTreeMap<String, ConfigMap> {
+    let api = Api::<ConfigMap>::namespaced(client.clone(), namespace);
+    let mut config_maps = BTreeMap::new();
+    for name in names {
+        if let Ok(Some(config_map)) = api.get_opt(&name).await {
+            config_maps.insert(name, config_map);
+        }
+    }
+    config_maps
+}
+
+async fn fetch_secrets(
+    client: &kube::Client,
+    namespace: &str,
+    names: BTreeSet<String>,
+) -> BTreeMap<String, Secret> {
+    let api = Api::<Secret>::namespaced(client.clone(), namespace);
+    let mut secrets = BTreeMap::new();
+    for name in names {
+        if let Ok(Some(secret)) = api.get_opt(&name).await {
+            secrets.insert(name, secret);
+        }
+    }
+    secrets
+}
+
+fn resolve_environment_variable(
+    mut variable: PodEnvironmentVariableDetail,
+    config_maps: &BTreeMap<String, ConfigMap>,
+    secrets: &BTreeMap<String, Secret>,
+) -> Vec<PodEnvironmentVariableDetail> {
+    match &variable.source {
+        PodEnvironmentVariableSource::ConfigMapKey { name, key, .. } => {
+            variable.value = config_map_value(config_maps.get(name), key);
+            vec![variable]
+        }
+        PodEnvironmentVariableSource::SecretKey { name, key, .. } => {
+            variable.value = secret_value(secrets.get(name), key);
+            vec![variable]
+        }
+        PodEnvironmentVariableSource::ConfigMapImport {
+            name,
+            prefix,
+            optional,
+        } => {
+            let Some(config_map) = config_maps.get(name) else {
+                return vec![variable];
+            };
+            config_map
+                .data
+                .as_ref()
+                .into_iter()
+                .flatten()
+                .map(|(key, value)| PodEnvironmentVariableDetail {
+                    name: format!("{prefix}{key}"),
+                    value: Some(value.clone()),
+                    source: PodEnvironmentVariableSource::ConfigMapKey {
+                        name: name.clone(),
+                        key: key.clone(),
+                        optional: *optional,
+                    },
+                })
+                .collect()
+        }
+        PodEnvironmentVariableSource::SecretImport {
+            name,
+            prefix,
+            optional,
+        } => {
+            let Some(secret) = secrets.get(name) else {
+                return vec![variable];
+            };
+            secret
+                .data
+                .as_ref()
+                .into_iter()
+                .flatten()
+                .map(|(key, value)| PodEnvironmentVariableDetail {
+                    name: format!("{prefix}{key}"),
+                    value: Some(String::from_utf8_lossy(&value.0).into_owned()),
+                    source: PodEnvironmentVariableSource::SecretKey {
+                        name: name.clone(),
+                        key: key.clone(),
+                        optional: *optional,
+                    },
+                })
+                .collect()
+        }
+        _ => vec![variable],
+    }
+}
+
+fn config_map_value(config_map: Option<&ConfigMap>, key: &str) -> Option<String> {
+    config_map
+        .and_then(|config_map| config_map.data.as_ref())
+        .and_then(|data| data.get(key))
+        .cloned()
+}
+
+fn secret_value(secret: Option<&Secret>, key: &str) -> Option<String> {
+    secret
+        .and_then(|secret| secret.data.as_ref())
+        .and_then(|data| data.get(key))
+        .map(|value| String::from_utf8_lossy(&value.0).into_owned())
+}
+
+fn expand_environment_variable_references(variables: &mut [PodEnvironmentVariableDetail]) {
+    let mut values = BTreeMap::new();
+    for variable in variables {
+        if matches!(variable.source, PodEnvironmentVariableSource::Literal) {
+            if let Some(value) = &variable.value {
+                variable.value = Some(expand_environment_variable_value(value, &values));
+            }
+        }
+        if let Some(value) = &variable.value {
+            values.insert(variable.name.clone(), value.clone());
+        }
+    }
+}
+
+fn expand_environment_variable_value(value: &str, values: &BTreeMap<String, String>) -> String {
+    let mut result = String::new();
+    let mut characters = value.chars().peekable();
+    while let Some(character) = characters.next() {
+        if character != '$' {
+            result.push(character);
+            continue;
+        }
+        if characters.next_if_eq(&'$').is_some() {
+            result.push('$');
+            continue;
+        }
+        if characters.next_if_eq(&'(').is_none() {
+            result.push('$');
+            continue;
+        }
+        let mut name = String::new();
+        while let Some(character) = characters.next() {
+            if character == ')' {
+                break;
+            }
+            name.push(character);
+        }
+        if let Some(replacement) = values.get(&name) {
+            result.push_str(replacement);
+        } else {
+            result.push_str("$(");
+            result.push_str(&name);
+            result.push(')');
+        }
+    }
+    result
+}
+
+fn resource_event_from_kubernetes(event: KubernetesEvent) -> ResourceEvent {
+    let last_timestamp = if let Some(timestamp) = event.event_time.as_ref() {
+        OffsetDateTime::parse(
+            &timestamp.0.to_rfc3339(),
+            &time::format_description::well_known::Rfc3339,
+        )
+        .ok()
+    } else {
+        event.last_timestamp.as_ref().and_then(|timestamp| {
+            OffsetDateTime::parse(
+                &timestamp.0.to_rfc3339(),
+                &time::format_description::well_known::Rfc3339,
+            )
+            .ok()
+        })
+    };
+    ResourceEvent {
+        uid: get_resource_uid(&event),
+        type_: event.type_.unwrap_or_else(|| "Normal".to_owned()),
+        reason: event.reason.unwrap_or_else(|| "Unknown".to_owned()),
+        message: event.message.unwrap_or_default(),
+        source: event.source.and_then(|source| source.component),
+        count: event.count.unwrap_or(1),
+        last_timestamp,
+    }
+}
+
 /// Helper to create a namespaced or cluster-scoped API for a given resource type
 async fn create_dynamic_api(
     client: &kube::Client,
@@ -1127,6 +1585,95 @@ mod tests {
     use k8s_openapi::api::apps::v1::{Deployment, DeploymentStatus};
     use k8s_openapi::api::core::v1::{ContainerStatus, Pod, PodStatus};
     use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
+
+    #[test]
+    fn environment_variable_expansion_uses_earlier_values_and_preserves_unknown_references() {
+        let mut variables = vec![
+            PodEnvironmentVariableDetail {
+                name: "HOST".to_owned(),
+                value: Some("api".to_owned()),
+                source: PodEnvironmentVariableSource::Literal,
+            },
+            PodEnvironmentVariableDetail {
+                name: "URL".to_owned(),
+                value: Some("https://$(HOST)/$(SERVICE_PORT)".to_owned()),
+                source: PodEnvironmentVariableSource::Literal,
+            },
+            PodEnvironmentVariableDetail {
+                name: "ESCAPED".to_owned(),
+                value: Some("$$(HOST)".to_owned()),
+                source: PodEnvironmentVariableSource::Literal,
+            },
+            PodEnvironmentVariableDetail {
+                name: "SHELL_STYLE".to_owned(),
+                value: Some("$HOST".to_owned()),
+                source: PodEnvironmentVariableSource::Literal,
+            },
+        ];
+
+        expand_environment_variable_references(&mut variables);
+
+        assert_eq!(
+            variables[1].value.as_deref(),
+            Some("https://api/$(SERVICE_PORT)")
+        );
+        assert_eq!(variables[2].value.as_deref(), Some("$(HOST)"));
+        assert_eq!(variables[3].value.as_deref(), Some("$HOST"));
+    }
+
+    #[test]
+    fn environment_variable_resolution_expands_config_map_and_secret_imports() {
+        let config_maps = BTreeMap::from([(
+            "settings".to_owned(),
+            ConfigMap {
+                data: Some(BTreeMap::from([("HOST".to_owned(), "api".to_owned())])),
+                ..Default::default()
+            },
+        )]);
+        let secrets = BTreeMap::from([(
+            "credentials".to_owned(),
+            Secret {
+                data: Some(BTreeMap::from([(
+                    "token".to_owned(),
+                    k8s_openapi::ByteString(b"secret-value".to_vec()),
+                )])),
+                ..Default::default()
+            },
+        )]);
+        let variables = [
+            PodEnvironmentVariableDetail {
+                name: "CONFIG".to_owned(),
+                value: None,
+                source: PodEnvironmentVariableSource::ConfigMapKey {
+                    name: "settings".to_owned(),
+                    key: "HOST".to_owned(),
+                    optional: false,
+                },
+            },
+            PodEnvironmentVariableDetail {
+                name: "Import Secret credentials".to_owned(),
+                value: None,
+                source: PodEnvironmentVariableSource::SecretImport {
+                    name: "credentials".to_owned(),
+                    prefix: "APP_".to_owned(),
+                    optional: false,
+                },
+            },
+        ];
+
+        let resolved = variables
+            .into_iter()
+            .flat_map(|variable| resolve_environment_variable(variable, &config_maps, &secrets))
+            .collect::<Vec<_>>();
+
+        assert_eq!(resolved[0].value.as_deref(), Some("api"));
+        assert_eq!(resolved[1].name, "APP_token");
+        assert_eq!(resolved[1].value.as_deref(), Some("secret-value"));
+        assert!(matches!(
+            resolved[1].source,
+            PodEnvironmentVariableSource::SecretKey { .. }
+        ));
+    }
 
     #[test]
     fn pod_extractor_populates_ready_status_and_restarts() {
