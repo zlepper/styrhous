@@ -59,6 +59,9 @@ pub(super) fn show(
 
                         if response.clicked() {
                             info!("Cluster '{cluster_name}' selected");
+                            if !selected {
+                                ui_state.close_all_resource_details(commands_to_send);
+                            }
                             if let Some(command) = ui_state.select_cluster(cluster_key) {
                                 info!("Connecting to cluster");
                                 commands_to_send.push(command);

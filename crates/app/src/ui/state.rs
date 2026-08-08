@@ -3,6 +3,7 @@ use crate::cluster_connection_manager::ClusterConnection;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use crate::resource_catalog::{ResourceNavigation, build_resource_navigation};
+use crate::resource_detail::{ResourceDetail, ResourceEvent};
 use crate::resource_table::CustomResourceColumn;
 use crate::sorted_name::SortedName;
 use crate::worker::{WorkerResult, WorkerTrait};
@@ -63,7 +64,27 @@ pub(super) struct PendingDelete {
 }
 
 #[derive(Debug, Clone)]
+pub(super) struct ResourceDetailPanelState {
+    pub(super) api_resource: ApiResource,
+    pub(super) namespace: Option<String>,
+    pub(super) resource_name: String,
+    pub(super) resource_uid: String,
+    pub(super) selection_generation: u64,
+    pub(super) detail: Option<ResourceDetail>,
+    pub(super) events: Vec<ResourceEvent>,
+    pub(super) detail_error: Option<String>,
+    pub(super) events_error: Option<String>,
+    /// Avoid treating the row click which opened the overlay as a scrim dismissal.
+    pub(super) dismiss_on_outside_click: bool,
+}
+
+#[derive(Debug, Clone)]
 pub(super) enum ResourceAction {
+    OpenDetails {
+        name: String,
+        namespace: Option<String>,
+        uid: String,
+    },
     EditYaml {
         name: String,
         namespace: Option<String>,
@@ -91,6 +112,8 @@ pub(super) struct ClusterState {
     pub(super) active_watchers: HashSet<ResourceWatchKey>,
     pub(super) resource_searches: HashMap<ApiResource, ResourceSearchState>,
     pub(super) yaml_panel: Option<YamlPanelState>,
+    pub(super) resource_detail_panel: Option<ResourceDetailPanelState>,
+    pub(super) next_detail_generation: u64,
     pub(super) pending_delete: Option<PendingDelete>,
 }
 
@@ -147,12 +170,81 @@ impl UiState {
             return;
         };
 
+        if cluster.resource_detail_panel.take().is_some() {
+            commands_to_send.push(crate::worker::WorkerCommand::StopResourceDetailWatch {
+                cluster_key: cluster.cluster_key,
+            });
+        }
         cluster.selected_api_resource = Some(api_resource);
         let api_resource = cluster
             .selected_api_resource
             .clone()
             .expect("selected API resource was just set");
         Self::request_selected_resource_watches(cluster, &api_resource, commands_to_send);
+    }
+
+    pub(super) fn open_resource_detail(
+        &mut self,
+        cluster_key: i32,
+        api_resource: ApiResource,
+        name: String,
+        namespace: Option<String>,
+        uid: String,
+        commands_to_send: &mut Vec<crate::worker::WorkerCommand>,
+    ) {
+        let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
+            return;
+        };
+        cluster.next_detail_generation += 1;
+        let selection_generation = cluster.next_detail_generation;
+        cluster.resource_detail_panel = Some(ResourceDetailPanelState {
+            api_resource: api_resource.clone(),
+            namespace: namespace.clone(),
+            resource_name: name.clone(),
+            resource_uid: uid.clone(),
+            selection_generation,
+            detail: None,
+            events: Vec::new(),
+            detail_error: None,
+            events_error: None,
+            dismiss_on_outside_click: false,
+        });
+        commands_to_send.push(crate::worker::WorkerCommand::StartResourceDetailWatch {
+            cluster_key: cluster.cluster_key,
+            api_resource,
+            namespace,
+            resource_name: name,
+            resource_uid: uid,
+            selection_generation,
+        });
+    }
+
+    pub(super) fn close_resource_detail(
+        &mut self,
+        cluster_key: i32,
+        commands_to_send: &mut Vec<crate::worker::WorkerCommand>,
+    ) {
+        let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
+            return;
+        };
+        if cluster.resource_detail_panel.take().is_some() {
+            commands_to_send.push(crate::worker::WorkerCommand::StopResourceDetailWatch {
+                cluster_key: cluster.cluster_key,
+            });
+        }
+    }
+
+    pub(super) fn close_all_resource_details(
+        &mut self,
+        commands_to_send: &mut Vec<crate::worker::WorkerCommand>,
+    ) {
+        for cluster in self.clusters.values_mut() {
+            if cluster.resource_detail_panel.take().is_some() {
+                commands_to_send.push(crate::worker::WorkerCommand::StopResourceDetailWatch {
+                    cluster_key: cluster.cluster_key,
+                });
+            }
+        }
     }
 
     pub(super) fn toggle_namespace(
@@ -325,6 +417,20 @@ impl UiState {
                                 message,
                             );
                         }
+                        Some(crate::worker::WorkerCommand::StartResourceDetailWatch {
+                            cluster_key,
+                            selection_generation,
+                            ..
+                        }) => {
+                            if let Some(panel) = self
+                                .clusters
+                                .get_mut(&cluster_key)
+                                .and_then(|cluster| cluster.resource_detail_panel.as_mut())
+                                .filter(|panel| panel.selection_generation == selection_generation)
+                            {
+                                panel.detail_error = Some(message);
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -356,6 +462,8 @@ impl UiState {
                                 active_watchers: HashSet::new(),
                                 resource_searches: HashMap::new(),
                                 yaml_panel: None,
+                                resource_detail_panel: None,
+                                next_detail_generation: 0,
                                 pending_delete: None,
                             },
                         );
@@ -464,6 +572,18 @@ impl UiState {
                         {
                             watch.resources.remove(&resource_uid);
                         }
+                        if cluster
+                            .resource_detail_panel
+                            .as_ref()
+                            .is_some_and(|panel| panel.resource_uid == resource_uid)
+                        {
+                            cluster.resource_detail_panel = None;
+                            commands_to_send.push(
+                                crate::worker::WorkerCommand::StopResourceDetailWatch {
+                                    cluster_key,
+                                },
+                            );
+                        }
                     }
                 }
                 WorkerResult::KubernetesResourcesReplaced {
@@ -507,6 +627,70 @@ impl UiState {
                 } => {
                     self.resource_watch_failed(cluster_key, api_resource, namespace, error);
                 }
+                WorkerResult::ResourceDetailUpdated {
+                    cluster_key,
+                    selection_generation,
+                    detail,
+                } => {
+                    if let Some(panel) = self
+                        .clusters
+                        .get_mut(&cluster_key)
+                        .and_then(|cluster| cluster.resource_detail_panel.as_mut())
+                        .filter(|panel| panel.selection_generation == selection_generation)
+                    {
+                        panel.detail = Some(detail);
+                        panel.detail_error = None;
+                    }
+                }
+                WorkerResult::ResourceEventsReplaced {
+                    cluster_key,
+                    selection_generation,
+                    events,
+                } => {
+                    if let Some(panel) = self
+                        .clusters
+                        .get_mut(&cluster_key)
+                        .and_then(|cluster| cluster.resource_detail_panel.as_mut())
+                        .filter(|panel| panel.selection_generation == selection_generation)
+                    {
+                        panel.events = events;
+                        panel.events_error = None;
+                    }
+                }
+                WorkerResult::ResourceDetailWatchFailed {
+                    cluster_key,
+                    selection_generation,
+                    events,
+                    error,
+                } => {
+                    if let Some(panel) = self
+                        .clusters
+                        .get_mut(&cluster_key)
+                        .and_then(|cluster| cluster.resource_detail_panel.as_mut())
+                        .filter(|panel| panel.selection_generation == selection_generation)
+                    {
+                        if events {
+                            panel.events_error = Some(error);
+                        } else {
+                            panel.detail_error = Some(error);
+                        }
+                    }
+                }
+                WorkerResult::ResourceDetailDeleted {
+                    cluster_key,
+                    selection_generation,
+                } => {
+                    if self
+                        .clusters
+                        .get(&cluster_key)
+                        .and_then(|cluster| cluster.resource_detail_panel.as_ref())
+                        .is_some_and(|panel| panel.selection_generation == selection_generation)
+                    {
+                        self.close_resource_detail(cluster_key, &mut commands_to_send);
+                    }
+                }
+                WorkerResult::ResourceDetailWatchStarted { .. }
+                | WorkerResult::ResourceDetailWatchStopped { .. } => {}
                 WorkerResult::ResourceYamlFetched {
                     cluster_key,
                     api_resource,

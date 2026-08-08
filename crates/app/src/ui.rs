@@ -1,5 +1,6 @@
 mod cluster_rail;
 mod dialogs;
+mod resource_detail;
 mod resource_navigation;
 mod state;
 mod widgets;
@@ -42,6 +43,7 @@ impl<W: WorkerTrait> eframe::App for MyEguiApp<W> {
         let clicked_api_resource = resource_navigation::show(ctx, &self.ui_state);
         yaml_editor::show(ctx, &mut self.ui_state, &mut commands_to_send);
         workspace::show(ctx, &mut self.ui_state, &mut commands_to_send);
+        resource_detail::show(ctx, &mut self.ui_state, &mut commands_to_send);
         show_delete_confirmation(ctx, &mut self.ui_state, &mut commands_to_send);
 
         if let (Some(cluster_key), Some(api_resource)) =

@@ -1,18 +1,20 @@
 use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::{
     Cluster, ClusterConnection, apply_resource_yaml, delete_resource, get_resource_yaml,
-    reload_kubeconfig, start_cluster_connection, start_resource_watcher,
+    reload_kubeconfig, start_cluster_connection, start_resource_watcher, watch_resource_detail,
 };
 use crate::helpers::ResultExt;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
+use crate::resource_detail::{ResourceDetail, ResourceEvent};
 use crate::resource_table::CustomResourceColumn;
 use anyhow::Error;
 use std::collections::HashMap;
 #[cfg(test)]
 use std::collections::VecDeque;
 use std::sync::{Arc, mpsc};
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
+use tokio::task::JoinHandle;
 use tracing::info;
 
 /// Trait abstracting the worker interface for testability
@@ -39,6 +41,7 @@ impl Worker {
 
             let shared = Arc::new(SharedWorkerState {
                 clients: RwLock::new(HashMap::new()),
+                detail_watches: Mutex::new(HashMap::new()),
             });
 
             let worker = WorkerRuntime {
@@ -132,6 +135,17 @@ pub enum WorkerCommand {
         cluster_key: i32,
         api_resource: ApiResource,
         namespace: Option<String>,
+    },
+    StartResourceDetailWatch {
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: Option<String>,
+        resource_name: String,
+        resource_uid: String,
+        selection_generation: u64,
+    },
+    StopResourceDetailWatch {
+        cluster_key: i32,
     },
     GetResourceYaml {
         cluster_key: i32,
@@ -227,6 +241,33 @@ pub enum WorkerResult {
         namespace: Option<String>,
         error: String,
     },
+    ResourceDetailWatchStarted {
+        cluster_key: i32,
+        selection_generation: u64,
+    },
+    ResourceDetailWatchStopped {
+        cluster_key: i32,
+    },
+    ResourceDetailUpdated {
+        cluster_key: i32,
+        selection_generation: u64,
+        detail: ResourceDetail,
+    },
+    ResourceDetailDeleted {
+        cluster_key: i32,
+        selection_generation: u64,
+    },
+    ResourceEventsReplaced {
+        cluster_key: i32,
+        selection_generation: u64,
+        events: Vec<ResourceEvent>,
+    },
+    ResourceDetailWatchFailed {
+        cluster_key: i32,
+        selection_generation: u64,
+        events: bool,
+        error: String,
+    },
     /// Resource YAML fetched for viewing/editing
     ResourceYamlFetched {
         cluster_key: i32,
@@ -257,6 +298,8 @@ pub type WorkerResultSender = mpsc::SyncSender<WorkerResult>;
 struct SharedWorkerState {
     /// Kube clients indexed by cluster_key
     clients: RwLock<HashMap<i32, kube::Client>>,
+    /// One detail inspector is visible per cluster at most.
+    detail_watches: Mutex<HashMap<i32, JoinHandle<()>>>,
 }
 
 struct WorkerRuntime {
@@ -327,6 +370,56 @@ impl WorkerRuntime {
                         cluster_key
                     ))
                 }
+            }
+            WorkerCommand::StartResourceDetailWatch {
+                cluster_key,
+                api_resource,
+                namespace,
+                resource_name,
+                resource_uid,
+                selection_generation,
+            } => {
+                let client = {
+                    let clients = shared.clients.read().await;
+                    clients.get(cluster_key).cloned()
+                };
+                if let Some(client) = client {
+                    if let Some(previous) = shared.detail_watches.lock().await.remove(cluster_key) {
+                        previous.abort();
+                    }
+                    let handle = tokio::spawn(watch_resource_detail(
+                        *cluster_key,
+                        client,
+                        api_resource.clone(),
+                        namespace.clone(),
+                        resource_name.clone(),
+                        resource_uid.clone(),
+                        *selection_generation,
+                        result_channel.clone(),
+                    ));
+                    shared
+                        .detail_watches
+                        .lock()
+                        .await
+                        .insert(*cluster_key, handle);
+                    Ok(WorkerResult::ResourceDetailWatchStarted {
+                        cluster_key: *cluster_key,
+                        selection_generation: *selection_generation,
+                    })
+                } else {
+                    Err(anyhow::anyhow!(
+                        "No client found for cluster_key {}",
+                        cluster_key
+                    ))
+                }
+            }
+            WorkerCommand::StopResourceDetailWatch { cluster_key } => {
+                if let Some(handle) = shared.detail_watches.lock().await.remove(cluster_key) {
+                    handle.abort();
+                }
+                Ok(WorkerResult::ResourceDetailWatchStopped {
+                    cluster_key: *cluster_key,
+                })
             }
             WorkerCommand::GetResourceYaml {
                 cluster_key,

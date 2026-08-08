@@ -183,3 +183,17 @@ pub fn pencil_button(ui: &mut Ui, size: f32, color: Color32, label: &str) -> Res
     });
     response
 }
+
+/// Render a clickable eye icon button using native egui Button.
+///
+/// The label is exposed to assistive technologies while the button remains icon-only.
+pub fn eye_button(ui: &mut Ui, size: f32, color: Color32, label: &str) -> Response {
+    let image = Image::new(include_image!("icons/eye.svg"))
+        .fit_to_exact_size(Vec2::splat(size))
+        .tint(color);
+    let response = ui.add(egui::Button::image(image).frame(false));
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label)
+    });
+    response
+}

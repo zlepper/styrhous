@@ -50,6 +50,7 @@ pub(super) fn show(
 ) {
     let mut namespace_selection = None;
     let mut retry_requested = false;
+    let mut detail_to_open = None;
     egui::CentralPanel::default()
         .frame(WorkspacePage::frame())
         .show(ctx, |ui| {
@@ -194,6 +195,13 @@ pub(super) fn show(
                     api_resource.namespaced && cluster.selected_namespaces.len() > 1,
                 ) {
                     match action {
+                        ResourceAction::OpenDetails {
+                            name,
+                            namespace,
+                            uid,
+                        } => {
+                            detail_to_open = Some((api_resource.clone(), name, namespace, uid));
+                        }
                         ResourceAction::EditYaml { name, namespace } => {
                             commands_to_send.push(WorkerCommand::GetResourceYaml {
                                 cluster_key: cluster.cluster_key,
@@ -213,6 +221,18 @@ pub(super) fn show(
             });
         });
 
+    if let (Some(cluster_key), Some((api_resource, name, namespace, uid))) =
+        (ui_state.selected_cluster, detail_to_open)
+    {
+        ui_state.open_resource_detail(
+            cluster_key,
+            api_resource,
+            name,
+            namespace,
+            uid,
+            commands_to_send,
+        );
+    }
     if let (Some(cluster_key), Some(selection)) = (ui_state.selected_cluster, namespace_selection) {
         match selection {
             NamespaceSelection::Replace(namespace) => {
@@ -660,8 +680,23 @@ fn show_resource_table(
                 _ => {}
             }
         },
-        |row_response, row| {
+        |row_response, row, column_index| {
             if let ResourceTableRow::Resource(resource) = row {
+                let primary_clicked_in_cell = row_response.ctx.input(|input| {
+                    input.pointer.button_clicked(egui::PointerButton::Primary)
+                        && input
+                            .pointer
+                            .latest_pos()
+                            .is_some_and(|position| row_response.interact_rect.contains(position))
+                });
+                if column_index == 0 && primary_clicked_in_cell && pending_action.borrow().is_none()
+                {
+                    *pending_action.borrow_mut() = Some(ResourceAction::OpenDetails {
+                        name: resource.name.clone(),
+                        namespace: resource.namespace.clone(),
+                        uid: resource.uid.clone(),
+                    });
+                }
                 MoreButton::show_context_menu(row_response, |menu| {
                     show_resource_action_items(menu, resource, &mut pending_action.borrow_mut());
                 });
@@ -707,7 +742,7 @@ fn show_resource_actions(
     });
 }
 
-fn show_resource_action_items(
+pub(super) fn show_resource_action_items(
     menu: &mut MoreMenu<'_>,
     resource: &MinimalResource,
     pending_action: &mut Option<ResourceAction>,
