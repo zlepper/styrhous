@@ -972,8 +972,8 @@ pub(crate) fn minimal_resource_from_typed<T: Resource>(
     }
 }
 
-/// Keep the inspector current independently of the compact resource-table watcher.
-/// This task is owned and cancelled by the worker when its selection changes.
+/// Keep one inspector history entry current independently of the compact
+/// resource-table watcher. The worker owns it until that entry leaves history.
 pub async fn watch_resource_detail(
     cluster_key: i32,
     client: kube::Client,
@@ -981,7 +981,7 @@ pub async fn watch_resource_detail(
     namespace: Option<String>,
     resource_name: String,
     resource_uid: String,
-    selection_generation: u64,
+    history_entry_id: u64,
     event_sender: WorkerResultSender,
 ) {
     tokio::join!(
@@ -991,7 +991,7 @@ pub async fn watch_resource_detail(
             api_resource.clone(),
             namespace.clone(),
             resource_name,
-            selection_generation,
+            history_entry_id,
             event_sender.clone(),
         ),
         watch_detail_events(
@@ -999,7 +999,7 @@ pub async fn watch_resource_detail(
             client.clone(),
             namespace.clone(),
             resource_uid.clone(),
-            selection_generation,
+            history_entry_id,
             event_sender.clone(),
         ),
         watch_managed_resources(
@@ -1008,7 +1008,7 @@ pub async fn watch_resource_detail(
             api_resource,
             namespace,
             resource_uid,
-            selection_generation,
+            history_entry_id,
             event_sender,
         ),
     );
@@ -1023,7 +1023,7 @@ async fn watch_managed_resources(
     root_api_resource: ApiResource,
     namespace: Option<String>,
     root_uid: String,
-    selection_generation: u64,
+    history_entry_id: u64,
     event_sender: WorkerResultSender,
 ) {
     let Some(namespace) = namespace else {
@@ -1034,7 +1034,7 @@ async fn watch_managed_resources(
         event_sender
             .send(WorkerResult::ManagedResourcesReplaced {
                 cluster_key,
-                selection_generation,
+                history_entry_id,
                 resources: Vec::new(),
             })
             .log_if_error("Failed to send empty managed resources");
@@ -1100,7 +1100,7 @@ async fn watch_managed_resources(
                 event_sender
                     .send(WorkerResult::ManagedResourcesReplaced {
                         cluster_key,
-                        selection_generation,
+                        history_entry_id,
                         resources,
                     })
                     .log_if_error("Failed to send managed resource update");
@@ -1111,7 +1111,7 @@ async fn watch_managed_resources(
             } => event_sender
                 .send(WorkerResult::ManagedResourcesWatchFailed {
                     cluster_key,
-                    selection_generation,
+                    history_entry_id,
                     error: format!("Unable to watch {}: {error}", api_resource.display_name()),
                 })
                 .log_if_error("Failed to send managed resource watch failure"),
@@ -1284,19 +1284,13 @@ async fn watch_detail_object(
     api_resource: ApiResource,
     namespace: Option<String>,
     resource_name: String,
-    selection_generation: u64,
+    history_entry_id: u64,
     event_sender: WorkerResultSender,
 ) {
     let api = match create_dynamic_api(&client, &api_resource, namespace.as_deref()).await {
         Ok(api) => api,
         Err(error) => {
-            send_detail_error(
-                &event_sender,
-                cluster_key,
-                selection_generation,
-                false,
-                error,
-            );
+            send_detail_error(&event_sender, cluster_key, history_entry_id, false, error);
             return;
         }
     };
@@ -1308,13 +1302,7 @@ async fn watch_detail_object(
         let event = match event {
             Ok(event) => event,
             Err(error) => {
-                send_detail_error(
-                    &event_sender,
-                    cluster_key,
-                    selection_generation,
-                    false,
-                    error,
-                );
+                send_detail_error(&event_sender, cluster_key, history_entry_id, false, error);
                 return;
             }
         };
@@ -1323,7 +1311,7 @@ async fn watch_detail_object(
                 event_sender
                     .send(WorkerResult::ResourceDetailUpdated {
                         cluster_key,
-                        selection_generation,
+                        history_entry_id,
                         detail: resource_detail_from_dynamic(&client, api_resource.clone(), object)
                             .await,
                     })
@@ -1334,7 +1322,7 @@ async fn watch_detail_object(
                 event_sender
                     .send(WorkerResult::ResourceDetailUpdated {
                         cluster_key,
-                        selection_generation,
+                        history_entry_id,
                         detail: resource_detail_from_dynamic(&client, api_resource.clone(), object)
                             .await,
                     })
@@ -1343,14 +1331,14 @@ async fn watch_detail_object(
             Event::Delete(_) => event_sender
                 .send(WorkerResult::ResourceDetailDeleted {
                     cluster_key,
-                    selection_generation,
+                    history_entry_id,
                 })
                 .log_if_error("Failed to send resource detail deletion"),
             Event::Init => found_during_initial_list = false,
             Event::InitDone if !found_during_initial_list => event_sender
                 .send(WorkerResult::ResourceDetailDeleted {
                     cluster_key,
-                    selection_generation,
+                    history_entry_id,
                 })
                 .log_if_error("Failed to send missing resource detail deletion"),
             Event::InitDone => {}
@@ -1363,7 +1351,7 @@ async fn watch_detail_events(
     client: kube::Client,
     namespace: Option<String>,
     resource_uid: String,
-    selection_generation: u64,
+    history_entry_id: u64,
     event_sender: WorkerResultSender,
 ) {
     let api: Api<KubernetesEvent> = match namespace.as_deref() {
@@ -1378,13 +1366,7 @@ async fn watch_detail_events(
         let event = match event {
             Ok(event) => event,
             Err(error) => {
-                send_detail_error(
-                    &event_sender,
-                    cluster_key,
-                    selection_generation,
-                    true,
-                    error,
-                );
+                send_detail_error(&event_sender, cluster_key, history_entry_id, true, error);
                 return;
             }
         };
@@ -1401,14 +1383,14 @@ async fn watch_detail_events(
             }
             Event::InitDone => {}
         }
-        send_detail_events(&event_sender, cluster_key, selection_generation, &events);
+        send_detail_events(&event_sender, cluster_key, history_entry_id, &events);
     }
 }
 
 fn send_detail_events(
     event_sender: &WorkerResultSender,
     cluster_key: i32,
-    selection_generation: u64,
+    history_entry_id: u64,
     events: &BTreeMap<String, ResourceEvent>,
 ) {
     let mut events = events.values().cloned().collect::<Vec<_>>();
@@ -1416,7 +1398,7 @@ fn send_detail_events(
     event_sender
         .send(WorkerResult::ResourceEventsReplaced {
             cluster_key,
-            selection_generation,
+            history_entry_id,
             events,
         })
         .log_if_error("Failed to send resource event update");
@@ -1425,14 +1407,14 @@ fn send_detail_events(
 fn send_detail_error(
     event_sender: &WorkerResultSender,
     cluster_key: i32,
-    selection_generation: u64,
+    history_entry_id: u64,
     events: bool,
     error: impl std::fmt::Debug,
 ) {
     event_sender
         .send(WorkerResult::ResourceDetailWatchFailed {
             cluster_key,
-            selection_generation,
+            history_entry_id,
             events,
             error: format!("{error:#?}"),
         })

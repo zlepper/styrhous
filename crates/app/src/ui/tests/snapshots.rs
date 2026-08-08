@@ -26,13 +26,22 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
 
+// The verified WGPU variance at transformed blade-shadow edges has a maximum per-pixel
+// YIQ-squared distance of 1.84634. This threshold accepts only that microscopic rasterization
+// noise; it does not permit any count of larger differences.
+const TRANSFORMED_BLADE_PIXEL_THRESHOLD: f32 = 2.1;
+
+fn transformed_blade_snapshot_options() -> egui_kittest::SnapshotOptions {
+    egui_kittest::SnapshotOptions::new().threshold(TRANSFORMED_BLADE_PIXEL_THRESHOLD)
+}
+
 fn select_namespace(harness: &mut Harness<MyEguiApp<MockWorker>>, namespace: &str) {
     harness
         .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
         .click();
-    harness.run();
+    harness.run_steps(2);
     harness.get_by_label(namespace).click();
-    harness.run();
+    harness.run_steps(2);
 }
 
 fn overflowing_pod_detail() -> PodDetail {
@@ -155,7 +164,7 @@ fn namespace_selector_replaces_toggles_and_selects_all_without_stopping_watches(
         next_cluster_key: 1,
         selected_cluster: Some(1),
     };
-    harness.run();
+    harness.run_steps(1);
 
     select_namespace(&mut harness, "default");
     assert_eq!(
@@ -166,7 +175,7 @@ fn namespace_selector_replaces_toggles_and_selects_all_without_stopping_watches(
     harness
         .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
         .click();
-    harness.run();
+    harness.run_steps(1);
     let namespace_position = harness.get_by_label("kube-system").rect().center();
     let modifiers = egui::Modifiers {
         ctrl: true,
@@ -739,7 +748,7 @@ fn resource_name_opens_and_closes_a_live_detail_inspector() {
                 cluster_key: 2,
                 resource_name,
                 resource_uid,
-                selection_generation: 1,
+                history_entry_id: 1,
                 ..
             }) if resource_name == name && resource_uid == "fixture-0"
         ),
@@ -754,7 +763,7 @@ fn resource_name_opens_and_closes_a_live_detail_inspector() {
         .results
         .push_back(WorkerResult::ResourceDetailUpdated {
             cluster_key: 2,
-            selection_generation: 1,
+            history_entry_id: 1,
             detail: ResourceDetail {
                 api_resource: pods,
                 name: name.into(),
@@ -796,13 +805,159 @@ fn resource_name_opens_and_closes_a_live_detail_inspector() {
     );
     assert!(matches!(
         harness.state().worker.commands.last(),
-        Some(WorkerCommand::StopResourceDetailWatch { cluster_key: 2 })
+        Some(WorkerCommand::StopResourceDetailWatch { cluster_key: 2, .. })
     ));
+}
+
+#[test]
+fn clicking_a_history_blade_is_captured_by_the_scrim() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    let deployment = fixture_api_resource("apps", "Deployment", "deployments");
+    let replica_set = fixture_api_resource("apps", "ReplicaSet", "replicasets");
+    let mut commands = Vec::new();
+    harness.state_mut().ui_state.open_resource_detail(
+        2,
+        deployment,
+        "api".into(),
+        Some("kube-system".into()),
+        "deployment-uid".into(),
+        &mut commands,
+    );
+    harness.run_steps(2);
+    harness.state_mut().ui_state.navigate_resource_detail(
+        2,
+        replica_set,
+        "api-7b948f".into(),
+        Some("kube-system".into()),
+        "replicaset-uid".into(),
+        &mut commands,
+    );
+    harness.run_steps(2);
+
+    // AccessKit reports the untransformed area rect. Use the transformed
+    // history header location, which is exposed to the left of the active
+    // blade, for the pointer interaction check.
+    let history_button = egui::pos2(575.0, 101.0);
+    assert_eq!(
+        harness.ctx.layer_id_at(history_button),
+        Some(egui::LayerId::new(
+            egui::Order::Foreground,
+            egui::Id::new(("resource-detail-input-scrim", "left")),
+        )),
+    );
+    primary_click(&mut harness, history_button);
+    harness.run_steps(4);
+
+    assert!(
+        harness.state().ui_state.clusters[&2]
+            .resource_detail_panel
+            .is_none(),
+        "the scrim receives the history blade click rather than navigation or the workspace"
+    );
+}
+
+#[test]
+fn promoted_history_blade_stays_above_its_back_history() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    let deployment = fixture_api_resource("apps", "Deployment", "deployments");
+    let mut commands = Vec::new();
+
+    harness.state_mut().ui_state.open_resource_detail(
+        2,
+        deployment.clone(),
+        "first".into(),
+        Some("kube-system".into()),
+        "first-uid".into(),
+        &mut commands,
+    );
+    harness
+        .state_mut()
+        .worker
+        .commands
+        .extend(commands.drain(..));
+    harness.run_steps(1);
+    harness
+        .state_mut()
+        .ui_state
+        .clusters
+        .get_mut(&2)
+        .unwrap()
+        .resource_detail_panel
+        .as_mut()
+        .unwrap()
+        .transition = None;
+    harness.run_steps(1);
+
+    for (name, uid) in [("second", "second-uid"), ("third", "third-uid")] {
+        harness.state_mut().ui_state.navigate_resource_detail(
+            2,
+            deployment.clone(),
+            name.into(),
+            Some("kube-system".into()),
+            uid.into(),
+            &mut commands,
+        );
+        harness
+            .state_mut()
+            .worker
+            .commands
+            .extend(commands.drain(..));
+        harness
+            .state_mut()
+            .ui_state
+            .clusters
+            .get_mut(&2)
+            .unwrap()
+            .resource_detail_panel
+            .as_mut()
+            .unwrap()
+            .transition = None;
+        harness.run_steps(1);
+    }
+
+    for forward in [false, false, true] {
+        harness
+            .state_mut()
+            .ui_state
+            .navigate_resource_detail_history(2, forward, &mut commands);
+        harness
+            .state_mut()
+            .worker
+            .commands
+            .extend(commands.drain(..));
+        harness
+            .state_mut()
+            .ui_state
+            .clusters
+            .get_mut(&2)
+            .unwrap()
+            .resource_detail_panel
+            .as_mut()
+            .unwrap()
+            .transition = None;
+        harness.run_steps(1);
+    }
+
+    let panel = harness.state().ui_state.clusters[&2]
+        .resource_detail_panel
+        .as_ref()
+        .expect("inspector should remain open");
+    assert_eq!(panel.resource_name, "second");
+    assert_eq!(panel.back_stack.len(), 1);
+    let active_layer = egui::LayerId::new(
+        egui::Order::Foreground,
+        egui::Id::new(("resource-detail-blade", panel.history_entry_id)),
+    );
+    let active_header = harness.get_by_label("Back").rect().center();
+    assert_eq!(harness.ctx.layer_id_at(active_header), Some(active_layer));
 }
 
 #[test]
 fn managed_resource_tables_navigate_with_back_and_forward_history() {
     let mut harness = application_harness::<MockWorker>();
+    harness.ctx.style_mut(|style| style.animation_time = 0.0);
     harness.state_mut().ui_state = oracle_resource_table_state();
     let deployment = fixture_api_resource("apps", "Deployment", "deployments");
     let replica_set = fixture_api_resource("apps", "ReplicaSet", "replicasets");
@@ -826,7 +981,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .results
         .push_back(WorkerResult::ManagedResourcesReplaced {
             cluster_key: 2,
-            selection_generation: 1,
+            history_entry_id: 1,
             resources: vec![
                 ManagedResource {
                     api_resource: replica_set.clone(),
@@ -890,7 +1045,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         Some(WorkerCommand::StartResourceDetailWatch {
             resource_name,
             resource_uid,
-            selection_generation: 2,
+            history_entry_id: 2,
             ..
         }) if resource_name == "api-7b948f" && resource_uid == "replicaset-uid"
     ));
@@ -901,7 +1056,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .results
         .push_back(WorkerResult::ResourceDetailUpdated {
             cluster_key: 2,
-            selection_generation: 2,
+            history_entry_id: 2,
             detail: ResourceDetail {
                 api_resource: replica_set.clone(),
                 name: "api-7b948f".into(),
@@ -920,6 +1075,39 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
                 payload: ResourceDetailPayload::Generic,
             },
         });
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(WorkerResult::ManagedResourcesReplaced {
+            cluster_key: 2,
+            history_entry_id: 2,
+            resources: vec![ManagedResource {
+                api_resource: pod.clone(),
+                name: "api-7b948f-pod".into(),
+                namespace: Some("kube-system".into()),
+                uid: "pod-uid".into(),
+                controller_owner_uid: "replicaset-uid".into(),
+                creation_timestamp: Some(
+                    time::OffsetDateTime::now_utc() - time::Duration::hours(2),
+                ),
+                cells: BTreeMap::from([
+                    (READY_COLUMN.to_owned(), CellValue::Text("1/1".into())),
+                    (
+                        CONTAINERS_COLUMN.to_owned(),
+                        CellValue::ContainerIndicators(vec![]),
+                    ),
+                    (
+                        STATUS_COLUMN.to_owned(),
+                        CellValue::Status {
+                            label: "Running".into(),
+                            tone: StatusTone::Success,
+                        },
+                    ),
+                    (RESTARTS_COLUMN.to_owned(), CellValue::Number(0)),
+                ]),
+            }],
+        });
     harness.run();
     harness
         .state_mut()
@@ -934,7 +1122,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
     harness.run();
     harness.snapshot_options(
         "replica_set_inspector_with_back_history",
-        &egui_kittest::SnapshotOptions::new().failed_pixel_count_threshold(1),
+        &transformed_blade_snapshot_options(),
     );
 
     harness.get_by_label("Back").click_accesskit();
@@ -983,18 +1171,18 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         &mut commands,
     );
     harness.state_mut().worker.commands.extend(commands);
-    let selection_generation = harness.state().ui_state.clusters[&2]
+    let history_entry_id = harness.state().ui_state.clusters[&2]
         .resource_detail_panel
         .as_ref()
         .unwrap()
-        .selection_generation;
+        .history_entry_id;
     harness
         .state_mut()
         .worker
         .results
         .push_back(WorkerResult::ResourceDetailUpdated {
             cluster_key: 2,
-            selection_generation,
+            history_entry_id,
             detail: ResourceDetail {
                 api_resource: pod.clone(),
                 name: "api-7b948f-pod".into(),
@@ -1036,8 +1224,64 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
     );
     harness.snapshot_options(
         "pod_inspector_with_two_back_history_blades",
-        &egui_kittest::SnapshotOptions::new().failed_pixel_count_threshold(1),
+        &transformed_blade_snapshot_options(),
     );
+
+    let detail_watch_starts_before_back = harness
+        .state()
+        .worker
+        .commands
+        .iter()
+        .filter(|command| matches!(command, WorkerCommand::StartResourceDetailWatch { .. }))
+        .count();
+    harness.get_by_label("Back").click_accesskit();
+    harness.run_steps(1);
+    assert_eq!(
+        harness
+            .state()
+            .worker
+            .commands
+            .iter()
+            .filter(|command| matches!(command, WorkerCommand::StartResourceDetailWatch { .. }))
+            .count(),
+        detail_watch_starts_before_back,
+        "Back promotes the already-watched history entry instead of restarting it",
+    );
+    harness
+        .state_mut()
+        .ui_state
+        .clusters
+        .get_mut(&2)
+        .unwrap()
+        .resource_detail_panel
+        .as_mut()
+        .unwrap()
+        .transition = None;
+    harness.run();
+    harness.get_by_label("Forward").click_accesskit();
+    harness.run_steps(1);
+    assert_eq!(
+        harness
+            .state()
+            .worker
+            .commands
+            .iter()
+            .filter(|command| matches!(command, WorkerCommand::StartResourceDetailWatch { .. }))
+            .count(),
+        detail_watch_starts_before_back,
+        "Forward promotes the already-watched history entry instead of restarting it",
+    );
+    harness
+        .state_mut()
+        .ui_state
+        .clusters
+        .get_mut(&2)
+        .unwrap()
+        .resource_detail_panel
+        .as_mut()
+        .unwrap()
+        .transition = None;
+    harness.run();
 
     let mut commands = Vec::new();
     harness.state_mut().ui_state.navigate_resource_detail(
@@ -1049,18 +1293,18 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         &mut commands,
     );
     harness.state_mut().worker.commands.extend(commands);
-    let selection_generation = harness.state().ui_state.clusters[&2]
+    let history_entry_id = harness.state().ui_state.clusters[&2]
         .resource_detail_panel
         .as_ref()
         .unwrap()
-        .selection_generation;
+        .history_entry_id;
     harness
         .state_mut()
         .worker
         .results
         .push_back(WorkerResult::ResourceDetailUpdated {
             cluster_key: 2,
-            selection_generation,
+            history_entry_id,
             detail: ResourceDetail {
                 api_resource: pod,
                 name: "api-7b948f-pod-debug".into(),
@@ -1099,7 +1343,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
     );
     harness.snapshot_options(
         "pod_inspector_with_three_back_history_entries",
-        &egui_kittest::SnapshotOptions::new().failed_pixel_count_threshold(1),
+        &transformed_blade_snapshot_options(),
     );
 }
 
@@ -1119,7 +1363,7 @@ fn pod_resource_detail_inspector_snapshot() {
     harness.state_mut().worker.results.extend([
         WorkerResult::ResourceDetailUpdated {
             cluster_key: 2,
-            selection_generation: 1,
+            history_entry_id: 1,
             detail: ResourceDetail {
                 api_resource: pods,
                 name: name.into(),
@@ -1216,7 +1460,7 @@ fn pod_resource_detail_inspector_snapshot() {
         },
         WorkerResult::ResourceEventsReplaced {
             cluster_key: 2,
-            selection_generation: 1,
+            history_entry_id: 1,
             events: vec![ResourceEvent {
                 uid: "event-1".into(),
                 type_: "Normal".into(),
@@ -1271,7 +1515,7 @@ fn open_typed_detail(
         .results
         .push_back(WorkerResult::ResourceDetailUpdated {
             cluster_key: 2,
-            selection_generation: 1,
+            history_entry_id: 1,
             detail,
         });
     harness.run();
@@ -1445,7 +1689,7 @@ fn secret_inspector_masks_values_and_prompts_for_a_real_external_change() {
         .results
         .push_back(WorkerResult::ResourceDetailUpdated {
             cluster_key: 2,
-            selection_generation: 1,
+            history_entry_id: 1,
             detail: ResourceDetail {
                 payload: ResourceDetailPayload::Secret(SecretDetail {
                     data: BTreeMap::from([(
