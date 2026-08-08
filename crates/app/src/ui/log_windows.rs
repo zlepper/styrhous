@@ -650,6 +650,29 @@ mod tests {
         snapshot_window(window, "pod_logs/filter_active");
     }
 
+    #[test]
+    fn pod_log_viewer_stream_failure_snapshot() {
+        let mut window = log_window(&[
+            "2026-08-08T15:22:17.143Z  INFO  server: listening on 0.0.0.0:8080",
+            "2026-08-08T15:22:21.687Z  WARN  retrying log stream",
+        ]);
+        window.status = PodLogStatus::Failed(
+            "The Kubernetes API closed the log stream unexpectedly".to_owned(),
+        );
+
+        snapshot_window(window, "pod_logs/stream_failed");
+    }
+
+    #[test]
+    fn pod_log_viewer_invalid_regex_snapshot() {
+        let mut window = log_window(&["api ready", "worker ready"]);
+        window.search.query = "[".to_owned();
+        window.search.regex_mode = true;
+        window.search.error = Some("unclosed character class".to_owned());
+
+        snapshot_window(window, "pod_logs/invalid_regex");
+    }
+
     fn add_match_ranges(window: &mut PodLogWindowState, filter_matches: bool) {
         let key = LogPageKey {
             generation: 0,
