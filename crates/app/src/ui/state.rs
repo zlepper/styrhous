@@ -1,5 +1,6 @@
 use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::ClusterConnection;
+use crate::log_store::{LogPageRow, LogStoreResult};
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::{MinimalResource, PodLogContainer};
 use crate::resource_catalog::{ResourceNavigation, build_resource_navigation};
@@ -9,7 +10,8 @@ use crate::resource_detail::{
 use crate::resource_table::CustomResourceColumn;
 use crate::sorted_name::SortedName;
 use crate::worker::{WorkerResult, WorkerTrait};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::time::Instant;
 use tracing::{error, info};
 
 #[derive(Default)]
@@ -28,7 +30,14 @@ pub(super) struct PodLogWindowState {
     pub(super) namespace: String,
     pub(super) pod_name: String,
     pub(super) container: PodLogContainer,
-    pub(super) lines: Vec<String>,
+    pub(super) total_lines: usize,
+    pub(super) pages: HashMap<LogPageKey, LogPage>,
+    pub(super) page_order: VecDeque<LogPageKey>,
+    pub(super) page_cache_bytes: usize,
+    pub(super) page_cache_limit: usize,
+    pub(super) page_size: usize,
+    pub(super) pending_pages: HashSet<LogPageKey>,
+    pub(super) store_opened: bool,
     pub(super) status: PodLogStatus,
     pub(super) close_requested: bool,
     pub(super) search: LogSearchState,
@@ -46,11 +55,14 @@ pub(super) enum PodLogStatus {
 pub(super) struct LogSearchState {
     pub(super) query: String,
     pub(super) regex_mode: bool,
-    pub(super) matching_lines: Vec<usize>,
-    pub(super) indexed_line_count: usize,
-    pub(super) active_match: usize,
-    pub(super) active_line: Option<usize>,
-    pub(super) scroll_to_line: Option<usize>,
+    pub(super) generation: u64,
+    pub(super) match_count: usize,
+    pub(super) search_complete: bool,
+    pub(super) scanned_lines: usize,
+    pub(super) search_deadline: Option<Instant>,
+    pub(super) active_display_row: Option<usize>,
+    pub(super) active_match: Option<usize>,
+    pub(super) scroll_to_display_row: Option<usize>,
     pub(super) error: Option<String>,
     pub(super) filter_matches: bool,
 }
@@ -60,13 +72,64 @@ impl Default for LogSearchState {
         Self {
             query: String::new(),
             regex_mode: false,
-            matching_lines: Vec::new(),
-            indexed_line_count: 0,
-            active_match: 0,
-            active_line: None,
-            scroll_to_line: None,
+            generation: 0,
+            match_count: 0,
+            search_complete: true,
+            scanned_lines: 0,
+            search_deadline: None,
+            active_display_row: None,
+            active_match: None,
+            scroll_to_display_row: None,
             error: None,
             filter_matches: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub(super) struct LogPageKey {
+    pub(super) generation: u64,
+    pub(super) filter_matches: bool,
+    pub(super) page_start: usize,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct LogPage {
+    pub(super) rows: Vec<LogPageRow>,
+    pub(super) bytes: usize,
+}
+
+impl PodLogWindowState {
+    pub(super) const DEFAULT_PAGE_CACHE_LIMIT: usize = 128 * 1024 * 1024;
+
+    pub(super) fn clear_pages(&mut self) {
+        self.pages.clear();
+        self.page_order.clear();
+        self.page_cache_bytes = 0;
+        self.pending_pages.clear();
+    }
+
+    pub(super) fn insert_page(&mut self, key: LogPageKey, rows: Vec<LogPageRow>) {
+        self.pending_pages.remove(&key);
+        if let Some(previous) = self.pages.remove(&key) {
+            self.page_cache_bytes = self.page_cache_bytes.saturating_sub(previous.bytes);
+            self.page_order.retain(|existing| *existing != key);
+        }
+        let bytes = rows
+            .iter()
+            .map(|row| row.text.len() + row.match_ranges.len() * 2 * std::mem::size_of::<usize>())
+            .sum();
+        self.page_cache_bytes += bytes;
+        self.pages.insert(key, LogPage { rows, bytes });
+        self.page_order.push_back(key);
+        while self.page_cache_bytes > self.page_cache_limit && self.page_order.len() > 1 {
+            let oldest = self
+                .page_order
+                .pop_front()
+                .expect("cache order is non-empty");
+            if let Some(page) = self.pages.remove(&oldest) {
+                self.page_cache_bytes = self.page_cache_bytes.saturating_sub(page.bytes);
+            }
         }
     }
 }
@@ -438,7 +501,14 @@ impl UiState {
                 namespace: namespace.clone(),
                 pod_name: pod_name.clone(),
                 container: container.clone(),
-                lines: Vec::new(),
+                total_lines: 0,
+                pages: HashMap::new(),
+                page_order: VecDeque::new(),
+                page_cache_bytes: 0,
+                page_cache_limit: PodLogWindowState::DEFAULT_PAGE_CACHE_LIMIT,
+                page_size: crate::log_store::LOG_PAGE_SIZE,
+                pending_pages: HashSet::new(),
+                store_opened: false,
                 status: PodLogStatus::Connecting,
                 close_requested: false,
                 search: LogSearchState::default(),
@@ -829,6 +899,7 @@ impl UiState {
     pub(super) fn update<W: WorkerTrait>(
         &mut self,
         worker: &mut W,
+        log_store: &crate::log_store::LogStoreService,
     ) -> Vec<crate::worker::WorkerCommand> {
         let mut commands_to_send = Vec::new();
         while let Some(result) = worker.get_next_message() {
@@ -1301,8 +1372,16 @@ impl UiState {
                     ..
                 } => {
                     if let Some(window) = self.log_windows.get_mut(&log_window_id) {
-                        window.lines.extend(lines);
-                        if !matches!(window.status, PodLogStatus::Failed(_)) {
+                        if !log_store.append(log_window_id, lines) {
+                            window.status = PodLogStatus::Failed(
+                                "Log storage is saturated; the live stream was stopped to avoid losing log lines."
+                                    .to_owned(),
+                            );
+                            commands_to_send.push(crate::worker::WorkerCommand::StopPodLogStream {
+                                cluster_key: window.cluster_key,
+                                log_window_id,
+                            });
+                        } else if !matches!(window.status, PodLogStatus::Failed(_)) {
                             window.status = PodLogStatus::Following;
                         }
                     }
@@ -1326,6 +1405,105 @@ impl UiState {
             }
         }
         commands_to_send
+    }
+
+    pub(super) fn apply_log_store_result(&mut self, result: LogStoreResult) {
+        match result {
+            LogStoreResult::Updated {
+                window_id,
+                total_lines,
+                completed_search,
+            } => {
+                if let Some(window) = self.log_windows.get_mut(&window_id) {
+                    window.total_lines = total_lines;
+                    if let Some((generation, match_count)) = completed_search
+                        && window.search.generation == generation
+                    {
+                        window.search.match_count = match_count;
+                        window.clear_pages();
+                    }
+                }
+            }
+            LogStoreResult::SearchProgress {
+                window_id,
+                generation,
+                scanned_lines,
+                total_lines,
+                match_count,
+            } => {
+                if let Some(window) = self.log_windows.get_mut(&window_id)
+                    && window.search.generation == generation
+                {
+                    window.total_lines = total_lines;
+                    window.search.scanned_lines = scanned_lines;
+                    window.search.match_count = match_count;
+                    window.search.search_complete = false;
+                    window.clear_pages();
+                }
+            }
+            LogStoreResult::SearchCompleted {
+                window_id,
+                generation,
+                match_count,
+            } => {
+                if let Some(window) = self.log_windows.get_mut(&window_id)
+                    && window.search.generation == generation
+                {
+                    window.search.scanned_lines = window.total_lines;
+                    window.search.match_count = match_count;
+                    window.search.search_complete = true;
+                    window.clear_pages();
+                }
+            }
+            LogStoreResult::PageLoaded {
+                window_id,
+                generation,
+                filter_matches,
+                page_start,
+                total_rows,
+                rows,
+            } => {
+                if let Some(window) = self.log_windows.get_mut(&window_id) {
+                    let key = LogPageKey {
+                        generation,
+                        filter_matches,
+                        page_start,
+                    };
+                    if generation == window.search.generation {
+                        if filter_matches {
+                            window.search.match_count = total_rows;
+                        } else {
+                            window.total_lines = total_rows;
+                        }
+                        window.insert_page(key, rows);
+                    }
+                }
+            }
+            LogStoreResult::MatchResolved {
+                window_id,
+                generation,
+                match_row,
+                line_index,
+            } => {
+                if let Some(window) = self.log_windows.get_mut(&window_id)
+                    && window.search.generation == generation
+                    && window.search.active_match == Some(match_row)
+                {
+                    let display_row = if window.search.filter_matches {
+                        match_row
+                    } else {
+                        line_index
+                    };
+                    window.search.active_display_row = Some(display_row);
+                    window.search.scroll_to_display_row = Some(display_row);
+                }
+            }
+            LogStoreResult::Failed { window_id, error } => {
+                if let Some(window) = self.log_windows.get_mut(&window_id) {
+                    window.status = PodLogStatus::Failed(format!("Log storage failed: {error}"));
+                }
+            }
+        }
     }
 
     fn resource_watch_failed(
@@ -1445,11 +1623,83 @@ mod tests {
             ]),
             commands: Vec::new(),
         };
-        let _ = state.update(&mut worker);
+        let log_store = crate::log_store::LogStoreService::default();
+        let _ = state.update(&mut worker, &log_store);
+        let start = Instant::now();
+        while state.log_windows[&1].total_lines != 2 || state.log_windows[&2].total_lines != 1 {
+            if let Some(result) = log_store.try_next_result() {
+                state.apply_log_store_result(result);
+            }
+            assert!(
+                start.elapsed() < std::time::Duration::from_secs(2),
+                "timed out waiting for log-store updates"
+            );
+            std::thread::yield_now();
+        }
 
-        assert_eq!(state.log_windows[&1].lines, ["api ready", "api serving"]);
+        assert_eq!(state.log_windows[&1].total_lines, 2);
         assert_eq!(state.log_windows[&1].status, PodLogStatus::Finished);
-        assert_eq!(state.log_windows[&2].lines, ["sidecar ready"]);
+        assert_eq!(state.log_windows[&2].total_lines, 1);
         assert_eq!(state.log_windows[&2].status, PodLogStatus::Following);
+    }
+
+    #[test]
+    fn ignores_stale_pages_and_evicts_pages_using_the_injected_cache_limit() {
+        let mut state = UiState::default();
+        let mut commands = Vec::new();
+        state.open_pod_log_window(
+            7,
+            "api-pod".into(),
+            Some("default".into()),
+            PodLogContainer {
+                name: "api".into(),
+                kind: ContainerKind::App,
+            },
+            &mut commands,
+        );
+        let window = state.log_windows.get_mut(&1).expect("log window exists");
+        window.page_cache_limit = 64;
+
+        state.apply_log_store_result(LogStoreResult::PageLoaded {
+            window_id: 1,
+            generation: 1,
+            filter_matches: false,
+            page_start: 0,
+            total_rows: 1,
+            rows: vec![test_log_row(0, "stale page must be ignored")],
+        });
+        assert!(state.log_windows[&1].pages.is_empty());
+
+        for page_start in [0, 1] {
+            state.apply_log_store_result(LogStoreResult::PageLoaded {
+                window_id: 1,
+                generation: 0,
+                filter_matches: false,
+                page_start,
+                total_rows: 2,
+                rows: vec![test_log_row(page_start, &"x".repeat(64))],
+            });
+        }
+
+        let window = &state.log_windows[&1];
+        assert!(!window.pages.contains_key(&LogPageKey {
+            generation: 0,
+            filter_matches: false,
+            page_start: 0,
+        }));
+        assert!(window.pages.contains_key(&LogPageKey {
+            generation: 0,
+            filter_matches: false,
+            page_start: 1,
+        }));
+    }
+
+    fn test_log_row(display_row: usize, text: &str) -> LogPageRow {
+        LogPageRow {
+            display_row,
+            line_index: display_row,
+            text: text.to_owned(),
+            match_ranges: Vec::new(),
+        }
     }
 }
