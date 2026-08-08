@@ -1,4 +1,4 @@
-use crate::resource_table::CellValue;
+use crate::resource_table::{CellValue, ContainerKind};
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use time::OffsetDateTime;
@@ -16,6 +16,16 @@ pub struct MinimalResource {
     pub creation_timestamp: Option<OffsetDateTime>,
     /// Type-specific values keyed by the selected resource table definition.
     pub cells: BTreeMap<String, CellValue>,
+    /// Declared Pod containers that can be selected for log streaming. This is
+    /// empty for all non-Pod resources.
+    pub log_containers: Vec<PodLogContainer>,
+}
+
+/// A declared Pod container available as a log-stream target.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct PodLogContainer {
+    pub(crate) name: String,
+    pub(crate) kind: ContainerKind,
 }
 
 impl Ord for MinimalResource {
@@ -85,6 +95,7 @@ mod tests {
             namespace: Some("default".to_string()),
             creation_timestamp: Some(now - time::Duration::hours(2)),
             cells: BTreeMap::new(),
+            log_containers: Vec::new(),
         };
         assert_eq!(resource.age(), "2h");
 
@@ -95,6 +106,7 @@ mod tests {
             namespace: Some("default".to_string()),
             creation_timestamp: Some(now - time::Duration::days(3)),
             cells: BTreeMap::new(),
+            log_containers: Vec::new(),
         };
         assert_eq!(resource.age(), "3d");
 
@@ -105,6 +117,7 @@ mod tests {
             namespace: Some("default".to_string()),
             creation_timestamp: Some(now - time::Duration::minutes(45)),
             cells: BTreeMap::new(),
+            log_containers: Vec::new(),
         };
         assert_eq!(resource.age(), "45m");
 
@@ -115,6 +128,7 @@ mod tests {
             namespace: Some("default".to_string()),
             creation_timestamp: Some(now - time::Duration::seconds(30)),
             cells: BTreeMap::new(),
+            log_containers: Vec::new(),
         };
         assert_eq!(resource.age(), "30s");
     }
@@ -127,6 +141,7 @@ mod tests {
             namespace: None,
             creation_timestamp: None,
             cells: BTreeMap::new(),
+            log_containers: Vec::new(),
         };
         assert_eq!(resource.age(), "Unknown");
     }

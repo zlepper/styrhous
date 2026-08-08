@@ -26,6 +26,7 @@ pub mod combobox;
 pub mod fuzzy;
 pub mod icons;
 pub mod more_button;
+pub mod search;
 pub mod sidebar;
 pub mod table;
 pub mod tabs;
@@ -41,6 +42,7 @@ pub use combobox::{
     WithFilter,
 };
 pub use more_button::{MoreButton, MoreMenu};
+pub use search::{SearchInputResponse, TailwindSearchInput};
 pub use sidebar::{
     ExpandableResponse, NarrowSidebar, NarrowSidebarContent, WideSidebar, WideSidebarContent,
 };

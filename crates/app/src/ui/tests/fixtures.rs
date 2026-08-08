@@ -11,7 +11,7 @@ use crate::worker::WorkerTrait;
 use egui_kittest::Harness;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-pub(super) const APP_SNAPSHOT_SIZE: egui::Vec2 = egui::vec2(1536.0, 1024.0);
+pub(super) const APP_SNAPSHOT_SIZE: egui::Vec2 = super::super::APP_SNAPSHOT_SIZE;
 
 pub(super) fn application_harness<W: WorkerTrait>() -> Harness<'static, MyEguiApp<W>> {
     Harness::builder()
@@ -80,6 +80,7 @@ fn fixture_resource(index: usize, name: &str) -> MinimalResource {
             ),
             (RESTARTS_COLUMN.to_owned(), CellValue::Number(0)),
         ]),
+        log_containers: Vec::new(),
     }
 }
 
@@ -157,5 +158,7 @@ pub(super) fn oracle_resource_table_state() -> UiState {
         ]),
         next_cluster_key: 3,
         selected_cluster: Some(2),
+        log_windows: BTreeMap::new(),
+        next_log_window_id: 0,
     }
 }

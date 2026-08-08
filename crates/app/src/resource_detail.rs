@@ -1,4 +1,5 @@
 use crate::api_resource::ApiResource;
+use crate::minimal_resource::PodLogContainer;
 use crate::resource_table::CellValue;
 use std::collections::BTreeMap;
 use time::OffsetDateTime;
@@ -84,6 +85,9 @@ pub(crate) struct PodDetail {
     pub(crate) service_account_name: Option<String>,
     pub(crate) dns_policy: Option<String>,
     pub(crate) containers: Vec<PodContainerDetail>,
+    /// All declared containers, including init and ephemeral containers, used
+    /// by the Pod log action picker.
+    pub(crate) log_containers: Vec<PodLogContainer>,
     pub(crate) volumes: Vec<PodVolumeDetail>,
 }
 

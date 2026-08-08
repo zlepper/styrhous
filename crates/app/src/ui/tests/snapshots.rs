@@ -98,6 +98,7 @@ fn overflowing_pod_detail() -> PodDetail {
                 ],
             })
             .collect(),
+        log_containers: Vec::new(),
         volumes: (0..3)
             .map(|index| PodVolumeDetail {
                 name: format!("config-{index}"),
@@ -163,6 +164,8 @@ fn namespace_selector_replaces_toggles_and_selects_all_without_stopping_watches(
         clusters: HashMap::from([(1, cluster)]),
         next_cluster_key: 1,
         selected_cluster: Some(1),
+        log_windows: BTreeMap::new(),
+        next_log_window_id: 0,
     };
     harness.run_steps(1);
 
@@ -282,6 +285,8 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
         clusters: HashMap::from([(1, cluster)]),
         next_cluster_key: 1,
         selected_cluster: Some(1),
+        log_windows: BTreeMap::new(),
+        next_log_window_id: 0,
     };
     harness.run();
     harness.get_by_label("Nodes").click_accesskit();
@@ -314,6 +319,7 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
                 namespace: None,
                 creation_timestamp: None,
                 cells: Default::default(),
+                log_containers: Vec::new(),
             }],
         });
     harness.run();
@@ -485,6 +491,7 @@ fn pod_resource_table_shows_per_container_status_indicators() {
                         ),
                         (RESTARTS_COLUMN.to_owned(), CellValue::Number(5)),
                     ]),
+                    log_containers: Vec::new(),
                 },
             )]),
             is_synced: true,
@@ -528,6 +535,7 @@ fn resource_table_snapshot_keeps_namespace_column_readable() {
                     namespace: Some("default".into()),
                     creation_timestamp: None,
                     cells: Default::default(),
+                    log_containers: Vec::new(),
                 },
             )]),
             is_synced: true,
@@ -567,6 +575,7 @@ fn deployment_resource_table_snapshot_uses_typed_columns() {
                         (UP_TO_DATE_COLUMN.to_owned(), CellValue::Number(3)),
                         (AVAILABLE_COLUMN.to_owned(), CellValue::Number(3)),
                     ]),
+                    log_containers: Vec::new(),
                 },
             )]),
             is_synced: true,
@@ -1437,6 +1446,7 @@ fn pod_resource_detail_inspector_snapshot() {
                             },
                         ],
                     }],
+                    log_containers: Vec::new(),
                     volumes: vec![
                         PodVolumeDetail {
                             name: "config-volume".into(),
@@ -1820,6 +1830,8 @@ fn delete_confirmation_can_be_cancelled_without_sending_a_command() {
         clusters: HashMap::from([(1, cluster)]),
         next_cluster_key: 1,
         selected_cluster: Some(1),
+        log_windows: BTreeMap::new(),
+        next_log_window_id: 0,
     }));
     let commands = Rc::new(RefCell::new(Vec::new()));
     let state_for_ui = state.clone();
@@ -1858,6 +1870,8 @@ fn resource_navigation_selects_primary_curated_gateway_and_other_resources() {
         clusters: HashMap::from([(1, cluster)]),
         next_cluster_key: 1,
         selected_cluster: Some(1),
+        log_windows: BTreeMap::new(),
+        next_log_window_id: 0,
     };
     harness.run();
 

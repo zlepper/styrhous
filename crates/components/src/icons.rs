@@ -117,6 +117,21 @@ pub fn arrow_right_icon() -> Image<'static> {
     Image::new(include_image!("icons/arrow-right.svg"))
 }
 
+/// Returns an up arrow icon for upward navigation.
+pub fn arrow_up_icon() -> Image<'static> {
+    Image::new(include_image!("icons/arrow-up.svg"))
+}
+
+/// Returns a down arrow icon for downward navigation.
+pub fn arrow_down_icon() -> Image<'static> {
+    Image::new(include_image!("icons/arrow-down.svg"))
+}
+
+/// Returns a funnel icon for filtering controls.
+pub fn funnel_icon() -> Image<'static> {
+    Image::new(include_image!("icons/funnel.svg"))
+}
+
 /// Returns an X-mark icon for dismissing overlays and panels.
 pub fn x_mark_icon() -> Image<'static> {
     Image::new(include_image!("icons/x-mark.svg"))

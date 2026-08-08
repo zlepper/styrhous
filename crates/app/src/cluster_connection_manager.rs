@@ -893,6 +893,7 @@ fn extract_minimal_resource(
         namespace: metadata.namespace.clone(),
         creation_timestamp,
         cells: extract_custom_cells(&obj.data, custom_columns),
+        log_containers: Vec::new(),
     }
 }
 
@@ -969,6 +970,7 @@ pub(crate) fn minimal_resource_from_typed<T: Resource>(
         namespace: metadata.namespace.clone(),
         creation_timestamp,
         cells,
+        log_containers: Vec::new(),
     }
 }
 

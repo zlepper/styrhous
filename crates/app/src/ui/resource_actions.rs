@@ -1,5 +1,5 @@
 use super::state::ResourceAction;
-use crate::minimal_resource::MinimalResource;
+use crate::minimal_resource::{MinimalResource, PodLogContainer};
 use components::colors::gray;
 use components::{MoreMenu, icons};
 
@@ -7,8 +7,42 @@ use components::{MoreMenu, icons};
 pub(super) fn show_resource_action_items(
     menu: &mut MoreMenu<'_>,
     resource: &MinimalResource,
+    log_containers: &[PodLogContainer],
     pending_action: &mut Option<ResourceAction>,
 ) {
+    match log_containers {
+        [] => {}
+        [container] => {
+            if menu.action("View logs").clicked() && pending_action.is_none() {
+                *pending_action = Some(ResourceAction::ViewLogs {
+                    name: resource.name.clone(),
+                    namespace: resource.namespace.clone(),
+                    container: container.clone(),
+                });
+            }
+            menu.separator();
+        }
+        containers => {
+            let mut selected = false;
+            menu.submenu("View logs", |ui| {
+                for container in containers {
+                    let label = format!("{} — {}", container.name, container.kind.label());
+                    if ui.button(label).clicked() && pending_action.is_none() {
+                        *pending_action = Some(ResourceAction::ViewLogs {
+                            name: resource.name.clone(),
+                            namespace: resource.namespace.clone(),
+                            container: container.clone(),
+                        });
+                        selected = true;
+                    }
+                }
+            });
+            if selected {
+                menu.close();
+            }
+            menu.separator();
+        }
+    }
     if menu
         .action_with_icon(
             "Edit YAML",
