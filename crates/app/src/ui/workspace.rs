@@ -1,3 +1,4 @@
+use super::resource_actions::show_resource_action_items;
 use super::state::{
     ClusterConnectionState, ClusterLoadState, PendingDelete, ResourceAction, ResourceSearchState,
     UiState,
@@ -14,8 +15,7 @@ use crate::worker::WorkerCommand;
 use components::colors::{TOOLBAR_BACKGROUND, gray};
 use components::fuzzy::{matches_fuzzy, normalize_for_search};
 use components::{
-    MoreButton, MoreMenu, SelectionAction, TableRowBuilder, TailwindCombobox, TailwindTable,
-    WorkspacePage, icons,
+    MoreButton, SelectionAction, TableRowBuilder, TailwindCombobox, TailwindTable, WorkspacePage,
 };
 use egui_extras::{Size, StripBuilder};
 use std::cell::RefCell;
@@ -215,6 +215,9 @@ pub(super) fn show(
                                 resource_name: name,
                                 namespace,
                             });
+                        }
+                        ResourceAction::SaveData { .. } => {
+                            unreachable!("resource table actions cannot save inspector data")
                         }
                     }
                 }
@@ -740,44 +743,6 @@ fn show_resource_actions(
     MoreButton::new(format!("More actions for {}", resource.name)).show(&mut action_ui, |menu| {
         show_resource_action_items(menu, resource, pending_action);
     });
-}
-
-pub(super) fn show_resource_action_items(
-    menu: &mut MoreMenu<'_>,
-    resource: &MinimalResource,
-    pending_action: &mut Option<ResourceAction>,
-) {
-    if menu
-        .action_with_icon(
-            "Edit YAML",
-            icons::document_icon()
-                .fit_to_exact_size(egui::Vec2::splat(16.0))
-                .tint(gray::_500),
-        )
-        .clicked()
-        && pending_action.is_none()
-    {
-        *pending_action = Some(ResourceAction::EditYaml {
-            name: resource.name.clone(),
-            namespace: resource.namespace.clone(),
-        });
-    }
-    menu.separator();
-    if menu
-        .destructive_action_with_icon(
-            "Delete",
-            icons::trash_icon()
-                .fit_to_exact_size(egui::Vec2::splat(16.0))
-                .tint(egui::Color32::from_rgb(185, 28, 28)),
-        )
-        .clicked()
-        && pending_action.is_none()
-    {
-        *pending_action = Some(ResourceAction::RequestDelete {
-            name: resource.name.clone(),
-            namespace: resource.namespace.clone(),
-        });
-    }
 }
 
 #[cfg(test)]

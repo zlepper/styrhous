@@ -11,9 +11,9 @@ capture-stderr = true
 max-threads = 1
 
 [[profile.default.overrides]]
-filter = 'test(/test_(real_cluster_connection|resource_watcher_integration|resource_actions_integration)$/)'
+filter = 'test(/test_(real_cluster_connection|resource_watcher_integration|resource_actions_integration|secret_inspector_actions_integration)$/)'
 test-group = "kind-integration"
 
 [[profile.default.scripts]]
-filter = 'test(/test_(real_cluster_connection|resource_watcher_integration|resource_actions_integration)$/)'
+filter = 'test(/test_(real_cluster_connection|resource_watcher_integration|resource_actions_integration|secret_inspector_actions_integration)$/)'
 setup = "ensure-kind-cluster"

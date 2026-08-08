@@ -3,7 +3,7 @@ use crate::cluster_connection_manager::ClusterConnection;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use crate::resource_catalog::{ResourceNavigation, build_resource_navigation};
-use crate::resource_detail::{ResourceDetail, ResourceEvent};
+use crate::resource_detail::{ResourceDetail, ResourceDetailPayload, ResourceEvent};
 use crate::resource_table::CustomResourceColumn;
 use crate::sorted_name::SortedName;
 use crate::worker::{WorkerResult, WorkerTrait};
@@ -74,11 +74,130 @@ pub(super) struct ResourceDetailPanelState {
     pub(super) events: Vec<ResourceEvent>,
     pub(super) detail_error: Option<String>,
     pub(super) events_error: Option<String>,
+    pub(super) data_editor: Option<ResourceDataEditorState>,
     /// Avoid treating the row click which opened the overlay as a scrim dismissal.
     pub(super) dismiss_on_outside_click: bool,
 }
 
 #[derive(Debug, Clone)]
+pub(super) struct ResourceDataEditorState {
+    /// The last resource data map accepted from the live watcher. Secret entries
+    /// which cannot be represented as UTF-8 are deliberately absent.
+    pub(super) server_values: BTreeMap<String, String>,
+    pub(super) resource_version: String,
+    pub(super) draft_values: BTreeMap<String, String>,
+    pub(super) pending_external_values: Option<BTreeMap<String, String>>,
+    pub(super) pending_external_resource_version: Option<String>,
+    pub(super) revealed_secret_keys: HashSet<String>,
+    pub(super) saving: bool,
+    pub(super) save_error: Option<String>,
+}
+
+impl ResourceDataEditorState {
+    fn new(values: BTreeMap<String, String>, resource_version: String) -> Self {
+        Self {
+            draft_values: values.clone(),
+            server_values: values,
+            resource_version,
+            pending_external_values: None,
+            pending_external_resource_version: None,
+            revealed_secret_keys: HashSet::new(),
+            saving: false,
+            save_error: None,
+        }
+    }
+
+    pub(super) fn is_modified(&self) -> bool {
+        self.draft_values != self.server_values
+    }
+
+    pub(super) fn changed_values(&self) -> (BTreeMap<String, String>, BTreeMap<String, String>) {
+        let mut expected = BTreeMap::new();
+        let mut updated = BTreeMap::new();
+        for (key, value) in &self.draft_values {
+            if self.server_values.get(key) != Some(value) {
+                if let Some(expected_value) = self.server_values.get(key) {
+                    expected.insert(key.clone(), expected_value.clone());
+                    updated.insert(key.clone(), value.clone());
+                }
+            }
+        }
+        (expected, updated)
+    }
+
+    fn accept_watched_values(
+        &mut self,
+        values: BTreeMap<String, String>,
+        resource_version: String,
+    ) {
+        if !self.is_modified() {
+            self.server_values = values.clone();
+            self.draft_values = values;
+            self.resource_version = resource_version;
+            self.pending_external_values = None;
+            self.pending_external_resource_version = None;
+            return;
+        }
+        if self.server_values != values {
+            self.pending_external_values = Some(values);
+            self.pending_external_resource_version = Some(resource_version);
+        } else {
+            self.resource_version = resource_version;
+        }
+    }
+
+    pub(super) fn use_external_values(&mut self) {
+        let Some(values) = self.pending_external_values.take() else {
+            return;
+        };
+        self.server_values = values.clone();
+        self.draft_values = values;
+        self.resource_version = self
+            .pending_external_resource_version
+            .take()
+            .unwrap_or_default();
+        self.save_error = None;
+    }
+
+    pub(super) fn keep_local_edits(&mut self) {
+        let Some(values) = self.pending_external_values.take() else {
+            return;
+        };
+        let dirty_values = self
+            .draft_values
+            .iter()
+            .filter(|(key, value)| self.server_values.get(*key) != Some(*value))
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect::<BTreeMap<_, _>>();
+        self.server_values = values.clone();
+        self.resource_version = self
+            .pending_external_resource_version
+            .take()
+            .unwrap_or_default();
+        self.draft_values = values;
+        for (key, value) in dirty_values {
+            if self.server_values.contains_key(&key) {
+                self.draft_values.insert(key, value);
+            } else {
+                self.save_error = Some(format!(
+                    "A changed data key was removed on the cluster and cannot be saved."
+                ));
+            }
+        }
+    }
+
+    pub(super) fn mark_saved(&mut self) {
+        let (expected, updated) = self.changed_values();
+        for key in expected.keys() {
+            if let Some(value) = updated.get(key) {
+                self.server_values.insert(key.clone(), value.clone());
+            }
+        }
+        self.saving = false;
+        self.save_error = None;
+    }
+}
+
 pub(super) enum ResourceAction {
     OpenDetails {
         name: String,
@@ -92,6 +211,10 @@ pub(super) enum ResourceAction {
     RequestDelete {
         name: String,
         namespace: Option<String>,
+    },
+    SaveData {
+        expected_values: BTreeMap<String, String>,
+        updated_values: BTreeMap<String, String>,
     },
 }
 
@@ -207,6 +330,7 @@ impl UiState {
             events: Vec::new(),
             detail_error: None,
             events_error: None,
+            data_editor: None,
             dismiss_on_outside_click: false,
         });
         commands_to_send.push(crate::worker::WorkerCommand::StartResourceDetailWatch {
@@ -431,6 +555,22 @@ impl UiState {
                                 panel.detail_error = Some(message);
                             }
                         }
+                        Some(crate::worker::WorkerCommand::UpdateResourceData {
+                            cluster_key,
+                            resource_name,
+                            ..
+                        }) => {
+                            if let Some(editor) = self
+                                .clusters
+                                .get_mut(&cluster_key)
+                                .and_then(|cluster| cluster.resource_detail_panel.as_mut())
+                                .filter(|panel| panel.resource_name == resource_name)
+                                .and_then(|panel| panel.data_editor.as_mut())
+                            {
+                                editor.saving = false;
+                                editor.save_error = Some(message);
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -638,6 +778,7 @@ impl UiState {
                         .and_then(|cluster| cluster.resource_detail_panel.as_mut())
                         .filter(|panel| panel.selection_generation == selection_generation)
                     {
+                        sync_resource_data_editor(panel, &detail);
                         panel.detail = Some(detail);
                         panel.detail_error = None;
                     }
@@ -730,6 +871,20 @@ impl UiState {
                         cluster.yaml_panel = None;
                     }
                 }
+                WorkerResult::ResourceDataUpdateCompleted {
+                    cluster_key,
+                    resource_name,
+                } => {
+                    if let Some(editor) = self
+                        .clusters
+                        .get_mut(&cluster_key)
+                        .and_then(|cluster| cluster.resource_detail_panel.as_mut())
+                        .filter(|panel| panel.resource_name == resource_name)
+                        .and_then(|panel| panel.data_editor.as_mut())
+                    {
+                        editor.mark_saved();
+                    }
+                }
             }
         }
         commands_to_send
@@ -749,5 +904,33 @@ impl UiState {
             watch.is_synced = false;
             watch.error = Some(error);
         }
+    }
+}
+
+fn sync_resource_data_editor(panel: &mut ResourceDetailPanelState, detail: &ResourceDetail) {
+    let values = match &detail.payload {
+        ResourceDetailPayload::ConfigMap(config_map) => Some(config_map.data.clone()),
+        ResourceDetailPayload::Secret(secret) => Some(
+            secret
+                .data
+                .iter()
+                .filter_map(|(key, value)| {
+                    value.text.as_ref().map(|text| (key.clone(), text.clone()))
+                })
+                .collect(),
+        ),
+        ResourceDetailPayload::Generic | ResourceDetailPayload::Pod(_) => None,
+    };
+    match (panel.data_editor.as_mut(), values) {
+        (Some(editor), Some(values)) => {
+            editor.accept_watched_values(values, detail.resource_version.clone())
+        }
+        (None, Some(values)) => {
+            panel.data_editor = Some(ResourceDataEditorState::new(
+                values,
+                detail.resource_version.clone(),
+            ))
+        }
+        (_, None) => panel.data_editor = None,
     }
 }

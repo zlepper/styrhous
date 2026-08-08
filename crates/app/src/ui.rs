@@ -1,5 +1,6 @@
 mod cluster_rail;
 mod dialogs;
+mod resource_actions;
 mod resource_detail;
 mod resource_navigation;
 mod state;
