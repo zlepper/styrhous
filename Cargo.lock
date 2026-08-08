@@ -2276,6 +2276,7 @@ dependencies = [
  "kube",
  "regex",
  "serde_yaml",
+ "tempfile",
  "time",
  "tokio",
  "tracing",

@@ -1,6 +1,7 @@
 mod api_resource;
 mod cluster_connection_manager;
 mod helpers;
+mod log_store;
 mod minimal_namespace;
 mod minimal_resource;
 mod resource_catalog;

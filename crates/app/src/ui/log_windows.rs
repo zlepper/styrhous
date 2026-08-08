@@ -1,15 +1,18 @@
-use super::state::{PodLogStatus, PodLogWindowState, UiState};
+use super::state::{LogPageKey, PodLogStatus, PodLogWindowState, UiState};
+use crate::log_store::{LOG_PAGE_SIZE, LogStoreService};
 use crate::worker::WorkerCommand;
 use components::colors::{SUCCESS, TABLE_BORDER, TOOLBAR_BACKGROUND, gray};
 use components::{TailwindSearchInput, icons};
+use std::time::{Duration, Instant};
 
 const TOOLBAR_TEXT_SIZE: f32 = 16.0;
 
-/// Render native, independent Pod log windows and stop streams for windows
-/// closed by the user.
+/// Render native, independent Pod log windows and stop both the Kubernetes
+/// stream and the independent disk store when a window is closed.
 pub(super) fn show(
     ctx: &egui::Context,
     ui_state: &mut UiState,
+    log_store: &LogStoreService,
     commands_to_send: &mut Vec<WorkerCommand>,
 ) {
     let ids = ui_state.log_windows.keys().copied().collect::<Vec<_>>();
@@ -17,6 +20,9 @@ pub(super) fn show(
         let Some(window) = ui_state.log_windows.get_mut(&id) else {
             continue;
         };
+        if !window.store_opened {
+            window.store_opened = log_store.open(id);
+        }
         let viewport_id = egui::ViewportId::from_hash_of(("pod-log-window", id));
         let title = format!(
             "Logs · {}/{} · {}",
@@ -31,7 +37,7 @@ pub(super) fn show(
                 .with_min_inner_size(crate::MIN_NATIVE_WINDOW_SIZE),
             |window_ctx, _| {
                 close_requested = window_ctx.input(|input| input.viewport().close_requested());
-                show_log_window(window_ctx, window, &mut close_requested);
+                show_log_window(window_ctx, window, log_store, &mut close_requested);
             },
         );
         window.close_requested |= close_requested;
@@ -45,6 +51,7 @@ pub(super) fn show(
         .collect::<Vec<_>>();
     for (id, cluster_key) in closed {
         ui_state.log_windows.remove(&id);
+        log_store.close(id);
         commands_to_send.push(WorkerCommand::StopPodLogStream {
             cluster_key,
             log_window_id: id,
@@ -55,8 +62,10 @@ pub(super) fn show(
 fn show_log_window(
     ctx: &egui::Context,
     window: &mut PodLogWindowState,
+    log_store: &LogStoreService,
     _close_requested: &mut bool,
 ) {
+    sync_search(ctx, window, log_store);
     egui::TopBottomPanel::top("pod-log-header")
         .exact_height(64.0)
         .frame(
@@ -93,12 +102,12 @@ fn show_log_window(
                         .color(status_color(&window.status)),
                 );
                 ui.label(
-                    egui::RichText::new(status_label(&window.status))
+                    egui::RichText::new(status_label(window))
                         .size(TOOLBAR_TEXT_SIZE)
                         .color(gray::_600),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    show_log_search_controls(ui, window);
+                    show_log_search_controls(ctx, ui, window, log_store)
                 });
             });
         });
@@ -110,15 +119,13 @@ fn show_log_window(
                 .inner_margin(egui::Margin::same(16)),
         )
         .show(ctx, |ui| {
-            refresh_log_search(window);
             let row_height = ui.text_style_height(&egui::TextStyle::Monospace);
             let row_step = row_height + ui.spacing().item_spacing.y;
-            let display_line_count = displayed_line_count(window);
+            let display_count = displayed_line_count(window);
             let requested_offset = window
                 .search
-                .scroll_to_line
+                .scroll_to_display_row
                 .take()
-                .and_then(|line| display_row_for_line(window, line))
                 .map(|row| egui::vec2(0.0, row as f32 * row_step));
             let mut scroll_area = egui::ScrollArea::both()
                 .id_salt(("pod-log-lines", window.id))
@@ -127,23 +134,72 @@ fn show_log_window(
             if let Some(offset) = requested_offset {
                 scroll_area = scroll_area.scroll_offset(offset);
             }
-            let matcher = log_matcher(&window.search).ok().flatten();
-            scroll_area.show_rows(ui, row_height, display_line_count, |ui, rows| {
+            scroll_area.show_rows(ui, row_height, display_count, |ui, rows| {
                 for display_row in rows {
-                    let line_index = line_for_display_row(window, display_row);
-                    let line = &window.lines[line_index];
-                    ui.add(
-                        egui::Label::new(log_line_layout_job(line_index, line, matcher.as_ref()))
+                    request_page_for_display_row(window, log_store, display_row);
+                    let page_start = display_row / window.page_size * window.page_size;
+                    let key = LogPageKey {
+                        generation: window.search.generation,
+                        filter_matches: filter_is_active(window),
+                        page_start,
+                    };
+                    if let Some(row) = window.pages.get(&key).and_then(|page| {
+                        page.rows.iter().find(|row| row.display_row == display_row)
+                    }) {
+                        ui.add(
+                            egui::Label::new(log_line_layout_job(
+                                row.line_index,
+                                &row.text,
+                                &row.match_ranges,
+                            ))
                             .extend()
                             .selectable(true),
-                    );
+                        );
+                    } else {
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new("Loading…")
+                                    .monospace()
+                                    .color(gray::_500),
+                            )
+                            .extend(),
+                        );
+                    }
                 }
             });
         });
 }
 
-fn show_log_search_controls(ui: &mut egui::Ui, window: &mut PodLogWindowState) {
-    refresh_log_search(window);
+fn request_page_for_display_row(
+    window: &mut PodLogWindowState,
+    log_store: &LogStoreService,
+    display_row: usize,
+) {
+    let page_start = display_row / window.page_size * window.page_size;
+    let key = LogPageKey {
+        generation: window.search.generation,
+        filter_matches: filter_is_active(window),
+        page_start,
+    };
+    if !window.pages.contains_key(&key)
+        && window.pending_pages.insert(key)
+        && !log_store.load_page(
+            window.id,
+            key.generation,
+            key.filter_matches,
+            key.page_start,
+        )
+    {
+        window.pending_pages.remove(&key);
+    }
+}
+
+fn show_log_search_controls(
+    ctx: &egui::Context,
+    ui: &mut egui::Ui,
+    window: &mut PodLogWindowState,
+    log_store: &LogStoreService,
+) {
     let invalid = window.search.error.is_some();
     let search_response = ui
         .allocate_ui_with_layout(
@@ -160,8 +216,17 @@ fn show_log_search_controls(ui: &mut egui::Ui, window: &mut PodLogWindowState) {
         )
         .inner;
     if search_response.text.changed() || search_response.regex.changed() {
-        reset_log_search(window);
-        refresh_log_search(window);
+        window.search.generation += 1;
+        window.search.match_count = 0;
+        window.search.scanned_lines = 0;
+        window.search.search_complete = window.search.query.is_empty();
+        window.search.error = None;
+        window.search.active_display_row = None;
+        window.search.active_match = None;
+        window.search.scroll_to_display_row = None;
+        window.clear_pages();
+        window.search.search_deadline = Some(Instant::now() + Duration::from_millis(150));
+        ctx.request_repaint_after(Duration::from_millis(150));
     }
 
     ui.add_space(8.0);
@@ -202,7 +267,7 @@ fn show_log_search_controls(ui: &mut egui::Ui, window: &mut PodLogWindowState) {
                                 "Next displayed line",
                             );
                             ui.separator();
-                            let filter = filter_button(ui, window.search.filter_matches);
+                            let filter = filter_button(ui, filter_is_active(window));
                             (previous_line, previous_match, next_match, next_line, filter)
                         })
                         .inner
@@ -212,10 +277,10 @@ fn show_log_search_controls(ui: &mut egui::Ui, window: &mut PodLogWindowState) {
         )
         .inner;
     if navigation.1 {
-        advance_log_match(window, false);
+        advance_log_match(window, log_store, false);
     }
     if navigation.2 {
-        advance_log_match(window, true);
+        advance_log_match(window, log_store, true);
     }
     if navigation.0 {
         advance_log_line(window, false);
@@ -225,6 +290,48 @@ fn show_log_search_controls(ui: &mut egui::Ui, window: &mut PodLogWindowState) {
     }
     if navigation.4 {
         window.search.filter_matches = !window.search.filter_matches;
+        window.search.active_display_row = None;
+        window.search.scroll_to_display_row = None;
+        window.clear_pages();
+    }
+    sync_search(ctx, window, log_store);
+}
+
+fn sync_search(ctx: &egui::Context, window: &mut PodLogWindowState, log_store: &LogStoreService) {
+    let Some(deadline) = window.search.search_deadline else {
+        return;
+    };
+    if Instant::now() < deadline {
+        ctx.request_repaint_after(deadline.saturating_duration_since(Instant::now()));
+        return;
+    }
+    window.search.search_deadline = None;
+    if window.search.query.is_empty() {
+        window.search.search_complete = true;
+        return;
+    }
+    let pattern = if window.search.regex_mode {
+        window.search.query.clone()
+    } else {
+        regex::escape(&window.search.query)
+    };
+    if let Err(error) = regex::RegexBuilder::new(&pattern)
+        .case_insensitive(true)
+        .build()
+    {
+        window.search.error = Some(error.to_string());
+        window.search.search_complete = true;
+        return;
+    }
+    window.search.search_complete = false;
+    if !log_store.search(
+        window.id,
+        window.search.generation,
+        window.search.query.clone(),
+        window.search.regex_mode,
+    ) {
+        window.search.search_deadline = Some(Instant::now() + Duration::from_millis(100));
+        ctx.request_repaint_after(Duration::from_millis(100));
     }
 }
 
@@ -277,176 +384,96 @@ fn filter_button(ui: &mut egui::Ui, active: bool) -> bool {
         .clicked()
 }
 
-fn reset_log_search(window: &mut PodLogWindowState) {
-    window.search.matching_lines.clear();
-    window.search.indexed_line_count = 0;
-    window.search.active_match = 0;
-    window.search.active_line = None;
-    window.search.scroll_to_line = None;
-    window.search.error = None;
-}
-
-fn refresh_log_search(window: &mut PodLogWindowState) {
-    if window.search.indexed_line_count > window.lines.len() {
-        reset_log_search(window);
-    }
-    if window.search.query.is_empty() {
-        window.search.matching_lines.clear();
-        window.search.indexed_line_count = window.lines.len();
-        window.search.active_match = 0;
-        window.search.error = None;
-        return;
-    }
-
-    let matcher = match log_matcher(&window.search) {
-        Ok(Some(regex)) => regex,
-        Ok(None) => return,
-        Err(error) => {
-            window.search.matching_lines.clear();
-            window.search.indexed_line_count = window.lines.len();
-            window.search.active_match = 0;
-            window.search.error = Some(error.to_string());
-            return;
-        }
-    };
-    for line_index in window.search.indexed_line_count..window.lines.len() {
-        let line = &window.lines[line_index];
-        if matcher.is_match(line) {
-            window.search.matching_lines.push(line_index);
-        }
-    }
-    window.search.indexed_line_count = window.lines.len();
-    window.search.error = None;
-    if window.search.active_match >= window.search.matching_lines.len() {
-        window.search.active_match = 0;
-    }
-}
-
-fn log_matcher(
-    search: &super::state::LogSearchState,
-) -> Result<Option<regex::Regex>, regex::Error> {
-    if search.query.is_empty() {
-        return Ok(None);
-    }
-    let pattern = if search.regex_mode {
-        search.query.clone()
-    } else {
-        regex::escape(&search.query)
-    };
-    regex::RegexBuilder::new(&pattern)
-        .case_insensitive(true)
-        .build()
-        .map(Some)
+fn filter_is_active(window: &PodLogWindowState) -> bool {
+    window.search.filter_matches && !window.search.query.is_empty()
 }
 
 fn displayed_line_count(window: &PodLogWindowState) -> usize {
-    if window.search.filter_matches && !window.search.query.is_empty() {
-        window.search.matching_lines.len()
+    if filter_is_active(window) {
+        window.search.match_count
     } else {
-        window.lines.len()
-    }
-}
-
-fn line_for_display_row(window: &PodLogWindowState, display_row: usize) -> usize {
-    if window.search.filter_matches && !window.search.query.is_empty() {
-        window.search.matching_lines[display_row]
-    } else {
-        display_row
-    }
-}
-
-fn display_row_for_line(window: &PodLogWindowState, line_index: usize) -> Option<usize> {
-    if window.search.filter_matches && !window.search.query.is_empty() {
-        window
-            .search
-            .matching_lines
-            .iter()
-            .position(|matching_line| *matching_line == line_index)
-    } else {
-        (line_index < window.lines.len()).then_some(line_index)
+        window.total_lines
     }
 }
 
 fn log_line_layout_job(
     line_index: usize,
     line: &str,
-    matcher: Option<&regex::Regex>,
+    ranges: &[(usize, usize)],
 ) -> egui::text::LayoutJob {
     let mut job = egui::text::LayoutJob::default();
-    let line_number_format = egui::TextFormat {
+    let number = egui::TextFormat {
         font_id: egui::FontId::monospace(14.0),
         color: egui::Color32::from_rgb(156, 163, 175),
         ..Default::default()
     };
-    let text_format = egui::TextFormat {
+    let text = egui::TextFormat {
         font_id: egui::FontId::monospace(14.0),
         color: egui::Color32::from_rgb(229, 231, 235),
         ..Default::default()
     };
-    let match_format = egui::TextFormat {
+    let highlighted = egui::TextFormat {
         font_id: egui::FontId::monospace(14.0),
         color: egui::Color32::from_rgb(254, 243, 199),
         background: egui::Color32::from_rgb(120, 53, 15),
         ..Default::default()
     };
-    job.append(&format!("{line_index:>6}  "), 0.0, line_number_format);
-
+    job.append(&format!("{line_index:>6}  "), 0.0, number);
     let mut cursor = 0;
-    if let Some(matcher) = matcher {
-        for matched in matcher.find_iter(line) {
-            if matched.start() > cursor {
-                job.append(&line[cursor..matched.start()], 0.0, text_format.clone());
-            }
-            job.append(
-                &line[matched.start()..matched.end()],
-                0.0,
-                match_format.clone(),
-            );
-            cursor = matched.end();
+    for &(start, end) in ranges {
+        if start > cursor {
+            job.append(&line[cursor..start], 0.0, text.clone());
         }
+        job.append(&line[start..end], 0.0, highlighted.clone());
+        cursor = end;
     }
     if cursor < line.len() {
-        job.append(&line[cursor..], 0.0, text_format);
+        job.append(&line[cursor..], 0.0, text);
     }
     job
 }
 
-fn advance_log_match(window: &mut PodLogWindowState, forward: bool) {
-    let matches = &window.search.matching_lines;
-    if matches.is_empty() {
+fn advance_log_match(window: &mut PodLogWindowState, log_store: &LogStoreService, forward: bool) {
+    if window.search.match_count == 0 {
         return;
     }
-    window.search.active_match = if forward {
-        (window.search.active_match + 1) % matches.len()
+    let current = window.search.active_match.unwrap_or_else(|| {
+        if forward {
+            window.search.match_count - 1
+        } else {
+            0
+        }
+    });
+    let next = if forward {
+        (current + 1) % window.search.match_count
     } else {
-        (window.search.active_match + matches.len() - 1) % matches.len()
+        (current + window.search.match_count - 1) % window.search.match_count
     };
-    window.search.scroll_to_line = Some(matches[window.search.active_match]);
-    window.search.active_line = window.search.scroll_to_line;
+    window.search.active_match = Some(next);
+    let _ = log_store.resolve_match(window.id, window.search.generation, next);
 }
 
 fn advance_log_line(window: &mut PodLogWindowState, forward: bool) {
-    let displayed_line_count = displayed_line_count(window);
-    if displayed_line_count == 0 {
+    let count = displayed_line_count(window);
+    if count == 0 {
         return;
     }
-    let current_display_row = window
-        .search
-        .active_line
-        .and_then(|line| display_row_for_line(window, line));
-    let next_display_row = match (current_display_row, forward) {
-        (Some(row), true) => (row + 1) % displayed_line_count,
-        (Some(row), false) => (row + displayed_line_count - 1) % displayed_line_count,
+    let current = window.search.active_display_row;
+    let next = match (current, forward) {
+        (Some(row), true) => (row + 1) % count,
+        (Some(row), false) => (row + count - 1) % count,
         (None, true) => 0,
-        (None, false) => displayed_line_count - 1,
+        (None, false) => count - 1,
     };
-    let line = line_for_display_row(window, next_display_row);
-    window.search.active_line = Some(line);
-    window.search.scroll_to_line = Some(line);
+    window.search.active_display_row = Some(next);
+    window.search.scroll_to_display_row = Some(next);
 }
 
-fn status_label(status: &PodLogStatus) -> String {
-    match status {
+fn status_label(window: &PodLogWindowState) -> String {
+    if !window.search.query.is_empty() && !window.search.search_complete {
+        return format!("Searching… {} matches", window.search.match_count);
+    }
+    match &window.status {
         PodLogStatus::Connecting => "Connecting…".to_owned(),
         PodLogStatus::Following => "Following".to_owned(),
         PodLogStatus::Finished => "Stream finished".to_owned(),
@@ -466,12 +493,13 @@ fn status_color(status: &PodLogStatus) -> egui::Color32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::log_store::{LogPageRow, LogStoreConfig, LogStoreResult};
     use crate::minimal_resource::PodLogContainer;
     use crate::resource_table::ContainerKind;
     use egui_kittest::Harness;
 
     fn log_window(lines: &[&str]) -> PodLogWindowState {
-        PodLogWindowState {
+        let mut window = PodLogWindowState {
             id: 1,
             cluster_key: 1,
             namespace: "default".to_owned(),
@@ -480,79 +508,82 @@ mod tests {
                 name: "api".to_owned(),
                 kind: ContainerKind::App,
             },
-            lines: lines.iter().map(ToString::to_string).collect(),
+            total_lines: lines.len(),
+            pages: Default::default(),
+            page_order: Default::default(),
+            page_cache_bytes: 0,
+            page_cache_limit: PodLogWindowState::DEFAULT_PAGE_CACHE_LIMIT,
+            page_size: LOG_PAGE_SIZE,
+            pending_pages: Default::default(),
+            store_opened: true,
             status: PodLogStatus::Following,
             close_requested: false,
             search: Default::default(),
-        }
-    }
-
-    #[test]
-    fn search_tracks_new_matching_log_lines_and_navigates_them() {
-        let mut window = log_window(&["starting api", "request complete", "API ready"]);
-        window.search.query = "api".to_owned();
-
-        refresh_log_search(&mut window);
-        assert_eq!(window.search.matching_lines, vec![0, 2]);
-
-        window.lines.push("api shutting down".to_owned());
-        refresh_log_search(&mut window);
-        assert_eq!(window.search.matching_lines, vec![0, 2, 3]);
-
-        advance_log_match(&mut window, true);
-        assert_eq!(window.search.active_match, 1);
-        assert_eq!(window.search.scroll_to_line, Some(2));
-        assert_eq!(window.search.active_line, Some(2));
-    }
-
-    #[test]
-    fn invalid_log_regex_reports_an_error_without_matches() {
-        let mut window = log_window(&["request complete"]);
-        window.search.query = "[".to_owned();
-        window.search.regex_mode = true;
-
-        refresh_log_search(&mut window);
-
-        assert!(window.search.matching_lines.is_empty());
-        assert!(window.search.error.is_some());
-    }
-
-    #[test]
-    fn line_navigation_respects_the_filtered_or_unfiltered_display() {
-        let mut window = log_window(&["api started", "worker started", "api ready"]);
-        window.search.query = "api".to_owned();
-        refresh_log_search(&mut window);
-
-        advance_log_line(&mut window, true);
-        assert_eq!(window.search.scroll_to_line, Some(0));
-        advance_log_line(&mut window, true);
-        assert_eq!(window.search.scroll_to_line, Some(1));
-
-        window.search.filter_matches = true;
-        advance_log_line(&mut window, true);
-        assert_eq!(window.search.scroll_to_line, Some(0));
-        advance_log_line(&mut window, true);
-        assert_eq!(window.search.scroll_to_line, Some(2));
-    }
-
-    #[test]
-    fn log_layout_highlights_each_matching_text_segment() {
-        let matcher = regex::RegexBuilder::new("http")
-            .case_insensitive(true)
-            .build()
-            .unwrap();
-
-        let layout = log_line_layout_job(12, "http HTTP status", Some(&matcher));
-
-        assert_eq!(layout.sections.len(), 5);
-        assert_eq!(
-            layout
-                .sections
+        };
+        window.insert_page(
+            LogPageKey {
+                generation: 0,
+                filter_matches: false,
+                page_start: 0,
+            },
+            lines
                 .iter()
-                .filter(|section| section.format.background != egui::Color32::TRANSPARENT)
-                .count(),
-            2
+                .enumerate()
+                .map(|(line_index, text)| LogPageRow {
+                    display_row: line_index,
+                    line_index,
+                    text: (*text).to_owned(),
+                    match_ranges: Vec::new(),
+                })
+                .collect(),
         );
+        window
+    }
+
+    #[test]
+    fn layout_highlights_only_matching_segments() {
+        let job = log_line_layout_job(4, "http http", &[(0, 4), (5, 9)]);
+        assert_eq!(job.sections.len(), 4);
+        assert_eq!(job.text, "     4  http http");
+    }
+
+    #[test]
+    fn scrolling_requests_one_background_page_and_renders_it_when_loaded() {
+        let service = LogStoreService::new(LogStoreConfig {
+            page_size: 2,
+            ..LogStoreConfig::default()
+        });
+        let lines = ["line 0", "line 1", "line 2", "line 3", "line 4"];
+        assert!(service.append(1, lines.into_iter().map(str::to_owned).collect()));
+        let _ = wait_for_store_result(&service, |result| {
+            matches!(result, LogStoreResult::Updated { .. })
+        });
+
+        let mut window = log_window(&lines);
+        window.page_size = 2;
+        window.clear_pages();
+
+        // The virtualized row callback can run more than once before I/O
+        // finishes. It must issue one request for the missing page.
+        request_page_for_display_row(&mut window, &service, 2);
+        request_page_for_display_row(&mut window, &service, 2);
+        let key = LogPageKey {
+            generation: 0,
+            filter_matches: false,
+            page_start: 2,
+        };
+        assert_eq!(window.pending_pages, std::collections::HashSet::from([key]));
+
+        let LogStoreResult::PageLoaded { rows, .. } = wait_for_store_result(&service, |result| {
+            matches!(result, LogStoreResult::PageLoaded { page_start: 2, .. })
+        }) else {
+            unreachable!()
+        };
+        window.insert_page(key, rows);
+
+        assert!(!window.pending_pages.contains(&key));
+        assert_eq!(window.pages[&key].rows[0].text, "line 2");
+        assert_eq!(window.pages[&key].rows[1].text, "line 3");
     }
 
     #[test]
@@ -570,15 +601,8 @@ mod tests {
             "2026-08-08T15:22:31.218Z  INFO  worker: processed batch of 42 jobs",
         ]);
         window.search.query = "http".to_owned();
-        refresh_log_search(&mut window);
-        let mut close_requested = false;
-        let mut harness = Harness::builder()
-            .with_size(super::super::APP_SNAPSHOT_SIZE)
-            .build(move |ctx| show_log_window(ctx, &mut window, &mut close_requested));
-        components::test_support::setup_egui(&harness.ctx);
-
-        harness.run();
-        harness.snapshot("pod_logs/viewer");
+        add_match_ranges(&mut window, false);
+        snapshot_window(window, "pod_logs/viewer");
     }
 
     #[test]
@@ -591,14 +615,85 @@ mod tests {
         ]);
         window.search.query = "http".to_owned();
         window.search.filter_matches = true;
-        refresh_log_search(&mut window);
+        window.search.match_count = 2;
+        window.insert_page(
+            LogPageKey {
+                generation: 0,
+                filter_matches: true,
+                page_start: 0,
+            },
+            [1, 2]
+                .into_iter()
+                .enumerate()
+                .map(|(display_row, line_index)| {
+                    let text = window.pages[&LogPageKey {
+                        generation: 0,
+                        filter_matches: false,
+                        page_start: 0,
+                    }]
+                        .rows[line_index]
+                        .text
+                        .clone();
+                    LogPageRow {
+                        display_row,
+                        line_index,
+                        match_ranges: regex::Regex::new("(?i)http")
+                            .expect("valid test matcher")
+                            .find_iter(&text)
+                            .map(|range| (range.start(), range.end()))
+                            .collect(),
+                        text,
+                    }
+                })
+                .collect(),
+        );
+        snapshot_window(window, "pod_logs/filter_active");
+    }
+
+    fn add_match_ranges(window: &mut PodLogWindowState, filter_matches: bool) {
+        let key = LogPageKey {
+            generation: 0,
+            filter_matches,
+            page_start: 0,
+        };
+        let page = window.pages.get_mut(&key).expect("test page exists");
+        for row in &mut page.rows {
+            row.match_ranges = regex::Regex::new("(?i)http")
+                .expect("valid test matcher")
+                .find_iter(&row.text)
+                .map(|range| (range.start(), range.end()))
+                .collect();
+        }
+    }
+
+    fn snapshot_window(window: PodLogWindowState, name: &str) {
+        let mut window = window;
+        let log_store = LogStoreService::default();
         let mut close_requested = false;
         let mut harness = Harness::builder()
             .with_size(super::super::APP_SNAPSHOT_SIZE)
-            .build(move |ctx| show_log_window(ctx, &mut window, &mut close_requested));
+            .build(move |ctx| show_log_window(ctx, &mut window, &log_store, &mut close_requested));
         components::test_support::setup_egui(&harness.ctx);
-
         harness.run();
-        harness.snapshot("pod_logs/filter_active");
+        harness.snapshot(name);
+    }
+
+    fn wait_for_store_result(
+        service: &LogStoreService,
+        matches: impl Fn(&LogStoreResult) -> bool,
+    ) -> LogStoreResult {
+        let start = Instant::now();
+        loop {
+            if let Some(result) = service.try_next_result()
+                && matches(&result)
+            {
+                return result;
+            }
+            assert!(
+                start.elapsed() < Duration::from_secs(2),
+                "timed out waiting for log-store result"
+            );
+            std::thread::yield_now();
+        }
     }
 }
