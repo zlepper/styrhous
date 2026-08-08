@@ -11,7 +11,7 @@ use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use crate::resource_catalog::build_resource_navigation;
 use crate::resource_detail::{
-    ConfigMapDetail, PodConditionDetail, PodContainerDetail, PodDetail,
+    ConfigMapDetail, ManagedResource, PodConditionDetail, PodContainerDetail, PodDetail,
     PodEnvironmentVariableDetail, PodEnvironmentVariableSource, PodVolumeDetail, ResourceDetail,
     ResourceDetailPayload, ResourceEvent, SecretDataDetail, SecretDetail,
 };
@@ -33,6 +33,72 @@ fn select_namespace(harness: &mut Harness<MyEguiApp<MockWorker>>, namespace: &st
     harness.run();
     harness.get_by_label(namespace).click();
     harness.run();
+}
+
+fn overflowing_pod_detail() -> PodDetail {
+    PodDetail {
+        phase: "Running".into(),
+        conditions: vec![
+            PodConditionDetail {
+                type_: "Initialized".into(),
+                status: "True".into(),
+                reason: Some("PodCompleted".into()),
+                message: Some("All init containers have completed.".into()),
+            },
+            PodConditionDetail {
+                type_: "Ready".into(),
+                status: "True".into(),
+                reason: Some("ContainersReady".into()),
+                message: Some("All containers are ready.".into()),
+            },
+        ],
+        node_name: Some("kind-control-plane".into()),
+        pod_ip: Some("10.244.0.23".into()),
+        host_ip: Some("172.18.0.2".into()),
+        qos_class: Some("Burstable".into()),
+        restart_policy: Some("Always".into()),
+        service_account_name: Some("api".into()),
+        dns_policy: Some("ClusterFirst".into()),
+        containers: (0..3)
+            .map(|index| PodContainerDetail {
+                name: format!("api-{index}"),
+                image: "registry.example.com/api:v1.2.3".into(),
+                ready: true,
+                restart_count: 0,
+                state: "Running".into(),
+                reason: None,
+                message: None,
+                command: vec!["/app/api".into()],
+                args: vec!["--serve".into(), "--metrics-address=:9090".into()],
+                ports: vec!["8080/TCP".into(), "9090/TCP".into()],
+                environment_variables: vec![
+                    PodEnvironmentVariableDetail {
+                        name: "LOG_LEVEL".into(),
+                        value: Some("info".into()),
+                        source: PodEnvironmentVariableSource::Literal,
+                    },
+                    PodEnvironmentVariableDetail {
+                        name: "DATABASE_URL".into(),
+                        value: Some("postgresql://database/api".into()),
+                        source: PodEnvironmentVariableSource::SecretKey {
+                            name: "api-database".into(),
+                            key: "url".into(),
+                            optional: false,
+                        },
+                    },
+                ],
+            })
+            .collect(),
+        volumes: (0..3)
+            .map(|index| PodVolumeDetail {
+                name: format!("config-{index}"),
+                kind: "ConfigMap".into(),
+                source: "api-configuration".into(),
+                mount_path: Some(format!("/etc/api/config-{index}")),
+                read_only: true,
+            })
+            .collect(),
+    }
 }
 
 fn secondary_click(harness: &mut Harness<MyEguiApp<MockWorker>>, position: egui::Pos2) {
@@ -710,7 +776,7 @@ fn resource_name_opens_and_closes_a_live_detail_inspector() {
             .and_then(|panel| panel.detail.as_ref())
             .is_some()
     );
-    harness.get_by_label("×").click_accesskit();
+    harness.get_by_label("Close inspector").click_accesskit();
     harness.run();
 
     assert!(
@@ -722,6 +788,309 @@ fn resource_name_opens_and_closes_a_live_detail_inspector() {
         harness.state().worker.commands.last(),
         Some(WorkerCommand::StopResourceDetailWatch { cluster_key: 2 })
     ));
+}
+
+#[test]
+fn managed_resource_tables_navigate_with_back_and_forward_history() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    let deployment = fixture_api_resource("apps", "Deployment", "deployments");
+    let replica_set = fixture_api_resource("apps", "ReplicaSet", "replicasets");
+    let pod = fixture_api_resource("core", "Pod", "pods");
+    let detail = ResourceDetail {
+        api_resource: deployment.clone(),
+        name: "api".into(),
+        namespace: Some("kube-system".into()),
+        uid: "deployment-uid".into(),
+        resource_version: "1".into(),
+        creation_timestamp: None,
+        owner: None,
+        labels: BTreeMap::new(),
+        annotations: BTreeMap::new(),
+        payload: ResourceDetailPayload::Generic,
+    };
+    open_typed_detail(&mut harness, deployment, detail);
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(WorkerResult::ManagedResourcesReplaced {
+            cluster_key: 2,
+            selection_generation: 1,
+            resources: vec![
+                ManagedResource {
+                    api_resource: replica_set.clone(),
+                    name: "api-7b948f".into(),
+                    namespace: Some("kube-system".into()),
+                    uid: "replicaset-uid".into(),
+                    controller_owner_uid: "deployment-uid".into(),
+                    creation_timestamp: Some(
+                        time::OffsetDateTime::now_utc() - time::Duration::hours(2),
+                    ),
+                    cells: BTreeMap::from([(
+                        READY_COLUMN.to_owned(),
+                        CellValue::Text("1/1".into()),
+                    )]),
+                },
+                ManagedResource {
+                    api_resource: pod.clone(),
+                    name: "api-7b948f-pod".into(),
+                    namespace: Some("kube-system".into()),
+                    uid: "pod-uid".into(),
+                    controller_owner_uid: "replicaset-uid".into(),
+                    creation_timestamp: Some(
+                        time::OffsetDateTime::now_utc() - time::Duration::minutes(15),
+                    ),
+                    cells: BTreeMap::from([
+                        (READY_COLUMN.to_owned(), CellValue::Text("1/1".into())),
+                        (
+                            CONTAINERS_COLUMN.to_owned(),
+                            CellValue::ContainerIndicators(vec![]),
+                        ),
+                        (
+                            STATUS_COLUMN.to_owned(),
+                            CellValue::Status {
+                                label: "Running".into(),
+                                tone: StatusTone::Success,
+                            },
+                        ),
+                        (RESTARTS_COLUMN.to_owned(), CellValue::Number(0)),
+                    ]),
+                },
+            ],
+        });
+    harness.run();
+    harness.snapshot_options(
+        "deployment_managed_resource_tables",
+        &egui_kittest::SnapshotOptions::new().failed_pixel_count_threshold(1),
+    );
+    let replica_set_position = harness.get_by_label("api-7b948f").rect().center();
+    primary_click(&mut harness, replica_set_position);
+    harness.run_steps(1);
+
+    let panel = harness.state().ui_state.clusters[&2]
+        .resource_detail_panel
+        .as_ref()
+        .expect("inspector should remain open");
+    assert_eq!(panel.api_resource, replica_set);
+    assert_eq!(panel.back_stack.len(), 1);
+    assert!(panel.forward_stack.is_empty());
+    assert!(matches!(
+        harness.state().worker.commands.last(),
+        Some(WorkerCommand::StartResourceDetailWatch {
+            resource_name,
+            resource_uid,
+            selection_generation: 2,
+            ..
+        }) if resource_name == "api-7b948f" && resource_uid == "replicaset-uid"
+    ));
+
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(WorkerResult::ResourceDetailUpdated {
+            cluster_key: 2,
+            selection_generation: 2,
+            detail: ResourceDetail {
+                api_resource: replica_set.clone(),
+                name: "api-7b948f".into(),
+                namespace: Some("kube-system".into()),
+                uid: "replicaset-uid".into(),
+                resource_version: "1".into(),
+                creation_timestamp: Some(
+                    time::OffsetDateTime::now_utc() - time::Duration::hours(2),
+                ),
+                owner: Some(crate::resource_detail::ResourceOwner {
+                    kind: "Deployment".into(),
+                    name: "api".into(),
+                }),
+                labels: BTreeMap::new(),
+                annotations: BTreeMap::new(),
+                payload: ResourceDetailPayload::Generic,
+            },
+        });
+    harness.run();
+    harness
+        .state_mut()
+        .ui_state
+        .clusters
+        .get_mut(&2)
+        .unwrap()
+        .resource_detail_panel
+        .as_mut()
+        .unwrap()
+        .transition = None;
+    harness.run();
+    harness.snapshot_options(
+        "replica_set_inspector_with_back_history",
+        &egui_kittest::SnapshotOptions::new().failed_pixel_count_threshold(1),
+    );
+
+    harness.get_by_label("Back").click_accesskit();
+    harness.run_steps(1);
+    let panel = harness.state().ui_state.clusters[&2]
+        .resource_detail_panel
+        .as_ref()
+        .expect("inspector should remain open");
+    assert_eq!(panel.api_resource.kind, "Deployment");
+    assert!(panel.back_stack.is_empty());
+    assert_eq!(panel.forward_stack.len(), 1);
+    harness
+        .state_mut()
+        .ui_state
+        .clusters
+        .get_mut(&2)
+        .unwrap()
+        .resource_detail_panel
+        .as_mut()
+        .unwrap()
+        .transition = None;
+    harness.run();
+    harness.snapshot_options(
+        "deployment_inspector_with_forward_history",
+        &egui_kittest::SnapshotOptions::new().failed_pixel_count_threshold(1),
+    );
+
+    harness.get_by_label("Forward").click_accesskit();
+    harness.run_steps(1);
+    assert_eq!(
+        harness.state().ui_state.clusters[&2]
+            .resource_detail_panel
+            .as_ref()
+            .expect("inspector should remain open")
+            .api_resource,
+        replica_set
+    );
+
+    let mut commands = Vec::new();
+    harness.state_mut().ui_state.navigate_resource_detail(
+        2,
+        pod.clone(),
+        "api-7b948f-pod".into(),
+        Some("kube-system".into()),
+        "pod-uid".into(),
+        &mut commands,
+    );
+    harness.state_mut().worker.commands.extend(commands);
+    let selection_generation = harness.state().ui_state.clusters[&2]
+        .resource_detail_panel
+        .as_ref()
+        .unwrap()
+        .selection_generation;
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(WorkerResult::ResourceDetailUpdated {
+            cluster_key: 2,
+            selection_generation,
+            detail: ResourceDetail {
+                api_resource: pod.clone(),
+                name: "api-7b948f-pod".into(),
+                namespace: Some("kube-system".into()),
+                uid: "pod-uid".into(),
+                resource_version: "1".into(),
+                creation_timestamp: Some(
+                    time::OffsetDateTime::now_utc() - time::Duration::minutes(15),
+                ),
+                owner: Some(crate::resource_detail::ResourceOwner {
+                    kind: "ReplicaSet".into(),
+                    name: "api-7b948f".into(),
+                }),
+                labels: BTreeMap::new(),
+                annotations: BTreeMap::new(),
+                payload: ResourceDetailPayload::Pod(overflowing_pod_detail()),
+            },
+        });
+    harness.run();
+    harness
+        .state_mut()
+        .ui_state
+        .clusters
+        .get_mut(&2)
+        .unwrap()
+        .resource_detail_panel
+        .as_mut()
+        .unwrap()
+        .transition = None;
+    harness.run();
+    assert_eq!(
+        harness.state().ui_state.clusters[&2]
+            .resource_detail_panel
+            .as_ref()
+            .unwrap()
+            .back_stack
+            .len(),
+        2
+    );
+    harness.snapshot_options(
+        "pod_inspector_with_two_back_history_blades",
+        &egui_kittest::SnapshotOptions::new().failed_pixel_count_threshold(1),
+    );
+
+    let mut commands = Vec::new();
+    harness.state_mut().ui_state.navigate_resource_detail(
+        2,
+        pod.clone(),
+        "api-7b948f-pod-debug".into(),
+        Some("kube-system".into()),
+        "pod-debug-uid".into(),
+        &mut commands,
+    );
+    harness.state_mut().worker.commands.extend(commands);
+    let selection_generation = harness.state().ui_state.clusters[&2]
+        .resource_detail_panel
+        .as_ref()
+        .unwrap()
+        .selection_generation;
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(WorkerResult::ResourceDetailUpdated {
+            cluster_key: 2,
+            selection_generation,
+            detail: ResourceDetail {
+                api_resource: pod,
+                name: "api-7b948f-pod-debug".into(),
+                namespace: Some("kube-system".into()),
+                uid: "pod-debug-uid".into(),
+                resource_version: "1".into(),
+                creation_timestamp: Some(
+                    time::OffsetDateTime::now_utc() - time::Duration::minutes(10),
+                ),
+                owner: None,
+                labels: BTreeMap::new(),
+                annotations: BTreeMap::new(),
+                payload: ResourceDetailPayload::Generic,
+            },
+        });
+    harness.run();
+    harness
+        .state_mut()
+        .ui_state
+        .clusters
+        .get_mut(&2)
+        .unwrap()
+        .resource_detail_panel
+        .as_mut()
+        .unwrap()
+        .transition = None;
+    harness.run();
+    assert_eq!(
+        harness.state().ui_state.clusters[&2]
+            .resource_detail_panel
+            .as_ref()
+            .unwrap()
+            .back_stack
+            .len(),
+        3
+    );
+    harness.snapshot_options(
+        "pod_inspector_with_three_back_history_entries",
+        &egui_kittest::SnapshotOptions::new().failed_pixel_count_threshold(1),
+    );
 }
 
 #[test]

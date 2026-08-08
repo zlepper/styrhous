@@ -107,6 +107,21 @@ pub fn ellipsis_horizontal_icon() -> Image<'static> {
     Image::new(include_image!("icons/ellipsis-horizontal.svg"))
 }
 
+/// Returns a left arrow icon for backwards navigation.
+pub fn arrow_left_icon() -> Image<'static> {
+    Image::new(include_image!("icons/arrow-left.svg"))
+}
+
+/// Returns a right arrow icon for forwards navigation.
+pub fn arrow_right_icon() -> Image<'static> {
+    Image::new(include_image!("icons/arrow-right.svg"))
+}
+
+/// Returns an X-mark icon for dismissing overlays and panels.
+pub fn x_mark_icon() -> Image<'static> {
+    Image::new(include_image!("icons/x-mark.svg"))
+}
+
 /// Returns a trash icon image for destructive menu actions.
 pub fn trash_icon() -> Image<'static> {
     Image::new(include_image!("icons/trash.svg"))

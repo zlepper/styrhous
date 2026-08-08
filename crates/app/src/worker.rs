@@ -7,7 +7,7 @@ use crate::cluster_connection_manager::{
 use crate::helpers::ResultExt;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
-use crate::resource_detail::{ResourceDetail, ResourceEvent};
+use crate::resource_detail::{ManagedResource, ResourceDetail, ResourceEvent};
 use crate::resource_table::CustomResourceColumn;
 use anyhow::Error;
 #[cfg(test)]
@@ -280,6 +280,16 @@ pub enum WorkerResult {
     ResourceDetailDeleted {
         cluster_key: i32,
         selection_generation: u64,
+    },
+    ManagedResourcesReplaced {
+        cluster_key: i32,
+        selection_generation: u64,
+        resources: Vec<ManagedResource>,
+    },
+    ManagedResourcesWatchFailed {
+        cluster_key: i32,
+        selection_generation: u64,
+        error: String,
     },
     ResourceEventsReplaced {
         cluster_key: i32,

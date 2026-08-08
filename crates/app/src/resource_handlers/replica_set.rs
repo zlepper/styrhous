@@ -19,7 +19,7 @@ pub(crate) fn table_definition(api_resource: &ApiResource) -> Option<ResourceTab
     })
 }
 
-fn extract(resource: &ReplicaSet) -> MinimalResource {
+pub(crate) fn extract(resource: &ReplicaSet) -> MinimalResource {
     let status = resource.status.as_ref();
     let ready = status.and_then(|status| status.ready_replicas).unwrap_or(0);
     let desired = status.map(|status| status.replicas).unwrap_or(0);

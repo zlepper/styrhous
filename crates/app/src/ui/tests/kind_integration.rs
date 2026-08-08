@@ -2,11 +2,15 @@ use super::super::MyEguiApp;
 use super::super::state::ClusterConnectionState;
 use super::fixtures::application_harness;
 use crate::api_resource::ApiResource;
+use crate::resource_table::{READY_COLUMN, STATUS_COLUMN};
 use crate::sorted_name::SortedName;
 use crate::worker::Worker;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
+use k8s_openapi::api::apps::v1::{Deployment, DeploymentSpec};
 use k8s_openapi::api::core::v1::{ConfigMap, Namespace, Secret};
+use k8s_openapi::api::core::v1::{Container, PodSpec, PodTemplateSpec};
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
 use kube::{Api, Client};
 use std::collections::BTreeMap;
 
@@ -341,6 +345,125 @@ fn test_resource_watcher_integration() {
             .any(|resource| resource.name == fixture.name),
         "resource watcher should report the integration ConfigMap"
     );
+}
+
+/// Verifies that the inspector follows the real Deployment -> ReplicaSet -> Pod
+/// ownership chain without relying on table-cache data.
+#[test]
+fn test_managed_resource_inspector_integration() {
+    let fixture = IntegrationConfigMap::create("managed-resource-inspector", "anchor", "unused");
+    let deployment_name = "managed-resource-inspector".to_owned();
+    let runtime = &fixture.runtime;
+    let client = runtime.block_on(async {
+        Client::try_default()
+            .await
+            .expect("Failed to create Kubernetes client")
+    });
+    let deployments: Api<Deployment> = Api::namespaced(client, &fixture.namespace);
+    runtime.block_on(async {
+        deployments
+            .create(
+                &Default::default(),
+                &Deployment {
+                    metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                        name: Some(deployment_name.clone()),
+                        namespace: Some(fixture.namespace.clone()),
+                        ..Default::default()
+                    },
+                    spec: Some(DeploymentSpec {
+                        replicas: Some(1),
+                        selector: LabelSelector {
+                            match_labels: Some(BTreeMap::from([(
+                                "app".to_owned(),
+                                deployment_name.clone(),
+                            )])),
+                            ..Default::default()
+                        },
+                        template: PodTemplateSpec {
+                            metadata: Some(
+                                k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                                    labels: Some(BTreeMap::from([(
+                                        "app".to_owned(),
+                                        deployment_name.clone(),
+                                    )])),
+                                    ..Default::default()
+                                },
+                            ),
+                            spec: Some(PodSpec {
+                                containers: vec![Container {
+                                    name: "pause".to_owned(),
+                                    image: Some("registry.k8s.io/pause:3.10".to_owned()),
+                                    ..Default::default()
+                                }],
+                                ..Default::default()
+                            }),
+                        },
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("Failed to create Deployment");
+    });
+
+    let (mut harness, cluster_key) = connected_kind_harness();
+    wait_for_cluster_data(&mut harness, cluster_key);
+    select_namespace(&mut harness, &fixture.namespace);
+    let deployments_resource = select_resource(&mut harness, "Apps & Containers", "Deployments");
+    wait_for_resource_sync(
+        &mut harness,
+        cluster_key,
+        deployments_resource,
+        &fixture.namespace,
+    );
+    harness.get_by_label(&deployment_name).click();
+    harness.run_steps(1);
+
+    let start = std::time::Instant::now();
+    while start.elapsed() < std::time::Duration::from_secs(15) {
+        harness.run_steps(1);
+        if let Some(panel) = harness.state().ui_state.clusters[&cluster_key]
+            .resource_detail_panel
+            .as_ref()
+            && panel
+                .managed_resources
+                .iter()
+                .any(|resource| resource.api_resource.kind == "ReplicaSet")
+            && panel.managed_resources.iter().any(|resource| {
+                resource.api_resource.kind == "Pod"
+                    && panel
+                        .managed_resources
+                        .iter()
+                        .any(|parent| parent.uid == resource.controller_owner_uid)
+            })
+        {
+            let replica_set = panel
+                .managed_resources
+                .iter()
+                .find(|resource| resource.api_resource.kind == "ReplicaSet")
+                .expect("managed ReplicaSet should be present");
+            assert!(
+                replica_set.cells.contains_key(READY_COLUMN),
+                "managed ReplicaSet should include the Ready table value"
+            );
+            let pod = panel
+                .managed_resources
+                .iter()
+                .find(|resource| resource.api_resource.kind == "Pod")
+                .expect("managed Pod should be present");
+            assert!(
+                pod.cells.contains_key(STATUS_COLUMN),
+                "managed Pod should include the Status table value"
+            );
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let panel = harness.state().ui_state.clusters[&cluster_key]
+        .resource_detail_panel
+        .as_ref();
+    panic!("Timed out waiting for managed resources: {panel:#?}");
 }
 
 /// Creates a ConfigMap, edits it through the UI, and then deletes it through the UI.

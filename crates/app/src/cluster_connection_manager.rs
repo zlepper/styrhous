@@ -3,7 +3,7 @@ use crate::helpers::ResultExt;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use crate::resource_detail::{
-    PodEnvironmentVariableDetail, PodEnvironmentVariableSource, ResourceDetail,
+    ManagedResource, PodEnvironmentVariableDetail, PodEnvironmentVariableSource, ResourceDetail,
     ResourceDetailPayload, ResourceEvent, ResourceOwner,
 };
 use crate::resource_handlers;
@@ -14,7 +14,9 @@ use futures_util::future::try_join_all;
 use futures_util::pin_mut;
 use futures_util::stream::StreamExt;
 use itertools::Itertools;
-use k8s_openapi::api::core::v1::{ConfigMap, Event as KubernetesEvent, Namespace, Secret};
+use k8s_openapi::api::apps::v1::ReplicaSet;
+use k8s_openapi::api::batch::v1::Job;
+use k8s_openapi::api::core::v1::{ConfigMap, Event as KubernetesEvent, Namespace, Pod, Secret};
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::{APIGroup, GroupVersionForDiscovery};
 use k8s_openapi::{ClusterResourceScope, NamespaceResourceScope};
@@ -30,7 +32,7 @@ use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
 use time::OffsetDateTime;
-use tokio::task::JoinHandle;
+use tokio::task::{JoinHandle, JoinSet};
 use tracing::{info, warn};
 
 #[derive(Debug, Clone)]
@@ -994,13 +996,286 @@ pub async fn watch_resource_detail(
         ),
         watch_detail_events(
             cluster_key,
+            client.clone(),
+            namespace.clone(),
+            resource_uid.clone(),
+            selection_generation,
+            event_sender.clone(),
+        ),
+        watch_managed_resources(
+            cluster_key,
             client,
+            api_resource,
             namespace,
             resource_uid,
             selection_generation,
             event_sender,
         ),
     );
+}
+
+/// Watch the small, well-known set of resource kinds which can make up a
+/// built-in workload controller hierarchy. Kubernetes has no generic reverse
+/// owner-reference query, so this deliberately does not attempt custom types.
+async fn watch_managed_resources(
+    cluster_key: i32,
+    client: kube::Client,
+    root_api_resource: ApiResource,
+    namespace: Option<String>,
+    root_uid: String,
+    selection_generation: u64,
+    event_sender: WorkerResultSender,
+) {
+    let Some(namespace) = namespace else {
+        return;
+    };
+    let resource_types = managed_resource_types(&root_api_resource);
+    if resource_types.is_empty() {
+        event_sender
+            .send(WorkerResult::ManagedResourcesReplaced {
+                cluster_key,
+                selection_generation,
+                resources: Vec::new(),
+            })
+            .log_if_error("Failed to send empty managed resources");
+        return;
+    }
+
+    let (updates_sender, mut updates_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let mut tasks = JoinSet::new();
+    for resource_type in resource_types {
+        let client = client.clone();
+        let namespace = namespace.clone();
+        let updates_sender = updates_sender.clone();
+        tasks.spawn(async move {
+            match resource_type {
+                ManagedResourceType::ReplicaSet => {
+                    watch_managed_type::<ReplicaSet>(
+                        client,
+                        namespace,
+                        updates_sender,
+                        resource_handlers::replica_set::extract,
+                    )
+                    .await
+                }
+                ManagedResourceType::Job => {
+                    watch_managed_type::<Job>(
+                        client,
+                        namespace,
+                        updates_sender,
+                        resource_handlers::job::extract,
+                    )
+                    .await
+                }
+                ManagedResourceType::Pod => {
+                    watch_managed_type::<Pod>(
+                        client,
+                        namespace,
+                        updates_sender,
+                        resource_handlers::pod::extract,
+                    )
+                    .await
+                }
+            }
+        });
+    }
+    drop(updates_sender);
+
+    let mut by_type = BTreeMap::<ApiResource, Vec<ManagedResource>>::new();
+    while let Some(update) = updates_receiver.recv().await {
+        match update {
+            ManagedResourceUpdate::Replaced {
+                api_resource,
+                resources,
+            } => {
+                by_type.insert(api_resource.clone(), resources);
+                let resources = by_type
+                    .values()
+                    .flatten()
+                    .filter(|resource| {
+                        belongs_to_workload_tree(resource, &root_uid, &root_api_resource, &by_type)
+                    })
+                    .cloned()
+                    .collect();
+                event_sender
+                    .send(WorkerResult::ManagedResourcesReplaced {
+                        cluster_key,
+                        selection_generation,
+                        resources,
+                    })
+                    .log_if_error("Failed to send managed resource update");
+            }
+            ManagedResourceUpdate::Failed {
+                api_resource,
+                error,
+            } => event_sender
+                .send(WorkerResult::ManagedResourcesWatchFailed {
+                    cluster_key,
+                    selection_generation,
+                    error: format!("Unable to watch {}: {error}", api_resource.display_name()),
+                })
+                .log_if_error("Failed to send managed resource watch failure"),
+        }
+    }
+    while tasks.join_next().await.is_some() {}
+}
+
+#[derive(Clone, Copy)]
+enum ManagedResourceType {
+    ReplicaSet,
+    Job,
+    Pod,
+}
+
+fn managed_resource_types(api_resource: &ApiResource) -> Vec<ManagedResourceType> {
+    match (api_resource.group.as_str(), api_resource.kind.as_str()) {
+        ("apps", "Deployment") => vec![ManagedResourceType::ReplicaSet, ManagedResourceType::Pod],
+        ("batch", "CronJob") => vec![ManagedResourceType::Job, ManagedResourceType::Pod],
+        ("apps", "ReplicaSet")
+        | ("apps", "StatefulSet")
+        | ("apps", "DaemonSet")
+        | ("core", "ReplicationController")
+        | ("batch", "Job") => vec![ManagedResourceType::Pod],
+        _ => Vec::new(),
+    }
+}
+
+enum ManagedResourceUpdate {
+    Replaced {
+        api_resource: ApiResource,
+        resources: Vec<ManagedResource>,
+    },
+    Failed {
+        api_resource: ApiResource,
+        error: String,
+    },
+}
+
+async fn watch_managed_type<T>(
+    client: kube::Client,
+    namespace: String,
+    sender: tokio::sync::mpsc::UnboundedSender<ManagedResourceUpdate>,
+    extract: fn(&T) -> MinimalResource,
+) where
+    T: Resource<DynamicType = (), Scope = NamespaceResourceScope>
+        + Clone
+        + k8s_openapi::serde::de::DeserializeOwned
+        + std::fmt::Debug
+        + Send
+        + 'static,
+{
+    let api_resource = api_resource_for::<T>();
+    let api = Api::<T>::namespaced(client, &namespace);
+    let stream = watcher(api, watcher_config());
+    pin_mut!(stream);
+    let mut resources = BTreeMap::new();
+    while let Some(event) = stream.next().await {
+        let event = match event {
+            Ok(event) => event,
+            Err(error) => {
+                let _ = sender.send(ManagedResourceUpdate::Failed {
+                    api_resource,
+                    error: format!("{error:#?}"),
+                });
+                return;
+            }
+        };
+        match event {
+            Event::Init => resources.clear(),
+            Event::InitApply(resource) | Event::Apply(resource) => {
+                if let Some(resource) = managed_resource_from_typed(&resource, extract) {
+                    resources.insert(resource.uid.clone(), resource);
+                }
+            }
+            Event::Delete(resource) => {
+                resources.remove(&get_resource_uid(&resource));
+            }
+            Event::InitDone => {}
+        }
+        let _ = sender.send(ManagedResourceUpdate::Replaced {
+            api_resource: api_resource.clone(),
+            resources: resources.values().cloned().collect(),
+        });
+    }
+}
+
+fn api_resource_for<T>() -> ApiResource
+where
+    T: Resource<DynamicType = (), Scope = NamespaceResourceScope>,
+{
+    let group = T::group(&());
+    ApiResource {
+        group: if group.is_empty() {
+            "core".into()
+        } else {
+            group.into_owned()
+        },
+        version: T::version(&()).into_owned(),
+        kind: T::kind(&()).into_owned(),
+        name: T::plural(&()).into_owned(),
+        namespaced: true,
+    }
+}
+
+fn managed_resource_from_typed<T>(
+    resource: &T,
+    extract: impl FnOnce(&T) -> MinimalResource,
+) -> Option<ManagedResource>
+where
+    T: Resource<DynamicType = (), Scope = NamespaceResourceScope>,
+{
+    let metadata = resource.meta();
+    let controller_owner_uid = metadata
+        .owner_references
+        .as_ref()?
+        .iter()
+        .find(|owner| owner.controller == Some(true))?
+        .uid
+        .clone();
+    let minimal_resource = extract(resource);
+    Some(ManagedResource {
+        api_resource: api_resource_for::<T>(),
+        name: minimal_resource.name,
+        namespace: minimal_resource.namespace,
+        uid: minimal_resource.uid,
+        controller_owner_uid,
+        creation_timestamp: minimal_resource.creation_timestamp,
+        cells: minimal_resource.cells,
+    })
+}
+
+fn belongs_to_workload_tree(
+    resource: &ManagedResource,
+    root_uid: &str,
+    root_api_resource: &ApiResource,
+    all_resources: &BTreeMap<ApiResource, Vec<ManagedResource>>,
+) -> bool {
+    if resource.controller_owner_uid == root_uid {
+        return is_managed_workload_child(root_api_resource, &resource.api_resource);
+    }
+    all_resources.values().flatten().any(|parent| {
+        parent.uid == resource.controller_owner_uid
+            && is_managed_workload_child(&parent.api_resource, &resource.api_resource)
+            && belongs_to_workload_tree(parent, root_uid, root_api_resource, all_resources)
+    })
+}
+
+fn is_managed_workload_child(parent: &ApiResource, child: &ApiResource) -> bool {
+    matches!(
+        (
+            parent.group.as_str(),
+            parent.kind.as_str(),
+            child.group.as_str(),
+            child.kind.as_str(),
+        ),
+        ("apps", "Deployment", "apps", "ReplicaSet")
+            | ("batch", "CronJob", "batch", "Job")
+            | ("apps", "ReplicaSet", "core", "Pod")
+            | ("apps", "StatefulSet", "core", "Pod")
+            | ("apps", "DaemonSet", "core", "Pod")
+            | ("core", "ReplicationController", "core", "Pod")
+            | ("batch", "Job", "core", "Pod")
+    )
 }
 
 async fn watch_detail_object(
@@ -1863,5 +2138,68 @@ mod tests {
                 "Synced".to_owned()
             ]))
         );
+    }
+
+    #[test]
+    fn managed_resource_tree_keeps_only_supported_controller_descendants() {
+        let replica_set = ManagedResource {
+            api_resource: api_resource_for::<ReplicaSet>(),
+            name: "api-7b948f".into(),
+            namespace: Some("default".into()),
+            uid: "replicaset-uid".into(),
+            controller_owner_uid: "deployment-uid".into(),
+            creation_timestamp: None,
+            cells: BTreeMap::new(),
+        };
+        let pod = ManagedResource {
+            api_resource: api_resource_for::<Pod>(),
+            name: "api-7b948f-pod".into(),
+            namespace: Some("default".into()),
+            uid: "pod-uid".into(),
+            controller_owner_uid: "replicaset-uid".into(),
+            creation_timestamp: None,
+            cells: BTreeMap::new(),
+        };
+        let unrelated_pod = ManagedResource {
+            uid: "other-pod-uid".into(),
+            controller_owner_uid: "other-uid".into(),
+            ..pod.clone()
+        };
+        let resources = BTreeMap::from([
+            (replica_set.api_resource.clone(), vec![replica_set.clone()]),
+            (
+                pod.api_resource.clone(),
+                vec![pod.clone(), unrelated_pod.clone()],
+            ),
+        ]);
+
+        assert!(belongs_to_workload_tree(
+            &replica_set,
+            "deployment-uid",
+            &api_resource_for::<Deployment>(),
+            &resources
+        ));
+        assert!(belongs_to_workload_tree(
+            &pod,
+            "deployment-uid",
+            &api_resource_for::<Deployment>(),
+            &resources
+        ));
+        assert!(!belongs_to_workload_tree(
+            &unrelated_pod,
+            "deployment-uid",
+            &api_resource_for::<Deployment>(),
+            &resources
+        ));
+        let directly_owned_pod = ManagedResource {
+            controller_owner_uid: "deployment-uid".into(),
+            ..pod.clone()
+        };
+        assert!(!belongs_to_workload_tree(
+            &directly_owned_pod,
+            "deployment-uid",
+            &api_resource_for::<Deployment>(),
+            &resources
+        ));
     }
 }

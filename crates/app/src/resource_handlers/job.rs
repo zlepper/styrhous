@@ -23,7 +23,7 @@ pub(crate) fn table_definition(api_resource: &ApiResource) -> Option<ResourceTab
     })
 }
 
-fn extract(resource: &Job) -> MinimalResource {
+pub(crate) fn extract(resource: &Job) -> MinimalResource {
     let status = resource.status.as_ref();
     let succeeded = status.and_then(|status| status.succeeded).unwrap_or(0);
     let desired = resource
