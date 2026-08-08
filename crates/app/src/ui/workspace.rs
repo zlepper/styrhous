@@ -4,13 +4,13 @@ use super::state::{
     UiState,
 };
 use super::widgets::{
-    container_indicators, resource_status, workspace_empty_state, workspace_error_state,
-    workspace_loading_state, workspace_search_error_state,
+    show_resource_cell, workspace_empty_state, workspace_error_state, workspace_loading_state,
+    workspace_search_error_state,
 };
 use crate::minimal_namespace::MinimalNamespace;
-use crate::minimal_resource::{MinimalResource, format_age};
+use crate::minimal_resource::MinimalResource;
 use crate::resource_handlers::table_definition;
-use crate::resource_table::{CellValue, CustomResourceColumn};
+use crate::resource_table::CustomResourceColumn;
 use crate::worker::WorkerCommand;
 use components::colors::{TOOLBAR_BACKGROUND, gray};
 use components::fuzzy::{matches_fuzzy, normalize_for_search};
@@ -218,6 +218,11 @@ pub(super) fn show(
                         }
                         ResourceAction::SaveData { .. } => {
                             unreachable!("resource table actions cannot save inspector data")
+                        }
+                        ResourceAction::NavigateDetails { .. }
+                        | ResourceAction::NavigateBack
+                        | ResourceAction::NavigateForward => {
+                            unreachable!("resource table cannot emit inspector navigation")
                         }
                     }
                 }
@@ -707,18 +712,6 @@ fn show_resource_table(
         },
     );
     pending_action.into_inner()
-}
-
-fn show_resource_cell(ui: &mut egui::Ui, cell: Option<&CellValue>) {
-    match cell.unwrap_or(&CellValue::Empty) {
-        CellValue::Text(value) => TableRowBuilder::text(ui, value, false),
-        CellValue::Number(value) => TableRowBuilder::text(ui, &value.to_string(), false),
-        CellValue::Timestamp(value) => TableRowBuilder::text(ui, &format_age(Some(*value)), false),
-        CellValue::Status { label, tone } => resource_status(ui, label, *tone),
-        CellValue::ContainerIndicators(indicators) => container_indicators(ui, indicators),
-        CellValue::List(values) => TableRowBuilder::text(ui, &values.join(", "), false),
-        CellValue::Empty => TableRowBuilder::text(ui, "-", false),
-    }
 }
 
 fn show_resource_actions(

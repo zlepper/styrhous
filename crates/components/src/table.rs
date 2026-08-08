@@ -224,6 +224,7 @@ impl TailwindTable {
     ) {
         let available_height = ui.available_height();
         let num_columns = self.columns.len();
+        let table_id = self.id;
         let original_item_spacing = ui.spacing().item_spacing;
         ui.spacing_mut().item_spacing.x = 0.0;
 
@@ -286,7 +287,7 @@ impl TailwindTable {
                             let rect = ui.max_rect();
                             interaction = Some(ui.interact(
                                 rect,
-                                ui.id().with("row-context-menu"),
+                                table_id.with(("row-context-menu", row_index, col_index)),
                                 egui::Sense::click(),
                             ));
                             ui.painter().rect_filled(rect, 0.0, CONTENT_BACKGROUND);

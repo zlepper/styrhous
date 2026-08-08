@@ -1,4 +1,5 @@
-use crate::resource_table::{ContainerIndicator, StatusTone};
+use crate::minimal_resource::format_age;
+use crate::resource_table::{CellValue, ContainerIndicator, StatusTone};
 use components::colors::{SUCCESS, gray};
 use components::{TableRowBuilder, TailwindButton, WorkspaceEmptyState};
 
@@ -39,6 +40,21 @@ pub(super) fn container_indicators(ui: &mut egui::Ui, indicators: &[ContainerInd
                 });
         }
     });
+}
+
+/// Render a type-specific resource-table value using the shared table visual
+/// vocabulary. Inspector tables use this too, so a Pod or Job looks the same
+/// wherever it is listed.
+pub(super) fn show_resource_cell(ui: &mut egui::Ui, cell: Option<&CellValue>) {
+    match cell.unwrap_or(&CellValue::Empty) {
+        CellValue::Text(value) => TableRowBuilder::text(ui, value, false),
+        CellValue::Number(value) => TableRowBuilder::text(ui, &value.to_string(), false),
+        CellValue::Timestamp(value) => TableRowBuilder::text(ui, &format_age(Some(*value)), false),
+        CellValue::Status { label, tone } => resource_status(ui, label, *tone),
+        CellValue::ContainerIndicators(indicators) => container_indicators(ui, indicators),
+        CellValue::List(values) => TableRowBuilder::text(ui, &values.join(", "), false),
+        CellValue::Empty => TableRowBuilder::text(ui, "-", false),
+    }
 }
 
 fn container_indicator_tooltip(indicator: &ContainerIndicator) -> String {

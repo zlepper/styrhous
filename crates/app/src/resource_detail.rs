@@ -1,4 +1,5 @@
 use crate::api_resource::ApiResource;
+use crate::resource_table::CellValue;
 use std::collections::BTreeMap;
 use time::OffsetDateTime;
 
@@ -22,6 +23,24 @@ pub(crate) struct ResourceDetail {
 pub(crate) struct ResourceOwner {
     pub(crate) kind: String,
     pub(crate) name: String,
+}
+
+/// A resource controlled by the object currently shown in the inspector.
+///
+/// The worker only returns workload resources that belong to a supported
+/// controller hierarchy. `controller_owner_uid` retains the source ownership
+/// relationship while type-specific cells let inspector tables match the main
+/// resource-list presentation.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct ManagedResource {
+    pub(crate) api_resource: ApiResource,
+    pub(crate) name: String,
+    pub(crate) namespace: Option<String>,
+    pub(crate) uid: String,
+    pub(crate) controller_owner_uid: String,
+    pub(crate) creation_timestamp: Option<OffsetDateTime>,
+    /// Type-specific table values, extracted alongside the resource metadata.
+    pub(crate) cells: BTreeMap<String, CellValue>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
