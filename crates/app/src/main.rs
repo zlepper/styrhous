@@ -1,3 +1,4 @@
+mod ansi;
 mod api_resource;
 mod cluster_connection_manager;
 mod helpers;

@@ -1,6 +1,8 @@
 use super::state::{LogPageKey, PodLogStatus, PodLogWindowState, UiState};
-use crate::log_store::{LOG_PAGE_SIZE, LogStoreService};
+use crate::ansi::AnsiStyleSpan;
+use crate::log_store::LogStoreService;
 use crate::worker::WorkerCommand;
+use anstyle::{Ansi256Color, AnsiColor, Color, Effects, RgbColor, Style};
 use components::colors::{SUCCESS, TABLE_BORDER, TOOLBAR_BACKGROUND, gray};
 use components::{TailwindSearchInput, icons};
 use std::time::{Duration, Instant};
@@ -150,6 +152,7 @@ fn show_log_window(
                             egui::Label::new(log_line_layout_job(
                                 row.line_index,
                                 &row.text,
+                                &row.style_spans,
                                 &row.match_ranges,
                             ))
                             .extend()
@@ -399,6 +402,7 @@ fn displayed_line_count(window: &PodLogWindowState) -> usize {
 fn log_line_layout_job(
     line_index: usize,
     line: &str,
+    style_spans: &[AnsiStyleSpan],
     ranges: &[(usize, usize)],
 ) -> egui::text::LayoutJob {
     let mut job = egui::text::LayoutJob::default();
@@ -412,25 +416,153 @@ fn log_line_layout_job(
         color: egui::Color32::from_rgb(229, 231, 235),
         ..Default::default()
     };
-    let highlighted = egui::TextFormat {
-        font_id: egui::FontId::monospace(14.0),
-        color: egui::Color32::from_rgb(254, 243, 199),
-        background: egui::Color32::from_rgb(120, 53, 15),
-        ..Default::default()
-    };
     job.append(&format!("{line_index:>6}  "), 0.0, number);
-    let mut cursor = 0;
-    for &(start, end) in ranges {
-        if start > cursor {
-            job.append(&line[cursor..start], 0.0, text.clone());
+    let mut boundaries = Vec::with_capacity(2 + style_spans.len() * 2 + ranges.len() * 2);
+    boundaries.extend([0, line.len()]);
+    boundaries.extend(
+        style_spans
+            .iter()
+            .flat_map(|span| [span.range.0, span.range.1]),
+    );
+    boundaries.extend(ranges.iter().flat_map(|&(start, end)| [start, end]));
+    boundaries.sort_unstable();
+    boundaries.dedup();
+    for boundary_pair in boundaries.windows(2) {
+        let start = boundary_pair[0];
+        let end = boundary_pair[1];
+        if start == end {
+            continue;
         }
-        job.append(&line[start..end], 0.0, highlighted.clone());
-        cursor = end;
-    }
-    if cursor < line.len() {
-        job.append(&line[cursor..], 0.0, text);
+        let style = style_spans
+            .iter()
+            .find(|span| span.range.0 <= start && start < span.range.1)
+            .map(|span| span.style);
+        let mut format = style.map_or_else(|| text.clone(), |style| ansi_text_format(style, &text));
+        if ranges
+            .iter()
+            .any(|&(match_start, match_end)| match_start <= start && end <= match_end)
+        {
+            if style.is_none() {
+                format.color = egui::Color32::from_rgb(254, 243, 199);
+            }
+            format.background = egui::Color32::from_rgb(120, 53, 15);
+        }
+        job.append(&line[start..end], 0.0, format);
     }
     job
+}
+
+fn ansi_text_format(style: Style, default: &egui::TextFormat) -> egui::TextFormat {
+    let default_background = egui::Color32::from_rgb(10, 10, 11);
+    let mut format = default.clone();
+    let foreground = style.get_fg_color().map(ansi_color).unwrap_or(format.color);
+    let background = style
+        .get_bg_color()
+        .map(ansi_color)
+        .unwrap_or(default_background);
+    if style.get_effects().contains(Effects::INVERT) {
+        format.color = background;
+        format.background = foreground;
+    } else {
+        format.color = foreground;
+        if style.get_bg_color().is_some() {
+            format.background = background;
+        }
+    }
+    let effects = style.get_effects();
+    if effects.contains(Effects::DIMMED) {
+        format.color = format.color.gamma_multiply(0.65);
+    }
+    if effects.contains(Effects::HIDDEN) {
+        format.color = egui::Color32::TRANSPARENT;
+    }
+    format.italics = effects.contains(Effects::ITALIC);
+    if effects.contains(Effects::UNDERLINE)
+        || effects.contains(Effects::DOUBLE_UNDERLINE)
+        || effects.contains(Effects::CURLY_UNDERLINE)
+        || effects.contains(Effects::DOTTED_UNDERLINE)
+        || effects.contains(Effects::DASHED_UNDERLINE)
+    {
+        format.underline = egui::Stroke::new(
+            1.0,
+            style
+                .get_underline_color()
+                .map(ansi_color)
+                .unwrap_or(format.color),
+        );
+    }
+    if effects.contains(Effects::STRIKETHROUGH) {
+        format.strikethrough = egui::Stroke::new(1.0, format.color);
+    }
+    format
+}
+
+fn ansi_color(color: Color) -> egui::Color32 {
+    match color {
+        Color::Ansi(color) => ansi_palette_color(color),
+        Color::Ansi256(Ansi256Color(index)) => ansi_256_color(index),
+        Color::Rgb(RgbColor(red, green, blue)) => egui::Color32::from_rgb(red, green, blue),
+    }
+}
+
+fn ansi_256_color(index: u8) -> egui::Color32 {
+    if index < 16 {
+        return ansi_palette_color(ansi_color_from_index(index));
+    }
+    if index >= 232 {
+        let gray = 8 + (index - 232) * 10;
+        return egui::Color32::from_gray(gray);
+    }
+    let color_index = index - 16;
+    let component = |value| if value == 0 { 0 } else { 55 + value * 40 };
+    egui::Color32::from_rgb(
+        component(color_index / 36),
+        component((color_index / 6) % 6),
+        component(color_index % 6),
+    )
+}
+
+fn ansi_color_from_index(index: u8) -> AnsiColor {
+    match index {
+        0 => AnsiColor::Black,
+        1 => AnsiColor::Red,
+        2 => AnsiColor::Green,
+        3 => AnsiColor::Yellow,
+        4 => AnsiColor::Blue,
+        5 => AnsiColor::Magenta,
+        6 => AnsiColor::Cyan,
+        7 => AnsiColor::White,
+        8 => AnsiColor::BrightBlack,
+        9 => AnsiColor::BrightRed,
+        10 => AnsiColor::BrightGreen,
+        11 => AnsiColor::BrightYellow,
+        12 => AnsiColor::BrightBlue,
+        13 => AnsiColor::BrightMagenta,
+        14 => AnsiColor::BrightCyan,
+        15 => AnsiColor::BrightWhite,
+        _ => unreachable!("ANSI 16-color palette index must be below 16"),
+    }
+}
+
+fn ansi_palette_color(color: AnsiColor) -> egui::Color32 {
+    match color {
+        AnsiColor::Black => egui::Color32::from_rgb(0, 0, 0),
+        AnsiColor::Red => egui::Color32::from_rgb(239, 68, 68),
+        AnsiColor::Green => egui::Color32::from_rgb(34, 197, 94),
+        AnsiColor::Yellow => egui::Color32::from_rgb(234, 179, 8),
+        AnsiColor::Blue => egui::Color32::from_rgb(59, 130, 246),
+        AnsiColor::Magenta => egui::Color32::from_rgb(217, 70, 239),
+        AnsiColor::Cyan => egui::Color32::from_rgb(6, 182, 212),
+        AnsiColor::White => egui::Color32::from_rgb(229, 231, 235),
+        AnsiColor::BrightBlack => egui::Color32::from_rgb(107, 114, 128),
+        AnsiColor::BrightRed => egui::Color32::from_rgb(248, 113, 113),
+        AnsiColor::BrightGreen => egui::Color32::from_rgb(74, 222, 128),
+        AnsiColor::BrightYellow => egui::Color32::from_rgb(250, 204, 21),
+        AnsiColor::BrightBlue => egui::Color32::from_rgb(96, 165, 250),
+        AnsiColor::BrightMagenta => egui::Color32::from_rgb(232, 121, 249),
+        AnsiColor::BrightCyan => egui::Color32::from_rgb(34, 211, 238),
+        AnsiColor::BrightWhite => egui::Color32::from_rgb(255, 255, 255),
+    }
 }
 
 fn advance_log_match(window: &mut PodLogWindowState, log_store: &LogStoreService, forward: bool) {
@@ -493,7 +625,7 @@ fn status_color(status: &PodLogStatus) -> egui::Color32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::log_store::{LogPageRow, LogStoreConfig, LogStoreResult};
+    use crate::log_store::{LOG_PAGE_SIZE, LogPageRow, LogStoreConfig, LogStoreResult};
     use crate::minimal_resource::PodLogContainer;
     use crate::resource_table::ContainerKind;
     use egui_kittest::Harness;
@@ -529,11 +661,15 @@ mod tests {
             lines
                 .iter()
                 .enumerate()
-                .map(|(line_index, text)| LogPageRow {
-                    display_row: line_index,
-                    line_index,
-                    text: (*text).to_owned(),
-                    match_ranges: Vec::new(),
+                .map(|(line_index, text)| {
+                    let parsed = crate::ansi::parse_log_line(text);
+                    LogPageRow {
+                        display_row: line_index,
+                        line_index,
+                        text: parsed.text,
+                        style_spans: parsed.style_spans,
+                        match_ranges: Vec::new(),
+                    }
                 })
                 .collect(),
         );
@@ -542,9 +678,37 @@ mod tests {
 
     #[test]
     fn layout_highlights_only_matching_segments() {
-        let job = log_line_layout_job(4, "http http", &[(0, 4), (5, 9)]);
+        let job = log_line_layout_job(4, "http http", &[], &[(0, 4), (5, 9)]);
         assert_eq!(job.sections.len(), 4);
         assert_eq!(job.text, "     4  http http");
+    }
+
+    #[test]
+    fn layout_preserves_ansi_style_while_highlighting_matches() {
+        let style = Style::new()
+            .fg_color(Some(AnsiColor::Red.into()))
+            .underline();
+        let job = log_line_layout_job(
+            0,
+            "error",
+            &[AnsiStyleSpan {
+                range: (0, 5),
+                style,
+            }],
+            &[(1, 4)],
+        );
+
+        assert_eq!(job.text, "     0  error");
+        assert_eq!(job.sections.len(), 4);
+        assert_eq!(
+            job.sections[1].format.color,
+            ansi_palette_color(AnsiColor::Red)
+        );
+        assert!(!job.sections[1].format.underline.is_empty());
+        assert_eq!(
+            job.sections[2].format.background,
+            egui::Color32::from_rgb(120, 53, 15)
+        );
     }
 
     #[test]
@@ -593,7 +757,7 @@ mod tests {
             "2026-08-08T15:22:17.145Z  INFO  database: connection pool initialized",
             "2026-08-08T15:22:18.021Z  INFO  http: GET /healthz 200 2ms",
             "2026-08-08T15:22:19.403Z  INFO  http: GET /v1/widgets 200 14ms",
-            "2026-08-08T15:22:21.687Z  WARN  cache: refreshing stale entry widgets:featured",
+            "2026-08-08T15:22:21.687Z  \u{1b}[33mWARN\u{1b}[0m  cache: refreshing stale entry widgets:featured",
             "2026-08-08T15:22:22.004Z  INFO  cache: refresh complete",
             "2026-08-08T15:22:24.631Z  INFO  http: POST /v1/widgets 201 38ms",
             "2026-08-08T15:22:26.144Z  INFO  metrics: flushed 18 samples",
@@ -634,9 +798,18 @@ mod tests {
                         .rows[line_index]
                         .text
                         .clone();
+                    let style_spans = window.pages[&LogPageKey {
+                        generation: 0,
+                        filter_matches: false,
+                        page_start: 0,
+                    }]
+                        .rows[line_index]
+                        .style_spans
+                        .clone();
                     LogPageRow {
                         display_row,
                         line_index,
+                        style_spans,
                         match_ranges: regex::Regex::new("(?i)http")
                             .expect("valid test matcher")
                             .find_iter(&text)
@@ -697,6 +870,7 @@ mod tests {
             .with_size(super::super::APP_SNAPSHOT_SIZE)
             .build(move |ctx| show_log_window(ctx, &mut window, &log_store, &mut close_requested));
         components::test_support::setup_egui(&harness.ctx);
+        harness.set_size(super::super::APP_SNAPSHOT_SIZE);
         harness.run();
         harness.snapshot(name);
     }
