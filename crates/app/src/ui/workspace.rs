@@ -240,6 +240,7 @@ pub(super) fn show(
             uid,
             commands_to_send,
         );
+        super::resource_detail::seed_detail_transition(ctx, ui_state, cluster_key);
     }
     if let (Some(cluster_key), Some(selection)) = (ui_state.selected_cluster, namespace_selection) {
         match selection {

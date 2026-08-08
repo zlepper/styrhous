@@ -776,7 +776,17 @@ fn resource_name_opens_and_closes_a_live_detail_inspector() {
             .and_then(|panel| panel.detail.as_ref())
             .is_some()
     );
+    harness.ctx.style_mut(|style| style.animation_time = 1.0);
     harness.get_by_label("Close inspector").click_accesskit();
+    harness.run_steps(2);
+
+    assert!(
+        harness.state().ui_state.clusters[&2]
+            .resource_detail_panel
+            .is_some(),
+        "the inspector remains present while its close animation is in progress"
+    );
+    harness.ctx.style_mut(|style| style.animation_time = 0.0);
     harness.run();
 
     assert!(
