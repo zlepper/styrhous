@@ -1,8 +1,8 @@
 //! A compact, Tailwind-inspired action menu for table rows and other dense UI.
 
 use egui::{
-    Button, Color32, CornerRadius, Frame, Image, Margin, Popup, PopupCloseBehavior, Response,
-    SetOpenCommand, Shadow, Stroke, Ui, Vec2,
+    Button, Color32, CornerRadius, Frame, Image, InnerResponse, Margin, Popup, PopupCloseBehavior,
+    Response, SetOpenCommand, Shadow, Stroke, Ui, Vec2,
 };
 
 use crate::{
@@ -107,6 +107,20 @@ impl MoreMenu<'_> {
     /// Add a standard action with a leading icon and return its response.
     pub fn action_with_icon(&mut self, label: impl Into<String>, icon: Image<'static>) -> Response {
         self.menu_button(label.into(), Some(icon), gray::_700)
+    }
+
+    /// Add a nested menu for actions that require a further choice.
+    pub fn submenu<R>(
+        &mut self,
+        label: impl Into<egui::WidgetText>,
+        add_contents: impl FnOnce(&mut Ui) -> R,
+    ) -> InnerResponse<Option<R>> {
+        self.ui.menu_button(label, add_contents)
+    }
+
+    /// Close the containing menu after a nested action has been selected.
+    pub fn close(&self) {
+        Popup::close_id(self.ui.ctx(), self.popup_id);
     }
 
     /// Add a destructive action and return its response.
@@ -231,5 +245,33 @@ mod tests {
 
         assert_eq!(*selected_action.borrow(), Some("delete"));
         harness.snapshot("more_button/closed_after_action");
+    }
+
+    #[test]
+    fn more_button_supports_accessible_nested_actions() {
+        let selected = Rc::new(RefCell::new(None));
+        let selected_in_ui = selected.clone();
+        let mut harness = Harness::new_ui(move |ui| {
+            MoreButton::new("More actions for api-pod").show(ui, |menu| {
+                menu.submenu("View logs", |ui| {
+                    if ui.button("api — Container").clicked() {
+                        *selected_in_ui.borrow_mut() = Some("api");
+                    }
+                });
+            });
+        });
+
+        crate::test_support::setup_egui(&harness.ctx);
+        harness.run();
+        harness
+            .get_by_label("More actions for api-pod")
+            .click_accesskit();
+        harness.run();
+        harness.get_by_label("View logs ⏵").click_accesskit();
+        harness.run();
+        harness.get_by_label("api — Container").click_accesskit();
+        harness.run();
+
+        assert_eq!(*selected.borrow(), Some("api"));
     }
 }

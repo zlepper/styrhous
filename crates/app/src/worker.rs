@@ -10,10 +10,14 @@ use crate::minimal_resource::MinimalResource;
 use crate::resource_detail::{ManagedResource, ResourceDetail, ResourceEvent};
 use crate::resource_table::CustomResourceColumn;
 use anyhow::Error;
+use futures_util::{AsyncBufReadExt, TryStreamExt};
+use k8s_openapi::api::core::v1::Pod;
+use kube::api::{Api, LogParams};
 #[cfg(test)]
 use std::collections::VecDeque;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, mpsc};
+use std::time::Duration;
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
 use tracing::info;
@@ -43,6 +47,7 @@ impl Worker {
             let shared = Arc::new(SharedWorkerState {
                 clients: RwLock::new(HashMap::new()),
                 detail_watches: Mutex::new(HashMap::new()),
+                log_streams: Mutex::new(HashMap::new()),
             });
 
             let worker = WorkerRuntime {
@@ -176,6 +181,17 @@ pub enum WorkerCommand {
         namespace: String,
         resource_name: String,
         update: ResourceDataUpdate,
+    },
+    StartPodLogStream {
+        cluster_key: i32,
+        log_window_id: u64,
+        namespace: String,
+        pod_name: String,
+        container: String,
+    },
+    StopPodLogStream {
+        cluster_key: i32,
+        log_window_id: u64,
     },
 }
 
@@ -331,6 +347,24 @@ pub enum WorkerResult {
         cluster_key: i32,
         resource_name: String,
     },
+    PodLogStreamStarted {
+        cluster_key: i32,
+        log_window_id: u64,
+    },
+    PodLogLinesAppended {
+        cluster_key: i32,
+        log_window_id: u64,
+        lines: Vec<String>,
+    },
+    PodLogStreamEnded {
+        cluster_key: i32,
+        log_window_id: u64,
+    },
+    PodLogStreamFailed {
+        cluster_key: i32,
+        log_window_id: u64,
+        error: String,
+    },
 }
 
 pub type WorkerResultSender = mpsc::SyncSender<WorkerResult>;
@@ -342,6 +376,8 @@ struct SharedWorkerState {
     /// Detail watches remain active while their visit is retained in an
     /// inspector's history.
     detail_watches: Mutex<HashMap<(i32, u64), JoinHandle<()>>>,
+    /// Native log windows each own one cancellable follow stream.
+    log_streams: Mutex<HashMap<(i32, u64), JoinHandle<()>>>,
 }
 
 struct WorkerRuntime {
@@ -566,6 +602,71 @@ impl WorkerRuntime {
                     ))
                 }
             }
+            WorkerCommand::StartPodLogStream {
+                cluster_key,
+                log_window_id,
+                namespace,
+                pod_name,
+                container,
+            } => {
+                let client = {
+                    let clients = shared.clients.read().await;
+                    clients.get(cluster_key).cloned()
+                };
+                if let Some(client) = client {
+                    let cluster_key = *cluster_key;
+                    let log_window_id = *log_window_id;
+                    let stream_key = (cluster_key, log_window_id);
+                    if let Some(previous) = shared.log_streams.lock().await.remove(&stream_key) {
+                        previous.abort();
+                    }
+                    let task_shared = shared.clone();
+                    let task_sender = result_channel.clone();
+                    let namespace = namespace.clone();
+                    let pod_name = pod_name.clone();
+                    let container = container.clone();
+                    let task = tokio::spawn(async move {
+                        stream_pod_logs(
+                            cluster_key,
+                            log_window_id,
+                            client,
+                            namespace,
+                            pod_name,
+                            container,
+                            task_sender,
+                        )
+                        .await;
+                        task_shared.log_streams.lock().await.remove(&stream_key);
+                    });
+                    shared.log_streams.lock().await.insert(stream_key, task);
+                    Ok(WorkerResult::PodLogStreamStarted {
+                        cluster_key,
+                        log_window_id,
+                    })
+                } else {
+                    Err(anyhow::anyhow!(
+                        "No client found for cluster_key {}",
+                        cluster_key
+                    ))
+                }
+            }
+            WorkerCommand::StopPodLogStream {
+                cluster_key,
+                log_window_id,
+            } => {
+                if let Some(task) = shared
+                    .log_streams
+                    .lock()
+                    .await
+                    .remove(&(*cluster_key, *log_window_id))
+                {
+                    task.abort();
+                }
+                Ok(WorkerResult::PodLogStreamEnded {
+                    cluster_key: *cluster_key,
+                    log_window_id: *log_window_id,
+                })
+            }
         };
 
         match result {
@@ -584,4 +685,79 @@ impl WorkerRuntime {
             }
         }
     }
+}
+
+async fn stream_pod_logs(
+    cluster_key: i32,
+    log_window_id: u64,
+    client: kube::Client,
+    namespace: String,
+    pod_name: String,
+    container: String,
+    sender: WorkerResultSender,
+) {
+    let result = async {
+        let pods: Api<Pod> = Api::namespaced(client, &namespace);
+        let stream = pods
+            .log_stream(
+                &pod_name,
+                &LogParams {
+                    container: Some(container),
+                    follow: true,
+                    ..LogParams::default()
+                },
+            )
+            .await?;
+        let mut lines = stream.lines();
+        let mut batch = Vec::new();
+        let mut flush = tokio::time::interval(Duration::from_millis(100));
+        flush.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            tokio::select! {
+                line = lines.try_next() => {
+                    let Some(line) = line? else {
+                        break;
+                    };
+                    batch.push(line);
+                    if batch.len() >= 64 {
+                        sender.send(WorkerResult::PodLogLinesAppended {
+                            cluster_key,
+                            log_window_id,
+                            lines: std::mem::take(&mut batch),
+                        })?;
+                    }
+                }
+                _ = flush.tick(), if !batch.is_empty() => {
+                    sender.send(WorkerResult::PodLogLinesAppended {
+                        cluster_key,
+                        log_window_id,
+                        lines: std::mem::take(&mut batch),
+                    })?;
+                }
+            }
+        }
+        if !batch.is_empty() {
+            sender.send(WorkerResult::PodLogLinesAppended {
+                cluster_key,
+                log_window_id,
+                lines: batch,
+            })?;
+        }
+        anyhow::Ok(())
+    }
+    .await;
+    let result = match result {
+        Ok(()) => WorkerResult::PodLogStreamEnded {
+            cluster_key,
+            log_window_id,
+        },
+        Err(error) => WorkerResult::PodLogStreamFailed {
+            cluster_key,
+            log_window_id,
+            error: format!("{error:#}"),
+        },
+    };
+    sender
+        .send(result)
+        .log_if_error("Failed to send Pod log stream result");
 }

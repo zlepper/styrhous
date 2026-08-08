@@ -1,7 +1,7 @@
 use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::ClusterConnection;
 use crate::minimal_namespace::MinimalNamespace;
-use crate::minimal_resource::MinimalResource;
+use crate::minimal_resource::{MinimalResource, PodLogContainer};
 use crate::resource_catalog::{ResourceNavigation, build_resource_navigation};
 use crate::resource_detail::{
     ManagedResource, ResourceDetail, ResourceDetailPayload, ResourceEvent,
@@ -17,6 +17,58 @@ pub(super) struct UiState {
     pub(super) clusters: HashMap<i32, ClusterState>,
     pub(super) next_cluster_key: i32,
     pub(super) selected_cluster: Option<i32>,
+    pub(super) log_windows: BTreeMap<u64, PodLogWindowState>,
+    pub(super) next_log_window_id: u64,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct PodLogWindowState {
+    pub(super) id: u64,
+    pub(super) cluster_key: i32,
+    pub(super) namespace: String,
+    pub(super) pod_name: String,
+    pub(super) container: PodLogContainer,
+    pub(super) lines: Vec<String>,
+    pub(super) status: PodLogStatus,
+    pub(super) close_requested: bool,
+    pub(super) search: LogSearchState,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(super) enum PodLogStatus {
+    Connecting,
+    Following,
+    Finished,
+    Failed(String),
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct LogSearchState {
+    pub(super) query: String,
+    pub(super) regex_mode: bool,
+    pub(super) matching_lines: Vec<usize>,
+    pub(super) indexed_line_count: usize,
+    pub(super) active_match: usize,
+    pub(super) active_line: Option<usize>,
+    pub(super) scroll_to_line: Option<usize>,
+    pub(super) error: Option<String>,
+    pub(super) filter_matches: bool,
+}
+
+impl Default for LogSearchState {
+    fn default() -> Self {
+        Self {
+            query: String::new(),
+            regex_mode: false,
+            matching_lines: Vec::new(),
+            indexed_line_count: 0,
+            active_match: 0,
+            active_line: None,
+            scroll_to_line: None,
+            error: None,
+            filter_matches: false,
+        }
+    }
 }
 
 /// Key for identifying a resource watcher (API resource + optional namespace).
@@ -317,6 +369,11 @@ pub(super) enum ResourceAction {
         expected_values: BTreeMap<String, String>,
         updated_values: BTreeMap<String, String>,
     },
+    ViewLogs {
+        name: String,
+        namespace: Option<String>,
+        container: PodLogContainer,
+    },
     NavigateDetails {
         api_resource: ApiResource,
         name: String,
@@ -360,6 +417,42 @@ pub(super) enum ClusterConnectionState {
 }
 
 impl UiState {
+    pub(super) fn open_pod_log_window(
+        &mut self,
+        cluster_key: i32,
+        pod_name: String,
+        namespace: Option<String>,
+        container: PodLogContainer,
+        commands_to_send: &mut Vec<crate::worker::WorkerCommand>,
+    ) {
+        let Some(namespace) = namespace else {
+            return;
+        };
+        self.next_log_window_id += 1;
+        let log_window_id = self.next_log_window_id;
+        self.log_windows.insert(
+            log_window_id,
+            PodLogWindowState {
+                id: log_window_id,
+                cluster_key,
+                namespace: namespace.clone(),
+                pod_name: pod_name.clone(),
+                container: container.clone(),
+                lines: Vec::new(),
+                status: PodLogStatus::Connecting,
+                close_requested: false,
+                search: LogSearchState::default(),
+            },
+        );
+        commands_to_send.push(crate::worker::WorkerCommand::StartPodLogStream {
+            cluster_key,
+            log_window_id,
+            namespace,
+            pod_name,
+            container: container.name,
+        });
+    }
+
     pub(super) fn select_cluster(
         &mut self,
         cluster_key: i32,
@@ -802,6 +895,14 @@ impl UiState {
                                 editor.save_error = Some(message);
                             }
                         }
+                        Some(crate::worker::WorkerCommand::StartPodLogStream {
+                            log_window_id,
+                            ..
+                        }) => {
+                            if let Some(window) = self.log_windows.get_mut(&log_window_id) {
+                                window.status = PodLogStatus::Failed(message);
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -1187,6 +1288,41 @@ impl UiState {
                         editor.mark_saved();
                     }
                 }
+                WorkerResult::PodLogStreamStarted { log_window_id, .. } => {
+                    if let Some(window) = self.log_windows.get_mut(&log_window_id) {
+                        if matches!(window.status, PodLogStatus::Connecting) {
+                            window.status = PodLogStatus::Following;
+                        }
+                    }
+                }
+                WorkerResult::PodLogLinesAppended {
+                    log_window_id,
+                    lines,
+                    ..
+                } => {
+                    if let Some(window) = self.log_windows.get_mut(&log_window_id) {
+                        window.lines.extend(lines);
+                        if !matches!(window.status, PodLogStatus::Failed(_)) {
+                            window.status = PodLogStatus::Following;
+                        }
+                    }
+                }
+                WorkerResult::PodLogStreamEnded { log_window_id, .. } => {
+                    if let Some(window) = self.log_windows.get_mut(&log_window_id)
+                        && !matches!(window.status, PodLogStatus::Failed(_))
+                    {
+                        window.status = PodLogStatus::Finished;
+                    }
+                }
+                WorkerResult::PodLogStreamFailed {
+                    log_window_id,
+                    error,
+                    ..
+                } => {
+                    if let Some(window) = self.log_windows.get_mut(&log_window_id) {
+                        window.status = PodLogStatus::Failed(error);
+                    }
+                }
             }
         }
         commands_to_send
@@ -1237,5 +1373,83 @@ fn sync_resource_data_editor(
             ))
         }
         (_, None) => *data_editor = None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::resource_table::ContainerKind;
+    use crate::worker::{MockWorker, WorkerCommand};
+    use std::collections::VecDeque;
+
+    #[test]
+    fn pod_log_windows_route_each_stream_by_its_window_id() {
+        let mut state = UiState::default();
+        let mut commands = Vec::new();
+        state.open_pod_log_window(
+            7,
+            "api-pod".into(),
+            Some("default".into()),
+            PodLogContainer {
+                name: "api".into(),
+                kind: ContainerKind::App,
+            },
+            &mut commands,
+        );
+        state.open_pod_log_window(
+            7,
+            "api-pod".into(),
+            Some("default".into()),
+            PodLogContainer {
+                name: "sidecar".into(),
+                kind: ContainerKind::App,
+            },
+            &mut commands,
+        );
+
+        assert!(matches!(
+            commands.as_slice(),
+            [
+                WorkerCommand::StartPodLogStream {
+                    log_window_id: 1,
+                    ..
+                },
+                WorkerCommand::StartPodLogStream {
+                    log_window_id: 2,
+                    ..
+                },
+            ]
+        ));
+
+        let mut worker = MockWorker {
+            results: VecDeque::from([
+                WorkerResult::PodLogStreamStarted {
+                    cluster_key: 7,
+                    log_window_id: 1,
+                },
+                WorkerResult::PodLogLinesAppended {
+                    cluster_key: 7,
+                    log_window_id: 2,
+                    lines: vec!["sidecar ready".into()],
+                },
+                WorkerResult::PodLogLinesAppended {
+                    cluster_key: 7,
+                    log_window_id: 1,
+                    lines: vec!["api ready".into(), "api serving".into()],
+                },
+                WorkerResult::PodLogStreamEnded {
+                    cluster_key: 7,
+                    log_window_id: 1,
+                },
+            ]),
+            commands: Vec::new(),
+        };
+        let _ = state.update(&mut worker);
+
+        assert_eq!(state.log_windows[&1].lines, ["api ready", "api serving"]);
+        assert_eq!(state.log_windows[&1].status, PodLogStatus::Finished);
+        assert_eq!(state.log_windows[&2].lines, ["sidecar ready"]);
+        assert_eq!(state.log_windows[&2].status, PodLogStatus::Following);
     }
 }

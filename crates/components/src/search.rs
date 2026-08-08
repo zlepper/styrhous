@@ -1,0 +1,103 @@
+//! Compact search control shared by resource and log toolbars.
+
+use crate::colors::{WHITE, gray};
+use egui::{CornerRadius, FontId, Id, Margin, Response, Stroke, Ui, Vec2};
+
+const INPUT_WIDTH: f32 = 150.0;
+const INPUT_HEIGHT: f32 = 24.0;
+
+/// Responses from a [`TailwindSearchInput`].
+pub struct SearchInputResponse {
+    pub text: Response,
+    pub regex: Response,
+}
+
+/// The compact search and regex-toggle control used in workspace toolbars.
+pub struct TailwindSearchInput<'a> {
+    query: &'a mut String,
+    regex_mode: &'a mut bool,
+    hint_text: String,
+    input_id: Id,
+    accessibility_label: String,
+    invalid: bool,
+}
+
+impl<'a> TailwindSearchInput<'a> {
+    pub fn new(query: &'a mut String, regex_mode: &'a mut bool) -> Self {
+        Self {
+            query,
+            regex_mode,
+            hint_text: "Search…".to_owned(),
+            input_id: Id::NULL,
+            accessibility_label: "Search".to_owned(),
+            invalid: false,
+        }
+    }
+
+    pub fn hint_text(mut self, hint_text: impl Into<String>) -> Self {
+        self.hint_text = hint_text.into();
+        self
+    }
+
+    pub fn id_salt(mut self, id_salt: impl std::hash::Hash) -> Self {
+        self.input_id = Id::new(id_salt);
+        self
+    }
+
+    pub fn accessibility_label(mut self, label: impl Into<String>) -> Self {
+        self.accessibility_label = label.into();
+        self
+    }
+
+    pub fn invalid(mut self, invalid: bool) -> Self {
+        self.invalid = invalid;
+        self
+    }
+
+    pub fn show(self, ui: &mut Ui) -> SearchInputResponse {
+        let accessibility_label = self.accessibility_label;
+        let stroke_color = if self.invalid {
+            egui::Color32::from_rgb(185, 28, 28)
+        } else {
+            gray::_300
+        };
+        egui::Frame::new()
+            .fill(WHITE)
+            .stroke(Stroke::new(1.0, stroke_color))
+            .corner_radius(CornerRadius::same(6))
+            .inner_margin(Margin::symmetric(8, 5))
+            .show(ui, |ui| {
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    let text = ui.add_sized(
+                        Vec2::new(INPUT_WIDTH, INPUT_HEIGHT),
+                        egui::TextEdit::singleline(self.query)
+                            .hint_text(self.hint_text)
+                            .frame(false)
+                            .font(FontId::proportional(14.0))
+                            .id_salt(self.input_id),
+                    );
+                    text.widget_info(|| {
+                        egui::WidgetInfo::labeled(
+                            egui::WidgetType::TextEdit,
+                            ui.is_enabled(),
+                            accessibility_label.clone(),
+                        )
+                    });
+
+                    ui.separator();
+                    let regex =
+                        ui.toggle_value(self.regex_mode, egui::RichText::new(".*").size(14.0));
+                    regex.widget_info(|| {
+                        egui::WidgetInfo::labeled(
+                            egui::WidgetType::Checkbox,
+                            ui.is_enabled(),
+                            "Use regex search",
+                        )
+                    });
+                    SearchInputResponse { text, regex }
+                })
+                .inner
+            })
+            .inner
+    }
+}

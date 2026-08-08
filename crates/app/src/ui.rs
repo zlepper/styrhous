@@ -1,5 +1,6 @@
 mod cluster_rail;
 mod dialogs;
+mod log_windows;
 mod resource_actions;
 mod resource_detail;
 mod resource_navigation;
@@ -7,6 +8,9 @@ mod state;
 mod widgets;
 mod workspace;
 mod yaml_editor;
+
+#[cfg(test)]
+pub(super) const APP_SNAPSHOT_SIZE: egui::Vec2 = egui::vec2(1536.0, 1024.0);
 
 use crate::worker::{Worker, WorkerTrait};
 use components::apply_light_theme;
@@ -45,6 +49,7 @@ impl<W: WorkerTrait> eframe::App for MyEguiApp<W> {
         yaml_editor::show(ctx, &mut self.ui_state, &mut commands_to_send);
         workspace::show(ctx, &mut self.ui_state, &mut commands_to_send);
         resource_detail::show(ctx, &mut self.ui_state, &mut commands_to_send);
+        log_windows::show(ctx, &mut self.ui_state, &mut commands_to_send);
         show_delete_confirmation(ctx, &mut self.ui_state, &mut commands_to_send);
 
         if let (Some(cluster_key), Some(api_resource)) =

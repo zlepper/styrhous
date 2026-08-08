@@ -265,6 +265,7 @@ pub(super) fn show(
 
     close |= blade_result.close;
     if let Some(action) = blade_result.action {
+        let mut log_to_open = None;
         let navigation_action = matches!(
             &action,
             ResourceAction::NavigateDetails { .. }
@@ -337,6 +338,13 @@ pub(super) fn show(
                                 });
                             }
                         }
+                        ResourceAction::ViewLogs {
+                            name,
+                            namespace,
+                            container,
+                        } => {
+                            log_to_open = Some((cluster.cluster_key, name, namespace, container));
+                        }
                         ResourceAction::OpenDetails { .. } => {
                             unreachable!("inspector actions cannot open detail")
                         }
@@ -351,6 +359,9 @@ pub(super) fn show(
         }
         if navigation_action {
             seed_detail_transition(ctx, ui_state, cluster_key);
+        }
+        if let Some((cluster_key, name, namespace, container)) = log_to_open {
+            ui_state.open_pod_log_window(cluster_key, name, namespace, container, commands_to_send);
         }
     }
     if let Some(panel) = ui_state
@@ -874,12 +885,20 @@ fn show_resource_detail_blade(
     is_foreground: bool,
 ) -> BladeResult {
     let mut result = BladeResult::default();
+    let log_containers = detail
+        .as_ref()
+        .and_then(|detail| match &detail.payload {
+            ResourceDetailPayload::Pod(pod) => Some(pod.log_containers.clone()),
+            _ => None,
+        })
+        .unwrap_or_default();
     let resource = MinimalResource {
         uid: resource_uid.to_owned(),
         name: resource_name.to_owned(),
         namespace: namespace.clone(),
         creation_timestamp: None,
         cells: Default::default(),
+        log_containers,
     };
     ui.allocate_ui_with_layout(
         egui::vec2(ui.available_width() - 10.0, 44.0),
@@ -939,7 +958,12 @@ fn show_resource_detail_blade(
                     format!("More actions for {} in background blade", resource.name)
                 };
                 MoreButton::new(more_label).show(ui, |menu| {
-                    show_resource_action_items(menu, &resource, &mut result.action);
+                    show_resource_action_items(
+                        menu,
+                        &resource,
+                        &resource.log_containers,
+                        &mut result.action,
+                    );
                 });
             });
         },

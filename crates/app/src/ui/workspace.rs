@@ -15,7 +15,8 @@ use crate::worker::WorkerCommand;
 use components::colors::{TOOLBAR_BACKGROUND, gray};
 use components::fuzzy::{matches_fuzzy, normalize_for_search};
 use components::{
-    MoreButton, SelectionAction, TableRowBuilder, TailwindCombobox, TailwindTable, WorkspacePage,
+    MoreButton, SelectionAction, TableRowBuilder, TailwindCombobox, TailwindSearchInput,
+    TailwindTable, WorkspacePage,
 };
 use egui_extras::{Size, StripBuilder};
 use std::cell::RefCell;
@@ -51,6 +52,7 @@ pub(super) fn show(
     let mut namespace_selection = None;
     let mut retry_requested = false;
     let mut detail_to_open = None;
+    let mut log_to_open = None;
     egui::CentralPanel::default()
         .frame(WorkspacePage::frame())
         .show(ctx, |ui| {
@@ -216,6 +218,13 @@ pub(super) fn show(
                                 namespace,
                             });
                         }
+                        ResourceAction::ViewLogs {
+                            name,
+                            namespace,
+                            container,
+                        } => {
+                            log_to_open = Some((cluster.cluster_key, name, namespace, container));
+                        }
                         ResourceAction::SaveData { .. } => {
                             unreachable!("resource table actions cannot save inspector data")
                         }
@@ -241,6 +250,9 @@ pub(super) fn show(
             commands_to_send,
         );
         super::resource_detail::seed_detail_transition(ctx, ui_state, cluster_key);
+    }
+    if let Some((cluster_key, name, namespace, container)) = log_to_open {
+        ui_state.open_pod_log_window(cluster_key, name, namespace, container, commands_to_send);
     }
     if let (Some(cluster_key), Some(selection)) = (ui_state.selected_cluster, namespace_selection) {
         match selection {
@@ -491,48 +503,13 @@ fn show_toolbar(
 }
 
 fn show_resource_search(ui: &mut egui::Ui, resource_search: &mut ResourceSearchState) {
-    let stroke_color = if regex_error(resource_search).is_some() {
-        egui::Color32::from_rgb(185, 28, 28)
-    } else {
-        gray::_300
-    };
-    egui::Frame::new()
-        .fill(egui::Color32::WHITE)
-        .stroke(egui::Stroke::new(1.0, stroke_color))
-        .corner_radius(egui::CornerRadius::same(6))
-        .inner_margin(egui::Margin::symmetric(8, 5))
-        .show(ui, |ui| {
-            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                let text_response = ui.add_sized(
-                    egui::vec2(150.0, 24.0),
-                    egui::TextEdit::singleline(&mut resource_search.query)
-                        .hint_text("Search resources...")
-                        .frame(false)
-                        .font(egui::FontId::proportional(14.0))
-                        .id_salt("resource-search-input"),
-                );
-                text_response.widget_info(|| {
-                    egui::WidgetInfo::labeled(
-                        egui::WidgetType::TextEdit,
-                        ui.is_enabled(),
-                        "Search resources",
-                    )
-                });
-
-                ui.separator();
-                let toggle_response = ui.toggle_value(
-                    &mut resource_search.regex_mode,
-                    egui::RichText::new(".*").size(14.0),
-                );
-                toggle_response.widget_info(|| {
-                    egui::WidgetInfo::labeled(
-                        egui::WidgetType::Checkbox,
-                        ui.is_enabled(),
-                        "Use regex search",
-                    )
-                });
-            });
-        });
+    let invalid = regex_error(resource_search).is_some();
+    TailwindSearchInput::new(&mut resource_search.query, &mut resource_search.regex_mode)
+        .hint_text("Search resources...")
+        .id_salt("resource-search-input")
+        .accessibility_label("Search resources")
+        .invalid(invalid)
+        .show(ui);
 }
 
 fn filter_resources(
@@ -707,7 +684,12 @@ fn show_resource_table(
                     });
                 }
                 MoreButton::show_context_menu(row_response, |menu| {
-                    show_resource_action_items(menu, resource, &mut pending_action.borrow_mut());
+                    show_resource_action_items(
+                        menu,
+                        resource,
+                        &resource.log_containers,
+                        &mut pending_action.borrow_mut(),
+                    );
                 });
             }
         },
@@ -735,7 +717,7 @@ fn show_resource_actions(
             .layout(egui::Layout::left_to_right(egui::Align::Center)),
     );
     MoreButton::new(format!("More actions for {}", resource.name)).show(&mut action_ui, |menu| {
-        show_resource_action_items(menu, resource, pending_action);
+        show_resource_action_items(menu, resource, &resource.log_containers, pending_action);
     });
 }
 
@@ -750,6 +732,7 @@ mod tests {
             namespace: Some("default".into()),
             creation_timestamp: None,
             cells: Default::default(),
+            log_containers: Vec::new(),
         }
     }
 

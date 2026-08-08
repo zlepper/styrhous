@@ -2,7 +2,7 @@ use crate::cluster_connection_manager::minimal_resource_from_typed;
 use crate::cluster_connection_manager::{
     ResourceWatcher, TypedWatcherContext, namespaced_typed_watcher,
 };
-use crate::minimal_resource::MinimalResource;
+use crate::minimal_resource::{MinimalResource, PodLogContainer};
 use crate::resource_detail::{
     PodConditionDetail, PodContainerDetail, PodDetail, PodEnvironmentVariableDetail,
     PodEnvironmentVariableSource, PodVolumeDetail, ResourceDetailPayload,
@@ -56,7 +56,7 @@ pub(crate) fn extract(pod: &Pod) -> MinimalResource {
         .unwrap_or("Unknown");
     let indicators = status.map(container_indicators).unwrap_or_default();
 
-    minimal_resource_from_typed(
+    let mut resource = minimal_resource_from_typed(
         pod,
         BTreeMap::from([
             (
@@ -76,7 +76,9 @@ pub(crate) fn extract(pod: &Pod) -> MinimalResource {
             ),
             (RESTARTS_COLUMN.to_owned(), CellValue::Number(restarts)),
         ]),
-    )
+    );
+    resource.log_containers = pod_log_containers(pod);
+    resource
 }
 
 pub(crate) fn detail_payload(object: &kube::api::DynamicObject) -> Option<ResourceDetailPayload> {
@@ -173,8 +175,41 @@ pub(crate) fn detail_payload(object: &kube::api::DynamicObject) -> Option<Resour
             .and_then(|spec| spec.service_account_name.clone()),
         dns_policy: pod.spec.as_ref().and_then(|spec| spec.dns_policy.clone()),
         containers,
+        log_containers: pod_log_containers(&pod),
         volumes,
     }))
+}
+
+fn pod_log_containers(pod: &Pod) -> Vec<PodLogContainer> {
+    let Some(spec) = &pod.spec else {
+        return Vec::new();
+    };
+    let mut containers = Vec::new();
+    containers.extend(
+        spec.init_containers
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .map(|container| PodLogContainer {
+                name: container.name.clone(),
+                kind: ContainerKind::Init,
+            }),
+    );
+    containers.extend(spec.containers.iter().map(|container| PodLogContainer {
+        name: container.name.clone(),
+        kind: ContainerKind::App,
+    }));
+    containers.extend(
+        spec.ephemeral_containers
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .map(|container| PodLogContainer {
+                name: container.name.clone(),
+                kind: ContainerKind::Ephemeral,
+            }),
+    );
+    containers
 }
 
 fn pod_environment_variables(
@@ -477,8 +512,8 @@ fn container_indicator(status: &ContainerStatus, kind: ContainerKind) -> Contain
 mod tests {
     use super::*;
     use k8s_openapi::api::core::v1::{
-        ContainerState, ContainerStateRunning, ContainerStateTerminated, ContainerStateWaiting,
-        PodStatus,
+        Container, ContainerState, ContainerStateRunning, ContainerStateTerminated,
+        ContainerStateWaiting, EphemeralContainer, PodSpec, PodStatus,
     };
 
     fn container_status(
@@ -499,6 +534,31 @@ mod tests {
     #[test]
     fn extract_includes_all_container_categories_with_state_aware_tones() {
         let pod = Pod {
+            spec: Some(PodSpec {
+                init_containers: Some(vec![Container {
+                    name: "setup".to_owned(),
+                    ..Default::default()
+                }]),
+                containers: vec![
+                    Container {
+                        name: "api".to_owned(),
+                        ..Default::default()
+                    },
+                    Container {
+                        name: "worker".to_owned(),
+                        ..Default::default()
+                    },
+                    Container {
+                        name: "sidecar".to_owned(),
+                        ..Default::default()
+                    },
+                ],
+                ephemeral_containers: Some(vec![EphemeralContainer {
+                    name: "debugger".to_owned(),
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            }),
             status: Some(PodStatus {
                 init_container_statuses: Some(vec![container_status(
                     "setup",
@@ -597,6 +657,20 @@ mod tests {
         assert_eq!(
             indicators[3].message.as_deref(),
             Some("Waiting for volume mount")
+        );
+        assert_eq!(
+            resource
+                .log_containers
+                .iter()
+                .map(|container| (container.name.as_str(), container.kind))
+                .collect::<Vec<_>>(),
+            vec![
+                ("setup", ContainerKind::Init),
+                ("api", ContainerKind::App),
+                ("worker", ContainerKind::App),
+                ("sidecar", ContainerKind::App),
+                ("debugger", ContainerKind::Ephemeral),
+            ]
         );
     }
 

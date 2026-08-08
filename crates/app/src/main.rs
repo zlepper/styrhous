@@ -14,11 +14,14 @@ mod worker;
 
 use crate::ui::MyEguiApp;
 
+pub(crate) const DEFAULT_NATIVE_WINDOW_SIZE: [f32; 2] = [1200.0, 800.0];
+pub(crate) const MIN_NATIVE_WINDOW_SIZE: [f32; 2] = [1000.0, 600.0];
+
 fn native_options() -> eframe::NativeOptions {
     eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1200.0, 800.0])
-            .with_min_inner_size([1000.0, 600.0]),
+            .with_inner_size(DEFAULT_NATIVE_WINDOW_SIZE)
+            .with_min_inner_size(MIN_NATIVE_WINDOW_SIZE),
         ..Default::default()
     }
 }
@@ -36,13 +39,19 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::native_options;
+    use super::{DEFAULT_NATIVE_WINDOW_SIZE, MIN_NATIVE_WINDOW_SIZE, native_options};
 
     #[test]
     fn native_window_starts_wide_and_has_a_minimum_width() {
         let viewport = native_options().viewport;
 
-        assert_eq!(viewport.inner_size, Some(egui::vec2(1200.0, 800.0)));
-        assert_eq!(viewport.min_inner_size, Some(egui::vec2(1000.0, 600.0)));
+        assert_eq!(
+            viewport.inner_size,
+            Some(egui::Vec2::from(DEFAULT_NATIVE_WINDOW_SIZE))
+        );
+        assert_eq!(
+            viewport.min_inner_size,
+            Some(egui::Vec2::from(MIN_NATIVE_WINDOW_SIZE))
+        );
     }
 }
