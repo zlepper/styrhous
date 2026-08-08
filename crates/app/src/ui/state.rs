@@ -22,6 +22,19 @@ pub(super) struct UiState {
 /// Key for identifying a resource watcher (API resource + optional namespace).
 pub(super) type ResourceWatchKey = (ApiResource, Option<String>);
 
+fn stop_resource_detail_watches(
+    cluster_key: i32,
+    history_entry_ids: impl IntoIterator<Item = u64>,
+    commands_to_send: &mut Vec<crate::worker::WorkerCommand>,
+) {
+    commands_to_send.extend(history_entry_ids.into_iter().map(|history_entry_id| {
+        crate::worker::WorkerCommand::StopResourceDetailWatch {
+            cluster_key,
+            history_entry_id,
+        }
+    }));
+}
+
 #[derive(Debug, Default)]
 pub(super) struct ResourceWatchState {
     pub(super) resources: BTreeMap<String, MinimalResource>,
@@ -145,6 +158,25 @@ impl ResourceDetailPanelState {
         self.managed_resources = entry.managed_resources;
         self.managed_resources_error = entry.managed_resources_error;
         self.data_editor = entry.data_editor;
+    }
+
+    fn retained_history_entry_ids(&self) -> impl Iterator<Item = u64> + '_ {
+        std::iter::once(self.history_entry_id).chain(
+            self.back_stack
+                .iter()
+                .chain(&self.forward_stack)
+                .map(|entry| entry.history_entry_id),
+        )
+    }
+
+    fn history_entry_mut(
+        &mut self,
+        history_entry_id: u64,
+    ) -> Option<&mut ResourceDetailHistoryEntry> {
+        self.back_stack
+            .iter_mut()
+            .chain(&mut self.forward_stack)
+            .find(|entry| entry.history_entry_id == history_entry_id)
     }
 }
 
@@ -370,10 +402,12 @@ impl UiState {
             return;
         };
 
-        if cluster.resource_detail_panel.take().is_some() {
-            commands_to_send.push(crate::worker::WorkerCommand::StopResourceDetailWatch {
-                cluster_key: cluster.cluster_key,
-            });
+        if let Some(panel) = cluster.resource_detail_panel.take() {
+            stop_resource_detail_watches(
+                cluster.cluster_key,
+                panel.retained_history_entry_ids(),
+                commands_to_send,
+            );
         }
         cluster.selected_api_resource = Some(api_resource);
         let api_resource = cluster
@@ -418,11 +452,11 @@ impl UiState {
         });
         commands_to_send.push(crate::worker::WorkerCommand::StartResourceDetailWatch {
             cluster_key: cluster.cluster_key,
+            history_entry_id: selection_generation,
             api_resource,
             namespace,
             resource_name: name,
             resource_uid: uid,
-            selection_generation,
         });
     }
 
@@ -442,7 +476,14 @@ impl UiState {
             return;
         };
         panel.back_stack.push(panel.history_entry());
-        panel.forward_stack.clear();
+        stop_resource_detail_watches(
+            cluster.cluster_key,
+            panel
+                .forward_stack
+                .drain(..)
+                .map(|entry| entry.history_entry_id),
+            commands_to_send,
+        );
         cluster.next_detail_generation += 1;
         let selection_generation = cluster.next_detail_generation;
         panel.replace_current(
@@ -465,11 +506,11 @@ impl UiState {
         panel.transition = Some(ResourceDetailTransition::Forward);
         commands_to_send.push(crate::worker::WorkerCommand::StartResourceDetailWatch {
             cluster_key: cluster.cluster_key,
+            history_entry_id: selection_generation,
             api_resource,
             namespace,
             resource_name: name,
             resource_uid: uid,
-            selection_generation,
         });
     }
 
@@ -477,7 +518,7 @@ impl UiState {
         &mut self,
         cluster_key: i32,
         forward: bool,
-        commands_to_send: &mut Vec<crate::worker::WorkerCommand>,
+        _commands_to_send: &mut Vec<crate::worker::WorkerCommand>,
     ) {
         let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
             return;
@@ -501,23 +542,11 @@ impl UiState {
         }
         cluster.next_detail_generation += 1;
         let selection_generation = cluster.next_detail_generation;
-        let api_resource = destination.api_resource.clone();
-        let namespace = destination.namespace.clone();
-        let resource_name = destination.resource_name.clone();
-        let resource_uid = destination.resource_uid.clone();
         panel.replace_current(destination, selection_generation);
         panel.transition = Some(if forward {
             ResourceDetailTransition::Forward
         } else {
             ResourceDetailTransition::Back
-        });
-        commands_to_send.push(crate::worker::WorkerCommand::StartResourceDetailWatch {
-            cluster_key: cluster.cluster_key,
-            api_resource,
-            namespace,
-            resource_name,
-            resource_uid,
-            selection_generation,
         });
     }
 
@@ -529,10 +558,12 @@ impl UiState {
         let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
             return;
         };
-        if cluster.resource_detail_panel.take().is_some() {
-            commands_to_send.push(crate::worker::WorkerCommand::StopResourceDetailWatch {
-                cluster_key: cluster.cluster_key,
-            });
+        if let Some(panel) = cluster.resource_detail_panel.take() {
+            stop_resource_detail_watches(
+                cluster.cluster_key,
+                panel.retained_history_entry_ids(),
+                commands_to_send,
+            );
         }
     }
 
@@ -556,10 +587,12 @@ impl UiState {
         commands_to_send: &mut Vec<crate::worker::WorkerCommand>,
     ) {
         for cluster in self.clusters.values_mut() {
-            if cluster.resource_detail_panel.take().is_some() {
-                commands_to_send.push(crate::worker::WorkerCommand::StopResourceDetailWatch {
-                    cluster_key: cluster.cluster_key,
-                });
+            if let Some(panel) = cluster.resource_detail_panel.take() {
+                stop_resource_detail_watches(
+                    cluster.cluster_key,
+                    panel.retained_history_entry_ids(),
+                    commands_to_send,
+                );
             }
         }
     }
@@ -736,16 +769,21 @@ impl UiState {
                         }
                         Some(crate::worker::WorkerCommand::StartResourceDetailWatch {
                             cluster_key,
-                            selection_generation,
+                            history_entry_id,
                             ..
                         }) => {
                             if let Some(panel) = self
                                 .clusters
                                 .get_mut(&cluster_key)
                                 .and_then(|cluster| cluster.resource_detail_panel.as_mut())
-                                .filter(|panel| panel.selection_generation == selection_generation)
                             {
-                                panel.detail_error = Some(message);
+                                if panel.history_entry_id == history_entry_id {
+                                    panel.detail_error = Some(message);
+                                } else if let Some(entry) =
+                                    panel.history_entry_mut(history_entry_id)
+                                {
+                                    entry.detail_error = Some(message);
+                                }
                             }
                         }
                         Some(crate::worker::WorkerCommand::UpdateResourceData {
@@ -909,12 +947,12 @@ impl UiState {
                             .resource_detail_panel
                             .as_ref()
                             .is_some_and(|panel| panel.resource_uid == resource_uid)
+                            && let Some(panel) = cluster.resource_detail_panel.take()
                         {
-                            cluster.resource_detail_panel = None;
-                            commands_to_send.push(
-                                crate::worker::WorkerCommand::StopResourceDetailWatch {
-                                    cluster_key,
-                                },
+                            stop_resource_detail_watches(
+                                cluster_key,
+                                panel.retained_history_entry_ids(),
+                                &mut commands_to_send,
                             );
                         }
                     }
@@ -962,38 +1000,47 @@ impl UiState {
                 }
                 WorkerResult::ResourceDetailUpdated {
                     cluster_key,
-                    selection_generation,
+                    history_entry_id,
                     detail,
                 } => {
                     if let Some(panel) = self
                         .clusters
                         .get_mut(&cluster_key)
                         .and_then(|cluster| cluster.resource_detail_panel.as_mut())
-                        .filter(|panel| panel.selection_generation == selection_generation)
                     {
-                        sync_resource_data_editor(panel, &detail);
-                        panel.detail = Some(detail);
-                        panel.detail_error = None;
+                        if panel.history_entry_id == history_entry_id {
+                            sync_resource_data_editor(&mut panel.data_editor, &detail);
+                            panel.detail = Some(detail);
+                            panel.detail_error = None;
+                        } else if let Some(entry) = panel.history_entry_mut(history_entry_id) {
+                            sync_resource_data_editor(&mut entry.data_editor, &detail);
+                            entry.detail = Some(detail);
+                            entry.detail_error = None;
+                        }
                     }
                 }
                 WorkerResult::ResourceEventsReplaced {
                     cluster_key,
-                    selection_generation,
+                    history_entry_id,
                     events,
                 } => {
                     if let Some(panel) = self
                         .clusters
                         .get_mut(&cluster_key)
                         .and_then(|cluster| cluster.resource_detail_panel.as_mut())
-                        .filter(|panel| panel.selection_generation == selection_generation)
                     {
-                        panel.events = events;
-                        panel.events_error = None;
+                        if panel.history_entry_id == history_entry_id {
+                            panel.events = events;
+                            panel.events_error = None;
+                        } else if let Some(entry) = panel.history_entry_mut(history_entry_id) {
+                            entry.events = events;
+                            entry.events_error = None;
+                        }
                     }
                 }
                 WorkerResult::ResourceDetailWatchFailed {
                     cluster_key,
-                    selection_generation,
+                    history_entry_id,
                     events,
                     error,
                 } => {
@@ -1001,55 +1048,88 @@ impl UiState {
                         .clusters
                         .get_mut(&cluster_key)
                         .and_then(|cluster| cluster.resource_detail_panel.as_mut())
-                        .filter(|panel| panel.selection_generation == selection_generation)
                     {
-                        if events {
-                            panel.events_error = Some(error);
-                        } else {
-                            panel.detail_error = Some(error);
+                        if panel.history_entry_id == history_entry_id {
+                            if events {
+                                panel.events_error = Some(error);
+                            } else {
+                                panel.detail_error = Some(error);
+                            }
+                        } else if let Some(entry) = panel.history_entry_mut(history_entry_id) {
+                            if events {
+                                entry.events_error = Some(error);
+                            } else {
+                                entry.detail_error = Some(error);
+                            }
                         }
                     }
                 }
                 WorkerResult::ResourceDetailDeleted {
                     cluster_key,
-                    selection_generation,
+                    history_entry_id,
                 } => {
-                    if self
-                        .clusters
-                        .get(&cluster_key)
-                        .and_then(|cluster| cluster.resource_detail_panel.as_ref())
-                        .is_some_and(|panel| panel.selection_generation == selection_generation)
+                    if let Some(cluster) = self.clusters.get_mut(&cluster_key)
+                        && let Some(panel) = cluster.resource_detail_panel.as_mut()
                     {
-                        self.close_resource_detail(cluster_key, &mut commands_to_send);
+                        if panel.history_entry_id == history_entry_id {
+                            let panel = cluster
+                                .resource_detail_panel
+                                .take()
+                                .expect("panel was checked above");
+                            stop_resource_detail_watches(
+                                cluster.cluster_key,
+                                panel.retained_history_entry_ids(),
+                                &mut commands_to_send,
+                            );
+                        } else {
+                            panel
+                                .back_stack
+                                .retain(|entry| entry.history_entry_id != history_entry_id);
+                            panel
+                                .forward_stack
+                                .retain(|entry| entry.history_entry_id != history_entry_id);
+                            stop_resource_detail_watches(
+                                cluster.cluster_key,
+                                [history_entry_id],
+                                &mut commands_to_send,
+                            );
+                        }
                     }
                 }
                 WorkerResult::ManagedResourcesReplaced {
                     cluster_key,
-                    selection_generation,
+                    history_entry_id,
                     resources,
                 } => {
                     if let Some(panel) = self
                         .clusters
                         .get_mut(&cluster_key)
                         .and_then(|cluster| cluster.resource_detail_panel.as_mut())
-                        .filter(|panel| panel.selection_generation == selection_generation)
                     {
-                        panel.managed_resources = resources;
-                        panel.managed_resources_error = None;
+                        if panel.history_entry_id == history_entry_id {
+                            panel.managed_resources = resources;
+                            panel.managed_resources_error = None;
+                        } else if let Some(entry) = panel.history_entry_mut(history_entry_id) {
+                            entry.managed_resources = resources;
+                            entry.managed_resources_error = None;
+                        }
                     }
                 }
                 WorkerResult::ManagedResourcesWatchFailed {
                     cluster_key,
-                    selection_generation,
+                    history_entry_id,
                     error,
                 } => {
                     if let Some(panel) = self
                         .clusters
                         .get_mut(&cluster_key)
                         .and_then(|cluster| cluster.resource_detail_panel.as_mut())
-                        .filter(|panel| panel.selection_generation == selection_generation)
                     {
-                        panel.managed_resources_error = Some(error);
+                        if panel.history_entry_id == history_entry_id {
+                            panel.managed_resources_error = Some(error);
+                        } else if let Some(entry) = panel.history_entry_mut(history_entry_id) {
+                            entry.managed_resources_error = Some(error);
+                        }
                     }
                 }
                 WorkerResult::ResourceDetailWatchStarted { .. }
@@ -1129,7 +1209,10 @@ impl UiState {
     }
 }
 
-fn sync_resource_data_editor(panel: &mut ResourceDetailPanelState, detail: &ResourceDetail) {
+fn sync_resource_data_editor(
+    data_editor: &mut Option<ResourceDataEditorState>,
+    detail: &ResourceDetail,
+) {
     let values = match &detail.payload {
         ResourceDetailPayload::ConfigMap(config_map) => Some(config_map.data.clone()),
         ResourceDetailPayload::Secret(secret) => Some(
@@ -1143,16 +1226,16 @@ fn sync_resource_data_editor(panel: &mut ResourceDetailPanelState, detail: &Reso
         ),
         ResourceDetailPayload::Generic | ResourceDetailPayload::Pod(_) => None,
     };
-    match (panel.data_editor.as_mut(), values) {
+    match (data_editor.as_mut(), values) {
         (Some(editor), Some(values)) => {
             editor.accept_watched_values(values, detail.resource_version.clone())
         }
         (None, Some(values)) => {
-            panel.data_editor = Some(ResourceDataEditorState::new(
+            *data_editor = Some(ResourceDataEditorState::new(
                 values,
                 detail.resource_version.clone(),
             ))
         }
-        (_, None) => panel.data_editor = None,
+        (_, None) => *data_editor = None,
     }
 }

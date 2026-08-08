@@ -139,14 +139,17 @@ pub enum WorkerCommand {
     },
     StartResourceDetailWatch {
         cluster_key: i32,
+        /// Stable identity of this visit in the inspector history. A resource
+        /// may be revisited, so it cannot be keyed by Kubernetes UID alone.
+        history_entry_id: u64,
         api_resource: ApiResource,
         namespace: Option<String>,
         resource_name: String,
         resource_uid: String,
-        selection_generation: u64,
     },
     StopResourceDetailWatch {
         cluster_key: i32,
+        history_entry_id: u64,
     },
     GetResourceYaml {
         cluster_key: i32,
@@ -267,38 +270,38 @@ pub enum WorkerResult {
     },
     ResourceDetailWatchStarted {
         cluster_key: i32,
-        selection_generation: u64,
+        history_entry_id: u64,
     },
     ResourceDetailWatchStopped {
         cluster_key: i32,
     },
     ResourceDetailUpdated {
         cluster_key: i32,
-        selection_generation: u64,
+        history_entry_id: u64,
         detail: ResourceDetail,
     },
     ResourceDetailDeleted {
         cluster_key: i32,
-        selection_generation: u64,
+        history_entry_id: u64,
     },
     ManagedResourcesReplaced {
         cluster_key: i32,
-        selection_generation: u64,
+        history_entry_id: u64,
         resources: Vec<ManagedResource>,
     },
     ManagedResourcesWatchFailed {
         cluster_key: i32,
-        selection_generation: u64,
+        history_entry_id: u64,
         error: String,
     },
     ResourceEventsReplaced {
         cluster_key: i32,
-        selection_generation: u64,
+        history_entry_id: u64,
         events: Vec<ResourceEvent>,
     },
     ResourceDetailWatchFailed {
         cluster_key: i32,
-        selection_generation: u64,
+        history_entry_id: u64,
         events: bool,
         error: String,
     },
@@ -336,8 +339,9 @@ pub type WorkerResultSender = mpsc::SyncSender<WorkerResult>;
 struct SharedWorkerState {
     /// Kube clients indexed by cluster_key
     clients: RwLock<HashMap<i32, kube::Client>>,
-    /// One detail inspector is visible per cluster at most.
-    detail_watches: Mutex<HashMap<i32, JoinHandle<()>>>,
+    /// Detail watches remain active while their visit is retained in an
+    /// inspector's history.
+    detail_watches: Mutex<HashMap<(i32, u64), JoinHandle<()>>>,
 }
 
 struct WorkerRuntime {
@@ -411,18 +415,19 @@ impl WorkerRuntime {
             }
             WorkerCommand::StartResourceDetailWatch {
                 cluster_key,
+                history_entry_id,
                 api_resource,
                 namespace,
                 resource_name,
                 resource_uid,
-                selection_generation,
             } => {
                 let client = {
                     let clients = shared.clients.read().await;
                     clients.get(cluster_key).cloned()
                 };
                 if let Some(client) = client {
-                    if let Some(previous) = shared.detail_watches.lock().await.remove(cluster_key) {
+                    let watch_key = (*cluster_key, *history_entry_id);
+                    if let Some(previous) = shared.detail_watches.lock().await.remove(&watch_key) {
                         previous.abort();
                     }
                     let handle = tokio::spawn(watch_resource_detail(
@@ -432,17 +437,13 @@ impl WorkerRuntime {
                         namespace.clone(),
                         resource_name.clone(),
                         resource_uid.clone(),
-                        *selection_generation,
+                        *history_entry_id,
                         result_channel.clone(),
                     ));
-                    shared
-                        .detail_watches
-                        .lock()
-                        .await
-                        .insert(*cluster_key, handle);
+                    shared.detail_watches.lock().await.insert(watch_key, handle);
                     Ok(WorkerResult::ResourceDetailWatchStarted {
                         cluster_key: *cluster_key,
-                        selection_generation: *selection_generation,
+                        history_entry_id: *history_entry_id,
                     })
                 } else {
                     Err(anyhow::anyhow!(
@@ -451,8 +452,16 @@ impl WorkerRuntime {
                     ))
                 }
             }
-            WorkerCommand::StopResourceDetailWatch { cluster_key } => {
-                if let Some(handle) = shared.detail_watches.lock().await.remove(cluster_key) {
+            WorkerCommand::StopResourceDetailWatch {
+                cluster_key,
+                history_entry_id,
+            } => {
+                if let Some(handle) = shared
+                    .detail_watches
+                    .lock()
+                    .await
+                    .remove(&(*cluster_key, *history_entry_id))
+                {
                     handle.abort();
                 }
                 Ok(WorkerResult::ResourceDetailWatchStopped {

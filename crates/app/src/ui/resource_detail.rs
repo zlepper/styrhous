@@ -18,7 +18,6 @@ use components::{
     ButtonSize, ButtonVariant, MoreButton, TableRowBuilder, TailwindButton, TailwindTable,
     TailwindTextArea, WorkspaceCard,
 };
-use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 const PANEL_WIDTH: f32 = 744.0;
@@ -29,9 +28,14 @@ const CARD_HEADER_PADDING: f32 = 16.0;
 const CARD_GAP: f32 = 12.0;
 const ACTIVE_BLADE_INSET: f32 = 8.0;
 const HISTORY_BLADE_SCALES: [f32; 2] = [0.9, 0.8];
-const HISTORY_BLADE_REVEAL: f32 = 250.0;
-// Temporarily slow for visual inspection of the blade choreography.
-const BLADE_TRANSITION_DURATION: f32 = 5.0;
+/// Horizontal recession as a fraction of the unscaled blade width. The older
+/// blade's additional step shrinks with the blade, so its recession remains
+/// visually proportional to its scale.
+const HISTORY_BLADE_X_TRANSLATIONS: [f32; 2] = [
+    1.0 / 3.0,
+    (1.0 / 3.0) * (1.0 + HISTORY_BLADE_SCALES[1] / HISTORY_BLADE_SCALES[0]),
+];
+const BLADE_TRANSITION_DURATION: f32 = 0.25;
 
 #[derive(Clone, Copy)]
 struct BladeTransform {
@@ -43,6 +47,12 @@ struct BladeTransform {
 struct BladeNavigation {
     can_go_back: bool,
     can_go_forward: bool,
+}
+
+#[derive(Default)]
+struct BladeResult {
+    action: Option<ResourceAction>,
+    close: bool,
 }
 
 pub(super) fn show(
@@ -68,13 +78,8 @@ pub(super) fn show(
         .get(&cluster_key)
         .and_then(|cluster| cluster.resource_detail_panel.as_ref())
         .and_then(|panel| {
-            matches!(panel.transition, Some(ResourceDetailTransition::Closing)).then(|| {
-                ctx.animate_value_with_time(
-                    detail_transition_id(panel),
-                    1.0,
-                    blade_transition_duration(ctx),
-                )
-            })
+            matches!(panel.transition, Some(ResourceDetailTransition::Closing))
+                .then(|| animated_blade_transition_progress(ctx, panel))
         })
         .unwrap_or(0.0);
     let mut close = ctx.input(|input| input.key_pressed(egui::Key::Escape));
@@ -91,16 +96,14 @@ pub(super) fn show(
     egui::Area::new(egui::Id::new("resource-detail-scrim"))
         .order(egui::Order::Foreground)
         .fixed_pos(viewport.min)
+        .interactable(false)
         .show(ctx, |ui| {
             ui.set_min_size(viewport.size());
-            let response =
-                ui.interact(ui.max_rect(), ui.id().with("dismiss"), egui::Sense::click());
             ui.painter().rect_filled(
                 ui.max_rect(),
                 0.0,
                 egui::Color32::BLACK.gamma_multiply(0.58 * (1.0 - closing_progress)),
             );
-            close |= dismiss_on_outside_click && response.clicked();
         });
 
     let (history_layers, history_offset, transition, active_blade_id) = ui_state
@@ -109,11 +112,7 @@ pub(super) fn show(
         .and_then(|cluster| cluster.resource_detail_panel.as_ref())
         .map(|panel| {
             let transition = panel.transition.map(|transition| {
-                let progress = ctx.animate_value_with_time(
-                    detail_transition_id(panel),
-                    1.0,
-                    blade_transition_duration(ctx),
-                );
+                let progress = animated_blade_transition_progress(ctx, panel);
                 (transition, progress)
             });
             let first_visible_history = panel.back_stack.len().saturating_sub(2);
@@ -135,15 +134,7 @@ pub(super) fn show(
             )
         });
     let panel_layer_id = blade_layer_id(active_blade_id);
-    show_history_layers(
-        ctx,
-        viewport,
-        &history_layers,
-        history_offset,
-        transition,
-        panel_layer_id,
-    );
-
+    let blade_height = viewport.height() - ACTIVE_BLADE_INSET * 2.0;
     let active_transform = transition.map_or_else(
         || active_blade_transform(viewport),
         |(transition, progress)| match transition {
@@ -167,6 +158,16 @@ pub(super) fn show(
             }
         },
     );
+    let has_history_layers = !history_layers.is_empty();
+    show_history_layers(ctx, viewport, &history_layers, history_offset, transition);
+
+    let active_rect = egui::Rect::from_min_size(
+        active_transform.position,
+        egui::vec2(PANEL_WIDTH, blade_height) * active_transform.scale,
+    );
+    // The input-only scrim is above history but below the active blade and
+    // its menus. Its regions deliberately exclude the active blade.
+    close |= dismiss_on_outside_click && show_input_scrim(ctx, viewport, active_rect);
 
     let panel = ui_state
         .clusters
@@ -174,6 +175,10 @@ pub(super) fn show(
         .and_then(|cluster| cluster.resource_detail_panel.as_mut())
         .expect("resource detail panel was checked above");
     let is_closing = matches!(transition, Some((ResourceDetailTransition::Closing, _)));
+    let outgoing_foreground_blade_is_visible = matches!(
+        transition,
+        Some((ResourceDetailTransition::Back, progress)) if progress < 1.0
+    );
 
     let panel_blade_id = blade_id(panel.history_entry_id);
     if let Some((transition_kind, progress)) = transition
@@ -182,8 +187,6 @@ pub(super) fn show(
         match transition_kind {
             ResourceDetailTransition::Back => {
                 if let Some(outgoing_entry) = panel.forward_stack.last() {
-                    let outgoing_layer_id = entry_blade_layer_id(outgoing_entry);
-                    ctx.set_sublayer(panel_layer_id, outgoing_layer_id);
                     show_outgoing_blade(
                         ctx,
                         viewport,
@@ -214,49 +217,54 @@ pub(super) fn show(
         }
     }
     let active_origin = active_blade_transform(viewport).position;
-    ctx.set_transform_layer(
-        panel_layer_id,
-        egui::emath::TSTransform::new(
-            active_transform.position.to_vec2() - active_origin.to_vec2() * active_transform.scale,
-            active_transform.scale,
-        ),
-    );
+    let active_visual_transform = blade_visual_transform(active_origin, active_transform);
 
-    let mut action = None;
-    let blade_height = viewport.height() - ACTIVE_BLADE_INSET * 2.0;
+    let mut blade_result = BladeResult::default();
     egui::Area::new(panel_blade_id)
         .order(egui::Order::Foreground)
         .fixed_pos(active_origin)
         .fade_in(false)
-        .interactable(!is_closing)
+        .interactable(
+            !is_closing
+                && !outgoing_foreground_blade_is_visible
+                && active_visual_transform == egui::emath::TSTransform::IDENTITY,
+        )
         .show(ctx, |ui| {
             ui.set_width(PANEL_WIDTH);
             ui.set_height(blade_height);
-            egui::ScrollArea::vertical()
-                .id_salt(("resource-detail-panel-scroll", panel.selection_generation))
-                .auto_shrink([false, false])
-                .min_scrolled_height(blade_height)
-                .max_height(blade_height)
-                .show(ui, |ui| {
-                    ui.set_width(PANEL_WIDTH);
-                    egui::Frame::new()
-                        .fill(WHITE)
-                        .stroke(egui::Stroke::new(1.0, gray::_200))
-                        .shadow(egui::Shadow {
-                            offset: [-4, 0],
-                            blur: 16,
-                            spread: 0,
-                            color: egui::Color32::BLACK.gamma_multiply(0.12),
-                        })
-                        .inner_margin(egui::Margin::same(PANEL_PADDING))
-                        .show(ui, |ui| {
-                            ui.set_min_height(blade_height - f32::from(PANEL_PADDING) * 2.0);
-                            action = show_panel(ui, panel, &mut close);
-                        });
+            ui.with_visual_transform(active_visual_transform, |ui| {
+                show_blade_frame(ui, blade_height, panel.history_entry_id, |ui| {
+                    let result = show_resource_detail_blade(
+                        ui,
+                        &panel.api_resource,
+                        &panel.namespace,
+                        &panel.resource_name,
+                        &panel.resource_uid,
+                        &panel.detail,
+                        &panel.events,
+                        panel.detail_error.as_deref(),
+                        panel.events_error.as_deref(),
+                        &panel.managed_resources,
+                        panel.managed_resources_error.as_deref(),
+                        panel.data_editor.as_mut(),
+                        BladeNavigation {
+                            can_go_back: !panel.back_stack.is_empty(),
+                            can_go_forward: !panel.forward_stack.is_empty(),
+                        },
+                        true,
+                    );
+                    if !outgoing_foreground_blade_is_visible {
+                        blade_result = result;
+                    }
                 });
+            });
         });
+    if should_promote_active_blade(has_history_layers, transition) {
+        ctx.move_to_top(panel_layer_id);
+    }
 
-    if let Some(action) = action {
+    close |= blade_result.close;
+    if let Some(action) = blade_result.action {
         let navigation_action = matches!(
             &action,
             ResourceAction::NavigateDetails { .. }
@@ -345,6 +353,13 @@ pub(super) fn show(
             seed_detail_transition(ctx, ui_state, cluster_key);
         }
     }
+    if let Some(panel) = ui_state
+        .clusters
+        .get_mut(&cluster_key)
+        .and_then(|cluster| cluster.resource_detail_panel.as_mut())
+    {
+        show_data_conflict_dialog(ctx, panel.data_editor.as_mut());
+    }
     let closing_finished = matches!(
         transition,
         Some((ResourceDetailTransition::Closing, progress)) if progress >= 1.0
@@ -379,6 +394,92 @@ fn blade_transition_duration(ctx: &egui::Context) -> f32 {
     }
 }
 
+fn animated_blade_transition_progress(
+    ctx: &egui::Context,
+    panel: &ResourceDetailPanelState,
+) -> f32 {
+    let linear_progress = ctx.animate_value_with_time(
+        detail_transition_id(panel),
+        1.0,
+        blade_transition_duration(ctx),
+    );
+    ease_blade_transition(linear_progress)
+}
+
+fn should_promote_active_blade(
+    has_history_layers: bool,
+    transition: Option<(ResourceDetailTransition, f32)>,
+) -> bool {
+    has_history_layers
+        && !matches!(
+            transition,
+            Some((ResourceDetailTransition::Back, progress)) if progress < 1.0
+        )
+}
+
+fn show_input_scrim(ctx: &egui::Context, viewport: egui::Rect, active_rect: egui::Rect) -> bool {
+    let regions = if active_rect.intersects(viewport) {
+        let active_rect = active_rect.intersect(viewport);
+        [
+            (
+                "left",
+                egui::Rect::from_min_max(
+                    viewport.min,
+                    egui::pos2(active_rect.min.x, viewport.max.y),
+                ),
+            ),
+            (
+                "top",
+                egui::Rect::from_min_max(
+                    egui::pos2(active_rect.min.x, viewport.min.y),
+                    active_rect.min,
+                ),
+            ),
+            (
+                "bottom",
+                egui::Rect::from_min_max(
+                    egui::pos2(active_rect.min.x, active_rect.max.y),
+                    egui::pos2(active_rect.max.x, viewport.max.y),
+                ),
+            ),
+            (
+                "right",
+                egui::Rect::from_min_max(
+                    egui::pos2(active_rect.max.x, viewport.min.y),
+                    viewport.max,
+                ),
+            ),
+        ]
+        .into_iter()
+        .collect::<Vec<_>>()
+    } else {
+        vec![("full", viewport)]
+    };
+
+    let mut clicked = false;
+    for (name, region) in regions {
+        if !region.is_positive() {
+            continue;
+        }
+        let id = egui::Id::new(("resource-detail-input-scrim", name));
+        let layer_id = egui::LayerId::new(egui::Order::Foreground, id);
+        clicked |= egui::Area::new(id)
+            .order(egui::Order::Foreground)
+            .fixed_pos(region.min)
+            .movable(false)
+            .show(ctx, |ui| {
+                ui.set_min_size(region.size());
+                ui.interact(ui.max_rect(), ui.id().with("dismiss"), egui::Sense::click())
+                    .clicked()
+            })
+            .inner;
+        // Input-only regions must be above the history visuals. They do not
+        // overlap the active blade, so its controls and menus remain usable.
+        ctx.move_to_top(layer_id);
+    }
+    clicked
+}
+
 fn detail_transition_id(panel: &ResourceDetailPanelState) -> egui::Id {
     let transition_kind = match panel.transition {
         Some(ResourceDetailTransition::Opening) => "opening",
@@ -400,7 +501,6 @@ fn show_history_layers(
     layers: &[&ResourceDetailHistoryEntry],
     history_offset: usize,
     transition: Option<(ResourceDetailTransition, f32)>,
-    active_layer_id: egui::LayerId,
 ) {
     // Paint oldest to newest so each newer blade naturally occludes the one
     // directly behind it.
@@ -433,14 +533,7 @@ fn show_history_layers(
             None => target_transform,
         };
         let untransformed_position = active_blade_transform(viewport).position;
-        let layer_id = entry_blade_layer_id(entry);
-        ctx.set_transform_layer(
-            layer_id,
-            egui::emath::TSTransform::new(
-                transform.position.to_vec2() - untransformed_position.to_vec2() * transform.scale,
-                transform.scale,
-            ),
-        );
+        let visual_transform = blade_visual_transform(untransformed_position, transform);
 
         egui::Area::new(history_blade_id(entry))
             // Keep every blade in the same layer class as it moves between
@@ -454,55 +547,30 @@ fn show_history_layers(
                 ui.set_width(PANEL_WIDTH);
                 let blade_height = viewport.height() - ACTIVE_BLADE_INSET * 2.0;
                 ui.set_height(blade_height);
-                egui::Frame::new()
-                    .fill(WHITE)
-                    .stroke(egui::Stroke::new(1.0, gray::_200))
-                    .shadow(egui::Shadow {
-                        offset: [-4, 0],
-                        blur: 16,
-                        spread: 0,
-                        color: egui::Color32::BLACK.gamma_multiply(0.12),
-                    })
-                    .inner_margin(egui::Margin::same(PANEL_PADDING))
-                    .show(ui, |ui| {
-                        ui.set_min_height(blade_height - f32::from(PANEL_PADDING) * 2.0);
-                        show_history_blade(
-                            ui,
-                            entry,
-                            BladeNavigation {
-                                can_go_back: history_offset + index > 0,
-                                // The current foreground blade is always the
-                                // immediate next entry from a history blade.
-                                can_go_forward: true,
-                            },
-                        );
-                    });
+                ui.with_visual_transform(visual_transform, |ui| {
+                    show_entry_blade_frame(
+                        ui,
+                        blade_height,
+                        entry,
+                        BladeNavigation {
+                            can_go_back: history_offset + index > 0,
+                            // The current foreground blade is always the
+                            // immediate next entry from a history blade.
+                            can_go_forward: true,
+                        },
+                        false,
+                    );
+                });
             });
-    }
-
-    if layers.len() == 2 {
-        let older_blade = history_blade_layer_id(layers[0]);
-        let nearer_blade = history_blade_layer_id(layers[1]);
-        // egui has no numeric z-index. Sublayers are its explicit, stable
-        // ordering mechanism: the immediate predecessor is always directly
-        // above the older history blade.
-        ctx.set_sublayer(older_blade, nearer_blade);
-    }
-    if let Some(nearest_history) = layers.last() {
-        ctx.set_sublayer(history_blade_layer_id(nearest_history), active_layer_id);
+        // History blades retain the layer order established while they were
+        // foreground. Promoting several layers with `move_to_top` in one
+        // frame is intentionally unordered in egui, so it cannot represent a
+        // deterministic back-to-front stack.
     }
 }
 
 fn history_blade_id(entry: &ResourceDetailHistoryEntry) -> egui::Id {
     blade_id(entry.history_entry_id)
-}
-
-fn history_blade_layer_id(entry: &ResourceDetailHistoryEntry) -> egui::LayerId {
-    entry_blade_layer_id(entry)
-}
-
-fn entry_blade_layer_id(entry: &ResourceDetailHistoryEntry) -> egui::LayerId {
-    blade_layer_id(history_blade_id(entry))
 }
 
 fn blade_layer_id(blade_id: egui::Id) -> egui::LayerId {
@@ -519,12 +587,24 @@ fn active_blade_transform(viewport: egui::Rect) -> BladeTransform {
     }
 }
 
+fn blade_visual_transform(
+    untransformed_position: egui::Pos2,
+    transform: BladeTransform,
+) -> egui::emath::TSTransform {
+    egui::emath::TSTransform::new(
+        transform.position.to_vec2() - untransformed_position.to_vec2() * transform.scale,
+        transform.scale,
+    )
+}
+
 fn history_blade_transform(viewport: egui::Rect, index: usize) -> BladeTransform {
-    let scale = HISTORY_BLADE_SCALES[index.min(HISTORY_BLADE_SCALES.len() - 1)];
+    let depth = index.min(HISTORY_BLADE_SCALES.len() - 1);
+    let scale = HISTORY_BLADE_SCALES[depth];
     let blade_height = viewport.height() - ACTIVE_BLADE_INSET * 2.0;
+    let horizontal_offset = PANEL_WIDTH * HISTORY_BLADE_X_TRANSLATIONS[depth];
     BladeTransform {
         position: egui::pos2(
-            active_blade_transform(viewport).position.x - HISTORY_BLADE_REVEAL * (index + 1) as f32,
+            active_blade_transform(viewport).position.x - horizontal_offset,
             viewport.min.y + ACTIVE_BLADE_INSET + (blade_height - blade_height * scale) / 2.0,
         ),
         scale,
@@ -564,6 +644,49 @@ mod tests {
             assert_eq!(closing.scale, blade.scale);
         }
     }
+
+    #[test]
+    fn historical_blade_recession_scales_its_second_step_with_the_blade_width() {
+        let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1536.0, 1024.0));
+        let active = active_blade_transform(viewport);
+        let nearer = history_blade_transform(viewport, 0);
+        let older = history_blade_transform(viewport, 1);
+
+        let nearer_recession = active.position.x - nearer.position.x;
+        let older_recession = active.position.x - older.position.x;
+        let older_step = older_recession - nearer_recession;
+
+        assert!((older_step - nearer_recession * older.scale / nearer.scale).abs() < 0.001);
+    }
+
+    #[test]
+    fn active_blade_waits_for_the_outgoing_back_blade_to_leave_before_promotion() {
+        assert!(!should_promote_active_blade(
+            true,
+            Some((ResourceDetailTransition::Back, 0.0)),
+        ));
+        assert!(!should_promote_active_blade(
+            true,
+            Some((ResourceDetailTransition::Back, 0.99)),
+        ));
+        assert!(should_promote_active_blade(
+            true,
+            Some((ResourceDetailTransition::Back, 1.0)),
+        ));
+    }
+
+    #[test]
+    fn blade_transition_easing_starts_and_ends_gently() {
+        assert_eq!(ease_blade_transition(0.0), 0.0);
+        assert!(ease_blade_transition(0.25) < 0.25);
+        assert_eq!(ease_blade_transition(0.5), 0.5);
+        assert!(ease_blade_transition(0.75) > 0.75);
+        assert_eq!(ease_blade_transition(1.0), 1.0);
+    }
+}
+
+fn ease_blade_transition(progress: f32) -> f32 {
+    egui::emath::easing::cubic_in_out(progress)
 }
 
 fn interpolate_blade_transform(
@@ -585,14 +708,7 @@ fn show_outgoing_blade(
     transform: BladeTransform,
 ) {
     let origin = active_blade_transform(viewport).position;
-    let layer_id = entry_blade_layer_id(entry);
-    ctx.set_transform_layer(
-        layer_id,
-        egui::emath::TSTransform::new(
-            transform.position.to_vec2() - origin.to_vec2() * transform.scale,
-            transform.scale,
-        ),
-    );
+    let visual_transform = blade_visual_transform(origin, transform);
 
     let blade_height = viewport.height() - ACTIVE_BLADE_INSET * 2.0;
     egui::Area::new(history_blade_id(entry))
@@ -603,20 +719,9 @@ fn show_outgoing_blade(
         .show(ctx, |ui| {
             ui.set_width(PANEL_WIDTH);
             ui.set_height(blade_height);
-            egui::Frame::new()
-                .fill(WHITE)
-                .stroke(egui::Stroke::new(1.0, gray::_200))
-                .shadow(egui::Shadow {
-                    offset: [-4, 0],
-                    blur: 16,
-                    spread: 0,
-                    color: egui::Color32::BLACK.gamma_multiply(0.12),
-                })
-                .inner_margin(egui::Margin::same(PANEL_PADDING))
-                .show(ui, |ui| {
-                    ui.set_min_height(blade_height - f32::from(PANEL_PADDING) * 2.0);
-                    show_history_blade(ui, entry, navigation);
-                });
+            ui.with_visual_transform(visual_transform, |ui| {
+                show_entry_blade_frame(ui, blade_height, entry, navigation, true);
+            });
         });
 }
 
@@ -624,63 +729,10 @@ fn blade_id(history_entry_id: u64) -> egui::Id {
     egui::Id::new(("resource-detail-blade", history_entry_id))
 }
 
-fn show_history_blade(
-    ui: &mut egui::Ui,
-    entry: &ResourceDetailHistoryEntry,
-    navigation: BladeNavigation,
-) {
-    ui.horizontal(|ui| {
-        let _ = show_blade_navigation_controls(ui, navigation, false);
-        egui::Frame::new()
-            .fill(indigo::_50)
-            .corner_radius(egui::CornerRadius::same(6))
-            .inner_margin(egui::Margin::symmetric(8, 5))
-            .show(ui, |ui| {
-                ui.label(
-                    egui::RichText::new(&entry.api_resource.kind)
-                        .size(13.0)
-                        .color(indigo::_600),
-                );
-            });
-        ui.add_space(14.0);
-        ui.label(
-            egui::RichText::new(&entry.resource_name)
-                .size(19.0)
-                .strong()
-                .color(gray::_900),
-        );
-    });
-    ui.add_space(15.0);
-    egui::ScrollArea::vertical()
-        .id_salt(("resource-detail-history-scroll", &entry.resource_uid))
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
-            ui.set_max_width(ui.available_width() - 9.0);
-            if let Some(error) = &entry.detail_error {
-                error_card(ui, "Unable to load resource details", error);
-            } else if let Some(detail) = &entry.detail {
-                show_detail(ui, detail);
-                metadata_maps(ui, detail);
-            }
-            ui.add_space(20.0);
-            let mut no_action = None;
-            show_managed_resources_for(
-                ui,
-                &entry.api_resource,
-                &entry.resource_uid,
-                &entry.managed_resources,
-                entry.managed_resources_error.as_deref(),
-                &mut no_action,
-            );
-            ui.add_space(16.0);
-            show_events(ui, &entry.events, entry.events_error.as_deref());
-        });
-}
-
 fn show_blade_navigation_controls(
     ui: &mut egui::Ui,
     navigation: BladeNavigation,
-    interactive: bool,
+    is_foreground: bool,
 ) -> Option<ResourceAction> {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(80.0, 36.0), egui::Sense::hover());
     let mut controls_ui = ui.new_child(
@@ -690,13 +742,13 @@ fn show_blade_navigation_controls(
     );
 
     let mut action = None;
-    let back_label = if interactive {
+    let back_label = if is_foreground {
         "Back"
     } else {
         "Back in background blade"
     };
     let back_clicked = controls_ui
-        .add_enabled_ui(interactive && navigation.can_go_back, |ui| {
+        .add_enabled_ui(navigation.can_go_back, |ui| {
             TailwindButton::icon(
                 icons::arrow_left_icon()
                     .fit_to_exact_size(egui::Vec2::splat(16.0))
@@ -712,13 +764,13 @@ fn show_blade_navigation_controls(
     if back_clicked {
         action = Some(ResourceAction::NavigateBack);
     }
-    let forward_label = if interactive {
+    let forward_label = if is_foreground {
         "Forward"
     } else {
         "Forward in background blade"
     };
     let forward_clicked = controls_ui
-        .add_enabled_ui(interactive && navigation.can_go_forward, |ui| {
+        .add_enabled_ui(navigation.can_go_forward, |ui| {
             TailwindButton::icon(
                 icons::arrow_right_icon()
                     .fit_to_exact_size(egui::Vec2::splat(16.0))
@@ -746,16 +798,86 @@ fn panel_api_resource(cluster: &super::state::ClusterState) -> crate::api_resour
         .clone()
 }
 
-fn show_panel(
+fn show_entry_blade_frame(
     ui: &mut egui::Ui,
-    panel: &mut ResourceDetailPanelState,
-    close: &mut bool,
-) -> Option<ResourceAction> {
-    let pending_action = RefCell::new(None);
+    blade_height: f32,
+    entry: &ResourceDetailHistoryEntry,
+    navigation: BladeNavigation,
+    is_foreground: bool,
+) {
+    let mut data_editor = entry.data_editor.clone();
+    show_blade_frame(ui, blade_height, entry.history_entry_id, |ui| {
+        let _ = show_resource_detail_blade(
+            ui,
+            &entry.api_resource,
+            &entry.namespace,
+            &entry.resource_name,
+            &entry.resource_uid,
+            &entry.detail,
+            &entry.events,
+            entry.detail_error.as_deref(),
+            entry.events_error.as_deref(),
+            &entry.managed_resources,
+            entry.managed_resources_error.as_deref(),
+            data_editor.as_mut(),
+            navigation,
+            is_foreground,
+        );
+    });
+}
+
+fn show_blade_frame(
+    ui: &mut egui::Ui,
+    blade_height: f32,
+    history_entry_id: u64,
+    add_content: impl FnOnce(&mut egui::Ui),
+) {
+    egui::ScrollArea::vertical()
+        .id_salt(("resource-detail-panel-scroll", history_entry_id))
+        .auto_shrink([false, false])
+        .min_scrolled_height(blade_height)
+        .max_height(blade_height)
+        .show(ui, |ui| {
+            ui.set_width(PANEL_WIDTH);
+            egui::Frame::new()
+                .fill(WHITE)
+                .stroke(egui::Stroke::new(1.0, gray::_200))
+                .shadow(egui::Shadow {
+                    offset: [-4, 0],
+                    blur: 16,
+                    spread: 0,
+                    color: egui::Color32::BLACK.gamma_multiply(0.12),
+                })
+                .inner_margin(egui::Margin::same(PANEL_PADDING))
+                .show(ui, |ui| {
+                    ui.set_min_height(blade_height - f32::from(PANEL_PADDING) * 2.0);
+                    add_content(ui);
+                });
+        });
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_resource_detail_blade(
+    ui: &mut egui::Ui,
+    api_resource: &crate::api_resource::ApiResource,
+    namespace: &Option<String>,
+    resource_name: &str,
+    resource_uid: &str,
+    detail: &Option<ResourceDetail>,
+    events: &[ResourceEvent],
+    detail_error: Option<&str>,
+    events_error: Option<&str>,
+    managed_resources: &[ManagedResource],
+    managed_resources_error: Option<&str>,
+    mut data_editor: Option<&mut super::state::ResourceDataEditorState>,
+    navigation: BladeNavigation,
+    is_foreground: bool,
+) -> BladeResult {
+    let mut result = BladeResult::default();
     let resource = MinimalResource {
-        uid: panel.resource_uid.clone(),
-        name: panel.resource_name.clone(),
-        namespace: panel.namespace.clone(),
+        uid: resource_uid.to_owned(),
+        name: resource_name.to_owned(),
+        namespace: namespace.clone(),
         creation_timestamp: None,
         cells: Default::default(),
     };
@@ -763,15 +885,8 @@ fn show_panel(
         egui::vec2(ui.available_width() - 10.0, 44.0),
         egui::Layout::left_to_right(egui::Align::Center),
         |ui| {
-            if let Some(action) = show_blade_navigation_controls(
-                ui,
-                BladeNavigation {
-                    can_go_back: !panel.back_stack.is_empty(),
-                    can_go_forward: !panel.forward_stack.is_empty(),
-                },
-                true,
-            ) {
-                pending_action.replace(Some(action));
+            if let Some(action) = show_blade_navigation_controls(ui, navigation, is_foreground) {
+                result.action = Some(action);
             }
             ui.allocate_ui_with_layout(
                 egui::vec2(116.0, 28.0),
@@ -784,7 +899,7 @@ fn show_panel(
                             .inner_margin(egui::Margin::symmetric(8, 5))
                             .show(ui, |ui| {
                                 ui.label(
-                                    egui::RichText::new(&panel.api_resource.kind)
+                                    egui::RichText::new(&api_resource.kind)
                                         .size(13.0)
                                         .color(indigo::_600),
                                 );
@@ -794,7 +909,7 @@ fn show_panel(
             );
             ui.add_space(14.0);
             ui.label(
-                egui::RichText::new(&panel.resource_name)
+                egui::RichText::new(resource_name)
                     .size(19.0)
                     .strong()
                     .color(gray::_900),
@@ -807,63 +922,58 @@ fn show_panel(
                 )
                 .variant(ButtonVariant::Secondary)
                 .size(ButtonSize::Md)
-                .accessibility_label("Close inspector")
+                .accessibility_label(if is_foreground {
+                    "Close inspector"
+                } else {
+                    "Close background inspector"
+                })
                 .show(ui)
                 .clicked()
                 {
-                    *close = true;
+                    result.close = true;
                 }
                 ui.add_space(8.0);
-                MoreButton::new(format!("More actions for {}", resource.name)).show(ui, |menu| {
-                    show_resource_action_items(menu, &resource, &mut pending_action.borrow_mut());
+                let more_label = if is_foreground {
+                    format!("More actions for {}", resource.name)
+                } else {
+                    format!("More actions for {} in background blade", resource.name)
+                };
+                MoreButton::new(more_label).show(ui, |menu| {
+                    show_resource_action_items(menu, &resource, &mut result.action);
                 });
             });
         },
     );
     ui.add_space(15.0);
     ui.set_max_width(ui.available_width() - 9.0);
-    if let Some(error) = &panel.detail_error {
+    if let Some(error) = detail_error {
         error_card(ui, "Unable to load resource details", error);
-    } else if let Some(detail) = &panel.detail {
+    } else if let Some(detail) = detail {
         show_detail(ui, detail);
         ui.add_space(16.0);
-        show_resource_data(
-            ui,
-            detail,
-            panel.data_editor.as_mut(),
-            &mut pending_action.borrow_mut(),
-        );
+        show_resource_data(ui, detail, data_editor.as_deref_mut(), &mut result.action);
         metadata_maps(ui, detail);
     } else {
         ui.spinner();
         ui.label(egui::RichText::new("Loading resource details…").color(gray::_500));
     }
     ui.add_space(20.0);
-    show_managed_resources(ui, panel, &mut pending_action.borrow_mut());
+    show_managed_resources_for(
+        ui,
+        api_resource,
+        resource_uid,
+        managed_resources,
+        managed_resources_error,
+        &mut result.action,
+    );
     ui.add_space(16.0);
-    show_events(ui, &panel.events, panel.events_error.as_deref());
+    show_events(ui, events, events_error);
     ui.add_space(16.0);
-    if let Some(detail) = &panel.detail {
+    if let Some(detail) = detail {
         show_additional_sections(ui, detail);
         ui.add_space(16.0);
     }
-    show_data_conflict_dialog(ui.ctx(), panel.data_editor.as_mut());
-    pending_action.into_inner()
-}
-
-fn show_managed_resources(
-    ui: &mut egui::Ui,
-    panel: &ResourceDetailPanelState,
-    pending_action: &mut Option<ResourceAction>,
-) {
-    show_managed_resources_for(
-        ui,
-        &panel.api_resource,
-        &panel.resource_uid,
-        &panel.managed_resources,
-        panel.managed_resources_error.as_deref(),
-        pending_action,
-    );
+    result
 }
 
 fn show_managed_resources_for(
