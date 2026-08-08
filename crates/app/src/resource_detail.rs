@@ -9,6 +9,8 @@ pub(crate) struct ResourceDetail {
     pub(crate) name: String,
     pub(crate) namespace: Option<String>,
     pub(crate) uid: String,
+    /// Kubernetes' optimistic-concurrency token for the watched object.
+    pub(crate) resource_version: String,
     pub(crate) creation_timestamp: Option<OffsetDateTime>,
     pub(crate) owner: Option<ResourceOwner>,
     pub(crate) labels: BTreeMap<String, String>,
@@ -26,6 +28,29 @@ pub(crate) struct ResourceOwner {
 pub(crate) enum ResourceDetailPayload {
     Generic,
     Pod(PodDetail),
+    ConfigMap(ConfigMapDetail),
+    Secret(SecretDetail),
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
+pub(crate) struct ConfigMapDetail {
+    pub(crate) data: BTreeMap<String, String>,
+    pub(crate) immutable: bool,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
+pub(crate) struct SecretDetail {
+    pub(crate) data: BTreeMap<String, SecretDataDetail>,
+    pub(crate) immutable: bool,
+    pub(crate) type_: String,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SecretDataDetail {
+    pub(crate) byte_len: usize,
+    /// Secret bytes which are not valid UTF-8 remain visible only as a length and
+    /// cannot be edited as text.
+    pub(crate) text: Option<String>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Default)]

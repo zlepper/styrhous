@@ -1,7 +1,8 @@
 use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::{
     Cluster, ClusterConnection, apply_resource_yaml, delete_resource, get_resource_yaml,
-    reload_kubeconfig, start_cluster_connection, start_resource_watcher, watch_resource_detail,
+    reload_kubeconfig, start_cluster_connection, start_resource_watcher, update_resource_data,
+    watch_resource_detail,
 };
 use crate::helpers::ResultExt;
 use crate::minimal_namespace::MinimalNamespace;
@@ -9,9 +10,9 @@ use crate::minimal_resource::MinimalResource;
 use crate::resource_detail::{ResourceDetail, ResourceEvent};
 use crate::resource_table::CustomResourceColumn;
 use anyhow::Error;
-use std::collections::HashMap;
 #[cfg(test)]
 use std::collections::VecDeque;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, mpsc};
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
@@ -166,6 +167,29 @@ pub enum WorkerCommand {
         resource_name: String,
         yaml: String,
     },
+    UpdateResourceData {
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: String,
+        resource_name: String,
+        update: ResourceDataUpdate,
+    },
+}
+
+/// The values are intentionally omitted from Debug output because this command can
+/// contain Secret plaintext. The worker logs failed commands at debug format.
+pub struct ResourceDataUpdate {
+    pub expected_resource_version: String,
+    pub expected_values: BTreeMap<String, String>,
+    pub updated_values: BTreeMap<String, String>,
+}
+
+impl std::fmt::Debug for ResourceDataUpdate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ResourceDataUpdate")
+            .field("keys", &self.updated_values.keys().collect::<Vec<_>>())
+            .finish()
+    }
 }
 
 /// Messages that can be received from the worker
@@ -288,6 +312,10 @@ pub enum WorkerResult {
         cluster_key: i32,
         api_resource: ApiResource,
         namespace: Option<String>,
+        resource_name: String,
+    },
+    ResourceDataUpdateCompleted {
+        cluster_key: i32,
         resource_name: String,
     },
 }
@@ -483,6 +511,33 @@ impl WorkerRuntime {
                         namespace.clone(),
                         resource_name.clone(),
                         yaml.clone(),
+                    )
+                    .await
+                } else {
+                    Err(anyhow::anyhow!(
+                        "No client found for cluster_key {}",
+                        cluster_key
+                    ))
+                }
+            }
+            WorkerCommand::UpdateResourceData {
+                cluster_key,
+                api_resource,
+                namespace,
+                resource_name,
+                update,
+            } => {
+                let clients = shared.clients.read().await;
+                if let Some(client) = clients.get(cluster_key) {
+                    update_resource_data(
+                        *cluster_key,
+                        client.clone(),
+                        api_resource.clone(),
+                        namespace.clone(),
+                        resource_name.clone(),
+                        &update.expected_values,
+                        &update.updated_values,
+                        &update.expected_resource_version,
                     )
                     .await
                 } else {

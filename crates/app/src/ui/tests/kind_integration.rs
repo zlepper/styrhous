@@ -6,17 +6,19 @@ use crate::sorted_name::SortedName;
 use crate::worker::Worker;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
-use k8s_openapi::api::core::v1::{ConfigMap, Namespace};
+use k8s_openapi::api::core::v1::{ConfigMap, Namespace, Secret};
 use kube::{Api, Client};
 use std::collections::BTreeMap;
 
 const WATCHER_CONFIGMAP_NAME: &str = "resource-watcher";
 const ACTIONS_CONFIGMAP_NAME: &str = "resource-actions";
+const ACTIONS_SECRET_NAME: &str = "resource-secret-actions";
 
 struct IntegrationConfigMap {
     runtime: tokio::runtime::Runtime,
     namespaces: Api<Namespace>,
     configmaps: Api<ConfigMap>,
+    secrets: Api<Secret>,
     namespace: String,
     name: String,
 }
@@ -54,7 +56,8 @@ impl IntegrationConfigMap {
                 .expect("Failed to create integration namespace");
         });
 
-        let configmaps: Api<ConfigMap> = Api::namespaced(client, &namespace);
+        let configmaps: Api<ConfigMap> = Api::namespaced(client.clone(), &namespace);
+        let secrets: Api<Secret> = Api::namespaced(client, &namespace);
         runtime.block_on(async {
             configmaps
                 .create(
@@ -77,10 +80,102 @@ impl IntegrationConfigMap {
             runtime,
             namespaces,
             configmaps,
+            secrets,
             namespace,
             name: name.to_owned(),
         }
     }
+}
+
+/// Updates an existing Secret value through the inspector without exposing its
+/// plaintext until the test explicitly operates on the editor state.
+#[test]
+fn test_secret_inspector_actions_integration() {
+    let fixture =
+        IntegrationConfigMap::create("resource-secret-actions", "secret-actions-anchor", "unused");
+    let test_secret_name = ACTIONS_SECRET_NAME.to_owned();
+    let runtime = &fixture.runtime;
+    let secrets = &fixture.secrets;
+    runtime.block_on(async {
+        secrets
+            .create(
+                &Default::default(),
+                &Secret {
+                    metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                        name: Some(test_secret_name.clone()),
+                        namespace: Some(fixture.namespace.clone()),
+                        ..Default::default()
+                    },
+                    data: Some(BTreeMap::from([(
+                        "password".to_owned(),
+                        k8s_openapi::ByteString(b"original-secret".to_vec()),
+                    )])),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("Failed to create integration Secret");
+    });
+
+    let (mut harness, cluster_key) = connected_kind_harness();
+    wait_for_cluster_data(&mut harness, cluster_key);
+    select_namespace(&mut harness, &fixture.namespace);
+    let secrets_resource = select_resource(&mut harness, "Config", "Secrets");
+    wait_for_resource_sync(
+        &mut harness,
+        cluster_key,
+        secrets_resource.clone(),
+        &fixture.namespace,
+    );
+    for _ in 0..3 {
+        harness.run();
+    }
+    harness.get_by_label(&test_secret_name).click();
+    harness.run_steps(1);
+    wait_for(
+        &mut harness,
+        |app| {
+            app.ui_state.clusters[&cluster_key]
+                .resource_detail_panel
+                .as_ref()
+                .and_then(|panel| panel.data_editor.as_ref())
+                .filter(|editor| editor.draft_values.contains_key("password"))
+                .map(|_| ())
+        },
+        10_000,
+    );
+    harness
+        .state_mut()
+        .ui_state
+        .clusters
+        .get_mut(&cluster_key)
+        .expect("selected cluster should exist")
+        .resource_detail_panel
+        .as_mut()
+        .and_then(|panel| panel.data_editor.as_mut())
+        .expect("Secret detail editor should be available")
+        .draft_values
+        .insert("password".to_owned(), "updated-secret".to_owned());
+    harness.run();
+    harness.get_by_label("Save data").click_accesskit();
+    harness.run();
+    wait_for(
+        &mut harness,
+        |_| {
+            runtime
+                .block_on(async { secrets.get(&test_secret_name).await })
+                .ok()
+                .filter(|secret| {
+                    secret
+                        .data
+                        .as_ref()
+                        .and_then(|data| data.get("password"))
+                        .is_some_and(|value| value.0 == b"updated-secret")
+                })
+                .map(|_| ())
+        },
+        10_000,
+    );
 }
 
 impl Drop for IntegrationConfigMap {

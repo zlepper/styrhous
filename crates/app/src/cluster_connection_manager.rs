@@ -1182,6 +1182,7 @@ async fn resource_detail_from_dynamic(
         name: metadata.name.clone().unwrap_or_default(),
         namespace: metadata.namespace.clone(),
         uid: get_resource_uid(&object),
+        resource_version: metadata.resource_version.clone().unwrap_or_default(),
         creation_timestamp,
         owner: metadata
             .owner_references
@@ -1572,6 +1573,87 @@ pub async fn apply_resource_yaml(
         cluster_key,
         api_resource,
         namespace,
+        resource_name,
+    })
+}
+
+/// Replace selected existing data values while preserving every other field. The
+/// fetched object's resourceVersion makes a concurrent update fail rather than
+/// silently overwriting it.
+pub async fn update_resource_data(
+    cluster_key: i32,
+    client: kube::Client,
+    api_resource: ApiResource,
+    namespace: String,
+    resource_name: String,
+    expected_values: &BTreeMap<String, String>,
+    updated_values: &BTreeMap<String, String>,
+    expected_resource_version: &str,
+) -> Result<WorkerResult> {
+    if expected_values.is_empty() || updated_values.is_empty() {
+        bail!("Resource data update must contain at least one existing value");
+    }
+    if expected_values.keys().ne(updated_values.keys()) {
+        bail!("Resource data update expected and updated keys must match");
+    }
+    if expected_resource_version.is_empty() {
+        bail!("Resource data update is missing the watched resource version");
+    }
+
+    if resource_handlers::matches_namespaced_api_resource::<ConfigMap>(&api_resource) {
+        let api: Api<ConfigMap> = Api::namespaced(client, &namespace);
+        let mut config_map = api.get(&resource_name).await?;
+        if config_map.metadata.resource_version.as_deref() != Some(expected_resource_version) {
+            bail!("ConfigMap changed on the cluster; reload its data before saving");
+        }
+        let data = config_map
+            .data
+            .as_mut()
+            .context("ConfigMap has no text data to update")?;
+        for (key, expected) in expected_values {
+            if data.get(key) != Some(expected) {
+                bail!("ConfigMap data key '{key}' changed or was removed on the cluster");
+            }
+        }
+        for (key, value) in updated_values {
+            *data
+                .get_mut(key)
+                .expect("expected ConfigMap key was verified above") = value.clone();
+        }
+        api.replace(&resource_name, &Default::default(), &config_map)
+            .await?;
+    } else if resource_handlers::matches_namespaced_api_resource::<Secret>(&api_resource) {
+        let api: Api<Secret> = Api::namespaced(client, &namespace);
+        let mut secret = api.get(&resource_name).await?;
+        if secret.metadata.resource_version.as_deref() != Some(expected_resource_version) {
+            bail!("Secret changed on the cluster; reload its data before saving");
+        }
+        let data = secret
+            .data
+            .as_mut()
+            .context("Secret has no data to update")?;
+        for (key, expected) in expected_values {
+            let Some(current) = data.get(key) else {
+                bail!("Secret data key '{key}' was removed on the cluster");
+            };
+            if std::str::from_utf8(&current.0).ok() != Some(expected.as_str()) {
+                bail!("Secret data key '{key}' changed on the cluster");
+            }
+        }
+        for (key, value) in updated_values {
+            *data
+                .get_mut(key)
+                .expect("expected Secret key was verified above") =
+                k8s_openapi::ByteString(value.as_bytes().to_vec());
+        }
+        api.replace(&resource_name, &Default::default(), &secret)
+            .await?;
+    } else {
+        bail!("Resource data updates are only supported for ConfigMaps and Secrets");
+    }
+
+    Ok(WorkerResult::ResourceDataUpdateCompleted {
+        cluster_key,
         resource_name,
     })
 }

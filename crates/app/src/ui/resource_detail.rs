@@ -1,9 +1,12 @@
+use super::resource_actions::show_resource_action_items;
 use super::state::{ResourceAction, ResourceDetailPanelState, UiState};
 use crate::minimal_resource::{MinimalResource, format_age};
-use crate::resource_detail::{PodDetail, ResourceDetail, ResourceDetailPayload, ResourceEvent};
-use crate::worker::WorkerCommand;
-use components::WorkspaceCard;
+use crate::resource_detail::{
+    ConfigMapDetail, PodDetail, ResourceDetail, ResourceDetailPayload, ResourceEvent, SecretDetail,
+};
+use crate::worker::{ResourceDataUpdate, WorkerCommand};
 use components::colors::{WHITE, gray, indigo};
+use components::{ButtonSize, MoreButton, TailwindButton, TailwindTextArea, WorkspaceCard};
 use std::cell::RefCell;
 
 const PANEL_WIDTH: f32 = 744.0;
@@ -64,7 +67,7 @@ pub(super) fn show(
         .expect("resource detail panel was checked above");
     let mut action = None;
     egui::Area::new(egui::Id::new("resource-detail-panel"))
-        .order(egui::Order::Tooltip)
+        .order(egui::Order::Foreground)
         .fixed_pos(egui::pos2(viewport.max.x - PANEL_WIDTH, viewport.min.y))
         .show(ctx, |ui| {
             ui.set_width(PANEL_WIDTH);
@@ -102,6 +105,33 @@ pub(super) fn show(
                         namespace,
                     });
                 }
+                ResourceAction::SaveData {
+                    expected_values,
+                    updated_values,
+                } => {
+                    let panel = cluster
+                        .resource_detail_panel
+                        .as_ref()
+                        .expect("detail panel remains open while data is saved");
+                    if let Some(namespace) = panel.namespace.clone() {
+                        commands_to_send.push(WorkerCommand::UpdateResourceData {
+                            cluster_key: cluster.cluster_key,
+                            api_resource: panel.api_resource.clone(),
+                            namespace,
+                            resource_name: panel.resource_name.clone(),
+                            update: ResourceDataUpdate {
+                                expected_resource_version: panel
+                                    .data_editor
+                                    .as_ref()
+                                    .expect("data save action requires an initialized editor")
+                                    .resource_version
+                                    .clone(),
+                                expected_values,
+                                updated_values,
+                            },
+                        });
+                    }
+                }
                 ResourceAction::OpenDetails { .. } => {
                     unreachable!("inspector actions cannot open detail")
                 }
@@ -124,16 +154,23 @@ fn panel_api_resource(cluster: &super::state::ClusterState) -> crate::api_resour
 
 fn show_panel(
     ui: &mut egui::Ui,
-    panel: &ResourceDetailPanelState,
+    panel: &mut ResourceDetailPanelState,
     close: &mut bool,
 ) -> Option<ResourceAction> {
     let pending_action = RefCell::new(None);
+    let resource = MinimalResource {
+        uid: panel.resource_uid.clone(),
+        name: panel.resource_name.clone(),
+        namespace: panel.namespace.clone(),
+        creation_timestamp: None,
+        cells: Default::default(),
+    };
     ui.allocate_ui_with_layout(
         egui::vec2(ui.available_width() - 10.0, 44.0),
         egui::Layout::left_to_right(egui::Align::Center),
         |ui| {
             ui.allocate_ui_with_layout(
-                egui::vec2(44.0, 28.0),
+                egui::vec2(88.0, 28.0),
                 egui::Layout::left_to_right(egui::Align::Center),
                 |ui| {
                     ui.centered_and_justified(|ui| {
@@ -152,14 +189,12 @@ fn show_panel(
                 },
             );
             ui.add_space(14.0);
-            ui.vertical(|ui| {
-                ui.label(
-                    egui::RichText::new(&panel.resource_name)
-                        .size(19.0)
-                        .strong()
-                        .color(gray::_900),
-                );
-            });
+            ui.label(
+                egui::RichText::new(&panel.resource_name)
+                    .size(19.0)
+                    .strong()
+                    .color(gray::_900),
+            );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
                     .add_sized(
@@ -174,17 +209,13 @@ fn show_panel(
                 {
                     *close = true;
                 }
+                ui.add_space(8.0);
+                MoreButton::new(format!("More actions for {}", resource.name)).show(ui, |menu| {
+                    show_resource_action_items(menu, &resource, &mut pending_action.borrow_mut());
+                });
             });
         },
     );
-    ui.horizontal(|ui| {
-        ui.add_space(3.0);
-        ui.label(
-            egui::RichText::new(&panel.api_resource.kind)
-                .size(14.0)
-                .color(gray::_600),
-        );
-    });
     ui.add_space(15.0);
     egui::ScrollArea::vertical()
         .id_salt("resource-detail-scroll")
@@ -195,6 +226,14 @@ fn show_panel(
                 error_card(ui, "Unable to load resource details", error);
             } else if let Some(detail) = &panel.detail {
                 show_detail(ui, detail);
+                ui.add_space(16.0);
+                show_resource_data(
+                    ui,
+                    detail,
+                    panel.data_editor.as_mut(),
+                    &mut pending_action.borrow_mut(),
+                );
+                metadata_maps(ui, detail);
             } else {
                 ui.spinner();
                 ui.label(egui::RichText::new("Loading resource details…").color(gray::_500));
@@ -206,8 +245,8 @@ fn show_panel(
                 show_additional_sections(ui, detail);
                 ui.add_space(16.0);
             }
-            show_detail_actions(ui, panel, &mut pending_action.borrow_mut());
         });
+    show_data_conflict_dialog(ui.ctx(), panel.data_editor.as_mut());
     pending_action.into_inner()
 }
 
@@ -219,12 +258,10 @@ fn show_detail(ui: &mut egui::Ui, detail: &ResourceDetail) {
     } else {
         show_generic_summary(ui, detail);
     }
-    ui.add_space(16.0);
-    metadata_maps(ui, detail);
 }
 
 fn show_generic_summary(ui: &mut egui::Ui, detail: &ResourceDetail) {
-    WorkspaceCard::new().padding(18).show(ui, |ui| {
+    detail_summary_card(ui, |ui| {
         detail_grid(ui, |ui, column| match column {
             0 => detail_value(
                 ui,
@@ -237,6 +274,319 @@ fn show_generic_summary(ui: &mut egui::Ui, detail: &ResourceDetail) {
     });
 }
 
+fn show_resource_data(
+    ui: &mut egui::Ui,
+    detail: &ResourceDetail,
+    editor: Option<&mut super::state::ResourceDataEditorState>,
+    pending_action: &mut Option<ResourceAction>,
+) {
+    let Some(editor) = editor else {
+        return;
+    };
+    match &detail.payload {
+        ResourceDetailPayload::ConfigMap(config_map) => {
+            show_config_map_data(ui, config_map, editor, pending_action)
+        }
+        ResourceDetailPayload::Secret(secret) => {
+            show_secret_data(ui, secret, editor, pending_action)
+        }
+        ResourceDetailPayload::Generic | ResourceDetailPayload::Pod(_) => {}
+    }
+}
+
+fn show_config_map_data(
+    ui: &mut egui::Ui,
+    config_map: &ConfigMapDetail,
+    editor: &mut super::state::ResourceDataEditorState,
+    pending_action: &mut Option<ResourceAction>,
+) {
+    section_header(
+        ui,
+        "Data",
+        Some(format!(
+            "{} entries · {}",
+            config_map.data.len(),
+            if config_map.immutable {
+                "Immutable"
+            } else {
+                "Mutable"
+            }
+        )),
+    );
+    if config_map.data.is_empty() {
+        detail_message_card(ui, |ui| {
+            ui.label(egui::RichText::new("No text data entries.").color(gray::_500));
+        });
+    }
+    for key in config_map.data.keys() {
+        data_entry(
+            ui,
+            key,
+            None,
+            |_| {},
+            |ui| data_value_editor(ui, key, editor, config_map.immutable),
+        );
+    }
+    data_save_controls(ui, editor, config_map.immutable, pending_action);
+    ui.add_space(16.0);
+}
+
+fn show_secret_data(
+    ui: &mut egui::Ui,
+    secret: &SecretDetail,
+    editor: &mut super::state::ResourceDataEditorState,
+    pending_action: &mut Option<ResourceAction>,
+) {
+    section_header(
+        ui,
+        "Data",
+        Some(format!(
+            "{} entries · {} · {}",
+            secret.data.len(),
+            secret.type_,
+            if secret.immutable {
+                "Immutable"
+            } else {
+                "Mutable"
+            }
+        )),
+    );
+    if secret.data.is_empty() {
+        detail_message_card(ui, |ui| {
+            ui.label(egui::RichText::new("No data entries.").color(gray::_500));
+        });
+    }
+    for (key, value) in &secret.data {
+        let revealed = editor.revealed_secret_keys.contains(key);
+        let mut visibility_toggled = false;
+        data_entry(
+            ui,
+            key,
+            Some(value.byte_len),
+            |ui| {
+                if value.text.is_some()
+                    && TailwindButton::secondary(if revealed { "Hide" } else { "Reveal" })
+                        .size(ButtonSize::Sm)
+                        .show(ui)
+                        .clicked()
+                {
+                    visibility_toggled = true;
+                }
+            },
+            |ui| match value.text.as_ref() {
+                Some(_) if revealed => data_value_editor(ui, key, editor, secret.immutable),
+                Some(_) => secret_value_mask(ui),
+                None => unavailable_secret_value(ui),
+            },
+        );
+        if visibility_toggled {
+            if revealed {
+                editor.revealed_secret_keys.remove(key);
+            } else {
+                editor.revealed_secret_keys.insert(key.clone());
+            }
+        }
+    }
+    data_save_controls(ui, editor, secret.immutable, pending_action);
+    ui.add_space(16.0);
+}
+
+fn detail_summary_card(ui: &mut egui::Ui, add_content: impl FnOnce(&mut egui::Ui)) {
+    WorkspaceCard::new().padding(18).show(ui, add_content);
+}
+
+fn detail_item_card(
+    ui: &mut egui::Ui,
+    add_header: impl FnOnce(&mut egui::Ui),
+    add_content: impl FnOnce(&mut egui::Ui),
+) {
+    WorkspaceCard::new()
+        .padding(CARD_CONTENT_PADDING)
+        .show(ui, |ui| {
+            add_header(ui);
+            ui.add_space(8.0);
+            ui.separator();
+            ui.add_space(8.0);
+            add_content(ui);
+        });
+}
+
+fn detail_message_card(ui: &mut egui::Ui, add_content: impl FnOnce(&mut egui::Ui)) {
+    WorkspaceCard::new()
+        .padding(CARD_CONTENT_PADDING)
+        .show(ui, add_content);
+}
+
+fn data_entry(
+    ui: &mut egui::Ui,
+    key: &str,
+    byte_len: Option<usize>,
+    add_action: impl FnOnce(&mut egui::Ui),
+    add_value: impl FnOnce(&mut egui::Ui),
+) {
+    detail_item_card(
+        ui,
+        |ui| {
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new(key)
+                        .monospace()
+                        .strong()
+                        .color(gray::_800),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    add_action(ui);
+                    if let Some(byte_len) = byte_len {
+                        ui.add_space(8.0);
+                        ui.label(
+                            egui::RichText::new(format!("{byte_len} bytes"))
+                                .size(12.0)
+                                .color(gray::_500),
+                        );
+                    }
+                });
+            });
+        },
+        add_value,
+    );
+    ui.add_space(8.0);
+}
+
+fn data_value_editor(
+    ui: &mut egui::Ui,
+    key: &str,
+    editor: &mut super::state::ResourceDataEditorState,
+    immutable: bool,
+) {
+    let value = editor
+        .draft_values
+        .get_mut(key)
+        .expect("typed data detail and editor keys remain in sync");
+    let response = TailwindTextArea::new(value)
+        .id_salt(("resource-data-value", key))
+        .monospace()
+        .desired_rows(3)
+        .enabled(!immutable && !editor.saving)
+        .show(ui);
+    if response.hovered() && immutable {
+        response.on_hover_text("This resource's data is immutable.");
+    }
+}
+
+fn secret_value_mask(ui: &mut egui::Ui) {
+    egui::Frame::new()
+        .fill(gray::_50)
+        .stroke(egui::Stroke::new(1.0, gray::_200))
+        .corner_radius(egui::CornerRadius::same(6))
+        .inner_margin(egui::Margin::symmetric(10, 8))
+        .show(ui, |ui| {
+            ui.label(
+                egui::RichText::new("••••••••••••")
+                    .monospace()
+                    .color(gray::_700),
+            );
+        });
+}
+
+fn unavailable_secret_value(ui: &mut egui::Ui) {
+    egui::Frame::new()
+        .fill(gray::_50)
+        .stroke(egui::Stroke::new(1.0, gray::_200))
+        .corner_radius(egui::CornerRadius::same(6))
+        .inner_margin(egui::Margin::symmetric(10, 8))
+        .show(ui, |ui| {
+            ui.label(
+                egui::RichText::new("Binary data")
+                    .strong()
+                    .color(gray::_700),
+            );
+            ui.label(
+                egui::RichText::new("This value cannot be edited in the inspector.")
+                    .size(12.0)
+                    .color(gray::_600),
+            );
+        });
+}
+
+fn data_save_controls(
+    ui: &mut egui::Ui,
+    editor: &mut super::state::ResourceDataEditorState,
+    immutable: bool,
+    pending_action: &mut Option<ResourceAction>,
+) {
+    if let Some(error) = &editor.save_error {
+        ui.colored_label(egui::Color32::from_rgb(185, 28, 28), error);
+        ui.add_space(6.0);
+    }
+    if immutable {
+        ui.label(egui::RichText::new("Data is immutable and cannot be edited.").color(gray::_500));
+        return;
+    }
+    let (expected_values, updated_values) = editor.changed_values();
+    let save_clicked = ui
+        .horizontal(|ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.add_enabled_ui(!editor.saving && !updated_values.is_empty(), |ui| {
+                    TailwindButton::primary(if editor.saving {
+                        "Saving…"
+                    } else {
+                        "Save data"
+                    })
+                    .size(ButtonSize::Sm)
+                    .show(ui)
+                })
+                .inner
+            })
+            .inner
+        })
+        .inner
+        .clicked();
+    if save_clicked && pending_action.is_none() {
+        editor.saving = true;
+        editor.save_error = None;
+        *pending_action = Some(ResourceAction::SaveData {
+            expected_values,
+            updated_values,
+        });
+    }
+}
+
+fn show_data_conflict_dialog(
+    ctx: &egui::Context,
+    editor: Option<&mut super::state::ResourceDataEditorState>,
+) {
+    let Some(editor) = editor else {
+        return;
+    };
+    if editor.pending_external_values.is_none() {
+        return;
+    }
+    let mut use_external = false;
+    let mut keep_local = false;
+    egui::Window::new("Data changed on cluster")
+        .collapsible(false)
+        .resizable(false)
+        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+        .show(ctx, |ui| {
+            ui.set_min_width(360.0);
+            ui.label("This resource changed on the cluster while you have unsaved data edits.");
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui.button("Use cluster version").clicked() {
+                    use_external = true;
+                }
+                if ui.button("Keep my edits").clicked() {
+                    keep_local = true;
+                }
+            });
+        });
+    if use_external {
+        editor.use_external_values();
+    } else if keep_local {
+        editor.keep_local_edits();
+    }
+}
+
 fn show_pod_summary(ui: &mut egui::Ui, detail: &ResourceDetail, pod: &PodDetail) {
     let ready = format!(
         "{}/{}",
@@ -246,7 +596,7 @@ fn show_pod_summary(ui: &mut egui::Ui, detail: &ResourceDetail, pod: &PodDetail)
             .count(),
         pod.containers.len()
     );
-    WorkspaceCard::new().padding(18).show(ui, |ui| {
+    detail_summary_card(ui, |ui| {
         detail_grid(ui, |ui, column| match column {
             0 => detail_value(
                 ui,
@@ -274,19 +624,18 @@ fn show_pod_summary(ui: &mut egui::Ui, detail: &ResourceDetail, pod: &PodDetail)
 }
 
 fn show_pod_detail(ui: &mut egui::Ui, pod: &PodDetail) {
-    section_title(ui, "Containers");
+    section_header(ui, "Containers", None);
     for container in &pod.containers {
-        WorkspaceCard::new()
-            .padding(CARD_CONTENT_PADDING)
-            .show(ui, |ui| {
+        detail_item_card(
+            ui,
+            |ui| {
                 ui.label(
                     egui::RichText::new(format!("⌃   {}", container.name))
                         .strong()
                         .color(gray::_800),
                 );
-                ui.add_space(8.0);
-                ui.separator();
-                ui.add_space(8.0);
+            },
+            |ui| {
                 detail_grid_columns(ui, 2, |ui, column| match column {
                     0 => detail_value(ui, "Image", &container.image),
                     1 => detail_value(ui, "State", &container.state),
@@ -317,25 +666,24 @@ fn show_pod_detail(ui: &mut egui::Ui, pod: &PodDetail) {
                 if let Some(message) = &container.message {
                     ui.label(egui::RichText::new(message).size(12.0).color(gray::_500));
                 }
-            });
+            },
+        );
         ui.add_space(CARD_GAP);
     }
     if !pod.volumes.is_empty() {
-        section_title(ui, "Volumes");
+        section_header(ui, "Volumes", None);
         for (index, volume) in pod.volumes.iter().enumerate() {
-            WorkspaceCard::new()
-                .padding(CARD_CONTENT_PADDING)
-                .show(ui, |ui| {
+            detail_item_card(
+                ui,
+                |ui| {
                     ui.label(
                         egui::RichText::new(format!("⌄   {}", volume.name))
                             .strong()
                             .color(gray::_800),
                     );
-                    ui.add_space(8.0);
-                    ui.separator();
-                    ui.add_space(8.0);
-                    volume_detail_row(ui, volume);
-                });
+                },
+                |ui| volume_detail_row(ui, volume),
+            );
             if index + 1 < pod.volumes.len() {
                 ui.add_space(CARD_GAP);
             }
@@ -522,13 +870,18 @@ fn disclosure_card(
     });
 }
 
-fn section_title(ui: &mut egui::Ui, title: &str) {
-    ui.label(
-        egui::RichText::new(title)
-            .strong()
-            .size(15.0)
-            .color(gray::_800),
-    );
+fn section_header(ui: &mut egui::Ui, title: &str, detail: Option<String>) {
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new(title)
+                .strong()
+                .size(15.0)
+                .color(gray::_800),
+        );
+        if let Some(detail) = detail {
+            ui.label(egui::RichText::new(detail).size(13.0).color(gray::_600));
+        }
+    });
     ui.add_space(6.0);
 }
 
@@ -776,38 +1129,6 @@ fn detail_grid_columns(
         }
     });
     ui.add_space(10.0);
-}
-
-fn show_detail_actions(
-    ui: &mut egui::Ui,
-    panel: &ResourceDetailPanelState,
-    pending_action: &mut Option<ResourceAction>,
-) {
-    let resource = MinimalResource {
-        uid: panel.resource_uid.clone(),
-        name: panel.resource_name.clone(),
-        namespace: panel.namespace.clone(),
-        creation_timestamp: None,
-        cells: Default::default(),
-    };
-    ui.horizontal(|ui| {
-        if ui.button("Edit YAML").clicked() && pending_action.is_none() {
-            *pending_action = Some(ResourceAction::EditYaml {
-                name: resource.name.clone(),
-                namespace: resource.namespace.clone(),
-            });
-        }
-        if ui
-            .button(egui::RichText::new("Delete").color(egui::Color32::from_rgb(185, 28, 28)))
-            .clicked()
-            && pending_action.is_none()
-        {
-            *pending_action = Some(ResourceAction::RequestDelete {
-                name: resource.name,
-                namespace: resource.namespace,
-            });
-        }
-    });
 }
 
 fn detail_value(ui: &mut egui::Ui, label: &str, value: &str) {

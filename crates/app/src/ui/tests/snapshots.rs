@@ -11,9 +11,9 @@ use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use crate::resource_catalog::build_resource_navigation;
 use crate::resource_detail::{
-    PodConditionDetail, PodContainerDetail, PodDetail, PodEnvironmentVariableDetail,
-    PodEnvironmentVariableSource, PodVolumeDetail, ResourceDetail, ResourceDetailPayload,
-    ResourceEvent,
+    ConfigMapDetail, PodConditionDetail, PodContainerDetail, PodDetail,
+    PodEnvironmentVariableDetail, PodEnvironmentVariableSource, PodVolumeDetail, ResourceDetail,
+    ResourceDetailPayload, ResourceEvent, SecretDataDetail, SecretDetail,
 };
 use crate::resource_table::{
     AVAILABLE_COLUMN, CONTAINERS_COLUMN, CellValue, ContainerIndicator, ContainerKind,
@@ -694,6 +694,7 @@ fn resource_name_opens_and_closes_a_live_detail_inspector() {
                 name: name.into(),
                 namespace: Some("kube-system".into()),
                 uid: "fixture-0".into(),
+                resource_version: "1".into(),
                 creation_timestamp: None,
                 owner: None,
                 labels: BTreeMap::new(),
@@ -745,6 +746,7 @@ fn pod_resource_detail_inspector_snapshot() {
                 name: name.into(),
                 namespace: Some("kube-system".into()),
                 uid: "fixture-0".into(),
+                resource_version: "1".into(),
                 creation_timestamp: None,
                 owner: None,
                 labels: BTreeMap::from([("k8s-app".into(), "kube-dns".into())]),
@@ -867,6 +869,283 @@ fn pod_resource_detail_inspector_snapshot() {
     harness.get_by_label("Reveal").click_accesskit();
     harness.run();
     harness.get_by_label("test-token");
+}
+
+fn open_typed_detail(
+    harness: &mut Harness<MyEguiApp<MockWorker>>,
+    api_resource: crate::api_resource::ApiResource,
+    detail: ResourceDetail,
+) {
+    let mut commands = Vec::new();
+    harness.state_mut().ui_state.open_resource_detail(
+        2,
+        api_resource,
+        detail.name.clone(),
+        detail.namespace.clone(),
+        detail.uid.clone(),
+        &mut commands,
+    );
+    harness.state_mut().worker.commands.extend(commands);
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(WorkerResult::ResourceDetailUpdated {
+            cluster_key: 2,
+            selection_generation: 1,
+            detail,
+        });
+    harness.run();
+}
+
+fn config_map_detail(data: BTreeMap<String, String>) -> ResourceDetail {
+    ResourceDetail {
+        api_resource: fixture_api_resource("core", "ConfigMap", "configmaps"),
+        name: "settings".into(),
+        namespace: Some("kube-system".into()),
+        uid: "configmap-uid".into(),
+        resource_version: "1".into(),
+        creation_timestamp: None,
+        owner: None,
+        labels: BTreeMap::new(),
+        annotations: BTreeMap::new(),
+        payload: ResourceDetailPayload::ConfigMap(ConfigMapDetail {
+            data,
+            immutable: false,
+        }),
+    }
+}
+
+#[test]
+fn config_map_inspector_saves_only_changed_existing_data_values() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    let detail = config_map_detail(BTreeMap::from([
+        ("mode".into(), "development".into()),
+        ("unused".into(), "preserved".into()),
+    ]));
+    open_typed_detail(&mut harness, detail.api_resource.clone(), detail);
+
+    let editor = harness
+        .state_mut()
+        .ui_state
+        .clusters
+        .get_mut(&2)
+        .expect("fixture cluster should exist")
+        .resource_detail_panel
+        .as_mut()
+        .and_then(|panel| panel.data_editor.as_mut())
+        .expect("ConfigMap editor should initialize from the detail payload");
+    editor
+        .draft_values
+        .insert("mode".into(), "production".into());
+    harness.run();
+    harness.get_by_label("Save data").click_accesskit();
+    harness.run();
+
+    assert!(matches!(
+        harness.state().worker.commands.last(),
+        Some(WorkerCommand::UpdateResourceData { update, .. })
+            if update.expected_resource_version == "1"
+                && update.expected_values == BTreeMap::from([("mode".into(), "development".into())])
+                && update.updated_values == BTreeMap::from([("mode".into(), "production".into())])
+    ));
+}
+
+#[test]
+fn config_map_resource_detail_inspector_snapshot() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    let detail = config_map_detail(BTreeMap::from([
+        ("app.toml".into(), "[server]\nport = 8080".into()),
+        ("log-level".into(), "info".into()),
+    ]));
+    open_typed_detail(&mut harness, detail.api_resource.clone(), detail);
+
+    harness.snapshot_options(
+        "config_map_resource_detail_inspector",
+        &egui_kittest::SnapshotOptions::new().failed_pixel_count_threshold(1),
+    );
+}
+
+#[test]
+fn resource_detail_more_actions_use_the_shared_resource_menu() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    let detail = config_map_detail(BTreeMap::from([("mode".into(), "development".into())]));
+    open_typed_detail(&mut harness, detail.api_resource.clone(), detail);
+
+    harness
+        .get_by_label("More actions for settings")
+        .click_accesskit();
+    harness.run();
+    harness.snapshot_options(
+        "config_map_resource_detail_actions",
+        &egui_kittest::SnapshotOptions::new().failed_pixel_count_threshold(1),
+    );
+    harness.get_by_label("Edit YAML").click_accesskit();
+    harness.run();
+    assert!(matches!(
+        harness.state().worker.commands.last(),
+        Some(WorkerCommand::GetResourceYaml { resource_name, .. }) if resource_name == "settings"
+    ));
+
+    harness
+        .get_by_label("More actions for settings")
+        .click_accesskit();
+    harness.run();
+    harness.get_by_label("Delete").click_accesskit();
+    harness.run();
+    assert!(
+        harness.state().ui_state.clusters[&2]
+            .pending_delete
+            .as_ref()
+            .is_some_and(|pending| pending.resource_name == "settings")
+    );
+}
+
+#[test]
+fn secret_inspector_masks_values_and_prompts_for_a_real_external_change() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    let secrets = fixture_api_resource("core", "Secret", "secrets");
+    let detail = ResourceDetail {
+        api_resource: secrets.clone(),
+        name: "credentials".into(),
+        namespace: Some("kube-system".into()),
+        uid: "secret-uid".into(),
+        resource_version: "1".into(),
+        creation_timestamp: None,
+        owner: None,
+        labels: BTreeMap::new(),
+        annotations: BTreeMap::new(),
+        payload: ResourceDetailPayload::Secret(SecretDetail {
+            data: BTreeMap::from([
+                (
+                    "password".into(),
+                    SecretDataDetail {
+                        byte_len: 6,
+                        text: Some("secret".into()),
+                    },
+                ),
+                (
+                    "binary".into(),
+                    SecretDataDetail {
+                        byte_len: 2,
+                        text: None,
+                    },
+                ),
+            ]),
+            immutable: false,
+            type_: "Opaque".into(),
+        }),
+    };
+    open_typed_detail(&mut harness, secrets, detail);
+
+    harness.get_by_label("Reveal").click_accesskit();
+    harness.run();
+    harness.get_by_label("Hide");
+    harness.get_by_label("Binary data");
+    harness.get_by_label("This value cannot be edited in the inspector.");
+
+    harness
+        .state_mut()
+        .ui_state
+        .clusters
+        .get_mut(&2)
+        .expect("fixture cluster should exist")
+        .resource_detail_panel
+        .as_mut()
+        .and_then(|panel| panel.data_editor.as_mut())
+        .expect("Secret editor should initialize")
+        .draft_values
+        .insert("password".into(), "changed".into());
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(WorkerResult::ResourceDetailUpdated {
+            cluster_key: 2,
+            selection_generation: 1,
+            detail: ResourceDetail {
+                payload: ResourceDetailPayload::Secret(SecretDetail {
+                    data: BTreeMap::from([(
+                        "password".into(),
+                        SecretDataDetail {
+                            byte_len: 7,
+                            text: Some("cluster".into()),
+                        },
+                    )]),
+                    immutable: false,
+                    type_: "Opaque".into(),
+                }),
+                ..config_map_detail(BTreeMap::new())
+            },
+        });
+    harness.run();
+    harness.get_by_label("Data changed on cluster");
+    harness.get_by_label("Keep my edits").click_accesskit();
+    harness.run();
+    assert_eq!(
+        harness.state().ui_state.clusters[&2]
+            .resource_detail_panel
+            .as_ref()
+            .and_then(|panel| panel.data_editor.as_ref())
+            .and_then(|editor| editor.draft_values.get("password"))
+            .map(String::as_str),
+        Some("changed")
+    );
+}
+
+#[test]
+fn secret_resource_detail_inspector_snapshot() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    let secrets = fixture_api_resource("core", "Secret", "secrets");
+    let detail = ResourceDetail {
+        api_resource: secrets.clone(),
+        name: "api-credentials".into(),
+        namespace: Some("kube-system".into()),
+        uid: "secret-snapshot-uid".into(),
+        resource_version: "1".into(),
+        creation_timestamp: None,
+        owner: None,
+        labels: BTreeMap::from([("app.kubernetes.io/name".into(), "api".into())]),
+        annotations: BTreeMap::new(),
+        payload: ResourceDetailPayload::Secret(SecretDetail {
+            data: BTreeMap::from([
+                (
+                    "password".into(),
+                    SecretDataDetail {
+                        byte_len: 24,
+                        text: Some("super-secret-password-value".into()),
+                    },
+                ),
+                (
+                    "certificate".into(),
+                    SecretDataDetail {
+                        byte_len: 1872,
+                        text: Some("-----BEGIN CERTIFICATE-----\n…".into()),
+                    },
+                ),
+                (
+                    "binary-token".into(),
+                    SecretDataDetail {
+                        byte_len: 32,
+                        text: None,
+                    },
+                ),
+            ]),
+            immutable: false,
+            type_: "Opaque".into(),
+        }),
+    };
+    open_typed_detail(&mut harness, secrets, detail);
+
+    harness.snapshot_options(
+        "secret_resource_detail_inspector",
+        &egui_kittest::SnapshotOptions::new().failed_pixel_count_threshold(1),
+    );
 }
 
 #[test]

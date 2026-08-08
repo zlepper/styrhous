@@ -31,6 +31,7 @@ pub mod table;
 pub mod tabs;
 #[doc(hidden)]
 pub mod test_support;
+pub mod textarea;
 pub mod theme;
 pub mod workspace;
 
@@ -45,6 +46,7 @@ pub use sidebar::{
 };
 pub use table::{SortDirection, SortState, TableColumnBuilder, TableRowBuilder, TailwindTable};
 pub use tabs::{Tabs, TabsContent, TabsResponse};
+pub use textarea::TailwindTextArea;
 pub use theme::{apply_light_theme, semibold_font};
 pub use workspace::{
     WorkspaceCard, WorkspaceDrawer, WorkspaceEmptyState, WorkspacePage, workspace_section_header,
