@@ -2,13 +2,8 @@ use super::state::UiState;
 use crate::terminal_launcher::TerminalLaunchSettings;
 use components::colors::{WHITE, gray, indigo};
 use components::design::{radius, spacing, status, surface, typography};
-use components::icons;
-use components::{ButtonSize, ButtonVariant, TailwindButton};
+use components::{BladeNavigator, BladeStack, ButtonSize, TailwindButton};
 
-const PANEL_WIDTH: f32 = 560.0;
-const PANEL_HORIZONTAL_INSET: f32 = spacing::XXL;
-const PANEL_VERTICAL_INSET: f32 = spacing::LG;
-const PANEL_PADDING: i8 = (spacing::XXL + spacing::SM) as i8;
 const FOOTER_HEIGHT: f32 = 52.0;
 const CHOICE_CONTENT_MIN_HEIGHT: f32 = 44.0;
 
@@ -23,75 +18,48 @@ pub(super) fn show(
         return;
     }
 
-    let viewport = ctx.content_rect();
     let mut close = ctx.input(|input| input.key_pressed(egui::Key::Escape));
     let mut save = false;
     let mut reset = false;
+    let stack = BladeStack::new("settings-blade");
+    let mut blade = ui_state
+        .terminal_settings_blade
+        .take()
+        .unwrap_or_else(|| BladeNavigator::new(()));
+    let response = stack.show_with_title(
+        ctx,
+        &mut blade,
+        |_| egui::Id::new("settings-content"),
+        |_| "Settings".to_owned(),
+        |ui, _, _| {
+            show_settings_introduction(ui);
+            ui.add_space(spacing::XL);
+            ui.separator();
+            ui.add_space(spacing::XL);
 
-    egui::Area::new(egui::Id::new("settings-blade-scrim"))
-        .order(egui::Order::Foreground)
-        .fixed_pos(viewport.min)
-        .show(ctx, |ui| {
-            ui.set_min_size(viewport.size());
-            ui.painter().rect_filled(
-                ui.max_rect(),
-                0.0,
-                egui::Color32::BLACK.gamma_multiply(0.48),
+            let content_height = (ui.available_height() - FOOTER_HEIGHT).max(120.0);
+            ui.allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), content_height),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| show_terminal_launcher(ui, ui_state));
+                },
             );
-            close |= ui
-                .allocate_rect(ui.max_rect(), egui::Sense::click())
-                .clicked();
-        });
 
-    let blade_height = viewport.height() - PANEL_VERTICAL_INSET * 2.0;
-    egui::Area::new(egui::Id::new("settings-blade"))
-        .order(egui::Order::Foreground)
-        .fixed_pos(egui::pos2(
-            viewport.right() - PANEL_WIDTH - PANEL_HORIZONTAL_INSET,
-            viewport.top() + PANEL_VERTICAL_INSET,
-        ))
-        .show(ctx, |ui| {
-            ui.set_width(PANEL_WIDTH);
-            ui.set_height(blade_height);
-            egui::Frame::new()
-                .fill(WHITE)
-                .stroke(surface::muted_border())
-                .shadow(egui::Shadow {
-                    offset: [-4, 0],
-                    blur: 18,
-                    spread: 0,
-                    color: egui::Color32::BLACK.gamma_multiply(0.16),
-                })
-                .inner_margin(egui::Margin::same(PANEL_PADDING))
-                .show(ui, |ui| {
-                    ui.set_min_height(blade_height - f32::from(PANEL_PADDING) * 2.0);
-                    show_header(ui, &mut close);
-                    ui.add_space(spacing::XL);
-                    ui.separator();
-                    ui.add_space(spacing::XL);
-
-                    let content_height = (ui.available_height() - FOOTER_HEIGHT).max(120.0);
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(ui.available_width(), content_height),
-                        egui::Layout::top_down(egui::Align::Min),
-                        |ui| {
-                            egui::ScrollArea::vertical()
-                                .auto_shrink([false, false])
-                                .show(ui, |ui| show_terminal_launcher(ui, ui_state));
-                        },
-                    );
-
-                    ui.separator();
-                    ui.add_space(spacing::SM);
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        save |= TailwindButton::new("Save changes").show(ui).clicked();
-                        reset |= TailwindButton::secondary("Reset")
-                            .size(ButtonSize::Md)
-                            .show(ui)
-                            .clicked();
-                    });
-                });
-        });
+            ui.separator();
+            ui.add_space(spacing::SM);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                save |= TailwindButton::new("Save changes").show(ui).clicked();
+                reset |= TailwindButton::secondary("Reset")
+                    .size(ButtonSize::Md)
+                    .show(ui)
+                    .clicked();
+            });
+        },
+    );
+    close |= response.dismissed;
 
     if reset {
         ui_state.terminal_settings_draft = TerminalLaunchSettings::default();
@@ -108,46 +76,32 @@ pub(super) fn show(
         }
     }
     if close {
+        if blade.begin_close() {
+            stack.seed_transition(ctx, &mut blade);
+        }
+    }
+    if response.close_finished {
         ui_state.terminal_settings_open = false;
+        ui_state.terminal_settings_blade = None;
+    } else {
+        ui_state.terminal_settings_blade = Some(blade);
     }
 }
 
-fn show_header(ui: &mut egui::Ui, close: &mut bool) {
-    ui.horizontal(|ui| {
-        ui.vertical(|ui| {
-            ui.label(
-                egui::RichText::new("APPLICATION")
-                    .font(typography::metadata())
-                    .color(gray::_500),
-            );
-            ui.add_space(spacing::XS);
-            ui.label(
-                egui::RichText::new("Settings")
-                    .font(typography::semibold(48.0))
-                    .color(gray::_900),
-            );
-            ui.add_space(spacing::LG);
-            ui.label(
-                egui::RichText::new(
-                    "Configure local tools and display preferences.\nThese settings apply only to this application on this device.",
-                )
-                    .font(typography::body())
-                    .color(gray::_600),
-            );
-        });
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
-            *close |= TailwindButton::icon(
-                icons::x_mark_icon()
-                    .fit_to_exact_size(egui::Vec2::splat(18.0))
-                    .tint(gray::_600),
-            )
-            .variant(ButtonVariant::Secondary)
-            .size(ButtonSize::Sm)
-            .accessibility_label("Close settings")
-            .show(ui)
-            .clicked();
-        });
-    });
+fn show_settings_introduction(ui: &mut egui::Ui) {
+    ui.label(
+        egui::RichText::new("APPLICATION")
+            .font(typography::metadata())
+            .color(gray::_500),
+    );
+    ui.add_space(spacing::XS);
+    ui.label(
+        egui::RichText::new(
+            "Configure local tools and display preferences.\nThese settings apply only to this application on this device.",
+        )
+        .font(typography::body())
+        .color(gray::_600),
+    );
 }
 
 fn show_terminal_launcher(ui: &mut egui::Ui, ui_state: &mut UiState) {

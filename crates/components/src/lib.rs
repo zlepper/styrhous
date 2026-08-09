@@ -20,6 +20,7 @@
 //!     .show(ui);
 //! ```
 
+pub mod blade;
 pub mod button;
 pub mod colors;
 pub mod combobox;
@@ -38,6 +39,9 @@ pub mod textarea;
 pub mod theme;
 pub mod workspace;
 
+pub use blade::{
+    BLADE_WIDTH, BladeLayer, BladeNavigator, BladeResponse, BladeStack, BladeTransition,
+};
 pub use button::{ButtonRounding, ButtonSize, ButtonVariant, TailwindButton};
 pub use combobox::{
     ComboboxResponse, ComboboxUi, ItemResponse, NoFilter, SelectionAction, TailwindCombobox,

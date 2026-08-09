@@ -170,6 +170,7 @@ pub(super) fn oracle_resource_table_state() -> UiState {
         next_log_window_id: 0,
         log_display_options: Default::default(),
         terminal_settings_open: false,
+        terminal_settings_blade: None,
         terminal_settings_draft: Default::default(),
         terminal_settings_error: None,
         terminal_launch_error: None,

@@ -1,8 +1,5 @@
 use super::resource_actions::show_resource_action_items;
-use super::state::{
-    ResourceAction, ResourceDetailHistoryEntry, ResourceDetailPanelState, ResourceDetailTransition,
-    UiState,
-};
+use super::state::{ResourceAction, ResourceDetailHistoryEntry, ResourceDetailPanelState, UiState};
 use super::widgets::show_resource_cell;
 use crate::minimal_resource::{MinimalResource, format_age};
 use crate::resource_detail::{
@@ -17,8 +14,8 @@ use components::colors::{WHITE, gray, indigo};
 use components::design::{radius, spacing, status, typography};
 use components::icons;
 use components::{
-    ButtonSize, ButtonVariant, MoreButton, TableRowBuilder, TailwindButton, TailwindTable,
-    TailwindTextArea, WorkspaceCard,
+    BladeTransition as ResourceDetailTransition, ButtonSize, ButtonVariant, MoreButton,
+    TableRowBuilder, TailwindButton, TailwindTable, TailwindTextArea, WorkspaceCard,
 };
 use std::collections::BTreeMap;
 
@@ -45,6 +42,7 @@ struct BladeTransform {
     scale: f32,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Copy)]
 struct BladeNavigation {
     can_go_back: bool,
@@ -63,6 +61,19 @@ pub(super) fn show(
     commands_to_send: &mut Vec<WorkerCommand>,
     shell_requests: &mut Vec<PodShellRequest>,
 ) {
+    show_shared_blade(ctx, ui_state, commands_to_send, shell_requests);
+}
+
+#[allow(dead_code, unreachable_code)]
+fn show_legacy(
+    ctx: &egui::Context,
+    ui_state: &mut UiState,
+    commands_to_send: &mut Vec<WorkerCommand>,
+    shell_requests: &mut Vec<PodShellRequest>,
+) {
+    show_shared_blade(ctx, ui_state, commands_to_send, shell_requests);
+    return;
+
     let Some(cluster_key) = ui_state.selected_cluster else {
         return;
     };
@@ -81,8 +92,11 @@ pub(super) fn show(
         .get(&cluster_key)
         .and_then(|cluster| cluster.resource_detail_panel.as_ref())
         .and_then(|panel| {
-            matches!(panel.transition, Some(ResourceDetailTransition::Closing))
-                .then(|| animated_blade_transition_progress(ctx, panel))
+            matches!(
+                panel.navigator.transition(),
+                Some(ResourceDetailTransition::Closing)
+            )
+            .then(|| animated_blade_transition_progress(ctx, panel))
         })
         .unwrap_or(0.0);
     let mut close = ctx.input(|input| input.key_pressed(egui::Key::Escape));
@@ -114,13 +128,13 @@ pub(super) fn show(
         .get(&cluster_key)
         .and_then(|cluster| cluster.resource_detail_panel.as_ref())
         .map(|panel| {
-            let transition = panel.transition.map(|transition| {
+            let transition = panel.navigator.transition().map(|transition| {
                 let progress = animated_blade_transition_progress(ctx, panel);
                 (transition, progress)
             });
-            let first_visible_history = panel.back_stack.len().saturating_sub(2);
+            let first_visible_history = panel.navigator.back_stack().len().saturating_sub(2);
             (
-                panel.back_stack[first_visible_history..]
+                panel.navigator.back_stack()[first_visible_history..]
                     .iter()
                     .collect::<Vec<_>>(),
                 first_visible_history,
@@ -185,7 +199,7 @@ pub(super) fn show(
     {
         match transition_kind {
             ResourceDetailTransition::Back => {
-                if let Some(outgoing_entry) = panel.forward_stack.last() {
+                if let Some(outgoing_entry) = panel.navigator.forward_stack().last() {
                     show_outgoing_blade(
                         ctx,
                         viewport,
@@ -197,7 +211,7 @@ pub(super) fn show(
                             // `forward_stack` now also contains the outgoing
                             // blade, so entries beneath it were already its
                             // forward history.
-                            can_go_forward: panel.forward_stack.len() > 1,
+                            can_go_forward: panel.navigator.forward_stack().len() > 1,
                         },
                         BladeTransform {
                             position: active_blade_transform(viewport).position
@@ -233,24 +247,24 @@ pub(super) fn show(
             ui.set_height(blade_height);
             ui.with_visual_transform(active_visual_transform, |ui| {
                 show_blade_frame(ui, blade_height, panel.history_entry_id, |ui| {
+                    let _navigation = BladeNavigation {
+                        can_go_back: panel.navigator.can_go_back(),
+                        can_go_forward: panel.navigator.can_go_forward(),
+                    };
+                    let entry = panel.navigator.current_mut();
                     let result = show_resource_detail_blade(
                         ui,
-                        &panel.api_resource,
-                        &panel.namespace,
-                        &panel.resource_name,
-                        &panel.resource_uid,
-                        &panel.detail,
-                        &panel.events,
-                        panel.detail_error.as_deref(),
-                        panel.events_error.as_deref(),
-                        &panel.managed_resources,
-                        panel.managed_resources_error.as_deref(),
-                        panel.data_editor.as_mut(),
-                        BladeNavigation {
-                            can_go_back: !panel.back_stack.is_empty(),
-                            can_go_forward: !panel.forward_stack.is_empty(),
-                        },
-                        true,
+                        &entry.api_resource,
+                        &entry.namespace,
+                        &entry.resource_name,
+                        &entry.resource_uid,
+                        &entry.detail,
+                        &entry.events,
+                        entry.detail_error.as_deref(),
+                        entry.events_error.as_deref(),
+                        &entry.managed_resources,
+                        entry.managed_resources_error.as_deref(),
+                        entry.data_editor.as_mut(),
                     );
                     if !outgoing_foreground_blade_is_visible {
                         blade_result = result;
@@ -400,12 +414,171 @@ pub(super) fn show(
     }
 }
 
+fn show_shared_blade(
+    ctx: &egui::Context,
+    ui_state: &mut UiState,
+    commands_to_send: &mut Vec<WorkerCommand>,
+    shell_requests: &mut Vec<PodShellRequest>,
+) {
+    let Some(cluster_key) = ui_state.selected_cluster else {
+        return;
+    };
+    let Some(cluster) = ui_state.clusters.get_mut(&cluster_key) else {
+        return;
+    };
+    let Some(panel) = cluster.resource_detail_panel.as_mut() else {
+        return;
+    };
+
+    let dismiss_on_outside_click = panel.dismiss_on_outside_click;
+    panel.dismiss_on_outside_click = true;
+    let stack = components::BladeStack::new("resource-detail-blade");
+    let response = stack.show(
+        ctx,
+        &mut panel.navigator,
+        |entry| egui::Id::new(entry.history_entry_id),
+        |ui, entry, layer| show_resource_detail_header(ui, entry, layer.is_foreground),
+        |ui, entry, layer| {
+            show_resource_detail_blade(
+                ui,
+                &entry.api_resource,
+                &entry.namespace,
+                &entry.resource_name,
+                &entry.resource_uid,
+                &entry.detail,
+                &entry.events,
+                entry.detail_error.as_deref(),
+                entry.events_error.as_deref(),
+                &entry.managed_resources,
+                entry.managed_resources_error.as_deref(),
+                if layer.is_foreground {
+                    entry.data_editor.as_mut()
+                } else {
+                    None
+                },
+            )
+        },
+    );
+
+    let mut close = ctx.input(|input| input.key_pressed(egui::Key::Escape));
+    close |= dismiss_on_outside_click && response.dismissed;
+    close |= response.header.close || response.active.close;
+    let action = response.header.action.or(response.active.action);
+    if let Some(action) = action {
+        match action {
+            ResourceAction::NavigateDetails {
+                api_resource,
+                name,
+                namespace,
+                uid,
+            } => {
+                ui_state.navigate_resource_detail(
+                    cluster_key,
+                    api_resource,
+                    name,
+                    namespace,
+                    uid,
+                    commands_to_send,
+                );
+            }
+            ResourceAction::NavigateBack => {
+                ui_state.navigate_resource_detail_history(cluster_key, false, commands_to_send);
+            }
+            ResourceAction::NavigateForward => {
+                ui_state.navigate_resource_detail_history(cluster_key, true, commands_to_send);
+            }
+            ResourceAction::EditYaml { name, namespace } => {
+                if let Some(cluster) = ui_state.clusters.get_mut(&cluster_key) {
+                    commands_to_send.push(WorkerCommand::GetResourceYaml {
+                        cluster_key: cluster.cluster_key,
+                        api_resource: panel_api_resource(cluster),
+                        namespace,
+                        resource_name: name,
+                    });
+                }
+            }
+            ResourceAction::RequestDelete { name, namespace } => {
+                if let Some(cluster) = ui_state.clusters.get_mut(&cluster_key) {
+                    cluster.pending_delete = Some(super::state::PendingDelete {
+                        resource_name: name,
+                        namespace,
+                    });
+                }
+            }
+            ResourceAction::SaveData {
+                expected_values,
+                updated_values,
+            } => {
+                if let Some(cluster) = ui_state.clusters.get_mut(&cluster_key)
+                    && let Some(panel) = cluster.resource_detail_panel.as_ref()
+                    && let (Some(namespace), Some(editor)) =
+                        (panel.namespace.clone(), panel.data_editor.as_ref())
+                {
+                    commands_to_send.push(WorkerCommand::UpdateResourceData {
+                        cluster_key: cluster.cluster_key,
+                        api_resource: panel.api_resource.clone(),
+                        namespace,
+                        resource_name: panel.resource_name.clone(),
+                        update: ResourceDataUpdate {
+                            expected_resource_version: editor.resource_version.clone(),
+                            expected_values,
+                            updated_values,
+                        },
+                    });
+                }
+            }
+            ResourceAction::ViewLogs {
+                name,
+                namespace,
+                container,
+            } => ui_state.open_pod_log_window(
+                cluster_key,
+                name,
+                namespace,
+                container,
+                commands_to_send,
+            ),
+            ResourceAction::Shell {
+                name,
+                namespace,
+                container,
+            } => {
+                if let (Some(namespace), Some(cluster)) =
+                    (namespace, ui_state.clusters.get(&cluster_key))
+                {
+                    shell_requests.push(PodShellRequest {
+                        kube_context: cluster.name.clone(),
+                        namespace,
+                        pod_name: name,
+                        container: container.name,
+                    });
+                }
+            }
+            ResourceAction::OpenDetails { .. } => {
+                unreachable!("inspector actions cannot open detail")
+            }
+        }
+    }
+    if let Some(panel) = ui_state
+        .clusters
+        .get_mut(&cluster_key)
+        .and_then(|cluster| cluster.resource_detail_panel.as_mut())
+    {
+        show_data_conflict_dialog(ctx, panel.data_editor.as_mut());
+    }
+    if close {
+        ui_state.begin_close_resource_detail(cluster_key);
+    } else if response.close_finished {
+        ui_state.close_resource_detail(cluster_key, commands_to_send);
+    }
+}
+
 pub(super) fn seed_detail_transition(ctx: &egui::Context, ui_state: &UiState, cluster_key: i32) {
     if let Some(panel) = ui_state
         .clusters
         .get(&cluster_key)
         .and_then(|cluster| cluster.resource_detail_panel.as_ref())
-        .filter(|panel| panel.transition.is_some())
+        .filter(|panel| panel.navigator.transition().is_some())
     {
         ctx.animate_value_with_time(
             detail_transition_id(panel),
@@ -510,7 +683,7 @@ fn show_input_scrim(ctx: &egui::Context, viewport: egui::Rect, active_rect: egui
 }
 
 fn detail_transition_id(panel: &ResourceDetailPanelState) -> egui::Id {
-    let transition_kind = match panel.transition {
+    let transition_kind = match panel.navigator.transition() {
         Some(ResourceDetailTransition::Opening) => "opening",
         Some(ResourceDetailTransition::Forward) => "forward",
         Some(ResourceDetailTransition::Back) => "back",
@@ -758,6 +931,7 @@ fn blade_id(history_entry_id: u64) -> egui::Id {
     egui::Id::new(("resource-detail-blade", history_entry_id))
 }
 
+#[allow(dead_code)]
 fn show_blade_navigation_controls(
     ui: &mut egui::Ui,
     navigation: BladeNavigation,
@@ -831,8 +1005,8 @@ fn show_entry_blade_frame(
     ui: &mut egui::Ui,
     blade_height: f32,
     entry: &ResourceDetailHistoryEntry,
-    navigation: BladeNavigation,
-    is_foreground: bool,
+    _navigation: BladeNavigation,
+    _is_foreground: bool,
 ) {
     let mut data_editor = entry.data_editor.clone();
     show_blade_frame(ui, blade_height, entry.history_entry_id, |ui| {
@@ -849,8 +1023,6 @@ fn show_entry_blade_frame(
             &entry.managed_resources,
             entry.managed_resources_error.as_deref(),
             data_editor.as_mut(),
-            navigation,
-            is_foreground,
         );
     });
 }
@@ -885,12 +1057,73 @@ fn show_blade_frame(
         });
 }
 
+fn show_resource_detail_header(
+    ui: &mut egui::Ui,
+    entry: &ResourceDetailHistoryEntry,
+    is_foreground: bool,
+) -> BladeResult {
+    let mut result = BladeResult::default();
+    let log_containers = entry
+        .detail
+        .as_ref()
+        .and_then(|detail| match &detail.payload {
+            ResourceDetailPayload::Pod(pod) => Some(pod.log_containers.clone()),
+            _ => None,
+        })
+        .unwrap_or_default();
+    let resource = MinimalResource {
+        uid: entry.resource_uid.clone(),
+        name: entry.resource_name.clone(),
+        namespace: entry.namespace.clone(),
+        creation_timestamp: None,
+        cells: Default::default(),
+        log_containers,
+    };
+    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        let more_label = if is_foreground {
+            format!("More actions for {}", resource.name)
+        } else {
+            format!("More actions for {} in background blade", resource.name)
+        };
+        MoreButton::new(more_label).show(ui, |menu| {
+            show_resource_action_items(
+                menu,
+                &resource,
+                &resource.log_containers,
+                &mut result.action,
+            );
+        });
+        ui.add_space(spacing::MD);
+        ui.label(
+            egui::RichText::new(&entry.resource_name)
+                .font(typography::page_title())
+                .color(gray::_900),
+        );
+        ui.add_space(spacing::MD);
+        egui::Frame::new()
+            .fill(indigo::_50)
+            .corner_radius(radius::control())
+            .inner_margin(egui::Margin::symmetric(
+                spacing::SM as i8,
+                spacing::XS as i8,
+            ))
+            .show(ui, |ui| {
+                ui.label(
+                    egui::RichText::new(&entry.api_resource.kind)
+                        .font(typography::body())
+                        .color(indigo::_600),
+                );
+            });
+    });
+    result
+}
+
 #[allow(clippy::too_many_arguments)]
 fn show_resource_detail_blade(
     ui: &mut egui::Ui,
     api_resource: &crate::api_resource::ApiResource,
-    namespace: &Option<String>,
-    resource_name: &str,
+    _namespace: &Option<String>,
+    _resource_name: &str,
     resource_uid: &str,
     detail: &Option<ResourceDetail>,
     events: &[ResourceEvent],
@@ -899,96 +1132,8 @@ fn show_resource_detail_blade(
     managed_resources: &[ManagedResource],
     managed_resources_error: Option<&str>,
     mut data_editor: Option<&mut super::state::ResourceDataEditorState>,
-    navigation: BladeNavigation,
-    is_foreground: bool,
 ) -> BladeResult {
     let mut result = BladeResult::default();
-    let log_containers = detail
-        .as_ref()
-        .and_then(|detail| match &detail.payload {
-            ResourceDetailPayload::Pod(pod) => Some(pod.log_containers.clone()),
-            _ => None,
-        })
-        .unwrap_or_default();
-    let resource = MinimalResource {
-        uid: resource_uid.to_owned(),
-        name: resource_name.to_owned(),
-        namespace: namespace.clone(),
-        creation_timestamp: None,
-        cells: Default::default(),
-        log_containers,
-    };
-    ui.allocate_ui_with_layout(
-        egui::vec2(ui.available_width() - 10.0, 44.0),
-        egui::Layout::left_to_right(egui::Align::Center),
-        |ui| {
-            if let Some(action) = show_blade_navigation_controls(ui, navigation, is_foreground) {
-                result.action = Some(action);
-            }
-            ui.allocate_ui_with_layout(
-                egui::vec2(116.0, 28.0),
-                egui::Layout::left_to_right(egui::Align::Center),
-                |ui| {
-                    ui.centered_and_justified(|ui| {
-                        egui::Frame::new()
-                            .fill(indigo::_50)
-                            .corner_radius(radius::control())
-                            .inner_margin(egui::Margin::symmetric(
-                                spacing::SM as i8,
-                                spacing::XS as i8,
-                            ))
-                            .show(ui, |ui| {
-                                ui.label(
-                                    egui::RichText::new(&api_resource.kind)
-                                        .font(typography::body())
-                                        .color(indigo::_600),
-                                );
-                            });
-                    });
-                },
-            );
-            ui.add_space(14.0);
-            ui.label(
-                egui::RichText::new(resource_name)
-                    .font(typography::page_title())
-                    .color(gray::_900),
-            );
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if TailwindButton::icon(
-                    icons::x_mark_icon()
-                        .fit_to_exact_size(egui::Vec2::splat(16.0))
-                        .tint(gray::_700),
-                )
-                .variant(ButtonVariant::Secondary)
-                .size(ButtonSize::Md)
-                .accessibility_label(if is_foreground {
-                    "Close inspector"
-                } else {
-                    "Close background inspector"
-                })
-                .show(ui)
-                .clicked()
-                {
-                    result.close = true;
-                }
-                ui.add_space(8.0);
-                let more_label = if is_foreground {
-                    format!("More actions for {}", resource.name)
-                } else {
-                    format!("More actions for {} in background blade", resource.name)
-                };
-                MoreButton::new(more_label).show(ui, |menu| {
-                    show_resource_action_items(
-                        menu,
-                        &resource,
-                        &resource.log_containers,
-                        &mut result.action,
-                    );
-                });
-            });
-        },
-    );
-    ui.add_space(15.0);
     ui.set_max_width(ui.available_width() - 9.0);
     if let Some(error) = detail_error {
         error_card(ui, "Unable to load resource details", error);
