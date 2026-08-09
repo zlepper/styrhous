@@ -25,6 +25,11 @@ pub(crate) fn table_definition(api_resource: &ApiResource) -> Option<ResourceTab
     })
 }
 
+/// Whether this is the built-in Deployment resource that supports rollout restarts.
+pub(crate) fn supports_rollout_restart(api_resource: &ApiResource) -> bool {
+    matches_namespaced_api_resource::<Deployment>(api_resource)
+}
+
 pub(crate) fn extract(deployment: &Deployment) -> MinimalResource {
     let status = deployment.status.as_ref();
     let desired = status.and_then(|status| status.replicas).unwrap_or(0);

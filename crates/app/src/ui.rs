@@ -16,7 +16,10 @@ use crate::terminal_launcher::{
 };
 use crate::worker::{Worker, WorkerTrait};
 use components::apply_light_theme;
-use dialogs::{show_delete_confirmation, show_terminal_launch_error};
+use dialogs::{
+    show_delete_confirmation, show_deployment_restart_confirmation, show_deployment_restart_error,
+    show_terminal_launch_error,
+};
 use state::{LogDisplayOptions, PersistedClusterSelections, ResourceNavigationExpansion, UiState};
 
 const CLUSTER_SELECTIONS_STORAGE_KEY: &str = "cluster_selections";
@@ -131,8 +134,10 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             &mut commands_to_send,
         );
         show_delete_confirmation(ctx, &mut self.ui_state, &mut commands_to_send);
+        show_deployment_restart_confirmation(ctx, &mut self.ui_state, &mut commands_to_send);
         settings::show(ctx, &mut self.ui_state, &mut self.terminal_launch_settings);
         show_terminal_launch_error(ctx, &mut self.ui_state, &self.terminal_launch_settings);
+        show_deployment_restart_error(ctx, &mut self.ui_state);
 
         if let (Some(cluster_key), Some(api_resource)) =
             (self.ui_state.selected_cluster, clicked_api_resource)

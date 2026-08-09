@@ -1,5 +1,8 @@
 use super::resource_actions::show_resource_action_items;
-use super::state::{ResourceAction, ResourceDetailHistoryEntry, ResourceDetailPanelState, UiState};
+use super::state::{
+    PendingDelete, PendingDeploymentRestart, ResourceAction, ResourceDetailHistoryEntry,
+    ResourceDetailPanelState, UiState,
+};
 use super::widgets::show_resource_cell;
 use crate::minimal_resource::{MinimalResource, format_age};
 use crate::resource_detail::{
@@ -323,7 +326,14 @@ fn show_legacy(
                             });
                         }
                         ResourceAction::RequestDelete { name, namespace } => {
-                            cluster.pending_delete = Some(super::state::PendingDelete {
+                            cluster.pending_delete = Some(PendingDelete::new(
+                                panel_api_resource(cluster),
+                                name,
+                                namespace,
+                            ));
+                        }
+                        ResourceAction::RequestDeploymentRestart { name, namespace } => {
+                            cluster.pending_deployment_restart = Some(PendingDeploymentRestart {
                                 resource_name: name,
                                 namespace,
                             });
@@ -498,7 +508,16 @@ fn show_shared_blade(
             }
             ResourceAction::RequestDelete { name, namespace } => {
                 if let Some(cluster) = ui_state.clusters.get_mut(&cluster_key) {
-                    cluster.pending_delete = Some(super::state::PendingDelete {
+                    cluster.pending_delete = Some(PendingDelete::new(
+                        panel_api_resource(cluster),
+                        name,
+                        namespace,
+                    ));
+                }
+            }
+            ResourceAction::RequestDeploymentRestart { name, namespace } => {
+                if let Some(cluster) = ui_state.clusters.get_mut(&cluster_key) {
+                    cluster.pending_deployment_restart = Some(PendingDeploymentRestart {
                         resource_name: name,
                         namespace,
                     });
@@ -1087,6 +1106,7 @@ fn show_resource_detail_header(
         MoreButton::new(more_label).show(ui, |menu| {
             show_resource_action_items(
                 menu,
+                &entry.api_resource,
                 &resource,
                 &resource.log_containers,
                 &mut result.action,

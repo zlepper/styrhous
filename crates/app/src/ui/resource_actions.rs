@@ -1,4 +1,5 @@
 use super::state::ResourceAction;
+use crate::api_resource::ApiResource;
 use crate::minimal_resource::{MinimalResource, PodLogContainer};
 use components::colors::gray;
 use components::design::status;
@@ -7,6 +8,7 @@ use components::{MoreMenu, PointingHand, icons};
 /// Render the shared resource-level actions used by table rows and inspectors.
 pub(super) fn show_resource_action_items(
     menu: &mut MoreMenu<'_>,
+    api_resource: &ApiResource,
     resource: &MinimalResource,
     log_containers: &[PodLogContainer],
     pending_action: &mut Option<ResourceAction>,
@@ -96,6 +98,17 @@ pub(super) fn show_resource_action_items(
             name: resource.name.clone(),
             namespace: resource.namespace.clone(),
         });
+    }
+    if crate::resource_handlers::deployment::supports_rollout_restart(api_resource) {
+        menu.separator();
+        if menu.action("Restart rollout").clicked() && pending_action.is_none() {
+            if let Some(namespace) = resource.namespace.clone() {
+                *pending_action = Some(ResourceAction::RequestDeploymentRestart {
+                    name: resource.name.clone(),
+                    namespace,
+                });
+            }
+        }
     }
     menu.separator();
     if menu

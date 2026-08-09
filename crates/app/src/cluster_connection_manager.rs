@@ -15,7 +15,7 @@ use futures_util::future::try_join_all;
 use futures_util::pin_mut;
 use futures_util::stream::StreamExt;
 use itertools::Itertools;
-use k8s_openapi::api::apps::v1::ReplicaSet;
+use k8s_openapi::api::apps::v1::{Deployment, ReplicaSet};
 use k8s_openapi::api::batch::v1::Job;
 use k8s_openapi::api::core::v1::{ConfigMap, Event as KubernetesEvent, Namespace, Pod, Secret};
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
@@ -1880,6 +1880,39 @@ pub async fn delete_resource(
     Ok(WorkerResult::ResourceDeleteCompleted {
         cluster_key,
         api_resource,
+        namespace,
+        resource_name,
+    })
+}
+
+/// Trigger a Deployment rollout the same way `kubectl rollout restart` does.
+pub async fn restart_deployment(
+    cluster_key: i32,
+    client: kube::Client,
+    namespace: String,
+    resource_name: String,
+) -> Result<WorkerResult> {
+    let restarted_at = OffsetDateTime::now_utc()
+        .format(&time::format_description::well_known::Rfc3339)
+        .context("Formatting Deployment restart timestamp")?;
+    info!(
+        "Restarting rollout for Deployment {} in {}",
+        resource_name, namespace
+    );
+
+    let api: Api<Deployment> = Api::namespaced(client, &namespace);
+    let patch: serde_yaml::Value = serde_yaml::from_str(&format!(
+        "spec:\n  template:\n    metadata:\n      annotations:\n        kubectl.kubernetes.io/restartedAt: \"{restarted_at}\"\n"
+    ))?;
+    api.patch(
+        &resource_name,
+        &kube::api::PatchParams::default(),
+        &kube::api::Patch::Merge(&patch),
+    )
+    .await?;
+
+    Ok(WorkerResult::DeploymentRestartCompleted {
+        cluster_key,
         namespace,
         resource_name,
     })

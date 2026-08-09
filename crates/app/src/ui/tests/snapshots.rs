@@ -1,5 +1,4 @@
 use super::super::MyEguiApp;
-use super::super::dialogs::show_delete_confirmation;
 use super::super::state::ClusterConnectionState;
 use super::super::state::{PendingDelete, ResourceWatchState, UiState};
 use super::fixtures::{
@@ -24,9 +23,7 @@ use crate::terminal_launcher::{TerminalLaunchSettings, test_support::MockTermina
 use crate::worker::{MockWorker, WorkerCommand, WorkerResult};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
-use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::rc::Rc;
 
 // The verified WGPU variance at transformed blade-shadow edges has a maximum per-pixel
 // YIQ-squared distance of 1.84634. This threshold accepts only that microscopic rasterization
@@ -624,6 +621,58 @@ fn deployment_resource_table_snapshot_uses_typed_columns() {
     harness.run();
 
     harness.snapshot("deployment_resource_table_typed_columns");
+}
+
+#[test]
+fn deployment_restart_action_opens_a_confirmation_and_sends_a_worker_command() {
+    let deployment = fixture_api_resource("apps", "Deployment", "deployments");
+    let mut state = oracle_resource_table_state();
+    let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
+    cluster.selected_api_resource = Some(deployment.clone());
+    cluster.resource_cache.insert(
+        (deployment, Some("kube-system".to_owned())),
+        ResourceWatchState {
+            resources: BTreeMap::from([(
+                "deployment-uid".to_owned(),
+                MinimalResource {
+                    uid: "deployment-uid".to_owned(),
+                    name: "coredns".to_owned(),
+                    namespace: Some("kube-system".to_owned()),
+                    creation_timestamp: None,
+                    cells: BTreeMap::new(),
+                    log_containers: Vec::new(),
+                },
+            )]),
+            is_synced: true,
+            error: None,
+        },
+    );
+
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = state;
+    harness.run();
+    harness.get_by_label("Apps & Containers").click_accesskit();
+    harness.run();
+    harness.get_by_label("Deployments").click_accesskit();
+    harness.run();
+    harness
+        .get_by_label("More actions for coredns")
+        .click_accesskit();
+    harness.run();
+    harness.get_by_label("Restart rollout").click_accesskit();
+    harness.run();
+
+    harness.snapshot("deployment_restart_confirmation");
+    harness.get_by_label("Restart rollout").click_accesskit();
+    harness.run();
+    assert!(matches!(
+        harness.state().worker.commands.last(),
+        Some(WorkerCommand::RestartDeployment {
+            cluster_key: 2,
+            namespace,
+            resource_name,
+        }) if namespace == "kube-system" && resource_name == "coredns"
+    ));
 }
 
 #[test]
@@ -1988,6 +2037,41 @@ fn config_map_detail(data: BTreeMap<String, String>) -> ResourceDetail {
 }
 
 #[test]
+fn deployment_inspector_exposes_the_shared_restart_action() {
+    let deployment = fixture_api_resource("apps", "Deployment", "deployments");
+    let detail = ResourceDetail {
+        api_resource: deployment.clone(),
+        name: "coredns".into(),
+        namespace: Some("kube-system".into()),
+        uid: "deployment-uid".into(),
+        resource_version: "1".into(),
+        creation_timestamp: None,
+        owner: None,
+        labels: BTreeMap::new(),
+        annotations: BTreeMap::new(),
+        payload: ResourceDetailPayload::Generic,
+    };
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    open_typed_detail(&mut harness, deployment, detail);
+
+    harness
+        .get_by_label("More actions for coredns")
+        .click_accesskit();
+    harness.run();
+    harness.get_by_label("Restart rollout").click_accesskit();
+    harness.run();
+    assert!(
+        harness.state().ui_state.clusters[&2]
+            .pending_deployment_restart
+            .as_ref()
+            .is_some_and(|pending| {
+                pending.resource_name == "coredns" && pending.namespace == "kube-system"
+            })
+    );
+}
+
+#[test]
 fn config_map_inspector_saves_only_changed_existing_data_values() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = oracle_resource_table_state();
@@ -2261,10 +2345,13 @@ fn delete_confirmation_can_be_cancelled_without_sending_a_command() {
     let mut cluster = fixture_cluster(1, "dev");
     cluster.selected_api_resource = Some(fixture_api_resource("", "ConfigMap", "configmaps"));
     cluster.pending_delete = Some(PendingDelete {
+        api_resource: fixture_api_resource("", "ConfigMap", "configmaps"),
         resource_name: "important-config".into(),
         namespace: Some("default".into()),
+        confirmation_available_at: std::time::Instant::now(),
     });
-    let state = Rc::new(RefCell::new(UiState {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = UiState {
         clusters: HashMap::from([(1, cluster)]),
         next_cluster_key: 1,
         selected_cluster: Some(1),
@@ -2278,25 +2365,80 @@ fn delete_confirmation_can_be_cancelled_without_sending_a_command() {
         terminal_launch_error: None,
         cluster_selections: Default::default(),
         resource_navigation_expansion: Default::default(),
-    }));
-    let commands = Rc::new(RefCell::new(Vec::new()));
-    let state_for_ui = state.clone();
-    let commands_for_ui = commands.clone();
-    let mut harness = Harness::new_ui(move |ui| {
-        show_delete_confirmation(
-            ui.ctx(),
-            &mut state_for_ui.borrow_mut(),
-            &mut commands_for_ui.borrow_mut(),
-        );
-    });
-    components::test_support::setup_egui(&mut harness);
+    };
 
     harness.run();
     harness.get_by_label("Cancel").click_accesskit();
     harness.run();
 
-    assert!(commands.borrow().is_empty());
-    assert!(state.borrow().clusters[&1].pending_delete.is_none());
+    assert!(harness.state().worker.commands.is_empty());
+    assert!(
+        harness.state().ui_state.clusters[&1]
+            .pending_delete
+            .is_none()
+    );
+}
+
+#[test]
+fn delete_confirmation_waits_before_enabling_the_destructive_action() {
+    let api_resource = fixture_api_resource("", "ConfigMap", "configmaps");
+    let mut cluster = fixture_cluster(1, "dev");
+    cluster.pending_delete = Some(PendingDelete {
+        api_resource,
+        resource_name: "important-config".into(),
+        namespace: Some("default".into()),
+        confirmation_available_at: std::time::Instant::now() + std::time::Duration::from_secs(3),
+    });
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = UiState {
+        clusters: HashMap::from([(1, cluster)]),
+        next_cluster_key: 1,
+        selected_cluster: Some(1),
+        log_windows: BTreeMap::new(),
+        next_log_window_id: 0,
+        log_display_options: Default::default(),
+        terminal_settings_open: false,
+        terminal_settings_blade: None,
+        terminal_settings_draft: Default::default(),
+        terminal_settings_error: None,
+        terminal_launch_error: None,
+        cluster_selections: Default::default(),
+        resource_navigation_expansion: Default::default(),
+    };
+
+    harness.run_steps(1);
+    harness
+        .get_by_label("Delete important-config")
+        .click_accesskit();
+    harness.run_steps(1);
+    assert!(harness.state().worker.commands.is_empty());
+    assert!(
+        harness.state().ui_state.clusters[&1]
+            .pending_delete
+            .is_some()
+    );
+
+    harness
+        .state_mut()
+        .ui_state
+        .clusters
+        .get_mut(&1)
+        .unwrap()
+        .pending_delete = Some(PendingDelete {
+        api_resource: fixture_api_resource("", "ConfigMap", "configmaps"),
+        resource_name: "important-config".into(),
+        namespace: Some("default".into()),
+        confirmation_available_at: std::time::Instant::now(),
+    });
+    harness.run();
+    harness
+        .get_by_label("Delete important-config")
+        .click_accesskit();
+    harness.run();
+    assert!(matches!(
+        harness.state().worker.commands.as_slice(),
+        [WorkerCommand::DeleteResource { resource_name, .. }] if resource_name == "important-config"
+    ));
 }
 
 #[test]

@@ -24,6 +24,7 @@ pub mod blade;
 pub mod button;
 pub mod colors;
 pub mod combobox;
+pub mod confirmation_dialog;
 pub mod design;
 pub mod error_dialog;
 pub mod fuzzy;
@@ -47,6 +48,9 @@ pub use button::{ButtonRounding, ButtonSize, ButtonVariant, TailwindButton};
 pub use combobox::{
     ComboboxResponse, ComboboxUi, ItemResponse, NoFilter, SelectionAction, TailwindCombobox,
     WithFilter,
+};
+pub use confirmation_dialog::{
+    ConfirmationDialog, ConfirmationDialogAction, ConfirmationDialogKind,
 };
 pub use error_dialog::{ErrorDialog, ErrorDialogAction};
 pub use interaction::PointingHand;
