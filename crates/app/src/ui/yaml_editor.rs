@@ -1,6 +1,6 @@
 use super::state::{UiState, ValidationState, YamlEditorWindowState};
 use crate::resource_schema::{
-    CompletionContext, CompletionContextKind, SchemaDiagnostic, SourceRange,
+    CompletionContext, CompletionContextKind, SourceRange, YamlDiagnostic,
 };
 use crate::worker::WorkerCommand;
 use components::colors::{TABLE_BORDER, TOOLBAR_BACKGROUND, gray, indigo};
@@ -171,8 +171,6 @@ pub(super) fn show_editor_window(
                 }
                 if let Some(error) = &editor.error {
                     error_strip(ui, error);
-                } else if editor.is_modified() {
-                    warning_strip(ui);
                 }
                 if show_code_editor(ctx, ui, editor) {
                     refresh_local_validation(editor);
@@ -223,27 +221,6 @@ fn status_indicator(ui: &mut egui::Ui, color: egui::Color32, label: &str) {
             .font(typography::body())
             .color(gray::_600),
     );
-}
-
-fn warning_strip(ui: &mut egui::Ui) {
-    egui::Frame::new()
-        .fill(egui::Color32::from_rgb(47, 35, 12))
-        .stroke(egui::Stroke::new(1.0, status::WARNING))
-        .inner_margin(egui::Margin::symmetric(
-            spacing::LG as i8,
-            spacing::SM as i8,
-        ))
-        .show(ui, |ui| {
-            ui.set_min_width(ui.available_width());
-            ui.label(
-                egui::RichText::new(
-                    "Unsaved changes — apply to update the resource in the cluster.",
-                )
-                .font(typography::body())
-                .color(egui::Color32::from_rgb(253, 230, 138)),
-            );
-        });
-    ui.add_space(spacing::SM);
 }
 
 fn error_strip(ui: &mut egui::Ui, error: &str) {
@@ -573,7 +550,7 @@ fn show_diagnostic_underlines(
     editor_id: u64,
     galley: &egui::Galley,
     galley_pos: egui::Pos2,
-    diagnostics: &[SchemaDiagnostic],
+    diagnostics: &[YamlDiagnostic],
 ) {
     for (diagnostic_index, diagnostic) in diagnostics.iter().enumerate() {
         let Some(range) = &diagnostic.range else {
@@ -931,23 +908,7 @@ fn refresh_local_validation(editor: &mut YamlEditorWindowState) {
     editor.diagnostics.clear();
     match &editor.schema {
         Some(schema) => match schema.validate_yaml(&editor.edited_yaml) {
-            Ok(mut diagnostics) => {
-                for diagnostic in &mut diagnostics {
-                    diagnostic.range = diagnostic
-                        .range
-                        .take()
-                        .or_else(|| {
-                            yaml_path_line(&editor.edited_yaml, &diagnostic.path)
-                                .and_then(|line| SourceRange::full_line(&editor.edited_yaml, line))
-                        })
-                        .or_else(|| SourceRange::full_line(&editor.edited_yaml, 1));
-                    diagnostic.line = diagnostic.range.as_ref().map(|range| {
-                        editor.edited_yaml[..byte_index(&editor.edited_yaml, range.start)]
-                            .lines()
-                            .count()
-                            .max(1)
-                    });
-                }
+            Ok(diagnostics) => {
                 editor.diagnostics = diagnostics;
                 if editor.diagnostics.is_empty() {
                     editor.validation_due = Some(Instant::now() + VALIDATION_DEBOUNCE);
@@ -959,7 +920,7 @@ fn refresh_local_validation(editor: &mut YamlEditorWindowState) {
                 editor.server_validation = ValidationState::Failed(message);
                 editor.validation_due = Some(Instant::now() + VALIDATION_DEBOUNCE);
             }
-            Err(message) => editor.diagnostics.push(SchemaDiagnostic {
+            Err(message) => editor.diagnostics.push(YamlDiagnostic {
                 range: yaml_error_range(&editor.edited_yaml, &message),
                 line: yaml_error_line(&message),
                 path: String::new(),
@@ -968,7 +929,7 @@ fn refresh_local_validation(editor: &mut YamlEditorWindowState) {
         },
         None => match serde_yaml::from_str::<serde_yaml::Value>(&editor.edited_yaml) {
             Ok(_) => editor.validation_due = Some(Instant::now() + VALIDATION_DEBOUNCE),
-            Err(error) => editor.diagnostics.push(SchemaDiagnostic {
+            Err(error) => editor.diagnostics.push(YamlDiagnostic {
                 range: error.location().and_then(|location| {
                     SourceRange::at_yaml_location(
                         &editor.edited_yaml,
@@ -999,21 +960,6 @@ fn yaml_error_range(yaml: &str, message: &str) -> Option<SourceRange> {
     SourceRange::at_yaml_location(yaml, line.parse().ok()?, column.parse().ok()?)
 }
 
-fn yaml_path_line(yaml: &str, path: &str) -> Option<usize> {
-    let key = path
-        .rsplit('/')
-        .next()
-        .filter(|segment| !segment.is_empty())?
-        .replace("~1", "/")
-        .replace("~0", "~");
-    yaml.lines()
-        .position(|line| {
-            let trimmed = line.trim_start().trim_start_matches("- ");
-            trimmed.starts_with(&format!("{key}:"))
-        })
-        .map(|line| line + 1)
-}
-
 fn maybe_request_server_validation(
     editor: &mut YamlEditorWindowState,
     commands_to_send: &mut Vec<WorkerCommand>,
@@ -1038,13 +984,16 @@ fn maybe_request_server_validation(
 
 fn show_diagnostics(ctx: &egui::Context, ui: &mut egui::Ui, editor: &mut YamlEditorWindowState) {
     let (diagnostics, showing_retained_diagnostics) = diagnostics_to_display(editor);
+    if let ValidationState::Failed(message) = &editor.server_validation {
+        error_strip(ui, message);
+    }
     if diagnostics.is_empty() {
         match &editor.server_validation {
             ValidationState::Pending => {
                 status_indicator(ui, gray::_400, "Validating with cluster…")
             }
             ValidationState::Valid => status_indicator(ui, status::SUCCESS, "Validated by cluster"),
-            ValidationState::Failed(message) => error_strip(ui, message),
+            ValidationState::Failed(_) => {}
             ValidationState::Idle => {
                 if editor.schema_loading {
                     status_indicator(ui, gray::_400, "Loading Kubernetes schema…");
@@ -1090,7 +1039,7 @@ fn show_diagnostics(ctx: &egui::Context, ui: &mut egui::Ui, editor: &mut YamlEdi
     }
 }
 
-fn diagnostics_to_display(editor: &YamlEditorWindowState) -> (&[SchemaDiagnostic], bool) {
+fn diagnostics_to_display(editor: &YamlEditorWindowState) -> (&[YamlDiagnostic], bool) {
     let validation_in_progress = editor.validation_due.is_some()
         || matches!(editor.server_validation, ValidationState::Pending);
     if editor.diagnostics.is_empty()
@@ -1797,7 +1746,7 @@ mod tests {
             .expect("diagnostic text is present");
         let mut editor = editor(yaml);
         editor.validation_revision = 1;
-        editor.diagnostics = vec![SchemaDiagnostic {
+        editor.diagnostics = vec![YamlDiagnostic {
             path: "/metadata/name".into(),
             message: "\"settings\" is not an allowed value".into(),
             line: Some(4),

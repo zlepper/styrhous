@@ -8,11 +8,11 @@ eframe = { version = "0.33", features = ["persistence"] }
 egui = "0.33"
 egui_extras = { version = "0.33", features = ["syntect"] }
 components = { path = "../components" }
-kube = { version = "2.0", features = ["runtime"] }
+kube = { version = "3.1", features = ["runtime"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 tokio = { version = "1.48", features = ["rt-multi-thread", "full"] }
-k8s-openapi = { version = "0.26", features = ["v1_31"] }
+k8s-openapi = { version = "0.27", features = ["v1_31"] }
 anyhow = "1.0"
 futures-util = "0.3"
 itertools = "0.14"

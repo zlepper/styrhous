@@ -30,7 +30,7 @@ pub struct CompletionResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SchemaDiagnostic {
+pub struct YamlDiagnostic {
     pub path: String,
     pub message: String,
     pub line: Option<usize>,
@@ -44,7 +44,36 @@ pub struct SourceRange {
     pub end: usize,
 }
 
+impl YamlDiagnostic {
+    pub fn at_path(path: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            path: path.into(),
+            message: message.into(),
+            line: None,
+            range: None,
+        }
+    }
+
+    pub fn locate_in(mut self, yaml: &str) -> Self {
+        self.range = self
+            .range
+            .or_else(|| SourceRange::at_yaml_path(yaml, &self.path));
+        self.line = self.range.as_ref().map(|range| {
+            yaml.chars()
+                .take(range.start)
+                .filter(|character| *character == '\n')
+                .count()
+                + 1
+        });
+        self
+    }
+}
+
 impl SourceRange {
+    pub fn at_yaml_path(source: &str, path: &str) -> Option<Self> {
+        yaml_path_range(source, path)
+    }
+
     pub fn at_yaml_location(source: &str, line: usize, column: usize) -> Option<Self> {
         let start = character_index_at_location(source, line, column)?;
         let end = (start + 1).min(source.chars().count());
@@ -53,18 +82,65 @@ impl SourceRange {
             end: end.max(start),
         })
     }
+}
 
-    pub fn full_line(source: &str, line: usize) -> Option<Self> {
-        let start = character_index_at_location(source, line, 1)?;
-        let end = source
-            .lines()
-            .nth(line.saturating_sub(1))
-            .map_or(start, |text| start + text.chars().count());
-        Some(Self {
-            start,
-            end: end.max(start + 1).min(source.chars().count()),
-        })
+/// Converts Kubernetes' dotted field-path notation into an RFC 6901 JSON pointer.
+///
+/// API status causes use paths such as `spec.template.spec.containers[0].image`, while the
+/// editor's YAML source mapper operates on JSON pointers.
+pub fn kubernetes_field_path_to_json_pointer(field: &str) -> Option<String> {
+    let mut segments = Vec::new();
+    let mut cursor = 0;
+    let bytes = field.as_bytes();
+
+    while cursor < bytes.len() {
+        if bytes[cursor] == b'.' {
+            return None;
+        }
+        let start = cursor;
+        while cursor < bytes.len() && !matches!(bytes[cursor], b'.' | b'[') {
+            cursor += 1;
+        }
+        if start != cursor {
+            segments.push(field[start..cursor].to_owned());
+        }
+        while cursor < bytes.len() && bytes[cursor] == b'[' {
+            cursor += 1;
+            let start = cursor;
+            while cursor < bytes.len() && bytes[cursor] != b']' {
+                cursor += 1;
+            }
+            if start == cursor || cursor == bytes.len() {
+                return None;
+            }
+            let segment = field[start..cursor].trim_matches('\'').trim_matches('\"');
+            if segment.is_empty() {
+                return None;
+            }
+            segments.push(segment.to_owned());
+            cursor += 1;
+        }
+        if cursor == bytes.len() {
+            break;
+        }
+        if bytes[cursor] != b'.' {
+            return None;
+        }
+        cursor += 1;
+        if cursor == bytes.len() {
+            return None;
+        }
     }
+
+    (!segments.is_empty()).then(|| {
+        segments
+            .into_iter()
+            .fold(String::new(), |mut pointer, segment| {
+                pointer.push('/');
+                pointer.push_str(&segment.replace('~', "~0").replace('/', "~1"));
+                pointer
+            })
+    })
 }
 
 /// A resource root schema in JSON Schema form. It is intentionally kept as JSON so the UI and
@@ -110,7 +186,7 @@ impl ResourceSchema {
         })))
     }
 
-    pub fn validate_yaml(&self, yaml: &str) -> Result<Vec<SchemaDiagnostic>, String> {
+    pub fn validate_yaml(&self, yaml: &str) -> Result<Vec<YamlDiagnostic>, String> {
         let yaml_value: serde_yaml::Value = serde_yaml::from_str(yaml).map_err(|error| {
             error
                 .location()
@@ -123,11 +199,9 @@ impl ResourceSchema {
             .map_err(|error| format!("Unable to compile the Kubernetes schema: {error}"))?;
         Ok(validator
             .iter_errors(&value)
-            .map(|error| SchemaDiagnostic {
-                path: error.instance_path.to_string(),
-                message: error.to_string(),
-                line: None,
-                range: yaml_path_range(yaml, &error.instance_path.to_string()),
+            .map(|error| {
+                YamlDiagnostic::at_path(error.instance_path.to_string(), error.to_string())
+                    .locate_in(yaml)
             })
             .collect())
     }
@@ -645,7 +719,9 @@ fn keys_at_indent(yaml: &str, before_line: usize, indent: usize) -> Vec<String> 
 
 #[cfg(test)]
 mod tests {
-    use super::{CompletionContextKind, ResourceSchema, yaml_context};
+    use super::{
+        CompletionContextKind, ResourceSchema, kubernetes_field_path_to_json_pointer, yaml_context,
+    };
     use crate::api_resource::ApiResource;
     use k8s_openapi::serde_json::json;
 
@@ -665,6 +741,22 @@ mod tests {
             },
         );
         assert!(schema.is_some());
+    }
+
+    #[test]
+    fn converts_kubernetes_field_paths_to_json_pointers() {
+        assert_eq!(
+            kubernetes_field_path_to_json_pointer("spec.template.spec.containers[0].image"),
+            Some("/spec/template/spec/containers/0/image".into())
+        );
+        assert_eq!(
+            kubernetes_field_path_to_json_pointer("metadata.labels[app.kubernetes.io/name]"),
+            Some("/metadata/labels/app.kubernetes.io~1name".into())
+        );
+        assert_eq!(
+            kubernetes_field_path_to_json_pointer("spec..replicas"),
+            None
+        );
     }
 
     #[test]
