@@ -2,14 +2,14 @@ use crate::api_resource::ApiResource;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// A fixed section in the primary resource navigator.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) struct CuratedResourceSection {
     pub(super) name: &'static str,
     pub(super) api_resources: Vec<ApiResource>,
 }
 
 /// A primary resource or a fixed section in the resource navigator.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) enum CuratedNavigationEntry {
     Resource(ApiResource),
     Section(CuratedResourceSection),
@@ -20,7 +20,7 @@ pub(super) enum CuratedNavigationEntry {
 /// The section order and the resources assigned to it are intentionally static.
 /// Discovery only decides which resources exist on the connected cluster and provides
 /// the server-supported API version used by the watcher.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub(super) struct ResourceNavigation {
     pub(super) curated_entries: Vec<CuratedNavigationEntry>,
     pub(super) other_api_groups: BTreeMap<String, Vec<ApiResource>>,

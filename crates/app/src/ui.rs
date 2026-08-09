@@ -20,9 +20,11 @@ use crate::terminal_launcher::{
 use crate::worker::{Worker, WorkerTrait};
 use components::apply_light_theme;
 use dialogs::{show_delete_confirmation, show_terminal_launch_error};
-use state::{LogDisplayOptions, UiState};
+use state::{LogDisplayOptions, PersistedClusterSelections, ResourceNavigationExpansion, UiState};
 
+const CLUSTER_SELECTIONS_STORAGE_KEY: &str = "cluster_selections";
 const LOG_DISPLAY_OPTIONS_STORAGE_KEY: &str = "log_display_options";
+const RESOURCE_NAVIGATION_EXPANSION_STORAGE_KEY: &str = "resource_navigation_expansion";
 const TERMINAL_LAUNCH_SETTINGS_STORAGE_KEY: &str = "terminal_launch_settings";
 
 pub struct MyEguiApp<W: WorkerTrait = Worker, L: TerminalLauncher = SystemTerminalLauncher> {
@@ -50,14 +52,17 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
         egui_extras::install_image_loaders(&cc.egui_ctx);
         apply_light_theme(&cc.egui_ctx);
         let mut app = Self::default();
-        app.ui_state.log_display_options = cc
-            .storage
+        app.load_persisted_state(cc.storage);
+        app
+    }
+
+    fn load_persisted_state(&mut self, storage: Option<&dyn eframe::Storage>) {
+        self.ui_state.log_display_options = storage
             .and_then(|storage| {
                 eframe::get_value::<LogDisplayOptions>(storage, LOG_DISPLAY_OPTIONS_STORAGE_KEY)
             })
             .unwrap_or_default();
-        app.terminal_launch_settings = cc
-            .storage
+        self.terminal_launch_settings = storage
             .and_then(|storage| {
                 eframe::get_value::<TerminalLaunchSettings>(
                     storage,
@@ -65,7 +70,22 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
                 )
             })
             .unwrap_or_default();
-        app
+        self.ui_state.cluster_selections = storage
+            .and_then(|storage| {
+                eframe::get_value::<PersistedClusterSelections>(
+                    storage,
+                    CLUSTER_SELECTIONS_STORAGE_KEY,
+                )
+            })
+            .unwrap_or_default();
+        self.ui_state.resource_navigation_expansion = storage
+            .and_then(|storage| {
+                eframe::get_value::<ResourceNavigationExpansion>(
+                    storage,
+                    RESOURCE_NAVIGATION_EXPANSION_STORAGE_KEY,
+                )
+            })
+            .unwrap_or_default();
     }
 }
 
@@ -93,7 +113,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             &mut commands_to_send,
             &self.terminal_launch_settings,
         );
-        let clicked_api_resource = resource_navigation::show(ctx, &self.ui_state);
+        let clicked_api_resource = resource_navigation::show(ctx, &mut self.ui_state);
         yaml_editor::show(ctx, &mut self.ui_state, &mut commands_to_send);
         workspace::show(
             ctx,
@@ -140,6 +160,16 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(
             storage,
+            CLUSTER_SELECTIONS_STORAGE_KEY,
+            &self.ui_state.cluster_selections,
+        );
+        eframe::set_value(
+            storage,
+            RESOURCE_NAVIGATION_EXPANSION_STORAGE_KEY,
+            &self.ui_state.resource_navigation_expansion,
+        );
+        eframe::set_value(
+            storage,
             LOG_DISPLAY_OPTIONS_STORAGE_KEY,
             &self.ui_state.log_display_options,
         );
@@ -149,6 +179,12 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             &self.terminal_launch_settings,
         );
     }
+
+    fn persist_egui_memory(&self) -> bool {
+        // Persist only the app settings explicitly written in `save`. Egui's complete memory
+        // includes `Area` z-ordering, which can leave a stale overlay layer above a later blade.
+        false
+    }
 }
 
 #[cfg(test)]
@@ -157,7 +193,12 @@ mod tests;
 #[cfg(test)]
 mod persistence_tests {
     use super::*;
-    use std::collections::HashMap;
+    use crate::api_resource::ApiResource;
+    use crate::cluster_connection_manager::Cluster;
+    use crate::log_store::LogStoreService;
+    use crate::minimal_namespace::MinimalNamespace;
+    use crate::worker::{MockWorker, WorkerResult};
+    use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
     #[derive(Default)]
     struct MemoryStorage(HashMap<String, String>);
@@ -210,6 +251,243 @@ mod persistence_tests {
                 TERMINAL_LAUNCH_SETTINGS_STORAGE_KEY
             ),
             Some(expected)
+        );
+    }
+
+    #[test]
+    fn app_does_not_persist_egui_area_memory() {
+        let app = MyEguiApp::<MockWorker>::default();
+
+        assert!(!eframe::App::persist_egui_memory(&app));
+    }
+
+    fn api_resource(group: &str, version: &str, kind: &str, name: &str) -> ApiResource {
+        ApiResource {
+            group: group.into(),
+            version: version.into(),
+            kind: kind.into(),
+            name: name.into(),
+            namespaced: true,
+        }
+    }
+
+    fn saved_selections() -> PersistedClusterSelections {
+        PersistedClusterSelections {
+            selections: BTreeMap::from([(
+                "dev".into(),
+                state::PersistedClusterSelection {
+                    selected_namespaces: BTreeSet::from(["default".into(), "obsolete".into()]),
+                    selected_api_resource: Some(state::PersistedApiResource {
+                        group: "apps".into(),
+                        name: "deployments".into(),
+                    }),
+                },
+            )]),
+        }
+    }
+
+    fn apply_results(
+        ui_state: &mut UiState,
+        results: impl IntoIterator<Item = WorkerResult>,
+    ) -> Vec<crate::worker::WorkerCommand> {
+        let mut worker = MockWorker {
+            results: VecDeque::from_iter(results),
+            ..Default::default()
+        };
+        ui_state.update(&mut worker, &LogStoreService::default())
+    }
+
+    fn current_dev_cluster() -> WorkerResult {
+        WorkerResult::KubernetesClustersUpdated(vec![Cluster {
+            name: "dev".into(),
+            cluster: Some("development".into()),
+            is_current: true,
+        }])
+    }
+
+    fn dev_namespaces() -> WorkerResult {
+        WorkerResult::KubernetesNamespacesReplaced {
+            cluster_key: 1,
+            namespaces: vec![MinimalNamespace {
+                name: "default".into(),
+                display_name: None,
+            }],
+        }
+    }
+
+    fn dev_api_resources() -> WorkerResult {
+        WorkerResult::KubernetesApisLoaded {
+            cluster_key: 1,
+            api_resources: vec![api_resource("apps", "v1", "Deployment", "deployments")],
+        }
+    }
+
+    #[test]
+    fn cluster_selections_round_trip_through_app_storage_without_shared_state() {
+        let expected = saved_selections();
+        let mut storage = MemoryStorage::default();
+        let mut app = MyEguiApp::<MockWorker>::default();
+        app.ui_state.cluster_selections = expected.clone();
+
+        eframe::App::save(&mut app, &mut storage);
+
+        let mut restored = MyEguiApp::<MockWorker>::default();
+        restored.load_persisted_state(Some(&storage));
+
+        assert_eq!(restored.ui_state.cluster_selections, expected);
+    }
+
+    #[test]
+    fn resource_navigation_expansion_round_trips_through_app_storage() {
+        let expected = ResourceNavigationExpansion {
+            expanded_nodes: BTreeSet::from([
+                "section:Apps & Containers".into(),
+                "other-resources".into(),
+                "other-resource-group:apps".into(),
+            ]),
+        };
+        let mut storage = MemoryStorage::default();
+        let mut app = MyEguiApp::<MockWorker>::default();
+        app.ui_state.resource_navigation_expansion = expected.clone();
+
+        eframe::App::save(&mut app, &mut storage);
+
+        let mut restored = MyEguiApp::<MockWorker>::default();
+        restored.load_persisted_state(Some(&storage));
+
+        assert_eq!(restored.ui_state.resource_navigation_expansion, expected);
+    }
+
+    #[test]
+    fn saved_selection_restores_when_discovery_results_arrive_in_either_order() {
+        for results in [
+            vec![current_dev_cluster(), dev_namespaces(), dev_api_resources()],
+            vec![current_dev_cluster(), dev_api_resources(), dev_namespaces()],
+        ] {
+            let mut ui_state = UiState {
+                cluster_selections: saved_selections(),
+                ..Default::default()
+            };
+            let commands = apply_results(&mut ui_state, results);
+
+            let cluster = &ui_state.clusters[&1];
+            assert_eq!(
+                cluster.selected_namespaces,
+                HashSet::from(["default".into()])
+            );
+            assert_eq!(
+                cluster
+                    .selected_api_resource
+                    .as_ref()
+                    .map(|resource| resource.name.as_str()),
+                Some("deployments")
+            );
+            assert!(commands.iter().any(|command| matches!(
+                command,
+                crate::worker::WorkerCommand::StartResourceWatch {
+                    cluster_key: 1,
+                    api_resource,
+                    namespace,
+                } if api_resource.name == "deployments" && namespace.as_deref() == Some("default")
+            )));
+        }
+    }
+
+    #[test]
+    fn unavailable_saved_selection_is_discarded_without_affecting_other_contexts() {
+        let mut selections = saved_selections();
+        selections
+            .selections
+            .get_mut("dev")
+            .unwrap()
+            .selected_namespaces = BTreeSet::from(["obsolete".into()]);
+        selections.selections.insert(
+            "prod".into(),
+            state::PersistedClusterSelection {
+                selected_namespaces: BTreeSet::from(["production".into()]),
+                selected_api_resource: Some(state::PersistedApiResource {
+                    group: "core".into(),
+                    name: "pods".into(),
+                }),
+            },
+        );
+        let mut ui_state = UiState {
+            cluster_selections: selections,
+            ..Default::default()
+        };
+
+        apply_results(
+            &mut ui_state,
+            [
+                current_dev_cluster(),
+                WorkerResult::KubernetesNamespacesReplaced {
+                    cluster_key: 1,
+                    namespaces: vec![MinimalNamespace {
+                        name: "default".into(),
+                        display_name: None,
+                    }],
+                },
+                WorkerResult::KubernetesApisLoaded {
+                    cluster_key: 1,
+                    api_resources: vec![api_resource("apps", "v1", "Service", "services")],
+                },
+            ],
+        );
+
+        assert!(ui_state.clusters[&1].selected_namespaces.is_empty());
+        assert!(ui_state.clusters[&1].selected_api_resource.is_none());
+        assert!(!ui_state.cluster_selections.selections.contains_key("dev"));
+        assert!(ui_state.cluster_selections.selections.contains_key("prod"));
+    }
+
+    #[test]
+    fn selection_changes_update_only_their_contexts_persisted_entry() {
+        let mut ui_state = UiState {
+            cluster_selections: PersistedClusterSelections {
+                selections: BTreeMap::from([(
+                    "prod".into(),
+                    state::PersistedClusterSelection {
+                        selected_namespaces: BTreeSet::from(["production".into()]),
+                        selected_api_resource: Some(state::PersistedApiResource {
+                            group: "core".into(),
+                            name: "pods".into(),
+                        }),
+                    },
+                )]),
+            },
+            ..Default::default()
+        };
+        apply_results(
+            &mut ui_state,
+            [
+                current_dev_cluster(),
+                dev_namespaces(),
+                WorkerResult::KubernetesApisLoaded {
+                    cluster_key: 1,
+                    api_resources: vec![api_resource("apps", "v1", "Deployment", "deployments")],
+                },
+            ],
+        );
+
+        let deployment = api_resource("apps", "v1", "Deployment", "deployments");
+        let mut commands = Vec::new();
+        ui_state.select_api_resource(1, deployment, &mut commands);
+        ui_state.replace_selected_namespaces(1, ["default".into()], &mut commands);
+
+        assert_eq!(
+            ui_state.cluster_selections.selections["dev"].selected_namespaces,
+            BTreeSet::from(["default".into()])
+        );
+        assert_eq!(
+            ui_state.cluster_selections.selections["dev"]
+                .selected_api_resource
+                .as_ref()
+                .map(|resource| (resource.group.as_str(), resource.name.as_str())),
+            Some(("apps", "deployments"))
+        );
+        assert_eq!(
+            ui_state.cluster_selections.selections["prod"].selected_namespaces,
+            BTreeSet::from(["production".into()])
         );
     }
 }

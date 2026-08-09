@@ -173,6 +173,8 @@ fn namespace_selector_replaces_toggles_and_selects_all_without_stopping_watches(
         terminal_settings_draft: Default::default(),
         terminal_settings_error: None,
         terminal_launch_error: None,
+        cluster_selections: Default::default(),
+        resource_navigation_expansion: Default::default(),
     };
     harness.run_steps(1);
 
@@ -300,6 +302,8 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
         terminal_settings_draft: Default::default(),
         terminal_settings_error: None,
         terminal_launch_error: None,
+        cluster_selections: Default::default(),
+        resource_navigation_expansion: Default::default(),
     };
     harness.run();
     harness.get_by_label("Nodes").click_accesskit();
@@ -431,6 +435,20 @@ fn oracle_resource_table_snapshot_uses_injected_cluster_state() {
     harness.get_by_label("Apps & Containers").click_accesskit();
     harness.run();
     harness.snapshot("oracle_resource_table_injected");
+}
+
+#[test]
+fn resource_navigation_uses_the_persisted_expansion_state() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    for node_id in ["section:Apps & Containers"] {
+        state.set_resource_navigation_node_expanded(node_id, true);
+    }
+    harness.state_mut().ui_state = state;
+
+    harness.run();
+
+    harness.get_by_label("Pods");
 }
 
 #[test]
@@ -2045,6 +2063,8 @@ fn delete_confirmation_can_be_cancelled_without_sending_a_command() {
         terminal_settings_draft: Default::default(),
         terminal_settings_error: None,
         terminal_launch_error: None,
+        cluster_selections: Default::default(),
+        resource_navigation_expansion: Default::default(),
     }));
     let commands = Rc::new(RefCell::new(Vec::new()));
     let state_for_ui = state.clone();
@@ -2091,6 +2111,8 @@ fn resource_navigation_selects_primary_curated_gateway_and_other_resources() {
         terminal_settings_draft: Default::default(),
         terminal_settings_error: None,
         terminal_launch_error: None,
+        cluster_selections: Default::default(),
+        resource_navigation_expansion: Default::default(),
     };
     harness.run();
 

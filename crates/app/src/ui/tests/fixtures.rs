@@ -174,5 +174,7 @@ pub(super) fn oracle_resource_table_state() -> UiState {
         terminal_settings_draft: Default::default(),
         terminal_settings_error: None,
         terminal_launch_error: None,
+        cluster_selections: Default::default(),
+        resource_navigation_expansion: Default::default(),
     }
 }
