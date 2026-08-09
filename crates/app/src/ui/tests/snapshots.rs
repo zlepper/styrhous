@@ -3,12 +3,12 @@ use super::super::dialogs::show_delete_confirmation;
 use super::super::state::ClusterConnectionState;
 use super::super::state::{PendingDelete, ResourceWatchState, UiState};
 use super::fixtures::{
-    application_harness, fixture_api_resource, fixture_cluster,
+    application_harness, application_harness_with_terminal, fixture_api_resource, fixture_cluster,
     fixture_cluster_scoped_api_resource, oracle_resource_table_state,
 };
 use crate::cluster_connection_manager::Cluster;
 use crate::minimal_namespace::MinimalNamespace;
-use crate::minimal_resource::MinimalResource;
+use crate::minimal_resource::{MinimalResource, PodLogContainer};
 use crate::resource_catalog::build_resource_navigation;
 use crate::resource_detail::{
     ConfigMapDetail, ManagedResource, PodConditionDetail, PodContainerDetail, PodDetail,
@@ -19,6 +19,7 @@ use crate::resource_table::{
     AVAILABLE_COLUMN, CONTAINERS_COLUMN, CellValue, ContainerIndicator, ContainerKind,
     READY_COLUMN, RESTARTS_COLUMN, STATUS_COLUMN, StatusTone, UP_TO_DATE_COLUMN,
 };
+use crate::terminal_launcher::{TerminalLaunchSettings, test_support::MockTerminalLauncher};
 use crate::worker::{MockWorker, WorkerCommand, WorkerResult};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
@@ -167,6 +168,10 @@ fn namespace_selector_replaces_toggles_and_selects_all_without_stopping_watches(
         log_windows: BTreeMap::new(),
         next_log_window_id: 0,
         log_display_options: Default::default(),
+        terminal_settings_open: false,
+        terminal_settings_draft: Default::default(),
+        terminal_settings_error: None,
+        terminal_launch_error: None,
     };
     harness.run_steps(1);
 
@@ -289,6 +294,10 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
         log_windows: BTreeMap::new(),
         next_log_window_id: 0,
         log_display_options: Default::default(),
+        terminal_settings_open: false,
+        terminal_settings_draft: Default::default(),
+        terminal_settings_error: None,
+        terminal_launch_error: None,
     };
     harness.run();
     harness.get_by_label("Nodes").click_accesskit();
@@ -737,6 +746,117 @@ fn resource_table_row_context_menu_opens_when_right_clicking_resource_text() {
     harness.run();
 
     harness.get_by_label("Edit YAML");
+}
+
+#[test]
+fn shell_action_launches_the_selected_context_pod_and_application_container() {
+    let mut harness = application_harness_with_terminal::<MockWorker, MockTerminalLauncher>();
+    let mut state = oracle_resource_table_state();
+    let pods = fixture_api_resource("core", "Pod", "pods");
+    let resource = state
+        .clusters
+        .get_mut(&2)
+        .unwrap()
+        .resource_cache
+        .get_mut(&(pods, Some("kube-system".into())))
+        .unwrap()
+        .resources
+        .values_mut()
+        .next()
+        .unwrap();
+    resource.log_containers = vec![PodLogContainer {
+        name: "coredns".into(),
+        kind: ContainerKind::App,
+    }];
+    let pod_name = resource.name.clone();
+    harness.state_mut().ui_state = state;
+    harness.run();
+
+    let action_label = format!("More actions for {pod_name}");
+    harness.get_by_label(&action_label).click_accesskit();
+    harness.run();
+    harness.get_by_label("Shell").click_accesskit();
+    harness.run();
+
+    assert_eq!(
+        harness.state().terminal_launcher.requests.as_slice(),
+        &[crate::terminal_launcher::PodShellRequest {
+            kube_context: "kind-kind".into(),
+            namespace: "kube-system".into(),
+            pod_name,
+            container: "coredns".into(),
+        }]
+    );
+}
+
+#[test]
+fn settings_button_opens_the_terminal_launcher_blade() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness.run();
+
+    harness.get_by_label("Settings").click_accesskit();
+    harness.run();
+
+    harness.get_by_label("Terminal launcher");
+    harness.get_by_label("Save changes");
+    harness.snapshot("settings_terminal_launcher");
+}
+
+#[test]
+fn settings_blade_shows_custom_terminal_launcher_details() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    state.terminal_settings_open = true;
+    state.terminal_settings_draft = TerminalLaunchSettings {
+        custom_template: Some("alacritty -e {command}".into()),
+    };
+    harness.state_mut().ui_state = state;
+    harness.run();
+
+    harness.get_by_role_and_label(egui::accesskit::Role::TextInput, "Command template");
+    harness.get_by_label("Save changes");
+    harness.snapshot("settings_terminal_launcher_custom");
+}
+
+#[test]
+fn settings_blade_shows_invalid_custom_template_after_save() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness.run();
+
+    harness.get_by_label("Settings").click_accesskit();
+    harness.run();
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::RadioButton, "Custom launcher")
+        .click_accesskit();
+    harness.run();
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::TextInput, "Command template")
+        .click();
+    harness.run();
+    harness
+        .input_mut()
+        .events
+        .push(egui::Event::Text("alacritty".into()));
+    harness.run();
+    assert_eq!(
+        harness
+            .state()
+            .ui_state
+            .terminal_settings_draft
+            .custom_template,
+        Some("alacritty".into())
+    );
+    harness.get_by_label("Save changes").click_accesskit();
+    harness.run();
+
+    assert_eq!(
+        harness.state().ui_state.terminal_settings_error.as_deref(),
+        Some("The launcher template must contain exactly one {command} placeholder.")
+    );
+    harness.get_by_label("Command template needs attention");
+    harness.snapshot("settings_terminal_launcher_invalid");
 }
 
 #[test]
@@ -1835,6 +1955,10 @@ fn delete_confirmation_can_be_cancelled_without_sending_a_command() {
         log_windows: BTreeMap::new(),
         next_log_window_id: 0,
         log_display_options: Default::default(),
+        terminal_settings_open: false,
+        terminal_settings_draft: Default::default(),
+        terminal_settings_error: None,
+        terminal_launch_error: None,
     }));
     let commands = Rc::new(RefCell::new(Vec::new()));
     let state_for_ui = state.clone();
@@ -1876,6 +2000,10 @@ fn resource_navigation_selects_primary_curated_gateway_and_other_resources() {
         log_windows: BTreeMap::new(),
         next_log_window_id: 0,
         log_display_options: Default::default(),
+        terminal_settings_open: false,
+        terminal_settings_draft: Default::default(),
+        terminal_settings_error: None,
+        terminal_launch_error: None,
     };
     harness.run();
 

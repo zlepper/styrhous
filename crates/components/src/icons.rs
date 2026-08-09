@@ -157,6 +157,11 @@ pub fn trash_icon() -> Image<'static> {
     Image::new(include_image!("icons/trash.svg"))
 }
 
+/// Returns a cog icon for application settings.
+pub fn settings_icon() -> Image<'static> {
+    Image::new(include_image!("icons/settings.svg"))
+}
+
 /// Render a trash (delete) icon (non-interactive)
 ///
 /// For a clickable button version, use `trash_button()` instead.

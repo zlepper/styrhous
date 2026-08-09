@@ -11,6 +11,7 @@ use crate::resource_detail::{
 };
 use crate::resource_handlers::table_definition;
 use crate::resource_table::{CONTAINERS_COLUMN, ResourceTableDefinition};
+use crate::terminal_launcher::PodShellRequest;
 use crate::worker::{ResourceDataUpdate, WorkerCommand};
 use components::colors::{WHITE, gray, indigo};
 use components::design::{radius, spacing, status, typography};
@@ -60,6 +61,7 @@ pub(super) fn show(
     ctx: &egui::Context,
     ui_state: &mut UiState,
     commands_to_send: &mut Vec<WorkerCommand>,
+    shell_requests: &mut Vec<PodShellRequest>,
 ) {
     let Some(cluster_key) = ui_state.selected_cluster else {
         return;
@@ -268,6 +270,7 @@ pub(super) fn show(
     close |= blade_result.close;
     if let Some(action) = blade_result.action {
         let mut log_to_open = None;
+        let mut shell_to_open = None;
         let navigation_action = matches!(
             &action,
             ResourceAction::NavigateDetails { .. }
@@ -347,6 +350,18 @@ pub(super) fn show(
                         } => {
                             log_to_open = Some((cluster.cluster_key, name, namespace, container));
                         }
+                        ResourceAction::Shell {
+                            name,
+                            namespace,
+                            container,
+                        } => {
+                            shell_to_open = namespace.map(|namespace| PodShellRequest {
+                                kube_context: cluster.name.clone(),
+                                namespace,
+                                pod_name: name,
+                                container: container.name,
+                            });
+                        }
                         ResourceAction::OpenDetails { .. } => {
                             unreachable!("inspector actions cannot open detail")
                         }
@@ -365,6 +380,7 @@ pub(super) fn show(
         if let Some((cluster_key, name, namespace, container)) = log_to_open {
             ui_state.open_pod_log_window(cluster_key, name, namespace, container, commands_to_send);
         }
+        shell_requests.extend(shell_to_open);
     }
     if let Some(panel) = ui_state
         .clusters

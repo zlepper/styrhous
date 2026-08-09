@@ -9,6 +9,7 @@ use crate::resource_detail::{
 };
 use crate::resource_table::CustomResourceColumn;
 use crate::sorted_name::SortedName;
+use crate::terminal_launcher::TerminalLaunchSettings;
 use crate::worker::{WorkerResult, WorkerTrait};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
@@ -23,6 +24,10 @@ pub(super) struct UiState {
     pub(super) log_windows: BTreeMap<u64, PodLogWindowState>,
     pub(super) next_log_window_id: u64,
     pub(super) log_display_options: LogDisplayOptions,
+    pub(super) terminal_settings_open: bool,
+    pub(super) terminal_settings_draft: TerminalLaunchSettings,
+    pub(super) terminal_settings_error: Option<String>,
+    pub(super) terminal_launch_error: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
@@ -460,6 +465,11 @@ pub(super) enum ResourceAction {
         namespace: Option<String>,
         container: PodLogContainer,
     },
+    Shell {
+        name: String,
+        namespace: Option<String>,
+        container: PodLogContainer,
+    },
     NavigateDetails {
         api_resource: ApiResource,
         name: String,
@@ -503,6 +513,11 @@ pub(super) enum ClusterConnectionState {
 }
 
 impl UiState {
+    pub(super) fn open_terminal_settings(&mut self, settings: &TerminalLaunchSettings) {
+        self.terminal_settings_open = true;
+        self.terminal_settings_draft = settings.clone();
+    }
+
     pub(super) fn open_pod_log_window(
         &mut self,
         cluster_key: i32,

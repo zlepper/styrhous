@@ -7,6 +7,7 @@ use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use crate::resource_catalog::{ResourceNavigation, build_resource_navigation};
 use crate::resource_table::{CellValue, READY_COLUMN, RESTARTS_COLUMN, STATUS_COLUMN, StatusTone};
+use crate::terminal_launcher::TerminalLauncher;
 use crate::worker::WorkerTrait;
 use egui_kittest::Harness;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -17,6 +18,13 @@ pub(super) fn application_harness<W: WorkerTrait>() -> Harness<'static, MyEguiAp
     Harness::builder()
         .with_size(APP_SNAPSHOT_SIZE)
         .build_eframe(|cc| MyEguiApp::<W>::new(cc))
+}
+
+pub(super) fn application_harness_with_terminal<W: WorkerTrait, L: TerminalLauncher>()
+-> Harness<'static, MyEguiApp<W, L>> {
+    Harness::builder()
+        .with_size(APP_SNAPSHOT_SIZE)
+        .build_eframe(|cc| MyEguiApp::<W, L>::new(cc))
 }
 
 pub(super) fn fixture_cluster(cluster_key: i32, name: &str) -> ClusterState {
@@ -161,5 +169,9 @@ pub(super) fn oracle_resource_table_state() -> UiState {
         log_windows: BTreeMap::new(),
         next_log_window_id: 0,
         log_display_options: Default::default(),
+        terminal_settings_open: false,
+        terminal_settings_draft: Default::default(),
+        terminal_settings_error: None,
+        terminal_launch_error: None,
     }
 }
