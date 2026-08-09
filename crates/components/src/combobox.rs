@@ -19,6 +19,7 @@ use egui::{
 };
 use std::sync::Arc;
 
+use crate::PointingHand;
 use crate::colors::{SUCCESS, WHITE, gray, indigo};
 use crate::design::{radius, typography};
 use crate::fuzzy::{matches_fuzzy, normalize_for_search};
@@ -146,6 +147,7 @@ impl<'a> ComboboxUi<'a> {
         let (rect, response) = self
             .ui
             .allocate_exact_size(Vec2::new(available_width, ITEM_HEIGHT), Sense::click());
+        let response = response.with_pointing_hand();
 
         if is_focused && self.scroll_to_focused {
             response.scroll_to_me(Some(Align::Center));
@@ -245,7 +247,12 @@ impl<'a> ComboboxUi<'a> {
         }
         let is_enabled = self.ui.is_enabled();
         response.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::WidgetType::Button, is_enabled, &label_text)
+            egui::WidgetInfo::selected(
+                egui::WidgetType::Checkbox,
+                is_enabled,
+                is_selected,
+                &label_text,
+            )
         });
 
         ItemResponse {
@@ -545,6 +552,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
         let corner_radius = radius::control();
         let (rect, response) =
             ui.allocate_exact_size(Vec2::new(width, size.input_height()), Sense::click());
+        let response = response.with_pointing_hand();
         let has_focus = response.has_focus()
             || ui.memory(|memory| memory.has_focus(response.id.with("input")))
             || is_open;

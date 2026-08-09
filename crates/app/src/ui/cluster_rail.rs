@@ -3,7 +3,7 @@ use crate::terminal_launcher::TerminalLaunchSettings;
 use crate::worker::WorkerCommand;
 use components::colors::{CLUSTER_RAIL_BACKGROUND, gray};
 use components::design::{spacing, status};
-use components::{NarrowSidebar, icons};
+use components::{NarrowSidebar, PointingHand, icons};
 use tracing::info;
 
 pub(super) fn show(
@@ -73,13 +73,15 @@ pub(super) fn show(
                         egui::Layout::bottom_up(egui::Align::Center),
                         |ui| {
                             ui.add_space(spacing::SM);
-                            let response = ui.add(
-                                egui::Button::image(
-                                    icons::settings_icon()
-                                        .fit_to_exact_size(egui::Vec2::splat(21.0)),
+                            let response = ui
+                                .add(
+                                    egui::Button::image(
+                                        icons::settings_icon()
+                                            .fit_to_exact_size(egui::Vec2::splat(21.0)),
+                                    )
+                                    .frame(false),
                                 )
-                                .frame(false),
-                            );
+                                .with_pointing_hand();
                             response.widget_info(|| {
                                 egui::WidgetInfo::labeled(
                                     egui::WidgetType::Button,

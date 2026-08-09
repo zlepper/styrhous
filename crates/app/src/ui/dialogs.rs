@@ -3,7 +3,7 @@ use crate::terminal_launcher::TerminalLaunchSettings;
 use crate::worker::WorkerCommand;
 use components::colors::gray;
 use components::design::{status, typography};
-use components::{ErrorDialog, ErrorDialogAction};
+use components::{ErrorDialog, ErrorDialogAction, PointingHand};
 
 pub(super) fn show_delete_confirmation(
     ctx: &egui::Context,
@@ -57,11 +57,12 @@ pub(super) fn show_delete_confirmation(
                         )
                         .fill(status::DANGER),
                     )
+                    .with_pointing_hand()
                     .clicked()
                 {
                     confirm = true;
                 }
-                if ui.button("Cancel").clicked() {
+                if ui.button("Cancel").with_pointing_hand().clicked() {
                     cancel = true;
                 }
             });

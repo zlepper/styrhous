@@ -7,7 +7,7 @@ use egui::{
 
 use crate::design::{radius, spacing, status, typography};
 use crate::{
-    ButtonSize, ButtonVariant, TailwindButton,
+    ButtonSize, ButtonVariant, PointingHand, TailwindButton,
     colors::{BLACK, WHITE, gray},
     icons,
 };
@@ -116,7 +116,9 @@ impl MoreMenu<'_> {
         label: impl Into<egui::WidgetText>,
         add_contents: impl FnOnce(&mut Ui) -> R,
     ) -> InnerResponse<Option<R>> {
-        self.ui.menu_button(label, add_contents)
+        let response = self.ui.menu_button(label, add_contents);
+        response.response.clone().with_pointing_hand();
+        response
     }
 
     /// Close the containing menu after a nested action has been selected.
@@ -185,7 +187,7 @@ impl MoreMenu<'_> {
             None => Button::new(text),
         }
         .min_size(Vec2::new(MENU_WIDTH, MENU_ITEM_HEIGHT));
-        let response = self.ui.add(button);
+        let response = self.ui.add(button).with_pointing_hand();
 
         self.ui.visuals_mut().widgets = saved_widgets;
         self.ui.spacing_mut().button_padding = saved_padding;
