@@ -436,7 +436,6 @@ fn show_shared_blade(
     let response = stack.show(
         ctx,
         &mut panel.navigator,
-        |entry| egui::Id::new(entry.history_entry_id),
         |ui, entry, layer| show_resource_detail_header(ui, entry, layer.is_foreground),
         |ui, entry, layer| {
             show_resource_detail_blade(

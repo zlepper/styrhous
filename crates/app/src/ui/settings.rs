@@ -29,7 +29,6 @@ pub(super) fn show(
     let response = stack.show_with_title(
         ctx,
         &mut blade,
-        |_| egui::Id::new("settings-content"),
         |_| "Settings".to_owned(),
         |ui, _, _| {
             show_settings_introduction(ui);
