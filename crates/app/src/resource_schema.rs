@@ -15,6 +15,37 @@ pub struct SchemaDiagnostic {
     pub path: String,
     pub message: String,
     pub line: Option<usize>,
+    pub range: Option<SourceRange>,
+}
+
+/// A half-open character range in the YAML source.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceRange {
+    pub start: usize,
+    pub end: usize,
+}
+
+impl SourceRange {
+    pub fn at_yaml_location(source: &str, line: usize, column: usize) -> Option<Self> {
+        let start = character_index_at_location(source, line, column)?;
+        let end = (start + 1).min(source.chars().count());
+        Some(Self {
+            start,
+            end: end.max(start),
+        })
+    }
+
+    pub fn full_line(source: &str, line: usize) -> Option<Self> {
+        let start = character_index_at_location(source, line, 1)?;
+        let end = source
+            .lines()
+            .nth(line.saturating_sub(1))
+            .map_or(start, |text| start + text.chars().count());
+        Some(Self {
+            start,
+            end: end.max(start + 1).min(source.chars().count()),
+        })
+    }
 }
 
 /// A resource root schema in JSON Schema form. It is intentionally kept as JSON so the UI and
@@ -77,6 +108,7 @@ impl ResourceSchema {
                 path: error.instance_path.to_string(),
                 message: error.to_string(),
                 line: None,
+                range: yaml_path_range(yaml, &error.instance_path.to_string()),
             })
             .collect())
     }
@@ -284,6 +316,69 @@ fn source_location(source: &str, byte_index: usize) -> (usize, usize) {
     (line, column)
 }
 
+fn yaml_path_range(source: &str, path: &str) -> Option<SourceRange> {
+    let segments = path
+        .strip_prefix('/')?
+        .split('/')
+        .map(|segment| segment.replace("~1", "/").replace("~0", "~"))
+        .collect::<Vec<_>>();
+    let documents = MarkedYaml::load_from_str(source).ok()?;
+    documents.into_iter().find_map(|document| {
+        yaml_node_at_path(&document, &segments)
+            .and_then(|node| source_range_from_node(source, node))
+    })
+}
+
+fn yaml_node_at_path<'a>(node: &'a MarkedYaml<'a>, path: &[String]) -> Option<&'a MarkedYaml<'a>> {
+    let Some((segment, rest)) = path.split_first() else {
+        return Some(node);
+    };
+    match &node.data {
+        YamlData::Mapping(mapping) => mapping
+            .iter()
+            .find(|(key, _)| scalar_text(key).as_deref() == Some(segment))
+            .and_then(|(_, value)| yaml_node_at_path(value, rest)),
+        YamlData::Sequence(sequence) => sequence
+            .get(segment.parse::<usize>().ok()?)
+            .and_then(|value| yaml_node_at_path(value, rest)),
+        YamlData::Tagged(_, node) => yaml_node_at_path(node, path),
+        _ => None,
+    }
+}
+
+fn source_range_from_node(source: &str, node: &MarkedYaml<'_>) -> Option<SourceRange> {
+    let start =
+        character_index_at_saphyr_location(source, node.span.start.line(), node.span.start.col())?;
+    let end =
+        character_index_at_saphyr_location(source, node.span.end.line(), node.span.end.col())?;
+    Some(SourceRange {
+        start,
+        end: end.max(start + 1).min(source.chars().count()),
+    })
+}
+
+fn character_index_at_saphyr_location(source: &str, line: usize, column: usize) -> Option<usize> {
+    let line_start = source
+        .split_inclusive('\n')
+        .take(line.saturating_sub(1))
+        .map(str::chars)
+        .map(Iterator::count)
+        .sum::<usize>();
+    let source_line = source.lines().nth(line.saturating_sub(1))?;
+    Some(line_start + column.min(source_line.chars().count()))
+}
+
+fn character_index_at_location(source: &str, line: usize, column: usize) -> Option<usize> {
+    let line_start = source
+        .split_inclusive('\n')
+        .take(line.saturating_sub(1))
+        .map(str::chars)
+        .map(Iterator::count)
+        .sum::<usize>();
+    let source_line = source.lines().nth(line.saturating_sub(1))?;
+    Some(line_start + column.saturating_sub(1).min(source_line.chars().count()))
+}
+
 fn token_before_cursor(source: &str, cursor: usize) -> String {
     source[..cursor]
         .chars()
@@ -409,6 +504,25 @@ mod tests {
         let errors = schema.validate_yaml("apiVersion: v1").expect("YAML parses");
         assert_eq!(errors.len(), 1);
         assert_eq!(errors[0].path, "");
+    }
+
+    #[test]
+    fn local_validation_preserves_the_exact_invalid_scalar_range() {
+        let yaml = "mode: unsupported";
+        let schema = ResourceSchema::new(json!({
+            "type": "object",
+            "properties": {"mode": {"type": "string", "enum": ["ReadOnly"]}}
+        }));
+
+        let errors = schema.validate_yaml(yaml).expect("YAML parses");
+        let range = errors[0].range.as_ref().expect("range is available");
+        let highlighted = yaml
+            .chars()
+            .skip(range.start)
+            .take(range.end - range.start)
+            .collect::<String>();
+
+        assert_eq!(highlighted, "unsupported");
     }
 
     #[test]

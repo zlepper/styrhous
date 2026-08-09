@@ -7,7 +7,7 @@ use crate::resource_catalog::{ResourceNavigation, build_resource_navigation};
 use crate::resource_detail::{
     ManagedResource, ResourceDetail, ResourceDetailPayload, ResourceEvent,
 };
-use crate::resource_schema::{CompletionSuggestion, ResourceSchema, SchemaDiagnostic};
+use crate::resource_schema::{CompletionSuggestion, ResourceSchema, SchemaDiagnostic, SourceRange};
 use crate::resource_table::CustomResourceColumn;
 use crate::sorted_name::SortedName;
 use crate::terminal_launcher::TerminalLaunchSettings;
@@ -275,6 +275,7 @@ pub(super) struct YamlEditorWindowState {
     pub(super) schema: Option<ResourceSchema>,
     pub(super) schema_loading: bool,
     pub(super) diagnostics: Vec<SchemaDiagnostic>,
+    pub(super) scroll_to_diagnostic: Option<SourceRange>,
     pub(super) server_validation: ValidationState,
     pub(super) validation_revision: u64,
     pub(super) validation_due: Option<Instant>,
@@ -830,6 +831,7 @@ impl UiState {
                     .resource_schemas
                     .contains_key(&(cluster_key, api_resource.clone())),
                 diagnostics: Vec::new(),
+                scroll_to_diagnostic: None,
                 server_validation: ValidationState::Idle,
                 validation_revision: 0,
                 validation_due: None,

@@ -1,5 +1,5 @@
 use super::state::{UiState, ValidationState, YamlEditorWindowState};
-use crate::resource_schema::SchemaDiagnostic;
+use crate::resource_schema::{SchemaDiagnostic, SourceRange};
 use crate::worker::WorkerCommand;
 use components::colors::{TABLE_BORDER, TOOLBAR_BACKGROUND, gray, indigo};
 use components::design::{spacing, status, surface, typography};
@@ -145,7 +145,7 @@ fn show_editor_window(
     if has_diagnostics_feedback(editor) {
         egui::TopBottomPanel::bottom("yaml-editor-diagnostics")
             .frame(toolbar_frame())
-            .show(ctx, |ui| show_diagnostics(ui, editor));
+            .show(ctx, |ui| show_diagnostics(ctx, ui, editor));
     }
 
     egui::CentralPanel::default()
@@ -310,6 +310,7 @@ fn show_code_editor(
     let mut cursor_byte = None;
     let mut text_edit_id = None;
     let mut caret_rect = None;
+    let scroll_target = editor.scroll_to_diagnostic.take();
     let fallback_completion_position = ui.clip_rect().left_top() + egui::vec2(74.0, 68.0);
     egui::ScrollArea::both()
         .id_salt(("yaml-editor-scroll", editor.id))
@@ -372,6 +373,19 @@ fn show_code_editor(
                     .translate(output.galley_pos.to_vec2())
                 });
                 text_edit_id = Some(output.response.id);
+                show_diagnostic_underlines(
+                    ui,
+                    editor.id,
+                    output.galley.as_ref(),
+                    output.galley_pos,
+                    &editor.diagnostics,
+                );
+                if let Some(target) = &scroll_target
+                    && let Some(rect) =
+                        diagnostic_rects(output.galley.as_ref(), output.galley_pos, target).first()
+                {
+                    ui.scroll_to_rect(*rect, Some(egui::Align::Center));
+                }
             });
         });
 
@@ -496,6 +510,93 @@ fn show_code_editor(
         }
     }
     changed
+}
+
+fn show_diagnostic_underlines(
+    ui: &mut egui::Ui,
+    editor_id: u64,
+    galley: &egui::Galley,
+    galley_pos: egui::Pos2,
+    diagnostics: &[SchemaDiagnostic],
+) {
+    for (diagnostic_index, diagnostic) in diagnostics.iter().enumerate() {
+        let Some(range) = &diagnostic.range else {
+            continue;
+        };
+        for (segment_index, rect) in diagnostic_rects(galley, galley_pos, range)
+            .into_iter()
+            .enumerate()
+        {
+            let response = ui.interact(
+                rect.expand2(egui::vec2(0.0, 3.0)),
+                egui::Id::new((
+                    "yaml-editor-diagnostic",
+                    editor_id,
+                    diagnostic_index,
+                    segment_index,
+                )),
+                egui::Sense::hover(),
+            );
+            response.widget_info(|| {
+                egui::WidgetInfo::labeled(
+                    egui::WidgetType::Label,
+                    true,
+                    format!("Validation error: {}", diagnostic.message),
+                )
+            });
+            response.on_hover_text(&diagnostic.message);
+            paint_diagnostic_squiggle(ui.painter(), rect);
+        }
+    }
+}
+
+fn diagnostic_rects(
+    galley: &egui::Galley,
+    galley_pos: egui::Pos2,
+    range: &SourceRange,
+) -> Vec<egui::Rect> {
+    let mut character_index = 0;
+    let mut rects = Vec::new();
+    for row in &galley.rows {
+        let row_character_count = row.char_count_including_newline();
+        let row_end = character_index + row_character_count;
+        let first = range.start.max(character_index);
+        let last = range.end.min(row_end);
+        let row_text_length = row.char_count_excluding_newline();
+        if first < last && first - character_index < row_text_length {
+            let start_column = first - character_index;
+            let end_column = (last - character_index).min(row_text_length);
+            let end_column = end_column.max((start_column + 1).min(row_text_length));
+            let row_rect = row.rect().translate(galley_pos.to_vec2());
+            rects.push(egui::Rect::from_min_max(
+                egui::pos2(row_rect.left() + row.x_offset(start_column), row_rect.top()),
+                egui::pos2(
+                    row_rect.left() + row.x_offset(end_column),
+                    row_rect.bottom(),
+                ),
+            ));
+        }
+        character_index = row_end;
+    }
+    rects
+}
+
+fn paint_diagnostic_squiggle(painter: &egui::Painter, rect: egui::Rect) {
+    let wavelength = 4.0;
+    let amplitude = 1.5;
+    let baseline = rect.bottom() - 2.0;
+    let steps = (rect.width() / (wavelength / 2.0)).ceil() as usize;
+    let points = (0..=steps)
+        .map(|step| {
+            let x = (rect.left() + step as f32 * (wavelength / 2.0)).min(rect.right());
+            let y = baseline + if step % 2 == 0 { -amplitude } else { amplitude };
+            egui::pos2(x, y)
+        })
+        .collect();
+    painter.add(egui::Shape::line(
+        points,
+        egui::Stroke::new(1.5, status::DANGER),
+    ));
 }
 
 fn yaml_editor_text_edit_id(editor_id: u64) -> egui::Id {
@@ -752,7 +853,20 @@ fn refresh_local_validation(editor: &mut YamlEditorWindowState) {
         Some(schema) => match schema.validate_yaml(&editor.edited_yaml) {
             Ok(mut diagnostics) => {
                 for diagnostic in &mut diagnostics {
-                    diagnostic.line = yaml_path_line(&editor.edited_yaml, &diagnostic.path);
+                    diagnostic.range = diagnostic
+                        .range
+                        .take()
+                        .or_else(|| {
+                            yaml_path_line(&editor.edited_yaml, &diagnostic.path)
+                                .and_then(|line| SourceRange::full_line(&editor.edited_yaml, line))
+                        })
+                        .or_else(|| SourceRange::full_line(&editor.edited_yaml, 1));
+                    diagnostic.line = diagnostic.range.as_ref().map(|range| {
+                        editor.edited_yaml[..byte_index(&editor.edited_yaml, range.start)]
+                            .lines()
+                            .count()
+                            .max(1)
+                    });
                 }
                 editor.diagnostics = diagnostics;
                 if editor.diagnostics.is_empty() {
@@ -766,6 +880,7 @@ fn refresh_local_validation(editor: &mut YamlEditorWindowState) {
                 editor.validation_due = Some(Instant::now() + VALIDATION_DEBOUNCE);
             }
             Err(message) => editor.diagnostics.push(SchemaDiagnostic {
+                range: yaml_error_range(&editor.edited_yaml, &message),
                 line: yaml_error_line(&message),
                 path: String::new(),
                 message,
@@ -774,6 +889,13 @@ fn refresh_local_validation(editor: &mut YamlEditorWindowState) {
         None => match serde_yaml::from_str::<serde_yaml::Value>(&editor.edited_yaml) {
             Ok(_) => editor.validation_due = Some(Instant::now() + VALIDATION_DEBOUNCE),
             Err(error) => editor.diagnostics.push(SchemaDiagnostic {
+                range: error.location().and_then(|location| {
+                    SourceRange::at_yaml_location(
+                        &editor.edited_yaml,
+                        location.line(),
+                        location.column(),
+                    )
+                }),
                 line: error.location().map(|location| location.line()),
                 path: String::new(),
                 message: error.to_string(),
@@ -787,6 +909,11 @@ fn yaml_error_line(message: &str) -> Option<usize> {
         .rsplit_once(" at ")
         .and_then(|(_, location)| location.split_once(':'))
         .and_then(|(line, _)| line.parse().ok())
+}
+
+fn yaml_error_range(yaml: &str, message: &str) -> Option<SourceRange> {
+    let (line, column) = message.rsplit_once(" at ")?.1.split_once(':')?;
+    SourceRange::at_yaml_location(yaml, line.parse().ok()?, column.parse().ok()?)
 }
 
 fn yaml_path_line(yaml: &str, path: &str) -> Option<usize> {
@@ -826,7 +953,7 @@ fn maybe_request_server_validation(
     }
 }
 
-fn show_diagnostics(ui: &mut egui::Ui, editor: &YamlEditorWindowState) {
+fn show_diagnostics(ctx: &egui::Context, ui: &mut egui::Ui, editor: &mut YamlEditorWindowState) {
     if editor.diagnostics.is_empty() {
         match &editor.server_validation {
             ValidationState::Pending => {
@@ -842,6 +969,7 @@ fn show_diagnostics(ui: &mut egui::Ui, editor: &YamlEditorWindowState) {
         }
         return;
     }
+    let mut range_to_focus = None;
     egui::CollapsingHeader::new(format!("{} diagnostics", editor.diagnostics.len()))
         .default_open(true)
         .show(ui, |ui| {
@@ -850,13 +978,39 @@ fn show_diagnostics(ui: &mut egui::Ui, editor: &YamlEditorWindowState) {
                     .line
                     .map(|line| format!("Line {line}: "))
                     .unwrap_or_default();
-                ui.label(
-                    egui::RichText::new(format!("{location}{}", diagnostic.message))
-                        .font(typography::metadata())
-                        .color(status::DANGER),
-                );
+                let response = ui
+                    .add(
+                        egui::Button::new(
+                            egui::RichText::new(format!("{location}{}", diagnostic.message))
+                                .font(typography::metadata())
+                                .color(status::DANGER),
+                        )
+                        .frame(false),
+                    )
+                    .with_pointing_hand()
+                    .on_hover_text("Jump to the highlighted YAML location");
+                if response.clicked() {
+                    range_to_focus = diagnostic.range.clone();
+                }
             }
         });
+    if let Some(range) = range_to_focus {
+        focus_diagnostic(ctx, editor, range);
+    }
+}
+
+fn focus_diagnostic(ctx: &egui::Context, editor: &mut YamlEditorWindowState, range: SourceRange) {
+    let text_edit_id = yaml_editor_text_edit_id(editor.id);
+    ctx.memory_mut(|memory| memory.request_focus(text_edit_id));
+    let mut state =
+        egui::widgets::text_edit::TextEditState::load(ctx, text_edit_id).unwrap_or_default();
+    state.cursor.set_char_range(Some(CCursorRange::two(
+        CCursor::new(range.start),
+        CCursor::new(range.end),
+    )));
+    state.store(ctx, text_edit_id);
+    editor.scroll_to_diagnostic = Some(range);
+    ctx.request_repaint();
 }
 
 fn has_diagnostics_feedback(editor: &YamlEditorWindowState) -> bool {
@@ -918,7 +1072,7 @@ mod tests {
     use super::*;
     use crate::api_resource::ApiResource;
     use crate::resource_schema::{CompletionSuggestion, ResourceSchema};
-    use egui_kittest::{Harness, SnapshotOptions};
+    use egui_kittest::{Harness, SnapshotOptions, kittest::Queryable};
     use k8s_openapi::serde_json::json;
 
     #[test]
@@ -1264,14 +1418,45 @@ mod tests {
 
     #[test]
     fn yaml_editor_diagnostics_snapshot() {
-        let mut editor = editor("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: settings");
-        editor.validation_revision = 1;
-        editor.diagnostics = vec![SchemaDiagnostic {
-            path: "/metadata/name".into(),
-            message: "\"settings\" is not an allowed value".into(),
-            line: Some(4),
-        }];
-        snapshot_editor(editor, "yaml_editor/diagnostics");
+        snapshot_editor(diagnostic_editor(), "yaml_editor/diagnostics");
+    }
+
+    #[test]
+    fn yaml_editor_diagnostic_tooltip_snapshot() {
+        let mut harness = editor_harness(diagnostic_editor());
+        harness
+            .get_by_label("Validation error: \"settings\" is not an allowed value")
+            .hover();
+        harness.run();
+        harness.snapshot("yaml_editor/diagnostics_tooltip");
+    }
+
+    #[test]
+    fn clicking_a_diagnostic_focuses_and_selects_its_yaml_range() {
+        let mut harness = editor_harness(diagnostic_editor());
+        let ctx = harness
+            .state()
+            .ctx
+            .clone()
+            .expect("editor context is available");
+        let text_edit_id = yaml_editor_text_edit_id(harness.state().editor.id);
+
+        harness
+            .get_by_label("Line 4: \"settings\" is not an allowed value")
+            .click_accesskit();
+        harness.run_steps(2);
+
+        assert!(ctx.memory(|memory| memory.has_focus(text_edit_id)));
+        let selection = egui::widgets::text_edit::TextEditState::load(&ctx, text_edit_id)
+            .and_then(|state| state.cursor.char_range())
+            .expect("editor selection is available");
+        let range = harness.state().editor.diagnostics[0]
+            .range
+            .as_ref()
+            .expect("diagnostic has a source range");
+        assert_eq!(selection.secondary.index, range.start);
+        assert_eq!(selection.primary.index, range.end);
+        assert!(harness.state().editor.scroll_to_diagnostic.is_none());
     }
 
     fn editor(yaml: &str) -> YamlEditorWindowState {
@@ -1298,6 +1483,7 @@ mod tests {
             schema: None,
             schema_loading: false,
             diagnostics: Vec::new(),
+            scroll_to_diagnostic: None,
             server_validation: ValidationState::Idle,
             validation_revision: 0,
             validation_due: None,
@@ -1305,6 +1491,26 @@ mod tests {
             suggestions_visible: false,
             suggestion_selection: 0,
         }
+    }
+
+    fn diagnostic_editor() -> YamlEditorWindowState {
+        let yaml = "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: settings";
+        let start = yaml
+            .find("settings")
+            .map(|index| yaml[..index].chars().count())
+            .expect("diagnostic text is present");
+        let mut editor = editor(yaml);
+        editor.validation_revision = 1;
+        editor.diagnostics = vec![SchemaDiagnostic {
+            path: "/metadata/name".into(),
+            message: "\"settings\" is not an allowed value".into(),
+            line: Some(4),
+            range: Some(SourceRange {
+                start,
+                end: start + "settings".chars().count(),
+            }),
+        }];
+        editor
     }
 
     fn snapshot_editor(editor: YamlEditorWindowState, name: &str) {
