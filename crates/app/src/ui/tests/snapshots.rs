@@ -166,6 +166,7 @@ fn namespace_selector_replaces_toggles_and_selects_all_without_stopping_watches(
         selected_cluster: Some(1),
         log_windows: BTreeMap::new(),
         next_log_window_id: 0,
+        log_display_options: Default::default(),
     };
     harness.run_steps(1);
 
@@ -287,6 +288,7 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
         selected_cluster: Some(1),
         log_windows: BTreeMap::new(),
         next_log_window_id: 0,
+        log_display_options: Default::default(),
     };
     harness.run();
     harness.get_by_label("Nodes").click_accesskit();
@@ -1832,6 +1834,7 @@ fn delete_confirmation_can_be_cancelled_without_sending_a_command() {
         selected_cluster: Some(1),
         log_windows: BTreeMap::new(),
         next_log_window_id: 0,
+        log_display_options: Default::default(),
     }));
     let commands = Rc::new(RefCell::new(Vec::new()));
     let state_for_ui = state.clone();
@@ -1872,6 +1875,7 @@ fn resource_navigation_selects_primary_curated_gateway_and_other_resources() {
         selected_cluster: Some(1),
         log_windows: BTreeMap::new(),
         next_log_window_id: 0,
+        log_display_options: Default::default(),
     };
     harness.run();
 

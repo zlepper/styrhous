@@ -16,7 +16,9 @@ use crate::log_store::LogStoreService;
 use crate::worker::{Worker, WorkerTrait};
 use components::apply_light_theme;
 use dialogs::show_delete_confirmation;
-use state::UiState;
+use state::{LogDisplayOptions, UiState};
+
+const LOG_DISPLAY_OPTIONS_STORAGE_KEY: &str = "log_display_options";
 
 pub struct MyEguiApp<W: WorkerTrait = Worker> {
     worker: W,
@@ -38,7 +40,14 @@ impl<W: WorkerTrait> MyEguiApp<W> {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         egui_extras::install_image_loaders(&cc.egui_ctx);
         apply_light_theme(&cc.egui_ctx);
-        Self::default()
+        let mut app = Self::default();
+        app.ui_state.log_display_options = cc
+            .storage
+            .and_then(|storage| {
+                eframe::get_value::<LogDisplayOptions>(storage, LOG_DISPLAY_OPTIONS_STORAGE_KEY)
+            })
+            .unwrap_or_default();
+        app
     }
 }
 
@@ -83,7 +92,53 @@ impl<W: WorkerTrait> eframe::App for MyEguiApp<W> {
             self.worker.send_command(command);
         }
     }
+
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        eframe::set_value(
+            storage,
+            LOG_DISPLAY_OPTIONS_STORAGE_KEY,
+            &self.ui_state.log_display_options,
+        );
+    }
 }
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod persistence_tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[derive(Default)]
+    struct MemoryStorage(HashMap<String, String>);
+
+    impl eframe::Storage for MemoryStorage {
+        fn get_string(&self, key: &str) -> Option<String> {
+            self.0.get(key).cloned()
+        }
+
+        fn set_string(&mut self, key: &str, value: String) {
+            self.0.insert(key.to_owned(), value);
+        }
+
+        fn flush(&mut self) {}
+    }
+
+    #[test]
+    fn log_display_options_round_trip_through_eframe_storage() {
+        let expected = LogDisplayOptions {
+            show_line_numbers: true,
+            show_timestamps: true,
+            render_ansi: false,
+        };
+        let mut storage = MemoryStorage::default();
+
+        eframe::set_value(&mut storage, LOG_DISPLAY_OPTIONS_STORAGE_KEY, &expected);
+
+        assert_eq!(
+            eframe::get_value::<LogDisplayOptions>(&storage, LOG_DISPLAY_OPTIONS_STORAGE_KEY),
+            Some(expected)
+        );
+    }
+}
