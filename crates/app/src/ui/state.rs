@@ -7,6 +7,7 @@ use crate::resource_catalog::{ResourceNavigation, build_resource_navigation};
 use crate::resource_detail::{
     ManagedResource, ResourceDetail, ResourceDetailPayload, ResourceEvent,
 };
+use crate::resource_schema::{CompletionSuggestion, ResourceSchema, SchemaDiagnostic};
 use crate::resource_table::CustomResourceColumn;
 use crate::sorted_name::SortedName;
 use crate::terminal_launcher::TerminalLaunchSettings;
@@ -28,6 +29,7 @@ pub(super) struct UiState {
     pub(super) next_log_window_id: u64,
     pub(super) yaml_editors: BTreeMap<u64, YamlEditorWindowState>,
     pub(super) next_yaml_editor_id: u64,
+    pub(super) resource_schemas: HashMap<(i32, ApiResource), ResourceSchema>,
     pub(super) log_display_options: LogDisplayOptions,
     pub(super) terminal_settings_open: bool,
     pub(super) terminal_settings_blade: Option<BladeNavigator<()>>,
@@ -270,6 +272,24 @@ pub(super) struct YamlEditorWindowState {
     pub(super) close_requested: bool,
     pub(super) confirm_discard: bool,
     pub(super) focus_requested: bool,
+    pub(super) schema: Option<ResourceSchema>,
+    pub(super) schema_loading: bool,
+    pub(super) diagnostics: Vec<SchemaDiagnostic>,
+    pub(super) server_validation: ValidationState,
+    pub(super) validation_revision: u64,
+    pub(super) validation_due: Option<Instant>,
+    pub(super) suggestions: Vec<CompletionSuggestion>,
+    pub(super) suggestions_visible: bool,
+    pub(super) suggestion_selection: usize,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(super) enum ValidationState {
+    #[default]
+    Idle,
+    Pending,
+    Valid,
+    Failed(String),
 }
 
 impl YamlEditorWindowState {
@@ -802,15 +822,39 @@ impl UiState {
                 close_requested: false,
                 confirm_discard: false,
                 focus_requested: false,
+                schema: self
+                    .resource_schemas
+                    .get(&(cluster_key, api_resource.clone()))
+                    .cloned(),
+                schema_loading: !self
+                    .resource_schemas
+                    .contains_key(&(cluster_key, api_resource.clone())),
+                diagnostics: Vec::new(),
+                server_validation: ValidationState::Idle,
+                validation_revision: 0,
+                validation_due: None,
+                suggestions: Vec::new(),
+                suggestions_visible: false,
+                suggestion_selection: 0,
             },
         );
         commands_to_send.push(crate::worker::WorkerCommand::GetResourceYaml {
             editor_id,
             cluster_key,
-            api_resource,
-            namespace,
-            resource_name,
+            api_resource: api_resource.clone(),
+            namespace: namespace.clone(),
+            resource_name: resource_name.clone(),
         });
+        if !self
+            .resource_schemas
+            .contains_key(&(cluster_key, api_resource.clone()))
+        {
+            commands_to_send.push(crate::worker::WorkerCommand::LoadResourceSchema {
+                editor_id,
+                cluster_key,
+                api_resource,
+            });
+        }
     }
 
     pub(super) fn select_cluster(
@@ -1280,6 +1324,26 @@ impl UiState {
                                 editor.error = Some(message);
                             }
                         }
+                        Some(crate::worker::WorkerCommand::LoadResourceSchema {
+                            editor_id,
+                            ..
+                        }) => {
+                            if let Some(editor) = self.yaml_editors.get_mut(&editor_id) {
+                                editor.schema_loading = false;
+                                editor.server_validation = ValidationState::Failed(message);
+                            }
+                        }
+                        Some(crate::worker::WorkerCommand::ValidateResourceYaml {
+                            editor_id,
+                            revision,
+                            ..
+                        }) => {
+                            if let Some(editor) = self.yaml_editors.get_mut(&editor_id)
+                                && editor.validation_revision == revision
+                            {
+                                editor.server_validation = ValidationState::Failed(message);
+                            }
+                        }
                         Some(crate::worker::WorkerCommand::StartPodLogStream {
                             log_window_id,
                             ..
@@ -1411,6 +1475,22 @@ impl UiState {
                 } => {
                     if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
                         cluster.custom_resource_columns.extend(columns);
+                    }
+                }
+                WorkerResult::KubernetesResourceSchemasLoaded {
+                    cluster_key,
+                    schemas,
+                } => {
+                    for (api_resource, schema) in schemas {
+                        self.resource_schemas
+                            .insert((cluster_key, api_resource.clone()), schema.clone());
+                        for editor in self.yaml_editors.values_mut().filter(|editor| {
+                            editor.cluster_key == cluster_key && editor.api_resource == api_resource
+                        }) {
+                            editor.schema = Some(schema.clone());
+                            editor.schema_loading = false;
+                            editor.validation_revision = 0;
+                        }
                     }
                 }
                 WorkerResult::KubernetesApisLoadFailed { cluster_key, error } => {
@@ -1669,6 +1749,43 @@ impl UiState {
                         editor.edited_yaml = yaml;
                         editor.loading = false;
                         editor.error = None;
+                    }
+                }
+                WorkerResult::ResourceSchemaLoaded {
+                    editor_id,
+                    cluster_key,
+                    api_resource,
+                    schema,
+                } => {
+                    self.resource_schemas
+                        .insert((cluster_key, api_resource.clone()), schema.clone());
+                    if let Some(editor) = self.yaml_editors.get_mut(&editor_id)
+                        && editor.cluster_key == cluster_key
+                        && editor.api_resource == api_resource
+                    {
+                        editor.schema = Some(schema);
+                        editor.schema_loading = false;
+                        editor.validation_revision = 0;
+                    }
+                }
+                WorkerResult::ResourceYamlValidated {
+                    editor_id,
+                    revision,
+                    cluster_key,
+                    api_resource,
+                    namespace,
+                    resource_name,
+                } => {
+                    if let Some(editor) = self.yaml_editors.get_mut(&editor_id)
+                        && editor.validation_revision == revision
+                        && editor.resource_matches(
+                            cluster_key,
+                            &api_resource,
+                            &namespace,
+                            &resource_name,
+                        )
+                    {
+                        editor.server_validation = ValidationState::Valid;
                     }
                 }
                 WorkerResult::ResourceDeleteCompleted {
@@ -2052,7 +2169,9 @@ mod tests {
             commands.as_slice(),
             [
                 WorkerCommand::GetResourceYaml { editor_id: 1, .. },
+                WorkerCommand::LoadResourceSchema { editor_id: 1, .. },
                 WorkerCommand::GetResourceYaml { editor_id: 2, .. },
+                WorkerCommand::LoadResourceSchema { editor_id: 2, .. },
             ]
         ));
         assert!(state.yaml_editors[&1].focus_requested);

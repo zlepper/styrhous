@@ -9,6 +9,7 @@ mod resource_catalog;
 mod resource_detail;
 mod resource_extensions;
 mod resource_handlers;
+mod resource_schema;
 mod resource_table;
 mod sorted_name;
 mod terminal_launcher;
