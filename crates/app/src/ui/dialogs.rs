@@ -3,6 +3,7 @@ use crate::terminal_launcher::TerminalLaunchSettings;
 use crate::worker::WorkerCommand;
 use components::colors::gray;
 use components::design::{status, typography};
+use components::{ErrorDialog, ErrorDialogAction};
 
 pub(super) fn show_delete_confirmation(
     ctx: &egui::Context,
@@ -91,24 +92,22 @@ pub(super) fn show_terminal_launch_error(
     let Some(error) = ui_state.terminal_launch_error.clone() else {
         return;
     };
-    let mut dismiss = false;
-    let mut configure = false;
-    egui::Window::new("Unable to open a terminal")
-        .collapsible(false)
-        .resizable(false)
-        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
-        .show(ctx, |ui| {
-            ui.label(error);
-            ui.add_space(12.0);
-            ui.horizontal(|ui| {
-                configure |= ui.button("Open Settings").clicked();
-                dismiss |= ui.button("Dismiss").clicked();
-            });
-        });
-    if configure {
-        ui_state.open_terminal_settings(settings);
-        ui_state.terminal_launch_error = None;
-    } else if dismiss {
-        ui_state.terminal_launch_error = None;
+    match (ErrorDialog {
+        id: egui::Id::new("terminal-launch-error"),
+        eyebrow: "POD SHELL",
+        title: "Couldn’t open a terminal",
+        message: "Kubernetes Dev UI could not start an external terminal for this pod shell.",
+        details: Some(&error),
+        recovery: Some("Choose a custom command in Settings to use another installed terminal."),
+        primary_action_label: Some("Open settings"),
+    })
+    .show(ctx)
+    {
+        ErrorDialogAction::PrimaryAction => {
+            ui_state.open_terminal_settings(settings);
+            ui_state.terminal_launch_error = None;
+        }
+        ErrorDialogAction::Dismiss => ui_state.terminal_launch_error = None,
+        ErrorDialogAction::None => {}
     }
 }

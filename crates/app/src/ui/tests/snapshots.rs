@@ -790,6 +790,77 @@ fn shell_action_launches_the_selected_context_pod_and_application_container() {
 }
 
 #[test]
+fn shell_launch_failure_uses_the_styled_error_modal_and_opens_terminal_settings() {
+    let mut harness = application_harness_with_terminal::<MockWorker, MockTerminalLauncher>();
+    let mut state = oracle_resource_table_state();
+    let pods = fixture_api_resource("core", "Pod", "pods");
+    let resource = state
+        .clusters
+        .get_mut(&2)
+        .unwrap()
+        .resource_cache
+        .get_mut(&(pods, Some("kube-system".into())))
+        .unwrap()
+        .resources
+        .values_mut()
+        .next()
+        .unwrap();
+    resource.log_containers = vec![PodLogContainer {
+        name: "coredns".into(),
+        kind: ContainerKind::App,
+    }];
+    let pod_name = resource.name.clone();
+    harness.state_mut().ui_state = state;
+    harness.state_mut().terminal_launcher.failure = Some(
+        "No supported terminal launcher was found. Tried: xdg-terminal-exec (No such file or directory (os error 2))."
+            .into(),
+    );
+    harness.run();
+
+    let action_label = format!("More actions for {pod_name}");
+    harness.get_by_label(&action_label).click_accesskit();
+    harness.run();
+    harness.get_by_label("Shell").click_accesskit();
+    harness.run_steps(2);
+
+    harness.get_by_label("POD SHELL");
+    harness.get_by_label("Couldn’t open a terminal");
+    harness.get_by_label(
+        "No supported terminal launcher was found. Tried: xdg-terminal-exec (No such file or directory (os error 2)).",
+    );
+    harness.get_by_label("Open settings");
+    harness.get_by_label("Dismiss");
+    assert!(harness.state().ui_state.terminal_launch_error.is_some());
+    harness.run_steps(2);
+    harness.snapshot_options(
+        "terminal_launch_error",
+        &egui_kittest::SnapshotOptions::new().failed_pixel_count_threshold(1),
+    );
+
+    harness.get_by_label("Open settings").click_accesskit();
+    harness.run_steps(2);
+
+    assert!(harness.state().ui_state.terminal_launch_error.is_none());
+    assert!(harness.state().ui_state.terminal_settings_open);
+    harness.get_by_label("Terminal launcher");
+}
+
+#[test]
+fn terminal_launch_error_dismisses_without_opening_settings() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    state.terminal_launch_error = Some("Unable to start xterm: permission denied".into());
+    harness.state_mut().ui_state = state;
+    harness.run();
+
+    harness.get_by_label("Dismiss").click_accesskit();
+    harness.run();
+
+    assert!(harness.state().ui_state.terminal_launch_error.is_none());
+    assert!(!harness.state().ui_state.terminal_settings_open);
+}
+
+#[test]
 fn settings_button_opens_the_terminal_launcher_blade() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = oracle_resource_table_state();
