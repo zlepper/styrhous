@@ -1427,10 +1427,9 @@ fn promoted_history_blade_stays_above_its_back_history() {
         .expect("inspector should remain open");
     assert_eq!(panel.resource_name, "second");
     assert_eq!(panel.navigator.back_stack().len(), 1);
-    let active_content_id = egui::Id::new(panel.navigator.current().history_entry_id);
     let active_layer = egui::LayerId::new(
         egui::Order::Foreground,
-        egui::Id::new("resource-detail-blade").with(("blade", active_content_id)),
+        egui::Id::new("resource-detail-blade").with(("blade", panel.navigator.back_stack().len())),
     );
     let active_header = harness.get_by_label("Back").rect().center();
     assert_eq!(harness.ctx.layer_id_at(active_header), Some(active_layer));

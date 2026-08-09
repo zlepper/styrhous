@@ -346,10 +346,9 @@ impl KubernetesNamespaceWatcher {
                     self.event_sender
                         .send(WorkerResult::KubernetesNamespacesDeleted {
                             cluster_key: self.cluster_key,
-                            namespace_name: item
-                                .metadata
-                                .namespace
-                                .expect("Namespace from the api server did not have a name"),
+                            namespace_name: item.metadata.name.expect(
+                                "Deleted Namespace from the api server did not have a name",
+                            ),
                         })
                         .log_if_error("Failed to send notification about deleted namespace");
                 }
