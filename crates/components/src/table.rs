@@ -20,7 +20,7 @@
 //!     });
 //! ```
 
-use egui::{Id, Ui, Vec2};
+use egui::{Button, Color32, Id, Ui, Vec2, WidgetText};
 use egui_extras::{Column, TableBuilder};
 use std::collections::HashSet;
 use std::hash::Hash;
@@ -348,6 +348,40 @@ impl TableRowBuilder<'_> {
                 .font(typography::body())
                 .color(color),
         );
+    }
+
+    /// Render a text-styled button for a navigable table cell.
+    ///
+    /// The button deliberately has no chrome so it retains the table's visual
+    /// language, while still letting egui route pointer and keyboard input to
+    /// the cell that owns it.
+    pub fn clickable_text(
+        ui: &mut Ui,
+        text: &str,
+        color: Color32,
+        accessibility_label: impl Into<WidgetText>,
+    ) -> egui::Response {
+        let accessibility_label = accessibility_label.into();
+        let response = ui
+            .add(
+                Button::new(
+                    egui::RichText::new(text)
+                        .font(typography::body())
+                        .color(color),
+                )
+                .small()
+                .frame(false),
+            )
+            .with_pointing_hand();
+        let is_enabled = ui.is_enabled();
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(
+                egui::WidgetType::Button,
+                is_enabled,
+                accessibility_label.text(),
+            )
+        });
+        response
     }
 }
 

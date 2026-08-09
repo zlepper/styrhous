@@ -134,7 +134,9 @@ fn test_secret_inspector_actions_integration() {
     for _ in 0..3 {
         harness.run();
     }
-    harness.get_by_label(&test_secret_name).click();
+    harness
+        .get_by_label(&format!("Open details for {test_secret_name}"))
+        .click();
     harness.run_steps(1);
     wait_for(
         &mut harness,
@@ -417,7 +419,9 @@ fn test_managed_resource_inspector_integration() {
         deployments_resource,
         &fixture.namespace,
     );
-    harness.get_by_label(&deployment_name).click();
+    harness
+        .get_by_label(&format!("Open details for {deployment_name}"))
+        .click();
     harness.run_steps(1);
 
     let start = std::time::Instant::now();
@@ -538,7 +542,10 @@ fn test_node_inspector_lists_scheduled_pods_integration() {
         },
         10_000,
     );
-    let node_position = harness.get_by_label(&node_name).rect().center();
+    let node_position = harness
+        .get_by_label(&format!("Open details for {node_name}"))
+        .rect()
+        .center();
     harness.event(egui::Event::PointerMoved(node_position));
     harness.event(egui::Event::PointerButton {
         pos: node_position,

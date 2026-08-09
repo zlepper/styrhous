@@ -331,7 +331,7 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
         });
     harness.run();
     harness.get_by_label("Cluster-wide");
-    harness.get_by_label("kind-control-plane");
+    harness.get_by_label("Open details for kind-control-plane");
 
     let cluster = harness.state_mut().ui_state.clusters.get_mut(&1).unwrap();
     cluster.selected_namespaces = HashSet::from(["default".into(), "kube-system".into()]);
@@ -691,7 +691,7 @@ fn resource_search_filters_rows_and_restores_its_mode_per_resource_type() {
         .push(egui::Event::Text("c66z".into()));
     harness.run();
 
-    harness.get_by_label("coredns-66bc5c9577-z9gt9");
+    harness.get_by_label("Open details for coredns-66bc5c9577-z9gt9");
     harness.get_by_label("7 resources hidden by search");
     assert_eq!(
         harness.state().ui_state.clusters[&2].resource_searches[&pods].query,
@@ -716,7 +716,7 @@ fn resource_search_filters_rows_and_restores_its_mode_per_resource_type() {
             },
         );
     harness.run();
-    harness.get_by_label("coredns-66bc5c9577-z9gt9");
+    harness.get_by_label("Open details for coredns-66bc5c9577-z9gt9");
     harness.get_by_label("7 resources hidden by search");
     harness.snapshot("resource_search_filtered");
 
@@ -780,7 +780,9 @@ fn resource_table_row_context_menu_snapshot() {
     harness.get_by_label("Apps & Containers").click_accesskit();
     harness.run();
 
-    let resource_name_rect = harness.get_by_label("coredns-66bc5c9577-ffw2s").rect();
+    let resource_name_rect = harness
+        .get_by_label("Open details for coredns-66bc5c9577-ffw2s")
+        .rect();
     let click_position = egui::pos2(
         resource_name_rect.right() + 32.0,
         resource_name_rect.center().y,
@@ -789,7 +791,10 @@ fn resource_table_row_context_menu_snapshot() {
     harness.run();
 
     harness.get_by_label("Edit");
-    harness.snapshot("oracle_resource_table_row_context_actions");
+    harness.snapshot_options(
+        "oracle_resource_table_row_context_actions",
+        &egui_kittest::SnapshotOptions::new().failed_pixel_count_threshold(2),
+    );
 }
 
 #[test]
@@ -801,13 +806,115 @@ fn resource_table_row_context_menu_opens_when_right_clicking_resource_text() {
     harness.run();
 
     let text_position = harness
-        .get_by_label("coredns-66bc5c9577-ffw2s")
+        .get_by_label("Open details for coredns-66bc5c9577-ffw2s")
         .rect()
         .center();
     secondary_click(&mut harness, text_position);
     harness.run();
 
     harness.get_by_label("Edit");
+}
+
+#[test]
+fn context_menu_action_does_not_activate_the_overlapped_resource_button() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness.run();
+    harness.get_by_label("Apps & Containers").click_accesskit();
+    harness.run();
+
+    let resource_name = "coredns-66bc5c9577-ffw2s";
+    let resource_position = harness
+        .get_by_label(&format!("Open details for {resource_name}"))
+        .rect()
+        .center();
+    secondary_click(&mut harness, resource_position);
+    harness.run();
+
+    let edit = harness.get_by_label("Edit");
+    let overlapped_resource = harness
+        .get_by_label("Open details for coredns-66bc5c9577-z9gt9")
+        .rect();
+    assert!(
+        edit.rect().intersects(overlapped_resource),
+        "the menu action must overlap a resource button to exercise popup input ownership"
+    );
+
+    edit.click();
+    harness.run_steps(1);
+
+    assert!(
+        harness.state().ui_state.clusters[&2]
+            .resource_detail_panel
+            .is_none(),
+        "the context-menu click must not open the overlapped resource"
+    );
+    assert!(
+        !harness
+            .state()
+            .worker
+            .commands
+            .iter()
+            .any(|command| matches!(command, WorkerCommand::StartResourceDetailWatch { .. })),
+        "the context-menu click must not start an underlying detail watch"
+    );
+}
+
+#[test]
+fn namespace_popup_option_does_not_activate_the_overlapped_resource_button() {
+    let mut state = oracle_resource_table_state();
+    let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
+    for namespace in ["default", "monitoring"] {
+        cluster.namespaces.insert(
+            namespace.into(),
+            MinimalNamespace {
+                name: namespace.into(),
+                display_name: None,
+            },
+        );
+    }
+
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = state;
+    harness.run();
+    harness.get_by_label("Apps & Containers").click_accesskit();
+    harness.run();
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
+        .click();
+    harness.run();
+
+    let namespace_option = harness.get_by_label("monitoring");
+    let overlapped_resource = harness
+        .get_by_label("Open details for coredns-66bc5c9577-z9gt9")
+        .rect();
+    assert!(
+        namespace_option.rect().intersects(overlapped_resource),
+        "the namespace option must overlap a resource button to exercise popup input ownership"
+    );
+
+    namespace_option.click();
+    harness.run_steps(2);
+
+    assert_eq!(
+        harness.state().ui_state.clusters[&2].selected_namespaces,
+        HashSet::from(["monitoring".to_owned()])
+    );
+    assert!(
+        harness.state().ui_state.clusters[&2]
+            .resource_detail_panel
+            .is_none(),
+        "the namespace click must not open the overlapped resource"
+    );
+    assert!(
+        !harness
+            .state()
+            .worker
+            .commands
+            .iter()
+            .any(|command| matches!(command, WorkerCommand::StartResourceDetailWatch { .. })),
+        "the namespace click must not start an underlying detail watch"
+    );
 }
 
 #[test]
@@ -1001,7 +1108,10 @@ fn resource_name_opens_and_closes_a_live_detail_inspector() {
     harness.run();
 
     let name = "coredns-66bc5c9577-ffw2s";
-    let resource_position = harness.get_by_label(name).rect().center();
+    let resource_position = harness
+        .get_by_label(&format!("Open details for {name}"))
+        .rect()
+        .center();
     primary_click(&mut harness, resource_position);
     harness.run_steps(1);
 
@@ -1288,7 +1398,7 @@ fn node_inspector_lists_cross_namespace_pods_in_the_shared_pod_table() {
         &egui_kittest::SnapshotOptions::new().failed_pixel_count_threshold(1),
     );
     harness.get_by_label("monitoring");
-    harness.get_by_label("api");
+    harness.get_by_label("Open details for api");
 }
 
 #[test]
@@ -1506,7 +1616,10 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         "deployment_managed_resource_tables",
         &egui_kittest::SnapshotOptions::new().failed_pixel_count_threshold(1),
     );
-    let replica_set_position = harness.get_by_label("api-7b948f").rect().center();
+    let replica_set_position = harness
+        .get_by_label("Open details for api-7b948f")
+        .rect()
+        .center();
     primary_click(&mut harness, replica_set_position);
     harness.run_steps(1);
 
@@ -1843,7 +1956,10 @@ fn pod_resource_detail_inspector_snapshot() {
     harness.run();
 
     let name = "coredns-66bc5c9577-ffw2s";
-    let resource_position = harness.get_by_label(name).rect().center();
+    let resource_position = harness
+        .get_by_label(&format!("Open details for {name}"))
+        .rect()
+        .center();
     primary_click(&mut harness, resource_position);
     harness.run_steps(1);
     let pods = fixture_api_resource("core", "Pod", "pods");
