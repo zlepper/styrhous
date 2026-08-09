@@ -13,7 +13,7 @@ use crate::terminal_launcher::TerminalLaunchSettings;
 use crate::worker::{WorkerResult, WorkerTrait};
 use components::BladeNavigator;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::time::Instant;
 use tracing::{error, info};
 
@@ -30,6 +30,56 @@ pub(super) struct UiState {
     pub(super) terminal_settings_draft: TerminalLaunchSettings,
     pub(super) terminal_settings_error: Option<String>,
     pub(super) terminal_launch_error: Option<String>,
+    pub(super) cluster_selections: PersistedClusterSelections,
+    pub(super) resource_navigation_expansion: ResourceNavigationExpansion,
+}
+
+/// Workspace choices retained independently of the transient cluster connection state.
+///
+/// Cluster contexts are rebuilt whenever the kubeconfig is reloaded, while namespace and API
+/// discovery complete asynchronously. Keeping these choices separately prevents that rebuild
+/// from overwriting the values which still need to be restored.
+#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub(super) struct PersistedClusterSelections {
+    #[serde(default)]
+    pub(super) selections: BTreeMap<String, PersistedClusterSelection>,
+}
+
+#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub(super) struct ResourceNavigationExpansion {
+    #[serde(default)]
+    pub(super) expanded_nodes: BTreeSet<String>,
+}
+
+#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub(super) struct PersistedClusterSelection {
+    #[serde(default)]
+    pub(super) selected_namespaces: BTreeSet<String>,
+    #[serde(default)]
+    pub(super) selected_api_resource: Option<PersistedApiResource>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub(super) struct PersistedApiResource {
+    pub(super) group: String,
+    pub(super) name: String,
+}
+
+impl PersistedApiResource {
+    fn from_api_resource(api_resource: &ApiResource) -> Self {
+        Self {
+            group: canonical_api_group(&api_resource.group).to_owned(),
+            name: api_resource.name.clone(),
+        }
+    }
+
+    fn matches(&self, api_resource: &ApiResource) -> bool {
+        self.group == canonical_api_group(&api_resource.group) && self.name == api_resource.name
+    }
+}
+
+fn canonical_api_group(group: &str) -> &str {
+    if group.is_empty() { "core" } else { group }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
@@ -468,6 +518,145 @@ pub(super) enum ClusterConnectionState {
 }
 
 impl UiState {
+    pub(super) fn resource_navigation_node_is_expanded(&self, node_id: &str) -> bool {
+        self.resource_navigation_expansion
+            .expanded_nodes
+            .contains(node_id)
+    }
+
+    pub(super) fn set_resource_navigation_node_expanded(
+        &mut self,
+        node_id: impl Into<String>,
+        is_expanded: bool,
+    ) {
+        let node_id = node_id.into();
+        if is_expanded {
+            self.resource_navigation_expansion
+                .expanded_nodes
+                .insert(node_id);
+        } else {
+            self.resource_navigation_expansion
+                .expanded_nodes
+                .remove(&node_id);
+        }
+    }
+
+    fn remember_selected_namespaces(&mut self, cluster_key: i32) {
+        let Some(cluster) = self.clusters.get(&cluster_key) else {
+            return;
+        };
+        let context_name = cluster.name.clone();
+        let namespaces = cluster.selected_namespaces.iter().cloned().collect();
+        self.cluster_selections
+            .selections
+            .entry(context_name)
+            .or_default()
+            .selected_namespaces = namespaces;
+        self.prune_empty_cluster_selection(cluster_key);
+    }
+
+    fn remember_selected_api_resource(&mut self, cluster_key: i32, api_resource: &ApiResource) {
+        let Some(context_name) = self
+            .clusters
+            .get(&cluster_key)
+            .map(|cluster| cluster.name.clone())
+        else {
+            return;
+        };
+        self.cluster_selections
+            .selections
+            .entry(context_name)
+            .or_default()
+            .selected_api_resource = Some(PersistedApiResource::from_api_resource(api_resource));
+    }
+
+    fn prune_empty_cluster_selection(&mut self, cluster_key: i32) {
+        let Some(context_name) = self
+            .clusters
+            .get(&cluster_key)
+            .map(|cluster| cluster.name.clone())
+        else {
+            return;
+        };
+        if self
+            .cluster_selections
+            .selections
+            .get(&context_name)
+            .is_some_and(|selection| selection == &PersistedClusterSelection::default())
+        {
+            self.cluster_selections.selections.remove(&context_name);
+        }
+    }
+
+    fn restore_selected_namespaces(
+        &mut self,
+        cluster_key: i32,
+        commands_to_send: &mut Vec<crate::worker::WorkerCommand>,
+    ) {
+        let Some(cluster) = self.clusters.get(&cluster_key) else {
+            return;
+        };
+        let context_name = cluster.name.clone();
+        let available_namespaces = cluster
+            .namespaces
+            .values()
+            .map(|namespace| namespace.name.clone())
+            .collect::<BTreeSet<_>>();
+
+        let restored_namespaces =
+            if let Some(selection) = self.cluster_selections.selections.get_mut(&context_name) {
+                selection
+                    .selected_namespaces
+                    .retain(|namespace| available_namespaces.contains(namespace));
+                selection.selected_namespaces.clone()
+            } else {
+                BTreeSet::new()
+            };
+
+        if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
+            cluster.selected_namespaces = restored_namespaces.into_iter().collect();
+            if let Some(api_resource) = cluster.selected_api_resource.clone() {
+                Self::request_selected_resource_watches(cluster, &api_resource, commands_to_send);
+            }
+        }
+        self.prune_empty_cluster_selection(cluster_key);
+    }
+
+    fn restored_api_resource(
+        &mut self,
+        cluster_key: i32,
+        api_resources: &[ApiResource],
+    ) -> Option<ApiResource> {
+        let Some(context_name) = self
+            .clusters
+            .get(&cluster_key)
+            .map(|cluster| cluster.name.clone())
+        else {
+            return None;
+        };
+        let saved_resource = self
+            .cluster_selections
+            .selections
+            .get(&context_name)
+            .and_then(|selection| selection.selected_api_resource.as_ref());
+        let api_resource = saved_resource.and_then(|saved_resource| {
+            api_resources
+                .iter()
+                .find(|api_resource| saved_resource.matches(api_resource))
+                .cloned()
+        });
+
+        if saved_resource.is_some() && api_resource.is_none() {
+            if let Some(selection) = self.cluster_selections.selections.get_mut(&context_name) {
+                selection.selected_api_resource = None;
+            }
+            self.prune_empty_cluster_selection(cluster_key);
+            return None;
+        }
+
+        api_resource
+    }
+
     pub(super) fn open_terminal_settings(&mut self, settings: &TerminalLaunchSettings) {
         self.terminal_settings_open = true;
         self.terminal_settings_blade = Some(BladeNavigator::new(()));
@@ -555,23 +744,28 @@ impl UiState {
         api_resource: ApiResource,
         commands_to_send: &mut Vec<crate::worker::WorkerCommand>,
     ) {
-        let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
-            return;
-        };
+        let api_resource = {
+            let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
+                return;
+            };
 
-        if let Some(panel) = cluster.resource_detail_panel.take() {
-            stop_resource_detail_watches(
-                cluster.cluster_key,
-                panel.retained_history_entry_ids(),
-                commands_to_send,
-            );
+            if let Some(panel) = cluster.resource_detail_panel.take() {
+                stop_resource_detail_watches(
+                    cluster.cluster_key,
+                    panel.retained_history_entry_ids(),
+                    commands_to_send,
+                );
+            }
+            cluster.selected_api_resource = Some(api_resource);
+            cluster
+                .selected_api_resource
+                .clone()
+                .expect("selected API resource was just set")
+        };
+        if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
+            Self::request_selected_resource_watches(cluster, &api_resource, commands_to_send);
         }
-        cluster.selected_api_resource = Some(api_resource);
-        let api_resource = cluster
-            .selected_api_resource
-            .clone()
-            .expect("selected API resource was just set");
-        Self::request_selected_resource_watches(cluster, &api_resource, commands_to_send);
+        self.remember_selected_api_resource(cluster_key, &api_resource);
     }
 
     pub(super) fn open_resource_detail(
@@ -740,20 +934,26 @@ impl UiState {
         namespace: String,
         commands_to_send: &mut Vec<crate::worker::WorkerCommand>,
     ) {
-        let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
-            return;
+        let (was_selected, api_resource) = {
+            let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
+                return;
+            };
+            let was_selected = !cluster.selected_namespaces.insert(namespace.clone());
+            if was_selected {
+                cluster.selected_namespaces.remove(&namespace);
+            }
+            (was_selected, cluster.selected_api_resource.clone())
         };
-
-        let was_selected = !cluster.selected_namespaces.insert(namespace.clone());
+        self.remember_selected_namespaces(cluster_key);
         if was_selected {
-            cluster.selected_namespaces.remove(&namespace);
             return;
         }
-
-        let Some(api_resource) = cluster.selected_api_resource.clone() else {
+        let Some(api_resource) = api_resource else {
             return;
         };
-        Self::request_resource_watch(cluster, &api_resource, Some(namespace), commands_to_send);
+        if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
+            Self::request_resource_watch(cluster, &api_resource, Some(namespace), commands_to_send);
+        }
     }
 
     /// Replace the visible namespace scope without cancelling existing watches.
@@ -765,15 +965,23 @@ impl UiState {
     ) where
         I: IntoIterator<Item = String>,
     {
-        let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
+        {
+            let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
+                return;
+            };
+            cluster.selected_namespaces = namespaces.into_iter().collect();
+        }
+        self.remember_selected_namespaces(cluster_key);
+        let Some(api_resource) = self
+            .clusters
+            .get(&cluster_key)
+            .and_then(|cluster| cluster.selected_api_resource.clone())
+        else {
             return;
         };
-
-        cluster.selected_namespaces = namespaces.into_iter().collect();
-        let Some(api_resource) = cluster.selected_api_resource.clone() else {
-            return;
-        };
-        Self::request_selected_resource_watches(cluster, &api_resource, commands_to_send);
+        if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
+            Self::request_selected_resource_watches(cluster, &api_resource, commands_to_send);
+        }
     }
 
     /// Select every discovered namespace without cancelling existing watches.
@@ -782,19 +990,27 @@ impl UiState {
         cluster_key: i32,
         commands_to_send: &mut Vec<crate::worker::WorkerCommand>,
     ) {
-        let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
+        {
+            let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
+                return;
+            };
+            cluster.selected_namespaces = cluster
+                .namespaces
+                .values()
+                .map(|namespace| namespace.name.clone())
+                .collect();
+        }
+        self.remember_selected_namespaces(cluster_key);
+        let Some(api_resource) = self
+            .clusters
+            .get(&cluster_key)
+            .and_then(|cluster| cluster.selected_api_resource.clone())
+        else {
             return;
         };
-
-        cluster.selected_namespaces = cluster
-            .namespaces
-            .values()
-            .map(|namespace| namespace.name.clone())
-            .collect();
-        let Some(api_resource) = cluster.selected_api_resource.clone() else {
-            return;
-        };
-        Self::request_selected_resource_watches(cluster, &api_resource, commands_to_send);
+        if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
+            Self::request_selected_resource_watches(cluster, &api_resource, commands_to_send);
+        }
     }
 
     /// Clear the visible namespace scope without cancelling existing watches.
@@ -802,6 +1018,7 @@ impl UiState {
         if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
             cluster.selected_namespaces.clear();
         }
+        self.remember_selected_namespaces(cluster_key);
     }
 
     pub(super) fn retry_selected_load(
@@ -1008,7 +1225,18 @@ impl UiState {
                 } => {
                     info!("Deleting kubernetes namespace: {namespace_name}");
                     if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
-                        cluster.namespaces.remove(&namespace_name.into());
+                        cluster.namespaces.remove(&SortedName::new(&namespace_name));
+                        cluster.selected_namespaces.remove(&namespace_name);
+                    }
+                    if let Some(context_name) = self
+                        .clusters
+                        .get(&cluster_key)
+                        .map(|cluster| cluster.name.clone())
+                        && let Some(selection) =
+                            self.cluster_selections.selections.get_mut(&context_name)
+                    {
+                        selection.selected_namespaces.remove(&namespace_name);
+                        self.prune_empty_cluster_selection(cluster_key);
                     }
                 }
                 WorkerResult::KubernetesNamespacesReplaced {
@@ -1023,6 +1251,7 @@ impl UiState {
                             .collect();
                         cluster.namespaces_load = ClusterLoadState::Ready;
                     }
+                    self.restore_selected_namespaces(cluster_key, &mut commands_to_send);
                 }
                 WorkerResult::KubernetesNamespacesLoadFailed { cluster_key, error } => {
                     if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
@@ -1034,9 +1263,14 @@ impl UiState {
                     cluster_key,
                 } => {
                     info!("Kubernetes API loaded");
+                    let restored_api_resource =
+                        self.restored_api_resource(cluster_key, &api_resources);
                     if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
                         cluster.resource_navigation = build_resource_navigation(api_resources);
                         cluster.api_resources_load = ClusterLoadState::Ready;
+                    }
+                    if let Some(api_resource) = restored_api_resource {
+                        self.select_api_resource(cluster_key, api_resource, &mut commands_to_send);
                     }
                 }
                 WorkerResult::KubernetesCustomResourceColumnsLoaded {
