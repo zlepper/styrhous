@@ -15,17 +15,17 @@ use std::time::{Duration, Instant};
 
 const TOOLBAR_HEIGHT: f32 = 52.0;
 const VALIDATION_DEBOUNCE: Duration = Duration::from_millis(500);
-const COMPLETION_LIST_WIDTH: f32 = 460.0;
-const COMPLETION_POPUP_WIDTH: f32 = 504.0;
-const COMPLETION_DOCUMENTATION_WIDTH: f32 = 320.0;
-const COMPLETION_LABEL_COLUMN_WIDTH: f32 = 170.0;
-const COMPLETION_DETAIL_COLUMN_WIDTH: f32 = 250.0;
-const COMPLETION_ROW_HEIGHT: f32 = 30.0;
+const COMPLETION_LIST_MIN_WIDTH: f32 = 240.0;
+const COMPLETION_LIST_MAX_WIDTH: f32 = 280.0;
+const COMPLETION_POPUP_MAX_WIDTH: f32 = COMPLETION_LIST_MAX_WIDTH + 2.0 * spacing::MD;
+const COMPLETION_DOCUMENTATION_WIDTH: f32 = 280.0;
+const COMPLETION_ROW_HEIGHT: f32 = 26.0;
 const COMPLETION_LIST_MAX_HEIGHT: f32 = 260.0;
-const COMPLETION_POPUP_CHROME_HEIGHT: f32 = 134.0;
+const COMPLETION_POPUP_CHROME_HEIGHT: f32 = 68.0;
 const COMPLETION_POPUP_MAX_HEIGHT: f32 =
     COMPLETION_POPUP_CHROME_HEIGHT + COMPLETION_LIST_MAX_HEIGHT;
-const DESCRIPTION_PREVIEW_CHARS: usize = 36;
+const DIAGNOSTIC_ROW_HEIGHT: f32 = 21.0;
+const DIAGNOSTIC_LIST_MAX_HEIGHT: f32 = 6.0 * DIAGNOSTIC_ROW_HEIGHT;
 
 pub(super) fn show(
     ctx: &egui::Context,
@@ -133,13 +133,6 @@ pub(super) fn show_editor_window(
                         .font(typography::body())
                         .color(gray::_600),
                 );
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(
-                        egui::RichText::new("⌘↵ Apply")
-                            .font(typography::metadata())
-                            .color(gray::_600),
-                    );
-                });
             });
         });
 
@@ -178,13 +171,6 @@ pub(super) fn show_editor_window(
             }
         });
 
-    if editor.is_ready()
-        && editor.is_modified()
-        && !editor.saving
-        && ctx.input(|input| input.modifiers.command && input.key_pressed(egui::Key::Enter))
-    {
-        apply_editor(editor, commands_to_send);
-    }
     maybe_request_server_validation(editor, commands_to_send);
     #[cfg(not(test))]
     if let Some(due) = editor.validation_due {
@@ -388,6 +374,7 @@ fn show_code_editor(
             ctx.content_rect(),
             caret_rect,
             completion_popup_height(editor.suggestions.len()),
+            completion_popup_width(&editor.suggestions),
         )
     });
 
@@ -425,11 +412,14 @@ fn show_code_editor(
     if editor.suggestions_visible {
         let pointer_pressed = ctx.input(|input| input.pointer.any_pressed());
         let pointer_position = ctx.input(|input| input.pointer.interact_pos());
-        let mut selected_row_top = None;
+        let completion_list_width = completion_list_width(&editor.suggestions);
+        let completion_popup_width = completion_list_width + 2.0 * spacing::MD;
+        let mut selected_row_rect = None;
         let popup = egui::Area::new(egui::Id::new(("yaml-editor-suggestions", editor.id)))
             .order(egui::Order::Foreground)
             .fixed_pos(completion_position)
             .show(ctx, |ui| {
+                ui.set_width(completion_popup_width);
                 egui::Frame::new()
                     .fill(TOOLBAR_BACKGROUND)
                     .stroke(egui::Stroke::new(1.0, gray::_600))
@@ -442,19 +432,13 @@ fn show_code_editor(
                     })
                     .inner_margin(egui::Margin::same(spacing::MD as i8))
                     .show(ui, |ui| {
-                        ui.label(
-                            egui::RichText::new("Kubernetes schema")
-                                .font(typography::body())
-                                .color(gray::_700),
-                        );
                         completion_context_header(ui, editor.completion_context.as_ref());
                         ui.add_space(spacing::XS);
-                        completion_table_header(ui);
                         let mut accepted = accept_suggestion.then_some(editor.suggestion_selection);
                         let mut hovered = None;
                         if editor.suggestions.is_empty() {
                             ui.add_sized(
-                                egui::vec2(COMPLETION_LIST_WIDTH, COMPLETION_ROW_HEIGHT),
+                                egui::vec2(completion_list_width, COMPLETION_ROW_HEIGHT),
                                 egui::Label::new(
                                     egui::RichText::new("No completions available")
                                         .font(typography::body())
@@ -467,19 +451,24 @@ fn show_code_editor(
                                 .max_height(COMPLETION_LIST_MAX_HEIGHT)
                                 .auto_shrink([false, true])
                                 .show(ui, |ui| {
-                                    ui.set_min_width(COMPLETION_LIST_WIDTH);
+                                    ui.set_width(completion_list_width);
                                     for (index, suggestion) in editor.suggestions.iter().enumerate()
                                     {
                                         let is_selected = index == editor.suggestion_selection;
-                                        let response = completion_row(ui, suggestion, is_selected);
+                                        let response = completion_row(
+                                            ui,
+                                            suggestion,
+                                            is_selected,
+                                            completion_list_width,
+                                        );
                                         if is_selected {
                                             if selection_changed {
                                                 response.scroll_to_me(Some(egui::Align::Center));
                                             }
-                                            selected_row_top = Some(response.rect.top());
+                                            selected_row_rect = Some(response.rect);
                                         }
                                         if response.hovered() {
-                                            hovered = Some(index);
+                                            hovered = Some((index, response.rect));
                                         }
                                         if response.clicked() {
                                             accepted = Some(index);
@@ -487,8 +476,9 @@ fn show_code_editor(
                                     }
                                 });
                         }
-                        if let Some(index) = hovered {
+                        if let Some((index, rect)) = hovered {
                             editor.suggestion_selection = index;
+                            selected_row_rect = Some(rect);
                         }
                         ui.add_space(spacing::XS);
                         ui.separator();
@@ -536,8 +526,10 @@ fn show_code_editor(
         {
             show_completion_documentation(
                 ctx,
-                completion_position,
-                selected_row_top.unwrap_or(completion_position.y + 60.0),
+                popup.response.rect,
+                selected_row_rect.unwrap_or_else(|| {
+                    egui::Rect::from_min_size(completion_position, egui::Vec2::ZERO)
+                }),
                 suggestion,
             );
         }
@@ -645,15 +637,16 @@ fn completion_popup_position(
     viewport: egui::Rect,
     caret_rect: egui::Rect,
     popup_height: f32,
+    popup_width: f32,
 ) -> egui::Pos2 {
     let padding = spacing::MD;
     let min_x = viewport.left() + padding;
-    let max_x = (viewport.right() - COMPLETION_POPUP_WIDTH - padding).max(min_x);
+    let max_x = (viewport.right() - popup_width - padding).max(min_x);
     let preferred_x = caret_rect.left();
     let x = if preferred_x <= max_x {
         preferred_x.max(min_x)
     } else {
-        (caret_rect.right() - COMPLETION_POPUP_WIDTH - padding).max(min_x)
+        (caret_rect.right() - popup_width - padding).max(min_x)
     };
 
     let min_y = viewport.top() + padding;
@@ -665,15 +658,6 @@ fn completion_popup_position(
         (caret_rect.top() - popup_height - spacing::XS).clamp(min_y, max_y)
     };
     egui::pos2(x, y)
-}
-
-fn completion_table_header(ui: &mut egui::Ui) {
-    ui.horizontal(|ui| {
-        ui.add_space(spacing::SM);
-        completion_column_label(ui, "FIELD", COMPLETION_LABEL_COLUMN_WIDTH);
-        completion_column_label(ui, "DESCRIPTION", COMPLETION_DETAIL_COLUMN_WIDTH);
-    });
-    ui.add_space(spacing::XS);
 }
 
 fn completion_context_header(ui: &mut egui::Ui, context: Option<&CompletionContext>) {
@@ -698,30 +682,14 @@ fn completion_context_header(ui: &mut egui::Ui, context: Option<&CompletionConte
                     .color(gray::_600),
             );
         }
-        if let Some(description) = &context.description {
-            ui.label(
-                egui::RichText::new(description_preview(Some(description)))
-                    .font(typography::metadata())
-                    .color(gray::_500),
-            );
-        }
     });
-}
-
-fn completion_column_label(ui: &mut egui::Ui, label: &str, width: f32) {
-    completion_text_column(
-        ui,
-        width,
-        egui::RichText::new(label)
-            .font(typography::metadata())
-            .color(gray::_500),
-    );
 }
 
 fn completion_row(
     ui: &mut egui::Ui,
     suggestion: &crate::resource_schema::CompletionSuggestion,
     selected: bool,
+    width: f32,
 ) -> egui::Response {
     let fill = if selected {
         indigo::_100
@@ -742,32 +710,30 @@ fn completion_row(
             spacing::XS as i8,
         ))
         .show(ui, |ui| {
-            ui.set_min_width(COMPLETION_LIST_WIDTH);
-            ui.horizontal(|ui| {
-                completion_text_column(
-                    ui,
-                    COMPLETION_LABEL_COLUMN_WIDTH,
-                    egui::RichText::new(&suggestion.label)
-                        .font(typography::body())
-                        .strong()
-                        .color(gray::_900),
-                );
-                completion_text_column(
-                    ui,
-                    COMPLETION_DETAIL_COLUMN_WIDTH,
-                    egui::RichText::new(description_preview(suggestion.detail.as_deref()))
-                        .font(typography::metadata())
-                        .color(gray::_600),
-                );
-            });
+            ui.set_width(width);
+            ui.label(
+                egui::RichText::new(&suggestion.label)
+                    .font(typography::monospace())
+                    .strong()
+                    .color(gray::_900),
+            );
         })
         .response;
     response.interact(egui::Sense::click())
 }
 
-fn completion_text_column(ui: &mut egui::Ui, width: f32, text: egui::RichText) {
-    let response = ui.label(text);
-    ui.add_space((width - response.rect.width()).max(0.0));
+fn completion_list_width(suggestions: &[crate::resource_schema::CompletionSuggestion]) -> f32 {
+    let longest_label = suggestions
+        .iter()
+        .map(|suggestion| suggestion.label.chars().count())
+        .max()
+        .unwrap_or("No completions available".chars().count());
+    let label_width = longest_label as f32 * typography::MONOSPACE_SIZE * 0.65;
+    (label_width + 2.0 * spacing::SM).clamp(COMPLETION_LIST_MIN_WIDTH, COMPLETION_LIST_MAX_WIDTH)
+}
+
+fn completion_popup_width(suggestions: &[crate::resource_schema::CompletionSuggestion]) -> f32 {
+    completion_list_width(suggestions) + 2.0 * spacing::MD
 }
 
 fn completion_type_badge(ui: &mut egui::Ui, type_label: &str) -> egui::Response {
@@ -794,40 +760,17 @@ fn completion_type_badge(ui: &mut egui::Ui, type_label: &str) -> egui::Response 
         .response
 }
 
-fn description_preview(description: Option<&str>) -> String {
-    let Some(description) = description else {
-        return String::new();
-    };
-    let mut characters = description.chars();
-    let preview = characters
-        .by_ref()
-        .take(DESCRIPTION_PREVIEW_CHARS)
-        .collect::<String>();
-    if characters.next().is_some() {
-        format!("{preview}…")
-    } else {
-        preview
-    }
-}
-
 fn show_completion_documentation(
     ctx: &egui::Context,
-    completion_position: egui::Pos2,
-    selected_row_top: f32,
+    completion_popup_rect: egui::Rect,
+    selected_row_rect: egui::Rect,
     suggestion: &crate::resource_schema::CompletionSuggestion,
 ) {
-    let viewport = ctx.content_rect();
-    let min_x = viewport.left() + spacing::MD;
-    let max_x = (viewport.right() - COMPLETION_DOCUMENTATION_WIDTH - spacing::MD).max(min_x);
-    let right_of_completion = completion_position.x + COMPLETION_POPUP_WIDTH + spacing::SM;
-    let x = if right_of_completion <= max_x {
-        right_of_completion
-    } else {
-        (completion_position.x - COMPLETION_DOCUMENTATION_WIDTH - spacing::SM).clamp(min_x, max_x)
-    };
-    let min_y = viewport.top() + spacing::MD;
-    let max_y = (viewport.bottom() - 160.0).max(min_y);
-    let position = egui::pos2(x, selected_row_top.clamp(min_y, max_y));
+    let position = completion_documentation_position(
+        ctx.content_rect(),
+        completion_popup_rect,
+        selected_row_rect,
+    );
     egui::Area::new(egui::Id::new((
         "yaml-editor-suggestion-documentation",
         suggestion.label.as_str(),
@@ -835,6 +778,7 @@ fn show_completion_documentation(
     .order(egui::Order::Foreground)
     .fixed_pos(position)
     .show(ctx, |ui| {
+        ui.set_width(COMPLETION_DOCUMENTATION_WIDTH);
         egui::Frame::new()
             .fill(TOOLBAR_BACKGROUND)
             .stroke(egui::Stroke::new(1.0, TABLE_BORDER))
@@ -847,12 +791,12 @@ fn show_completion_documentation(
             })
             .inner_margin(egui::Margin::same(spacing::MD as i8))
             .show(ui, |ui| {
-                ui.set_width(COMPLETION_DOCUMENTATION_WIDTH);
+                ui.set_width(COMPLETION_DOCUMENTATION_WIDTH - 2.0 * spacing::MD);
                 ui.horizontal(|ui| {
                     completion_type_badge(ui, suggestion.type_label.as_deref().unwrap_or("field"));
                     ui.label(
                         egui::RichText::new(&suggestion.label)
-                            .font(typography::body())
+                            .font(typography::monospace())
                             .strong()
                             .color(gray::_900),
                     );
@@ -867,11 +811,30 @@ fn show_completion_documentation(
                             .as_deref()
                             .unwrap_or("No schema documentation is available."),
                     )
-                    .font(typography::body())
+                    .font(typography::metadata())
                     .color(gray::_700),
                 );
             });
     });
+}
+
+fn completion_documentation_position(
+    viewport: egui::Rect,
+    completion_popup_rect: egui::Rect,
+    selected_row_rect: egui::Rect,
+) -> egui::Pos2 {
+    let min_x = viewport.left() + spacing::MD;
+    let max_x = (viewport.right() - COMPLETION_DOCUMENTATION_WIDTH - spacing::MD).max(min_x);
+    let right_of_completion = completion_popup_rect.right() + spacing::SM;
+    let x = if right_of_completion <= max_x {
+        right_of_completion
+    } else {
+        (completion_popup_rect.left() - COMPLETION_DOCUMENTATION_WIDTH - spacing::SM)
+            .clamp(min_x, max_x)
+    };
+    let min_y = viewport.top() + spacing::MD;
+    let max_y = (viewport.bottom() - 160.0).max(min_y);
+    egui::pos2(x, selected_row_rect.top().clamp(min_y, max_y))
 }
 
 fn byte_index(text: &str, character_index: usize) -> usize {
@@ -1009,30 +972,37 @@ fn show_diagnostics(ctx: &egui::Context, ui: &mut egui::Ui, editor: &mut YamlEdi
             if showing_retained_diagnostics {
                 status_indicator(ui, gray::_400, "Validating updated YAML…");
             }
-            for diagnostic in diagnostics {
-                let location = diagnostic
-                    .line
-                    .map(|line| format!("Line {line}: "))
-                    .unwrap_or_default();
-                let button = egui::Button::new(
-                    egui::RichText::new(format!("{location}{}", diagnostic.message))
-                        .font(typography::metadata())
-                        .color(status::DANGER),
-                )
-                .frame(false);
-                let response = if showing_retained_diagnostics {
-                    ui.add_enabled(false, button).on_hover_text(
-                        "Validating the updated YAML before this diagnostic can be located",
-                    )
-                } else {
-                    ui.add(button)
-                        .with_pointing_hand()
-                        .on_hover_text("Jump to the highlighted YAML location")
-                };
-                if !showing_retained_diagnostics && response.clicked() {
-                    range_to_focus = diagnostic.range.clone();
-                }
-            }
+            egui::ScrollArea::vertical()
+                .id_salt(("yaml-editor-diagnostic-list", editor.id))
+                .max_height(DIAGNOSTIC_LIST_MAX_HEIGHT)
+                .min_scrolled_height(DIAGNOSTIC_LIST_MAX_HEIGHT)
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    for diagnostic in diagnostics {
+                        let location = diagnostic
+                            .line
+                            .map(|line| format!("Line {line}: "))
+                            .unwrap_or_default();
+                        let button = egui::Button::new(
+                            egui::RichText::new(format!("{location}{}", diagnostic.message))
+                                .font(typography::metadata())
+                                .color(status::DANGER),
+                        )
+                        .frame(false);
+                        let response = if showing_retained_diagnostics {
+                            ui.add_enabled(false, button).on_hover_text(
+                                "Validating the updated YAML before this diagnostic can be located",
+                            )
+                        } else {
+                            ui.add(button)
+                                .with_pointing_hand()
+                                .on_hover_text("Jump to the highlighted YAML location")
+                        };
+                        if !showing_retained_diagnostics && response.clicked() {
+                            range_to_focus = diagnostic.range.clone();
+                        }
+                    }
+                });
         });
     if let Some(range) = range_to_focus {
         focus_diagnostic(ctx, editor, range);
@@ -1158,6 +1128,25 @@ mod tests {
         let mut editor = editor("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: settings");
         editor.edited_yaml.push_str("\ndata:\n  mode: development");
         snapshot_editor(editor, "yaml_editor/modified");
+    }
+
+    #[test]
+    fn command_enter_does_not_apply_yaml_changes() {
+        let mut editor = editor("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: settings");
+        editor.edited_yaml.push_str("\ndata:\n  mode: development");
+        let mut harness = editor_harness(editor);
+
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Enter);
+        harness.run();
+
+        assert!(!harness.state().editor.saving);
+        assert!(
+            harness
+                .state()
+                .commands
+                .iter()
+                .all(|command| !matches!(command, WorkerCommand::ApplyResourceYaml { .. }))
+        );
     }
 
     #[test]
@@ -1582,17 +1571,6 @@ mod tests {
     }
 
     #[test]
-    fn description_preview_is_bounded_and_marks_truncation() {
-        assert_eq!(description_preview(Some("short")), "short");
-        assert_eq!(
-            description_preview(Some(
-                "a description that is deliberately longer than forty characters"
-            )),
-            "a description that is deliberately l…"
-        );
-    }
-
-    #[test]
     fn completion_popup_flips_and_clamps_at_each_viewport_edge() {
         let viewport = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(1600.0, 900.0));
         let top_left = egui::Rect::from_min_size(egui::pos2(20.0, 20.0), egui::vec2(2.0, 18.0));
@@ -1601,14 +1579,30 @@ mod tests {
         let bottom_right =
             egui::Rect::from_min_size(egui::pos2(1580.0, 870.0), egui::vec2(2.0, 18.0));
 
-        let top_left_position =
-            completion_popup_position(viewport, top_left, COMPLETION_POPUP_MAX_HEIGHT);
-        let top_right_position =
-            completion_popup_position(viewport, top_right, COMPLETION_POPUP_MAX_HEIGHT);
-        let bottom_left_position =
-            completion_popup_position(viewport, bottom_left, COMPLETION_POPUP_MAX_HEIGHT);
-        let bottom_right_position =
-            completion_popup_position(viewport, bottom_right, COMPLETION_POPUP_MAX_HEIGHT);
+        let top_left_position = completion_popup_position(
+            viewport,
+            top_left,
+            COMPLETION_POPUP_MAX_HEIGHT,
+            COMPLETION_POPUP_MAX_WIDTH,
+        );
+        let top_right_position = completion_popup_position(
+            viewport,
+            top_right,
+            COMPLETION_POPUP_MAX_HEIGHT,
+            COMPLETION_POPUP_MAX_WIDTH,
+        );
+        let bottom_left_position = completion_popup_position(
+            viewport,
+            bottom_left,
+            COMPLETION_POPUP_MAX_HEIGHT,
+            COMPLETION_POPUP_MAX_WIDTH,
+        );
+        let bottom_right_position = completion_popup_position(
+            viewport,
+            bottom_right,
+            COMPLETION_POPUP_MAX_HEIGHT,
+            COMPLETION_POPUP_MAX_WIDTH,
+        );
 
         for position in [
             top_left_position,
@@ -1617,7 +1611,7 @@ mod tests {
             bottom_right_position,
         ] {
             assert!(position.x >= spacing::MD);
-            assert!(position.x + COMPLETION_POPUP_WIDTH <= viewport.right() - spacing::MD);
+            assert!(position.x + COMPLETION_POPUP_MAX_WIDTH <= viewport.right() - spacing::MD);
             assert!(position.y >= spacing::MD);
             assert!(position.y + COMPLETION_POPUP_MAX_HEIGHT <= viewport.bottom() - spacing::MD);
         }
@@ -1634,8 +1628,58 @@ mod tests {
     }
 
     #[test]
+    fn completion_popup_width_fits_short_labels_without_penalizing_long_ones() {
+        assert_eq!(
+            completion_list_width(&many_suggestions(1)),
+            COMPLETION_LIST_MIN_WIDTH
+        );
+        assert_eq!(
+            completion_list_width(&[CompletionSuggestion {
+                label: "a".repeat(80),
+                type_label: None,
+                detail: None,
+            }]),
+            COMPLETION_LIST_MAX_WIDTH
+        );
+    }
+
+    #[test]
+    fn completion_documentation_attaches_to_the_selected_row_without_overlapping_the_list() {
+        let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1536.0, 1024.0));
+        let selected_row =
+            egui::Rect::from_min_size(egui::pos2(1238.0, 830.0), egui::vec2(240.0, 26.0));
+        let completion_popup = egui::Rect::from_min_size(
+            egui::pos2(1230.0, 814.0),
+            egui::vec2(COMPLETION_POPUP_MAX_WIDTH, 144.0),
+        );
+
+        let position = completion_documentation_position(viewport, completion_popup, selected_row);
+
+        assert_eq!(position.y, selected_row.top());
+        assert!(
+            position.x + COMPLETION_DOCUMENTATION_WIDTH + spacing::SM <= completion_popup.left()
+        );
+    }
+
+    #[test]
     fn yaml_editor_diagnostics_snapshot() {
         snapshot_editor(diagnostic_editor(), "yaml_editor/diagnostics");
+    }
+
+    #[test]
+    fn yaml_editor_many_diagnostics_snapshot() {
+        let mut editor = diagnostic_editor();
+        editor.diagnostics = (1..=100)
+            .map(|index| YamlDiagnostic {
+                path: format!("/data/field-{index}"),
+                message: format!("Validation error {index}"),
+                line: Some(4),
+                range: editor.diagnostics[0].range.clone(),
+            })
+            .collect();
+        editor.retained_diagnostics = editor.diagnostics.clone();
+
+        snapshot_editor(editor, "yaml_editor/diagnostics_many");
     }
 
     #[test]
