@@ -641,6 +641,14 @@ fn show_resource_table(
         rows.push(ResourceTableRow::HiddenBySearch(hidden_resource_count));
     }
     let definition = table_definition(api_resource, custom_columns);
+    let node_column_index = (api_resource.kind == "Pod").then(|| {
+        1 + usize::from(show_namespace_column)
+            + definition
+                .columns
+                .iter()
+                .position(|column| column.id == NODE_COLUMN)
+                .expect("Pod table defines a Node column")
+    });
     let mut table = TailwindTable::new(format!(
         "resource-table-{}-{}-{}",
         api_resource.group, api_resource.version, api_resource.name
@@ -672,6 +680,30 @@ fn show_resource_table(
             let actions_index = age_index + 1;
             match row {
                 ResourceTableRow::Resource(resource) => match column_index {
+                    0 if allow_actions => {
+                        let response = TableRowBuilder::clickable_text(
+                            ui,
+                            &resource.name,
+                            gray::_900,
+                            format!("Open details for {}", resource.name),
+                        );
+                        if response.clicked() && pending_action.borrow().is_none() {
+                            *pending_action.borrow_mut() = Some(ResourceAction::OpenDetails {
+                                name: resource.name.clone(),
+                                namespace: resource.namespace.clone(),
+                                uid: resource.uid.clone(),
+                            });
+                        }
+                        MoreButton::show_context_menu(&response, |menu| {
+                            show_resource_action_items(
+                                menu,
+                                api_resource,
+                                resource,
+                                &resource.log_containers,
+                                &mut pending_action.borrow_mut(),
+                            );
+                        });
+                    }
                     0 => TableRowBuilder::text(ui, &resource.name, true),
                     index if Some(index) == namespace_index => {
                         TableRowBuilder::text(
@@ -689,14 +721,35 @@ fn show_resource_table(
                             && api_resource.kind == "Pod"
                             && let Some(CellValue::Text(node_name)) = resource.cells.get(&column.id)
                         {
-                            let text = egui::RichText::new(node_name)
-                                .font(typography::body())
-                                .color(if node_name == "-" {
-                                    gray::_500
-                                } else {
-                                    components::colors::indigo::_600
+                            if allow_actions && node_name != "-" {
+                                let response = TableRowBuilder::clickable_text(
+                                    ui,
+                                    node_name,
+                                    components::colors::indigo::_600,
+                                    format!("Open details for Node {node_name}"),
+                                );
+                                if response.clicked() && pending_action.borrow().is_none() {
+                                    *pending_action.borrow_mut() =
+                                        Some(ResourceAction::NavigateDetails {
+                                            api_resource:
+                                                crate::resource_handlers::node::api_resource(),
+                                            name: node_name.clone(),
+                                            namespace: None,
+                                            uid: node_name.clone(),
+                                        });
+                                }
+                                MoreButton::show_context_menu(&response, |menu| {
+                                    show_resource_action_items(
+                                        menu,
+                                        api_resource,
+                                        resource,
+                                        &resource.log_containers,
+                                        &mut pending_action.borrow_mut(),
+                                    );
                                 });
-                            ui.label(text);
+                            } else {
+                                TableRowBuilder::text(ui, node_name, false);
+                            }
                         } else {
                             show_resource_cell(ui, resource.cells.get(&column.id));
                         }
@@ -729,14 +782,6 @@ fn show_resource_table(
         },
         |row_response, row, column_index| {
             if let ResourceTableRow::Resource(resource) = row {
-                let node_column_index = (api_resource.kind == "Pod").then(|| {
-                    1 + usize::from(show_namespace_column)
-                        + definition
-                            .columns
-                            .iter()
-                            .position(|column| column.id == NODE_COLUMN)
-                            .expect("Pod table defines a Node column")
-                });
                 if Some(column_index) == node_column_index
                     && let Some(CellValue::Text(node_name)) = resource.cells.get(NODE_COLUMN)
                 {
@@ -744,77 +789,7 @@ fn show_resource_table(
                         row_response
                             .clone()
                             .on_hover_text("Kubernetes has not assigned this Pod to a Node.");
-                    } else {
-                        let pointer_over_node_cell = row_response.ctx.input(|input| {
-                            input.pointer.latest_pos().is_some_and(|position| {
-                                row_response.interact_rect.contains(position)
-                            })
-                        });
-                        if pointer_over_node_cell {
-                            row_response
-                                .ctx
-                                .set_cursor_icon(egui::CursorIcon::PointingHand);
-                        }
-                        row_response.widget_info(|| {
-                            egui::WidgetInfo::labeled(
-                                egui::WidgetType::Button,
-                                row_response.enabled(),
-                                format!("Open details for Node {node_name}"),
-                            )
-                        });
                     }
-                }
-                if allow_actions && column_index == 0 {
-                    let pointer_over_name_cell = row_response.ctx.input(|input| {
-                        input
-                            .pointer
-                            .latest_pos()
-                            .is_some_and(|position| row_response.interact_rect.contains(position))
-                    });
-                    if pointer_over_name_cell {
-                        row_response
-                            .ctx
-                            .set_cursor_icon(egui::CursorIcon::PointingHand);
-                    }
-                    row_response.widget_info(|| {
-                        egui::WidgetInfo::labeled(
-                            egui::WidgetType::Button,
-                            row_response.enabled(),
-                            format!("Open details for {}", resource.name),
-                        )
-                    });
-                }
-                let primary_clicked_in_cell = row_response.ctx.input(|input| {
-                    input.pointer.button_clicked(egui::PointerButton::Primary)
-                        && input
-                            .pointer
-                            .latest_pos()
-                            .is_some_and(|position| row_response.interact_rect.contains(position))
-                });
-                if allow_actions
-                    && column_index == 0
-                    && primary_clicked_in_cell
-                    && pending_action.borrow().is_none()
-                {
-                    *pending_action.borrow_mut() = Some(ResourceAction::OpenDetails {
-                        name: resource.name.clone(),
-                        namespace: resource.namespace.clone(),
-                        uid: resource.uid.clone(),
-                    });
-                }
-                if allow_actions
-                    && Some(column_index) == node_column_index
-                    && let Some(CellValue::Text(node_name)) = resource.cells.get(NODE_COLUMN)
-                    && node_name != "-"
-                    && primary_clicked_in_cell
-                    && pending_action.borrow().is_none()
-                {
-                    *pending_action.borrow_mut() = Some(ResourceAction::NavigateDetails {
-                        api_resource: crate::resource_handlers::node::api_resource(),
-                        name: node_name.clone(),
-                        namespace: None,
-                        uid: node_name.clone(),
-                    });
                 }
                 if allow_actions {
                     MoreButton::show_context_menu(row_response, |menu| {

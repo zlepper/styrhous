@@ -1267,7 +1267,24 @@ fn show_managed_resource_table(
         |ui, row, column_index| {
             let type_specific_start = 1 + usize::from(show_namespace_column);
             match column_index {
-                0 => TableRowBuilder::text(ui, &row.name, true),
+                0 => {
+                    if TableRowBuilder::clickable_text(
+                        ui,
+                        &row.name,
+                        gray::_900,
+                        format!("Open details for {}", row.name),
+                    )
+                    .clicked()
+                        && pending_action.is_none()
+                    {
+                        *pending_action = Some(ResourceAction::NavigateDetails {
+                            api_resource: row.api_resource.clone(),
+                            name: row.name.clone(),
+                            namespace: row.namespace.clone(),
+                            uid: row.uid.clone(),
+                        });
+                    }
+                }
                 1 if show_namespace_column => {
                     TableRowBuilder::text(ui, row.namespace.as_deref().unwrap_or("-"), false)
                 }
@@ -1281,24 +1298,7 @@ fn show_managed_resource_table(
                 _ => TableRowBuilder::text(ui, &format_age(row.creation_timestamp), false),
             }
         },
-        |row_response, row, column_index| {
-            let name_cell_clicked = column_index == 0
-                && row_response.ctx.input(|input| {
-                    input.pointer.button_clicked(egui::PointerButton::Primary)
-                        && input
-                            .pointer
-                            .latest_pos()
-                            .is_some_and(|position| row_response.interact_rect.contains(position))
-                });
-            if name_cell_clicked && pending_action.is_none() {
-                *pending_action = Some(ResourceAction::NavigateDetails {
-                    api_resource: row.api_resource.clone(),
-                    name: row.name.clone(),
-                    namespace: row.namespace.clone(),
-                    uid: row.uid.clone(),
-                });
-            }
-        },
+        |_, _, _| {},
     );
 }
 

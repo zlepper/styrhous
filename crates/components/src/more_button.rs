@@ -66,14 +66,7 @@ impl MoreButton {
     /// row-level context menus.
     pub fn show_context_menu(response: &Response, add_contents: impl FnOnce(&mut MoreMenu<'_>)) {
         let popup_id = Popup::default_response_id(response);
-        let secondary_clicked_in_response = response.ctx.input(|input| {
-            input.pointer.button_clicked(egui::PointerButton::Secondary)
-                && input
-                    .pointer
-                    .latest_pos()
-                    .is_some_and(|position| response.interact_rect.contains(position))
-        });
-        let set_open = if secondary_clicked_in_response {
+        let set_open = if response.secondary_clicked() {
             Some(SetOpenCommand::Bool(true))
         } else if response.clicked() {
             Some(SetOpenCommand::Bool(false))
