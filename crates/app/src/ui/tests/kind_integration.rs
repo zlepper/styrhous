@@ -675,6 +675,18 @@ fn test_resource_actions_integration() {
             .is_some_and(|pending| pending.resource_name == test_configmap_name)
     );
 
+    wait_for(
+        &mut harness,
+        |app| {
+            app.ui_state.clusters[&cluster_key]
+                .pending_delete
+                .as_ref()
+                .filter(|pending| pending.confirmation_available_at <= std::time::Instant::now())
+                .map(|_| ())
+        },
+        5_000,
+    );
+
     let confirm_delete_label = format!("Delete {test_configmap_name}");
     harness
         .get_by_label(&confirm_delete_label)
