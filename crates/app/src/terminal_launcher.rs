@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::io::ErrorKind;
 use std::process::Command;
 
 /// Everything required to start an interactive shell in a Pod from a local terminal.
@@ -48,12 +49,23 @@ impl TerminalLauncher for SystemTerminalLauncher {
         request: &PodShellRequest,
         settings: &TerminalLaunchSettings,
     ) -> Result<(), String> {
-        let plan = LaunchPlan::for_current_platform(request, settings)?;
-        Command::new(&plan.program)
-            .args(&plan.args)
-            .spawn()
-            .map(|_| ())
-            .map_err(|error| format!("Unable to start {}: {error}", plan.program))
+        let plans = LaunchPlan::for_current_platform(request, settings)?;
+        let mut unavailable = Vec::new();
+
+        for plan in plans {
+            match Command::new(&plan.program).args(&plan.args).spawn() {
+                Ok(_) => return Ok(()),
+                Err(error) if error.kind() == ErrorKind::NotFound => {
+                    unavailable.push(format!("{} ({error})", plan.program));
+                }
+                Err(error) => return Err(format!("Unable to start {}: {error}", plan.program)),
+            }
+        }
+
+        Err(format!(
+            "No supported terminal launcher was found. Tried: {}.",
+            unavailable.join(", ")
+        ))
     }
 }
 
@@ -67,46 +79,114 @@ impl LaunchPlan {
     fn for_current_platform(
         request: &PodShellRequest,
         settings: &TerminalLaunchSettings,
-    ) -> Result<Self, String> {
+    ) -> Result<Vec<Self>, String> {
         settings.validate()?;
         let kubectl = kubectl_arguments(request);
         if let Some(template) = &settings.custom_template {
-            return Ok(custom_template_plan(template, &kubectl));
+            return Ok(vec![custom_template_plan(template, &kubectl)]);
         }
 
         #[cfg(target_os = "linux")]
         {
-            let mut args = vec![format!("--title=Shell: {}", request.pod_name), "--".into()];
-            args.extend(kubectl);
-            return Ok(Self {
-                program: "xdg-terminal-exec".into(),
-                args,
-            });
+            return Ok(linux_launch_plans(
+                request,
+                &kubectl,
+                std::env::var("TERMINAL").ok().as_deref(),
+            ));
         }
         #[cfg(target_os = "macos")]
         {
             let command = shell_command(&kubectl, ShellDialect::Posix);
-            return Ok(Self {
+            return Ok(vec![Self {
                 program: "osascript".into(),
                 args: vec![
                     "-e".into(),
                     "on run argv\ntell application \"Terminal\"\ndo script (item 1 of argv)\nactivate\nend tell\nend run".into(),
                     command,
                 ],
-            });
+            }]);
         }
         #[cfg(target_os = "windows")]
         {
             let mut args = vec!["-w".into(), "new".into()];
             args.extend(kubectl);
-            return Ok(Self {
+            return Ok(vec![Self {
                 program: "wt.exe".into(),
                 args,
-            });
+            }]);
         }
         #[allow(unreachable_code)]
         Err("Opening an external terminal is not supported on this operating system.".into())
     }
+}
+
+#[cfg(target_os = "linux")]
+fn linux_launch_plans(
+    request: &PodShellRequest,
+    kubectl: &[String],
+    terminal_environment: Option<&str>,
+) -> Vec<LaunchPlan> {
+    let title = format!("Shell: {}", request.pod_name);
+    let command = shell_command(kubectl, ShellDialect::Posix);
+    let mut plans = Vec::new();
+
+    if let Some(terminal) = terminal_environment.filter(|terminal| !terminal.trim().is_empty()) {
+        plans.push(LaunchPlan {
+            program: "/bin/sh".into(),
+            args: vec!["-lc".into(), format!("exec {terminal} -e {command}")],
+        });
+    }
+
+    plans.push(LaunchPlan {
+        program: "xdg-terminal-exec".into(),
+        args: {
+            let mut args = vec![format!("--title={title}"), "--".into()];
+            args.extend(kubectl.iter().cloned());
+            args
+        },
+    });
+    plans.push(LaunchPlan {
+        program: "x-terminal-emulator".into(),
+        args: {
+            let mut args = vec!["-e".into()];
+            args.extend(kubectl.iter().cloned());
+            args
+        },
+    });
+    plans.push(LaunchPlan {
+        program: "gnome-terminal".into(),
+        args: {
+            let mut args = vec![format!("--title={title}"), "--".into()];
+            args.extend(kubectl.iter().cloned());
+            args
+        },
+    });
+    plans.push(LaunchPlan {
+        program: "konsole".into(),
+        args: {
+            let mut args = vec![
+                "--new-tab".into(),
+                "-p".into(),
+                format!("tabtitle={title}"),
+                "-e".into(),
+            ];
+            args.extend(kubectl.iter().cloned());
+            args
+        },
+    });
+    plans.push(LaunchPlan {
+        program: "xfce4-terminal".into(),
+        args: vec![format!("--title={title}"), format!("--command={command}")],
+    });
+    plans.push(LaunchPlan {
+        program: "xterm".into(),
+        args: {
+            let mut args = vec!["-T".into(), title, "-e".into()];
+            args.extend(kubectl.iter().cloned());
+            args
+        },
+    });
+    plans
 }
 
 fn kubectl_arguments(request: &PodShellRequest) -> Vec<String> {
@@ -262,5 +342,72 @@ mod tests {
         let command = shell_command(&kubectl_arguments(&request()), ShellDialect::Posix);
         assert!(command.contains("'team dev'"));
         assert!(command.contains("'kubectl'"));
+    }
+
+    #[test]
+    fn custom_template_bypasses_automatic_launcher_candidates() {
+        let plans = LaunchPlan::for_current_platform(
+            &request(),
+            &TerminalLaunchSettings {
+                custom_template: Some("alacritty -e {command}".into()),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(plans.len(), 1);
+        #[cfg(windows)]
+        assert_eq!(plans[0].program, "cmd.exe");
+        #[cfg(not(windows))]
+        assert_eq!(plans[0].program, "/bin/sh");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_automatic_launcher_prefers_terminal_environment_then_desktop_fallbacks() {
+        let kubectl = kubectl_arguments(&request());
+        let plans = linux_launch_plans(
+            &request(),
+            &kubectl,
+            Some("alacritty --working-directory ~"),
+        );
+
+        assert_eq!(
+            plans
+                .iter()
+                .map(|plan| plan.program.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "/bin/sh",
+                "xdg-terminal-exec",
+                "x-terminal-emulator",
+                "gnome-terminal",
+                "konsole",
+                "xfce4-terminal",
+                "xterm",
+            ]
+        );
+        assert_eq!(plans[0].args[0], "-lc");
+        assert!(plans[0].args[1].starts_with("exec alacritty --working-directory ~ -e "));
+        assert!(plans[0].args[1].contains("'team dev'"));
+        assert_eq!(plans[1].args[0], "--title=Shell: api");
+        assert_eq!(plans[1].args[1], "--");
+        assert_eq!(plans[2].args[0], "-e");
+        assert_eq!(plans[3].args[0], "--title=Shell: api");
+        assert_eq!(
+            plans[4].args[..4],
+            ["--new-tab", "-p", "tabtitle=Shell: api", "-e"]
+        );
+        assert_eq!(plans[5].args[0], "--title=Shell: api");
+        assert!(plans[5].args[1].starts_with("--command='kubectl'"));
+        assert_eq!(plans[6].args[..3], ["-T", "Shell: api", "-e"]);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_automatic_launcher_starts_with_xdg_when_terminal_environment_is_missing() {
+        let kubectl = kubectl_arguments(&request());
+        let plans = linux_launch_plans(&request(), &kubectl, None);
+
+        assert_eq!(plans[0].program, "xdg-terminal-exec");
     }
 }

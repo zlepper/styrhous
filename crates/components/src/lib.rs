@@ -24,6 +24,7 @@ pub mod button;
 pub mod colors;
 pub mod combobox;
 pub mod design;
+pub mod error_dialog;
 pub mod fuzzy;
 pub mod icons;
 pub mod more_button;
@@ -42,6 +43,7 @@ pub use combobox::{
     ComboboxResponse, ComboboxUi, ItemResponse, NoFilter, SelectionAction, TailwindCombobox,
     WithFilter,
 };
+pub use error_dialog::{ErrorDialog, ErrorDialogAction};
 pub use more_button::{MoreButton, MoreMenu};
 pub use search::{SearchInputResponse, TailwindSearchInput};
 pub use sidebar::{
