@@ -28,6 +28,7 @@ use std::hash::Hash;
 use crate::colors::{
     CONTENT_BACKGROUND, TABLE_BORDER, TABLE_HEADER_BACKGROUND, WHITE, gray, indigo,
 };
+use crate::design::{radius, spacing, typography};
 use crate::icons;
 
 fn egui_column(column: &TableColumn) -> Column {
@@ -44,14 +45,14 @@ fn egui_column(column: &TableColumn) -> Column {
     column.resizable(false)
 }
 
-// Layout constants (from Tailwind classes)
-// The primary resource table is deliberately spacious. The larger rhythm makes the
-// workspace read as one continuous surface at desktop resolutions, instead of a
-// compact widget stranded in the top-left corner.
-const ROW_HEIGHT: f32 = 81.25;
-const HEADER_HEIGHT: f32 = 64.0;
-const CELL_PADDING_X: f32 = 30.0;
-const TEXT_FONT_SIZE: f32 = 18.0;
+// The resource table follows the compact desktop rhythm used by controls and
+// sidebars, while keeping a comfortable row target for pointer interactions.
+const ROW_HEIGHT: f32 = 44.0;
+const HEADER_HEIGHT: f32 = 40.0;
+const CELL_PADDING_X: f32 = spacing::LG;
+const ROOMY_ROW_HEIGHT: f32 = 81.25;
+const ROOMY_HEADER_HEIGHT: f32 = 64.0;
+const ROOMY_CELL_PADDING_X: f32 = 30.0;
 const HEADER_BG: egui::Color32 = TABLE_HEADER_BACKGROUND;
 const CHECKBOX_SIZE: f32 = 16.0;
 const CHECKBOX_COL_WIDTH: f32 = 48.0;
@@ -148,6 +149,7 @@ pub struct TailwindTable {
     columns: Vec<TableColumn>,
     is_selectable: bool,
     fill_available_height: bool,
+    roomy: bool,
 }
 
 impl TailwindTable {
@@ -158,6 +160,7 @@ impl TailwindTable {
             columns: Vec::new(),
             is_selectable: false,
             fill_available_height: false,
+            roomy: false,
         }
     }
 
@@ -187,6 +190,13 @@ impl TailwindTable {
     /// still read as a deliberate working surface instead of a floating list.
     pub fn fill_available_height(mut self) -> Self {
         self.fill_available_height = true;
+        self
+    }
+
+    /// Use the spacious rhythm required by dense inspector content where
+    /// controls are addressed at stable, larger hit targets.
+    pub fn roomy(mut self) -> Self {
+        self.roomy = true;
         self
     }
 
@@ -223,6 +233,11 @@ impl TailwindTable {
         mut render_row: impl FnMut(&egui::Response, &'a T, usize),
     ) {
         let available_height = ui.available_height();
+        let (header_height, row_height, cell_padding_x) = if self.roomy {
+            (ROOMY_HEADER_HEIGHT, ROOMY_ROW_HEIGHT, ROOMY_CELL_PADDING_X)
+        } else {
+            (HEADER_HEIGHT, ROW_HEIGHT, CELL_PADDING_X)
+        };
         let num_columns = self.columns.len();
         let table_id = self.id;
         let original_item_spacing = ui.spacing().item_spacing;
@@ -238,7 +253,7 @@ impl TailwindTable {
         if self.fill_available_height {
             table = table
                 .auto_shrink([false, false])
-                .min_scrolled_height((available_height - HEADER_HEIGHT).max(0.0));
+                .min_scrolled_height((available_height - header_height).max(0.0));
         }
 
         // Add columns
@@ -247,7 +262,7 @@ impl TailwindTable {
         }
 
         table
-            .header(HEADER_HEIGHT, |mut header| {
+            .header(header_height, |mut header| {
                 for col in &self.columns {
                     header.col(|ui| {
                         // White background for header
@@ -264,10 +279,10 @@ impl TailwindTable {
                                 .layout(egui::Layout::left_to_right(egui::Align::Center)),
                         );
                         label_ui.horizontal(|ui| {
-                            ui.add_space(CELL_PADDING_X);
+                            ui.add_space(cell_padding_x);
                             ui.label(
                                 egui::RichText::new(&col.header)
-                                    .size(TEXT_FONT_SIZE)
+                                    .font(typography::body())
                                     .color(gray::_900)
                                     .strong(),
                             );
@@ -276,7 +291,7 @@ impl TailwindTable {
                 }
             })
             .body(|body| {
-                body.rows(ROW_HEIGHT, items.len(), |mut row| {
+                body.rows(row_height, items.len(), |mut row| {
                     let row_index = row.index();
                     let item = &items[row_index];
 
@@ -298,7 +313,7 @@ impl TailwindTable {
 
                             // Add padding and render cell content
                             ui.horizontal(|ui| {
-                                ui.add_space(CELL_PADDING_X);
+                                ui.add_space(cell_padding_x);
                                 render_cell(ui, item, col_index);
                             });
                         });
@@ -327,7 +342,11 @@ impl TableRowBuilder<'_> {
         } else {
             gray::_500
         };
-        ui.label(egui::RichText::new(text).size(TEXT_FONT_SIZE).color(color));
+        ui.label(
+            egui::RichText::new(text)
+                .font(typography::body())
+                .color(color),
+        );
     }
 }
 
@@ -345,7 +364,7 @@ fn render_checkbox(ui: &mut Ui, state: CheckboxState) -> egui::Response {
 
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
-        let rounding = egui::CornerRadius::same(3);
+        let rounding = radius::subtle();
 
         match state {
             CheckboxState::Unchecked => {
@@ -465,7 +484,7 @@ impl TailwindTable {
                             ui.add_space(CELL_PADDING_X);
                             ui.label(
                                 egui::RichText::new(&col.header)
-                                    .size(TEXT_FONT_SIZE)
+                                    .font(typography::body())
                                     .color(gray::_900)
                                     .strong(),
                             );
@@ -608,7 +627,7 @@ impl TailwindTable {
 
                             ui.label(
                                 egui::RichText::new(&col.header)
-                                    .size(TEXT_FONT_SIZE)
+                                    .font(typography::body())
                                     .color(gray::_900)
                                     .strong(),
                             );
@@ -725,7 +744,7 @@ impl TailwindTable {
                             ui.add_space(CELL_PADDING_X);
                             ui.label(
                                 egui::RichText::new(&col.header)
-                                    .size(TEXT_FONT_SIZE)
+                                    .font(typography::body())
                                     .color(gray::_900)
                                     .strong(),
                             );

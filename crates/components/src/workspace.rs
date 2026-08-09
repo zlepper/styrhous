@@ -3,13 +3,13 @@
 //! The components in this module own the common Lens-inspired surface treatment so
 //! application screens do not repeat fills, borders, radii, or empty-state layout.
 
-use egui::{Color32, CornerRadius, Frame, Margin, RichText, Stroke, Ui};
+use egui::{Color32, Frame, Margin, RichText, Stroke, Ui};
 
 use crate::colors::{CONTENT_BACKGROUND, WHITE, gray};
+use crate::design::{radius, spacing, surface, typography};
 
-const CARD_MARGIN: i8 = 12;
-const STATE_MARGIN: i8 = 32;
-const SURFACE_RADIUS: u8 = 8;
+const CARD_MARGIN: i8 = spacing::MD as i8;
+const STATE_MARGIN: i8 = spacing::XXL as i8;
 
 /// The light content canvas used beside the dark application navigation.
 pub struct WorkspacePage;
@@ -53,8 +53,8 @@ impl WorkspaceCard {
     pub fn show<R>(self, ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
         Frame::new()
             .fill(WHITE)
-            .stroke(Stroke::new(1.0, gray::_200))
-            .corner_radius(CornerRadius::same(SURFACE_RADIUS))
+            .stroke(surface::muted_border())
+            .corner_radius(radius::surface())
             .inner_margin(Margin::same(self.padding))
             .show(ui, add_contents)
             .inner
@@ -83,12 +83,15 @@ impl<'a> WorkspaceEmptyState<'a> {
                         |ui| {
                             ui.label(
                                 RichText::new(self.title)
-                                    .size(18.0)
-                                    .strong()
+                                    .font(typography::section_heading())
                                     .color(gray::_800),
                             );
-                            ui.add_space(6.0);
-                            ui.label(RichText::new(self.message).size(13.0).color(gray::_500));
+                            ui.add_space(spacing::SM);
+                            ui.label(
+                                RichText::new(self.message)
+                                    .font(typography::body())
+                                    .color(gray::_500),
+                            );
                         },
                     );
                 });
@@ -119,9 +122,17 @@ impl WorkspaceDrawer {
 /// Render a compact title and optional detail for a workspace section.
 pub fn workspace_section_header(ui: &mut Ui, title: &str, detail: Option<&str>) {
     ui.horizontal(|ui| {
-        ui.label(RichText::new(title).size(16.0).strong().color(gray::_900));
+        ui.label(
+            RichText::new(title)
+                .font(typography::section_heading())
+                .color(gray::_900),
+        );
         if let Some(detail) = detail {
-            ui.label(RichText::new(detail).size(12.0).color(gray::_500));
+            ui.label(
+                RichText::new(detail)
+                    .font(typography::metadata())
+                    .color(gray::_500),
+            );
         }
     });
 }

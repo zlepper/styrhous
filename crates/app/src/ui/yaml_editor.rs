@@ -2,6 +2,7 @@ use super::state::UiState;
 use crate::worker::WorkerCommand;
 use components::WorkspaceDrawer;
 use components::colors::{WHITE, gray, indigo};
+use components::design::{status, typography};
 use tracing::info;
 
 pub(super) fn show(
@@ -30,7 +31,7 @@ pub(super) fn show(
                 ui.label(
                     egui::RichText::new(format!("Edit YAML · {}", yaml_panel.resource_name))
                         .strong()
-                        .size(14.0)
+                        .font(typography::body())
                         .color(WHITE),
                 );
                 let resource_scope = yaml_panel.namespace.as_deref().map_or_else(
@@ -39,7 +40,7 @@ pub(super) fn show(
                 );
                 ui.label(
                     egui::RichText::new(resource_scope)
-                        .size(12.0)
+                        .font(typography::metadata())
                         .color(gray::_400),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -76,8 +77,8 @@ pub(super) fn show(
                     if yaml_panel.is_modified() {
                         ui.label(
                             egui::RichText::new("Modified")
-                                .color(egui::Color32::from_rgb(234, 179, 8))
-                                .size(12.0),
+                                .color(status::WARNING)
+                                .font(typography::metadata()),
                         );
                     }
                 });

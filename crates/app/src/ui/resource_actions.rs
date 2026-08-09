@@ -1,6 +1,7 @@
 use super::state::ResourceAction;
 use crate::minimal_resource::{MinimalResource, PodLogContainer};
 use components::colors::gray;
+use components::design::status;
 use components::{MoreMenu, icons};
 
 /// Render the shared resource-level actions used by table rows and inspectors.
@@ -64,7 +65,7 @@ pub(super) fn show_resource_action_items(
             "Delete",
             icons::trash_icon()
                 .fit_to_exact_size(egui::Vec2::splat(16.0))
-                .tint(egui::Color32::from_rgb(185, 28, 28)),
+                .tint(status::DANGER),
         )
         .clicked()
         && pending_action.is_none()

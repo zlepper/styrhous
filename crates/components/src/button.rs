@@ -3,6 +3,7 @@
 use egui::{Button, Color32, CornerRadius, Image, Response, Shadow, Stroke, Ui, Vec2, WidgetText};
 
 use crate::colors::{BLACK, WHITE, gray, indigo};
+use crate::design::{radius, spacing};
 
 /// Button color variant
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -248,11 +249,11 @@ impl<'a> TailwindButton<'a> {
     /// Get size metrics for the current size
     fn size_metrics(&self) -> (Vec2, f32) {
         match self.size {
-            ButtonSize::Xs => (Vec2::new(8.0, 4.0), 24.0),
-            ButtonSize::Sm => (Vec2::new(12.0, 6.0), 28.0),
-            ButtonSize::Md => (Vec2::new(16.0, 8.0), 36.0),
-            ButtonSize::Lg => (Vec2::new(20.0, 10.0), 44.0),
-            ButtonSize::Xl => (Vec2::new(24.0, 12.0), 52.0),
+            ButtonSize::Xs => (Vec2::new(spacing::SM, spacing::XS), 24.0),
+            ButtonSize::Sm => (Vec2::new(spacing::MD, spacing::XS), 28.0),
+            ButtonSize::Md => (Vec2::new(spacing::MD, spacing::SM), 32.0),
+            ButtonSize::Lg => (Vec2::new(spacing::LG, spacing::SM), 36.0),
+            ButtonSize::Xl => (Vec2::new(spacing::LG, spacing::MD), 44.0),
         }
     }
 
@@ -260,19 +261,19 @@ impl<'a> TailwindButton<'a> {
     /// compact control rhythm rather than text-button line heights.
     fn icon_button_size(&self) -> f32 {
         match self.size {
-            ButtonSize::Xs => 32.0,
-            ButtonSize::Sm => 36.0,
-            ButtonSize::Md => 40.0,
-            ButtonSize::Lg => 44.0,
-            ButtonSize::Xl => 52.0,
+            ButtonSize::Xs => 28.0,
+            ButtonSize::Sm => 32.0,
+            ButtonSize::Md => 36.0,
+            ButtonSize::Lg => 40.0,
+            ButtonSize::Xl => 44.0,
         }
     }
 
     /// Get corner radius for the current rounding style
     fn corner_radius(&self) -> CornerRadius {
         match self.rounding {
-            ButtonRounding::Default => CornerRadius::same(6),
-            ButtonRounding::Rounded => CornerRadius::same(8),
+            ButtonRounding::Default => radius::control(),
+            ButtonRounding::Rounded => radius::surface(),
             ButtonRounding::Pill => CornerRadius::same(255), // max u8 for pill shape
         }
     }

@@ -1,10 +1,11 @@
 //! A compact, Tailwind-inspired action menu for table rows and other dense UI.
 
 use egui::{
-    Button, Color32, CornerRadius, Frame, Image, InnerResponse, Margin, Popup, PopupCloseBehavior,
-    Response, SetOpenCommand, Shadow, Stroke, Ui, Vec2,
+    Button, Color32, Frame, Image, InnerResponse, Margin, Popup, PopupCloseBehavior, Response,
+    SetOpenCommand, Shadow, Stroke, Ui, Vec2,
 };
 
+use crate::design::{radius, spacing, status, typography};
 use crate::{
     ButtonSize, ButtonVariant, TailwindButton,
     colors::{BLACK, WHITE, gray},
@@ -12,9 +13,9 @@ use crate::{
 };
 
 const MENU_WIDTH: f32 = 192.0;
-const MENU_ITEM_HEIGHT: f32 = 36.0;
-const MENU_ITEM_PADDING: Vec2 = Vec2::new(12.0, 8.0);
-const DESTRUCTIVE: Color32 = Color32::from_rgb(185, 28, 28); // Tailwind red-700
+const MENU_ITEM_HEIGHT: f32 = 32.0;
+const MENU_ITEM_PADDING: Vec2 = Vec2::new(spacing::MD, spacing::SM);
+const DESTRUCTIVE: Color32 = status::DANGER;
 
 /// A compact action-menu trigger styled as a secondary icon-only button.
 pub struct MoreButton {
@@ -163,20 +164,22 @@ impl MoreMenu<'_> {
         visuals.inactive.bg_fill = WHITE;
         visuals.inactive.bg_stroke = Stroke::NONE;
         visuals.inactive.fg_stroke = Stroke::new(1.0, color);
-        visuals.inactive.corner_radius = CornerRadius::same(6);
+        visuals.inactive.corner_radius = radius::control();
         visuals.hovered.weak_bg_fill = gray::_100;
         visuals.hovered.bg_fill = gray::_100;
         visuals.hovered.bg_stroke = Stroke::NONE;
         visuals.hovered.fg_stroke = Stroke::new(1.0, color);
-        visuals.hovered.corner_radius = CornerRadius::same(6);
+        visuals.hovered.corner_radius = radius::control();
         visuals.active.weak_bg_fill = gray::_200;
         visuals.active.bg_fill = gray::_200;
         visuals.active.bg_stroke = Stroke::NONE;
         visuals.active.fg_stroke = Stroke::new(1.0, color);
-        visuals.active.corner_radius = CornerRadius::same(6);
+        visuals.active.corner_radius = radius::control();
         self.ui.spacing_mut().button_padding = MENU_ITEM_PADDING;
 
-        let text = egui::RichText::new(label).color(color);
+        let text = egui::RichText::new(label)
+            .font(typography::body())
+            .color(color);
         let button = match icon {
             Some(icon) => Button::image_and_text(icon, text),
             None => Button::new(text),
@@ -198,8 +201,8 @@ fn menu_frame() -> Frame {
     Frame::new()
         .fill(WHITE)
         .stroke(Stroke::new(1.0, gray::_200))
-        .corner_radius(CornerRadius::same(8))
-        .inner_margin(Margin::same(4))
+        .corner_radius(radius::surface())
+        .inner_margin(Margin::same(spacing::XS as i8))
         .shadow(Shadow {
             offset: [0, 2],
             blur: 8,

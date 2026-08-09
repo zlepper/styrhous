@@ -13,6 +13,7 @@ use crate::resource_handlers::table_definition;
 use crate::resource_table::{CONTAINERS_COLUMN, ResourceTableDefinition};
 use crate::worker::{ResourceDataUpdate, WorkerCommand};
 use components::colors::{WHITE, gray, indigo};
+use components::design::{radius, spacing, status, typography};
 use components::icons;
 use components::{
     ButtonSize, ButtonVariant, MoreButton, TableRowBuilder, TailwindButton, TailwindTable,
@@ -21,11 +22,11 @@ use components::{
 use std::collections::BTreeMap;
 
 const PANEL_WIDTH: f32 = 744.0;
-const PANEL_PADDING: i8 = 28;
-const CARD_CONTENT_PADDING: i8 = 12;
+const PANEL_PADDING: i8 = spacing::XL as i8;
+const CARD_CONTENT_PADDING: i8 = spacing::MD as i8;
 const CARD_HEADER_HEIGHT: f32 = 40.0;
-const CARD_HEADER_PADDING: f32 = 16.0;
-const CARD_GAP: f32 = 12.0;
+const CARD_HEADER_PADDING: f32 = spacing::LG;
+const CARD_GAP: f32 = spacing::MD;
 const ACTIVE_BLADE_INSET: f32 = 8.0;
 const HISTORY_BLADE_SCALES: [f32; 2] = [0.9, 0.8];
 /// Horizontal recession as a fraction of the unscaled blade width. The older
@@ -165,10 +166,6 @@ pub(super) fn show(
         active_transform.position,
         egui::vec2(PANEL_WIDTH, blade_height) * active_transform.scale,
     );
-    // The input-only scrim is above history but below the active blade and
-    // its menus. Its regions deliberately exclude the active blade.
-    close |= dismiss_on_outside_click && show_input_scrim(ctx, viewport, active_rect);
-
     let panel = ui_state
         .clusters
         .get_mut(&cluster_key)
@@ -262,6 +259,11 @@ pub(super) fn show(
     if should_promote_active_blade(has_history_layers, transition) {
         ctx.move_to_top(panel_layer_id);
     }
+
+    // Register the input-only scrim after every blade layer. Its regions
+    // deliberately exclude the active blade, so it captures history and
+    // workspace clicks without blocking foreground controls or menus.
+    close |= dismiss_on_outside_click && show_input_scrim(ctx, viewport, active_rect);
 
     close |= blade_result.close;
     if let Some(action) = blade_result.action {
@@ -913,13 +915,16 @@ fn show_resource_detail_blade(
                 |ui| {
                     ui.centered_and_justified(|ui| {
                         egui::Frame::new()
-                            .fill(egui::Color32::from_rgb(238, 242, 255))
-                            .corner_radius(egui::CornerRadius::same(6))
-                            .inner_margin(egui::Margin::symmetric(8, 5))
+                            .fill(indigo::_50)
+                            .corner_radius(radius::control())
+                            .inner_margin(egui::Margin::symmetric(
+                                spacing::SM as i8,
+                                spacing::XS as i8,
+                            ))
                             .show(ui, |ui| {
                                 ui.label(
                                     egui::RichText::new(&api_resource.kind)
-                                        .size(13.0)
+                                        .font(typography::body())
                                         .color(indigo::_600),
                                 );
                             });
@@ -929,8 +934,7 @@ fn show_resource_detail_blade(
             ui.add_space(14.0);
             ui.label(
                 egui::RichText::new(resource_name)
-                    .size(19.0)
-                    .strong()
+                    .font(typography::page_title())
                     .color(gray::_900),
             );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -1041,6 +1045,7 @@ fn show_managed_resource_table(
 ) {
     let definition = managed_resource_table_definition(kind);
     let mut table = TailwindTable::new(format!("managed-resource-table-{resource_uid}-{kind}",))
+        .roomy()
         .column("name", "Name", |column| column.fill_remaining());
     for column in &definition.columns {
         table = table.column(column.id.clone(), column.label.clone(), |table_column| {
@@ -1348,7 +1353,7 @@ fn data_entry(
                         ui.add_space(8.0);
                         ui.label(
                             egui::RichText::new(format!("{byte_len} bytes"))
-                                .size(12.0)
+                                .font(typography::metadata())
                                 .color(gray::_500),
                         );
                     }
@@ -1385,8 +1390,11 @@ fn secret_value_mask(ui: &mut egui::Ui) {
     egui::Frame::new()
         .fill(gray::_50)
         .stroke(egui::Stroke::new(1.0, gray::_200))
-        .corner_radius(egui::CornerRadius::same(6))
-        .inner_margin(egui::Margin::symmetric(10, 8))
+        .corner_radius(radius::control())
+        .inner_margin(egui::Margin::symmetric(
+            (spacing::SM + spacing::XS) as i8,
+            spacing::SM as i8,
+        ))
         .show(ui, |ui| {
             ui.label(
                 egui::RichText::new("••••••••••••")
@@ -1400,8 +1408,11 @@ fn unavailable_secret_value(ui: &mut egui::Ui) {
     egui::Frame::new()
         .fill(gray::_50)
         .stroke(egui::Stroke::new(1.0, gray::_200))
-        .corner_radius(egui::CornerRadius::same(6))
-        .inner_margin(egui::Margin::symmetric(10, 8))
+        .corner_radius(radius::control())
+        .inner_margin(egui::Margin::symmetric(
+            (spacing::SM + spacing::XS) as i8,
+            spacing::SM as i8,
+        ))
         .show(ui, |ui| {
             ui.label(
                 egui::RichText::new("Binary data")
@@ -1410,7 +1421,7 @@ fn unavailable_secret_value(ui: &mut egui::Ui) {
             );
             ui.label(
                 egui::RichText::new("This value cannot be edited in the inspector.")
-                    .size(12.0)
+                    .font(typography::metadata())
                     .color(gray::_600),
             );
         });
@@ -1423,8 +1434,8 @@ fn data_save_controls(
     pending_action: &mut Option<ResourceAction>,
 ) {
     if let Some(error) = &editor.save_error {
-        ui.colored_label(egui::Color32::from_rgb(185, 28, 28), error);
-        ui.add_space(6.0);
+        ui.colored_label(status::DANGER, error);
+        ui.add_space(spacing::SM);
     }
     if immutable {
         ui.label(egui::RichText::new("Data is immutable and cannot be edited.").color(gray::_500));
@@ -1572,7 +1583,11 @@ fn show_pod_detail(ui: &mut egui::Ui, pod: &PodDetail) {
                     detail_value(ui, "Reason", reason);
                 }
                 if let Some(message) = &container.message {
-                    ui.label(egui::RichText::new(message).size(12.0).color(gray::_500));
+                    ui.label(
+                        egui::RichText::new(message)
+                            .font(typography::metadata())
+                            .color(gray::_500),
+                    );
                 }
             },
         );
@@ -1633,7 +1648,7 @@ fn show_events(ui: &mut egui::Ui, events: &[ResourceEvent], error: Option<&str>)
                 ui.label(
                     egui::RichText::new("Events")
                         .strong()
-                        .size(15.0)
+                        .font(typography::section_heading())
                         .color(gray::_800),
                 );
             },
@@ -1759,14 +1774,14 @@ fn disclosure_card(
             header.left_center() + egui::vec2(CARD_HEADER_PADDING, 0.0),
             egui::Align2::LEFT_CENTER,
             title,
-            egui::FontId::proportional(14.0),
+            typography::body(),
             gray::_800,
         );
         painter.text(
             header.right_center() - egui::vec2(CARD_HEADER_PADDING, 0.0),
             egui::Align2::RIGHT_CENTER,
             if open { "⌃" } else { "⌄" },
-            egui::FontId::proportional(16.0),
+            typography::section_heading(),
             gray::_700,
         );
         if open {
@@ -1783,11 +1798,15 @@ fn section_header(ui: &mut egui::Ui, title: &str, detail: Option<String>) {
         ui.label(
             egui::RichText::new(title)
                 .strong()
-                .size(15.0)
+                .font(typography::section_heading())
                 .color(gray::_800),
         );
         if let Some(detail) = detail {
-            ui.label(egui::RichText::new(detail).size(13.0).color(gray::_600));
+            ui.label(
+                egui::RichText::new(detail)
+                    .font(typography::body())
+                    .color(gray::_600),
+            );
         }
     });
     ui.add_space(6.0);
@@ -1797,10 +1816,14 @@ fn detail_row(ui: &mut egui::Ui, label: &str, value: &str) {
     ui.horizontal_wrapped(|ui| {
         ui.label(
             egui::RichText::new(format!("{label}: "))
-                .size(12.0)
+                .font(typography::metadata())
                 .color(gray::_500),
         );
-        ui.label(egui::RichText::new(value).size(12.0).color(gray::_800));
+        ui.label(
+            egui::RichText::new(value)
+                .font(typography::metadata())
+                .color(gray::_800),
+        );
     });
 }
 
@@ -1810,15 +1833,18 @@ fn environment_variables(
 ) {
     ui.label(
         egui::RichText::new("Environment variables")
-            .size(12.0)
+            .font(typography::metadata())
             .color(gray::_500),
     );
     ui.add_space(4.0);
     egui::Frame::new()
         .fill(gray::_100)
         .stroke(egui::Stroke::new(1.0, gray::_200))
-        .corner_radius(egui::CornerRadius::same(4))
-        .inner_margin(egui::Margin::symmetric(8, 6))
+        .corner_radius(radius::subtle())
+        .inner_margin(egui::Margin::symmetric(
+            spacing::SM as i8,
+            (spacing::SM + 2.0) as i8,
+        ))
         .show(ui, |ui| {
             environment_variable_header(ui);
             for variable in variables {
@@ -1850,14 +1876,17 @@ fn environment_variable_row(
 fn environment_variable_cell(ui: &mut egui::Ui, value: &str, header: bool) {
     let text = egui::RichText::new(value)
         .monospace()
-        .size(11.0)
+        .font(typography::monospace())
         .color(if header { gray::_600 } else { gray::_800 });
     let text = if header { text.strong() } else { text };
     egui::Frame::new()
         .fill(WHITE)
         .stroke(egui::Stroke::new(1.0, gray::_200))
-        .corner_radius(egui::CornerRadius::same(3))
-        .inner_margin(egui::Margin::symmetric(6, 4))
+        .corner_radius(radius::subtle())
+        .inner_margin(egui::Margin::symmetric(
+            (spacing::SM - 2.0) as i8,
+            spacing::XS as i8,
+        ))
         .show(ui, |ui| {
             ui.set_max_width(ui.available_width());
             ui.add(egui::Label::new(text).selectable(!header).wrap());
@@ -1881,8 +1910,11 @@ fn environment_variable_value_cell(
     egui::Frame::new()
         .fill(WHITE)
         .stroke(egui::Stroke::new(1.0, gray::_200))
-        .corner_radius(egui::CornerRadius::same(3))
-        .inner_margin(egui::Margin::symmetric(6, 4))
+        .corner_radius(radius::subtle())
+        .inner_margin(egui::Margin::symmetric(
+            (spacing::SM - 2.0) as i8,
+            spacing::XS as i8,
+        ))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             ui.set_max_width(ui.available_width());
@@ -1905,7 +1937,7 @@ fn environment_variable_value_cell(
                         egui::Label::new(
                             egui::RichText::new(value)
                                 .monospace()
-                                .size(11.0)
+                                .font(typography::monospace())
                                 .color(gray::_800),
                         )
                         .selectable(true)
@@ -1924,15 +1956,22 @@ fn environment_variable_source_cell(
     egui::Frame::new()
         .fill(WHITE)
         .stroke(egui::Stroke::new(1.0, gray::_200))
-        .corner_radius(egui::CornerRadius::same(3))
-        .inner_margin(egui::Margin::symmetric(6, 4))
+        .corner_radius(radius::subtle())
+        .inner_margin(egui::Margin::symmetric(
+            (spacing::SM - 2.0) as i8,
+            spacing::XS as i8,
+        ))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             ui.set_max_width(ui.available_width());
             ui.horizontal_wrapped(|ui| {
                 ui.add(
-                    egui::Label::new(egui::RichText::new(source).size(11.0).color(gray::_600))
-                        .wrap(),
+                    egui::Label::new(
+                        egui::RichText::new(source)
+                            .font(typography::metadata())
+                            .color(gray::_600),
+                    )
+                    .wrap(),
                 );
             });
         });
@@ -2041,27 +2080,51 @@ fn detail_grid_columns(
 
 fn detail_value(ui: &mut egui::Ui, label: &str, value: &str) {
     if !label.is_empty() {
-        ui.label(egui::RichText::new(label).size(12.0).color(gray::_500));
+        ui.label(
+            egui::RichText::new(label)
+                .font(typography::metadata())
+                .color(gray::_500),
+        );
     }
-    ui.label(egui::RichText::new(value).size(12.0).color(gray::_900));
+    ui.label(
+        egui::RichText::new(value)
+            .font(typography::metadata())
+            .color(gray::_900),
+    );
 }
 
 fn status_value(ui: &mut egui::Ui, label: &str, value: &str) {
     if !label.is_empty() {
-        ui.label(egui::RichText::new(label).size(12.0).color(gray::_500));
+        ui.label(
+            egui::RichText::new(label)
+                .font(typography::metadata())
+                .color(gray::_500),
+        );
     }
     ui.horizontal(|ui| {
-        ui.colored_label(egui::Color32::from_rgb(34, 197, 94), "●");
-        ui.label(egui::RichText::new(value).size(12.0).color(gray::_900));
+        ui.colored_label(status::SUCCESS, "●");
+        ui.label(
+            egui::RichText::new(value)
+                .font(typography::metadata())
+                .color(gray::_900),
+        );
     });
 }
 
 fn event_header(ui: &mut egui::Ui, label: &str) {
-    ui.label(egui::RichText::new(label).size(11.0).color(gray::_500));
+    ui.label(
+        egui::RichText::new(label)
+            .font(typography::metadata())
+            .color(gray::_500),
+    );
 }
 
 fn chip_row(ui: &mut egui::Ui, label: &str, values: &[String]) {
-    ui.label(egui::RichText::new(label).size(12.0).color(gray::_500));
+    ui.label(
+        egui::RichText::new(label)
+            .font(typography::metadata())
+            .color(gray::_500),
+    );
     ui.with_layout(
         egui::Layout::left_to_right(egui::Align::TOP).with_main_wrap(true),
         |ui| {
@@ -2074,15 +2137,15 @@ fn chip_row(ui: &mut egui::Ui, label: &str, values: &[String]) {
                         egui::Frame::new()
                             .fill(gray::_100)
                             .stroke(egui::Stroke::new(1.0, gray::_200))
-                            .corner_radius(egui::CornerRadius::same(4))
-                            .inner_margin(egui::Margin::symmetric(5, 0))
+                            .corner_radius(radius::subtle())
+                            .inner_margin(egui::Margin::symmetric((spacing::SM - 3.0) as i8, 0))
                             .show(ui, |ui| {
                                 ui.set_max_width(chip_width - 10.0);
                                 ui.add(
                                     egui::Label::new(
                                         egui::RichText::new(value)
                                             .monospace()
-                                            .size(11.0)
+                                            .font(typography::monospace())
                                             .color(gray::_800),
                                     )
                                     .wrap(),
@@ -2122,10 +2185,10 @@ fn volume_detail_row(ui: &mut egui::Ui, volume: &crate::resource_detail::PodVolu
 }
 
 fn error_card(ui: &mut egui::Ui, title: &str, error: &str) {
+    ui.label(egui::RichText::new(title).strong().color(status::DANGER));
     ui.label(
-        egui::RichText::new(title)
-            .strong()
-            .color(egui::Color32::from_rgb(185, 28, 28)),
+        egui::RichText::new(error)
+            .font(typography::metadata())
+            .color(gray::_600),
     );
-    ui.label(egui::RichText::new(error).size(12.0).color(gray::_600));
 }

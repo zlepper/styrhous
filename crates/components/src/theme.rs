@@ -1,18 +1,16 @@
 //! Application-wide visual defaults for the Tailwind-inspired components.
 
-use egui::{Context, FontData, FontDefinitions, FontFamily, FontId, Stroke, Visuals};
+use egui::{Context, FontData, FontDefinitions, FontFamily, FontId, Stroke, TextStyle, Visuals};
 use std::sync::Arc;
 
 use crate::colors::{CONTENT_BACKGROUND, TABLE_BORDER, gray, indigo};
-
-const INTER_SEMIBOLD: &str = "Inter SemiBold";
 
 /// A true semibold face for headings and selected labels.
 ///
 /// `RichText::strong()` only changes egui's text color; it does not select a
 /// bold font face. Callers that need typographic hierarchy should use this.
 pub fn semibold_font(size: f32) -> FontId {
-    FontId::new(size, FontFamily::Name(INTER_SEMIBOLD.into()))
+    crate::design::typography::semibold(size)
 }
 
 fn apply_inter_fonts(ctx: &Context) {
@@ -41,7 +39,7 @@ fn apply_inter_fonts(ctx: &Context) {
         ],
     );
     fonts.families.insert(
-        FontFamily::Name(INTER_SEMIBOLD.into()),
+        FontFamily::Name("Inter SemiBold".into()),
         vec![
             "inter-semibold".into(),
             "inter-regular".into(),
@@ -59,6 +57,24 @@ fn apply_inter_fonts(ctx: &Context) {
 /// dark pane backgrounds showing through table gaps and component spacing.
 pub fn apply_light_theme(ctx: &Context) {
     apply_inter_fonts(ctx);
+
+    ctx.style_mut(|style| {
+        style
+            .text_styles
+            .insert(TextStyle::Small, crate::design::typography::metadata());
+        style
+            .text_styles
+            .insert(TextStyle::Body, crate::design::typography::body());
+        style
+            .text_styles
+            .insert(TextStyle::Button, crate::design::typography::body());
+        style
+            .text_styles
+            .insert(TextStyle::Heading, crate::design::typography::page_title());
+        style
+            .text_styles
+            .insert(TextStyle::Monospace, crate::design::typography::monospace());
+    });
 
     let mut visuals = Visuals::light();
     visuals.panel_fill = CONTENT_BACKGROUND;
