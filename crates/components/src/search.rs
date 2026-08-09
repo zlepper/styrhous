@@ -5,7 +5,9 @@ use crate::design::{radius, spacing, status, typography};
 use egui::{Id, Margin, Response, Stroke, Ui, Vec2};
 
 const INPUT_WIDTH: f32 = 150.0;
-const INPUT_HEIGHT: f32 = 32.0;
+// The frame adds 4 px above and below plus a 1 px border on each edge, so the
+// editor must remain 26 px tall to fit the 36 px toolbar slots used by callers.
+const INPUT_HEIGHT: f32 = 26.0;
 
 /// Responses from a [`TailwindSearchInput`].
 pub struct SearchInputResponse {
