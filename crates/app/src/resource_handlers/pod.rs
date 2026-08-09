@@ -9,8 +9,8 @@ use crate::resource_detail::{
 };
 use crate::resource_handlers::{matches_namespaced_api_resource, matches_namespaced_resource};
 use crate::resource_table::{
-    CONTAINERS_COLUMN, CellValue, ContainerIndicator, ContainerKind, READY_COLUMN, RESTARTS_COLUMN,
-    ResourceTableDefinition, STATUS_COLUMN, StatusTone, column, status_tone,
+    CONTAINERS_COLUMN, CellValue, ContainerIndicator, ContainerKind, NODE_COLUMN, READY_COLUMN,
+    RESTARTS_COLUMN, ResourceTableDefinition, STATUS_COLUMN, StatusTone, column, status_tone,
 };
 use k8s_openapi::api::core::v1::{ContainerStatus, Pod};
 use std::collections::BTreeMap;
@@ -27,6 +27,7 @@ pub(crate) fn table_definition(api_resource: &ApiResource) -> Option<ResourceTab
             column(CONTAINERS_COLUMN, "Containers", 150.0),
             column(STATUS_COLUMN, "Status", 128.0),
             column(RESTARTS_COLUMN, "Restarts", 120.0),
+            column(NODE_COLUMN, "Node", 180.0),
         ],
     })
 }
@@ -75,6 +76,15 @@ pub(crate) fn extract(pod: &Pod) -> MinimalResource {
                 },
             ),
             (RESTARTS_COLUMN.to_owned(), CellValue::Number(restarts)),
+            (
+                NODE_COLUMN.to_owned(),
+                CellValue::Text(
+                    pod.spec
+                        .as_ref()
+                        .and_then(|spec| spec.node_name.clone())
+                        .unwrap_or_else(|| "-".to_owned()),
+                ),
+            ),
         ]),
     );
     resource.log_containers = pod_log_containers(pod);

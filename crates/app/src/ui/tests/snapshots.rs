@@ -11,12 +11,12 @@ use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::{MinimalResource, PodLogContainer};
 use crate::resource_catalog::build_resource_navigation;
 use crate::resource_detail::{
-    ConfigMapDetail, ManagedResource, PodConditionDetail, PodContainerDetail, PodDetail,
-    PodEnvironmentVariableDetail, PodEnvironmentVariableSource, PodVolumeDetail, ResourceDetail,
-    ResourceDetailPayload, ResourceEvent, SecretDataDetail, SecretDetail,
+    ConfigMapDetail, ManagedResource, NodeDetail, PodConditionDetail, PodContainerDetail,
+    PodDetail, PodEnvironmentVariableDetail, PodEnvironmentVariableSource, PodVolumeDetail,
+    ResourceDetail, ResourceDetailPayload, ResourceEvent, SecretDataDetail, SecretDetail,
 };
 use crate::resource_table::{
-    AVAILABLE_COLUMN, CONTAINERS_COLUMN, CellValue, ContainerIndicator, ContainerKind,
+    AVAILABLE_COLUMN, CONTAINERS_COLUMN, CellValue, ContainerIndicator, ContainerKind, NODE_COLUMN,
     READY_COLUMN, RESTARTS_COLUMN, STATUS_COLUMN, StatusTone, UP_TO_DATE_COLUMN,
 };
 use crate::terminal_launcher::{TerminalLaunchSettings, test_support::MockTerminalLauncher};
@@ -1029,6 +1029,152 @@ fn resource_name_opens_and_closes_a_live_detail_inspector() {
         harness.state().worker.commands.last(),
         Some(WorkerCommand::StopResourceDetailWatch { cluster_key: 2, .. })
     ));
+}
+
+#[test]
+fn clicking_a_pod_node_in_the_resource_table_opens_the_node_inspector() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    let pods = fixture_api_resource("core", "Pod", "pods");
+    let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
+    let pod = cluster
+        .resource_cache
+        .get_mut(&(pods, Some("kube-system".into())))
+        .expect("Pod watch fixture exists")
+        .resources
+        .values_mut()
+        .next()
+        .expect("Pod fixture exists");
+    pod.cells.insert(
+        NODE_COLUMN.into(),
+        CellValue::Text("kind-control-plane".into()),
+    );
+    harness.state_mut().ui_state = state;
+    harness.run();
+
+    let node_position = harness
+        .get_by_label("Open details for Node kind-control-plane")
+        .rect()
+        .center();
+    primary_click(&mut harness, node_position);
+    harness.run_steps(1);
+
+    assert!(matches!(
+        harness.state().worker.commands.last(),
+        Some(WorkerCommand::StartResourceDetailWatch {
+            api_resource,
+            namespace: None,
+            resource_name,
+            resource_uid,
+            ..
+        }) if api_resource == &crate::resource_handlers::node::api_resource()
+            && resource_name == "kind-control-plane"
+            && resource_uid == "kind-control-plane"
+    ));
+}
+
+#[test]
+fn clicking_a_pod_node_in_the_inspector_navigates_to_the_node_inspector() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    let pods = fixture_api_resource("core", "Pod", "pods");
+    let mut commands = Vec::new();
+    harness.state_mut().ui_state.open_resource_detail(
+        2,
+        pods.clone(),
+        "api".into(),
+        Some("kube-system".into()),
+        "pod-uid".into(),
+        &mut commands,
+    );
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(WorkerResult::ResourceDetailUpdated {
+            cluster_key: 2,
+            history_entry_id: 1,
+            detail: ResourceDetail {
+                api_resource: pods,
+                name: "api".into(),
+                namespace: Some("kube-system".into()),
+                uid: "pod-uid".into(),
+                resource_version: "1".into(),
+                creation_timestamp: None,
+                owner: None,
+                labels: BTreeMap::new(),
+                annotations: BTreeMap::new(),
+                payload: ResourceDetailPayload::Pod(overflowing_pod_detail()),
+            },
+        });
+    harness.run_steps(2);
+
+    let node_position = harness
+        .get_by_label("Open details for Node kind-control-plane")
+        .rect()
+        .center();
+    primary_click(&mut harness, node_position);
+    harness.run_steps(1);
+
+    assert!(matches!(
+        harness.state().worker.commands.last(),
+        Some(WorkerCommand::StartResourceDetailWatch {
+            api_resource,
+            namespace: None,
+            resource_name,
+            resource_uid,
+            history_entry_id: 2,
+            ..
+        }) if api_resource == &crate::resource_handlers::node::api_resource()
+            && resource_name == "kind-control-plane"
+            && resource_uid == "kind-control-plane"
+    ));
+}
+
+#[test]
+fn node_inspector_shows_its_spec() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    let mut commands = Vec::new();
+    harness.state_mut().ui_state.open_resource_detail(
+        2,
+        crate::resource_handlers::node::api_resource(),
+        "kind-control-plane".into(),
+        None,
+        "node-uid".into(),
+        &mut commands,
+    );
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(WorkerResult::ResourceDetailUpdated {
+            cluster_key: 2,
+            history_entry_id: 1,
+            detail: ResourceDetail {
+                api_resource: crate::resource_handlers::node::api_resource(),
+                name: "kind-control-plane".into(),
+                namespace: None,
+                uid: "node-uid".into(),
+                resource_version: "1".into(),
+                creation_timestamp: None,
+                owner: None,
+                labels: BTreeMap::new(),
+                annotations: BTreeMap::new(),
+                payload: ResourceDetailPayload::Node(NodeDetail {
+                    pod_cidrs: vec!["10.244.0.0/24".into()],
+                    provider_id: Some("kind://docker/kind/kind-control-plane".into()),
+                    unschedulable: true,
+                    taints: vec!["node-role.kubernetes.io/control-plane:NoSchedule".into()],
+                }),
+            },
+        });
+    harness.run_steps(2);
+
+    harness.get_by_label("Spec");
+    harness.get_by_label("Scheduling disabled");
+    harness.get_by_label("10.244.0.0/24");
+    harness.get_by_label("node-role.kubernetes.io/control-plane:NoSchedule");
 }
 
 #[test]

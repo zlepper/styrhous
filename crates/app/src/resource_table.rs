@@ -4,6 +4,7 @@ pub(crate) const READY_COLUMN: &str = "ready";
 pub(crate) const CONTAINERS_COLUMN: &str = "containers";
 pub(crate) const STATUS_COLUMN: &str = "status";
 pub(crate) const RESTARTS_COLUMN: &str = "restarts";
+pub(crate) const NODE_COLUMN: &str = "node";
 pub(crate) const UP_TO_DATE_COLUMN: &str = "up-to-date";
 pub(crate) const AVAILABLE_COLUMN: &str = "available";
 pub(crate) const DESIRED_COLUMN: &str = "desired";

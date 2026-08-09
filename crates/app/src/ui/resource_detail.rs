@@ -3,7 +3,7 @@ use super::state::{ResourceAction, ResourceDetailHistoryEntry, ResourceDetailPan
 use super::widgets::show_resource_cell;
 use crate::minimal_resource::{MinimalResource, format_age};
 use crate::resource_detail::{
-    ConfigMapDetail, ManagedResource, PodDetail, ResourceDetail, ResourceDetailPayload,
+    ConfigMapDetail, ManagedResource, NodeDetail, PodDetail, ResourceDetail, ResourceDetailPayload,
     ResourceEvent, SecretDetail,
 };
 use crate::resource_handlers::table_definition;
@@ -1138,7 +1138,7 @@ fn show_resource_detail_blade(
     if let Some(error) = detail_error {
         error_card(ui, "Unable to load resource details", error);
     } else if let Some(detail) = detail {
-        show_detail(ui, detail);
+        show_detail(ui, detail, &mut result.action);
         ui.add_space(16.0);
         show_resource_data(ui, detail, data_editor.as_deref_mut(), &mut result.action);
         metadata_maps(ui, detail);
@@ -1324,14 +1324,58 @@ fn managed_resource_table_kinds(
     }
 }
 
-fn show_detail(ui: &mut egui::Ui, detail: &ResourceDetail) {
+fn show_detail(
+    ui: &mut egui::Ui,
+    detail: &ResourceDetail,
+    pending_action: &mut Option<ResourceAction>,
+) {
     if let ResourceDetailPayload::Pod(pod) = &detail.payload {
-        show_pod_summary(ui, detail, pod);
+        show_pod_summary(ui, detail, pod, pending_action);
         ui.add_space(13.0);
         show_pod_detail(ui, pod);
+    } else if let ResourceDetailPayload::Node(node) = &detail.payload {
+        show_generic_summary(ui, detail);
+        ui.add_space(13.0);
+        show_node_detail(ui, node);
     } else {
         show_generic_summary(ui, detail);
     }
+}
+
+fn show_node_detail(ui: &mut egui::Ui, node: &NodeDetail) {
+    section_header(ui, "Spec", None);
+    let pod_cidrs = if node.pod_cidrs.is_empty() {
+        "-".to_owned()
+    } else {
+        node.pod_cidrs.join(", ")
+    };
+    let taints = if node.taints.is_empty() {
+        "None".to_owned()
+    } else {
+        node.taints.join(", ")
+    };
+    detail_item_card(
+        ui,
+        |_| {},
+        |ui| {
+            detail_row(
+                ui,
+                "Scheduling",
+                if node.unschedulable {
+                    "Scheduling disabled"
+                } else {
+                    "Schedulable"
+                },
+            );
+            detail_row(
+                ui,
+                "Provider ID",
+                node.provider_id.as_deref().unwrap_or("-"),
+            );
+            detail_row(ui, "Pod CIDRs", &pod_cidrs);
+            detail_row(ui, "Taints", &taints);
+        },
+    );
 }
 
 fn show_generic_summary(ui: &mut egui::Ui, detail: &ResourceDetail) {
@@ -1364,7 +1408,9 @@ fn show_resource_data(
         ResourceDetailPayload::Secret(secret) => {
             show_secret_data(ui, secret, editor, pending_action)
         }
-        ResourceDetailPayload::Generic | ResourceDetailPayload::Pod(_) => {}
+        ResourceDetailPayload::Generic
+        | ResourceDetailPayload::Pod(_)
+        | ResourceDetailPayload::Node(_) => {}
     }
 }
 
@@ -1671,7 +1717,12 @@ fn show_data_conflict_dialog(
     }
 }
 
-fn show_pod_summary(ui: &mut egui::Ui, detail: &ResourceDetail, pod: &PodDetail) {
+fn show_pod_summary(
+    ui: &mut egui::Ui,
+    detail: &ResourceDetail,
+    pod: &PodDetail,
+    pending_action: &mut Option<ResourceAction>,
+) {
     let ready = format!(
         "{}/{}",
         pod.containers
@@ -1688,7 +1739,7 @@ fn show_pod_summary(ui: &mut egui::Ui, detail: &ResourceDetail, pod: &PodDetail)
                 detail.namespace.as_deref().unwrap_or("Cluster-wide"),
             ),
             1 => status_value(ui, "Status", &pod.phase),
-            _ => detail_value(ui, "Node", pod.node_name.as_deref().unwrap_or("-")),
+            _ => detail_node_value(ui, pod.node_name.as_deref(), pending_action),
         });
         ui.separator();
         detail_grid(ui, |ui, column| match column {
@@ -1705,6 +1756,52 @@ fn show_pod_summary(ui: &mut egui::Ui, detail: &ResourceDetail, pod: &PodDetail)
         // Keep the final, two-column row balanced with the full rows above.
         ui.add_space(8.0);
     });
+}
+
+fn detail_node_value(
+    ui: &mut egui::Ui,
+    node_name: Option<&str>,
+    pending_action: &mut Option<ResourceAction>,
+) {
+    ui.label(
+        egui::RichText::new("Node")
+            .font(typography::metadata())
+            .color(gray::_500),
+    );
+    let Some(node_name) = node_name else {
+        ui.label(
+            egui::RichText::new("-")
+                .font(typography::metadata())
+                .color(gray::_900),
+        )
+        .on_hover_text("Kubernetes has not assigned this Pod to a Node.");
+        return;
+    };
+    let response = ui.add(
+        egui::Label::new(
+            egui::RichText::new(node_name)
+                .font(typography::metadata())
+                .color(indigo::_600),
+        )
+        .sense(egui::Sense::click()),
+    );
+    response.clone().with_pointing_hand().widget_info(|| {
+        egui::WidgetInfo::labeled(
+            egui::WidgetType::Button,
+            response.enabled(),
+            format!("Open details for Node {node_name}"),
+        )
+    });
+    if response.clicked() && pending_action.is_none() {
+        *pending_action = Some(ResourceAction::NavigateDetails {
+            api_resource: crate::resource_handlers::node::api_resource(),
+            name: node_name.to_owned(),
+            namespace: None,
+            // The node watcher can load the detail by name. Until its first
+            // detail update, use the name for the event selector as well.
+            uid: node_name.to_owned(),
+        });
+    }
 }
 
 fn show_pod_detail(ui: &mut egui::Ui, pod: &PodDetail) {
@@ -2235,14 +2332,14 @@ fn optional_label(optional: bool) -> &'static str {
     if optional { " (optional)" } else { "" }
 }
 
-fn detail_grid(ui: &mut egui::Ui, add_column: impl Fn(&mut egui::Ui, usize)) {
+fn detail_grid(ui: &mut egui::Ui, add_column: impl FnMut(&mut egui::Ui, usize)) {
     detail_grid_columns(ui, 3, add_column);
 }
 
 fn detail_grid_columns(
     ui: &mut egui::Ui,
     column_count: usize,
-    add_column: impl Fn(&mut egui::Ui, usize),
+    mut add_column: impl FnMut(&mut egui::Ui, usize),
 ) {
     ui.columns(column_count, |columns| {
         for (index, column) in columns.iter_mut().enumerate() {
