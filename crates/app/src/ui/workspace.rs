@@ -11,6 +11,7 @@ use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use crate::resource_handlers::table_definition;
 use crate::resource_table::CustomResourceColumn;
+use crate::terminal_launcher::PodShellRequest;
 use crate::worker::WorkerCommand;
 use components::colors::{TOOLBAR_BACKGROUND, gray};
 use components::design::{spacing, typography};
@@ -49,11 +50,13 @@ pub(super) fn show(
     ctx: &egui::Context,
     ui_state: &mut UiState,
     commands_to_send: &mut Vec<WorkerCommand>,
+    shell_requests: &mut Vec<PodShellRequest>,
 ) {
     let mut namespace_selection = None;
     let mut retry_requested = false;
     let mut detail_to_open = None;
     let mut log_to_open = None;
+    let mut shell_to_open = None;
     egui::CentralPanel::default()
         .frame(WorkspacePage::frame())
         .show(ctx, |ui| {
@@ -227,6 +230,18 @@ pub(super) fn show(
                         } => {
                             log_to_open = Some((cluster.cluster_key, name, namespace, container));
                         }
+                        ResourceAction::Shell {
+                            name,
+                            namespace,
+                            container,
+                        } => {
+                            shell_to_open = namespace.map(|namespace| PodShellRequest {
+                                kube_context: cluster.name.clone(),
+                                namespace,
+                                pod_name: name,
+                                container: container.name,
+                            });
+                        }
                         ResourceAction::SaveData { .. } => {
                             unreachable!("resource table actions cannot save inspector data")
                         }
@@ -256,6 +271,7 @@ pub(super) fn show(
     if let Some((cluster_key, name, namespace, container)) = log_to_open {
         ui_state.open_pod_log_window(cluster_key, name, namespace, container, commands_to_send);
     }
+    shell_requests.extend(shell_to_open);
     if let (Some(cluster_key), Some(selection)) = (ui_state.selected_cluster, namespace_selection) {
         match selection {
             NamespaceSelection::Replace(namespace) => {

@@ -11,6 +11,42 @@ pub(super) fn show_resource_action_items(
     log_containers: &[PodLogContainer],
     pending_action: &mut Option<ResourceAction>,
 ) {
+    let shell_containers = log_containers
+        .iter()
+        .filter(|container| matches!(container.kind, crate::resource_table::ContainerKind::App))
+        .collect::<Vec<_>>();
+    match shell_containers.as_slice() {
+        [] => {}
+        [container] => {
+            if menu.action("Shell").clicked() && pending_action.is_none() {
+                *pending_action = Some(ResourceAction::Shell {
+                    name: resource.name.clone(),
+                    namespace: resource.namespace.clone(),
+                    container: (*container).clone(),
+                });
+            }
+            menu.separator();
+        }
+        containers => {
+            let mut selected = false;
+            menu.submenu("Shell", |ui| {
+                for container in containers {
+                    if ui.button(&container.name).clicked() && pending_action.is_none() {
+                        *pending_action = Some(ResourceAction::Shell {
+                            name: resource.name.clone(),
+                            namespace: resource.namespace.clone(),
+                            container: (*container).clone(),
+                        });
+                        selected = true;
+                    }
+                }
+            });
+            if selected {
+                menu.close();
+            }
+            menu.separator();
+        }
+    }
     match log_containers {
         [] => {}
         [container] => {

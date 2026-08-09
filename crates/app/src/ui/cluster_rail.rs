@@ -1,14 +1,16 @@
 use super::state::{ClusterConnectionState, UiState};
+use crate::terminal_launcher::TerminalLaunchSettings;
 use crate::worker::WorkerCommand;
-use components::NarrowSidebar;
 use components::colors::{CLUSTER_RAIL_BACKGROUND, gray};
-use components::design::status;
+use components::design::{spacing, status};
+use components::{NarrowSidebar, icons};
 use tracing::info;
 
 pub(super) fn show(
     ctx: &egui::Context,
     ui_state: &mut UiState,
     commands_to_send: &mut Vec<WorkerCommand>,
+    terminal_settings: &TerminalLaunchSettings,
 ) {
     egui::SidePanel::left("cluster-panel")
         .exact_width(68.0)
@@ -67,6 +69,29 @@ pub(super) fn show(
                             }
                         }
                     }
+                    sidebar.ui_mut().with_layout(
+                        egui::Layout::bottom_up(egui::Align::Center),
+                        |ui| {
+                            ui.add_space(spacing::SM);
+                            let response = ui.add(
+                                egui::Button::image(
+                                    icons::settings_icon()
+                                        .fit_to_exact_size(egui::Vec2::splat(21.0)),
+                                )
+                                .frame(false),
+                            );
+                            response.widget_info(|| {
+                                egui::WidgetInfo::labeled(
+                                    egui::WidgetType::Button,
+                                    ui.is_enabled(),
+                                    "Settings",
+                                )
+                            });
+                            if response.on_hover_text("Settings").clicked() {
+                                ui_state.open_terminal_settings(terminal_settings);
+                            }
+                        },
+                    );
                 });
         });
 }

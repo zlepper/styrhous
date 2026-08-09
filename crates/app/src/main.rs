@@ -11,6 +11,7 @@ mod resource_extensions;
 mod resource_handlers;
 mod resource_table;
 mod sorted_name;
+mod terminal_launcher;
 mod ui;
 mod worker;
 

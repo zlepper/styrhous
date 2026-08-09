@@ -1,4 +1,5 @@
 use super::state::UiState;
+use crate::terminal_launcher::TerminalLaunchSettings;
 use crate::worker::WorkerCommand;
 use components::colors::gray;
 use components::design::{status, typography};
@@ -79,5 +80,35 @@ pub(super) fn show_delete_confirmation(
         if let Some(cluster) = ui_state.clusters.get_mut(&cluster_id) {
             cluster.pending_delete = None;
         }
+    }
+}
+
+pub(super) fn show_terminal_launch_error(
+    ctx: &egui::Context,
+    ui_state: &mut UiState,
+    settings: &TerminalLaunchSettings,
+) {
+    let Some(error) = ui_state.terminal_launch_error.clone() else {
+        return;
+    };
+    let mut dismiss = false;
+    let mut configure = false;
+    egui::Window::new("Unable to open a terminal")
+        .collapsible(false)
+        .resizable(false)
+        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+        .show(ctx, |ui| {
+            ui.label(error);
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                configure |= ui.button("Open Settings").clicked();
+                dismiss |= ui.button("Dismiss").clicked();
+            });
+        });
+    if configure {
+        ui_state.open_terminal_settings(settings);
+        ui_state.terminal_launch_error = None;
+    } else if dismiss {
+        ui_state.terminal_launch_error = None;
     }
 }
