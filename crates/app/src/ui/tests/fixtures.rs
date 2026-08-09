@@ -41,7 +41,6 @@ pub(super) fn fixture_cluster(cluster_key: i32, name: &str) -> ClusterState {
         resource_cache: HashMap::new(),
         active_watchers: HashSet::new(),
         resource_searches: HashMap::new(),
-        yaml_panel: None,
         resource_detail_panel: None,
         next_detail_generation: 0,
         pending_delete: None,
@@ -166,15 +165,6 @@ pub(super) fn oracle_resource_table_state() -> UiState {
         ]),
         next_cluster_key: 3,
         selected_cluster: Some(2),
-        log_windows: BTreeMap::new(),
-        next_log_window_id: 0,
-        log_display_options: Default::default(),
-        terminal_settings_open: false,
-        terminal_settings_blade: None,
-        terminal_settings_draft: Default::default(),
-        terminal_settings_error: None,
-        terminal_launch_error: None,
-        cluster_selections: Default::default(),
-        resource_navigation_expansion: Default::default(),
+        ..Default::default()
     }
 }

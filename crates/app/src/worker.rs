@@ -157,6 +157,7 @@ pub enum WorkerCommand {
         history_entry_id: u64,
     },
     GetResourceYaml {
+        editor_id: u64,
         cluster_key: i32,
         api_resource: ApiResource,
         namespace: Option<String>,
@@ -174,6 +175,7 @@ pub enum WorkerCommand {
         resource_name: String,
     },
     ApplyResourceYaml {
+        editor_id: u64,
         cluster_key: i32,
         api_resource: ApiResource,
         namespace: Option<String>,
@@ -328,6 +330,7 @@ pub enum WorkerResult {
     },
     /// Resource YAML fetched for viewing/editing
     ResourceYamlFetched {
+        editor_id: u64,
         cluster_key: i32,
         api_resource: ApiResource,
         namespace: Option<String>,
@@ -343,6 +346,7 @@ pub enum WorkerResult {
     },
     /// Resource YAML was successfully applied
     ResourceApplyCompleted {
+        editor_id: u64,
         cluster_key: i32,
         api_resource: ApiResource,
         namespace: Option<String>,
@@ -516,6 +520,7 @@ impl WorkerRuntime {
                 })
             }
             WorkerCommand::GetResourceYaml {
+                editor_id,
                 cluster_key,
                 api_resource,
                 namespace,
@@ -524,6 +529,7 @@ impl WorkerRuntime {
                 let clients = shared.clients.read().await;
                 if let Some(client) = clients.get(cluster_key) {
                     get_resource_yaml(
+                        *editor_id,
                         *cluster_key,
                         client.clone(),
                         api_resource.clone(),
@@ -583,6 +589,7 @@ impl WorkerRuntime {
                 }
             }
             WorkerCommand::ApplyResourceYaml {
+                editor_id,
                 cluster_key,
                 api_resource,
                 namespace,
@@ -592,6 +599,7 @@ impl WorkerRuntime {
                 let clients = shared.clients.read().await;
                 if let Some(client) = clients.get(cluster_key) {
                     apply_resource_yaml(
+                        *editor_id,
                         *cluster_key,
                         client.clone(),
                         api_resource.clone(),

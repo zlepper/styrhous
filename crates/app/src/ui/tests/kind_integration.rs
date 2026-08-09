@@ -608,39 +608,41 @@ fn test_resource_actions_integration() {
     let actions_label = format!("More actions for {test_configmap_name}");
     harness.get_by_label(&actions_label).click_accesskit();
     harness.run();
-    harness.get_by_label("Edit YAML").click_accesskit();
+    harness.get_by_label("Edit").click_accesskit();
     harness.run();
     wait_for(
         &mut harness,
         |app| {
-            app.ui_state.clusters[&cluster_key]
-                .yaml_panel
-                .as_ref()
-                .filter(|panel| panel.resource_name == test_configmap_name)
+            app.ui_state
+                .yaml_editors
+                .values()
+                .find(|editor| editor.resource_name == test_configmap_name && editor.is_ready())
                 .map(|_| ())
         },
         5_000,
     );
 
-    let yaml_panel = harness
+    let yaml_editor = harness
         .state_mut()
         .ui_state
-        .clusters
-        .get_mut(&cluster_key)
-        .and_then(|cluster| cluster.yaml_panel.as_mut())
-        .expect("YAML panel should be open");
-    yaml_panel.edited_yaml = yaml_panel
+        .yaml_editors
+        .values_mut()
+        .find(|editor| editor.resource_name == test_configmap_name)
+        .expect("YAML editor should be open");
+    yaml_editor.edited_yaml = yaml_editor
         .edited_yaml
         .replace("original-value", "edited-value");
     harness.run();
-    harness.get_by_label("Save YAML").click();
+    harness.get_by_label("Apply changes").click();
     harness.run();
     wait_for(
         &mut harness,
         |app| {
-            app.ui_state.clusters[&cluster_key]
-                .yaml_panel
-                .is_none()
+            app.ui_state
+                .yaml_editors
+                .values()
+                .find(|editor| editor.resource_name == test_configmap_name)
+                .is_some_and(|editor| editor.is_ready() && !editor.is_modified() && !editor.saving)
                 .then_some(())
         },
         5_000,

@@ -26,6 +26,8 @@ pub(super) struct UiState {
     pub(super) selected_cluster: Option<i32>,
     pub(super) log_windows: BTreeMap<u64, PodLogWindowState>,
     pub(super) next_log_window_id: u64,
+    pub(super) yaml_editors: BTreeMap<u64, YamlEditorWindowState>,
+    pub(super) next_yaml_editor_id: u64,
     pub(super) log_display_options: LogDisplayOptions,
     pub(super) terminal_settings_open: bool,
     pub(super) terminal_settings_blade: Option<BladeNavigator<()>>,
@@ -254,18 +256,44 @@ pub(super) enum ClusterLoadState {
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct YamlPanelState {
+pub(super) struct YamlEditorWindowState {
+    pub(super) id: u64,
+    pub(super) cluster_key: i32,
     pub(super) api_resource: ApiResource,
     pub(super) namespace: Option<String>,
     pub(super) resource_name: String,
-    pub(super) original_yaml: String,
+    pub(super) original_yaml: Option<String>,
     pub(super) edited_yaml: String,
-    pub(super) panel_height: f32,
+    pub(super) loading: bool,
+    pub(super) saving: bool,
+    pub(super) error: Option<String>,
+    pub(super) close_requested: bool,
+    pub(super) confirm_discard: bool,
+    pub(super) focus_requested: bool,
 }
 
-impl YamlPanelState {
+impl YamlEditorWindowState {
     pub(super) fn is_modified(&self) -> bool {
-        self.original_yaml != self.edited_yaml
+        self.original_yaml
+            .as_ref()
+            .is_some_and(|original_yaml| original_yaml != &self.edited_yaml)
+    }
+
+    pub(super) fn is_ready(&self) -> bool {
+        !self.loading && self.original_yaml.is_some()
+    }
+
+    pub(super) fn resource_matches(
+        &self,
+        cluster_key: i32,
+        api_resource: &ApiResource,
+        namespace: &Option<String>,
+        resource_name: &str,
+    ) -> bool {
+        self.cluster_key == cluster_key
+            && self.api_resource == *api_resource
+            && self.namespace == *namespace
+            && self.resource_name == resource_name
     }
 }
 
@@ -530,7 +558,6 @@ pub(super) struct ClusterState {
     pub(super) resource_cache: HashMap<ResourceWatchKey, ResourceWatchState>,
     pub(super) active_watchers: HashSet<ResourceWatchKey>,
     pub(super) resource_searches: HashMap<ApiResource, ResourceSearchState>,
-    pub(super) yaml_panel: Option<YamlPanelState>,
     pub(super) resource_detail_panel: Option<ResourceDetailPanelState>,
     pub(super) next_detail_generation: u64,
     pub(super) pending_delete: Option<PendingDelete>,
@@ -734,6 +761,55 @@ impl UiState {
             namespace,
             pod_name,
             container: container.name,
+        });
+    }
+
+    pub(super) fn open_yaml_editor(
+        &mut self,
+        ctx: &egui::Context,
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: Option<String>,
+        resource_name: String,
+        commands_to_send: &mut Vec<crate::worker::WorkerCommand>,
+    ) {
+        if let Some(editor) = self.yaml_editors.values_mut().find(|editor| {
+            editor.resource_matches(cluster_key, &api_resource, &namespace, &resource_name)
+        }) {
+            editor.focus_requested = true;
+            ctx.send_viewport_cmd_to(
+                egui::ViewportId::from_hash_of(("yaml-editor-window", editor.id)),
+                egui::ViewportCommand::Focus,
+            );
+            return;
+        }
+
+        self.next_yaml_editor_id += 1;
+        let editor_id = self.next_yaml_editor_id;
+        self.yaml_editors.insert(
+            editor_id,
+            YamlEditorWindowState {
+                id: editor_id,
+                cluster_key,
+                api_resource: api_resource.clone(),
+                namespace: namespace.clone(),
+                resource_name: resource_name.clone(),
+                original_yaml: None,
+                edited_yaml: String::new(),
+                loading: true,
+                saving: false,
+                error: None,
+                close_requested: false,
+                confirm_discard: false,
+                focus_requested: false,
+            },
+        );
+        commands_to_send.push(crate::worker::WorkerCommand::GetResourceYaml {
+            editor_id,
+            cluster_key,
+            api_resource,
+            namespace,
+            resource_name,
         });
     }
 
@@ -1188,6 +1264,22 @@ impl UiState {
                                 editor.save_error = Some(message);
                             }
                         }
+                        Some(crate::worker::WorkerCommand::GetResourceYaml {
+                            editor_id, ..
+                        }) => {
+                            if let Some(editor) = self.yaml_editors.get_mut(&editor_id) {
+                                editor.loading = false;
+                                editor.error = Some(message);
+                            }
+                        }
+                        Some(crate::worker::WorkerCommand::ApplyResourceYaml {
+                            editor_id, ..
+                        }) => {
+                            if let Some(editor) = self.yaml_editors.get_mut(&editor_id) {
+                                editor.saving = false;
+                                editor.error = Some(message);
+                            }
+                        }
                         Some(crate::worker::WorkerCommand::StartPodLogStream {
                             log_window_id,
                             ..
@@ -1234,7 +1326,6 @@ impl UiState {
                                 resource_cache: HashMap::new(),
                                 active_watchers: HashSet::new(),
                                 resource_searches: HashMap::new(),
-                                yaml_panel: None,
                                 resource_detail_panel: None,
                                 next_detail_generation: 0,
                                 pending_delete: None,
@@ -1558,6 +1649,7 @@ impl UiState {
                 WorkerResult::ResourceDetailWatchStarted { .. }
                 | WorkerResult::ResourceDetailWatchStopped { .. } => {}
                 WorkerResult::ResourceYamlFetched {
+                    editor_id,
                     cluster_key,
                     api_resource,
                     namespace,
@@ -1565,15 +1657,18 @@ impl UiState {
                     yaml,
                 } => {
                     info!("YAML fetched for {resource_name}");
-                    if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
-                        cluster.yaml_panel = Some(YamlPanelState {
-                            api_resource,
-                            namespace,
-                            resource_name,
-                            original_yaml: yaml.clone(),
-                            edited_yaml: yaml,
-                            panel_height: 300.0,
-                        });
+                    if let Some(editor) = self.yaml_editors.get_mut(&editor_id)
+                        && editor.resource_matches(
+                            cluster_key,
+                            &api_resource,
+                            &namespace,
+                            &resource_name,
+                        )
+                    {
+                        editor.original_yaml = Some(yaml.clone());
+                        editor.edited_yaml = yaml;
+                        editor.loading = false;
+                        editor.error = None;
                     }
                 }
                 WorkerResult::ResourceDeleteCompleted {
@@ -1587,13 +1682,24 @@ impl UiState {
                     }
                 }
                 WorkerResult::ResourceApplyCompleted {
+                    editor_id,
                     cluster_key,
+                    api_resource,
+                    namespace,
                     resource_name,
-                    ..
                 } => {
                     info!("Resource applied: {resource_name}");
-                    if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
-                        cluster.yaml_panel = None;
+                    if let Some(editor) = self.yaml_editors.get_mut(&editor_id)
+                        && editor.resource_matches(
+                            cluster_key,
+                            &api_resource,
+                            &namespace,
+                            &resource_name,
+                        )
+                    {
+                        editor.original_yaml = Some(editor.edited_yaml.clone());
+                        editor.saving = false;
+                        editor.error = None;
                     }
                 }
                 WorkerResult::DeploymentRestartCompleted {
@@ -1817,6 +1923,7 @@ fn sync_resource_data_editor(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::api_resource::ApiResource;
     use crate::resource_table::ContainerKind;
     use crate::worker::{MockWorker, WorkerCommand};
     use std::collections::VecDeque;
@@ -1901,6 +2008,87 @@ mod tests {
         assert_eq!(state.log_windows[&1].status, PodLogStatus::Finished);
         assert_eq!(state.log_windows[&2].total_lines, 1);
         assert_eq!(state.log_windows[&2].status, PodLogStatus::Following);
+    }
+
+    #[test]
+    fn yaml_editors_are_deduplicated_and_route_results_by_editor_id() {
+        let ctx = egui::Context::default();
+        let api_resource = ApiResource {
+            group: "core".into(),
+            version: "v1".into(),
+            kind: "ConfigMap".into(),
+            name: "configmaps".into(),
+            namespaced: true,
+        };
+        let mut state = UiState::default();
+        let mut commands = Vec::new();
+
+        state.open_yaml_editor(
+            &ctx,
+            7,
+            api_resource.clone(),
+            Some("default".into()),
+            "settings".into(),
+            &mut commands,
+        );
+        state.open_yaml_editor(
+            &ctx,
+            7,
+            api_resource.clone(),
+            Some("default".into()),
+            "settings".into(),
+            &mut commands,
+        );
+        state.open_yaml_editor(
+            &ctx,
+            7,
+            api_resource.clone(),
+            Some("default".into()),
+            "other-settings".into(),
+            &mut commands,
+        );
+
+        assert!(matches!(
+            commands.as_slice(),
+            [
+                WorkerCommand::GetResourceYaml { editor_id: 1, .. },
+                WorkerCommand::GetResourceYaml { editor_id: 2, .. },
+            ]
+        ));
+        assert!(state.yaml_editors[&1].focus_requested);
+
+        let mut worker = MockWorker {
+            results: VecDeque::from([
+                WorkerResult::ResourceYamlFetched {
+                    editor_id: 2,
+                    cluster_key: 7,
+                    api_resource: api_resource.clone(),
+                    namespace: Some("default".into()),
+                    resource_name: "other-settings".into(),
+                    yaml: "kind: ConfigMap\nmetadata:\n  name: other-settings".into(),
+                },
+                WorkerResult::ResourceYamlFetched {
+                    editor_id: 1,
+                    cluster_key: 7,
+                    api_resource: api_resource.clone(),
+                    namespace: Some("default".into()),
+                    resource_name: "settings".into(),
+                    yaml: "kind: ConfigMap\nmetadata:\n  name: settings".into(),
+                },
+            ]),
+            commands: Vec::new(),
+        };
+        let log_store = crate::log_store::LogStoreService::default();
+        state.update(&mut worker, &log_store);
+
+        assert_eq!(state.yaml_editors[&1].resource_name, "settings");
+        assert_eq!(state.yaml_editors[&2].resource_name, "other-settings");
+        assert!(
+            state
+                .yaml_editors
+                .values()
+                .all(YamlEditorWindowState::is_ready)
+        );
     }
 
     #[test]

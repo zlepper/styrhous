@@ -227,7 +227,7 @@ mod tests {
         let selected_action_in_ui = selected_action.clone();
         let mut harness = Harness::new_ui(move |ui| {
             MoreButton::new("More actions for coredns").show(ui, |menu| {
-                if menu.action("Edit YAML").clicked() {
+                if menu.action("Edit").clicked() {
                     *selected_action_in_ui.borrow_mut() = Some("edit");
                 }
                 menu.separator();
