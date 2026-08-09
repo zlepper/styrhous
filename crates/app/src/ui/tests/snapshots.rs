@@ -169,6 +169,7 @@ fn namespace_selector_replaces_toggles_and_selects_all_without_stopping_watches(
         next_log_window_id: 0,
         log_display_options: Default::default(),
         terminal_settings_open: false,
+        terminal_settings_blade: None,
         terminal_settings_draft: Default::default(),
         terminal_settings_error: None,
         terminal_launch_error: None,
@@ -295,6 +296,7 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
         next_log_window_id: 0,
         log_display_options: Default::default(),
         terminal_settings_open: false,
+        terminal_settings_blade: None,
         terminal_settings_draft: Default::default(),
         terminal_settings_error: None,
         terminal_launch_error: None,
@@ -988,7 +990,7 @@ fn resource_name_opens_and_closes_a_live_detail_inspector() {
             .is_some()
     );
     harness.ctx.style_mut(|style| style.animation_time = 1.0);
-    harness.get_by_label("Close inspector").click_accesskit();
+    harness.get_by_label("Close blade").click_accesskit();
     harness.run_steps(2);
 
     assert!(
@@ -1045,7 +1047,7 @@ fn clicking_a_history_blade_is_captured_by_the_scrim() {
         harness.ctx.layer_id_at(history_button),
         Some(egui::LayerId::new(
             egui::Order::Foreground,
-            egui::Id::new(("resource-detail-input-scrim", "left")),
+            egui::Id::new("resource-detail-blade").with(("input-scrim", "left")),
         )),
     );
     primary_click(&mut harness, history_button);
@@ -1089,7 +1091,8 @@ fn promoted_history_blade_stays_above_its_back_history() {
         .resource_detail_panel
         .as_mut()
         .unwrap()
-        .transition = None;
+        .navigator
+        .clear_transition();
     harness.run_steps(1);
 
     for (name, uid) in [("second", "second-uid"), ("third", "third-uid")] {
@@ -1115,7 +1118,8 @@ fn promoted_history_blade_stays_above_its_back_history() {
             .resource_detail_panel
             .as_mut()
             .unwrap()
-            .transition = None;
+            .navigator
+            .clear_transition();
         harness.run_steps(1);
     }
 
@@ -1138,7 +1142,8 @@ fn promoted_history_blade_stays_above_its_back_history() {
             .resource_detail_panel
             .as_mut()
             .unwrap()
-            .transition = None;
+            .navigator
+            .clear_transition();
         harness.run_steps(1);
     }
 
@@ -1147,10 +1152,11 @@ fn promoted_history_blade_stays_above_its_back_history() {
         .as_ref()
         .expect("inspector should remain open");
     assert_eq!(panel.resource_name, "second");
-    assert_eq!(panel.back_stack.len(), 1);
+    assert_eq!(panel.navigator.back_stack().len(), 1);
+    let active_content_id = egui::Id::new(panel.navigator.current().history_entry_id);
     let active_layer = egui::LayerId::new(
         egui::Order::Foreground,
-        egui::Id::new(("resource-detail-blade", panel.history_entry_id)),
+        egui::Id::new("resource-detail-blade").with(("blade", active_content_id)),
     );
     let active_header = harness.get_by_label("Back").rect().center();
     assert_eq!(harness.ctx.layer_id_at(active_header), Some(active_layer));
@@ -1240,8 +1246,8 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .as_ref()
         .expect("inspector should remain open");
     assert_eq!(panel.api_resource, replica_set);
-    assert_eq!(panel.back_stack.len(), 1);
-    assert!(panel.forward_stack.is_empty());
+    assert_eq!(panel.navigator.back_stack().len(), 1);
+    assert!(panel.navigator.forward_stack().is_empty());
     assert!(matches!(
         harness.state().worker.commands.last(),
         Some(WorkerCommand::StartResourceDetailWatch {
@@ -1320,7 +1326,8 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .resource_detail_panel
         .as_mut()
         .unwrap()
-        .transition = None;
+        .navigator
+        .clear_transition();
     harness.run();
     harness.snapshot_options(
         "replica_set_inspector_with_back_history",
@@ -1334,8 +1341,8 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .as_ref()
         .expect("inspector should remain open");
     assert_eq!(panel.api_resource.kind, "Deployment");
-    assert!(panel.back_stack.is_empty());
-    assert_eq!(panel.forward_stack.len(), 1);
+    assert!(panel.navigator.back_stack().is_empty());
+    assert_eq!(panel.navigator.forward_stack().len(), 1);
     harness
         .state_mut()
         .ui_state
@@ -1345,7 +1352,8 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .resource_detail_panel
         .as_mut()
         .unwrap()
-        .transition = None;
+        .navigator
+        .clear_transition();
     harness.run();
     harness.snapshot_options(
         "deployment_inspector_with_forward_history",
@@ -1413,14 +1421,16 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .resource_detail_panel
         .as_mut()
         .unwrap()
-        .transition = None;
+        .navigator
+        .clear_transition();
     harness.run();
     assert_eq!(
         harness.state().ui_state.clusters[&2]
             .resource_detail_panel
             .as_ref()
             .unwrap()
-            .back_stack
+            .navigator
+            .back_stack()
             .len(),
         2
     );
@@ -1458,7 +1468,8 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .resource_detail_panel
         .as_mut()
         .unwrap()
-        .transition = None;
+        .navigator
+        .clear_transition();
     harness.run();
     harness.get_by_label("Forward").click_accesskit();
     harness.run_steps(1);
@@ -1482,7 +1493,8 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .resource_detail_panel
         .as_mut()
         .unwrap()
-        .transition = None;
+        .navigator
+        .clear_transition();
     harness.run();
 
     let mut commands = Vec::new();
@@ -1532,14 +1544,16 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .resource_detail_panel
         .as_mut()
         .unwrap()
-        .transition = None;
+        .navigator
+        .clear_transition();
     harness.run();
     assert_eq!(
         harness.state().ui_state.clusters[&2]
             .resource_detail_panel
             .as_ref()
             .unwrap()
-            .back_stack
+            .navigator
+            .back_stack()
             .len(),
         3
     );
@@ -2027,6 +2041,7 @@ fn delete_confirmation_can_be_cancelled_without_sending_a_command() {
         next_log_window_id: 0,
         log_display_options: Default::default(),
         terminal_settings_open: false,
+        terminal_settings_blade: None,
         terminal_settings_draft: Default::default(),
         terminal_settings_error: None,
         terminal_launch_error: None,
@@ -2072,6 +2087,7 @@ fn resource_navigation_selects_primary_curated_gateway_and_other_resources() {
         next_log_window_id: 0,
         log_display_options: Default::default(),
         terminal_settings_open: false,
+        terminal_settings_blade: None,
         terminal_settings_draft: Default::default(),
         terminal_settings_error: None,
         terminal_launch_error: None,

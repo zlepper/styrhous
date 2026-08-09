@@ -11,6 +11,7 @@ use crate::resource_table::CustomResourceColumn;
 use crate::sorted_name::SortedName;
 use crate::terminal_launcher::TerminalLaunchSettings;
 use crate::worker::{WorkerResult, WorkerTrait};
+use components::BladeNavigator;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::time::Instant;
@@ -25,6 +26,7 @@ pub(super) struct UiState {
     pub(super) next_log_window_id: u64,
     pub(super) log_display_options: LogDisplayOptions,
     pub(super) terminal_settings_open: bool,
+    pub(super) terminal_settings_blade: Option<BladeNavigator<()>>,
     pub(super) terminal_settings_draft: TerminalLaunchSettings,
     pub(super) terminal_settings_error: Option<String>,
     pub(super) terminal_launch_error: Option<String>,
@@ -223,33 +225,10 @@ pub(super) struct PendingDelete {
 
 #[derive(Debug, Clone)]
 pub(super) struct ResourceDetailPanelState {
-    pub(super) api_resource: ApiResource,
-    pub(super) namespace: Option<String>,
-    pub(super) resource_name: String,
-    pub(super) resource_uid: String,
-    /// Stable identity of this visit in the inspector history.
-    pub(super) history_entry_id: u64,
+    pub(super) navigator: BladeNavigator<ResourceDetailHistoryEntry>,
     pub(super) selection_generation: u64,
-    pub(super) detail: Option<ResourceDetail>,
-    pub(super) events: Vec<ResourceEvent>,
-    pub(super) detail_error: Option<String>,
-    pub(super) events_error: Option<String>,
-    pub(super) managed_resources: Vec<ManagedResource>,
-    pub(super) managed_resources_error: Option<String>,
-    pub(super) data_editor: Option<ResourceDataEditorState>,
-    pub(super) back_stack: Vec<ResourceDetailHistoryEntry>,
-    pub(super) forward_stack: Vec<ResourceDetailHistoryEntry>,
-    pub(super) transition: Option<ResourceDetailTransition>,
     /// Avoid treating the row click which opened the overlay as a scrim dismissal.
     pub(super) dismiss_on_outside_click: bool,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub(super) enum ResourceDetailTransition {
-    Opening,
-    Forward,
-    Back,
-    Closing,
 }
 
 #[derive(Debug, Clone)]
@@ -270,56 +249,30 @@ pub(super) struct ResourceDetailHistoryEntry {
 }
 
 impl ResourceDetailPanelState {
-    fn history_entry(&self) -> ResourceDetailHistoryEntry {
-        ResourceDetailHistoryEntry {
-            history_entry_id: self.history_entry_id,
-            api_resource: self.api_resource.clone(),
-            namespace: self.namespace.clone(),
-            resource_name: self.resource_name.clone(),
-            resource_uid: self.resource_uid.clone(),
-            detail: self.detail.clone(),
-            events: self.events.clone(),
-            detail_error: self.detail_error.clone(),
-            events_error: self.events_error.clone(),
-            managed_resources: self.managed_resources.clone(),
-            managed_resources_error: self.managed_resources_error.clone(),
-            data_editor: self.data_editor.clone(),
-        }
-    }
-
-    fn replace_current(&mut self, entry: ResourceDetailHistoryEntry, selection_generation: u64) {
-        self.history_entry_id = entry.history_entry_id;
-        self.api_resource = entry.api_resource;
-        self.namespace = entry.namespace;
-        self.resource_name = entry.resource_name;
-        self.resource_uid = entry.resource_uid;
-        self.selection_generation = selection_generation;
-        self.detail = entry.detail;
-        self.events = entry.events;
-        self.detail_error = entry.detail_error;
-        self.events_error = entry.events_error;
-        self.managed_resources = entry.managed_resources;
-        self.managed_resources_error = entry.managed_resources_error;
-        self.data_editor = entry.data_editor;
-    }
-
     fn retained_history_entry_ids(&self) -> impl Iterator<Item = u64> + '_ {
-        std::iter::once(self.history_entry_id).chain(
-            self.back_stack
-                .iter()
-                .chain(&self.forward_stack)
-                .map(|entry| entry.history_entry_id),
-        )
+        self.navigator.entries().map(|entry| entry.history_entry_id)
     }
 
     fn history_entry_mut(
         &mut self,
         history_entry_id: u64,
     ) -> Option<&mut ResourceDetailHistoryEntry> {
-        self.back_stack
-            .iter_mut()
-            .chain(&mut self.forward_stack)
+        self.navigator
+            .entries_mut()
             .find(|entry| entry.history_entry_id == history_entry_id)
+    }
+}
+
+impl std::ops::Deref for ResourceDetailPanelState {
+    type Target = ResourceDetailHistoryEntry;
+    fn deref(&self) -> &Self::Target {
+        self.navigator.current()
+    }
+}
+
+impl std::ops::DerefMut for ResourceDetailPanelState {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.navigator.current_mut()
     }
 }
 
@@ -476,7 +429,9 @@ pub(super) enum ResourceAction {
         namespace: Option<String>,
         uid: String,
     },
+    #[allow(dead_code)]
     NavigateBack,
+    #[allow(dead_code)]
     NavigateForward,
 }
 
@@ -515,6 +470,7 @@ pub(super) enum ClusterConnectionState {
 impl UiState {
     pub(super) fn open_terminal_settings(&mut self, settings: &TerminalLaunchSettings) {
         self.terminal_settings_open = true;
+        self.terminal_settings_blade = Some(BladeNavigator::new(()));
         self.terminal_settings_draft = settings.clone();
     }
 
@@ -633,22 +589,21 @@ impl UiState {
         cluster.next_detail_generation += 1;
         let selection_generation = cluster.next_detail_generation;
         cluster.resource_detail_panel = Some(ResourceDetailPanelState {
-            api_resource: api_resource.clone(),
-            namespace: namespace.clone(),
-            resource_name: name.clone(),
-            resource_uid: uid.clone(),
-            history_entry_id: selection_generation,
+            navigator: BladeNavigator::new(ResourceDetailHistoryEntry {
+                history_entry_id: selection_generation,
+                api_resource: api_resource.clone(),
+                namespace: namespace.clone(),
+                resource_name: name.clone(),
+                resource_uid: uid.clone(),
+                detail: None,
+                events: Vec::new(),
+                detail_error: None,
+                events_error: None,
+                managed_resources: Vec::new(),
+                managed_resources_error: None,
+                data_editor: None,
+            }),
             selection_generation,
-            detail: None,
-            events: Vec::new(),
-            detail_error: None,
-            events_error: None,
-            managed_resources: Vec::new(),
-            managed_resources_error: None,
-            data_editor: None,
-            back_stack: Vec::new(),
-            forward_stack: Vec::new(),
-            transition: Some(ResourceDetailTransition::Opening),
             dismiss_on_outside_click: false,
         });
         commands_to_send.push(crate::worker::WorkerCommand::StartResourceDetailWatch {
@@ -673,38 +628,35 @@ impl UiState {
         let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
             return;
         };
+        cluster.next_detail_generation += 1;
+        let selection_generation = cluster.next_detail_generation;
         let Some(panel) = cluster.resource_detail_panel.as_mut() else {
             return;
         };
-        panel.back_stack.push(panel.history_entry());
+        let entry = ResourceDetailHistoryEntry {
+            history_entry_id: selection_generation,
+            api_resource: api_resource.clone(),
+            namespace: namespace.clone(),
+            resource_name: name.clone(),
+            resource_uid: uid.clone(),
+            detail: None,
+            events: Vec::new(),
+            detail_error: None,
+            events_error: None,
+            managed_resources: Vec::new(),
+            managed_resources_error: None,
+            data_editor: None,
+        };
         stop_resource_detail_watches(
             cluster.cluster_key,
             panel
-                .forward_stack
-                .drain(..)
+                .navigator
+                .push(entry)
+                .into_iter()
                 .map(|entry| entry.history_entry_id),
             commands_to_send,
         );
-        cluster.next_detail_generation += 1;
-        let selection_generation = cluster.next_detail_generation;
-        panel.replace_current(
-            ResourceDetailHistoryEntry {
-                history_entry_id: selection_generation,
-                api_resource: api_resource.clone(),
-                namespace: namespace.clone(),
-                resource_name: name.clone(),
-                resource_uid: uid.clone(),
-                detail: None,
-                events: Vec::new(),
-                detail_error: None,
-                events_error: None,
-                managed_resources: Vec::new(),
-                managed_resources_error: None,
-                data_editor: None,
-            },
-            selection_generation,
-        );
-        panel.transition = Some(ResourceDetailTransition::Forward);
+        panel.selection_generation = selection_generation;
         commands_to_send.push(crate::worker::WorkerCommand::StartResourceDetailWatch {
             cluster_key: cluster.cluster_key,
             history_entry_id: selection_generation,
@@ -727,28 +679,16 @@ impl UiState {
         let Some(panel) = cluster.resource_detail_panel.as_mut() else {
             return;
         };
-        let destination = if forward {
-            panel.forward_stack.pop()
+        let moved = if forward {
+            panel.navigator.go_forward()
         } else {
-            panel.back_stack.pop()
+            panel.navigator.go_back()
         };
-        let Some(destination) = destination else {
+        if !moved {
             return;
-        };
-        let current = panel.history_entry();
-        if forward {
-            panel.back_stack.push(current);
-        } else {
-            panel.forward_stack.push(current);
         }
         cluster.next_detail_generation += 1;
-        let selection_generation = cluster.next_detail_generation;
-        panel.replace_current(destination, selection_generation);
-        panel.transition = Some(if forward {
-            ResourceDetailTransition::Forward
-        } else {
-            ResourceDetailTransition::Back
-        });
+        panel.selection_generation = cluster.next_detail_generation;
     }
 
     pub(super) fn close_resource_detail(
@@ -776,11 +716,7 @@ impl UiState {
         else {
             return false;
         };
-        if matches!(panel.transition, Some(ResourceDetailTransition::Closing)) {
-            return false;
-        }
-        panel.transition = Some(ResourceDetailTransition::Closing);
-        true
+        panel.navigator.begin_close()
     }
 
     pub(super) fn close_all_resource_details(
@@ -1293,10 +1229,12 @@ impl UiState {
                             );
                         } else {
                             panel
-                                .back_stack
+                                .navigator
+                                .back_stack_mut()
                                 .retain(|entry| entry.history_entry_id != history_entry_id);
                             panel
-                                .forward_stack
+                                .navigator
+                                .forward_stack_mut()
                                 .retain(|entry| entry.history_entry_id != history_entry_id);
                             stop_resource_detail_watches(
                                 cluster.cluster_key,
