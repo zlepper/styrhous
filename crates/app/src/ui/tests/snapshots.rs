@@ -1251,7 +1251,7 @@ fn node_inspector_lists_cross_namespace_pods_in_the_shared_pod_table() {
 }
 
 #[test]
-fn clicking_a_history_blade_is_captured_by_the_scrim() {
+fn clicking_a_history_blade_returns_to_that_history_entry() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = oracle_resource_table_state();
     let deployment = fixture_api_resource("apps", "Deployment", "deployments");
@@ -1259,7 +1259,7 @@ fn clicking_a_history_blade_is_captured_by_the_scrim() {
     let mut commands = Vec::new();
     harness.state_mut().ui_state.open_resource_detail(
         2,
-        deployment,
+        deployment.clone(),
         "api".into(),
         Some("kube-system".into()),
         "deployment-uid".into(),
@@ -1276,26 +1276,14 @@ fn clicking_a_history_blade_is_captured_by_the_scrim() {
     );
     harness.run_steps(2);
 
-    // AccessKit reports the untransformed area rect. Use the transformed
-    // history header location, which is exposed to the left of the active
-    // blade, for the pointer interaction check.
-    let history_button = egui::pos2(575.0, 101.0);
-    assert_eq!(
-        harness.ctx.layer_id_at(history_button),
-        Some(egui::LayerId::new(
-            egui::Order::Foreground,
-            egui::Id::new("resource-detail-blade").with(("input-scrim", "left")),
-        )),
-    );
-    primary_click(&mut harness, history_button);
+    harness.get_by_label("Go back one blade").click();
     harness.run_steps(4);
 
-    assert!(
-        harness.state().ui_state.clusters[&2]
-            .resource_detail_panel
-            .is_none(),
-        "the scrim receives the history blade click rather than navigation or the workspace"
-    );
+    let panel = harness.state().ui_state.clusters[&2]
+        .resource_detail_panel
+        .as_ref()
+        .expect("history blade click must not dismiss the detail panel");
+    assert_eq!(panel.navigator.current().api_resource, deployment);
 }
 
 #[test]

@@ -4,7 +4,7 @@ use crate::colors::{WHITE, gray};
 use crate::design::spacing;
 use crate::icons;
 use crate::{ButtonSize, ButtonVariant, TailwindButton};
-use egui::{Color32, Id, Order, Pos2, Rect, Sense, Ui};
+use egui::{Color32, Id, Order, Pos2, Rect, Sense, Ui, WidgetInfo, WidgetType};
 use egui_extras::{Size, StripBuilder};
 
 /// The fixed width used by every foreground and history blade.
@@ -38,6 +38,7 @@ pub struct BladeNavigator<T> {
     forward_stack: Vec<T>,
     transition: Option<BladeTransition>,
     transition_started_at: Option<f64>,
+    back_steps: usize,
 }
 
 impl<T> BladeNavigator<T> {
@@ -48,6 +49,7 @@ impl<T> BladeNavigator<T> {
             forward_stack: Vec::new(),
             transition: Some(BladeTransition::Opening),
             transition_started_at: None,
+            back_steps: 0,
         }
     }
     pub fn current(&self) -> &T {
@@ -82,16 +84,31 @@ impl<T> BladeNavigator<T> {
             .push(std::mem::replace(&mut self.current, next));
         self.transition = Some(BladeTransition::Forward);
         self.transition_started_at = None;
+        self.back_steps = 0;
         std::mem::take(&mut self.forward_stack)
     }
     pub fn go_back(&mut self) -> bool {
-        let Some(previous) = self.back_stack.pop() else {
+        self.go_back_steps(1)
+    }
+    /// Move directly to an earlier entry in the back history.
+    ///
+    /// The resulting transition promotes the selected entry in one animation,
+    /// rather than playing an animation for every intermediate entry.
+    pub fn go_back_steps(&mut self, steps: usize) -> bool {
+        if steps == 0 || steps > self.back_stack.len() {
             return false;
-        };
-        self.forward_stack
-            .push(std::mem::replace(&mut self.current, previous));
+        }
+        for _ in 0..steps {
+            let previous = self
+                .back_stack
+                .pop()
+                .expect("step count was checked against the back stack");
+            self.forward_stack
+                .push(std::mem::replace(&mut self.current, previous));
+        }
         self.transition = Some(BladeTransition::Back);
         self.transition_started_at = None;
+        self.back_steps = steps;
         true
     }
     pub fn go_forward(&mut self) -> bool {
@@ -102,6 +119,7 @@ impl<T> BladeNavigator<T> {
             .push(std::mem::replace(&mut self.current, next));
         self.transition = Some(BladeTransition::Forward);
         self.transition_started_at = None;
+        self.back_steps = 0;
         true
     }
     pub fn begin_close(&mut self) -> bool {
@@ -110,11 +128,13 @@ impl<T> BladeNavigator<T> {
         }
         self.transition = Some(BladeTransition::Closing);
         self.transition_started_at = None;
+        self.back_steps = 0;
         true
     }
     pub fn clear_transition(&mut self) {
         self.transition = None;
         self.transition_started_at = None;
+        self.back_steps = 0;
     }
     pub fn entries(&self) -> impl Iterator<Item = &T> {
         std::iter::once(&self.current)
@@ -130,6 +150,10 @@ impl<T> BladeNavigator<T> {
         if self.transition.is_some() && self.transition_started_at.is_none() {
             self.transition_started_at = Some(ctx.input(|input| input.time));
         }
+    }
+
+    fn back_steps(&self) -> usize {
+        self.back_steps.max(1)
     }
 }
 
@@ -184,6 +208,9 @@ impl BladeStack {
         let transition = navigator
             .transition
             .map(|kind| (kind, progress(ctx, navigator)));
+        let transition_back_steps = matches!(transition, Some((BladeTransition::Back, _)))
+            .then(|| navigator.back_steps())
+            .unwrap_or(1);
         let closing_progress = matches!(transition, Some((BladeTransition::Closing, _)))
             .then(|| transition.expect("transition exists").1)
             .unwrap_or_default();
@@ -194,14 +221,48 @@ impl BladeStack {
         for stack_index in 0..first_history {
             retain_hidden_layer(ctx, self.layer_id(stack_index), viewport);
         }
+        if let Some((BladeTransition::Forward, value)) = transition
+            && value < 1.0
+            && first_history > 0
+        {
+            let stack_index = first_history - 1;
+            let content_id = self.content_id(stack_index);
+            let entry = &mut navigator.back_stack_mut()[stack_index];
+            show_layer(
+                ctx,
+                self.layer_id(stack_index),
+                viewport,
+                history_transform(viewport, HISTORY_SCALES.len() - 1),
+                false,
+                |ui| {
+                    let layer = BladeLayer {
+                        content_id,
+                        is_foreground: false,
+                        can_go_back: stack_index > 0,
+                        can_go_forward: true,
+                    };
+                    let _ = show_header(ui, layer, |ui| render_header(ui, entry, layer));
+                    render_content(ui, entry, layer);
+                },
+            );
+        }
+
+        let history_interactable = !matches!(transition, Some((BladeTransition::Closing, _)))
+            && !matches!(transition, Some((_, progress)) if progress < 1.0);
+        let mut history_targets = Vec::new();
         for (index, entry) in navigator.back_stack_mut()[first_history..]
             .iter_mut()
             .enumerate()
         {
             let stack_index = first_history + index;
             let depth = history_len - first_history - index - 1;
-            let transform = history_layer_transform(viewport, depth, transition);
+            let transform =
+                history_layer_transform(viewport, depth, transition, transition_back_steps);
             let content_id = self.content_id(stack_index);
+            let steps = depth + 1;
+            if history_interactable {
+                history_targets.push((content_id, transformed_rect(viewport, transform), steps));
+            }
             show_layer(
                 ctx,
                 self.layer_id(stack_index),
@@ -224,19 +285,26 @@ impl BladeStack {
         if let Some((BladeTransition::Back, value)) = transition
             && value < 1.0
         {
-            let can_go_forward = navigator.forward_stack().len() > 1;
-            if let Some(entry) = navigator.forward_stack_mut().last_mut() {
-                let stack_index = history_len + 1;
+            let can_go_forward = navigator.forward_stack().len() > transition_back_steps;
+            for (index, entry) in navigator
+                .forward_stack_mut()
+                .iter_mut()
+                .rev()
+                .take(transition_back_steps)
+                .enumerate()
+            {
+                let stack_index = history_len + 1 + index;
                 let content_id = self.content_id(stack_index);
+                let start = if index + 1 < transition_back_steps {
+                    history_transform(viewport, index)
+                } else {
+                    active_transform(viewport)
+                };
                 show_layer(
                     ctx,
                     self.layer_id(stack_index),
                     viewport,
-                    Transform {
-                        position: active_transform(viewport).position
-                            + egui::vec2(value * (WIDTH + INSET * 2.0), 0.0),
-                        scale: 1.0,
-                    },
+                    closing_transform(viewport, start, value),
                     false,
                     |ui| {
                         let layer = BladeLayer {
@@ -259,7 +327,7 @@ impl BladeStack {
                 scale: 1.0,
             },
             Some((BladeTransition::Back, value)) => interpolate(
-                history_transform(viewport, 0),
+                history_transform(viewport, transition_back_steps - 1),
                 active_transform(viewport),
                 value,
             ),
@@ -299,6 +367,11 @@ impl BladeStack {
                 (header, active, header_action)
             },
         );
+        if should_promote_active_blade(history_len > 0, transition) {
+            ctx.move_to_top(egui::LayerId::new(Order::Foreground, active_area_id));
+        }
+        let (dismissed, history_selection) =
+            show_input_scrim(ctx, self.id, viewport, active_rect, &history_targets);
         match header_action {
             HeaderAction::Back => {
                 navigator.go_back();
@@ -309,12 +382,12 @@ impl BladeStack {
             HeaderAction::Close => {
                 navigator.begin_close();
             }
-            HeaderAction::None => {}
+            HeaderAction::None => {
+                if let Some(steps) = history_selection {
+                    navigator.go_back_steps(steps);
+                }
+            }
         }
-        if should_promote_active_blade(history_len > 0, transition) {
-            ctx.move_to_top(egui::LayerId::new(Order::Foreground, active_area_id));
-        }
-        let dismissed = show_input_scrim(ctx, self.id, viewport, active_rect);
         BladeResponse {
             header,
             active,
@@ -414,6 +487,7 @@ fn history_layer_transform(
     viewport: Rect,
     depth: usize,
     transition: Option<(BladeTransition, f32)>,
+    back_steps: usize,
 ) -> Transform {
     let target = history_transform(viewport, depth);
     match transition {
@@ -426,9 +500,11 @@ fn history_layer_transform(
             };
             interpolate(start, target, progress)
         }
-        Some((BladeTransition::Back, progress)) => {
-            interpolate(history_transform(viewport, depth + 1), target, progress)
-        }
+        Some((BladeTransition::Back, progress)) => interpolate(
+            history_transform(viewport, depth + back_steps),
+            target,
+            progress,
+        ),
         Some((BladeTransition::Opening, _)) | None => target,
     }
 }
@@ -445,6 +521,19 @@ fn interpolate(from: Transform, to: Transform, value: f32) -> Transform {
     Transform {
         position: from.position + (to.position - from.position) * value,
         scale: from.scale + (to.scale - from.scale) * value,
+    }
+}
+fn transformed_rect(viewport: Rect, transform: Transform) -> Rect {
+    Rect::from_min_size(
+        transform.position,
+        egui::vec2(WIDTH, height(viewport)) * transform.scale,
+    )
+}
+fn history_navigation_label(steps: usize) -> String {
+    match steps {
+        1 => "Go back one blade".to_owned(),
+        2 => "Go back two blades".to_owned(),
+        _ => format!("Go back {steps} blades"),
     }
 }
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -643,8 +732,15 @@ fn paint_scrim(ctx: &egui::Context, id: Id, viewport: Rect, closing: f32) {
             );
         });
 }
-fn show_input_scrim(ctx: &egui::Context, id: Id, viewport: Rect, active: Rect) -> bool {
+fn show_input_scrim(
+    ctx: &egui::Context,
+    id: Id,
+    viewport: Rect,
+    active: Rect,
+    history: &[(Id, Rect, usize)],
+) -> (bool, Option<usize>) {
     let mut clicked = false;
+    let mut history_selection = None;
     let regions = if active.intersects(viewport) {
         let active = active.intersect(viewport);
         vec![
@@ -676,18 +772,63 @@ fn show_input_scrim(ctx: &egui::Context, id: Id, viewport: Rect, active: Rect) -
             continue;
         }
         let area_id = id.with(("input-scrim", name));
-        clicked |= egui::Area::new(area_id)
+        let (dismissed, selection) = egui::Area::new(area_id)
             .order(Order::Foreground)
             .fixed_pos(region.min)
             .show(ctx, |ui| {
                 ui.set_min_size(region.size());
-                ui.interact(ui.max_rect(), ui.id().with("dismiss"), Sense::click())
-                    .clicked()
+                let dismissed = ui.interact(ui.max_rect(), ui.id().with("dismiss"), Sense::click());
+                let mut selection = None;
+                for (index, (content_id, rect, steps)) in history.iter().enumerate() {
+                    let target = history_navigation_rect(active, history, *rect).intersect(region);
+                    if !target.is_positive() {
+                        continue;
+                    }
+                    let response = ui.interact(
+                        target,
+                        ui.id().with(("history-navigation", index, content_id)),
+                        Sense::click(),
+                    );
+                    response.widget_info(|| {
+                        WidgetInfo::labeled(
+                            WidgetType::Button,
+                            true,
+                            history_navigation_label(*steps),
+                        )
+                    });
+                    if response.clicked() {
+                        selection = Some(*steps);
+                    }
+                }
+                if selection.is_none() && dismissed.clicked() {
+                    selection = ctx.input(|input| {
+                        input.pointer.interact_pos().and_then(|position| {
+                            history.iter().find_map(|(_, rect, steps)| {
+                                history_navigation_rect(active, history, *rect)
+                                    .contains(position)
+                                    .then_some(*steps)
+                            })
+                        })
+                    });
+                }
+                (dismissed.clicked() && selection.is_none(), selection)
             })
             .inner;
+        clicked |= dismissed;
+        history_selection = history_selection.or(selection);
         ctx.move_to_top(egui::LayerId::new(Order::Foreground, area_id));
     }
-    clicked
+    (clicked, history_selection)
+}
+
+fn history_navigation_rect(active: Rect, history: &[(Id, Rect, usize)], rect: Rect) -> Rect {
+    let right = history
+        .iter()
+        .filter(|(_, other, _)| other.min.x > rect.min.x)
+        .map(|(_, other, _)| other.min.x)
+        .chain(std::iter::once(active.min.x))
+        .fold(rect.max.x, f32::min);
+    Rect::from_min_max(rect.min, egui::pos2(right, rect.max.y))
 }
 
 #[cfg(test)]
@@ -1241,6 +1382,74 @@ mod tests {
     }
 
     #[test]
+    fn snapshots_history_overflow_delayed_removal_and_direct_two_step_back_animation() {
+        let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 1,
+            title: "First",
+        })));
+        navigator.borrow_mut().clear_transition();
+        let stack = BladeStack::new("blade-history-overflow-animation");
+        let navigator_for_ui = Rc::clone(&navigator);
+        let mut harness = Harness::new_ui(move |ui| {
+            stack.show_with_title(
+                ui.ctx(),
+                &mut navigator_for_ui.borrow_mut(),
+                |blade| blade.title.to_owned(),
+                render_test_blade,
+            );
+        });
+        crate::test_support::setup_egui(&mut harness);
+        harness.ctx.style_mut(|style| style.animation_time = 1.0);
+        harness.input_mut().time = Some(1.0);
+        harness.step();
+
+        for (id, title) in [(2, "Second"), (3, "Third")] {
+            navigator.borrow_mut().push(TestBlade { id, title });
+            navigator.borrow_mut().clear_transition();
+            harness.step();
+        }
+
+        navigator.borrow_mut().push(TestBlade {
+            id: 4,
+            title: "Fourth",
+        });
+        harness.input_mut().time = Some(10.0);
+        harness.step();
+        harness.snapshot_options(
+            "blades/history_overflow_first_frame",
+            &transformed_blade_snapshot_options(),
+        );
+        // The capped history blade remains fully visible until the other
+        // history layers have completed their transition.
+        harness.input_mut().time = Some(10.0 + f64::from(TRANSITION_DURATION / 2.0));
+        harness.step();
+        harness.snapshot_options(
+            "blades/history_overflow_mid_frame",
+            &transformed_blade_snapshot_options(),
+        );
+        harness.input_mut().time = Some(10.0 + f64::from(TRANSITION_DURATION));
+        harness.step();
+        harness.snapshot_options(
+            "blades/history_overflow_final_frame",
+            &transformed_blade_snapshot_options(),
+        );
+
+        assert!(navigator.borrow_mut().go_back_steps(2));
+        harness.input_mut().time = Some(20.0);
+        harness.step();
+        harness.snapshot_options(
+            "blades/direct_two_step_back_first_frame",
+            &transformed_blade_snapshot_options(),
+        );
+        harness.input_mut().time = Some(20.0 + f64::from(TRANSITION_DURATION / 2.0));
+        harness.step();
+        harness.snapshot_options(
+            "blades/direct_two_step_back_mid_frame",
+            &transformed_blade_snapshot_options(),
+        );
+    }
+
+    #[test]
     fn snapshots_custom_header_content_with_shared_controls() {
         let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
             id: 1,
@@ -1467,6 +1676,201 @@ mod tests {
         assert_eq!(navigator.current(), &"one");
         assert_eq!(navigator.push("three"), vec!["two"]);
         assert!(!navigator.can_go_forward());
+    }
+
+    #[test]
+    fn navigator_can_jump_back_multiple_steps() {
+        let mut navigator = BladeNavigator::new("one");
+        navigator.push("two");
+        navigator.push("three");
+        navigator.push("four");
+
+        assert!(navigator.go_back_steps(2));
+        assert_eq!(navigator.current(), &"two");
+        assert_eq!(navigator.back_stack(), &["one"]);
+        assert_eq!(navigator.forward_stack(), &["four", "three"]);
+        assert_eq!(navigator.transition(), Some(BladeTransition::Back));
+        assert_eq!(navigator.back_steps(), 2);
+
+        assert!(!navigator.go_back_steps(0));
+        assert!(!navigator.go_back_steps(2));
+        assert_eq!(navigator.current(), &"two");
+    }
+
+    #[test]
+    fn visible_history_blades_are_clickable_without_dismissing_the_stack() {
+        let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 1,
+            title: "First",
+        })));
+        navigator.borrow_mut().clear_transition();
+        let dismissed = Rc::new(RefCell::new(false));
+        let stack = BladeStack::new("blade-clickable-history");
+        let navigator_for_ui = Rc::clone(&navigator);
+        let dismissed_for_ui = Rc::clone(&dismissed);
+        let mut harness = Harness::new_ui(move |ui| {
+            let response = stack.show_with_title(
+                ui.ctx(),
+                &mut navigator_for_ui.borrow_mut(),
+                |blade| blade.title.to_owned(),
+                render_test_blade,
+            );
+            *dismissed_for_ui.borrow_mut() = response.dismissed;
+        });
+        crate::test_support::setup_egui(&mut harness);
+        for (id, title) in [(2, "Second"), (3, "Third"), (4, "Fourth")] {
+            navigator.borrow_mut().push(TestBlade { id, title });
+            navigator.borrow_mut().clear_transition();
+            harness.run();
+        }
+
+        harness.get_by_label("Go back two blades").click();
+        harness.run();
+
+        assert_eq!(navigator.borrow().current().id, 2);
+        assert_eq!(
+            navigator
+                .borrow()
+                .forward_stack()
+                .last()
+                .map(|blade| blade.id),
+            Some(3)
+        );
+        assert!(!*dismissed.borrow());
+    }
+
+    #[test]
+    fn clicking_the_nearest_history_blade_goes_back_one_step() {
+        let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 1,
+            title: "First",
+        })));
+        navigator.borrow_mut().clear_transition();
+        let stack = BladeStack::new("blade-clickable-nearest-history");
+        let navigator_for_ui = Rc::clone(&navigator);
+        let mut harness = Harness::new_ui(move |ui| {
+            stack.show_with_title(
+                ui.ctx(),
+                &mut navigator_for_ui.borrow_mut(),
+                |blade| blade.title.to_owned(),
+                render_test_blade,
+            );
+        });
+        crate::test_support::setup_egui(&mut harness);
+        for (id, title) in [(2, "Second"), (3, "Third")] {
+            navigator.borrow_mut().push(TestBlade { id, title });
+            navigator.borrow_mut().clear_transition();
+            harness.run();
+        }
+
+        harness.get_by_label("Go back one blade").click();
+        harness.run();
+
+        assert_eq!(navigator.borrow().current().id, 2);
+    }
+
+    #[test]
+    fn clicking_overlapping_history_blades_selects_the_topmost_blade() {
+        let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 1,
+            title: "First",
+        })));
+        navigator.borrow_mut().clear_transition();
+        let stack = BladeStack::new("blade-overlapping-history-click");
+        let navigator_for_ui = Rc::clone(&navigator);
+        let mut harness = Harness::new_ui(move |ui| {
+            stack.show_with_title(
+                ui.ctx(),
+                &mut navigator_for_ui.borrow_mut(),
+                |blade| blade.title.to_owned(),
+                render_test_blade,
+            );
+        });
+        crate::test_support::setup_egui(&mut harness);
+        for (id, title) in [(2, "Second"), (3, "Third"), (4, "Fourth")] {
+            navigator.borrow_mut().push(TestBlade { id, title });
+            navigator.borrow_mut().clear_transition();
+            harness.run();
+        }
+
+        let viewport = harness.ctx.content_rect();
+        let older = transformed_rect(viewport, history_transform(viewport, 1));
+        let nearer = transformed_rect(viewport, history_transform(viewport, 0));
+        let active = transformed_rect(viewport, active_transform(viewport));
+        let overlap = older.intersect(nearer);
+        assert!(overlap.is_positive(), "the history blades should overlap");
+
+        let click_position = egui::pos2((nearer.min.x + active.min.x) / 2.0, overlap.center().y);
+        assert!(older.contains(click_position));
+        assert!(nearer.contains(click_position));
+        assert!(!active.contains(click_position));
+        harness.event(egui::Event::PointerMoved(click_position));
+        for pressed in [true, false] {
+            harness.event(egui::Event::PointerButton {
+                pos: click_position,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::default(),
+            });
+        }
+        harness.run();
+
+        assert_eq!(
+            navigator.borrow().current().id,
+            3,
+            "the nearer history blade must win its overlap with the older blade"
+        );
+    }
+
+    #[test]
+    fn clicking_history_under_the_foreground_blade_keeps_the_foreground_active() {
+        let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 1,
+            title: "First",
+        })));
+        navigator.borrow_mut().clear_transition();
+        let dismissed = Rc::new(RefCell::new(false));
+        let stack = BladeStack::new("blade-foreground-overlap-click");
+        let navigator_for_ui = Rc::clone(&navigator);
+        let dismissed_for_ui = Rc::clone(&dismissed);
+        let mut harness = Harness::new_ui(move |ui| {
+            let response = stack.show_with_title(
+                ui.ctx(),
+                &mut navigator_for_ui.borrow_mut(),
+                |blade| blade.title.to_owned(),
+                render_test_blade,
+            );
+            *dismissed_for_ui.borrow_mut() = response.dismissed;
+        });
+        crate::test_support::setup_egui(&mut harness);
+        for (id, title) in [(2, "Second"), (3, "Third"), (4, "Fourth")] {
+            navigator.borrow_mut().push(TestBlade { id, title });
+            navigator.borrow_mut().clear_transition();
+            harness.run();
+        }
+
+        let viewport = harness.ctx.content_rect();
+        let history = transformed_rect(viewport, history_transform(viewport, 0));
+        let active = transformed_rect(viewport, active_transform(viewport));
+        let overlap = history.intersect(active);
+        assert!(
+            overlap.is_positive(),
+            "history should extend under the foreground blade"
+        );
+        let click_position = overlap.center();
+        harness.event(egui::Event::PointerMoved(click_position));
+        for pressed in [true, false] {
+            harness.event(egui::Event::PointerButton {
+                pos: click_position,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::default(),
+            });
+        }
+        harness.run();
+
+        assert_eq!(navigator.borrow().current().id, 4);
+        assert!(!*dismissed.borrow());
     }
 
     #[test]
