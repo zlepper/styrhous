@@ -2122,8 +2122,12 @@ fn resource_detail_more_actions_use_the_shared_resource_menu() {
     harness.get_by_label("Edit").click_accesskit();
     harness.run();
     assert!(matches!(
-        harness.state().worker.commands.last(),
+        harness.state().worker.commands.iter().rev().nth(1),
         Some(WorkerCommand::GetResourceYaml { resource_name, .. }) if resource_name == "settings"
+    ));
+    assert!(matches!(
+        harness.state().worker.commands.last(),
+        Some(WorkerCommand::LoadResourceSchema { .. })
     ));
 
     harness

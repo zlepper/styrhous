@@ -1,14 +1,30 @@
-use super::state::{UiState, YamlEditorWindowState};
+use super::state::{UiState, ValidationState, YamlEditorWindowState};
+use crate::resource_schema::SchemaDiagnostic;
 use crate::worker::WorkerCommand;
-use components::colors::{TABLE_BORDER, TOOLBAR_BACKGROUND, gray};
+use components::colors::{TABLE_BORDER, TOOLBAR_BACKGROUND, gray, indigo};
 use components::design::{spacing, status, surface, typography};
 use components::{
     ConfirmationDialog, ConfirmationDialogAction, ConfirmationDialogKind, PointingHand,
     TailwindButton,
 };
+use egui::text::{CCursor, CCursorRange};
 use egui_extras::syntax_highlighting::{CodeTheme, highlight};
+use std::time::{Duration, Instant};
 
 const TOOLBAR_HEIGHT: f32 = 52.0;
+const VALIDATION_DEBOUNCE: Duration = Duration::from_millis(500);
+const COMPLETION_LIST_WIDTH: f32 = 540.0;
+const COMPLETION_POPUP_WIDTH: f32 = 584.0;
+const COMPLETION_DOCUMENTATION_WIDTH: f32 = 320.0;
+const COMPLETION_TYPE_COLUMN_WIDTH: f32 = 92.0;
+const COMPLETION_LABEL_COLUMN_WIDTH: f32 = 148.0;
+const COMPLETION_DETAIL_COLUMN_WIDTH: f32 = 260.0;
+const COMPLETION_ROW_HEIGHT: f32 = 30.0;
+const COMPLETION_LIST_MAX_HEIGHT: f32 = 260.0;
+const COMPLETION_POPUP_CHROME_HEIGHT: f32 = 110.0;
+const COMPLETION_POPUP_MAX_HEIGHT: f32 =
+    COMPLETION_POPUP_CHROME_HEIGHT + COMPLETION_LIST_MAX_HEIGHT;
+const DESCRIPTION_PREVIEW_CHARS: usize = 36;
 
 pub(super) fn show(
     ctx: &egui::Context,
@@ -126,6 +142,12 @@ fn show_editor_window(
             });
         });
 
+    if has_diagnostics_feedback(editor) {
+        egui::TopBottomPanel::bottom("yaml-editor-diagnostics")
+            .frame(toolbar_frame())
+            .show(ctx, |ui| show_diagnostics(ui, editor));
+    }
+
     egui::CentralPanel::default()
         .frame(
             egui::Frame::new()
@@ -143,12 +165,17 @@ fn show_editor_window(
                     editor.error.as_deref().unwrap_or("Unable to load resource"),
                 );
             } else {
+                if editor.validation_revision == 0 && !editor.edited_yaml.is_empty() {
+                    refresh_local_validation(editor);
+                }
                 if let Some(error) = &editor.error {
                     error_strip(ui, error);
                 } else if editor.is_modified() {
                     warning_strip(ui);
                 }
-                show_code_editor(ctx, ui, editor);
+                if show_code_editor(ctx, ui, editor) {
+                    refresh_local_validation(editor);
+                }
             }
         });
 
@@ -158,6 +185,11 @@ fn show_editor_window(
         && ctx.input(|input| input.modifiers.command && input.key_pressed(egui::Key::Enter))
     {
         apply_editor(editor, commands_to_send);
+    }
+    maybe_request_server_validation(editor, commands_to_send);
+    #[cfg(not(test))]
+    if let Some(due) = editor.validation_due {
+        ctx.request_repaint_after(due.saturating_duration_since(Instant::now()));
     }
     show_discard_confirmation(ctx, editor);
 }
@@ -242,8 +274,43 @@ fn editor_error(ui: &mut egui::Ui, error: &str) {
     });
 }
 
-fn show_code_editor(_ctx: &egui::Context, ui: &mut egui::Ui, editor: &mut YamlEditorWindowState) {
+fn show_code_editor(
+    ctx: &egui::Context,
+    ui: &mut egui::Ui,
+    editor: &mut YamlEditorWindowState,
+) -> bool {
+    let (move_selection_up, move_selection_down, accept_suggestion, dismiss_suggestions) =
+        if editor.suggestions_visible {
+            ctx.input_mut(|input| {
+                (
+                    input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp),
+                    input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown),
+                    input.consume_key(egui::Modifiers::NONE, egui::Key::Enter)
+                        || input.consume_key(egui::Modifiers::NONE, egui::Key::Tab),
+                    input.consume_key(egui::Modifiers::NONE, egui::Key::Escape),
+                )
+            })
+        } else {
+            (false, false, false, false)
+        };
+    let selection_changed = move_selection_up || move_selection_down;
+    if move_selection_down {
+        editor.suggestion_selection =
+            (editor.suggestion_selection + 1).min(editor.suggestions.len().saturating_sub(1));
+    }
+    if move_selection_up {
+        editor.suggestion_selection = editor.suggestion_selection.saturating_sub(1);
+    }
+    if dismiss_suggestions {
+        editor.suggestions_visible = false;
+    }
+
     let line_count = editor.edited_yaml.lines().count().max(1);
+    let mut changed = false;
+    let mut cursor_byte = None;
+    let mut text_edit_id = None;
+    let mut caret_rect = None;
+    let fallback_completion_position = ui.clip_rect().left_top() + egui::vec2(74.0, 68.0);
     egui::ScrollArea::both()
         .id_salt(("yaml-editor-scroll", editor.id))
         .auto_shrink([false, false])
@@ -252,10 +319,18 @@ fn show_code_editor(_ctx: &egui::Context, ui: &mut egui::Ui, editor: &mut YamlEd
                 ui.vertical(|ui| {
                     ui.set_min_width(36.0);
                     for line in 1..=line_count {
+                        let has_diagnostic = editor
+                            .diagnostics
+                            .iter()
+                            .any(|diagnostic| diagnostic.line == Some(line));
                         ui.label(
                             egui::RichText::new(line.to_string())
                                 .font(typography::monospace())
-                                .color(gray::_500),
+                                .color(if has_diagnostic {
+                                    status::DANGER
+                                } else {
+                                    gray::_500
+                                }),
                         );
                     }
                 });
@@ -268,19 +343,526 @@ fn show_code_editor(_ctx: &egui::Context, ui: &mut egui::Ui, editor: &mut YamlEd
                         layout_job.wrap.max_width = wrap_width;
                         ui.fonts_mut(|fonts| fonts.layout_job(layout_job))
                     };
-                ui.add(
-                    egui::TextEdit::multiline(&mut editor.edited_yaml)
-                        .id_salt(("yaml-editor-text", editor.id))
-                        .font(typography::monospace())
-                        .code_editor()
-                        .text_color(gray::_100)
-                        .background_color(surface::TERMINAL_BACKGROUND)
-                        .desired_width(f32::INFINITY)
-                        .desired_rows(line_count)
-                        .layouter(&mut layouter),
-                );
+                ui.style_mut().visuals.text_cursor.stroke = egui::Stroke::new(4.0, indigo::_100);
+                ui.style_mut().visuals.text_cursor.blink = false;
+                let output = egui::TextEdit::multiline(&mut editor.edited_yaml)
+                    .id(yaml_editor_text_edit_id(editor.id))
+                    .font(typography::monospace())
+                    .code_editor()
+                    .text_color(gray::_100)
+                    .background_color(surface::TERMINAL_BACKGROUND)
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(line_count)
+                    .layouter(&mut layouter)
+                    .show(ui);
+                changed = output.response.changed();
+                cursor_byte = output
+                    .cursor_range
+                    .map(|range| byte_index(&editor.edited_yaml, range.primary.index));
+                caret_rect = output.cursor_range.map(|range| {
+                    egui::text_selection::text_cursor_state::cursor_rect(
+                        &output.galley,
+                        &range.primary,
+                        output
+                            .galley
+                            .rows
+                            .first()
+                            .map_or(typography::MONOSPACE_SIZE, |row| row.rect().height()),
+                    )
+                    .translate(output.galley_pos.to_vec2())
+                });
+                text_edit_id = Some(output.response.id);
             });
         });
+
+    let completion_position = caret_rect.map_or(fallback_completion_position, |caret_rect| {
+        completion_popup_position(
+            ctx.content_rect(),
+            caret_rect,
+            completion_popup_height(editor.suggestions.len()),
+        )
+    });
+
+    let requested =
+        ctx.input(|input| input.modifiers.command && input.key_pressed(egui::Key::Space));
+    if let Some(cursor) = cursor_byte
+        && (changed || requested)
+        && let Some(schema) = &editor.schema
+    {
+        let selected_label = editor
+            .suggestions
+            .get(editor.suggestion_selection)
+            .map(|suggestion| suggestion.label.clone());
+        editor.suggestions = schema.suggestions_at(&editor.edited_yaml, cursor);
+        editor.suggestion_selection = selected_label
+            .as_deref()
+            .and_then(|label| {
+                editor
+                    .suggestions
+                    .iter()
+                    .position(|suggestion| suggestion.label == label)
+            })
+            .unwrap_or(0);
+        editor.suggestions_visible = !editor.suggestions.is_empty();
+    }
+    if editor.suggestions_visible {
+        let mut selected_row_top = None;
+        egui::Area::new(egui::Id::new(("yaml-editor-suggestions", editor.id)))
+            .order(egui::Order::Foreground)
+            .fixed_pos(completion_position)
+            .show(ctx, |ui| {
+                egui::Frame::new()
+                    .fill(TOOLBAR_BACKGROUND)
+                    .stroke(egui::Stroke::new(1.0, gray::_600))
+                    .corner_radius(components::design::radius::surface())
+                    .shadow(egui::epaint::Shadow {
+                        offset: [0, 5],
+                        blur: 12,
+                        spread: 0,
+                        color: egui::Color32::from_black_alpha(100),
+                    })
+                    .inner_margin(egui::Margin::same(spacing::MD as i8))
+                    .show(ui, |ui| {
+                        ui.label(
+                            egui::RichText::new("Kubernetes schema")
+                                .font(typography::body())
+                                .color(gray::_700),
+                        );
+                        ui.add_space(spacing::XS);
+                        completion_table_header(ui);
+                        let mut accepted = accept_suggestion.then_some(editor.suggestion_selection);
+                        let mut hovered = None;
+                        egui::ScrollArea::vertical()
+                            .id_salt(("yaml-editor-suggestion-list", editor.id))
+                            .max_height(COMPLETION_LIST_MAX_HEIGHT)
+                            .auto_shrink([false, true])
+                            .show(ui, |ui| {
+                                ui.set_min_width(COMPLETION_LIST_WIDTH);
+                                for (index, suggestion) in editor.suggestions.iter().enumerate() {
+                                    let is_selected = index == editor.suggestion_selection;
+                                    let response = completion_row(ui, suggestion, is_selected);
+                                    if is_selected {
+                                        if selection_changed {
+                                            response.scroll_to_me(Some(egui::Align::Center));
+                                        }
+                                        selected_row_top = Some(response.rect.top());
+                                    }
+                                    if response.hovered() {
+                                        hovered = Some(index);
+                                    }
+                                    if response.clicked() {
+                                        accepted = Some(index);
+                                    }
+                                }
+                            });
+                        if let Some(index) = hovered {
+                            editor.suggestion_selection = index;
+                        }
+                        ui.add_space(spacing::XS);
+                        ui.separator();
+                        ui.add_space(spacing::XS);
+                        ui.label(
+                            egui::RichText::new("↑↓ navigate  ·  Enter apply  ·  Esc dismiss")
+                                .font(typography::metadata())
+                                .color(gray::_500),
+                        );
+                        if let Some(index) = accepted
+                            && let Some(suggestion) = editor.suggestions.get(index)
+                            && let (Some(cursor), Some(id)) = (cursor_byte, text_edit_id)
+                        {
+                            let new_cursor = insert_suggestion(
+                                &mut editor.edited_yaml,
+                                cursor,
+                                &suggestion.label,
+                            );
+                            let mut state = egui::widgets::text_edit::TextEditState::load(ctx, id)
+                                .unwrap_or_default();
+                            state
+                                .cursor
+                                .set_char_range(Some(CCursorRange::one(CCursor::new(new_cursor))));
+                            state.store(ctx, id);
+                            editor.suggestions_visible = false;
+                            changed = true;
+                        }
+                    });
+            });
+        if let Some(suggestion) = editor.suggestions.get(editor.suggestion_selection) {
+            show_completion_documentation(
+                ctx,
+                completion_position,
+                selected_row_top.unwrap_or(completion_position.y + 60.0),
+                suggestion,
+            );
+        }
+    }
+    changed
+}
+
+fn yaml_editor_text_edit_id(editor_id: u64) -> egui::Id {
+    egui::Id::new(("yaml-editor-text", editor_id))
+}
+
+fn completion_popup_height(suggestion_count: usize) -> f32 {
+    COMPLETION_POPUP_CHROME_HEIGHT
+        + (suggestion_count as f32 * COMPLETION_ROW_HEIGHT).min(COMPLETION_LIST_MAX_HEIGHT)
+}
+
+fn completion_popup_position(
+    viewport: egui::Rect,
+    caret_rect: egui::Rect,
+    popup_height: f32,
+) -> egui::Pos2 {
+    let padding = spacing::MD;
+    let min_x = viewport.left() + padding;
+    let max_x = (viewport.right() - COMPLETION_POPUP_WIDTH - padding).max(min_x);
+    let preferred_x = caret_rect.left();
+    let x = if preferred_x <= max_x {
+        preferred_x.max(min_x)
+    } else {
+        (caret_rect.right() - COMPLETION_POPUP_WIDTH - padding).max(min_x)
+    };
+
+    let min_y = viewport.top() + padding;
+    let max_y = (viewport.bottom() - popup_height - padding).max(min_y);
+    let preferred_y = caret_rect.bottom() + spacing::XS;
+    let y = if preferred_y <= max_y {
+        preferred_y.max(min_y)
+    } else {
+        (caret_rect.top() - popup_height - spacing::XS).clamp(min_y, max_y)
+    };
+    egui::pos2(x, y)
+}
+
+fn completion_table_header(ui: &mut egui::Ui) {
+    ui.horizontal(|ui| {
+        ui.add_space(spacing::SM);
+        completion_column_label(ui, "TYPE", COMPLETION_TYPE_COLUMN_WIDTH);
+        completion_column_label(ui, "FIELD", COMPLETION_LABEL_COLUMN_WIDTH);
+        completion_column_label(ui, "DESCRIPTION", COMPLETION_DETAIL_COLUMN_WIDTH);
+    });
+    ui.add_space(spacing::XS);
+}
+
+fn completion_column_label(ui: &mut egui::Ui, label: &str, width: f32) {
+    completion_text_column(
+        ui,
+        width,
+        egui::RichText::new(label)
+            .font(typography::metadata())
+            .color(gray::_500),
+    );
+}
+
+fn completion_row(
+    ui: &mut egui::Ui,
+    suggestion: &crate::resource_schema::CompletionSuggestion,
+    selected: bool,
+) -> egui::Response {
+    let fill = if selected {
+        indigo::_100
+    } else {
+        TOOLBAR_BACKGROUND
+    };
+    let stroke = if selected {
+        indigo::_400
+    } else {
+        egui::Color32::TRANSPARENT
+    };
+    let response = egui::Frame::new()
+        .fill(fill)
+        .stroke(egui::Stroke::new(1.0, stroke))
+        .corner_radius(components::design::radius::control())
+        .inner_margin(egui::Margin::symmetric(
+            spacing::SM as i8,
+            spacing::XS as i8,
+        ))
+        .show(ui, |ui| {
+            ui.set_min_width(COMPLETION_LIST_WIDTH);
+            ui.horizontal(|ui| {
+                let type_label = suggestion.type_label.as_deref().unwrap_or("field");
+                completion_type_column(ui, type_label);
+                completion_text_column(
+                    ui,
+                    COMPLETION_LABEL_COLUMN_WIDTH,
+                    egui::RichText::new(&suggestion.label)
+                        .font(typography::body())
+                        .strong()
+                        .color(gray::_900),
+                );
+                completion_text_column(
+                    ui,
+                    COMPLETION_DETAIL_COLUMN_WIDTH,
+                    egui::RichText::new(description_preview(suggestion.detail.as_deref()))
+                        .font(typography::metadata())
+                        .color(gray::_600),
+                );
+            });
+        })
+        .response;
+    response.interact(egui::Sense::click())
+}
+
+fn completion_text_column(ui: &mut egui::Ui, width: f32, text: egui::RichText) {
+    let response = ui.label(text);
+    ui.add_space((width - response.rect.width()).max(0.0));
+}
+
+fn completion_type_column(ui: &mut egui::Ui, type_label: &str) {
+    let response = completion_type_badge(ui, type_label);
+    ui.add_space((COMPLETION_TYPE_COLUMN_WIDTH - response.rect.width()).max(0.0));
+}
+
+fn completion_type_badge(ui: &mut egui::Ui, type_label: &str) -> egui::Response {
+    let is_boolean = type_label == "boolean";
+    egui::Frame::new()
+        .fill(if is_boolean {
+            status::SUCCESS.gamma_multiply(0.15)
+        } else {
+            indigo::_200
+        })
+        .corner_radius(components::design::radius::control())
+        .inner_margin(egui::Margin::symmetric(6, 3))
+        .show(ui, |ui| {
+            ui.label(
+                egui::RichText::new(type_label.to_uppercase())
+                    .font(typography::metadata())
+                    .color(if is_boolean {
+                        status::SUCCESS
+                    } else {
+                        indigo::_700
+                    }),
+            );
+        })
+        .response
+}
+
+fn description_preview(description: Option<&str>) -> String {
+    let Some(description) = description else {
+        return String::new();
+    };
+    let mut characters = description.chars();
+    let preview = characters
+        .by_ref()
+        .take(DESCRIPTION_PREVIEW_CHARS)
+        .collect::<String>();
+    if characters.next().is_some() {
+        format!("{preview}…")
+    } else {
+        preview
+    }
+}
+
+fn show_completion_documentation(
+    ctx: &egui::Context,
+    completion_position: egui::Pos2,
+    selected_row_top: f32,
+    suggestion: &crate::resource_schema::CompletionSuggestion,
+) {
+    let viewport = ctx.content_rect();
+    let min_x = viewport.left() + spacing::MD;
+    let max_x = (viewport.right() - COMPLETION_DOCUMENTATION_WIDTH - spacing::MD).max(min_x);
+    let right_of_completion = completion_position.x + COMPLETION_POPUP_WIDTH + spacing::SM;
+    let x = if right_of_completion <= max_x {
+        right_of_completion
+    } else {
+        (completion_position.x - COMPLETION_DOCUMENTATION_WIDTH - spacing::SM).clamp(min_x, max_x)
+    };
+    let min_y = viewport.top() + spacing::MD;
+    let max_y = (viewport.bottom() - 160.0).max(min_y);
+    let position = egui::pos2(x, selected_row_top.clamp(min_y, max_y));
+    egui::Area::new(egui::Id::new((
+        "yaml-editor-suggestion-documentation",
+        suggestion.label.as_str(),
+    )))
+    .order(egui::Order::Foreground)
+    .fixed_pos(position)
+    .show(ctx, |ui| {
+        egui::Frame::new()
+            .fill(TOOLBAR_BACKGROUND)
+            .stroke(egui::Stroke::new(1.0, TABLE_BORDER))
+            .corner_radius(components::design::radius::surface())
+            .shadow(egui::epaint::Shadow {
+                offset: [0, 4],
+                blur: 10,
+                spread: 0,
+                color: egui::Color32::from_black_alpha(80),
+            })
+            .inner_margin(egui::Margin::same(spacing::MD as i8))
+            .show(ui, |ui| {
+                ui.set_width(COMPLETION_DOCUMENTATION_WIDTH);
+                ui.horizontal(|ui| {
+                    completion_type_badge(ui, suggestion.type_label.as_deref().unwrap_or("field"));
+                    ui.label(
+                        egui::RichText::new(&suggestion.label)
+                            .font(typography::body())
+                            .strong()
+                            .color(gray::_900),
+                    );
+                });
+                ui.add_space(spacing::SM);
+                ui.separator();
+                ui.add_space(spacing::SM);
+                ui.label(
+                    egui::RichText::new(
+                        suggestion
+                            .detail
+                            .as_deref()
+                            .unwrap_or("No schema documentation is available."),
+                    )
+                    .font(typography::body())
+                    .color(gray::_700),
+                );
+            });
+    });
+}
+
+fn byte_index(text: &str, character_index: usize) -> usize {
+    text.char_indices()
+        .nth(character_index)
+        .map_or(text.len(), |(index, _)| index)
+}
+
+fn insert_suggestion(text: &mut String, cursor: usize, suggestion: &str) -> usize {
+    let line_start = text[..cursor].rfind('\n').map_or(0, |index| index + 1);
+    let before_cursor = &text[line_start..cursor];
+    let start = before_cursor
+        .char_indices()
+        .rev()
+        .find_map(|(index, character)| {
+            (!character.is_alphanumeric() && character != '-' && character != '_')
+                .then_some(line_start + index + character.len_utf8())
+        })
+        .unwrap_or(line_start);
+    let is_value = before_cursor.contains(':');
+    let replacement = if is_value {
+        suggestion.to_owned()
+    } else {
+        format!("{suggestion}: ")
+    };
+    text.replace_range(start..cursor, &replacement);
+    text[..start].chars().count() + replacement.chars().count()
+}
+
+fn refresh_local_validation(editor: &mut YamlEditorWindowState) {
+    editor.validation_revision += 1;
+    editor.validation_due = None;
+    editor.server_validation = ValidationState::Idle;
+    editor.diagnostics.clear();
+    match &editor.schema {
+        Some(schema) => match schema.validate_yaml(&editor.edited_yaml) {
+            Ok(mut diagnostics) => {
+                for diagnostic in &mut diagnostics {
+                    diagnostic.line = yaml_path_line(&editor.edited_yaml, &diagnostic.path);
+                }
+                editor.diagnostics = diagnostics;
+                if editor.diagnostics.is_empty() {
+                    editor.validation_due = Some(Instant::now() + VALIDATION_DEBOUNCE);
+                }
+            }
+            Err(message) if message.starts_with("Unable to compile the Kubernetes schema:") => {
+                // A malformed or unsupported OpenAPI extension must not prevent the API server
+                // from validating the document. Treat the local schema as unavailable.
+                editor.server_validation = ValidationState::Failed(message);
+                editor.validation_due = Some(Instant::now() + VALIDATION_DEBOUNCE);
+            }
+            Err(message) => editor.diagnostics.push(SchemaDiagnostic {
+                line: yaml_error_line(&message),
+                path: String::new(),
+                message,
+            }),
+        },
+        None => match serde_yaml::from_str::<serde_yaml::Value>(&editor.edited_yaml) {
+            Ok(_) => editor.validation_due = Some(Instant::now() + VALIDATION_DEBOUNCE),
+            Err(error) => editor.diagnostics.push(SchemaDiagnostic {
+                line: error.location().map(|location| location.line()),
+                path: String::new(),
+                message: error.to_string(),
+            }),
+        },
+    }
+}
+
+fn yaml_error_line(message: &str) -> Option<usize> {
+    message
+        .rsplit_once(" at ")
+        .and_then(|(_, location)| location.split_once(':'))
+        .and_then(|(line, _)| line.parse().ok())
+}
+
+fn yaml_path_line(yaml: &str, path: &str) -> Option<usize> {
+    let key = path
+        .rsplit('/')
+        .next()
+        .filter(|segment| !segment.is_empty())?
+        .replace("~1", "/")
+        .replace("~0", "~");
+    yaml.lines()
+        .position(|line| {
+            let trimmed = line.trim_start().trim_start_matches("- ");
+            trimmed.starts_with(&format!("{key}:"))
+        })
+        .map(|line| line + 1)
+}
+
+fn maybe_request_server_validation(
+    editor: &mut YamlEditorWindowState,
+    commands_to_send: &mut Vec<WorkerCommand>,
+) {
+    if editor
+        .validation_due
+        .is_some_and(|due| due <= Instant::now())
+    {
+        editor.validation_due = None;
+        editor.server_validation = ValidationState::Pending;
+        commands_to_send.push(WorkerCommand::ValidateResourceYaml {
+            editor_id: editor.id,
+            revision: editor.validation_revision,
+            cluster_key: editor.cluster_key,
+            api_resource: editor.api_resource.clone(),
+            namespace: editor.namespace.clone(),
+            resource_name: editor.resource_name.clone(),
+            yaml: editor.edited_yaml.clone(),
+        });
+    }
+}
+
+fn show_diagnostics(ui: &mut egui::Ui, editor: &YamlEditorWindowState) {
+    if editor.diagnostics.is_empty() {
+        match &editor.server_validation {
+            ValidationState::Pending => {
+                status_indicator(ui, gray::_400, "Validating with cluster…")
+            }
+            ValidationState::Valid => status_indicator(ui, status::SUCCESS, "Validated by cluster"),
+            ValidationState::Failed(message) => error_strip(ui, message),
+            ValidationState::Idle => {
+                if editor.schema_loading {
+                    status_indicator(ui, gray::_400, "Loading Kubernetes schema…");
+                }
+            }
+        }
+        return;
+    }
+    egui::CollapsingHeader::new(format!("{} diagnostics", editor.diagnostics.len()))
+        .default_open(true)
+        .show(ui, |ui| {
+            for diagnostic in &editor.diagnostics {
+                let location = diagnostic
+                    .line
+                    .map(|line| format!("Line {line}: "))
+                    .unwrap_or_default();
+                ui.label(
+                    egui::RichText::new(format!("{location}{}", diagnostic.message))
+                        .font(typography::metadata())
+                        .color(status::DANGER),
+                );
+            }
+        });
+}
+
+fn has_diagnostics_feedback(editor: &YamlEditorWindowState) -> bool {
+    !editor.diagnostics.is_empty()
+        || editor.schema_loading
+        || !matches!(editor.server_validation, ValidationState::Idle)
 }
 
 fn apply_editor(editor: &mut YamlEditorWindowState, commands_to_send: &mut Vec<WorkerCommand>) {
@@ -335,7 +917,9 @@ fn show_discard_confirmation(ctx: &egui::Context, editor: &mut YamlEditorWindowS
 mod tests {
     use super::*;
     use crate::api_resource::ApiResource;
-    use egui_kittest::Harness;
+    use crate::resource_schema::{CompletionSuggestion, ResourceSchema};
+    use egui_kittest::{Harness, SnapshotOptions};
+    use k8s_openapi::serde_json::json;
 
     #[test]
     fn yaml_highlighting_uses_the_yaml_language() {
@@ -383,6 +967,313 @@ mod tests {
         snapshot_editor(editor, "yaml_editor/discard_confirmation");
     }
 
+    #[test]
+    fn yaml_editor_completion_snapshot() {
+        let mut editor = editor("apiVersion: v1\nkind: ConfigMap\nmet");
+        editor.suggestions = vec![
+            CompletionSuggestion {
+                label: "metadata".into(),
+                type_label: Some("object".into()),
+                detail: Some("Object metadata including the resource name and labels.".into()),
+            },
+            CompletionSuggestion {
+                label: "immutable".into(),
+                type_label: Some("boolean".into()),
+                detail: Some("Whether the ConfigMap can change after it has been created.".into()),
+            },
+        ];
+        editor.suggestions_visible = true;
+        editor.validation_revision = 1;
+        snapshot_editor(editor, "yaml_editor/completion");
+    }
+
+    #[test]
+    fn yaml_editor_value_completion_snapshot() {
+        let mut editor = editor("mode: Read");
+        let schema = ResourceSchema::new(json!({
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "type": "string",
+                    "enum": ["ReadOnly", "ReadWrite"]
+                }
+            }
+        }));
+        editor.suggestions = schema.suggestions_at(&editor.edited_yaml, editor.edited_yaml.len());
+        editor.schema = Some(schema);
+        editor.suggestions_visible = true;
+        editor.validation_revision = 1;
+
+        assert_eq!(
+            editor
+                .suggestions
+                .iter()
+                .map(|suggestion| suggestion.label.as_str())
+                .collect::<Vec<_>>(),
+            vec!["ReadOnly", "ReadWrite"],
+        );
+        snapshot_editor(editor, "yaml_editor/value_completion");
+    }
+
+    #[test]
+    fn yaml_editor_deep_array_value_completion_snapshot() {
+        let yaml = "spec:\n  templates:\n    - spec:\n        containers:\n          - imagePullPolicy: Al";
+        let mut editor = editor(yaml);
+        let schema = ResourceSchema::new(json!({
+            "type": "object",
+            "properties": {
+                "spec": {"type": "object", "properties": {
+                    "templates": {"type": "array", "items": {"type": "object", "properties": {
+                        "spec": {"type": "object", "properties": {
+                            "containers": {"type": "array", "items": {"type": "object", "properties": {
+                                "imagePullPolicy": {
+                                    "type": "string",
+                                    "enum": ["Always", "IfNotPresent", "Never"]
+                                }
+                            }}}
+                        }}
+                    }}}
+                }}
+            }
+        }));
+        editor.suggestions = schema.suggestions_at(&editor.edited_yaml, editor.edited_yaml.len());
+        editor.schema = Some(schema);
+        editor.suggestions_visible = true;
+        editor.validation_revision = 1;
+
+        assert_eq!(editor.suggestions[0].label, "Always");
+        snapshot_editor(editor, "yaml_editor/deep_array_value_completion");
+    }
+
+    #[test]
+    fn yaml_editor_completion_keyboard_navigation_snapshot() {
+        let mut editor = editor("alpha\nbeta");
+        editor.suggestions = many_suggestions(128);
+        editor.suggestions_visible = true;
+        editor.validation_revision = 1;
+        let mut harness = editor_harness(editor);
+
+        for _ in 0..16 {
+            harness.key_press(egui::Key::ArrowDown);
+            harness.run();
+        }
+        for _ in 0..4 {
+            harness.key_press(egui::Key::ArrowUp);
+            harness.run();
+        }
+
+        assert_eq!(harness.state().editor.suggestion_selection, 12);
+        assert_eq!(harness.state().editor.suggestions[12].label, "field-012",);
+        harness.snapshot("yaml_editor/completion_keyboard_navigation");
+    }
+
+    #[test]
+    fn yaml_editor_completion_bottom_right_caret_snapshot() {
+        let yaml = format!("{}deep: {}", "filler: value\n".repeat(48), "x".repeat(160));
+        snapshot_completion_at_focused_caret(&yaml, "yaml_editor/completion_bottom_right_caret");
+    }
+
+    #[test]
+    fn yaml_editor_completion_top_left_caret_snapshot() {
+        let mut editor = editor("mode: Read");
+        editor.suggestions = vec![CompletionSuggestion {
+            label: "ReadOnly".into(),
+            type_label: Some("enum".into()),
+            detail: Some("allowed value".into()),
+        }];
+        editor.suggestions_visible = true;
+        editor.validation_revision = 1;
+        let mut harness = editor_harness(editor);
+        let ctx = harness
+            .state()
+            .ctx
+            .clone()
+            .expect("editor context is available");
+        let text_edit_id = yaml_editor_text_edit_id(harness.state().editor.id);
+        set_editor_caret(&ctx, text_edit_id, "mode: Read".chars().count());
+
+        harness.run();
+        harness.snapshot("yaml_editor/focused_caret");
+    }
+
+    #[test]
+    fn yaml_editor_completion_top_right_caret_snapshot() {
+        let yaml = format!("mode: {}", "x".repeat(160));
+        snapshot_completion_at_focused_caret(&yaml, "yaml_editor/completion_top_right_caret");
+    }
+
+    #[test]
+    fn yaml_editor_completion_bottom_left_caret_snapshot() {
+        let yaml = format!("{}mode: Read", "filler: value\n".repeat(48));
+        snapshot_completion_at_focused_caret(&yaml, "yaml_editor/completion_bottom_left_caret");
+    }
+
+    #[test]
+    fn completion_navigation_moves_the_popup_selection_without_moving_the_editor_caret() {
+        let mut editor = editor("alpha\nbeta");
+        editor.suggestions = many_suggestions(3);
+        editor.suggestions_visible = true;
+        let mut harness = editor_harness(editor);
+        let ctx = harness
+            .state()
+            .ctx
+            .clone()
+            .expect("editor context is available");
+        let text_edit_id = yaml_editor_text_edit_id(harness.state().editor.id);
+        set_editor_caret(&ctx, text_edit_id, 2);
+
+        harness.key_press(egui::Key::ArrowDown);
+        harness.run();
+
+        assert_eq!(harness.state().editor.suggestion_selection, 1);
+        assert_eq!(editor_caret(&ctx, text_edit_id), 2);
+    }
+
+    #[test]
+    fn filtering_keeps_the_selected_suggestion_when_it_remains_available() {
+        let mut editor = editor("m");
+        let schema = ResourceSchema::new(json!({
+            "type": "object",
+            "properties": {
+                "metadata": {"type": "object"},
+                "xmetadata": {"type": "object"},
+                "immutable": {"type": "boolean"}
+            }
+        }));
+        editor.suggestions = schema.suggestions_at(&editor.edited_yaml, editor.edited_yaml.len());
+        editor.suggestion_selection = editor
+            .suggestions
+            .iter()
+            .position(|suggestion| suggestion.label == "xmetadata")
+            .expect("xmetadata is initially suggested");
+        editor.suggestions_visible = true;
+        editor.schema = Some(schema);
+        let mut harness = editor_harness(editor);
+        let ctx = harness
+            .state()
+            .ctx
+            .clone()
+            .expect("editor context is available");
+        let text_edit_id = yaml_editor_text_edit_id(harness.state().editor.id);
+        set_editor_caret(&ctx, text_edit_id, 1);
+
+        harness.event(egui::Event::Text("eta".into()));
+        harness.run();
+
+        let editor = &harness.state().editor;
+        assert_eq!(editor.edited_yaml, "meta");
+        assert_eq!(
+            editor.suggestions[editor.suggestion_selection].label,
+            "xmetadata"
+        );
+        assert!(
+            editor
+                .suggestions
+                .iter()
+                .all(|suggestion| suggestion.label != "immutable")
+        );
+    }
+
+    #[test]
+    fn enter_applies_the_selected_fuzzy_matched_value_completion() {
+        let mut editor = editor("mode: ");
+        editor.schema = Some(ResourceSchema::new(json!({
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "type": "string",
+                    "enum": ["ReadOnly", "ReadWrite", "WriteOnly"]
+                }
+            }
+        })));
+        let mut harness = editor_harness(editor);
+        let ctx = harness
+            .state()
+            .ctx
+            .clone()
+            .expect("editor context is available");
+        let text_edit_id = yaml_editor_text_edit_id(harness.state().editor.id);
+        set_editor_caret(&ctx, text_edit_id, "mode: ".chars().count());
+
+        harness.event(egui::Event::Text("rw".into()));
+        harness.run();
+
+        assert_eq!(harness.state().editor.edited_yaml, "mode: rw");
+        assert_eq!(harness.state().editor.suggestions.len(), 1);
+        assert_eq!(harness.state().editor.suggestions[0].label, "ReadWrite");
+
+        harness.key_press(egui::Key::Enter);
+        harness.run();
+
+        assert_eq!(harness.state().editor.edited_yaml, "mode: ReadWrite");
+        assert!(!harness.state().editor.suggestions_visible);
+        assert_eq!(
+            editor_caret(&ctx, text_edit_id),
+            "mode: ReadWrite".chars().count()
+        );
+    }
+
+    #[test]
+    fn description_preview_is_bounded_and_marks_truncation() {
+        assert_eq!(description_preview(Some("short")), "short");
+        assert_eq!(
+            description_preview(Some(
+                "a description that is deliberately longer than forty characters"
+            )),
+            "a description that is deliberately l…"
+        );
+    }
+
+    #[test]
+    fn completion_popup_flips_and_clamps_at_each_viewport_edge() {
+        let viewport = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(1600.0, 900.0));
+        let top_left = egui::Rect::from_min_size(egui::pos2(20.0, 20.0), egui::vec2(2.0, 18.0));
+        let top_right = egui::Rect::from_min_size(egui::pos2(1580.0, 20.0), egui::vec2(2.0, 18.0));
+        let bottom_left = egui::Rect::from_min_size(egui::pos2(20.0, 870.0), egui::vec2(2.0, 18.0));
+        let bottom_right =
+            egui::Rect::from_min_size(egui::pos2(1580.0, 870.0), egui::vec2(2.0, 18.0));
+
+        let top_left_position =
+            completion_popup_position(viewport, top_left, COMPLETION_POPUP_MAX_HEIGHT);
+        let top_right_position =
+            completion_popup_position(viewport, top_right, COMPLETION_POPUP_MAX_HEIGHT);
+        let bottom_left_position =
+            completion_popup_position(viewport, bottom_left, COMPLETION_POPUP_MAX_HEIGHT);
+        let bottom_right_position =
+            completion_popup_position(viewport, bottom_right, COMPLETION_POPUP_MAX_HEIGHT);
+
+        for position in [
+            top_left_position,
+            top_right_position,
+            bottom_left_position,
+            bottom_right_position,
+        ] {
+            assert!(position.x >= spacing::MD);
+            assert!(position.x + COMPLETION_POPUP_WIDTH <= viewport.right() - spacing::MD);
+            assert!(position.y >= spacing::MD);
+            assert!(position.y + COMPLETION_POPUP_MAX_HEIGHT <= viewport.bottom() - spacing::MD);
+        }
+        assert!(top_left_position.y >= top_left.bottom());
+        assert!(top_right_position.x < top_right.left());
+        assert!(bottom_left_position.y < bottom_left.top());
+        assert!(bottom_right_position.x < bottom_right.left());
+        assert!(bottom_right_position.y < bottom_right.top());
+        assert_eq!(completion_popup_height(3), 200.0);
+        assert_eq!(completion_popup_height(128), COMPLETION_POPUP_MAX_HEIGHT);
+    }
+
+    #[test]
+    fn yaml_editor_diagnostics_snapshot() {
+        let mut editor = editor("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: settings");
+        editor.validation_revision = 1;
+        editor.diagnostics = vec![SchemaDiagnostic {
+            path: "/metadata/name".into(),
+            message: "\"settings\" is not an allowed value".into(),
+            line: Some(4),
+        }];
+        snapshot_editor(editor, "yaml_editor/diagnostics");
+    }
+
     fn editor(yaml: &str) -> YamlEditorWindowState {
         YamlEditorWindowState {
             id: 1,
@@ -404,6 +1295,15 @@ mod tests {
             close_requested: false,
             confirm_discard: false,
             focus_requested: false,
+            schema: None,
+            schema_loading: false,
+            diagnostics: Vec::new(),
+            server_validation: ValidationState::Idle,
+            validation_revision: 0,
+            validation_due: None,
+            suggestions: Vec::new(),
+            suggestions_visible: false,
+            suggestion_selection: 0,
         }
     }
 
@@ -418,6 +1318,7 @@ mod tests {
             SnapshotState {
                 editor,
                 commands: Vec::new(),
+                ctx: None,
             },
         );
         components::test_support::setup_egui(&mut harness);
@@ -429,5 +1330,72 @@ mod tests {
     struct SnapshotState {
         editor: YamlEditorWindowState,
         commands: Vec<WorkerCommand>,
+        ctx: Option<egui::Context>,
+    }
+
+    fn editor_harness(editor: YamlEditorWindowState) -> Harness<'static, SnapshotState> {
+        let mut harness = Harness::builder().build_state(
+            |ctx, state: &mut SnapshotState| {
+                state.ctx = Some(ctx.clone());
+                show_editor_window(ctx, &mut state.editor, &mut state.commands);
+            },
+            SnapshotState {
+                editor,
+                commands: Vec::new(),
+                ctx: None,
+            },
+        );
+        components::test_support::setup_egui(&mut harness);
+        harness.run();
+        harness
+    }
+
+    fn many_suggestions(count: usize) -> Vec<CompletionSuggestion> {
+        (0..count)
+            .map(|index| CompletionSuggestion {
+                label: format!("field-{index:03}"),
+                type_label: Some("string".into()),
+                detail: Some(format!("Documentation for field {index:03}.")),
+            })
+            .collect()
+    }
+
+    fn snapshot_completion_at_focused_caret(yaml: &str, name: &str) {
+        let mut editor = editor(yaml);
+        editor.suggestions = many_suggestions(3);
+        editor.suggestions_visible = true;
+        editor.validation_revision = 1;
+        let mut harness = editor_harness(editor);
+        let ctx = harness
+            .state()
+            .ctx
+            .clone()
+            .expect("editor context is available");
+        let text_edit_id = yaml_editor_text_edit_id(harness.state().editor.id);
+        set_editor_caret(&ctx, text_edit_id, yaml.chars().count());
+
+        harness.run();
+        harness.snapshot_options(
+            name,
+            &SnapshotOptions::new().failed_pixel_count_threshold(1),
+        );
+    }
+
+    fn set_editor_caret(ctx: &egui::Context, id: egui::Id, character_index: usize) {
+        ctx.memory_mut(|memory| memory.request_focus(id));
+        let mut state = egui::widgets::text_edit::TextEditState::load(ctx, id)
+            .expect("text editor state is available");
+        state
+            .cursor
+            .set_char_range(Some(CCursorRange::one(CCursor::new(character_index))));
+        state.store(ctx, id);
+    }
+
+    fn editor_caret(ctx: &egui::Context, id: egui::Id) -> usize {
+        egui::widgets::text_edit::TextEditState::load(ctx, id)
+            .and_then(|state| state.cursor.char_range())
+            .expect("editor caret is available")
+            .primary
+            .index
     }
 }

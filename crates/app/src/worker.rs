@@ -1,13 +1,14 @@
 use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::{
-    Cluster, ClusterConnection, apply_resource_yaml, delete_resource, get_resource_yaml,
-    reload_kubeconfig, restart_deployment, start_cluster_connection, start_resource_watcher,
-    update_resource_data, watch_resource_detail,
+    Cluster, ClusterConnection, apply_resource_yaml, delete_resource, get_resource_schema,
+    get_resource_yaml, reload_kubeconfig, restart_deployment, start_cluster_connection,
+    start_resource_watcher, update_resource_data, validate_resource_yaml, watch_resource_detail,
 };
 use crate::helpers::ResultExt;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use crate::resource_detail::{ManagedResource, ResourceDetail, ResourceEvent};
+use crate::resource_schema::ResourceSchema;
 use crate::resource_table::CustomResourceColumn;
 use anyhow::Error;
 use futures_util::{AsyncBufReadExt, TryStreamExt};
@@ -182,6 +183,20 @@ pub enum WorkerCommand {
         resource_name: String,
         yaml: String,
     },
+    LoadResourceSchema {
+        editor_id: u64,
+        cluster_key: i32,
+        api_resource: ApiResource,
+    },
+    ValidateResourceYaml {
+        editor_id: u64,
+        revision: u64,
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: Option<String>,
+        resource_name: String,
+        yaml: String,
+    },
     UpdateResourceData {
         cluster_key: i32,
         api_resource: ApiResource,
@@ -249,6 +264,10 @@ pub enum WorkerResult {
     KubernetesCustomResourceColumnsLoaded {
         cluster_key: i32,
         columns: std::collections::BTreeMap<ApiResource, Vec<CustomResourceColumn>>,
+    },
+    KubernetesResourceSchemasLoaded {
+        cluster_key: i32,
+        schemas: std::collections::BTreeMap<ApiResource, ResourceSchema>,
     },
     KubernetesApisLoadFailed {
         cluster_key: i32,
@@ -336,6 +355,20 @@ pub enum WorkerResult {
         namespace: Option<String>,
         resource_name: String,
         yaml: String,
+    },
+    ResourceSchemaLoaded {
+        editor_id: u64,
+        cluster_key: i32,
+        api_resource: ApiResource,
+        schema: ResourceSchema,
+    },
+    ResourceYamlValidated {
+        editor_id: u64,
+        revision: u64,
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: Option<String>,
+        resource_name: String,
     },
     /// Resource was successfully deleted
     ResourceDeleteCompleted {
@@ -544,6 +577,27 @@ impl WorkerRuntime {
                     ))
                 }
             }
+            WorkerCommand::LoadResourceSchema {
+                editor_id,
+                cluster_key,
+                api_resource,
+            } => {
+                let clients = shared.clients.read().await;
+                if let Some(client) = clients.get(cluster_key) {
+                    get_resource_schema(
+                        *editor_id,
+                        *cluster_key,
+                        client.clone(),
+                        api_resource.clone(),
+                    )
+                    .await
+                } else {
+                    Err(anyhow::anyhow!(
+                        "No client found for cluster_key {}",
+                        cluster_key
+                    ))
+                }
+            }
             WorkerCommand::DeleteResource {
                 cluster_key,
                 api_resource,
@@ -600,6 +654,35 @@ impl WorkerRuntime {
                 if let Some(client) = clients.get(cluster_key) {
                     apply_resource_yaml(
                         *editor_id,
+                        *cluster_key,
+                        client.clone(),
+                        api_resource.clone(),
+                        namespace.clone(),
+                        resource_name.clone(),
+                        yaml.clone(),
+                    )
+                    .await
+                } else {
+                    Err(anyhow::anyhow!(
+                        "No client found for cluster_key {}",
+                        cluster_key
+                    ))
+                }
+            }
+            WorkerCommand::ValidateResourceYaml {
+                editor_id,
+                revision,
+                cluster_key,
+                api_resource,
+                namespace,
+                resource_name,
+                yaml,
+            } => {
+                let clients = shared.clients.read().await;
+                if let Some(client) = clients.get(cluster_key) {
+                    validate_resource_yaml(
+                        *editor_id,
+                        *revision,
                         *cluster_key,
                         client.clone(),
                         api_resource.clone(),

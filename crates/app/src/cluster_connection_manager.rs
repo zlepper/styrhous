@@ -8,12 +8,14 @@ use crate::resource_detail::{
     ResourceOwner,
 };
 use crate::resource_handlers;
+use crate::resource_schema::ResourceSchema;
 use crate::resource_table::{CellValue, CustomResourceColumn};
 use crate::worker::{WorkerResult, WorkerResultSender};
 use anyhow::{Context, Result, bail};
 use futures_util::future::try_join_all;
 use futures_util::pin_mut;
 use futures_util::stream::StreamExt;
+use http::Request;
 use itertools::Itertools;
 use k8s_openapi::api::apps::v1::{Deployment, ReplicaSet};
 use k8s_openapi::api::batch::v1::Job;
@@ -133,6 +135,12 @@ impl ClusterConnection {
                                 columns: inspection.custom_resource_columns,
                             })
                             .log_if_error("Failed to send custom resource columns");
+                        event_output
+                            .send(WorkerResult::KubernetesResourceSchemasLoaded {
+                                cluster_key,
+                                schemas: inspection.resource_schemas,
+                            })
+                            .log_if_error("Failed to send custom resource schemas");
                     }
                 }
             }
@@ -155,6 +163,7 @@ struct KubernetesApiInspector {
 struct ApiInspection {
     api_resources: Vec<ApiResource>,
     custom_resource_columns: BTreeMap<ApiResource, Vec<CustomResourceColumn>>,
+    resource_schemas: BTreeMap<ApiResource, ResourceSchema>,
 }
 
 impl KubernetesApiInspector {
@@ -248,51 +257,70 @@ impl KubernetesApiInspector {
             .collect_vec();
         resources.extend(core_resources);
 
-        let custom_resource_columns = self.custom_resource_columns().await;
+        let (custom_resource_columns, resource_schemas) = self.custom_resource_metadata().await;
         Ok(ApiInspection {
             api_resources: resources,
             custom_resource_columns,
+            resource_schemas,
         })
     }
 
-    async fn custom_resource_columns(&self) -> BTreeMap<ApiResource, Vec<CustomResourceColumn>> {
+    async fn custom_resource_metadata(
+        &self,
+    ) -> (
+        BTreeMap<ApiResource, Vec<CustomResourceColumn>>,
+        BTreeMap<ApiResource, ResourceSchema>,
+    ) {
         let crds = Api::<CustomResourceDefinition>::all(self.client.clone());
         let Ok(crds) = crds.list(&Default::default()).await else {
             // Access to CRDs is commonly restricted. Dynamic resources still work without
             // their optional columns, so do not fail API discovery in that case.
-            return BTreeMap::new();
+            return (BTreeMap::new(), BTreeMap::new());
         };
 
-        crds.items
-            .iter()
-            .flat_map(|crd| {
-                let spec = &crd.spec;
-                spec.versions.iter().filter_map(move |version| {
-                    version.additional_printer_columns.as_ref().map(|columns| {
-                        (
-                            ApiResource {
-                                group: spec.group.clone(),
-                                version: version.name.clone(),
-                                kind: spec.names.kind.clone(),
-                                name: spec.names.plural.clone(),
-                                namespaced: spec.scope == "Namespaced",
-                            },
-                            columns
-                                .iter()
-                                .enumerate()
-                                .map(|(index, column)| CustomResourceColumn {
-                                    id: format!("crd-{index}"),
-                                    label: column.name.clone(),
-                                    json_path: column.json_path.clone(),
-                                    type_: column.type_.clone(),
-                                    format: column.format.clone(),
-                                })
-                                .collect(),
-                        )
-                    })
-                })
-            })
-            .collect()
+        let mut columns_by_resource = BTreeMap::new();
+        let mut schemas_by_resource = BTreeMap::new();
+        for crd in &crds.items {
+            let spec = &crd.spec;
+            for version in &spec.versions {
+                let api_resource = ApiResource {
+                    group: spec.group.clone(),
+                    version: version.name.clone(),
+                    kind: spec.names.kind.clone(),
+                    name: spec.names.plural.clone(),
+                    namespaced: spec.scope == "Namespaced",
+                };
+                if let Some(columns) = &version.additional_printer_columns {
+                    columns_by_resource.insert(
+                        api_resource.clone(),
+                        columns
+                            .iter()
+                            .enumerate()
+                            .map(|(index, column)| CustomResourceColumn {
+                                id: format!("crd-{index}"),
+                                label: column.name.clone(),
+                                json_path: column.json_path.clone(),
+                                type_: column.type_.clone(),
+                                format: column.format.clone(),
+                            })
+                            .collect(),
+                    );
+                }
+                if let Some(schema) = version
+                    .schema
+                    .as_ref()
+                    .and_then(|schema| schema.open_api_v3_schema.as_ref())
+                    && let Ok(root) = k8s_openapi::serde_json::to_value(schema)
+                {
+                    schemas_by_resource.insert(api_resource, ResourceSchema::new(root));
+                }
+            }
+        }
+        (columns_by_resource, schemas_by_resource)
+    }
+
+    async fn custom_resource_columns(&self) -> BTreeMap<ApiResource, Vec<CustomResourceColumn>> {
+        self.custom_resource_metadata().await.0
     }
 }
 
@@ -1856,6 +1884,91 @@ pub async fn get_resource_yaml(
         namespace,
         resource_name,
         yaml,
+    })
+}
+
+/// Fetch the OpenAPI v3 group-version document and return the schema for one built-in resource.
+/// CRD schemas are sent with API discovery, so this path is only used as a lazy fallback.
+pub async fn get_resource_schema(
+    editor_id: u64,
+    cluster_key: i32,
+    client: kube::Client,
+    api_resource: ApiResource,
+) -> Result<WorkerResult> {
+    let group_version = if api_resource.group == "core" {
+        format!("api/{}", api_resource.version)
+    } else {
+        format!("apis/{}/{}", api_resource.group, api_resource.version)
+    };
+    let index: k8s_openapi::serde_json::Value = client
+        .request(Request::builder().uri("/openapi/v3").body(Vec::new())?)
+        .await?;
+    let path = index
+        .get("paths")
+        .and_then(|paths| {
+            paths
+                .get(&group_version)
+                .or_else(|| paths.get(format!("/{group_version}")))
+        })
+        .and_then(|entry| entry.get("serverRelativeURL"))
+        .and_then(k8s_openapi::serde_json::Value::as_str)
+        .ok_or_else(|| anyhow::anyhow!("No OpenAPI v3 schema is available for {group_version}"))?;
+    let document: k8s_openapi::serde_json::Value = client
+        .request(Request::builder().uri(path).body(Vec::new())?)
+        .await?;
+    let schema = ResourceSchema::from_openapi_document(document, &api_resource)
+        .ok_or_else(|| anyhow::anyhow!("No OpenAPI schema matches {}", api_resource.kind))?;
+    Ok(WorkerResult::ResourceSchemaLoaded {
+        editor_id,
+        cluster_key,
+        api_resource,
+        schema,
+    })
+}
+
+/// Validate the same server-side apply request used by Save without persisting a change.
+pub async fn validate_resource_yaml(
+    editor_id: u64,
+    revision: u64,
+    cluster_key: i32,
+    client: kube::Client,
+    api_resource: ApiResource,
+    namespace: Option<String>,
+    resource_name: String,
+    yaml: String,
+) -> Result<WorkerResult> {
+    let mut obj: DynamicObject = serde_yaml::from_str(&yaml)?;
+    if let Some(metadata) = obj.data.get_mut("metadata")
+        && let Some(meta_obj) = metadata.as_object_mut()
+    {
+        for field in [
+            "managedFields",
+            "resourceVersion",
+            "uid",
+            "creationTimestamp",
+        ] {
+            meta_obj.remove(field);
+        }
+    }
+    obj.metadata.managed_fields = None;
+    obj.metadata.resource_version = None;
+    obj.metadata.uid = None;
+    obj.metadata.creation_timestamp = None;
+
+    let api = create_dynamic_api(&client, &api_resource, namespace.as_deref()).await?;
+    let params = kube::api::PatchParams::apply("kubernetes-dev-ui")
+        .force()
+        .validation(kube::api::ValidationDirective::Strict)
+        .dry_run();
+    api.patch(&resource_name, &params, &kube::api::Patch::Apply(&obj))
+        .await?;
+    Ok(WorkerResult::ResourceYamlValidated {
+        editor_id,
+        revision,
+        cluster_key,
+        api_resource,
+        namespace,
+        resource_name,
     })
 }
 
