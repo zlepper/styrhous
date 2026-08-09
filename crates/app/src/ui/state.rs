@@ -10,6 +10,7 @@ use crate::resource_detail::{
 use crate::resource_table::CustomResourceColumn;
 use crate::sorted_name::SortedName;
 use crate::worker::{WorkerResult, WorkerTrait};
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::time::Instant;
 use tracing::{error, info};
@@ -21,6 +22,24 @@ pub(super) struct UiState {
     pub(super) selected_cluster: Option<i32>,
     pub(super) log_windows: BTreeMap<u64, PodLogWindowState>,
     pub(super) next_log_window_id: u64,
+    pub(super) log_display_options: LogDisplayOptions,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+pub(super) struct LogDisplayOptions {
+    pub(super) show_line_numbers: bool,
+    pub(super) show_timestamps: bool,
+    pub(super) render_ansi: bool,
+}
+
+impl Default for LogDisplayOptions {
+    fn default() -> Self {
+        Self {
+            show_line_numbers: false,
+            show_timestamps: false,
+            render_ansi: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1702,6 +1721,7 @@ mod tests {
         LogPageRow {
             display_row,
             line_index: display_row,
+            timestamp: None,
             text: text.to_owned(),
             style_spans: Vec::new(),
             match_ranges: Vec::new(),

@@ -4,7 +4,7 @@
 //! owns the API stream; the UI forwards its bounded batches here and consumes
 //! this service's paged results.
 
-use crate::ansi::{AnsiStyleSpan, parse_log_line};
+use crate::ansi::{AnsiStyleSpan, parse_kubernetes_log_line};
 use regex::Regex;
 use std::collections::HashMap;
 use std::fs::File;
@@ -39,6 +39,7 @@ impl Default for LogStoreConfig {
 pub(crate) struct LogPageRow {
     pub(crate) display_row: usize,
     pub(crate) line_index: usize,
+    pub(crate) timestamp: Option<String>,
     pub(crate) text: String,
     pub(crate) style_spans: Vec<AnsiStyleSpan>,
     pub(crate) match_ranges: Vec<(usize, usize)>,
@@ -525,10 +526,10 @@ impl LogStore {
             data.write_all(&length.to_le_bytes())?;
             data.write_all(bytes)?;
             next_offset += u64::from(length) + 4;
-            let visible_line = parse_log_line(line);
+            let visible_line = parse_kubernetes_log_line(line);
             if completed_matcher
                 .as_ref()
-                .is_some_and(|matcher| matcher.is_match(&visible_line.text))
+                .is_some_and(|matcher| matcher.is_match(&visible_line.line.text))
             {
                 matching_line_indices.push(first_line_index + relative_line_index);
             }
@@ -651,7 +652,7 @@ impl LogStore {
         // here before the index becomes visible.
         for line_index in scanned_lines..self.total_lines {
             let line = self.read_line(line_index)?;
-            if matcher.is_match(&parse_log_line(&line).text) {
+            if matcher.is_match(&parse_kubernetes_log_line(&line).line.text) {
                 tail_matches.push(line_index);
             }
         }
@@ -717,12 +718,12 @@ impl LogStore {
             } else {
                 display_row
             };
-            let parsed = parse_log_line(&self.read_line(line_index)?);
+            let parsed = parse_kubernetes_log_line(&self.read_line(line_index)?);
             let match_ranges = matcher
                 .as_ref()
                 .map(|matcher| {
                     matcher
-                        .find_iter(&parsed.text)
+                        .find_iter(&parsed.line.text)
                         .map(|range| (range.start(), range.end()))
                         .collect()
                 })
@@ -730,8 +731,9 @@ impl LogStore {
             rows.push(LogPageRow {
                 display_row,
                 line_index,
-                text: parsed.text,
-                style_spans: parsed.style_spans,
+                timestamp: parsed.timestamp,
+                text: parsed.line.text,
+                style_spans: parsed.line.style_spans,
                 match_ranges,
             });
         }
@@ -801,7 +803,11 @@ fn scan_records(
         if data.read_exact(&mut bytes).is_err() {
             return;
         }
-        if matcher.is_match(&parse_log_line(&String::from_utf8_lossy(&bytes)).text) {
+        if matcher.is_match(
+            &parse_kubernetes_log_line(&String::from_utf8_lossy(&bytes))
+                .line
+                .text,
+        ) {
             match_lines.push(scanned_lines);
         }
         scanned_lines += 1;

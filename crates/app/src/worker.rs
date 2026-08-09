@@ -704,6 +704,7 @@ async fn stream_pod_logs(
                 &LogParams {
                     container: Some(container),
                     follow: true,
+                    timestamps: true,
                     ..LogParams::default()
                 },
             )

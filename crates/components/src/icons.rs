@@ -132,6 +132,21 @@ pub fn funnel_icon() -> Image<'static> {
     Image::new(include_image!("icons/funnel.svg"))
 }
 
+/// Returns a numbered-list icon for line-number visibility controls.
+pub fn numbered_list_icon() -> Image<'static> {
+    Image::new(include_image!("icons/numbered-list.svg"))
+}
+
+/// Returns a calendar icon for timestamp visibility controls.
+pub fn calendar_days_icon() -> Image<'static> {
+    Image::new(include_image!("icons/calendar-days.svg"))
+}
+
+/// Returns a swatch icon for ANSI styling controls.
+pub fn swatch_icon() -> Image<'static> {
+    Image::new(include_image!("icons/swatch.svg"))
+}
+
 /// Returns an X-mark icon for dismissing overlays and panels.
 pub fn x_mark_icon() -> Image<'static> {
     Image::new(include_image!("icons/x-mark.svg"))

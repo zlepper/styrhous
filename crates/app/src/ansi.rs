@@ -5,6 +5,7 @@
 
 use anstyle::{Ansi256Color, AnsiColor, Color, Effects, RgbColor, Style};
 use anstyle_parse::{DefaultCharAccumulator, Params, Parser, Perform};
+use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct AnsiStyleSpan {
@@ -16,6 +17,29 @@ pub(crate) struct AnsiStyleSpan {
 pub(crate) struct ParsedLogLine {
     pub(crate) text: String,
     pub(crate) style_spans: Vec<AnsiStyleSpan>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ParsedKubernetesLogLine {
+    pub(crate) timestamp: Option<String>,
+    pub(crate) line: ParsedLogLine,
+}
+
+/// Split the optional timestamp Kubernetes prepends when `timestamps=true`
+/// before removing ANSI controls from the log message.
+pub(crate) fn parse_kubernetes_log_line(line: &str) -> ParsedKubernetesLogLine {
+    if let Some((timestamp, message)) = line.split_once(' ')
+        && OffsetDateTime::parse(timestamp, &Rfc3339).is_ok()
+    {
+        return ParsedKubernetesLogLine {
+            timestamp: Some(timestamp.to_owned()),
+            line: parse_log_line(message),
+        };
+    }
+    ParsedKubernetesLogLine {
+        timestamp: None,
+        line: parse_log_line(line),
+    }
 }
 
 pub(crate) fn parse_log_line(line: &str) -> ParsedLogLine {
@@ -318,5 +342,27 @@ mod tests {
 
         assert_eq!(parsed.text, "beforeafter still");
         assert!(parsed.style_spans.is_empty());
+    }
+
+    #[test]
+    fn separates_kubernetes_timestamp_before_parsing_ansi() {
+        let parsed = parse_kubernetes_log_line(
+            "2026-08-08T15:22:17.143Z \u{1b}[33mWARN\u{1b}[0m cache is stale",
+        );
+
+        assert_eq!(
+            parsed.timestamp.as_deref(),
+            Some("2026-08-08T15:22:17.143Z")
+        );
+        assert_eq!(parsed.line.text, "WARN cache is stale");
+        assert_eq!(parsed.line.style_spans.len(), 1);
+    }
+
+    #[test]
+    fn leaves_non_kubernetes_timestamp_lines_unchanged() {
+        let parsed = parse_kubernetes_log_line("not-a-timestamp message");
+
+        assert_eq!(parsed.timestamp, None);
+        assert_eq!(parsed.line.text, "not-a-timestamp message");
     }
 }

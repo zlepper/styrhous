@@ -1,4 +1,4 @@
-use super::state::{LogPageKey, PodLogStatus, PodLogWindowState, UiState};
+use super::state::{LogDisplayOptions, LogPageKey, PodLogStatus, PodLogWindowState, UiState};
 use crate::ansi::AnsiStyleSpan;
 use crate::log_store::LogStoreService;
 use crate::worker::WorkerCommand;
@@ -19,7 +19,9 @@ pub(super) fn show(
 ) {
     let ids = ui_state.log_windows.keys().copied().collect::<Vec<_>>();
     for id in ids {
-        let Some(window) = ui_state.log_windows.get_mut(&id) else {
+        let (log_windows, display_options) =
+            (&mut ui_state.log_windows, &mut ui_state.log_display_options);
+        let Some(window) = log_windows.get_mut(&id) else {
             continue;
         };
         if !window.store_opened {
@@ -39,7 +41,13 @@ pub(super) fn show(
                 .with_min_inner_size(crate::MIN_NATIVE_WINDOW_SIZE),
             |window_ctx, _| {
                 close_requested = window_ctx.input(|input| input.viewport().close_requested());
-                show_log_window(window_ctx, window, log_store, &mut close_requested);
+                show_log_window(
+                    window_ctx,
+                    window,
+                    display_options,
+                    log_store,
+                    &mut close_requested,
+                );
             },
         );
         window.close_requested |= close_requested;
@@ -64,6 +72,7 @@ pub(super) fn show(
 fn show_log_window(
     ctx: &egui::Context,
     window: &mut PodLogWindowState,
+    display_options: &mut LogDisplayOptions,
     log_store: &LogStoreService,
     _close_requested: &mut bool,
 ) {
@@ -109,7 +118,7 @@ fn show_log_window(
                         .color(gray::_600),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    show_log_search_controls(ctx, ui, window, log_store)
+                    show_log_search_controls(ctx, ui, window, display_options, log_store)
                 });
             });
         });
@@ -151,9 +160,11 @@ fn show_log_window(
                         ui.add(
                             egui::Label::new(log_line_layout_job(
                                 row.line_index,
+                                row.timestamp.as_deref(),
                                 &row.text,
                                 &row.style_spans,
                                 &row.match_ranges,
+                                *display_options,
                             ))
                             .extend()
                             .selectable(true),
@@ -201,6 +212,7 @@ fn show_log_search_controls(
     ctx: &egui::Context,
     ui: &mut egui::Ui,
     window: &mut PodLogWindowState,
+    display_options: &mut LogDisplayOptions,
     log_store: &LogStoreService,
 ) {
     let invalid = window.search.error.is_some();
@@ -279,6 +291,48 @@ fn show_log_search_controls(
             },
         )
         .inner;
+    ui.add_space(8.0);
+    let display_controls = ui
+        .allocate_ui_with_layout(
+            egui::vec2(96.0, 34.0),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                egui::Frame::new()
+                    .fill(egui::Color32::WHITE)
+                    .stroke(egui::Stroke::new(1.0, gray::_300))
+                    .corner_radius(egui::CornerRadius::same(6))
+                    .inner_margin(egui::Margin::symmetric(2, 2))
+                    .show(ui, |ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
+                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                            let line_numbers = log_display_toggle_button(
+                                ui,
+                                icons::numbered_list_icon(),
+                                display_options.show_line_numbers,
+                                "Show log line numbers",
+                            );
+                            ui.separator();
+                            let timestamps = log_display_toggle_button(
+                                ui,
+                                icons::calendar_days_icon(),
+                                display_options.show_timestamps,
+                                "Show Kubernetes log timestamps",
+                            );
+                            ui.separator();
+                            let ansi = log_display_toggle_button(
+                                ui,
+                                icons::swatch_icon(),
+                                display_options.render_ansi,
+                                "Render ANSI styling",
+                            );
+                            (line_numbers, timestamps, ansi)
+                        })
+                        .inner
+                    })
+                    .inner
+            },
+        )
+        .inner;
     if navigation.1 {
         advance_log_match(window, log_store, false);
     }
@@ -296,6 +350,15 @@ fn show_log_search_controls(
         window.search.active_display_row = None;
         window.search.scroll_to_display_row = None;
         window.clear_pages();
+    }
+    if display_controls.0 {
+        display_options.show_line_numbers = !display_options.show_line_numbers;
+    }
+    if display_controls.1 {
+        display_options.show_timestamps = !display_options.show_timestamps;
+    }
+    if display_controls.2 {
+        display_options.render_ansi = !display_options.render_ansi;
     }
     sync_search(ctx, window, log_store);
 }
@@ -354,21 +417,25 @@ fn navigation_button(ui: &mut egui::Ui, icon: egui::Image<'static>, label: &str)
 }
 
 fn filter_button(ui: &mut egui::Ui, active: bool) -> bool {
+    log_display_toggle_button(ui, icons::funnel_icon(), active, "Filter to matching lines")
+}
+
+fn log_display_toggle_button(
+    ui: &mut egui::Ui,
+    icon: egui::Image<'static>,
+    active: bool,
+    label: &str,
+) -> bool {
     let response = ui.add_sized(
         egui::Vec2::splat(28.0),
         egui::Button::image(
-            icons::funnel_icon()
-                .fit_to_exact_size(egui::Vec2::splat(14.0))
+            icon.fit_to_exact_size(egui::Vec2::splat(14.0))
                 .tint(gray::_700),
         )
         .frame(false),
     );
     response.widget_info(|| {
-        egui::WidgetInfo::labeled(
-            egui::WidgetType::Checkbox,
-            ui.is_enabled(),
-            "Filter to matching lines",
-        )
+        egui::WidgetInfo::labeled(egui::WidgetType::Checkbox, ui.is_enabled(), label)
     });
     if active {
         let center = response.rect.right_bottom() - egui::vec2(3.5, 3.5);
@@ -382,9 +449,7 @@ fn filter_button(ui: &mut egui::Ui, active: bool) -> bool {
             egui::Color32::WHITE,
         );
     }
-    response
-        .on_hover_text("Show only lines matching the search")
-        .clicked()
+    response.on_hover_text(label).clicked()
 }
 
 fn filter_is_active(window: &PodLogWindowState) -> bool {
@@ -401,9 +466,11 @@ fn displayed_line_count(window: &PodLogWindowState) -> usize {
 
 fn log_line_layout_job(
     line_index: usize,
+    timestamp: Option<&str>,
     line: &str,
     style_spans: &[AnsiStyleSpan],
     ranges: &[(usize, usize)],
+    display_options: LogDisplayOptions,
 ) -> egui::text::LayoutJob {
     let mut job = egui::text::LayoutJob::default();
     let number = egui::TextFormat {
@@ -416,7 +483,14 @@ fn log_line_layout_job(
         color: egui::Color32::from_rgb(229, 231, 235),
         ..Default::default()
     };
-    job.append(&format!("{line_index:>6}  "), 0.0, number);
+    if display_options.show_line_numbers {
+        job.append(&format!("{line_index:>6}  "), 0.0, number.clone());
+    }
+    if display_options.show_timestamps
+        && let Some(timestamp) = timestamp
+    {
+        job.append(&format!("{timestamp}  "), 0.0, number);
+    }
     let mut boundaries = Vec::with_capacity(2 + style_spans.len() * 2 + ranges.len() * 2);
     boundaries.extend([0, line.len()]);
     boundaries.extend(
@@ -433,10 +507,15 @@ fn log_line_layout_job(
         if start == end {
             continue;
         }
-        let style = style_spans
-            .iter()
-            .find(|span| span.range.0 <= start && start < span.range.1)
-            .map(|span| span.style);
+        let style = display_options
+            .render_ansi
+            .then(|| {
+                style_spans
+                    .iter()
+                    .find(|span| span.range.0 <= start && start < span.range.1)
+                    .map(|span| span.style)
+            })
+            .flatten();
         let mut format = style.map_or_else(|| text.clone(), |style| ansi_text_format(style, &text));
         if ranges
             .iter()
@@ -628,7 +707,9 @@ mod tests {
     use crate::log_store::{LOG_PAGE_SIZE, LogPageRow, LogStoreConfig, LogStoreResult};
     use crate::minimal_resource::PodLogContainer;
     use crate::resource_table::ContainerKind;
-    use egui_kittest::Harness;
+    use egui_kittest::{Harness, kittest::Queryable};
+    use std::cell::RefCell;
+    use std::rc::Rc;
 
     fn log_window(lines: &[&str]) -> PodLogWindowState {
         let mut window = PodLogWindowState {
@@ -662,12 +743,13 @@ mod tests {
                 .iter()
                 .enumerate()
                 .map(|(line_index, text)| {
-                    let parsed = crate::ansi::parse_log_line(text);
+                    let parsed = crate::ansi::parse_kubernetes_log_line(text);
                     LogPageRow {
                         display_row: line_index,
                         line_index,
-                        text: parsed.text,
-                        style_spans: parsed.style_spans,
+                        timestamp: parsed.timestamp,
+                        text: parsed.line.text,
+                        style_spans: parsed.line.style_spans,
                         match_ranges: Vec::new(),
                     }
                 })
@@ -678,7 +760,17 @@ mod tests {
 
     #[test]
     fn layout_highlights_only_matching_segments() {
-        let job = log_line_layout_job(4, "http http", &[], &[(0, 4), (5, 9)]);
+        let job = log_line_layout_job(
+            4,
+            None,
+            "http http",
+            &[],
+            &[(0, 4), (5, 9)],
+            LogDisplayOptions {
+                show_line_numbers: true,
+                ..Default::default()
+            },
+        );
         assert_eq!(job.sections.len(), 4);
         assert_eq!(job.text, "     4  http http");
     }
@@ -690,12 +782,17 @@ mod tests {
             .underline();
         let job = log_line_layout_job(
             0,
+            None,
             "error",
             &[AnsiStyleSpan {
                 range: (0, 5),
                 style,
             }],
             &[(1, 4)],
+            LogDisplayOptions {
+                show_line_numbers: true,
+                ..Default::default()
+            },
         );
 
         assert_eq!(job.text, "     0  error");
@@ -708,6 +805,75 @@ mod tests {
         assert_eq!(
             job.sections[2].format.background,
             egui::Color32::from_rgb(120, 53, 15)
+        );
+    }
+
+    #[test]
+    fn layout_toggles_metadata_and_ansi_styling_independently() {
+        let style = Style::new().fg_color(Some(AnsiColor::Red.into()));
+        let job = log_line_layout_job(
+            4,
+            Some("2026-08-08T15:22:17.143Z"),
+            "error",
+            &[AnsiStyleSpan {
+                range: (0, 5),
+                style,
+            }],
+            &[],
+            LogDisplayOptions {
+                show_line_numbers: true,
+                show_timestamps: true,
+                render_ansi: false,
+            },
+        );
+
+        assert_eq!(job.text, "     4  2026-08-08T15:22:17.143Z  error");
+        assert_eq!(
+            job.sections.last().expect("message section").format.color,
+            egui::Color32::from_rgb(229, 231, 235)
+        );
+    }
+
+    #[test]
+    fn display_toggles_update_the_shared_options() {
+        let window = Rc::new(RefCell::new(log_window(&["api ready"])));
+        let display_options = Rc::new(RefCell::new(LogDisplayOptions::default()));
+        let window_for_ui = window.clone();
+        let display_options_for_ui = display_options.clone();
+        let log_store = LogStoreService::default();
+        let mut close_requested = false;
+        let mut harness = Harness::builder()
+            .with_size(super::super::APP_SNAPSHOT_SIZE)
+            .build(move |ctx| {
+                show_log_window(
+                    ctx,
+                    &mut window_for_ui.borrow_mut(),
+                    &mut display_options_for_ui.borrow_mut(),
+                    &log_store,
+                    &mut close_requested,
+                )
+            });
+        components::test_support::setup_egui(&harness.ctx);
+        harness.run();
+
+        harness
+            .get_by_label("Show log line numbers")
+            .click_accesskit();
+        harness
+            .get_by_label("Show Kubernetes log timestamps")
+            .click_accesskit();
+        harness
+            .get_by_label("Render ANSI styling")
+            .click_accesskit();
+        harness.run();
+
+        assert_eq!(
+            *display_options.borrow(),
+            LogDisplayOptions {
+                show_line_numbers: true,
+                show_timestamps: true,
+                render_ansi: false,
+            }
         );
     }
 
@@ -809,6 +975,14 @@ mod tests {
                     LogPageRow {
                         display_row,
                         line_index,
+                        timestamp: window.pages[&LogPageKey {
+                            generation: 0,
+                            filter_matches: false,
+                            page_start: 0,
+                        }]
+                            .rows[line_index]
+                            .timestamp
+                            .clone(),
                         style_spans,
                         match_ranges: regex::Regex::new("(?i)http")
                             .expect("valid test matcher")
@@ -864,11 +1038,20 @@ mod tests {
 
     fn snapshot_window(window: PodLogWindowState, name: &str) {
         let mut window = window;
+        let mut display_options = LogDisplayOptions::default();
         let log_store = LogStoreService::default();
         let mut close_requested = false;
         let mut harness = Harness::builder()
             .with_size(super::super::APP_SNAPSHOT_SIZE)
-            .build(move |ctx| show_log_window(ctx, &mut window, &log_store, &mut close_requested));
+            .build(move |ctx| {
+                show_log_window(
+                    ctx,
+                    &mut window,
+                    &mut display_options,
+                    &log_store,
+                    &mut close_requested,
+                )
+            });
         components::test_support::setup_egui(&harness.ctx);
         harness.set_size(super::super::APP_SNAPSHOT_SIZE);
         harness.run();

@@ -160,5 +160,6 @@ pub(super) fn oracle_resource_table_state() -> UiState {
         selected_cluster: Some(2),
         log_windows: BTreeMap::new(),
         next_log_window_id: 0,
+        log_display_options: Default::default(),
     }
 }
