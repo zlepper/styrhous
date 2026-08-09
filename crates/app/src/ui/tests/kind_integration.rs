@@ -699,3 +699,114 @@ fn test_resource_actions_integration() {
             .is_err()
     );
 }
+
+/// Verifies that the Deployment action patches the pod template annotation used
+/// by `kubectl rollout restart` against a real Kubernetes API server.
+#[test]
+fn test_deployment_rollout_restart_integration() {
+    let fixture = IntegrationConfigMap::create("deployment-rollout-restart", "anchor", "unused");
+    let deployment_name = "restartable-deployment".to_owned();
+    let runtime = &fixture.runtime;
+    let client = runtime.block_on(async {
+        Client::try_default()
+            .await
+            .expect("Failed to create Kubernetes client")
+    });
+    let deployments: Api<Deployment> = Api::namespaced(client, &fixture.namespace);
+    runtime.block_on(async {
+        deployments
+            .create(
+                &Default::default(),
+                &Deployment {
+                    metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                        name: Some(deployment_name.clone()),
+                        namespace: Some(fixture.namespace.clone()),
+                        ..Default::default()
+                    },
+                    spec: Some(DeploymentSpec {
+                        replicas: Some(1),
+                        selector: LabelSelector {
+                            match_labels: Some(BTreeMap::from([(
+                                "app".to_owned(),
+                                deployment_name.clone(),
+                            )])),
+                            ..Default::default()
+                        },
+                        template: PodTemplateSpec {
+                            metadata: Some(
+                                k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                                    labels: Some(BTreeMap::from([(
+                                        "app".to_owned(),
+                                        deployment_name.clone(),
+                                    )])),
+                                    ..Default::default()
+                                },
+                            ),
+                            spec: Some(PodSpec {
+                                containers: vec![Container {
+                                    name: "pause".to_owned(),
+                                    image: Some("registry.k8s.io/pause:3.10".to_owned()),
+                                    ..Default::default()
+                                }],
+                                ..Default::default()
+                            }),
+                        },
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("Failed to create Deployment");
+    });
+
+    let (mut harness, cluster_key) = connected_kind_harness();
+    wait_for_cluster_data(&mut harness, cluster_key);
+    select_namespace(&mut harness, &fixture.namespace);
+    let deployments_resource = select_resource(&mut harness, "Apps & Containers", "Deployments");
+    wait_for_resource_sync(
+        &mut harness,
+        cluster_key,
+        deployments_resource,
+        &fixture.namespace,
+    );
+    for _ in 0..3 {
+        harness.run();
+    }
+    let actions_label = format!("More actions for {deployment_name}");
+    harness.get_by_label(&actions_label).click_accesskit();
+    harness.run();
+    harness.get_by_label("Restart rollout").click_accesskit();
+    harness.run();
+    harness.get_by_label("Restart rollout").click_accesskit();
+    harness.run();
+
+    wait_for(
+        &mut harness,
+        |_| {
+            runtime
+                .block_on(async { deployments.get(&deployment_name).await })
+                .ok()
+                .and_then(|deployment| {
+                    deployment
+                        .spec
+                        .and_then(|spec| spec.template.metadata)
+                        .and_then(|metadata| metadata.annotations)
+                        .and_then(|annotations| {
+                            annotations
+                                .get("kubectl.kubernetes.io/restartedAt")
+                                .cloned()
+                        })
+                })
+                .filter(|timestamp| {
+                    time::OffsetDateTime::parse(
+                        timestamp,
+                        &time::format_description::well_known::Rfc3339,
+                    )
+                    .is_ok()
+                })
+                .map(|_| ())
+        },
+        10_000,
+    );
+}

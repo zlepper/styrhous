@@ -16,7 +16,7 @@ k8s-openapi = { version = "0.26", features = ["v1_31"] }
 anyhow = "1.0"
 futures-util = "0.3"
 itertools = "0.14"
-time = { version = "0.3", features = ["parsing"] }
+time = { version = "0.3", features = ["formatting", "parsing"] }
 serde_yaml = "0.9"
 serde = { version = "1.0", features = ["derive"] }
 regex = "1.12"

@@ -16,6 +16,8 @@ pub enum ButtonVariant {
     Secondary,
     /// Light indigo background with indigo text
     Soft,
+    /// Solid danger background with white text
+    Danger,
 }
 
 /// Button size preset
@@ -111,6 +113,11 @@ impl<'a> TailwindButton<'a> {
     /// Create a soft button (light indigo background)
     pub fn soft(text: impl Into<WidgetText>) -> Self {
         Self::new(text).variant(ButtonVariant::Soft)
+    }
+
+    /// Create a destructive action button.
+    pub fn danger(text: impl Into<WidgetText>) -> Self {
+        Self::new(text).variant(ButtonVariant::Danger)
     }
 
     /// Set the button variant (color scheme)
@@ -243,6 +250,13 @@ impl<'a> TailwindButton<'a> {
                 indigo::_200, // fill_active
                 indigo::_600, // text_color
                 Stroke::NONE, // stroke
+            ),
+            ButtonVariant::Danger => (
+                crate::design::status::DANGER,
+                crate::design::status::DANGER.gamma_multiply(0.9),
+                crate::design::status::DANGER.gamma_multiply(0.8),
+                WHITE,
+                Stroke::NONE,
             ),
         }
     }

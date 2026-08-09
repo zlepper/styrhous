@@ -1,8 +1,8 @@
 use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::{
     Cluster, ClusterConnection, apply_resource_yaml, delete_resource, get_resource_yaml,
-    reload_kubeconfig, start_cluster_connection, start_resource_watcher, update_resource_data,
-    watch_resource_detail,
+    reload_kubeconfig, restart_deployment, start_cluster_connection, start_resource_watcher,
+    update_resource_data, watch_resource_detail,
 };
 use crate::helpers::ResultExt;
 use crate::minimal_namespace::MinimalNamespace;
@@ -166,6 +166,11 @@ pub enum WorkerCommand {
         cluster_key: i32,
         api_resource: ApiResource,
         namespace: Option<String>,
+        resource_name: String,
+    },
+    RestartDeployment {
+        cluster_key: i32,
+        namespace: String,
         resource_name: String,
     },
     ApplyResourceYaml {
@@ -341,6 +346,12 @@ pub enum WorkerResult {
         cluster_key: i32,
         api_resource: ApiResource,
         namespace: Option<String>,
+        resource_name: String,
+    },
+    /// A Deployment rollout restart patch was accepted by the API server.
+    DeploymentRestartCompleted {
+        cluster_key: i32,
+        namespace: String,
         resource_name: String,
     },
     ResourceDataUpdateCompleted {
@@ -539,6 +550,27 @@ impl WorkerRuntime {
                         *cluster_key,
                         client.clone(),
                         api_resource.clone(),
+                        namespace.clone(),
+                        resource_name.clone(),
+                    )
+                    .await
+                } else {
+                    Err(anyhow::anyhow!(
+                        "No client found for cluster_key {}",
+                        cluster_key
+                    ))
+                }
+            }
+            WorkerCommand::RestartDeployment {
+                cluster_key,
+                namespace,
+                resource_name,
+            } => {
+                let clients = shared.clients.read().await;
+                if let Some(client) = clients.get(cluster_key) {
+                    restart_deployment(
+                        *cluster_key,
+                        client.clone(),
                         namespace.clone(),
                         resource_name.clone(),
                     )

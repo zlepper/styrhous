@@ -1,9 +1,11 @@
 use super::state::UiState;
 use crate::terminal_launcher::TerminalLaunchSettings;
 use crate::worker::WorkerCommand;
-use components::colors::gray;
-use components::design::{status, typography};
-use components::{ErrorDialog, ErrorDialogAction, PointingHand};
+use components::{
+    ConfirmationDialog, ConfirmationDialogAction, ConfirmationDialogKind, ErrorDialog,
+    ErrorDialogAction,
+};
+use std::time::Instant;
 
 pub(super) fn show_delete_confirmation(
     ctx: &egui::Context,
@@ -19,68 +21,126 @@ pub(super) fn show_delete_confirmation(
     let Some(pending) = cluster.pending_delete.clone() else {
         return;
     };
-    let Some(api_resource) = cluster.selected_api_resource.clone() else {
-        return;
-    };
     let cluster_key = cluster.cluster_key;
+    let now = Instant::now();
+    let remaining = pending
+        .confirmation_available_at
+        .saturating_duration_since(now);
+    let confirm_enabled = remaining.is_zero();
+    if !confirm_enabled {
+        ctx.request_repaint_after(remaining);
+    }
+    let seconds = (remaining.as_millis() + 999) / 1_000;
+    let unavailable_message =
+        (!confirm_enabled).then(|| format!("Delete will be available in {seconds} seconds."));
+    let scope_text = pending.namespace.as_deref().map_or_else(
+        || "This will delete the cluster-wide resource.".to_owned(),
+        |namespace| format!("This will delete the resource from namespace {namespace}."),
+    );
+    let action = ConfirmationDialog {
+        id: egui::Id::new("delete-resource-confirmation"),
+        eyebrow: "DELETE RESOURCE",
+        title: "Delete resource?",
+        message: &scope_text,
+        unavailable_message: unavailable_message.as_deref(),
+        cancel_label: "Cancel",
+        confirm_label: &format!("Delete {}", pending.resource_name),
+        kind: ConfirmationDialogKind::Destructive,
+        confirm_enabled,
+    }
+    .show(ctx);
 
-    let mut cancel = false;
-    let mut confirm = false;
-    egui::Window::new("Delete resource?")
-        .collapsible(false)
-        .resizable(false)
-        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
-        .show(ctx, |ui| {
-            ui.set_min_width(320.0);
-            ui.label(
-                egui::RichText::new(format!("Delete {}?", pending.resource_name))
-                    .strong()
-                    .color(gray::_900),
-            );
-            ui.add_space(8.0);
-            let scope_text = pending.namespace.as_deref().map_or_else(
-                || "This will delete the cluster-wide resource.".to_owned(),
-                |namespace| format!("This will delete the resource from namespace {namespace}."),
-            );
-            ui.label(
-                egui::RichText::new(scope_text)
-                    .font(typography::body())
-                    .color(gray::_600),
-            );
-            ui.add_space(16.0);
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui
-                    .add(
-                        egui::Button::new(
-                            egui::RichText::new(format!("Delete {}", pending.resource_name))
-                                .color(egui::Color32::WHITE),
-                        )
-                        .fill(status::DANGER),
-                    )
-                    .with_pointing_hand()
-                    .clicked()
-                {
-                    confirm = true;
-                }
-                if ui.button("Cancel").with_pointing_hand().clicked() {
-                    cancel = true;
-                }
-            });
-        });
-
-    if cancel {
+    if action == ConfirmationDialogAction::Cancel {
         if let Some(cluster) = ui_state.clusters.get_mut(&cluster_id) {
             cluster.pending_delete = None;
         }
-    } else if confirm {
+    } else if action == ConfirmationDialogAction::Confirm {
         commands_to_send.push(WorkerCommand::DeleteResource {
             cluster_key,
-            api_resource,
+            api_resource: pending.api_resource,
             namespace: pending.namespace,
             resource_name: pending.resource_name,
         });
         if let Some(cluster) = ui_state.clusters.get_mut(&cluster_id) {
             cluster.pending_delete = None;
+        }
+    }
+}
+
+pub(super) fn show_deployment_restart_confirmation(
+    ctx: &egui::Context,
+    ui_state: &mut UiState,
+    commands_to_send: &mut Vec<WorkerCommand>,
+) {
+    let Some(cluster_id) = ui_state.selected_cluster else {
+        return;
+    };
+    let Some(cluster) = ui_state.clusters.get(&cluster_id) else {
+        return;
+    };
+    let Some(pending) = cluster.pending_deployment_restart.clone() else {
+        return;
+    };
+    let cluster_key = cluster.cluster_key;
+    let message = format!(
+        "This updates the pod template and starts a rolling replacement of the pods for {} in the {} namespace.",
+        pending.resource_name, pending.namespace
+    );
+    let action = ConfirmationDialog {
+        id: egui::Id::new("restart-deployment-rollout-confirmation"),
+        eyebrow: "DEPLOYMENT",
+        title: "Restart rollout?",
+        message: &message,
+        unavailable_message: None,
+        cancel_label: "Cancel",
+        confirm_label: "Restart rollout",
+        kind: ConfirmationDialogKind::Primary,
+        confirm_enabled: true,
+    }
+    .show(ctx);
+
+    if action == ConfirmationDialogAction::Cancel {
+        if let Some(cluster) = ui_state.clusters.get_mut(&cluster_id) {
+            cluster.pending_deployment_restart = None;
+        }
+    } else if action == ConfirmationDialogAction::Confirm {
+        commands_to_send.push(WorkerCommand::RestartDeployment {
+            cluster_key,
+            namespace: pending.namespace,
+            resource_name: pending.resource_name,
+        });
+        if let Some(cluster) = ui_state.clusters.get_mut(&cluster_id) {
+            cluster.pending_deployment_restart = None;
+        }
+    }
+}
+
+pub(super) fn show_deployment_restart_error(ctx: &egui::Context, ui_state: &mut UiState) {
+    let Some(cluster_id) = ui_state.selected_cluster else {
+        return;
+    };
+    let Some(error) = ui_state
+        .clusters
+        .get(&cluster_id)
+        .and_then(|cluster| cluster.deployment_restart_error.as_deref())
+    else {
+        return;
+    };
+    if matches!(
+        (ErrorDialog {
+            id: egui::Id::new("deployment-restart-error"),
+            eyebrow: "DEPLOYMENT",
+            title: "Couldn’t restart rollout",
+            message: "Kubernetes Dev UI could not request a rolling restart for this Deployment.",
+            details: Some(error),
+            recovery: Some("Check your Kubernetes permissions and the Deployment’s current state."),
+            primary_action_label: None,
+        })
+        .show(ctx),
+        ErrorDialogAction::Dismiss
+    ) {
+        if let Some(cluster) = ui_state.clusters.get_mut(&cluster_id) {
+            cluster.deployment_restart_error = None;
         }
     }
 }

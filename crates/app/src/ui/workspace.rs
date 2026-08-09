@@ -1,7 +1,7 @@
 use super::resource_actions::show_resource_action_items;
 use super::state::{
-    ClusterConnectionState, ClusterLoadState, PendingDelete, ResourceAction, ResourceSearchState,
-    UiState,
+    ClusterConnectionState, ClusterLoadState, PendingDelete, PendingDeploymentRestart,
+    ResourceAction, ResourceSearchState, UiState,
 };
 use super::widgets::{
     show_resource_cell, workspace_empty_state, workspace_error_state, workspace_loading_state,
@@ -218,7 +218,11 @@ pub(super) fn show(
                             });
                         }
                         ResourceAction::RequestDelete { name, namespace } => {
-                            cluster.pending_delete = Some(PendingDelete {
+                            cluster.pending_delete =
+                                Some(PendingDelete::new(api_resource.clone(), name, namespace));
+                        }
+                        ResourceAction::RequestDeploymentRestart { name, namespace } => {
+                            cluster.pending_deployment_restart = Some(PendingDeploymentRestart {
                                 resource_name: name,
                                 namespace,
                             });
@@ -695,7 +699,12 @@ fn show_resource_table(
                     }
                     index if index == actions_index => {
                         if allow_actions {
-                            show_resource_actions(ui, resource, &mut pending_action.borrow_mut());
+                            show_resource_actions(
+                                ui,
+                                api_resource,
+                                resource,
+                                &mut pending_action.borrow_mut(),
+                            );
                         }
                     }
                     _ => {}
@@ -804,6 +813,7 @@ fn show_resource_table(
                     MoreButton::show_context_menu(row_response, |menu| {
                         show_resource_action_items(
                             menu,
+                            api_resource,
                             resource,
                             &resource.log_containers,
                             &mut pending_action.borrow_mut(),
@@ -818,6 +828,7 @@ fn show_resource_table(
 
 fn show_resource_actions(
     ui: &mut egui::Ui,
+    api_resource: &crate::api_resource::ApiResource,
     resource: &MinimalResource,
     pending_action: &mut Option<ResourceAction>,
 ) {
@@ -836,7 +847,13 @@ fn show_resource_actions(
             .layout(egui::Layout::left_to_right(egui::Align::Center)),
     );
     MoreButton::new(format!("More actions for {}", resource.name)).show(&mut action_ui, |menu| {
-        show_resource_action_items(menu, resource, &resource.log_containers, pending_action);
+        show_resource_action_items(
+            menu,
+            api_resource,
+            resource,
+            &resource.log_containers,
+            pending_action,
+        );
     });
 }
 
