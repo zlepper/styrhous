@@ -191,6 +191,9 @@ pub(crate) fn detail_payload(
     if matches_namespaced_api_resource::<k8s_openapi::api::core::v1::Pod>(api_resource) {
         return pod::detail_payload(object).unwrap_or(ResourceDetailPayload::Generic);
     }
+    if matches_cluster_api_resource::<k8s_openapi::api::core::v1::Node>(api_resource) {
+        return node::detail_payload(object).unwrap_or(ResourceDetailPayload::Generic);
+    }
     if matches_namespaced_api_resource::<k8s_openapi::api::core::v1::ConfigMap>(api_resource) {
         return config_map::detail_payload(object).unwrap_or(ResourceDetailPayload::Generic);
     }

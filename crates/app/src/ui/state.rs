@@ -1748,7 +1748,9 @@ fn sync_resource_data_editor(
                 })
                 .collect(),
         ),
-        ResourceDetailPayload::Generic | ResourceDetailPayload::Pod(_) => None,
+        ResourceDetailPayload::Generic
+        | ResourceDetailPayload::Pod(_)
+        | ResourceDetailPayload::Node(_) => None,
     };
     match (data_editor.as_mut(), values) {
         (Some(editor), Some(values)) => {

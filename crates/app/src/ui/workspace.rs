@@ -10,7 +10,7 @@ use super::widgets::{
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use crate::resource_handlers::table_definition;
-use crate::resource_table::CustomResourceColumn;
+use crate::resource_table::{CellValue, CustomResourceColumn, NODE_COLUMN};
 use crate::terminal_launcher::PodShellRequest;
 use crate::worker::WorkerCommand;
 use components::colors::{TOOLBAR_BACKGROUND, gray};
@@ -245,9 +245,15 @@ pub(super) fn show(
                         ResourceAction::SaveData { .. } => {
                             unreachable!("resource table actions cannot save inspector data")
                         }
-                        ResourceAction::NavigateDetails { .. }
-                        | ResourceAction::NavigateBack
-                        | ResourceAction::NavigateForward => {
+                        ResourceAction::NavigateDetails {
+                            api_resource,
+                            name,
+                            namespace,
+                            uid,
+                        } => {
+                            detail_to_open = Some((api_resource, name, namespace, uid));
+                        }
+                        ResourceAction::NavigateBack | ResourceAction::NavigateForward => {
                             unreachable!("resource table cannot emit inspector navigation")
                         }
                     }
@@ -668,7 +674,21 @@ fn show_resource_table(
                             && index < type_specific_start + definition.columns.len() =>
                     {
                         let column = &definition.columns[index - type_specific_start];
-                        show_resource_cell(ui, resource.cells.get(&column.id));
+                        if column.id == NODE_COLUMN
+                            && api_resource.kind == "Pod"
+                            && let Some(CellValue::Text(node_name)) = resource.cells.get(&column.id)
+                        {
+                            let text = egui::RichText::new(node_name)
+                                .font(typography::body())
+                                .color(if node_name == "-" {
+                                    gray::_500
+                                } else {
+                                    components::colors::indigo::_600
+                                });
+                            ui.label(text);
+                        } else {
+                            show_resource_cell(ui, resource.cells.get(&column.id));
+                        }
                     }
                     index if index == age_index => {
                         TableRowBuilder::text(ui, &resource.age(), false)
@@ -693,6 +713,41 @@ fn show_resource_table(
         },
         |row_response, row, column_index| {
             if let ResourceTableRow::Resource(resource) = row {
+                let node_column_index = (api_resource.kind == "Pod").then(|| {
+                    1 + usize::from(show_namespace_column)
+                        + definition
+                            .columns
+                            .iter()
+                            .position(|column| column.id == NODE_COLUMN)
+                            .expect("Pod table defines a Node column")
+                });
+                if Some(column_index) == node_column_index
+                    && let Some(CellValue::Text(node_name)) = resource.cells.get(NODE_COLUMN)
+                {
+                    if node_name == "-" {
+                        row_response
+                            .clone()
+                            .on_hover_text("Kubernetes has not assigned this Pod to a Node.");
+                    } else {
+                        let pointer_over_node_cell = row_response.ctx.input(|input| {
+                            input.pointer.latest_pos().is_some_and(|position| {
+                                row_response.interact_rect.contains(position)
+                            })
+                        });
+                        if pointer_over_node_cell {
+                            row_response
+                                .ctx
+                                .set_cursor_icon(egui::CursorIcon::PointingHand);
+                        }
+                        row_response.widget_info(|| {
+                            egui::WidgetInfo::labeled(
+                                egui::WidgetType::Button,
+                                row_response.enabled(),
+                                format!("Open details for Node {node_name}"),
+                            )
+                        });
+                    }
+                }
                 if allow_actions && column_index == 0 {
                     let pointer_over_name_cell = row_response.ctx.input(|input| {
                         input
@@ -729,6 +784,20 @@ fn show_resource_table(
                         name: resource.name.clone(),
                         namespace: resource.namespace.clone(),
                         uid: resource.uid.clone(),
+                    });
+                }
+                if allow_actions
+                    && Some(column_index) == node_column_index
+                    && let Some(CellValue::Text(node_name)) = resource.cells.get(NODE_COLUMN)
+                    && node_name != "-"
+                    && primary_clicked_in_cell
+                    && pending_action.borrow().is_none()
+                {
+                    *pending_action.borrow_mut() = Some(ResourceAction::NavigateDetails {
+                        api_resource: crate::resource_handlers::node::api_resource(),
+                        name: node_name.clone(),
+                        namespace: None,
+                        uid: node_name.clone(),
                     });
                 }
                 if allow_actions {

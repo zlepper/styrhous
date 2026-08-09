@@ -1201,9 +1201,22 @@ async fn watch_managed_type<T>(
     }
 }
 
-fn api_resource_for<T>() -> ApiResource
+pub(crate) trait ApiResourceScope {
+    const NAMESPACED: bool;
+}
+
+impl ApiResourceScope for NamespaceResourceScope {
+    const NAMESPACED: bool = true;
+}
+
+impl ApiResourceScope for ClusterResourceScope {
+    const NAMESPACED: bool = false;
+}
+
+pub(crate) fn api_resource_for<T>() -> ApiResource
 where
-    T: Resource<DynamicType = (), Scope = NamespaceResourceScope>,
+    T: Resource<DynamicType = ()>,
+    T::Scope: ApiResourceScope,
 {
     let group = T::group(&());
     ApiResource {
@@ -1215,7 +1228,7 @@ where
         version: T::version(&()).into_owned(),
         kind: T::kind(&()).into_owned(),
         name: T::plural(&()).into_owned(),
-        namespaced: true,
+        namespaced: T::Scope::NAMESPACED,
     }
 }
 

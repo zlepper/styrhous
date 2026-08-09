@@ -48,6 +48,7 @@ pub(crate) struct ManagedResource {
 pub(crate) enum ResourceDetailPayload {
     Generic,
     Pod(PodDetail),
+    Node(NodeDetail),
     ConfigMap(ConfigMapDetail),
     Secret(SecretDetail),
 }
@@ -89,6 +90,14 @@ pub(crate) struct PodDetail {
     /// by the Pod log action picker.
     pub(crate) log_containers: Vec<PodLogContainer>,
     pub(crate) volumes: Vec<PodVolumeDetail>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
+pub(crate) struct NodeDetail {
+    pub(crate) pod_cidrs: Vec<String>,
+    pub(crate) provider_id: Option<String>,
+    pub(crate) unschedulable: bool,
+    pub(crate) taints: Vec<String>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
