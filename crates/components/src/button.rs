@@ -2,6 +2,7 @@
 
 use egui::{Button, Color32, CornerRadius, Image, Response, Shadow, Stroke, Ui, Vec2, WidgetText};
 
+use crate::PointingHand;
 use crate::colors::{BLACK, WHITE, gray, indigo};
 use crate::design::{radius, spacing};
 
@@ -198,7 +199,7 @@ impl<'a> TailwindButton<'a> {
             ButtonContent::Icon(icon) => Button::image(icon),
         }
         .min_size(min_size);
-        let response = ui.add(button);
+        let response = ui.add(button).with_pointing_hand();
 
         // Draw shadow behind the button (painted on layer below)
         if shadow != Shadow::NONE {

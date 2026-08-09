@@ -2,7 +2,7 @@ use super::state::ResourceAction;
 use crate::minimal_resource::{MinimalResource, PodLogContainer};
 use components::colors::gray;
 use components::design::status;
-use components::{MoreMenu, icons};
+use components::{MoreMenu, PointingHand, icons};
 
 /// Render the shared resource-level actions used by table rows and inspectors.
 pub(super) fn show_resource_action_items(
@@ -31,7 +31,9 @@ pub(super) fn show_resource_action_items(
             let mut selected = false;
             menu.submenu("Shell", |ui| {
                 for container in containers {
-                    if ui.button(&container.name).clicked() && pending_action.is_none() {
+                    if ui.button(&container.name).with_pointing_hand().clicked()
+                        && pending_action.is_none()
+                    {
                         *pending_action = Some(ResourceAction::Shell {
                             name: resource.name.clone(),
                             namespace: resource.namespace.clone(),
@@ -64,7 +66,7 @@ pub(super) fn show_resource_action_items(
             menu.submenu("View logs", |ui| {
                 for container in containers {
                     let label = format!("{} — {}", container.name, container.kind.label());
-                    if ui.button(label).clicked() && pending_action.is_none() {
+                    if ui.button(label).with_pointing_hand().clicked() && pending_action.is_none() {
                         *pending_action = Some(ResourceAction::ViewLogs {
                             name: resource.name.clone(),
                             namespace: resource.namespace.clone(),

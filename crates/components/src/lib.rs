@@ -28,6 +28,7 @@ pub mod design;
 pub mod error_dialog;
 pub mod fuzzy;
 pub mod icons;
+pub mod interaction;
 pub mod more_button;
 pub mod search;
 pub mod sidebar;
@@ -48,6 +49,7 @@ pub use combobox::{
     WithFilter,
 };
 pub use error_dialog::{ErrorDialog, ErrorDialogAction};
+pub use interaction::PointingHand;
 pub use more_button::{MoreButton, MoreMenu};
 pub use search::{SearchInputResponse, TailwindSearchInput};
 pub use sidebar::{

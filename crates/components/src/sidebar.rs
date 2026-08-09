@@ -34,6 +34,7 @@ use egui::{
     collapsing_header::CollapsingState,
 };
 
+use crate::PointingHand;
 use crate::colors::{NAVIGATION_BACKGROUND, WHITE, gray, indigo};
 use crate::design::{radius, spacing, typography};
 
@@ -116,6 +117,7 @@ fn allocate_item(ui: &mut Ui, height: f32) -> (egui::Rect, egui::Rect, Response)
     let available_width = ui.available_width();
     let (rect, response) =
         ui.allocate_exact_size(Vec2::new(available_width, height), Sense::click());
+    let response = response.with_pointing_hand();
     let inner_rect = rect.shrink2(Vec2::new(ITEM_PADDING_X, 0.0));
     (rect, inner_rect, response)
 }
@@ -201,9 +203,25 @@ fn render_avatar(
     );
 }
 
-fn add_button_accessibility(response: &Response, ui: &Ui, label: &str) {
+fn add_selectable_accessibility(response: &Response, ui: &Ui, label: &str, selected: bool) {
     response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label)
+        egui::WidgetInfo::selected(
+            egui::WidgetType::SelectableLabel,
+            ui.is_enabled(),
+            selected,
+            label,
+        )
+    });
+}
+
+fn add_expandable_accessibility(response: &Response, ui: &Ui, label: &str, open: bool) {
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(
+            egui::WidgetType::CollapsingHeader,
+            ui.is_enabled(),
+            open,
+            label,
+        )
     });
 }
 
@@ -301,7 +319,7 @@ impl<'a> SidebarContentCore<'a> {
             response.clone().on_hover_text(text_str);
         }
 
-        add_button_accessibility(&response, self.ui, text_str);
+        add_selectable_accessibility(&response, self.ui, text_str, selected);
         response
     }
 
@@ -368,7 +386,7 @@ impl<'a> SidebarContentCore<'a> {
             response.clone().on_hover_text(tooltip);
         }
 
-        add_button_accessibility(&response, self.ui, text_str);
+        add_selectable_accessibility(&response, self.ui, text_str, selected);
         response
     }
 
@@ -540,7 +558,7 @@ impl<'a> WideSidebarContent<'a> {
             colors.text,
             rect.right() - ITEM_PADDING_X - text_pos.x,
         );
-        add_button_accessibility(&response, self.core.ui, text_str);
+        add_selectable_accessibility(&response, self.core.ui, text_str, selected);
         if text_is_truncated {
             response.clone().on_hover_text(text_str);
         }
@@ -636,7 +654,6 @@ impl<'a> WideSidebarContent<'a> {
             colors.text,
             inner_rect.right() - text_pos_after_icon(inner_rect, WIDE_GROUP_HEIGHT).x,
         );
-        add_button_accessibility(&response, self.core.ui, text_str);
         if text_is_truncated {
             response.clone().on_hover_text(text_str);
         }
@@ -647,6 +664,7 @@ impl<'a> WideSidebarContent<'a> {
         state.store(self.core.ui.ctx());
 
         let is_open_now = state.is_open();
+        add_expandable_accessibility(&response, self.core.ui, text_str, is_open_now);
         let children = if is_open_now {
             self.core.ui.add_space(2.0);
             let result = add_children(self);
@@ -747,7 +765,6 @@ impl<'a> WideSidebarContent<'a> {
             colors.text,
             inner_rect.right() - text_pos.x,
         );
-        add_button_accessibility(&response, self.core.ui, text_str);
         if text_is_truncated {
             response.clone().on_hover_text(text_str);
         }
@@ -758,6 +775,7 @@ impl<'a> WideSidebarContent<'a> {
         state.store(self.core.ui.ctx());
 
         let is_open_now = state.is_open();
+        add_expandable_accessibility(&response, self.core.ui, text_str, is_open_now);
         let children = if is_open_now {
             self.core.ui.add_space(6.0);
             let result = add_children(self);
@@ -815,7 +833,7 @@ impl<'a> WideSidebarContent<'a> {
             colors.text,
             rect.right() - ITEM_PADDING_X - text_pos.x,
         );
-        add_button_accessibility(&response, self.core.ui, text_str);
+        add_selectable_accessibility(&response, self.core.ui, text_str, selected);
         if text_is_truncated {
             response.clone().on_hover_text(text_str);
         }

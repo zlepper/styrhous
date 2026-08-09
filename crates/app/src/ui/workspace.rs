@@ -693,6 +693,26 @@ fn show_resource_table(
         },
         |row_response, row, column_index| {
             if let ResourceTableRow::Resource(resource) = row {
+                if allow_actions && column_index == 0 {
+                    let pointer_over_name_cell = row_response.ctx.input(|input| {
+                        input
+                            .pointer
+                            .latest_pos()
+                            .is_some_and(|position| row_response.interact_rect.contains(position))
+                    });
+                    if pointer_over_name_cell {
+                        row_response
+                            .ctx
+                            .set_cursor_icon(egui::CursorIcon::PointingHand);
+                    }
+                    row_response.widget_info(|| {
+                        egui::WidgetInfo::labeled(
+                            egui::WidgetType::Button,
+                            row_response.enabled(),
+                            format!("Open details for {}", resource.name),
+                        )
+                    });
+                }
                 let primary_clicked_in_cell = row_response.ctx.input(|input| {
                     input.pointer.button_clicked(egui::PointerButton::Primary)
                         && input

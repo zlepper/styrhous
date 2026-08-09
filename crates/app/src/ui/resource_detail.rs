@@ -15,7 +15,7 @@ use components::design::{radius, spacing, status, typography};
 use components::icons;
 use components::{
     BladeTransition as ResourceDetailTransition, ButtonSize, ButtonVariant, MoreButton,
-    TableRowBuilder, TailwindButton, TailwindTable, TailwindTextArea, WorkspaceCard,
+    PointingHand, TableRowBuilder, TailwindButton, TailwindTable, TailwindTextArea, WorkspaceCard,
 };
 use std::collections::BTreeMap;
 
@@ -1652,10 +1652,14 @@ fn show_data_conflict_dialog(
             ui.label("This resource changed on the cluster while you have unsaved data edits.");
             ui.add_space(12.0);
             ui.horizontal(|ui| {
-                if ui.button("Use cluster version").clicked() {
+                if ui
+                    .button("Use cluster version")
+                    .with_pointing_hand()
+                    .clicked()
+                {
                     use_external = true;
                 }
-                if ui.button("Keep my edits").clicked() {
+                if ui.button("Keep my edits").with_pointing_hand().clicked() {
                     keep_local = true;
                 }
             });
@@ -1926,10 +1930,19 @@ fn disclosure_card(
             egui::vec2(ui.available_width(), CARD_HEADER_HEIGHT),
             egui::Sense::click(),
         );
+        let response = response.with_pointing_hand();
         if response.clicked() {
             open = !open;
             ui.data_mut(|data| data.insert_temp(id, open));
         }
+        response.widget_info(|| {
+            egui::WidgetInfo::selected(
+                egui::WidgetType::CollapsingHeader,
+                ui.is_enabled(),
+                open,
+                title,
+            )
+        });
         let painter = ui.painter();
         painter.text(
             header.left_center() + egui::vec2(CARD_HEADER_PADDING, 0.0),

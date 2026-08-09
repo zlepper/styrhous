@@ -1,8 +1,8 @@
 use super::state::UiState;
 use crate::worker::WorkerCommand;
-use components::WorkspaceDrawer;
 use components::colors::{WHITE, gray, indigo};
 use components::design::{status, typography};
+use components::{PointingHand, WorkspaceDrawer};
 use tracing::info;
 
 pub(super) fn show(
@@ -51,6 +51,7 @@ pub(super) fn show(
                             )
                             .fill(gray::_700),
                         )
+                        .with_pointing_hand()
                         .clicked()
                     {
                         if yaml_panel.is_modified() {
@@ -64,6 +65,7 @@ pub(super) fn show(
                             egui::Button::new(egui::RichText::new("Save YAML").color(WHITE))
                                 .fill(indigo::_600),
                         )
+                        .with_pointing_hand()
                         .clicked()
                     {
                         commands_to_send.push(WorkerCommand::ApplyResourceYaml {

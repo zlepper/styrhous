@@ -5,7 +5,7 @@ use crate::worker::WorkerCommand;
 use anstyle::{Ansi256Color, AnsiColor, Color, Effects, RgbColor, Style};
 use components::colors::{SUCCESS, TABLE_BORDER, TOOLBAR_BACKGROUND, gray};
 use components::design::{radius, spacing, status, surface, typography};
-use components::{TailwindSearchInput, icons};
+use components::{PointingHand, TailwindSearchInput, icons};
 use std::time::{Duration, Instant};
 
 /// Render native, independent Pod log windows and stop both the Kubernetes
@@ -402,14 +402,16 @@ fn sync_search(ctx: &egui::Context, window: &mut PodLogWindowState, log_store: &
 }
 
 fn navigation_button(ui: &mut egui::Ui, icon: egui::Image<'static>, label: &str) -> bool {
-    let response = ui.add_sized(
-        egui::Vec2::splat(28.0),
-        egui::Button::image(
-            icon.fit_to_exact_size(egui::Vec2::splat(14.0))
-                .tint(gray::_700),
+    let response = ui
+        .add_sized(
+            egui::Vec2::splat(28.0),
+            egui::Button::image(
+                icon.fit_to_exact_size(egui::Vec2::splat(14.0))
+                    .tint(gray::_700),
+            )
+            .frame(false),
         )
-        .frame(false),
-    );
+        .with_pointing_hand();
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label.to_owned())
     });
@@ -426,14 +428,16 @@ fn log_display_toggle_button(
     active: bool,
     label: &str,
 ) -> bool {
-    let response = ui.add_sized(
-        egui::Vec2::splat(28.0),
-        egui::Button::image(
-            icon.fit_to_exact_size(egui::Vec2::splat(14.0))
-                .tint(gray::_700),
+    let response = ui
+        .add_sized(
+            egui::Vec2::splat(28.0),
+            egui::Button::image(
+                icon.fit_to_exact_size(egui::Vec2::splat(14.0))
+                    .tint(gray::_700),
+            )
+            .frame(false),
         )
-        .frame(false),
-    );
+        .with_pointing_hand();
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Checkbox, ui.is_enabled(), label)
     });

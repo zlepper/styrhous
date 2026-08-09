@@ -21,8 +21,9 @@
 //! });
 //! ```
 
-use egui::{Color32, CursorIcon, Image, Response, ScrollArea, Sense, Ui, Vec2};
+use egui::{Color32, Image, Response, ScrollArea, Sense, Ui, Vec2};
 
+use crate::PointingHand;
 use crate::colors::{gray, indigo};
 use crate::design::{spacing, typography};
 
@@ -210,7 +211,7 @@ fn render_tab_header(
 
     // Allocate space and get response
     let (rect, response) = ui.allocate_exact_size(Vec2::new(tab_width, tab_height), Sense::click());
-    let response = response.on_hover_cursor(CursorIcon::PointingHand);
+    let response = response.with_pointing_hand();
 
     // Determine colors based on state
     let colors = TabColors::for_state(is_selected, response.hovered());

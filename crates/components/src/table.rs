@@ -25,6 +25,7 @@ use egui_extras::{Column, TableBuilder};
 use std::collections::HashSet;
 use std::hash::Hash;
 
+use crate::PointingHand;
 use crate::colors::{
     CONTENT_BACKGROUND, TABLE_BORDER, TABLE_HEADER_BACKGROUND, WHITE, gray, indigo,
 };
@@ -359,8 +360,9 @@ enum CheckboxState {
 }
 
 /// Render a Tailwind-styled checkbox
-fn render_checkbox(ui: &mut Ui, state: CheckboxState) -> egui::Response {
+fn render_checkbox(ui: &mut Ui, state: CheckboxState, label: &str) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(CHECKBOX_SIZE), egui::Sense::click());
+    let response = response.with_pointing_hand();
 
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
@@ -410,6 +412,17 @@ fn render_checkbox(ui: &mut Ui, state: CheckboxState) -> egui::Response {
         }
     }
 
+    response.widget_info(|| match state {
+        CheckboxState::Unchecked => {
+            egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), false, label)
+        }
+        CheckboxState::Checked => {
+            egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), true, label)
+        }
+        CheckboxState::Indeterminate => {
+            egui::WidgetInfo::labeled(egui::WidgetType::Checkbox, ui.is_enabled(), label)
+        }
+    });
     response
 }
 
@@ -471,7 +484,7 @@ impl TailwindTable {
                     ui.painter().rect_filled(rect, 0.0, HEADER_BG);
                     ui.horizontal_centered(|ui| {
                         ui.add_space(CELL_PADDING_X);
-                        render_checkbox(ui, select_all_state);
+                        render_checkbox(ui, select_all_state, "Select all rows");
                     });
                 });
 
@@ -510,7 +523,11 @@ impl TailwindTable {
                             } else {
                                 CheckboxState::Unchecked
                             };
-                            render_checkbox(ui, checkbox_state);
+                            render_checkbox(
+                                ui,
+                                checkbox_state,
+                                &format!("Select row {}", row_index + 1),
+                            );
                         });
                     });
 
@@ -609,14 +626,28 @@ impl TailwindTable {
 
                         // Make sortable headers clickable
                         let response = if col.sortable {
-                            let response =
-                                ui.interact(rect, ui.id().with(&col.id), egui::Sense::click());
+                            let response = ui
+                                .interact(rect, ui.id().with(&col.id), egui::Sense::click())
+                                .with_pointing_hand();
                             if response.clicked() {
                                 *clicked_column.borrow_mut() = Some(col.id.clone());
                             }
-                            if response.hovered() {
-                                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-                            }
+                            let sort_label = match sort_direction {
+                                Some(SortDirection::Ascending) => {
+                                    format!("Sort by {}; currently ascending", col.header)
+                                }
+                                Some(SortDirection::Descending) => {
+                                    format!("Sort by {}; currently descending", col.header)
+                                }
+                                None => format!("Sort by {}", col.header),
+                            };
+                            response.widget_info(|| {
+                                egui::WidgetInfo::labeled(
+                                    egui::WidgetType::Button,
+                                    ui.is_enabled(),
+                                    sort_label.clone(),
+                                )
+                            });
                             Some(response)
                         } else {
                             None
@@ -820,6 +851,7 @@ fn render_sort_indicator(ui: &mut Ui, direction: Option<SortDirection>) {
 mod tests {
     use super::*;
     use egui_kittest::Harness;
+    use egui_kittest::kittest::Queryable;
     use std::collections::HashSet;
 
     #[derive(Clone)]
@@ -956,6 +988,8 @@ mod tests {
 
         crate::test_support::setup_egui(&mut harness);
         harness.run();
+        harness.get_by_role_and_label(egui::accesskit::Role::CheckBox, "Select all rows");
+        harness.get_by_role_and_label(egui::accesskit::Role::CheckBox, "Select row 1");
         harness.snapshot("tables/with_selection");
     }
 

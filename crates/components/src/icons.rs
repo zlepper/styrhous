@@ -18,6 +18,8 @@
 
 use egui::{Color32, Image, Response, Ui, Vec2, include_image};
 
+use crate::PointingHand;
+
 /// Render a chevron-right icon
 ///
 /// # Arguments
@@ -206,7 +208,9 @@ pub fn trash_button(ui: &mut Ui, size: f32, color: Color32, label: &str) -> Resp
     let image = Image::new(include_image!("icons/trash.svg"))
         .fit_to_exact_size(Vec2::splat(size))
         .tint(color);
-    let response = ui.add(egui::Button::image(image).frame(false));
+    let response = ui
+        .add(egui::Button::image(image).frame(false))
+        .with_pointing_hand();
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label)
     });
@@ -227,7 +231,9 @@ pub fn pencil_button(ui: &mut Ui, size: f32, color: Color32, label: &str) -> Res
     let image = Image::new(include_image!("icons/pencil.svg"))
         .fit_to_exact_size(Vec2::splat(size))
         .tint(color);
-    let response = ui.add(egui::Button::image(image).frame(false));
+    let response = ui
+        .add(egui::Button::image(image).frame(false))
+        .with_pointing_hand();
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label)
     });
@@ -241,7 +247,9 @@ pub fn eye_button(ui: &mut Ui, size: f32, color: Color32, label: &str) -> Respon
     let image = Image::new(include_image!("icons/eye.svg"))
         .fit_to_exact_size(Vec2::splat(size))
         .tint(color);
-    let response = ui.add(egui::Button::image(image).frame(false));
+    let response = ui
+        .add(egui::Button::image(image).frame(false))
+        .with_pointing_hand();
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label)
     });

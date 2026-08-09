@@ -1,5 +1,6 @@
 //! Compact search control shared by resource and log toolbars.
 
+use crate::PointingHand;
 use crate::colors::{WHITE, gray};
 use crate::design::{radius, spacing, status, typography};
 use egui::{Id, Margin, Response, Stroke, Ui, Vec2};
@@ -88,10 +89,12 @@ impl<'a> TailwindSearchInput<'a> {
                     });
 
                     ui.separator();
-                    let regex = ui.toggle_value(
-                        self.regex_mode,
-                        egui::RichText::new(".*").font(typography::body()),
-                    );
+                    let regex = ui
+                        .toggle_value(
+                            self.regex_mode,
+                            egui::RichText::new(".*").font(typography::body()),
+                        )
+                        .with_pointing_hand();
                     regex.widget_info(|| {
                         egui::WidgetInfo::labeled(
                             egui::WidgetType::Checkbox,

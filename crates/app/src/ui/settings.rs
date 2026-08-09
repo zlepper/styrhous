@@ -2,7 +2,7 @@ use super::state::UiState;
 use crate::terminal_launcher::TerminalLaunchSettings;
 use components::colors::{WHITE, gray, indigo};
 use components::design::{radius, spacing, status, surface, typography};
-use components::{BladeNavigator, BladeStack, ButtonSize, TailwindButton};
+use components::{BladeNavigator, BladeStack, ButtonSize, PointingHand, TailwindButton};
 
 const FOOTER_HEIGHT: f32 = 52.0;
 const CHOICE_CONTENT_MIN_HEIGHT: f32 = 44.0;
@@ -179,11 +179,12 @@ fn launcher_choice(
                     |ui| {
                         ui.spacing_mut().icon_width = 20.0;
                         ui.spacing_mut().icon_width_inner = 12.0;
-                        let response = ui.radio(selected, "");
+                        let response = ui.radio(selected, "").with_pointing_hand();
                         response.widget_info(|| {
-                            egui::WidgetInfo::labeled(
+                            egui::WidgetInfo::selected(
                                 egui::WidgetType::RadioButton,
                                 ui.is_enabled(),
+                                selected,
                                 title,
                             )
                         });
