@@ -7,7 +7,9 @@ use crate::resource_catalog::{ResourceNavigation, build_resource_navigation};
 use crate::resource_detail::{
     ManagedResource, ResourceDetail, ResourceDetailPayload, ResourceEvent,
 };
-use crate::resource_schema::{CompletionSuggestion, ResourceSchema, SchemaDiagnostic, SourceRange};
+use crate::resource_schema::{
+    CompletionContext, CompletionSuggestion, ResourceSchema, SchemaDiagnostic, SourceRange,
+};
 use crate::resource_table::CustomResourceColumn;
 use crate::sorted_name::SortedName;
 use crate::terminal_launcher::TerminalLaunchSettings;
@@ -275,11 +277,17 @@ pub(super) struct YamlEditorWindowState {
     pub(super) schema: Option<ResourceSchema>,
     pub(super) schema_loading: bool,
     pub(super) diagnostics: Vec<SchemaDiagnostic>,
+    /// The last diagnostics shown in the pane while a newer document is being validated.
+    /// These are intentionally separate from `diagnostics`, whose ranges must always match
+    /// the current editor buffer before they are used for line markers or squiggles.
+    pub(super) retained_diagnostics: Vec<SchemaDiagnostic>,
     pub(super) scroll_to_diagnostic: Option<SourceRange>,
     pub(super) server_validation: ValidationState,
     pub(super) validation_revision: u64,
     pub(super) validation_due: Option<Instant>,
     pub(super) suggestions: Vec<CompletionSuggestion>,
+    pub(super) completion_context: Option<CompletionContext>,
+    pub(super) completion_cursor: Option<usize>,
     pub(super) suggestions_visible: bool,
     pub(super) suggestion_selection: usize,
 }
@@ -831,11 +839,14 @@ impl UiState {
                     .resource_schemas
                     .contains_key(&(cluster_key, api_resource.clone())),
                 diagnostics: Vec::new(),
+                retained_diagnostics: Vec::new(),
                 scroll_to_diagnostic: None,
                 server_validation: ValidationState::Idle,
                 validation_revision: 0,
                 validation_due: None,
                 suggestions: Vec::new(),
+                completion_context: None,
+                completion_cursor: None,
                 suggestions_visible: false,
                 suggestion_selection: 0,
             },

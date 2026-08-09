@@ -11,6 +11,25 @@ pub struct CompletionSuggestion {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompletionContext {
+    pub kind: CompletionContextKind,
+    pub type_label: Option<String>,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompletionContextKind {
+    MappingKey,
+    Value,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CompletionResult {
+    pub suggestions: Vec<CompletionSuggestion>,
+    pub context: Option<CompletionContext>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SchemaDiagnostic {
     pub path: String,
     pub message: String,
@@ -114,38 +133,59 @@ impl ResourceSchema {
     }
 
     pub fn suggestions_at(&self, yaml: &str, cursor: usize) -> Vec<CompletionSuggestion> {
+        self.completion_at(yaml, cursor).suggestions
+    }
+
+    pub fn completion_at(&self, yaml: &str, cursor: usize) -> CompletionResult {
         let context = yaml_context(yaml, cursor);
         let mut schema_path = context.path.clone();
         if let Some(key) = &context.value_key {
             schema_path.push(key.clone());
         }
         let Some(mut schema) = self.resolve_path(&schema_path) else {
-            return Vec::new();
+            return CompletionResult::default();
         };
         while schema.get("type").and_then(Value::as_str) == Some("array") {
             let Some(items) = schema.get("items") else {
                 break;
             };
+            let Some(items) = resolve_ref(&self.root, items) else {
+                break;
+            };
             schema = items;
         }
+
+        let completion_context = CompletionContext {
+            kind: context
+                .is_value
+                .then_some(CompletionContextKind::Value)
+                .unwrap_or(CompletionContextKind::MappingKey),
+            type_label: if context.is_value {
+                schema.get("type").and_then(Value::as_str)
+            } else {
+                schema
+                    .get("additionalProperties")
+                    .and_then(|properties| properties.get("type"))
+                    .and_then(Value::as_str)
+                    .or_else(|| schema.get("type").and_then(Value::as_str))
+            }
+            .map(ToOwned::to_owned),
+            description: schema
+                .get("description")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned),
+        };
 
         let existing = keys_at_indent(yaml, context.line_start, context.indent);
         let prefix = context.prefix;
         let properties = schema.get("properties").and_then(Value::as_object);
-        let enum_values = schema.get("enum").and_then(Value::as_array);
 
         if context.is_value {
-            let suggestions = enum_values
-                .into_iter()
-                .flatten()
-                .filter_map(Value::as_str)
-                .map(|value| CompletionSuggestion {
-                    label: value.to_owned(),
-                    type_label: Some("enum".into()),
-                    detail: Some("allowed value".into()),
-                })
-                .collect();
-            return filter_suggestions(suggestions, &prefix);
+            let suggestions = value_suggestions(schema);
+            return CompletionResult {
+                suggestions: filter_suggestions(suggestions, &prefix),
+                context: Some(completion_context),
+            };
         }
 
         let suggestions = properties
@@ -164,7 +204,10 @@ impl ResourceSchema {
                     .map(ToOwned::to_owned),
             })
             .collect();
-        filter_suggestions(suggestions, &prefix)
+        CompletionResult {
+            suggestions: filter_suggestions(suggestions, &prefix),
+            context: Some(completion_context),
+        }
     }
 
     fn resolve_path(&self, path: &[String]) -> Option<&Value> {
@@ -179,6 +222,69 @@ impl ResourceSchema {
         }
         resolve_ref(&self.root, schema)
     }
+}
+
+fn value_suggestions(schema: &Value) -> Vec<CompletionSuggestion> {
+    let explicit_values = schema
+        .get("enum")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(|value| CompletionSuggestion {
+            label: value.to_owned(),
+            type_label: Some("enum".into()),
+            detail: None,
+        })
+        .collect::<Vec<_>>();
+    if !explicit_values.is_empty() {
+        return explicit_values;
+    }
+
+    // Kubernetes' OpenAPI leaves some string aliases without an `enum`. Its descriptions still
+    // spell out their closed value set, notably LabelSelectorRequirement.operator. Use only the
+    // conventional "Valid ... are A, B and C" wording so ordinary prose cannot become a
+    // completion source.
+    documented_values(schema)
+        .into_iter()
+        .map(|value| CompletionSuggestion {
+            label: value,
+            type_label: Some("documented value".into()),
+            detail: None,
+        })
+        .collect()
+}
+
+fn documented_values(schema: &Value) -> Vec<String> {
+    let Some(description) = schema.get("description").and_then(Value::as_str) else {
+        return Vec::new();
+    };
+    let Some(values) = description
+        .split_once("Valid operators are ")
+        .map(|(_, values)| values)
+        .or_else(|| {
+            description
+                .split_once("Valid values are ")
+                .map(|(_, values)| values)
+        })
+    else {
+        return Vec::new();
+    };
+
+    values
+        .split_once('.')
+        .map_or(values, |(values, _)| values)
+        .replace(" and ", ",")
+        .split(',')
+        .map(|value| value.trim().trim_matches(['`', '\'', '"']))
+        .filter(|value| {
+            !value.is_empty()
+                && value.chars().all(|character| {
+                    character.is_ascii_alphanumeric() || matches!(character, '-' | '_')
+                })
+        })
+        .map(ToOwned::to_owned)
+        .collect()
 }
 
 fn filter_suggestions(
@@ -220,10 +326,21 @@ fn fuzzy_match_rank(label: &str, normalized_prefix: &str) -> u8 {
 }
 
 fn resolve_ref<'a>(root: &'a Value, value: &'a Value) -> Option<&'a Value> {
-    value
+    let value = value
         .get("$ref")
         .and_then(Value::as_str)
-        .map_or(Some(value), |reference| root.pointer(reference))
+        .map_or(Some(value), |reference| {
+            root.pointer(reference.strip_prefix('#').unwrap_or(reference))
+        })?;
+    // Kubernetes OpenAPI v3 expresses many typed fields as a one-item `allOf` wrapping a
+    // local reference (for example DeploymentSpec.selector -> LabelSelector). Treat that
+    // wrapper as transparent for schema traversal.
+    if let Some(all_of) = value.get("allOf").and_then(Value::as_array)
+        && let [schema] = all_of.as_slice()
+    {
+        return resolve_ref(root, schema);
+    }
+    Some(value)
 }
 
 struct YamlContext {
@@ -237,6 +354,12 @@ struct YamlContext {
 
 fn yaml_context(yaml: &str, cursor: usize) -> YamlContext {
     let cursor = cursor.min(yaml.len());
+    // A partially typed mapping key (`match` before its colon is entered) is still valid YAML:
+    // Saphyr represents it as the scalar value of the preceding mapping entry. In an editor,
+    // though, it is a key prefix and must inherit that mapping's schema path.
+    if is_bare_mapping_key_prefix(yaml, cursor) {
+        return fallback_yaml_context(yaml, cursor);
+    }
     let location = source_location(yaml, cursor);
     if let Ok(documents) = MarkedYaml::load_from_str(yaml) {
         for document in &documents {
@@ -247,6 +370,15 @@ fn yaml_context(yaml: &str, cursor: usize) -> YamlContext {
         }
     }
     fallback_yaml_context(yaml, cursor)
+}
+
+fn is_bare_mapping_key_prefix(yaml: &str, cursor: usize) -> bool {
+    let line_start = yaml[..cursor].rfind('\n').map_or(0, |index| index + 1);
+    let line = yaml[line_start..cursor]
+        .trim_start()
+        .strip_prefix("- ")
+        .unwrap_or(yaml[line_start..cursor].trim_start());
+    !line.is_empty() && !line.contains(':')
 }
 
 fn context_in_node(node: &MarkedYaml<'_>, cursor: (usize, usize)) -> Option<YamlContext> {
@@ -394,8 +526,12 @@ fn fallback_yaml_context(yaml: &str, cursor: usize) -> YamlContext {
     let cursor = cursor.min(yaml.len());
     let line_start = yaml[..cursor].rfind('\n').map_or(0, |index| index + 1);
     let line = &yaml[line_start..cursor];
-    let indent = line.len() - line.trim_start().len();
-    let before_cursor = &line[indent..];
+    let source_indent = line.len() - line.trim_start().len();
+    let (indent, before_cursor) = line[source_indent..]
+        .strip_prefix("- ")
+        .map_or((source_indent, &line[source_indent..]), |mapping| {
+            (source_indent + 2, mapping)
+        });
     let (is_value, prefix, value_key) = before_cursor
         .split_once(':')
         .map(|(key, value)| (true, value.trim().to_owned(), Some(key.trim().to_owned())))
@@ -407,8 +543,15 @@ fn fallback_yaml_context(yaml: &str, cursor: usize) -> YamlContext {
 
     let mut path = Vec::<(usize, String)>::new();
     for source_line in yaml[..line_start].lines() {
-        let indentation = source_line.len() - source_line.trim_start().len();
-        let trimmed = source_line.trim_start().trim_start_matches("- ");
+        let source_indentation = source_line.len() - source_line.trim_start().len();
+        let (indentation, trimmed) = source_line[source_indentation..]
+            .strip_prefix("- ")
+            // A sequence item's mapping key begins after its dash. Keeping that extra two
+            // columns preserves the array property's place in the enclosing schema path.
+            .map_or(
+                (source_indentation, &source_line[source_indentation..]),
+                |trimmed| (source_indentation + 2, trimmed),
+            );
         let Some((key, value)) = trimmed.split_once(':') else {
             continue;
         };
@@ -462,21 +605,47 @@ impl YamlContext {
 }
 
 fn keys_at_indent(yaml: &str, before_line: usize, indent: usize) -> Vec<String> {
-    yaml[..before_line]
+    let current_is_sequence_item = yaml[before_line..]
         .lines()
-        .filter_map(|line| {
-            let indentation = line.len() - line.trim_start().len();
-            (indentation == indent)
-                .then(|| line.trim_start().trim_start_matches("- ").split_once(':'))
-                .flatten()
-                .map(|(key, _)| key.trim().to_owned())
-        })
-        .collect()
+        .next()
+        .is_some_and(|line| line.trim_start().starts_with("- "));
+    if current_is_sequence_item {
+        return Vec::new();
+    }
+    let mut keys = Vec::new();
+    let mut found_sequence_item = false;
+    for line in yaml[..before_line].lines().rev() {
+        let line_indent = line.len() - line.trim_start().len();
+        let line_after_indent = &line[line_indent..];
+        let sequence_mapping = line_after_indent.strip_prefix("- ");
+        let effective_indent = sequence_mapping.map_or(line_indent, |_| line_indent + 2);
+
+        if sequence_mapping.is_some() && effective_indent == indent {
+            if found_sequence_item {
+                break;
+            }
+            found_sequence_item = true;
+        } else if line_indent < indent {
+            break;
+        }
+
+        if effective_indent == indent
+            && let Some((key, _)) = sequence_mapping
+                .unwrap_or(line_after_indent)
+                .split_once(':')
+        {
+            keys.push(key.trim().to_owned());
+        }
+        if found_sequence_item {
+            break;
+        }
+    }
+    keys
 }
 
 #[cfg(test)]
 mod tests {
-    use super::ResourceSchema;
+    use super::{CompletionContextKind, ResourceSchema, yaml_context};
     use crate::api_resource::ApiResource;
     use k8s_openapi::serde_json::json;
 
@@ -561,6 +730,158 @@ mod tests {
         }));
         assert_eq!(schema.suggestions_at("met", 3)[0].label, "metadata");
         assert_eq!(schema.suggestions_at("mode: Read", 10)[0].label, "ReadOnly");
+        let completion = schema.completion_at("mode: Read", 10);
+        assert_eq!(
+            completion.context.as_ref().map(|context| context.kind),
+            Some(CompletionContextKind::Value)
+        );
+        assert_eq!(
+            completion
+                .context
+                .as_ref()
+                .and_then(|context| context.type_label.as_deref()),
+            Some("string")
+        );
+    }
+
+    #[test]
+    fn suggests_documented_kubernetes_value_sets_when_openapi_omits_an_enum() {
+        let schema = ResourceSchema::new(json!({
+            "type": "object",
+            "properties": {
+                "operator": {
+                    "type": "string",
+                    "description": "operator represents a key's relationship with a set of values. Valid operators are In, NotIn, Exists and DoesNotExist."
+                }
+            }
+        }));
+
+        let suggestions = schema
+            .suggestions_at("operator: I", "operator: I".len())
+            .into_iter()
+            .map(|suggestion| (suggestion.label, suggestion.detail))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            suggestions,
+            vec![
+                ("In".into(), None),
+                ("NotIn".into(), None),
+                ("Exists".into(), None),
+                ("DoesNotExist".into(), None),
+            ]
+        );
+    }
+
+    #[test]
+    fn completion_context_tracks_deeply_nested_sequence_values() {
+        let yaml = r#"apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployment-completion
+spec:
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+            - key: k8s-app
+              operator: I"#;
+
+        let context = yaml_context(yaml, yaml.len());
+        assert_eq!(
+            context.path,
+            vec![
+                "spec",
+                "affinity",
+                "podAntiAffinity",
+                "preferredDuringSchedulingIgnoredDuringExecution",
+                "podAffinityTerm",
+                "labelSelector",
+                "matchExpressions",
+            ]
+        );
+        assert_eq!(context.value_key.as_deref(), Some("operator"));
+        assert!(context.is_value);
+    }
+
+    #[test]
+    fn completion_context_tracks_mapping_keys_inside_deeply_nested_sequences() {
+        let yaml = r#"spec:
+  template:
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector: {}"#;
+        let cursor = yaml.find("podAffinityTerm").expect("key exists") + "podAffinityTerm".len();
+
+        let context = yaml_context(yaml, cursor);
+        assert_eq!(
+            context.path,
+            vec![
+                "spec",
+                "template",
+                "spec",
+                "affinity",
+                "podAntiAffinity",
+                "preferredDuringSchedulingIgnoredDuringExecution",
+            ]
+        );
+        assert!(!context.is_value);
+    }
+
+    #[test]
+    fn partial_mapping_keys_keep_their_enclosing_sequence_path() {
+        let yaml = r#"spec:
+  template:
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: k8s-app
+                  oper"#;
+
+        let context = yaml_context(yaml, yaml.len());
+        assert_eq!(
+            context.path,
+            vec![
+                "spec",
+                "template",
+                "spec",
+                "affinity",
+                "podAntiAffinity",
+                "preferredDuringSchedulingIgnoredDuringExecution",
+                "podAffinityTerm",
+                "labelSelector",
+                "matchExpressions",
+            ]
+        );
+        assert!(!context.is_value);
+    }
+
+    #[test]
+    fn suggests_keys_from_array_items_wrapped_in_openapi_all_of_references() {
+        let schema = ResourceSchema::new(json!({
+            "$ref": "#/components/schemas/Root",
+            "components": {"schemas": {
+                "Root": {"type": "object", "properties": {
+                    "terms": {"type": "array", "items": {"allOf": [
+                        {"$ref": "#/components/schemas/Term"}
+                    ]}}
+                }},
+                "Term": {"type": "object", "properties": {
+                    "operator": {"type": "string"}
+                }}
+            }}
+        }));
+        let yaml = "terms:\n- oper";
+
+        assert_eq!(schema.suggestions_at(yaml, yaml.len())[0].label, "operator");
     }
 
     #[test]
@@ -657,6 +978,27 @@ mod tests {
         assert_eq!(
             schema.suggestions_at(array_value, array_value.len())[0].label,
             "Always"
+        );
+
+        let selector_schema = ResourceSchema::new(json!({
+            "type": "object",
+            "properties": {
+                "spec": {"type": "object", "properties": {
+                    "selector": {"type": "object", "properties": {
+                        "matchLabels": {"type": "object"}
+                    }}
+                }}
+            }
+        }));
+        let partial_selector_key = "spec:\n  selector:\n    match";
+        let labels = selector_schema
+            .suggestions_at(partial_selector_key, partial_selector_key.len())
+            .into_iter()
+            .map(|suggestion| suggestion.label)
+            .collect::<Vec<_>>();
+        assert!(
+            labels.iter().any(|label| label == "matchLabels"),
+            "a bare partial mapping key must use its enclosing schema path"
         );
 
         let array_key = "spec:\n  templates:\n    - spec:\n        containers:\n          - na";

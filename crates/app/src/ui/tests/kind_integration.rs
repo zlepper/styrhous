@@ -714,6 +714,217 @@ fn test_resource_actions_integration() {
     );
 }
 
+/// Fetches the live Deployment OpenAPI schema from Kind and verifies completion inside an
+/// existing `spec.selector.matchLabels` key after it has been partially edited.
+#[test]
+fn test_deployment_match_labels_completion_integration() {
+    let fixture = IntegrationConfigMap::create("deployment-completion", "anchor", "unused");
+    let deployment_name = "deployment-completion".to_owned();
+    let client = fixture.runtime.block_on(async {
+        Client::try_default()
+            .await
+            .expect("Failed to create Kubernetes client")
+    });
+    let deployments: Api<Deployment> = Api::namespaced(client, &fixture.namespace);
+    fixture.runtime.block_on(async {
+        deployments
+            .create(
+                &Default::default(),
+                &Deployment {
+                    metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                        name: Some(deployment_name.clone()),
+                        namespace: Some(fixture.namespace.clone()),
+                        ..Default::default()
+                    },
+                    spec: Some(DeploymentSpec {
+                        replicas: Some(1),
+                        selector: LabelSelector {
+                            match_labels: Some(BTreeMap::from([(
+                                "app".to_owned(),
+                                deployment_name.clone(),
+                            )])),
+                            ..Default::default()
+                        },
+                        template: PodTemplateSpec {
+                            metadata: Some(
+                                k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                                    labels: Some(BTreeMap::from([(
+                                        "app".to_owned(),
+                                        deployment_name.clone(),
+                                    )])),
+                                    ..Default::default()
+                                },
+                            ),
+                            spec: Some(PodSpec {
+                                containers: vec![Container {
+                                    name: "pause".to_owned(),
+                                    image: Some("registry.k8s.io/pause:3.10".to_owned()),
+                                    ..Default::default()
+                                }],
+                                ..Default::default()
+                            }),
+                        },
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("Failed to create integration Deployment");
+    });
+
+    let (mut harness, cluster_key) = connected_kind_harness();
+    wait_for_cluster_data(&mut harness, cluster_key);
+    select_namespace(&mut harness, &fixture.namespace);
+    let deployments_resource = select_resource(&mut harness, "Apps & Containers", "Deployments");
+    wait_for_resource_sync(
+        &mut harness,
+        cluster_key,
+        deployments_resource,
+        &fixture.namespace,
+    );
+
+    let actions_label = format!("More actions for {deployment_name}");
+    harness.get_by_label(&actions_label).click_accesskit();
+    harness.run();
+    harness.get_by_label("Edit").click_accesskit();
+    harness.run();
+    let (schema, yaml) = wait_for(
+        &mut harness,
+        |app| {
+            app.ui_state
+                .yaml_editors
+                .values()
+                .find(|editor| editor.resource_name == deployment_name && editor.is_ready())
+                .and_then(|editor| {
+                    editor
+                        .schema
+                        .clone()
+                        .map(|schema| (schema, editor.edited_yaml.clone()))
+                })
+        },
+        10_000,
+    );
+
+    let key_start = yaml
+        .find("matchLabels")
+        .expect("live Deployment YAML includes spec.selector.matchLabels");
+    let mut partial_yaml = yaml;
+    partial_yaml.replace_range(key_start..key_start + "matchLabels".len(), "match");
+    let cursor = partial_yaml[..key_start + "match".len()].chars().count();
+    let suggestions = schema.suggestions_at(&partial_yaml, cursor);
+
+    assert_eq!(
+        suggestions
+            .first()
+            .map(|suggestion| suggestion.label.as_str()),
+        Some("matchLabels"),
+        "suggestions: {suggestions:#?}\npartial YAML:\n{partial_yaml}"
+    );
+
+    let affinity_yaml = r#"apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployment-completion
+spec:
+  template:
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: k8s-app
+                  operator: I"#;
+    let suggestions = schema.suggestions_at(affinity_yaml, affinity_yaml.len());
+    assert_eq!(
+        suggestions
+            .first()
+            .map(|suggestion| suggestion.label.as_str()),
+        Some("In"),
+        "suggestions: {suggestions:#?}\nYAML:\n{affinity_yaml}"
+    );
+}
+
+/// Opens the installed CoreDNS Deployment through the real editor and checks the completion
+/// context at every mapping key in its live YAML.
+#[test]
+fn test_coredns_deployment_property_completion_integration() {
+    let (mut harness, cluster_key) = connected_kind_harness();
+    wait_for_cluster_data(&mut harness, cluster_key);
+    select_namespace(&mut harness, "kube-system");
+    let deployments_resource = select_resource(&mut harness, "Apps & Containers", "Deployments");
+    wait_for_resource_sync(
+        &mut harness,
+        cluster_key,
+        deployments_resource,
+        "kube-system",
+    );
+
+    harness
+        .get_by_label("More actions for coredns")
+        .click_accesskit();
+    harness.run();
+    harness.get_by_label("Edit").click_accesskit();
+    harness.run();
+    let (schema, yaml) = wait_for(
+        &mut harness,
+        |app| {
+            app.ui_state
+                .yaml_editors
+                .values()
+                .find(|editor| editor.resource_name == "coredns" && editor.is_ready())
+                .and_then(|editor| {
+                    editor
+                        .schema
+                        .clone()
+                        .map(|schema| (schema, editor.edited_yaml.clone()))
+                })
+        },
+        10_000,
+    );
+
+    let failures = yaml_mapping_key_positions(&yaml)
+        .into_iter()
+        .filter_map(|(line, key, cursor)| {
+            let completion = schema.completion_at(&yaml, cursor);
+            completion
+                .context
+                .is_none()
+                .then_some((line, key, completion.suggestions))
+        })
+        .collect::<Vec<_>>();
+
+    assert!(
+        failures.is_empty(),
+        "each CoreDNS mapping key should resolve to a schema completion context:\n{failures:#?}\nYAML:\n{yaml}"
+    );
+}
+
+fn yaml_mapping_key_positions(yaml: &str) -> Vec<(usize, String, usize)> {
+    let mut line_start = 0;
+    let mut positions = Vec::new();
+    for (line_number, line) in yaml.lines().enumerate() {
+        let leading_whitespace = line.len() - line.trim_start().len();
+        let line_after_indent = &line[leading_whitespace..];
+        let (dash_prefix, mapping) = line_after_indent
+            .strip_prefix("- ")
+            .map_or((0, line_after_indent), |mapping| (2, mapping));
+        if let Some((key, _)) = mapping.split_once(':')
+            && !key.is_empty()
+            && key.chars().all(|character| {
+                character.is_ascii_alphanumeric() || matches!(character, '-' | '_')
+            })
+        {
+            let cursor = line_start + leading_whitespace + dash_prefix + key.len();
+            positions.push((line_number + 1, key.to_owned(), cursor));
+        }
+        line_start += line.len() + 1;
+    }
+    positions
+}
+
 /// Verifies that the Deployment action patches the pod template annotation used
 /// by `kubectl rollout restart` against a real Kubernetes API server.
 #[test]

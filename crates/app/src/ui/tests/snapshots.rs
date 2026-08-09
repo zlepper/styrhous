@@ -1,6 +1,8 @@
 use super::super::MyEguiApp;
 use super::super::state::ClusterConnectionState;
-use super::super::state::{PendingDelete, ResourceWatchState, UiState};
+use super::super::state::{
+    PendingDelete, ResourceWatchState, UiState, ValidationState, YamlEditorWindowState,
+};
 use super::fixtures::{
     application_harness, application_harness_with_terminal, fixture_api_resource, fixture_cluster,
     fixture_cluster_scoped_api_resource, oracle_resource_table_state,
@@ -15,20 +17,28 @@ use crate::resource_detail::{
     PodVolumeDetail, ResourceDetail, ResourceDetailPayload, ResourceEvent, SecretDataDetail,
     SecretDetail,
 };
+use crate::resource_schema::ResourceSchema;
 use crate::resource_table::{
     AVAILABLE_COLUMN, CONTAINERS_COLUMN, CellValue, ContainerIndicator, ContainerKind, NODE_COLUMN,
     READY_COLUMN, RESTARTS_COLUMN, STATUS_COLUMN, StatusTone, UP_TO_DATE_COLUMN,
 };
 use crate::terminal_launcher::{TerminalLaunchSettings, test_support::MockTerminalLauncher};
 use crate::worker::{MockWorker, WorkerCommand, WorkerResult};
+use egui::text::{CCursor, CCursorRange};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
+use k8s_openapi::serde_json::json;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 // The verified WGPU variance at transformed blade-shadow edges has a maximum per-pixel
 // YIQ-squared distance of 1.84634. This threshold accepts only that microscopic rasterization
 // noise; it does not permit any count of larger differences.
 const TRANSFORMED_BLADE_PIXEL_THRESHOLD: f32 = 2.1;
+
+struct YamlEditorSnapshotState {
+    editor: YamlEditorWindowState,
+    commands: Vec<WorkerCommand>,
+}
 
 fn transformed_blade_snapshot_options() -> egui_kittest::SnapshotOptions {
     egui_kittest::SnapshotOptions::new().threshold(TRANSFORMED_BLADE_PIXEL_THRESHOLD)
@@ -2015,6 +2025,159 @@ fn config_map_detail(data: BTreeMap<String, String>) -> ResourceDetail {
             immutable: false,
         }),
     }
+}
+
+#[test]
+fn deployment_editor_completes_match_labels_in_a_selector() {
+    let deployment = fixture_api_resource("apps", "Deployment", "deployments");
+    let detail = ResourceDetail {
+        api_resource: deployment.clone(),
+        name: "coredns".into(),
+        namespace: Some("kube-system".into()),
+        uid: "deployment-match-labels-uid".into(),
+        resource_version: "1".into(),
+        creation_timestamp: None,
+        owner: None,
+        labels: BTreeMap::new(),
+        annotations: BTreeMap::new(),
+        payload: ResourceDetailPayload::Generic,
+    };
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    open_typed_detail(&mut harness, deployment.clone(), detail);
+
+    harness
+        .get_by_label("More actions for coredns")
+        .click_accesskit();
+    harness.run();
+    harness.get_by_label("Edit").click_accesskit();
+    harness.run();
+
+    let editor_id = harness
+        .state()
+        .worker
+        .commands
+        .iter()
+        .find_map(|command| match command {
+            WorkerCommand::GetResourceYaml { editor_id, .. } => Some(*editor_id),
+            _ => None,
+        })
+        .expect("editing the deployment fetches its YAML");
+    let original_yaml = "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: coredns\nspec:\n  selector:\n    matchLabels:\n      app: coredns";
+    let partial_yaml = "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: coredns\nspec:\n  selector:\n    match";
+    assert!(
+        deployment_selector_schema()
+            .suggestions_at(partial_yaml, partial_yaml.chars().count())
+            .iter()
+            .any(|suggestion| suggestion.label == "matchLabels"),
+        "the deployment schema should complete the partial selector key"
+    );
+    harness.state_mut().worker.results.extend([
+        WorkerResult::ResourceYamlFetched {
+            editor_id,
+            cluster_key: 2,
+            api_resource: deployment.clone(),
+            namespace: Some("kube-system".into()),
+            resource_name: "coredns".into(),
+            yaml: original_yaml.into(),
+        },
+        WorkerResult::ResourceSchemaLoaded {
+            editor_id,
+            cluster_key: 2,
+            api_resource: deployment.clone(),
+            schema: deployment_selector_schema(),
+        },
+    ]);
+    harness.run();
+
+    let mut editor = harness
+        .state()
+        .ui_state
+        .yaml_editors
+        .get(&editor_id)
+        .expect("deployment editor remains open")
+        .clone();
+    editor.edited_yaml = partial_yaml.into();
+    editor.validation_revision = 0;
+    editor.validation_due = None;
+    editor.diagnostics.clear();
+    editor.retained_diagnostics.clear();
+    editor.server_validation = ValidationState::Idle;
+    let mut snapshot_harness = Harness::builder().build_state(
+        |ctx, state: &mut YamlEditorSnapshotState| {
+            super::super::yaml_editor::show_editor_window(
+                ctx,
+                &mut state.editor,
+                &mut state.commands,
+            );
+        },
+        YamlEditorSnapshotState {
+            editor,
+            commands: Vec::new(),
+        },
+    );
+    components::test_support::setup_egui(&mut snapshot_harness);
+    snapshot_harness.run();
+
+    let text_edit_id = egui::Id::new(("yaml-editor-text", editor_id));
+    let mut text_edit_state =
+        egui::widgets::text_edit::TextEditState::load(&snapshot_harness.ctx, text_edit_id)
+            .expect("the deployment YAML editor has rendered");
+    let cursor = partial_yaml.chars().count();
+    text_edit_state
+        .cursor
+        .set_char_range(Some(CCursorRange::one(CCursor::new(cursor))));
+    text_edit_state.store(&snapshot_harness.ctx, text_edit_id);
+    snapshot_harness
+        .ctx
+        .memory_mut(|memory| memory.request_focus(text_edit_id));
+
+    snapshot_harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Space);
+    snapshot_harness.run();
+
+    let editor = &snapshot_harness.state().editor;
+    assert!(editor.suggestions_visible, "editor state: {editor:#?}");
+    assert_eq!(editor.suggestions[0].label, "matchLabels");
+    snapshot_harness.snapshot("deployment_editor_match_labels_completion");
+}
+
+fn deployment_selector_schema() -> ResourceSchema {
+    ResourceSchema::new(json!({
+        "type": "object",
+        "properties": {
+            "apiVersion": {"type": "string"},
+            "kind": {"type": "string"},
+            "metadata": {"type": "object"},
+            "spec": {
+                "type": "object",
+                "properties": {
+                    "selector": {
+                        "description": "Label selector for the Pods managed by this Deployment.",
+                        "allOf": [{"$ref": "#/components/schemas/LabelSelector"}]
+                    }
+                }
+            }
+        },
+        "components": {
+            "schemas": {
+                "LabelSelector": {
+                    "type": "object",
+                    "properties": {
+                        "matchLabels": {
+                            "type": "object",
+                            "description": "Map of label keys and values that must match the selected Pods.",
+                            "additionalProperties": {"type": "string"}
+                        },
+                        "matchExpressions": {
+                            "type": "array",
+                            "description": "Requirements for selecting Pods by label.",
+                            "items": {"type": "object"}
+                        }
+                    }
+                }
+            }
+        }
+    }))
 }
 
 #[test]
