@@ -192,6 +192,9 @@ impl BladeStack {
 
         let history_len = navigator.back_stack.len();
         let first_history = history_len.saturating_sub(HISTORY_SCALES.len());
+        for entry in &navigator.back_stack()[..first_history] {
+            retain_hidden_layer(ctx, self.layer_id(item_id(entry)), viewport);
+        }
         for (index, entry) in navigator.back_stack_mut()[first_history..]
             .iter_mut()
             .enumerate()
@@ -606,6 +609,23 @@ fn show_layer<R>(
         })
         .inner
 }
+
+/// Keep clipped history layers visible to egui without painting their contents.
+///
+/// An [`egui::Area`] that disappears for a frame is automatically promoted when
+/// it returns. That would put an older history blade above newer history when
+/// it re-enters the two-layer display cap. Retaining the area off-screen keeps
+/// its established position in the foreground display stack.
+fn retain_hidden_layer(ctx: &egui::Context, id: Id, viewport: Rect) {
+    egui::Area::new(id)
+        .order(Order::Foreground)
+        .fixed_pos(egui::pos2(viewport.right() + INSET, viewport.top() + INSET))
+        .fade_in(false)
+        .interactable(false)
+        .show(ctx, |ui| {
+            ui.set_min_size(egui::Vec2::ZERO);
+        });
+}
 fn paint_scrim(ctx: &egui::Context, id: Id, viewport: Rect, closing: f32) {
     egui::Area::new(id.with("scrim"))
         .order(Order::Foreground)
@@ -744,6 +764,41 @@ mod tests {
         navigator.borrow_mut().clear_transition();
         harness.run();
         harness.snapshot_options("blades/history_cap", &transformed_blade_snapshot_options());
+    }
+
+    #[test]
+    fn snapshots_history_order_when_a_blade_returns_to_the_display_stack() {
+        let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 1,
+            title: "First",
+        })));
+        navigator.borrow_mut().clear_transition();
+        let stack = BladeStack::new("blade-returned-to-display-stack-snapshot");
+        let navigator_for_ui = Rc::clone(&navigator);
+        let mut harness = Harness::new_ui(move |ui| {
+            stack.show_with_title(
+                ui.ctx(),
+                &mut navigator_for_ui.borrow_mut(),
+                |blade| Id::new(blade.id),
+                |blade| blade.title.to_owned(),
+                render_test_blade,
+            );
+        });
+        crate::test_support::setup_egui(&mut harness);
+
+        for (id, title) in [(2, "Second"), (3, "Third"), (4, "Fourth")] {
+            navigator.borrow_mut().push(TestBlade { id, title });
+        }
+        navigator.borrow_mut().clear_transition();
+        harness.run();
+
+        assert!(navigator.borrow_mut().go_back());
+        navigator.borrow_mut().clear_transition();
+        harness.run();
+        harness.snapshot_options(
+            "blades/restored_history_display_stack",
+            &transformed_blade_snapshot_options(),
+        );
     }
 
     #[test]
