@@ -5,6 +5,7 @@ use std::hash::Hash;
 use egui::{Id, Response, TextBuffer, TextEdit, TextStyle, Ui};
 
 use crate::colors::{WHITE, gray, indigo};
+use crate::design::{radius, spacing};
 
 /// A bordered multiline text area with Tailwind-inspired input states.
 pub struct TailwindTextArea<'a> {
@@ -66,8 +67,11 @@ impl<'a> TailwindTextArea<'a> {
         egui::Frame::new()
             .fill(fill)
             .stroke(stroke)
-            .corner_radius(egui::CornerRadius::same(6))
-            .inner_margin(egui::Margin::symmetric(10, 8))
+            .corner_radius(radius::control())
+            .inner_margin(egui::Margin::symmetric(
+                (spacing::SM + spacing::XS) as i8,
+                spacing::SM as i8,
+            ))
             .show(ui, |ui| {
                 let mut editor = TextEdit::multiline(self.text)
                     .id(id)

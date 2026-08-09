@@ -1,9 +1,10 @@
 use crate::minimal_resource::format_age;
 use crate::resource_table::{CellValue, ContainerIndicator, StatusTone};
-use components::colors::{SUCCESS, gray};
+use components::colors::gray;
+use components::design::{radius, spacing, status, typography};
 use components::{TableRowBuilder, TailwindButton, WorkspaceEmptyState};
 
-const STATE_MARGIN: i8 = 32;
+const STATE_MARGIN: i8 = spacing::XXL as i8;
 
 pub(super) fn resource_status(ui: &mut egui::Ui, status: &str, tone: StatusTone) {
     let color = status_color(tone);
@@ -75,9 +76,9 @@ fn container_indicator_tooltip(indicator: &ContainerIndicator) -> String {
 
 fn status_color(tone: StatusTone) -> egui::Color32 {
     match tone {
-        StatusTone::Success => SUCCESS,
-        StatusTone::Warning => egui::Color32::from_rgb(202, 138, 4),
-        StatusTone::Danger => egui::Color32::from_rgb(220, 38, 38),
+        StatusTone::Success => status::SUCCESS,
+        StatusTone::Warning => status::WARNING,
+        StatusTone::Danger => status::CRITICAL,
         StatusTone::Neutral => gray::_400,
     }
 }
@@ -92,16 +93,19 @@ pub(super) fn workspace_search_error_state(ui: &mut egui::Ui, message: &str) {
 
 pub(super) fn workspace_loading_state(ui: &mut egui::Ui, title: &str, message: &str) {
     show_state_area(ui, 74.0, |ui| {
-        ui.add(egui::Spinner::new().size(22.0));
-        ui.add_space(8.0);
+        ui.add(egui::Spinner::new().size(20.0));
+        ui.add_space(spacing::SM);
         ui.label(
             egui::RichText::new(title)
-                .size(18.0)
-                .strong()
+                .font(typography::section_heading())
                 .color(gray::_800),
         );
-        ui.add_space(6.0);
-        ui.label(egui::RichText::new(message).size(13.0).color(gray::_500));
+        ui.add_space(spacing::SM);
+        ui.label(
+            egui::RichText::new(message)
+                .font(typography::body())
+                .color(gray::_500),
+        );
     });
 }
 
@@ -129,25 +133,24 @@ fn workspace_error_details<R>(
             ui.vertical_centered(|ui| {
                 ui.label(
                     egui::RichText::new(title)
-                        .size(18.0)
-                        .strong()
+                        .font(typography::section_heading())
                         .color(gray::_800),
                 );
             });
-            ui.add_space(6.0);
+            ui.add_space(spacing::SM);
             ui.label(
                 egui::RichText::new("Error details")
-                    .size(13.0)
+                    .font(typography::body())
                     .color(gray::_500),
             );
-            ui.add_space(4.0);
+            ui.add_space(spacing::XS);
             let code_width = ui.available_width();
             let code_background = ui.visuals().code_bg_color;
             egui::Frame::new()
                 .fill(code_background)
                 .stroke(egui::Stroke::new(1.0, gray::_200))
-                .corner_radius(egui::CornerRadius::same(4))
-                .inner_margin(egui::Margin::same(8))
+                .corner_radius(radius::subtle())
+                .inner_margin(egui::Margin::same(spacing::SM as i8))
                 .show(ui, |ui| {
                     ui.set_min_width((code_width - 16.0).max(0.0));
                     ui.code(message);

@@ -75,6 +75,9 @@ Use a real `Worker` only when testing the Kind integration path.
 - For egui UI work, use the existing Tailwind-inspired components and palette (`TailwindButton`,
   `WorkspaceCard`, and `components::colors`) whenever they fit. Follow Tailwind UI surface,
   spacing, typography, and control patterns rather than introducing one-off widget styling.
+- Use `components::design` for shared typography, spacing, radii, surfaces, and fixed semantic
+  status colors. Do not hardcode reusable visual constants in screens or components; keep only
+  feature-specific geometry (for example, animation or panel dimensions) local to its owner.
 - Prefer behavior-focused tests and real interactions; mock only external, uncontrollable
   processes.
 - Keep UI and Kubernetes operations separated through the worker commands/results.

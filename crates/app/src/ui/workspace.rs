@@ -13,6 +13,7 @@ use crate::resource_handlers::table_definition;
 use crate::resource_table::CustomResourceColumn;
 use crate::worker::WorkerCommand;
 use components::colors::{TOOLBAR_BACKGROUND, gray};
+use components::design::{spacing, typography};
 use components::fuzzy::{matches_fuzzy, normalize_for_search};
 use components::{
     MoreButton, SelectionAction, TableRowBuilder, TailwindCombobox, TailwindSearchInput,
@@ -22,9 +23,9 @@ use egui_extras::{Size, StripBuilder};
 use std::cell::RefCell;
 
 const RESOURCE_SEARCH_WIDTH: f32 = 210.0;
-const TOOLBAR_RIGHT_INSET: f32 = 24.0;
-const TOOLBAR_HEIGHT: f32 = 64.0;
-const TOOLBAR_CONTENT_HEIGHT: f32 = 50.0;
+const TOOLBAR_RIGHT_INSET: f32 = spacing::XL;
+const TOOLBAR_HEIGHT: f32 = 52.0;
+const TOOLBAR_CONTENT_HEIGHT: f32 = 36.0;
 const TOOLBAR_VERTICAL_PADDING: f32 = (TOOLBAR_HEIGHT - TOOLBAR_CONTENT_HEIGHT) / 2.0;
 
 struct FilteredResources {
@@ -195,6 +196,7 @@ pub(super) fn show(
                     &filtered_resources.resources,
                     all_resources.len() - filtered_resources.resources.len(),
                     api_resource.namespaced && cluster.selected_namespaces.len() > 1,
+                    cluster.resource_detail_panel.is_none(),
                 ) {
                     match action {
                         ResourceAction::OpenDetails {
@@ -405,17 +407,21 @@ fn show_toolbar(
                     strip.cell(|ui| {
                         ui.add_space(37.0);
                         if selected_api_resource.is_some_and(|resource| !resource.namespaced) {
-                            ui.label(egui::RichText::new("Scope").size(14.0).color(gray::_700));
+                            ui.label(
+                                egui::RichText::new("Scope")
+                                    .font(typography::body())
+                                    .color(gray::_700),
+                            );
                             ui.add_space(7.0);
                             ui.label(
                                 egui::RichText::new("Cluster-wide")
-                                    .size(14.0)
+                                    .font(typography::body())
                                     .color(gray::_700),
                             );
                         } else {
                             ui.label(
                                 egui::RichText::new("Namespace")
-                                    .size(14.0)
+                                    .font(typography::body())
                                     .color(gray::_700),
                             );
                             ui.add_space(7.0);
@@ -479,7 +485,7 @@ fn show_toolbar(
                                     filtered_resources.resources.len(),
                                     !resource_search.query.is_empty(),
                                 ))
-                                .size(18.0)
+                                .font(typography::section_heading())
                                 .color(gray::_500),
                             );
                         }
@@ -591,6 +597,7 @@ fn show_resource_table(
     resources: &[MinimalResource],
     hidden_resource_count: usize,
     show_namespace_column: bool,
+    allow_actions: bool,
 ) -> Option<ResourceAction> {
     let pending_action = RefCell::new(None);
     let mut rows = resources
@@ -651,7 +658,9 @@ fn show_resource_table(
                         TableRowBuilder::text(ui, &resource.age(), false)
                     }
                     index if index == actions_index => {
-                        show_resource_actions(ui, resource, &mut pending_action.borrow_mut())
+                        if allow_actions {
+                            show_resource_actions(ui, resource, &mut pending_action.borrow_mut());
+                        }
                     }
                     _ => {}
                 },
@@ -675,7 +684,10 @@ fn show_resource_table(
                             .latest_pos()
                             .is_some_and(|position| row_response.interact_rect.contains(position))
                 });
-                if column_index == 0 && primary_clicked_in_cell && pending_action.borrow().is_none()
+                if allow_actions
+                    && column_index == 0
+                    && primary_clicked_in_cell
+                    && pending_action.borrow().is_none()
                 {
                     *pending_action.borrow_mut() = Some(ResourceAction::OpenDetails {
                         name: resource.name.clone(),
@@ -683,14 +695,16 @@ fn show_resource_table(
                         uid: resource.uid.clone(),
                     });
                 }
-                MoreButton::show_context_menu(row_response, |menu| {
-                    show_resource_action_items(
-                        menu,
-                        resource,
-                        &resource.log_containers,
-                        &mut pending_action.borrow_mut(),
-                    );
-                });
+                if allow_actions {
+                    MoreButton::show_context_menu(row_response, |menu| {
+                        show_resource_action_items(
+                            menu,
+                            resource,
+                            &resource.log_containers,
+                            &mut pending_action.borrow_mut(),
+                        );
+                    });
+                }
             }
         },
     );

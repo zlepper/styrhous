@@ -3,29 +3,26 @@
 //! The component owns presentation, filtering, keyboard navigation, and the
 //! selection gestures. Callers continue to own their selected values.
 
-const ITEM_HEIGHT: f32 = 36.0;
-const INPUT_HEIGHT: f32 = 50.0;
-const CORNER_RADIUS: u8 = 6;
-const ICON_SIZE: f32 = 20.0;
+const ITEM_HEIGHT: f32 = 32.0;
+const INPUT_HEIGHT: f32 = 36.0;
+const ICON_SIZE: f32 = 16.0;
 const DROPDOWN_MAX_HEIGHT: f32 = 300.0;
 const DEFAULT_WIDTH: f32 = 256.0;
-const ITEM_PADDING_X: f32 = 12.0;
-const INPUT_PADDING_X: f32 = 12.0;
+const ITEM_PADDING_X: f32 = crate::design::spacing::MD;
+const INPUT_PADDING_X: f32 = crate::design::spacing::MD;
 const ICON_AREA_WIDTH: f32 = 36.0;
-const FONT_SIZE: f32 = 18.0;
-const COMPACT_INPUT_HEIGHT: f32 = 36.0;
-const COMPACT_FONT_SIZE: f32 = 14.0;
+const COMPACT_INPUT_HEIGHT: f32 = 32.0;
 
 use egui::{
-    Align, Align2, Color32, CornerRadius, FontId, Id, Key, Modifiers, Popup, PopupCloseBehavior,
-    Rect, Response, ScrollArea, Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2, WidgetText,
+    Align, Align2, Color32, FontId, Id, Key, Modifiers, Popup, PopupCloseBehavior, Rect, Response,
+    ScrollArea, Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2, WidgetText,
 };
 use std::sync::Arc;
 
 use crate::colors::{SUCCESS, WHITE, gray, indigo};
+use crate::design::{radius, typography};
 use crate::fuzzy::{matches_fuzzy, normalize_for_search};
 use crate::icons;
-use crate::semibold_font;
 
 fn layout_truncated_text(
     ui: &Ui,
@@ -207,9 +204,9 @@ impl<'a> ComboboxUi<'a> {
                 self.ui,
                 &label_text,
                 if is_selected {
-                    semibold_font(FONT_SIZE)
+                    typography::semibold(typography::BODY_SIZE)
                 } else {
-                    FontId::proportional(FONT_SIZE)
+                    typography::body()
                 },
                 text_color,
                 text_width,
@@ -284,10 +281,10 @@ impl ComboboxSize {
         }
     }
 
-    fn font_size(self) -> f32 {
+    fn font(self) -> FontId {
         match self {
-            Self::Default => FONT_SIZE,
-            Self::Compact => COMPACT_FONT_SIZE,
+            Self::Default => typography::body(),
+            Self::Compact => typography::metadata(),
         }
     }
 
@@ -545,7 +542,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
         selected_status: Option<bool>,
         size: ComboboxSize,
     ) -> Response {
-        let corner_radius = CornerRadius::same(CORNER_RADIUS);
+        let corner_radius = radius::control();
         let (rect, response) =
             ui.allocate_exact_size(Vec2::new(width, size.input_height()), Sense::click());
         let has_focus = response.has_focus()
@@ -590,13 +587,8 @@ impl<F> TailwindCombobox<WithFilter<F>> {
                 }
                 let text_pos = input_rect.left_center()
                     + Vec2::new(if selected_status.is_some() { 20.0 } else { 0.0 }, 0.0);
-                let galley = layout_truncated_text(
-                    ui,
-                    text,
-                    FontId::proportional(size.font_size()),
-                    gray::_900,
-                    input_rect.width(),
-                );
+                let galley =
+                    layout_truncated_text(ui, text, size.font(), gray::_900, input_rect.width());
                 let is_truncated = galley.elided;
                 ui.painter().galley(
                     text_pos - Vec2::new(0.0, galley.size().y / 2.0),
@@ -614,7 +606,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
                     input_rect.left_center(),
                     Align2::LEFT_CENTER,
                     placeholder,
-                    FontId::proportional(size.font_size()),
+                    size.font(),
                     gray::_400,
                 );
             }
@@ -632,7 +624,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             .vertical_align(egui::Align::Center)
             .id(response.id.with("input"));
         if matches!(size, ComboboxSize::Compact) {
-            text_edit = text_edit.font(FontId::proportional(size.font_size()));
+            text_edit = text_edit.font(size.font());
         }
         if let Some(placeholder) = placeholder {
             text_edit = text_edit.hint_text(placeholder);

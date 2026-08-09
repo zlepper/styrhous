@@ -1,10 +1,11 @@
 //! Compact search control shared by resource and log toolbars.
 
 use crate::colors::{WHITE, gray};
-use egui::{CornerRadius, FontId, Id, Margin, Response, Stroke, Ui, Vec2};
+use crate::design::{radius, spacing, status, typography};
+use egui::{Id, Margin, Response, Stroke, Ui, Vec2};
 
 const INPUT_WIDTH: f32 = 150.0;
-const INPUT_HEIGHT: f32 = 24.0;
+const INPUT_HEIGHT: f32 = 32.0;
 
 /// Responses from a [`TailwindSearchInput`].
 pub struct SearchInputResponse {
@@ -57,15 +58,15 @@ impl<'a> TailwindSearchInput<'a> {
     pub fn show(self, ui: &mut Ui) -> SearchInputResponse {
         let accessibility_label = self.accessibility_label;
         let stroke_color = if self.invalid {
-            egui::Color32::from_rgb(185, 28, 28)
+            status::DANGER
         } else {
             gray::_300
         };
         egui::Frame::new()
             .fill(WHITE)
             .stroke(Stroke::new(1.0, stroke_color))
-            .corner_radius(CornerRadius::same(6))
-            .inner_margin(Margin::symmetric(8, 5))
+            .corner_radius(radius::control())
+            .inner_margin(Margin::symmetric(spacing::SM as i8, spacing::XS as i8))
             .show(ui, |ui| {
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                     let text = ui.add_sized(
@@ -73,7 +74,7 @@ impl<'a> TailwindSearchInput<'a> {
                         egui::TextEdit::singleline(self.query)
                             .hint_text(self.hint_text)
                             .frame(false)
-                            .font(FontId::proportional(14.0))
+                            .font(typography::body())
                             .id_salt(self.input_id),
                     );
                     text.widget_info(|| {
@@ -85,8 +86,10 @@ impl<'a> TailwindSearchInput<'a> {
                     });
 
                     ui.separator();
-                    let regex =
-                        ui.toggle_value(self.regex_mode, egui::RichText::new(".*").size(14.0));
+                    let regex = ui.toggle_value(
+                        self.regex_mode,
+                        egui::RichText::new(".*").font(typography::body()),
+                    );
                     regex.widget_info(|| {
                         egui::WidgetInfo::labeled(
                             egui::WidgetType::Checkbox,

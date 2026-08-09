@@ -1,6 +1,7 @@
 use super::state::UiState;
 use crate::worker::WorkerCommand;
 use components::colors::gray;
+use components::design::{status, typography};
 
 pub(super) fn show_delete_confirmation(
     ctx: &egui::Context,
@@ -39,7 +40,11 @@ pub(super) fn show_delete_confirmation(
                 || "This will delete the cluster-wide resource.".to_owned(),
                 |namespace| format!("This will delete the resource from namespace {namespace}."),
             );
-            ui.label(egui::RichText::new(scope_text).size(13.0).color(gray::_600));
+            ui.label(
+                egui::RichText::new(scope_text)
+                    .font(typography::body())
+                    .color(gray::_600),
+            );
             ui.add_space(16.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
@@ -48,7 +53,7 @@ pub(super) fn show_delete_confirmation(
                             egui::RichText::new(format!("Delete {}", pending.resource_name))
                                 .color(egui::Color32::WHITE),
                         )
-                        .fill(egui::Color32::from_rgb(185, 28, 28)),
+                        .fill(status::DANGER),
                     )
                     .clicked()
                 {

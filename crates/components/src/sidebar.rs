@@ -30,29 +30,27 @@
 //! ```
 
 use egui::{
-    Color32, CornerRadius, Id, Image, Response, RichText, Sense, Stroke, Ui, UiBuilder, Vec2,
-    WidgetText, collapsing_header::CollapsingState,
+    Color32, Id, Image, Response, RichText, Sense, Stroke, Ui, UiBuilder, Vec2, WidgetText,
+    collapsing_header::CollapsingState,
 };
 
 use crate::colors::{NAVIGATION_BACKGROUND, WHITE, gray, indigo};
+use crate::design::{radius, spacing, typography};
 
 const WIDE_WIDTH: f32 = 292.0;
 const NARROW_WIDTH: f32 = 68.0;
 // Resource leaves use a slightly denser allocation than their 44px selection
 // treatment. This preserves the oracle's vertical rhythm while leaving a clear,
 // comfortably sized active target.
-const WIDE_ITEM_HEIGHT: f32 = 41.8;
-const WIDE_GROUP_HEIGHT: f32 = 52.0;
-const NARROW_ITEM_HEIGHT: f32 = 62.0;
+const WIDE_ITEM_HEIGHT: f32 = 36.0;
+const WIDE_GROUP_HEIGHT: f32 = 44.0;
+const NARROW_ITEM_HEIGHT: f32 = 52.0;
 const NARROW_AVATAR_SIZE: f32 = 28.0;
-const ITEM_PADDING_X: f32 = 8.0;
-const ITEM_CORNER_RADIUS: u8 = 6;
-const ICON_SIZE: f32 = 20.0;
-const ICON_TEXT_SPACING: f32 = 10.0;
+const ITEM_PADDING_X: f32 = spacing::SM;
+const ICON_SIZE: f32 = 16.0;
+const ICON_TEXT_SPACING: f32 = spacing::SM;
 const CHEVRON_SIZE: f32 = 16.0;
 const CHEVRON_GAP: f32 = 8.0;
-const TEXT_FONT_SIZE: f32 = 18.0;
-const AVATAR_FONT_SIZE: f32 = 14.0;
 
 struct ItemColors {
     background: Color32,
@@ -124,7 +122,7 @@ fn allocate_item(ui: &mut Ui, height: f32) -> (egui::Rect, egui::Rect, Response)
 
 fn draw_background(painter: &egui::Painter, rect: egui::Rect, color: Color32) {
     if color != Color32::TRANSPARENT {
-        painter.rect_filled(rect, CornerRadius::same(ITEM_CORNER_RADIUS), color);
+        painter.rect_filled(rect, radius::control(), color);
     }
 }
 
@@ -136,7 +134,7 @@ fn render_icon(ui: &mut Ui, rect: egui::Rect, icon: Image<'_>, tint: Color32) {
 }
 
 fn truncate_text(painter: &egui::Painter, text: &str, color: Color32, max_width: f32) -> String {
-    let font = egui::FontId::proportional(TEXT_FONT_SIZE);
+    let font = typography::body();
     if painter
         .layout_no_wrap(text.to_owned(), font.clone(), color)
         .size()
@@ -175,7 +173,7 @@ fn render_text(
         pos,
         egui::Align2::LEFT_TOP,
         &rendered_text,
-        egui::FontId::proportional(TEXT_FONT_SIZE),
+        typography::body(),
         color,
     );
     rendered_text != text
@@ -198,7 +196,7 @@ fn render_avatar(
         center,
         egui::Align2::CENTER_CENTER,
         initial,
-        egui::FontId::proportional(AVATAR_FONT_SIZE),
+        typography::body(),
         text,
     );
 }
@@ -223,12 +221,12 @@ fn icon_rect_centered(inner_rect: egui::Rect) -> egui::Rect {
 
 fn text_pos_after_icon(inner_rect: egui::Rect, item_height: f32) -> egui::Pos2 {
     let text_x = CHEVRON_SIZE + CHEVRON_GAP + ICON_SIZE + ICON_TEXT_SPACING;
-    inner_rect.min + Vec2::new(text_x, (item_height - TEXT_FONT_SIZE) / 2.0)
+    inner_rect.min + Vec2::new(text_x, (item_height - typography::BODY_SIZE) / 2.0)
 }
 
 fn text_pos_after_chevron(inner_rect: egui::Rect, item_height: f32) -> egui::Pos2 {
     let text_x = CHEVRON_SIZE + CHEVRON_GAP + 24.0;
-    inner_rect.min + Vec2::new(text_x, (item_height - TEXT_FONT_SIZE) / 2.0)
+    inner_rect.min + Vec2::new(text_x, (item_height - typography::BODY_SIZE) / 2.0)
 }
 
 struct SidebarContentCore<'a> {
@@ -530,7 +528,11 @@ impl<'a> WideSidebarContent<'a> {
         let colors = ItemColors::navigation(selected, response.hovered(), self.core.dark);
         draw_background(self.core.ui.painter(), inner_rect, colors.background);
 
-        let text_pos = inner_rect.min + Vec2::new(24.0, (WIDE_ITEM_HEIGHT - TEXT_FONT_SIZE) / 2.0);
+        let text_pos = inner_rect.min
+            + Vec2::new(
+                spacing::XL,
+                (WIDE_ITEM_HEIGHT - typography::BODY_SIZE) / 2.0,
+            );
         let text_is_truncated = render_text(
             self.core.ui.painter(),
             text_pos,
@@ -554,7 +556,7 @@ impl<'a> WideSidebarContent<'a> {
             ui.add_space(padding_x);
             ui.label(
                 RichText::new(text.to_uppercase())
-                    .size(11.0)
+                    .font(typography::metadata())
                     .color(if self.core.dark {
                         gray::_400
                     } else {
@@ -804,7 +806,8 @@ impl<'a> WideSidebarContent<'a> {
 
         draw_background(self.core.ui.painter(), bg_rect, colors.background);
 
-        let text_pos = rect.min + Vec2::new(text_x, (WIDE_ITEM_HEIGHT - TEXT_FONT_SIZE) / 2.0);
+        let text_pos =
+            rect.min + Vec2::new(text_x, (WIDE_ITEM_HEIGHT - typography::BODY_SIZE) / 2.0);
         let text_is_truncated = render_text(
             self.core.ui.painter(),
             text_pos,

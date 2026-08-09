@@ -24,16 +24,16 @@
 use egui::{Color32, CursorIcon, Image, Response, ScrollArea, Sense, Ui, Vec2};
 
 use crate::colors::{gray, indigo};
+use crate::design::{spacing, typography};
 
 // Constants from Tailwind classes
-const TAB_GAP: f32 = 32.0; // space-x-8
+const TAB_GAP: f32 = spacing::LG;
 const TAB_PADDING_X: f32 = 4.0; // px-1
-const TAB_PADDING_Y: f32 = 16.0; // py-4
+const TAB_PADDING_Y: f32 = spacing::MD;
 const ICON_SIZE: f32 = 20.0; // size-5
 const ICON_MARGIN_RIGHT: f32 = 8.0; // mr-2
 const ICON_MARGIN_LEFT: f32 = -2.0; // -ml-0.5
 const UNDERLINE_HEIGHT: f32 = 2.0; // border-b-2
-const TEXT_FONT_SIZE: f32 = 14.0; // text-sm
 const SEPARATOR_HEIGHT: f32 = 1.0; // border-b
 
 /// Colors for a tab based on its state
@@ -101,7 +101,7 @@ impl Tabs {
         // Calculate header row height based on actual text metrics
         let sample_galley = ui.painter().layout_no_wrap(
             "Xg".to_string(), // Use characters with ascenders/descenders
-            egui::FontId::proportional(TEXT_FONT_SIZE),
+            typography::body(),
             Color32::PLACEHOLDER,
         );
         let header_height = TAB_PADDING_Y * 2.0 + sample_galley.size().y.max(ICON_SIZE);
@@ -192,11 +192,9 @@ fn render_tab_header(
     is_selected: bool,
 ) -> Response {
     // Create galley for measurement (use PLACEHOLDER so fallback_color works when painting)
-    let galley = ui.painter().layout_no_wrap(
-        label.to_string(),
-        egui::FontId::proportional(TEXT_FONT_SIZE),
-        Color32::PLACEHOLDER,
-    );
+    let galley =
+        ui.painter()
+            .layout_no_wrap(label.to_string(), typography::body(), Color32::PLACEHOLDER);
 
     let icon_width = if icon.is_some() {
         ICON_MARGIN_LEFT + ICON_SIZE + ICON_MARGIN_RIGHT

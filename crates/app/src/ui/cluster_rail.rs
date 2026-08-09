@@ -1,7 +1,8 @@
 use super::state::{ClusterConnectionState, UiState};
 use crate::worker::WorkerCommand;
 use components::NarrowSidebar;
-use components::colors::{CLUSTER_RAIL_BACKGROUND, SUCCESS, gray};
+use components::colors::{CLUSTER_RAIL_BACKGROUND, gray};
+use components::design::status;
 use tracing::info;
 
 pub(super) fn show(
@@ -34,12 +35,10 @@ pub(super) fn show(
                         let selected = ui_state.selected_cluster == Some(cluster_key);
                         let cluster_name = cluster.name.clone();
                         let (status_label, status_color) = match &cluster.connection {
-                            ClusterConnectionState::Connected(_) => ("Connected", SUCCESS),
-                            ClusterConnectionState::Connecting => {
-                                ("Connecting", egui::Color32::from_rgb(202, 138, 4))
-                            }
+                            ClusterConnectionState::Connected(_) => ("Connected", status::SUCCESS),
+                            ClusterConnectionState::Connecting => ("Connecting", status::WARNING),
                             ClusterConnectionState::Failed(_) => {
-                                ("Connection failed", egui::Color32::from_rgb(220, 38, 38))
+                                ("Connection failed", status::CRITICAL)
                             }
                             ClusterConnectionState::Disconnected => ("Disconnected", gray::_500),
                         };

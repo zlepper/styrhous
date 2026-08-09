@@ -4,10 +4,9 @@ use crate::log_store::LogStoreService;
 use crate::worker::WorkerCommand;
 use anstyle::{Ansi256Color, AnsiColor, Color, Effects, RgbColor, Style};
 use components::colors::{SUCCESS, TABLE_BORDER, TOOLBAR_BACKGROUND, gray};
+use components::design::{radius, spacing, status, surface, typography};
 use components::{TailwindSearchInput, icons};
 use std::time::{Duration, Instant};
-
-const TOOLBAR_TEXT_SIZE: f32 = 16.0;
 
 /// Render native, independent Pod log windows and stop both the Kubernetes
 /// stream and the independent disk store when a window is closed.
@@ -78,43 +77,44 @@ fn show_log_window(
 ) {
     sync_search(ctx, window, log_store);
     egui::TopBottomPanel::top("pod-log-header")
-        .exact_height(64.0)
+        .exact_height(52.0)
         .frame(
             egui::Frame::new()
                 .fill(TOOLBAR_BACKGROUND)
                 .stroke(egui::Stroke::new(1.0, TABLE_BORDER))
-                .inner_margin(egui::Margin::symmetric(24, 12)),
+                .inner_margin(egui::Margin::symmetric(
+                    spacing::XL as i8,
+                    spacing::SM as i8,
+                )),
         )
         .show(ctx, |ui| {
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 ui.label(
                     egui::RichText::new("Logs")
-                        .size(TOOLBAR_TEXT_SIZE)
-                        .strong()
+                        .font(typography::section_heading())
                         .color(gray::_900),
                 );
-                ui.add_space(18.0);
+                ui.add_space(spacing::LG);
                 ui.label(
                     egui::RichText::new(&window.pod_name)
-                        .size(TOOLBAR_TEXT_SIZE)
-                        .strong()
+                        .font(typography::section_heading())
                         .color(gray::_900),
                 );
-                ui.add_space(12.0);
+                ui.add_space(spacing::MD);
                 ui.label(
                     egui::RichText::new(format!("Container: {}", window.container.name))
-                        .size(TOOLBAR_TEXT_SIZE)
+                        .font(typography::body())
                         .color(gray::_600),
                 );
-                ui.add_space(12.0);
+                ui.add_space(spacing::MD);
                 ui.label(
                     egui::RichText::new("●")
-                        .size(TOOLBAR_TEXT_SIZE)
+                        .font(typography::body())
                         .color(status_color(&window.status)),
                 );
                 ui.label(
                     egui::RichText::new(status_label(window))
-                        .size(TOOLBAR_TEXT_SIZE)
+                        .font(typography::body())
                         .color(gray::_600),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -126,8 +126,8 @@ fn show_log_window(
     egui::CentralPanel::default()
         .frame(
             egui::Frame::new()
-                .fill(egui::Color32::from_rgb(10, 10, 11))
-                .inner_margin(egui::Margin::same(16)),
+                .fill(surface::TERMINAL_BACKGROUND)
+                .inner_margin(egui::Margin::same(spacing::LG as i8)),
         )
         .show(ctx, |ui| {
             let row_height = ui.text_style_height(&egui::TextStyle::Monospace);
@@ -244,7 +244,7 @@ fn show_log_search_controls(
         ctx.request_repaint_after(Duration::from_millis(150));
     }
 
-    ui.add_space(8.0);
+    ui.add_space(spacing::SM);
     let navigation = ui
         .allocate_ui_with_layout(
             egui::vec2(158.0, 34.0),
@@ -253,7 +253,7 @@ fn show_log_search_controls(
                 egui::Frame::new()
                     .fill(egui::Color32::WHITE)
                     .stroke(egui::Stroke::new(1.0, gray::_300))
-                    .corner_radius(egui::CornerRadius::same(6))
+                    .corner_radius(radius::control())
                     .inner_margin(egui::Margin::symmetric(2, 2))
                     .show(ui, |ui| {
                         ui.spacing_mut().item_spacing.x = 0.0;
@@ -291,7 +291,7 @@ fn show_log_search_controls(
             },
         )
         .inner;
-    ui.add_space(8.0);
+    ui.add_space(spacing::SM);
     let display_controls = ui
         .allocate_ui_with_layout(
             egui::vec2(96.0, 34.0),
@@ -300,7 +300,7 @@ fn show_log_search_controls(
                 egui::Frame::new()
                     .fill(egui::Color32::WHITE)
                     .stroke(egui::Stroke::new(1.0, gray::_300))
-                    .corner_radius(egui::CornerRadius::same(6))
+                    .corner_radius(radius::control())
                     .inner_margin(egui::Margin::symmetric(2, 2))
                     .show(ui, |ui| {
                         ui.spacing_mut().item_spacing.x = 0.0;
@@ -697,7 +697,7 @@ fn status_color(status: &PodLogStatus) -> egui::Color32 {
         PodLogStatus::Connecting => gray::_400,
         PodLogStatus::Following => SUCCESS,
         PodLogStatus::Finished => gray::_400,
-        PodLogStatus::Failed(_) => egui::Color32::from_rgb(185, 28, 28),
+        PodLogStatus::Failed(_) => status::DANGER,
     }
 }
 

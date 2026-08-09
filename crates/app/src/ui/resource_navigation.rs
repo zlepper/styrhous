@@ -1,8 +1,9 @@
 use super::state::UiState;
 use crate::api_resource::ApiResource;
 use crate::resource_catalog::CuratedNavigationEntry;
+use components::WideSidebar;
 use components::colors::{NAVIGATION_BACKGROUND, WHITE};
-use components::{WideSidebar, semibold_font};
+use components::design::typography;
 
 pub(super) fn show(ctx: &egui::Context, ui_state: &UiState) -> Option<ApiResource> {
     let selected_cluster_id = ui_state.selected_cluster?;
@@ -20,7 +21,7 @@ pub(super) fn show(ctx: &egui::Context, ui_state: &UiState) -> Option<ApiResourc
                     ui.add_space(24.0);
                     ui.label(
                         egui::RichText::new(&cluster.name)
-                            .font(semibold_font(20.0))
+                            .font(typography::page_title())
                             .color(WHITE),
                     );
                 });
