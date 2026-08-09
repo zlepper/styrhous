@@ -734,7 +734,7 @@ mod tests {
                     }
                 });
         });
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
 
         harness.run();
         harness.snapshot("comboboxes/closed");
@@ -797,7 +797,7 @@ mod tests {
                 *select_all_for_ui.borrow_mut() = true;
             }
         });
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness
             .get_by_role_and_label(egui::accesskit::Role::ComboBox, "People")
@@ -844,7 +844,7 @@ mod tests {
                     cb.item(&person.name, false);
                 });
         });
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness
             .get_by_role_and_label(egui::accesskit::Role::ComboBox, "People")
@@ -887,7 +887,7 @@ mod tests {
                     }
                 });
         });
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness
             .get_by_role_and_label(egui::accesskit::Role::ComboBox, "People")
@@ -920,7 +920,7 @@ mod tests {
                     cb.item_with_status(*namespace, *namespace == selected_namespace, Some(true));
                 });
         });
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness.snapshot("comboboxes/long_namespace_closed");
         harness
@@ -943,7 +943,7 @@ mod tests {
                     cb.item_with_status(*namespace, *namespace == selected_namespace, Some(true));
                 });
         });
-        crate::test_support::setup_egui(&open_harness.ctx);
+        crate::test_support::setup_egui(&mut open_harness);
         open_harness.run();
         open_harness
             .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespaces")
@@ -971,7 +971,7 @@ mod tests {
                     }
                 });
         });
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness
             .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespaces")
@@ -1020,7 +1020,7 @@ mod tests {
                     }
                 });
         });
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         let combobox_rect = harness
             .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespaces")
@@ -1057,7 +1057,7 @@ mod tests {
                     cb.item(*namespace, false);
                 });
         });
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness
             .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespaces")
@@ -1091,7 +1091,7 @@ mod tests {
                     cb.item(namespace, false);
                 });
         });
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness
             .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespaces")

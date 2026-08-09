@@ -50,7 +50,7 @@ fn showcase_title(ui: &mut egui::Ui, title: &str) {
 }
 
 fn apply_reference_theme(harness: &mut Harness<'_>) {
-    components::test_support::setup_egui(&harness.ctx);
+    components::test_support::setup_egui(harness);
 }
 
 fn show_people_table(ui: &mut egui::Ui, people: &[Person]) {

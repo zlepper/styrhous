@@ -957,7 +957,7 @@ mod tests {
 
     fn create_harness<'a>(app: impl FnMut(&mut Ui) + 'a) -> Harness<'a> {
         let mut harness = Harness::new_ui(app);
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness
     }
@@ -1093,7 +1093,7 @@ mod tests {
                 });
             });
         });
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
 
         harness.snapshot("sidebars/expandable_toggle_collapsed");
@@ -1201,7 +1201,7 @@ mod tests {
                 });
             });
         });
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
 
         // Click on Engineering using accessibility

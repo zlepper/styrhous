@@ -900,7 +900,7 @@ mod tests {
                 });
         });
 
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness.snapshot("tables/basic");
     }
@@ -923,7 +923,7 @@ mod tests {
                 });
         });
 
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness.snapshot("tables/alternating_rows");
     }
@@ -954,7 +954,7 @@ mod tests {
                 );
         });
 
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness.snapshot("tables/with_selection");
     }
@@ -986,7 +986,7 @@ mod tests {
                 );
         });
 
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness.snapshot("tables/select_all");
     }
@@ -1020,7 +1020,7 @@ mod tests {
                 );
         });
 
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness.snapshot("tables/select_all_indeterminate");
     }
@@ -1068,7 +1068,7 @@ mod tests {
                     TableRowBuilder::text(ui, text, col_index == 0);
                 });
         });
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness.snapshot("tables/sorting_unsorted");
 
@@ -1093,7 +1093,7 @@ mod tests {
                     TableRowBuilder::text(ui, text, col_index == 0);
                 });
         });
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness.snapshot("tables/sorting_name_asc");
 
@@ -1117,7 +1117,7 @@ mod tests {
                     TableRowBuilder::text(ui, text, col_index == 0);
                 });
         });
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness.snapshot("tables/sorting_title_desc");
     }
@@ -1143,7 +1143,7 @@ mod tests {
                 });
         });
 
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness.snapshot("tables/column_toggle_menu");
     }
@@ -1170,7 +1170,7 @@ mod tests {
                 });
         });
 
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness.snapshot("tables/hidden_column");
     }

@@ -235,7 +235,7 @@ mod tests {
             });
         });
 
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness
             .get_by_label("More actions for coredns")
@@ -264,7 +264,7 @@ mod tests {
             });
         });
 
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness
             .get_by_label("More actions for api-pod")

@@ -10,9 +10,6 @@ mod widgets;
 mod workspace;
 mod yaml_editor;
 
-#[cfg(test)]
-pub(super) const APP_SNAPSHOT_SIZE: egui::Vec2 = egui::vec2(1536.0, 1024.0);
-
 use crate::log_store::LogStoreService;
 use crate::terminal_launcher::{
     PodShellRequest, SystemTerminalLauncher, TerminalLaunchSettings, TerminalLauncher,

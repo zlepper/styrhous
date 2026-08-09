@@ -842,18 +842,16 @@ mod tests {
         let display_options_for_ui = display_options.clone();
         let log_store = LogStoreService::default();
         let mut close_requested = false;
-        let mut harness = Harness::builder()
-            .with_size(super::super::APP_SNAPSHOT_SIZE)
-            .build(move |ctx| {
-                show_log_window(
-                    ctx,
-                    &mut window_for_ui.borrow_mut(),
-                    &mut display_options_for_ui.borrow_mut(),
-                    &log_store,
-                    &mut close_requested,
-                )
-            });
-        components::test_support::setup_egui(&harness.ctx);
+        let mut harness = Harness::builder().build(move |ctx| {
+            show_log_window(
+                ctx,
+                &mut window_for_ui.borrow_mut(),
+                &mut display_options_for_ui.borrow_mut(),
+                &log_store,
+                &mut close_requested,
+            )
+        });
+        components::test_support::setup_egui(&mut harness);
         harness.run();
 
         harness
@@ -1041,19 +1039,16 @@ mod tests {
         let mut display_options = LogDisplayOptions::default();
         let log_store = LogStoreService::default();
         let mut close_requested = false;
-        let mut harness = Harness::builder()
-            .with_size(super::super::APP_SNAPSHOT_SIZE)
-            .build(move |ctx| {
-                show_log_window(
-                    ctx,
-                    &mut window,
-                    &mut display_options,
-                    &log_store,
-                    &mut close_requested,
-                )
-            });
-        components::test_support::setup_egui(&harness.ctx);
-        harness.set_size(super::super::APP_SNAPSHOT_SIZE);
+        let mut harness = Harness::builder().build(move |ctx| {
+            show_log_window(
+                ctx,
+                &mut window,
+                &mut display_options,
+                &log_store,
+                &mut close_requested,
+            )
+        });
+        components::test_support::setup_egui(&mut harness);
         harness.run();
         harness.snapshot(name);
     }

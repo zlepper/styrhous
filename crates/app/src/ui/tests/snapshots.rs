@@ -2018,7 +2018,7 @@ fn resource_table_reflows_after_viewport_resize() {
     harness.run();
     harness.snapshot("resource_table_narrow");
 
-    harness.set_size(super::fixtures::APP_SNAPSHOT_SIZE);
+    components::test_support::setup_egui(&mut harness);
     harness.run();
     harness.snapshot("resource_table_resized");
 }
@@ -2076,6 +2076,7 @@ fn delete_confirmation_can_be_cancelled_without_sending_a_command() {
             &mut commands_for_ui.borrow_mut(),
         );
     });
+    components::test_support::setup_egui(&mut harness);
 
     harness.run();
     harness.get_by_label("Cancel").click_accesskit();
