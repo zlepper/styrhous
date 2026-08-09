@@ -7,7 +7,7 @@ use crate::resource_detail::{
     ResourceEvent, SecretDetail,
 };
 use crate::resource_handlers::table_definition;
-use crate::resource_table::{CONTAINERS_COLUMN, ResourceTableDefinition};
+use crate::resource_table::{CONTAINERS_COLUMN, NODE_COLUMN, ResourceTableDefinition};
 use crate::terminal_launcher::PodShellRequest;
 use crate::worker::{ResourceDataUpdate, WorkerCommand};
 use components::colors::{WHITE, gray, indigo};
@@ -1184,7 +1184,14 @@ fn show_managed_resources_for(
         }
         let rows = managed_resource_rows(managed_resources, kind);
         section_header(ui, title, Some(format!("{} resources", rows.len())));
-        show_managed_resource_table(ui, resource_uid, kind, &rows, pending_action);
+        show_managed_resource_table(
+            ui,
+            resource_uid,
+            kind,
+            &rows,
+            api_resource.kind == "Node",
+            pending_action,
+        );
         if rows.is_empty() {
             ui.add_space(8.0);
             ui.label(egui::RichText::new(format!("No {title} found.")).color(gray::_500));
@@ -1202,12 +1209,18 @@ fn show_managed_resource_table(
     resource_uid: &str,
     kind: &str,
     rows: &[ManagedResourceRow],
+    show_namespace_column: bool,
     pending_action: &mut Option<ResourceAction>,
 ) {
-    let definition = managed_resource_table_definition(kind);
+    let definition = managed_resource_table_definition(kind, show_namespace_column);
     let mut table = TailwindTable::new(format!("managed-resource-table-{resource_uid}-{kind}",))
         .roomy()
         .column("name", "Name", |column| column.fill_remaining());
+    if show_namespace_column {
+        table = table.column("namespace", "Namespace", |column| {
+            column.initial_width(150.0)
+        });
+    }
     for column in &definition.columns {
         table = table.column(column.id.clone(), column.label.clone(), |table_column| {
             table_column.initial_width(column.initial_width)
@@ -1217,13 +1230,22 @@ fn show_managed_resource_table(
     table.show_with_row_response(
         ui,
         rows,
-        |ui, row, column_index| match column_index {
-            0 => TableRowBuilder::text(ui, &row.name, true),
-            index if index <= definition.columns.len() => {
-                let column = &definition.columns[index - 1];
-                show_resource_cell(ui, row.cells.get(&column.id));
+        |ui, row, column_index| {
+            let type_specific_start = 1 + usize::from(show_namespace_column);
+            match column_index {
+                0 => TableRowBuilder::text(ui, &row.name, true),
+                1 if show_namespace_column => {
+                    TableRowBuilder::text(ui, row.namespace.as_deref().unwrap_or("-"), false)
+                }
+                index
+                    if index >= type_specific_start
+                        && index < type_specific_start + definition.columns.len() =>
+                {
+                    let column = &definition.columns[index - type_specific_start];
+                    show_resource_cell(ui, row.cells.get(&column.id));
+                }
+                _ => TableRowBuilder::text(ui, &format_age(row.creation_timestamp), false),
             }
-            _ => TableRowBuilder::text(ui, &format_age(row.creation_timestamp), false),
         },
         |row_response, row, column_index| {
             let name_cell_clicked = column_index == 0
@@ -1279,7 +1301,10 @@ impl From<&ManagedResource> for ManagedResourceRow {
     }
 }
 
-fn managed_resource_table_definition(kind: &str) -> ResourceTableDefinition {
+fn managed_resource_table_definition(
+    kind: &str,
+    omit_contextual_node_column: bool,
+) -> ResourceTableDefinition {
     let mut definition = table_definition(&managed_resource_api_resource(kind), &[]);
     if kind == "Pod" {
         // The inspector panel is substantially narrower than the workspace.
@@ -1289,6 +1314,11 @@ fn managed_resource_table_definition(kind: &str) -> ResourceTableDefinition {
         definition
             .columns
             .retain(|column| column.id != CONTAINERS_COLUMN);
+        if omit_contextual_node_column {
+            // All listed Pods are scheduled to the inspected Node, so repeating
+            // its name consumes scarce inspector width without adding context.
+            definition.columns.retain(|column| column.id != NODE_COLUMN);
+        }
     }
     definition
 }
@@ -1320,6 +1350,7 @@ fn managed_resource_table_kinds(
         | ("apps", "DaemonSet")
         | ("core", "ReplicationController")
         | ("batch", "Job") => &[("Pods", "Pod")],
+        ("core", "Node") => &[("Pods", "Pod")],
         _ => &[],
     }
 }

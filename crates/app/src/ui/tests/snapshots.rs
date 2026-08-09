@@ -11,9 +11,10 @@ use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::{MinimalResource, PodLogContainer};
 use crate::resource_catalog::build_resource_navigation;
 use crate::resource_detail::{
-    ConfigMapDetail, ManagedResource, NodeDetail, PodConditionDetail, PodContainerDetail,
-    PodDetail, PodEnvironmentVariableDetail, PodEnvironmentVariableSource, PodVolumeDetail,
-    ResourceDetail, ResourceDetailPayload, ResourceEvent, SecretDataDetail, SecretDetail,
+    ConfigMapDetail, ManagedResource, ManagedResourceAssociation, NodeDetail, PodConditionDetail,
+    PodContainerDetail, PodDetail, PodEnvironmentVariableDetail, PodEnvironmentVariableSource,
+    PodVolumeDetail, ResourceDetail, ResourceDetailPayload, ResourceEvent, SecretDataDetail,
+    SecretDetail,
 };
 use crate::resource_table::{
     AVAILABLE_COLUMN, CONTAINERS_COLUMN, CellValue, ContainerIndicator, ContainerKind, NODE_COLUMN,
@@ -1178,6 +1179,78 @@ fn node_inspector_shows_its_spec() {
 }
 
 #[test]
+fn node_inspector_lists_cross_namespace_pods_in_the_shared_pod_table() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.ctx.style_mut(|style| style.animation_time = 0.0);
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    let nodes = crate::resource_handlers::node::api_resource();
+    let mut commands = Vec::new();
+    harness.state_mut().ui_state.open_resource_detail(
+        2,
+        nodes.clone(),
+        "kind-control-plane".into(),
+        None,
+        "node-uid".into(),
+        &mut commands,
+    );
+    harness.state_mut().worker.results.extend([
+        WorkerResult::ResourceDetailUpdated {
+            cluster_key: 2,
+            history_entry_id: 1,
+            detail: ResourceDetail {
+                api_resource: nodes,
+                name: "kind-control-plane".into(),
+                namespace: None,
+                uid: "node-uid".into(),
+                resource_version: "1".into(),
+                creation_timestamp: None,
+                owner: None,
+                labels: BTreeMap::new(),
+                annotations: BTreeMap::new(),
+                payload: ResourceDetailPayload::Node(NodeDetail::default()),
+            },
+        },
+        WorkerResult::ManagedResourcesReplaced {
+            cluster_key: 2,
+            history_entry_id: 1,
+            resources: vec![ManagedResource {
+                api_resource: fixture_api_resource("core", "Pod", "pods"),
+                name: "api".into(),
+                namespace: Some("monitoring".into()),
+                uid: "pod-uid".into(),
+                association: ManagedResourceAssociation::NodeName("kind-control-plane".into()),
+                creation_timestamp: Some(
+                    time::OffsetDateTime::now_utc() - time::Duration::minutes(15),
+                ),
+                cells: BTreeMap::from([
+                    (READY_COLUMN.into(), CellValue::Text("1/1".into())),
+                    (
+                        STATUS_COLUMN.into(),
+                        CellValue::Status {
+                            label: "Running".into(),
+                            tone: StatusTone::Success,
+                        },
+                    ),
+                    (RESTARTS_COLUMN.into(), CellValue::Number(0)),
+                    (
+                        NODE_COLUMN.into(),
+                        CellValue::Text("kind-control-plane".into()),
+                    ),
+                ]),
+            }],
+        },
+    ]);
+    harness.run_steps(2);
+
+    harness.snapshot_options(
+        "node_inspector_with_scheduled_pods",
+        &egui_kittest::SnapshotOptions::new().failed_pixel_count_threshold(1),
+    );
+    harness.get_by_label("monitoring");
+    harness.get_by_label("api");
+}
+
+#[test]
 fn clicking_a_history_blade_is_captured_by_the_scrim() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = oracle_resource_table_state();
@@ -1360,7 +1433,9 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
                     name: "api-7b948f".into(),
                     namespace: Some("kube-system".into()),
                     uid: "replicaset-uid".into(),
-                    controller_owner_uid: "deployment-uid".into(),
+                    association: ManagedResourceAssociation::ControllerOwnerUid(
+                        "deployment-uid".into(),
+                    ),
                     creation_timestamp: Some(
                         time::OffsetDateTime::now_utc() - time::Duration::hours(2),
                     ),
@@ -1374,7 +1449,9 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
                     name: "api-7b948f-pod".into(),
                     namespace: Some("kube-system".into()),
                     uid: "pod-uid".into(),
-                    controller_owner_uid: "replicaset-uid".into(),
+                    association: ManagedResourceAssociation::ControllerOwnerUid(
+                        "replicaset-uid".into(),
+                    ),
                     creation_timestamp: Some(
                         time::OffsetDateTime::now_utc() - time::Duration::minutes(15),
                     ),
@@ -1459,7 +1536,9 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
                 name: "api-7b948f-pod".into(),
                 namespace: Some("kube-system".into()),
                 uid: "pod-uid".into(),
-                controller_owner_uid: "replicaset-uid".into(),
+                association: ManagedResourceAssociation::ControllerOwnerUid(
+                    "replicaset-uid".into(),
+                ),
                 creation_timestamp: Some(
                     time::OffsetDateTime::now_utc() - time::Duration::hours(2),
                 ),
