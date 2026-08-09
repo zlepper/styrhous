@@ -163,16 +163,7 @@ fn namespace_selector_replaces_toggles_and_selects_all_without_stopping_watches(
         clusters: HashMap::from([(1, cluster)]),
         next_cluster_key: 1,
         selected_cluster: Some(1),
-        log_windows: BTreeMap::new(),
-        next_log_window_id: 0,
-        log_display_options: Default::default(),
-        terminal_settings_open: false,
-        terminal_settings_blade: None,
-        terminal_settings_draft: Default::default(),
-        terminal_settings_error: None,
-        terminal_launch_error: None,
-        cluster_selections: Default::default(),
-        resource_navigation_expansion: Default::default(),
+        ..Default::default()
     };
     harness.run_steps(1);
 
@@ -292,16 +283,7 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
         clusters: HashMap::from([(1, cluster)]),
         next_cluster_key: 1,
         selected_cluster: Some(1),
-        log_windows: BTreeMap::new(),
-        next_log_window_id: 0,
-        log_display_options: Default::default(),
-        terminal_settings_open: false,
-        terminal_settings_blade: None,
-        terminal_settings_draft: Default::default(),
-        terminal_settings_error: None,
-        terminal_launch_error: None,
-        cluster_selections: Default::default(),
-        resource_navigation_expansion: Default::default(),
+        ..Default::default()
     };
     harness.run();
     harness.get_by_label("Nodes").click_accesskit();
@@ -796,7 +778,7 @@ fn resource_table_row_context_menu_snapshot() {
     secondary_click(&mut harness, click_position);
     harness.run();
 
-    harness.get_by_label("Edit YAML");
+    harness.get_by_label("Edit");
     harness.snapshot("oracle_resource_table_row_context_actions");
 }
 
@@ -815,7 +797,7 @@ fn resource_table_row_context_menu_opens_when_right_clicking_resource_text() {
     secondary_click(&mut harness, text_position);
     harness.run();
 
-    harness.get_by_label("Edit YAML");
+    harness.get_by_label("Edit");
 }
 
 #[test]
@@ -2137,7 +2119,7 @@ fn resource_detail_more_actions_use_the_shared_resource_menu() {
         "config_map_resource_detail_actions",
         &egui_kittest::SnapshotOptions::new().failed_pixel_count_threshold(1),
     );
-    harness.get_by_label("Edit YAML").click_accesskit();
+    harness.get_by_label("Edit").click_accesskit();
     harness.run();
     assert!(matches!(
         harness.state().worker.commands.last(),
@@ -2354,16 +2336,7 @@ fn delete_confirmation_can_be_cancelled_without_sending_a_command() {
         clusters: HashMap::from([(1, cluster)]),
         next_cluster_key: 1,
         selected_cluster: Some(1),
-        log_windows: BTreeMap::new(),
-        next_log_window_id: 0,
-        log_display_options: Default::default(),
-        terminal_settings_open: false,
-        terminal_settings_blade: None,
-        terminal_settings_draft: Default::default(),
-        terminal_settings_error: None,
-        terminal_launch_error: None,
-        cluster_selections: Default::default(),
-        resource_navigation_expansion: Default::default(),
+        ..Default::default()
     };
 
     harness.run();
@@ -2393,16 +2366,7 @@ fn delete_confirmation_waits_before_enabling_the_destructive_action() {
         clusters: HashMap::from([(1, cluster)]),
         next_cluster_key: 1,
         selected_cluster: Some(1),
-        log_windows: BTreeMap::new(),
-        next_log_window_id: 0,
-        log_display_options: Default::default(),
-        terminal_settings_open: false,
-        terminal_settings_blade: None,
-        terminal_settings_draft: Default::default(),
-        terminal_settings_error: None,
-        terminal_launch_error: None,
-        cluster_selections: Default::default(),
-        resource_navigation_expansion: Default::default(),
+        ..Default::default()
     };
 
     harness.run_steps(1);
@@ -2458,16 +2422,7 @@ fn resource_navigation_selects_primary_curated_gateway_and_other_resources() {
         clusters: HashMap::from([(1, cluster)]),
         next_cluster_key: 1,
         selected_cluster: Some(1),
-        log_windows: BTreeMap::new(),
-        next_log_window_id: 0,
-        log_display_options: Default::default(),
-        terminal_settings_open: false,
-        terminal_settings_blade: None,
-        terminal_settings_draft: Default::default(),
-        terminal_settings_error: None,
-        terminal_launch_error: None,
-        cluster_selections: Default::default(),
-        resource_navigation_expansion: Default::default(),
+        ..Default::default()
     };
     harness.run();
 

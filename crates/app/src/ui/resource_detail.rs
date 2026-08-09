@@ -288,6 +288,7 @@ fn show_legacy(
     if let Some(action) = blade_result.action {
         let mut log_to_open = None;
         let mut shell_to_open = None;
+        let mut yaml_to_open = None;
         let navigation_action = matches!(
             &action,
             ResourceAction::NavigateDetails { .. }
@@ -318,12 +319,12 @@ fn show_legacy(
                 if let Some(cluster) = ui_state.clusters.get_mut(&cluster_key) {
                     match action {
                         ResourceAction::EditYaml { name, namespace } => {
-                            commands_to_send.push(WorkerCommand::GetResourceYaml {
-                                cluster_key: cluster.cluster_key,
-                                api_resource: panel_api_resource(cluster),
+                            yaml_to_open = Some((
+                                cluster.cluster_key,
+                                panel_api_resource(cluster),
                                 namespace,
-                                resource_name: name,
-                            });
+                                name,
+                            ));
                         }
                         ResourceAction::RequestDelete { name, namespace } => {
                             cluster.pending_delete = Some(PendingDelete::new(
@@ -403,6 +404,16 @@ fn show_legacy(
         }
         if let Some((cluster_key, name, namespace, container)) = log_to_open {
             ui_state.open_pod_log_window(cluster_key, name, namespace, container, commands_to_send);
+        }
+        if let Some((cluster_key, api_resource, namespace, resource_name)) = yaml_to_open {
+            ui_state.open_yaml_editor(
+                ctx,
+                cluster_key,
+                api_resource,
+                namespace,
+                resource_name,
+                commands_to_send,
+            );
         }
         shell_requests.extend(shell_to_open);
     }
@@ -497,13 +508,17 @@ fn show_shared_blade(
                 ui_state.navigate_resource_detail_history(cluster_key, true, commands_to_send);
             }
             ResourceAction::EditYaml { name, namespace } => {
-                if let Some(cluster) = ui_state.clusters.get_mut(&cluster_key) {
-                    commands_to_send.push(WorkerCommand::GetResourceYaml {
-                        cluster_key: cluster.cluster_key,
-                        api_resource: panel_api_resource(cluster),
+                if let Some(api_resource) =
+                    ui_state.clusters.get(&cluster_key).map(panel_api_resource)
+                {
+                    ui_state.open_yaml_editor(
+                        ctx,
+                        cluster_key,
+                        api_resource,
                         namespace,
-                        resource_name: name,
-                    });
+                        name,
+                        commands_to_send,
+                    );
                 }
             }
             ResourceAction::RequestDelete { name, namespace } => {

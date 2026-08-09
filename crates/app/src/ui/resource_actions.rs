@@ -86,7 +86,7 @@ pub(super) fn show_resource_action_items(
     }
     if menu
         .action_with_icon(
-            "Edit YAML",
+            "Edit",
             icons::document_icon()
                 .fit_to_exact_size(egui::Vec2::splat(16.0))
                 .tint(gray::_500),

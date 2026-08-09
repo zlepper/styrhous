@@ -1815,6 +1815,7 @@ async fn create_dynamic_api(
 
 /// Fetch a resource's full YAML representation
 pub async fn get_resource_yaml(
+    editor_id: u64,
     cluster_key: i32,
     client: kube::Client,
     api_resource: ApiResource,
@@ -1849,6 +1850,7 @@ pub async fn get_resource_yaml(
     let yaml = serde_yaml::to_string(&obj)?;
 
     Ok(WorkerResult::ResourceYamlFetched {
+        editor_id,
         cluster_key,
         api_resource,
         namespace,
@@ -1919,6 +1921,7 @@ pub async fn restart_deployment(
 
 /// Apply (replace) a resource from YAML
 pub async fn apply_resource_yaml(
+    editor_id: u64,
     cluster_key: i32,
     client: kube::Client,
     api_resource: ApiResource,
@@ -1963,6 +1966,7 @@ pub async fn apply_resource_yaml(
     .await?;
 
     Ok(WorkerResult::ResourceApplyCompleted {
+        editor_id,
         cluster_key,
         api_resource,
         namespace,

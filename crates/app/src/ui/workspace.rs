@@ -56,6 +56,7 @@ pub(super) fn show(
     let mut retry_requested = false;
     let mut detail_to_open = None;
     let mut log_to_open = None;
+    let mut yaml_to_open = None;
     let mut shell_to_open = None;
     egui::CentralPanel::default()
         .frame(WorkspacePage::frame())
@@ -210,12 +211,8 @@ pub(super) fn show(
                             detail_to_open = Some((api_resource.clone(), name, namespace, uid));
                         }
                         ResourceAction::EditYaml { name, namespace } => {
-                            commands_to_send.push(WorkerCommand::GetResourceYaml {
-                                cluster_key: cluster.cluster_key,
-                                api_resource: api_resource.clone(),
-                                namespace,
-                                resource_name: name,
-                            });
+                            yaml_to_open =
+                                Some((cluster.cluster_key, api_resource.clone(), namespace, name));
                         }
                         ResourceAction::RequestDelete { name, namespace } => {
                             cluster.pending_delete =
@@ -280,6 +277,16 @@ pub(super) fn show(
     }
     if let Some((cluster_key, name, namespace, container)) = log_to_open {
         ui_state.open_pod_log_window(cluster_key, name, namespace, container, commands_to_send);
+    }
+    if let Some((cluster_key, api_resource, namespace, resource_name)) = yaml_to_open {
+        ui_state.open_yaml_editor(
+            ctx,
+            cluster_key,
+            api_resource,
+            namespace,
+            resource_name,
+            commands_to_send,
+        );
     }
     shell_requests.extend(shell_to_open);
     if let (Some(cluster_key), Some(selection)) = (ui_state.selected_cluster, namespace_selection) {

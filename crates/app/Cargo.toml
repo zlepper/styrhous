@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 eframe = { version = "0.33", features = ["persistence"] }
 egui = "0.33"
-egui_extras = "0.33"
+egui_extras = { version = "0.33", features = ["syntect"] }
 components = { path = "../components" }
 kube = { version = "2.0", features = ["runtime"] }
 tracing = "0.1"
