@@ -26,22 +26,27 @@ pub(crate) struct ResourceOwner {
     pub(crate) name: String,
 }
 
-/// A resource controlled by the object currently shown in the inspector.
+/// A resource related to the object currently shown in the inspector.
 ///
-/// The worker only returns workload resources that belong to a supported
-/// controller hierarchy. `controller_owner_uid` retains the source ownership
-/// relationship while type-specific cells let inspector tables match the main
-/// resource-list presentation.
+/// The relationship may be workload ownership or a Pod's node assignment;
+/// type-specific cells let inspector tables match the main resource-list
+/// presentation.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ManagedResource {
     pub(crate) api_resource: ApiResource,
     pub(crate) name: String,
     pub(crate) namespace: Option<String>,
     pub(crate) uid: String,
-    pub(crate) controller_owner_uid: String,
+    pub(crate) association: ManagedResourceAssociation,
     pub(crate) creation_timestamp: Option<OffsetDateTime>,
     /// Type-specific table values, extracted alongside the resource metadata.
     pub(crate) cells: BTreeMap<String, CellValue>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) enum ManagedResourceAssociation {
+    ControllerOwnerUid(String),
+    NodeName(String),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

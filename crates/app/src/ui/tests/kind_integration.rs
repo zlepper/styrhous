@@ -9,7 +9,7 @@ use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use k8s_openapi::api::apps::v1::{Deployment, DeploymentSpec};
 use k8s_openapi::api::core::v1::{ConfigMap, Namespace, Secret};
-use k8s_openapi::api::core::v1::{Container, PodSpec, PodTemplateSpec};
+use k8s_openapi::api::core::v1::{Container, Pod, PodSpec, PodTemplateSpec};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
 use kube::{Api, Client};
 use std::collections::BTreeMap;
@@ -435,7 +435,11 @@ fn test_managed_resource_inspector_integration() {
                     && panel
                         .managed_resources
                         .iter()
-                        .any(|parent| parent.uid == resource.controller_owner_uid)
+                        .any(|parent| matches!(
+                            &resource.association,
+                            crate::resource_detail::ManagedResourceAssociation::ControllerOwnerUid(owner_uid)
+                                if parent.uid == *owner_uid
+                        ))
             })
         {
             let replica_set = panel
@@ -464,6 +468,111 @@ fn test_managed_resource_inspector_integration() {
         .resource_detail_panel
         .as_ref();
     panic!("Timed out waiting for managed resources: {panel:#?}");
+}
+
+/// Verifies that a Node inspector watches Pods cluster-wide and shows the Pods
+/// scheduled to the selected Node through the shared inspector table path.
+#[test]
+fn test_node_inspector_lists_scheduled_pods_integration() {
+    let fixture = IntegrationConfigMap::create("node-inspector", "anchor", "unused");
+    let pod_name = "node-inspector-pod".to_owned();
+    let client = fixture.runtime.block_on(async {
+        Client::try_default()
+            .await
+            .expect("Failed to create Kubernetes client")
+    });
+    let pods: Api<Pod> = Api::namespaced(client, &fixture.namespace);
+    fixture.runtime.block_on(async {
+        pods.create(
+            &Default::default(),
+            &Pod {
+                metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                    name: Some(pod_name.clone()),
+                    namespace: Some(fixture.namespace.clone()),
+                    ..Default::default()
+                },
+                spec: Some(PodSpec {
+                    containers: vec![Container {
+                        name: "pause".to_owned(),
+                        image: Some("registry.k8s.io/pause:3.10".to_owned()),
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("Failed to create integration Pod");
+    });
+    let node_name = fixture.runtime.block_on(async {
+        tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            loop {
+                if let Some(node_name) = pods
+                    .get(&pod_name)
+                    .await
+                    .expect("Failed to get integration Pod")
+                    .spec
+                    .and_then(|spec| spec.node_name)
+                {
+                    return node_name;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+        })
+        .await
+        .expect("Timed out waiting for Kubernetes to assign the integration Pod")
+    });
+
+    let (mut harness, cluster_key) = connected_kind_harness();
+    wait_for_cluster_data(&mut harness, cluster_key);
+    harness.get_by_label("Nodes").click_accesskit();
+    wait_for(
+        &mut harness,
+        |app| {
+            app.ui_state.clusters[&cluster_key]
+                .resource_cache
+                .get(&(crate::resource_handlers::node::api_resource(), None))
+                .filter(|watch| watch.is_synced)
+                .map(|_| ())
+        },
+        10_000,
+    );
+    let node_position = harness.get_by_label(&node_name).rect().center();
+    harness.event(egui::Event::PointerMoved(node_position));
+    harness.event(egui::Event::PointerButton {
+        pos: node_position,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::default(),
+    });
+    harness.event(egui::Event::PointerButton {
+        pos: node_position,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::default(),
+    });
+    harness.run_steps(1);
+
+    wait_for(
+        &mut harness,
+        |app| {
+            app.ui_state.clusters[&cluster_key]
+                .resource_detail_panel
+                .as_ref()
+                .and_then(|panel| {
+                    panel
+                        .managed_resources
+                        .iter()
+                        .find(|resource| resource.name == pod_name)
+                        .filter(|resource| {
+                            resource.namespace.as_deref() == Some(&fixture.namespace)
+                        })
+                        .map(|_| ())
+                })
+        },
+        15_000,
+    );
 }
 
 /// Creates a ConfigMap, edits it through the UI, and then deletes it through the UI.
