@@ -353,7 +353,7 @@ mod tests {
                 button_row(ui, ButtonVariant::Soft, ButtonRounding::Pill);
             });
         });
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness.snapshot_options("buttons/variants", &SnapshotOptions::new().threshold(2.1));
     }
@@ -375,7 +375,7 @@ mod tests {
                     });
                 });
             });
-            crate::test_support::setup_egui(&harness.ctx);
+            crate::test_support::setup_egui(&mut harness);
             harness.run();
             harness.get_by_label("Hovered").hover();
             harness.run_ok();
@@ -393,7 +393,7 @@ mod tests {
                     });
                 });
             });
-            crate::test_support::setup_egui(&harness.ctx);
+            crate::test_support::setup_egui(&mut harness);
             harness.run();
             let button = harness.get_by_label("Pressed");
             let center = button.rect().center();
@@ -422,7 +422,7 @@ mod tests {
                     });
                 });
             });
-            crate::test_support::setup_egui(&harness.ctx);
+            crate::test_support::setup_egui(&mut harness);
             harness.run();
             harness.get_by_label("Hovered").hover();
             harness.run_ok();
@@ -440,7 +440,7 @@ mod tests {
                     });
                 });
             });
-            crate::test_support::setup_egui(&harness.ctx);
+            crate::test_support::setup_egui(&mut harness);
             harness.run();
             let button = harness.get_by_label("Pressed");
             let center = button.rect().center();
@@ -469,7 +469,7 @@ mod tests {
                     });
                 });
             });
-            crate::test_support::setup_egui(&harness.ctx);
+            crate::test_support::setup_egui(&mut harness);
             harness.run();
             harness.get_by_label("Hovered").hover();
             harness.run_ok();
@@ -487,7 +487,7 @@ mod tests {
                     });
                 });
             });
-            crate::test_support::setup_egui(&harness.ctx);
+            crate::test_support::setup_egui(&mut harness);
             harness.run();
             let button = harness.get_by_label("Pressed");
             let center = button.rect().center();

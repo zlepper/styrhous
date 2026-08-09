@@ -12,19 +12,17 @@ use crate::worker::WorkerTrait;
 use egui_kittest::Harness;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-pub(super) const APP_SNAPSHOT_SIZE: egui::Vec2 = super::super::APP_SNAPSHOT_SIZE;
-
 pub(super) fn application_harness<W: WorkerTrait>() -> Harness<'static, MyEguiApp<W>> {
-    Harness::builder()
-        .with_size(APP_SNAPSHOT_SIZE)
-        .build_eframe(|cc| MyEguiApp::<W>::new(cc))
+    let mut harness = Harness::builder().build_eframe(|cc| MyEguiApp::<W>::new(cc));
+    components::test_support::setup_egui(&mut harness);
+    harness
 }
 
 pub(super) fn application_harness_with_terminal<W: WorkerTrait, L: TerminalLauncher>()
 -> Harness<'static, MyEguiApp<W, L>> {
-    Harness::builder()
-        .with_size(APP_SNAPSHOT_SIZE)
-        .build_eframe(|cc| MyEguiApp::<W, L>::new(cc))
+    let mut harness = Harness::builder().build_eframe(|cc| MyEguiApp::<W, L>::new(cc));
+    components::test_support::setup_egui(&mut harness);
+    harness
 }
 
 pub(super) fn fixture_cluster(cluster_key: i32, name: &str) -> ClusterState {

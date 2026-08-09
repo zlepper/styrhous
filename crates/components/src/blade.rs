@@ -721,8 +721,7 @@ mod tests {
                 render_test_blade,
             );
         });
-        crate::test_support::setup_egui(&harness.ctx);
-        harness.set_size(egui::vec2(1536.0, 1024.0));
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness.snapshot_options("blades/single", &transformed_blade_snapshot_options());
 
@@ -764,9 +763,8 @@ mod tests {
                 render_test_blade,
             );
         });
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.ctx.style_mut(|style| style.animation_time = 1.0);
-        harness.set_size(egui::vec2(1536.0, 1024.0));
 
         // Harness construction renders once before the test can configure the
         // clock. Restart this transition so the frames below use only our
@@ -847,8 +845,7 @@ mod tests {
                 render_test_blade,
             );
         });
-        crate::test_support::setup_egui(&harness.ctx);
-        harness.set_size(egui::vec2(1536.0, 1024.0));
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness.snapshot_options(
             "blades/custom_header",
@@ -879,8 +876,7 @@ mod tests {
                 },
             );
         });
-        crate::test_support::setup_egui(&harness.ctx);
-        harness.set_size(egui::vec2(1536.0, 1024.0));
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         for (id, title) in [(2, "Second"), (3, "Third"), (4, "Fourth")] {
             navigator.borrow_mut().push(TestBlade { id, title });
@@ -927,7 +923,7 @@ mod tests {
                 },
             );
         });
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
         navigator.borrow_mut().push(TestBlade {
             id: 2,
@@ -975,7 +971,7 @@ mod tests {
                 },
             );
         });
-        crate::test_support::setup_egui(&harness.ctx);
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
 
         for (id, title) in [(2, "Second"), (3, "Third"), (4, "Fourth")] {
@@ -1035,8 +1031,7 @@ mod tests {
             );
             *close_finished_for_ui.borrow_mut() = response.close_finished;
         });
-        crate::test_support::setup_egui(&harness.ctx);
-        harness.set_size(egui::vec2(1536.0, 1024.0));
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
 
         let back = harness.get_by_label("Back").rect();
@@ -1093,8 +1088,7 @@ mod tests {
                 },
             );
         });
-        crate::test_support::setup_egui(&harness.ctx);
-        harness.set_size(egui::vec2(1536.0, 1024.0));
+        crate::test_support::setup_egui(&mut harness);
         harness.run();
 
         assert_eq!(*observed_width.borrow(), Some(CONTENT_WIDTH));
