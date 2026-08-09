@@ -176,7 +176,6 @@ impl BladeStack {
         &self,
         ctx: &egui::Context,
         navigator: &mut BladeNavigator<T>,
-        item_id: impl Fn(&T) -> Id,
         mut render_header: impl FnMut(&mut Ui, &mut T, BladeLayer) -> H,
         mut render_content: impl FnMut(&mut Ui, &mut T, BladeLayer) -> R,
     ) -> BladeResponse<H, R> {
@@ -192,19 +191,20 @@ impl BladeStack {
 
         let history_len = navigator.back_stack.len();
         let first_history = history_len.saturating_sub(HISTORY_SCALES.len());
-        for entry in &navigator.back_stack()[..first_history] {
-            retain_hidden_layer(ctx, self.layer_id(item_id(entry)), viewport);
+        for stack_index in 0..first_history {
+            retain_hidden_layer(ctx, self.layer_id(stack_index), viewport);
         }
         for (index, entry) in navigator.back_stack_mut()[first_history..]
             .iter_mut()
             .enumerate()
         {
+            let stack_index = first_history + index;
             let depth = history_len - first_history - index - 1;
             let transform = history_layer_transform(viewport, depth, transition);
-            let content_id = item_id(entry);
+            let content_id = self.content_id(stack_index);
             show_layer(
                 ctx,
-                self.layer_id(content_id),
+                self.layer_id(stack_index),
                 viewport,
                 transform,
                 false,
@@ -226,10 +226,11 @@ impl BladeStack {
         {
             let can_go_forward = navigator.forward_stack().len() > 1;
             if let Some(entry) = navigator.forward_stack_mut().last_mut() {
-                let content_id = item_id(entry);
+                let stack_index = history_len + 1;
+                let content_id = self.content_id(stack_index);
                 show_layer(
                     ctx,
-                    self.layer_id(content_id),
+                    self.layer_id(stack_index),
                     viewport,
                     Transform {
                         position: active_transform(viewport).position
@@ -272,8 +273,8 @@ impl BladeStack {
             egui::vec2(WIDTH, height(viewport)) * active_blade_transform.scale,
         );
         let outgoing = matches!(transition, Some((BladeTransition::Back, value)) if value < 1.0);
-        let active_content_id = item_id(navigator.current());
-        let active_area_id = self.layer_id(active_content_id);
+        let active_content_id = self.content_id(history_len);
+        let active_area_id = self.layer_id(history_len);
         let (header, active, header_action) = show_layer(
             ctx,
             active_area_id,
@@ -327,14 +328,12 @@ impl BladeStack {
         &self,
         ctx: &egui::Context,
         navigator: &mut BladeNavigator<T>,
-        item_id: impl Fn(&T) -> Id,
         title: impl Fn(&T) -> String,
         render_content: impl FnMut(&mut Ui, &mut T, BladeLayer) -> R,
     ) -> BladeResponse<(), R> {
         self.show(
             ctx,
             navigator,
-            item_id,
             |ui, entry, _| {
                 ui.label(
                     egui::RichText::new(title(entry))
@@ -346,8 +345,12 @@ impl BladeStack {
         )
     }
 
-    fn layer_id(&self, content_id: Id) -> Id {
-        self.id.with(("blade", content_id))
+    fn content_id(&self, stack_index: usize) -> Id {
+        self.id.with(("blade-content", stack_index))
+    }
+
+    fn layer_id(&self, stack_index: usize) -> Id {
+        self.id.with(("blade", stack_index))
     }
 }
 
@@ -695,7 +698,7 @@ mod tests {
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug, PartialEq)]
     struct TestBlade {
         id: u64,
         title: &'static str,
@@ -736,7 +739,6 @@ mod tests {
             stack.show_with_title(
                 ui.ctx(),
                 &mut navigator_for_ui.borrow_mut(),
-                |blade| Id::new(blade.id),
                 |blade| blade.title.to_owned(),
                 render_test_blade,
             );
@@ -779,7 +781,6 @@ mod tests {
             stack.show_with_title(
                 ui.ctx(),
                 &mut navigator_for_ui.borrow_mut(),
-                |blade| Id::new(blade.id),
                 |blade| blade.title.to_owned(),
                 render_test_blade,
             );
@@ -802,6 +803,366 @@ mod tests {
     }
 
     #[test]
+    fn snapshots_history_order_after_crossing_the_display_cap_repeatedly() {
+        let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 1,
+            title: "First",
+        })));
+        navigator.borrow_mut().clear_transition();
+        let stack = BladeStack::new("blade-deep-history-cycle-snapshot");
+        let navigator_for_ui = Rc::clone(&navigator);
+        let mut harness = Harness::new_ui(move |ui| {
+            stack.show_with_title(
+                ui.ctx(),
+                &mut navigator_for_ui.borrow_mut(),
+                |blade| blade.title.to_owned(),
+                render_test_blade,
+            );
+        });
+        crate::test_support::setup_egui(&mut harness);
+        harness.run();
+
+        for (id, title) in [
+            (2, "Second"),
+            (3, "Third"),
+            (4, "Fourth"),
+            (5, "Fifth"),
+            (6, "Sixth"),
+        ] {
+            navigator.borrow_mut().push(TestBlade { id, title });
+            navigator.borrow_mut().clear_transition();
+            harness.run();
+        }
+        for _ in 0..3 {
+            assert!(navigator.borrow_mut().go_back());
+            navigator.borrow_mut().clear_transition();
+            harness.run();
+        }
+        for _ in 0..2 {
+            assert!(navigator.borrow_mut().go_forward());
+            navigator.borrow_mut().clear_transition();
+            harness.run();
+        }
+
+        assert_eq!(navigator.borrow().current().id, 5);
+        harness.snapshot_options(
+            "blades/deep_history_cycle",
+            &transformed_blade_snapshot_options(),
+        );
+    }
+
+    #[test]
+    fn snapshots_an_interrupted_back_to_forward_transition() {
+        let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 1,
+            title: "First",
+        })));
+        navigator.borrow_mut().clear_transition();
+        let stack = BladeStack::new("blade-interrupted-transition-snapshot");
+        let navigator_for_ui = Rc::clone(&navigator);
+        let mut harness = Harness::new_ui(move |ui| {
+            stack.show_with_title(
+                ui.ctx(),
+                &mut navigator_for_ui.borrow_mut(),
+                |blade| blade.title.to_owned(),
+                render_test_blade,
+            );
+        });
+        crate::test_support::setup_egui(&mut harness);
+        harness.ctx.style_mut(|style| style.animation_time = 1.0);
+        harness.input_mut().time = Some(1.0);
+        harness.step();
+
+        for (id, title) in [(2, "Second"), (3, "Third")] {
+            navigator.borrow_mut().push(TestBlade { id, title });
+            navigator.borrow_mut().clear_transition();
+            harness.step();
+        }
+
+        assert!(navigator.borrow_mut().go_back());
+        harness.input_mut().time = Some(10.0);
+        harness.step();
+        harness.input_mut().time = Some(10.0 + f64::from(TRANSITION_DURATION / 2.0));
+        harness.step();
+
+        assert!(navigator.borrow_mut().go_forward());
+        harness.input_mut().time = Some(20.0);
+        harness.step();
+        harness.input_mut().time = Some(20.0 + f64::from(TRANSITION_DURATION / 2.0));
+        harness.step();
+        harness.snapshot_options(
+            "blades/interrupted_back_to_forward",
+            &transformed_blade_snapshot_options(),
+        );
+    }
+
+    #[test]
+    fn snapshots_an_interrupted_forward_to_back_transition() {
+        let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 1,
+            title: "First",
+        })));
+        navigator.borrow_mut().clear_transition();
+        let stack = BladeStack::new("blade-interrupted-transition-snapshot");
+        let navigator_for_ui = Rc::clone(&navigator);
+        let mut harness = Harness::new_ui(move |ui| {
+            stack.show_with_title(
+                ui.ctx(),
+                &mut navigator_for_ui.borrow_mut(),
+                |blade| blade.title.to_owned(),
+                render_test_blade,
+            );
+        });
+        crate::test_support::setup_egui(&mut harness);
+        harness.ctx.style_mut(|style| style.animation_time = 1.0);
+        harness.input_mut().time = Some(1.0);
+        harness.step();
+
+        for (id, title) in [(2, "Second"), (3, "Third")] {
+            navigator.borrow_mut().push(TestBlade { id, title });
+            navigator.borrow_mut().clear_transition();
+            harness.step();
+        }
+
+        assert!(navigator.borrow_mut().go_back());
+        harness.input_mut().time = Some(10.0);
+        harness.step();
+        harness.input_mut().time = Some(10.0 + f64::from(TRANSITION_DURATION / 2.0));
+        harness.step();
+
+        assert!(navigator.borrow_mut().go_forward());
+        harness.input_mut().time = Some(20.0);
+        harness.step();
+        harness.input_mut().time = Some(20.0 + f64::from(TRANSITION_DURATION / 2.0));
+        harness.step();
+        assert!(navigator.borrow_mut().go_back());
+        harness.input_mut().time = Some(30.0);
+        harness.step();
+        harness.input_mut().time = Some(30.0 + f64::from(TRANSITION_DURATION / 2.0));
+        harness.step();
+        harness.snapshot_options(
+            "blades/interrupted_forward_to_back",
+            &transformed_blade_snapshot_options(),
+        );
+    }
+
+    #[test]
+    fn snapshots_a_reopened_stack_without_stale_layers() {
+        let navigator = Rc::new(RefCell::new(Some(BladeNavigator::new(TestBlade {
+            id: 1,
+            title: "Original",
+        }))));
+        navigator
+            .borrow_mut()
+            .as_mut()
+            .expect("navigator is open")
+            .clear_transition();
+        let stack = BladeStack::new("blade-reopened-stack-snapshot");
+        let navigator_for_ui = Rc::clone(&navigator);
+        let mut harness = Harness::new_ui(move |ui| {
+            if let Some(navigator) = navigator_for_ui.borrow_mut().as_mut() {
+                stack.show_with_title(
+                    ui.ctx(),
+                    navigator,
+                    |blade| blade.title.to_owned(),
+                    render_test_blade,
+                );
+            }
+        });
+        crate::test_support::setup_egui(&mut harness);
+        harness.run();
+
+        navigator.borrow_mut().take();
+        harness.run();
+
+        *navigator.borrow_mut() = Some(BladeNavigator::new(TestBlade {
+            id: 2,
+            title: "Reopened",
+        }));
+        navigator
+            .borrow_mut()
+            .as_mut()
+            .expect("navigator was reopened")
+            .clear_transition();
+        harness.run();
+        harness.snapshot_options(
+            "blades/reopened_stack",
+            &transformed_blade_snapshot_options(),
+        );
+    }
+
+    #[test]
+    fn snapshots_restored_history_after_resizing_the_viewport() {
+        let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 1,
+            title: "First",
+        })));
+        navigator.borrow_mut().clear_transition();
+        let stack = BladeStack::new("blade-resized-history-snapshot");
+        let navigator_for_ui = Rc::clone(&navigator);
+        let mut harness = Harness::new_ui(move |ui| {
+            stack.show_with_title(
+                ui.ctx(),
+                &mut navigator_for_ui.borrow_mut(),
+                |blade| blade.title.to_owned(),
+                render_test_blade,
+            );
+        });
+        crate::test_support::setup_egui(&mut harness);
+        harness.run();
+        for (id, title) in [(2, "Second"), (3, "Third"), (4, "Fourth")] {
+            navigator.borrow_mut().push(TestBlade { id, title });
+            navigator.borrow_mut().clear_transition();
+            harness.run();
+        }
+        assert!(navigator.borrow_mut().go_back());
+        navigator.borrow_mut().clear_transition();
+        harness.set_size(egui::vec2(1024.0, 768.0));
+        harness.run();
+        harness.snapshot_options(
+            "blades/resized_restored_history",
+            &transformed_blade_snapshot_options(),
+        );
+    }
+
+    #[test]
+    fn discarded_forward_history_is_never_rendered_again() {
+        let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 1,
+            title: "First",
+        })));
+        navigator.borrow_mut().clear_transition();
+        let rendered = Rc::new(RefCell::new(Vec::new()));
+        let stack = BladeStack::new("blade-discarded-forward-history");
+        let navigator_for_ui = Rc::clone(&navigator);
+        let rendered_for_ui = Rc::clone(&rendered);
+        let mut harness = Harness::new_ui(move |ui| {
+            stack.show_with_title(
+                ui.ctx(),
+                &mut navigator_for_ui.borrow_mut(),
+                |blade| blade.title.to_owned(),
+                |ui, blade, layer| {
+                    rendered_for_ui.borrow_mut().push(blade.id);
+                    render_test_blade(ui, blade, layer);
+                },
+            );
+        });
+        crate::test_support::setup_egui(&mut harness);
+        harness.run();
+        for (id, title) in [(2, "Second"), (3, "Third")] {
+            navigator.borrow_mut().push(TestBlade { id, title });
+            navigator.borrow_mut().clear_transition();
+            harness.run();
+        }
+        assert!(navigator.borrow_mut().go_back());
+        navigator.borrow_mut().clear_transition();
+        harness.run();
+        assert_eq!(
+            navigator
+                .borrow()
+                .forward_stack()
+                .last()
+                .map(|blade| blade.id),
+            Some(3)
+        );
+
+        let discarded = navigator.borrow_mut().push(TestBlade {
+            id: 4,
+            title: "Replacement",
+        });
+        assert_eq!(discarded.len(), 1);
+        assert_eq!(discarded[0].id, 3);
+        navigator.borrow_mut().clear_transition();
+        rendered.borrow_mut().clear();
+        harness.run();
+
+        assert!(
+            !rendered.borrow().contains(&3),
+            "discarded forward history must not remain in the display stack"
+        );
+    }
+
+    #[test]
+    fn snapshots_the_most_recently_rendered_stack_above_other_stacks() {
+        let first_navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 1,
+            title: "First stack",
+        })));
+        let second_navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 2,
+            title: "Second stack",
+        })));
+        first_navigator.borrow_mut().clear_transition();
+        second_navigator.borrow_mut().clear_transition();
+        let first_stack = BladeStack::new("first-concurrent-blade-stack");
+        let second_stack = BladeStack::new("second-concurrent-blade-stack");
+        let first_for_ui = Rc::clone(&first_navigator);
+        let second_for_ui = Rc::clone(&second_navigator);
+        let mut harness = Harness::new_ui(move |ui| {
+            first_stack.show_with_title(
+                ui.ctx(),
+                &mut first_for_ui.borrow_mut(),
+                |blade| blade.title.to_owned(),
+                render_test_blade,
+            );
+            second_stack.show_with_title(
+                ui.ctx(),
+                &mut second_for_ui.borrow_mut(),
+                |blade| blade.title.to_owned(),
+                render_test_blade,
+            );
+        });
+        crate::test_support::setup_egui(&mut harness);
+        harness.run();
+        harness.snapshot_options(
+            "blades/concurrent_stacks",
+            &transformed_blade_snapshot_options(),
+        );
+    }
+
+    #[test]
+    fn restored_history_keeps_focus_and_keyboard_navigation_on_the_active_blade() {
+        let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 1,
+            title: "First",
+        })));
+        navigator.borrow_mut().clear_transition();
+        let stack = BladeStack::new("blade-restored-history-accessibility");
+        let navigator_for_ui = Rc::clone(&navigator);
+        let mut harness = Harness::new_ui(move |ui| {
+            stack.show_with_title(
+                ui.ctx(),
+                &mut navigator_for_ui.borrow_mut(),
+                |blade| blade.title.to_owned(),
+                render_test_blade,
+            );
+        });
+        crate::test_support::setup_egui(&mut harness);
+        harness.run();
+        for (id, title) in [(2, "Second"), (3, "Third"), (4, "Fourth")] {
+            navigator.borrow_mut().push(TestBlade { id, title });
+            navigator.borrow_mut().clear_transition();
+            harness.run();
+        }
+        assert!(navigator.borrow_mut().go_back());
+        navigator.borrow_mut().clear_transition();
+        harness.run();
+
+        assert_eq!(
+            harness.get_all_by_label("Back in background blade").count(),
+            2,
+            "the restored history blades must not expose foreground controls"
+        );
+        harness.get_by_label("Back").focus();
+        harness.run();
+        assert!(harness.get_by_label("Back").is_focused());
+
+        harness.key_press(egui::Key::Enter);
+        harness.run();
+        assert_eq!(navigator.borrow().current().id, 2);
+    }
+
+    #[test]
     fn snapshots_opening_and_forward_animation_frames() {
         let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
             id: 1,
@@ -813,7 +1174,6 @@ mod tests {
             stack.show_with_title(
                 ui.ctx(),
                 &mut navigator_for_ui.borrow_mut(),
-                |blade| Id::new(blade.id),
                 |blade| blade.title.to_owned(),
                 render_test_blade,
             );
@@ -893,7 +1253,6 @@ mod tests {
             stack.show(
                 ui.ctx(),
                 &mut navigator_for_ui.borrow_mut(),
-                |blade| Id::new(blade.id),
                 |ui, blade, _| {
                     ui.label(egui::RichText::new(format!("Custom: {}", blade.title)).strong());
                 },
@@ -923,7 +1282,6 @@ mod tests {
             stack.show_with_title(
                 ui.ctx(),
                 &mut navigator_for_ui.borrow_mut(),
-                |blade| Id::new(blade.id),
                 |blade| blade.title.to_owned(),
                 |ui, blade, layer| {
                     rendered_for_ui.borrow_mut().push(blade.id);
@@ -963,7 +1321,6 @@ mod tests {
             stack.show_with_title(
                 ui.ctx(),
                 &mut navigator_for_ui.borrow_mut(),
-                |blade| Id::new(blade.id),
                 |blade| blade.title.to_owned(),
                 |ui, blade, layer| {
                     let state_id = layer.content_id.with("child-state");
@@ -997,6 +1354,59 @@ mod tests {
     }
 
     #[test]
+    fn content_ids_are_synthesized_from_stack_positions() {
+        let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 1,
+            title: "First",
+        })));
+        navigator.borrow_mut().clear_transition();
+        let stack_source = "blade-stack-position-content-ids";
+        let stack = BladeStack::new(stack_source);
+        let rendered = Rc::new(RefCell::new(Vec::new()));
+        let navigator_for_ui = Rc::clone(&navigator);
+        let rendered_for_ui = Rc::clone(&rendered);
+        let mut harness = Harness::new_ui(move |ui| {
+            stack.show_with_title(
+                ui.ctx(),
+                &mut navigator_for_ui.borrow_mut(),
+                |blade| blade.title.to_owned(),
+                |ui, blade, layer| {
+                    rendered_for_ui
+                        .borrow_mut()
+                        .push((blade.id, layer.content_id));
+                    render_test_blade(ui, blade, layer);
+                },
+            );
+        });
+        crate::test_support::setup_egui(&mut harness);
+        harness.run();
+        navigator.borrow_mut().push(TestBlade {
+            id: 2,
+            title: "Second",
+        });
+        navigator.borrow_mut().push(TestBlade {
+            id: 3,
+            title: "Third",
+        });
+        navigator.borrow_mut().clear_transition();
+        rendered.borrow_mut().clear();
+        harness.run();
+
+        let expected = [
+            (1, Id::new(stack_source).with(("blade-content", 0))),
+            (2, Id::new(stack_source).with(("blade-content", 1))),
+            (3, Id::new(stack_source).with(("blade-content", 2))),
+        ];
+        assert!(
+            rendered
+                .borrow()
+                .chunks_exact(expected.len())
+                .all(|frame| frame == expected),
+            "content IDs should be derived from each blade's stack position: {rendered:?}"
+        );
+    }
+
+    #[test]
     fn hidden_history_blades_restore_their_existing_child_state() {
         let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
             id: 1,
@@ -1011,7 +1421,6 @@ mod tests {
             stack.show_with_title(
                 ui.ctx(),
                 &mut navigator_for_ui.borrow_mut(),
-                |blade| Id::new(blade.id),
                 |blade| blade.title.to_owned(),
                 |ui, blade, layer| {
                     let state_id = layer.content_id.with("child-state");
@@ -1080,7 +1489,6 @@ mod tests {
             let response = stack.show_with_title(
                 ui.ctx(),
                 &mut navigator_for_ui.borrow_mut(),
-                |blade| Id::new(blade.id),
                 |blade| blade.title.to_owned(),
                 render_test_blade,
             );
@@ -1136,7 +1544,6 @@ mod tests {
             stack.show_with_title(
                 ui.ctx(),
                 &mut navigator_for_ui.borrow_mut(),
-                |blade| Id::new(blade.id),
                 |blade| blade.title.to_owned(),
                 |ui, _, _| {
                     *observed_width_for_ui.borrow_mut() = Some(ui.available_width());
