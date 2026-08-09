@@ -10,7 +10,7 @@ use crate::resource_detail::{
 use crate::resource_handlers;
 use crate::resource_schema::ResourceSchema;
 use crate::resource_table::{CellValue, CustomResourceColumn};
-use crate::worker::{WorkerResult, WorkerResultSender};
+use crate::worker::{ResourceApiError, ResourceApiErrorCause, WorkerResult, WorkerResultSender};
 use anyhow::{Context, Result, bail};
 use futures_util::future::try_join_all;
 use futures_util::pin_mut;
@@ -909,7 +909,7 @@ fn extract_minimal_resource(
     // Parse creation timestamp
     let creation_timestamp = metadata.creation_timestamp.as_ref().and_then(|ts| {
         OffsetDateTime::parse(
-            &ts.0.to_rfc3339(),
+            &ts.0.to_string(),
             &time::format_description::well_known::Rfc3339,
         )
         .ok()
@@ -986,7 +986,7 @@ pub(crate) fn minimal_resource_from_typed<T: Resource>(
     let metadata = obj.meta();
     let creation_timestamp = metadata.creation_timestamp.as_ref().and_then(|timestamp| {
         OffsetDateTime::parse(
-            &timestamp.0.to_rfc3339(),
+            &timestamp.0.to_string(),
             &time::format_description::well_known::Rfc3339,
         )
         .ok()
@@ -1560,7 +1560,7 @@ async fn resource_detail_from_dynamic(
     let metadata = &object.metadata;
     let creation_timestamp = metadata.creation_timestamp.as_ref().and_then(|timestamp| {
         OffsetDateTime::parse(
-            &timestamp.0.to_rfc3339(),
+            &timestamp.0.to_string(),
             &time::format_description::well_known::Rfc3339,
         )
         .ok()
@@ -1789,14 +1789,14 @@ fn expand_environment_variable_value(value: &str, values: &BTreeMap<String, Stri
 fn resource_event_from_kubernetes(event: KubernetesEvent) -> ResourceEvent {
     let last_timestamp = if let Some(timestamp) = event.event_time.as_ref() {
         OffsetDateTime::parse(
-            &timestamp.0.to_rfc3339(),
+            &timestamp.0.to_string(),
             &time::format_description::well_known::Rfc3339,
         )
         .ok()
     } else {
         event.last_timestamp.as_ref().and_then(|timestamp| {
             OffsetDateTime::parse(
-                &timestamp.0.to_rfc3339(),
+                &timestamp.0.to_string(),
                 &time::format_description::well_known::Rfc3339,
             )
             .ok()
@@ -1960,16 +1960,46 @@ pub async fn validate_resource_yaml(
         .force()
         .validation(kube::api::ValidationDirective::Strict)
         .dry_run();
-    api.patch(&resource_name, &params, &kube::api::Patch::Apply(&obj))
-        .await?;
-    Ok(WorkerResult::ResourceYamlValidated {
-        editor_id,
-        revision,
-        cluster_key,
-        api_resource,
-        namespace,
-        resource_name,
-    })
+    match api
+        .patch(&resource_name, &params, &kube::api::Patch::Apply(&obj))
+        .await
+    {
+        Ok(_) => Ok(WorkerResult::ResourceYamlValidated {
+            editor_id,
+            revision,
+            cluster_key,
+            api_resource,
+            namespace,
+            resource_name,
+        }),
+        Err(kube::Error::Api(status)) => Ok(WorkerResult::ResourceYamlValidationFailed {
+            editor_id,
+            revision,
+            cluster_key,
+            api_resource,
+            namespace,
+            resource_name,
+            error: resource_api_error(&status),
+        }),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn resource_api_error(status: &kube::core::Status) -> ResourceApiError {
+    ResourceApiError {
+        message: status.message.clone(),
+        causes: status
+            .details
+            .as_ref()
+            .map_or(&[][..], |details| details.causes.as_slice())
+            .iter()
+            .map(|cause| ResourceApiErrorCause {
+                field: cause.field.clone(),
+                message: cause.message.clone(),
+                reason: cause.reason.clone(),
+            })
+            .collect(),
+    }
 }
 
 /// Delete a resource
@@ -2071,20 +2101,31 @@ pub async fn apply_resource_yaml(
 
     // Use server-side apply with force to take ownership of fields
     let patch_params = kube::api::PatchParams::apply("kubernetes-dev-ui").force();
-    api.patch(
-        &resource_name,
-        &patch_params,
-        &kube::api::Patch::Apply(&obj),
-    )
-    .await?;
-
-    Ok(WorkerResult::ResourceApplyCompleted {
-        editor_id,
-        cluster_key,
-        api_resource,
-        namespace,
-        resource_name,
-    })
+    match api
+        .patch(
+            &resource_name,
+            &patch_params,
+            &kube::api::Patch::Apply(&obj),
+        )
+        .await
+    {
+        Ok(_) => Ok(WorkerResult::ResourceApplyCompleted {
+            editor_id,
+            cluster_key,
+            api_resource,
+            namespace,
+            resource_name,
+        }),
+        Err(kube::Error::Api(status)) => Ok(WorkerResult::ResourceApplyFailed {
+            editor_id,
+            cluster_key,
+            api_resource,
+            namespace,
+            resource_name,
+            error: resource_api_error(&status),
+        }),
+        Err(error) => Err(error.into()),
+    }
 }
 
 /// Replace selected existing data values while preserving every other field. The

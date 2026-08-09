@@ -370,6 +370,15 @@ pub enum WorkerResult {
         namespace: Option<String>,
         resource_name: String,
     },
+    ResourceYamlValidationFailed {
+        editor_id: u64,
+        revision: u64,
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: Option<String>,
+        resource_name: String,
+        error: ResourceApiError,
+    },
     /// Resource was successfully deleted
     ResourceDeleteCompleted {
         cluster_key: i32,
@@ -384,6 +393,14 @@ pub enum WorkerResult {
         api_resource: ApiResource,
         namespace: Option<String>,
         resource_name: String,
+    },
+    ResourceApplyFailed {
+        editor_id: u64,
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: Option<String>,
+        resource_name: String,
+        error: ResourceApiError,
     },
     /// A Deployment rollout restart patch was accepted by the API server.
     DeploymentRestartCompleted {
@@ -416,6 +433,20 @@ pub enum WorkerResult {
 }
 
 pub type WorkerResultSender = mpsc::SyncSender<WorkerResult>;
+
+/// Kubernetes API status information retained for YAML editor feedback.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResourceApiError {
+    pub message: String,
+    pub causes: Vec<ResourceApiErrorCause>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResourceApiErrorCause {
+    pub field: String,
+    pub message: String,
+    pub reason: String,
+}
 
 /// Shared state accessible from spawned async tasks
 struct SharedWorkerState {
