@@ -122,6 +122,12 @@ pub(super) struct PodLogWindowState {
     pub(super) page_cache_limit: usize,
     pub(super) page_size: usize,
     pub(super) pending_pages: HashSet<LogPageKey>,
+    /// The viewer keeps its initial surface quiet until a disk-backed page is
+    /// available, rather than rendering a moving viewport of placeholders.
+    pub(super) initial_page_loaded: bool,
+    /// The first visible logical row, captured by the renderer so a spool
+    /// rebase can preserve the rendered record rather than its old row number.
+    pub(super) visible_top_display_row: usize,
     pub(super) store_opened: bool,
     pub(super) status: PodLogStatus,
     pub(super) close_requested: bool,
@@ -152,6 +158,9 @@ pub(super) struct LogSearchState {
     pub(super) active_display_row: Option<usize>,
     pub(super) active_match: Option<usize>,
     pub(super) scroll_to_display_row: Option<usize>,
+    /// When present, preserve a rebased viewport by adding this many row
+    /// heights to the currently persisted vertical offset.
+    pub(super) rebase_scroll_row_delta: Option<usize>,
     pub(super) error: Option<String>,
     pub(super) filter_matches: bool,
 }
@@ -169,6 +178,7 @@ impl Default for LogSearchState {
             active_display_row: None,
             active_match: None,
             scroll_to_display_row: None,
+            rebase_scroll_row_delta: None,
             error: None,
             filter_matches: false,
         }
@@ -250,6 +260,9 @@ impl PodLogWindowState {
 
     pub(super) fn insert_page(&mut self, key: LogPageKey, rows: Vec<LogPageRow>) {
         self.pending_pages.remove(&key);
+        if !key.filter_matches && !rows.is_empty() {
+            self.initial_page_loaded = true;
+        }
         if let Some(previous) = self.pages.remove(&key) {
             self.page_cache_bytes = self.page_cache_bytes.saturating_sub(previous.bytes);
             self.page_order.retain(|existing| *existing != key);
@@ -882,6 +895,8 @@ impl UiState {
                 page_cache_limit: PodLogWindowState::DEFAULT_PAGE_CACHE_LIMIT,
                 page_size: crate::log_store::LOG_PAGE_SIZE,
                 pending_pages: HashSet::new(),
+                initial_page_loaded: false,
+                visible_top_display_row: 0,
                 store_opened: false,
                 status: PodLogStatus::Connecting,
                 close_requested: false,
@@ -2051,6 +2066,38 @@ impl UiState {
                     }
                 }
             }
+            LogStoreResult::Rebased {
+                window_id,
+                total_lines,
+                live_start,
+                history_lines,
+            } => {
+                if let Some(window) = self.log_windows.get_mut(&window_id) {
+                    let old_visible_row = window.visible_top_display_row;
+                    let rebased_visible_row =
+                        rebase_display_row(old_visible_row, history_lines, live_start);
+                    // The scroll area clamps its horizontal offset against the
+                    // content width before the newly requested page is laid
+                    // out. Keep the previous width for that one frame so a
+                    // wide-log rebase cannot snap back to the left edge.
+                    let horizontal_content_width = window.horizontal_content_width;
+                    window.total_lines = total_lines;
+                    window.initial_page_loaded = true;
+                    window.clear_pages();
+                    window.horizontal_content_width = horizontal_content_width;
+                    window.search.scroll_to_display_row =
+                        Some(rebased_visible_row.min(total_lines.saturating_sub(1)));
+                    window.search.rebase_scroll_row_delta =
+                        Some(rebased_visible_row.saturating_sub(old_visible_row));
+                    if !window.search.query.is_empty() {
+                        window.search.generation = window.search.generation.wrapping_add(1);
+                        window.search.match_count = 0;
+                        window.search.search_complete = false;
+                        window.search.scanned_lines = 0;
+                        window.search.search_deadline = Some(Instant::now());
+                    }
+                }
+            }
             LogStoreResult::SearchProgress {
                 window_id,
                 generation,
@@ -2159,6 +2206,13 @@ impl UiState {
             watch.error = Some(error);
         }
     }
+}
+
+/// Translate a row in the initial tail segment to its logical position after
+/// the completed history segment takes over. Its overlap is retained at the
+/// end of history, while later records remain after that segment.
+fn rebase_display_row(live_row: usize, history_lines: usize, live_start: usize) -> usize {
+    history_lines.saturating_sub(live_start) + live_row
 }
 
 fn sync_resource_data_editor(
@@ -2487,6 +2541,21 @@ mod tests {
             filter_matches: false,
             page_start: 1,
         }));
+    }
+
+    #[test]
+    fn rebasing_maps_an_overlapping_tail_row_to_its_history_position() {
+        assert_eq!(rebase_display_row(40, 200, 100), 140);
+    }
+
+    #[test]
+    fn rebasing_maps_live_records_after_the_overlap_without_an_extra_shift() {
+        assert_eq!(rebase_display_row(120, 200, 100), 220);
+    }
+
+    #[test]
+    fn rebasing_without_overlap_places_the_live_segment_after_all_history() {
+        assert_eq!(rebase_display_row(40, 100, 0), 140);
     }
 
     fn test_log_row(display_row: usize, text: &str) -> LogPageRow {
