@@ -68,7 +68,7 @@ pub(super) fn show(
     }
 }
 
-fn show_log_window(
+pub(super) fn show_log_window(
     ctx: &egui::Context,
     window: &mut PodLogWindowState,
     display_options: &mut LogDisplayOptions,
@@ -154,9 +154,12 @@ fn show_log_window(
                         filter_matches: filter_is_active(window),
                         page_start,
                     };
-                    if let Some(row) = window.pages.get(&key).and_then(|page| {
-                        page.rows.iter().find(|row| row.display_row == display_row)
-                    }) {
+                    let row_offset = display_row - page_start;
+                    if let Some(row) = window
+                        .pages
+                        .get(&key)
+                        .and_then(|page| page.rows.get(row_offset))
+                    {
                         ui.add(
                             egui::Label::new(log_line_layout_job(
                                 row.line_index,
@@ -477,6 +480,7 @@ fn log_line_layout_job(
     display_options: LogDisplayOptions,
 ) -> egui::text::LayoutJob {
     let mut job = egui::text::LayoutJob::default();
+    job.wrap = egui::text::TextWrapping::no_max_width();
     let number = egui::TextFormat {
         font_id: egui::FontId::monospace(14.0),
         color: egui::Color32::from_rgb(156, 163, 175),
@@ -810,6 +814,76 @@ mod tests {
             job.sections[2].format.background,
             egui::Color32::from_rgb(120, 53, 15)
         );
+    }
+
+    #[test]
+    fn wide_log_rows_are_not_wrapped_and_need_horizontal_scrolling() {
+        let wide_line = "x".repeat(4 * 1024);
+        let context = egui::Context::default();
+        let input = || egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(320.0, 200.0),
+            )),
+            ..Default::default()
+        };
+        let mut first_scroll_output = None;
+        let _ = context.run(input(), |context| {
+            egui::CentralPanel::default().show(context, |ui| {
+                first_scroll_output = Some(show_wide_test_scroll_area(ui, &wide_line));
+            });
+        });
+
+        let first_output = first_scroll_output.expect("scroll area was rendered");
+        assert!(first_output.content_size.x > first_output.inner_rect.width());
+
+        let mut scroll_input = input();
+        scroll_input.events = vec![
+            egui::Event::PointerMoved(first_output.inner_rect.center()),
+            egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(-120.0, 0.0),
+                modifiers: egui::Modifiers::default(),
+            },
+        ];
+        let mut second_scroll_output = None;
+        let _ = context.run(scroll_input, |context| {
+            egui::CentralPanel::default().show(context, |ui| {
+                second_scroll_output = Some(show_wide_test_scroll_area(ui, &wide_line));
+            });
+        });
+
+        assert!(
+            second_scroll_output
+                .expect("scroll area was rendered")
+                .state
+                .offset
+                .x
+                > 0.0
+        );
+    }
+
+    fn show_wide_test_scroll_area(
+        ui: &mut egui::Ui,
+        wide_line: &str,
+    ) -> egui::scroll_area::ScrollAreaOutput<()> {
+        let row_height = ui.text_style_height(&egui::TextStyle::Monospace);
+        egui::ScrollArea::both()
+            .id_salt("wide-log-scroll-test")
+            .auto_shrink([false, false])
+            .show_rows(ui, row_height, 1, |ui, _| {
+                ui.add(
+                    egui::Label::new(log_line_layout_job(
+                        0,
+                        None,
+                        wide_line,
+                        &[],
+                        &[],
+                        LogDisplayOptions::default(),
+                    ))
+                    .extend(),
+                );
+            })
     }
 
     #[test]
