@@ -156,27 +156,64 @@ fn show_log_window_with_scroll_state(
                 .inner_margin(egui::Margin::same(spacing::LG as i8)),
         )
         .show(ctx, |ui| {
-            let row_height =
+            let pixels_per_point = ui.pixels_per_point();
+            let font_row_height =
                 ui.fonts_mut(|fonts| fonts.row_height(&egui::FontId::monospace(LOG_FONT_SIZE)));
-            let row_step = row_height + ui.spacing().item_spacing.y;
-            let display_count = displayed_line_count(window);
+            // Keep virtual row origins on the physical-pixel grid. Otherwise
+            // equivalent rows at different logical indices can round to
+            // different raster positions during a source rebase.
+            let row_step = ((font_row_height + ui.spacing().item_spacing.y) * pixels_per_point)
+                .round()
+                / pixels_per_point;
+            let row_height = row_step - ui.spacing().item_spacing.y;
             let scroll_area_salt = egui::Id::new(("pod-log-lines", window.id));
+            if initial_spool_is_pending(window) {
+                request_page_for_display_row(
+                    window,
+                    log_store,
+                    window.total_lines.saturating_sub(1),
+                );
+                show_initial_spool_state(ui, window.total_lines);
+                return egui::ScrollArea::both()
+                    .id_salt(scroll_area_salt)
+                    .show_rows(ui, row_height, 0, |_ui, _rows| {});
+            }
+
+            let display_count = displayed_line_count(window);
             // `ScrollArea::id_salt` hashes the salt into an `Id` before it
             // scopes it to this UI. Mirror both steps when reading its state.
             let scroll_id = ui.make_persistent_id(egui::Id::new(scroll_area_salt));
+            let scroll_state = egui::scroll_area::State::load(ctx, scroll_id);
+            let horizontal_offset = scroll_state.as_ref().map_or(0.0, |state| state.offset.x);
+            // The virtual fragment renderer rounds its content origin to the
+            // physical pixel grid. Store that same normalized value so a
+            // rebase cannot turn a fractional wheel offset into a one-pixel
+            // horizontal text jump on its next frame.
             let horizontal_offset =
-                egui::scroll_area::State::load(ctx, scroll_id).map_or(0.0, |state| state.offset.x);
+                (horizontal_offset * pixels_per_point).round() / pixels_per_point;
+            let vertical_offset = scroll_state.as_ref().map_or(0.0, |state| state.offset.y);
+            window.visible_top_display_row = (vertical_offset / row_step).max(0.0).floor() as usize;
             let viewport_width = ui.available_width();
             let character_width = ui
                 .fonts_mut(|fonts| fonts.glyph_width(&egui::FontId::monospace(LOG_FONT_SIZE), '0'));
-            let requested_offset = window
-                .search
-                .scroll_to_display_row
-                .take()
-                .map(|row| egui::vec2(0.0, row as f32 * row_step));
+            let requested_offset = window.search.scroll_to_display_row.take().map(|row| {
+                let requested_vertical_offset = window
+                    .search
+                    .rebase_scroll_row_delta
+                    .take()
+                    .map_or(row as f32 * row_step, |delta| {
+                        vertical_offset + delta as f32 * row_step
+                    });
+                egui::vec2(horizontal_offset, requested_vertical_offset)
+            });
             let mut scroll_area = egui::ScrollArea::both()
                 .id_salt(scroll_area_salt)
                 .auto_shrink([false, false])
+                // A wide page can arrive after placeholders have already been
+                // rendered. Reserving both bars from the first frame keeps
+                // that discovery from changing the vertical viewport.
+                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+                .horizontal_scroll_offset(horizontal_offset)
                 .stick_to_bottom(requested_offset.is_none());
             if let Some(offset) = requested_offset {
                 scroll_area = scroll_area.scroll_offset(offset);
@@ -222,19 +259,26 @@ fn show_log_window_with_scroll_state(
                             if let Some(range) = selection_range {
                                 highlight_ranges.push(range);
                             }
-                            ui.add(
-                                egui::Label::new(log_line_layout_job(
-                                    row.line_index,
-                                    row.timestamp.as_deref(),
-                                    &row.text,
-                                    &row.style_spans,
-                                    &highlight_ranges,
-                                    *display_options,
-                                ))
-                                .extend()
-                                .selectable(false)
-                                .sense(egui::Sense::click_and_drag()),
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(ui.available_width(), row_height),
+                                egui::Layout::left_to_right(egui::Align::Center),
+                                |ui| {
+                                    ui.add(
+                                        egui::Label::new(log_line_layout_job(
+                                            row.line_index,
+                                            row.timestamp.as_deref(),
+                                            &row.text,
+                                            &row.style_spans,
+                                            &highlight_ranges,
+                                            *display_options,
+                                        ))
+                                        .extend()
+                                        .selectable(false)
+                                        .sense(egui::Sense::click_and_drag()),
+                                    )
+                                },
                             )
+                            .inner
                         } else {
                             ui.allocate_ui_with_layout(
                                 egui::vec2(ui.available_width(), row_height),
@@ -286,13 +330,12 @@ fn show_log_window_with_scroll_state(
                             character_width,
                         );
                     } else {
-                        ui.add(
-                            egui::Label::new(
-                                egui::RichText::new("Loading…")
-                                    .font(egui::FontId::monospace(LOG_FONT_SIZE))
-                                    .color(gray::_500),
-                            )
-                            .extend(),
+                        show_loading_row(
+                            ui,
+                            row_height,
+                            display_row,
+                            !filter_is_active(window),
+                            *display_options,
                         );
                     }
                     if let Some((position, starts_selection)) = selection_update {
@@ -310,6 +353,45 @@ fn show_log_window_with_scroll_state(
             })
         })
         .inner
+}
+
+fn initial_spool_is_pending(window: &PodLogWindowState) -> bool {
+    window.total_lines > 0
+        && !window.initial_page_loaded
+        && !filter_is_active(window)
+        && !matches!(window.status, PodLogStatus::Failed(_))
+}
+
+fn show_initial_spool_state(ui: &mut egui::Ui, total_lines: usize) {
+    let state_rect = egui::Rect::from_center_size(
+        ui.available_rect_before_wrap().center(),
+        egui::vec2(280.0, 64.0),
+    );
+    ui.scope_builder(
+        egui::UiBuilder::new()
+            .max_rect(state_rect)
+            .layout(egui::Layout::top_down(egui::Align::Center)),
+        |ui| {
+            ui.horizontal_centered(|ui| {
+                ui.add(egui::Spinner::new().size(20.0).color(gray::_200));
+                ui.add_space(spacing::SM);
+                ui.label(
+                    egui::RichText::new("Spooling logs…")
+                        .font(typography::section_heading())
+                        .color(gray::_200),
+                );
+            });
+            ui.add_space(spacing::SM);
+            ui.label(
+                egui::RichText::new(format!(
+                    "{total_lines} {} received",
+                    if total_lines == 1 { "line" } else { "lines" }
+                ))
+                .font(typography::body())
+                .color(gray::_500),
+            );
+        },
+    );
 }
 
 fn request_page_for_display_row(
@@ -732,6 +814,39 @@ fn log_line_prefix(
     prefix
 }
 
+fn show_loading_row(
+    ui: &mut egui::Ui,
+    row_height: f32,
+    display_row: usize,
+    display_row_is_line_index: bool,
+    display_options: LogDisplayOptions,
+) {
+    ui.allocate_ui_with_layout(
+        egui::vec2(ui.available_width(), row_height),
+        egui::Layout::left_to_right(egui::Align::Center),
+        |ui| {
+            if display_row_is_line_index && display_options.show_line_numbers {
+                ui.add(
+                    egui::Label::new(
+                        egui::RichText::new(log_line_prefix(display_row, None, display_options))
+                            .font(egui::FontId::monospace(LOG_FONT_SIZE))
+                            .color(egui::Color32::from_rgb(156, 163, 175)),
+                    )
+                    .selectable(false),
+                );
+            }
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new("Loading…")
+                        .font(egui::FontId::monospace(LOG_FONT_SIZE))
+                        .color(gray::_500),
+                )
+                .selectable(false),
+            );
+        },
+    );
+}
+
 fn clipped_style_spans(
     style_spans: &[AnsiStyleSpan],
     byte_range: std::ops::Range<usize>,
@@ -1006,6 +1121,9 @@ fn status_label(window: &PodLogWindowState) -> String {
     if !window.search.query.is_empty() && !window.search.search_complete {
         return format!("Searching… {} matches", window.search.match_count);
     }
+    if initial_spool_is_pending(window) {
+        return format!("Spooling… {} lines", window.total_lines);
+    }
     match &window.status {
         PodLogStatus::Connecting => "Connecting…".to_owned(),
         PodLogStatus::Following => "Following".to_owned(),
@@ -1029,8 +1147,10 @@ mod tests {
     use crate::log_store::{LOG_PAGE_SIZE, LogPageRow, LogStoreConfig, LogStoreResult};
     use crate::minimal_resource::PodLogContainer;
     use crate::resource_table::ContainerKind;
+    use crate::worker::{MockWorker, WorkerResult};
     use egui_kittest::{Harness, kittest::Queryable};
     use std::cell::RefCell;
+    use std::collections::VecDeque;
     use std::rc::Rc;
 
     fn log_window(lines: &[&str]) -> PodLogWindowState {
@@ -1050,6 +1170,8 @@ mod tests {
             page_cache_limit: PodLogWindowState::DEFAULT_PAGE_CACHE_LIMIT,
             page_size: LOG_PAGE_SIZE,
             pending_pages: Default::default(),
+            initial_page_loaded: true,
+            visible_top_display_row: 0,
             store_opened: true,
             status: PodLogStatus::Following,
             close_requested: false,
@@ -1226,6 +1348,152 @@ mod tests {
         assert_eq!(loading_offset.inner_rect, loaded_offset.inner_rect);
         assert_eq!(loading_offset.content_size, loaded_offset.content_size);
         assert_eq!(loading_offset.state.offset.y, loaded_offset.state.offset.y);
+    }
+
+    #[test]
+    fn loading_a_narrow_page_does_not_move_the_bottom_offset() {
+        let mut window = log_window(&[]);
+        window.total_lines = LOG_PAGE_SIZE * 2;
+        window.status = PodLogStatus::Finished;
+        window.insert_page(
+            LogPageKey {
+                generation: 0,
+                filter_matches: false,
+                page_start: LOG_PAGE_SIZE,
+            },
+            (LOG_PAGE_SIZE..window.total_lines)
+                .map(|line_index| LogPageRow {
+                    display_row: line_index,
+                    line_index,
+                    timestamp: None,
+                    text: format!("line {line_index}"),
+                    style_spans: Vec::new(),
+                    match_ranges: Vec::new(),
+                })
+                .collect(),
+        );
+        window.search.scroll_to_display_row = Some(window.total_lines - 1);
+
+        let context = egui::Context::default();
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(800.0, 600.0),
+            )),
+            ..Default::default()
+        };
+        let mut display_options = LogDisplayOptions::default();
+        let log_store = LogStoreService::default();
+        let mut close_requested = false;
+        let mut render = |window: &mut PodLogWindowState| {
+            let mut scroll_state = None;
+            let _ = context.run(input.clone(), |ctx| {
+                scroll_state = Some(show_log_window_with_scroll_state(
+                    ctx,
+                    window,
+                    &mut display_options,
+                    &log_store,
+                    &mut close_requested,
+                ));
+            });
+            scroll_state.expect("log scroll area was rendered")
+        };
+
+        let _ = render(&mut window);
+        let loaded_offset = render(&mut window);
+        window.pages.clear();
+        window.page_order.clear();
+        window.page_cache_bytes = 0;
+        let loading_offset = render(&mut window);
+
+        assert_eq!(loading_offset.inner_rect, loaded_offset.inner_rect);
+        assert_eq!(loading_offset.content_size, loaded_offset.content_size);
+        assert_eq!(loading_offset.state.offset.y, loaded_offset.state.offset.y);
+    }
+
+    #[test]
+    fn first_unfiltered_page_ends_the_initial_spool_state() {
+        let mut window = log_window(&[]);
+        window.total_lines = 1;
+        window.initial_page_loaded = false;
+
+        assert!(initial_spool_is_pending(&window));
+        window.insert_page(
+            LogPageKey {
+                generation: 0,
+                filter_matches: false,
+                page_start: 0,
+            },
+            vec![LogPageRow {
+                display_row: 0,
+                line_index: 0,
+                timestamp: None,
+                text: "first line".to_owned(),
+                style_spans: Vec::new(),
+                match_ranges: Vec::new(),
+            }],
+        );
+
+        assert!(!initial_spool_is_pending(&window));
+    }
+
+    #[test]
+    fn first_wide_page_does_not_change_the_vertical_viewport() {
+        let wide_line = "x".repeat(4 * 1024);
+        let mut window = log_window(&[]);
+        window.total_lines = LOG_PAGE_SIZE * 2;
+        window.status = PodLogStatus::Finished;
+        window.search.scroll_to_display_row = Some(window.total_lines - 1);
+
+        let context = egui::Context::default();
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(800.0, 600.0),
+            )),
+            ..Default::default()
+        };
+        let mut display_options = LogDisplayOptions::default();
+        let log_store = LogStoreService::default();
+        let mut close_requested = false;
+        let mut render = |window: &mut PodLogWindowState| {
+            let mut scroll_state = None;
+            let _ = context.run(input.clone(), |ctx| {
+                scroll_state = Some(show_log_window_with_scroll_state(
+                    ctx,
+                    window,
+                    &mut display_options,
+                    &log_store,
+                    &mut close_requested,
+                ));
+            });
+            scroll_state.expect("log scroll area was rendered")
+        };
+
+        let _ = render(&mut window);
+        let loading_offset = render(&mut window);
+        window.insert_page(
+            LogPageKey {
+                generation: 0,
+                filter_matches: false,
+                page_start: LOG_PAGE_SIZE,
+            },
+            (LOG_PAGE_SIZE..window.total_lines)
+                .map(|line_index| LogPageRow {
+                    display_row: line_index,
+                    line_index,
+                    timestamp: None,
+                    text: wide_line.clone(),
+                    style_spans: Vec::new(),
+                    match_ranges: Vec::new(),
+                })
+                .collect(),
+        );
+        let loaded_offset = render(&mut window);
+
+        assert_eq!(loaded_offset.inner_rect, loading_offset.inner_rect);
+        assert_eq!(loaded_offset.content_size.y, loading_offset.content_size.y);
+        assert_eq!(loaded_offset.state.offset.y, loading_offset.state.offset.y);
     }
 
     #[test]
@@ -1632,6 +1900,218 @@ mod tests {
     }
 
     #[test]
+    fn pod_log_viewer_loading_placeholder_snapshot() {
+        let mut window = log_window(&[]);
+        window.total_lines = 100;
+        window.initial_page_loaded = false;
+        snapshot_initial_spool_window(
+            window,
+            "pod_logs/loading_placeholder",
+            LogDisplayOptions {
+                show_line_numbers: true,
+                ..LogDisplayOptions::default()
+            },
+        );
+    }
+
+    #[test]
+    fn pod_log_viewer_rebase_keeps_scrolled_wide_text_in_place() {
+        let live_lines = (0..LOG_PAGE_SIZE)
+            .map(|line_index| format!("record {line_index:03} :: ").repeat(32))
+            .collect::<Vec<_>>();
+        let live_line_refs = live_lines.iter().map(String::as_str).collect::<Vec<_>>();
+
+        // The worker only controls stream lifecycle now; the storage service
+        // owns log data. Drive both boundaries explicitly so this test fixes
+        // the exact frame in which the source swap is rendered.
+        let mut state = UiState::default();
+        let mut commands = Vec::new();
+        state.open_pod_log_window(
+            1,
+            "api-0".into(),
+            Some("default".into()),
+            PodLogContainer {
+                name: "api".into(),
+                kind: ContainerKind::App,
+            },
+            &mut commands,
+        );
+        let mut worker = MockWorker {
+            results: VecDeque::from([WorkerResult::PodLogStreamStarted {
+                cluster_key: 1,
+                log_window_id: 1,
+            }]),
+            commands: Vec::new(),
+        };
+        let _ = state.update(&mut worker);
+        state.log_windows.insert(1, log_window(&live_line_refs));
+
+        let state = Rc::new(RefCell::new(state));
+        let rendered_scroll_offset = Rc::new(RefCell::new(egui::Vec2::ZERO));
+        let rendered_scroll_id = Rc::new(RefCell::new(None));
+        let state_for_ui = state.clone();
+        let rendered_scroll_offset_for_ui = rendered_scroll_offset.clone();
+        let rendered_scroll_id_for_ui = rendered_scroll_id.clone();
+        let log_store = LogStoreService::default();
+        let mut close_requested = false;
+        let mut harness = Harness::builder().build(move |ctx| {
+            let mut state = state_for_ui.borrow_mut();
+            let UiState {
+                log_windows,
+                log_display_options,
+                ..
+            } = &mut *state;
+            let window = log_windows.get_mut(&1).expect("log window exists");
+            let output = show_log_window_with_scroll_state(
+                ctx,
+                window,
+                log_display_options,
+                &log_store,
+                &mut close_requested,
+            );
+            *rendered_scroll_offset_for_ui.borrow_mut() = output.state.offset;
+            *rendered_scroll_id_for_ui.borrow_mut() = Some(output.id);
+        });
+        components::test_support::setup_egui(&mut harness);
+        harness.run_steps(2);
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::PointerMoved(egui::pos2(400.0, 180.0)));
+        harness.step();
+        harness.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(-600.0, -700.0),
+            modifiers: egui::Modifiers::default(),
+        });
+        harness.run_steps(3);
+
+        // Snap the fixture to a physical-pixel x offset before capturing the
+        // two frames. Real scroll input can end between pixels; this isolates
+        // source-rebase behavior from wheel-event rounding.
+        let scroll_id = rendered_scroll_id
+            .borrow()
+            .expect("log scroll area was rendered");
+        let mut scroll_state = egui::scroll_area::State::load(&harness.ctx, scroll_id)
+            .expect("log scroll state was persisted");
+        scroll_state.offset.x = 600.0;
+        scroll_state.store(&harness.ctx, scroll_id);
+        harness.run_steps(2);
+
+        let before_offset = *rendered_scroll_offset.borrow();
+        let old_visible_row = state.borrow().log_windows[&1].visible_top_display_row;
+        assert!(
+            before_offset.x > 0.0,
+            "the test must exercise horizontal scroll"
+        );
+        assert!(
+            old_visible_row > 0,
+            "the test must exercise vertical scroll"
+        );
+        harness.snapshot("pod_logs/rebase_before");
+
+        // A full history request returned 100 older records plus the complete
+        // initial tail. The visible tail record therefore moves down by 100
+        // logical rows, but its rendered position must not move.
+        state
+            .borrow_mut()
+            .apply_log_store_result(LogStoreResult::Rebased {
+                window_id: 1,
+                total_lines: LOG_PAGE_SIZE + 100,
+                history_lines: LOG_PAGE_SIZE + 100,
+                live_start: LOG_PAGE_SIZE,
+            });
+        state
+            .borrow_mut()
+            .apply_log_store_result(LogStoreResult::PageLoaded {
+                window_id: 1,
+                generation: 0,
+                filter_matches: false,
+                page_start: LOG_PAGE_SIZE,
+                total_rows: LOG_PAGE_SIZE + 100,
+                rows: (LOG_PAGE_SIZE..LOG_PAGE_SIZE + 100)
+                    .map(|display_row| {
+                        let live_index = display_row - 100;
+                        LogPageRow {
+                            display_row,
+                            line_index: display_row,
+                            timestamp: None,
+                            text: live_lines[live_index].clone(),
+                            style_spans: Vec::new(),
+                            match_ranges: Vec::new(),
+                        }
+                    })
+                    .collect(),
+            });
+        harness.run_steps(3);
+
+        let after_offset = *rendered_scroll_offset.borrow();
+        let expected_row = old_visible_row + 100;
+        assert_eq!(
+            state.borrow().log_windows[&1].visible_top_display_row,
+            expected_row,
+            "the rendered anchor must refer to the same record after rebasing"
+        );
+        assert!(
+            (after_offset.x - before_offset.x).abs() <= 0.1,
+            "rebasing must preserve the horizontal scroll offset: before={before_offset:?}, after={after_offset:?}"
+        );
+        harness.snapshot("pod_logs/rebase_after");
+
+        // Supply the newly prepended page, then scroll up into it. This
+        // verifies that the post-rebase cache can move in the opposite
+        // direction without losing the horizontal position or showing the
+        // old tail at the wrong logical index.
+        state
+            .borrow_mut()
+            .apply_log_store_result(LogStoreResult::PageLoaded {
+                window_id: 1,
+                generation: 0,
+                filter_matches: false,
+                page_start: 0,
+                total_rows: LOG_PAGE_SIZE + 100,
+                rows: (0..LOG_PAGE_SIZE)
+                    .map(|display_row| {
+                        let text = if display_row < 100 {
+                            format!("history {display_row:03} :: ").repeat(32)
+                        } else {
+                            live_lines[display_row - 100].clone()
+                        };
+                        LogPageRow {
+                            display_row,
+                            line_index: display_row,
+                            timestamp: None,
+                            text,
+                            style_spans: Vec::new(),
+                            match_ranges: Vec::new(),
+                        }
+                    })
+                    .collect(),
+            });
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::PointerMoved(egui::pos2(400.0, 180.0)));
+        harness.step();
+        harness.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, 10_000.0),
+            modifiers: egui::Modifiers::default(),
+        });
+        harness.run_steps(3);
+        let history_scroll_offset = *rendered_scroll_offset.borrow();
+        assert!(
+            state.borrow().log_windows[&1].visible_top_display_row < 100,
+            "upward scrolling must reach the prepended history segment"
+        );
+        assert!(
+            (history_scroll_offset.x - before_offset.x).abs() <= 0.1,
+            "upward scrolling through history must retain the horizontal offset"
+        );
+        harness.snapshot("pod_logs/rebase_history_after_scroll");
+    }
+
+    #[test]
     fn pod_log_viewer_filter_active_snapshot() {
         let mut window = log_window(&[
             "2026-08-08T15:22:17.143Z  INFO  server: listening on 0.0.0.0:8080",
@@ -1733,7 +2213,35 @@ mod tests {
     }
 
     fn snapshot_window(window: PodLogWindowState, name: &str) {
-        snapshot_window_after_horizontal_scroll(window, name, 0.0);
+        snapshot_window_with_display_options(window, name, LogDisplayOptions::default());
+    }
+
+    fn snapshot_window_with_display_options(
+        window: PodLogWindowState,
+        name: &str,
+        display_options: LogDisplayOptions,
+    ) {
+        snapshot_window_after_horizontal_scroll_with_display_options(
+            window,
+            name,
+            0.0,
+            display_options,
+            true,
+        );
+    }
+
+    fn snapshot_initial_spool_window(
+        window: PodLogWindowState,
+        name: &str,
+        display_options: LogDisplayOptions,
+    ) {
+        snapshot_window_after_horizontal_scroll_with_display_options(
+            window,
+            name,
+            0.0,
+            display_options,
+            false,
+        );
     }
 
     fn snapshot_window_after_horizontal_scroll(
@@ -1741,8 +2249,23 @@ mod tests {
         name: &str,
         horizontal_offset: f32,
     ) {
+        snapshot_window_after_horizontal_scroll_with_display_options(
+            window,
+            name,
+            horizontal_offset,
+            LogDisplayOptions::default(),
+            true,
+        );
+    }
+
+    fn snapshot_window_after_horizontal_scroll_with_display_options(
+        window: PodLogWindowState,
+        name: &str,
+        horizontal_offset: f32,
+        mut display_options: LogDisplayOptions,
+        settle: bool,
+    ) {
         let mut window = window;
-        let mut display_options = LogDisplayOptions::default();
         let log_store = LogStoreService::default();
         let mut close_requested = false;
         let mut harness = Harness::builder().build(move |ctx| {
@@ -1755,7 +2278,13 @@ mod tests {
             )
         });
         components::test_support::setup_egui(&mut harness);
-        harness.run();
+        if settle {
+            harness.run();
+        } else {
+            // The spinner repaints continuously. A fixed frame is sufficient
+            // for this visual regression without asking the harness to settle.
+            harness.step();
+        }
         if horizontal_offset > 0.0 {
             harness
                 .input_mut()

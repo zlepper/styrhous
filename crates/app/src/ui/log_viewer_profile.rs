@@ -216,6 +216,8 @@ fn empty_log_window(total_lines: usize) -> PodLogWindowState {
         page_cache_limit: PodLogWindowState::DEFAULT_PAGE_CACHE_LIMIT,
         page_size: PAGE_SIZE,
         pending_pages: Default::default(),
+        initial_page_loaded: true,
+        visible_top_display_row: 0,
         store_opened: true,
         status: PodLogStatus::Finished,
         close_requested: false,

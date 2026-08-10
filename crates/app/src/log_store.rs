@@ -5,7 +5,7 @@
 
 use crate::ansi::{AnsiStyleSpan, parse_kubernetes_log_line};
 use regex::Regex;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -50,6 +50,15 @@ pub(crate) enum LogStoreResult {
         window_id: u64,
         total_lines: usize,
         completed_search: Option<(u64, usize)>,
+    },
+    Rebased {
+        window_id: u64,
+        total_lines: usize,
+        /// Maps a row from the pre-rebase live segment into the combined
+        /// logical index, keeping the visible log record in place.
+        live_start: usize,
+        /// Number of records supplied by the completed history request.
+        history_lines: usize,
     },
     SearchProgress {
         window_id: u64,
@@ -96,6 +105,13 @@ enum Command {
     Append {
         window_id: u64,
         lines: Vec<String>,
+    },
+    AppendBackfill {
+        window_id: u64,
+        lines: Vec<String>,
+    },
+    CompleteBackfill {
+        window_id: u64,
     },
     Search {
         window_id: u64,
@@ -149,7 +165,7 @@ enum Command {
 
 /// The UI-facing handle for the dedicated log-store thread.
 pub(crate) struct LogStoreService {
-    commands: mpsc::SyncSender<Command>,
+    commands: StoreCommandSender,
     appender: LogStoreAppender,
     results: mpsc::Receiver<LogStoreResult>,
     live_updates: Arc<LiveUpdates>,
@@ -162,7 +178,8 @@ pub(crate) struct LogStoreService {
 /// busy instead of dropping batches on a UI-owned queue.
 #[derive(Clone)]
 pub(crate) struct LogStoreAppender {
-    commands: mpsc::SyncSender<Command>,
+    live_commands: StoreCommandSender,
+    backfill_commands: StoreCommandSender,
 }
 
 impl LogStoreAppender {
@@ -170,7 +187,7 @@ impl LogStoreAppender {
         if lines.is_empty() {
             return Ok(());
         }
-        let commands = self.commands.clone();
+        let commands = self.live_commands.clone();
         tokio::task::spawn_blocking(move || {
             commands
                 .send(Command::Append { window_id, lines })
@@ -178,6 +195,73 @@ impl LogStoreAppender {
         })
         .await
         .map_err(|error| anyhow::anyhow!("Log storage task failed: {error}"))?
+    }
+
+    fn try_append(&self, window_id: u64, lines: Vec<String>) -> bool {
+        self.live_commands
+            .try_send(Command::Append { window_id, lines })
+            .is_ok()
+    }
+
+    pub(crate) async fn append_backfill(
+        &self,
+        window_id: u64,
+        lines: Vec<String>,
+    ) -> anyhow::Result<()> {
+        if lines.is_empty() {
+            return Ok(());
+        }
+        let commands = self.backfill_commands.clone();
+        tokio::task::spawn_blocking(move || {
+            commands
+                .send(Command::AppendBackfill { window_id, lines })
+                .map_err(|_| anyhow::anyhow!("Log storage stopped before backfill finished"))
+        })
+        .await
+        .map_err(|error| anyhow::anyhow!("Log storage task failed: {error}"))?
+    }
+
+    pub(crate) async fn complete_backfill(&self, window_id: u64) -> anyhow::Result<()> {
+        let commands = self.backfill_commands.clone();
+        tokio::task::spawn_blocking(move || {
+            commands
+                .send(Command::CompleteBackfill { window_id })
+                .map_err(|_| anyhow::anyhow!("Log storage stopped before backfill completed"))
+        })
+        .await
+        .map_err(|error| anyhow::anyhow!("Log storage task failed: {error}"))?
+    }
+}
+
+/// A bounded command lane with a coalesced wake-up for the storage thread.
+///
+/// The append lane remains bounded, so the Kubernetes stream still applies
+/// backpressure. The separate control lane lets page reads overtake queued
+/// appends without waking the store in a polling loop while it is idle.
+#[derive(Clone)]
+struct StoreCommandSender {
+    commands: mpsc::SyncSender<Command>,
+    wake: mpsc::Sender<()>,
+    work_pending: Arc<AtomicBool>,
+}
+
+impl StoreCommandSender {
+    fn send(&self, command: Command) -> Result<(), mpsc::SendError<Command>> {
+        self.commands.send(command)?;
+        self.notify();
+        Ok(())
+    }
+
+    fn try_send(&self, command: Command) -> Result<(), mpsc::TrySendError<Command>> {
+        self.commands.try_send(command)?;
+        self.notify();
+        Ok(())
+    }
+
+    fn notify(&self) {
+        if !self.work_pending.swap(true, Ordering::AcqRel) {
+            let _ = self.wake.send(());
+        }
     }
 }
 
@@ -264,31 +348,38 @@ impl LogStoreService {
             result_channel_capacity: config.result_channel_capacity.max(1),
             search_progress_interval: config.search_progress_interval.max(1),
         };
-        let (commands, dispatcher_receiver) = mpsc::sync_channel(config.command_channel_capacity);
-        let (store_sender, receiver) = mpsc::sync_channel(config.command_channel_capacity);
+        let (commands, control_receiver) = mpsc::sync_channel(config.command_channel_capacity);
+        let (live_commands, live_receiver) = mpsc::sync_channel(config.command_channel_capacity);
+        let (backfill_commands, backfill_receiver) =
+            mpsc::sync_channel(config.command_channel_capacity);
+        let (scan_commands, scan_receiver) = mpsc::sync_channel(config.command_channel_capacity);
+        let (wake_sender, wake_receiver) = mpsc::channel();
+        let work_pending = Arc::new(AtomicBool::new(false));
+        let make_sender = |commands| StoreCommandSender {
+            commands,
+            wake: wake_sender.clone(),
+            work_pending: work_pending.clone(),
+        };
+        let commands = make_sender(commands);
+        let appender = LogStoreAppender {
+            live_commands: make_sender(live_commands),
+            backfill_commands: make_sender(backfill_commands),
+        };
+        let scan_sender = make_sender(scan_commands);
         let (result_sender, results) = mpsc::sync_channel(config.result_channel_capacity);
         let result_sender = LogStoreResultSender::new(result_sender, repaint_context);
         let live_updates = Arc::new(LiveUpdates::new(result_sender.repaint_context.clone()));
         let store_live_updates = live_updates.clone();
-        let scan_sender = store_sender.clone();
-        let appender = LogStoreAppender {
-            commands: store_sender.clone(),
-        };
-        thread::Builder::new()
-            .name("pod-log-command-bridge".to_owned())
-            .spawn(move || {
-                while let Ok(command) = dispatcher_receiver.recv() {
-                    if store_sender.send(command).is_err() {
-                        break;
-                    }
-                }
-            })
-            .expect("Failed to start pod log command bridge");
         thread::Builder::new()
             .name("pod-log-store".to_owned())
             .spawn(move || {
                 run_store(
-                    receiver,
+                    control_receiver,
+                    live_receiver,
+                    backfill_receiver,
+                    scan_receiver,
+                    wake_receiver,
+                    work_pending,
                     scan_sender,
                     result_sender,
                     store_live_updates,
@@ -309,7 +400,7 @@ impl LogStoreService {
 
     pub(crate) fn append(&self, window_id: u64, lines: Vec<String>) -> bool {
         if !lines.is_empty() {
-            self.send(Command::Append { window_id, lines })
+            self.appender.try_append(window_id, lines)
         } else {
             true
         }
@@ -390,9 +481,12 @@ impl LogStoreService {
     }
 
     pub(crate) fn try_next_result(&self) -> Option<LogStoreResult> {
-        self.live_updates
-            .take_next()
-            .or_else(|| self.results.try_recv().ok())
+        // Page and rebase results must not sit behind an indefinitely busy
+        // live stream. Progress updates are coalesced and can safely wait.
+        self.results
+            .try_recv()
+            .ok()
+            .or_else(|| self.live_updates.take_next())
     }
 
     fn send(&self, command: Command) -> bool {
@@ -401,16 +495,50 @@ impl LogStoreService {
 }
 
 fn run_store(
-    receiver: mpsc::Receiver<Command>,
-    scan_sender: mpsc::SyncSender<Command>,
+    control_receiver: mpsc::Receiver<Command>,
+    live_receiver: mpsc::Receiver<Command>,
+    backfill_receiver: mpsc::Receiver<Command>,
+    scan_receiver: mpsc::Receiver<Command>,
+    wake_receiver: mpsc::Receiver<()>,
+    work_pending: Arc<AtomicBool>,
+    scan_sender: StoreCommandSender,
     result_sender: LogStoreResultSender,
     live_updates: Arc<LiveUpdates>,
     config: LogStoreConfig,
 ) {
     let mut stores = HashMap::<u64, LogStore>::new();
-    while let Ok(command) = receiver.recv() {
+    let mut closed = HashSet::new();
+    loop {
+        let command = next_store_command(
+            &control_receiver,
+            &live_receiver,
+            &backfill_receiver,
+            &scan_receiver,
+        );
+        let command = if let Some(command) = command {
+            command
+        } else {
+            // Clear the coalesced notification only after draining all lanes.
+            // If a command arrives while doing so, the second check handles it;
+            // if it arrives afterwards, its sender wakes us.
+            work_pending.store(false, Ordering::Release);
+            if let Some(command) = next_store_command(
+                &control_receiver,
+                &live_receiver,
+                &backfill_receiver,
+                &scan_receiver,
+            ) {
+                work_pending.store(true, Ordering::Release);
+                command
+            } else if wake_receiver.recv().is_ok() {
+                continue;
+            } else {
+                break;
+            }
+        };
         match command {
             Command::Open { window_id } => {
+                closed.remove(&window_id);
                 if let Err(error) = stores
                     .entry(window_id)
                     .or_insert_with(LogStore::new)
@@ -421,6 +549,9 @@ fn run_store(
                 }
             }
             Command::Append { window_id, lines } => {
+                if closed.contains(&window_id) {
+                    continue;
+                }
                 let store = stores.entry(window_id).or_insert_with(LogStore::new);
                 match store.append(lines) {
                     Ok(summary) => live_updates.publish(LogStoreResult::Updated {
@@ -428,6 +559,33 @@ fn run_store(
                         total_lines: summary.total_lines,
                         completed_search: summary.completed_search,
                     }),
+                    Err(error) => send_failure(&result_sender, window_id, error),
+                }
+            }
+            Command::AppendBackfill { window_id, lines } => {
+                if closed.contains(&window_id) {
+                    continue;
+                }
+                let store = stores.entry(window_id).or_insert_with(LogStore::new);
+                if let Err(error) = store.append_backfill(lines) {
+                    send_failure(&result_sender, window_id, error);
+                }
+            }
+            Command::CompleteBackfill { window_id } => {
+                let Some(store) = stores.get_mut(&window_id) else {
+                    continue;
+                };
+                match store.complete_backfill() {
+                    Ok(Some(rebase)) => send_result(
+                        &result_sender,
+                        LogStoreResult::Rebased {
+                            window_id,
+                            total_lines: store.visible_total_lines(),
+                            live_start: rebase.live_start,
+                            history_lines: rebase.history_lines,
+                        },
+                    ),
+                    Ok(None) => {}
                     Err(error) => send_failure(&result_sender, window_id, error),
                 }
             }
@@ -536,6 +694,7 @@ fn run_store(
             }
             Command::Close { window_id } => {
                 stores.remove(&window_id);
+                closed.insert(window_id);
                 live_updates.remove(window_id);
             }
             Command::ScanProgress {
@@ -553,7 +712,7 @@ fn run_store(
                             window_id,
                             generation,
                             scanned_lines,
-                            total_lines: store.total_lines,
+                            total_lines: store.visible_total_lines(),
                             match_count: store
                                 .search
                                 .as_ref()
@@ -581,7 +740,7 @@ fn run_store(
                             window_id,
                             generation,
                             scanned_lines,
-                            total_lines: store.total_lines,
+                            total_lines: store.visible_total_lines(),
                             match_count,
                         },
                     ),
@@ -613,6 +772,20 @@ fn run_store(
             }
         }
     }
+}
+
+fn next_store_command(
+    control_receiver: &mpsc::Receiver<Command>,
+    live_receiver: &mpsc::Receiver<Command>,
+    backfill_receiver: &mpsc::Receiver<Command>,
+    scan_receiver: &mpsc::Receiver<Command>,
+) -> Option<Command> {
+    control_receiver
+        .try_recv()
+        .ok()
+        .or_else(|| live_receiver.try_recv().ok())
+        .or_else(|| backfill_receiver.try_recv().ok())
+        .or_else(|| scan_receiver.try_recv().ok())
 }
 
 #[derive(Clone)]
@@ -658,9 +831,53 @@ fn send_failure(sender: &LogStoreResultSender, window_id: u64, error: impl std::
 struct LogStore {
     data: Option<NamedTempFile>,
     offsets: Option<NamedTempFile>,
+    backfill: Option<BackfillStore>,
+    rebase: Option<LogRebase>,
     total_lines: usize,
     search: Option<SearchState>,
     initialization_error: Option<String>,
+}
+
+/// The completed historical response stays in a separate pair of spool files.
+/// A rebase joins it with the live segment logically, without copying either
+/// log body through memory or rewriting the live spool.
+struct BackfillStore {
+    data: NamedTempFile,
+    offsets: NamedTempFile,
+    total_lines: usize,
+}
+
+#[derive(Clone, Copy)]
+struct LogRebase {
+    history_lines: usize,
+    live_start: usize,
+}
+
+struct LogicalReader {
+    live_data: File,
+    live_offsets: File,
+    backfill: Option<(File, File)>,
+    rebase: Option<LogRebase>,
+}
+
+impl LogicalReader {
+    fn read_line(&mut self, line_index: usize) -> anyhow::Result<String> {
+        if let Some(rebase) = self.rebase {
+            if line_index < rebase.history_lines {
+                let (data, offsets) = self
+                    .backfill
+                    .as_mut()
+                    .expect("rebased reader retains a history segment");
+                return read_line_from(data, offsets, line_index);
+            }
+            return read_line_from(
+                &mut self.live_data,
+                &mut self.live_offsets,
+                line_index - rebase.history_lines + rebase.live_start,
+            );
+        }
+        read_line_from(&mut self.live_data, &mut self.live_offsets, line_index)
+    }
 }
 
 struct SearchState {
@@ -677,12 +894,55 @@ struct AppendSummary {
     completed_search: Option<(u64, usize)>,
 }
 
+impl BackfillStore {
+    fn new() -> anyhow::Result<Self> {
+        Ok(Self {
+            data: NamedTempFile::new()?,
+            offsets: NamedTempFile::new()?,
+            total_lines: 0,
+        })
+    }
+
+    fn append(&mut self, lines: Vec<String>) -> anyhow::Result<()> {
+        let appended_lines = lines.len();
+        let mut data = self.data.reopen()?;
+        let mut offsets = self.offsets.reopen()?;
+        let mut next_offset = data.seek(SeekFrom::End(0))?;
+        let mut line_offsets = Vec::with_capacity(lines.len());
+        for line in lines {
+            let bytes = line.as_bytes();
+            let length = u32::try_from(bytes.len())
+                .map_err(|_| anyhow::anyhow!("A log line exceeds 4 GiB"))?;
+            line_offsets.push(next_offset);
+            data.write_all(&length.to_le_bytes())?;
+            data.write_all(bytes)?;
+            next_offset += u64::from(length) + 4;
+        }
+        data.flush()?;
+        offsets.seek(SeekFrom::End(0))?;
+        for offset in line_offsets {
+            offsets.write_all(&offset.to_le_bytes())?;
+        }
+        offsets.flush()?;
+        self.total_lines += appended_lines;
+        Ok(())
+    }
+
+    fn read_line(&self, line_index: usize) -> anyhow::Result<String> {
+        let mut data = self.data.reopen()?;
+        let mut offsets = self.offsets.reopen()?;
+        read_line_from(&mut data, &mut offsets, line_index)
+    }
+}
+
 impl LogStore {
     fn new() -> Self {
         match (NamedTempFile::new(), NamedTempFile::new()) {
             (Ok(data), Ok(offsets)) => Self {
                 data: Some(data),
                 offsets: Some(offsets),
+                backfill: None,
+                rebase: None,
                 total_lines: 0,
                 search: None,
                 initialization_error: None,
@@ -690,6 +950,8 @@ impl LogStore {
             (data, offsets) => Self {
                 data: None,
                 offsets: None,
+                backfill: None,
+                rebase: None,
                 total_lines: 0,
                 search: None,
                 initialization_error: Some(format!(
@@ -726,13 +988,92 @@ impl LogStore {
         })
     }
 
+    fn visible_total_lines(&self) -> usize {
+        self.rebase.map_or(self.total_lines, |rebase| {
+            rebase.history_lines + self.total_lines.saturating_sub(rebase.live_start)
+        })
+    }
+
+    fn append_backfill(&mut self, lines: Vec<String>) -> anyhow::Result<()> {
+        if self.backfill.is_none() {
+            self.backfill = Some(BackfillStore::new()?);
+        }
+        self.backfill
+            .as_mut()
+            .expect("backfill store was initialized")
+            .append(lines)
+    }
+
+    fn logical_reader(&self) -> anyhow::Result<LogicalReader> {
+        Ok(LogicalReader {
+            live_data: self.data()?.reopen()?,
+            live_offsets: self.offsets()?.reopen()?,
+            backfill: self
+                .backfill
+                .as_ref()
+                .map(|backfill| {
+                    Ok::<_, anyhow::Error>((backfill.data.reopen()?, backfill.offsets.reopen()?))
+                })
+                .transpose()?,
+            rebase: self.rebase,
+        })
+    }
+
+    fn complete_backfill(&mut self) -> anyhow::Result<Option<LogRebase>> {
+        let Some(backfill) = &self.backfill else {
+            return Ok(None);
+        };
+        if backfill.total_lines == 0 {
+            return Ok(None);
+        }
+
+        let overlap = self.find_backfill_overlap(backfill)?;
+        let rebase = LogRebase {
+            history_lines: backfill.total_lines,
+            live_start: overlap,
+        };
+        if let Some(search) = &self.search {
+            search.cancellation.store(true, Ordering::Relaxed);
+        }
+        self.search = None;
+        self.rebase = Some(rebase);
+        Ok(Some(rebase))
+    }
+
+    fn find_backfill_overlap(&self, backfill: &BackfillStore) -> anyhow::Result<usize> {
+        // The first live records are the requested tail. Comparing ordered raw
+        // records (which include Kubernetes timestamps) avoids treating
+        // repeated messages with the same timestamp as an overlap.
+        const MAX_OVERLAP_LINES: usize = 4 * LOG_PAGE_SIZE;
+        let max_overlap = self
+            .total_lines
+            .min(backfill.total_lines)
+            .min(MAX_OVERLAP_LINES);
+        for overlap in (1..=max_overlap).rev() {
+            let history_start = backfill.total_lines - overlap;
+            let mut matches = true;
+            for offset in 0..overlap {
+                if backfill.read_line(history_start + offset)? != self.read_live_line(offset)? {
+                    matches = false;
+                    break;
+                }
+            }
+            if matches {
+                return Ok(overlap);
+            }
+        }
+        // The fallback deliberately keeps both segments. It may duplicate a
+        // small boundary, but it cannot discard recent live output.
+        Ok(0)
+    }
+
     fn append(&mut self, lines: Vec<String>) -> anyhow::Result<AppendSummary> {
         self.init_error()
             .map_err(|error| anyhow::Error::msg(error.to_owned()))?;
         let mut data = self.data()?.reopen()?;
         let mut offsets = self.offsets()?.reopen()?;
         let mut next_offset = data.seek(SeekFrom::End(0))?;
-        let first_line_index = self.total_lines;
+        let first_line_index = self.visible_total_lines();
         let completed_matcher = self
             .search
             .as_ref()
@@ -783,7 +1124,7 @@ impl LogStore {
             matches.flush()?;
         }
         Ok(AppendSummary {
-            total_lines: self.total_lines,
+            total_lines: self.visible_total_lines(),
             completed_search: self
                 .search
                 .as_ref()
@@ -798,7 +1139,7 @@ impl LogStore {
         generation: u64,
         query: String,
         regex_mode: bool,
-        sender: mpsc::SyncSender<Command>,
+        sender: StoreCommandSender,
         search_progress_interval: usize,
     ) -> anyhow::Result<()> {
         if let Some(search) = &self.search {
@@ -817,9 +1158,8 @@ impl LogStore {
             .case_insensitive(true)
             .build()?;
         let cancellation = Arc::new(AtomicBool::new(false));
-        let scan_lines = self.total_lines;
-        let scan_end = self.data()?.reopen()?.metadata()?.len();
-        let reader = self.data()?.reopen()?;
+        let scan_lines = self.visible_total_lines();
+        let reader = self.logical_reader()?;
         self.search = Some(SearchState {
             generation,
             matcher: matcher.clone(),
@@ -833,7 +1173,6 @@ impl LogStore {
             .spawn(move || {
                 scan_records(
                     reader,
-                    scan_end,
                     scan_lines,
                     matcher,
                     cancellation,
@@ -873,7 +1212,7 @@ impl LogStore {
         let mut tail_matches = Vec::new();
         // Any lines appended while the background scan ran are searched once
         // here before the index becomes visible.
-        for line_index in scanned_lines..self.total_lines {
+        for line_index in scanned_lines..self.visible_total_lines() {
             let line = self.read_line(line_index)?;
             if matcher.is_match(&parse_kubernetes_log_line(&line).line.text) {
                 tail_matches.push(line_index);
@@ -919,7 +1258,7 @@ impl LogStore {
             )
         } else {
             (
-                self.total_lines,
+                self.visible_total_lines(),
                 self.search
                     .as_ref()
                     .filter(|search| search.generation == generation)
@@ -927,8 +1266,6 @@ impl LogStore {
                 None,
             )
         };
-        let mut data = self.data()?.reopen()?;
-        let mut offsets = self.offsets()?.reopen()?;
         let end = (page_start + page_size).min(total_rows);
         let mut rows = Vec::with_capacity(end.saturating_sub(page_start));
         let mut matching_offsets = match_offsets;
@@ -943,8 +1280,7 @@ impl LogStore {
             } else {
                 display_row
             };
-            let parsed =
-                parse_kubernetes_log_line(&read_line_from(&mut data, &mut offsets, line_index)?);
+            let parsed = parse_kubernetes_log_line(&self.read_line(line_index)?);
             let match_ranges = matcher
                 .as_ref()
                 .map(|matcher| {
@@ -1006,7 +1342,7 @@ impl LogStore {
             }
             search.match_count
         } else {
-            self.total_lines
+            self.visible_total_lines()
         };
         if start_row >= total_rows || start_row > end_row {
             return Ok(String::new());
@@ -1061,6 +1397,20 @@ impl LogStore {
     }
 
     fn read_line(&self, line_index: usize) -> anyhow::Result<String> {
+        if let Some(rebase) = self.rebase {
+            if line_index < rebase.history_lines {
+                return self
+                    .backfill
+                    .as_ref()
+                    .expect("rebased store retains its history segment")
+                    .read_line(line_index);
+            }
+            return self.read_live_line(line_index - rebase.history_lines + rebase.live_start);
+        }
+        self.read_live_line(line_index)
+    }
+
+    fn read_live_line(&self, line_index: usize) -> anyhow::Result<String> {
         let mut data = self.data()?.reopen()?;
         let offset = read_u64_at(&mut self.offsets()?.reopen()?, line_index)?;
         read_line_at(&mut data, offset)
@@ -1101,35 +1451,25 @@ fn read_u64_at(file: &mut File, index: usize) -> anyhow::Result<u64> {
 }
 
 fn scan_records(
-    mut data: File,
-    scan_end: u64,
+    mut reader: LogicalReader,
     scan_lines: usize,
     matcher: Regex,
     cancellation: Arc<AtomicBool>,
     window_id: u64,
     generation: u64,
-    sender: mpsc::SyncSender<Command>,
+    sender: StoreCommandSender,
     search_progress_interval: usize,
 ) {
     let mut scanned_lines = 0;
     let mut match_lines = Vec::new();
-    while data.stream_position().unwrap_or(scan_end) < scan_end && scanned_lines < scan_lines {
+    while scanned_lines < scan_lines {
         if cancellation.load(Ordering::Relaxed) {
             return;
         }
-        let mut length = [0_u8; 4];
-        if data.read_exact(&mut length).is_err() {
+        let Ok(line) = reader.read_line(scanned_lines) else {
             return;
-        }
-        let mut bytes = vec![0; u32::from_le_bytes(length) as usize];
-        if data.read_exact(&mut bytes).is_err() {
-            return;
-        }
-        if matcher.is_match(
-            &parse_kubernetes_log_line(&String::from_utf8_lossy(&bytes))
-                .line
-                .text,
-        ) {
+        };
+        if matcher.is_match(&parse_kubernetes_log_line(&line).line.text) {
             match_lines.push(scanned_lines);
         }
         scanned_lines += 1;
@@ -1251,6 +1591,216 @@ mod tests {
         };
         assert_eq!(rows.len(), LOG_PAGE_SIZE);
         assert_eq!(rows[0].text, "line 256");
+    }
+
+    #[test]
+    fn page_reads_overtake_pending_append_batches() {
+        let (control_sender, control_receiver) = mpsc::sync_channel(1);
+        let (_scan_sender, scan_receiver) = mpsc::sync_channel(1);
+        let (append_sender, append_receiver) = mpsc::sync_channel(1);
+        let (_backfill_sender, backfill_receiver) = mpsc::sync_channel(1);
+        append_sender
+            .send(Command::Append {
+                window_id: 1,
+                lines: vec!["queued append".to_owned()],
+            })
+            .expect("append queue accepts the batch");
+        control_sender
+            .send(Command::LoadPage {
+                window_id: 1,
+                generation: 0,
+                filter_matches: false,
+                page_start: 0,
+            })
+            .expect("control queue accepts the page request");
+
+        assert!(matches!(
+            next_store_command(
+                &control_receiver,
+                &append_receiver,
+                &backfill_receiver,
+                &scan_receiver,
+            ),
+            Some(Command::LoadPage { window_id: 1, .. })
+        ));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn completed_backfill_rebases_overlapping_tail_without_changing_records() {
+        let service = LogStoreService::default();
+        let appender = service.appender();
+        service.open(12);
+        appender
+            .append(
+                12,
+                vec![
+                    "2026-08-10T10:00:02Z tail two".into(),
+                    "2026-08-10T10:00:03Z tail three".into(),
+                    "2026-08-10T10:00:04Z live four".into(),
+                ],
+            )
+            .await
+            .expect("initial tail is spooled");
+        let _ = wait_for(&service, |result| {
+            matches!(
+                result,
+                LogStoreResult::Updated {
+                    window_id: 12,
+                    total_lines: 3,
+                    ..
+                }
+            )
+        });
+
+        appender
+            .append_backfill(
+                12,
+                vec![
+                    "2026-08-10T10:00:00Z history zero".into(),
+                    "2026-08-10T10:00:01Z history one".into(),
+                    "2026-08-10T10:00:02Z tail two".into(),
+                    "2026-08-10T10:00:03Z tail three".into(),
+                ],
+            )
+            .await
+            .expect("history is spooled");
+        appender
+            .complete_backfill(12)
+            .await
+            .expect("history completion is accepted");
+
+        assert!(matches!(
+            wait_for(&service, |result| matches!(
+                result,
+                LogStoreResult::Rebased { .. }
+            )),
+            LogStoreResult::Rebased {
+                window_id: 12,
+                total_lines: 5,
+                history_lines: 4,
+                live_start: 2,
+            }
+        ));
+
+        assert!(service.load_page(12, 0, false, 0));
+        let LogStoreResult::PageLoaded {
+            total_rows, rows, ..
+        } = wait_for(&service, |result| {
+            matches!(result, LogStoreResult::PageLoaded { .. })
+        })
+        else {
+            unreachable!()
+        };
+        assert_eq!(total_rows, 5);
+        assert_eq!(
+            rows.into_iter().map(|row| row.text).collect::<Vec<_>>(),
+            vec![
+                "history zero",
+                "history one",
+                "tail two",
+                "tail three",
+                "live four",
+            ]
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn rebase_keeps_new_live_records_after_the_overlapping_tail() {
+        let service = LogStoreService::default();
+        let appender = service.appender();
+        service.open(13);
+        appender
+            .append(13, vec!["tail one".into(), "tail two".into()])
+            .await
+            .expect("initial tail is spooled");
+        let _ = wait_for(&service, |result| {
+            matches!(result, LogStoreResult::Updated { .. })
+        });
+        appender
+            .append_backfill(13, vec!["old".into(), "tail one".into()])
+            .await
+            .expect("history is spooled");
+        appender
+            .complete_backfill(13)
+            .await
+            .expect("history completion is accepted");
+        let _ = wait_for(&service, |result| {
+            matches!(result, LogStoreResult::Rebased { .. })
+        });
+
+        appender
+            .append(13, vec!["new live".into()])
+            .await
+            .expect("live stream remains writable after rebase");
+        assert!(matches!(
+            wait_for(&service, |result| {
+                matches!(
+                    result,
+                    LogStoreResult::Updated {
+                        window_id: 13,
+                        total_lines: 4,
+                        ..
+                    }
+                )
+            }),
+            LogStoreResult::Updated { .. }
+        ));
+
+        assert!(service.load_page(13, 0, false, 0));
+        let LogStoreResult::PageLoaded { rows, .. } = wait_for(&service, |result| {
+            matches!(result, LogStoreResult::PageLoaded { .. })
+        }) else {
+            unreachable!()
+        };
+        assert_eq!(
+            rows.into_iter().map(|row| row.text).collect::<Vec<_>>(),
+            vec!["old", "tail one", "tail two", "new live"]
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn unmatched_backfill_keeps_both_segments_instead_of_losing_live_logs() {
+        let service = LogStoreService::default();
+        let appender = service.appender();
+        service.open(14);
+        appender
+            .append(14, vec!["live one".into(), "live two".into()])
+            .await
+            .expect("initial tail is spooled");
+        let _ = wait_for(&service, |result| {
+            matches!(result, LogStoreResult::Updated { .. })
+        });
+        appender
+            .append_backfill(14, vec!["history one".into(), "history two".into()])
+            .await
+            .expect("history is spooled");
+        appender
+            .complete_backfill(14)
+            .await
+            .expect("history completion is accepted");
+
+        assert!(matches!(
+            wait_for(&service, |result| matches!(
+                result,
+                LogStoreResult::Rebased { .. }
+            )),
+            LogStoreResult::Rebased {
+                history_lines: 2,
+                live_start: 0,
+                total_lines: 4,
+                ..
+            }
+        ));
+        assert!(service.load_page(14, 0, false, 0));
+        let LogStoreResult::PageLoaded { rows, .. } = wait_for(&service, |result| {
+            matches!(result, LogStoreResult::PageLoaded { .. })
+        }) else {
+            unreachable!()
+        };
+        assert_eq!(
+            rows.into_iter().map(|row| row.text).collect::<Vec<_>>(),
+            vec!["history one", "history two", "live one", "live two"]
+        );
     }
 
     #[test]
