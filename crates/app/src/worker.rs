@@ -25,6 +25,10 @@ use tracing::info;
 
 /// Trait abstracting the worker interface for testability
 pub trait WorkerTrait: Default {
+    fn with_repaint_context(_context: egui::Context) -> Self {
+        Self::default()
+    }
+
     fn start(&mut self);
     fn get_next_message(&mut self) -> Option<WorkerResult>;
     fn send_command(&mut self, command: WorkerCommand);
@@ -33,13 +37,23 @@ pub trait WorkerTrait: Default {
 #[derive(Default)]
 pub struct Worker {
     inner: Option<WorkerInner>,
+    repaint_context: Option<egui::Context>,
 }
 
 impl Worker {
+    pub(crate) fn with_repaint_context(context: egui::Context) -> Self {
+        Self {
+            inner: None,
+            repaint_context: Some(context),
+        }
+    }
+
     pub fn start(&mut self) {
         if self.inner.is_none() {
             let (command_channel_sender, command_channel_receiver) = mpsc::sync_channel(10);
             let (result_channel_sender, result_channel_receiver) = mpsc::sync_channel(1024);
+            let result_sender =
+                WorkerResultSender::new(result_channel_sender, self.repaint_context.clone());
 
             command_channel_sender
                 .send(WorkerCommand::LoadClusters)
@@ -52,7 +66,7 @@ impl Worker {
             });
 
             let worker = WorkerRuntime {
-                sender: result_channel_sender,
+                sender: result_sender,
                 receiver: command_channel_receiver,
                 shared,
             };
@@ -88,6 +102,10 @@ impl Worker {
 }
 
 impl WorkerTrait for Worker {
+    fn with_repaint_context(context: egui::Context) -> Self {
+        Self::with_repaint_context(context)
+    }
+
     fn start(&mut self) {
         Worker::start(self)
     }
@@ -432,7 +450,28 @@ pub enum WorkerResult {
     },
 }
 
-pub type WorkerResultSender = mpsc::SyncSender<WorkerResult>;
+#[derive(Clone)]
+pub struct WorkerResultSender {
+    sender: mpsc::SyncSender<WorkerResult>,
+    repaint_context: Option<egui::Context>,
+}
+
+impl WorkerResultSender {
+    fn new(sender: mpsc::SyncSender<WorkerResult>, repaint_context: Option<egui::Context>) -> Self {
+        Self {
+            sender,
+            repaint_context,
+        }
+    }
+
+    pub fn send(&self, result: WorkerResult) -> Result<(), mpsc::SendError<WorkerResult>> {
+        self.sender.send(result)?;
+        if let Some(context) = &self.repaint_context {
+            context.request_repaint();
+        }
+        Ok(())
+    }
+}
 
 /// Kubernetes API status information retained for YAML editor feedback.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -460,7 +499,7 @@ struct SharedWorkerState {
 }
 
 struct WorkerRuntime {
-    sender: mpsc::SyncSender<WorkerResult>,
+    sender: WorkerResultSender,
     receiver: mpsc::Receiver<WorkerCommand>,
     shared: Arc<SharedWorkerState>,
 }
@@ -915,4 +954,38 @@ async fn stream_pod_logs(
     sender
         .send(result)
         .log_if_error("Failed to send Pod log stream result");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn worker_results_request_a_repaint_when_context_is_attached() {
+        let context = egui::Context::default();
+        let repaint_count = Arc::new(AtomicUsize::new(0));
+        let repaint_count_for_callback = repaint_count.clone();
+        context.set_request_repaint_callback(move |_| {
+            repaint_count_for_callback.fetch_add(1, Ordering::Relaxed);
+        });
+        let (sender, receiver) = mpsc::sync_channel(1);
+        let result_sender = WorkerResultSender::new(sender, Some(context));
+
+        result_sender
+            .send(WorkerResult::PodLogStreamEnded {
+                cluster_key: 1,
+                log_window_id: 2,
+            })
+            .expect("result receiver is open");
+
+        assert!(matches!(
+            receiver.try_recv(),
+            Ok(WorkerResult::PodLogStreamEnded {
+                cluster_key: 1,
+                log_window_id: 2,
+            })
+        ));
+        assert_eq!(repaint_count.load(Ordering::Relaxed), 1);
+    }
 }

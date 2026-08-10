@@ -1,5 +1,7 @@
 mod cluster_rail;
 mod dialogs;
+#[doc(hidden)]
+pub mod log_viewer_profile;
 mod log_windows;
 mod resource_actions;
 mod resource_detail;
@@ -51,7 +53,13 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         egui_extras::install_image_loaders(&cc.egui_ctx);
         apply_light_theme(&cc.egui_ctx);
-        let mut app = Self::default();
+        let mut app = Self {
+            worker: W::with_repaint_context(cc.egui_ctx.clone()),
+            terminal_launcher: L::default(),
+            terminal_launch_settings: TerminalLaunchSettings::default(),
+            ui_state: UiState::default(),
+            log_store: LogStoreService::with_repaint_context(cc.egui_ctx.clone()),
+        };
         app.load_persisted_state(cc.storage);
         app
     }

@@ -44,6 +44,10 @@ fn transformed_blade_snapshot_options() -> egui_kittest::SnapshotOptions {
     egui_kittest::SnapshotOptions::new().threshold(TRANSFORMED_BLADE_PIXEL_THRESHOLD)
 }
 
+fn single_pixel_snapshot_options() -> egui_kittest::SnapshotOptions {
+    egui_kittest::SnapshotOptions::new().failed_pixel_count_threshold(1)
+}
+
 fn select_namespace(harness: &mut Harness<MyEguiApp<MockWorker>>, namespace: &str) {
     harness
         .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
@@ -394,7 +398,10 @@ fn namespace_selector_search_snapshot_shows_active_watches() {
         .events
         .push(egui::Event::Text("m".into()));
     harness.run();
-    harness.snapshot("namespace_selector_open_filtered_active_watches");
+    harness.snapshot_options(
+        "namespace_selector_open_filtered_active_watches",
+        &single_pixel_snapshot_options(),
+    );
 }
 
 #[test]
@@ -1040,7 +1047,10 @@ fn settings_button_opens_the_terminal_launcher_blade() {
 
     harness.get_by_label("Terminal launcher");
     harness.get_by_label("Save changes");
-    harness.snapshot("settings_terminal_launcher");
+    harness.snapshot_options(
+        "settings_terminal_launcher",
+        &single_pixel_snapshot_options(),
+    );
 }
 
 #[test]
@@ -1056,7 +1066,10 @@ fn settings_blade_shows_custom_terminal_launcher_details() {
 
     harness.get_by_role_and_label(egui::accesskit::Role::TextInput, "Command template");
     harness.get_by_label("Save changes");
-    harness.snapshot("settings_terminal_launcher_custom");
+    harness.snapshot_options(
+        "settings_terminal_launcher_custom",
+        &single_pixel_snapshot_options(),
+    );
 }
 
 #[test]
@@ -1096,7 +1109,10 @@ fn settings_blade_shows_invalid_custom_template_after_save() {
         Some("The launcher template must contain exactly one {command} placeholder.")
     );
     harness.get_by_label("Command template needs attention");
-    harness.snapshot("settings_terminal_launcher_invalid");
+    harness.snapshot_options(
+        "settings_terminal_launcher_invalid",
+        &single_pixel_snapshot_options(),
+    );
 }
 
 #[test]

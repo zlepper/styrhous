@@ -145,6 +145,17 @@ impl Default for LogStoreService {
 
 impl LogStoreService {
     pub(crate) fn new(config: LogStoreConfig) -> Self {
+        Self::new_with_repaint_context(config, None)
+    }
+
+    pub(crate) fn with_repaint_context(context: egui::Context) -> Self {
+        Self::new_with_repaint_context(LogStoreConfig::default(), Some(context))
+    }
+
+    fn new_with_repaint_context(
+        config: LogStoreConfig,
+        repaint_context: Option<egui::Context>,
+    ) -> Self {
         let config = LogStoreConfig {
             page_size: config.page_size.max(1),
             command_channel_capacity: config.command_channel_capacity.max(1),
@@ -154,6 +165,7 @@ impl LogStoreService {
         let (commands, dispatcher_receiver) = mpsc::sync_channel(config.command_channel_capacity);
         let (store_sender, receiver) = mpsc::sync_channel(config.command_channel_capacity);
         let (result_sender, results) = mpsc::sync_channel(config.result_channel_capacity);
+        let result_sender = LogStoreResultSender::new(result_sender, repaint_context);
         let scan_sender = store_sender.clone();
         thread::Builder::new()
             .name("pod-log-command-bridge".to_owned())
@@ -237,7 +249,7 @@ impl LogStoreService {
 fn run_store(
     receiver: mpsc::Receiver<Command>,
     scan_sender: mpsc::SyncSender<Command>,
-    result_sender: mpsc::SyncSender<LogStoreResult>,
+    result_sender: LogStoreResultSender,
     config: LogStoreConfig,
 ) {
     let mut stores = HashMap::<u64, LogStore>::new();
@@ -414,15 +426,37 @@ fn run_store(
     }
 }
 
-fn send_result(sender: &mpsc::SyncSender<LogStoreResult>, result: LogStoreResult) {
+#[derive(Clone)]
+struct LogStoreResultSender {
+    sender: mpsc::SyncSender<LogStoreResult>,
+    repaint_context: Option<egui::Context>,
+}
+
+impl LogStoreResultSender {
+    fn new(
+        sender: mpsc::SyncSender<LogStoreResult>,
+        repaint_context: Option<egui::Context>,
+    ) -> Self {
+        Self {
+            sender,
+            repaint_context,
+        }
+    }
+
+    fn send(&self, result: LogStoreResult) -> Result<(), mpsc::SendError<LogStoreResult>> {
+        self.sender.send(result)?;
+        if let Some(context) = &self.repaint_context {
+            context.request_repaint();
+        }
+        Ok(())
+    }
+}
+
+fn send_result(sender: &LogStoreResultSender, result: LogStoreResult) {
     let _ = sender.send(result);
 }
 
-fn send_failure(
-    sender: &mpsc::SyncSender<LogStoreResult>,
-    window_id: u64,
-    error: impl std::fmt::Display,
-) {
+fn send_failure(sender: &LogStoreResultSender, window_id: u64, error: impl std::fmt::Display) {
     send_result(
         sender,
         LogStoreResult::Failed {
@@ -704,6 +738,8 @@ impl LogStore {
                 None,
             )
         };
+        let mut data = self.data()?.reopen()?;
+        let mut offsets = self.offsets()?.reopen()?;
         let end = (page_start + page_size).min(total_rows);
         let mut rows = Vec::with_capacity(end.saturating_sub(page_start));
         let mut matching_offsets = match_offsets;
@@ -718,7 +754,8 @@ impl LogStore {
             } else {
                 display_row
             };
-            let parsed = parse_kubernetes_log_line(&self.read_line(line_index)?);
+            let parsed =
+                parse_kubernetes_log_line(&read_line_from(&mut data, &mut offsets, line_index)?);
             let match_ranges = matcher
                 .as_ref()
                 .map(|matcher| {
@@ -762,13 +799,26 @@ impl LogStore {
     fn read_line(&self, line_index: usize) -> anyhow::Result<String> {
         let mut data = self.data()?.reopen()?;
         let offset = read_u64_at(&mut self.offsets()?.reopen()?, line_index)?;
-        data.seek(SeekFrom::Start(offset))?;
-        let mut length = [0_u8; 4];
-        data.read_exact(&mut length)?;
-        let mut bytes = vec![0; u32::from_le_bytes(length) as usize];
-        data.read_exact(&mut bytes)?;
-        String::from_utf8(bytes).map_err(anyhow::Error::from)
+        read_line_at(&mut data, offset)
     }
+}
+
+fn read_line_from(
+    data: &mut File,
+    offsets: &mut File,
+    line_index: usize,
+) -> anyhow::Result<String> {
+    let offset = read_u64_at(offsets, line_index)?;
+    read_line_at(data, offset)
+}
+
+fn read_line_at(data: &mut File, offset: u64) -> anyhow::Result<String> {
+    data.seek(SeekFrom::Start(offset))?;
+    let mut length = [0_u8; 4];
+    data.read_exact(&mut length)?;
+    let mut bytes = vec![0; u32::from_le_bytes(length) as usize];
+    data.read_exact(&mut bytes)?;
+    String::from_utf8(bytes).map_err(anyhow::Error::from)
 }
 
 fn read_u64_at(file: &mut File, index: usize) -> anyhow::Result<u64> {
@@ -849,7 +899,33 @@ fn scan_records(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
+
+    #[test]
+    fn store_results_request_a_repaint_when_context_is_attached() {
+        let context = egui::Context::default();
+        let repaint_count = Arc::new(AtomicUsize::new(0));
+        let repaint_count_for_callback = repaint_count.clone();
+        context.set_request_repaint_callback(move |_| {
+            repaint_count_for_callback.fetch_add(1, Ordering::Relaxed);
+        });
+        let service = LogStoreService::with_repaint_context(context);
+
+        assert!(service.append(1, vec!["line 0".to_owned()]));
+        let _ = wait_for(&service, |result| {
+            matches!(result, LogStoreResult::Updated { .. })
+        });
+
+        let start = std::time::Instant::now();
+        while repaint_count.load(Ordering::Relaxed) == 0 {
+            assert!(
+                start.elapsed() < Duration::from_secs(2),
+                "timed out waiting for log-store repaint request"
+            );
+            thread::yield_now();
+        }
+    }
 
     #[test]
     fn stores_complete_lines_and_returns_only_requested_page() {
