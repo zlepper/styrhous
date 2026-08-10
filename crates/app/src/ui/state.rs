@@ -126,6 +126,10 @@ pub(super) struct PodLogWindowState {
     pub(super) status: PodLogStatus,
     pub(super) close_requested: bool,
     pub(super) search: LogSearchState,
+    pub(super) horizontal_content_width: f32,
+    pub(super) selection: Option<LogTextSelection>,
+    pub(super) selection_generation: u64,
+    pub(super) copied_text: Option<String>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -182,6 +186,53 @@ pub(super) struct LogPageKey {
 pub(super) struct LogPage {
     pub(super) rows: Vec<LogPageRow>,
     pub(super) bytes: usize,
+    pub(super) max_text_columns: usize,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(super) struct LogTextPosition {
+    pub(super) display_row: usize,
+    pub(super) byte_offset: usize,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(super) struct LogTextSelection {
+    pub(super) anchor: LogTextPosition,
+    pub(super) focus: LogTextPosition,
+}
+
+impl LogTextSelection {
+    pub(super) fn normalized(self) -> (LogTextPosition, LogTextPosition) {
+        if (self.anchor.display_row, self.anchor.byte_offset)
+            <= (self.focus.display_row, self.focus.byte_offset)
+        {
+            (self.anchor, self.focus)
+        } else {
+            (self.focus, self.anchor)
+        }
+    }
+
+    pub(super) fn range_for_row(
+        self,
+        display_row: usize,
+        line_len: usize,
+    ) -> Option<(usize, usize)> {
+        let (start, end) = self.normalized();
+        if !(start.display_row..=end.display_row).contains(&display_row) {
+            return None;
+        }
+        let start = if display_row == start.display_row {
+            start.byte_offset.min(line_len)
+        } else {
+            0
+        };
+        let end = if display_row == end.display_row {
+            end.byte_offset.min(line_len)
+        } else {
+            line_len
+        };
+        (start != end).then_some((start, end))
+    }
 }
 
 impl PodLogWindowState {
@@ -192,6 +243,9 @@ impl PodLogWindowState {
         self.page_order.clear();
         self.page_cache_bytes = 0;
         self.pending_pages.clear();
+        self.horizontal_content_width = 0.0;
+        self.selection = None;
+        self.selection_generation = self.selection_generation.wrapping_add(1);
     }
 
     pub(super) fn insert_page(&mut self, key: LogPageKey, rows: Vec<LogPageRow>) {
@@ -208,8 +262,20 @@ impl PodLogWindowState {
                     + row.match_ranges.len() * 2 * std::mem::size_of::<usize>()
             })
             .sum();
+        let max_text_columns = rows
+            .iter()
+            .map(|row| row.text.chars().count())
+            .max()
+            .unwrap_or_default();
         self.page_cache_bytes += bytes;
-        self.pages.insert(key, LogPage { rows, bytes });
+        self.pages.insert(
+            key,
+            LogPage {
+                rows,
+                bytes,
+                max_text_columns,
+            },
+        );
         self.page_order.push_back(key);
         while self.page_cache_bytes > self.page_cache_limit && self.page_order.len() > 1 {
             let oldest = self
@@ -820,6 +886,10 @@ impl UiState {
                 status: PodLogStatus::Connecting,
                 close_requested: false,
                 search: LogSearchState::default(),
+                horizontal_content_width: 0.0,
+                selection: None,
+                selection_generation: 0,
+                copied_text: None,
             },
         );
         commands_to_send.push(crate::worker::WorkerCommand::StartPodLogStream {
@@ -2074,6 +2144,17 @@ impl UiState {
                     };
                     window.search.active_display_row = Some(display_row);
                     window.search.scroll_to_display_row = Some(display_row);
+                }
+            }
+            LogStoreResult::Copied {
+                window_id,
+                selection_generation,
+                text,
+            } => {
+                if let Some(window) = self.log_windows.get_mut(&window_id)
+                    && window.selection_generation == selection_generation
+                {
+                    window.copied_text = Some(text);
                 }
             }
             LogStoreResult::Failed { window_id, error } => {

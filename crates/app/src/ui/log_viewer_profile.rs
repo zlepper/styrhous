@@ -220,6 +220,10 @@ fn empty_log_window(total_lines: usize) -> PodLogWindowState {
         status: PodLogStatus::Finished,
         close_requested: false,
         search: Default::default(),
+        horizontal_content_width: 0.0,
+        selection: None,
+        selection_generation: 0,
+        copied_text: None,
     }
 }
 

@@ -78,6 +78,11 @@ pub(crate) enum LogStoreResult {
         match_row: usize,
         line_index: usize,
     },
+    Copied {
+        window_id: u64,
+        selection_generation: u64,
+        text: String,
+    },
     Failed {
         window_id: u64,
         error: String,
@@ -109,6 +114,18 @@ enum Command {
         window_id: u64,
         generation: u64,
         match_row: usize,
+    },
+    Copy {
+        window_id: u64,
+        selection_generation: u64,
+        generation: u64,
+        filter_matches: bool,
+        start_row: usize,
+        start_byte: usize,
+        end_row: usize,
+        end_byte: usize,
+        show_line_numbers: bool,
+        show_timestamps: bool,
     },
     Close {
         window_id: u64,
@@ -237,6 +254,34 @@ impl LogStoreService {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn copy(
+        &self,
+        window_id: u64,
+        selection_generation: u64,
+        generation: u64,
+        filter_matches: bool,
+        start_row: usize,
+        start_byte: usize,
+        end_row: usize,
+        end_byte: usize,
+        show_line_numbers: bool,
+        show_timestamps: bool,
+    ) -> bool {
+        self.send(Command::Copy {
+            window_id,
+            selection_generation,
+            generation,
+            filter_matches,
+            start_row,
+            start_byte,
+            end_row,
+            end_byte,
+            show_line_numbers,
+            show_timestamps,
+        })
+    }
+
     pub(crate) fn try_next_result(&self) -> Option<LogStoreResult> {
         self.results.try_recv().ok()
     }
@@ -343,6 +388,42 @@ fn run_store(
                         },
                     ),
                     Ok(None) => {}
+                    Err(error) => send_failure(&result_sender, window_id, error),
+                }
+            }
+            Command::Copy {
+                window_id,
+                selection_generation,
+                generation,
+                filter_matches,
+                start_row,
+                start_byte,
+                end_row,
+                end_byte,
+                show_line_numbers,
+                show_timestamps,
+            } => {
+                let Some(store) = stores.get_mut(&window_id) else {
+                    continue;
+                };
+                match store.copy_range(
+                    generation,
+                    filter_matches,
+                    start_row,
+                    start_byte,
+                    end_row,
+                    end_byte,
+                    show_line_numbers,
+                    show_timestamps,
+                ) {
+                    Ok(text) => send_result(
+                        &result_sender,
+                        LogStoreResult::Copied {
+                            window_id,
+                            selection_generation,
+                            text,
+                        },
+                    ),
                     Err(error) => send_failure(&result_sender, window_id, error),
                 }
             }
@@ -796,11 +877,94 @@ impl LogStore {
         Ok(Some(read_u64_at(&mut offsets, match_row)? as usize))
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn copy_range(
+        &mut self,
+        generation: u64,
+        filter_matches: bool,
+        start_row: usize,
+        start_byte: usize,
+        end_row: usize,
+        end_byte: usize,
+        show_line_numbers: bool,
+        show_timestamps: bool,
+    ) -> anyhow::Result<String> {
+        let total_rows = if filter_matches {
+            let Some(search) = &self.search else {
+                return Ok(String::new());
+            };
+            if search.generation != generation {
+                return Ok(String::new());
+            }
+            search.match_count
+        } else {
+            self.total_lines
+        };
+        if start_row >= total_rows || start_row > end_row {
+            return Ok(String::new());
+        }
+        let end_row = end_row.min(total_rows - 1);
+        let mut text = String::new();
+        let mut match_offsets = filter_matches
+            .then(|| {
+                self.search
+                    .as_ref()
+                    .expect("filtered copy has a search")
+                    .match_offsets
+                    .as_ref()
+                    .expect("filtered copy has an index")
+                    .reopen()
+            })
+            .transpose()?;
+        for display_row in start_row..=end_row {
+            let line_index = if let Some(offsets) = &mut match_offsets {
+                read_u64_at(offsets, display_row)? as usize
+            } else {
+                display_row
+            };
+            let parsed = parse_kubernetes_log_line(&self.read_line(line_index)?);
+            let line = parsed.line.text;
+            let start = if display_row == start_row {
+                floor_char_boundary(&line, start_byte)
+            } else {
+                0
+            };
+            let end = if display_row == end_row {
+                floor_char_boundary(&line, end_byte)
+            } else {
+                line.len()
+            };
+            if display_row != start_row {
+                text.push('\n');
+            }
+            if show_line_numbers {
+                use std::fmt::Write as _;
+                write!(text, "{line_index:>6}  ")?;
+            }
+            if show_timestamps && let Some(timestamp) = parsed.timestamp {
+                text.push_str(&timestamp);
+                text.push_str("  ");
+            }
+            if start < end {
+                text.push_str(&line[start..end]);
+            }
+        }
+        Ok(text)
+    }
+
     fn read_line(&self, line_index: usize) -> anyhow::Result<String> {
         let mut data = self.data()?.reopen()?;
         let offset = read_u64_at(&mut self.offsets()?.reopen()?, line_index)?;
         read_line_at(&mut data, offset)
     }
+}
+
+fn floor_char_boundary(text: &str, byte_offset: usize) -> usize {
+    let mut byte_offset = byte_offset.min(text.len());
+    while byte_offset > 0 && !text.is_char_boundary(byte_offset) {
+        byte_offset -= 1;
+    }
+    byte_offset
 }
 
 fn read_line_from(
@@ -962,6 +1126,39 @@ mod tests {
         assert_eq!(total_rows, 600);
         assert_eq!(rows.len(), LOG_PAGE_SIZE);
         assert_eq!(rows[0].text, "line 256");
+    }
+
+    #[test]
+    fn copy_reads_a_utf8_range_from_the_spool_with_displayed_metadata() {
+        let service = LogStoreService::default();
+        let first = "2026-08-10T12:34:56Z  alphaé";
+        let second = "2026-08-10T12:34:57Z  beta";
+        assert!(service.append(8, vec![first.to_owned(), second.to_owned()]));
+        let _ = wait_for(&service, |result| {
+            matches!(result, LogStoreResult::Updated { window_id: 8, .. })
+        });
+        let first_text = parse_kubernetes_log_line(first).line.text;
+        let second_text = parse_kubernetes_log_line(second).line.text;
+        let start = first_text.find('é').expect("utf8 character is present");
+        let end = second_text.len();
+
+        assert!(service.copy(8, 3, 0, false, 0, start, 1, end, true, true));
+        let LogStoreResult::Copied {
+            selection_generation,
+            text,
+            ..
+        } = wait_for(&service, |result| {
+            matches!(result, LogStoreResult::Copied { .. })
+        })
+        else {
+            unreachable!()
+        };
+
+        assert_eq!(selection_generation, 3);
+        assert_eq!(
+            text,
+            format!("     0  2026-08-10T12:34:56Z  é\n     1  2026-08-10T12:34:57Z  {second_text}")
+        );
     }
 
     #[test]
