@@ -13,6 +13,7 @@ outputs = { self, nixpkgs}:
         buildInputs = with pkgs; [
           libxcb
           libGL
+          vulkan-loader
           libxkbcommon
           openssl
           wayland
