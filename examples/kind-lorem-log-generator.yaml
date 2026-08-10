@@ -1,0 +1,55 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lorem-log-generator
+  labels:
+    app.kubernetes.io/name: lorem-log-generator
+spec:
+  restartPolicy: Never
+  terminationGracePeriodSeconds: 5
+  containers:
+    - name: generator
+      image: busybox:1.36.1
+      command: ["/bin/sh", "-ec"]
+      args:
+        - |
+          # Emit at least TARGET_BYTES to stdout. Every emitted line is between
+          # MIN_LINE_BYTES and MAX_LINE_BYTES characters, plus its newline.
+          awk \
+            -v target="$TARGET_BYTES" \
+            -v min_line="$MIN_LINE_BYTES" \
+            -v max_line="$MAX_LINE_BYTES" \
+            '
+              BEGIN {
+                lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. "
+                srand()
+                written = 0
+
+                while (written < target) {
+                  line_length = min_line + int(rand() * (max_line - min_line + 1))
+                  remaining = line_length
+
+                  while (remaining > 0) {
+                    chunk_length = remaining < length(lorem) ? remaining : length(lorem)
+                    printf "%s", substr(lorem, 1, chunk_length)
+                    remaining -= chunk_length
+                  }
+                  printf "\n"
+                  written += line_length + 1
+                }
+              }
+            '
+      env:
+        - name: TARGET_BYTES
+          value: "4294967296" # 4 GiB
+        - name: MIN_LINE_BYTES
+          value: "50"
+        - name: MAX_LINE_BYTES
+          value: "4096"
+      resources:
+        requests:
+          cpu: 100m
+          memory: 16Mi
+        limits:
+          cpu: "1"
+          memory: 64Mi

@@ -1,4 +1,7 @@
-use super::state::{LogDisplayOptions, LogPageKey, PodLogStatus, PodLogWindowState, UiState};
+use super::state::{
+    LogDisplayOptions, LogPageKey, LogTextPosition, LogTextSelection, PodLogStatus,
+    PodLogWindowState, UiState,
+};
 use crate::ansi::AnsiStyleSpan;
 use crate::log_store::LogStoreService;
 use crate::worker::WorkerCommand;
@@ -7,6 +10,9 @@ use components::colors::{SUCCESS, TABLE_BORDER, TOOLBAR_BACKGROUND, gray};
 use components::design::{radius, spacing, status, surface, typography};
 use components::{PointingHand, TailwindSearchInput, icons};
 use std::time::{Duration, Instant};
+
+const LOG_FONT_SIZE: f32 = 14.0;
+const HORIZONTAL_OVERSCAN_POINTS: f32 = 120.0;
 
 /// Render native, independent Pod log windows and stop both the Kubernetes
 /// stream and the independent disk store when a window is closed.
@@ -75,7 +81,27 @@ pub(super) fn show_log_window(
     log_store: &LogStoreService,
     _close_requested: &mut bool,
 ) {
+    let _ = show_log_window_with_scroll_state(
+        ctx,
+        window,
+        display_options,
+        log_store,
+        _close_requested,
+    );
+}
+
+fn show_log_window_with_scroll_state(
+    ctx: &egui::Context,
+    window: &mut PodLogWindowState,
+    display_options: &mut LogDisplayOptions,
+    log_store: &LogStoreService,
+    _close_requested: &mut bool,
+) -> egui::scroll_area::ScrollAreaOutput<()> {
     sync_search(ctx, window, log_store);
+    if let Some(text) = window.copied_text.take() {
+        ctx.copy_text(text);
+    }
+    request_copy(ctx, window, display_options, log_store);
     egui::TopBottomPanel::top("pod-log-header")
         .exact_height(52.0)
         .frame(
@@ -130,23 +156,35 @@ pub(super) fn show_log_window(
                 .inner_margin(egui::Margin::same(spacing::LG as i8)),
         )
         .show(ctx, |ui| {
-            let row_height = ui.text_style_height(&egui::TextStyle::Monospace);
+            let row_height =
+                ui.fonts_mut(|fonts| fonts.row_height(&egui::FontId::monospace(LOG_FONT_SIZE)));
             let row_step = row_height + ui.spacing().item_spacing.y;
             let display_count = displayed_line_count(window);
+            let scroll_area_salt = egui::Id::new(("pod-log-lines", window.id));
+            // `ScrollArea::id_salt` hashes the salt into an `Id` before it
+            // scopes it to this UI. Mirror both steps when reading its state.
+            let scroll_id = ui.make_persistent_id(egui::Id::new(scroll_area_salt));
+            let horizontal_offset =
+                egui::scroll_area::State::load(ctx, scroll_id).map_or(0.0, |state| state.offset.x);
+            let viewport_width = ui.available_width();
+            let character_width = ui
+                .fonts_mut(|fonts| fonts.glyph_width(&egui::FontId::monospace(LOG_FONT_SIZE), '0'));
             let requested_offset = window
                 .search
                 .scroll_to_display_row
                 .take()
                 .map(|row| egui::vec2(0.0, row as f32 * row_step));
             let mut scroll_area = egui::ScrollArea::both()
-                .id_salt(("pod-log-lines", window.id))
+                .id_salt(scroll_area_salt)
                 .auto_shrink([false, false])
                 .stick_to_bottom(requested_offset.is_none());
             if let Some(offset) = requested_offset {
                 scroll_area = scroll_area.scroll_offset(offset);
             }
             scroll_area.show_rows(ui, row_height, display_count, |ui, rows| {
+                ui.set_min_width(window.horizontal_content_width);
                 for display_row in rows {
+                    let mut selection_update = None;
                     request_page_for_display_row(window, log_store, display_row);
                     let page_start = display_row / window.page_size * window.page_size;
                     let key = LogPageKey {
@@ -155,36 +193,123 @@ pub(super) fn show_log_window(
                         page_start,
                     };
                     let row_offset = display_row - page_start;
-                    if let Some(row) = window
-                        .pages
-                        .get(&key)
-                        .and_then(|page| page.rows.get(row_offset))
-                    {
-                        ui.add(
-                            egui::Label::new(log_line_layout_job(
-                                row.line_index,
-                                row.timestamp.as_deref(),
-                                &row.text,
-                                &row.style_spans,
-                                &row.match_ranges,
-                                *display_options,
-                            ))
-                            .extend()
-                            .selectable(true),
+                    if let Some((row, max_text_columns)) = window.pages.get(&key).and_then(|page| {
+                        page.rows
+                            .get(row_offset)
+                            .map(|row| (row, page.max_text_columns))
+                    }) {
+                        let prefix = log_line_prefix(
+                            row.line_index,
+                            row.timestamp.as_deref(),
+                            *display_options,
+                        );
+                        let prefix_width = prefix.chars().count() as f32 * character_width;
+                        let fragment = visible_text_fragment(
+                            &row.text,
+                            (horizontal_offset - prefix_width).max(0.0),
+                            viewport_width,
+                            character_width,
+                        );
+                        window.horizontal_content_width = window
+                            .horizontal_content_width
+                            .max(prefix_width + max_text_columns as f32 * character_width);
+                        let byte_range = fragment.byte_range.clone();
+                        let selection_range = window.selection.and_then(|selection| {
+                            selection.range_for_row(display_row, row.text.len())
+                        });
+                        let response = if byte_range == (0..row.text.len()) {
+                            let mut highlight_ranges = row.match_ranges.clone();
+                            if let Some(range) = selection_range {
+                                highlight_ranges.push(range);
+                            }
+                            ui.add(
+                                egui::Label::new(log_line_layout_job(
+                                    row.line_index,
+                                    row.timestamp.as_deref(),
+                                    &row.text,
+                                    &row.style_spans,
+                                    &highlight_ranges,
+                                    *display_options,
+                                ))
+                                .extend()
+                                .selectable(false)
+                                .sense(egui::Sense::click_and_drag()),
+                            )
+                        } else {
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(ui.available_width(), row_height),
+                                egui::Layout::left_to_right(egui::Align::Center),
+                                |ui| {
+                                    if !prefix.is_empty() {
+                                        ui.add(egui::Label::new(
+                                            egui::RichText::new(prefix)
+                                                .font(egui::FontId::monospace(LOG_FONT_SIZE))
+                                                .color(egui::Color32::from_rgb(156, 163, 175)),
+                                        ));
+                                    }
+                                    ui.add_space(fragment.start_x);
+                                    let mut highlight_ranges =
+                                        clipped_ranges(&row.match_ranges, byte_range.clone());
+                                    if let Some(range) = selection_range {
+                                        highlight_ranges
+                                            .extend(clipped_ranges(&[range], byte_range.clone()));
+                                    }
+                                    ui.add(
+                                        egui::Label::new(log_line_text_layout_job(
+                                            &row.text[byte_range.clone()],
+                                            clipped_style_spans(
+                                                &row.style_spans,
+                                                byte_range.clone(),
+                                            ),
+                                            highlight_ranges,
+                                            *display_options,
+                                        ))
+                                        .extend()
+                                        .selectable(false)
+                                        .sense(egui::Sense::click_and_drag()),
+                                    )
+                                },
+                            )
+                            .inner
+                        };
+                        let message_start_x = if byte_range == (0..row.text.len()) {
+                            prefix_width
+                        } else {
+                            fragment.start_x
+                        };
+                        selection_update = selection_position(
+                            ctx,
+                            display_row,
+                            &row.text,
+                            response,
+                            message_start_x,
+                            character_width,
                         );
                     } else {
                         ui.add(
                             egui::Label::new(
                                 egui::RichText::new("Loading…")
-                                    .monospace()
+                                    .font(egui::FontId::monospace(LOG_FONT_SIZE))
                                     .color(gray::_500),
                             )
                             .extend(),
                         );
                     }
+                    if let Some((position, starts_selection)) = selection_update {
+                        if starts_selection {
+                            window.selection = Some(LogTextSelection {
+                                anchor: position,
+                                focus: position,
+                            });
+                        } else if let Some(selection) = &mut window.selection {
+                            selection.focus = position;
+                        }
+                        window.selection_generation = window.selection_generation.wrapping_add(1);
+                    }
                 }
-            });
-        });
+            })
+        })
+        .inner
 }
 
 fn request_page_for_display_row(
@@ -471,6 +596,173 @@ fn displayed_line_count(window: &PodLogWindowState) -> usize {
     }
 }
 
+fn request_copy(
+    ctx: &egui::Context,
+    window: &PodLogWindowState,
+    display_options: &LogDisplayOptions,
+    log_store: &LogStoreService,
+) {
+    let copy_requested = ctx.input(|input| {
+        input
+            .events
+            .iter()
+            .any(|event| matches!(event, egui::Event::Copy))
+    });
+    let Some(selection) = copy_requested.then(|| window.selection).flatten() else {
+        return;
+    };
+    let (start, end) = selection.normalized();
+    if start == end {
+        return;
+    }
+    let _ = log_store.copy(
+        window.id,
+        window.selection_generation,
+        window.search.generation,
+        filter_is_active(window),
+        start.display_row,
+        start.byte_offset,
+        end.display_row,
+        end.byte_offset,
+        display_options.show_line_numbers,
+        display_options.show_timestamps,
+    );
+}
+
+fn selection_position(
+    ctx: &egui::Context,
+    display_row: usize,
+    text: &str,
+    response: egui::Response,
+    message_start_x: f32,
+    character_width: f32,
+) -> Option<(LogTextPosition, bool)> {
+    let Some(pointer) = response.interact_pointer_pos() else {
+        return None;
+    };
+    let byte_offset = byte_offset_at_x(
+        text,
+        pointer.x - response.rect.left() + message_start_x,
+        character_width,
+    );
+    let position = LogTextPosition {
+        display_row,
+        byte_offset,
+    };
+    if response.drag_started() || response.clicked() {
+        Some((position, true))
+    } else if response.hovered() && ctx.input(|input| input.pointer.primary_down()) {
+        Some((position, false))
+    } else {
+        None
+    }
+}
+
+fn byte_offset_at_x(text: &str, x: f32, character_width: f32) -> usize {
+    let column = (x.max(0.0) / character_width).round() as usize;
+    if text.is_ascii() {
+        return column.min(text.len());
+    }
+    text.char_indices()
+        .nth(column)
+        .map_or(text.len(), |(byte_offset, _)| byte_offset)
+}
+
+#[derive(Debug, Clone)]
+struct VisibleTextFragment {
+    byte_range: std::ops::Range<usize>,
+    start_x: f32,
+}
+
+fn visible_text_fragment(
+    text: &str,
+    horizontal_offset: f32,
+    viewport_width: f32,
+    character_width: f32,
+) -> VisibleTextFragment {
+    let overscan_columns = (HORIZONTAL_OVERSCAN_POINTS / character_width).ceil() as usize;
+    let first_column = (horizontal_offset / character_width).floor().max(0.0) as usize;
+    let visible_columns = (viewport_width / character_width).ceil() as usize;
+    let start_column = first_column.saturating_sub(overscan_columns);
+    let end_column = first_column
+        .saturating_add(visible_columns)
+        .saturating_add(overscan_columns);
+    let byte_range = character_column_range(text, start_column, end_column);
+    VisibleTextFragment {
+        byte_range,
+        start_x: start_column as f32 * character_width,
+    }
+}
+
+fn character_column_range(
+    text: &str,
+    start_column: usize,
+    end_column: usize,
+) -> std::ops::Range<usize> {
+    if text.is_ascii() {
+        return start_column.min(text.len())..end_column.min(text.len());
+    }
+
+    let start = text
+        .char_indices()
+        .nth(start_column)
+        .map_or(text.len(), |(byte_index, _)| byte_index);
+    let end = text
+        .char_indices()
+        .nth(end_column)
+        .map_or(text.len(), |(byte_index, _)| byte_index);
+    start..end
+}
+
+fn log_line_prefix(
+    line_index: usize,
+    timestamp: Option<&str>,
+    display_options: LogDisplayOptions,
+) -> String {
+    let mut prefix = String::new();
+    if display_options.show_line_numbers {
+        prefix.push_str(&format!("{line_index:>6}  "));
+    }
+    if display_options.show_timestamps
+        && let Some(timestamp) = timestamp
+    {
+        prefix.push_str(timestamp);
+        prefix.push_str("  ");
+    }
+    prefix
+}
+
+fn clipped_style_spans(
+    style_spans: &[AnsiStyleSpan],
+    byte_range: std::ops::Range<usize>,
+) -> Vec<AnsiStyleSpan> {
+    style_spans
+        .iter()
+        .filter_map(|span| {
+            let start = span.range.0.max(byte_range.start);
+            let end = span.range.1.min(byte_range.end);
+            (start < end).then_some(AnsiStyleSpan {
+                range: (start - byte_range.start, end - byte_range.start),
+                style: span.style,
+            })
+        })
+        .collect()
+}
+
+fn clipped_ranges(
+    ranges: &[(usize, usize)],
+    byte_range: std::ops::Range<usize>,
+) -> Vec<(usize, usize)> {
+    ranges
+        .iter()
+        .filter_map(|&(range_start, range_end)| {
+            let start = range_start.max(byte_range.start);
+            let end = range_end.min(byte_range.end);
+            (start < end).then_some((start - byte_range.start, end - byte_range.start))
+        })
+        .collect()
+}
+
 fn log_line_layout_job(
     line_index: usize,
     timestamp: Option<&str>,
@@ -482,13 +774,8 @@ fn log_line_layout_job(
     let mut job = egui::text::LayoutJob::default();
     job.wrap = egui::text::TextWrapping::no_max_width();
     let number = egui::TextFormat {
-        font_id: egui::FontId::monospace(14.0),
+        font_id: egui::FontId::monospace(LOG_FONT_SIZE),
         color: egui::Color32::from_rgb(156, 163, 175),
-        ..Default::default()
-    };
-    let text = egui::TextFormat {
-        font_id: egui::FontId::monospace(14.0),
-        color: egui::Color32::from_rgb(229, 231, 235),
         ..Default::default()
     };
     if display_options.show_line_numbers {
@@ -499,6 +786,34 @@ fn log_line_layout_job(
     {
         job.append(&format!("{timestamp}  "), 0.0, number);
     }
+    append_log_line_text(&mut job, line, style_spans, ranges, display_options);
+    job
+}
+
+fn log_line_text_layout_job(
+    line: &str,
+    style_spans: Vec<AnsiStyleSpan>,
+    ranges: Vec<(usize, usize)>,
+    display_options: LogDisplayOptions,
+) -> egui::text::LayoutJob {
+    let mut job = egui::text::LayoutJob::default();
+    job.wrap = egui::text::TextWrapping::no_max_width();
+    append_log_line_text(&mut job, line, &style_spans, &ranges, display_options);
+    job
+}
+
+fn append_log_line_text(
+    job: &mut egui::text::LayoutJob,
+    line: &str,
+    style_spans: &[AnsiStyleSpan],
+    ranges: &[(usize, usize)],
+    display_options: LogDisplayOptions,
+) {
+    let text = egui::TextFormat {
+        font_id: egui::FontId::monospace(LOG_FONT_SIZE),
+        color: egui::Color32::from_rgb(229, 231, 235),
+        ..Default::default()
+    };
     let mut boundaries = Vec::with_capacity(2 + style_spans.len() * 2 + ranges.len() * 2);
     boundaries.extend([0, line.len()]);
     boundaries.extend(
@@ -536,7 +851,6 @@ fn log_line_layout_job(
         }
         job.append(&line[start..end], 0.0, format);
     }
-    job
 }
 
 fn ansi_text_format(style: Style, default: &egui::TextFormat) -> egui::TextFormat {
@@ -740,6 +1054,10 @@ mod tests {
             status: PodLogStatus::Following,
             close_requested: false,
             search: Default::default(),
+            horizontal_content_width: 0.0,
+            selection: None,
+            selection_generation: 0,
+            copied_text: None,
         };
         window.insert_page(
             LogPageKey {
@@ -764,6 +1082,196 @@ mod tests {
                 .collect(),
         );
         window
+    }
+
+    fn fully_loaded_log_window(line_count: usize) -> PodLogWindowState {
+        let mut window = log_window(&[]);
+        window.total_lines = line_count;
+        window.status = PodLogStatus::Finished;
+
+        for page_start in (0..line_count).step_by(LOG_PAGE_SIZE) {
+            let page_end = (page_start + LOG_PAGE_SIZE).min(line_count);
+            window.insert_page(
+                LogPageKey {
+                    generation: 0,
+                    filter_matches: false,
+                    page_start,
+                },
+                (page_start..page_end)
+                    .map(|line_index| LogPageRow {
+                        display_row: line_index,
+                        line_index,
+                        timestamp: None,
+                        text: format!("line {line_index}"),
+                        style_spans: Vec::new(),
+                        match_ranges: Vec::new(),
+                    })
+                    .collect(),
+            );
+        }
+
+        window
+    }
+
+    #[test]
+    fn completed_fully_loaded_logs_do_not_oscillate_at_the_bottom() {
+        let window = Rc::new(RefCell::new(fully_loaded_log_window(10_000)));
+        let window_for_ui = window.clone();
+        let display_options = Rc::new(RefCell::new(LogDisplayOptions::default()));
+        let display_options_for_ui = display_options.clone();
+        let scroll_state = Rc::new(RefCell::new(None));
+        let scroll_state_for_ui = scroll_state.clone();
+        let log_store = LogStoreService::default();
+        let mut close_requested = false;
+        let mut harness = Harness::builder().build(move |ctx| {
+            *scroll_state_for_ui.borrow_mut() = Some(show_log_window_with_scroll_state(
+                ctx,
+                &mut window_for_ui.borrow_mut(),
+                &mut display_options_for_ui.borrow_mut(),
+                &log_store,
+                &mut close_requested,
+            ));
+        });
+        components::test_support::setup_egui(&mut harness);
+        harness.run();
+
+        let bottom_offset = scroll_state
+            .borrow()
+            .as_ref()
+            .expect("log scroll area was rendered")
+            .state
+            .offset
+            .y;
+        assert!(bottom_offset > 0.0);
+
+        for _ in 0..5 {
+            harness
+                .input_mut()
+                .events
+                .push(egui::Event::PointerMoved(egui::pos2(400.0, 100.0)));
+            harness.input_mut().events.push(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, -120.0),
+                modifiers: egui::Modifiers::default(),
+            });
+            harness.step();
+            let offset = scroll_state
+                .borrow()
+                .as_ref()
+                .expect("log scroll area was rendered")
+                .state
+                .offset
+                .y;
+            assert_eq!(offset, bottom_offset);
+        }
+    }
+
+    #[test]
+    fn loading_a_wide_page_does_not_move_the_bottom_offset() {
+        let wide_line = "x".repeat(4 * 1024);
+        let mut window = log_window(&[]);
+        window.total_lines = LOG_PAGE_SIZE * 2;
+        window.status = PodLogStatus::Finished;
+        window.insert_page(
+            LogPageKey {
+                generation: 0,
+                filter_matches: false,
+                page_start: LOG_PAGE_SIZE,
+            },
+            (LOG_PAGE_SIZE..window.total_lines)
+                .map(|line_index| LogPageRow {
+                    display_row: line_index,
+                    line_index,
+                    timestamp: None,
+                    text: wide_line.clone(),
+                    style_spans: Vec::new(),
+                    match_ranges: Vec::new(),
+                })
+                .collect(),
+        );
+        window.search.scroll_to_display_row = Some(window.total_lines - 1);
+
+        let context = egui::Context::default();
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(800.0, 600.0),
+            )),
+            ..Default::default()
+        };
+        let mut display_options = LogDisplayOptions::default();
+        let log_store = LogStoreService::default();
+        let mut close_requested = false;
+        let mut render = |window: &mut PodLogWindowState| {
+            let mut scroll_state = None;
+            let _ = context.run(input.clone(), |ctx| {
+                scroll_state = Some(show_log_window_with_scroll_state(
+                    ctx,
+                    window,
+                    &mut display_options,
+                    &log_store,
+                    &mut close_requested,
+                ));
+            });
+            scroll_state.expect("log scroll area was rendered")
+        };
+
+        let _ = render(&mut window);
+        let loaded_offset = render(&mut window);
+        window.pages.clear();
+        window.page_order.clear();
+        window.page_cache_bytes = 0;
+        let loading_offset = render(&mut window);
+
+        assert_eq!(loading_offset.inner_rect, loaded_offset.inner_rect);
+        assert_eq!(loading_offset.content_size, loaded_offset.content_size);
+        assert_eq!(loading_offset.state.offset.y, loaded_offset.state.offset.y);
+    }
+
+    #[test]
+    fn horizontal_fragment_uses_byte_boundaries_for_utf8_text() {
+        let text = "aé日z";
+
+        assert_eq!(character_column_range(text, 1, 3), 1..6);
+        assert_eq!(&text[character_column_range(text, 1, 3)], "é日");
+        assert_eq!(character_column_range(text, 3, 4), 6..7);
+    }
+
+    #[test]
+    fn horizontal_fragment_limits_ascii_layout_to_the_visible_columns() {
+        let text = "x".repeat(4_096);
+        let fragment = visible_text_fragment(&text, 1_000.0, 120.0, 10.0);
+
+        assert_eq!(fragment.byte_range, 88..124);
+        assert_eq!(fragment.start_x, 880.0);
+    }
+
+    #[test]
+    fn wide_log_window_exposes_a_horizontal_scroll_range() {
+        let context = egui::Context::default();
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(320.0, 200.0),
+            )),
+            ..Default::default()
+        };
+        let mut window = log_window(&[&"x".repeat(4 * 1024)]);
+        let mut display_options = LogDisplayOptions::default();
+        let log_store = LogStoreService::default();
+        let mut close_requested = false;
+
+        let _ = context.run(input, |context| {
+            show_log_window(
+                context,
+                &mut window,
+                &mut display_options,
+                &log_store,
+                &mut close_requested,
+            );
+        });
+
+        assert!(window.horizontal_content_width > 320.0);
     }
 
     #[test]
@@ -1012,6 +1520,118 @@ mod tests {
     }
 
     #[test]
+    fn pod_log_viewer_wide_selected_fragment_snapshot() {
+        let line = format!(
+            "INFO  {}",
+            (0..512)
+                .map(|index| format!("column-{index:04} "))
+                .collect::<String>()
+        );
+        let mut window = log_window(&[&line]);
+        let text = &window.pages[&LogPageKey {
+            generation: 0,
+            filter_matches: false,
+            page_start: 0,
+        }]
+            .rows[0]
+            .text;
+        let selected_start = text
+            .find("column-0010")
+            .expect("selection marker is present");
+        let selected_end = text
+            .find("column-0014")
+            .expect("selection end marker is present")
+            + "column-0014".len();
+        window.selection = Some(LogTextSelection {
+            anchor: LogTextPosition {
+                display_row: 0,
+                byte_offset: selected_start,
+            },
+            focus: LogTextPosition {
+                display_row: 0,
+                byte_offset: selected_end,
+            },
+        });
+
+        snapshot_window_after_horizontal_scroll(window, "pod_logs/wide_selected_fragment", 1_000.0);
+    }
+
+    #[test]
+    fn pod_log_viewer_wide_multiline_selection_after_scroll_snapshot() {
+        let lines = (0..3)
+            .map(|row| {
+                format!(
+                    "INFO row-{row}  {}",
+                    (0..512)
+                        .map(|column| format!("column-{column:04} "))
+                        .collect::<String>()
+                )
+            })
+            .collect::<Vec<_>>();
+        let line_refs = lines.iter().map(String::as_str).collect::<Vec<_>>();
+        let mut window = log_window(&line_refs);
+        let page = &window.pages[&LogPageKey {
+            generation: 0,
+            filter_matches: false,
+            page_start: 0,
+        }];
+        let start = page.rows[0]
+            .text
+            .find("column-0010")
+            .expect("selection start marker is present");
+        let end = page.rows[2]
+            .text
+            .find("column-0014")
+            .expect("selection end marker is present")
+            + "column-0014".len();
+        window.selection = Some(LogTextSelection {
+            anchor: LogTextPosition {
+                display_row: 0,
+                byte_offset: start,
+            },
+            focus: LogTextPosition {
+                display_row: 2,
+                byte_offset: end,
+            },
+        });
+
+        snapshot_window_after_horizontal_scroll(
+            window,
+            "pod_logs/wide_multiline_selection_after_scroll",
+            1_000.0,
+        );
+    }
+
+    #[test]
+    fn pod_log_viewer_utf8_grapheme_selection_snapshot() {
+        let line = "INFO  café e\u{301} 日本語 👩‍💻 family: 👨‍👩‍👧‍👦  ".repeat(12);
+        let mut window = log_window(&[&line]);
+        let text = &window.pages[&LogPageKey {
+            generation: 0,
+            filter_matches: false,
+            page_start: 0,
+        }]
+            .rows[0]
+            .text;
+        let selected_start = text
+            .find("e\u{301}")
+            .expect("combining sequence is present");
+        let selected_end = selected_start + "e\u{301} 日本語 👩‍💻".len();
+        window.selection = Some(LogTextSelection {
+            anchor: LogTextPosition {
+                display_row: 0,
+                byte_offset: selected_start,
+            },
+            focus: LogTextPosition {
+                display_row: 0,
+                byte_offset: selected_end,
+            },
+        });
+
+        snapshot_window(window, "pod_logs/utf8_grapheme_selection");
+    }
+
+    #[test]
     fn pod_log_viewer_filter_active_snapshot() {
         let mut window = log_window(&[
             "2026-08-08T15:22:17.143Z  INFO  server: listening on 0.0.0.0:8080",
@@ -1113,6 +1733,14 @@ mod tests {
     }
 
     fn snapshot_window(window: PodLogWindowState, name: &str) {
+        snapshot_window_after_horizontal_scroll(window, name, 0.0);
+    }
+
+    fn snapshot_window_after_horizontal_scroll(
+        window: PodLogWindowState,
+        name: &str,
+        horizontal_offset: f32,
+    ) {
         let mut window = window;
         let mut display_options = LogDisplayOptions::default();
         let log_store = LogStoreService::default();
@@ -1128,6 +1756,23 @@ mod tests {
         });
         components::test_support::setup_egui(&mut harness);
         harness.run();
+        if horizontal_offset > 0.0 {
+            harness
+                .input_mut()
+                .events
+                .push(egui::Event::PointerMoved(egui::pos2(400.0, 100.0)));
+            harness.step();
+            harness.input_mut().events.push(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(-horizontal_offset, 0.0),
+                modifiers: egui::Modifiers::default(),
+            });
+            harness.step();
+            // The wheel event updates ScrollArea state during this frame. Draw
+            // a couple more frames so the virtual text fragment observes the
+            // resulting offset before snapshotting.
+            harness.run_steps(2);
+        }
         harness.snapshot(name);
     }
 

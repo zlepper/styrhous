@@ -3,7 +3,7 @@ use kubernetes_dev_ui::LogViewerProfile;
 use std::hint::black_box;
 use std::time::Duration;
 
-const WIDE_PAYLOAD_BYTES: usize = 4 * 1024;
+const DEFAULT_WIDE_PAYLOAD_BYTES: &[usize] = &[256, 1024, 4 * 1024, 16 * 1024];
 
 fn log_viewer(c: &mut Criterion) {
     if let Some(samples) = std::env::var("LOG_VIEWER_LATENCY_SAMPLES")
@@ -62,9 +62,9 @@ fn log_viewer(c: &mut Criterion) {
     group.finish();
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct BenchmarkScenario {
-    name: &'static str,
+    name: String,
     row_count: usize,
     payload_bytes: usize,
 }
@@ -73,33 +73,58 @@ fn benchmark_scenarios() -> Vec<BenchmarkScenario> {
     configured_row_counts("LOG_VIEWER_ROW_COUNTS", &[10_000, 100_000, 1_000_000])
         .into_iter()
         .map(|row_count| BenchmarkScenario {
-            name: "normal",
+            name: "normal".to_owned(),
             row_count,
             payload_bytes: 36,
         })
         .chain(
             configured_row_counts("LOG_VIEWER_WIDE_ROW_COUNTS", &[10_000])
                 .into_iter()
-                .map(|row_count| BenchmarkScenario {
-                    name: "wide_4k",
-                    row_count,
-                    payload_bytes: WIDE_PAYLOAD_BYTES,
+                .flat_map(|row_count| {
+                    configured_payload_widths(
+                        "LOG_VIEWER_WIDE_PAYLOAD_BYTES",
+                        DEFAULT_WIDE_PAYLOAD_BYTES,
+                    )
+                    .into_iter()
+                    .map(move |payload_bytes| BenchmarkScenario {
+                        name: format!("wide_{}", payload_width_label(payload_bytes)),
+                        row_count,
+                        payload_bytes,
+                    })
                 }),
         )
         .collect()
 }
 
 fn configured_row_counts(variable: &str, default: &[usize]) -> Vec<usize> {
+    configured_positive_integers(variable, default)
+}
+
+fn configured_payload_widths(variable: &str, default: &[usize]) -> Vec<usize> {
+    configured_positive_integers(variable, default)
+}
+
+fn configured_positive_integers(variable: &str, default: &[usize]) -> Vec<usize> {
     match std::env::var(variable) {
         Ok(value) => value
             .split(',')
             .map(|value| {
-                value.trim().parse().unwrap_or_else(|_| {
+                let value = value.trim().parse().unwrap_or_else(|_| {
                     panic!("{variable} must be comma-separated positive integers")
-                })
+                });
+                assert!(value > 0, "{variable} must contain only positive integers");
+                value
             })
             .collect(),
         Err(_) => default.to_vec(),
+    }
+}
+
+fn payload_width_label(payload_bytes: usize) -> String {
+    if payload_bytes.is_multiple_of(1024) {
+        format!("{}k", payload_bytes / 1024)
+    } else {
+        format!("{payload_bytes}b")
     }
 }
 
