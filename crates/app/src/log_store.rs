@@ -1,8 +1,7 @@
 //! Disk-backed storage and search for native pod-log windows.
 //!
-//! This is deliberately independent from the Kubernetes worker. The worker only
-//! owns the API stream; the UI forwards its bounded batches here and consumes
-//! this service's paged results.
+//! The Kubernetes worker streams directly into this spool through a bounded
+//! ingress handle. The UI only consumes coalesced progress and paged results.
 
 use crate::ansi::{AnsiStyleSpan, parse_kubernetes_log_line};
 use regex::Regex;
@@ -151,7 +150,93 @@ enum Command {
 /// The UI-facing handle for the dedicated log-store thread.
 pub(crate) struct LogStoreService {
     commands: mpsc::SyncSender<Command>,
+    appender: LogStoreAppender,
     results: mpsc::Receiver<LogStoreResult>,
+    live_updates: Arc<LiveUpdates>,
+}
+
+/// Bounded ingestion handle owned by the Kubernetes worker.
+///
+/// Sending an append waits for space in the disk-spool command queue. The
+/// caller therefore stops reading Kubernetes response data while the spool is
+/// busy instead of dropping batches on a UI-owned queue.
+#[derive(Clone)]
+pub(crate) struct LogStoreAppender {
+    commands: mpsc::SyncSender<Command>,
+}
+
+impl LogStoreAppender {
+    pub(crate) async fn append(&self, window_id: u64, lines: Vec<String>) -> anyhow::Result<()> {
+        if lines.is_empty() {
+            return Ok(());
+        }
+        let commands = self.commands.clone();
+        tokio::task::spawn_blocking(move || {
+            commands
+                .send(Command::Append { window_id, lines })
+                .map_err(|_| anyhow::anyhow!("Log storage stopped before the stream finished"))
+        })
+        .await
+        .map_err(|error| anyhow::anyhow!("Log storage task failed: {error}"))?
+    }
+}
+
+struct LiveUpdates {
+    updates: std::sync::Mutex<HashMap<u64, LogStoreResult>>,
+    repaint_requested: AtomicBool,
+    repaint_context: Option<egui::Context>,
+}
+
+impl LiveUpdates {
+    fn new(repaint_context: Option<egui::Context>) -> Self {
+        Self {
+            updates: std::sync::Mutex::new(HashMap::new()),
+            repaint_requested: AtomicBool::new(false),
+            repaint_context,
+        }
+    }
+
+    fn publish(&self, result: LogStoreResult) {
+        let window_id = match result {
+            LogStoreResult::Updated { window_id, .. } => window_id,
+            _ => unreachable!("only live updates are coalesced"),
+        };
+        self.updates
+            .lock()
+            .expect("live update lock is not poisoned")
+            .insert(window_id, result);
+        if !self.repaint_requested.swap(true, Ordering::AcqRel)
+            && let Some(context) = &self.repaint_context
+        {
+            context.request_repaint();
+        }
+    }
+
+    fn take_next(&self) -> Option<LogStoreResult> {
+        let mut updates = self
+            .updates
+            .lock()
+            .expect("live update lock is not poisoned");
+        let window_id = updates.keys().next().copied()?;
+        let update = updates.remove(&window_id);
+        if updates.is_empty() {
+            // Reset while holding the lock so a concurrent publisher either
+            // sees the reset value or is included in this drain.
+            self.repaint_requested.store(false, Ordering::Release);
+        }
+        update
+    }
+
+    fn remove(&self, window_id: u64) {
+        let mut updates = self
+            .updates
+            .lock()
+            .expect("live update lock is not poisoned");
+        updates.remove(&window_id);
+        if updates.is_empty() {
+            self.repaint_requested.store(false, Ordering::Release);
+        }
+    }
 }
 
 impl Default for LogStoreService {
@@ -183,7 +268,12 @@ impl LogStoreService {
         let (store_sender, receiver) = mpsc::sync_channel(config.command_channel_capacity);
         let (result_sender, results) = mpsc::sync_channel(config.result_channel_capacity);
         let result_sender = LogStoreResultSender::new(result_sender, repaint_context);
+        let live_updates = Arc::new(LiveUpdates::new(result_sender.repaint_context.clone()));
+        let store_live_updates = live_updates.clone();
         let scan_sender = store_sender.clone();
+        let appender = LogStoreAppender {
+            commands: store_sender.clone(),
+        };
         thread::Builder::new()
             .name("pod-log-command-bridge".to_owned())
             .spawn(move || {
@@ -196,9 +286,22 @@ impl LogStoreService {
             .expect("Failed to start pod log command bridge");
         thread::Builder::new()
             .name("pod-log-store".to_owned())
-            .spawn(move || run_store(receiver, scan_sender, result_sender, config))
+            .spawn(move || {
+                run_store(
+                    receiver,
+                    scan_sender,
+                    result_sender,
+                    store_live_updates,
+                    config,
+                )
+            })
             .expect("Failed to start pod log store thread");
-        Self { commands, results }
+        Self {
+            commands,
+            appender,
+            results,
+            live_updates,
+        }
     }
     pub(crate) fn open(&self, window_id: u64) -> bool {
         self.send(Command::Open { window_id })
@@ -210,6 +313,10 @@ impl LogStoreService {
         } else {
             true
         }
+    }
+
+    pub(crate) fn appender(&self) -> LogStoreAppender {
+        self.appender.clone()
     }
 
     pub(crate) fn search(
@@ -283,7 +390,9 @@ impl LogStoreService {
     }
 
     pub(crate) fn try_next_result(&self) -> Option<LogStoreResult> {
-        self.results.try_recv().ok()
+        self.live_updates
+            .take_next()
+            .or_else(|| self.results.try_recv().ok())
     }
 
     fn send(&self, command: Command) -> bool {
@@ -295,6 +404,7 @@ fn run_store(
     receiver: mpsc::Receiver<Command>,
     scan_sender: mpsc::SyncSender<Command>,
     result_sender: LogStoreResultSender,
+    live_updates: Arc<LiveUpdates>,
     config: LogStoreConfig,
 ) {
     let mut stores = HashMap::<u64, LogStore>::new();
@@ -313,14 +423,11 @@ fn run_store(
             Command::Append { window_id, lines } => {
                 let store = stores.entry(window_id).or_insert_with(LogStore::new);
                 match store.append(lines) {
-                    Ok(summary) => send_result(
-                        &result_sender,
-                        LogStoreResult::Updated {
-                            window_id,
-                            total_lines: summary.total_lines,
-                            completed_search: summary.completed_search,
-                        },
-                    ),
+                    Ok(summary) => live_updates.publish(LogStoreResult::Updated {
+                        window_id,
+                        total_lines: summary.total_lines,
+                        completed_search: summary.completed_search,
+                    }),
                     Err(error) => send_failure(&result_sender, window_id, error),
                 }
             }
@@ -429,6 +536,7 @@ fn run_store(
             }
             Command::Close { window_id } => {
                 stores.remove(&window_id);
+                live_updates.remove(window_id);
             }
             Command::ScanProgress {
                 window_id,
@@ -1089,6 +1197,60 @@ mod tests {
             );
             thread::yield_now();
         }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn direct_ingestion_waits_for_spool_capacity_without_ui_draining_updates() {
+        let service = LogStoreService::new(LogStoreConfig {
+            command_channel_capacity: 1,
+            result_channel_capacity: 1,
+            ..LogStoreConfig::default()
+        });
+        let appender = service.appender();
+
+        // This intentionally exceeds both bounded command queues many times
+        // while leaving the UI result side untouched. Every batch must be
+        // accepted eventually; a try_send data path would fail here.
+        for line_index in 0..512 {
+            appender
+                .append(41, vec![format!("line {line_index}")])
+                .await
+                .expect("direct ingestion waits instead of dropping a batch");
+        }
+
+        let updated = wait_for(&service, |result| {
+            matches!(
+                result,
+                LogStoreResult::Updated {
+                    window_id: 41,
+                    total_lines: 512,
+                    ..
+                }
+            )
+        });
+        assert!(matches!(
+            updated,
+            LogStoreResult::Updated {
+                window_id: 41,
+                total_lines: 512,
+                ..
+            }
+        ));
+
+        assert!(service.load_page(41, 0, false, 256));
+        let LogStoreResult::PageLoaded { rows, .. } = wait_for(&service, |result| {
+            matches!(
+                result,
+                LogStoreResult::PageLoaded {
+                    page_start: 256,
+                    ..
+                }
+            )
+        }) else {
+            unreachable!()
+        };
+        assert_eq!(rows.len(), LOG_PAGE_SIZE);
+        assert_eq!(rows[0].text, "line 256");
     }
 
     #[test]

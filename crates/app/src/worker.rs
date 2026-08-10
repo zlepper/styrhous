@@ -5,6 +5,7 @@ use crate::cluster_connection_manager::{
     start_resource_watcher, update_resource_data, validate_resource_yaml, watch_resource_detail,
 };
 use crate::helpers::ResultExt;
+use crate::log_store::LogStoreAppender;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use crate::resource_detail::{ManagedResource, ResourceDetail, ResourceEvent};
@@ -32,12 +33,14 @@ pub trait WorkerTrait: Default {
     fn start(&mut self);
     fn get_next_message(&mut self) -> Option<WorkerResult>;
     fn send_command(&mut self, command: WorkerCommand);
+    fn set_log_store_appender(&mut self, _appender: LogStoreAppender) {}
 }
 
 #[derive(Default)]
 pub struct Worker {
     inner: Option<WorkerInner>,
     repaint_context: Option<egui::Context>,
+    log_store_appender: Option<LogStoreAppender>,
 }
 
 impl Worker {
@@ -45,6 +48,7 @@ impl Worker {
         Self {
             inner: None,
             repaint_context: Some(context),
+            log_store_appender: None,
         }
     }
 
@@ -63,6 +67,7 @@ impl Worker {
                 clients: RwLock::new(HashMap::new()),
                 detail_watches: Mutex::new(HashMap::new()),
                 log_streams: Mutex::new(HashMap::new()),
+                log_store_appender: self.log_store_appender.clone(),
             });
 
             let worker = WorkerRuntime {
@@ -99,6 +104,14 @@ impl Worker {
                 .log_if_error("Failed to send command");
         }
     }
+
+    pub(crate) fn set_log_store_appender(&mut self, appender: LogStoreAppender) {
+        assert!(
+            self.inner.is_none(),
+            "The log store appender must be configured before starting the worker"
+        );
+        self.log_store_appender = Some(appender);
+    }
 }
 
 impl WorkerTrait for Worker {
@@ -116,6 +129,10 @@ impl WorkerTrait for Worker {
 
     fn send_command(&mut self, command: WorkerCommand) {
         Worker::send_command(self, command)
+    }
+
+    fn set_log_store_appender(&mut self, appender: LogStoreAppender) {
+        Worker::set_log_store_appender(self, appender)
     }
 }
 
@@ -434,11 +451,6 @@ pub enum WorkerResult {
         cluster_key: i32,
         log_window_id: u64,
     },
-    PodLogLinesAppended {
-        cluster_key: i32,
-        log_window_id: u64,
-        lines: Vec<String>,
-    },
     PodLogStreamEnded {
         cluster_key: i32,
         log_window_id: u64,
@@ -496,6 +508,9 @@ struct SharedWorkerState {
     detail_watches: Mutex<HashMap<(i32, u64), JoinHandle<()>>>,
     /// Native log windows each own one cancellable follow stream.
     log_streams: Mutex<HashMap<(i32, u64), JoinHandle<()>>>,
+    /// The bounded, disk-backed ingress for pod logs. A Kubernetes stream
+    /// awaits this directly rather than routing log data through the UI.
+    log_store_appender: Option<LogStoreAppender>,
 }
 
 struct WorkerRuntime {
@@ -807,35 +822,44 @@ impl WorkerRuntime {
                     clients.get(cluster_key).cloned()
                 };
                 if let Some(client) = client {
-                    let cluster_key = *cluster_key;
-                    let log_window_id = *log_window_id;
-                    let stream_key = (cluster_key, log_window_id);
-                    if let Some(previous) = shared.log_streams.lock().await.remove(&stream_key) {
-                        previous.abort();
-                    }
-                    let task_shared = shared.clone();
-                    let task_sender = result_channel.clone();
-                    let namespace = namespace.clone();
-                    let pod_name = pod_name.clone();
-                    let container = container.clone();
-                    let task = tokio::spawn(async move {
-                        stream_pod_logs(
+                    if let Some(log_store_appender) = shared.log_store_appender.clone() {
+                        let cluster_key = *cluster_key;
+                        let log_window_id = *log_window_id;
+                        let stream_key = (cluster_key, log_window_id);
+                        if let Some(previous) = shared.log_streams.lock().await.remove(&stream_key)
+                        {
+                            previous.abort();
+                        }
+                        let task_shared = shared.clone();
+                        let task_sender = result_channel.clone();
+                        let namespace = namespace.clone();
+                        let pod_name = pod_name.clone();
+                        let container = container.clone();
+                        let task = tokio::spawn(async move {
+                            stream_pod_logs(
+                                cluster_key,
+                                log_window_id,
+                                client,
+                                namespace,
+                                pod_name,
+                                container,
+                                log_store_appender,
+                                task_sender,
+                            )
+                            .await;
+                            task_shared.log_streams.lock().await.remove(&stream_key);
+                        });
+                        shared.log_streams.lock().await.insert(stream_key, task);
+                        Ok(WorkerResult::PodLogStreamStarted {
                             cluster_key,
                             log_window_id,
-                            client,
-                            namespace,
-                            pod_name,
-                            container,
-                            task_sender,
-                        )
-                        .await;
-                        task_shared.log_streams.lock().await.remove(&stream_key);
-                    });
-                    shared.log_streams.lock().await.insert(stream_key, task);
-                    Ok(WorkerResult::PodLogStreamStarted {
-                        cluster_key,
-                        log_window_id,
-                    })
+                        })
+                    } else {
+                        Err(anyhow::anyhow!(
+                            "Pod log storage is not initialized for cluster_key {}",
+                            cluster_key
+                        ))
+                    }
                 } else {
                     Err(anyhow::anyhow!(
                         "No client found for cluster_key {}",
@@ -887,6 +911,7 @@ async fn stream_pod_logs(
     namespace: String,
     pod_name: String,
     container: String,
+    log_store_appender: LogStoreAppender,
     sender: WorkerResultSender,
 ) {
     let result = async {
@@ -914,28 +939,20 @@ async fn stream_pod_logs(
                     };
                     batch.push(line);
                     if batch.len() >= 64 {
-                        sender.send(WorkerResult::PodLogLinesAppended {
-                            cluster_key,
-                            log_window_id,
-                            lines: std::mem::take(&mut batch),
-                        })?;
+                        log_store_appender
+                            .append(log_window_id, std::mem::take(&mut batch))
+                            .await?;
                     }
                 }
                 _ = flush.tick(), if !batch.is_empty() => {
-                    sender.send(WorkerResult::PodLogLinesAppended {
-                        cluster_key,
-                        log_window_id,
-                        lines: std::mem::take(&mut batch),
-                    })?;
+                    log_store_appender
+                        .append(log_window_id, std::mem::take(&mut batch))
+                        .await?;
                 }
             }
         }
         if !batch.is_empty() {
-            sender.send(WorkerResult::PodLogLinesAppended {
-                cluster_key,
-                log_window_id,
-                lines: batch,
-            })?;
+            log_store_appender.append(log_window_id, batch).await?;
         }
         anyhow::Ok(())
     }

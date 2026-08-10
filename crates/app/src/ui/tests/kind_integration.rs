@@ -132,7 +132,7 @@ fn test_secret_inspector_actions_integration() {
         &fixture.namespace,
     );
     for _ in 0..3 {
-        harness.run();
+        harness.run_steps(1);
     }
     harness
         .get_by_label(&format!("Open details for {test_secret_name}"))
@@ -162,9 +162,9 @@ fn test_secret_inspector_actions_integration() {
         .expect("Secret detail editor should be available")
         .draft_values
         .insert("password".to_owned(), "updated-secret".to_owned());
-    harness.run();
+    harness.run_steps(1);
     harness.get_by_label("Save data").click_accesskit();
-    harness.run();
+    harness.run_steps(1);
     wait_for(
         &mut harness,
         |_| {
@@ -248,9 +248,9 @@ fn select_namespace(harness: &mut Harness<MyEguiApp<Worker>>, namespace: &str) {
     harness
         .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
         .click();
-    harness.run();
+    harness.run_steps(1);
     harness.get_by_label(namespace).click();
-    harness.run();
+    harness.run_steps(1);
 }
 
 fn select_resource(
@@ -259,8 +259,8 @@ fn select_resource(
     resource_name: &str,
 ) -> ApiResource {
     harness.get_by_label(section).click_accesskit();
-    harness.run();
-    harness.run();
+    harness.run_steps(1);
+    harness.run_steps(1);
     harness.get_by_label(resource_name).click_accesskit();
     harness.run_steps(1);
     let cluster_key = harness
@@ -610,13 +610,13 @@ fn test_resource_actions_integration() {
     );
 
     for _ in 0..3 {
-        harness.run();
+        harness.run_steps(1);
     }
     let actions_label = format!("More actions for {test_configmap_name}");
     harness.get_by_label(&actions_label).click_accesskit();
-    harness.run();
+    harness.run_steps(1);
     harness.get_by_label("Edit").click_accesskit();
-    harness.run();
+    harness.run_steps(1);
     wait_for(
         &mut harness,
         |app| {
@@ -639,9 +639,9 @@ fn test_resource_actions_integration() {
     yaml_editor.edited_yaml = yaml_editor
         .edited_yaml
         .replace("original-value", "edited-value");
-    harness.run();
+    harness.run_steps(1);
     harness.get_by_label("Apply changes").click();
-    harness.run();
+    harness.run_steps(1);
     wait_for(
         &mut harness,
         |app| {
@@ -671,12 +671,12 @@ fn test_resource_actions_integration() {
     );
 
     for _ in 0..5 {
-        harness.run();
+        harness.run_steps(1);
     }
     harness.get_by_label(&actions_label).click_accesskit();
-    harness.run();
+    harness.run_steps(1);
     harness.get_by_label("Delete").click_accesskit();
-    harness.run();
+    harness.run_steps(1);
     assert!(
         harness.state().ui_state.clusters[&cluster_key]
             .pending_delete
@@ -700,7 +700,7 @@ fn test_resource_actions_integration() {
     harness
         .get_by_label(&confirm_delete_label)
         .click_accesskit();
-    harness.run();
+    harness.run_steps(1);
     wait_for(
         &mut harness,
         |app| {
@@ -793,9 +793,9 @@ fn test_deployment_match_labels_completion_integration() {
 
     let actions_label = format!("More actions for {deployment_name}");
     harness.get_by_label(&actions_label).click_accesskit();
-    harness.run();
+    harness.run_steps(1);
     harness.get_by_label("Edit").click_accesskit();
-    harness.run();
+    harness.run_steps(1);
     let (schema, yaml) = wait_for(
         &mut harness,
         |app| {
@@ -872,9 +872,9 @@ fn test_coredns_deployment_property_completion_integration() {
     harness
         .get_by_label("More actions for coredns")
         .click_accesskit();
-    harness.run();
+    harness.run_steps(1);
     harness.get_by_label("Edit").click_accesskit();
-    harness.run();
+    harness.run_steps(1);
     let (schema, yaml) = wait_for(
         &mut harness,
         |app| {
@@ -1003,15 +1003,18 @@ fn test_deployment_rollout_restart_integration() {
         &fixture.namespace,
     );
     for _ in 0..3 {
-        harness.run();
+        harness.run_steps(1);
     }
     let actions_label = format!("More actions for {deployment_name}");
     harness.get_by_label(&actions_label).click_accesskit();
-    harness.run();
+    harness.run_steps(1);
     harness.get_by_label("Restart rollout").click_accesskit();
-    harness.run();
+    // The action menu and confirmation dialog use the same label while the
+    // menu blade animates out. Advance its bounded transition before querying
+    // the confirmation button.
+    harness.run_steps(2);
     harness.get_by_label("Restart rollout").click_accesskit();
-    harness.run();
+    harness.run_steps(1);
 
     wait_for(
         &mut harness,

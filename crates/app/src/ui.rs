@@ -39,12 +39,15 @@ pub struct MyEguiApp<W: WorkerTrait = Worker, L: TerminalLauncher = SystemTermin
 
 impl<W: WorkerTrait, L: TerminalLauncher> Default for MyEguiApp<W, L> {
     fn default() -> Self {
+        let log_store = LogStoreService::default();
+        let mut worker = W::default();
+        worker.set_log_store_appender(log_store.appender());
         Self {
-            worker: W::default(),
+            worker,
             terminal_launcher: L::default(),
             terminal_launch_settings: TerminalLaunchSettings::default(),
             ui_state: UiState::default(),
-            log_store: LogStoreService::default(),
+            log_store,
         }
     }
 }
@@ -53,12 +56,15 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         egui_extras::install_image_loaders(&cc.egui_ctx);
         apply_light_theme(&cc.egui_ctx);
+        let log_store = LogStoreService::with_repaint_context(cc.egui_ctx.clone());
+        let mut worker = W::with_repaint_context(cc.egui_ctx.clone());
+        worker.set_log_store_appender(log_store.appender());
         let mut app = Self {
-            worker: W::with_repaint_context(cc.egui_ctx.clone()),
+            worker,
             terminal_launcher: L::default(),
             terminal_launch_settings: TerminalLaunchSettings::default(),
             ui_state: UiState::default(),
-            log_store: LogStoreService::with_repaint_context(cc.egui_ctx.clone()),
+            log_store,
         };
         app.load_persisted_state(cc.storage);
         app
@@ -100,7 +106,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
 impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.worker.start();
-        let mut commands_to_send = self.ui_state.update(&mut self.worker, &self.log_store);
+        let mut commands_to_send = self.ui_state.update(&mut self.worker);
         let mut shell_requests = Vec::<PodShellRequest>::new();
         while let Some(result) = self.log_store.try_next_result() {
             if let crate::log_store::LogStoreResult::Failed { window_id, .. } = &result
@@ -205,7 +211,6 @@ mod persistence_tests {
     use super::*;
     use crate::api_resource::ApiResource;
     use crate::cluster_connection_manager::Cluster;
-    use crate::log_store::LogStoreService;
     use crate::minimal_namespace::MinimalNamespace;
     use crate::worker::{MockWorker, WorkerResult};
     use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
@@ -304,7 +309,7 @@ mod persistence_tests {
             results: VecDeque::from_iter(results),
             ..Default::default()
         };
-        ui_state.update(&mut worker, &LogStoreService::default())
+        ui_state.update(&mut worker)
     }
 
     fn current_dev_cluster() -> WorkerResult {

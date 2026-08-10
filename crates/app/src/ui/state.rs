@@ -1362,7 +1362,6 @@ impl UiState {
     pub(super) fn update<W: WorkerTrait>(
         &mut self,
         worker: &mut W,
-        log_store: &crate::log_store::LogStoreService,
     ) -> Vec<crate::worker::WorkerCommand> {
         let mut commands_to_send = Vec::new();
         while let Some(result) = worker.get_next_message() {
@@ -2014,26 +2013,6 @@ impl UiState {
                         }
                     }
                 }
-                WorkerResult::PodLogLinesAppended {
-                    log_window_id,
-                    lines,
-                    ..
-                } => {
-                    if let Some(window) = self.log_windows.get_mut(&log_window_id) {
-                        if !log_store.append(log_window_id, lines) {
-                            window.status = PodLogStatus::Failed(
-                                "Log storage is saturated; the live stream was stopped to avoid losing log lines."
-                                    .to_owned(),
-                            );
-                            commands_to_send.push(crate::worker::WorkerCommand::StopPodLogStream {
-                                cluster_key: window.cluster_key,
-                                log_window_id,
-                            });
-                        } else if !matches!(window.status, PodLogStatus::Failed(_)) {
-                            window.status = PodLogStatus::Following;
-                        }
-                    }
-                }
                 WorkerResult::PodLogStreamEnded { log_window_id, .. } => {
                     if let Some(window) = self.log_windows.get_mut(&log_window_id)
                         && !matches!(window.status, PodLogStatus::Failed(_))
@@ -2268,15 +2247,9 @@ mod tests {
                     cluster_key: 7,
                     log_window_id: 1,
                 },
-                WorkerResult::PodLogLinesAppended {
+                WorkerResult::PodLogStreamStarted {
                     cluster_key: 7,
                     log_window_id: 2,
-                    lines: vec!["sidecar ready".into()],
-                },
-                WorkerResult::PodLogLinesAppended {
-                    cluster_key: 7,
-                    log_window_id: 1,
-                    lines: vec!["api ready".into(), "api serving".into()],
                 },
                 WorkerResult::PodLogStreamEnded {
                     cluster_key: 7,
@@ -2285,19 +2258,17 @@ mod tests {
             ]),
             commands: Vec::new(),
         };
-        let log_store = crate::log_store::LogStoreService::default();
-        let _ = state.update(&mut worker, &log_store);
-        let start = Instant::now();
-        while state.log_windows[&1].total_lines != 2 || state.log_windows[&2].total_lines != 1 {
-            if let Some(result) = log_store.try_next_result() {
-                state.apply_log_store_result(result);
-            }
-            assert!(
-                start.elapsed() < std::time::Duration::from_secs(2),
-                "timed out waiting for log-store updates"
-            );
-            std::thread::yield_now();
-        }
+        let _ = state.update(&mut worker);
+        state.apply_log_store_result(LogStoreResult::Updated {
+            window_id: 2,
+            total_lines: 1,
+            completed_search: None,
+        });
+        state.apply_log_store_result(LogStoreResult::Updated {
+            window_id: 1,
+            total_lines: 2,
+            completed_search: None,
+        });
 
         assert_eq!(state.log_windows[&1].total_lines, 2);
         assert_eq!(state.log_windows[&1].status, PodLogStatus::Finished);
@@ -2375,8 +2346,7 @@ mod tests {
             ]),
             commands: Vec::new(),
         };
-        let log_store = crate::log_store::LogStoreService::default();
-        state.update(&mut worker, &log_store);
+        state.update(&mut worker);
 
         assert_eq!(state.yaml_editors[&1].resource_name, "settings");
         assert_eq!(state.yaml_editors[&2].resource_name, "other-settings");
@@ -2448,7 +2418,7 @@ mod tests {
             commands: Vec::new(),
         };
 
-        state.update(&mut worker, &crate::log_store::LogStoreService::default());
+        state.update(&mut worker);
 
         let editor = &state.yaml_editors[&1];
         assert_eq!(
