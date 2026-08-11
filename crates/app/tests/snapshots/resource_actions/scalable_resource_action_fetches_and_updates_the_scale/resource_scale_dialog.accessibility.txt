@@ -64,41 +64,41 @@ Window state=[focused] rect=<none>
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="Name" rect=(x=376.0 y=62.5 width=38.8 height=17.0 center_x=395.4 center_y=71.0)
-                  TextRun value="Name" rect=(x=376.0 y=62.5 width=38.8 height=17.0 center_x=395.4 center_y=71.0)
+              CheckBox name="Select all rows" state=[toggled=False] rect=(x=376.0 y=67.0 width=16.0 height=16.0 center_x=384.0 center_y=75.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="Ready" rect=(x=1033.0 y=62.5 width=41.5 height=17.0 center_x=1053.7 center_y=71.0)
-                  TextRun value="Ready" rect=(x=1033.0 y=62.5 width=41.5 height=17.0 center_x=1053.7 center_y=71.0)
+              Label value="Name" rect=(x=424.0 y=66.5 width=38.8 height=17.0 center_x=443.4 center_y=75.0)
+                TextRun value="Name" rect=(x=424.0 y=66.5 width=38.8 height=17.0 center_x=443.4 center_y=75.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="Up-to-date" rect=(x=1123.0 y=62.5 width=73.8 height=17.0 center_x=1159.9 center_y=71.0)
-                  TextRun value="Up-to-date" rect=(x=1123.0 y=62.5 width=73.8 height=17.0 center_x=1159.9 center_y=71.0)
+              Label value="Ready" rect=(x=1033.0 y=66.5 width=41.5 height=17.0 center_x=1053.7 center_y=75.0)
+                TextRun value="Ready" rect=(x=1033.0 y=66.5 width=41.5 height=17.0 center_x=1053.7 center_y=75.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="Available" rect=(x=1255.0 y=62.5 width=59.1 height=17.0 center_x=1284.6 center_y=71.0)
-                  TextRun value="Available" rect=(x=1255.0 y=62.5 width=59.1 height=17.0 center_x=1284.6 center_y=71.0)
+              Label value="Up-to-date" rect=(x=1123.0 y=66.5 width=73.8 height=17.0 center_x=1159.9 center_y=75.0)
+                TextRun value="Up-to-date" rect=(x=1123.0 y=66.5 width=73.8 height=17.0 center_x=1159.9 center_y=75.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="Age" rect=(x=1371.0 y=62.5 width=26.4 height=17.0 center_x=1384.2 center_y=71.0)
-                  TextRun value="Age" rect=(x=1371.0 y=62.5 width=26.4 height=17.0 center_x=1384.2 center_y=71.0)
+              Label value="Available" rect=(x=1255.0 y=66.5 width=59.1 height=17.0 center_x=1284.6 center_y=75.0)
+                TextRun value="Available" rect=(x=1255.0 y=66.5 width=59.1 height=17.0 center_x=1284.6 center_y=75.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="" rect=(x=1448.0 y=62.5 width=0.0 height=17.0 center_x=1448.0 center_y=71.0)
-                  TextRun value="" rect=(x=1448.0 y=62.5 width=0.0 height=17.0 center_x=1448.0 center_y=71.0)
+              Label value="Age" rect=(x=1371.0 y=66.5 width=26.4 height=17.0 center_x=1384.2 center_y=75.0)
+                TextRun value="Age" rect=(x=1371.0 y=66.5 width=26.4 height=17.0 center_x=1384.2 center_y=75.0)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="" rect=(x=1448.0 y=66.5 width=0.0 height=17.0 center_x=1448.0 center_y=75.0)
+                TextRun value="" rect=(x=1448.0 y=66.5 width=0.0 height=17.0 center_x=1448.0 center_y=75.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
-                Unknown rect=(x=360.0 y=98.0 width=657.0 height=44.0 center_x=688.5 center_y=120.0)
                 GenericContainer rect=<none>
-                  Button name="Open details for coredns" rect=(x=376.0 y=111.5 width=53.8 height=17.0 center_x=402.9 center_y=120.0)
+                  CheckBox name="Select row 1" state=[toggled=False] rect=(x=376.0 y=112.0 width=16.0 height=16.0 center_x=384.0 center_y=120.0)
+              GenericContainer rect=<none>
+                Unknown rect=(x=408.0 y=98.0 width=609.0 height=44.0 center_x=712.5 center_y=120.0)
+                GenericContainer rect=<none>
+                  Button name="Open details for coredns" rect=(x=424.0 y=111.5 width=53.8 height=17.0 center_x=450.9 center_y=120.0)
               GenericContainer rect=<none>
                 Unknown rect=(x=1017.0 y=98.0 width=90.0 height=44.0 center_x=1062.0 center_y=120.0)
                 GenericContainer rect=<none>

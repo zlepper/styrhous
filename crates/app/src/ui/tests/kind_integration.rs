@@ -743,6 +743,105 @@ fn test_resource_actions_integration() {
     );
 }
 
+/// Deletes two independently selected ConfigMaps through the bulk action.
+#[test]
+fn test_bulk_resource_delete_integration() {
+    let fixture = IntegrationConfigMap::create("bulk-delete", "bulk-delete-a", "first");
+    let second_name = "bulk-delete-b".to_owned();
+    let runtime = &fixture.runtime;
+    let configmaps = &fixture.configmaps;
+    runtime.block_on(async {
+        configmaps
+            .create(
+                &Default::default(),
+                &ConfigMap {
+                    metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                        name: Some(second_name.clone()),
+                        namespace: Some(fixture.namespace.clone()),
+                        ..Default::default()
+                    },
+                    data: Some(BTreeMap::from([(
+                        String::from("key1"),
+                        String::from("second"),
+                    )])),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("Failed to create second integration ConfigMap");
+    });
+
+    let (mut harness, cluster_key) = connected_kind_harness();
+    wait_for_cluster_data(&mut harness, cluster_key);
+    select_namespace(&mut harness, &fixture.namespace);
+    let configmaps_resource = select_resource(&mut harness, "Config", "Config Maps");
+    wait_for_resource_sync(
+        &mut harness,
+        cluster_key,
+        configmaps_resource.clone(),
+        &fixture.namespace,
+    );
+    wait_for(
+        &mut harness,
+        |app| {
+            let resources = &app.ui_state.clusters[&cluster_key].resource_cache
+                [&(configmaps_resource.clone(), Some(fixture.namespace.clone()))]
+                .resources;
+            (resources
+                .values()
+                .any(|resource| resource.name == fixture.name)
+                && resources
+                    .values()
+                    .any(|resource| resource.name == second_name))
+            .then_some(())
+        },
+        10_000,
+    );
+
+    harness.get_by_label("Select row 1").click_accesskit();
+    harness.run_steps(1);
+    harness.get_by_label("Select row 2").click_accesskit();
+    harness.run_steps(1);
+    harness.get_by_label("Delete selected").click_accesskit();
+    harness.run_steps(1);
+    wait_for(
+        &mut harness,
+        |app| {
+            app.ui_state.clusters[&cluster_key]
+                .pending_bulk_delete
+                .as_ref()
+                .filter(|pending| pending.confirmation_available_at <= std::time::Instant::now())
+                .map(|_| ())
+        },
+        5_000,
+    );
+    harness.get_by_label("Delete 2 resources").click_accesskit();
+    harness.run_steps(1);
+    wait_for(
+        &mut harness,
+        |app| {
+            let resources = &app.ui_state.clusters[&cluster_key].resource_cache
+                [&(configmaps_resource.clone(), Some(fixture.namespace.clone()))]
+                .resources;
+            (!resources
+                .values()
+                .any(|resource| resource.name == fixture.name || resource.name == second_name))
+            .then_some(())
+        },
+        10_000,
+    );
+    assert!(
+        runtime
+            .block_on(async { configmaps.get(&fixture.name).await })
+            .is_err()
+    );
+    assert!(
+        runtime
+            .block_on(async { configmaps.get(&second_name).await })
+            .is_err()
+    );
+}
+
 /// Removes a deliberately stuck ConfigMap's finalizer through the guarded UI action.
 #[test]
 fn test_force_delete_resource_with_finalizer_integration() {

@@ -63,10 +63,12 @@ Window state=[focused] rect=<none>
                   GenericContainer rect=<none>
                     CheckBox name="Select row 1" state=[toggled=True] rect=(x=24.0 y=301.0 width=16.0 height=16.0 center_x=32.0 center_y=309.0)
                 GenericContainer rect=<none>
+                  Unknown rect=(x=56.0 y=287.0 width=150.0 height=44.0 center_x=131.0 center_y=309.0)
                   GenericContainer rect=<none>
                     Label value="Michael Foster" rect=(x=72.0 y=300.5 width=97.0 height=17.0 center_x=120.5 center_y=309.0)
                       TextRun value="Michael Foster" rect=(x=72.0 y=300.5 width=97.0 height=17.0 center_x=120.5 center_y=309.0)
                 GenericContainer rect=<none>
+                  Unknown rect=(x=206.0 y=287.0 width=100.0 height=44.0 center_x=256.0 center_y=309.0)
                   GenericContainer rect=<none>
                     Label value="Designer" rect=(x=222.0 y=300.5 width=59.3 height=17.0 center_x=251.7 center_y=309.0)
                       TextRun value="Designer" rect=(x=222.0 y=300.5 width=59.3 height=17.0 center_x=251.7 center_y=309.0)
@@ -74,10 +76,12 @@ Window state=[focused] rect=<none>
                   GenericContainer rect=<none>
                     CheckBox name="Select row 2" state=[toggled=False] rect=(x=24.0 y=348.0 width=16.0 height=16.0 center_x=32.0 center_y=356.0)
                 GenericContainer rect=<none>
+                  Unknown rect=(x=56.0 y=334.0 width=150.0 height=44.0 center_x=131.0 center_y=356.0)
                   GenericContainer rect=<none>
                     Label value="Emily Selman" rect=(x=72.0 y=347.5 width=88.3 height=17.0 center_x=116.1 center_y=356.0)
                       TextRun value="Emily Selman" rect=(x=72.0 y=347.5 width=88.3 height=17.0 center_x=116.1 center_y=356.0)
                 GenericContainer rect=<none>
+                  Unknown rect=(x=206.0 y=334.0 width=100.0 height=44.0 center_x=256.0 center_y=356.0)
                   GenericContainer rect=<none>
                     Label value="Engineer" rect=(x=222.0 y=347.5 width=58.5 height=17.0 center_x=251.3 center_y=356.0)
                       TextRun value="Engineer" rect=(x=222.0 y=347.5 width=58.5 height=17.0 center_x=251.3 center_y=356.0)

@@ -64,52 +64,50 @@ Window state=[focused] rect=<none>
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="Name" rect=(x=376.0 y=62.5 width=38.8 height=17.0 center_x=395.4 center_y=71.0)
-                  TextRun value="Name" rect=(x=376.0 y=62.5 width=38.8 height=17.0 center_x=395.4 center_y=71.0)
+              CheckBox name="Select all rows" state=[toggled=False] rect=(x=376.0 y=67.0 width=16.0 height=16.0 center_x=384.0 center_y=75.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="Ready" rect=(x=703.0 y=62.5 width=41.5 height=17.0 center_x=723.7 center_y=71.0)
-                  TextRun value="Ready" rect=(x=703.0 y=62.5 width=41.5 height=17.0 center_x=723.7 center_y=71.0)
+              Label value="Name" rect=(x=424.0 y=66.5 width=38.8 height=17.0 center_x=443.4 center_y=75.0)
+                TextRun value="Name" rect=(x=424.0 y=66.5 width=38.8 height=17.0 center_x=443.4 center_y=75.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="Containers" rect=(x=793.0 y=62.5 width=71.9 height=17.0 center_x=828.9 center_y=71.0)
-                  TextRun value="Containers" rect=(x=793.0 y=62.5 width=71.9 height=17.0 center_x=828.9 center_y=71.0)
+              Label value="Ready" rect=(x=703.0 y=66.5 width=41.5 height=17.0 center_x=723.7 center_y=75.0)
+                TextRun value="Ready" rect=(x=703.0 y=66.5 width=41.5 height=17.0 center_x=723.7 center_y=75.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="Status" rect=(x=943.0 y=62.5 width=41.8 height=17.0 center_x=963.9 center_y=71.0)
-                  TextRun value="Status" rect=(x=943.0 y=62.5 width=41.8 height=17.0 center_x=963.9 center_y=71.0)
+              Label value="Containers" rect=(x=793.0 y=66.5 width=71.9 height=17.0 center_x=828.9 center_y=75.0)
+                TextRun value="Containers" rect=(x=793.0 y=66.5 width=71.9 height=17.0 center_x=828.9 center_y=75.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="Restarts" rect=(x=1071.0 y=62.5 width=54.2 height=17.0 center_x=1098.1 center_y=71.0)
-                  TextRun value="Restarts" rect=(x=1071.0 y=62.5 width=54.2 height=17.0 center_x=1098.1 center_y=71.0)
+              Label value="Status" rect=(x=943.0 y=66.5 width=41.8 height=17.0 center_x=963.9 center_y=75.0)
+                TextRun value="Status" rect=(x=943.0 y=66.5 width=41.8 height=17.0 center_x=963.9 center_y=75.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="Node" rect=(x=1191.0 y=62.5 width=35.7 height=17.0 center_x=1208.8 center_y=71.0)
-                  TextRun value="Node" rect=(x=1191.0 y=62.5 width=35.7 height=17.0 center_x=1208.8 center_y=71.0)
+              Label value="Restarts" rect=(x=1071.0 y=66.5 width=54.2 height=17.0 center_x=1098.1 center_y=75.0)
+                TextRun value="Restarts" rect=(x=1071.0 y=66.5 width=54.2 height=17.0 center_x=1098.1 center_y=75.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="Age" rect=(x=1371.0 y=62.5 width=26.4 height=17.0 center_x=1384.2 center_y=71.0)
-                  TextRun value="Age" rect=(x=1371.0 y=62.5 width=26.4 height=17.0 center_x=1384.2 center_y=71.0)
+              Label value="Node" rect=(x=1191.0 y=66.5 width=35.7 height=17.0 center_x=1208.8 center_y=75.0)
+                TextRun value="Node" rect=(x=1191.0 y=66.5 width=35.7 height=17.0 center_x=1208.8 center_y=75.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="" rect=(x=1448.0 y=62.5 width=0.0 height=17.0 center_x=1448.0 center_y=71.0)
-                  TextRun value="" rect=(x=1448.0 y=62.5 width=0.0 height=17.0 center_x=1448.0 center_y=71.0)
+              Label value="Age" rect=(x=1371.0 y=66.5 width=26.4 height=17.0 center_x=1384.2 center_y=75.0)
+                TextRun value="Age" rect=(x=1371.0 y=66.5 width=26.4 height=17.0 center_x=1384.2 center_y=75.0)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="" rect=(x=1448.0 y=66.5 width=0.0 height=17.0 center_x=1448.0 center_y=75.0)
+                TextRun value="" rect=(x=1448.0 y=66.5 width=0.0 height=17.0 center_x=1448.0 center_y=75.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
-                Unknown rect=(x=360.0 y=98.0 width=327.0 height=44.0 center_x=523.5 center_y=120.0)
                 GenericContainer rect=<none>
-                  Label value="coredns-66bc5c9577-ffw2s" rect=(x=376.0 y=111.5 width=187.5 height=17.0 center_x=469.7 center_y=120.0)
-                    TextRun value="coredns-66bc5c9577-ffw2s" rect=(x=376.0 y=111.5 width=187.5 height=17.0 center_x=469.7 center_y=120.0)
+                  CheckBox name="Select row 1" state=[toggled=False] rect=(x=376.0 y=112.0 width=16.0 height=16.0 center_x=384.0 center_y=120.0)
+              GenericContainer rect=<none>
+                Unknown rect=(x=408.0 y=98.0 width=279.0 height=44.0 center_x=547.5 center_y=120.0)
+                GenericContainer rect=<none>
+                  Label value="coredns-66bc5c9577-ffw2s" rect=(x=424.0 y=111.5 width=187.5 height=17.0 center_x=517.7 center_y=120.0)
+                    TextRun value="coredns-66bc5c9577-ffw2s" rect=(x=424.0 y=111.5 width=187.5 height=17.0 center_x=517.7 center_y=120.0)
               GenericContainer rect=<none>
                 Unknown rect=(x=687.0 y=98.0 width=90.0 height=44.0 center_x=732.0 center_y=120.0)
                 GenericContainer rect=<none>
@@ -145,10 +143,13 @@ Window state=[focused] rect=<none>
                 Unknown rect=(x=1432.0 y=98.0 width=104.0 height=44.0 center_x=1484.0 center_y=120.0)
                 GenericContainer rect=<none>
               GenericContainer rect=<none>
-                Unknown rect=(x=360.0 y=145.0 width=327.0 height=44.0 center_x=523.5 center_y=167.0)
                 GenericContainer rect=<none>
-                  Label value="coredns-66bc5c9577-z9gt9" rect=(x=376.0 y=158.5 width=188.3 height=17.0 center_x=470.2 center_y=167.0)
-                    TextRun value="coredns-66bc5c9577-z9gt9" rect=(x=376.0 y=158.5 width=188.3 height=17.0 center_x=470.2 center_y=167.0)
+                  CheckBox name="Select row 2" state=[toggled=False] rect=(x=376.0 y=159.0 width=16.0 height=16.0 center_x=384.0 center_y=167.0)
+              GenericContainer rect=<none>
+                Unknown rect=(x=408.0 y=145.0 width=279.0 height=44.0 center_x=547.5 center_y=167.0)
+                GenericContainer rect=<none>
+                  Label value="coredns-66bc5c9577-z9gt9" rect=(x=424.0 y=158.5 width=188.3 height=17.0 center_x=518.2 center_y=167.0)
+                    TextRun value="coredns-66bc5c9577-z9gt9" rect=(x=424.0 y=158.5 width=188.3 height=17.0 center_x=518.2 center_y=167.0)
               GenericContainer rect=<none>
                 Unknown rect=(x=687.0 y=145.0 width=90.0 height=44.0 center_x=732.0 center_y=167.0)
                 GenericContainer rect=<none>
@@ -184,10 +185,13 @@ Window state=[focused] rect=<none>
                 Unknown rect=(x=1432.0 y=145.0 width=104.0 height=44.0 center_x=1484.0 center_y=167.0)
                 GenericContainer rect=<none>
               GenericContainer rect=<none>
-                Unknown rect=(x=360.0 y=192.0 width=327.0 height=44.0 center_x=523.5 center_y=214.0)
                 GenericContainer rect=<none>
-                  Label value="etcd-kind-control-plane" rect=(x=376.0 y=205.5 width=158.8 height=17.0 center_x=455.4 center_y=214.0)
-                    TextRun value="etcd-kind-control-plane" rect=(x=376.0 y=205.5 width=158.8 height=17.0 center_x=455.4 center_y=214.0)
+                  CheckBox name="Select row 3" state=[toggled=False] rect=(x=376.0 y=206.0 width=16.0 height=16.0 center_x=384.0 center_y=214.0)
+              GenericContainer rect=<none>
+                Unknown rect=(x=408.0 y=192.0 width=279.0 height=44.0 center_x=547.5 center_y=214.0)
+                GenericContainer rect=<none>
+                  Label value="etcd-kind-control-plane" rect=(x=424.0 y=205.5 width=158.8 height=17.0 center_x=503.4 center_y=214.0)
+                    TextRun value="etcd-kind-control-plane" rect=(x=424.0 y=205.5 width=158.8 height=17.0 center_x=503.4 center_y=214.0)
               GenericContainer rect=<none>
                 Unknown rect=(x=687.0 y=192.0 width=90.0 height=44.0 center_x=732.0 center_y=214.0)
                 GenericContainer rect=<none>
@@ -223,10 +227,13 @@ Window state=[focused] rect=<none>
                 Unknown rect=(x=1432.0 y=192.0 width=104.0 height=44.0 center_x=1484.0 center_y=214.0)
                 GenericContainer rect=<none>
               GenericContainer rect=<none>
-                Unknown rect=(x=360.0 y=239.0 width=327.0 height=44.0 center_x=523.5 center_y=261.0)
                 GenericContainer rect=<none>
-                  Label value="kindnet-9qrlh" rect=(x=376.0 y=252.5 width=89.5 height=17.0 center_x=420.8 center_y=261.0)
-                    TextRun value="kindnet-9qrlh" rect=(x=376.0 y=252.5 width=89.5 height=17.0 center_x=420.8 center_y=261.0)
+                  CheckBox name="Select row 4" state=[toggled=False] rect=(x=376.0 y=253.0 width=16.0 height=16.0 center_x=384.0 center_y=261.0)
+              GenericContainer rect=<none>
+                Unknown rect=(x=408.0 y=239.0 width=279.0 height=44.0 center_x=547.5 center_y=261.0)
+                GenericContainer rect=<none>
+                  Label value="kindnet-9qrlh" rect=(x=424.0 y=252.5 width=89.5 height=17.0 center_x=468.8 center_y=261.0)
+                    TextRun value="kindnet-9qrlh" rect=(x=424.0 y=252.5 width=89.5 height=17.0 center_x=468.8 center_y=261.0)
               GenericContainer rect=<none>
                 Unknown rect=(x=687.0 y=239.0 width=90.0 height=44.0 center_x=732.0 center_y=261.0)
                 GenericContainer rect=<none>
@@ -262,10 +269,13 @@ Window state=[focused] rect=<none>
                 Unknown rect=(x=1432.0 y=239.0 width=104.0 height=44.0 center_x=1484.0 center_y=261.0)
                 GenericContainer rect=<none>
               GenericContainer rect=<none>
-                Unknown rect=(x=360.0 y=286.0 width=327.0 height=44.0 center_x=523.5 center_y=308.0)
                 GenericContainer rect=<none>
-                  Label value="kube-apiserver-kind-control-plane" rect=(x=376.0 y=299.5 width=230.0 height=17.0 center_x=491.0 center_y=308.0)
-                    TextRun value="kube-apiserver-kind-control-plane" rect=(x=376.0 y=299.5 width=230.0 height=17.0 center_x=491.0 center_y=308.0)
+                  CheckBox name="Select row 5" state=[toggled=False] rect=(x=376.0 y=300.0 width=16.0 height=16.0 center_x=384.0 center_y=308.0)
+              GenericContainer rect=<none>
+                Unknown rect=(x=408.0 y=286.0 width=279.0 height=44.0 center_x=547.5 center_y=308.0)
+                GenericContainer rect=<none>
+                  Label value="kube-apiserver-kind-control-plane" rect=(x=424.0 y=299.5 width=230.0 height=17.0 center_x=539.0 center_y=308.0)
+                    TextRun value="kube-apiserver-kind-control-plane" rect=(x=424.0 y=299.5 width=230.0 height=17.0 center_x=539.0 center_y=308.0)
               GenericContainer rect=<none>
                 Unknown rect=(x=687.0 y=286.0 width=90.0 height=44.0 center_x=732.0 center_y=308.0)
                 GenericContainer rect=<none>
@@ -301,10 +311,13 @@ Window state=[focused] rect=<none>
                 Unknown rect=(x=1432.0 y=286.0 width=104.0 height=44.0 center_x=1484.0 center_y=308.0)
                 GenericContainer rect=<none>
               GenericContainer rect=<none>
-                Unknown rect=(x=360.0 y=333.0 width=327.0 height=44.0 center_x=523.5 center_y=355.0)
                 GenericContainer rect=<none>
-                  Label value="kube-controller-manager-kind-control-plane" rect=(x=376.0 y=346.5 width=295.2 height=17.0 center_x=523.6 center_y=355.0)
-                    TextRun value="kube-controller-manager-kind-control-plane" rect=(x=376.0 y=346.5 width=295.2 height=17.0 center_x=523.6 center_y=355.0)
+                  CheckBox name="Select row 6" state=[toggled=False] rect=(x=376.0 y=347.0 width=16.0 height=16.0 center_x=384.0 center_y=355.0)
+              GenericContainer rect=<none>
+                Unknown rect=(x=408.0 y=333.0 width=279.0 height=44.0 center_x=547.5 center_y=355.0)
+                GenericContainer rect=<none>
+                  Label value="kube-controller-manager-kind-control-plane" rect=(x=424.0 y=346.5 width=260.1 height=17.0 center_x=554.0 center_y=355.0)
+                    TextRun value="kube-controller-manager-kind-contro…" rect=(x=424.0 y=346.5 width=260.1 height=17.0 center_x=554.0 center_y=355.0)
               GenericContainer rect=<none>
                 Unknown rect=(x=687.0 y=333.0 width=90.0 height=44.0 center_x=732.0 center_y=355.0)
                 GenericContainer rect=<none>
@@ -340,10 +353,13 @@ Window state=[focused] rect=<none>
                 Unknown rect=(x=1432.0 y=333.0 width=104.0 height=44.0 center_x=1484.0 center_y=355.0)
                 GenericContainer rect=<none>
               GenericContainer rect=<none>
-                Unknown rect=(x=360.0 y=380.0 width=327.0 height=44.0 center_x=523.5 center_y=402.0)
                 GenericContainer rect=<none>
-                  Label value="kube-proxy-v86gd" rect=(x=376.0 y=393.5 width=124.6 height=17.0 center_x=438.3 center_y=402.0)
-                    TextRun value="kube-proxy-v86gd" rect=(x=376.0 y=393.5 width=124.6 height=17.0 center_x=438.3 center_y=402.0)
+                  CheckBox name="Select row 7" state=[toggled=False] rect=(x=376.0 y=394.0 width=16.0 height=16.0 center_x=384.0 center_y=402.0)
+              GenericContainer rect=<none>
+                Unknown rect=(x=408.0 y=380.0 width=279.0 height=44.0 center_x=547.5 center_y=402.0)
+                GenericContainer rect=<none>
+                  Label value="kube-proxy-v86gd" rect=(x=424.0 y=393.5 width=124.6 height=17.0 center_x=486.3 center_y=402.0)
+                    TextRun value="kube-proxy-v86gd" rect=(x=424.0 y=393.5 width=124.6 height=17.0 center_x=486.3 center_y=402.0)
               GenericContainer rect=<none>
                 Unknown rect=(x=687.0 y=380.0 width=90.0 height=44.0 center_x=732.0 center_y=402.0)
                 GenericContainer rect=<none>
@@ -379,10 +395,13 @@ Window state=[focused] rect=<none>
                 Unknown rect=(x=1432.0 y=380.0 width=104.0 height=44.0 center_x=1484.0 center_y=402.0)
                 GenericContainer rect=<none>
               GenericContainer rect=<none>
-                Unknown rect=(x=360.0 y=427.0 width=327.0 height=44.0 center_x=523.5 center_y=449.0)
                 GenericContainer rect=<none>
-                  Label value="kube-scheduler-kind-control-plane" rect=(x=376.0 y=440.5 width=233.7 height=17.0 center_x=492.8 center_y=449.0)
-                    TextRun value="kube-scheduler-kind-control-plane" rect=(x=376.0 y=440.5 width=233.7 height=17.0 center_x=492.8 center_y=449.0)
+                  CheckBox name="Select row 8" state=[toggled=False] rect=(x=376.0 y=441.0 width=16.0 height=16.0 center_x=384.0 center_y=449.0)
+              GenericContainer rect=<none>
+                Unknown rect=(x=408.0 y=427.0 width=279.0 height=44.0 center_x=547.5 center_y=449.0)
+                GenericContainer rect=<none>
+                  Label value="kube-scheduler-kind-control-plane" rect=(x=424.0 y=440.5 width=233.7 height=17.0 center_x=540.8 center_y=449.0)
+                    TextRun value="kube-scheduler-kind-control-plane" rect=(x=424.0 y=440.5 width=233.7 height=17.0 center_x=540.8 center_y=449.0)
               GenericContainer rect=<none>
                 Unknown rect=(x=687.0 y=427.0 width=90.0 height=44.0 center_x=732.0 center_y=449.0)
                 GenericContainer rect=<none>

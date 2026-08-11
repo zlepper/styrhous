@@ -470,26 +470,65 @@ impl TailwindTable {
         self,
         ui: &mut Ui,
         items: &'a [T],
-        selection: &HashSet<K>,
+        selection: &mut HashSet<K>,
         key_fn: impl Fn(&T) -> K,
-        mut render_cell: impl FnMut(&mut Ui, &'a T, usize),
+        render_cell: impl FnMut(&mut Ui, &'a T, usize),
     ) where
         K: Eq + Hash + Clone,
     {
+        self.show_selectable_with_row_response(
+            ui,
+            items,
+            selection,
+            |item| Some(key_fn(item)),
+            render_cell,
+            |_, _, _| {},
+        );
+    }
+
+    /// Show a selectable table and receive an interactive response for every
+    /// data cell.
+    ///
+    /// This is the selectable counterpart to [`Self::show_with_row_response`].
+    /// Checkbox interactions update `selection` directly; returning `None`
+    /// from `key_fn` renders an unselectable row while preserving the regular
+    /// row callback for callers that need contextual row interactions.
+    pub fn show_selectable_with_row_response<'a, T, K>(
+        self,
+        ui: &mut Ui,
+        items: &'a [T],
+        selection: &mut HashSet<K>,
+        key_fn: impl Fn(&T) -> Option<K>,
+        mut render_cell: impl FnMut(&mut Ui, &'a T, usize),
+        mut render_row: impl FnMut(&egui::Response, &'a T, usize),
+    ) where
+        K: Eq + Hash + Clone,
+    {
+        debug_assert!(
+            self.is_selectable,
+            "selectable tables must call .selectable()"
+        );
         let available_height = ui.available_height();
+        let (header_height, row_height, cell_padding_x) = if self.roomy {
+            (ROOMY_HEADER_HEIGHT, ROOMY_ROW_HEIGHT, ROOMY_CELL_PADDING_X)
+        } else {
+            (HEADER_HEIGHT, ROW_HEIGHT, CELL_PADDING_X)
+        };
         let num_columns = self.columns.len();
-        let num_items = items.len();
+        let visible_keys = items.iter().filter_map(&key_fn).collect::<Vec<_>>();
+        let num_selectable_items = visible_keys.len();
+        let table_id = self.id;
         let original_item_spacing = ui.spacing().item_spacing;
         ui.spacing_mut().item_spacing.x = 0.0;
 
         // Determine select-all checkbox state
-        let selected_count = items
+        let selected_count = visible_keys
             .iter()
-            .filter(|item| selection.contains(&key_fn(item)))
+            .filter(|key| selection.contains(*key))
             .count();
-        let select_all_state = if selected_count == 0 {
+        let select_all_state = if num_selectable_items == 0 || selected_count == 0 {
             CheckboxState::Unchecked
-        } else if selected_count == num_items {
+        } else if selected_count == num_selectable_items {
             CheckboxState::Checked
         } else {
             CheckboxState::Indeterminate
@@ -502,6 +541,12 @@ impl TailwindTable {
             .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
             .max_scroll_height(available_height);
 
+        if self.fill_available_height {
+            table = table
+                .auto_shrink([false, false])
+                .min_scrolled_height((available_height - header_height).max(0.0));
+        }
+
         // Add checkbox column first
         table = table.column(Column::exact(CHECKBOX_COL_WIDTH));
 
@@ -511,14 +556,27 @@ impl TailwindTable {
         }
 
         table
-            .header(HEADER_HEIGHT, |mut header| {
+            .header(header_height, |mut header| {
                 // Checkbox column header (select all)
                 header.col(|ui| {
                     let rect = ui.max_rect();
                     ui.painter().rect_filled(rect, 0.0, HEADER_BG);
+                    ui.painter().line_segment(
+                        [rect.left_bottom(), rect.right_bottom()],
+                        egui::Stroke::new(1.0, TABLE_BORDER),
+                    );
                     ui.horizontal_centered(|ui| {
-                        ui.add_space(CELL_PADDING_X);
-                        render_checkbox(ui, select_all_state, "Select all rows");
+                        ui.add_space(cell_padding_x);
+                        let response = render_checkbox(ui, select_all_state, "Select all rows");
+                        if response.clicked() {
+                            if selected_count == num_selectable_items {
+                                for key in &visible_keys {
+                                    selection.remove(key);
+                                }
+                            } else {
+                                selection.extend(visible_keys.iter().cloned());
+                            }
+                        }
                     });
                 });
 
@@ -527,8 +585,12 @@ impl TailwindTable {
                     header.col(|ui| {
                         let rect = ui.max_rect();
                         ui.painter().rect_filled(rect, 0.0, HEADER_BG);
+                        ui.painter().line_segment(
+                            [rect.left_bottom(), rect.right_bottom()],
+                            egui::Stroke::new(1.0, TABLE_BORDER),
+                        );
                         ui.horizontal(|ui| {
-                            ui.add_space(CELL_PADDING_X);
+                            ui.add_space(cell_padding_x);
                             ui.label(
                                 egui::RichText::new(&col.header)
                                     .font(typography::body())
@@ -540,41 +602,67 @@ impl TailwindTable {
                 }
             })
             .body(|body| {
-                body.rows(ROW_HEIGHT, num_items, |mut row| {
+                body.rows(row_height, items.len(), |mut row| {
                     let row_index = row.index();
                     let item = &items[row_index];
-                    let is_selected = selection.contains(&key_fn(item));
+                    let item_key = key_fn(item);
+                    let is_selected = item_key.as_ref().is_some_and(|key| selection.contains(key));
                     let bg_color = WHITE;
 
                     // Checkbox column
                     row.col(|ui| {
                         let rect = ui.max_rect();
                         ui.painter().rect_filled(rect, 0.0, bg_color);
+                        ui.painter().line_segment(
+                            [rect.left_bottom(), rect.right_bottom()],
+                            egui::Stroke::new(1.0, TABLE_BORDER),
+                        );
                         ui.horizontal_centered(|ui| {
-                            ui.add_space(CELL_PADDING_X);
-                            let checkbox_state = if is_selected {
-                                CheckboxState::Checked
-                            } else {
-                                CheckboxState::Unchecked
-                            };
-                            render_checkbox(
-                                ui,
-                                checkbox_state,
-                                &format!("Select row {}", row_index + 1),
-                            );
+                            ui.add_space(cell_padding_x);
+                            if let Some(key) = item_key.as_ref() {
+                                let checkbox_state = if is_selected {
+                                    CheckboxState::Checked
+                                } else {
+                                    CheckboxState::Unchecked
+                                };
+                                let response = render_checkbox(
+                                    ui,
+                                    checkbox_state,
+                                    &format!("Select row {}", row_index + 1),
+                                );
+                                if response.clicked() {
+                                    if is_selected {
+                                        selection.remove(key);
+                                    } else {
+                                        selection.insert(key.clone());
+                                    }
+                                }
+                            }
                         });
                     });
 
                     // Data columns
                     for col_index in 0..num_columns {
+                        let mut interaction = None;
                         row.col(|ui| {
                             let rect = ui.max_rect();
+                            interaction = Some(ui.interact(
+                                rect,
+                                table_id.with(("row-context-menu", row_index, col_index)),
+                                egui::Sense::click(),
+                            ));
                             ui.painter().rect_filled(rect, 0.0, bg_color);
+                            ui.painter().line_segment(
+                                [rect.left_bottom(), rect.right_bottom()],
+                                egui::Stroke::new(1.0, TABLE_BORDER),
+                            );
                             ui.horizontal(|ui| {
-                                ui.add_space(CELL_PADDING_X);
+                                ui.add_space(cell_padding_x);
                                 render_cell(ui, item, col_index);
                             });
                         });
+                        let response = interaction.expect("table cell should register interaction");
+                        render_row(&response, item, col_index);
                     }
                 });
             });
@@ -887,7 +975,9 @@ mod tests {
     use crate::test_support::UiHarnessSnapshot;
     use egui_kittest::Harness;
     use egui_kittest::kittest::Queryable;
+    use std::cell::RefCell;
     use std::collections::HashSet;
+    use std::rc::Rc;
 
     #[derive(Clone)]
     struct User {
@@ -998,7 +1088,7 @@ mod tests {
     #[test]
     fn test_table_with_selection() {
         let users = test_users();
-        let selection: HashSet<u32> = HashSet::new();
+        let mut selection: HashSet<u32> = HashSet::new();
 
         let mut harness = Harness::new_ui(|ui| {
             TailwindTable::new("users-selection")
@@ -1008,7 +1098,7 @@ mod tests {
                 .show_selectable(
                     ui,
                     &users,
-                    &selection,
+                    &mut selection,
                     |user| user.id,
                     |ui, user, col_index| {
                         let text = match col_index {
@@ -1029,10 +1119,44 @@ mod tests {
     }
 
     #[test]
+    fn selectable_table_toggles_rows_and_only_visible_rows_from_its_header() {
+        let users = test_users();
+        let selected = Rc::new(RefCell::new(HashSet::from([3])));
+        let selected_for_ui = selected.clone();
+        let visible_users = &users[..2];
+        let mut harness = Harness::new_ui(move |ui| {
+            TailwindTable::new("users-selection-interactions")
+                .column("name", "Name", |col| col.initial_width(150.0))
+                .selectable()
+                .show_selectable(
+                    ui,
+                    visible_users,
+                    &mut selected_for_ui.borrow_mut(),
+                    |user| user.id,
+                    |ui, user, _| TableRowBuilder::text(ui, &user.name, true),
+                );
+        });
+
+        crate::test_support::setup_egui(&mut harness);
+        harness.run();
+        harness.get_by_label("Select row 1").click_accesskit();
+        harness.run();
+        assert_eq!(*selected.borrow(), HashSet::from([1, 3]));
+
+        harness.get_by_label("Select all rows").click_accesskit();
+        harness.run();
+        assert_eq!(*selected.borrow(), HashSet::from([1, 2, 3]));
+
+        harness.get_by_label("Select all rows").click_accesskit();
+        harness.run();
+        assert_eq!(*selected.borrow(), HashSet::from([3]));
+    }
+
+    #[test]
     fn test_table_select_all() {
         let users = test_users();
         // All users selected
-        let selection: HashSet<u32> = users.iter().map(|u| u.id).collect();
+        let mut selection: HashSet<u32> = users.iter().map(|u| u.id).collect();
 
         let mut harness = Harness::new_ui(|ui| {
             TailwindTable::new("users-select-all")
@@ -1042,7 +1166,7 @@ mod tests {
                 .show_selectable(
                     ui,
                     &users,
-                    &selection,
+                    &mut selection,
                     |user| user.id,
                     |ui, user, col_index| {
                         let text = match col_index {
@@ -1076,7 +1200,7 @@ mod tests {
                 .show_selectable(
                     ui,
                     &users,
-                    &selection,
+                    &mut selection,
                     |user| user.id,
                     |ui, user, col_index| {
                         let text = match col_index {

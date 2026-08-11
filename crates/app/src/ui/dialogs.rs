@@ -1,4 +1,4 @@
-use super::state::UiState;
+use super::state::{BulkDeleteProgress, UiState};
 use crate::terminal_launcher::TerminalLaunchSettings;
 use crate::worker::WorkerCommand;
 use components::colors::{WHITE, gray};
@@ -68,10 +68,134 @@ pub(super) fn show_delete_confirmation(
             api_resource: pending.api_resource,
             namespace: pending.namespace,
             resource_name: pending.resource_name,
+            resource_uid: None,
+            bulk_delete_id: None,
         });
         if let Some(cluster) = ui_state.clusters.get_mut(&cluster_id) {
             cluster.pending_delete = None;
         }
+    }
+}
+
+pub(super) fn show_bulk_delete_confirmation(
+    ctx: &egui::Context,
+    ui_state: &mut UiState,
+    commands_to_send: &mut Vec<WorkerCommand>,
+) {
+    let Some(cluster_id) = ui_state.selected_cluster else {
+        return;
+    };
+    let Some(cluster) = ui_state.clusters.get(&cluster_id) else {
+        return;
+    };
+    let Some(pending) = cluster.pending_bulk_delete.clone() else {
+        return;
+    };
+    let cluster_key = cluster.cluster_key;
+    let remaining = pending
+        .confirmation_available_at
+        .saturating_duration_since(Instant::now());
+    let confirm_enabled = remaining.is_zero();
+    if !confirm_enabled {
+        ctx.request_repaint_after(remaining);
+    }
+    let target_count = pending.targets.len();
+    let target_list = pending
+        .targets
+        .iter()
+        .map(super::state::BulkDeleteTarget::display_name)
+        .collect::<Vec<_>>()
+        .join("\n");
+    let title = format!("Delete {target_count} resources?");
+    let message = format!("This will permanently delete {target_count} selected resources.");
+    let confirm_label = format!("Delete {target_count} resources");
+    let unavailable_message = (!confirm_enabled).then(|| {
+        format!(
+            "Delete will be available in {} seconds.",
+            remaining.as_millis().div_ceil(1_000)
+        )
+    });
+    let action = ConfirmationDialog {
+        id: egui::Id::new("bulk-delete-resources-confirmation"),
+        eyebrow: "DELETE RESOURCES",
+        title: &title,
+        message: &message,
+        unavailable_message: unavailable_message.as_deref(),
+        cancel_label: "Cancel",
+        confirm_label: &confirm_label,
+        kind: ConfirmationDialogKind::Destructive,
+        confirm_enabled,
+        warning: Some(ConfirmationDialogWarning {
+            title: "Deletion targets",
+            message: "Review every resource before confirming. This action cannot be undone.",
+            details: Some(&target_list),
+        }),
+        acknowledgement: None,
+    }
+    .show(ctx);
+
+    if action == ConfirmationDialogAction::Cancel {
+        if let Some(cluster) = ui_state.clusters.get_mut(&cluster_id) {
+            cluster.pending_bulk_delete = None;
+        }
+    } else if action == ConfirmationDialogAction::Confirm {
+        let bulk_delete_id = ui_state
+            .clusters
+            .get_mut(&cluster_id)
+            .map(|cluster| {
+                cluster.next_bulk_delete_id = cluster.next_bulk_delete_id.wrapping_add(1);
+                cluster.next_bulk_delete_id
+            })
+            .expect("selected cluster still exists while confirming bulk deletion");
+        for target in &pending.targets {
+            commands_to_send.push(WorkerCommand::DeleteResource {
+                cluster_key,
+                api_resource: pending.api_resource.clone(),
+                namespace: target.namespace.clone(),
+                resource_name: target.name.clone(),
+                resource_uid: Some(target.uid.clone()),
+                bulk_delete_id: Some(bulk_delete_id),
+            });
+        }
+        if let Some(cluster) = ui_state.clusters.get_mut(&cluster_id) {
+            cluster.bulk_delete_progress = Some(BulkDeleteProgress::new(
+                bulk_delete_id,
+                pending.api_resource,
+                pending.targets,
+            ));
+            cluster.pending_bulk_delete = None;
+        }
+    }
+}
+
+pub(super) fn show_bulk_delete_error(ctx: &egui::Context, ui_state: &mut UiState) {
+    let Some(cluster_id) = ui_state.selected_cluster else {
+        return;
+    };
+    let Some(error) = ui_state
+        .clusters
+        .get(&cluster_id)
+        .and_then(|cluster| cluster.bulk_delete_error.as_deref())
+    else {
+        return;
+    };
+    if matches!(
+        (ErrorDialog {
+            id: egui::Id::new("bulk-delete-resources-error"),
+            eyebrow: "DELETE RESOURCES",
+            title: "Some resources could not be deleted",
+            message: "The remaining selected resources were not deleted.",
+            details: Some(error),
+            recovery: Some(
+                "Check the resource state and your Kubernetes permissions, then try again."
+            ),
+            primary_action_label: None,
+        })
+        .show(ctx),
+        ErrorDialogAction::Dismiss
+    ) && let Some(cluster) = ui_state.clusters.get_mut(&cluster_id)
+    {
+        cluster.bulk_delete_error = None;
     }
 }
 

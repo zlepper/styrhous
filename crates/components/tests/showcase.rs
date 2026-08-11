@@ -226,7 +226,7 @@ fn showcase_tables() {
             show_people_table(&mut columns[0], &PEOPLE[..2]);
             columns[0].add_space(20.0);
             columns[0].label(egui::RichText::new("Selectable").strong());
-            let selected = HashSet::from(["Michael Foster"]);
+            let mut selected = HashSet::from(["Michael Foster"]);
             TailwindTable::new("showcase-selectable")
                 .column("name", "Name", |column| column.initial_width(150.0))
                 .column("role", "Role", |column| column.initial_width(100.0))
@@ -234,7 +234,7 @@ fn showcase_tables() {
                 .show_selectable(
                     &mut columns[0],
                     &PEOPLE[..2],
-                    &selected,
+                    &mut selected,
                     |person| person.name,
                     |ui, person, column_index| {
                         let text = match column_index {

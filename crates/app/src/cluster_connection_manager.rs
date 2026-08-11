@@ -22,8 +22,7 @@ use k8s_openapi::api::core::v1::{ConfigMap, Event as KubernetesEvent, Namespace,
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::{APIGroup, GroupVersionForDiscovery};
 use k8s_openapi::{ClusterResourceScope, NamespaceResourceScope};
-use kube::api::DynamicObject;
-use kube::api::GroupVersionKind;
+use kube::api::{DeleteParams, DynamicObject, GroupVersionKind, Preconditions};
 use kube::config::KubeConfigOptions;
 use kube::config::Kubeconfig;
 use kube::runtime::watcher;
@@ -2160,6 +2159,8 @@ pub async fn delete_resource(
     api_resource: ApiResource,
     namespace: Option<String>,
     resource_name: String,
+    resource_uid: Option<String>,
+    bulk_delete_id: Option<u64>,
 ) -> Result<WorkerResult> {
     info!(
         "Deleting {}/{} {} in {}",
@@ -2170,11 +2171,21 @@ pub async fn delete_resource(
     );
 
     let api = create_dynamic_api(&client, &api_resource, namespace.as_deref()).await?;
-    api.delete(&resource_name, &Default::default()).await?;
+    let delete_params = resource_uid.map(|uid| {
+        DeleteParams::default().preconditions(Preconditions {
+            uid: Some(uid),
+            resource_version: None,
+        })
+    });
+    api.delete(&resource_name, &delete_params.unwrap_or_default())
+        .await?;
 
     Ok(WorkerResult::ResourceDeleteCompleted {
         cluster_key,
+        api_resource,
+        namespace,
         resource_name,
+        bulk_delete_id,
     })
 }
 
