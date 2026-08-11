@@ -116,6 +116,13 @@ pub(super) struct PodLogWindowState {
     pub(super) pod_name: String,
     pub(super) container: PodLogContainer,
     pub(super) total_lines: usize,
+    /// Older records written by the background history request but not yet
+    /// merged into the logical log stream.
+    pub(super) backfill_lines: Option<usize>,
+    /// Recent tail rows sent with the store notification. These bridge the
+    /// small gap between accepting a live record and serving its disk page.
+    pub(super) live_rows: BTreeMap<usize, LogPageRow>,
+    pub(super) following_bottom: bool,
     pub(super) pages: HashMap<LogPageKey, LogPage>,
     pub(super) page_order: VecDeque<LogPageKey>,
     pub(super) page_cache_bytes: usize,
@@ -253,6 +260,7 @@ impl PodLogWindowState {
         self.page_order.clear();
         self.page_cache_bytes = 0;
         self.pending_pages.clear();
+        self.live_rows.clear();
         self.horizontal_content_width = 0.0;
         self.selection = None;
         self.selection_generation = self.selection_generation.wrapping_add(1);
@@ -262,6 +270,9 @@ impl PodLogWindowState {
         self.pending_pages.remove(&key);
         if !key.filter_matches && !rows.is_empty() {
             self.initial_page_loaded = true;
+            let page_end = key.page_start.saturating_add(rows.len());
+            self.live_rows
+                .retain(|display_row, _| *display_row < key.page_start || *display_row >= page_end);
         }
         if let Some(previous) = self.pages.remove(&key) {
             self.page_cache_bytes = self.page_cache_bytes.saturating_sub(previous.bytes);
@@ -889,6 +900,9 @@ impl UiState {
                 pod_name: pod_name.clone(),
                 container: container.clone(),
                 total_lines: 0,
+                backfill_lines: None,
+                live_rows: BTreeMap::new(),
+                following_bottom: true,
                 pages: HashMap::new(),
                 page_order: VecDeque::new(),
                 page_cache_bytes: 0,
@@ -2055,9 +2069,27 @@ impl UiState {
                 window_id,
                 total_lines,
                 completed_search,
+                appended_rows,
+                backfill_lines,
             } => {
                 if let Some(window) = self.log_windows.get_mut(&window_id) {
                     window.total_lines = total_lines;
+                    if let Some(backfill_lines) = backfill_lines {
+                        window.backfill_lines = Some(backfill_lines);
+                    }
+                    if window.following_bottom && !window.search.filter_matches {
+                        for row in appended_rows {
+                            window.live_rows.insert(row.display_row, row);
+                        }
+                        while window.live_rows.len() > 2 * crate::log_store::LOG_PAGE_SIZE {
+                            let oldest = *window
+                                .live_rows
+                                .first_key_value()
+                                .expect("live row cache is non-empty")
+                                .0;
+                            window.live_rows.remove(&oldest);
+                        }
+                    }
                     if let Some((generation, match_count)) = completed_search
                         && window.search.generation == generation
                     {
@@ -2082,6 +2114,7 @@ impl UiState {
                     // wide-log rebase cannot snap back to the left edge.
                     let horizontal_content_width = window.horizontal_content_width;
                     window.total_lines = total_lines;
+                    window.backfill_lines = None;
                     window.initial_page_loaded = true;
                     window.clear_pages();
                     window.horizontal_content_width = horizontal_content_width;
@@ -2317,11 +2350,15 @@ mod tests {
             window_id: 2,
             total_lines: 1,
             completed_search: None,
+            appended_rows: Vec::new(),
+            backfill_lines: None,
         });
         state.apply_log_store_result(LogStoreResult::Updated {
             window_id: 1,
             total_lines: 2,
             completed_search: None,
+            appended_rows: Vec::new(),
+            backfill_lines: None,
         });
 
         assert_eq!(state.log_windows[&1].total_lines, 2);
@@ -2541,6 +2578,63 @@ mod tests {
             filter_matches: false,
             page_start: 1,
         }));
+    }
+
+    #[test]
+    fn live_tail_rows_bridge_disk_pages_only_while_following_bottom() {
+        let mut state = UiState::default();
+        let mut commands = Vec::new();
+        state.open_pod_log_window(
+            7,
+            "api-pod".into(),
+            Some("default".into()),
+            PodLogContainer {
+                name: "api".into(),
+                kind: ContainerKind::App,
+            },
+            &mut commands,
+        );
+
+        let tail_row = |display_row, text: &str| LogPageRow {
+            display_row,
+            line_index: display_row,
+            timestamp: None,
+            text: text.to_owned(),
+            style_spans: Vec::new(),
+            match_ranges: Vec::new(),
+        };
+        state.apply_log_store_result(LogStoreResult::Updated {
+            window_id: 1,
+            total_lines: 1,
+            completed_search: None,
+            appended_rows: vec![tail_row(0, "live now")],
+            backfill_lines: Some(12_345),
+        });
+        let window = &state.log_windows[&1];
+        assert_eq!(window.backfill_lines, Some(12_345));
+        assert_eq!(window.live_rows[&0].text, "live now");
+
+        state.log_windows.get_mut(&1).unwrap().following_bottom = false;
+        state.apply_log_store_result(LogStoreResult::Updated {
+            window_id: 1,
+            total_lines: 2,
+            completed_search: None,
+            appended_rows: vec![tail_row(1, "wait for disk")],
+            backfill_lines: None,
+        });
+        let window = &state.log_windows[&1];
+        assert_eq!(window.total_lines, 2);
+        assert!(!window.live_rows.contains_key(&1));
+
+        state.apply_log_store_result(LogStoreResult::PageLoaded {
+            window_id: 1,
+            generation: 0,
+            filter_matches: false,
+            page_start: 0,
+            total_rows: 2,
+            rows: vec![tail_row(0, "live now"), tail_row(1, "wait for disk")],
+        });
+        assert!(state.log_windows[&1].live_rows.is_empty());
     }
 
     #[test]

@@ -24,6 +24,7 @@ pub struct TailwindSearchInput<'a> {
     input_id: Id,
     accessibility_label: String,
     invalid: bool,
+    focus: bool,
 }
 
 impl<'a> TailwindSearchInput<'a> {
@@ -35,6 +36,7 @@ impl<'a> TailwindSearchInput<'a> {
             input_id: Id::NULL,
             accessibility_label: "Search".to_owned(),
             invalid: false,
+            focus: false,
         }
     }
 
@@ -55,6 +57,12 @@ impl<'a> TailwindSearchInput<'a> {
 
     pub fn invalid(mut self, invalid: bool) -> Self {
         self.invalid = invalid;
+        self
+    }
+
+    /// Focus the text editor in the frame where the control is shown.
+    pub fn focus(mut self, focus: bool) -> Self {
+        self.focus = focus;
         self
     }
 
@@ -80,6 +88,9 @@ impl<'a> TailwindSearchInput<'a> {
                             .font(typography::body())
                             .id_salt(self.input_id),
                     );
+                    if self.focus {
+                        text.request_focus();
+                    }
                     text.widget_info(|| {
                         egui::WidgetInfo::labeled(
                             egui::WidgetType::TextEdit,

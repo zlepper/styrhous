@@ -218,10 +218,11 @@ fn show_log_window_with_scroll_state(
             if let Some(offset) = requested_offset {
                 scroll_area = scroll_area.scroll_offset(offset);
             }
-            scroll_area.show_rows(ui, row_height, display_count, |ui, rows| {
+            let output = scroll_area.show_rows(ui, row_height, display_count, |ui, rows| {
                 ui.set_min_width(window.horizontal_content_width);
                 for display_row in rows {
                     let mut selection_update = None;
+                    let mut row_content_width = None;
                     request_page_for_display_row(window, log_store, display_row);
                     let page_start = display_row / window.page_size * window.page_size;
                     let key = LogPageKey {
@@ -230,11 +231,25 @@ fn show_log_window_with_scroll_state(
                         page_start,
                     };
                     let row_offset = display_row - page_start;
-                    if let Some((row, max_text_columns)) = window.pages.get(&key).and_then(|page| {
-                        page.rows
-                            .get(row_offset)
-                            .map(|row| (row, page.max_text_columns))
-                    }) {
+                    let cached_row = window
+                        .pages
+                        .get(&key)
+                        .and_then(|page| {
+                            page.rows
+                                .get(row_offset)
+                                .map(|row| (row, page.max_text_columns))
+                        })
+                        .or_else(|| {
+                            if !filter_is_active(window) {
+                                window
+                                    .live_rows
+                                    .get(&display_row)
+                                    .map(|row| (row, row.text.chars().count()))
+                            } else {
+                                None
+                            }
+                        });
+                    if let Some((row, max_text_columns)) = cached_row {
                         let prefix = log_line_prefix(
                             row.line_index,
                             row.timestamp.as_deref(),
@@ -247,9 +262,8 @@ fn show_log_window_with_scroll_state(
                             viewport_width,
                             character_width,
                         );
-                        window.horizontal_content_width = window
-                            .horizontal_content_width
-                            .max(prefix_width + max_text_columns as f32 * character_width);
+                        row_content_width =
+                            Some(prefix_width + max_text_columns as f32 * character_width);
                         let byte_range = fragment.byte_range.clone();
                         let selection_range = window.selection.and_then(|selection| {
                             selection.range_for_row(display_row, row.text.len())
@@ -349,8 +363,15 @@ fn show_log_window_with_scroll_state(
                         }
                         window.selection_generation = window.selection_generation.wrapping_add(1);
                     }
+                    if let Some(row_content_width) = row_content_width {
+                        window.horizontal_content_width =
+                            window.horizontal_content_width.max(row_content_width);
+                    }
                 }
-            })
+            });
+            window.following_bottom = output.state.offset.y + output.inner_rect.height()
+                >= output.content_size.y - row_step;
+            output
         })
         .inner
 }
@@ -426,6 +447,8 @@ fn show_log_search_controls(
     log_store: &LogStoreService,
 ) {
     let invalid = window.search.error.is_some();
+    let focus_search =
+        ctx.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::F));
     let search_response = ui
         .allocate_ui_with_layout(
             egui::vec2(212.0, 36.0),
@@ -436,6 +459,7 @@ fn show_log_search_controls(
                     .id_salt(("pod-log-search", window.id))
                     .accessibility_label("Search logs")
                     .invalid(invalid)
+                    .focus(focus_search)
                     .show(ui)
             },
         )
@@ -1118,17 +1142,30 @@ fn advance_log_line(window: &mut PodLogWindowState, forward: bool) {
 }
 
 fn status_label(window: &PodLogWindowState) -> String {
-    if !window.search.query.is_empty() && !window.search.search_complete {
-        return format!("Searching… {} matches", window.search.match_count);
+    let status = if !window.search.query.is_empty() && !window.search.search_complete {
+        format!("Searching… {} matches", window.search.match_count)
+    } else if initial_spool_is_pending(window) {
+        format!("Spooling… {} lines", window.total_lines)
+    } else {
+        match &window.status {
+            PodLogStatus::Connecting => "Connecting…".to_owned(),
+            PodLogStatus::Following => "Following".to_owned(),
+            PodLogStatus::Finished => "Stream finished".to_owned(),
+            PodLogStatus::Failed(error) => format!("Stream failed: {error}"),
+        }
+    };
+    if let Some(backfill_lines) = window.backfill_lines {
+        format!("{status} · backfill {}", compact_line_count(backfill_lines))
+    } else {
+        status
     }
-    if initial_spool_is_pending(window) {
-        return format!("Spooling… {} lines", window.total_lines);
-    }
-    match &window.status {
-        PodLogStatus::Connecting => "Connecting…".to_owned(),
-        PodLogStatus::Following => "Following".to_owned(),
-        PodLogStatus::Finished => "Stream finished".to_owned(),
-        PodLogStatus::Failed(error) => format!("Stream failed: {error}"),
+}
+
+fn compact_line_count(lines: usize) -> String {
+    match lines {
+        0..=999 => lines.to_string(),
+        1_000..=999_999 => format!("{:.1}k", lines as f64 / 1_000.0),
+        _ => format!("{:.1}M", lines as f64 / 1_000_000.0),
     }
 }
 
@@ -1164,6 +1201,9 @@ mod tests {
                 kind: ContainerKind::App,
             },
             total_lines: lines.len(),
+            backfill_lines: None,
+            live_rows: Default::default(),
+            following_bottom: true,
             pages: Default::default(),
             page_order: Default::default(),
             page_cache_bytes: 0,
@@ -1912,6 +1952,61 @@ mod tests {
                 ..LogDisplayOptions::default()
             },
         );
+    }
+
+    #[test]
+    fn pod_log_viewer_renders_live_tail_rows_while_disk_page_catches_up_snapshot() {
+        let mut window = log_window(&[]);
+        window.total_lines = 1;
+        window.backfill_lines = Some(12_345);
+        window.live_rows.insert(
+            0,
+            LogPageRow {
+                display_row: 0,
+                line_index: 0,
+                timestamp: None,
+                text: "live row arrives without a placeholder".into(),
+                style_spans: Vec::new(),
+                match_ranges: Vec::new(),
+            },
+        );
+        snapshot_window(window, "pod_logs/live_tail_rows_while_disk_page_catches_up");
+    }
+
+    #[test]
+    fn command_f_focuses_log_search_input() {
+        let window = Rc::new(RefCell::new(log_window(&["one line"])));
+        let window_for_ui = window.clone();
+        let display_options = Rc::new(RefCell::new(LogDisplayOptions::default()));
+        let display_options_for_ui = display_options.clone();
+        let log_store = LogStoreService::default();
+        let mut close_requested = false;
+        let mut harness = Harness::builder().build(move |ctx| {
+            show_log_window(
+                ctx,
+                &mut window_for_ui.borrow_mut(),
+                &mut display_options_for_ui.borrow_mut(),
+                &log_store,
+                &mut close_requested,
+            );
+        });
+        components::test_support::setup_egui(&mut harness);
+        harness.run_steps(2);
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::F);
+        harness.step();
+        harness.event(egui::Event::Text("find me".into()));
+        harness.step();
+
+        assert_eq!(window.borrow().search.query, "find me");
+    }
+
+    #[test]
+    fn status_label_compacts_history_spool_progress() {
+        let mut window = log_window(&[]);
+        window.backfill_lines = Some(12_345);
+        assert_eq!(status_label(&window), "Following · backfill 12.3k");
+        window.backfill_lines = Some(1_250_000);
+        assert_eq!(status_label(&window), "Following · backfill 1.2M");
     }
 
     #[test]

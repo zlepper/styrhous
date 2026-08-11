@@ -543,11 +543,15 @@ fn show_toolbar(
 
 fn show_resource_search(ui: &mut egui::Ui, resource_search: &mut ResourceSearchState) {
     let invalid = regex_error(resource_search).is_some();
+    let focus_search = ui
+        .ctx()
+        .input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::F));
     TailwindSearchInput::new(&mut resource_search.query, &mut resource_search.regex_mode)
         .hint_text("Search resources...")
         .id_salt("resource-search-input")
         .accessibility_label("Search resources")
         .invalid(invalid)
+        .focus(focus_search)
         .show(ui);
 }
 
@@ -842,6 +846,9 @@ fn show_resource_actions(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use egui_kittest::Harness;
+    use std::cell::RefCell;
+    use std::rc::Rc;
 
     fn resource(name: &str) -> MinimalResource {
         MinimalResource {
@@ -915,5 +922,24 @@ mod tests {
     fn resource_count_includes_the_total_while_searching() {
         assert_eq!(resource_count_label(8, 1, true), "1 of 8 items");
         assert_eq!(resource_count_label(8, 8, false), "8 items");
+    }
+
+    #[test]
+    fn command_f_focuses_resource_search_input() {
+        let search = Rc::new(RefCell::new(ResourceSearchState::default()));
+        let search_for_ui = search.clone();
+        let mut harness = Harness::builder().build(move |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                show_resource_search(ui, &mut search_for_ui.borrow_mut());
+            });
+        });
+        components::test_support::setup_egui(&mut harness);
+        harness.run();
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::F);
+        harness.run();
+        harness.event(egui::Event::Text("worker".into()));
+        harness.run();
+
+        assert_eq!(search.borrow().query, "worker");
     }
 }
