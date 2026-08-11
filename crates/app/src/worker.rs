@@ -76,14 +76,13 @@ impl Worker {
                 shared,
             };
 
-            let worker_thread = std::thread::spawn(move || {
+            let _ = std::thread::spawn(move || {
                 worker.run();
             });
 
             self.inner = Some(WorkerInner {
                 receiver: result_channel_receiver,
                 sender: command_channel_sender,
-                worker_thread,
             })
         }
     }
@@ -162,7 +161,6 @@ impl WorkerTrait for MockWorker {
 struct WorkerInner {
     sender: mpsc::SyncSender<WorkerCommand>,
     receiver: mpsc::Receiver<WorkerResult>,
-    worker_thread: std::thread::JoinHandle<()>,
 }
 
 /// Messages that can be sent to the worker
@@ -345,13 +343,6 @@ pub enum WorkerResult {
         namespace: Option<String>,
         error: String,
     },
-    ResourceDetailWatchStarted {
-        cluster_key: i32,
-        history_entry_id: u64,
-    },
-    ResourceDetailWatchStopped {
-        cluster_key: i32,
-    },
     ResourceDetailUpdated {
         cluster_key: i32,
         history_entry_id: u64,
@@ -417,8 +408,6 @@ pub enum WorkerResult {
     /// Resource was successfully deleted
     ResourceDeleteCompleted {
         cluster_key: i32,
-        api_resource: ApiResource,
-        namespace: Option<String>,
         resource_name: String,
     },
     /// Resource YAML was successfully applied
@@ -439,7 +428,6 @@ pub enum WorkerResult {
     },
     /// A Deployment rollout restart patch was accepted by the API server.
     DeploymentRestartCompleted {
-        cluster_key: i32,
         namespace: String,
         resource_name: String,
     },
@@ -448,15 +436,12 @@ pub enum WorkerResult {
         resource_name: String,
     },
     PodLogStreamStarted {
-        cluster_key: i32,
         log_window_id: u64,
     },
     PodLogStreamEnded {
-        cluster_key: i32,
         log_window_id: u64,
     },
     PodLogStreamFailed {
-        cluster_key: i32,
         log_window_id: u64,
         error: String,
     },
@@ -542,7 +527,7 @@ impl WorkerRuntime {
         command: WorkerCommand,
     ) {
         let result = match &command {
-            WorkerCommand::LoadClusters => reload_kubeconfig().await,
+            WorkerCommand::LoadClusters => reload_kubeconfig().await.map(Some),
             WorkerCommand::ConnectToCluster {
                 cluster_key,
                 cluster,
@@ -558,7 +543,7 @@ impl WorkerRuntime {
                     let client = runner.client();
                     shared.clients.write().await.insert(*cluster_key, client);
                 }
-                res
+                res.map(Some)
             }
             WorkerCommand::StartResourceWatch {
                 cluster_key,
@@ -575,6 +560,7 @@ impl WorkerRuntime {
                         result_channel.clone(),
                     )
                     .await
+                    .map(Some)
                 } else {
                     Err(anyhow::anyhow!(
                         "No client found for cluster_key {}",
@@ -610,10 +596,7 @@ impl WorkerRuntime {
                         result_channel.clone(),
                     ));
                     shared.detail_watches.lock().await.insert(watch_key, handle);
-                    Ok(WorkerResult::ResourceDetailWatchStarted {
-                        cluster_key: *cluster_key,
-                        history_entry_id: *history_entry_id,
-                    })
+                    Ok(None)
                 } else {
                     Err(anyhow::anyhow!(
                         "No client found for cluster_key {}",
@@ -633,9 +616,7 @@ impl WorkerRuntime {
                 {
                     handle.abort();
                 }
-                Ok(WorkerResult::ResourceDetailWatchStopped {
-                    cluster_key: *cluster_key,
-                })
+                Ok(None)
             }
             WorkerCommand::GetResourceYaml {
                 editor_id,
@@ -655,6 +636,7 @@ impl WorkerRuntime {
                         resource_name.clone(),
                     )
                     .await
+                    .map(Some)
                 } else {
                     Err(anyhow::anyhow!(
                         "No client found for cluster_key {}",
@@ -676,6 +658,7 @@ impl WorkerRuntime {
                         api_resource.clone(),
                     )
                     .await
+                    .map(Some)
                 } else {
                     Err(anyhow::anyhow!(
                         "No client found for cluster_key {}",
@@ -699,6 +682,7 @@ impl WorkerRuntime {
                         resource_name.clone(),
                     )
                     .await
+                    .map(Some)
                 } else {
                     Err(anyhow::anyhow!(
                         "No client found for cluster_key {}",
@@ -713,13 +697,9 @@ impl WorkerRuntime {
             } => {
                 let clients = shared.clients.read().await;
                 if let Some(client) = clients.get(cluster_key) {
-                    restart_deployment(
-                        *cluster_key,
-                        client.clone(),
-                        namespace.clone(),
-                        resource_name.clone(),
-                    )
-                    .await
+                    restart_deployment(client.clone(), namespace.clone(), resource_name.clone())
+                        .await
+                        .map(Some)
                 } else {
                     Err(anyhow::anyhow!(
                         "No client found for cluster_key {}",
@@ -747,6 +727,7 @@ impl WorkerRuntime {
                         yaml.clone(),
                     )
                     .await
+                    .map(Some)
                 } else {
                     Err(anyhow::anyhow!(
                         "No client found for cluster_key {}",
@@ -776,6 +757,7 @@ impl WorkerRuntime {
                         yaml.clone(),
                     )
                     .await
+                    .map(Some)
                 } else {
                     Err(anyhow::anyhow!(
                         "No client found for cluster_key {}",
@@ -803,6 +785,7 @@ impl WorkerRuntime {
                         &update.expected_resource_version,
                     )
                     .await
+                    .map(Some)
                 } else {
                     Err(anyhow::anyhow!(
                         "No client found for cluster_key {}",
@@ -837,7 +820,6 @@ impl WorkerRuntime {
                         let container = container.clone();
                         let task = tokio::spawn(async move {
                             stream_pod_logs(
-                                cluster_key,
                                 log_window_id,
                                 client,
                                 namespace,
@@ -850,10 +832,7 @@ impl WorkerRuntime {
                             task_shared.log_streams.lock().await.remove(&stream_key);
                         });
                         shared.log_streams.lock().await.insert(stream_key, task);
-                        Ok(WorkerResult::PodLogStreamStarted {
-                            cluster_key,
-                            log_window_id,
-                        })
+                        Ok(Some(WorkerResult::PodLogStreamStarted { log_window_id }))
                     } else {
                         Err(anyhow::anyhow!(
                             "Pod log storage is not initialized for cluster_key {}",
@@ -879,10 +858,9 @@ impl WorkerRuntime {
                 {
                     task.abort();
                 }
-                Ok(WorkerResult::PodLogStreamEnded {
-                    cluster_key: *cluster_key,
+                Ok(Some(WorkerResult::PodLogStreamEnded {
                     log_window_id: *log_window_id,
-                })
+                }))
             }
         };
 
@@ -895,17 +873,17 @@ impl WorkerRuntime {
                     })
                     .log_if_error("Failed to send command failed notification");
             }
-            Ok(result) => {
+            Ok(Some(result)) => {
                 result_channel
                     .send(result)
                     .log_if_error("Failed to send result notification");
             }
+            Ok(None) => {}
         }
     }
 }
 
 async fn stream_pod_logs(
-    cluster_key: i32,
     log_window_id: u64,
     client: kube::Client,
     namespace: String,
@@ -952,12 +930,8 @@ async fn stream_pod_logs(
     }
     .await;
     let result = match result {
-        Ok(()) => WorkerResult::PodLogStreamEnded {
-            cluster_key,
-            log_window_id,
-        },
+        Ok(()) => WorkerResult::PodLogStreamEnded { log_window_id },
         Err(error) => WorkerResult::PodLogStreamFailed {
-            cluster_key,
             log_window_id,
             error: format!("{error:#}"),
         },
@@ -1039,18 +1013,12 @@ mod tests {
         let result_sender = WorkerResultSender::new(sender, Some(context));
 
         result_sender
-            .send(WorkerResult::PodLogStreamEnded {
-                cluster_key: 1,
-                log_window_id: 2,
-            })
+            .send(WorkerResult::PodLogStreamEnded { log_window_id: 2 })
             .expect("result receiver is open");
 
         assert!(matches!(
             receiver.try_recv(),
-            Ok(WorkerResult::PodLogStreamEnded {
-                cluster_key: 1,
-                log_window_id: 2,
-            })
+            Ok(WorkerResult::PodLogStreamEnded { log_window_id: 2 })
         ));
         assert_eq!(repaint_count.load(Ordering::Relaxed), 1);
     }

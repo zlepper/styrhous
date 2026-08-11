@@ -206,10 +206,6 @@ impl ResourceSchema {
             .collect())
     }
 
-    pub fn suggestions_at(&self, yaml: &str, cursor: usize) -> Vec<CompletionSuggestion> {
-        self.completion_at(yaml, cursor).suggestions
-    }
-
     pub fn completion_at(&self, yaml: &str, cursor: usize) -> CompletionResult {
         let context = yaml_context(yaml, cursor);
         let mut schema_path = context.path.clone();
@@ -820,8 +816,14 @@ mod tests {
                 "mode": {"type": "string", "enum": ["ReadOnly", "ReadWrite"]}
             }
         }));
-        assert_eq!(schema.suggestions_at("met", 3)[0].label, "metadata");
-        assert_eq!(schema.suggestions_at("mode: Read", 10)[0].label, "ReadOnly");
+        assert_eq!(
+            schema.completion_at("met", 3).suggestions[0].label,
+            "metadata"
+        );
+        assert_eq!(
+            schema.completion_at("mode: Read", 10).suggestions[0].label,
+            "ReadOnly"
+        );
         let completion = schema.completion_at("mode: Read", 10);
         assert_eq!(
             completion.context.as_ref().map(|context| context.kind),
@@ -849,7 +851,8 @@ mod tests {
         }));
 
         let suggestions = schema
-            .suggestions_at("operator: I", "operator: I".len())
+            .completion_at("operator: I", "operator: I".len())
+            .suggestions
             .into_iter()
             .map(|suggestion| (suggestion.label, suggestion.detail))
             .collect::<Vec<_>>();
@@ -973,7 +976,10 @@ spec:
         }));
         let yaml = "terms:\n- oper";
 
-        assert_eq!(schema.suggestions_at(yaml, yaml.len())[0].label, "operator");
+        assert_eq!(
+            schema.completion_at(yaml, yaml.len()).suggestions[0].label,
+            "operator"
+        );
     }
 
     #[test]
@@ -988,14 +994,16 @@ spec:
         }));
 
         let labels = schema
-            .suggestions_at("mta", 3)
+            .completion_at("mta", 3)
+            .suggestions
             .into_iter()
             .map(|suggestion| suggestion.label)
             .collect::<Vec<_>>();
         assert_eq!(labels, vec!["metadata", "xmetadata"]);
 
         let labels = schema
-            .suggestions_at("meta", 4)
+            .completion_at("meta", 4)
+            .suggestions
             .into_iter()
             .map(|suggestion| suggestion.label)
             .collect::<Vec<_>>();
@@ -1020,7 +1028,7 @@ spec:
         ] {
             let cursor = document.rfind("Read").expect("test cursor") + "Read".len();
             assert_eq!(
-                nested_schema.suggestions_at(document, cursor)[0].label,
+                nested_schema.completion_at(document, cursor).suggestions[0].label,
                 "ReadOnly",
                 "completion should target the final mode scalar in {document:?}",
             );
@@ -1032,7 +1040,10 @@ spec:
         }));
         let document = "---\nmode: Ignore\n---\nmode: Read";
         assert_eq!(
-            root_schema.suggestions_at(document, document.len())[0].label,
+            root_schema
+                .completion_at(document, document.len())
+                .suggestions[0]
+                .label,
             "ReadOnly"
         );
     }
@@ -1062,13 +1073,19 @@ spec:
 
         let nested_value = "spec:\n  template:\n    spec:\n      mode: Al";
         assert_eq!(
-            schema.suggestions_at(nested_value, nested_value.len())[0].label,
+            schema
+                .completion_at(nested_value, nested_value.len())
+                .suggestions[0]
+                .label,
             "Always"
         );
 
         let array_value = "spec:\n  templates:\n    - spec:\n        containers:\n          - imagePullPolicy: Al";
         assert_eq!(
-            schema.suggestions_at(array_value, array_value.len())[0].label,
+            schema
+                .completion_at(array_value, array_value.len())
+                .suggestions[0]
+                .label,
             "Always"
         );
 
@@ -1084,7 +1101,8 @@ spec:
         }));
         let partial_selector_key = "spec:\n  selector:\n    match";
         let labels = selector_schema
-            .suggestions_at(partial_selector_key, partial_selector_key.len())
+            .completion_at(partial_selector_key, partial_selector_key.len())
+            .suggestions
             .into_iter()
             .map(|suggestion| suggestion.label)
             .collect::<Vec<_>>();
@@ -1095,19 +1113,24 @@ spec:
 
         let array_key = "spec:\n  templates:\n    - spec:\n        containers:\n          - na";
         assert_eq!(
-            schema.suggestions_at(array_key, array_key.len())[0].label,
+            schema.completion_at(array_key, array_key.len()).suggestions[0].label,
             "name"
         );
 
         let comment_between_nodes =
             "spec:\n  template:\n    # select the runtime mode\n    spec:\n      mode: Al";
         assert_eq!(
-            schema.suggestions_at(comment_between_nodes, comment_between_nodes.len())[0].label,
+            schema
+                .completion_at(comment_between_nodes, comment_between_nodes.len())
+                .suggestions[0]
+                .label,
             "Always"
         );
 
         let partial_sibling_key = "spec:\n  templates:\n    - spec:\n        containers:\n          - name: api\n            im";
-        let suggestions = schema.suggestions_at(partial_sibling_key, partial_sibling_key.len());
+        let suggestions = schema
+            .completion_at(partial_sibling_key, partial_sibling_key.len())
+            .suggestions;
         assert_eq!(suggestions[0].label, "imagePullPolicy");
         assert!(
             suggestions

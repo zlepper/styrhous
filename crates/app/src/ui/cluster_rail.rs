@@ -37,7 +37,7 @@ pub(super) fn show(
                         let selected = ui_state.selected_cluster == Some(cluster_key);
                         let cluster_name = cluster.name.clone();
                         let (status_label, status_color) = match &cluster.connection {
-                            ClusterConnectionState::Connected(_) => ("Connected", status::SUCCESS),
+                            ClusterConnectionState::Connected => ("Connected", status::SUCCESS),
                             ClusterConnectionState::Connecting => ("Connecting", status::WARNING),
                             ClusterConnectionState::Failed(_) => {
                                 ("Connection failed", status::CRITICAL)

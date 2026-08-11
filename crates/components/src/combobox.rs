@@ -323,6 +323,15 @@ pub struct TailwindCombobox<Filter> {
     filter: Filter,
 }
 
+struct ComboboxInput<'a> {
+    width: f32,
+    is_open: bool,
+    placeholder: Option<&'a str>,
+    selected_text: Option<&'a str>,
+    selected_status: Option<bool>,
+    size: ComboboxSize,
+}
+
 impl TailwindCombobox<NoFilter> {
     /// Create a new combobox with an explicit ID.
     pub fn new(id_salt: impl std::hash::Hash) -> Self {
@@ -453,12 +462,14 @@ impl<F> TailwindCombobox<WithFilter<F>> {
         let input_response = Self::render_input(
             ui,
             &mut state,
-            width,
-            is_open,
-            placeholder.as_deref(),
-            selected_text.as_deref(),
-            selected_status,
-            size,
+            ComboboxInput {
+                width,
+                is_open,
+                placeholder: placeholder.as_deref(),
+                selected_text: selected_text.as_deref(),
+                selected_status,
+                size,
+            },
         );
 
         let is_enabled = ui.is_enabled();
@@ -539,16 +550,15 @@ impl<F> TailwindCombobox<WithFilter<F>> {
         }
     }
 
-    fn render_input(
-        ui: &mut Ui,
-        state: &mut ComboboxState,
-        width: f32,
-        is_open: bool,
-        placeholder: Option<&str>,
-        selected_text: Option<&str>,
-        selected_status: Option<bool>,
-        size: ComboboxSize,
-    ) -> Response {
+    fn render_input(ui: &mut Ui, state: &mut ComboboxState, input: ComboboxInput<'_>) -> Response {
+        let ComboboxInput {
+            width,
+            is_open,
+            placeholder,
+            selected_text,
+            selected_status,
+            size,
+        } = input;
         let corner_radius = radius::control();
         let (rect, response) =
             ui.allocate_exact_size(Vec2::new(width, size.input_height()), Sense::click());

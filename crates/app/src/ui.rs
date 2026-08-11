@@ -315,7 +315,6 @@ mod persistence_tests {
     fn current_dev_cluster() -> WorkerResult {
         WorkerResult::KubernetesClustersUpdated(vec![Cluster {
             name: "dev".into(),
-            cluster: Some("development".into()),
             is_current: true,
         }])
     }

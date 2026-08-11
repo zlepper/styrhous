@@ -28,7 +28,6 @@ pub(super) fn application_harness_with_terminal<W: WorkerTrait, L: TerminalLaunc
 pub(super) fn fixture_cluster(cluster_key: i32, name: &str) -> ClusterState {
     ClusterState {
         name: name.into(),
-        cluster: None,
         cluster_key,
         namespaces: BTreeMap::new(),
         connection: ClusterConnectionState::Disconnected,
@@ -115,7 +114,7 @@ pub(super) fn oracle_resource_table_state() -> UiState {
     .collect::<Vec<_>>();
 
     let mut kind = fixture_cluster(2, "kind-kind");
-    kind.connection = ClusterConnectionState::Connected(None);
+    kind.connection = ClusterConnectionState::Connected;
     kind.namespaces.insert(
         "kube-system".into(),
         MinimalNamespace {

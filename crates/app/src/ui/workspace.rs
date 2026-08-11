@@ -107,7 +107,7 @@ pub(super) fn show(
                         );
                         return;
                     }
-                    ClusterConnectionState::Connected(_) => {}
+                    ClusterConnectionState::Connected => {}
                 }
 
                 match (&cluster.namespaces_load, &cluster.api_resources_load) {

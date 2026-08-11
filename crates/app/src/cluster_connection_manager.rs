@@ -41,7 +41,6 @@ use tracing::{info, warn};
 #[derive(Debug, Clone)]
 pub struct Cluster {
     pub name: String,
-    pub cluster: Option<String>,
     pub is_current: bool,
 }
 
@@ -54,7 +53,6 @@ pub async fn reload_kubeconfig() -> Result<WorkerResult> {
     for named_context in cfg.contexts {
         clusters.push(Cluster {
             name: named_context.name.clone(),
-            cluster: named_context.context.map(|c| c.cluster).clone(),
             is_current: current_context.as_deref() == Some(named_context.name.as_str()),
         });
     }
@@ -2023,15 +2021,12 @@ pub async fn delete_resource(
 
     Ok(WorkerResult::ResourceDeleteCompleted {
         cluster_key,
-        api_resource,
-        namespace,
         resource_name,
     })
 }
 
 /// Trigger a Deployment rollout the same way `kubectl rollout restart` does.
 pub async fn restart_deployment(
-    cluster_key: i32,
     client: kube::Client,
     namespace: String,
     resource_name: String,
@@ -2056,7 +2051,6 @@ pub async fn restart_deployment(
     .await?;
 
     Ok(WorkerResult::DeploymentRestartCompleted {
-        cluster_key,
         namespace,
         resource_name,
     })

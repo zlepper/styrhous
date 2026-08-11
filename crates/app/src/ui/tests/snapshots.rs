@@ -160,7 +160,7 @@ fn primary_click(harness: &mut Harness<MyEguiApp<MockWorker>>, position: egui::P
 fn namespace_selector_replaces_toggles_and_selects_all_without_stopping_watches() {
     let pods = fixture_api_resource("", "Pod", "pods");
     let mut cluster = fixture_cluster(1, "dev");
-    cluster.connection = ClusterConnectionState::Connected(None);
+    cluster.connection = ClusterConnectionState::Connected;
     cluster.resource_navigation = build_resource_navigation(vec![pods.clone()]);
     for namespace in ["default", "kube-system", "monitoring"] {
         cluster.namespaces.insert(
@@ -289,7 +289,7 @@ fn namespace_selector_replaces_toggles_and_selects_all_without_stopping_watches(
 fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
     let nodes = fixture_cluster_scoped_api_resource("core", "Node", "nodes");
     let mut cluster = fixture_cluster(1, "dev");
-    cluster.connection = ClusterConnectionState::Connected(None);
+    cluster.connection = ClusterConnectionState::Connected;
     cluster.resource_navigation = build_resource_navigation(vec![nodes.clone()]);
 
     let mut harness = application_harness::<MockWorker>();
@@ -414,7 +414,6 @@ fn no_current_context_leaves_cluster_selection_manual() {
         .results
         .push_back(WorkerResult::KubernetesClustersUpdated(vec![Cluster {
             name: "dev".into(),
-            cluster: None,
             is_current: false,
         }]));
 
@@ -2199,7 +2198,8 @@ fn deployment_editor_completes_match_labels_in_a_selector() {
     let partial_yaml = "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: coredns\nspec:\n  selector:\n    match";
     assert!(
         deployment_selector_schema()
-            .suggestions_at(partial_yaml, partial_yaml.chars().count())
+            .completion_at(partial_yaml, partial_yaml.chars().count())
+            .suggestions
             .iter()
             .any(|suggestion| suggestion.label == "matchLabels"),
         "the deployment schema should complete the partial selector key"
@@ -2836,12 +2836,10 @@ fn test_ui_flow() {
         .push_back(WorkerResult::KubernetesClustersUpdated(vec![
             Cluster {
                 name: "dev".into(),
-                cluster: None,
                 is_current: true,
             },
             Cluster {
                 name: "prod".into(),
-                cluster: Some("production".into()),
                 is_current: false,
             },
         ]));
