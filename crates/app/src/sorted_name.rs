@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 
-#[derive(Eq, PartialEq, Debug, Ord)]
+#[derive(Eq, PartialEq, Debug)]
 pub struct SortedName {
     value: String,
     sort_value: String,
@@ -34,9 +34,17 @@ impl From<&str> for SortedName {
     }
 }
 
+impl Ord for SortedName {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.sort_value
+            .cmp(&other.sort_value)
+            .then_with(|| self.value.cmp(&other.value))
+    }
+}
+
 impl PartialOrd for SortedName {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.sort_value.partial_cmp(&other.sort_value)
+        Some(self.cmp(other))
     }
 }
 
@@ -56,12 +64,12 @@ impl Deref for SortedName {
 
 impl PartialEq<String> for SortedName {
     fn eq(&self, other: &String) -> bool {
-        &self.value == other
+        self.value == *other
     }
 }
 
 impl PartialEq<str> for SortedName {
     fn eq(&self, other: &str) -> bool {
-        &self.value == other
+        self.value == other
     }
 }

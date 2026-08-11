@@ -417,7 +417,7 @@ impl LogStoreService {
         thread::Builder::new()
             .name("pod-log-store".to_owned())
             .spawn(move || {
-                run_store(
+                run_store(StoreThread {
                     control_receiver,
                     live_receiver,
                     backfill_receiver,
@@ -426,9 +426,9 @@ impl LogStoreService {
                     work_pending,
                     scan_sender,
                     result_sender,
-                    store_live_updates,
+                    live_updates: store_live_updates,
                     config,
-                )
+                })
             })
             .expect("Failed to start pod log store thread");
         Self {
@@ -538,7 +538,7 @@ impl LogStoreService {
     }
 }
 
-fn run_store(
+struct StoreThread {
     control_receiver: mpsc::Receiver<Command>,
     live_receiver: mpsc::Receiver<Command>,
     backfill_receiver: mpsc::Receiver<Command>,
@@ -549,7 +549,21 @@ fn run_store(
     result_sender: LogStoreResultSender,
     live_updates: Arc<LiveUpdates>,
     config: LogStoreConfig,
-) {
+}
+
+fn run_store(store_thread: StoreThread) {
+    let StoreThread {
+        control_receiver,
+        live_receiver,
+        backfill_receiver,
+        scan_receiver,
+        wake_receiver,
+        work_pending,
+        scan_sender,
+        result_sender,
+        live_updates,
+        config,
+    } = store_thread;
     let mut stores = HashMap::<u64, LogStore>::new();
     let mut closed = HashSet::new();
     loop {
@@ -1245,7 +1259,7 @@ impl LogStore {
         thread::Builder::new()
             .name("pod-log-search".to_owned())
             .spawn(move || {
-                scan_records(
+                scan_records(SearchScan {
                     reader,
                     scan_lines,
                     matcher,
@@ -1254,7 +1268,7 @@ impl LogStore {
                     generation,
                     sender,
                     search_progress_interval,
-                )
+                })
             })
             .map_err(anyhow::Error::from)?;
         Ok(())
@@ -1524,8 +1538,8 @@ fn read_u64_at(file: &mut File, index: usize) -> anyhow::Result<u64> {
     Ok(u64::from_le_bytes(bytes))
 }
 
-fn scan_records(
-    mut reader: LogicalReader,
+struct SearchScan {
+    reader: LogicalReader,
     scan_lines: usize,
     matcher: Regex,
     cancellation: Arc<AtomicBool>,
@@ -1533,7 +1547,19 @@ fn scan_records(
     generation: u64,
     sender: StoreCommandSender,
     search_progress_interval: usize,
-) {
+}
+
+fn scan_records(search_scan: SearchScan) {
+    let SearchScan {
+        mut reader,
+        scan_lines,
+        matcher,
+        cancellation,
+        window_id,
+        generation,
+        sender,
+        search_progress_interval,
+    } = search_scan;
     let mut scanned_lines = 0;
     let mut match_lines = Vec::new();
     while scanned_lines < scan_lines {

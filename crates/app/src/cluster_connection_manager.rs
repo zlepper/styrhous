@@ -934,7 +934,7 @@ fn extract_custom_cells(
         .filter_map(|column| {
             let path = JsonPath::try_from(column.json_path.as_str()).ok()?;
             let value = path.find(data);
-            let values = value.as_array()?.iter().cloned().collect::<Vec<_>>();
+            let values = value.as_array()?.to_vec();
             custom_cell_value(column, &values).map(|cell| (column.id.clone(), cell))
         })
         .collect()
@@ -946,15 +946,15 @@ fn custom_cell_value(
 ) -> Option<CellValue> {
     let value = values.first()?;
     if values.len() == 1 {
-        if matches!(column.type_.as_str(), "integer" | "number") {
-            if let Some(number) = value.as_i64() {
-                return Some(CellValue::Number(number));
-            }
+        if matches!(column.type_.as_str(), "integer" | "number")
+            && let Some(number) = value.as_i64()
+        {
+            return Some(CellValue::Number(number));
         }
-        if matches!(column.type_.as_str(), "date" | "date-time") {
-            if let Some(value) = value.as_str().and_then(parse_timestamp) {
-                return Some(CellValue::Timestamp(value));
-            }
+        if matches!(column.type_.as_str(), "date" | "date-time")
+            && let Some(value) = value.as_str().and_then(parse_timestamp)
+        {
+            return Some(CellValue::Timestamp(value));
         }
         return json_value_to_text(value).map(CellValue::Text);
     }
@@ -1000,18 +1000,30 @@ pub(crate) fn minimal_resource_from_typed<T: Resource>(
     }
 }
 
+pub struct ResourceDetailWatchRequest {
+    pub cluster_key: i32,
+    pub client: kube::Client,
+    pub api_resource: ApiResource,
+    pub namespace: Option<String>,
+    pub resource_name: String,
+    pub resource_uid: String,
+    pub history_entry_id: u64,
+    pub event_sender: WorkerResultSender,
+}
+
 /// Keep one inspector history entry current independently of the compact
 /// resource-table watcher. The worker owns it until that entry leaves history.
-pub async fn watch_resource_detail(
-    cluster_key: i32,
-    client: kube::Client,
-    api_resource: ApiResource,
-    namespace: Option<String>,
-    resource_name: String,
-    resource_uid: String,
-    history_entry_id: u64,
-    event_sender: WorkerResultSender,
-) {
+pub async fn watch_resource_detail(request: ResourceDetailWatchRequest) {
+    let ResourceDetailWatchRequest {
+        cluster_key,
+        client,
+        api_resource,
+        namespace,
+        resource_name,
+        resource_uid,
+        history_entry_id,
+        event_sender,
+    } = request;
     let root_name = resource_name.clone();
     tokio::join!(
         watch_detail_object(
@@ -1031,23 +1043,23 @@ pub async fn watch_resource_detail(
             history_entry_id,
             event_sender.clone(),
         ),
-        watch_managed_resources(
+        watch_managed_resources(ManagedResourceWatchRequest {
             cluster_key,
             client,
-            api_resource,
+            root_api_resource: api_resource,
             namespace,
             root_name,
-            resource_uid,
+            root_uid: resource_uid,
             history_entry_id,
             event_sender,
-        ),
+        }),
     );
 }
 
 /// Watch the small, well-known set of resource kinds which can make up a
 /// built-in workload controller hierarchy. Kubernetes has no generic reverse
 /// owner-reference query, so this deliberately does not attempt custom types.
-async fn watch_managed_resources(
+struct ManagedResourceWatchRequest {
     cluster_key: i32,
     client: kube::Client,
     root_api_resource: ApiResource,
@@ -1056,7 +1068,19 @@ async fn watch_managed_resources(
     root_uid: String,
     history_entry_id: u64,
     event_sender: WorkerResultSender,
-) {
+}
+
+async fn watch_managed_resources(request: ManagedResourceWatchRequest) {
+    let ManagedResourceWatchRequest {
+        cluster_key,
+        client,
+        root_api_resource,
+        namespace,
+        root_name,
+        root_uid,
+        history_entry_id,
+        event_sender,
+    } = request;
     let resource_types = managed_resource_types(&root_api_resource);
     if resource_types.is_empty() {
         event_sender
@@ -1441,8 +1465,10 @@ async fn watch_detail_object(
                     .send(WorkerResult::ResourceDetailUpdated {
                         cluster_key,
                         history_entry_id,
-                        detail: resource_detail_from_dynamic(&client, api_resource.clone(), object)
-                            .await,
+                        detail: Box::new(
+                            resource_detail_from_dynamic(&client, api_resource.clone(), object)
+                                .await,
+                        ),
                     })
                     .log_if_error("Failed to send resource detail update");
             }
@@ -1452,8 +1478,10 @@ async fn watch_detail_object(
                     .send(WorkerResult::ResourceDetailUpdated {
                         cluster_key,
                         history_entry_id,
-                        detail: resource_detail_from_dynamic(&client, api_resource.clone(), object)
-                            .await,
+                        detail: Box::new(
+                            resource_detail_from_dynamic(&client, api_resource.clone(), object)
+                                .await,
+                        ),
                     })
                     .log_if_error("Failed to send resource detail update");
             }
@@ -1523,7 +1551,7 @@ fn send_detail_events(
     events: &BTreeMap<String, ResourceEvent>,
 ) {
     let mut events = events.values().cloned().collect::<Vec<_>>();
-    events.sort_by(|left, right| right.last_timestamp.cmp(&left.last_timestamp));
+    events.sort_by_key(|event| std::cmp::Reverse(event.last_timestamp));
     event_sender
         .send(WorkerResult::ResourceEventsReplaced {
             cluster_key,
@@ -1739,10 +1767,10 @@ fn secret_value(secret: Option<&Secret>, key: &str) -> Option<String> {
 fn expand_environment_variable_references(variables: &mut [PodEnvironmentVariableDetail]) {
     let mut values = BTreeMap::new();
     for variable in variables {
-        if matches!(variable.source, PodEnvironmentVariableSource::Literal) {
-            if let Some(value) = &variable.value {
-                variable.value = Some(expand_environment_variable_value(value, &values));
-            }
+        if matches!(variable.source, PodEnvironmentVariableSource::Literal)
+            && let Some(value) = &variable.value
+        {
+            variable.value = Some(expand_environment_variable_value(value, &values));
         }
         if let Some(value) = &variable.value {
             values.insert(variable.name.clone(), value.clone());
@@ -1767,7 +1795,7 @@ fn expand_environment_variable_value(value: &str, values: &BTreeMap<String, Stri
             continue;
         }
         let mut name = String::new();
-        while let Some(character) = characters.next() {
+        for character in characters.by_ref() {
             if character == ')' {
                 break;
             }
@@ -1860,13 +1888,13 @@ pub async fn get_resource_yaml(
     let mut obj = api.get(&resource_name).await?;
 
     // Strip server-managed fields that clutter the editor and cause issues on apply
-    if let Some(metadata) = obj.data.get_mut("metadata") {
-        if let Some(meta_obj) = metadata.as_object_mut() {
-            meta_obj.remove("managedFields");
-            meta_obj.remove("resourceVersion");
-            meta_obj.remove("uid");
-            meta_obj.remove("creationTimestamp");
-        }
+    if let Some(metadata) = obj.data.get_mut("metadata")
+        && let Some(meta_obj) = metadata.as_object_mut()
+    {
+        meta_obj.remove("managedFields");
+        meta_obj.remove("resourceVersion");
+        meta_obj.remove("uid");
+        meta_obj.remove("creationTimestamp");
     }
     obj.metadata.managed_fields = None;
     obj.metadata.resource_version = None;
@@ -1924,17 +1952,31 @@ pub async fn get_resource_schema(
     })
 }
 
+pub struct ResourceYamlValidationRequest {
+    pub editor_id: u64,
+    pub revision: u64,
+    pub cluster_key: i32,
+    pub client: kube::Client,
+    pub api_resource: ApiResource,
+    pub namespace: Option<String>,
+    pub resource_name: String,
+    pub yaml: String,
+}
+
 /// Validate the same server-side apply request used by Save without persisting a change.
 pub async fn validate_resource_yaml(
-    editor_id: u64,
-    revision: u64,
-    cluster_key: i32,
-    client: kube::Client,
-    api_resource: ApiResource,
-    namespace: Option<String>,
-    resource_name: String,
-    yaml: String,
+    request: ResourceYamlValidationRequest,
 ) -> Result<WorkerResult> {
+    let ResourceYamlValidationRequest {
+        editor_id,
+        revision,
+        cluster_key,
+        client,
+        api_resource,
+        namespace,
+        resource_name,
+        yaml,
+    } = request;
     let mut obj: DynamicObject = serde_yaml::from_str(&yaml)?;
     if let Some(metadata) = obj.data.get_mut("metadata")
         && let Some(meta_obj) = metadata.as_object_mut()
@@ -2077,13 +2119,13 @@ pub async fn apply_resource_yaml(
     let mut obj: DynamicObject = serde_yaml::from_str(&yaml)?;
 
     // Strip fields that cannot be sent with server-side apply
-    if let Some(metadata) = obj.data.get_mut("metadata") {
-        if let Some(meta_obj) = metadata.as_object_mut() {
-            meta_obj.remove("managedFields");
-            meta_obj.remove("resourceVersion");
-            meta_obj.remove("uid");
-            meta_obj.remove("creationTimestamp");
-        }
+    if let Some(metadata) = obj.data.get_mut("metadata")
+        && let Some(meta_obj) = metadata.as_object_mut()
+    {
+        meta_obj.remove("managedFields");
+        meta_obj.remove("resourceVersion");
+        meta_obj.remove("uid");
+        meta_obj.remove("creationTimestamp");
     }
     // Also clear from the typed metadata
     obj.metadata.managed_fields = None;
@@ -2122,19 +2164,31 @@ pub async fn apply_resource_yaml(
     }
 }
 
+pub struct ResourceDataUpdateRequest<'a> {
+    pub cluster_key: i32,
+    pub client: kube::Client,
+    pub api_resource: ApiResource,
+    pub namespace: String,
+    pub resource_name: String,
+    pub expected_values: &'a BTreeMap<String, String>,
+    pub updated_values: &'a BTreeMap<String, String>,
+    pub expected_resource_version: &'a str,
+}
+
 /// Replace selected existing data values while preserving every other field. The
 /// fetched object's resourceVersion makes a concurrent update fail rather than
 /// silently overwriting it.
-pub async fn update_resource_data(
-    cluster_key: i32,
-    client: kube::Client,
-    api_resource: ApiResource,
-    namespace: String,
-    resource_name: String,
-    expected_values: &BTreeMap<String, String>,
-    updated_values: &BTreeMap<String, String>,
-    expected_resource_version: &str,
-) -> Result<WorkerResult> {
+pub async fn update_resource_data(request: ResourceDataUpdateRequest<'_>) -> Result<WorkerResult> {
+    let ResourceDataUpdateRequest {
+        cluster_key,
+        client,
+        api_resource,
+        namespace,
+        resource_name,
+        expected_values,
+        updated_values,
+        expected_resource_version,
+    } = request;
     if expected_values.is_empty() || updated_values.is_empty() {
         bail!("Resource data update must contain at least one existing value");
     }
