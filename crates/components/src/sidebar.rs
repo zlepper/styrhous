@@ -428,7 +428,7 @@ fn render_sidebar<R>(
     );
 
     let scroll_id = ui.auto_id_with("sidebar-scroll");
-    egui::ScrollArea::vertical()
+    crate::scroll::vertical()
         .id_salt(scroll_id)
         .auto_shrink(false)
         .show(&mut child_ui, |ui| {

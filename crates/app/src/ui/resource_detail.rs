@@ -1066,7 +1066,7 @@ fn show_blade_frame(
     history_entry_id: u64,
     add_content: impl FnOnce(&mut egui::Ui),
 ) {
-    egui::ScrollArea::vertical()
+    components::scroll::vertical()
         .id_salt(("resource-detail-panel-scroll", history_entry_id))
         .auto_shrink([false, false])
         .min_scrolled_height(blade_height)

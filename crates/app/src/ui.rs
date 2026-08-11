@@ -17,7 +17,7 @@ use crate::terminal_launcher::{
     PodShellRequest, SystemTerminalLauncher, TerminalLaunchSettings, TerminalLauncher,
 };
 use crate::worker::{Worker, WorkerTrait};
-use components::apply_light_theme;
+use components::{apply_light_theme, scroll};
 use dialogs::{
     show_delete_confirmation, show_deployment_restart_confirmation, show_deployment_restart_error,
     show_terminal_launch_error,
@@ -54,8 +54,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> Default for MyEguiApp<W, L> {
 
 impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        egui_extras::install_image_loaders(&cc.egui_ctx);
-        apply_light_theme(&cc.egui_ctx);
+        configure_egui_context(&cc.egui_ctx);
         let log_store = LogStoreService::with_repaint_context(cc.egui_ctx.clone());
         let mut worker = W::with_repaint_context(cc.egui_ctx.clone());
         worker.set_log_store_appender(log_store.appender());
@@ -101,6 +100,13 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
             })
             .unwrap_or_default();
     }
+}
+
+/// Configure the one egui context shared by the main and child native windows.
+fn configure_egui_context(ctx: &egui::Context) {
+    egui_extras::install_image_loaders(ctx);
+    apply_light_theme(ctx);
+    scroll::configure_input(ctx);
 }
 
 impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
@@ -287,6 +293,17 @@ mod persistence_tests {
         let app = MyEguiApp::<MockWorker>::default();
 
         assert!(!eframe::App::persist_egui_memory(&app));
+    }
+
+    #[test]
+    fn egui_context_configuration_uses_faster_mouse_wheel_scrolling() {
+        let ctx = egui::Context::default();
+        configure_egui_context(&ctx);
+
+        assert_eq!(
+            ctx.options(|options| options.input_options.line_scroll_speed),
+            scroll::LINE_SCROLL_SPEED
+        );
     }
 
     fn api_resource(group: &str, version: &str, kind: &str, name: &str) -> ApiResource {

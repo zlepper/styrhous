@@ -171,7 +171,7 @@ fn show_log_window_with_scroll_state(
                     window.total_lines.saturating_sub(1),
                 );
                 show_initial_spool_state(ui, window.total_lines);
-                return egui::ScrollArea::both()
+                return components::scroll::both()
                     .id_salt(scroll_area_salt)
                     .show_rows(ui, row_height, 0, |_ui, _rows| {});
             }
@@ -266,7 +266,7 @@ fn show_log_window_with_scroll_state(
                     egui::vec2(horizontal_offset, requested_vertical_offset)
                 })
                 .or(caret_scroll_offset);
-            let mut scroll_area = egui::ScrollArea::both()
+            let mut scroll_area = components::scroll::both()
                 .id_salt(scroll_area_salt)
                 .auto_shrink([false, false])
                 // A wide page can arrive after placeholders have already been
@@ -3252,7 +3252,7 @@ mod tests {
         wide_line: &str,
     ) -> egui::scroll_area::ScrollAreaOutput<()> {
         let row_height = ui.text_style_height(&egui::TextStyle::Monospace);
-        egui::ScrollArea::both()
+        components::scroll::both()
             .id_salt("wide-log-scroll-test")
             .auto_shrink([false, false])
             .show_rows(ui, row_height, 1, |ui, _| {

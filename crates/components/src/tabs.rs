@@ -21,7 +21,7 @@
 //! });
 //! ```
 
-use egui::{Color32, Image, Response, ScrollArea, Sense, Ui, Vec2};
+use egui::{Color32, Image, Response, Sense, Ui, Vec2};
 
 use crate::PointingHand;
 use crate::colors::{gray, indigo};
@@ -133,7 +133,7 @@ impl Tabs {
         {
             let mut header_ui = ui.new_child(egui::UiBuilder::new().max_rect(header_rect));
 
-            ScrollArea::horizontal()
+            crate::scroll::horizontal()
                 .id_salt(id.with("header-scroll"))
                 .show(&mut header_ui, |ui| {
                     ui.horizontal(|ui| {

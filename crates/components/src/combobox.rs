@@ -15,7 +15,7 @@ const COMPACT_INPUT_HEIGHT: f32 = 32.0;
 
 use egui::{
     Align, Align2, Color32, FontId, Id, Key, Modifiers, Popup, PopupCloseBehavior, Rect, Response,
-    ScrollArea, Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2, WidgetText,
+    Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2, WidgetText,
 };
 use std::sync::Arc;
 
@@ -506,7 +506,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
             .show(|ui| {
                 ui.set_min_height(dropdown_height);
-                ScrollArea::vertical()
+                crate::scroll::vertical()
                     .max_height(dropdown_height)
                     .min_scrolled_height(dropdown_height)
                     .show(ui, |ui| {

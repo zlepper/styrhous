@@ -41,7 +41,7 @@ pub(super) fn show(
                 egui::vec2(ui.available_width(), content_height),
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
-                    egui::ScrollArea::vertical()
+                    components::scroll::vertical()
                         .auto_shrink([false, false])
                         .show(ui, |ui| show_terminal_launcher(ui, ui_state));
                 },
