@@ -50,6 +50,11 @@ pub(crate) enum LogStoreResult {
         window_id: u64,
         total_lines: usize,
         completed_search: Option<(u64, usize)>,
+        /// Parsed rows from the live tail. The UI can draw these immediately
+        /// while a normal page request catches up from the disk spool.
+        appended_rows: Vec<LogPageRow>,
+        /// Number of older records written to the history spool so far.
+        backfill_lines: Option<usize>,
     },
     Rebased {
         window_id: u64,
@@ -265,8 +270,18 @@ impl StoreCommandSender {
     }
 }
 
+const MAX_COALESCED_LIVE_ROWS: usize = 2 * LOG_PAGE_SIZE;
+
+#[derive(Default)]
+struct PendingLiveUpdate {
+    total_lines: usize,
+    completed_search: Option<(u64, usize)>,
+    appended_rows: Vec<LogPageRow>,
+    backfill_lines: Option<usize>,
+}
+
 struct LiveUpdates {
-    updates: std::sync::Mutex<HashMap<u64, LogStoreResult>>,
+    updates: std::sync::Mutex<HashMap<u64, PendingLiveUpdate>>,
     repaint_requested: AtomicBool,
     repaint_context: Option<egui::Context>,
 }
@@ -280,15 +295,36 @@ impl LiveUpdates {
         }
     }
 
-    fn publish(&self, result: LogStoreResult) {
-        let window_id = match result {
-            LogStoreResult::Updated { window_id, .. } => window_id,
-            _ => unreachable!("only live updates are coalesced"),
-        };
-        self.updates
+    fn publish_live(&self, window_id: u64, summary: AppendSummary) {
+        let mut updates = self
+            .updates
             .lock()
-            .expect("live update lock is not poisoned")
-            .insert(window_id, result);
+            .expect("live update lock is not poisoned");
+        let update = updates.entry(window_id).or_default();
+        update.total_lines = summary.total_lines;
+        update.completed_search = summary.completed_search;
+        update.appended_rows.extend(summary.appended_rows);
+        if update.appended_rows.len() > MAX_COALESCED_LIVE_ROWS {
+            let excess = update.appended_rows.len() - MAX_COALESCED_LIVE_ROWS;
+            update.appended_rows.drain(..excess);
+        }
+        drop(updates);
+        self.request_repaint();
+    }
+
+    fn publish_backfill(&self, window_id: u64, total_lines: usize, backfill_lines: usize) {
+        let mut updates = self
+            .updates
+            .lock()
+            .expect("live update lock is not poisoned");
+        let update = updates.entry(window_id).or_default();
+        update.total_lines = total_lines;
+        update.backfill_lines = Some(backfill_lines);
+        drop(updates);
+        self.request_repaint();
+    }
+
+    fn request_repaint(&self) {
         if !self.repaint_requested.swap(true, Ordering::AcqRel)
             && let Some(context) = &self.repaint_context
         {
@@ -302,7 +338,15 @@ impl LiveUpdates {
             .lock()
             .expect("live update lock is not poisoned");
         let window_id = updates.keys().next().copied()?;
-        let update = updates.remove(&window_id);
+        let update = updates
+            .remove(&window_id)
+            .map(|update| LogStoreResult::Updated {
+                window_id,
+                total_lines: update.total_lines,
+                completed_search: update.completed_search,
+                appended_rows: update.appended_rows,
+                backfill_lines: update.backfill_lines,
+            });
         if updates.is_empty() {
             // Reset while holding the lock so a concurrent publisher either
             // sees the reset value or is included in this drain.
@@ -554,11 +598,7 @@ fn run_store(
                 }
                 let store = stores.entry(window_id).or_insert_with(LogStore::new);
                 match store.append(lines) {
-                    Ok(summary) => live_updates.publish(LogStoreResult::Updated {
-                        window_id,
-                        total_lines: summary.total_lines,
-                        completed_search: summary.completed_search,
-                    }),
+                    Ok(summary) => live_updates.publish_live(window_id, summary),
                     Err(error) => send_failure(&result_sender, window_id, error),
                 }
             }
@@ -567,8 +607,20 @@ fn run_store(
                     continue;
                 }
                 let store = stores.entry(window_id).or_insert_with(LogStore::new);
-                if let Err(error) = store.append_backfill(lines) {
-                    send_failure(&result_sender, window_id, error);
+                match store.append_backfill(lines) {
+                    Ok(()) => {
+                        let backfill_lines = store
+                            .backfill
+                            .as_ref()
+                            .expect("backfill store was initialized")
+                            .total_lines;
+                        live_updates.publish_backfill(
+                            window_id,
+                            store.visible_total_lines(),
+                            backfill_lines,
+                        );
+                    }
+                    Err(error) => send_failure(&result_sender, window_id, error),
                 }
             }
             Command::CompleteBackfill { window_id } => {
@@ -576,15 +628,20 @@ fn run_store(
                     continue;
                 };
                 match store.complete_backfill() {
-                    Ok(Some(rebase)) => send_result(
-                        &result_sender,
-                        LogStoreResult::Rebased {
-                            window_id,
-                            total_lines: store.visible_total_lines(),
-                            live_start: rebase.live_start,
-                            history_lines: rebase.history_lines,
-                        },
-                    ),
+                    Ok(Some(rebase)) => {
+                        // A rebase replaces the logical row space. Do not let
+                        // a coalesced pre-rebase tail update arrive after it.
+                        live_updates.remove(window_id);
+                        send_result(
+                            &result_sender,
+                            LogStoreResult::Rebased {
+                                window_id,
+                                total_lines: store.visible_total_lines(),
+                                live_start: rebase.live_start,
+                                history_lines: rebase.history_lines,
+                            },
+                        )
+                    }
                     Ok(None) => {}
                     Err(error) => send_failure(&result_sender, window_id, error),
                 }
@@ -892,6 +949,7 @@ struct SearchState {
 struct AppendSummary {
     total_lines: usize,
     completed_search: Option<(u64, usize)>,
+    appended_rows: Vec<LogPageRow>,
 }
 
 impl BackfillStore {
@@ -1081,6 +1139,7 @@ impl LogStore {
             .map(|search| search.matcher.clone());
         let mut line_offsets = Vec::with_capacity(lines.len());
         let mut matching_line_indices = Vec::new();
+        let mut appended_rows = Vec::with_capacity(lines.len());
 
         for (relative_line_index, line) in lines.iter().enumerate() {
             let bytes = line.as_bytes();
@@ -1091,12 +1150,26 @@ impl LogStore {
             data.write_all(bytes)?;
             next_offset += u64::from(length) + 4;
             let visible_line = parse_kubernetes_log_line(line);
+            let match_ranges = completed_matcher.as_ref().map_or_else(Vec::new, |matcher| {
+                matcher
+                    .find_iter(&visible_line.line.text)
+                    .map(|matched| (matched.start(), matched.end()))
+                    .collect()
+            });
             if completed_matcher
                 .as_ref()
-                .is_some_and(|matcher| matcher.is_match(&visible_line.line.text))
+                .is_some_and(|_| !match_ranges.is_empty())
             {
                 matching_line_indices.push(first_line_index + relative_line_index);
             }
+            appended_rows.push(LogPageRow {
+                display_row: first_line_index + relative_line_index,
+                line_index: first_line_index + relative_line_index,
+                timestamp: visible_line.timestamp,
+                text: visible_line.line.text,
+                style_spans: visible_line.line.style_spans,
+                match_ranges,
+            });
         }
         data.flush()?;
         // The index is published only after the complete batch of records, so
@@ -1130,6 +1203,7 @@ impl LogStore {
                 .as_ref()
                 .filter(|search| search.complete)
                 .map(|search| (search.generation, search.match_count)),
+            appended_rows,
         })
     }
 
@@ -1537,6 +1611,66 @@ mod tests {
             );
             thread::yield_now();
         }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn live_updates_include_parsed_rows_and_backfill_progress() {
+        let service = LogStoreService::default();
+        service.open(77);
+        assert!(service.append(
+            77,
+            vec!["2026-08-10T12:34:56Z \u{1b}[31merror\u{1b}[0m".to_owned()]
+        ));
+
+        let LogStoreResult::Updated {
+            total_lines,
+            appended_rows,
+            backfill_lines,
+            ..
+        } = wait_for(&service, |result| {
+            matches!(result, LogStoreResult::Updated { window_id: 77, .. })
+        })
+        else {
+            unreachable!()
+        };
+        assert_eq!(total_lines, 1);
+        assert_eq!(backfill_lines, None);
+        assert_eq!(appended_rows.len(), 1);
+        assert_eq!(appended_rows[0].display_row, 0);
+        assert_eq!(appended_rows[0].line_index, 0);
+        assert_eq!(
+            appended_rows[0].timestamp.as_deref(),
+            Some("2026-08-10T12:34:56Z")
+        );
+        assert_eq!(appended_rows[0].text, "error");
+        assert_eq!(appended_rows[0].style_spans.len(), 1);
+
+        let appender = service.appender();
+        appender
+            .append_backfill(77, vec!["old one".into(), "old two".into()])
+            .await
+            .expect("history append is accepted");
+        let LogStoreResult::Updated {
+            total_lines,
+            appended_rows,
+            backfill_lines,
+            ..
+        } = wait_for(&service, |result| {
+            matches!(
+                result,
+                LogStoreResult::Updated {
+                    window_id: 77,
+                    backfill_lines: Some(2),
+                    ..
+                }
+            )
+        })
+        else {
+            unreachable!()
+        };
+        assert_eq!(total_lines, 1);
+        assert!(appended_rows.is_empty());
+        assert_eq!(backfill_lines, Some(2));
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
