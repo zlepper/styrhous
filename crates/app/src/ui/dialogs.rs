@@ -30,7 +30,7 @@ pub(super) fn show_delete_confirmation(
     if !confirm_enabled {
         ctx.request_repaint_after(remaining);
     }
-    let seconds = (remaining.as_millis() + 999) / 1_000;
+    let seconds = remaining.as_millis().div_ceil(1_000);
     let unavailable_message =
         (!confirm_enabled).then(|| format!("Delete will be available in {seconds} seconds."));
     let scope_text = pending.namespace.as_deref().map_or_else(
@@ -138,10 +138,9 @@ pub(super) fn show_deployment_restart_error(ctx: &egui::Context, ui_state: &mut 
         })
         .show(ctx),
         ErrorDialogAction::Dismiss
-    ) {
-        if let Some(cluster) = ui_state.clusters.get_mut(&cluster_id) {
-            cluster.deployment_restart_error = None;
-        }
+    ) && let Some(cluster) = ui_state.clusters.get_mut(&cluster_id)
+    {
+        cluster.deployment_restart_error = None;
     }
 }
 

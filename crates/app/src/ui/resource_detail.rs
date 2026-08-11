@@ -1165,7 +1165,7 @@ fn show_resource_detail_blade(
     events_error: Option<&str>,
     managed_resources: &[ManagedResource],
     managed_resources_error: Option<&str>,
-    mut data_editor: Option<&mut super::state::ResourceDataEditorState>,
+    data_editor: Option<&mut super::state::ResourceDataEditorState>,
 ) -> BladeResult {
     let mut result = BladeResult::default();
     ui.set_max_width(ui.available_width() - 9.0);
@@ -1174,7 +1174,7 @@ fn show_resource_detail_blade(
     } else if let Some(detail) = detail {
         show_detail(ui, detail, &mut result.action);
         ui.add_space(16.0);
-        show_resource_data(ui, detail, data_editor.as_deref_mut(), &mut result.action);
+        show_resource_data(ui, detail, data_editor, &mut result.action);
         metadata_maps(ui, detail);
     } else {
         ui.spinner();

@@ -1,6 +1,7 @@
 use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::{
-    Cluster, ClusterConnection, apply_resource_yaml, delete_resource, get_resource_schema,
+    Cluster, ClusterConnection, ResourceDataUpdateRequest, ResourceDetailWatchRequest,
+    ResourceYamlValidationRequest, apply_resource_yaml, delete_resource, get_resource_schema,
     get_resource_yaml, reload_kubeconfig, restart_deployment, start_cluster_connection,
     start_resource_watcher, update_resource_data, validate_resource_yaml, watch_resource_detail,
 };
@@ -346,7 +347,7 @@ pub enum WorkerResult {
     ResourceDetailUpdated {
         cluster_key: i32,
         history_entry_id: u64,
-        detail: ResourceDetail,
+        detail: Box<ResourceDetail>,
     },
     ResourceDetailDeleted {
         cluster_key: i32,
@@ -461,8 +462,8 @@ impl WorkerResultSender {
         }
     }
 
-    pub fn send(&self, result: WorkerResult) -> Result<(), mpsc::SendError<WorkerResult>> {
-        self.sender.send(result)?;
+    pub fn send(&self, result: WorkerResult) -> Result<(), Box<mpsc::SendError<WorkerResult>>> {
+        self.sender.send(result).map_err(Box::new)?;
         if let Some(context) = &self.repaint_context {
             context.request_repaint();
         }
@@ -585,16 +586,16 @@ impl WorkerRuntime {
                     if let Some(previous) = shared.detail_watches.lock().await.remove(&watch_key) {
                         previous.abort();
                     }
-                    let handle = tokio::spawn(watch_resource_detail(
-                        *cluster_key,
+                    let handle = tokio::spawn(watch_resource_detail(ResourceDetailWatchRequest {
+                        cluster_key: *cluster_key,
                         client,
-                        api_resource.clone(),
-                        namespace.clone(),
-                        resource_name.clone(),
-                        resource_uid.clone(),
-                        *history_entry_id,
-                        result_channel.clone(),
-                    ));
+                        api_resource: api_resource.clone(),
+                        namespace: namespace.clone(),
+                        resource_name: resource_name.clone(),
+                        resource_uid: resource_uid.clone(),
+                        history_entry_id: *history_entry_id,
+                        event_sender: result_channel.clone(),
+                    }));
                     shared.detail_watches.lock().await.insert(watch_key, handle);
                     Ok(None)
                 } else {
@@ -746,16 +747,16 @@ impl WorkerRuntime {
             } => {
                 let clients = shared.clients.read().await;
                 if let Some(client) = clients.get(cluster_key) {
-                    validate_resource_yaml(
-                        *editor_id,
-                        *revision,
-                        *cluster_key,
-                        client.clone(),
-                        api_resource.clone(),
-                        namespace.clone(),
-                        resource_name.clone(),
-                        yaml.clone(),
-                    )
+                    validate_resource_yaml(ResourceYamlValidationRequest {
+                        editor_id: *editor_id,
+                        revision: *revision,
+                        cluster_key: *cluster_key,
+                        client: client.clone(),
+                        api_resource: api_resource.clone(),
+                        namespace: namespace.clone(),
+                        resource_name: resource_name.clone(),
+                        yaml: yaml.clone(),
+                    })
                     .await
                     .map(Some)
                 } else {
@@ -774,16 +775,16 @@ impl WorkerRuntime {
             } => {
                 let clients = shared.clients.read().await;
                 if let Some(client) = clients.get(cluster_key) {
-                    update_resource_data(
-                        *cluster_key,
-                        client.clone(),
-                        api_resource.clone(),
-                        namespace.clone(),
-                        resource_name.clone(),
-                        &update.expected_values,
-                        &update.updated_values,
-                        &update.expected_resource_version,
-                    )
+                    update_resource_data(ResourceDataUpdateRequest {
+                        cluster_key: *cluster_key,
+                        client: client.clone(),
+                        api_resource: api_resource.clone(),
+                        namespace: namespace.clone(),
+                        resource_name: resource_name.clone(),
+                        expected_values: &update.expected_values,
+                        updated_values: &update.updated_values,
+                        expected_resource_version: &update.expected_resource_version,
+                    })
                     .await
                     .map(Some)
                 } else {

@@ -437,9 +437,7 @@ fn oracle_resource_table_snapshot_uses_injected_cluster_state() {
 fn resource_navigation_uses_the_persisted_expansion_state() {
     let mut harness = application_harness::<MockWorker>();
     let mut state = oracle_resource_table_state();
-    for node_id in ["section:Apps & Containers"] {
-        state.set_resource_navigation_node_expanded(node_id, true);
-    }
+    state.set_resource_navigation_node_expanded("section:Apps & Containers", true);
     harness.state_mut().ui_state = state;
 
     harness.run();
@@ -1153,7 +1151,7 @@ fn resource_name_opens_and_closes_a_live_detail_inspector() {
         .push_back(WorkerResult::ResourceDetailUpdated {
             cluster_key: 2,
             history_entry_id: 1,
-            detail: ResourceDetail {
+            detail: Box::new(ResourceDetail {
                 api_resource: pods,
                 name: name.into(),
                 namespace: Some("kube-system".into()),
@@ -1164,7 +1162,7 @@ fn resource_name_opens_and_closes_a_live_detail_inspector() {
                 labels: BTreeMap::new(),
                 annotations: BTreeMap::new(),
                 payload: ResourceDetailPayload::Generic,
-            },
+            }),
         });
     harness.run();
     assert!(
@@ -1261,7 +1259,7 @@ fn clicking_a_pod_node_in_the_inspector_navigates_to_the_node_inspector() {
         .push_back(WorkerResult::ResourceDetailUpdated {
             cluster_key: 2,
             history_entry_id: 1,
-            detail: ResourceDetail {
+            detail: Box::new(ResourceDetail {
                 api_resource: pods,
                 name: "api".into(),
                 namespace: Some("kube-system".into()),
@@ -1271,8 +1269,8 @@ fn clicking_a_pod_node_in_the_inspector_navigates_to_the_node_inspector() {
                 owner: None,
                 labels: BTreeMap::new(),
                 annotations: BTreeMap::new(),
-                payload: ResourceDetailPayload::Pod(overflowing_pod_detail()),
-            },
+                payload: ResourceDetailPayload::Pod(Box::new(overflowing_pod_detail())),
+            }),
         });
     harness.run_steps(2);
 
@@ -1318,7 +1316,7 @@ fn node_inspector_shows_its_spec() {
         .push_back(WorkerResult::ResourceDetailUpdated {
             cluster_key: 2,
             history_entry_id: 1,
-            detail: ResourceDetail {
+            detail: Box::new(ResourceDetail {
                 api_resource: crate::resource_handlers::node::api_resource(),
                 name: "kind-control-plane".into(),
                 namespace: None,
@@ -1334,7 +1332,7 @@ fn node_inspector_shows_its_spec() {
                     unschedulable: true,
                     taints: vec!["node-role.kubernetes.io/control-plane:NoSchedule".into()],
                 }),
-            },
+            }),
         });
     harness.run_steps(2);
 
@@ -1363,7 +1361,7 @@ fn node_inspector_lists_cross_namespace_pods_in_the_shared_pod_table() {
         WorkerResult::ResourceDetailUpdated {
             cluster_key: 2,
             history_entry_id: 1,
-            detail: ResourceDetail {
+            detail: Box::new(ResourceDetail {
                 api_resource: nodes,
                 name: "kind-control-plane".into(),
                 namespace: None,
@@ -1374,7 +1372,7 @@ fn node_inspector_lists_cross_namespace_pods_in_the_shared_pod_table() {
                 labels: BTreeMap::new(),
                 annotations: BTreeMap::new(),
                 payload: ResourceDetailPayload::Node(NodeDetail::default()),
-            },
+            }),
         },
         WorkerResult::ManagedResourcesReplaced {
             cluster_key: 2,
@@ -1467,11 +1465,7 @@ fn promoted_history_blade_stays_above_its_back_history() {
         "first-uid".into(),
         &mut commands,
     );
-    harness
-        .state_mut()
-        .worker
-        .commands
-        .extend(commands.drain(..));
+    harness.state_mut().worker.commands.append(&mut commands);
     harness.run_steps(1);
     harness
         .state_mut()
@@ -1495,11 +1489,7 @@ fn promoted_history_blade_stays_above_its_back_history() {
             uid.into(),
             &mut commands,
         );
-        harness
-            .state_mut()
-            .worker
-            .commands
-            .extend(commands.drain(..));
+        harness.state_mut().worker.commands.append(&mut commands);
         harness
             .state_mut()
             .ui_state
@@ -1519,11 +1509,7 @@ fn promoted_history_blade_stays_above_its_back_history() {
             .state_mut()
             .ui_state
             .navigate_resource_detail_history(2, forward, &mut commands);
-        harness
-            .state_mut()
-            .worker
-            .commands
-            .extend(commands.drain(..));
+        harness.state_mut().worker.commands.append(&mut commands);
         harness
             .state_mut()
             .ui_state
@@ -1662,7 +1648,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .push_back(WorkerResult::ResourceDetailUpdated {
             cluster_key: 2,
             history_entry_id: 2,
-            detail: ResourceDetail {
+            detail: Box::new(ResourceDetail {
                 api_resource: replica_set.clone(),
                 name: "api-7b948f".into(),
                 namespace: Some("kube-system".into()),
@@ -1678,7 +1664,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
                 labels: BTreeMap::new(),
                 annotations: BTreeMap::new(),
                 payload: ResourceDetailPayload::Generic,
-            },
+            }),
         });
     harness
         .state_mut()
@@ -1792,7 +1778,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .push_back(WorkerResult::ResourceDetailUpdated {
             cluster_key: 2,
             history_entry_id,
-            detail: ResourceDetail {
+            detail: Box::new(ResourceDetail {
                 api_resource: pod.clone(),
                 name: "api-7b948f-pod".into(),
                 namespace: Some("kube-system".into()),
@@ -1807,8 +1793,8 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
                 }),
                 labels: BTreeMap::new(),
                 annotations: BTreeMap::new(),
-                payload: ResourceDetailPayload::Pod(overflowing_pod_detail()),
-            },
+                payload: ResourceDetailPayload::Pod(Box::new(overflowing_pod_detail())),
+            }),
         });
     harness.run();
     harness
@@ -1918,7 +1904,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .push_back(WorkerResult::ResourceDetailUpdated {
             cluster_key: 2,
             history_entry_id,
-            detail: ResourceDetail {
+            detail: Box::new(ResourceDetail {
                 api_resource: pod,
                 name: "api-7b948f-pod-debug".into(),
                 namespace: Some("kube-system".into()),
@@ -1931,7 +1917,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
                 labels: BTreeMap::new(),
                 annotations: BTreeMap::new(),
                 payload: ResourceDetailPayload::Generic,
-            },
+            }),
         });
     harness.run();
     harness
@@ -1982,7 +1968,7 @@ fn pod_resource_detail_inspector_snapshot() {
         WorkerResult::ResourceDetailUpdated {
             cluster_key: 2,
             history_entry_id: 1,
-            detail: ResourceDetail {
+            detail: Box::new(ResourceDetail {
                 api_resource: pods,
                 name: name.into(),
                 namespace: Some("kube-system".into()),
@@ -1992,7 +1978,7 @@ fn pod_resource_detail_inspector_snapshot() {
                 owner: None,
                 labels: BTreeMap::from([("k8s-app".into(), "kube-dns".into())]),
                 annotations: BTreeMap::new(),
-                payload: ResourceDetailPayload::Pod(PodDetail {
+                payload: ResourceDetailPayload::Pod(Box::new(PodDetail {
                     phase: "Running".into(),
                     conditions: vec![PodConditionDetail {
                         type_: "Ready".into(),
@@ -2074,8 +2060,8 @@ fn pod_resource_detail_inspector_snapshot() {
                             read_only: true,
                         },
                     ],
-                }),
-            },
+                })),
+            }),
         },
         WorkerResult::ResourceEventsReplaced {
             cluster_key: 2,
@@ -2135,7 +2121,7 @@ fn open_typed_detail(
         .push_back(WorkerResult::ResourceDetailUpdated {
             cluster_key: 2,
             history_entry_id: 1,
-            detail,
+            detail: Box::new(detail),
         });
     harness.run();
 }
@@ -2502,7 +2488,7 @@ fn secret_inspector_masks_values_and_prompts_for_a_real_external_change() {
         .push_back(WorkerResult::ResourceDetailUpdated {
             cluster_key: 2,
             history_entry_id: 1,
-            detail: ResourceDetail {
+            detail: Box::new(ResourceDetail {
                 payload: ResourceDetailPayload::Secret(SecretDetail {
                     data: BTreeMap::from([(
                         "password".into(),
@@ -2515,7 +2501,7 @@ fn secret_inspector_masks_values_and_prompts_for_a_real_external_change() {
                     type_: "Opaque".into(),
                 }),
                 ..config_map_detail(BTreeMap::new())
-            },
+            }),
         });
     harness.run();
     harness.get_by_label("Data changed on cluster");

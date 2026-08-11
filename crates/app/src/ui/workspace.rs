@@ -305,10 +305,8 @@ pub(super) fn show(
             }
         }
     }
-    if retry_requested {
-        if let Some(cluster_key) = ui_state.selected_cluster {
-            ui_state.retry_selected_load(cluster_key, commands_to_send);
-        }
+    if retry_requested && let Some(cluster_key) = ui_state.selected_cluster {
+        ui_state.retry_selected_load(cluster_key, commands_to_send);
     }
 }
 
@@ -340,8 +338,8 @@ fn selected_watches_are_loading(
         })
 }
 
-fn selected_resources<'a>(
-    cluster: &'a super::state::ClusterState,
+fn selected_resources(
+    cluster: &super::state::ClusterState,
     api_resource: Option<&crate::api_resource::ApiResource>,
 ) -> Vec<MinimalResource> {
     let Some(api_resource) = api_resource else {
@@ -356,7 +354,7 @@ fn selected_resources<'a>(
             resources.extend(state.resources.values().cloned());
         }
     }
-    resources.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    resources.sort_by_key(|resource| resource.name.to_lowercase());
     resources
 }
 
@@ -761,15 +759,13 @@ fn show_resource_table(
                     index if index == age_index => {
                         TableRowBuilder::text(ui, &resource.age(), false)
                     }
-                    index if index == actions_index => {
-                        if allow_actions {
-                            show_resource_actions(
-                                ui,
-                                api_resource,
-                                resource,
-                                &mut pending_action.borrow_mut(),
-                            );
-                        }
+                    index if index == actions_index && allow_actions => {
+                        show_resource_actions(
+                            ui,
+                            api_resource,
+                            resource,
+                            &mut pending_action.borrow_mut(),
+                        );
                     }
                     _ => {}
                 },
@@ -788,12 +784,11 @@ fn show_resource_table(
             if let ResourceTableRow::Resource(resource) = row {
                 if Some(column_index) == node_column_index
                     && let Some(CellValue::Text(node_name)) = resource.cells.get(NODE_COLUMN)
+                    && node_name == "-"
                 {
-                    if node_name == "-" {
-                        row_response
-                            .clone()
-                            .on_hover_text("Kubernetes has not assigned this Pod to a Node.");
-                    }
+                    row_response
+                        .clone()
+                        .on_hover_text("Kubernetes has not assigned this Pod to a Node.");
                 }
                 if allow_actions {
                     MoreButton::show_context_menu(row_response, |menu| {

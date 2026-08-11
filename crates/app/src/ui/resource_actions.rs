@@ -101,13 +101,14 @@ pub(super) fn show_resource_action_items(
     }
     if crate::resource_handlers::deployment::supports_rollout_restart(api_resource) {
         menu.separator();
-        if menu.action("Restart rollout").clicked() && pending_action.is_none() {
-            if let Some(namespace) = resource.namespace.clone() {
-                *pending_action = Some(ResourceAction::RequestDeploymentRestart {
-                    name: resource.name.clone(),
-                    namespace,
-                });
-            }
+        if menu.action("Restart rollout").clicked()
+            && pending_action.is_none()
+            && let Some(namespace) = resource.namespace.clone()
+        {
+            *pending_action = Some(ResourceAction::RequestDeploymentRestart {
+                name: resource.name.clone(),
+                namespace,
+            });
         }
     }
     menu.separator();

@@ -74,10 +74,8 @@ pub(super) fn show(
             Err(error) => ui_state.terminal_settings_error = Some(error),
         }
     }
-    if close {
-        if blade.begin_close() {
-            stack.seed_transition(ctx, &mut blade);
-        }
+    if close && blade.begin_close() {
+        stack.seed_transition(ctx, &mut blade);
     }
     if response.close_finished {
         ui_state.terminal_settings_open = false;

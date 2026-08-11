@@ -1,3 +1,4 @@
+use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::minimal_resource_from_typed;
 use crate::cluster_connection_manager::{
     ResourceWatcher, TypedWatcherContext, namespaced_typed_watcher,
@@ -166,7 +167,7 @@ pub(crate) fn detail_payload(object: &kube::api::DynamicObject) -> Option<Resour
                 .collect()
         });
 
-    Some(ResourceDetailPayload::Pod(PodDetail {
+    Some(ResourceDetailPayload::Pod(Box::new(PodDetail {
         phase: status
             .and_then(|status| status.phase.clone())
             .unwrap_or_else(|| "Unknown".to_owned()),
@@ -187,7 +188,7 @@ pub(crate) fn detail_payload(object: &kube::api::DynamicObject) -> Option<Resour
         containers,
         log_containers: pod_log_containers(&pod),
         volumes,
-    }))
+    })))
 }
 
 fn pod_log_containers(pod: &Pod) -> Vec<PodLogContainer> {
@@ -785,4 +786,3 @@ mod tests {
         assert_eq!(detail.restart_policy.as_deref(), Some("Always"));
     }
 }
-use crate::api_resource::ApiResource;

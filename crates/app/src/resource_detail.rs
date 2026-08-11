@@ -52,7 +52,7 @@ pub(crate) enum ManagedResourceAssociation {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum ResourceDetailPayload {
     Generic,
-    Pod(PodDetail),
+    Pod(Box<PodDetail>),
     Node(NodeDetail),
     ConfigMap(ConfigMapDetail),
     Secret(SecretDetail),

@@ -830,7 +830,7 @@ fn request_copy(
             .iter()
             .any(|event| matches!(event, egui::Event::Copy))
     });
-    let Some(selection) = copy_requested.then(|| window.selection).flatten() else {
+    let Some(selection) = copy_requested.then_some(window.selection).flatten() else {
         return;
     };
     let (start, end) = selection.normalized();
@@ -1236,9 +1236,7 @@ fn selection_position(
     text_start_x: f32,
     character_width: f32,
 ) -> Option<(LogTextPosition, bool)> {
-    let Some(pointer) = response.interact_pointer_pos() else {
-        return None;
-    };
+    let pointer = response.interact_pointer_pos()?;
     let byte_offset =
         byte_offset_at_response_x(text, pointer.x, text_left, text_start_x, character_width);
     let position = LogTextPosition {
@@ -1410,8 +1408,10 @@ fn log_line_layout_job(
     ranges: &[(usize, usize)],
     display_options: LogDisplayOptions,
 ) -> egui::text::LayoutJob {
-    let mut job = egui::text::LayoutJob::default();
-    job.wrap = egui::text::TextWrapping::no_max_width();
+    let mut job = egui::text::LayoutJob {
+        wrap: egui::text::TextWrapping::no_max_width(),
+        ..Default::default()
+    };
     let number = egui::TextFormat {
         font_id: egui::FontId::monospace(LOG_FONT_SIZE),
         color: egui::Color32::from_rgb(156, 163, 175),
@@ -1435,8 +1435,10 @@ fn log_line_text_layout_job(
     ranges: Vec<(usize, usize)>,
     display_options: LogDisplayOptions,
 ) -> egui::text::LayoutJob {
-    let mut job = egui::text::LayoutJob::default();
-    job.wrap = egui::text::TextWrapping::no_max_width();
+    let mut job = egui::text::LayoutJob {
+        wrap: egui::text::TextWrapping::no_max_width(),
+        ..Default::default()
+    };
     append_log_line_text(&mut job, line, &style_spans, &ranges, display_options);
     job
 }
@@ -3844,10 +3846,10 @@ mod tests {
             filter_matches,
             page_start: 0,
         };
+        let matcher = regex::Regex::new("(?i)http").expect("valid test matcher");
         let page = window.pages.get_mut(&key).expect("test page exists");
         for row in &mut page.rows {
-            row.match_ranges = regex::Regex::new("(?i)http")
-                .expect("valid test matcher")
+            row.match_ranges = matcher
                 .find_iter(&row.text)
                 .map(|range| (range.start(), range.end()))
                 .collect();

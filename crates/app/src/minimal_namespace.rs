@@ -3,26 +3,33 @@ use k8s_openapi::api::core::v1::Namespace;
 use std::cmp::Ordering;
 use std::fmt::Display;
 
-#[derive(Debug, Eq, PartialEq, Ord, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct MinimalNamespace {
     pub name: String,
     pub display_name: Option<String>,
 }
 
-impl PartialOrd for MinimalNamespace {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        let self_display_name = self
-            .display_name
+impl Ord for MinimalNamespace {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.display_name
             .as_ref()
             .unwrap_or(&self.name)
-            .to_lowercase();
-        let other_display_name = other
-            .display_name
-            .as_ref()
-            .unwrap_or(&other.name)
-            .to_lowercase();
+            .to_lowercase()
+            .cmp(
+                &other
+                    .display_name
+                    .as_ref()
+                    .unwrap_or(&other.name)
+                    .to_lowercase(),
+            )
+            .then_with(|| self.display_name.cmp(&other.display_name))
+            .then_with(|| self.name.cmp(&other.name))
+    }
+}
 
-        self_display_name.partial_cmp(&other_display_name)
+impl PartialOrd for MinimalNamespace {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -43,6 +50,6 @@ impl Display for MinimalNamespace {
 
 impl MinimalNamespace {
     pub fn get_name_to_display(&self) -> &str {
-        &self.display_name.as_ref().unwrap_or(&self.name)
+        self.display_name.as_ref().unwrap_or(&self.name)
     }
 }

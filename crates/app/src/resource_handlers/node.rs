@@ -1,3 +1,4 @@
+use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::{
     ResourceWatcher, TypedWatcherContext, api_resource_for, cluster_typed_watcher,
     minimal_resource_from_typed,
@@ -159,4 +160,3 @@ mod tests {
         assert!(!resource.namespaced);
     }
 }
-use crate::api_resource::ApiResource;

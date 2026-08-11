@@ -436,9 +436,11 @@ fn diagnostics_from_api_error(error: &ResourceApiError, yaml: &str) -> Vec<YamlD
 }
 
 fn api_error_message(error: &ResourceApiError) -> String {
-    (!error.message.is_empty())
-        .then_some(error.message.clone())
-        .unwrap_or_else(|| "The Kubernetes API rejected this resource".into())
+    if !error.message.is_empty() {
+        error.message.clone()
+    } else {
+        "The Kubernetes API rejected this resource".into()
+    }
 }
 
 fn set_editor_diagnostics(editor: &mut YamlEditorWindowState, diagnostics: Vec<YamlDiagnostic>) {
@@ -587,11 +589,11 @@ impl ResourceDataEditorState {
         let mut expected = BTreeMap::new();
         let mut updated = BTreeMap::new();
         for (key, value) in &self.draft_values {
-            if self.server_values.get(key) != Some(value) {
-                if let Some(expected_value) = self.server_values.get(key) {
-                    expected.insert(key.clone(), expected_value.clone());
-                    updated.insert(key.clone(), value.clone());
-                }
+            if self.server_values.get(key) != Some(value)
+                && let Some(expected_value) = self.server_values.get(key)
+            {
+                expected.insert(key.clone(), expected_value.clone());
+                updated.insert(key.clone(), value.clone());
             }
         }
         (expected, updated)
@@ -651,9 +653,9 @@ impl ResourceDataEditorState {
             if self.server_values.contains_key(&key) {
                 self.draft_values.insert(key, value);
             } else {
-                self.save_error = Some(format!(
-                    "A changed data key was removed on the cluster and cannot be saved."
-                ));
+                self.save_error = Some(
+                    "A changed data key was removed on the cluster and cannot be saved.".to_owned(),
+                );
             }
         }
     }
@@ -854,13 +856,10 @@ impl UiState {
         cluster_key: i32,
         api_resources: &[ApiResource],
     ) -> Option<ApiResource> {
-        let Some(context_name) = self
+        let context_name = self
             .clusters
             .get(&cluster_key)
-            .map(|cluster| cluster.name.clone())
-        else {
-            return None;
-        };
+            .map(|cluster| cluster.name.clone())?;
         let saved_resource = self
             .cluster_selections
             .selections
@@ -1562,10 +1561,10 @@ impl UiState {
                             },
                         );
                     }
-                    if let Some(cluster_key) = current_cluster_key {
-                        if let Some(command) = self.select_cluster(cluster_key) {
-                            commands_to_send.push(command);
-                        }
+                    if let Some(cluster_key) = current_cluster_key
+                        && let Some(command) = self.select_cluster(cluster_key)
+                    {
+                        commands_to_send.push(command);
                     }
                 }
                 WorkerResult::KubernetesNamespacesAdded {
@@ -1769,11 +1768,11 @@ impl UiState {
                     {
                         if panel.history_entry_id == history_entry_id {
                             sync_resource_data_editor(&mut panel.data_editor, &detail);
-                            panel.detail = Some(detail);
+                            panel.detail = Some(*detail);
                             panel.detail_error = None;
                         } else if let Some(entry) = panel.history_entry_mut(history_entry_id) {
                             sync_resource_data_editor(&mut entry.data_editor, &detail);
-                            entry.detail = Some(detail);
+                            entry.detail = Some(*detail);
                             entry.detail_error = None;
                         }
                     }
@@ -2052,10 +2051,10 @@ impl UiState {
                     }
                 }
                 WorkerResult::PodLogStreamStarted { log_window_id } => {
-                    if let Some(window) = self.log_windows.get_mut(&log_window_id) {
-                        if matches!(window.status, PodLogStatus::Connecting) {
-                            window.status = PodLogStatus::Following;
-                        }
+                    if let Some(window) = self.log_windows.get_mut(&log_window_id)
+                        && matches!(window.status, PodLogStatus::Connecting)
+                    {
+                        window.status = PodLogStatus::Following;
                     }
                 }
                 WorkerResult::PodLogStreamEnded { log_window_id } => {

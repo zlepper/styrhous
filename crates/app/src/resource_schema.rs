@@ -226,10 +226,11 @@ impl ResourceSchema {
         }
 
         let completion_context = CompletionContext {
-            kind: context
-                .is_value
-                .then_some(CompletionContextKind::Value)
-                .unwrap_or(CompletionContextKind::MappingKey),
+            kind: if context.is_value {
+                CompletionContextKind::Value
+            } else {
+                CompletionContextKind::MappingKey
+            },
             type_label: if context.is_value {
                 schema.get("type").and_then(Value::as_str)
             } else {
