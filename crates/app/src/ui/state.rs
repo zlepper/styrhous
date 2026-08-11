@@ -400,6 +400,17 @@ pub(super) struct YamlEditorWindowState {
     pub(super) completion_cursor: Option<usize>,
     pub(super) suggestions_visible: bool,
     pub(super) suggestion_selection: usize,
+    pub(super) search: YamlEditorSearchState,
+}
+
+#[derive(Debug, Clone, Default)]
+pub(super) struct YamlEditorSearchState {
+    pub(super) query: String,
+    pub(super) regex_mode: bool,
+    pub(super) input_focused: bool,
+    pub(super) active_match: Option<usize>,
+    /// The next rendered editor frame scrolls this match into view, then clears it.
+    pub(super) scroll_to_match: Option<usize>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -1016,6 +1027,7 @@ impl UiState {
                 completion_cursor: None,
                 suggestions_visible: false,
                 suggestion_selection: 0,
+                search: YamlEditorSearchState::default(),
             },
         );
         commands_to_send.push(crate::worker::WorkerCommand::GetResourceYaml {

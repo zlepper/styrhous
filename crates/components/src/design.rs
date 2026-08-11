@@ -116,3 +116,12 @@ pub mod status {
     pub const DANGER: Color32 = Color32::from_rgb(185, 28, 28);
     pub const CRITICAL: Color32 = Color32::from_rgb(220, 38, 38);
 }
+
+pub mod search {
+    use egui::Color32;
+
+    /// Background for inactive search matches on dark code and log surfaces.
+    pub const MATCH_BACKGROUND: Color32 = Color32::from_rgb(120, 53, 15);
+    /// Background for the match selected by find navigation.
+    pub const ACTIVE_MATCH_BACKGROUND: Color32 = Color32::from_rgb(67, 56, 202);
+}
