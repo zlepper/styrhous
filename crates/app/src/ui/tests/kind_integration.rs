@@ -11,6 +11,7 @@ use k8s_openapi::api::apps::v1::{Deployment, DeploymentSpec};
 use k8s_openapi::api::core::v1::{ConfigMap, Namespace, Secret};
 use k8s_openapi::api::core::v1::{Container, Pod, PodSpec, PodTemplateSpec};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
+use kube::api::Patch;
 use kube::{Api, Client};
 use std::collections::BTreeMap;
 
@@ -187,6 +188,18 @@ fn test_secret_inspector_actions_integration() {
 impl Drop for IntegrationConfigMap {
     fn drop(&mut self) {
         let _ = self.runtime.block_on(async {
+            // A failure in the force-delete test can otherwise strand this fixture's
+            // ConfigMap (and therefore its namespace) in Terminating.
+            let _ = self
+                .configmaps
+                .patch(
+                    &self.name,
+                    &Default::default(),
+                    &Patch::Merge(&k8s_openapi::serde_json::json!({
+                        "metadata": { "finalizers": [] }
+                    })),
+                )
+                .await;
             self.namespaces
                 .delete(&self.namespace, &Default::default())
                 .await
@@ -726,6 +739,119 @@ fn test_resource_actions_integration() {
     assert!(
         runtime
             .block_on(async { configmaps.get(&test_configmap_name).await })
+            .is_err()
+    );
+}
+
+/// Removes a deliberately stuck ConfigMap's finalizer through the guarded UI action.
+#[test]
+fn test_force_delete_resource_with_finalizer_integration() {
+    let fixture = IntegrationConfigMap::create("force-delete", "force-delete-stuck", "value");
+    let resource_name = fixture.name.clone();
+    let runtime = &fixture.runtime;
+    let configmaps = &fixture.configmaps;
+    runtime.block_on(async {
+        configmaps
+            .patch(
+                &resource_name,
+                &Default::default(),
+                &Patch::Merge(&k8s_openapi::serde_json::json!({
+                    "metadata": { "finalizers": ["tests.kubernetes-dev-ui/finalizer"] }
+                })),
+            )
+            .await
+            .expect("ConfigMap finalizer should be added");
+        configmaps
+            .delete(&resource_name, &Default::default())
+            .await
+            .expect("ConfigMap deletion should be accepted");
+        let configmap = configmaps
+            .get(&resource_name)
+            .await
+            .expect("Finalizer should keep ConfigMap present");
+        assert!(configmap.metadata.deletion_timestamp.is_some());
+        assert!(
+            configmap
+                .metadata
+                .finalizers
+                .as_ref()
+                .is_some_and(|finalizers| finalizers == &["tests.kubernetes-dev-ui/finalizer"])
+        );
+    });
+
+    let (mut harness, cluster_key) = connected_kind_harness();
+    wait_for_cluster_data(&mut harness, cluster_key);
+    select_namespace(&mut harness, &fixture.namespace);
+    let configmaps_resource = select_resource(&mut harness, "Config", "Config Maps");
+    wait_for_resource_sync(
+        &mut harness,
+        cluster_key,
+        configmaps_resource.clone(),
+        &fixture.namespace,
+    );
+    wait_for(
+        &mut harness,
+        |app| {
+            app.ui_state.clusters[&cluster_key].resource_cache
+                [&(configmaps_resource.clone(), Some(fixture.namespace.clone()))]
+                .resources
+                .values()
+                .find(|resource| resource.name == resource_name)
+                .filter(|resource| resource.can_force_delete())
+                .map(|_| ())
+        },
+        10_000,
+    );
+
+    harness
+        .get_by_label(&format!("More actions for {resource_name}"))
+        .click_accesskit();
+    harness.run_steps(1);
+    harness
+        .get_by_label("Force delete (remove finalizers)")
+        .click_accesskit();
+    harness.run_steps(1);
+    wait_for(
+        &mut harness,
+        |app| {
+            app.ui_state.clusters[&cluster_key]
+                .pending_force_delete
+                .as_ref()
+                .filter(|pending| pending.confirmation_available_at <= std::time::Instant::now())
+                .map(|_| ())
+        },
+        5_000,
+    );
+    harness
+        .get_by_role_and_label(
+            egui::accesskit::Role::TextInput,
+            &format!("Type {resource_name} to acknowledge that you are bypassing cleanup:"),
+        )
+        .click();
+    harness.run_steps(1);
+    harness
+        .input_mut()
+        .events
+        .push(egui::Event::Text(resource_name.clone()));
+    harness.run_steps(1);
+    harness.get_by_label("Remove finalizers").click_accesskit();
+    harness.run_steps(1);
+
+    wait_for(
+        &mut harness,
+        |app| {
+            (!app.ui_state.clusters[&cluster_key].resource_cache
+                [&(configmaps_resource.clone(), Some(fixture.namespace.clone()))]
+                .resources
+                .values()
+                .any(|resource| resource.name == resource_name))
+            .then_some(())
+        },
+        10_000,
+    );
+    assert!(
+        runtime
+            .block_on(async { configmaps.get(&resource_name).await })
             .is_err()
     );
 }

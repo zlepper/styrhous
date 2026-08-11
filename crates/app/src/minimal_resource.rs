@@ -3,6 +3,9 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use time::OffsetDateTime;
 
+const DELETING_CELL: &str = "__resource-deleting";
+const FINALIZERS_CELL: &str = "__resource-finalizers";
+
 /// A lightweight representation of any Kubernetes resource for UI display.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct MinimalResource {
@@ -41,6 +44,39 @@ impl PartialOrd for MinimalResource {
 }
 
 impl MinimalResource {
+    pub(crate) fn with_lifecycle_metadata(
+        mut self,
+        is_deleting: bool,
+        finalizers: Vec<String>,
+    ) -> Self {
+        if is_deleting {
+            self.cells
+                .insert(DELETING_CELL.into(), CellValue::Text("true".into()));
+        }
+        if !finalizers.is_empty() {
+            self.cells
+                .insert(FINALIZERS_CELL.into(), CellValue::List(finalizers));
+        }
+        self
+    }
+
+    /// Whether Kubernetes has accepted deletion but still retains the object.
+    pub(crate) fn is_deleting(&self) -> bool {
+        matches!(self.cells.get(DELETING_CELL), Some(CellValue::Text(value)) if value == "true")
+    }
+
+    /// Finalizers blocking deletion, when this resource is pending deletion.
+    pub(crate) fn finalizers(&self) -> &[String] {
+        match self.cells.get(FINALIZERS_CELL) {
+            Some(CellValue::List(finalizers)) => finalizers,
+            _ => &[],
+        }
+    }
+
+    pub(crate) fn can_force_delete(&self) -> bool {
+        self.is_deleting() && !self.finalizers().is_empty()
+    }
+
     /// Calculate age from creation_timestamp as human-readable string.
     pub fn age(&self) -> String {
         format_age(self.creation_timestamp)
@@ -144,5 +180,35 @@ mod tests {
             log_containers: Vec::new(),
         };
         assert_eq!(resource.age(), "Unknown");
+    }
+
+    #[test]
+    fn force_delete_requires_a_deleting_resource_with_finalizers() {
+        let resource = MinimalResource {
+            uid: "test".to_string(),
+            name: "test-resource".to_string(),
+            namespace: None,
+            creation_timestamp: None,
+            cells: BTreeMap::new(),
+            log_containers: Vec::new(),
+        };
+        assert!(!resource.can_force_delete());
+        assert!(
+            !resource
+                .clone()
+                .with_lifecycle_metadata(false, vec!["example.com/cleanup".into()])
+                .can_force_delete()
+        );
+        assert!(
+            !resource
+                .clone()
+                .with_lifecycle_metadata(true, Vec::new())
+                .can_force_delete()
+        );
+        assert!(
+            resource
+                .with_lifecycle_metadata(true, vec!["example.com/cleanup".into()])
+                .can_force_delete()
+        );
     }
 }

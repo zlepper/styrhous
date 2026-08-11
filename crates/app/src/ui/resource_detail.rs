@@ -1,7 +1,7 @@
 use super::resource_actions::show_resource_action_items;
 use super::state::{
-    PendingDelete, PendingDeploymentRestart, ResourceAction, ResourceDetailHistoryEntry,
-    ResourceDetailPanelState, UiState,
+    PendingDelete, PendingDeploymentRestart, PendingForceDelete, ResourceAction,
+    ResourceDetailHistoryEntry, ResourceDetailPanelState, UiState,
 };
 use super::widgets::show_resource_cell;
 use crate::minimal_resource::{MinimalResource, format_age};
@@ -333,6 +333,20 @@ fn show_legacy(
                                 namespace,
                             ));
                         }
+                        ResourceAction::RequestForceDelete {
+                            name,
+                            uid,
+                            namespace,
+                            finalizers,
+                        } => {
+                            cluster.pending_force_delete = Some(PendingForceDelete::new(
+                                panel_api_resource(cluster),
+                                name,
+                                uid,
+                                namespace,
+                                finalizers,
+                            ));
+                        }
                         ResourceAction::RequestDeploymentRestart { name, namespace } => {
                             cluster.pending_deployment_restart = Some(PendingDeploymentRestart {
                                 resource_name: name,
@@ -543,6 +557,22 @@ fn show_shared_blade(
                         panel_api_resource(cluster),
                         name,
                         namespace,
+                    ));
+                }
+            }
+            ResourceAction::RequestForceDelete {
+                name,
+                uid,
+                namespace,
+                finalizers,
+            } => {
+                if let Some(cluster) = ui_state.clusters.get_mut(&cluster_key) {
+                    cluster.pending_force_delete = Some(PendingForceDelete::new(
+                        panel_api_resource(cluster),
+                        name,
+                        uid,
+                        namespace,
+                        finalizers,
                     ));
                 }
             }
@@ -1138,7 +1168,18 @@ fn show_resource_detail_header(
         creation_timestamp: None,
         cells: Default::default(),
         log_containers,
-    };
+    }
+    .with_lifecycle_metadata(
+        entry
+            .detail
+            .as_ref()
+            .is_some_and(|detail| detail.is_deleting),
+        entry
+            .detail
+            .as_ref()
+            .map(|detail| detail.finalizers.clone())
+            .unwrap_or_default(),
+    );
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         let more_label = if is_foreground {
             format!("More actions for {}", resource.name)

@@ -960,6 +960,10 @@ fn extract_minimal_resource(
         cells: extract_custom_cells(&obj.data, custom_columns),
         log_containers: Vec::new(),
     }
+    .with_lifecycle_metadata(
+        metadata.deletion_timestamp.is_some(),
+        metadata.finalizers.clone().unwrap_or_default(),
+    )
 }
 
 fn extract_custom_cells(
@@ -1037,6 +1041,10 @@ pub(crate) fn minimal_resource_from_typed<T: Resource>(
         cells,
         log_containers: Vec::new(),
     }
+    .with_lifecycle_metadata(
+        metadata.deletion_timestamp.is_some(),
+        metadata.finalizers.clone().unwrap_or_default(),
+    )
 }
 
 pub struct ResourceDetailWatchRequest {
@@ -1636,6 +1644,8 @@ async fn resource_detail_from_dynamic(
         namespace: metadata.namespace.clone(),
         uid: get_resource_uid(&object),
         resource_version: metadata.resource_version.clone().unwrap_or_default(),
+        is_deleting: metadata.deletion_timestamp.is_some(),
+        finalizers: metadata.finalizers.clone().unwrap_or_default(),
         creation_timestamp,
         owner: metadata
             .owner_references
@@ -2163,6 +2173,55 @@ pub async fn delete_resource(
     api.delete(&resource_name, &Default::default()).await?;
 
     Ok(WorkerResult::ResourceDeleteCompleted {
+        cluster_key,
+        resource_name,
+    })
+}
+
+/// Remove finalizers from a resource Kubernetes is already deleting.
+pub async fn force_delete_resource(
+    cluster_key: i32,
+    client: kube::Client,
+    api_resource: ApiResource,
+    namespace: Option<String>,
+    resource_name: String,
+    resource_uid: String,
+) -> Result<WorkerResult> {
+    let api = create_dynamic_api(&client, &api_resource, namespace.as_deref()).await?;
+    let resource = api.get(&resource_name).await?;
+    let metadata = resource.meta();
+    if metadata.uid.as_deref() != Some(&resource_uid) {
+        anyhow::bail!(
+            "Resource was replaced while awaiting confirmation; finalizers were not removed"
+        );
+    }
+    if metadata.deletion_timestamp.is_none() {
+        anyhow::bail!("Resource is no longer deleting; finalizers were not removed");
+    }
+    if metadata.finalizers.as_ref().is_none_or(Vec::is_empty) {
+        anyhow::bail!("Resource no longer has finalizers; nothing was removed");
+    }
+    let resource_version = metadata
+        .resource_version
+        .as_deref()
+        .context("Deleting resource did not include a resource version")?;
+    info!(
+        "Removing finalizers from {}/{} {} in {}",
+        api_resource.group,
+        api_resource.name,
+        resource_name,
+        namespace.as_deref().unwrap_or("cluster-wide scope")
+    );
+    let patch = k8s_openapi::serde_json::json!({
+        "metadata": { "resourceVersion": resource_version, "finalizers": [] }
+    });
+    api.patch(
+        &resource_name,
+        &kube::api::PatchParams::default(),
+        &kube::api::Patch::Merge(&patch),
+    )
+    .await?;
+    Ok(WorkerResult::ResourceForceDeleteCompleted {
         cluster_key,
         resource_name,
     })

@@ -137,4 +137,17 @@ pub(super) fn show_resource_action_items(
             namespace: resource.namespace.clone(),
         });
     }
+    if resource.can_force_delete()
+        && menu
+            .destructive_action("Force delete (remove finalizers)")
+            .clicked()
+        && pending_action.is_none()
+    {
+        *pending_action = Some(ResourceAction::RequestForceDelete {
+            name: resource.name.clone(),
+            uid: resource.uid.clone(),
+            namespace: resource.namespace.clone(),
+            finalizers: resource.finalizers().to_vec(),
+        });
+    }
 }
