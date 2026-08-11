@@ -204,6 +204,8 @@ pub enum WorkerCommand {
         api_resource: ApiResource,
         namespace: Option<String>,
         resource_name: String,
+        resource_uid: Option<String>,
+        bulk_delete_id: Option<u64>,
     },
     ForceDeleteResource {
         cluster_key: i32,
@@ -431,7 +433,10 @@ pub enum WorkerResult {
     /// Resource was successfully deleted
     ResourceDeleteCompleted {
         cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: Option<String>,
         resource_name: String,
+        bulk_delete_id: Option<u64>,
     },
     /// A deleting resource's finalizers were removed.
     ResourceForceDeleteCompleted {
@@ -710,6 +715,8 @@ impl WorkerRuntime {
                 api_resource,
                 namespace,
                 resource_name,
+                resource_uid,
+                bulk_delete_id,
             } => {
                 let clients = shared.clients.read().await;
                 if let Some(client) = clients.get(cluster_key) {
@@ -719,6 +726,8 @@ impl WorkerRuntime {
                         api_resource.clone(),
                         namespace.clone(),
                         resource_name.clone(),
+                        resource_uid.clone(),
+                        *bulk_delete_id,
                     )
                     .await
                     .map(Some)

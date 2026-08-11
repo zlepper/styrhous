@@ -490,6 +490,73 @@ pub(super) struct PendingDelete {
     pub(super) confirmation_available_at: Instant,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(super) struct BulkDeleteTarget {
+    pub(super) uid: String,
+    pub(super) name: String,
+    pub(super) namespace: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct PendingBulkDelete {
+    pub(super) api_resource: ApiResource,
+    pub(super) targets: Vec<BulkDeleteTarget>,
+    pub(super) confirmation_available_at: Instant,
+}
+
+impl PendingBulkDelete {
+    pub(super) fn new(api_resource: ApiResource, targets: Vec<BulkDeleteTarget>) -> Self {
+        Self {
+            api_resource,
+            targets,
+            confirmation_available_at: Instant::now() + DELETE_CONFIRMATION_DELAY,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(super) struct BulkDeleteProgress {
+    pub(super) id: u64,
+    pub(super) api_resource: ApiResource,
+    pub(super) remaining_targets: HashSet<BulkDeleteTarget>,
+    pub(super) failures: Vec<(BulkDeleteTarget, String)>,
+}
+
+impl BulkDeleteProgress {
+    pub(super) fn new(id: u64, api_resource: ApiResource, targets: Vec<BulkDeleteTarget>) -> Self {
+        Self {
+            id,
+            api_resource,
+            remaining_targets: targets.into_iter().collect(),
+            failures: Vec::new(),
+        }
+    }
+
+    fn target_for(
+        &self,
+        api_resource: &ApiResource,
+        name: &str,
+        namespace: &Option<String>,
+    ) -> Option<BulkDeleteTarget> {
+        if self.api_resource != *api_resource {
+            return None;
+        }
+        self.remaining_targets
+            .iter()
+            .find(|target| target.name == name && target.namespace == *namespace)
+            .cloned()
+    }
+}
+
+impl BulkDeleteTarget {
+    pub(super) fn display_name(&self) -> String {
+        self.namespace.as_deref().map_or_else(
+            || self.name.clone(),
+            |namespace| format!("{namespace}/{}", self.name),
+        )
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct PendingForceDelete {
     pub(super) api_resource: ApiResource,
@@ -793,9 +860,14 @@ pub(super) struct ClusterState {
     pub(super) resource_cache: HashMap<ResourceWatchKey, ResourceWatchState>,
     pub(super) active_watchers: HashSet<ResourceWatchKey>,
     pub(super) resource_searches: HashMap<ApiResource, ResourceSearchState>,
+    pub(super) resource_selections: HashMap<ApiResource, HashSet<String>>,
+    pub(super) next_bulk_delete_id: u64,
     pub(super) resource_detail_panel: Option<ResourceDetailPanelState>,
     pub(super) next_detail_generation: u64,
     pub(super) pending_delete: Option<PendingDelete>,
+    pub(super) pending_bulk_delete: Option<PendingBulkDelete>,
+    pub(super) bulk_delete_progress: Option<BulkDeleteProgress>,
+    pub(super) bulk_delete_error: Option<String>,
     pub(super) pending_force_delete: Option<PendingForceDelete>,
     pub(super) force_delete_error: Option<String>,
     pub(super) pending_deployment_restart: Option<PendingDeploymentRestart>,
@@ -1469,6 +1541,53 @@ impl UiState {
         });
     }
 
+    fn settle_bulk_delete_target(
+        &mut self,
+        cluster_key: i32,
+        bulk_delete_id: Option<u64>,
+        api_resource: &ApiResource,
+        resource_name: &str,
+        namespace: &Option<String>,
+        failure: Option<String>,
+    ) {
+        let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
+            return;
+        };
+        let Some(progress) = cluster.bulk_delete_progress.as_mut() else {
+            return;
+        };
+        if bulk_delete_id != Some(progress.id) {
+            return;
+        }
+        let Some(target) = progress.target_for(api_resource, resource_name, namespace) else {
+            return;
+        };
+
+        let api_resource = progress.api_resource.clone();
+        progress.remaining_targets.remove(&target);
+        if let Some(failure) = failure {
+            progress.failures.push((target, failure));
+        } else if let Some(selection) = cluster.resource_selections.get_mut(&api_resource) {
+            selection.remove(&target.uid);
+        }
+
+        if !progress.remaining_targets.is_empty() {
+            return;
+        }
+
+        let failures = std::mem::take(&mut progress.failures);
+        cluster.bulk_delete_progress = None;
+        if failures.is_empty() {
+            return;
+        }
+        let details = failures
+            .iter()
+            .map(|(target, error)| format!("{}: {error}", target.display_name()))
+            .collect::<Vec<_>>()
+            .join("\n");
+        cluster.bulk_delete_error = Some(details);
+    }
+
     pub(super) fn update<W: WorkerTrait>(
         &mut self,
         worker: &mut W,
@@ -1501,6 +1620,23 @@ impl UiState {
                                 api_resource,
                                 namespace,
                                 message,
+                            );
+                        }
+                        Some(crate::worker::WorkerCommand::DeleteResource {
+                            cluster_key,
+                            api_resource,
+                            bulk_delete_id,
+                            namespace,
+                            resource_name,
+                            ..
+                        }) => {
+                            self.settle_bulk_delete_target(
+                                cluster_key,
+                                bulk_delete_id,
+                                &api_resource,
+                                &resource_name,
+                                &namespace,
+                                Some(message),
                             );
                         }
                         Some(crate::worker::WorkerCommand::StartResourceDetailWatch {
@@ -1641,9 +1777,14 @@ impl UiState {
                                 resource_cache: HashMap::new(),
                                 active_watchers: HashSet::new(),
                                 resource_searches: HashMap::new(),
+                                resource_selections: HashMap::new(),
+                                next_bulk_delete_id: 0,
                                 resource_detail_panel: None,
                                 next_detail_generation: 0,
                                 pending_delete: None,
+                                pending_bulk_delete: None,
+                                bulk_delete_progress: None,
+                                bulk_delete_error: None,
                                 pending_force_delete: None,
                                 force_delete_error: None,
                                 pending_deployment_restart: None,
@@ -1777,7 +1918,7 @@ impl UiState {
                     if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
                         let watch = cluster
                             .resource_cache
-                            .entry((api_resource, namespace))
+                            .entry((api_resource.clone(), namespace))
                             .or_default();
                         watch.resources.insert(resource.uid.clone(), resource);
                     }
@@ -1790,10 +1931,15 @@ impl UiState {
                 } => {
                     info!("Resource deleted: {resource_uid}");
                     if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
-                        if let Some(watch) =
-                            cluster.resource_cache.get_mut(&(api_resource, namespace))
+                        if let Some(watch) = cluster
+                            .resource_cache
+                            .get_mut(&(api_resource.clone(), namespace))
                         {
                             watch.resources.remove(&resource_uid);
+                        }
+                        if let Some(selection) = cluster.resource_selections.get_mut(&api_resource)
+                        {
+                            selection.remove(&resource_uid);
                         }
                         if cluster
                             .resource_detail_panel
@@ -1819,7 +1965,7 @@ impl UiState {
                     if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
                         let watch = cluster
                             .resource_cache
-                            .entry((api_resource, namespace))
+                            .entry((api_resource.clone(), namespace))
                             .or_default();
                         watch.resources = resources
                             .into_iter()
@@ -1827,6 +1973,22 @@ impl UiState {
                             .collect();
                         watch.is_synced = true;
                         watch.error = None;
+                        let visible_uids = cluster
+                            .resource_cache
+                            .iter()
+                            .filter(|((cached_api_resource, cached_namespace), _)| {
+                                cached_api_resource == &api_resource
+                                    && (!api_resource.namespaced
+                                        || cached_namespace.as_ref().is_some_and(|namespace| {
+                                            cluster.selected_namespaces.contains(namespace)
+                                        }))
+                            })
+                            .flat_map(|(_, watch)| watch.resources.keys().cloned())
+                            .collect::<HashSet<_>>();
+                        if let Some(selection) = cluster.resource_selections.get_mut(&api_resource)
+                        {
+                            selection.retain(|uid| visible_uids.contains(uid));
+                        }
                     }
                 }
                 WorkerResult::KubernetesResourceWatchStarted {
@@ -2072,10 +2234,20 @@ impl UiState {
                 }
                 WorkerResult::ResourceDeleteCompleted {
                     cluster_key,
+                    api_resource,
+                    namespace,
                     resource_name,
-                    ..
+                    bulk_delete_id,
                 } => {
                     info!("Resource deleted: {resource_name}");
+                    self.settle_bulk_delete_target(
+                        cluster_key,
+                        bulk_delete_id,
+                        &api_resource,
+                        &resource_name,
+                        &namespace,
+                        None,
+                    );
                     if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
                         cluster.pending_delete = None;
                     }

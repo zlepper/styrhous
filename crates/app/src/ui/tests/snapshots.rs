@@ -1,8 +1,8 @@
 use super::super::MyEguiApp;
 use super::super::state::ClusterConnectionState;
 use super::super::state::{
-    PendingDelete, PendingForceDelete, ResourceWatchState, UiState, ValidationState,
-    YamlEditorWindowState,
+    BulkDeleteProgress, BulkDeleteTarget, PendingDelete, PendingForceDelete, ResourceWatchState,
+    UiState, ValidationState, YamlEditorWindowState,
 };
 use super::fixtures::{
     application_harness, application_harness_with_terminal, fixture_api_resource, fixture_cluster,
@@ -859,6 +859,190 @@ fn resource_table_more_actions_snapshot() {
     harness.run();
     harness.ui_harness(
         "resource_tables/resource_table_more_actions_snapshot/oracle_resource_table_actions",
+    );
+}
+
+#[test]
+fn resource_table_multi_selection_confirms_and_dispatches_bulk_delete() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness.run();
+    harness.get_by_label("Apps & Containers").click_accesskit();
+    harness.run();
+
+    harness.get_by_label("Select row 1").click_accesskit();
+    harness.run();
+    harness.get_by_label("Select row 2").click_accesskit();
+    harness.run();
+    harness.get_by_label("2 selected");
+    harness.ui_harness(
+        "resource_tables/resource_table_multi_selection_confirms_and_dispatches_bulk_delete/selected",
+    );
+
+    harness.get_by_label("Delete selected").click_accesskit();
+    harness.run();
+    harness.get_by_label("Delete 2 resources?");
+    harness.ui_harness(
+        "resource_tables/resource_table_multi_selection_confirms_and_dispatches_bulk_delete/confirmation",
+    );
+
+    harness
+        .state_mut()
+        .ui_state
+        .clusters
+        .get_mut(&2)
+        .unwrap()
+        .pending_bulk_delete
+        .as_mut()
+        .unwrap()
+        .confirmation_available_at = std::time::Instant::now();
+    harness.run();
+    harness.get_by_label("Delete 2 resources").click_accesskit();
+    harness.run();
+
+    assert!(matches!(
+        harness.state().worker.commands.as_slice(),
+        [
+            WorkerCommand::DeleteResource {
+                cluster_key: 2,
+                namespace: Some(first_namespace),
+                resource_name: first_name,
+                ..
+            },
+            WorkerCommand::DeleteResource {
+                cluster_key: 2,
+                namespace: Some(second_namespace),
+                resource_name: second_name,
+                ..
+            },
+        ] if first_namespace == "kube-system"
+            && second_namespace == "kube-system"
+            && first_name == "coredns-66bc5c9577-ffw2s"
+            && second_name == "coredns-66bc5c9577-z9gt9"
+    ));
+
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(WorkerResult::ResourceDeleteCompleted {
+            cluster_key: 2,
+            api_resource: fixture_api_resource("core", "Pod", "pods"),
+            namespace: Some("kube-system".into()),
+            resource_name: "coredns-66bc5c9577-ffw2s".into(),
+            bulk_delete_id: Some(1),
+        });
+    harness.run();
+    assert_eq!(
+        harness.state().ui_state.clusters[&2].resource_selections
+            [&fixture_api_resource("core", "Pod", "pods")],
+        HashSet::from(["fixture-1".into()])
+    );
+
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(WorkerResult::ResourceDeleteCompleted {
+            cluster_key: 2,
+            api_resource: fixture_api_resource("core", "Pod", "pods"),
+            namespace: Some("kube-system".into()),
+            resource_name: "coredns-66bc5c9577-z9gt9".into(),
+            bulk_delete_id: Some(1),
+        });
+    harness.run();
+    assert!(
+        harness.state().ui_state.clusters[&2].resource_selections
+            [&fixture_api_resource("core", "Pod", "pods")]
+            .is_empty()
+    );
+}
+
+#[test]
+fn bulk_delete_keeps_failed_resources_selected_and_reports_them_together() {
+    let api_resource = fixture_api_resource("core", "Pod", "pods");
+    let failed = BulkDeleteTarget {
+        uid: "failed-uid".into(),
+        name: "failed-pod".into(),
+        namespace: Some("default".into()),
+    };
+    let succeeded = BulkDeleteTarget {
+        uid: "succeeded-uid".into(),
+        name: "succeeded-pod".into(),
+        namespace: Some("default".into()),
+    };
+    let mut cluster = fixture_cluster(1, "dev");
+    cluster.resource_selections.insert(
+        api_resource.clone(),
+        HashSet::from([failed.uid.clone(), succeeded.uid.clone()]),
+    );
+    cluster.bulk_delete_progress = Some(BulkDeleteProgress::new(
+        42,
+        api_resource.clone(),
+        vec![failed.clone(), succeeded.clone()],
+    ));
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = UiState {
+        clusters: HashMap::from([(1, cluster)]),
+        next_cluster_key: 1,
+        selected_cluster: Some(1),
+        ..Default::default()
+    };
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(WorkerResult::ResourceDeleteCompleted {
+            cluster_key: 1,
+            api_resource: fixture_api_resource("core", "ConfigMap", "configmaps"),
+            namespace: succeeded.namespace.clone(),
+            resource_name: succeeded.name.clone(),
+            bulk_delete_id: None,
+        });
+    harness.run();
+    assert_eq!(
+        harness.state().ui_state.clusters[&1].resource_selections[&api_resource],
+        HashSet::from([failed.uid.clone(), succeeded.uid.clone()])
+    );
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(WorkerResult::CommandFailed {
+            command: Some(WorkerCommand::DeleteResource {
+                cluster_key: 1,
+                api_resource: api_resource.clone(),
+                namespace: failed.namespace.clone(),
+                resource_name: failed.name.clone(),
+                resource_uid: Some(failed.uid.clone()),
+                bulk_delete_id: Some(42),
+            }),
+            error: anyhow::anyhow!("forbidden"),
+        });
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(WorkerResult::ResourceDeleteCompleted {
+            cluster_key: 1,
+            api_resource: api_resource.clone(),
+            namespace: succeeded.namespace.clone(),
+            resource_name: succeeded.name.clone(),
+            bulk_delete_id: Some(42),
+        });
+
+    harness.run();
+    harness.get_by_label("Some resources could not be deleted");
+    assert_eq!(
+        harness.state().ui_state.clusters[&1].resource_selections[&api_resource],
+        HashSet::from([failed.uid])
+    );
+    harness.get_by_label("Dismiss").click_accesskit();
+    harness.run();
+    assert!(
+        harness.state().ui_state.clusters[&1]
+            .bulk_delete_error
+            .is_none()
     );
 }
 

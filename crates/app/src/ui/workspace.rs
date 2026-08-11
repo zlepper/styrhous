@@ -1,7 +1,7 @@
 use super::resource_actions::show_resource_action_items;
 use super::state::{
-    ClusterConnectionState, ClusterLoadState, PendingDelete, PendingDeploymentRestart,
-    PendingForceDelete, ResourceAction, ResourceSearchState, UiState,
+    BulkDeleteTarget, ClusterConnectionState, ClusterLoadState, PendingBulkDelete, PendingDelete,
+    PendingDeploymentRestart, PendingForceDelete, ResourceAction, ResourceSearchState, UiState,
 };
 use super::widgets::{
     show_resource_cell, workspace_empty_state, workspace_error_state, workspace_loading_state,
@@ -17,11 +17,12 @@ use components::colors::{TOOLBAR_BACKGROUND, gray};
 use components::design::{spacing, typography};
 use components::fuzzy::{matches_fuzzy, normalize_for_search};
 use components::{
-    MoreButton, SelectionAction, TableRowBuilder, TailwindCombobox, TailwindSearchInput,
-    TailwindTable, WorkspacePage,
+    ButtonSize, MoreButton, SelectionAction, TableRowBuilder, TailwindButton, TailwindCombobox,
+    TailwindSearchInput, TailwindTable, WorkspacePage,
 };
 use egui_extras::{Size, StripBuilder};
 use std::cell::RefCell;
+use std::collections::HashSet;
 
 const RESOURCE_SEARCH_WIDTH: f32 = 210.0;
 const TOOLBAR_RIGHT_INSET: f32 = spacing::XL;
@@ -45,11 +46,29 @@ struct ResourceActionAvailability {
     supports_scale: bool,
 }
 
+struct ResourceSelectionControls<'a> {
+    selected_count: usize,
+    actions_enabled: bool,
+    action: &'a mut Option<ResourceSelectionAction>,
+}
+
+struct ResourceTableOptions<'a> {
+    custom_columns: &'a [CustomResourceColumn],
+    hidden_resource_count: usize,
+    show_namespace_column: bool,
+    actions: ResourceActionAvailability,
+}
+
 enum NamespaceSelection {
     Replace(String),
     Toggle(String),
     SelectAll,
     ClearAll,
+}
+
+enum ResourceSelectionAction {
+    Clear,
+    Delete,
 }
 
 pub(super) fn show(
@@ -65,6 +84,7 @@ pub(super) fn show(
     let mut log_to_open = None;
     let mut yaml_to_open = None;
     let mut shell_to_open = None;
+    let mut resource_selection_action = None;
     egui::CentralPanel::default()
         .frame(WorkspacePage::frame())
         .show(ui, |ui| {
@@ -136,6 +156,12 @@ pub(super) fn show(
 
                 let selected_api_resource = cluster.selected_api_resource.clone();
                 let all_resources = selected_resources(cluster, selected_api_resource.as_ref());
+                let selected_resource_count = selected_api_resource
+                    .as_ref()
+                    .and_then(|api_resource| cluster.resource_selections.get(api_resource))
+                    .map_or(0, HashSet::len);
+                let resource_actions_enabled = cluster.resource_detail_panel.is_none()
+                    && cluster.bulk_delete_progress.is_none();
                 let mut resource_search = selected_api_resource
                     .as_ref()
                     .and_then(|api_resource| cluster.resource_searches.get(api_resource))
@@ -148,6 +174,11 @@ pub(super) fn show(
                     &all_resources,
                     &mut resource_search,
                     &mut namespace_selection,
+                    ResourceSelectionControls {
+                        selected_count: selected_resource_count,
+                        actions_enabled: resource_actions_enabled,
+                        action: &mut resource_selection_action,
+                    },
                 );
                 if let Some(api_resource) = &selected_api_resource {
                     cluster
@@ -199,18 +230,26 @@ pub(super) fn show(
                 } else if let Some(action) = show_resource_table(
                     ui,
                     api_resource,
-                    cluster
-                        .custom_resource_columns
-                        .get(api_resource)
-                        .map(Vec::as_slice)
-                        .unwrap_or_default(),
                     &filtered_resources.resources,
-                    all_resources.len() - filtered_resources.resources.len(),
-                    api_resource.namespaced && cluster.selected_namespaces.len() > 1,
-                    ResourceActionAvailability {
-                        enabled: cluster.resource_detail_panel.is_none(),
-                        supports_scale: cluster.scalable_api_resources.contains(api_resource),
+                    ResourceTableOptions {
+                        custom_columns: cluster
+                            .custom_resource_columns
+                            .get(api_resource)
+                            .map(Vec::as_slice)
+                            .unwrap_or_default(),
+                        hidden_resource_count: all_resources.len()
+                            - filtered_resources.resources.len(),
+                        show_namespace_column: api_resource.namespaced
+                            && cluster.selected_namespaces.len() > 1,
+                        actions: ResourceActionAvailability {
+                            enabled: resource_actions_enabled,
+                            supports_scale: cluster.scalable_api_resources.contains(api_resource),
+                        },
                     },
+                    cluster
+                        .resource_selections
+                        .entry(api_resource.clone())
+                        .or_default(),
                 ) {
                     match action {
                         ResourceAction::OpenDetails {
@@ -291,6 +330,34 @@ pub(super) fn show(
                         }
                     }
                 }
+
+                if let Some(selection_action) = resource_selection_action.take() {
+                    match selection_action {
+                        ResourceSelectionAction::Clear => {
+                            cluster.resource_selections.remove(api_resource);
+                        }
+                        ResourceSelectionAction::Delete => {
+                            let selected_uids = cluster
+                                .resource_selections
+                                .get(api_resource)
+                                .cloned()
+                                .unwrap_or_default();
+                            let targets = all_resources
+                                .iter()
+                                .filter(|resource| selected_uids.contains(&resource.uid))
+                                .map(|resource| BulkDeleteTarget {
+                                    uid: resource.uid.clone(),
+                                    name: resource.name.clone(),
+                                    namespace: resource.namespace.clone(),
+                                })
+                                .collect::<Vec<_>>();
+                            if !targets.is_empty() {
+                                cluster.pending_bulk_delete =
+                                    Some(PendingBulkDelete::new(api_resource.clone(), targets));
+                            }
+                        }
+                    }
+                }
             });
         });
 
@@ -334,6 +401,17 @@ pub(super) fn show(
             }
             NamespaceSelection::ClearAll => {
                 ui_state.clear_selected_namespaces(cluster_key);
+            }
+        }
+        if let Some(cluster) = ui_state.clusters.get_mut(&cluster_key)
+            && let Some(api_resource) = cluster.selected_api_resource.clone()
+        {
+            let visible_uids = selected_resources(cluster, Some(&api_resource))
+                .into_iter()
+                .map(|resource| resource.uid)
+                .collect::<HashSet<_>>();
+            if let Some(resource_selection) = cluster.resource_selections.get_mut(&api_resource) {
+                resource_selection.retain(|uid| visible_uids.contains(uid));
             }
         }
     }
@@ -413,6 +491,7 @@ fn show_toolbar(
     all_resources: &[MinimalResource],
     resource_search: &mut ResourceSearchState,
     namespace_selection: &mut Option<NamespaceSelection>,
+    selection_controls: ResourceSelectionControls<'_>,
 ) -> FilteredResources {
     let selected_text = match cluster.selected_namespaces.len() {
         0 => "Select namespaces".to_owned(),
@@ -542,15 +621,47 @@ fn show_toolbar(
                             ui.add_space(15.0);
                             ui.separator();
                             ui.add_space(18.0);
-                            ui.label(
-                                egui::RichText::new(resource_count_label(
-                                    all_resources.len(),
-                                    filtered_resources.resources.len(),
-                                    !resource_search.query.is_empty(),
-                                ))
-                                .font(typography::section_heading())
-                                .color(gray::_500),
-                            );
+                            if selection_controls.selected_count == 0 {
+                                ui.label(
+                                    egui::RichText::new(resource_count_label(
+                                        all_resources.len(),
+                                        filtered_resources.resources.len(),
+                                        !resource_search.query.is_empty(),
+                                    ))
+                                    .font(typography::section_heading())
+                                    .color(gray::_500),
+                                );
+                            } else {
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "{} selected",
+                                        selection_controls.selected_count
+                                    ))
+                                    .font(typography::section_heading())
+                                    .color(gray::_700),
+                                );
+                                ui.add_space(spacing::MD);
+                                if TailwindButton::secondary("Clear selection")
+                                    .size(ButtonSize::Xs)
+                                    .show(ui)
+                                    .clicked()
+                                {
+                                    *selection_controls.action =
+                                        Some(ResourceSelectionAction::Clear);
+                                }
+                                let delete =
+                                    TailwindButton::danger("Delete selected").size(ButtonSize::Xs);
+                                if ui
+                                    .add_enabled_ui(selection_controls.actions_enabled, |ui| {
+                                        delete.show(ui)
+                                    })
+                                    .inner
+                                    .clicked()
+                                {
+                                    *selection_controls.action =
+                                        Some(ResourceSelectionAction::Delete);
+                                }
+                            }
                         }
                     });
                     strip.cell(|ui| {
@@ -660,23 +771,23 @@ fn resource_count_label(
 fn show_resource_table(
     ui: &mut egui::Ui,
     api_resource: &crate::api_resource::ApiResource,
-    custom_columns: &[CustomResourceColumn],
     resources: &[MinimalResource],
-    hidden_resource_count: usize,
-    show_namespace_column: bool,
-    actions: ResourceActionAvailability,
+    options: ResourceTableOptions<'_>,
+    selection: &mut HashSet<String>,
 ) -> Option<ResourceAction> {
     let pending_action = RefCell::new(None);
     let mut rows = resources
         .iter()
         .map(ResourceTableRow::Resource)
         .collect::<Vec<_>>();
-    if hidden_resource_count > 0 {
-        rows.push(ResourceTableRow::HiddenBySearch(hidden_resource_count));
+    if options.hidden_resource_count > 0 {
+        rows.push(ResourceTableRow::HiddenBySearch(
+            options.hidden_resource_count,
+        ));
     }
-    let definition = table_definition(api_resource, custom_columns);
+    let definition = table_definition(api_resource, options.custom_columns);
     let node_column_index = (api_resource.kind == "Pod").then(|| {
-        1 + usize::from(show_namespace_column)
+        1 + usize::from(options.show_namespace_column)
             + definition
                 .columns
                 .iter()
@@ -688,7 +799,7 @@ fn show_resource_table(
         api_resource.group, api_resource.version, api_resource.name
     ))
     .column("name", "Name", |col| col.sortable().fill_remaining());
-    if show_namespace_column {
+    if options.show_namespace_column {
         table = table.column("namespace", "Namespace", |col| {
             col.sortable().initial_width(180.0)
         });
@@ -702,19 +813,25 @@ fn show_resource_table(
     table = table
         .column("age", "Age", |col| col.sortable().initial_width(77.0))
         .column("actions", "", |col| col.initial_width(104.0))
+        .selectable()
         .fill_available_height();
 
-    table.show_with_row_response(
+    table.show_selectable_with_row_response(
         ui,
         &rows,
+        selection,
+        |row| match row {
+            ResourceTableRow::Resource(resource) => Some(resource.uid.clone()),
+            ResourceTableRow::HiddenBySearch(_) => None,
+        },
         |ui, row, column_index| {
-            let namespace_index = show_namespace_column.then_some(1);
-            let type_specific_start = 1 + usize::from(show_namespace_column);
+            let namespace_index = options.show_namespace_column.then_some(1);
+            let type_specific_start = 1 + usize::from(options.show_namespace_column);
             let age_index = type_specific_start + definition.columns.len();
             let actions_index = age_index + 1;
             match row {
                 ResourceTableRow::Resource(resource) => match column_index {
-                    0 if actions.enabled => {
+                    0 if options.actions.enabled => {
                         let response = TableRowBuilder::clickable_text(
                             ui,
                             &resource.name,
@@ -734,7 +851,7 @@ fn show_resource_table(
                                 api_resource,
                                 resource,
                                 &resource.log_containers,
-                                actions.supports_scale,
+                                options.actions.supports_scale,
                                 &mut pending_action.borrow_mut(),
                             );
                         });
@@ -756,7 +873,7 @@ fn show_resource_table(
                             && api_resource.kind == "Pod"
                             && let Some(CellValue::Text(node_name)) = resource.cells.get(&column.id)
                         {
-                            if actions.enabled && node_name != "-" {
+                            if options.actions.enabled && node_name != "-" {
                                 let response = TableRowBuilder::clickable_text(
                                     ui,
                                     node_name,
@@ -779,7 +896,7 @@ fn show_resource_table(
                                         api_resource,
                                         resource,
                                         &resource.log_containers,
-                                        actions.supports_scale,
+                                        options.actions.supports_scale,
                                         &mut pending_action.borrow_mut(),
                                     );
                                 });
@@ -793,12 +910,12 @@ fn show_resource_table(
                     index if index == age_index => {
                         TableRowBuilder::text(ui, &resource.age(), false)
                     }
-                    index if index == actions_index && actions.enabled => {
+                    index if index == actions_index && options.actions.enabled => {
                         show_resource_actions(
                             ui,
                             api_resource,
                             resource,
-                            actions.supports_scale,
+                            options.actions.supports_scale,
                             &mut pending_action.borrow_mut(),
                         );
                     }
@@ -825,14 +942,14 @@ fn show_resource_table(
                         .clone()
                         .on_hover_text("Kubernetes has not assigned this Pod to a Node.");
                 }
-                if actions.enabled {
+                if options.actions.enabled {
                     MoreButton::show_context_menu(row_response, |menu| {
                         show_resource_action_items(
                             menu,
                             api_resource,
                             resource,
                             &resource.log_containers,
-                            actions.supports_scale,
+                            options.actions.supports_scale,
                             &mut pending_action.borrow_mut(),
                         );
                     });
