@@ -3582,10 +3582,7 @@ mod tests {
             &mut commands,
         );
         let mut worker = MockWorker {
-            results: VecDeque::from([WorkerResult::PodLogStreamStarted {
-                cluster_key: 1,
-                log_window_id: 1,
-            }]),
+            results: VecDeque::from([WorkerResult::PodLogStreamStarted { log_window_id: 1 }]),
             commands: Vec::new(),
         };
         let _ = state.update(&mut worker);

@@ -26,6 +26,7 @@ const DELETE_CONFIRMATION_DELAY: Duration = Duration::from_secs(3);
 #[derive(Default)]
 pub(super) struct UiState {
     pub(super) clusters: HashMap<i32, ClusterState>,
+    pub(super) cluster_connections: HashMap<i32, ClusterConnection>,
     pub(super) next_cluster_key: i32,
     pub(super) selected_cluster: Option<i32>,
     pub(super) log_windows: BTreeMap<u64, PodLogWindowState>,
@@ -454,10 +455,6 @@ impl YamlEditorWindowState {
             .is_some_and(|original_yaml| original_yaml != &self.edited_yaml)
     }
 
-    pub(super) fn is_ready(&self) -> bool {
-        !self.loading && self.original_yaml.is_some()
-    }
-
     pub(super) fn resource_matches(
         &self,
         cluster_key: i32,
@@ -720,7 +717,6 @@ pub(super) enum ResourceAction {
 #[derive(Debug)]
 pub(super) struct ClusterState {
     pub(super) name: String,
-    pub(super) cluster: Option<String>,
     pub(super) cluster_key: i32,
     pub(super) namespaces: BTreeMap<SortedName, MinimalNamespace>,
     pub(super) connection: ClusterConnectionState,
@@ -744,9 +740,7 @@ pub(super) struct ClusterState {
 pub(super) enum ClusterConnectionState {
     Disconnected,
     Connecting,
-    /// A live connection is present in production. Snapshot fixtures can represent
-    /// the same visible state without constructing a Kubernetes client.
-    Connected(Option<ClusterConnection>),
+    Connected,
     Failed(String),
 }
 
@@ -1037,7 +1031,7 @@ impl UiState {
         let cluster = self.clusters.get_mut(&cluster_key)?;
         if matches!(
             &cluster.connection,
-            ClusterConnectionState::Connected(_) | ClusterConnectionState::Connecting
+            ClusterConnectionState::Connected | ClusterConnectionState::Connecting
         ) {
             return None;
         }
@@ -1535,6 +1529,7 @@ impl UiState {
                 }
                 WorkerResult::KubernetesClustersUpdated(clusters) => {
                     self.clusters.clear();
+                    self.cluster_connections.clear();
                     self.selected_cluster = None;
                     let mut current_cluster_key = None;
                     for cluster in clusters {
@@ -1548,7 +1543,6 @@ impl UiState {
                             ClusterState {
                                 cluster_key,
                                 name: cluster.name,
-                                cluster: cluster.cluster,
                                 namespaces: BTreeMap::new(),
                                 connection: ClusterConnectionState::Disconnected,
                                 namespaces_load: ClusterLoadState::Loading,
@@ -1674,7 +1668,10 @@ impl UiState {
                 } => {
                     info!("Cluster connection created");
                     if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
-                        cluster.connection = ClusterConnectionState::Connected(runner);
+                        if let Some(connection) = runner {
+                            self.cluster_connections.insert(cluster_key, connection);
+                        }
+                        cluster.connection = ClusterConnectionState::Connected;
                     }
                 }
                 WorkerResult::KubernetesResourceAdded {
@@ -1896,8 +1893,6 @@ impl UiState {
                         }
                     }
                 }
-                WorkerResult::ResourceDetailWatchStarted { .. }
-                | WorkerResult::ResourceDetailWatchStopped { .. } => {}
                 WorkerResult::ResourceYamlFetched {
                     editor_id,
                     cluster_key,
@@ -2056,14 +2051,14 @@ impl UiState {
                         editor.mark_saved();
                     }
                 }
-                WorkerResult::PodLogStreamStarted { log_window_id, .. } => {
+                WorkerResult::PodLogStreamStarted { log_window_id } => {
                     if let Some(window) = self.log_windows.get_mut(&log_window_id) {
                         if matches!(window.status, PodLogStatus::Connecting) {
                             window.status = PodLogStatus::Following;
                         }
                     }
                 }
-                WorkerResult::PodLogStreamEnded { log_window_id, .. } => {
+                WorkerResult::PodLogStreamEnded { log_window_id } => {
                     if let Some(window) = self.log_windows.get_mut(&log_window_id)
                         && !matches!(window.status, PodLogStatus::Failed(_))
                     {
@@ -2073,7 +2068,6 @@ impl UiState {
                 WorkerResult::PodLogStreamFailed {
                     log_window_id,
                     error,
-                    ..
                 } => {
                     if let Some(window) = self.log_windows.get_mut(&log_window_id) {
                         window.status = PodLogStatus::Failed(error);
@@ -2351,18 +2345,9 @@ mod tests {
 
         let mut worker = MockWorker {
             results: VecDeque::from([
-                WorkerResult::PodLogStreamStarted {
-                    cluster_key: 7,
-                    log_window_id: 1,
-                },
-                WorkerResult::PodLogStreamStarted {
-                    cluster_key: 7,
-                    log_window_id: 2,
-                },
-                WorkerResult::PodLogStreamEnded {
-                    cluster_key: 7,
-                    log_window_id: 1,
-                },
+                WorkerResult::PodLogStreamStarted { log_window_id: 1 },
+                WorkerResult::PodLogStreamStarted { log_window_id: 2 },
+                WorkerResult::PodLogStreamEnded { log_window_id: 1 },
             ]),
             commands: Vec::new(),
         };
@@ -2466,7 +2451,7 @@ mod tests {
             state
                 .yaml_editors
                 .values()
-                .all(YamlEditorWindowState::is_ready)
+                .all(|editor| !editor.loading && editor.original_yaml.is_some())
         );
     }
 

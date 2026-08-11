@@ -80,10 +80,10 @@ pub fn matches_fuzzy(haystack: &str, needle_chars: &[char]) -> bool {
     let mut current = needle_iter.next();
 
     for h in normalize_for_search(haystack) {
-        if let Some(&n) = current {
-            if h == n {
-                current = needle_iter.next();
-            }
+        if let Some(&n) = current
+            && h == n
+        {
+            current = needle_iter.next();
         }
     }
 

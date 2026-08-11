@@ -306,7 +306,7 @@ fn test_real_cluster_connection() {
     assert_eq!(cluster.name, "kind-kind");
     assert!(matches!(
         cluster.connection,
-        ClusterConnectionState::Connected(_)
+        ClusterConnectionState::Connected
     ));
     assert!(cluster.namespaces.contains_key(&SortedName::new("default")));
     assert!(
@@ -623,7 +623,11 @@ fn test_resource_actions_integration() {
             app.ui_state
                 .yaml_editors
                 .values()
-                .find(|editor| editor.resource_name == test_configmap_name && editor.is_ready())
+                .find(|editor| {
+                    editor.resource_name == test_configmap_name
+                        && !editor.loading
+                        && editor.original_yaml.is_some()
+                })
                 .map(|_| ())
         },
         5_000,
@@ -649,7 +653,12 @@ fn test_resource_actions_integration() {
                 .yaml_editors
                 .values()
                 .find(|editor| editor.resource_name == test_configmap_name)
-                .is_some_and(|editor| editor.is_ready() && !editor.is_modified() && !editor.saving)
+                .is_some_and(|editor| {
+                    !editor.loading
+                        && editor.original_yaml.is_some()
+                        && !editor.is_modified()
+                        && !editor.saving
+                })
                 .then_some(())
         },
         5_000,
@@ -802,7 +811,11 @@ fn test_deployment_match_labels_completion_integration() {
             app.ui_state
                 .yaml_editors
                 .values()
-                .find(|editor| editor.resource_name == deployment_name && editor.is_ready())
+                .find(|editor| {
+                    editor.resource_name == deployment_name
+                        && !editor.loading
+                        && editor.original_yaml.is_some()
+                })
                 .and_then(|editor| {
                     editor
                         .schema
@@ -819,7 +832,7 @@ fn test_deployment_match_labels_completion_integration() {
     let mut partial_yaml = yaml;
     partial_yaml.replace_range(key_start..key_start + "matchLabels".len(), "match");
     let cursor = partial_yaml[..key_start + "match".len()].chars().count();
-    let suggestions = schema.suggestions_at(&partial_yaml, cursor);
+    let suggestions = schema.completion_at(&partial_yaml, cursor).suggestions;
 
     assert_eq!(
         suggestions
@@ -844,7 +857,9 @@ spec:
                 matchExpressions:
                 - key: k8s-app
                   operator: I"#;
-    let suggestions = schema.suggestions_at(affinity_yaml, affinity_yaml.len());
+    let suggestions = schema
+        .completion_at(affinity_yaml, affinity_yaml.len())
+        .suggestions;
     assert_eq!(
         suggestions
             .first()
@@ -881,7 +896,11 @@ fn test_coredns_deployment_property_completion_integration() {
             app.ui_state
                 .yaml_editors
                 .values()
-                .find(|editor| editor.resource_name == "coredns" && editor.is_ready())
+                .find(|editor| {
+                    editor.resource_name == "coredns"
+                        && !editor.loading
+                        && editor.original_yaml.is_some()
+                })
                 .and_then(|editor| {
                     editor
                         .schema

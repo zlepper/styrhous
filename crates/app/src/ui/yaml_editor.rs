@@ -17,13 +17,10 @@ const TOOLBAR_HEIGHT: f32 = 52.0;
 const VALIDATION_DEBOUNCE: Duration = Duration::from_millis(500);
 const COMPLETION_LIST_MIN_WIDTH: f32 = 240.0;
 const COMPLETION_LIST_MAX_WIDTH: f32 = 280.0;
-const COMPLETION_POPUP_MAX_WIDTH: f32 = COMPLETION_LIST_MAX_WIDTH + 2.0 * spacing::MD;
 const COMPLETION_DOCUMENTATION_WIDTH: f32 = 280.0;
 const COMPLETION_ROW_HEIGHT: f32 = 26.0;
 const COMPLETION_LIST_MAX_HEIGHT: f32 = 260.0;
 const COMPLETION_POPUP_CHROME_HEIGHT: f32 = 68.0;
-const COMPLETION_POPUP_MAX_HEIGHT: f32 =
-    COMPLETION_POPUP_CHROME_HEIGHT + COMPLETION_LIST_MAX_HEIGHT;
 const DIAGNOSTIC_ROW_HEIGHT: f32 = 21.0;
 const DIAGNOSTIC_LIST_MAX_HEIGHT: f32 = 6.0 * DIAGNOSTIC_ROW_HEIGHT;
 
@@ -1100,6 +1097,10 @@ mod tests {
     use egui_kittest::{Harness, SnapshotOptions, kittest::Queryable};
     use k8s_openapi::serde_json::json;
 
+    const COMPLETION_POPUP_MAX_WIDTH: f32 = COMPLETION_LIST_MAX_WIDTH + 2.0 * spacing::MD;
+    const COMPLETION_POPUP_MAX_HEIGHT: f32 =
+        COMPLETION_POPUP_CHROME_HEIGHT + COMPLETION_LIST_MAX_HEIGHT;
+
     #[test]
     fn yaml_highlighting_uses_the_yaml_language() {
         let ctx = egui::Context::default();
@@ -1497,7 +1498,9 @@ mod tests {
                 "immutable": {"type": "boolean"}
             }
         }));
-        editor.suggestions = schema.suggestions_at(&editor.edited_yaml, editor.edited_yaml.len());
+        editor.suggestions = schema
+            .completion_at(&editor.edited_yaml, editor.edited_yaml.len())
+            .suggestions;
         editor.suggestion_selection = editor
             .suggestions
             .iter()
