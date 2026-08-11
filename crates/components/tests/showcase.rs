@@ -112,7 +112,7 @@ fn showcase_buttons() {
 
     apply_reference_theme(&mut harness);
     harness.run();
-    harness.ui_harness("showcase/buttons");
+    harness.ui_harness("showcase/showcase_buttons/buttons");
 }
 
 #[test]
@@ -175,7 +175,7 @@ fn showcase_comboboxes() {
         .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Multi-select")
         .click();
     harness.run();
-    harness.ui_harness("showcase/comboboxes");
+    harness.ui_harness("showcase/showcase_comboboxes/comboboxes");
 }
 
 #[test]
@@ -214,7 +214,7 @@ fn showcase_sidebars() {
 
     apply_reference_theme(&mut harness);
     harness.run();
-    harness.ui_harness("showcase/sidebars");
+    harness.ui_harness("showcase/showcase_sidebars/sidebars");
 }
 
 #[test]
@@ -292,7 +292,7 @@ fn showcase_tables() {
 
     apply_reference_theme(&mut harness);
     harness.run();
-    harness.ui_harness("showcase/tables");
+    harness.ui_harness("showcase/showcase_tables/tables");
 }
 
 #[test]
@@ -329,5 +329,5 @@ fn showcase_tabs() {
 
     apply_reference_theme(&mut harness);
     harness.run();
-    harness.ui_harness("showcase/tabs");
+    harness.ui_harness("showcase/showcase_tabs/tabs");
 }

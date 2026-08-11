@@ -969,7 +969,7 @@ mod tests {
 
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.ui_harness("tables/basic");
+        harness.ui_harness("tables/test_table_basic/basic");
     }
 
     #[test]
@@ -992,7 +992,7 @@ mod tests {
 
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.ui_harness("tables/alternating_rows");
+        harness.ui_harness("tables/test_table_alternating_rows/alternating_rows");
     }
 
     #[test]
@@ -1025,7 +1025,7 @@ mod tests {
         harness.run();
         harness.get_by_role_and_label(egui::accesskit::Role::CheckBox, "Select all rows");
         harness.get_by_role_and_label(egui::accesskit::Role::CheckBox, "Select row 1");
-        harness.ui_harness("tables/with_selection");
+        harness.ui_harness("tables/test_table_with_selection/with_selection");
     }
 
     #[test]
@@ -1057,7 +1057,7 @@ mod tests {
 
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.ui_harness("tables/select_all");
+        harness.ui_harness("tables/test_table_select_all/select_all");
     }
 
     #[test]
@@ -1091,7 +1091,7 @@ mod tests {
 
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.ui_harness("tables/select_all_indeterminate");
+        harness.ui_harness("tables/test_table_select_all_indeterminate/select_all_indeterminate");
     }
 
     /// Helper function to sort users based on sort state
@@ -1139,7 +1139,7 @@ mod tests {
         });
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.ui_harness("tables/sorting_unsorted");
+        harness.ui_harness("tables/test_table_sorting/sorting_unsorted");
 
         // --- Snapshot 2: Sort by name ascending ---
         // Sort state is set before rendering, and data is sorted accordingly
@@ -1164,7 +1164,7 @@ mod tests {
         });
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.ui_harness("tables/sorting_name_asc");
+        harness.ui_harness("tables/test_table_sorting/sorting_name_asc");
 
         // --- Snapshot 3: Sort by title descending ---
         let mut users = test_users();
@@ -1188,7 +1188,7 @@ mod tests {
         });
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.ui_harness("tables/sorting_title_desc");
+        harness.ui_harness("tables/test_table_sorting/sorting_title_desc");
     }
 
     #[test]
@@ -1214,7 +1214,7 @@ mod tests {
 
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.ui_harness("tables/column_toggle_menu");
+        harness.ui_harness("tables/test_table_column_toggle_menu/column_toggle_menu");
     }
 
     #[test]
@@ -1241,6 +1241,6 @@ mod tests {
 
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.ui_harness("tables/hidden_column");
+        harness.ui_harness("tables/test_table_hidden_column/hidden_column");
     }
 }

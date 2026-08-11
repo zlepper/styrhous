@@ -881,7 +881,7 @@ mod tests {
         });
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.ui_harness("blades/single");
+        harness.ui_harness("blades/snapshots_a_single_blade_and_its_visible_history/single");
 
         navigator.borrow_mut().push(TestBlade {
             id: 2,
@@ -893,7 +893,7 @@ mod tests {
         });
         navigator.borrow_mut().clear_transition();
         harness.run();
-        harness.ui_harness("blades/history");
+        harness.ui_harness("blades/snapshots_a_single_blade_and_its_visible_history/history");
 
         navigator.borrow_mut().push(TestBlade {
             id: 4,
@@ -901,7 +901,7 @@ mod tests {
         });
         navigator.borrow_mut().clear_transition();
         harness.run();
-        harness.ui_harness("blades/history_cap");
+        harness.ui_harness("blades/snapshots_a_single_blade_and_its_visible_history/history_cap");
     }
 
     #[test]
@@ -976,7 +976,7 @@ mod tests {
         assert!(navigator.borrow_mut().go_back());
         navigator.borrow_mut().clear_transition();
         harness.run();
-        harness.ui_harness("blades/restored_history_display_stack");
+        harness.ui_harness("blades/snapshots_history_order_when_a_blade_returns_to_the_display_stack/restored_history_display_stack");
     }
 
     #[test]
@@ -1022,7 +1022,7 @@ mod tests {
         }
 
         assert_eq!(navigator.borrow().current().id, 5);
-        harness.ui_harness("blades/deep_history_cycle");
+        harness.ui_harness("blades/snapshots_history_order_after_crossing_the_display_cap_repeatedly/deep_history_cycle");
     }
 
     #[test]
@@ -1066,7 +1066,7 @@ mod tests {
         harness.step();
         harness.input_mut().time = Some(20.0 + f64::from(TRANSITION_DURATION / 2.0));
         harness.step();
-        harness.ui_harness("blades/interrupted_back_to_forward");
+        harness.ui_harness("blades/snapshots_an_interrupted_back_to_forward_transition/interrupted_back_to_forward");
     }
 
     #[test]
@@ -1115,7 +1115,7 @@ mod tests {
         harness.step();
         harness.input_mut().time = Some(30.0 + f64::from(TRANSITION_DURATION / 2.0));
         harness.step();
-        harness.ui_harness("blades/interrupted_forward_to_back");
+        harness.ui_harness("blades/snapshots_an_interrupted_forward_to_back_transition/interrupted_forward_to_back");
     }
 
     #[test]
@@ -1157,7 +1157,7 @@ mod tests {
             .expect("navigator was reopened")
             .clear_transition();
         harness.run();
-        harness.ui_harness("blades/reopened_stack");
+        harness.ui_harness("blades/snapshots_a_reopened_stack_without_stale_layers/reopened_stack");
     }
 
     #[test]
@@ -1188,7 +1188,7 @@ mod tests {
         navigator.borrow_mut().clear_transition();
         harness.set_size(egui::vec2(1024.0, 768.0));
         harness.run();
-        harness.ui_harness("blades/resized_restored_history");
+        harness.ui_harness("blades/snapshots_restored_history_after_resizing_the_viewport/resized_restored_history");
     }
 
     #[test]
@@ -1280,7 +1280,7 @@ mod tests {
         });
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.ui_harness("blades/concurrent_stacks");
+        harness.ui_harness("blades/snapshots_the_most_recently_rendered_stack_above_other_stacks/concurrent_stacks");
     }
 
     #[test]
@@ -1356,13 +1356,18 @@ mod tests {
         }
         harness.input_mut().time = Some(1.0);
         harness.step();
-        harness.ui_harness("blades/opening_first_frame");
+        harness.ui_harness(
+            "blades/snapshots_opening_and_forward_animation_frames/opening_first_frame",
+        );
         harness.input_mut().time = Some(1.0 + f64::from(TRANSITION_DURATION / 2.0));
         harness.step();
-        harness.ui_harness("blades/opening_mid_frame");
+        harness
+            .ui_harness("blades/snapshots_opening_and_forward_animation_frames/opening_mid_frame");
         harness.input_mut().time = Some(1.0 + f64::from(TRANSITION_DURATION));
         harness.step();
-        harness.ui_harness("blades/opening_final_frame");
+        harness.ui_harness(
+            "blades/snapshots_opening_and_forward_animation_frames/opening_final_frame",
+        );
 
         navigator.borrow_mut().push(TestBlade {
             id: 2,
@@ -1370,18 +1375,22 @@ mod tests {
         });
         harness.input_mut().time = Some(20.0);
         harness.step();
-        harness.ui_harness("blades/forward_first_frame");
+        harness.ui_harness(
+            "blades/snapshots_opening_and_forward_animation_frames/forward_first_frame",
+        );
         harness.input_mut().time = Some(20.0 + f64::from(TRANSITION_DURATION / 2.0));
         harness.step();
-        harness.ui_harness("blades/forward_mid_frame");
+        harness
+            .ui_harness("blades/snapshots_opening_and_forward_animation_frames/forward_mid_frame");
 
         assert!(navigator.borrow_mut().go_back());
         harness.input_mut().time = Some(30.0);
         harness.step();
-        harness.ui_harness("blades/back_first_frame");
+        harness
+            .ui_harness("blades/snapshots_opening_and_forward_animation_frames/back_first_frame");
         harness.input_mut().time = Some(30.0 + f64::from(TRANSITION_DURATION / 2.0));
         harness.step();
-        harness.ui_harness("blades/back_mid_frame");
+        harness.ui_harness("blades/snapshots_opening_and_forward_animation_frames/back_mid_frame");
     }
 
     #[test]
@@ -1420,23 +1429,23 @@ mod tests {
         });
         harness.input_mut().time = Some(10.0);
         harness.step();
-        harness.ui_harness("blades/history_overflow_first_frame");
+        harness.ui_harness("blades/snapshots_history_overflow_delayed_removal_and_direct_two_step_back_animation/history_overflow_first_frame");
         // The capped history blade remains fully visible until the other
         // history layers have completed their transition.
         harness.input_mut().time = Some(10.0 + f64::from(TRANSITION_DURATION / 2.0));
         harness.step();
-        harness.ui_harness("blades/history_overflow_mid_frame");
+        harness.ui_harness("blades/snapshots_history_overflow_delayed_removal_and_direct_two_step_back_animation/history_overflow_mid_frame");
         harness.input_mut().time = Some(10.0 + f64::from(TRANSITION_DURATION));
         harness.step();
-        harness.ui_harness("blades/history_overflow_final_frame");
+        harness.ui_harness("blades/snapshots_history_overflow_delayed_removal_and_direct_two_step_back_animation/history_overflow_final_frame");
 
         assert!(navigator.borrow_mut().go_back_steps(2));
         harness.input_mut().time = Some(20.0);
         harness.step();
-        harness.ui_harness("blades/direct_two_step_back_first_frame");
+        harness.ui_harness("blades/snapshots_history_overflow_delayed_removal_and_direct_two_step_back_animation/direct_two_step_back_first_frame");
         harness.input_mut().time = Some(20.0 + f64::from(TRANSITION_DURATION / 2.0));
         harness.step();
-        harness.ui_harness("blades/direct_two_step_back_mid_frame");
+        harness.ui_harness("blades/snapshots_history_overflow_delayed_removal_and_direct_two_step_back_animation/direct_two_step_back_mid_frame");
     }
 
     #[test]
@@ -1460,7 +1469,9 @@ mod tests {
         });
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.ui_harness("blades/custom_header");
+        harness.ui_harness(
+            "blades/snapshots_custom_header_content_with_shared_controls/custom_header",
+        );
     }
 
     #[test]

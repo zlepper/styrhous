@@ -1125,7 +1125,7 @@ mod tests {
     fn yaml_editor_clean_snapshot() {
         snapshot_editor(
             editor("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: settings"),
-            "yaml_editor/clean",
+            "yaml_editor/yaml_editor_clean_snapshot/clean",
         );
     }
 
@@ -1133,7 +1133,7 @@ mod tests {
     fn yaml_editor_modified_snapshot() {
         let mut editor = editor("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: settings");
         editor.edited_yaml.push_str("\ndata:\n  mode: development");
-        snapshot_editor(editor, "yaml_editor/modified");
+        snapshot_editor(editor, "yaml_editor/yaml_editor_modified_snapshot/modified");
     }
 
     #[test]
@@ -1160,7 +1160,10 @@ mod tests {
         let mut editor = editor("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: settings");
         editor.edited_yaml.push_str("\ndata:\n  mode: development");
         editor.error = Some("The Kubernetes API rejected this resource".into());
-        snapshot_editor(editor, "yaml_editor/apply_error");
+        snapshot_editor(
+            editor,
+            "yaml_editor/yaml_editor_apply_error_snapshot/apply_error",
+        );
     }
 
     #[test]
@@ -1168,7 +1171,10 @@ mod tests {
         let mut editor = editor("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: settings");
         editor.edited_yaml.push_str("\ndata:\n  mode: development");
         editor.confirm_discard = true;
-        snapshot_editor(editor, "yaml_editor/discard_confirmation");
+        snapshot_editor(
+            editor,
+            "yaml_editor/yaml_editor_discard_confirmation_snapshot/discard_confirmation",
+        );
     }
 
     #[test]
@@ -1193,7 +1199,10 @@ mod tests {
         });
         editor.suggestions_visible = true;
         editor.validation_revision = 1;
-        snapshot_editor(editor, "yaml_editor/completion");
+        snapshot_editor(
+            editor,
+            "yaml_editor/yaml_editor_completion_snapshot/completion",
+        );
     }
 
     #[test]
@@ -1223,7 +1232,10 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["ReadOnly", "ReadWrite"],
         );
-        snapshot_editor(editor, "yaml_editor/value_completion");
+        snapshot_editor(
+            editor,
+            "yaml_editor/yaml_editor_value_completion_snapshot/value_completion",
+        );
     }
 
     #[test]
@@ -1255,7 +1267,10 @@ mod tests {
         editor.validation_revision = 1;
 
         assert_eq!(editor.suggestions[0].label, "Always");
-        snapshot_editor(editor, "yaml_editor/deep_array_value_completion");
+        snapshot_editor(
+            editor,
+            "yaml_editor/yaml_editor_deep_array_value_completion_snapshot/deep_array_value_completion",
+        );
     }
 
     #[test]
@@ -1277,13 +1292,16 @@ mod tests {
 
         assert_eq!(harness.state().editor.suggestion_selection, 12);
         assert_eq!(harness.state().editor.suggestions[12].label, "field-012",);
-        harness.ui_harness("yaml_editor/completion_keyboard_navigation");
+        harness.ui_harness("yaml_editor/yaml_editor_completion_keyboard_navigation_snapshot/completion_keyboard_navigation");
     }
 
     #[test]
     fn yaml_editor_completion_bottom_right_caret_snapshot() {
         let yaml = format!("{}deep: {}", "filler: value\n".repeat(48), "x".repeat(160));
-        snapshot_completion_at_focused_caret(&yaml, "yaml_editor/completion_bottom_right_caret");
+        snapshot_completion_at_focused_caret(
+            &yaml,
+            "yaml_editor/yaml_editor_completion_bottom_right_caret_snapshot/completion_bottom_right_caret",
+        );
     }
 
     #[test]
@@ -1306,7 +1324,8 @@ mod tests {
         set_editor_caret(&ctx, text_edit_id, "mode: Read".chars().count());
 
         harness.run();
-        harness.ui_harness("yaml_editor/focused_caret");
+        harness
+            .ui_harness("yaml_editor/yaml_editor_completion_top_left_caret_snapshot/focused_caret");
     }
 
     #[test]
@@ -1428,7 +1447,9 @@ mod tests {
         assert!(harness.state().editor.suggestions_visible);
         assert!(harness.state().editor.suggestions.is_empty());
         harness.get_by_label("No completions available");
-        harness.ui_harness("yaml_editor/no_completions");
+        harness.ui_harness(
+            "yaml_editor/ctrl_space_shows_an_empty_completion_message_snapshot/no_completions",
+        );
     }
 
     #[test]
@@ -1462,13 +1483,19 @@ mod tests {
     #[test]
     fn yaml_editor_completion_top_right_caret_snapshot() {
         let yaml = format!("mode: {}", "x".repeat(160));
-        snapshot_completion_at_focused_caret(&yaml, "yaml_editor/completion_top_right_caret");
+        snapshot_completion_at_focused_caret(
+            &yaml,
+            "yaml_editor/yaml_editor_completion_top_right_caret_snapshot/completion_top_right_caret",
+        );
     }
 
     #[test]
     fn yaml_editor_completion_bottom_left_caret_snapshot() {
         let yaml = format!("{}mode: Read", "filler: value\n".repeat(48));
-        snapshot_completion_at_focused_caret(&yaml, "yaml_editor/completion_bottom_left_caret");
+        snapshot_completion_at_focused_caret(
+            &yaml,
+            "yaml_editor/yaml_editor_completion_bottom_left_caret_snapshot/completion_bottom_left_caret",
+        );
     }
 
     #[test]
@@ -1671,7 +1698,10 @@ mod tests {
 
     #[test]
     fn yaml_editor_diagnostics_snapshot() {
-        snapshot_editor(diagnostic_editor(), "yaml_editor/diagnostics");
+        snapshot_editor(
+            diagnostic_editor(),
+            "yaml_editor/yaml_editor_diagnostics_snapshot/diagnostics",
+        );
     }
 
     #[test]
@@ -1687,7 +1717,10 @@ mod tests {
             .collect();
         editor.retained_diagnostics = editor.diagnostics.clone();
 
-        snapshot_editor(editor, "yaml_editor/diagnostics_many");
+        snapshot_editor(
+            editor,
+            "yaml_editor/yaml_editor_many_diagnostics_snapshot/diagnostics_many",
+        );
     }
 
     #[test]
@@ -1697,7 +1730,8 @@ mod tests {
             .get_by_label("Validation error: \"settings\" is not an allowed value")
             .hover();
         harness.run();
-        harness.ui_harness("yaml_editor/diagnostics_tooltip");
+        harness
+            .ui_harness("yaml_editor/yaml_editor_diagnostic_tooltip_snapshot/diagnostics_tooltip");
     }
 
     #[test]
@@ -1705,7 +1739,10 @@ mod tests {
         let mut editor = diagnostic_editor();
         editor.diagnostics.clear();
         editor.server_validation = ValidationState::Pending;
-        snapshot_editor(editor, "yaml_editor/diagnostics_validating");
+        snapshot_editor(
+            editor,
+            "yaml_editor/yaml_editor_retained_diagnostics_snapshot/diagnostics_validating",
+        );
     }
 
     #[test]

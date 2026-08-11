@@ -387,7 +387,7 @@ fn namespace_selector_search_snapshot_shows_active_watches() {
         .push(egui::Event::Text("m".into()));
     harness.run();
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
-        "namespace_selector_open_filtered_active_watches",
+        "cluster_connection/namespace_selector_search_snapshot_shows_active_watches/namespace_selector_open_filtered_active_watches",
     ));
 }
 
@@ -417,7 +417,7 @@ fn oracle_resource_table_snapshot_uses_injected_cluster_state() {
     harness.run();
     harness.get_by_label("Apps & Containers").click_accesskit();
     harness.run();
-    harness.ui_harness("oracle_resource_table_injected");
+    harness.ui_harness("resource_tables/oracle_resource_table_snapshot_uses_injected_cluster_state/oracle_resource_table_injected");
 }
 
 #[test]
@@ -516,11 +516,11 @@ fn pod_resource_table_shows_per_container_status_indicators() {
     harness.run();
     harness.get_by_label("Apps & Containers").click_accesskit();
     harness.run();
-    harness.ui_harness("pod_resource_table_container_indicators");
+    harness.ui_harness("resource_tables/pod_resource_table_shows_per_container_status_indicators/pod_resource_table_container_indicators");
 
     harness.get_by_label("Container: sidecar").hover();
     harness.run();
-    harness.ui_harness("pod_resource_table_container_indicators_tooltip");
+    harness.ui_harness("resource_tables/pod_resource_table_shows_per_container_status_indicators/pod_resource_table_container_indicators_tooltip");
 }
 
 #[test]
@@ -561,7 +561,7 @@ fn resource_table_snapshot_keeps_namespace_column_readable() {
     harness.get_by_label("Apps & Containers").click_accesskit();
     harness.run();
 
-    harness.ui_harness("resource_table_multiple_namespaces");
+    harness.ui_harness("resource_tables/resource_table_snapshot_keeps_namespace_column_readable/resource_table_multiple_namespaces");
 }
 
 #[test]
@@ -603,7 +603,7 @@ fn deployment_resource_table_snapshot_uses_typed_columns() {
     harness.get_by_label("Deployments").click_accesskit();
     harness.run();
 
-    harness.ui_harness("deployment_resource_table_typed_columns");
+    harness.ui_harness("resource_tables/deployment_resource_table_snapshot_uses_typed_columns/deployment_resource_table_typed_columns");
 }
 
 #[test]
@@ -645,7 +645,7 @@ fn deployment_restart_action_opens_a_confirmation_and_sends_a_worker_command() {
     harness.get_by_label("Restart rollout").click_accesskit();
     harness.run();
 
-    harness.ui_harness("deployment_restart_confirmation");
+    harness.ui_harness("resource_actions/deployment_restart_action_opens_a_confirmation_and_sends_a_worker_command/deployment_restart_confirmation");
     harness.get_by_label("Restart rollout").click_accesskit();
     harness.run();
     assert!(matches!(
@@ -722,7 +722,7 @@ fn scalable_resource_action_fetches_and_updates_the_scale() {
             replicas: 3,
         });
     harness.run();
-    harness.ui_harness("resource_scale_dialog");
+    harness.ui_harness("resource_actions/scalable_resource_action_fetches_and_updates_the_scale/resource_scale_dialog");
     harness
         .state_mut()
         .ui_state
@@ -805,7 +805,7 @@ fn resource_search_filters_rows_and_restores_its_mode_per_resource_type() {
     harness.run();
     harness.get_by_label("Open details for coredns-66bc5c9577-z9gt9");
     harness.get_by_label("7 resources hidden by search");
-    harness.ui_harness("resource_search_filtered");
+    harness.ui_harness("resource_tables/resource_search_filters_rows_and_restores_its_mode_per_resource_type/resource_search_filtered");
 
     harness.get_by_label("Nodes").click_accesskit();
     harness.run();
@@ -842,7 +842,7 @@ fn invalid_resource_search_regex_is_shown_in_workspace() {
     harness.run();
 
     harness.get_by_label("Invalid regular expression");
-    harness.ui_harness("resource_search_invalid_regex");
+    harness.ui_harness("resource_tables/invalid_resource_search_regex_is_shown_in_workspace/resource_search_invalid_regex");
 }
 
 #[test]
@@ -856,7 +856,9 @@ fn resource_table_more_actions_snapshot() {
         .get_by_label("More actions for coredns-66bc5c9577-ffw2s")
         .click_accesskit();
     harness.run();
-    harness.ui_harness("oracle_resource_table_actions");
+    harness.ui_harness(
+        "resource_tables/resource_table_more_actions_snapshot/oracle_resource_table_actions",
+    );
 }
 
 #[test]
@@ -879,7 +881,7 @@ fn resource_table_row_context_menu_snapshot() {
 
     harness.get_by_label("Edit");
     harness.ui_harness(
-        HarnessSnapshotOptions::strict("oracle_resource_table_row_context_actions")
+        HarnessSnapshotOptions::strict("resource_tables/resource_table_row_context_menu_snapshot/oracle_resource_table_row_context_actions")
             .max_failed_pixels(2),
     );
 }
@@ -1088,7 +1090,7 @@ fn shell_launch_failure_uses_the_styled_error_modal_and_opens_terminal_settings(
     harness.get_by_label("Dismiss");
     assert!(harness.state().ui_state.terminal_launch_error.is_some());
     harness.run_steps(2);
-    harness.ui_harness(HarnessSnapshotOptions::one_pixel("terminal_launch_error"));
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel("terminal/shell_launch_failure_uses_the_styled_error_modal_and_opens_terminal_settings/terminal_launch_error"));
 
     harness.get_by_label("Open settings").click_accesskit();
     harness.run_steps(2);
@@ -1125,7 +1127,7 @@ fn settings_button_opens_the_terminal_launcher_blade() {
     harness.get_by_label("Terminal launcher");
     harness.get_by_label("Save changes");
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
-        "settings_terminal_launcher",
+        "terminal/settings_button_opens_the_terminal_launcher_blade/settings_terminal_launcher",
     ));
 }
 
@@ -1143,7 +1145,7 @@ fn settings_blade_shows_custom_terminal_launcher_details() {
     harness.get_by_role_and_label(egui::accesskit::Role::TextInput, "Command template");
     harness.get_by_label("Save changes");
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
-        "settings_terminal_launcher_custom",
+        "terminal/settings_blade_shows_custom_terminal_launcher_details/settings_terminal_launcher_custom",
     ));
 }
 
@@ -1185,7 +1187,7 @@ fn settings_blade_shows_invalid_custom_template_after_save() {
     );
     harness.get_by_label("Command template needs attention");
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
-        "settings_terminal_launcher_invalid",
+        "terminal/settings_blade_shows_invalid_custom_template_after_save/settings_terminal_launcher_invalid",
     ));
 }
 
@@ -1490,7 +1492,7 @@ fn node_inspector_lists_cross_namespace_pods_in_the_shared_pod_table() {
     harness.run_steps(2);
 
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
-        "node_inspector_with_scheduled_pods",
+        "resource_inspectors/node_inspector_lists_cross_namespace_pods_in_the_shared_pod_table/node_inspector_with_scheduled_pods",
     ));
     harness.get_by_label("monitoring");
     harness.get_by_label("Open details for api");
@@ -1698,7 +1700,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         });
     harness.run();
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
-        "deployment_managed_resource_tables",
+        "resource_inspectors/managed_resource_tables_navigate_with_back_and_forward_history/deployment_managed_resource_tables",
     ));
     let replica_set_position = harness
         .get_by_label("Open details for api-7b948f")
@@ -1797,7 +1799,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .navigator
         .clear_transition();
     harness.run();
-    harness.ui_harness("replica_set_inspector_with_back_history");
+    harness.ui_harness("resource_inspectors/managed_resource_tables_navigate_with_back_and_forward_history/replica_set_inspector_with_back_history");
 
     harness.get_by_label("Back").click_accesskit();
     harness.run_steps(1);
@@ -1821,7 +1823,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .clear_transition();
     harness.run();
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
-        "deployment_inspector_with_forward_history",
+        "resource_inspectors/managed_resource_tables_navigate_with_back_and_forward_history/deployment_inspector_with_forward_history",
     ));
 
     harness.get_by_label("Forward").click_accesskit();
@@ -1898,7 +1900,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
             .len(),
         2
     );
-    harness.ui_harness("pod_inspector_with_two_back_history_blades");
+    harness.ui_harness("resource_inspectors/managed_resource_tables_navigate_with_back_and_forward_history/pod_inspector_with_two_back_history_blades");
 
     let detail_watch_starts_before_back = harness
         .state()
@@ -2018,7 +2020,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
             .len(),
         3
     );
-    harness.ui_harness("pod_inspector_with_three_back_history_entries");
+    harness.ui_harness("resource_inspectors/managed_resource_tables_navigate_with_back_and_forward_history/pod_inspector_with_three_back_history_entries");
 }
 
 #[test]
@@ -2164,7 +2166,7 @@ fn pod_resource_detail_inspector_snapshot() {
     assert_eq!(second_arg_top, long_arg_top);
 
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
-        "pod_resource_detail_inspector",
+        "resource_inspectors/pod_resource_detail_inspector_snapshot/pod_resource_detail_inspector",
     ));
     harness.get_by_label("Reveal").click_accesskit();
     harness.run();
@@ -2328,7 +2330,7 @@ fn deployment_editor_completes_match_labels_in_a_selector() {
     let editor = &snapshot_harness.state().editor;
     assert!(editor.suggestions_visible, "editor state: {editor:#?}");
     assert_eq!(editor.suggestions[0].label, "matchLabels");
-    snapshot_harness.ui_harness("deployment_editor_match_labels_completion");
+    snapshot_harness.ui_harness("resource_editor/deployment_editor_completes_match_labels_in_a_selector/deployment_editor_match_labels_completion");
 }
 
 fn deployment_selector_schema() -> ResourceSchema {
@@ -2452,7 +2454,7 @@ fn config_map_resource_detail_inspector_snapshot() {
     open_typed_detail(&mut harness, detail.api_resource.clone(), detail);
 
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
-        "config_map_resource_detail_inspector",
+        "resource_inspectors/config_map_resource_detail_inspector_snapshot/config_map_resource_detail_inspector",
     ));
 }
 
@@ -2468,7 +2470,7 @@ fn resource_detail_more_actions_use_the_shared_resource_menu() {
         .click_accesskit();
     harness.run();
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
-        "config_map_resource_detail_actions",
+        "resource_actions/resource_detail_more_actions_use_the_shared_resource_menu/config_map_resource_detail_actions",
     ));
     harness.get_by_label("Edit").click_accesskit();
     harness.run();
@@ -2634,7 +2636,7 @@ fn secret_resource_detail_inspector_snapshot() {
     open_typed_detail(&mut harness, secrets, detail);
 
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
-        "secret_resource_detail_inspector",
+        "resource_inspectors/secret_resource_detail_inspector_snapshot/secret_resource_detail_inspector",
     ));
 }
 
@@ -2648,11 +2650,15 @@ fn resource_table_reflows_after_viewport_resize() {
 
     harness.set_size(egui::vec2(1024.0, 1024.0));
     harness.run();
-    harness.ui_harness("resource_table_narrow");
+    harness.ui_harness(
+        "resource_tables/resource_table_reflows_after_viewport_resize/resource_table_narrow",
+    );
 
     components::test_support::setup_egui(&mut harness);
     harness.run();
-    harness.ui_harness("resource_table_resized");
+    harness.ui_harness(
+        "resource_tables/resource_table_reflows_after_viewport_resize/resource_table_resized",
+    );
 }
 
 #[test]
@@ -2670,7 +2676,7 @@ fn cluster_rail_shows_connection_status_marker_and_tooltip() {
     harness.get_by_label("dev").hover();
     harness.run();
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
-        "cluster_rail_connection_status",
+        "cluster_connection/cluster_rail_shows_connection_status_marker_and_tooltip/cluster_rail_connection_status",
     ));
 }
 
@@ -2881,7 +2887,7 @@ fn test_ui_flow() {
 )"#;
     let mut harness = application_harness::<MockWorker>();
     harness.run();
-    harness.ui_harness("01_empty_state");
+    harness.ui_harness("cluster_connection/test_ui_flow/01_empty_state");
 
     harness
         .state_mut()
@@ -2910,7 +2916,7 @@ fn test_ui_flow() {
             cluster,
         }] if cluster == "dev"
     ));
-    harness.ui_harness("current_context_connecting");
+    harness.ui_harness("cluster_connection/test_ui_flow/current_context_connecting");
 
     harness.state_mut().worker.results.push_back(
         WorkerResult::KubernetesClusterConnectionCreated {
@@ -2984,7 +2990,7 @@ fn test_ui_flow() {
             ))
     );
     harness.get_by_label("Loading resources");
-    harness.ui_harness("resource_watch_loading");
+    harness.ui_harness("cluster_connection/test_ui_flow/resource_watch_loading");
 
     harness
         .state_mut()
@@ -3012,7 +3018,7 @@ fn test_ui_flow() {
     harness.run();
     harness.get_by_label("Unable to load resources");
     harness.get_by_label(watch_error);
-    harness.ui_harness("resource_watch_error");
+    harness.ui_harness("cluster_connection/test_ui_flow/resource_watch_error");
     harness.get_by_label("Retry").click_accesskit();
     harness.run_steps(1);
     assert_eq!(

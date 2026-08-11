@@ -371,7 +371,7 @@ mod tests {
         });
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.ui_harness("buttons/variants");
+        harness.ui_harness("buttons/test_buttons/variants");
     }
 
     /// Test button hover and active (pressed) states
@@ -393,7 +393,7 @@ mod tests {
             harness.run();
             harness.get_by_label("Hovered").hover();
             harness.run_ok();
-            harness.ui_harness("buttons/primary_hovered");
+            harness.ui_harness("buttons/test_button_interaction_states/primary_hovered");
         }
 
         // Test Primary button - pressed
@@ -422,7 +422,7 @@ mod tests {
                 modifiers: egui::Modifiers::default(),
             });
             harness.step();
-            harness.ui_harness("buttons/primary_pressed");
+            harness.ui_harness("buttons/test_button_interaction_states/primary_pressed");
         }
 
         // Test Secondary button - hovered
@@ -440,7 +440,7 @@ mod tests {
             harness.run();
             harness.get_by_label("Hovered").hover();
             harness.run_ok();
-            harness.ui_harness("buttons/secondary_hovered");
+            harness.ui_harness("buttons/test_button_interaction_states/secondary_hovered");
         }
 
         // Test Secondary button - pressed
@@ -469,7 +469,7 @@ mod tests {
                 modifiers: egui::Modifiers::default(),
             });
             harness.step();
-            harness.ui_harness("buttons/secondary_pressed");
+            harness.ui_harness("buttons/test_button_interaction_states/secondary_pressed");
         }
 
         // Test Soft button - hovered
@@ -487,7 +487,7 @@ mod tests {
             harness.run();
             harness.get_by_label("Hovered").hover();
             harness.run_ok();
-            harness.ui_harness("buttons/soft_hovered");
+            harness.ui_harness("buttons/test_button_interaction_states/soft_hovered");
         }
 
         // Test Soft button - pressed
@@ -516,7 +516,7 @@ mod tests {
                 modifiers: egui::Modifiers::default(),
             });
             harness.step();
-            harness.ui_harness("buttons/soft_pressed");
+            harness.ui_harness("buttons/test_button_interaction_states/soft_pressed");
         }
     }
 }
