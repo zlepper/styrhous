@@ -20,6 +20,21 @@ Window state=[focused] rect=<none>
                 GenericContainer rect=<none>
                   Button name="Apply changes" rect=(x=1380.4 y=17.0 width=122.6 height=33.0 center_x=1441.7 center_y=33.5)
                 Button name="Discard" rect=(x=1297.9 y=17.0 width=74.5 height=33.0 center_x=1335.1 center_y=33.5)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        TextInput name="Search YAML" value="" rect=(x=1074.9 y=22.0 width=150.0 height=26.0 center_x=1149.9 center_y=35.0)
+                          TextRun value="" rect=(x=1078.9 y=24.0 width=0.0 height=17.0 center_x=1078.9 center_y=32.5)
+                      CheckBox name="Use regex search" state=[toggled=Mixed] rect=(x=1246.9 y=25.5 width=19.1 height=19.0 center_x=1256.4 center_y=35.0)
+                Label value="0 matches" rect=(x=990.5 y=27.5 width=59.3 height=15.0 center_x=1020.2 center_y=35.0)
+                  TextRun value="0 matches" rect=(x=990.9 y=27.5 width=59.3 height=15.0 center_x=1020.5 center_y=35.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      Button name="Previous match" state=[disabled] rect=(x=922.5 y=21.0 width=28.0 height=28.0 center_x=936.5 center_y=35.0)
+                    GenericContainer rect=<none>
+                      Button name="Next match" state=[disabled] rect=(x=950.5 y=21.0 width=28.0 height=28.0 center_x=964.5 center_y=35.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>

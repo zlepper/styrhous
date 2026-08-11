@@ -7,7 +7,7 @@ use crate::log_store::LogStoreService;
 use crate::worker::WorkerCommand;
 use anstyle::{Ansi256Color, AnsiColor, Color, Effects, RgbColor, Style};
 use components::colors::{SUCCESS, TABLE_BORDER, TOOLBAR_BACKGROUND, gray};
-use components::design::{radius, spacing, status, surface, typography};
+use components::design::{radius, search, spacing, status, surface, typography};
 use components::{PointingHand, TailwindSearchInput, icons};
 use std::time::{Duration, Instant};
 
@@ -1495,7 +1495,7 @@ fn append_log_line_text(
             if style.is_none() {
                 format.color = egui::Color32::from_rgb(254, 243, 199);
             }
-            format.background = egui::Color32::from_rgb(120, 53, 15);
+            format.background = search::MATCH_BACKGROUND;
         }
         job.append(&line[start..end], 0.0, format);
     }
