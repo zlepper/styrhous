@@ -47,11 +47,12 @@ enum NamespaceSelection {
 }
 
 pub(super) fn show(
-    ctx: &egui::Context,
+    ui: &mut egui::Ui,
     ui_state: &mut UiState,
     commands_to_send: &mut Vec<WorkerCommand>,
     shell_requests: &mut Vec<PodShellRequest>,
 ) {
+    let ctx = ui.ctx().clone();
     let mut namespace_selection = None;
     let mut retry_requested = false;
     let mut detail_to_open = None;
@@ -60,7 +61,7 @@ pub(super) fn show(
     let mut shell_to_open = None;
     egui::CentralPanel::default()
         .frame(WorkspacePage::frame())
-        .show(ctx, |ui| {
+        .show(ui, |ui| {
             WorkspacePage::show(ui, |ui| {
                 let toolbar_rect = egui::Rect::from_min_size(
                     ui.max_rect().min,
@@ -273,14 +274,14 @@ pub(super) fn show(
             uid,
             commands_to_send,
         );
-        super::resource_detail::seed_detail_transition(ctx, ui_state, cluster_key);
+        super::resource_detail::seed_detail_transition(&ctx, ui_state, cluster_key);
     }
     if let Some((cluster_key, name, namespace, container)) = log_to_open {
         ui_state.open_pod_log_window(cluster_key, name, namespace, container, commands_to_send);
     }
     if let Some((cluster_key, api_resource, namespace, resource_name)) = yaml_to_open {
         ui_state.open_yaml_editor(
-            ctx,
+            &ctx,
             cluster_key,
             api_resource,
             namespace,
@@ -923,7 +924,7 @@ mod tests {
     fn command_f_focuses_resource_search_input() {
         let search = Rc::new(RefCell::new(ResourceSearchState::default()));
         let search_for_ui = search.clone();
-        let mut harness = Harness::builder().build(move |ctx| {
+        let mut harness = Harness::builder().build_ui(move |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 show_resource_search(ui, &mut search_for_ui.borrow_mut());
             });

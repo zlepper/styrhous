@@ -57,8 +57,9 @@ fn apply_inter_fonts(ctx: &Context) {
 /// dark pane backgrounds showing through table gaps and component spacing.
 pub fn apply_light_theme(ctx: &Context) {
     apply_inter_fonts(ctx);
+    ctx.set_theme(egui::Theme::Light);
 
-    ctx.style_mut(|style| {
+    ctx.style_mut_of(egui::Theme::Light, |style| {
         style
             .text_styles
             .insert(TextStyle::Small, crate::design::typography::metadata());
@@ -86,5 +87,5 @@ pub fn apply_light_theme(ctx: &Context) {
     visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, TABLE_BORDER);
     visuals.hyperlink_color = indigo::_600;
 
-    ctx.set_visuals(visuals);
+    ctx.set_visuals_of(egui::Theme::Light, visuals);
 }

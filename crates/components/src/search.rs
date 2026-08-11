@@ -45,7 +45,7 @@ impl<'a> TailwindSearchInput<'a> {
         self
     }
 
-    pub fn id_salt(mut self, id_salt: impl std::hash::Hash) -> Self {
+    pub fn id_salt(mut self, id_salt: impl std::hash::Hash + std::fmt::Debug) -> Self {
         self.input_id = Id::new(id_salt);
         self
     }
@@ -84,7 +84,7 @@ impl<'a> TailwindSearchInput<'a> {
                         Vec2::new(INPUT_WIDTH, INPUT_HEIGHT),
                         egui::TextEdit::singleline(self.query)
                             .hint_text(self.hint_text)
-                            .frame(false)
+                            .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(4, 2)))
                             .font(typography::body())
                             .id_salt(self.input_id),
                     );

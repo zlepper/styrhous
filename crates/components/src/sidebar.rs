@@ -702,7 +702,7 @@ impl<'a> WideSidebarContent<'a> {
     /// `Other` subgroup below several API groups.
     pub fn nested_expandable_text<R>(
         &mut self,
-        id_source: impl std::hash::Hash,
+        id_source: impl std::hash::Hash + std::fmt::Debug,
         text: impl Into<WidgetText>,
         default_open: bool,
         add_children: impl FnOnce(&mut WideSidebarContent<'_>) -> R,
@@ -968,8 +968,8 @@ impl<'a> NarrowSidebarContent<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use egui_kittest::Harness;
     use egui_kittest::kittest::Queryable;
+    use egui_kittest::{Harness, SnapshotResults};
     use std::cell::RefCell;
     use std::rc::Rc;
 
@@ -1180,6 +1180,7 @@ mod tests {
 
     #[test]
     fn test_sidebar_full_text_tooltips_only_appear_when_truncated() {
+        let mut results = SnapshotResults::new();
         let mut visible_label = create_harness(|ui| {
             WideSidebar::new().dark().show(ui, |sidebar| {
                 sidebar.child_item("pods", false);
@@ -1187,7 +1188,7 @@ mod tests {
         });
         visible_label.get_by_label("pods").hover();
         visible_label.run();
-        visible_label.snapshot("sidebars/tooltip_visible_label");
+        results.add(visible_label.try_snapshot("sidebars/tooltip_visible_label"));
 
         let mut truncated_label = create_harness(|ui| {
             WideSidebar::new().width(160.0).dark().show(ui, |sidebar| {
@@ -1198,7 +1199,7 @@ mod tests {
             .get_by_label("very-long-resource-name-that-needs-truncation")
             .hover();
         truncated_label.run();
-        truncated_label.snapshot("sidebars/tooltip_truncated_label");
+        results.add(truncated_label.try_snapshot("sidebars/tooltip_truncated_label"));
     }
 
     #[test]

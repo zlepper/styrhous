@@ -179,7 +179,7 @@ pub struct BladeStack {
 }
 
 impl BladeStack {
-    pub fn new(id_source: impl std::hash::Hash) -> Self {
+    pub fn new(id_source: impl std::hash::Hash + std::fmt::Debug) -> Self {
         Self {
             id: Id::new(id_source),
         }
@@ -433,7 +433,7 @@ struct Transform {
     scale: f32,
 }
 fn duration(ctx: &egui::Context) -> f32 {
-    if ctx.style().animation_time == 0.0 {
+    if ctx.global_style().animation_time == 0.0 {
         0.0
     } else {
         TRANSITION_DURATION
@@ -1010,7 +1010,9 @@ mod tests {
             );
         });
         crate::test_support::setup_egui(&mut harness);
-        harness.ctx.style_mut(|style| style.animation_time = 1.0);
+        harness
+            .ctx
+            .global_style_mut(|style| style.animation_time = 1.0);
         harness.input_mut().time = Some(1.0);
         harness.step();
 
@@ -1055,7 +1057,9 @@ mod tests {
             );
         });
         crate::test_support::setup_egui(&mut harness);
-        harness.ctx.style_mut(|style| style.animation_time = 1.0);
+        harness
+            .ctx
+            .global_style_mut(|style| style.animation_time = 1.0);
         harness.input_mut().time = Some(1.0);
         harness.step();
 
@@ -1320,7 +1324,9 @@ mod tests {
             );
         });
         crate::test_support::setup_egui(&mut harness);
-        harness.ctx.style_mut(|style| style.animation_time = 1.0);
+        harness
+            .ctx
+            .global_style_mut(|style| style.animation_time = 1.0);
 
         // Harness construction renders once before the test can configure the
         // clock. Restart this transition so the frames below use only our
@@ -1399,7 +1405,9 @@ mod tests {
             );
         });
         crate::test_support::setup_egui(&mut harness);
-        harness.ctx.style_mut(|style| style.animation_time = 1.0);
+        harness
+            .ctx
+            .global_style_mut(|style| style.animation_time = 1.0);
         harness.input_mut().time = Some(1.0);
         harness.step();
 

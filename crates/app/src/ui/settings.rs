@@ -278,7 +278,7 @@ fn show_command_template_input(
                 egui::vec2(full_width, 20.0),
                 egui::TextEdit::singleline(template)
                     .id(id)
-                    .frame(false)
+                    .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(4, 2)))
                     .font(typography::monospace())
                     .text_color(gray::_800)
                     .hint_text("alacritty -e {command}"),

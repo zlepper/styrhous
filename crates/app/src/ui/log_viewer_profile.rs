@@ -166,15 +166,16 @@ impl LogViewerProfile {
     }
 
     fn run_frame(&mut self) {
-        let _ = self.context.run(self.input.clone(), |context| {
+        let mut output = self.context.run_ui(self.input.clone(), |ui| {
             show_log_window(
-                context,
+                ui,
                 &mut self.window,
                 &mut self.display_options,
                 &self.log_store,
                 &mut self.close_requested,
             );
         });
+        output.textures_delta.clear();
     }
 
     fn insert_loaded_page(&mut self, result: LogStoreResult) {

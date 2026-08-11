@@ -155,7 +155,7 @@ pub struct TailwindTable {
 
 impl TailwindTable {
     /// Create a new table with the given id source
-    pub fn new(id_source: impl std::hash::Hash) -> Self {
+    pub fn new(id_source: impl std::hash::Hash + std::fmt::Debug) -> Self {
         Self {
             id: Id::new(id_source),
             columns: Vec::new(),
@@ -884,8 +884,8 @@ fn render_sort_indicator(ui: &mut Ui, direction: Option<SortDirection>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use egui_kittest::Harness;
     use egui_kittest::kittest::Queryable;
+    use egui_kittest::{Harness, SnapshotResults};
     use std::collections::HashSet;
 
     #[derive(Clone)]
@@ -1113,6 +1113,7 @@ mod tests {
 
     #[test]
     fn test_table_sorting() {
+        let mut results = SnapshotResults::new();
         // Comprehensive sorting test that demonstrates the full sorting workflow:
         // 1. No sort state (unsorted indicator shown)
         // 2. Sort by name ascending (data is sorted, up arrow shown)
@@ -1138,7 +1139,7 @@ mod tests {
         });
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.snapshot("tables/sorting_unsorted");
+        results.add(harness.try_snapshot("tables/sorting_unsorted"));
 
         // --- Snapshot 2: Sort by name ascending ---
         // Sort state is set before rendering, and data is sorted accordingly
@@ -1163,7 +1164,7 @@ mod tests {
         });
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.snapshot("tables/sorting_name_asc");
+        results.add(harness.try_snapshot("tables/sorting_name_asc"));
 
         // --- Snapshot 3: Sort by title descending ---
         let mut users = test_users();
@@ -1187,7 +1188,7 @@ mod tests {
         });
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.snapshot("tables/sorting_title_desc");
+        results.add(harness.try_snapshot("tables/sorting_title_desc"));
     }
 
     #[test]
