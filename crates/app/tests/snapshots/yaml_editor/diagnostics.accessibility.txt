@@ -1,0 +1,52 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="Edit" rect=(x=33.0 y=24.0 width=28.5 height=19.0 center_x=47.3 center_y=33.5)
+                TextRun value="Edit" rect=(x=33.0 y=24.0 width=28.5 height=19.0 center_x=47.3 center_y=33.5)
+              Label value="settings" rect=(x=85.5 y=24.0 width=59.8 height=19.0 center_x=115.5 center_y=33.5)
+                TextRun value="settings" rect=(x=85.5 y=24.0 width=59.8 height=19.0 center_x=115.5 center_y=33.5)
+              Label value="ConfigMap · kube-system" rect=(x=165.4 y=25.0 width=171.7 height=17.0 center_x=251.2 center_y=33.5)
+                TextRun value="ConfigMap · kube-system" rect=(x=165.4 y=25.0 width=171.7 height=17.0 center_x=251.2 center_y=33.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Button name="Apply changes" state=[disabled] rect=(x=1380.4 y=17.0 width=122.6 height=33.0 center_x=1441.7 center_y=33.5)
+                Button name="Close" rect=(x=1310.8 y=17.0 width=61.6 height=33.0 center_x=1341.6 center_y=33.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="Changes apply directly to the cluster" rect=(x=33.0 y=988.0 width=242.7 height=17.0 center_x=154.3 center_y=996.5)
+                TextRun value="Changes apply directly to the cluster" rect=(x=33.0 y=988.0 width=242.7 height=17.0 center_x=154.3 center_y=996.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Button name="1 diagnostics" rect=(x=33.0 y=927.0 width=107.5 height=19.0 center_x=86.7 center_y=936.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      Button name="Line 4: \"settings\" is not an allowed value" rect=(x=51.0 y=949.0 width=229.8 height=18.0 center_x=165.9 center_y=958.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="1" rect=(x=24.0 y=76.0 width=7.8 height=15.0 center_x=27.9 center_y=83.5)
+                      TextRun value="1" rect=(x=24.0 y=76.0 width=7.8 height=15.0 center_x=27.9 center_y=83.5)
+                    Label value="2" rect=(x=24.0 y=94.0 width=7.8 height=15.0 center_x=27.9 center_y=101.5)
+                      TextRun value="2" rect=(x=24.0 y=94.0 width=7.8 height=15.0 center_x=27.9 center_y=101.5)
+                    Label value="3" rect=(x=24.0 y=112.0 width=7.8 height=15.0 center_x=27.9 center_y=119.5)
+                      TextRun value="3" rect=(x=24.0 y=112.0 width=7.8 height=15.0 center_x=27.9 center_y=119.5)
+                    Label value="4" rect=(x=24.0 y=130.0 width=7.8 height=15.0 center_x=27.9 center_y=137.5)
+                      TextRun value="4" rect=(x=24.0 y=130.0 width=7.8 height=15.0 center_x=27.9 center_y=137.5)
+                  MultilineTextInput value="apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: settings" rect=(x=82.0 y=76.0 width=1430.0 height=64.5 center_x=797.0 center_y=108.2)
+                    TextRun value="apiVersion: v1\n" rect=(x=86.0 y=78.0 width=109.6 height=15.0 center_x=140.8 center_y=85.5)
+                    TextRun value="kind: ConfigMap\n" rect=(x=86.0 y=93.0 width=117.4 height=15.0 center_x=144.7 center_y=100.5)
+                    TextRun value="metadata:\n" rect=(x=86.0 y=108.0 width=70.4 height=15.0 center_x=121.2 center_y=115.5)
+                    TextRun value="  name: settings" rect=(x=86.0 y=123.0 width=125.2 height=15.0 center_x=148.6 center_y=130.5)
+                  Label value="Validation error: \"settings\" is not an allowed value" rect=(x=148.0 y=120.0 width=63.2 height=21.0 center_x=179.6 center_y=130.5)

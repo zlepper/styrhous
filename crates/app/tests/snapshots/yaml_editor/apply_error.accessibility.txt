@@ -1,0 +1,55 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="Edit" rect=(x=33.0 y=24.0 width=28.5 height=19.0 center_x=47.3 center_y=33.5)
+                TextRun value="Edit" rect=(x=33.0 y=24.0 width=28.5 height=19.0 center_x=47.3 center_y=33.5)
+              Label value="settings" rect=(x=85.5 y=24.0 width=59.8 height=19.0 center_x=115.5 center_y=33.5)
+                TextRun value="settings" rect=(x=85.5 y=24.0 width=59.8 height=19.0 center_x=115.5 center_y=33.5)
+              Label value="ConfigMap · kube-system" rect=(x=165.4 y=25.0 width=171.7 height=17.0 center_x=251.2 center_y=33.5)
+                TextRun value="ConfigMap · kube-system" rect=(x=165.4 y=25.0 width=171.7 height=17.0 center_x=251.2 center_y=33.5)
+              Label value="●" rect=(x=357.1 y=25.0 width=12.8 height=17.0 center_x=363.5 center_y=33.5)
+                TextRun value="●" rect=(x=357.1 y=25.0 width=12.8 height=17.0 center_x=363.5 center_y=33.5)
+              Label value="Modified" rect=(x=377.9 y=25.0 width=58.3 height=17.0 center_x=407.0 center_y=33.5)
+                TextRun value="Modified" rect=(x=377.9 y=25.0 width=58.3 height=17.0 center_x=407.0 center_y=33.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Button name="Apply changes" rect=(x=1380.4 y=17.0 width=122.6 height=33.0 center_x=1441.7 center_y=33.5)
+                Button name="Discard" rect=(x=1297.9 y=17.0 width=74.5 height=33.0 center_x=1335.1 center_y=33.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="Changes apply directly to the cluster" rect=(x=33.0 y=988.0 width=242.7 height=17.0 center_x=154.3 center_y=996.5)
+                TextRun value="Changes apply directly to the cluster" rect=(x=33.0 y=988.0 width=242.7 height=17.0 center_x=154.3 center_y=996.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="The Kubernetes API rejected this resource" rect=(x=41.0 y=85.0 width=279.4 height=17.0 center_x=180.7 center_y=93.5)
+                TextRun value="The Kubernetes API rejected this resource" rect=(x=41.0 y=85.0 width=279.4 height=17.0 center_x=180.7 center_y=93.5)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="1" rect=(x=24.0 y=122.0 width=7.8 height=15.0 center_x=27.9 center_y=129.5)
+                      TextRun value="1" rect=(x=24.0 y=122.0 width=7.8 height=15.0 center_x=27.9 center_y=129.5)
+                    Label value="2" rect=(x=24.0 y=140.0 width=7.8 height=15.0 center_x=27.9 center_y=147.5)
+                      TextRun value="2" rect=(x=24.0 y=140.0 width=7.8 height=15.0 center_x=27.9 center_y=147.5)
+                    Label value="3" rect=(x=24.0 y=158.0 width=7.8 height=15.0 center_x=27.9 center_y=165.5)
+                      TextRun value="3" rect=(x=24.0 y=158.0 width=7.8 height=15.0 center_x=27.9 center_y=165.5)
+                    Label value="4" rect=(x=24.0 y=176.0 width=7.8 height=15.0 center_x=27.9 center_y=183.5)
+                      TextRun value="4" rect=(x=24.0 y=176.0 width=7.8 height=15.0 center_x=27.9 center_y=183.5)
+                    Label value="5" rect=(x=24.0 y=194.0 width=7.8 height=15.0 center_x=27.9 center_y=201.5)
+                      TextRun value="5" rect=(x=24.0 y=194.0 width=7.8 height=15.0 center_x=27.9 center_y=201.5)
+                    Label value="6" rect=(x=24.0 y=212.0 width=7.8 height=15.0 center_x=27.9 center_y=219.5)
+                      TextRun value="6" rect=(x=24.0 y=212.0 width=7.8 height=15.0 center_x=27.9 center_y=219.5)
+                  MultilineTextInput value="apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: settings\ndata:\n  mode: development" rect=(x=82.0 y=122.0 width=1430.0 height=94.8 center_x=797.0 center_y=169.4)
+                    TextRun value="apiVersion: v1\n" rect=(x=86.0 y=124.0 width=109.6 height=15.0 center_x=140.8 center_y=131.5)
+                    TextRun value="kind: ConfigMap\n" rect=(x=86.0 y=139.0 width=117.4 height=15.0 center_x=144.7 center_y=146.5)
+                    TextRun value="metadata:\n" rect=(x=86.0 y=154.0 width=70.4 height=15.0 center_x=121.2 center_y=161.5)
+                    TextRun value="  name: settings\n" rect=(x=86.0 y=169.0 width=125.2 height=15.0 center_x=148.6 center_y=176.5)
+                    TextRun value="data:\n" rect=(x=86.0 y=184.0 width=39.1 height=15.0 center_x=105.6 center_y=191.5)
+                    TextRun value="  mode: development" rect=(x=86.0 y=199.0 width=148.7 height=15.0 center_x=160.4 center_y=206.5)

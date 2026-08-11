@@ -1,0 +1,45 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="Edit" rect=(x=33.0 y=24.0 width=28.5 height=19.0 center_x=47.3 center_y=33.5)
+                TextRun value="Edit" rect=(x=33.0 y=24.0 width=28.5 height=19.0 center_x=47.3 center_y=33.5)
+              Label value="settings" rect=(x=85.5 y=24.0 width=59.8 height=19.0 center_x=115.5 center_y=33.5)
+                TextRun value="settings" rect=(x=85.5 y=24.0 width=59.8 height=19.0 center_x=115.5 center_y=33.5)
+              Label value="ConfigMap · kube-system" rect=(x=165.4 y=25.0 width=171.7 height=17.0 center_x=251.2 center_y=33.5)
+                TextRun value="ConfigMap · kube-system" rect=(x=165.4 y=25.0 width=171.7 height=17.0 center_x=251.2 center_y=33.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Button name="Apply changes" state=[disabled] rect=(x=1380.4 y=17.0 width=122.6 height=33.0 center_x=1441.7 center_y=33.5)
+                Button name="Close" rect=(x=1310.8 y=17.0 width=61.6 height=33.0 center_x=1341.6 center_y=33.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="Changes apply directly to the cluster" rect=(x=33.0 y=988.0 width=242.7 height=17.0 center_x=154.3 center_y=996.5)
+                TextRun value="Changes apply directly to the cluster" rect=(x=33.0 y=988.0 width=242.7 height=17.0 center_x=154.3 center_y=996.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="1" rect=(x=24.0 y=76.0 width=7.8 height=15.0 center_x=27.9 center_y=83.5)
+                      TextRun value="1" rect=(x=24.0 y=76.0 width=7.8 height=15.0 center_x=27.9 center_y=83.5)
+                  MultilineTextInput value="unknown" state=[focused] rect=(x=82.0 y=76.0 width=1430.0 height=19.1 center_x=797.0 center_y=85.6)
+                    TextRun value="unknown" rect=(x=86.0 y=78.0 width=54.8 height=15.0 center_x=113.4 center_y=85.5)
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        Label value="EXPECTS KEY" rect=(x=152.0 y=113.5 width=81.3 height=15.0 center_x=192.6 center_y=121.0)
+          TextRun value="EXPECTS KEY" rect=(x=152.0 y=113.5 width=81.3 height=15.0 center_x=192.6 center_y=121.0)
+        Label value="object" rect=(x=241.3 y=113.5 width=35.2 height=15.0 center_x=258.9 center_y=121.0)
+          TextRun value="object" rect=(x=241.3 y=113.5 width=35.2 height=15.0 center_x=258.9 center_y=121.0)
+      GenericContainer rect=<none>
+        Label value="No completions available" rect=(x=152.0 y=137.0 width=240.0 height=26.0 center_x=272.0 center_y=150.0)
+          TextRun value="No completions available" rect=(x=189.0 y=141.5 width=165.2 height=17.0 center_x=271.6 center_y=150.0)
+      Label value="Esc dismiss" rect=(x=152.0 y=183.0 width=66.4 height=15.0 center_x=185.2 center_y=190.5)
+        TextRun value="Esc dismiss" rect=(x=152.0 y=183.0 width=66.4 height=15.0 center_x=185.2 center_y=190.5)

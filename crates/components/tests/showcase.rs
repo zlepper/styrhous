@@ -8,6 +8,7 @@ use std::collections::HashSet;
 
 use components::colors::WHITE;
 use components::icons::{calendar_icon, document_icon, folder_icon, home_icon, users_icon};
+use components::test_support::UiHarnessSnapshot;
 use components::{
     ButtonRounding, ButtonSize, ButtonVariant, SortDirection, SortState, TableRowBuilder, Tabs,
     TailwindButton, TailwindCombobox, TailwindTable, WideSidebar,
@@ -111,7 +112,7 @@ fn showcase_buttons() {
 
     apply_reference_theme(&mut harness);
     harness.run();
-    harness.snapshot("showcase/buttons");
+    harness.ui_harness("showcase/buttons");
 }
 
 #[test]
@@ -174,7 +175,7 @@ fn showcase_comboboxes() {
         .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Multi-select")
         .click();
     harness.run();
-    harness.snapshot("showcase/comboboxes");
+    harness.ui_harness("showcase/comboboxes");
 }
 
 #[test]
@@ -213,7 +214,7 @@ fn showcase_sidebars() {
 
     apply_reference_theme(&mut harness);
     harness.run();
-    harness.snapshot("showcase/sidebars");
+    harness.ui_harness("showcase/sidebars");
 }
 
 #[test]
@@ -291,7 +292,7 @@ fn showcase_tables() {
 
     apply_reference_theme(&mut harness);
     harness.run();
-    harness.snapshot("showcase/tables");
+    harness.ui_harness("showcase/tables");
 }
 
 #[test]
@@ -328,5 +329,5 @@ fn showcase_tabs() {
 
     apply_reference_theme(&mut harness);
     harness.run();
-    harness.snapshot("showcase/tabs");
+    harness.ui_harness("showcase/tabs");
 }

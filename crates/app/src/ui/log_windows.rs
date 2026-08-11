@@ -1694,6 +1694,7 @@ mod tests {
     use crate::minimal_resource::PodLogContainer;
     use crate::resource_table::ContainerKind;
     use crate::worker::{MockWorker, WorkerResult};
+    use components::test_support::UiHarnessSnapshot;
     use egui_kittest::{Harness, kittest::Queryable};
     use std::cell::RefCell;
     use std::collections::VecDeque;
@@ -2708,7 +2709,7 @@ mod tests {
         harness.step();
         harness.key_press(egui::Key::ArrowDown);
         harness.step();
-        harness.snapshot("pod_logs/keyboard_caret_after_arrow_down");
+        harness.ui_harness("pod_logs/keyboard_caret_after_arrow_down");
     }
 
     #[test]
@@ -2746,7 +2747,7 @@ mod tests {
 
         assert_eq!(caret_focus(&window.borrow()).display_row, 0);
         assert!(*caret_has_focus.borrow(), "ArrowUp must retain caret focus");
-        harness.snapshot("pod_logs/keyboard_caret_after_arrow_up");
+        harness.ui_harness("pod_logs/keyboard_caret_after_arrow_up");
     }
 
     #[test]
@@ -2802,7 +2803,7 @@ mod tests {
             modifiers: egui::Modifiers::NONE,
         });
         harness.run();
-        harness.snapshot("pod_logs/keyboard_caret");
+        harness.ui_harness("pod_logs/keyboard_caret");
     }
 
     #[test]
@@ -3675,7 +3676,7 @@ mod tests {
             old_visible_row > 0,
             "the test must exercise vertical scroll"
         );
-        harness.snapshot("pod_logs/rebase_before");
+        harness.ui_harness("pod_logs/rebase_before");
 
         // A full history request returned 100 older records plus the complete
         // initial tail. The visible tail record therefore moves down by 100
@@ -3723,7 +3724,7 @@ mod tests {
             (after_offset.x - before_offset.x).abs() <= 0.1,
             "rebasing must preserve the horizontal scroll offset: before={before_offset:?}, after={after_offset:?}"
         );
-        harness.snapshot("pod_logs/rebase_after");
+        harness.ui_harness("pod_logs/rebase_after");
 
         // Supply the newly prepended page, then scroll up into it. This
         // verifies that the post-rebase cache can move in the opposite
@@ -3776,7 +3777,7 @@ mod tests {
             (history_scroll_offset.x - before_offset.x).abs() <= 0.1,
             "upward scrolling through history must retain the horizontal offset"
         );
-        harness.snapshot("pod_logs/rebase_history_after_scroll");
+        harness.ui_harness("pod_logs/rebase_history_after_scroll");
     }
 
     #[test]
@@ -3971,7 +3972,7 @@ mod tests {
             // resulting offset before snapshotting.
             harness.run_steps(2);
         }
-        harness.snapshot(name);
+        harness.ui_harness(name);
     }
 
     fn wait_for_store_result(

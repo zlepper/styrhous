@@ -1,0 +1,12 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Button name="very-long-resource-name-that-needs-truncation" state=[toggled=False] rect=(x=8.0 y=14.0 width=160.0 height=36.0 center_x=88.0 center_y=32.0)
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      Label value="very-long-resource-name-that-needs-truncation" rect=(x=15.0 y=61.0 width=323.5 height=17.0 center_x=176.7 center_y=69.5)

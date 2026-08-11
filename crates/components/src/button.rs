@@ -311,8 +311,8 @@ impl<'a> TailwindButton<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::AccessibilitySnapshot;
-    use egui_kittest::{Harness, SnapshotOptions, SnapshotResults, kittest::Queryable};
+    use crate::test_support::UiHarnessSnapshot;
+    use egui_kittest::{Harness, kittest::Queryable};
 
     const SIZES: [(ButtonSize, &str); 5] = [
         (ButtonSize::Xs, "Xs"),
@@ -371,16 +371,13 @@ mod tests {
         });
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.snapshot_options("buttons/variants", &SnapshotOptions::new().threshold(2.1));
-        harness.accessibility_snapshot("buttons/variants");
+        harness.ui_harness("buttons/variants");
     }
 
     /// Test button hover and active (pressed) states
     /// Each snapshot shows a reference button (default) next to the interactive button
     #[test]
     fn test_button_interaction_states() {
-        let mut results = SnapshotResults::new();
-
         // Test Primary button - hovered
         {
             let mut harness = Harness::new_ui(|ui| {
@@ -396,7 +393,7 @@ mod tests {
             harness.run();
             harness.get_by_label("Hovered").hover();
             harness.run_ok();
-            results.add(harness.try_snapshot("buttons/primary_hovered"));
+            harness.ui_harness("buttons/primary_hovered");
         }
 
         // Test Primary button - pressed
@@ -425,7 +422,7 @@ mod tests {
                 modifiers: egui::Modifiers::default(),
             });
             harness.step();
-            results.add(harness.try_snapshot("buttons/primary_pressed"));
+            harness.ui_harness("buttons/primary_pressed");
         }
 
         // Test Secondary button - hovered
@@ -443,7 +440,7 @@ mod tests {
             harness.run();
             harness.get_by_label("Hovered").hover();
             harness.run_ok();
-            results.add(harness.try_snapshot("buttons/secondary_hovered"));
+            harness.ui_harness("buttons/secondary_hovered");
         }
 
         // Test Secondary button - pressed
@@ -472,7 +469,7 @@ mod tests {
                 modifiers: egui::Modifiers::default(),
             });
             harness.step();
-            results.add(harness.try_snapshot("buttons/secondary_pressed"));
+            harness.ui_harness("buttons/secondary_pressed");
         }
 
         // Test Soft button - hovered
@@ -490,7 +487,7 @@ mod tests {
             harness.run();
             harness.get_by_label("Hovered").hover();
             harness.run_ok();
-            results.add(harness.try_snapshot("buttons/soft_hovered"));
+            harness.ui_harness("buttons/soft_hovered");
         }
 
         // Test Soft button - pressed
@@ -519,7 +516,7 @@ mod tests {
                 modifiers: egui::Modifiers::default(),
             });
             harness.step();
-            results.add(harness.try_snapshot("buttons/soft_pressed"));
+            harness.ui_harness("buttons/soft_pressed");
         }
     }
 }

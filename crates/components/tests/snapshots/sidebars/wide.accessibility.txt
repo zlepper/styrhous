@@ -1,0 +1,32 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Button name="Dashboard" state=[toggled=True] rect=(x=8.0 y=14.0 width=292.0 height=36.0 center_x=154.0 center_y=32.0)
+              GenericContainer rect=<none>
+                Image rect=(x=40.0 y=24.0 width=16.0 height=16.0 center_x=48.0 center_y=32.0)
+              Button name="Team" state=[toggled=False] rect=(x=8.0 y=53.0 width=292.0 height=36.0 center_x=154.0 center_y=71.0)
+              GenericContainer rect=<none>
+                Image rect=(x=40.0 y=63.0 width=16.0 height=16.0 center_x=48.0 center_y=71.0)
+              Button name="Projects" state=[toggled=False] rect=(x=8.0 y=92.0 width=292.0 height=36.0 center_x=154.0 center_y=110.0)
+              GenericContainer rect=<none>
+                Image rect=(x=40.0 y=102.0 width=16.0 height=16.0 center_x=48.0 center_y=110.0)
+              Button name="Calendar" state=[toggled=False] rect=(x=8.0 y=131.0 width=292.0 height=36.0 center_x=154.0 center_y=149.0)
+              GenericContainer rect=<none>
+                Image rect=(x=40.0 y=141.0 width=16.0 height=16.0 center_x=48.0 center_y=149.0)
+              Button name="Documents" state=[toggled=False] rect=(x=8.0 y=170.0 width=292.0 height=36.0 center_x=154.0 center_y=188.0)
+              GenericContainer rect=<none>
+                Image rect=(x=40.0 y=180.0 width=16.0 height=16.0 center_x=48.0 center_y=188.0)
+              Button name="Reports" state=[toggled=False] rect=(x=8.0 y=209.0 width=292.0 height=36.0 center_x=154.0 center_y=227.0)
+              GenericContainer rect=<none>
+                Image rect=(x=40.0 y=219.0 width=16.0 height=16.0 center_x=48.0 center_y=227.0)
+              GenericContainer rect=<none>
+                Label value="YOUR TEAMS" rect=(x=20.0 y=261.5 width=78.7 height=15.0 center_x=59.4 center_y=269.0)
+                  TextRun value="YOUR TEAMS" rect=(x=20.0 y=261.5 width=78.7 height=15.0 center_x=59.4 center_y=269.0)
+              Button name="Heroicons" state=[toggled=False] rect=(x=8.0 y=283.0 width=292.0 height=36.0 center_x=154.0 center_y=301.0)
+              Button name="Tailwind Labs" state=[toggled=False] rect=(x=8.0 y=322.0 width=292.0 height=36.0 center_x=154.0 center_y=340.0)
+              Button name="Workcation" state=[toggled=False] rect=(x=8.0 y=361.0 width=292.0 height=36.0 center_x=154.0 center_y=379.0)

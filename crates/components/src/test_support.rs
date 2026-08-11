@@ -11,10 +11,16 @@ use std::path::{Path, PathBuf};
 use egui::Vec2;
 use egui::accesskit::Role;
 use egui_kittest::kittest::NodeT;
-use egui_kittest::{Harness, Node};
+use egui_kittest::{Harness, Node, SnapshotError, SnapshotOptions};
 
 /// The deterministic viewport used by all egui tests and snapshots.
 pub const EGUI_TEST_SIZE: Vec2 = Vec2::new(1536.0, 1024.0);
+
+/// The project-wide per-pixel color tolerance for UI screenshots.
+///
+/// This accepts the measured WGPU anti-aliasing variance at transformed shadow edges while still
+/// allowing no pixels to exceed the threshold.
+pub const DEFAULT_PIXEL_THRESHOLD: f32 = 2.1;
 
 /// Configure a test harness for component tests and snapshots.
 pub fn setup_egui<State>(harness: &mut Harness<'_, State>) {
@@ -57,6 +63,83 @@ impl AccessibilityTreeOptions {
     pub fn output_path(mut self, output_path: impl Into<PathBuf>) -> Self {
         self.output_path = output_path.into();
         self
+    }
+}
+
+/// Options for a complete UI snapshot: rendered pixels plus the AccessKit tree.
+#[derive(Clone, Debug)]
+pub struct HarnessSnapshotOptions {
+    name: String,
+    pixel: SnapshotOptions,
+    accessibility: AccessibilityTreeOptions,
+}
+
+impl HarnessSnapshotOptions {
+    /// Create a snapshot using the project-wide pixel tolerance.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            pixel: SnapshotOptions::new().threshold(DEFAULT_PIXEL_THRESHOLD),
+            accessibility: AccessibilityTreeOptions::default(),
+        }
+    }
+
+    /// Create a snapshot using egui_kittest's strict default tolerance.
+    pub fn strict(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            pixel: SnapshotOptions::new(),
+            accessibility: AccessibilityTreeOptions::default(),
+        }
+    }
+
+    /// Create a strict snapshot that permits one pixel above its color threshold.
+    pub fn one_pixel(name: impl Into<String>) -> Self {
+        Self::strict(name).max_failed_pixels(1)
+    }
+
+    /// Override the per-pixel color tolerance.
+    pub fn threshold(mut self, threshold: f32) -> Self {
+        self.pixel.threshold = threshold;
+        self
+    }
+
+    /// Override the maximum number of pixels that may exceed the color tolerance.
+    pub fn max_failed_pixels(mut self, max_failed_pixels: usize) -> Self {
+        self.pixel.max_failed_pixels = max_failed_pixels;
+        self
+    }
+
+    /// Write both image and accessibility fixtures under a custom directory.
+    pub fn output_path(mut self, output_path: impl Into<PathBuf>) -> Self {
+        let output_path = output_path.into();
+        self.pixel.output_path = output_path.clone();
+        self.accessibility.output_path = output_path;
+        self
+    }
+
+    /// Include or omit unlabeled structural nodes from the accessibility fixture.
+    pub fn include_structural_nodes(mut self, include_structural_nodes: bool) -> Self {
+        self.accessibility.include_structural_nodes = include_structural_nodes;
+        self
+    }
+}
+
+impl From<&str> for HarnessSnapshotOptions {
+    fn from(name: &str) -> Self {
+        Self::new(name)
+    }
+}
+
+impl From<String> for HarnessSnapshotOptions {
+    fn from(name: String) -> Self {
+        Self::new(name)
+    }
+}
+
+impl From<&HarnessSnapshotOptions> for HarnessSnapshotOptions {
+    fn from(options: &HarnessSnapshotOptions) -> Self {
+        options.clone()
     }
 }
 
@@ -107,6 +190,40 @@ impl Display for AccessibilitySnapshotError {
 
 impl std::error::Error for AccessibilitySnapshotError {}
 
+/// A failure from either artifact produced by [`UiHarnessSnapshot::ui_harness`].
+#[derive(Debug)]
+pub enum UiHarnessSnapshotError {
+    /// The image snapshot failed.
+    Pixel(Box<SnapshotError>),
+    /// The accessibility text snapshot failed.
+    Accessibility(Box<AccessibilitySnapshotError>),
+    /// Both artifacts failed during the same UI snapshot.
+    Both {
+        pixel: Box<SnapshotError>,
+        accessibility: Box<AccessibilitySnapshotError>,
+    },
+}
+
+impl Display for UiHarnessSnapshotError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Pixel(error) => write!(formatter, "Pixel snapshot failed:\n{error}"),
+            Self::Accessibility(error) => {
+                write!(formatter, "Accessibility snapshot failed:\n{error}")
+            }
+            Self::Both {
+                pixel,
+                accessibility,
+            } => write!(
+                formatter,
+                "Pixel snapshot failed:\n{pixel}\n\nAccessibility snapshot failed:\n{accessibility}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for UiHarnessSnapshotError {}
+
 /// Adds deterministic AccessKit tree snapshots to an egui test harness.
 pub trait AccessibilitySnapshot {
     /// Return the current AccessKit tree as agent-readable text.
@@ -143,6 +260,23 @@ pub trait AccessibilitySnapshot {
         name: impl AsRef<str>,
         options: &AccessibilityTreeOptions,
     ) -> Result<PathBuf, AccessibilitySnapshotError>;
+}
+
+/// Adds complete pixel and accessibility snapshots to an egui test harness.
+pub trait UiHarnessSnapshot {
+    /// Compare the rendered pixels and AccessKit tree for one named UI state.
+    #[track_caller]
+    fn ui_harness(&mut self, options: impl Into<HarnessSnapshotOptions>) {
+        if let Err(error) = self.try_ui_harness(options) {
+            panic!("{error}");
+        }
+    }
+
+    /// Fallibly compare both artifacts for one named UI state.
+    fn try_ui_harness(
+        &mut self,
+        options: impl Into<HarnessSnapshotOptions>,
+    ) -> Result<(), UiHarnessSnapshotError>;
 }
 
 impl<State> AccessibilitySnapshot for Harness<'_, State> {
@@ -219,6 +353,30 @@ impl<State> AccessibilitySnapshot for Harness<'_, State> {
         create_parent_directory(&path)?;
         write_file(&path, &self.accessibility_tree(options))?;
         Ok(path)
+    }
+}
+
+impl<State> UiHarnessSnapshot for Harness<'_, State> {
+    fn try_ui_harness(
+        &mut self,
+        options: impl Into<HarnessSnapshotOptions>,
+    ) -> Result<(), UiHarnessSnapshotError> {
+        let options = options.into();
+        let pixel = self.try_snapshot_options(&options.name, &options.pixel);
+        let accessibility =
+            self.try_accessibility_snapshot_with_options(&options.name, &options.accessibility);
+
+        match (pixel, accessibility) {
+            (Ok(()), Ok(())) => Ok(()),
+            (Err(pixel), Ok(())) => Err(UiHarnessSnapshotError::Pixel(Box::new(pixel))),
+            (Ok(()), Err(accessibility)) => Err(UiHarnessSnapshotError::Accessibility(Box::new(
+                accessibility,
+            ))),
+            (Err(pixel), Err(accessibility)) => Err(UiHarnessSnapshotError::Both {
+                pixel: Box::new(pixel),
+                accessibility: Box::new(accessibility),
+            }),
+        }
     }
 }
 
@@ -467,6 +625,54 @@ mod tests {
             paths.old_path,
             PathBuf::from("tests/snapshots/buttons/variants.accessibility.old.txt")
         );
+    }
+
+    #[test]
+    fn harness_snapshot_options_keep_pixel_and_accessibility_output_together() {
+        let options = HarnessSnapshotOptions::from("example")
+            .output_path("custom-snapshots")
+            .include_structural_nodes(false);
+
+        assert_eq!(options.name, "example");
+        assert_eq!(options.pixel.threshold, DEFAULT_PIXEL_THRESHOLD);
+        assert_eq!(options.pixel.max_failed_pixels, 0);
+        assert_eq!(options.pixel.output_path, PathBuf::from("custom-snapshots"));
+        assert_eq!(
+            options.accessibility.output_path,
+            PathBuf::from("custom-snapshots")
+        );
+        assert!(!options.accessibility.include_structural_nodes);
+
+        let strict = HarnessSnapshotOptions::strict("strict");
+        assert_eq!(strict.pixel.threshold, SnapshotOptions::new().threshold);
+        assert_eq!(strict.pixel.max_failed_pixels, 0);
+
+        let one_pixel = HarnessSnapshotOptions::one_pixel("one-pixel");
+        assert_eq!(one_pixel.pixel.threshold, SnapshotOptions::new().threshold);
+        assert_eq!(one_pixel.pixel.max_failed_pixels, 1);
+    }
+
+    #[test]
+    fn ui_harness_writes_both_candidates_when_both_fixtures_are_missing() {
+        let output_path = test_directory();
+        let mut harness = Harness::new_ui(|ui| {
+            ui.label("Snapshot me");
+        });
+
+        let result = harness
+            .try_ui_harness(HarnessSnapshotOptions::new("example").output_path(&output_path));
+
+        if SnapshotMode::from_env().is_update() {
+            result.expect("update mode should create both fixtures");
+            assert!(output_path.join("example.png").exists());
+            assert!(output_path.join("example.accessibility.txt").exists());
+        } else {
+            assert!(matches!(result, Err(UiHarnessSnapshotError::Both { .. })));
+            assert!(output_path.join("example.new.png").exists());
+            assert!(output_path.join("example.accessibility.new.txt").exists());
+        }
+
+        std::fs::remove_dir_all(output_path).unwrap();
     }
 
     #[test]

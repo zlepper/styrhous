@@ -1,0 +1,34 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+  GenericContainer rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Button name="Back" state=[disabled] rect=(x=809.0 y=35.0 width=32.0 height=32.0 center_x=825.0 center_y=51.0)
+                GenericContainer rect=<none>
+                  Button name="Forward" state=[disabled] rect=(x=849.0 y=35.0 width=32.0 height=32.0 center_x=865.0 center_y=51.0)
+              GenericContainer rect=<none>
+                Label value="Reopened" rect=(x=917.0 y=39.0 width=95.9 height=24.0 center_x=964.9 center_y=51.0)
+                  TextRun value="Reopened" rect=(x=917.0 y=39.0 width=95.9 height=24.0 center_x=964.9 center_y=51.0)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Button name="Close blade" rect=(x=1471.0 y=35.0 width=32.0 height=32.0 center_x=1487.0 center_y=51.0)
+            Label value="Active · Reopened" rect=(x=809.0 y=88.0 width=120.4 height=17.0 center_x=869.2 center_y=96.5)
+              TextRun value="Active · Reopened" rect=(x=809.0 y=88.0 width=120.4 height=17.0 center_x=869.2 center_y=96.5)
+            Label value="back: false · forward: false" rect=(x=809.0 y=108.0 width=175.1 height=17.0 center_x=896.6 center_y=116.5)
+              TextRun value="back: false · forward: false" rect=(x=809.0 y=108.0 width=175.1 height=17.0 center_x=896.6 center_y=116.5)
+      ScrollBar rect=(x=1518.0 y=8.0 width=10.0 height=1008.0 center_x=1523.0 center_y=512.0)
+  GenericContainer rect=<none>
+    Unknown rect=(x=0.0 y=0.0 width=784.0 height=1024.0 center_x=392.0 center_y=512.0)
+  GenericContainer rect=<none>
+    Unknown rect=(x=784.0 y=1016.0 width=744.0 height=8.0 center_x=1156.0 center_y=1020.0)
+  GenericContainer rect=<none>
+    Unknown rect=(x=1528.0 y=0.0 width=8.0 height=1024.0 center_x=1532.0 center_y=512.0)

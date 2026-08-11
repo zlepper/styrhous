@@ -834,8 +834,9 @@ fn history_navigation_rect(active: Rect, history: &[(Id, Rect, usize)], rect: Re
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::UiHarnessSnapshot;
+    use egui_kittest::Harness;
     use egui_kittest::kittest::Queryable;
-    use egui_kittest::{Harness, SnapshotOptions};
     use std::cell::RefCell;
     use std::rc::Rc;
 
@@ -861,12 +862,6 @@ mod tests {
         ));
     }
 
-    // WGPU produces up to 1.84634 YIQ-squared variance at transformed shadow edges.
-    // Keep the tolerance below the first meaningful visual difference.
-    fn transformed_blade_snapshot_options() -> SnapshotOptions {
-        SnapshotOptions::new().threshold(2.1)
-    }
-
     #[test]
     fn snapshots_a_single_blade_and_its_visible_history() {
         let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
@@ -886,7 +881,7 @@ mod tests {
         });
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.snapshot_options("blades/single", &transformed_blade_snapshot_options());
+        harness.ui_harness("blades/single");
 
         navigator.borrow_mut().push(TestBlade {
             id: 2,
@@ -898,7 +893,7 @@ mod tests {
         });
         navigator.borrow_mut().clear_transition();
         harness.run();
-        harness.snapshot_options("blades/history", &transformed_blade_snapshot_options());
+        harness.ui_harness("blades/history");
 
         navigator.borrow_mut().push(TestBlade {
             id: 4,
@@ -906,7 +901,7 @@ mod tests {
         });
         navigator.borrow_mut().clear_transition();
         harness.run();
-        harness.snapshot_options("blades/history_cap", &transformed_blade_snapshot_options());
+        harness.ui_harness("blades/history_cap");
     }
 
     #[test]
@@ -937,10 +932,7 @@ mod tests {
         assert!(navigator.borrow_mut().go_back());
         navigator.borrow_mut().clear_transition();
         harness.run();
-        harness.snapshot_options(
-            "blades/restored_history_display_stack",
-            &transformed_blade_snapshot_options(),
-        );
+        harness.ui_harness("blades/restored_history_display_stack");
     }
 
     #[test]
@@ -986,10 +978,7 @@ mod tests {
         }
 
         assert_eq!(navigator.borrow().current().id, 5);
-        harness.snapshot_options(
-            "blades/deep_history_cycle",
-            &transformed_blade_snapshot_options(),
-        );
+        harness.ui_harness("blades/deep_history_cycle");
     }
 
     #[test]
@@ -1033,10 +1022,7 @@ mod tests {
         harness.step();
         harness.input_mut().time = Some(20.0 + f64::from(TRANSITION_DURATION / 2.0));
         harness.step();
-        harness.snapshot_options(
-            "blades/interrupted_back_to_forward",
-            &transformed_blade_snapshot_options(),
-        );
+        harness.ui_harness("blades/interrupted_back_to_forward");
     }
 
     #[test]
@@ -1085,10 +1071,7 @@ mod tests {
         harness.step();
         harness.input_mut().time = Some(30.0 + f64::from(TRANSITION_DURATION / 2.0));
         harness.step();
-        harness.snapshot_options(
-            "blades/interrupted_forward_to_back",
-            &transformed_blade_snapshot_options(),
-        );
+        harness.ui_harness("blades/interrupted_forward_to_back");
     }
 
     #[test]
@@ -1130,10 +1113,7 @@ mod tests {
             .expect("navigator was reopened")
             .clear_transition();
         harness.run();
-        harness.snapshot_options(
-            "blades/reopened_stack",
-            &transformed_blade_snapshot_options(),
-        );
+        harness.ui_harness("blades/reopened_stack");
     }
 
     #[test]
@@ -1164,10 +1144,7 @@ mod tests {
         navigator.borrow_mut().clear_transition();
         harness.set_size(egui::vec2(1024.0, 768.0));
         harness.run();
-        harness.snapshot_options(
-            "blades/resized_restored_history",
-            &transformed_blade_snapshot_options(),
-        );
+        harness.ui_harness("blades/resized_restored_history");
     }
 
     #[test]
@@ -1259,10 +1236,7 @@ mod tests {
         });
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.snapshot_options(
-            "blades/concurrent_stacks",
-            &transformed_blade_snapshot_options(),
-        );
+        harness.ui_harness("blades/concurrent_stacks");
     }
 
     #[test]
@@ -1338,22 +1312,13 @@ mod tests {
         }
         harness.input_mut().time = Some(1.0);
         harness.step();
-        harness.snapshot_options(
-            "blades/opening_first_frame",
-            &transformed_blade_snapshot_options(),
-        );
+        harness.ui_harness("blades/opening_first_frame");
         harness.input_mut().time = Some(1.0 + f64::from(TRANSITION_DURATION / 2.0));
         harness.step();
-        harness.snapshot_options(
-            "blades/opening_mid_frame",
-            &transformed_blade_snapshot_options(),
-        );
+        harness.ui_harness("blades/opening_mid_frame");
         harness.input_mut().time = Some(1.0 + f64::from(TRANSITION_DURATION));
         harness.step();
-        harness.snapshot_options(
-            "blades/opening_final_frame",
-            &transformed_blade_snapshot_options(),
-        );
+        harness.ui_harness("blades/opening_final_frame");
 
         navigator.borrow_mut().push(TestBlade {
             id: 2,
@@ -1361,30 +1326,18 @@ mod tests {
         });
         harness.input_mut().time = Some(20.0);
         harness.step();
-        harness.snapshot_options(
-            "blades/forward_first_frame",
-            &transformed_blade_snapshot_options(),
-        );
+        harness.ui_harness("blades/forward_first_frame");
         harness.input_mut().time = Some(20.0 + f64::from(TRANSITION_DURATION / 2.0));
         harness.step();
-        harness.snapshot_options(
-            "blades/forward_mid_frame",
-            &transformed_blade_snapshot_options(),
-        );
+        harness.ui_harness("blades/forward_mid_frame");
 
         assert!(navigator.borrow_mut().go_back());
         harness.input_mut().time = Some(30.0);
         harness.step();
-        harness.snapshot_options(
-            "blades/back_first_frame",
-            &transformed_blade_snapshot_options(),
-        );
+        harness.ui_harness("blades/back_first_frame");
         harness.input_mut().time = Some(30.0 + f64::from(TRANSITION_DURATION / 2.0));
         harness.step();
-        harness.snapshot_options(
-            "blades/back_mid_frame",
-            &transformed_blade_snapshot_options(),
-        );
+        harness.ui_harness("blades/back_mid_frame");
     }
 
     #[test]
@@ -1423,38 +1376,23 @@ mod tests {
         });
         harness.input_mut().time = Some(10.0);
         harness.step();
-        harness.snapshot_options(
-            "blades/history_overflow_first_frame",
-            &transformed_blade_snapshot_options(),
-        );
+        harness.ui_harness("blades/history_overflow_first_frame");
         // The capped history blade remains fully visible until the other
         // history layers have completed their transition.
         harness.input_mut().time = Some(10.0 + f64::from(TRANSITION_DURATION / 2.0));
         harness.step();
-        harness.snapshot_options(
-            "blades/history_overflow_mid_frame",
-            &transformed_blade_snapshot_options(),
-        );
+        harness.ui_harness("blades/history_overflow_mid_frame");
         harness.input_mut().time = Some(10.0 + f64::from(TRANSITION_DURATION));
         harness.step();
-        harness.snapshot_options(
-            "blades/history_overflow_final_frame",
-            &transformed_blade_snapshot_options(),
-        );
+        harness.ui_harness("blades/history_overflow_final_frame");
 
         assert!(navigator.borrow_mut().go_back_steps(2));
         harness.input_mut().time = Some(20.0);
         harness.step();
-        harness.snapshot_options(
-            "blades/direct_two_step_back_first_frame",
-            &transformed_blade_snapshot_options(),
-        );
+        harness.ui_harness("blades/direct_two_step_back_first_frame");
         harness.input_mut().time = Some(20.0 + f64::from(TRANSITION_DURATION / 2.0));
         harness.step();
-        harness.snapshot_options(
-            "blades/direct_two_step_back_mid_frame",
-            &transformed_blade_snapshot_options(),
-        );
+        harness.ui_harness("blades/direct_two_step_back_mid_frame");
     }
 
     #[test]
@@ -1478,10 +1416,7 @@ mod tests {
         });
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.snapshot_options(
-            "blades/custom_header",
-            &transformed_blade_snapshot_options(),
-        );
+        harness.ui_harness("blades/custom_header");
     }
 
     #[test]

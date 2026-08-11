@@ -1,0 +1,206 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="Logs" rect=(x=33.0 y=24.0 width=36.9 height=19.0 center_x=51.5 center_y=33.5)
+                TextRun value="Logs" rect=(x=33.0 y=24.0 width=36.9 height=19.0 center_x=51.5 center_y=33.5)
+              Label value="api-0" rect=(x=93.9 y=24.0 width=40.1 height=19.0 center_x=114.0 center_y=33.5)
+                TextRun value="api-0" rect=(x=93.9 y=24.0 width=40.1 height=19.0 center_x=114.0 center_y=33.5)
+              Label value="Container: api" rect=(x=154.0 y=25.0 width=92.3 height=17.0 center_x=200.2 center_y=33.5)
+                TextRun value="Container: api" rect=(x=154.0 y=25.0 width=92.3 height=17.0 center_x=200.2 center_y=33.5)
+              Label value="●" rect=(x=266.3 y=25.0 width=12.8 height=17.0 center_x=272.7 center_y=33.5)
+                TextRun value="●" rect=(x=266.3 y=25.0 width=12.8 height=17.0 center_x=272.7 center_y=33.5)
+              Label value="Following" rect=(x=287.1 y=25.0 width=62.7 height=17.0 center_x=318.5 center_y=33.5)
+                TextRun value="Following" rect=(x=287.1 y=25.0 width=62.7 height=17.0 center_x=318.5 center_y=33.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        TextInput name="Search logs" value="" rect=(x=1300.0 y=22.0 width=150.0 height=26.0 center_x=1375.0 center_y=35.0)
+                          TextRun value="" rect=(x=1304.0 y=24.0 width=0.0 height=17.0 center_x=1304.0 center_y=32.5)
+                      CheckBox name="Use regex search" state=[toggled=Mixed] rect=(x=1472.0 y=25.5 width=19.1 height=19.0 center_x=1481.5 center_y=35.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        Button name="Previous displayed line" rect=(x=1120.0 y=21.0 width=28.0 height=28.0 center_x=1134.0 center_y=35.0)
+                      GenericContainer rect=<none>
+                        Button name="Previous matching line" rect=(x=1154.0 y=21.0 width=28.0 height=28.0 center_x=1168.0 center_y=35.0)
+                      GenericContainer rect=<none>
+                        Button name="Next matching line" rect=(x=1188.0 y=21.0 width=28.0 height=28.0 center_x=1202.0 center_y=35.0)
+                      GenericContainer rect=<none>
+                        Button name="Next displayed line" rect=(x=1222.0 y=21.0 width=28.0 height=28.0 center_x=1236.0 center_y=35.0)
+                      GenericContainer rect=<none>
+                        CheckBox name="Filter to matching lines" state=[toggled=Mixed] rect=(x=1256.0 y=21.0 width=28.0 height=28.0 center_x=1270.0 center_y=35.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        CheckBox name="Show log line numbers" state=[toggled=Mixed] rect=(x=1008.0 y=21.0 width=28.0 height=28.0 center_x=1022.0 center_y=35.0)
+                      GenericContainer rect=<none>
+                        CheckBox name="Show Kubernetes log timestamps" state=[toggled=Mixed] rect=(x=1042.0 y=21.0 width=28.0 height=28.0 center_x=1056.0 center_y=35.0)
+                      GenericContainer rect=<none>
+                        CheckBox name="Render ANSI styling" state=[toggled=Mixed] rect=(x=1076.0 y=21.0 width=28.0 height=28.0 center_x=1090.0 center_y=35.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Unknown rect=(x=24.0 y=76.0 width=1488.0 height=924.0 center_x=768.0 center_y=538.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value=" :: history 000 :: history 000 :: history 000 :: history 000 :: history 000 :: history 000 :: history 000 :: history 000 :: history 000 :: history 000 :: history 000 :: history 000 :: history 000 :: history " rect=(x=-104.0 y=76.0 width=1744.8 height=16.0 center_x=768.4 center_y=84.0)
+                  Unknown rect=(x=-576.0 y=76.0 width=2216.8 height=16.0 center_x=532.4 center_y=84.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 001 :: history 001 :: history 001 :: history 001 :: history 001 :: history 001 :: history 001 :: history 001 :: history 001 :: history 001 :: history 001 :: history 001 :: history 001 :: history " rect=(x=-104.0 y=95.0 width=1744.8 height=16.0 center_x=768.4 center_y=103.0)
+                  Unknown rect=(x=-576.0 y=95.0 width=2216.8 height=16.0 center_x=532.4 center_y=103.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 002 :: history 002 :: history 002 :: history 002 :: history 002 :: history 002 :: history 002 :: history 002 :: history 002 :: history 002 :: history 002 :: history 002 :: history 002 :: history " rect=(x=-104.0 y=114.0 width=1744.8 height=16.0 center_x=768.4 center_y=122.0)
+                  Unknown rect=(x=-576.0 y=114.0 width=2216.8 height=16.0 center_x=532.4 center_y=122.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 003 :: history 003 :: history 003 :: history 003 :: history 003 :: history 003 :: history 003 :: history 003 :: history 003 :: history 003 :: history 003 :: history 003 :: history 003 :: history " rect=(x=-104.0 y=133.0 width=1744.8 height=16.0 center_x=768.4 center_y=141.0)
+                  Unknown rect=(x=-576.0 y=133.0 width=2216.8 height=16.0 center_x=532.4 center_y=141.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 004 :: history 004 :: history 004 :: history 004 :: history 004 :: history 004 :: history 004 :: history 004 :: history 004 :: history 004 :: history 004 :: history 004 :: history 004 :: history " rect=(x=-104.0 y=152.0 width=1744.8 height=16.0 center_x=768.4 center_y=160.0)
+                  Unknown rect=(x=-576.0 y=152.0 width=2216.8 height=16.0 center_x=532.4 center_y=160.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 005 :: history 005 :: history 005 :: history 005 :: history 005 :: history 005 :: history 005 :: history 005 :: history 005 :: history 005 :: history 005 :: history 005 :: history 005 :: history " rect=(x=-104.0 y=171.0 width=1744.8 height=16.0 center_x=768.4 center_y=179.0)
+                  Unknown rect=(x=-576.0 y=171.0 width=2216.8 height=16.0 center_x=532.4 center_y=179.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 006 :: history 006 :: history 006 :: history 006 :: history 006 :: history 006 :: history 006 :: history 006 :: history 006 :: history 006 :: history 006 :: history 006 :: history 006 :: history " rect=(x=-104.0 y=190.0 width=1744.8 height=16.0 center_x=768.4 center_y=198.0)
+                  Unknown rect=(x=-576.0 y=190.0 width=2216.8 height=16.0 center_x=532.4 center_y=198.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 007 :: history 007 :: history 007 :: history 007 :: history 007 :: history 007 :: history 007 :: history 007 :: history 007 :: history 007 :: history 007 :: history 007 :: history 007 :: history " rect=(x=-104.0 y=209.0 width=1744.8 height=16.0 center_x=768.4 center_y=217.0)
+                  Unknown rect=(x=-576.0 y=209.0 width=2216.8 height=16.0 center_x=532.4 center_y=217.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 008 :: history 008 :: history 008 :: history 008 :: history 008 :: history 008 :: history 008 :: history 008 :: history 008 :: history 008 :: history 008 :: history 008 :: history 008 :: history " rect=(x=-104.0 y=228.0 width=1744.8 height=16.0 center_x=768.4 center_y=236.0)
+                  Unknown rect=(x=-576.0 y=228.0 width=2216.8 height=16.0 center_x=532.4 center_y=236.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 009 :: history 009 :: history 009 :: history 009 :: history 009 :: history 009 :: history 009 :: history 009 :: history 009 :: history 009 :: history 009 :: history 009 :: history 009 :: history " rect=(x=-104.0 y=247.0 width=1744.8 height=16.0 center_x=768.4 center_y=255.0)
+                  Unknown rect=(x=-576.0 y=247.0 width=2216.8 height=16.0 center_x=532.4 center_y=255.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 010 :: history 010 :: history 010 :: history 010 :: history 010 :: history 010 :: history 010 :: history 010 :: history 010 :: history 010 :: history 010 :: history 010 :: history 010 :: history " rect=(x=-104.0 y=266.0 width=1744.8 height=16.0 center_x=768.4 center_y=274.0)
+                  Unknown rect=(x=-576.0 y=266.0 width=2216.8 height=16.0 center_x=532.4 center_y=274.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 011 :: history 011 :: history 011 :: history 011 :: history 011 :: history 011 :: history 011 :: history 011 :: history 011 :: history 011 :: history 011 :: history 011 :: history 011 :: history " rect=(x=-104.0 y=285.0 width=1744.8 height=16.0 center_x=768.4 center_y=293.0)
+                  Unknown rect=(x=-576.0 y=285.0 width=2216.8 height=16.0 center_x=532.4 center_y=293.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 012 :: history 012 :: history 012 :: history 012 :: history 012 :: history 012 :: history 012 :: history 012 :: history 012 :: history 012 :: history 012 :: history 012 :: history 012 :: history " rect=(x=-104.0 y=304.0 width=1744.8 height=16.0 center_x=768.4 center_y=312.0)
+                  Unknown rect=(x=-576.0 y=304.0 width=2216.8 height=16.0 center_x=532.4 center_y=312.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 013 :: history 013 :: history 013 :: history 013 :: history 013 :: history 013 :: history 013 :: history 013 :: history 013 :: history 013 :: history 013 :: history 013 :: history 013 :: history " rect=(x=-104.0 y=323.0 width=1744.8 height=16.0 center_x=768.4 center_y=331.0)
+                  Unknown rect=(x=-576.0 y=323.0 width=2216.8 height=16.0 center_x=532.4 center_y=331.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 014 :: history 014 :: history 014 :: history 014 :: history 014 :: history 014 :: history 014 :: history 014 :: history 014 :: history 014 :: history 014 :: history 014 :: history 014 :: history " rect=(x=-104.0 y=342.0 width=1744.8 height=16.0 center_x=768.4 center_y=350.0)
+                  Unknown rect=(x=-576.0 y=342.0 width=2216.8 height=16.0 center_x=532.4 center_y=350.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 015 :: history 015 :: history 015 :: history 015 :: history 015 :: history 015 :: history 015 :: history 015 :: history 015 :: history 015 :: history 015 :: history 015 :: history 015 :: history " rect=(x=-104.0 y=361.0 width=1744.8 height=16.0 center_x=768.4 center_y=369.0)
+                  Unknown rect=(x=-576.0 y=361.0 width=2216.8 height=16.0 center_x=532.4 center_y=369.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 016 :: history 016 :: history 016 :: history 016 :: history 016 :: history 016 :: history 016 :: history 016 :: history 016 :: history 016 :: history 016 :: history 016 :: history 016 :: history " rect=(x=-104.0 y=380.0 width=1744.8 height=16.0 center_x=768.4 center_y=388.0)
+                  Unknown rect=(x=-576.0 y=380.0 width=2216.8 height=16.0 center_x=532.4 center_y=388.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 017 :: history 017 :: history 017 :: history 017 :: history 017 :: history 017 :: history 017 :: history 017 :: history 017 :: history 017 :: history 017 :: history 017 :: history 017 :: history " rect=(x=-104.0 y=399.0 width=1744.8 height=16.0 center_x=768.4 center_y=407.0)
+                  Unknown rect=(x=-576.0 y=399.0 width=2216.8 height=16.0 center_x=532.4 center_y=407.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 018 :: history 018 :: history 018 :: history 018 :: history 018 :: history 018 :: history 018 :: history 018 :: history 018 :: history 018 :: history 018 :: history 018 :: history 018 :: history " rect=(x=-104.0 y=418.0 width=1744.8 height=16.0 center_x=768.4 center_y=426.0)
+                  Unknown rect=(x=-576.0 y=418.0 width=2216.8 height=16.0 center_x=532.4 center_y=426.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 019 :: history 019 :: history 019 :: history 019 :: history 019 :: history 019 :: history 019 :: history 019 :: history 019 :: history 019 :: history 019 :: history 019 :: history 019 :: history " rect=(x=-104.0 y=437.0 width=1744.8 height=16.0 center_x=768.4 center_y=445.0)
+                  Unknown rect=(x=-576.0 y=437.0 width=2216.8 height=16.0 center_x=532.4 center_y=445.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 020 :: history 020 :: history 020 :: history 020 :: history 020 :: history 020 :: history 020 :: history 020 :: history 020 :: history 020 :: history 020 :: history 020 :: history 020 :: history " rect=(x=-104.0 y=456.0 width=1744.8 height=16.0 center_x=768.4 center_y=464.0)
+                  Unknown rect=(x=-576.0 y=456.0 width=2216.8 height=16.0 center_x=532.4 center_y=464.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 021 :: history 021 :: history 021 :: history 021 :: history 021 :: history 021 :: history 021 :: history 021 :: history 021 :: history 021 :: history 021 :: history 021 :: history 021 :: history " rect=(x=-104.0 y=475.0 width=1744.8 height=16.0 center_x=768.4 center_y=483.0)
+                  Unknown rect=(x=-576.0 y=475.0 width=2216.8 height=16.0 center_x=532.4 center_y=483.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 022 :: history 022 :: history 022 :: history 022 :: history 022 :: history 022 :: history 022 :: history 022 :: history 022 :: history 022 :: history 022 :: history 022 :: history 022 :: history " rect=(x=-104.0 y=494.0 width=1744.8 height=16.0 center_x=768.4 center_y=502.0)
+                  Unknown rect=(x=-576.0 y=494.0 width=2216.8 height=16.0 center_x=532.4 center_y=502.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 023 :: history 023 :: history 023 :: history 023 :: history 023 :: history 023 :: history 023 :: history 023 :: history 023 :: history 023 :: history 023 :: history 023 :: history 023 :: history " rect=(x=-104.0 y=513.0 width=1744.8 height=16.0 center_x=768.4 center_y=521.0)
+                  Unknown rect=(x=-576.0 y=513.0 width=2216.8 height=16.0 center_x=532.4 center_y=521.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 024 :: history 024 :: history 024 :: history 024 :: history 024 :: history 024 :: history 024 :: history 024 :: history 024 :: history 024 :: history 024 :: history 024 :: history 024 :: history " rect=(x=-104.0 y=532.0 width=1744.8 height=16.0 center_x=768.4 center_y=540.0)
+                  Unknown rect=(x=-576.0 y=532.0 width=2216.8 height=16.0 center_x=532.4 center_y=540.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 025 :: history 025 :: history 025 :: history 025 :: history 025 :: history 025 :: history 025 :: history 025 :: history 025 :: history 025 :: history 025 :: history 025 :: history 025 :: history " rect=(x=-104.0 y=551.0 width=1744.8 height=16.0 center_x=768.4 center_y=559.0)
+                  Unknown rect=(x=-576.0 y=551.0 width=2216.8 height=16.0 center_x=532.4 center_y=559.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 026 :: history 026 :: history 026 :: history 026 :: history 026 :: history 026 :: history 026 :: history 026 :: history 026 :: history 026 :: history 026 :: history 026 :: history 026 :: history " rect=(x=-104.0 y=570.0 width=1744.8 height=16.0 center_x=768.4 center_y=578.0)
+                  Unknown rect=(x=-576.0 y=570.0 width=2216.8 height=16.0 center_x=532.4 center_y=578.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 027 :: history 027 :: history 027 :: history 027 :: history 027 :: history 027 :: history 027 :: history 027 :: history 027 :: history 027 :: history 027 :: history 027 :: history 027 :: history " rect=(x=-104.0 y=589.0 width=1744.8 height=16.0 center_x=768.4 center_y=597.0)
+                  Unknown rect=(x=-576.0 y=589.0 width=2216.8 height=16.0 center_x=532.4 center_y=597.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 028 :: history 028 :: history 028 :: history 028 :: history 028 :: history 028 :: history 028 :: history 028 :: history 028 :: history 028 :: history 028 :: history 028 :: history 028 :: history " rect=(x=-104.0 y=608.0 width=1744.8 height=16.0 center_x=768.4 center_y=616.0)
+                  Unknown rect=(x=-576.0 y=608.0 width=2216.8 height=16.0 center_x=532.4 center_y=616.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 029 :: history 029 :: history 029 :: history 029 :: history 029 :: history 029 :: history 029 :: history 029 :: history 029 :: history 029 :: history 029 :: history 029 :: history 029 :: history " rect=(x=-104.0 y=627.0 width=1744.8 height=16.0 center_x=768.4 center_y=635.0)
+                  Unknown rect=(x=-576.0 y=627.0 width=2216.8 height=16.0 center_x=532.4 center_y=635.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 030 :: history 030 :: history 030 :: history 030 :: history 030 :: history 030 :: history 030 :: history 030 :: history 030 :: history 030 :: history 030 :: history 030 :: history 030 :: history " rect=(x=-104.0 y=646.0 width=1744.8 height=16.0 center_x=768.4 center_y=654.0)
+                  Unknown rect=(x=-576.0 y=646.0 width=2216.8 height=16.0 center_x=532.4 center_y=654.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 031 :: history 031 :: history 031 :: history 031 :: history 031 :: history 031 :: history 031 :: history 031 :: history 031 :: history 031 :: history 031 :: history 031 :: history 031 :: history " rect=(x=-104.0 y=665.0 width=1744.8 height=16.0 center_x=768.4 center_y=673.0)
+                  Unknown rect=(x=-576.0 y=665.0 width=2216.8 height=16.0 center_x=532.4 center_y=673.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 032 :: history 032 :: history 032 :: history 032 :: history 032 :: history 032 :: history 032 :: history 032 :: history 032 :: history 032 :: history 032 :: history 032 :: history 032 :: history " rect=(x=-104.0 y=684.0 width=1744.8 height=16.0 center_x=768.4 center_y=692.0)
+                  Unknown rect=(x=-576.0 y=684.0 width=2216.8 height=16.0 center_x=532.4 center_y=692.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 033 :: history 033 :: history 033 :: history 033 :: history 033 :: history 033 :: history 033 :: history 033 :: history 033 :: history 033 :: history 033 :: history 033 :: history 033 :: history " rect=(x=-104.0 y=703.0 width=1744.8 height=16.0 center_x=768.4 center_y=711.0)
+                  Unknown rect=(x=-576.0 y=703.0 width=2216.8 height=16.0 center_x=532.4 center_y=711.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 034 :: history 034 :: history 034 :: history 034 :: history 034 :: history 034 :: history 034 :: history 034 :: history 034 :: history 034 :: history 034 :: history 034 :: history 034 :: history " rect=(x=-104.0 y=722.0 width=1744.8 height=16.0 center_x=768.4 center_y=730.0)
+                  Unknown rect=(x=-576.0 y=722.0 width=2216.8 height=16.0 center_x=532.4 center_y=730.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 035 :: history 035 :: history 035 :: history 035 :: history 035 :: history 035 :: history 035 :: history 035 :: history 035 :: history 035 :: history 035 :: history 035 :: history 035 :: history " rect=(x=-104.0 y=741.0 width=1744.8 height=16.0 center_x=768.4 center_y=749.0)
+                  Unknown rect=(x=-576.0 y=741.0 width=2216.8 height=16.0 center_x=532.4 center_y=749.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 036 :: history 036 :: history 036 :: history 036 :: history 036 :: history 036 :: history 036 :: history 036 :: history 036 :: history 036 :: history 036 :: history 036 :: history 036 :: history " rect=(x=-104.0 y=760.0 width=1744.8 height=16.0 center_x=768.4 center_y=768.0)
+                  Unknown rect=(x=-576.0 y=760.0 width=2216.8 height=16.0 center_x=532.4 center_y=768.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 037 :: history 037 :: history 037 :: history 037 :: history 037 :: history 037 :: history 037 :: history 037 :: history 037 :: history 037 :: history 037 :: history 037 :: history 037 :: history " rect=(x=-104.0 y=779.0 width=1744.8 height=16.0 center_x=768.4 center_y=787.0)
+                  Unknown rect=(x=-576.0 y=779.0 width=2216.8 height=16.0 center_x=532.4 center_y=787.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 038 :: history 038 :: history 038 :: history 038 :: history 038 :: history 038 :: history 038 :: history 038 :: history 038 :: history 038 :: history 038 :: history 038 :: history 038 :: history " rect=(x=-104.0 y=798.0 width=1744.8 height=16.0 center_x=768.4 center_y=806.0)
+                  Unknown rect=(x=-576.0 y=798.0 width=2216.8 height=16.0 center_x=532.4 center_y=806.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 039 :: history 039 :: history 039 :: history 039 :: history 039 :: history 039 :: history 039 :: history 039 :: history 039 :: history 039 :: history 039 :: history 039 :: history 039 :: history " rect=(x=-104.0 y=817.0 width=1744.8 height=16.0 center_x=768.4 center_y=825.0)
+                  Unknown rect=(x=-576.0 y=817.0 width=2216.8 height=16.0 center_x=532.4 center_y=825.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 040 :: history 040 :: history 040 :: history 040 :: history 040 :: history 040 :: history 040 :: history 040 :: history 040 :: history 040 :: history 040 :: history 040 :: history 040 :: history " rect=(x=-104.0 y=836.0 width=1744.8 height=16.0 center_x=768.4 center_y=844.0)
+                  Unknown rect=(x=-576.0 y=836.0 width=2216.8 height=16.0 center_x=532.4 center_y=844.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 041 :: history 041 :: history 041 :: history 041 :: history 041 :: history 041 :: history 041 :: history 041 :: history 041 :: history 041 :: history 041 :: history 041 :: history 041 :: history " rect=(x=-104.0 y=855.0 width=1744.8 height=16.0 center_x=768.4 center_y=863.0)
+                  Unknown rect=(x=-576.0 y=855.0 width=2216.8 height=16.0 center_x=532.4 center_y=863.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 042 :: history 042 :: history 042 :: history 042 :: history 042 :: history 042 :: history 042 :: history 042 :: history 042 :: history 042 :: history 042 :: history 042 :: history 042 :: history " rect=(x=-104.0 y=874.0 width=1744.8 height=16.0 center_x=768.4 center_y=882.0)
+                  Unknown rect=(x=-576.0 y=874.0 width=2216.8 height=16.0 center_x=532.4 center_y=882.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 043 :: history 043 :: history 043 :: history 043 :: history 043 :: history 043 :: history 043 :: history 043 :: history 043 :: history 043 :: history 043 :: history 043 :: history 043 :: history " rect=(x=-104.0 y=893.0 width=1744.8 height=16.0 center_x=768.4 center_y=901.0)
+                  Unknown rect=(x=-576.0 y=893.0 width=2216.8 height=16.0 center_x=532.4 center_y=901.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 044 :: history 044 :: history 044 :: history 044 :: history 044 :: history 044 :: history 044 :: history 044 :: history 044 :: history 044 :: history 044 :: history 044 :: history 044 :: history " rect=(x=-104.0 y=912.0 width=1744.8 height=16.0 center_x=768.4 center_y=920.0)
+                  Unknown rect=(x=-576.0 y=912.0 width=2216.8 height=16.0 center_x=532.4 center_y=920.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 045 :: history 045 :: history 045 :: history 045 :: history 045 :: history 045 :: history 045 :: history 045 :: history 045 :: history 045 :: history 045 :: history 045 :: history 045 :: history " rect=(x=-104.0 y=931.0 width=1744.8 height=16.0 center_x=768.4 center_y=939.0)
+                  Unknown rect=(x=-576.0 y=931.0 width=2216.8 height=16.0 center_x=532.4 center_y=939.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 046 :: history 046 :: history 046 :: history 046 :: history 046 :: history 046 :: history 046 :: history 046 :: history 046 :: history 046 :: history 046 :: history 046 :: history 046 :: history " rect=(x=-104.0 y=950.0 width=1744.8 height=16.0 center_x=768.4 center_y=958.0)
+                  Unknown rect=(x=-576.0 y=950.0 width=2216.8 height=16.0 center_x=532.4 center_y=958.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 047 :: history 047 :: history 047 :: history 047 :: history 047 :: history 047 :: history 047 :: history 047 :: history 047 :: history 047 :: history 047 :: history 047 :: history 047 :: history " rect=(x=-104.0 y=969.0 width=1744.8 height=16.0 center_x=768.4 center_y=977.0)
+                  Unknown rect=(x=-576.0 y=969.0 width=2216.8 height=16.0 center_x=532.4 center_y=977.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 048 :: history 048 :: history 048 :: history 048 :: history 048 :: history 048 :: history 048 :: history 048 :: history 048 :: history 048 :: history 048 :: history 048 :: history 048 :: history " rect=(x=-104.0 y=988.0 width=1744.8 height=16.0 center_x=768.4 center_y=996.0)
+                  Unknown rect=(x=-576.0 y=988.0 width=2216.8 height=16.0 center_x=532.4 center_y=996.0)
+                  GenericContainer rect=<none>
+                    Label value=" :: history 049 :: history 049 :: history 049 :: history 049 :: history 049 :: history 049 :: history 049 :: history 049 :: history 049 :: history 049 :: history 049 :: history 049 :: history 049 :: history " rect=(x=-104.0 y=1007.0 width=1744.8 height=16.0 center_x=768.4 center_y=1015.0)
+                  Unknown rect=(x=-576.0 y=1007.0 width=2216.8 height=16.0 center_x=532.4 center_y=1015.0)
+            ScrollBar rect=(x=24.0 y=990.0 width=1488.0 height=10.0 center_x=768.0 center_y=995.0)
+            ScrollBar rect=(x=1502.0 y=76.0 width=10.0 height=924.0 center_x=1507.0 center_y=538.0)

@@ -884,8 +884,9 @@ fn render_sort_indicator(ui: &mut Ui, direction: Option<SortDirection>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::UiHarnessSnapshot;
+    use egui_kittest::Harness;
     use egui_kittest::kittest::Queryable;
-    use egui_kittest::{Harness, SnapshotResults};
     use std::collections::HashSet;
 
     #[derive(Clone)]
@@ -968,7 +969,7 @@ mod tests {
 
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.snapshot("tables/basic");
+        harness.ui_harness("tables/basic");
     }
 
     #[test]
@@ -991,7 +992,7 @@ mod tests {
 
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.snapshot("tables/alternating_rows");
+        harness.ui_harness("tables/alternating_rows");
     }
 
     #[test]
@@ -1024,7 +1025,7 @@ mod tests {
         harness.run();
         harness.get_by_role_and_label(egui::accesskit::Role::CheckBox, "Select all rows");
         harness.get_by_role_and_label(egui::accesskit::Role::CheckBox, "Select row 1");
-        harness.snapshot("tables/with_selection");
+        harness.ui_harness("tables/with_selection");
     }
 
     #[test]
@@ -1056,7 +1057,7 @@ mod tests {
 
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.snapshot("tables/select_all");
+        harness.ui_harness("tables/select_all");
     }
 
     #[test]
@@ -1090,7 +1091,7 @@ mod tests {
 
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.snapshot("tables/select_all_indeterminate");
+        harness.ui_harness("tables/select_all_indeterminate");
     }
 
     /// Helper function to sort users based on sort state
@@ -1113,7 +1114,6 @@ mod tests {
 
     #[test]
     fn test_table_sorting() {
-        let mut results = SnapshotResults::new();
         // Comprehensive sorting test that demonstrates the full sorting workflow:
         // 1. No sort state (unsorted indicator shown)
         // 2. Sort by name ascending (data is sorted, up arrow shown)
@@ -1139,7 +1139,7 @@ mod tests {
         });
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        results.add(harness.try_snapshot("tables/sorting_unsorted"));
+        harness.ui_harness("tables/sorting_unsorted");
 
         // --- Snapshot 2: Sort by name ascending ---
         // Sort state is set before rendering, and data is sorted accordingly
@@ -1164,7 +1164,7 @@ mod tests {
         });
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        results.add(harness.try_snapshot("tables/sorting_name_asc"));
+        harness.ui_harness("tables/sorting_name_asc");
 
         // --- Snapshot 3: Sort by title descending ---
         let mut users = test_users();
@@ -1188,7 +1188,7 @@ mod tests {
         });
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        results.add(harness.try_snapshot("tables/sorting_title_desc"));
+        harness.ui_harness("tables/sorting_title_desc");
     }
 
     #[test]
@@ -1214,7 +1214,7 @@ mod tests {
 
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.snapshot("tables/column_toggle_menu");
+        harness.ui_harness("tables/column_toggle_menu");
     }
 
     #[test]
@@ -1241,6 +1241,6 @@ mod tests {
 
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.snapshot("tables/hidden_column");
+        harness.ui_harness("tables/hidden_column");
     }
 }

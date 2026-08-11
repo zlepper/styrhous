@@ -1,0 +1,139 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        Label value="Tables" rect=(x=8.0 y=8.0 width=62.0 height=24.0 center_x=39.0 center_y=20.0)
+          TextRun value="Tables" rect=(x=8.0 y=8.0 width=62.0 height=24.0 center_x=39.0 center_y=20.0)
+        GenericContainer rect=<none>
+          Label value="Standard" rect=(x=8.0 y=47.0 width=756.0 height=17.0 center_x=386.0 center_y=55.5)
+            TextRun value="Standard" rect=(x=8.0 y=47.0 width=59.6 height=17.0 center_x=37.8 center_y=55.5)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Label value="Name" rect=(x=24.0 y=74.5 width=38.8 height=17.0 center_x=43.4 center_y=83.0)
+                    TextRun value="Name" rect=(x=24.0 y=74.5 width=38.8 height=17.0 center_x=43.4 center_y=83.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Label value="Role" rect=(x=174.0 y=74.5 width=28.8 height=17.0 center_x=188.4 center_y=83.0)
+                    TextRun value="Role" rect=(x=174.0 y=74.5 width=28.8 height=17.0 center_x=188.4 center_y=83.0)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Unknown rect=(x=8.0 y=110.0 width=150.0 height=44.0 center_x=83.0 center_y=132.0)
+                  GenericContainer rect=<none>
+                    Label value="Michael Foster" rect=(x=24.0 y=123.5 width=97.0 height=17.0 center_x=72.5 center_y=132.0)
+                      TextRun value="Michael Foster" rect=(x=24.0 y=123.5 width=97.0 height=17.0 center_x=72.5 center_y=132.0)
+                GenericContainer rect=<none>
+                  Unknown rect=(x=158.0 y=110.0 width=100.0 height=44.0 center_x=208.0 center_y=132.0)
+                  GenericContainer rect=<none>
+                    Label value="Designer" rect=(x=174.0 y=123.5 width=59.3 height=17.0 center_x=203.7 center_y=132.0)
+                      TextRun value="Designer" rect=(x=174.0 y=123.5 width=59.3 height=17.0 center_x=203.7 center_y=132.0)
+                GenericContainer rect=<none>
+                  Unknown rect=(x=8.0 y=157.0 width=150.0 height=44.0 center_x=83.0 center_y=179.0)
+                  GenericContainer rect=<none>
+                    Label value="Emily Selman" rect=(x=24.0 y=170.5 width=88.3 height=17.0 center_x=68.1 center_y=179.0)
+                      TextRun value="Emily Selman" rect=(x=24.0 y=170.5 width=88.3 height=17.0 center_x=68.1 center_y=179.0)
+                GenericContainer rect=<none>
+                  Unknown rect=(x=158.0 y=157.0 width=100.0 height=44.0 center_x=208.0 center_y=179.0)
+                  GenericContainer rect=<none>
+                    Label value="Engineer" rect=(x=174.0 y=170.5 width=58.5 height=17.0 center_x=203.3 center_y=179.0)
+                      TextRun value="Engineer" rect=(x=174.0 y=170.5 width=58.5 height=17.0 center_x=203.3 center_y=179.0)
+          Label value="Selectable" rect=(x=8.0 y=224.0 width=756.0 height=17.0 center_x=386.0 center_y=232.5)
+            TextRun value="Selectable" rect=(x=8.0 y=224.0 width=69.2 height=17.0 center_x=42.6 center_y=232.5)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                CheckBox name="Select all rows" state=[toggled=Mixed] rect=(x=24.0 y=256.0 width=16.0 height=16.0 center_x=32.0 center_y=264.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Name" rect=(x=72.0 y=255.5 width=38.8 height=17.0 center_x=91.4 center_y=264.0)
+                  TextRun value="Name" rect=(x=72.0 y=255.5 width=38.8 height=17.0 center_x=91.4 center_y=264.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Role" rect=(x=222.0 y=255.5 width=28.8 height=17.0 center_x=236.4 center_y=264.0)
+                  TextRun value="Role" rect=(x=222.0 y=255.5 width=28.8 height=17.0 center_x=236.4 center_y=264.0)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    CheckBox name="Select row 1" state=[toggled=True] rect=(x=24.0 y=301.0 width=16.0 height=16.0 center_x=32.0 center_y=309.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="Michael Foster" rect=(x=72.0 y=300.5 width=97.0 height=17.0 center_x=120.5 center_y=309.0)
+                      TextRun value="Michael Foster" rect=(x=72.0 y=300.5 width=97.0 height=17.0 center_x=120.5 center_y=309.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="Designer" rect=(x=222.0 y=300.5 width=59.3 height=17.0 center_x=251.7 center_y=309.0)
+                      TextRun value="Designer" rect=(x=222.0 y=300.5 width=59.3 height=17.0 center_x=251.7 center_y=309.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    CheckBox name="Select row 2" state=[toggled=False] rect=(x=24.0 y=348.0 width=16.0 height=16.0 center_x=32.0 center_y=356.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="Emily Selman" rect=(x=72.0 y=347.5 width=88.3 height=17.0 center_x=116.1 center_y=356.0)
+                      TextRun value="Emily Selman" rect=(x=72.0 y=347.5 width=88.3 height=17.0 center_x=116.1 center_y=356.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="Engineer" rect=(x=222.0 y=347.5 width=58.5 height=17.0 center_x=251.3 center_y=356.0)
+                      TextRun value="Engineer" rect=(x=222.0 y=347.5 width=58.5 height=17.0 center_x=251.3 center_y=356.0)
+        GenericContainer rect=<none>
+          Label value="Sorted" rect=(x=772.0 y=47.0 width=756.0 height=17.0 center_x=1150.0 center_y=55.5)
+            TextRun value="Sorted" rect=(x=772.0 y=47.0 width=43.6 height=17.0 center_x=793.8 center_y=55.5)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Button name="Sort by Name; currently ascending" rect=(x=772.0 y=67.0 width=150.0 height=40.0 center_x=847.0 center_y=87.0)
+              GenericContainer rect=<none>
+                Label value="Name" rect=(x=788.0 y=78.5 width=38.8 height=17.0 center_x=807.4 center_y=87.0)
+                  TextRun value="Name" rect=(x=788.0 y=78.5 width=38.8 height=17.0 center_x=807.4 center_y=87.0)
+                Image rect=(x=830.8 y=81.0 width=12.0 height=12.0 center_x=836.8 center_y=87.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Role" rect=(x=938.0 y=78.5 width=28.8 height=17.0 center_x=952.4 center_y=87.0)
+                  TextRun value="Role" rect=(x=938.0 y=78.5 width=28.8 height=17.0 center_x=952.4 center_y=87.0)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="Michael Foster" rect=(x=788.0 y=123.5 width=97.0 height=17.0 center_x=836.5 center_y=132.0)
+                      TextRun value="Michael Foster" rect=(x=788.0 y=123.5 width=97.0 height=17.0 center_x=836.5 center_y=132.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="Designer" rect=(x=938.0 y=123.5 width=59.3 height=17.0 center_x=967.7 center_y=132.0)
+                      TextRun value="Designer" rect=(x=938.0 y=123.5 width=59.3 height=17.0 center_x=967.7 center_y=132.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="Emily Selman" rect=(x=788.0 y=170.5 width=88.3 height=17.0 center_x=832.1 center_y=179.0)
+                      TextRun value="Emily Selman" rect=(x=788.0 y=170.5 width=88.3 height=17.0 center_x=832.1 center_y=179.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="Engineer" rect=(x=938.0 y=170.5 width=58.5 height=17.0 center_x=967.3 center_y=179.0)
+                      TextRun value="Engineer" rect=(x=938.0 y=170.5 width=58.5 height=17.0 center_x=967.3 center_y=179.0)
+          Label value="Column visibility" rect=(x=772.0 y=224.0 width=756.0 height=17.0 center_x=1150.0 center_y=232.5)
+            TextRun value="Column visibility" rect=(x=772.0 y=224.0 width=107.9 height=17.0 center_x=825.9 center_y=232.5)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Name" rect=(x=788.0 y=255.5 width=38.8 height=17.0 center_x=807.4 center_y=264.0)
+                  TextRun value="Name" rect=(x=788.0 y=255.5 width=38.8 height=17.0 center_x=807.4 center_y=264.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Image rect=(x=922.0 y=244.0 width=32.0 height=40.0 center_x=938.0 center_y=264.0)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="Michael Foster" rect=(x=788.0 y=300.5 width=97.0 height=17.0 center_x=836.5 center_y=309.0)
+                      TextRun value="Michael Foster" rect=(x=788.0 y=300.5 width=97.0 height=17.0 center_x=836.5 center_y=309.0)
+                GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="Emily Selman" rect=(x=788.0 y=347.5 width=88.3 height=17.0 center_x=832.1 center_y=356.0)
+                      TextRun value="Emily Selman" rect=(x=788.0 y=347.5 width=88.3 height=17.0 center_x=832.1 center_y=356.0)
+                GenericContainer rect=<none>

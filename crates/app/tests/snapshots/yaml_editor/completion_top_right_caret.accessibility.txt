@@ -1,0 +1,61 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="Edit" rect=(x=33.0 y=24.0 width=28.5 height=19.0 center_x=47.3 center_y=33.5)
+                TextRun value="Edit" rect=(x=33.0 y=24.0 width=28.5 height=19.0 center_x=47.3 center_y=33.5)
+              Label value="settings" rect=(x=85.5 y=24.0 width=59.8 height=19.0 center_x=115.5 center_y=33.5)
+                TextRun value="settings" rect=(x=85.5 y=24.0 width=59.8 height=19.0 center_x=115.5 center_y=33.5)
+              Label value="ConfigMap · kube-system" rect=(x=165.4 y=25.0 width=171.7 height=17.0 center_x=251.2 center_y=33.5)
+                TextRun value="ConfigMap · kube-system" rect=(x=165.4 y=25.0 width=171.7 height=17.0 center_x=251.2 center_y=33.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Button name="Apply changes" state=[disabled] rect=(x=1380.4 y=17.0 width=122.6 height=33.0 center_x=1441.7 center_y=33.5)
+                Button name="Close" rect=(x=1310.8 y=17.0 width=61.6 height=33.0 center_x=1341.6 center_y=33.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="Changes apply directly to the cluster" rect=(x=33.0 y=988.0 width=242.7 height=17.0 center_x=154.3 center_y=996.5)
+                TextRun value="Changes apply directly to the cluster" rect=(x=33.0 y=988.0 width=242.7 height=17.0 center_x=154.3 center_y=996.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="1" rect=(x=24.0 y=76.0 width=7.8 height=15.0 center_x=27.9 center_y=83.5)
+                      TextRun value="1" rect=(x=24.0 y=76.0 width=7.8 height=15.0 center_x=27.9 center_y=83.5)
+                  MultilineTextInput value="mode: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" state=[focused] rect=(x=82.0 y=76.0 width=1430.0 height=19.1 center_x=797.0 center_y=85.6)
+                    TextRun value="mode: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" rect=(x=86.0 y=78.0 width=1299.2 height=15.0 center_x=735.6 center_y=85.5)
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Label value="field-000" rect=(x=1133.0 y=121.0 width=70.4 height=15.0 center_x=1168.2 center_y=128.5)
+              TextRun value="field-000" rect=(x=1133.0 y=121.0 width=70.4 height=15.0 center_x=1168.2 center_y=128.5)
+          Unknown rect=(x=1124.0 y=116.0 width=258.0 height=25.0 center_x=1253.0 center_y=128.5)
+          GenericContainer rect=<none>
+            Label value="field-001" rect=(x=1133.0 y=149.0 width=70.4 height=15.0 center_x=1168.2 center_y=156.5)
+              TextRun value="field-001" rect=(x=1133.0 y=149.0 width=70.4 height=15.0 center_x=1168.2 center_y=156.5)
+          Unknown rect=(x=1124.0 y=144.0 width=258.0 height=25.0 center_x=1253.0 center_y=156.5)
+          GenericContainer rect=<none>
+            Label value="field-002" rect=(x=1133.0 y=177.0 width=70.4 height=15.0 center_x=1168.2 center_y=184.5)
+              TextRun value="field-002" rect=(x=1133.0 y=177.0 width=70.4 height=15.0 center_x=1168.2 center_y=184.5)
+          Unknown rect=(x=1124.0 y=172.0 width=258.0 height=25.0 center_x=1253.0 center_y=184.5)
+      Label value="↑↓ navigate  ·  Enter apply  ·  Esc dismiss" rect=(x=1124.0 y=217.0 width=236.1 height=15.0 center_x=1242.0 center_y=224.5)
+        TextRun value="↑↓ navigate  ·  Enter apply  ·  Esc dismiss" rect=(x=1124.0 y=217.0 width=236.1 height=15.0 center_x=1242.0 center_y=224.5)
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Label value="STRING" rect=(x=842.0 y=132.0 width=44.3 height=15.0 center_x=864.2 center_y=139.5)
+            TextRun value="STRING" rect=(x=842.0 y=132.0 width=44.3 height=15.0 center_x=864.2 center_y=139.5)
+        Label value="field-000" rect=(x=900.3 y=132.0 width=70.4 height=15.0 center_x=935.5 center_y=139.5)
+          TextRun value="field-000" rect=(x=900.3 y=132.0 width=70.4 height=15.0 center_x=935.5 center_y=139.5)
+      Label value="Documentation for field 000." rect=(x=836.0 y=178.0 width=162.6 height=15.0 center_x=917.3 center_y=185.5)
+        TextRun value="Documentation for field 000." rect=(x=836.0 y=178.0 width=162.6 height=15.0 center_x=917.3 center_y=185.5)

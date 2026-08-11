@@ -1,0 +1,47 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        Label value="Sidebars" rect=(x=8.0 y=8.0 width=83.3 height=24.0 center_x=49.7 center_y=20.0)
+          TextRun value="Sidebars" rect=(x=8.0 y=8.0 width=83.3 height=24.0 center_x=49.7 center_y=20.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Label value="Narrow" rect=(x=8.0 y=47.0 width=48.5 height=17.0 center_x=32.3 center_y=55.5)
+              TextRun value="Narrow" rect=(x=8.0 y=47.0 width=48.5 height=17.0 center_x=32.3 center_y=55.5)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Button name="Dashboard" state=[toggled=True] rect=(x=8.0 y=76.0 width=68.0 height=52.0 center_x=42.0 center_y=102.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=34.0 y=94.0 width=16.0 height=16.0 center_x=42.0 center_y=102.0)
+                  Button name="People" state=[toggled=False] rect=(x=8.0 y=128.0 width=68.0 height=52.0 center_x=42.0 center_y=154.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=34.0 y=146.0 width=16.0 height=16.0 center_x=42.0 center_y=154.0)
+                  Button name="Tailwind Labs" state=[toggled=False] rect=(x=8.0 y=197.0 width=68.0 height=52.0 center_x=42.0 center_y=223.0)
+                  Button name="Acme" state=[toggled=False] rect=(x=8.0 y=249.0 width=68.0 height=52.0 center_x=42.0 center_y=275.0)
+          GenericContainer rect=<none>
+            Label value="Wide" rect=(x=88.5 y=47.0 width=33.9 height=17.0 center_x=105.5 center_y=55.5)
+              TextRun value="Wide" rect=(x=88.5 y=47.0 width=33.9 height=17.0 center_x=105.5 center_y=55.5)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Button name="Dashboard" state=[toggled=True] rect=(x=89.0 y=73.0 width=280.0 height=36.0 center_x=229.0 center_y=91.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=121.0 y=83.0 width=16.0 height=16.0 center_x=129.0 center_y=91.0)
+                  Button name="Calendar" state=[toggled=False] rect=(x=89.0 y=112.0 width=280.0 height=36.0 center_x=229.0 center_y=130.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=121.0 y=122.0 width=16.0 height=16.0 center_x=129.0 center_y=130.0)
+                  GenericContainer rect=<none>
+                    Label value="WORKSPACE" rect=(x=101.0 y=164.5 width=75.0 height=15.0 center_x=138.5 center_y=172.0)
+                      TextRun value="WORKSPACE" rect=(x=101.0 y=164.5 width=75.0 height=15.0 center_x=138.5 center_y=172.0)
+                  Button name="Projects" state=[toggled=True] rect=(x=89.0 y=186.0 width=280.0 height=44.0 center_x=229.0 center_y=208.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=105.0 y=200.0 width=16.0 height=16.0 center_x=113.0 center_y=208.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=121.0 y=196.0 width=16.0 height=16.0 center_x=129.0 center_y=204.0)
+                  Button name="Platform" state=[toggled=False] rect=(x=89.0 y=235.0 width=280.0 height=36.0 center_x=229.0 center_y=253.0)
+                  Button name="Kubernetes UI" state=[toggled=True] rect=(x=89.0 y=274.0 width=280.0 height=36.0 center_x=229.0 center_y=292.0)
+                  Button name="Documents" state=[toggled=False] rect=(x=89.0 y=315.0 width=280.0 height=36.0 center_x=229.0 center_y=333.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=121.0 y=325.0 width=16.0 height=16.0 center_x=129.0 center_y=333.0)
