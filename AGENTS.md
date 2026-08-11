@@ -38,6 +38,9 @@ merely to make a test pass. Accessibility snapshots expose the AccessKit hierarc
 node's logical egui-point bounds, and are useful for reviewing alignment and placement. Use the
 project's `harness.ui_harness(...)` helper for every new snapshot so the pixel and accessibility
 fixtures are always checked together. Its default pixel threshold is 2.1 with no failed pixels.
+It also rejects meaningful same-layer accessibility-node overlap, including overflowing text runs;
+popup and blade layers are detected automatically. Disable that check only for an explicitly
+intentional same-layer collision with `HarnessSnapshotOptions::check_illegal_overlaps(false)`.
 
 ### Pre-commit hooks
 

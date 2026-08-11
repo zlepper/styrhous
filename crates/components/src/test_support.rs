@@ -8,8 +8,8 @@ use std::fmt::{Display, Write as _};
 use std::io;
 use std::path::{Path, PathBuf};
 
-use egui::Vec2;
 use egui::accesskit::Role;
+use egui::{Pos2, Rect, Vec2};
 use egui_kittest::kittest::NodeT;
 use egui_kittest::{Harness, Node, SnapshotError, SnapshotOptions};
 
@@ -34,6 +34,8 @@ pub fn setup_egui<State>(harness: &mut Harness<'_, State>) {
 pub struct AccessibilityTreeOptions {
     /// Include unlabeled generic containers so the output preserves the complete AccessKit tree.
     pub include_structural_nodes: bool,
+    /// Reject overlapping, unrelated visible nodes in the same egui layer.
+    pub check_illegal_overlaps: bool,
     /// Directory containing the committed text fixtures and diagnostic dumps.
     pub output_path: PathBuf,
 }
@@ -42,6 +44,7 @@ impl Default for AccessibilityTreeOptions {
     fn default() -> Self {
         Self {
             include_structural_nodes: true,
+            check_illegal_overlaps: true,
             output_path: PathBuf::from("tests/snapshots"),
         }
     }
@@ -56,6 +59,15 @@ impl AccessibilityTreeOptions {
     /// Include or omit unlabeled `GenericContainer` nodes.
     pub fn include_structural_nodes(mut self, include_structural_nodes: bool) -> Self {
         self.include_structural_nodes = include_structural_nodes;
+        self
+    }
+
+    /// Enable or disable automatic same-layer collision detection.
+    ///
+    /// Disabling this should be reserved for tests that intentionally construct overlapping
+    /// content in a single egui layer.
+    pub fn check_illegal_overlaps(mut self, check_illegal_overlaps: bool) -> Self {
+        self.check_illegal_overlaps = check_illegal_overlaps;
         self
     }
 
@@ -121,6 +133,12 @@ impl HarnessSnapshotOptions {
     /// Include or omit unlabeled structural nodes from the accessibility fixture.
     pub fn include_structural_nodes(mut self, include_structural_nodes: bool) -> Self {
         self.accessibility.include_structural_nodes = include_structural_nodes;
+        self
+    }
+
+    /// Enable or disable automatic same-layer collision detection.
+    pub fn check_illegal_overlaps(mut self, check_illegal_overlaps: bool) -> Self {
+        self.accessibility.check_illegal_overlaps = check_illegal_overlaps;
         self
     }
 }
@@ -190,35 +208,53 @@ impl Display for AccessibilitySnapshotError {
 
 impl std::error::Error for AccessibilitySnapshotError {}
 
+/// Two unrelated visible accessibility nodes that collide in the same egui layer.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AccessibilityOverlap {
+    first: AccessibilityNodeDescription,
+    second: AccessibilityNodeDescription,
+    intersection: Rect,
+}
+
+impl Display for AccessibilityOverlap {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "{} overlaps {} at {}",
+            self.first,
+            self.second,
+            format_rect(self.intersection),
+        )
+    }
+}
+
 /// A failure from either artifact produced by [`UiHarnessSnapshot::ui_harness`].
 #[derive(Debug)]
-pub enum UiHarnessSnapshotError {
-    /// The image snapshot failed.
-    Pixel(Box<SnapshotError>),
-    /// The accessibility text snapshot failed.
-    Accessibility(Box<AccessibilitySnapshotError>),
-    /// Both artifacts failed during the same UI snapshot.
-    Both {
-        pixel: Box<SnapshotError>,
-        accessibility: Box<AccessibilitySnapshotError>,
-    },
+pub struct UiHarnessSnapshotError {
+    pixel: Option<Box<SnapshotError>>,
+    accessibility: Option<Box<AccessibilitySnapshotError>>,
+    overlaps: Vec<AccessibilityOverlap>,
 }
 
 impl Display for UiHarnessSnapshotError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Pixel(error) => write!(formatter, "Pixel snapshot failed:\n{error}"),
-            Self::Accessibility(error) => {
-                write!(formatter, "Accessibility snapshot failed:\n{error}")
-            }
-            Self::Both {
-                pixel,
-                accessibility,
-            } => write!(
-                formatter,
-                "Pixel snapshot failed:\n{pixel}\n\nAccessibility snapshot failed:\n{accessibility}"
-            ),
+        let mut sections = Vec::new();
+        if let Some(error) = &self.pixel {
+            sections.push(format!("Pixel snapshot failed:\n{error}"));
         }
+        if let Some(error) = &self.accessibility {
+            sections.push(format!("Accessibility snapshot failed:\n{error}"));
+        }
+        if !self.overlaps.is_empty() {
+            let overlaps = self
+                .overlaps
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("\n");
+            sections.push(format!("Illegal accessibility overlaps:\n{overlaps}"));
+        }
+        formatter.write_str(&sections.join("\n\n"))
     }
 }
 
@@ -228,6 +264,12 @@ impl std::error::Error for UiHarnessSnapshotError {}
 pub trait AccessibilitySnapshot {
     /// Return the current AccessKit tree as agent-readable text.
     fn accessibility_tree(&self, options: &AccessibilityTreeOptions) -> String;
+
+    /// Return unrelated visible nodes that overlap within the same egui layer.
+    fn illegal_accessibility_overlaps(
+        &self,
+        options: &AccessibilityTreeOptions,
+    ) -> Vec<AccessibilityOverlap>;
 
     /// Compare the current tree with `{name}.accessibility.txt`.
     #[track_caller]
@@ -242,6 +284,10 @@ pub trait AccessibilitySnapshot {
         name: impl AsRef<str>,
         options: &AccessibilityTreeOptions,
     ) {
+        let overlaps = self.illegal_accessibility_overlaps(options);
+        if !overlaps.is_empty() {
+            panic!("{}", illegal_overlaps_message(&overlaps));
+        }
         if let Err(error) = self.try_accessibility_snapshot_with_options(name, options) {
             panic!("{error}");
         }
@@ -298,6 +344,24 @@ impl<State> AccessibilitySnapshot for Harness<'_, State> {
             options,
         );
         output
+    }
+
+    fn illegal_accessibility_overlaps(
+        &self,
+        options: &AccessibilityTreeOptions,
+    ) -> Vec<AccessibilityOverlap> {
+        if !options.check_illegal_overlaps {
+            return Vec::new();
+        }
+
+        let mut nodes = Vec::new();
+        collect_accessibility_nodes(
+            &self.root(),
+            self.ctx.pixels_per_point(),
+            self.ctx.viewport_rect(),
+            &mut nodes,
+        );
+        find_illegal_overlaps(&nodes)
     }
 
     fn try_accessibility_snapshot_with_options(
@@ -365,17 +429,17 @@ impl<State> UiHarnessSnapshot for Harness<'_, State> {
         let pixel = self.try_snapshot_options(&options.name, &options.pixel);
         let accessibility =
             self.try_accessibility_snapshot_with_options(&options.name, &options.accessibility);
+        let overlaps = self.illegal_accessibility_overlaps(&options.accessibility);
 
-        match (pixel, accessibility) {
-            (Ok(()), Ok(())) => Ok(()),
-            (Err(pixel), Ok(())) => Err(UiHarnessSnapshotError::Pixel(Box::new(pixel))),
-            (Ok(()), Err(accessibility)) => Err(UiHarnessSnapshotError::Accessibility(Box::new(
-                accessibility,
-            ))),
-            (Err(pixel), Err(accessibility)) => Err(UiHarnessSnapshotError::Both {
-                pixel: Box::new(pixel),
-                accessibility: Box::new(accessibility),
-            }),
+        let error = UiHarnessSnapshotError {
+            pixel: pixel.err().map(Box::new),
+            accessibility: accessibility.err().map(Box::new),
+            overlaps,
+        };
+        if error.pixel.is_none() && error.accessibility.is_none() && error.overlaps.is_empty() {
+            Ok(())
+        } else {
+            Err(error)
         }
     }
 }
@@ -546,6 +610,272 @@ fn format_node(
     }
 }
 
+const MINIMUM_OVERLAP_SIZE: f32 = 1.0;
+
+#[derive(Clone, Debug, PartialEq)]
+struct AccessibilityNodeDescription {
+    role: String,
+    name: Option<String>,
+    value: Option<String>,
+    rect: Rect,
+}
+
+impl Display for AccessibilityNodeDescription {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}", self.role)?;
+        if let Some(name) = &self.name {
+            write!(formatter, " name={name:?}")?;
+        }
+        if let Some(value) = &self.value {
+            write!(formatter, " value={value:?}")?;
+        }
+        write!(formatter, " {}", format_rect(self.rect))
+    }
+}
+
+#[derive(Clone, Debug)]
+struct AccessibilityNodeInfo {
+    description: AccessibilityNodeDescription,
+    parent: Option<usize>,
+    layer: Option<usize>,
+    hidden: bool,
+}
+
+fn collect_accessibility_nodes(
+    root: &Node<'_>,
+    pixels_per_point: f32,
+    viewport: Rect,
+    nodes: &mut Vec<AccessibilityNodeInfo>,
+) {
+    let root_index =
+        collect_accessibility_node(root, pixels_per_point, viewport, None, None, nodes);
+    for (layer, child) in root.children().enumerate() {
+        collect_accessibility_branch(
+            &child,
+            pixels_per_point,
+            viewport,
+            Some(root_index),
+            Some(layer),
+            nodes,
+        );
+    }
+}
+
+fn collect_accessibility_branch(
+    node: &Node<'_>,
+    pixels_per_point: f32,
+    visible_rect: Rect,
+    parent: Option<usize>,
+    layer: Option<usize>,
+    nodes: &mut Vec<AccessibilityNodeInfo>,
+) {
+    let index =
+        collect_accessibility_node(node, pixels_per_point, visible_rect, parent, layer, nodes);
+    let child_visible_rect = clip_rect_for_scrollbars(node, pixels_per_point, visible_rect);
+    for child in node.children() {
+        collect_accessibility_branch(
+            &child,
+            pixels_per_point,
+            child_visible_rect,
+            Some(index),
+            layer,
+            nodes,
+        );
+    }
+}
+
+fn collect_accessibility_node(
+    node: &Node<'_>,
+    pixels_per_point: f32,
+    visible_rect: Rect,
+    parent: Option<usize>,
+    layer: Option<usize>,
+    nodes: &mut Vec<AccessibilityNodeInfo>,
+) -> usize {
+    let accesskit_node = node.accesskit_node();
+    let rect = accesskit_rect(accesskit_node.bounding_box(), pixels_per_point)
+        .map(|rect| rect.intersect(visible_rect));
+    let index = nodes.len();
+    if let Some(rect) = rect {
+        nodes.push(AccessibilityNodeInfo {
+            description: AccessibilityNodeDescription {
+                role: format!("{:?}", accesskit_node.role()),
+                name: accesskit_node.label(),
+                value: accesskit_node.value(),
+                rect,
+            },
+            parent,
+            layer,
+            hidden: accesskit_node.is_hidden() || !rect.is_positive(),
+        });
+    } else {
+        nodes.push(AccessibilityNodeInfo {
+            description: AccessibilityNodeDescription {
+                role: format!("{:?}", accesskit_node.role()),
+                name: accesskit_node.label(),
+                value: accesskit_node.value(),
+                rect: Rect::NOTHING,
+            },
+            parent,
+            layer,
+            hidden: true,
+        });
+    }
+
+    index
+}
+
+fn clip_rect_for_scrollbars(
+    node: &Node<'_>,
+    pixels_per_point: f32,
+    mut visible_rect: Rect,
+) -> Rect {
+    for child in node.children() {
+        let child_node = child.accesskit_node();
+        if child_node.role() != Role::ScrollBar {
+            continue;
+        }
+        let Some(scrollbar_rect) = accesskit_rect(child_node.bounding_box(), pixels_per_point)
+        else {
+            continue;
+        };
+
+        if scrollbar_rect.height() > scrollbar_rect.width() {
+            visible_rect.min.y = visible_rect.min.y.max(scrollbar_rect.min.y);
+            visible_rect.max.y = visible_rect.max.y.min(scrollbar_rect.max.y);
+        } else {
+            visible_rect.min.x = visible_rect.min.x.max(scrollbar_rect.min.x);
+            visible_rect.max.x = visible_rect.max.x.min(scrollbar_rect.max.x);
+        }
+    }
+    visible_rect
+}
+
+fn accesskit_rect(rect: Option<egui::accesskit::Rect>, pixels_per_point: f32) -> Option<Rect> {
+    rect.map(|rect| {
+        Rect::from_min_max(
+            Pos2::new(
+                rect.x0 as f32 / pixels_per_point,
+                rect.y0 as f32 / pixels_per_point,
+            ),
+            Pos2::new(
+                rect.x1 as f32 / pixels_per_point,
+                rect.y1 as f32 / pixels_per_point,
+            ),
+        )
+    })
+}
+
+fn find_illegal_overlaps(nodes: &[AccessibilityNodeInfo]) -> Vec<AccessibilityOverlap> {
+    let mut overlaps = Vec::new();
+    for (first_index, first) in nodes.iter().enumerate() {
+        if !is_overlap_candidate(first_index, nodes) {
+            continue;
+        }
+        for (second_index, second) in nodes.iter().enumerate().skip(first_index + 1) {
+            if !is_overlap_candidate(second_index, nodes)
+                || first.layer != second.layer
+                || nodes_are_related(first_index, second_index, nodes)
+                || is_composite_control_content(first, second)
+                || is_composite_control_content(second, first)
+            {
+                continue;
+            }
+
+            let intersection = first.description.rect.intersect(second.description.rect);
+            if intersection.width() >= MINIMUM_OVERLAP_SIZE
+                && intersection.height() >= MINIMUM_OVERLAP_SIZE
+            {
+                overlaps.push(AccessibilityOverlap {
+                    first: first.description.clone(),
+                    second: second.description.clone(),
+                    intersection,
+                });
+            }
+        }
+    }
+    overlaps
+}
+
+fn is_overlap_candidate(index: usize, nodes: &[AccessibilityNodeInfo]) -> bool {
+    let node = &nodes[index];
+    !node.hidden
+        && node.description.rect.is_positive()
+        && !matches!(
+            node.description.role.as_str(),
+            "Window" | "Unknown" | "GenericContainer" | "Image" | "ScrollBar"
+        )
+        && (node.description.role != "Label" || has_descendant_role(index, "TextRun", nodes))
+}
+
+fn is_composite_control_content(
+    outer: &AccessibilityNodeInfo,
+    inner: &AccessibilityNodeInfo,
+) -> bool {
+    let contains_inner = outer.description.rect.contains_rect(inner.description.rect);
+    (outer.description.role == "ComboBox"
+        && matches!(inner.description.role.as_str(), "TextInput" | "TextRun")
+        && contains_inner)
+        || (outer.description.role == "Button"
+            && matches!(inner.description.role.as_str(), "Label" | "TextRun")
+            && contains_inner
+            && inner
+                .description
+                .name
+                .as_deref()
+                .or(inner.description.value.as_deref())
+                .is_some_and(|text| {
+                    outer
+                        .description
+                        .name
+                        .as_deref()
+                        .is_some_and(|name| name.contains(text))
+                }))
+}
+
+fn has_descendant_role(index: usize, role: &str, nodes: &[AccessibilityNodeInfo]) -> bool {
+    nodes.iter().enumerate().any(|(candidate, node)| {
+        node.description.role == role && is_ancestor(index, candidate, nodes)
+    })
+}
+
+fn nodes_are_related(first: usize, second: usize, nodes: &[AccessibilityNodeInfo]) -> bool {
+    is_ancestor(first, second, nodes) || is_ancestor(second, first, nodes)
+}
+
+fn is_ancestor(ancestor: usize, mut descendant: usize, nodes: &[AccessibilityNodeInfo]) -> bool {
+    while let Some(parent) = nodes[descendant].parent {
+        if parent == ancestor {
+            return true;
+        }
+        descendant = parent;
+    }
+    false
+}
+
+fn illegal_overlaps_message(overlaps: &[AccessibilityOverlap]) -> String {
+    let overlaps = overlaps
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!("Illegal accessibility overlaps:\n{overlaps}")
+}
+
+fn format_rect(rect: Rect) -> String {
+    let width = rect.width();
+    let height = rect.height();
+    format!(
+        "rect=(x={} y={} width={} height={} center_x={} center_y={})",
+        coordinate(rect.min.x),
+        coordinate(rect.min.y),
+        coordinate(width),
+        coordinate(height),
+        coordinate(rect.center().x),
+        coordinate(rect.center().y),
+    )
+}
+
 fn coordinate(value: f32) -> String {
     let value = if value.abs() < f32::EPSILON {
         0.0
@@ -610,6 +940,132 @@ mod tests {
     }
 
     #[test]
+    fn illegal_overlap_detection_reports_a_text_run_colliding_with_a_button() {
+        let harness = Harness::new_ui(|ui| {
+            let rect = Rect::from_min_size(ui.min_rect().min, egui::vec2(180.0, 28.0));
+            ui.put(rect, egui::Label::new("Overlapping text"));
+            ui.put(rect, egui::Button::new("Colliding button"));
+        });
+
+        let overlaps = harness.illegal_accessibility_overlaps(&AccessibilityTreeOptions::default());
+        let message = illegal_overlaps_message(&overlaps);
+
+        assert!(
+            !overlaps.is_empty(),
+            "the deliberately bad UI must be rejected"
+        );
+        assert!(message.contains("TextRun value=\"Overlapping text\""));
+        assert!(message.contains("Button name=\"Colliding button\""));
+        assert!(message.contains("overlaps"));
+    }
+
+    #[test]
+    fn overlap_detection_allows_related_text_and_edge_touching_widgets() {
+        let harness = Harness::new_ui(|ui| {
+            ui.label("A label owns this text run");
+            let left = Rect::from_min_size(
+                ui.min_rect().min + egui::vec2(0.0, 40.0),
+                egui::vec2(80.0, 28.0),
+            );
+            let right = Rect::from_min_size(left.right_top(), egui::vec2(80.0, 28.0));
+            ui.put(left, egui::Button::new("Left"));
+            ui.put(right, egui::Button::new("Right"));
+        });
+
+        assert!(
+            harness
+                .illegal_accessibility_overlaps(&AccessibilityTreeOptions::default())
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn overlap_detection_automatically_ignores_a_foreground_area() {
+        let harness = Harness::new_ui(|ui| {
+            let rect = Rect::from_min_size(ui.min_rect().min, egui::vec2(180.0, 28.0));
+            ui.put(rect, egui::Button::new("Underlying button"));
+            egui::Area::new(egui::Id::new("overlap-test-area"))
+                .order(egui::Order::Foreground)
+                .fixed_pos(rect.min)
+                .show(ui.ctx(), |ui| {
+                    ui.add_sized(rect.size(), egui::Button::new("Foreground button"));
+                });
+        });
+
+        assert!(
+            harness
+                .illegal_accessibility_overlaps(&AccessibilityTreeOptions::default())
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn overlap_detection_ignores_nonvisual_semantic_annotations() {
+        let harness = Harness::new_ui(|ui| {
+            let rect = Rect::from_min_size(ui.min_rect().min, egui::vec2(180.0, 28.0));
+            ui.put(rect, egui::Label::new("Visible text"));
+            let annotation = ui.interact(
+                rect,
+                egui::Id::new("nonvisual-semantic-annotation"),
+                egui::Sense::hover(),
+            );
+            annotation.widget_info(|| {
+                egui::WidgetInfo::labeled(
+                    egui::WidgetType::Label,
+                    true,
+                    "Validation error annotation",
+                )
+            });
+        });
+
+        assert!(
+            harness
+                .illegal_accessibility_overlaps(&AccessibilityTreeOptions::default())
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn overlap_detection_respects_scrollbar_clip_bounds() {
+        let harness = Harness::new_ui(|ui| {
+            egui::ScrollArea::vertical()
+                .max_height(48.0)
+                .show(ui, |ui| {
+                    for index in 0..10 {
+                        ui.add_sized(
+                            egui::vec2(160.0, 20.0),
+                            egui::Button::new(format!("Scrollable item {index}")),
+                        );
+                    }
+                });
+            ui.label("Footer below the scroll area");
+        });
+
+        assert!(
+            harness
+                .illegal_accessibility_overlaps(&AccessibilityTreeOptions::default())
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn overlap_detection_can_be_disabled_for_an_exceptional_test() {
+        let harness = Harness::new_ui(|ui| {
+            let rect = Rect::from_min_size(ui.min_rect().min, egui::vec2(180.0, 28.0));
+            ui.put(rect, egui::Label::new("Overlapping text"));
+            ui.put(rect, egui::Button::new("Colliding button"));
+        });
+
+        assert!(
+            harness
+                .illegal_accessibility_overlaps(
+                    &AccessibilityTreeOptions::new().check_illegal_overlaps(false),
+                )
+                .is_empty()
+        );
+    }
+
+    #[test]
     fn snapshot_paths_keep_text_fixtures_distinct_from_image_snapshots() {
         let paths = snapshot_paths(Path::new("tests/snapshots"), "buttons/variants");
 
@@ -642,6 +1098,7 @@ mod tests {
             PathBuf::from("custom-snapshots")
         );
         assert!(!options.accessibility.include_structural_nodes);
+        assert!(options.accessibility.check_illegal_overlaps);
 
         let strict = HarnessSnapshotOptions::strict("strict");
         assert_eq!(strict.pixel.threshold, SnapshotOptions::new().threshold);
@@ -667,9 +1124,41 @@ mod tests {
             assert!(output_path.join("example.png").exists());
             assert!(output_path.join("example.accessibility.txt").exists());
         } else {
-            assert!(matches!(result, Err(UiHarnessSnapshotError::Both { .. })));
+            let error = result.expect_err("missing fixtures must fail");
+            assert!(error.pixel.is_some());
+            assert!(error.accessibility.is_some());
+            assert!(error.overlaps.is_empty());
             assert!(output_path.join("example.new.png").exists());
             assert!(output_path.join("example.accessibility.new.txt").exists());
+        }
+
+        std::fs::remove_dir_all(output_path).unwrap();
+    }
+
+    #[test]
+    fn ui_harness_rejects_illegal_overlaps_even_when_updating_snapshots() {
+        let output_path = test_directory();
+        let mut harness = Harness::new_ui(|ui| {
+            let rect = Rect::from_min_size(ui.min_rect().min, egui::vec2(180.0, 28.0));
+            ui.put(rect, egui::Label::new("Overlapping text"));
+            ui.put(rect, egui::Button::new("Colliding button"));
+        });
+
+        let error = harness
+            .try_ui_harness(HarnessSnapshotOptions::new("overlap").output_path(&output_path))
+            .expect_err("an illegal overlap must always fail the combined snapshot");
+
+        assert!(!error.overlaps.is_empty());
+        if SnapshotMode::from_env().is_update() {
+            assert!(error.pixel.is_none());
+            assert!(error.accessibility.is_none());
+            assert!(output_path.join("overlap.png").exists());
+            assert!(output_path.join("overlap.accessibility.txt").exists());
+        } else {
+            assert!(error.pixel.is_some());
+            assert!(error.accessibility.is_some());
+            assert!(output_path.join("overlap.new.png").exists());
+            assert!(output_path.join("overlap.accessibility.new.txt").exists());
         }
 
         std::fs::remove_dir_all(output_path).unwrap();
