@@ -1,8 +1,6 @@
 TODO list:
 
 * Code editor
-    * Intellisense
-    * Show server errors as line level errors
     * Search function
 * Multi select resources
 * Ownership references
@@ -10,19 +8,17 @@ TODO list:
 * Debug shell to pod
 * Resource details view
 * Scale resource where the resource type supports a scale endpoint
-* Make columns on table user configuable (And remember per resource type in user's config folder)
 * Add explicit support for Helm
 * Blade component should support back/forward navigation via relevant buttons on mouse
 * Create a shell on a node
 * Display resource usages of pods
-* Allow resizing the columns in a table on-the-fly
-* Take a look at the build warnings
 * Force delete by removing finalizers
 * Connect to kubernetes cluster by discovering via the Az cli/AWS cli/Tailscale
 * Add option for whole word matching only in search
 * Add option for case-sensitive matching in search
-* Many of the popups seems to let clicks pass through to whatever is underneath. Especially bad when the resource table is below.
-
+* Table improvements
+    * Make columns on table user configuable (And remember per resource type in user's config folder)
+    * Allow resizing the columns in a table on-the-fly
 
 
 Deferred
