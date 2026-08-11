@@ -501,6 +501,15 @@ pub(super) struct PendingDeploymentRestart {
 }
 
 #[derive(Debug, Clone)]
+pub(super) struct PendingScale {
+    pub(super) api_resource: ApiResource,
+    pub(super) resource_name: String,
+    pub(super) namespace: Option<String>,
+    pub(super) current_replicas: i32,
+    pub(super) desired_replicas: String,
+}
+
+#[derive(Debug, Clone)]
 pub(super) struct ResourceDetailPanelState {
     pub(super) navigator: BladeNavigator<ResourceDetailHistoryEntry>,
     pub(super) selection_generation: u64,
@@ -690,6 +699,10 @@ pub(super) enum ResourceAction {
         name: String,
         namespace: String,
     },
+    RequestScale {
+        name: String,
+        namespace: Option<String>,
+    },
     SaveData {
         expected_values: BTreeMap<String, String>,
         updated_values: BTreeMap<String, String>,
@@ -727,6 +740,7 @@ pub(super) struct ClusterState {
     pub(super) selected_namespaces: HashSet<String>,
     pub(super) resource_navigation: ResourceNavigation,
     pub(super) custom_resource_columns: BTreeMap<ApiResource, Vec<CustomResourceColumn>>,
+    pub(super) scalable_api_resources: BTreeSet<ApiResource>,
     pub(super) selected_api_resource: Option<ApiResource>,
     pub(super) resource_cache: HashMap<ResourceWatchKey, ResourceWatchState>,
     pub(super) active_watchers: HashSet<ResourceWatchKey>,
@@ -736,6 +750,8 @@ pub(super) struct ClusterState {
     pub(super) pending_delete: Option<PendingDelete>,
     pub(super) pending_deployment_restart: Option<PendingDeploymentRestart>,
     pub(super) deployment_restart_error: Option<String>,
+    pub(super) pending_scale: Option<PendingScale>,
+    pub(super) scale_error: Option<String>,
 }
 
 #[derive(Debug)]
@@ -1523,6 +1539,18 @@ impl UiState {
                                 cluster.deployment_restart_error = Some(message);
                             }
                         }
+                        Some(crate::worker::WorkerCommand::GetResourceScale {
+                            cluster_key,
+                            ..
+                        })
+                        | Some(crate::worker::WorkerCommand::UpdateResourceScale {
+                            cluster_key,
+                            ..
+                        }) => {
+                            if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
+                                cluster.scale_error = Some(message);
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -1550,6 +1578,7 @@ impl UiState {
                                 selected_api_resource: None,
                                 resource_navigation: ResourceNavigation::default(),
                                 custom_resource_columns: BTreeMap::new(),
+                                scalable_api_resources: BTreeSet::new(),
                                 resource_cache: HashMap::new(),
                                 active_watchers: HashSet::new(),
                                 resource_searches: HashMap::new(),
@@ -1558,6 +1587,8 @@ impl UiState {
                                 pending_delete: None,
                                 pending_deployment_restart: None,
                                 deployment_restart_error: None,
+                                pending_scale: None,
+                                scale_error: None,
                             },
                         );
                     }
@@ -1620,12 +1651,14 @@ impl UiState {
                 WorkerResult::KubernetesApisLoaded {
                     api_resources,
                     cluster_key,
+                    scalable_api_resources,
                 } => {
                     info!("Kubernetes API loaded");
                     let restored_api_resource =
                         self.restored_api_resource(cluster_key, &api_resources);
                     if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
                         cluster.resource_navigation = build_resource_navigation(api_resources);
+                        cluster.scalable_api_resources = scalable_api_resources;
                         cluster.api_resources_load = ClusterLoadState::Ready;
                     }
                     if let Some(api_resource) = restored_api_resource {
@@ -2035,6 +2068,32 @@ impl UiState {
                     ..
                 } => {
                     info!("Deployment rollout restart requested: {resource_name} in {namespace}");
+                }
+                WorkerResult::ResourceScaleFetched {
+                    cluster_key,
+                    api_resource,
+                    namespace,
+                    resource_name,
+                    replicas,
+                } => {
+                    if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
+                        cluster.pending_scale = Some(PendingScale {
+                            api_resource,
+                            resource_name,
+                            namespace,
+                            current_replicas: replicas,
+                            desired_replicas: replicas.to_string(),
+                        });
+                    }
+                }
+                WorkerResult::ResourceScaleUpdated {
+                    cluster_key,
+                    resource_name,
+                } => {
+                    info!("Resource scale updated: {resource_name}");
+                    if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
+                        cluster.pending_scale = None;
+                    }
                 }
                 WorkerResult::ResourceDataUpdateCompleted {
                     cluster_key,

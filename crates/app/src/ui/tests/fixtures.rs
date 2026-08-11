@@ -10,7 +10,7 @@ use crate::resource_table::{CellValue, READY_COLUMN, RESTARTS_COLUMN, STATUS_COL
 use crate::terminal_launcher::TerminalLauncher;
 use crate::worker::WorkerTrait;
 use egui_kittest::Harness;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 pub(super) fn application_harness<W: WorkerTrait + 'static>() -> Harness<'static, MyEguiApp<W>> {
     let mut harness = Harness::builder().build_eframe(|cc| MyEguiApp::<W>::new(cc));
@@ -38,6 +38,7 @@ pub(super) fn fixture_cluster(cluster_key: i32, name: &str) -> ClusterState {
         selected_namespaces: HashSet::new(),
         resource_navigation: ResourceNavigation::default(),
         custom_resource_columns: BTreeMap::new(),
+        scalable_api_resources: BTreeSet::new(),
         selected_api_resource: None,
         resource_cache: HashMap::new(),
         active_watchers: HashSet::new(),
@@ -47,6 +48,8 @@ pub(super) fn fixture_cluster(cluster_key: i32, name: &str) -> ClusterState {
         pending_delete: None,
         pending_deployment_restart: None,
         deployment_restart_error: None,
+        pending_scale: None,
+        scale_error: None,
     }
 }
 

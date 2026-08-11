@@ -39,6 +39,12 @@ enum ResourceTableRow<'a> {
     HiddenBySearch(usize),
 }
 
+#[derive(Clone, Copy)]
+struct ResourceActionAvailability {
+    enabled: bool,
+    supports_scale: bool,
+}
+
 enum NamespaceSelection {
     Replace(String),
     Toggle(String),
@@ -201,7 +207,10 @@ pub(super) fn show(
                     &filtered_resources.resources,
                     all_resources.len() - filtered_resources.resources.len(),
                     api_resource.namespaced && cluster.selected_namespaces.len() > 1,
-                    cluster.resource_detail_panel.is_none(),
+                    ResourceActionAvailability {
+                        enabled: cluster.resource_detail_panel.is_none(),
+                        supports_scale: cluster.scalable_api_resources.contains(api_resource),
+                    },
                 ) {
                     match action {
                         ResourceAction::OpenDetails {
@@ -223,6 +232,14 @@ pub(super) fn show(
                             cluster.pending_deployment_restart = Some(PendingDeploymentRestart {
                                 resource_name: name,
                                 namespace,
+                            });
+                        }
+                        ResourceAction::RequestScale { name, namespace } => {
+                            commands_to_send.push(WorkerCommand::GetResourceScale {
+                                cluster_key: cluster.cluster_key,
+                                api_resource: api_resource.clone(),
+                                namespace,
+                                resource_name: name,
                             });
                         }
                         ResourceAction::ViewLogs {
@@ -633,7 +650,7 @@ fn show_resource_table(
     resources: &[MinimalResource],
     hidden_resource_count: usize,
     show_namespace_column: bool,
-    allow_actions: bool,
+    actions: ResourceActionAvailability,
 ) -> Option<ResourceAction> {
     let pending_action = RefCell::new(None);
     let mut rows = resources
@@ -683,7 +700,7 @@ fn show_resource_table(
             let actions_index = age_index + 1;
             match row {
                 ResourceTableRow::Resource(resource) => match column_index {
-                    0 if allow_actions => {
+                    0 if actions.enabled => {
                         let response = TableRowBuilder::clickable_text(
                             ui,
                             &resource.name,
@@ -703,6 +720,7 @@ fn show_resource_table(
                                 api_resource,
                                 resource,
                                 &resource.log_containers,
+                                actions.supports_scale,
                                 &mut pending_action.borrow_mut(),
                             );
                         });
@@ -724,7 +742,7 @@ fn show_resource_table(
                             && api_resource.kind == "Pod"
                             && let Some(CellValue::Text(node_name)) = resource.cells.get(&column.id)
                         {
-                            if allow_actions && node_name != "-" {
+                            if actions.enabled && node_name != "-" {
                                 let response = TableRowBuilder::clickable_text(
                                     ui,
                                     node_name,
@@ -747,6 +765,7 @@ fn show_resource_table(
                                         api_resource,
                                         resource,
                                         &resource.log_containers,
+                                        actions.supports_scale,
                                         &mut pending_action.borrow_mut(),
                                     );
                                 });
@@ -760,11 +779,12 @@ fn show_resource_table(
                     index if index == age_index => {
                         TableRowBuilder::text(ui, &resource.age(), false)
                     }
-                    index if index == actions_index && allow_actions => {
+                    index if index == actions_index && actions.enabled => {
                         show_resource_actions(
                             ui,
                             api_resource,
                             resource,
+                            actions.supports_scale,
                             &mut pending_action.borrow_mut(),
                         );
                     }
@@ -791,13 +811,14 @@ fn show_resource_table(
                         .clone()
                         .on_hover_text("Kubernetes has not assigned this Pod to a Node.");
                 }
-                if allow_actions {
+                if actions.enabled {
                     MoreButton::show_context_menu(row_response, |menu| {
                         show_resource_action_items(
                             menu,
                             api_resource,
                             resource,
                             &resource.log_containers,
+                            actions.supports_scale,
                             &mut pending_action.borrow_mut(),
                         );
                     });
@@ -812,6 +833,7 @@ fn show_resource_actions(
     ui: &mut egui::Ui,
     api_resource: &crate::api_resource::ApiResource,
     resource: &MinimalResource,
+    supports_scale: bool,
     pending_action: &mut Option<ResourceAction>,
 ) {
     let mut action_ui = ui.new_child(
@@ -834,6 +856,7 @@ fn show_resource_actions(
             api_resource,
             resource,
             &resource.log_containers,
+            supports_scale,
             pending_action,
         );
     });

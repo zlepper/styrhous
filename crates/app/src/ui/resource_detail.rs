@@ -339,6 +339,14 @@ fn show_legacy(
                                 namespace,
                             });
                         }
+                        ResourceAction::RequestScale { name, namespace } => {
+                            commands_to_send.push(WorkerCommand::GetResourceScale {
+                                cluster_key: cluster.cluster_key,
+                                api_resource: panel_api_resource(cluster),
+                                namespace,
+                                resource_name: name,
+                            });
+                        }
                         ResourceAction::SaveData {
                             expected_values,
                             updated_values,
@@ -447,6 +455,7 @@ fn show_shared_blade(
     let Some(cluster) = ui_state.clusters.get_mut(&cluster_key) else {
         return;
     };
+    let scalable_api_resources = cluster.scalable_api_resources.clone();
     let Some(panel) = cluster.resource_detail_panel.as_mut() else {
         return;
     };
@@ -457,7 +466,14 @@ fn show_shared_blade(
     let response = stack.show(
         ctx,
         &mut panel.navigator,
-        |ui, entry, layer| show_resource_detail_header(ui, entry, layer.is_foreground),
+        |ui, entry, layer| {
+            show_resource_detail_header(
+                ui,
+                entry,
+                layer.is_foreground,
+                scalable_api_resources.contains(&entry.api_resource),
+            )
+        },
         |ui, entry, layer| {
             show_resource_detail_blade(
                 ui,
@@ -535,6 +551,16 @@ fn show_shared_blade(
                     cluster.pending_deployment_restart = Some(PendingDeploymentRestart {
                         resource_name: name,
                         namespace,
+                    });
+                }
+            }
+            ResourceAction::RequestScale { name, namespace } => {
+                if let Some(cluster) = ui_state.clusters.get(&cluster_key) {
+                    commands_to_send.push(WorkerCommand::GetResourceScale {
+                        cluster_key: cluster.cluster_key,
+                        api_resource: panel_api_resource(cluster),
+                        namespace,
+                        resource_name: name,
                     });
                 }
             }
@@ -1094,6 +1120,7 @@ fn show_resource_detail_header(
     ui: &mut egui::Ui,
     entry: &ResourceDetailHistoryEntry,
     is_foreground: bool,
+    supports_scale: bool,
 ) -> BladeResult {
     let mut result = BladeResult::default();
     let log_containers = entry
@@ -1124,6 +1151,7 @@ fn show_resource_detail_header(
                 &entry.api_resource,
                 &resource,
                 &resource.log_containers,
+                supports_scale,
                 &mut result.action,
             );
         });

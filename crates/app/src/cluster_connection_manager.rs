@@ -16,7 +16,6 @@ use futures_util::future::try_join_all;
 use futures_util::pin_mut;
 use futures_util::stream::StreamExt;
 use http::Request;
-use itertools::Itertools;
 use k8s_openapi::api::apps::v1::{Deployment, ReplicaSet};
 use k8s_openapi::api::batch::v1::Job;
 use k8s_openapi::api::core::v1::{ConfigMap, Event as KubernetesEvent, Namespace, Pod, Secret};
@@ -125,6 +124,7 @@ impl ClusterConnection {
                             .send(WorkerResult::KubernetesApisLoaded {
                                 cluster_key,
                                 api_resources: inspection.api_resources,
+                                scalable_api_resources: inspection.scalable_api_resources,
                             })
                             .log_if_error("Failed to send kubernetes API resources");
                         event_output
@@ -160,8 +160,14 @@ struct KubernetesApiInspector {
 
 struct ApiInspection {
     api_resources: Vec<ApiResource>,
+    scalable_api_resources: BTreeSet<ApiResource>,
     custom_resource_columns: BTreeMap<ApiResource, Vec<CustomResourceColumn>>,
     resource_schemas: BTreeMap<ApiResource, ResourceSchema>,
+}
+
+struct DiscoveredApiResources {
+    api_resources: Vec<ApiResource>,
+    scalable_api_resources: BTreeSet<ApiResource>,
 }
 
 impl KubernetesApiInspector {
@@ -169,7 +175,7 @@ impl KubernetesApiInspector {
         &self,
         api_group: APIGroup,
         versions: Vec<GroupVersionForDiscovery>,
-    ) -> Result<Vec<ApiResource>> {
+    ) -> Result<DiscoveredApiResources> {
         let tasks = versions.iter().map(|api_group_version| {
             self.client
                 .list_api_group_resources(&api_group_version.group_version)
@@ -180,10 +186,11 @@ impl KubernetesApiInspector {
             .await?
             .iter()
             .zip(versions)
-            .flat_map(|(resources, version)| {
+            .map(|(resources, version)| {
                 let version_name = version.version.clone();
 
-                let mut temp = Vec::new();
+                let mut api_resources = Vec::new();
+                let mut scalable_api_resources = BTreeSet::new();
 
                 for resource in &resources.resources {
                     // Skip resources like "Status" and "Scale"
@@ -191,46 +198,73 @@ impl KubernetesApiInspector {
                         continue;
                     }
 
-                    temp.push(ApiResource {
+                    let api_resource = ApiResource {
                         group: api_group_name.clone(),
                         version: version_name.clone(),
                         kind: resource.kind.clone(),
                         name: resource.name.clone(),
                         namespaced: resource.namespaced,
-                    });
+                    };
+                    if supports_scale_subresource(&resources.resources, &resource.name) {
+                        scalable_api_resources.insert(api_resource.clone());
+                    }
+                    api_resources.push(api_resource);
                 }
 
-                temp
+                DiscoveredApiResources {
+                    api_resources,
+                    scalable_api_resources,
+                }
             })
-            .collect();
+            .fold(
+                DiscoveredApiResources {
+                    api_resources: Vec::new(),
+                    scalable_api_resources: BTreeSet::new(),
+                },
+                |mut all, discovered| {
+                    all.api_resources.extend(discovered.api_resources);
+                    all.scalable_api_resources
+                        .extend(discovered.scalable_api_resources);
+                    all
+                },
+            );
 
         Ok(resources)
     }
 
-    async fn get_core_api_resources(&self) -> Result<Vec<ApiResource>> {
+    async fn get_core_api_resources(&self) -> Result<DiscoveredApiResources> {
         let core_api_versions = self.client.list_core_api_versions().await?;
 
-        let mut resources = Vec::new();
+        let mut discovered = DiscoveredApiResources {
+            api_resources: Vec::new(),
+            scalable_api_resources: BTreeSet::new(),
+        };
 
         for version in &core_api_versions.versions {
             let api_resources = self.client.list_core_api_resources(version).await?;
 
-            for resource in api_resources.resources {
+            for resource in &api_resources.resources {
                 if resource.name.contains("/") {
                     continue;
                 }
 
-                resources.push(ApiResource {
+                let api_resource = ApiResource {
                     group: "core".to_string(),
                     version: version.clone(),
                     kind: resource.kind.clone(),
                     name: resource.name.clone(),
                     namespaced: resource.namespaced,
-                });
+                };
+                if supports_scale_subresource(&api_resources.resources, &resource.name) {
+                    discovered
+                        .scalable_api_resources
+                        .insert(api_resource.clone());
+                }
+                discovered.api_resources.push(api_resource);
             }
         }
 
-        Ok(resources)
+        Ok(discovered)
     }
 
     pub async fn inspect_api(&self) -> Result<ApiInspection> {
@@ -248,16 +282,21 @@ impl KubernetesApiInspector {
 
         let core_resources = self.get_core_api_resources().await?;
 
-        let mut resources = try_join_all(tasks)
-            .await?
-            .into_iter()
-            .flatten()
-            .collect_vec();
-        resources.extend(core_resources);
+        let discovered_resources =
+            try_join_all(tasks)
+                .await?
+                .into_iter()
+                .fold(core_resources, |mut all, discovered| {
+                    all.api_resources.extend(discovered.api_resources);
+                    all.scalable_api_resources
+                        .extend(discovered.scalable_api_resources);
+                    all
+                });
 
         let (custom_resource_columns, resource_schemas) = self.custom_resource_metadata().await;
         Ok(ApiInspection {
-            api_resources: resources,
+            api_resources: discovered_resources.api_resources,
+            scalable_api_resources: discovered_resources.scalable_api_resources,
             custom_resource_columns,
             resource_schemas,
         })
@@ -1867,6 +1906,68 @@ async fn create_dynamic_api(
     Ok(api)
 }
 
+fn supports_scale_subresource(
+    resources: &[k8s_openapi::apimachinery::pkg::apis::meta::v1::APIResource],
+    resource_name: &str,
+) -> bool {
+    let scale_name = format!("{resource_name}/scale");
+    resources.iter().any(|resource| {
+        resource.name == scale_name
+            && resource.verbs.iter().any(|verb| verb == "get")
+            && resource.verbs.iter().any(|verb| verb == "patch")
+    })
+}
+
+/// Fetch the desired replica count through a dynamically discovered Scale subresource.
+pub async fn get_resource_scale(
+    cluster_key: i32,
+    client: kube::Client,
+    api_resource: ApiResource,
+    namespace: Option<String>,
+    resource_name: String,
+) -> Result<WorkerResult> {
+    let api = create_dynamic_api(&client, &api_resource, namespace.as_deref()).await?;
+    let scale = api.get_scale(&resource_name).await?;
+    let replicas = scale
+        .spec
+        .context("Scale endpoint returned no desired replica count")?
+        .replicas
+        .context("Scale endpoint returned no desired replica count")?;
+
+    Ok(WorkerResult::ResourceScaleFetched {
+        cluster_key,
+        api_resource,
+        namespace,
+        resource_name,
+        replicas,
+    })
+}
+
+/// Update the desired replica count through a dynamically discovered Scale subresource.
+pub async fn update_resource_scale(
+    cluster_key: i32,
+    client: kube::Client,
+    api_resource: ApiResource,
+    namespace: Option<String>,
+    resource_name: String,
+    replicas: i32,
+) -> Result<WorkerResult> {
+    let api = create_dynamic_api(&client, &api_resource, namespace.as_deref()).await?;
+    let patch: serde_yaml::Value =
+        serde_yaml::from_str(&format!("spec:\n  replicas: {replicas}\n"))?;
+    api.patch_scale(
+        &resource_name,
+        &kube::api::PatchParams::default(),
+        &kube::api::Patch::Merge(&patch),
+    )
+    .await?;
+
+    Ok(WorkerResult::ResourceScaleUpdated {
+        cluster_key,
+        resource_name,
+    })
+}
+
 /// Fetch a resource's full YAML representation
 pub async fn get_resource_yaml(
     editor_id: u64,
@@ -2265,7 +2366,32 @@ mod tests {
     };
     use k8s_openapi::api::apps::v1::{Deployment, DeploymentStatus};
     use k8s_openapi::api::core::v1::{ContainerStatus, Pod, PodStatus};
-    use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
+    use k8s_openapi::apimachinery::pkg::apis::meta::v1::{APIResource, ObjectMeta};
+
+    #[test]
+    fn scale_capability_requires_get_and_patch_on_the_parent_subresource() {
+        let resources = vec![
+            APIResource {
+                name: "deployments/scale".into(),
+                verbs: vec!["get".into(), "patch".into()],
+                ..Default::default()
+            },
+            APIResource {
+                name: "deployments/status".into(),
+                verbs: vec!["get".into(), "patch".into()],
+                ..Default::default()
+            },
+            APIResource {
+                name: "statefulsets/scale".into(),
+                verbs: vec!["get".into()],
+                ..Default::default()
+            },
+        ];
+
+        assert!(supports_scale_subresource(&resources, "deployments"));
+        assert!(!supports_scale_subresource(&resources, "statefulsets"));
+        assert!(!supports_scale_subresource(&resources, "replicasets"));
+    }
 
     #[test]
     fn environment_variable_expansion_uses_earlier_values_and_preserves_unknown_references() {

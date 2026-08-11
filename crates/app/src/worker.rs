@@ -1,9 +1,10 @@
 use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::{
     Cluster, ClusterConnection, ResourceDataUpdateRequest, ResourceDetailWatchRequest,
-    ResourceYamlValidationRequest, apply_resource_yaml, delete_resource, get_resource_schema,
-    get_resource_yaml, reload_kubeconfig, restart_deployment, start_cluster_connection,
-    start_resource_watcher, update_resource_data, validate_resource_yaml, watch_resource_detail,
+    ResourceYamlValidationRequest, apply_resource_yaml, delete_resource, get_resource_scale,
+    get_resource_schema, get_resource_yaml, reload_kubeconfig, restart_deployment,
+    start_cluster_connection, start_resource_watcher, update_resource_data, update_resource_scale,
+    validate_resource_yaml, watch_resource_detail,
 };
 use crate::helpers::ResultExt;
 use crate::log_store::LogStoreAppender;
@@ -209,6 +210,19 @@ pub enum WorkerCommand {
         namespace: String,
         resource_name: String,
     },
+    GetResourceScale {
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: Option<String>,
+        resource_name: String,
+    },
+    UpdateResourceScale {
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: Option<String>,
+        resource_name: String,
+        replicas: i32,
+    },
     ApplyResourceYaml {
         editor_id: u64,
         cluster_key: i32,
@@ -294,6 +308,7 @@ pub enum WorkerResult {
     KubernetesApisLoaded {
         cluster_key: i32,
         api_resources: Vec<ApiResource>,
+        scalable_api_resources: std::collections::BTreeSet<ApiResource>,
     },
     KubernetesCustomResourceColumnsLoaded {
         cluster_key: i32,
@@ -430,6 +445,17 @@ pub enum WorkerResult {
     /// A Deployment rollout restart patch was accepted by the API server.
     DeploymentRestartCompleted {
         namespace: String,
+        resource_name: String,
+    },
+    ResourceScaleFetched {
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: Option<String>,
+        resource_name: String,
+        replicas: i32,
+    },
+    ResourceScaleUpdated {
+        cluster_key: i32,
         resource_name: String,
     },
     ResourceDataUpdateCompleted {
@@ -701,6 +727,56 @@ impl WorkerRuntime {
                     restart_deployment(client.clone(), namespace.clone(), resource_name.clone())
                         .await
                         .map(Some)
+                } else {
+                    Err(anyhow::anyhow!(
+                        "No client found for cluster_key {}",
+                        cluster_key
+                    ))
+                }
+            }
+            WorkerCommand::GetResourceScale {
+                cluster_key,
+                api_resource,
+                namespace,
+                resource_name,
+            } => {
+                let clients = shared.clients.read().await;
+                if let Some(client) = clients.get(cluster_key) {
+                    get_resource_scale(
+                        *cluster_key,
+                        client.clone(),
+                        api_resource.clone(),
+                        namespace.clone(),
+                        resource_name.clone(),
+                    )
+                    .await
+                    .map(Some)
+                } else {
+                    Err(anyhow::anyhow!(
+                        "No client found for cluster_key {}",
+                        cluster_key
+                    ))
+                }
+            }
+            WorkerCommand::UpdateResourceScale {
+                cluster_key,
+                api_resource,
+                namespace,
+                resource_name,
+                replicas,
+            } => {
+                let clients = shared.clients.read().await;
+                if let Some(client) = clients.get(cluster_key) {
+                    update_resource_scale(
+                        *cluster_key,
+                        client.clone(),
+                        api_resource.clone(),
+                        namespace.clone(),
+                        resource_name.clone(),
+                        *replicas,
+                    )
+                    .await
+                    .map(Some)
                 } else {
                     Err(anyhow::anyhow!(
                         "No client found for cluster_key {}",
