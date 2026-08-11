@@ -289,7 +289,7 @@ fn show_code_editor(
     let mut caret_rect = None;
     let scroll_target = editor.scroll_to_diagnostic.take();
     let fallback_completion_position = ui.clip_rect().left_top() + egui::vec2(74.0, 68.0);
-    egui::ScrollArea::both()
+    components::scroll::both()
         .id_salt(("yaml-editor-scroll", editor.id))
         .auto_shrink([false, false])
         .show(ui, |ui| {
@@ -444,7 +444,7 @@ fn show_code_editor(
                                 ),
                             );
                         } else {
-                            egui::ScrollArea::vertical()
+                            components::scroll::vertical()
                                 .id_salt(("yaml-editor-suggestion-list", editor.id))
                                 .max_height(COMPLETION_LIST_MAX_HEIGHT)
                                 .auto_shrink([false, true])
@@ -973,7 +973,7 @@ fn show_diagnostics(ctx: &egui::Context, ui: &mut egui::Ui, editor: &mut YamlEdi
             if showing_retained_diagnostics {
                 status_indicator(ui, gray::_400, "Validating updated YAML…");
             }
-            egui::ScrollArea::vertical()
+            components::scroll::vertical()
                 .id_salt(("yaml-editor-diagnostic-list", editor.id))
                 .max_height(DIAGNOSTIC_LIST_MAX_HEIGHT)
                 .min_scrolled_height(DIAGNOSTIC_LIST_MAX_HEIGHT)

@@ -31,6 +31,7 @@ pub mod fuzzy;
 pub mod icons;
 pub mod interaction;
 pub mod more_button;
+pub mod scroll;
 pub mod search;
 pub mod sidebar;
 pub mod table;

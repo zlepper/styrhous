@@ -669,7 +669,7 @@ fn show_layer<R>(
             ui.set_width(WIDTH);
             ui.set_height(height(viewport));
             ui.with_visual_transform(visual, |ui| {
-                egui::ScrollArea::vertical()
+                crate::scroll::vertical()
                     .id_salt(ui.id().with("scroll"))
                     .auto_shrink([false, false])
                     .min_scrolled_height(height(viewport))
