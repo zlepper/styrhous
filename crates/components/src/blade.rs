@@ -834,7 +834,7 @@ fn history_navigation_rect(active: Rect, history: &[(Id, Rect, usize)], rect: Re
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::UiHarnessSnapshot;
+    use crate::test_support::{AccessibilitySnapshot, UiHarnessSnapshot};
     use egui_kittest::Harness;
     use egui_kittest::kittest::Queryable;
     use std::cell::RefCell;
@@ -902,6 +902,50 @@ mod tests {
         navigator.borrow_mut().clear_transition();
         harness.run();
         harness.ui_harness("blades/history_cap");
+    }
+
+    #[test]
+    fn overlap_detection_ignores_intentionally_stacked_blade_layers() {
+        let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 1,
+            title: "First",
+        })));
+        navigator.borrow_mut().clear_transition();
+        let stack = BladeStack::new("blade-overlap-validation");
+        let navigator_for_ui = Rc::clone(&navigator);
+        let mut harness = Harness::new_ui(move |ui| {
+            stack.show_with_title(
+                ui.ctx(),
+                &mut navigator_for_ui.borrow_mut(),
+                |blade| blade.title.to_owned(),
+                render_test_blade,
+            );
+        });
+        crate::test_support::setup_egui(&mut harness);
+
+        for (id, title) in [(2, "Second"), (3, "Third")] {
+            navigator.borrow_mut().push(TestBlade { id, title });
+        }
+        navigator.borrow_mut().clear_transition();
+        harness.run();
+
+        let background_buttons: Vec<_> = harness
+            .get_all_by_label("Back in background blade")
+            .collect();
+        assert_eq!(background_buttons.len(), 2);
+        assert!(
+            background_buttons[0]
+                .rect()
+                .intersects(background_buttons[1].rect()),
+            "the test must exercise intentional blade overlap"
+        );
+        assert!(
+            harness
+                .illegal_accessibility_overlaps(
+                    &crate::test_support::AccessibilityTreeOptions::default()
+                )
+                .is_empty()
+        );
     }
 
     #[test]
