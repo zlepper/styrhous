@@ -1,3 +1,4 @@
+use crate::resource_detail::ResourceOwner;
 use crate::resource_table::{CellValue, ContainerKind};
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -17,6 +18,8 @@ pub struct MinimalResource {
     pub namespace: Option<String>,
     /// Creation timestamp
     pub creation_timestamp: Option<OffsetDateTime>,
+    /// The Kubernetes controller owner, if this resource has one.
+    pub controller_owner: Option<ResourceOwner>,
     /// Type-specific values keyed by the selected resource table definition.
     pub cells: BTreeMap<String, CellValue>,
     /// Declared Pod containers that can be selected for log streaming. This is
@@ -130,6 +133,7 @@ mod tests {
             name: "test-pod".to_string(),
             namespace: Some("default".to_string()),
             creation_timestamp: Some(now - time::Duration::hours(2)),
+            controller_owner: None,
             cells: BTreeMap::new(),
             log_containers: Vec::new(),
         };
@@ -141,6 +145,7 @@ mod tests {
             name: "test-pod".to_string(),
             namespace: Some("default".to_string()),
             creation_timestamp: Some(now - time::Duration::days(3)),
+            controller_owner: None,
             cells: BTreeMap::new(),
             log_containers: Vec::new(),
         };
@@ -152,6 +157,7 @@ mod tests {
             name: "test-pod".to_string(),
             namespace: Some("default".to_string()),
             creation_timestamp: Some(now - time::Duration::minutes(45)),
+            controller_owner: None,
             cells: BTreeMap::new(),
             log_containers: Vec::new(),
         };
@@ -163,6 +169,7 @@ mod tests {
             name: "test-pod".to_string(),
             namespace: Some("default".to_string()),
             creation_timestamp: Some(now - time::Duration::seconds(30)),
+            controller_owner: None,
             cells: BTreeMap::new(),
             log_containers: Vec::new(),
         };
@@ -176,6 +183,7 @@ mod tests {
             name: "test-pod".to_string(),
             namespace: None,
             creation_timestamp: None,
+            controller_owner: None,
             cells: BTreeMap::new(),
             log_containers: Vec::new(),
         };
@@ -189,6 +197,7 @@ mod tests {
             name: "test-resource".to_string(),
             namespace: None,
             creation_timestamp: None,
+            controller_owner: None,
             cells: BTreeMap::new(),
             log_containers: Vec::new(),
         };

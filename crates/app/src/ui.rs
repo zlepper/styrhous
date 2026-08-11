@@ -6,6 +6,7 @@ mod log_windows;
 mod resource_actions;
 mod resource_detail;
 mod resource_navigation;
+mod resource_owner;
 mod settings;
 mod state;
 mod widgets;

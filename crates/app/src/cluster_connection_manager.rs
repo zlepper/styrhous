@@ -20,7 +20,9 @@ use k8s_openapi::api::apps::v1::{Deployment, ReplicaSet};
 use k8s_openapi::api::batch::v1::Job;
 use k8s_openapi::api::core::v1::{ConfigMap, Event as KubernetesEvent, Namespace, Pod, Secret};
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::{APIGroup, GroupVersionForDiscovery};
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::{
+    APIGroup, GroupVersionForDiscovery, ObjectMeta,
+};
 use k8s_openapi::{ClusterResourceScope, NamespaceResourceScope};
 use kube::api::{DeleteParams, DynamicObject, GroupVersionKind, Preconditions};
 use kube::config::KubeConfigOptions;
@@ -934,6 +936,28 @@ fn get_resource_uid<T: Resource>(obj: &T) -> String {
     })
 }
 
+fn resource_owners(metadata: &ObjectMeta) -> Vec<ResourceOwner> {
+    metadata
+        .owner_references
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .map(|owner| ResourceOwner {
+            api_version: owner.api_version.clone(),
+            kind: owner.kind.clone(),
+            name: owner.name.clone(),
+            uid: owner.uid.clone(),
+            controller: owner.controller == Some(true),
+        })
+        .collect()
+}
+
+fn controller_owner(metadata: &ObjectMeta) -> Option<ResourceOwner> {
+    resource_owners(metadata)
+        .into_iter()
+        .find(|owner| owner.controller)
+}
+
 /// Extract a MinimalResource from a DynamicObject
 fn extract_minimal_resource(
     obj: &DynamicObject,
@@ -956,6 +980,7 @@ fn extract_minimal_resource(
         name: metadata.name.clone().unwrap_or_default(),
         namespace: metadata.namespace.clone(),
         creation_timestamp,
+        controller_owner: controller_owner(metadata),
         cells: extract_custom_cells(&obj.data, custom_columns),
         log_containers: Vec::new(),
     }
@@ -1037,6 +1062,7 @@ pub(crate) fn minimal_resource_from_typed<T: Resource>(
         name: metadata.name.clone().unwrap_or_default(),
         namespace: metadata.namespace.clone(),
         creation_timestamp,
+        controller_owner: controller_owner(metadata),
         cells,
         log_containers: Vec::new(),
     }
@@ -1646,14 +1672,7 @@ async fn resource_detail_from_dynamic(
         is_deleting: metadata.deletion_timestamp.is_some(),
         finalizers: metadata.finalizers.clone().unwrap_or_default(),
         creation_timestamp,
-        owner: metadata
-            .owner_references
-            .as_ref()
-            .and_then(|owners| owners.first())
-            .map(|owner| ResourceOwner {
-                kind: owner.kind.clone(),
-                name: owner.name.clone(),
-            }),
+        owners: resource_owners(metadata),
         labels: metadata.labels.clone().unwrap_or_default(),
         annotations: metadata.annotations.clone().unwrap_or_default(),
         payload: resource_handlers::detail_payload(&api_resource, &object),
@@ -2436,7 +2455,72 @@ mod tests {
     };
     use k8s_openapi::api::apps::v1::{Deployment, DeploymentStatus};
     use k8s_openapi::api::core::v1::{ContainerStatus, Pod, PodStatus};
-    use k8s_openapi::apimachinery::pkg::apis::meta::v1::{APIResource, ObjectMeta};
+    use k8s_openapi::apimachinery::pkg::apis::meta::v1::{APIResource, ObjectMeta, OwnerReference};
+
+    #[test]
+    fn resource_owners_preserve_all_references_and_identify_the_controller() {
+        let metadata = ObjectMeta {
+            owner_references: Some(vec![
+                OwnerReference {
+                    api_version: "example.dev/v1".into(),
+                    kind: "Backup".into(),
+                    name: "api-backup".into(),
+                    uid: "backup-uid".into(),
+                    controller: Some(false),
+                    block_owner_deletion: None,
+                },
+                OwnerReference {
+                    api_version: "apps/v1".into(),
+                    kind: "ReplicaSet".into(),
+                    name: "api-7b948f".into(),
+                    uid: "replicaset-uid".into(),
+                    controller: Some(true),
+                    block_owner_deletion: None,
+                },
+            ]),
+            ..Default::default()
+        };
+
+        let owners = resource_owners(&metadata);
+        let dynamic_resource = extract_minimal_resource(
+            &DynamicObject {
+                types: None,
+                metadata: metadata.clone(),
+                data: k8s_openapi::serde_json::json!({}),
+            },
+            &[],
+        );
+        let typed_resource = minimal_resource_from_typed(
+            &Pod {
+                metadata: metadata.clone(),
+                ..Default::default()
+            },
+            BTreeMap::new(),
+        );
+
+        assert_eq!(owners.len(), 2);
+        assert_eq!(owners[0].label(), "Backup / api-backup");
+        assert_eq!(owners[1].uid, "replicaset-uid");
+        assert_eq!(
+            controller_owner(&metadata).map(|owner| owner.name),
+            Some("api-7b948f".into())
+        );
+        assert_eq!(
+            dynamic_resource.controller_owner.map(|owner| owner.name),
+            Some("api-7b948f".into())
+        );
+        assert_eq!(
+            typed_resource.controller_owner.map(|owner| owner.name),
+            Some("api-7b948f".into())
+        );
+        assert_eq!(
+            owners
+                .into_iter()
+                .find(|owner| owner.controller)
+                .map(|owner| owner.name),
+            Some("api-7b948f".into())
+        );
+    }
 
     #[test]
     fn scale_capability_requires_get_and_patch_on_the_parent_subresource() {

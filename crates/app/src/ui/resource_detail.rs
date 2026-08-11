@@ -1,10 +1,12 @@
 use super::resource_actions::show_resource_action_items;
+use super::resource_owner;
 use super::state::{
     PendingDelete, PendingDeploymentRestart, PendingForceDelete, ResourceAction,
     ResourceDetailHistoryEntry, ResourceDetailPanelState, UiState,
 };
 use super::widgets::show_resource_cell;
 use crate::minimal_resource::{MinimalResource, format_age};
+use crate::resource_catalog::ResourceNavigation;
 use crate::resource_detail::{
     ConfigMapDetail, ManagedResource, NodeDetail, PodDetail, ResourceDetail, ResourceDetailPayload,
     ResourceEvent, SecretDetail,
@@ -257,6 +259,7 @@ fn show_legacy(
                     let entry = panel.navigator.current_mut();
                     let result = show_resource_detail_blade(
                         ui,
+                        &ResourceNavigation::default(),
                         &entry.api_resource,
                         &entry.namespace,
                         &entry.resource_name,
@@ -470,6 +473,7 @@ fn show_shared_blade(
         return;
     };
     let scalable_api_resources = cluster.scalable_api_resources.clone();
+    let resource_navigation = cluster.resource_navigation.clone();
     let Some(panel) = cluster.resource_detail_panel.as_mut() else {
         return;
     };
@@ -491,6 +495,7 @@ fn show_shared_blade(
         |ui, entry, layer| {
             show_resource_detail_blade(
                 ui,
+                &resource_navigation,
                 &entry.api_resource,
                 &entry.namespace,
                 &entry.resource_name,
@@ -1101,6 +1106,7 @@ fn show_entry_blade_frame(
     show_blade_frame(ui, blade_height, entry.history_entry_id, |ui| {
         let _ = show_resource_detail_blade(
             ui,
+            &ResourceNavigation::default(),
             &entry.api_resource,
             &entry.namespace,
             &entry.resource_name,
@@ -1166,6 +1172,7 @@ fn show_resource_detail_header(
         name: entry.resource_name.clone(),
         namespace: entry.namespace.clone(),
         creation_timestamp: None,
+        controller_owner: None,
         cells: Default::default(),
         log_containers,
     }
@@ -1224,6 +1231,7 @@ fn show_resource_detail_header(
 #[allow(clippy::too_many_arguments)]
 fn show_resource_detail_blade(
     ui: &mut egui::Ui,
+    resource_navigation: &ResourceNavigation,
     api_resource: &crate::api_resource::ApiResource,
     _namespace: &Option<String>,
     _resource_name: &str,
@@ -1262,7 +1270,7 @@ fn show_resource_detail_blade(
     show_events(ui, events, events_error);
     ui.add_space(16.0);
     if let Some(detail) = detail {
-        show_additional_sections(ui, detail);
+        show_additional_sections(ui, detail, resource_navigation, &mut result.action);
         ui.add_space(16.0);
     }
     result
@@ -2088,7 +2096,12 @@ fn show_events(ui: &mut egui::Ui, events: &[ResourceEvent], error: Option<&str>)
     });
 }
 
-fn show_additional_sections(ui: &mut egui::Ui, detail: &ResourceDetail) {
+fn show_additional_sections(
+    ui: &mut egui::Ui,
+    detail: &ResourceDetail,
+    resource_navigation: &ResourceNavigation,
+    pending_action: &mut Option<ResourceAction>,
+) {
     if let ResourceDetailPayload::Pod(pod) = &detail.payload {
         disclosure_card(ui, "conditions", "Conditions", false, |ui| {
             if pod.conditions.is_empty() {
@@ -2114,11 +2127,43 @@ fn show_additional_sections(ui: &mut egui::Ui, detail: &ResourceDetail) {
         ui.add_space(16.0);
     }
     disclosure_card(ui, "owner-references", "Owner references", false, |ui| {
-        if let Some(owner) = &detail.owner {
-            detail_row(ui, "Kind", &owner.kind);
-            detail_row(ui, "Name", &owner.name);
-        } else {
+        if detail.owners.is_empty() {
             ui.label(egui::RichText::new("No owner references.").color(gray::_500));
+        } else {
+            for owner in &detail.owners {
+                let label = owner.label();
+                if let Some(action) = resource_owner::navigation_action(
+                    resource_navigation,
+                    owner,
+                    detail.namespace.as_deref(),
+                ) {
+                    let response = ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(&label)
+                                .font(typography::metadata())
+                                .color(indigo::_600),
+                        )
+                        .sense(egui::Sense::click()),
+                    );
+                    response.clone().with_pointing_hand().widget_info(|| {
+                        egui::WidgetInfo::labeled(
+                            egui::WidgetType::Button,
+                            response.enabled(),
+                            format!("Open details for {label}"),
+                        )
+                    });
+                    if response.clicked() {
+                        resource_owner::queue_navigation_action(pending_action, action);
+                    }
+                } else {
+                    ui.label(
+                        egui::RichText::new(label)
+                            .font(typography::metadata())
+                            .color(gray::_900),
+                    )
+                    .on_hover_text(resource_owner::unavailable_tooltip(owner));
+                }
+            }
         }
     });
     if let ResourceDetailPayload::Pod(pod) = &detail.payload {
