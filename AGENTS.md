@@ -32,8 +32,10 @@ cargo nextest run -p kubernetes-dev-ui test_ui_flow
 UPDATE_SNAPSHOTS=1 cargo nextest run -p kubernetes-dev-ui
 ```
 
-`egui_kittest` snapshots live in `crates/app/tests/snapshots/`. Review generated
-`*.new.png` files before accepting them; never update snapshots merely to make a test pass.
+`egui_kittest` snapshots live in each crate's `tests/snapshots/` directory. Review generated
+`*.new.png` and `*.accessibility.new.txt` files before accepting them; never update snapshots
+merely to make a test pass. Accessibility snapshots expose the AccessKit hierarchy plus each
+node's logical egui-point bounds, and are useful for reviewing alignment and placement.
 
 ### Pre-commit hooks
 

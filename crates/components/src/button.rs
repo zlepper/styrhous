@@ -311,6 +311,7 @@ impl<'a> TailwindButton<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::AccessibilitySnapshot;
     use egui_kittest::{Harness, SnapshotOptions, SnapshotResults, kittest::Queryable};
 
     const SIZES: [(ButtonSize, &str); 5] = [
@@ -371,6 +372,7 @@ mod tests {
         crate::test_support::setup_egui(&mut harness);
         harness.run();
         harness.snapshot_options("buttons/variants", &SnapshotOptions::new().threshold(2.1));
+        harness.accessibility_snapshot("buttons/variants");
     }
 
     /// Test button hover and active (pressed) states

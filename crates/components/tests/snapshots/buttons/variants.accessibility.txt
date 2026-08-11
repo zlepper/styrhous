@@ -1,0 +1,54 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Label value="Primary buttons" rect=(x=8.0 y=16.0 width=105.1 height=17.0 center_x=60.5 center_y=24.5)
+            TextRun value="Primary buttons" rect=(x=8.0 y=16.0 width=105.1 height=17.0 center_x=60.5 center_y=24.5)
+          GenericContainer rect=<none>
+            Button name="Button text" rect=(x=8.0 y=40.0 width=87.8 height=25.0 center_x=51.9 center_y=52.5)
+            Button name="Button text" rect=(x=103.8 y=40.0 width=95.8 height=28.0 center_x=151.8 center_y=54.0)
+            Button name="Button text" rect=(x=207.7 y=40.0 width=95.8 height=33.0 center_x=255.6 center_y=56.5)
+            Button name="Button text" rect=(x=311.5 y=40.0 width=103.8 height=36.0 center_x=363.5 center_y=58.0)
+            Button name="Button text" rect=(x=423.4 y=40.0 width=103.8 height=44.0 center_x=475.3 center_y=62.0)
+          Label value="Secondary buttons" rect=(x=8.0 y=95.0 width=125.5 height=17.0 center_x=70.7 center_y=103.5)
+            TextRun value="Secondary buttons" rect=(x=8.0 y=95.0 width=125.5 height=17.0 center_x=70.7 center_y=103.5)
+          GenericContainer rect=<none>
+            Button name="Button text" rect=(x=8.0 y=119.0 width=87.8 height=25.0 center_x=51.9 center_y=131.5)
+            Button name="Button text" rect=(x=103.8 y=119.0 width=95.8 height=28.0 center_x=151.8 center_y=133.0)
+            Button name="Button text" rect=(x=207.7 y=119.0 width=95.8 height=33.0 center_x=255.6 center_y=135.5)
+            Button name="Button text" rect=(x=311.5 y=119.0 width=103.8 height=36.0 center_x=363.5 center_y=137.0)
+            Button name="Button text" rect=(x=423.4 y=119.0 width=103.8 height=44.0 center_x=475.3 center_y=141.0)
+          Label value="Soft buttons" rect=(x=8.0 y=174.0 width=80.5 height=17.0 center_x=48.3 center_y=182.5)
+            TextRun value="Soft buttons" rect=(x=8.0 y=174.0 width=80.5 height=17.0 center_x=48.3 center_y=182.5)
+          GenericContainer rect=<none>
+            Button name="Button text" rect=(x=8.0 y=198.0 width=87.8 height=25.0 center_x=51.9 center_y=210.5)
+            Button name="Button text" rect=(x=103.8 y=198.0 width=95.8 height=28.0 center_x=151.8 center_y=212.0)
+            Button name="Button text" rect=(x=207.7 y=198.0 width=95.8 height=33.0 center_x=255.6 center_y=214.5)
+            Button name="Button text" rect=(x=311.5 y=198.0 width=103.8 height=36.0 center_x=363.5 center_y=216.0)
+            Button name="Button text" rect=(x=423.4 y=198.0 width=103.8 height=44.0 center_x=475.3 center_y=220.0)
+          Label value="Rounded primary buttons" rect=(x=8.0 y=253.0 width=167.7 height=17.0 center_x=91.9 center_y=261.5)
+            TextRun value="Rounded primary buttons" rect=(x=8.0 y=253.0 width=167.7 height=17.0 center_x=91.9 center_y=261.5)
+          GenericContainer rect=<none>
+            Button name="Button text" rect=(x=8.0 y=277.0 width=87.8 height=25.0 center_x=51.9 center_y=289.5)
+            Button name="Button text" rect=(x=103.8 y=277.0 width=95.8 height=28.0 center_x=151.8 center_y=291.0)
+            Button name="Button text" rect=(x=207.7 y=277.0 width=95.8 height=33.0 center_x=255.6 center_y=293.5)
+            Button name="Button text" rect=(x=311.5 y=277.0 width=103.8 height=36.0 center_x=363.5 center_y=295.0)
+            Button name="Button text" rect=(x=423.4 y=277.0 width=103.8 height=44.0 center_x=475.3 center_y=299.0)
+          Label value="Rounded secondary buttons" rect=(x=8.0 y=332.0 width=186.9 height=17.0 center_x=101.4 center_y=340.5)
+            TextRun value="Rounded secondary buttons" rect=(x=8.0 y=332.0 width=186.9 height=17.0 center_x=101.4 center_y=340.5)
+          GenericContainer rect=<none>
+            Button name="Button text" rect=(x=8.0 y=356.0 width=87.8 height=25.0 center_x=51.9 center_y=368.5)
+            Button name="Button text" rect=(x=103.8 y=356.0 width=95.8 height=28.0 center_x=151.8 center_y=370.0)
+            Button name="Button text" rect=(x=207.7 y=356.0 width=95.8 height=33.0 center_x=255.6 center_y=372.5)
+            Button name="Button text" rect=(x=311.5 y=356.0 width=103.8 height=36.0 center_x=363.5 center_y=374.0)
+            Button name="Button text" rect=(x=423.4 y=356.0 width=103.8 height=44.0 center_x=475.3 center_y=378.0)
+          Label value="Rounded soft buttons" rect=(x=8.0 y=411.0 width=141.9 height=17.0 center_x=79.0 center_y=419.5)
+            TextRun value="Rounded soft buttons" rect=(x=8.0 y=411.0 width=141.9 height=17.0 center_x=79.0 center_y=419.5)
+          GenericContainer rect=<none>
+            Button name="Button text" rect=(x=8.0 y=435.0 width=87.8 height=25.0 center_x=51.9 center_y=447.5)
+            Button name="Button text" rect=(x=103.8 y=435.0 width=95.8 height=28.0 center_x=151.8 center_y=449.0)
+            Button name="Button text" rect=(x=207.7 y=435.0 width=95.8 height=33.0 center_x=255.6 center_y=451.5)
+            Button name="Button text" rect=(x=311.5 y=435.0 width=103.8 height=36.0 center_x=363.5 center_y=453.0)
+            Button name="Button text" rect=(x=423.4 y=435.0 width=103.8 height=44.0 center_x=475.3 center_y=457.0)
