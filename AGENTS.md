@@ -47,8 +47,15 @@ intentional same-layer collision with `HarnessSnapshotOptions::check_illegal_ove
 Never bypass pre-commit hooks (including with `git commit --no-verify`). If a hook fails,
 investigate and correct the underlying failure before committing.
 
+### UI tests
+
 When matching a UI to a design oracle, use `scripts/compare-oracle-snapshot.sh` for
 ImageMagick metrics/diffs and `scripts/review-oracle-diff.sh` for the Codex CLI visual review.
+
+Whenever an accessibility snapshot changes, take a look at it, and make sure things actually line up. For example:
+* Check that things that are "together" shares the same height or are centered properly with each other
+* Check that icons and text in boxes is actually positions the expected way in those boxes, usually vertically centered
+* Check that there is a proper margin around elements or between elements as necessary so things maintain a nice coherence.
 
 ### Kind-backed integration tests
 
