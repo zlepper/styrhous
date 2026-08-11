@@ -142,6 +142,12 @@ pub(super) struct PodLogWindowState {
     pub(super) horizontal_content_width: f32,
     pub(super) selection: Option<LogTextSelection>,
     pub(super) selection_generation: u64,
+    /// The character column retained when moving the caret vertically.
+    pub(super) caret_preferred_column: Option<usize>,
+    /// A keyboard move whose destination page has not arrived from the log store yet.
+    pub(super) pending_caret: Option<PendingLogCaret>,
+    /// Make the next rendered caret visible in the horizontal scroll viewport.
+    pub(super) ensure_caret_visible: bool,
     pub(super) copied_text: Option<String>,
 }
 
@@ -218,6 +224,15 @@ pub(super) struct LogTextSelection {
     pub(super) focus: LogTextPosition,
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(super) struct PendingLogCaret {
+    pub(super) display_row: usize,
+    pub(super) character_column: usize,
+    /// `None` collapses the selection at the destination; otherwise the
+    /// existing anchor is retained for a Shift-extended selection.
+    pub(super) anchor: Option<LogTextPosition>,
+}
+
 impl LogTextSelection {
     pub(super) fn normalized(self) -> (LogTextPosition, LogTextPosition) {
         if (self.anchor.display_row, self.anchor.byte_offset)
@@ -263,6 +278,9 @@ impl PodLogWindowState {
         self.live_rows.clear();
         self.horizontal_content_width = 0.0;
         self.selection = None;
+        self.caret_preferred_column = None;
+        self.pending_caret = None;
+        self.ensure_caret_visible = false;
         self.selection_generation = self.selection_generation.wrapping_add(1);
     }
 
@@ -918,6 +936,9 @@ impl UiState {
                 horizontal_content_width: 0.0,
                 selection: None,
                 selection_generation: 0,
+                caret_preferred_column: None,
+                pending_caret: None,
+                ensure_caret_visible: false,
                 copied_text: None,
             },
         );

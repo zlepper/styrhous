@@ -228,6 +228,9 @@ fn empty_log_window(total_lines: usize) -> PodLogWindowState {
         horizontal_content_width: 0.0,
         selection: None,
         selection_generation: 0,
+        caret_preferred_column: None,
+        pending_caret: None,
+        ensure_caret_visible: false,
         copied_text: None,
     }
 }
