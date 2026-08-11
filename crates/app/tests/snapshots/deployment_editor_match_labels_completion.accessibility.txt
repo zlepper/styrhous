@@ -1,0 +1,95 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="Edit" rect=(x=33.0 y=24.0 width=28.5 height=19.0 center_x=47.3 center_y=33.5)
+                TextRun value="Edit" rect=(x=33.0 y=24.0 width=28.5 height=19.0 center_x=47.3 center_y=33.5)
+              Label value="coredns" rect=(x=85.5 y=24.0 width=61.5 height=19.0 center_x=116.3 center_y=33.5)
+                TextRun value="coredns" rect=(x=85.5 y=24.0 width=61.5 height=19.0 center_x=116.3 center_y=33.5)
+              Label value="Deployment · kube-system" rect=(x=167.1 y=25.0 width=178.1 height=17.0 center_x=256.1 center_y=33.5)
+                TextRun value="Deployment · kube-system" rect=(x=167.1 y=25.0 width=178.1 height=17.0 center_x=256.1 center_y=33.5)
+              Label value="●" rect=(x=365.1 y=25.0 width=12.8 height=17.0 center_x=371.5 center_y=33.5)
+                TextRun value="●" rect=(x=365.1 y=25.0 width=12.8 height=17.0 center_x=371.5 center_y=33.5)
+              Label value="Modified" rect=(x=385.9 y=25.0 width=58.3 height=17.0 center_x=415.1 center_y=33.5)
+                TextRun value="Modified" rect=(x=385.9 y=25.0 width=58.3 height=17.0 center_x=415.1 center_y=33.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Button name="Apply changes" rect=(x=1380.4 y=17.0 width=122.6 height=33.0 center_x=1441.7 center_y=33.5)
+                Button name="Discard" rect=(x=1297.9 y=17.0 width=74.5 height=33.0 center_x=1335.1 center_y=33.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="Changes apply directly to the cluster" rect=(x=33.0 y=988.0 width=242.7 height=17.0 center_x=154.3 center_y=996.5)
+                TextRun value="Changes apply directly to the cluster" rect=(x=33.0 y=988.0 width=242.7 height=17.0 center_x=154.3 center_y=996.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Button name="1 diagnostics" rect=(x=33.0 y=927.0 width=107.5 height=19.0 center_x=86.7 center_y=936.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      Button name="Line 7: \"match\" is not of type \"object\"" rect=(x=51.0 y=949.0 width=214.0 height=18.0 center_x=158.0 center_y=958.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="1" rect=(x=24.0 y=76.0 width=7.8 height=15.0 center_x=27.9 center_y=83.5)
+                      TextRun value="1" rect=(x=24.0 y=76.0 width=7.8 height=15.0 center_x=27.9 center_y=83.5)
+                    Label value="2" rect=(x=24.0 y=94.0 width=7.8 height=15.0 center_x=27.9 center_y=101.5)
+                      TextRun value="2" rect=(x=24.0 y=94.0 width=7.8 height=15.0 center_x=27.9 center_y=101.5)
+                    Label value="3" rect=(x=24.0 y=112.0 width=7.8 height=15.0 center_x=27.9 center_y=119.5)
+                      TextRun value="3" rect=(x=24.0 y=112.0 width=7.8 height=15.0 center_x=27.9 center_y=119.5)
+                    Label value="4" rect=(x=24.0 y=130.0 width=7.8 height=15.0 center_x=27.9 center_y=137.5)
+                      TextRun value="4" rect=(x=24.0 y=130.0 width=7.8 height=15.0 center_x=27.9 center_y=137.5)
+                    Label value="5" rect=(x=24.0 y=148.0 width=7.8 height=15.0 center_x=27.9 center_y=155.5)
+                      TextRun value="5" rect=(x=24.0 y=148.0 width=7.8 height=15.0 center_x=27.9 center_y=155.5)
+                    Label value="6" rect=(x=24.0 y=166.0 width=7.8 height=15.0 center_x=27.9 center_y=173.5)
+                      TextRun value="6" rect=(x=24.0 y=166.0 width=7.8 height=15.0 center_x=27.9 center_y=173.5)
+                    Label value="7" rect=(x=24.0 y=184.0 width=7.8 height=15.0 center_x=27.9 center_y=191.5)
+                      TextRun value="7" rect=(x=24.0 y=184.0 width=7.8 height=15.0 center_x=27.9 center_y=191.5)
+                  MultilineTextInput value="apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: coredns\nspec:\n  selector:\n    match" state=[focused] rect=(x=82.0 y=76.0 width=1430.0 height=109.9 center_x=797.0 center_y=130.9)
+                    TextRun value="apiVersion: apps/v1\n" rect=(x=86.0 y=78.0 width=148.7 height=15.0 center_x=160.4 center_y=85.5)
+                    TextRun value="kind: Deployment\n" rect=(x=86.0 y=93.0 width=125.2 height=15.0 center_x=148.6 center_y=100.5)
+                    TextRun value="metadata:\n" rect=(x=86.0 y=108.0 width=70.4 height=15.0 center_x=121.2 center_y=115.5)
+                    TextRun value="  name: coredns\n" rect=(x=86.0 y=123.0 width=117.4 height=15.0 center_x=144.7 center_y=130.5)
+                    TextRun value="spec:\n" rect=(x=86.0 y=138.0 width=39.1 height=15.0 center_x=105.6 center_y=145.5)
+                    TextRun value="  selector:\n" rect=(x=86.0 y=153.0 width=86.1 height=15.0 center_x=129.0 center_y=160.5)
+                    TextRun value="    match" rect=(x=86.0 y=168.0 width=70.4 height=15.0 center_x=121.2 center_y=175.5)
+                  Label value="Validation error: \"match\" is not of type \"object\"" rect=(x=117.0 y=165.0 width=39.4 height=21.0 center_x=136.7 center_y=175.5)
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        Label value="EXPECTS KEY" rect=(x=168.0 y=203.5 width=81.3 height=15.0 center_x=208.6 center_y=211.0)
+          TextRun value="EXPECTS KEY" rect=(x=168.0 y=203.5 width=81.3 height=15.0 center_x=208.6 center_y=211.0)
+        Label value="object" rect=(x=257.3 y=203.5 width=35.2 height=15.0 center_x=274.9 center_y=211.0)
+          TextRun value="object" rect=(x=257.3 y=203.5 width=35.2 height=15.0 center_x=274.9 center_y=211.0)
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Label value="matchLabels" rect=(x=177.0 y=232.0 width=86.1 height=15.0 center_x=220.0 center_y=239.5)
+              TextRun value="matchLabels" rect=(x=177.0 y=232.0 width=86.1 height=15.0 center_x=220.0 center_y=239.5)
+          Unknown rect=(x=168.0 y=227.0 width=258.0 height=25.0 center_x=297.0 center_y=239.5)
+          GenericContainer rect=<none>
+            Label value="matchExpressions" rect=(x=177.0 y=260.0 width=125.2 height=15.0 center_x=239.6 center_y=267.5)
+              TextRun value="matchExpressions" rect=(x=177.0 y=260.0 width=125.2 height=15.0 center_x=239.6 center_y=267.5)
+          Unknown rect=(x=168.0 y=255.0 width=258.0 height=25.0 center_x=297.0 center_y=267.5)
+      Label value="↑↓ navigate  ·  Enter apply  ·  Esc dismiss" rect=(x=168.0 y=300.0 width=236.1 height=15.0 center_x=286.0 center_y=307.5)
+        TextRun value="↑↓ navigate  ·  Enter apply  ·  Esc dismiss" rect=(x=168.0 y=300.0 width=236.1 height=15.0 center_x=286.0 center_y=307.5)
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Label value="OBJECT" rect=(x=466.0 y=243.0 width=47.6 height=15.0 center_x=489.8 center_y=250.5)
+            TextRun value="OBJECT" rect=(x=466.0 y=243.0 width=47.6 height=15.0 center_x=489.8 center_y=250.5)
+        Label value="matchLabels" rect=(x=527.6 y=243.0 width=86.1 height=15.0 center_x=570.6 center_y=250.5)
+          TextRun value="matchLabels" rect=(x=527.6 y=243.0 width=86.1 height=15.0 center_x=570.6 center_y=250.5)
+      Label value="Map of label keys and values that must match the selected Pods." rect=(x=460.0 y=289.0 width=223.4 height=30.0 center_x=571.7 center_y=304.0)
+        TextRun value="Map of label keys and values that must " rect=(x=460.0 y=289.0 width=223.4 height=15.0 center_x=571.7 center_y=296.5)
+        TextRun value="match the selected Pods." rect=(x=460.0 y=304.0 width=143.5 height=15.0 center_x=531.7 center_y=311.5)

@@ -1,0 +1,60 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="Edit" rect=(x=33.0 y=24.0 width=28.5 height=19.0 center_x=47.3 center_y=33.5)
+                TextRun value="Edit" rect=(x=33.0 y=24.0 width=28.5 height=19.0 center_x=47.3 center_y=33.5)
+              Label value="settings" rect=(x=85.5 y=24.0 width=59.8 height=19.0 center_x=115.5 center_y=33.5)
+                TextRun value="settings" rect=(x=85.5 y=24.0 width=59.8 height=19.0 center_x=115.5 center_y=33.5)
+              Label value="ConfigMap · kube-system" rect=(x=165.4 y=25.0 width=171.7 height=17.0 center_x=251.2 center_y=33.5)
+                TextRun value="ConfigMap · kube-system" rect=(x=165.4 y=25.0 width=171.7 height=17.0 center_x=251.2 center_y=33.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Button name="Apply changes" state=[disabled] rect=(x=1380.4 y=17.0 width=122.6 height=33.0 center_x=1441.7 center_y=33.5)
+                Button name="Close" rect=(x=1310.8 y=17.0 width=61.6 height=33.0 center_x=1341.6 center_y=33.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="Changes apply directly to the cluster" rect=(x=33.0 y=988.0 width=242.7 height=17.0 center_x=154.3 center_y=996.5)
+                TextRun value="Changes apply directly to the cluster" rect=(x=33.0 y=988.0 width=242.7 height=17.0 center_x=154.3 center_y=996.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="1" rect=(x=24.0 y=76.0 width=7.8 height=15.0 center_x=27.9 center_y=83.5)
+                      TextRun value="1" rect=(x=24.0 y=76.0 width=7.8 height=15.0 center_x=27.9 center_y=83.5)
+                    Label value="2" rect=(x=24.0 y=94.0 width=7.8 height=15.0 center_x=27.9 center_y=101.5)
+                      TextRun value="2" rect=(x=24.0 y=94.0 width=7.8 height=15.0 center_x=27.9 center_y=101.5)
+                    Label value="3" rect=(x=24.0 y=112.0 width=7.8 height=15.0 center_x=27.9 center_y=119.5)
+                      TextRun value="3" rect=(x=24.0 y=112.0 width=7.8 height=15.0 center_x=27.9 center_y=119.5)
+                    Label value="4" rect=(x=24.0 y=130.0 width=7.8 height=15.0 center_x=27.9 center_y=137.5)
+                      TextRun value="4" rect=(x=24.0 y=130.0 width=7.8 height=15.0 center_x=27.9 center_y=137.5)
+                    Label value="5" rect=(x=24.0 y=148.0 width=7.8 height=15.0 center_x=27.9 center_y=155.5)
+                      TextRun value="5" rect=(x=24.0 y=148.0 width=7.8 height=15.0 center_x=27.9 center_y=155.5)
+                  MultilineTextInput value="spec:\n  templates:\n    - spec:\n        containers:\n          - imagePullPolicy: Al" rect=(x=82.0 y=76.0 width=1430.0 height=79.6 center_x=797.0 center_y=115.8)
+                    TextRun value="spec:\n" rect=(x=86.0 y=78.0 width=39.1 height=15.0 center_x=105.6 center_y=85.5)
+                    TextRun value="  templates:\n" rect=(x=86.0 y=93.0 width=93.9 height=15.0 center_x=133.0 center_y=100.5)
+                    TextRun value="    - spec:\n" rect=(x=86.0 y=108.0 width=86.1 height=15.0 center_x=129.0 center_y=115.5)
+                    TextRun value="        containers:\n" rect=(x=86.0 y=123.0 width=148.7 height=15.0 center_x=160.4 center_y=130.5)
+                    TextRun value="          - imagePullPolicy: Al" rect=(x=86.0 y=138.0 width=242.6 height=15.0 center_x=207.3 center_y=145.5)
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        Label value="EXPECTS VALUE" rect=(x=95.0 y=142.5 width=96.5 height=15.0 center_x=143.3 center_y=150.0)
+          TextRun value="EXPECTS VALUE" rect=(x=95.0 y=142.5 width=96.5 height=15.0 center_x=143.3 center_y=150.0)
+        Label value="string" rect=(x=199.5 y=142.5 width=32.2 height=15.0 center_x=215.7 center_y=150.0)
+          TextRun value="string" rect=(x=199.5 y=142.5 width=32.2 height=15.0 center_x=215.7 center_y=150.0)
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Label value="Always" rect=(x=104.0 y=171.0 width=47.0 height=15.0 center_x=127.5 center_y=178.5)
+              TextRun value="Always" rect=(x=104.0 y=171.0 width=47.0 height=15.0 center_x=127.5 center_y=178.5)
+          Unknown rect=(x=95.0 y=166.0 width=258.0 height=25.0 center_x=224.0 center_y=178.5)
+      Label value="↑↓ navigate  ·  Enter apply  ·  Esc dismiss" rect=(x=95.0 y=211.0 width=236.1 height=15.0 center_x=213.0 center_y=218.5)
+        TextRun value="↑↓ navigate  ·  Enter apply  ·  Esc dismiss" rect=(x=95.0 y=211.0 width=236.1 height=15.0 center_x=213.0 center_y=218.5)

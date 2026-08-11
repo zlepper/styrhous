@@ -1098,7 +1098,8 @@ mod tests {
     use crate::resource_schema::{
         CompletionContext, CompletionContextKind, CompletionSuggestion, ResourceSchema,
     };
-    use egui_kittest::{Harness, SnapshotOptions, kittest::Queryable};
+    use components::test_support::{HarnessSnapshotOptions, UiHarnessSnapshot};
+    use egui_kittest::{Harness, kittest::Queryable};
     use k8s_openapi::serde_json::json;
 
     const COMPLETION_POPUP_MAX_WIDTH: f32 = COMPLETION_LIST_MAX_WIDTH + 2.0 * spacing::MD;
@@ -1276,7 +1277,7 @@ mod tests {
 
         assert_eq!(harness.state().editor.suggestion_selection, 12);
         assert_eq!(harness.state().editor.suggestions[12].label, "field-012",);
-        harness.snapshot("yaml_editor/completion_keyboard_navigation");
+        harness.ui_harness("yaml_editor/completion_keyboard_navigation");
     }
 
     #[test]
@@ -1305,7 +1306,7 @@ mod tests {
         set_editor_caret(&ctx, text_edit_id, "mode: Read".chars().count());
 
         harness.run();
-        harness.snapshot("yaml_editor/focused_caret");
+        harness.ui_harness("yaml_editor/focused_caret");
     }
 
     #[test]
@@ -1427,7 +1428,7 @@ mod tests {
         assert!(harness.state().editor.suggestions_visible);
         assert!(harness.state().editor.suggestions.is_empty());
         harness.get_by_label("No completions available");
-        harness.snapshot("yaml_editor/no_completions");
+        harness.ui_harness("yaml_editor/no_completions");
     }
 
     #[test]
@@ -1696,7 +1697,7 @@ mod tests {
             .get_by_label("Validation error: \"settings\" is not an allowed value")
             .hover();
         harness.run();
-        harness.snapshot("yaml_editor/diagnostics_tooltip");
+        harness.ui_harness("yaml_editor/diagnostics_tooltip");
     }
 
     #[test]
@@ -1842,7 +1843,7 @@ mod tests {
         components::test_support::setup_egui(&mut harness);
         harness.state_mut().editor.confirm_discard = confirm_discard;
         harness.run();
-        harness.snapshot(name);
+        harness.ui_harness(name);
     }
 
     struct SnapshotState {
@@ -1893,7 +1894,7 @@ mod tests {
         set_editor_caret(&ctx, text_edit_id, yaml.chars().count());
 
         harness.run();
-        harness.snapshot_options(name, &SnapshotOptions::new().max_failed_pixels(1));
+        harness.ui_harness(HarnessSnapshotOptions::one_pixel(name));
     }
 
     fn set_editor_caret(ctx: &egui::Context, id: egui::Id, character_index: usize) {

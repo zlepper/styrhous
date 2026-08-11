@@ -1,0 +1,6 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        Button name="More actions for coredns" rect=(x=8.0 y=8.0 width=36.0 height=36.0 center_x=26.0 center_y=26.0)

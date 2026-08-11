@@ -683,8 +683,9 @@ impl<F> TailwindCombobox<WithFilter<F>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::UiHarnessSnapshot;
+    use egui_kittest::Harness;
     use egui_kittest::kittest::Queryable;
-    use egui_kittest::{Harness, SnapshotResults};
     use std::cell::RefCell;
     use std::collections::HashSet;
     use std::rc::Rc;
@@ -755,20 +756,20 @@ mod tests {
         crate::test_support::setup_egui(&mut harness);
 
         harness.run();
-        harness.snapshot("comboboxes/closed");
+        harness.ui_harness("comboboxes/closed");
 
         harness
             .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Assigned to")
             .click();
         harness.run();
-        harness.snapshot("comboboxes/open");
+        harness.ui_harness("comboboxes/open");
 
         harness
             .input_mut()
             .events
             .push(egui::Event::Text("mi".into()));
         harness.run();
-        harness.snapshot("comboboxes/filtered");
+        harness.ui_harness("comboboxes/filtered");
 
         harness.get_by_label("Michael Foster").click();
         harness.run();
@@ -778,7 +779,7 @@ mod tests {
             .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Assigned to")
             .click();
         harness.run();
-        harness.snapshot("comboboxes/selected");
+        harness.ui_harness("comboboxes/selected");
     }
 
     #[test]
@@ -923,7 +924,6 @@ mod tests {
 
     #[test]
     fn long_namespace_names_are_truncated_without_hiding_selection_affordances() {
-        let mut results = SnapshotResults::new();
         let namespaces = [
             "namespace-with-a-very-long-name-that-must-not-overlap-the-status-or-checkmark",
             "default",
@@ -941,12 +941,12 @@ mod tests {
         });
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        results.add(harness.try_snapshot("comboboxes/long_namespace_closed"));
+        harness.ui_harness("comboboxes/long_namespace_closed");
         harness
             .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespaces")
             .hover();
         harness.run();
-        results.add(harness.try_snapshot("comboboxes/long_namespace_closed_tooltip"));
+        harness.ui_harness("comboboxes/long_namespace_closed_tooltip");
 
         let namespaces = [
             "namespace-with-a-very-long-name-that-must-not-overlap-the-status-or-checkmark",
@@ -968,10 +968,10 @@ mod tests {
             .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespaces")
             .click();
         open_harness.run();
-        results.add(open_harness.try_snapshot("comboboxes/long_namespace_open"));
+        open_harness.ui_harness("comboboxes/long_namespace_open");
         open_harness.get_by_label(selected_namespace).hover();
         open_harness.run_ok();
-        results.add(open_harness.try_snapshot("comboboxes/long_namespace_open_tooltip"));
+        open_harness.ui_harness("comboboxes/long_namespace_open_tooltip");
     }
 
     #[test]
@@ -1014,7 +1014,7 @@ mod tests {
         assert_eq!(harness.get_by_label("system").rect(), system_rect);
         assert_eq!(harness.get_by_label("staging").rect(), staging_rect);
         assert_eq!(harness.get_by_label("sandbox").rect(), sandbox_rect);
-        harness.snapshot("comboboxes/three_filtered_results");
+        harness.ui_harness("comboboxes/three_filtered_results");
 
         harness.key_down(Key::Enter);
         harness.run();
@@ -1057,7 +1057,7 @@ mod tests {
         let focused_rect = harness.get_by_label("namespace-010").rect();
         assert!(focused_rect.top() >= combobox_rect.bottom());
         assert!(focused_rect.bottom() <= combobox_rect.bottom() + DROPDOWN_MAX_HEIGHT);
-        harness.snapshot("comboboxes/keyboard_scroll_into_view");
+        harness.ui_harness("comboboxes/keyboard_scroll_into_view");
 
         harness.key_down(Key::Enter);
         harness.run();
@@ -1093,7 +1093,7 @@ mod tests {
         harness.run();
         harness.get_by_label("staging");
         harness.get_by_label("sandbox");
-        harness.snapshot("comboboxes/filter_expands");
+        harness.ui_harness("comboboxes/filter_expands");
     }
 
     #[test]
@@ -1116,6 +1116,6 @@ mod tests {
             .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespaces")
             .click();
         harness.run();
-        harness.snapshot("comboboxes/two_hundred_items");
+        harness.ui_harness("comboboxes/two_hundred_items");
     }
 }

@@ -210,6 +210,7 @@ fn menu_frame() -> Frame {
 mod tests {
     use std::{cell::RefCell, rc::Rc};
 
+    use crate::test_support::UiHarnessSnapshot;
     use egui_kittest::{Harness, kittest::Queryable};
 
     use super::*;
@@ -236,13 +237,13 @@ mod tests {
             .get_by_label("More actions for coredns")
             .click_accesskit();
         harness.run();
-        harness.snapshot("more_button/open");
+        harness.ui_harness("more_button/open");
 
         harness.get_by_label("Delete").click_accesskit();
         harness.run();
 
         assert_eq!(*selected_action.borrow(), Some("delete"));
-        harness.snapshot("more_button/closed_after_action");
+        harness.ui_harness("more_button/closed_after_action");
     }
 
     #[test]

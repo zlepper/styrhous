@@ -1,0 +1,66 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="Edit" rect=(x=33.0 y=24.0 width=28.5 height=19.0 center_x=47.3 center_y=33.5)
+                TextRun value="Edit" rect=(x=33.0 y=24.0 width=28.5 height=19.0 center_x=47.3 center_y=33.5)
+              Label value="settings" rect=(x=85.5 y=24.0 width=59.8 height=19.0 center_x=115.5 center_y=33.5)
+                TextRun value="settings" rect=(x=85.5 y=24.0 width=59.8 height=19.0 center_x=115.5 center_y=33.5)
+              Label value="ConfigMap · kube-system" rect=(x=165.4 y=25.0 width=171.7 height=17.0 center_x=251.2 center_y=33.5)
+                TextRun value="ConfigMap · kube-system" rect=(x=165.4 y=25.0 width=171.7 height=17.0 center_x=251.2 center_y=33.5)
+              Label value="●" rect=(x=357.1 y=25.0 width=12.8 height=17.0 center_x=363.5 center_y=33.5)
+                TextRun value="●" rect=(x=357.1 y=25.0 width=12.8 height=17.0 center_x=363.5 center_y=33.5)
+              Label value="Modified" rect=(x=377.9 y=25.0 width=58.3 height=17.0 center_x=407.0 center_y=33.5)
+                TextRun value="Modified" rect=(x=377.9 y=25.0 width=58.3 height=17.0 center_x=407.0 center_y=33.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Button name="Apply changes" rect=(x=1380.4 y=17.0 width=122.6 height=33.0 center_x=1441.7 center_y=33.5)
+                Button name="Discard" rect=(x=1297.9 y=17.0 width=74.5 height=33.0 center_x=1335.1 center_y=33.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="Changes apply directly to the cluster" rect=(x=33.0 y=988.0 width=242.7 height=17.0 center_x=154.3 center_y=996.5)
+                TextRun value="Changes apply directly to the cluster" rect=(x=33.0 y=988.0 width=242.7 height=17.0 center_x=154.3 center_y=996.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="1" rect=(x=24.0 y=76.0 width=7.8 height=15.0 center_x=27.9 center_y=83.5)
+                      TextRun value="1" rect=(x=24.0 y=76.0 width=7.8 height=15.0 center_x=27.9 center_y=83.5)
+                    Label value="2" rect=(x=24.0 y=94.0 width=7.8 height=15.0 center_x=27.9 center_y=101.5)
+                      TextRun value="2" rect=(x=24.0 y=94.0 width=7.8 height=15.0 center_x=27.9 center_y=101.5)
+                    Label value="3" rect=(x=24.0 y=112.0 width=7.8 height=15.0 center_x=27.9 center_y=119.5)
+                      TextRun value="3" rect=(x=24.0 y=112.0 width=7.8 height=15.0 center_x=27.9 center_y=119.5)
+                    Label value="4" rect=(x=24.0 y=130.0 width=7.8 height=15.0 center_x=27.9 center_y=137.5)
+                      TextRun value="4" rect=(x=24.0 y=130.0 width=7.8 height=15.0 center_x=27.9 center_y=137.5)
+                    Label value="5" rect=(x=24.0 y=148.0 width=7.8 height=15.0 center_x=27.9 center_y=155.5)
+                      TextRun value="5" rect=(x=24.0 y=148.0 width=7.8 height=15.0 center_x=27.9 center_y=155.5)
+                    Label value="6" rect=(x=24.0 y=166.0 width=7.8 height=15.0 center_x=27.9 center_y=173.5)
+                      TextRun value="6" rect=(x=24.0 y=166.0 width=7.8 height=15.0 center_x=27.9 center_y=173.5)
+                  MultilineTextInput value="apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: settings\ndata:\n  mode: development" rect=(x=82.0 y=76.0 width=1430.0 height=94.8 center_x=797.0 center_y=123.4)
+                    TextRun value="apiVersion: v1\n" rect=(x=86.0 y=78.0 width=109.6 height=15.0 center_x=140.8 center_y=85.5)
+                    TextRun value="kind: ConfigMap\n" rect=(x=86.0 y=93.0 width=117.4 height=15.0 center_x=144.7 center_y=100.5)
+                    TextRun value="metadata:\n" rect=(x=86.0 y=108.0 width=70.4 height=15.0 center_x=121.2 center_y=115.5)
+                    TextRun value="  name: settings\n" rect=(x=86.0 y=123.0 width=125.2 height=15.0 center_x=148.6 center_y=130.5)
+                    TextRun value="data:\n" rect=(x=86.0 y=138.0 width=39.1 height=15.0 center_x=105.6 center_y=145.5)
+                    TextRun value="  mode: development" rect=(x=86.0 y=153.0 width=148.7 height=15.0 center_x=160.4 center_y=160.5)
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        Label value="Unsaved changes" rect=(x=528.0 y=428.0 width=101.6 height=15.0 center_x=578.8 center_y=435.5)
+          TextRun value="Unsaved changes" rect=(x=528.0 y=428.0 width=101.6 height=15.0 center_x=578.8 center_y=435.5)
+        Label value="Discard changes?" rect=(x=528.0 y=454.0 width=207.4 height=29.0 center_x=631.7 center_y=468.5)
+          TextRun value="Discard changes?" rect=(x=528.0 y=454.0 width=207.4 height=29.0 center_x=631.7 center_y=468.5)
+        Label value="Your unsaved edits will be lost." rect=(x=528.0 y=498.0 width=204.1 height=17.0 center_x=630.0 center_y=506.5)
+          TextRun value="Your unsaved edits will be lost." rect=(x=528.0 y=498.0 width=204.1 height=17.0 center_x=630.0 center_y=506.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Button name="Discard changes" rect=(x=873.0 y=563.0 width=135.0 height=33.0 center_x=940.5 center_y=579.5)
+          Button name="Keep editing" rect=(x=758.4 y=563.0 width=106.6 height=33.0 center_x=811.7 center_y=579.5)

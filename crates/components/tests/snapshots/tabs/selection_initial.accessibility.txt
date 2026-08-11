@@ -1,0 +1,15 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        Label value="First content" rect=(x=8.0 y=55.0 width=83.0 height=17.0 center_x=49.5 center_y=63.5)
+          TextRun value="First content" rect=(x=8.0 y=55.0 width=83.0 height=17.0 center_x=49.5 center_y=63.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Button name="First" state=[toggled=True] rect=(x=8.0 y=8.0 width=36.9 height=44.0 center_x=26.5 center_y=30.0)
+                Button name="Second" state=[toggled=False] rect=(x=60.9 y=8.0 width=58.4 height=44.0 center_x=90.1 center_y=30.0)
+        Label value="Selected: 0" rect=(x=8.0 y=75.0 width=74.7 height=17.0 center_x=45.3 center_y=83.5)
+          TextRun value="Selected: 0" rect=(x=8.0 y=75.0 width=74.7 height=17.0 center_x=45.3 center_y=83.5)

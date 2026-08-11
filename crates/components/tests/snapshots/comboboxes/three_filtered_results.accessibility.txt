@@ -1,0 +1,21 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        Label value="Namespaces" rect=(x=8.0 y=8.0 width=86.3 height=17.0 center_x=51.2 center_y=16.5)
+          TextRun value="Namespaces" rect=(x=8.0 y=8.0 width=86.3 height=17.0 center_x=51.2 center_y=16.5)
+        ComboBox name="Namespaces" rect=(x=8.0 y=28.0 width=250.0 height=36.0 center_x=133.0 center_y=46.0)
+        GenericContainer rect=<none>
+          Image rect=(x=234.0 y=38.0 width=16.0 height=16.0 center_x=242.0 center_y=46.0)
+        GenericContainer rect=<none>
+          TextInput value="s" state=[focused] rect=(x=20.0 y=35.5 width=202.0 height=21.0 center_x=121.0 center_y=46.0)
+            TextRun value="s" rect=(x=24.0 y=37.5 width=7.4 height=17.0 center_x=27.7 center_y=46.0)
+  Unknown rect=(x=8.0 y=64.0 width=250.0 height=116.0 center_x=133.0 center_y=122.0)
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            CheckBox name="system" state=[toggled=False] rect=(x=15.0 y=71.0 width=236.0 height=32.0 center_x=133.0 center_y=87.0)
+            CheckBox name="staging" state=[toggled=False] rect=(x=15.0 y=106.0 width=236.0 height=32.0 center_x=133.0 center_y=122.0)
+            CheckBox name="sandbox" state=[toggled=False] rect=(x=15.0 y=141.0 width=236.0 height=32.0 center_x=133.0 center_y=157.0)

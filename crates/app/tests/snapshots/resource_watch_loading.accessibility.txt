@@ -1,0 +1,60 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Button name="dev" state=[toggled=True] rect=(x=0.0 y=9.0 width=68.0 height=52.0 center_x=34.0 center_y=35.0)
+              Button name="prod" state=[toggled=False] rect=(x=0.0 y=61.0 width=68.0 height=52.0 center_x=34.0 center_y=87.0)
+              GenericContainer rect=<none>
+                Button name="Settings" rect=(x=23.5 y=995.0 width=21.0 height=21.0 center_x=34.0 center_y=1005.5)
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="dev" rect=(x=92.0 y=29.0 width=34.8 height=24.0 center_x=109.4 center_y=41.0)
+                  TextRun value="dev" rect=(x=92.0 y=29.0 width=34.8 height=24.0 center_x=109.4 center_y=41.0)
+              Button name="Apps & Containers" state=[toggled=True] rect=(x=68.0 y=73.0 width=291.0 height=44.0 center_x=213.5 center_y=95.0)
+              GenericContainer rect=<none>
+                Image rect=(x=88.0 y=87.0 width=16.0 height=16.0 center_x=96.0 center_y=95.0)
+              Button name="Pods" state=[toggled=True] rect=(x=68.0 y=126.0 width=291.0 height=36.0 center_x=213.5 center_y=144.0)
+              Button name="Deployments" state=[toggled=False] rect=(x=68.0 y=165.0 width=291.0 height=36.0 center_x=213.5 center_y=183.0)
+              Button name="Stateful Sets" state=[toggled=False] rect=(x=68.0 y=204.0 width=291.0 height=36.0 center_x=213.5 center_y=222.0)
+              Button name="Config" state=[toggled=False] rect=(x=68.0 y=245.0 width=291.0 height=44.0 center_x=213.5 center_y=267.0)
+              GenericContainer rect=<none>
+                Image rect=(x=88.0 y=259.0 width=16.0 height=16.0 center_x=96.0 center_y=267.0)
+              Button name="Networking" state=[toggled=False] rect=(x=68.0 y=292.0 width=291.0 height=44.0 center_x=213.5 center_y=314.0)
+              GenericContainer rect=<none>
+                Image rect=(x=88.0 y=306.0 width=16.0 height=16.0 center_x=96.0 center_y=314.0)
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Label value="Namespace" rect=(x=397.0 y=17.5 width=79.0 height=17.0 center_x=436.5 center_y=26.0)
+              TextRun value="Namespace" rect=(x=397.0 y=17.5 width=79.0 height=17.0 center_x=436.5 center_y=26.0)
+            ComboBox name="Namespace" rect=(x=491.0 y=10.0 width=230.0 height=32.0 center_x=606.0 center_y=26.0)
+            GenericContainer rect=<none>
+              Image rect=(x=697.0 y=18.0 width=16.0 height=16.0 center_x=705.0 center_y=26.0)
+          GenericContainer rect=<none>
+            Label value="0 items" rect=(x=775.0 y=16.5 width=55.3 height=19.0 center_x=802.7 center_y=26.0)
+              TextRun value="0 items" rect=(x=775.0 y=16.5 width=55.3 height=19.0 center_x=802.7 center_y=26.0)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    TextInput name="Search resources" value="" rect=(x=1303.0 y=13.0 width=150.0 height=26.0 center_x=1378.0 center_y=26.0)
+                      TextRun value="" rect=(x=1307.0 y=15.0 width=0.0 height=17.0 center_x=1307.0 center_y=23.5)
+                  CheckBox name="Use regex search" state=[toggled=Mixed] rect=(x=1475.0 y=16.5 width=19.1 height=19.0 center_x=1484.5 center_y=26.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              ProgressIndicator rect=(x=938.0 y=502.5 width=20.0 height=20.0 center_x=948.0 center_y=512.5)
+              Label value="Loading resources" rect=(x=877.8 y=533.5 width=140.4 height=19.0 center_x=948.0 center_y=543.0)
+                TextRun value="Loading resources" rect=(x=878.0 y=533.5 width=140.4 height=19.0 center_x=948.2 center_y=543.0)
+              Label value="Waiting for the selected namespace resources to synchronize." rect=(x=742.0 y=563.5 width=412.0 height=17.0 center_x=948.0 center_y=572.0)
+                TextRun value="Waiting for the selected namespace resources to synchronize." rect=(x=742.0 y=563.5 width=412.0 height=17.0 center_x=948.0 center_y=572.0)

@@ -1,0 +1,74 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Button name="dev" state=[toggled=False] rect=(x=0.0 y=9.0 width=68.0 height=52.0 center_x=34.0 center_y=35.0)
+              Button name="kind-kind" state=[toggled=True] rect=(x=0.0 y=61.0 width=68.0 height=52.0 center_x=34.0 center_y=87.0)
+              Button name="kube-local" state=[toggled=False] rect=(x=0.0 y=113.0 width=68.0 height=52.0 center_x=34.0 center_y=139.0)
+              GenericContainer rect=<none>
+                Button name="Settings" rect=(x=23.5 y=995.0 width=21.0 height=21.0 center_x=34.0 center_y=1005.5)
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="kind-kind" rect=(x=92.0 y=29.0 width=89.0 height=24.0 center_x=136.5 center_y=41.0)
+                  TextRun value="kind-kind" rect=(x=92.0 y=29.0 width=89.0 height=24.0 center_x=136.5 center_y=41.0)
+              Button name="Nodes" state=[toggled=False] rect=(x=68.0 y=73.0 width=291.0 height=36.0 center_x=213.5 center_y=91.0)
+              Button name="Apps & Containers" state=[toggled=False] rect=(x=68.0 y=112.0 width=291.0 height=44.0 center_x=213.5 center_y=134.0)
+              GenericContainer rect=<none>
+                Image rect=(x=88.0 y=126.0 width=16.0 height=16.0 center_x=96.0 center_y=134.0)
+              Button name="Config" state=[toggled=False] rect=(x=68.0 y=159.0 width=291.0 height=44.0 center_x=213.5 center_y=181.0)
+              GenericContainer rect=<none>
+                Image rect=(x=88.0 y=173.0 width=16.0 height=16.0 center_x=96.0 center_y=181.0)
+              Button name="Networking" state=[toggled=False] rect=(x=68.0 y=206.0 width=291.0 height=44.0 center_x=213.5 center_y=228.0)
+              GenericContainer rect=<none>
+                Image rect=(x=88.0 y=220.0 width=16.0 height=16.0 center_x=96.0 center_y=228.0)
+              Button name="Storage" state=[toggled=False] rect=(x=68.0 y=253.0 width=291.0 height=44.0 center_x=213.5 center_y=275.0)
+              GenericContainer rect=<none>
+                Image rect=(x=88.0 y=267.0 width=16.0 height=16.0 center_x=96.0 center_y=275.0)
+              Button name="Namespaces" state=[toggled=False] rect=(x=68.0 y=300.0 width=291.0 height=36.0 center_x=213.5 center_y=318.0)
+              Button name="Events" state=[toggled=False] rect=(x=68.0 y=339.0 width=291.0 height=36.0 center_x=213.5 center_y=357.0)
+              Button name="Other Resources" state=[toggled=False] rect=(x=68.0 y=378.0 width=291.0 height=44.0 center_x=213.5 center_y=400.0)
+              GenericContainer rect=<none>
+                Image rect=(x=88.0 y=392.0 width=16.0 height=16.0 center_x=96.0 center_y=400.0)
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Label value="Namespace" rect=(x=397.0 y=17.5 width=79.0 height=17.0 center_x=436.5 center_y=26.0)
+              TextRun value="Namespace" rect=(x=397.0 y=17.5 width=79.0 height=17.0 center_x=436.5 center_y=26.0)
+            ComboBox name="Namespace" rect=(x=491.0 y=10.0 width=230.0 height=32.0 center_x=606.0 center_y=26.0)
+            GenericContainer rect=<none>
+              Image rect=(x=697.0 y=18.0 width=16.0 height=16.0 center_x=705.0 center_y=26.0)
+          GenericContainer rect=<none>
+            Label value="0 of 8 items" rect=(x=775.0 y=16.5 width=89.8 height=19.0 center_x=819.9 center_y=26.0)
+              TextRun value="0 of 8 items" rect=(x=775.0 y=16.5 width=89.8 height=19.0 center_x=819.9 center_y=26.0)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    TextInput name="Search resources" value="coredns[a-z" rect=(x=1303.0 y=13.0 width=150.0 height=26.0 center_x=1378.0 center_y=26.0)
+                      TextRun value="coredns[a-z" rect=(x=1307.0 y=15.0 width=81.0 height=17.0 center_x=1347.5 center_y=23.5)
+                  CheckBox name="Use regex search" state=[toggled=Mixed] rect=(x=1475.0 y=16.5 width=19.1 height=19.0 center_x=1484.5 center_y=26.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Label value="Invalid regular expression" rect=(x=851.3 y=477.2 width=193.5 height=19.0 center_x=948.0 center_y=486.8)
+                    TextRun value="Invalid regular expression" rect=(x=851.0 y=477.2 width=193.5 height=19.0 center_x=947.8 center_y=486.8)
+                Label value="Error details" rect=(x=392.0 y=507.2 width=80.0 height=17.0 center_x=432.0 center_y=515.8)
+                  TextRun value="Error details" rect=(x=392.0 y=507.2 width=80.0 height=17.0 center_x=432.0 center_y=515.8)
+                GenericContainer rect=<none>
+                  Label value="regex parse error:\n    coredns[a-z\n           ^\nerror: unclosed character class" rect=(x=401.0 y=540.2 width=242.6 height=60.0 center_x=522.3 center_y=570.2)
+                    TextRun value="regex parse error:\n" rect=(x=401.0 y=540.2 width=140.9 height=15.0 center_x=471.4 center_y=547.8)
+                    TextRun value="    coredns[a-z\n" rect=(x=401.0 y=555.2 width=117.4 height=15.0 center_x=459.7 center_y=562.8)
+                    TextRun value="           ^\n" rect=(x=401.0 y=570.2 width=93.9 height=15.0 center_x=448.0 center_y=577.8)
+                    TextRun value="error: unclosed character class" rect=(x=401.0 y=585.2 width=242.6 height=15.0 center_x=522.3 center_y=592.8)

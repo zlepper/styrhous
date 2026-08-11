@@ -1,0 +1,53 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="Edit" rect=(x=33.0 y=24.0 width=28.5 height=19.0 center_x=47.3 center_y=33.5)
+                TextRun value="Edit" rect=(x=33.0 y=24.0 width=28.5 height=19.0 center_x=47.3 center_y=33.5)
+              Label value="settings" rect=(x=85.5 y=24.0 width=59.8 height=19.0 center_x=115.5 center_y=33.5)
+                TextRun value="settings" rect=(x=85.5 y=24.0 width=59.8 height=19.0 center_x=115.5 center_y=33.5)
+              Label value="ConfigMap · kube-system" rect=(x=165.4 y=25.0 width=171.7 height=17.0 center_x=251.2 center_y=33.5)
+                TextRun value="ConfigMap · kube-system" rect=(x=165.4 y=25.0 width=171.7 height=17.0 center_x=251.2 center_y=33.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Button name="Apply changes" state=[disabled] rect=(x=1380.4 y=17.0 width=122.6 height=33.0 center_x=1441.7 center_y=33.5)
+                Button name="Close" rect=(x=1310.8 y=17.0 width=61.6 height=33.0 center_x=1341.6 center_y=33.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="Changes apply directly to the cluster" rect=(x=33.0 y=988.0 width=242.7 height=17.0 center_x=154.3 center_y=996.5)
+                TextRun value="Changes apply directly to the cluster" rect=(x=33.0 y=988.0 width=242.7 height=17.0 center_x=154.3 center_y=996.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="1" rect=(x=24.0 y=76.0 width=7.8 height=15.0 center_x=27.9 center_y=83.5)
+                      TextRun value="1" rect=(x=24.0 y=76.0 width=7.8 height=15.0 center_x=27.9 center_y=83.5)
+                  MultilineTextInput value="mode: Read" state=[focused] rect=(x=82.0 y=76.0 width=1430.0 height=19.1 center_x=797.0 center_y=85.6)
+                    TextRun value="mode: Read" rect=(x=86.0 y=78.0 width=78.3 height=15.0 center_x=125.1 center_y=85.5)
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Label value="ReadOnly" rect=(x=185.0 y=121.0 width=62.6 height=15.0 center_x=216.3 center_y=128.5)
+              TextRun value="ReadOnly" rect=(x=185.0 y=121.0 width=62.6 height=15.0 center_x=216.3 center_y=128.5)
+          Unknown rect=(x=176.0 y=116.0 width=258.0 height=25.0 center_x=305.0 center_y=128.5)
+      Label value="↑↓ navigate  ·  Enter apply  ·  Esc dismiss" rect=(x=176.0 y=161.0 width=236.1 height=15.0 center_x=294.0 center_y=168.5)
+        TextRun value="↑↓ navigate  ·  Enter apply  ·  Esc dismiss" rect=(x=176.0 y=161.0 width=236.1 height=15.0 center_x=294.0 center_y=168.5)
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Label value="ENUM" rect=(x=474.0 y=132.0 width=36.0 height=15.0 center_x=492.0 center_y=139.5)
+            TextRun value="ENUM" rect=(x=474.0 y=132.0 width=36.0 height=15.0 center_x=492.0 center_y=139.5)
+        Label value="ReadOnly" rect=(x=524.0 y=132.0 width=62.6 height=15.0 center_x=555.3 center_y=139.5)
+          TextRun value="ReadOnly" rect=(x=524.0 y=132.0 width=62.6 height=15.0 center_x=555.3 center_y=139.5)
+      Label value="allowed value" rect=(x=468.0 y=178.0 width=77.3 height=15.0 center_x=506.6 center_y=185.5)
+        TextRun value="allowed value" rect=(x=468.0 y=178.0 width=77.3 height=15.0 center_x=506.6 center_y=185.5)
