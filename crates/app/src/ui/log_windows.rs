@@ -2709,7 +2709,7 @@ mod tests {
         harness.step();
         harness.key_press(egui::Key::ArrowDown);
         harness.step();
-        harness.ui_harness("pod_logs/keyboard_caret_after_arrow_down");
+        harness.ui_harness("pod_logs/pod_log_viewer_keyboard_caret_after_arrow_down_snapshot/keyboard_caret_after_arrow_down");
     }
 
     #[test]
@@ -2747,7 +2747,7 @@ mod tests {
 
         assert_eq!(caret_focus(&window.borrow()).display_row, 0);
         assert!(*caret_has_focus.borrow(), "ArrowUp must retain caret focus");
-        harness.ui_harness("pod_logs/keyboard_caret_after_arrow_up");
+        harness.ui_harness("pod_logs/pod_log_viewer_keyboard_caret_after_arrow_up_snapshot/keyboard_caret_after_arrow_up");
     }
 
     #[test]
@@ -2803,7 +2803,7 @@ mod tests {
             modifiers: egui::Modifiers::NONE,
         });
         harness.run();
-        harness.ui_harness("pod_logs/keyboard_caret");
+        harness.ui_harness("pod_logs/pod_log_viewer_keyboard_caret_snapshot/keyboard_caret");
     }
 
     #[test]
@@ -3393,7 +3393,7 @@ mod tests {
         ]);
         window.search.query = "http".to_owned();
         add_match_ranges(&mut window, false);
-        snapshot_window(window, "pod_logs/viewer");
+        snapshot_window(window, "pod_logs/pod_log_viewer_snapshot/viewer");
     }
 
     #[test]
@@ -3430,7 +3430,11 @@ mod tests {
             },
         });
 
-        snapshot_window_after_horizontal_scroll(window, "pod_logs/wide_selected_fragment", 1_000.0);
+        snapshot_window_after_horizontal_scroll(
+            window,
+            "pod_logs/pod_log_viewer_wide_selected_fragment_snapshot/wide_selected_fragment",
+            1_000.0,
+        );
     }
 
     #[test]
@@ -3474,7 +3478,7 @@ mod tests {
 
         snapshot_window_after_horizontal_scroll(
             window,
-            "pod_logs/wide_multiline_selection_after_scroll",
+            "pod_logs/pod_log_viewer_wide_multiline_selection_after_scroll_snapshot/wide_multiline_selection_after_scroll",
             1_000.0,
         );
     }
@@ -3505,7 +3509,10 @@ mod tests {
             },
         });
 
-        snapshot_window(window, "pod_logs/utf8_grapheme_selection");
+        snapshot_window(
+            window,
+            "pod_logs/pod_log_viewer_utf8_grapheme_selection_snapshot/utf8_grapheme_selection",
+        );
     }
 
     #[test]
@@ -3515,7 +3522,7 @@ mod tests {
         window.initial_page_loaded = false;
         snapshot_initial_spool_window(
             window,
-            "pod_logs/loading_placeholder",
+            "pod_logs/pod_log_viewer_loading_placeholder_snapshot/loading_placeholder",
             LogDisplayOptions {
                 show_line_numbers: true,
                 ..LogDisplayOptions::default()
@@ -3539,7 +3546,10 @@ mod tests {
                 match_ranges: Vec::new(),
             },
         );
-        snapshot_window(window, "pod_logs/live_tail_rows_while_disk_page_catches_up");
+        snapshot_window(
+            window,
+            "pod_logs/pod_log_viewer_renders_live_tail_rows_while_disk_page_catches_up_snapshot/live_tail_rows_while_disk_page_catches_up",
+        );
     }
 
     #[test]
@@ -3676,7 +3686,9 @@ mod tests {
             old_visible_row > 0,
             "the test must exercise vertical scroll"
         );
-        harness.ui_harness("pod_logs/rebase_before");
+        harness.ui_harness(
+            "pod_logs/pod_log_viewer_rebase_keeps_scrolled_wide_text_in_place/rebase_before",
+        );
 
         // A full history request returned 100 older records plus the complete
         // initial tail. The visible tail record therefore moves down by 100
@@ -3724,7 +3736,9 @@ mod tests {
             (after_offset.x - before_offset.x).abs() <= 0.1,
             "rebasing must preserve the horizontal scroll offset: before={before_offset:?}, after={after_offset:?}"
         );
-        harness.ui_harness("pod_logs/rebase_after");
+        harness.ui_harness(
+            "pod_logs/pod_log_viewer_rebase_keeps_scrolled_wide_text_in_place/rebase_after",
+        );
 
         // Supply the newly prepended page, then scroll up into it. This
         // verifies that the post-rebase cache can move in the opposite
@@ -3777,7 +3791,7 @@ mod tests {
             (history_scroll_offset.x - before_offset.x).abs() <= 0.1,
             "upward scrolling through history must retain the horizontal offset"
         );
-        harness.ui_harness("pod_logs/rebase_history_after_scroll");
+        harness.ui_harness("pod_logs/pod_log_viewer_rebase_keeps_scrolled_wide_text_in_place/rebase_history_after_scroll");
     }
 
     #[test]
@@ -3839,7 +3853,10 @@ mod tests {
                 })
                 .collect(),
         );
-        snapshot_window(window, "pod_logs/filter_active");
+        snapshot_window(
+            window,
+            "pod_logs/pod_log_viewer_filter_active_snapshot/filter_active",
+        );
     }
 
     #[test]
@@ -3852,7 +3869,10 @@ mod tests {
             "The Kubernetes API closed the log stream unexpectedly".to_owned(),
         );
 
-        snapshot_window(window, "pod_logs/stream_failed");
+        snapshot_window(
+            window,
+            "pod_logs/pod_log_viewer_stream_failure_snapshot/stream_failed",
+        );
     }
 
     #[test]
@@ -3862,7 +3882,10 @@ mod tests {
         window.search.regex_mode = true;
         window.search.error = Some("unclosed character class".to_owned());
 
-        snapshot_window(window, "pod_logs/invalid_regex");
+        snapshot_window(
+            window,
+            "pod_logs/pod_log_viewer_invalid_regex_snapshot/invalid_regex",
+        );
     }
 
     fn add_match_ranges(window: &mut PodLogWindowState, filter_matches: bool) {

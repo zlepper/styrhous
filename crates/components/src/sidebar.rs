@@ -1015,7 +1015,7 @@ mod tests {
             });
         });
 
-        harness.ui_harness("sidebars/wide");
+        harness.ui_harness("sidebars/test_sidebar_wide_mode/wide");
     }
 
     #[test]
@@ -1031,7 +1031,7 @@ mod tests {
             });
         });
 
-        harness.ui_harness("sidebars/narrow");
+        harness.ui_harness("sidebars/test_sidebar_narrow_mode/narrow");
     }
 
     #[test]
@@ -1044,7 +1044,7 @@ mod tests {
             });
         });
 
-        harness.ui_harness("sidebars/narrow_avatars");
+        harness.ui_harness("sidebars/test_sidebar_narrow_avatars/narrow_avatars");
     }
 
     #[test]
@@ -1060,7 +1060,7 @@ mod tests {
             });
         });
 
-        harness.ui_harness("sidebars/dark");
+        harness.ui_harness("sidebars/test_sidebar_dark_mode/dark");
     }
 
     #[test]
@@ -1072,7 +1072,7 @@ mod tests {
             });
         });
 
-        harness.ui_harness("sidebars/primary_text_item");
+        harness.ui_harness("sidebars/test_sidebar_primary_text_item/primary_text_item");
     }
 
     #[test]
@@ -1098,7 +1098,7 @@ mod tests {
             });
         });
 
-        harness.ui_harness("sidebars/expandable");
+        harness.ui_harness("sidebars/test_sidebar_expandable_sections/expandable");
     }
 
     #[test]
@@ -1115,7 +1115,7 @@ mod tests {
         crate::test_support::setup_egui(&mut harness);
         harness.run();
 
-        harness.ui_harness("sidebars/expandable_toggle_collapsed");
+        harness.ui_harness("sidebars/test_sidebar_expandable_toggle/expandable_toggle_collapsed");
 
         let teams_node = harness.get_by_label("Teams");
         let center = teams_node.rect().center();
@@ -1140,7 +1140,7 @@ mod tests {
         });
         harness.run();
 
-        harness.ui_harness("sidebars/expandable_toggle_expanded");
+        harness.ui_harness("sidebars/test_sidebar_expandable_toggle/expandable_toggle_expanded");
     }
 
     #[test]
@@ -1157,7 +1157,9 @@ mod tests {
         harness.get_by_label("Apps & Containers").hover();
         harness.run();
 
-        harness.ui_harness("sidebars/resource_parent_hover");
+        harness.ui_harness(
+            "sidebars/test_sidebar_parent_hover_is_a_full_rounded_row/resource_parent_hover",
+        );
     }
 
     #[test]
@@ -1188,7 +1190,7 @@ mod tests {
         });
         visible_label.get_by_label("pods").hover();
         visible_label.run();
-        visible_label.ui_harness("sidebars/tooltip_visible_label");
+        visible_label.ui_harness("sidebars/test_sidebar_full_text_tooltips_only_appear_when_truncated/tooltip_visible_label");
 
         let mut truncated_label = create_harness(|ui| {
             WideSidebar::new().width(160.0).dark().show(ui, |sidebar| {
@@ -1199,7 +1201,7 @@ mod tests {
             .get_by_label("very-long-resource-name-that-needs-truncation")
             .hover();
         truncated_label.run();
-        truncated_label.ui_harness("sidebars/tooltip_truncated_label");
+        truncated_label.ui_harness("sidebars/test_sidebar_full_text_tooltips_only_appear_when_truncated/tooltip_truncated_label");
     }
 
     #[test]

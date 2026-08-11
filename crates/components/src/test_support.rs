@@ -1067,19 +1067,22 @@ mod tests {
 
     #[test]
     fn snapshot_paths_keep_text_fixtures_distinct_from_image_snapshots() {
-        let paths = snapshot_paths(Path::new("tests/snapshots"), "buttons/variants");
+        let paths = snapshot_paths(
+            Path::new("tests/snapshots"),
+            "buttons/test_buttons/variants",
+        );
 
         assert_eq!(
             paths.snapshot_path,
-            PathBuf::from("tests/snapshots/buttons/variants.accessibility.txt")
+            PathBuf::from("tests/snapshots/buttons/test_buttons/variants.accessibility.txt")
         );
         assert_eq!(
             paths.new_path,
-            PathBuf::from("tests/snapshots/buttons/variants.accessibility.new.txt")
+            PathBuf::from("tests/snapshots/buttons/test_buttons/variants.accessibility.new.txt")
         );
         assert_eq!(
             paths.old_path,
-            PathBuf::from("tests/snapshots/buttons/variants.accessibility.old.txt")
+            PathBuf::from("tests/snapshots/buttons/test_buttons/variants.accessibility.old.txt")
         );
     }
 

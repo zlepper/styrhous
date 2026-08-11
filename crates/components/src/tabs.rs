@@ -331,7 +331,7 @@ mod tests {
 
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.ui_harness("tabs/no_icons");
+        harness.ui_harness("tabs/test_tabs_no_icons/no_icons");
     }
 
     #[test]
@@ -356,7 +356,7 @@ mod tests {
 
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.ui_harness("tabs/with_icons");
+        harness.ui_harness("tabs/test_tabs_with_icons/with_icons");
     }
 
     #[test]
@@ -379,13 +379,13 @@ mod tests {
 
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.ui_harness("tabs/selection_initial");
+        harness.ui_harness("tabs/test_tabs_selection_change/selection_initial");
 
         // Click on "Second" tab
         let second_tab = harness.get_by_label("Second");
         second_tab.click();
         harness.run();
 
-        harness.ui_harness("tabs/selection_changed");
+        harness.ui_harness("tabs/test_tabs_selection_change/selection_changed");
     }
 }

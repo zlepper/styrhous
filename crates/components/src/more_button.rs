@@ -237,13 +237,16 @@ mod tests {
             .get_by_label("More actions for coredns")
             .click_accesskit();
         harness.run();
-        harness.ui_harness("more_button/open");
+        harness
+            .ui_harness("more_button/more_button_actions_are_accessible_and_close_the_menu/open");
 
         harness.get_by_label("Delete").click_accesskit();
         harness.run();
 
         assert_eq!(*selected_action.borrow(), Some("delete"));
-        harness.ui_harness("more_button/closed_after_action");
+        harness.ui_harness(
+            "more_button/more_button_actions_are_accessible_and_close_the_menu/closed_after_action",
+        );
     }
 
     #[test]
