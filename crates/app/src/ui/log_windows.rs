@@ -1,6 +1,6 @@
 use super::state::{
-    LogDisplayOptions, LogPageKey, LogTextPosition, LogTextSelection, PodLogStatus,
-    PodLogWindowState, UiState,
+    LogDisplayOptions, LogPageKey, LogTextPosition, LogTextSelection, PendingLogCaret,
+    PodLogStatus, PodLogWindowState, UiState,
 };
 use crate::ansi::AnsiStyleSpan;
 use crate::log_store::LogStoreService;
@@ -196,16 +196,79 @@ fn show_log_window_with_scroll_state(
             let viewport_width = ui.available_width();
             let character_width = ui
                 .fonts_mut(|fonts| fonts.glyph_width(&egui::FontId::monospace(LOG_FONT_SIZE), '0'));
-            let requested_offset = window.search.scroll_to_display_row.take().map(|row| {
-                let requested_vertical_offset = window
-                    .search
-                    .rebase_scroll_row_delta
-                    .take()
-                    .map_or(row as f32 * row_step, |delta| {
-                        vertical_offset + delta as f32 * row_step
-                    });
-                egui::vec2(horizontal_offset, requested_vertical_offset)
-            });
+            let caret_focus_id = egui::Id::new(("pod-log-caret", window.id));
+            // Register a real focusable egui node for the virtual text canvas.
+            // Individual rows request this ID on click, but cannot own it because
+            // their set changes as pages are virtualized in and out of view.
+            let _ = ui.interact(
+                ui.available_rect_before_wrap(),
+                caret_focus_id,
+                egui::Sense::focusable_noninteractive(),
+            );
+            resolve_pending_caret(window, log_store, displayed_line_count(window), ctx);
+            let caret_has_focus = ctx.memory(|memory| memory.has_focus(caret_focus_id));
+            if caret_has_focus {
+                ctx.memory_mut(|memory| {
+                    memory.set_focus_lock_filter(
+                        caret_focus_id,
+                        egui::EventFilter {
+                            horizontal_arrows: true,
+                            vertical_arrows: true,
+                            ..Default::default()
+                        },
+                    );
+                });
+                handle_log_keyboard(
+                    ctx,
+                    window,
+                    log_store,
+                    displayed_line_count(window),
+                    (ui.available_height() / row_step).floor().max(1.0) as usize,
+                );
+            }
+            let mut caret_scroll_offset = None;
+            let horizontal_offset = if window.ensure_caret_visible {
+                if let Some(offset) = caret_horizontal_offset(
+                    window,
+                    *display_options,
+                    horizontal_offset,
+                    viewport_width,
+                    character_width,
+                ) {
+                    let vertical = caret_vertical_offset(
+                        window,
+                        vertical_offset,
+                        ui.available_height(),
+                        row_step,
+                    );
+                    if (offset - horizontal_offset).abs() > f32::EPSILON
+                        || (vertical - vertical_offset).abs() > f32::EPSILON
+                    {
+                        caret_scroll_offset = Some(egui::vec2(offset, vertical));
+                    }
+                    window.ensure_caret_visible = false;
+                    offset
+                } else {
+                    horizontal_offset
+                }
+            } else {
+                horizontal_offset
+            };
+            let requested_offset = window
+                .search
+                .scroll_to_display_row
+                .take()
+                .map(|row| {
+                    let requested_vertical_offset = window
+                        .search
+                        .rebase_scroll_row_delta
+                        .take()
+                        .map_or(row as f32 * row_step, |delta| {
+                            vertical_offset + delta as f32 * row_step
+                        });
+                    egui::vec2(horizontal_offset, requested_vertical_offset)
+                })
+                .or(caret_scroll_offset);
             let mut scroll_area = egui::ScrollArea::both()
                 .id_salt(scroll_area_salt)
                 .auto_shrink([false, false])
@@ -214,7 +277,10 @@ fn show_log_window_with_scroll_state(
                 // that discovery from changing the vertical viewport.
                 .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                 .horizontal_scroll_offset(horizontal_offset)
-                .stick_to_bottom(requested_offset.is_none());
+                // A focused text caret is an explicit request to inspect the
+                // current records. Do not let new tail records carry it out
+                // of view between keyboard frames.
+                .stick_to_bottom(requested_offset.is_none() && !caret_has_focus);
             if let Some(offset) = requested_offset {
                 scroll_area = scroll_area.scroll_offset(offset);
             }
@@ -222,6 +288,7 @@ fn show_log_window_with_scroll_state(
                 ui.set_min_width(window.horizontal_content_width);
                 for display_row in rows {
                     let mut selection_update = None;
+                    let mut caret_paint = None;
                     let mut row_content_width = None;
                     request_page_for_display_row(window, log_store, display_row);
                     let page_start = display_row / window.page_size * window.page_size;
@@ -268,12 +335,13 @@ fn show_log_window_with_scroll_state(
                         let selection_range = window.selection.and_then(|selection| {
                             selection.range_for_row(display_row, row.text.len())
                         });
-                        let response = if byte_range == (0..row.text.len()) {
+                        let (response, interaction_response) = if byte_range == (0..row.text.len())
+                        {
                             let mut highlight_ranges = row.match_ranges.clone();
                             if let Some(range) = selection_range {
                                 highlight_ranges.push(range);
                             }
-                            ui.allocate_ui_with_layout(
+                            let row_response = ui.allocate_ui_with_layout(
                                 egui::vec2(ui.available_width(), row_height),
                                 egui::Layout::left_to_right(egui::Align::Center),
                                 |ui| {
@@ -288,13 +356,20 @@ fn show_log_window_with_scroll_state(
                                         ))
                                         .extend()
                                         .selectable(false)
-                                        .sense(egui::Sense::click_and_drag()),
+                                        .sense(egui::Sense::hover()),
                                     )
                                 },
-                            )
-                            .inner
+                            );
+                            let interaction_response = ui
+                                .interact(
+                                    row_response.response.rect,
+                                    egui::Id::new(("pod-log-line", window.id, display_row)),
+                                    egui::Sense::click_and_drag(),
+                                )
+                                .on_hover_cursor(egui::CursorIcon::Text);
+                            (row_response.inner, interaction_response)
                         } else {
-                            ui.allocate_ui_with_layout(
+                            let row_response = ui.allocate_ui_with_layout(
                                 egui::vec2(ui.available_width(), row_height),
                                 egui::Layout::left_to_right(egui::Align::Center),
                                 |ui| {
@@ -324,25 +399,45 @@ fn show_log_window_with_scroll_state(
                                         ))
                                         .extend()
                                         .selectable(false)
-                                        .sense(egui::Sense::click_and_drag()),
+                                        .sense(egui::Sense::hover()),
                                     )
                                 },
-                            )
-                            .inner
+                            );
+                            let interaction_response = ui
+                                .interact(
+                                    row_response.response.rect,
+                                    egui::Id::new(("pod-log-line", window.id, display_row)),
+                                    egui::Sense::click_and_drag(),
+                                )
+                                .on_hover_cursor(egui::CursorIcon::Text);
+                            (row_response.inner, interaction_response)
                         };
-                        let message_start_x = if byte_range == (0..row.text.len()) {
-                            prefix_width
+                        let (text_left, text_start_x) = if byte_range == (0..row.text.len()) {
+                            (response.rect.left() + prefix_width, 0.0)
                         } else {
-                            fragment.start_x
+                            (response.rect.left(), fragment.start_x)
                         };
                         selection_update = selection_position(
                             ctx,
                             display_row,
                             &row.text,
-                            response,
-                            message_start_x,
+                            &interaction_response,
+                            text_left,
+                            text_start_x,
                             character_width,
                         );
+                        if selection_update.is_some()
+                            || window
+                                .selection
+                                .is_some_and(|selection| selection.focus.display_row == display_row)
+                        {
+                            caret_paint = Some((
+                                row.text.clone(),
+                                byte_range.clone(),
+                                response.rect,
+                                prefix_width,
+                            ));
+                        }
                     } else {
                         show_loading_row(
                             ui,
@@ -352,20 +447,41 @@ fn show_log_window_with_scroll_state(
                             *display_options,
                         );
                     }
+                    if let Some(row_content_width) = row_content_width {
+                        window.horizontal_content_width =
+                            window.horizontal_content_width.max(row_content_width);
+                    }
                     if let Some((position, starts_selection)) = selection_update {
                         if starts_selection {
                             window.selection = Some(LogTextSelection {
                                 anchor: position,
                                 focus: position,
                             });
+                            ctx.memory_mut(|memory| memory.request_focus(caret_focus_id));
                         } else if let Some(selection) = &mut window.selection {
                             selection.focus = position;
                         }
+                        window.caret_preferred_column =
+                            Some(caret_paint.as_ref().map_or(0, |(text, _, _, _)| {
+                                character_column_at_byte(text, position.byte_offset)
+                            }));
+                        window.ensure_caret_visible = false;
                         window.selection_generation = window.selection_generation.wrapping_add(1);
                     }
-                    if let Some(row_content_width) = row_content_width {
-                        window.horizontal_content_width =
-                            window.horizontal_content_width.max(row_content_width);
+                    if let Some((text, byte_range, response_rect, prefix_width)) = caret_paint {
+                        paint_log_caret(
+                            ui,
+                            ctx,
+                            window,
+                            caret_focus_id,
+                            display_row,
+                            &text,
+                            &byte_range,
+                            response_rect,
+                            prefix_width,
+                            character_width,
+                            row_height,
+                        );
                     }
                 }
             });
@@ -735,22 +851,396 @@ fn request_copy(
     );
 }
 
+fn log_row_for_display_row(
+    window: &PodLogWindowState,
+    display_row: usize,
+) -> Option<&crate::log_store::LogPageRow> {
+    let page_start = display_row / window.page_size * window.page_size;
+    let key = LogPageKey {
+        generation: window.search.generation,
+        filter_matches: filter_is_active(window),
+        page_start,
+    };
+    window
+        .pages
+        .get(&key)
+        .and_then(|page| page.rows.get(display_row - page_start))
+        .or_else(|| {
+            (!filter_is_active(window))
+                .then(|| window.live_rows.get(&display_row))
+                .flatten()
+        })
+}
+
+fn resolve_pending_caret(
+    window: &mut PodLogWindowState,
+    log_store: &LogStoreService,
+    display_count: usize,
+    _ctx: &egui::Context,
+) {
+    let Some(pending) = window.pending_caret else {
+        return;
+    };
+    if pending.display_row >= display_count {
+        window.pending_caret = None;
+        return;
+    }
+    let Some(position) =
+        log_row_for_display_row(window, pending.display_row).map(|row| LogTextPosition {
+            display_row: pending.display_row,
+            byte_offset: byte_offset_at_character_column(&row.text, pending.character_column),
+        })
+    else {
+        request_page_for_display_row(window, log_store, pending.display_row);
+        return;
+    };
+    window.selection = Some(LogTextSelection {
+        anchor: pending.anchor.unwrap_or(position),
+        focus: position,
+    });
+    window.pending_caret = None;
+    window.ensure_caret_visible = true;
+    window.selection_generation = window.selection_generation.wrapping_add(1);
+}
+
+fn handle_log_keyboard(
+    ctx: &egui::Context,
+    window: &mut PodLogWindowState,
+    log_store: &LogStoreService,
+    display_count: usize,
+    page_rows: usize,
+) {
+    if display_count == 0 || window.pending_caret.is_some() {
+        return;
+    }
+    let events = ctx.input(|input| input.events.clone());
+    for event in events {
+        let egui::Event::Key {
+            key,
+            pressed: true,
+            modifiers,
+            ..
+        } = event
+        else {
+            continue;
+        };
+        if move_log_caret(
+            window,
+            log_store,
+            display_count,
+            page_rows,
+            key,
+            modifiers,
+            ctx.input(|input| input.time),
+        ) {
+            ctx.input_mut(|input| {
+                input.consume_key(modifiers, key);
+            });
+            // egui turns unconsumed arrow keys into directional focus
+            // navigation at the end of the frame. This canvas owns the arrow
+            // keys while its caret is active, so suppress that traversal.
+            ctx.memory_mut(|memory| memory.move_focus(egui::FocusDirection::None));
+        }
+    }
+}
+
+fn move_log_caret(
+    window: &mut PodLogWindowState,
+    log_store: &LogStoreService,
+    display_count: usize,
+    page_rows: usize,
+    key: egui::Key,
+    modifiers: egui::Modifiers,
+    _interaction_time: f64,
+) -> bool {
+    if key == egui::Key::A && modifiers.command {
+        let last_row = display_count - 1;
+        set_caret_target(
+            window,
+            log_store,
+            last_row,
+            usize::MAX,
+            Some(LogTextPosition {
+                display_row: 0,
+                byte_offset: 0,
+            }),
+            _interaction_time,
+        );
+        return true;
+    }
+
+    let Some(selection) = window.selection else {
+        return false;
+    };
+    let mut focus = selection.focus;
+    let mut anchor = modifiers.shift.then_some(selection.anchor);
+    if !modifiers.shift && !selection_is_empty(selection) {
+        match key {
+            egui::Key::ArrowLeft => focus = selection.normalized().0,
+            egui::Key::ArrowRight => focus = selection.normalized().1,
+            _ => {}
+        }
+        if matches!(key, egui::Key::ArrowLeft | egui::Key::ArrowRight) {
+            window.selection = Some(LogTextSelection {
+                anchor: focus,
+                focus,
+            });
+            window.caret_preferred_column = None;
+            window.ensure_caret_visible = true;
+            window.selection_generation = window.selection_generation.wrapping_add(1);
+            return true;
+        }
+    }
+
+    let Some(text) = log_row_for_display_row(window, focus.display_row).map(|row| row.text.clone())
+    else {
+        request_page_for_display_row(window, log_store, focus.display_row);
+        return false;
+    };
+    let character_column = character_column_at_byte(&text, focus.byte_offset);
+    let line_length = text.chars().count();
+    let mut target_row = focus.display_row;
+    let mut target_column = character_column;
+    let mut preserve_column = false;
+
+    match key {
+        egui::Key::ArrowLeft => {
+            if modifiers.alt || modifiers.ctrl {
+                target_column = egui::text_selection::text_cursor_state::ccursor_previous_word(
+                    &text,
+                    egui::text::CCursor::new(character_column),
+                )
+                .index;
+            } else if modifiers.mac_cmd {
+                target_column = 0;
+            } else if character_column > 0 {
+                target_column = character_column - 1;
+            } else if target_row > 0 {
+                target_row -= 1;
+                target_column = usize::MAX;
+            }
+        }
+        egui::Key::ArrowRight => {
+            if modifiers.alt || modifiers.ctrl {
+                target_column = egui::text_selection::text_cursor_state::ccursor_next_word(
+                    &text,
+                    egui::text::CCursor::new(character_column),
+                )
+                .index;
+            } else if modifiers.mac_cmd {
+                target_column = line_length;
+            } else if character_column < line_length {
+                target_column = character_column + 1;
+            } else if target_row + 1 < display_count {
+                target_row += 1;
+                target_column = 0;
+            }
+        }
+        egui::Key::ArrowUp => {
+            if modifiers.command {
+                target_row = 0;
+                target_column = 0;
+            } else {
+                target_row = target_row.saturating_sub(1);
+                target_column = window.caret_preferred_column.unwrap_or(character_column);
+                preserve_column = true;
+            }
+        }
+        egui::Key::ArrowDown => {
+            if modifiers.command {
+                target_row = display_count - 1;
+                target_column = usize::MAX;
+            } else {
+                target_row = (target_row + 1).min(display_count - 1);
+                target_column = window.caret_preferred_column.unwrap_or(character_column);
+                preserve_column = true;
+            }
+        }
+        egui::Key::Home => {
+            if modifiers.command {
+                target_row = 0;
+            }
+            target_column = 0;
+        }
+        egui::Key::End => {
+            if modifiers.command {
+                target_row = display_count - 1;
+            }
+            target_column = usize::MAX;
+        }
+        egui::Key::PageUp => {
+            target_row = target_row.saturating_sub(page_rows);
+            target_column = window.caret_preferred_column.unwrap_or(character_column);
+            preserve_column = true;
+        }
+        egui::Key::PageDown => {
+            target_row = (target_row + page_rows).min(display_count - 1);
+            target_column = window.caret_preferred_column.unwrap_or(character_column);
+            preserve_column = true;
+        }
+        _ => return false,
+    }
+    if preserve_column {
+        window.caret_preferred_column = Some(target_column);
+    } else {
+        window.caret_preferred_column = None;
+    }
+    set_caret_target(
+        window,
+        log_store,
+        target_row,
+        target_column,
+        anchor.take(),
+        _interaction_time,
+    );
+    true
+}
+
+fn set_caret_target(
+    window: &mut PodLogWindowState,
+    log_store: &LogStoreService,
+    display_row: usize,
+    character_column: usize,
+    anchor: Option<LogTextPosition>,
+    _interaction_time: f64,
+) {
+    let position = log_row_for_display_row(window, display_row).map(|row| LogTextPosition {
+        display_row,
+        byte_offset: byte_offset_at_character_column(&row.text, character_column),
+    });
+    if let Some(position) = position {
+        window.selection = Some(LogTextSelection {
+            anchor: anchor.unwrap_or(position),
+            focus: position,
+        });
+        window.pending_caret = None;
+        window.ensure_caret_visible = true;
+        window.selection_generation = window.selection_generation.wrapping_add(1);
+    } else {
+        window.pending_caret = Some(PendingLogCaret {
+            display_row,
+            character_column,
+            anchor,
+        });
+        request_page_for_display_row(window, log_store, display_row);
+    }
+}
+
+fn selection_is_empty(selection: LogTextSelection) -> bool {
+    selection.anchor == selection.focus
+}
+
+fn character_column_at_byte(text: &str, byte_offset: usize) -> usize {
+    egui::text_selection::text_cursor_state::char_index_from_byte_index(text, byte_offset)
+}
+
+fn byte_offset_at_character_column(text: &str, character_column: usize) -> usize {
+    egui::text_selection::text_cursor_state::byte_index_from_char_index(text, character_column)
+}
+
+fn caret_horizontal_offset(
+    window: &PodLogWindowState,
+    display_options: LogDisplayOptions,
+    horizontal_offset: f32,
+    viewport_width: f32,
+    character_width: f32,
+) -> Option<f32> {
+    let focus = window.selection?.focus;
+    let row = log_row_for_display_row(window, focus.display_row)?;
+    let prefix_width = log_line_prefix(row.line_index, row.timestamp.as_deref(), display_options)
+        .chars()
+        .count() as f32
+        * character_width;
+    let caret_x = prefix_width
+        + character_column_at_byte(&row.text, focus.byte_offset) as f32 * character_width;
+    if caret_x < horizontal_offset {
+        Some(caret_x)
+    } else if caret_x + character_width > horizontal_offset + viewport_width {
+        Some((caret_x + character_width - viewport_width).max(0.0))
+    } else {
+        Some(horizontal_offset)
+    }
+}
+
+fn caret_vertical_offset(
+    window: &PodLogWindowState,
+    vertical_offset: f32,
+    viewport_height: f32,
+    row_step: f32,
+) -> f32 {
+    let Some(focus) = window.selection.map(|selection| selection.focus) else {
+        return vertical_offset;
+    };
+    let caret_top = focus.display_row as f32 * row_step;
+    let caret_bottom = caret_top + row_step;
+    if caret_top < vertical_offset {
+        caret_top
+    } else if caret_bottom > vertical_offset + viewport_height {
+        (caret_bottom - viewport_height).max(0.0)
+    } else {
+        vertical_offset
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn paint_log_caret(
+    ui: &egui::Ui,
+    ctx: &egui::Context,
+    window: &PodLogWindowState,
+    focus_id: egui::Id,
+    display_row: usize,
+    text: &str,
+    byte_range: &std::ops::Range<usize>,
+    response_rect: egui::Rect,
+    prefix_width: f32,
+    character_width: f32,
+    row_height: f32,
+) {
+    if !ctx.memory(|memory| memory.has_focus(focus_id)) {
+        return;
+    }
+    let Some(focus) = window.selection.map(|selection| selection.focus) else {
+        return;
+    };
+    if focus.display_row != display_row
+        || focus.byte_offset < byte_range.start
+        || focus.byte_offset > byte_range.end
+    {
+        return;
+    }
+    let relative_byte_offset = focus.byte_offset.saturating_sub(byte_range.start);
+    let text_x = if byte_range.start == 0 {
+        response_rect.left() + prefix_width
+    } else {
+        response_rect.left()
+    };
+    let x = text_x
+        + character_column_at_byte(&text[byte_range.clone()], relative_byte_offset) as f32
+            * character_width;
+    let cursor_rect = egui::Rect::from_min_max(
+        egui::pos2(x, response_rect.top()),
+        egui::pos2(x, response_rect.top() + row_height),
+    );
+    ui.painter().line_segment(
+        [cursor_rect.center_top(), cursor_rect.center_bottom()],
+        egui::Stroke::new(2.0, egui::Color32::WHITE),
+    );
+}
+
 fn selection_position(
     ctx: &egui::Context,
     display_row: usize,
     text: &str,
-    response: egui::Response,
-    message_start_x: f32,
+    response: &egui::Response,
+    text_left: f32,
+    text_start_x: f32,
     character_width: f32,
 ) -> Option<(LogTextPosition, bool)> {
     let Some(pointer) = response.interact_pointer_pos() else {
         return None;
     };
-    let byte_offset = byte_offset_at_x(
-        text,
-        pointer.x - response.rect.left() + message_start_x,
-        character_width,
-    );
+    let byte_offset =
+        byte_offset_at_response_x(text, pointer.x, text_left, text_start_x, character_width);
     let position = LogTextPosition {
         display_row,
         byte_offset,
@@ -772,6 +1262,16 @@ fn byte_offset_at_x(text: &str, x: f32, character_width: f32) -> usize {
     text.char_indices()
         .nth(column)
         .map_or(text.len(), |(byte_offset, _)| byte_offset)
+}
+
+fn byte_offset_at_response_x(
+    text: &str,
+    pointer_x: f32,
+    text_left: f32,
+    text_start_x: f32,
+    character_width: f32,
+) -> usize {
+    byte_offset_at_x(text, pointer_x - text_left + text_start_x, character_width)
 }
 
 #[derive(Debug, Clone)]
@@ -1219,6 +1719,9 @@ mod tests {
             horizontal_content_width: 0.0,
             selection: None,
             selection_generation: 0,
+            caret_preferred_column: None,
+            pending_caret: None,
+            ensure_caret_visible: false,
             copied_text: None,
         };
         window.insert_page(
@@ -1273,6 +1776,1023 @@ mod tests {
         }
 
         window
+    }
+
+    fn select_log_position(window: &mut PodLogWindowState, display_row: usize, byte_offset: usize) {
+        let position = LogTextPosition {
+            display_row,
+            byte_offset,
+        };
+        window.selection = Some(LogTextSelection {
+            anchor: position,
+            focus: position,
+        });
+        window.caret_preferred_column = None;
+    }
+
+    fn move_key(
+        window: &mut PodLogWindowState,
+        log_store: &LogStoreService,
+        key: egui::Key,
+        modifiers: egui::Modifiers,
+        page_rows: usize,
+    ) {
+        let display_count = displayed_line_count(window);
+        assert!(move_log_caret(
+            window,
+            log_store,
+            display_count,
+            page_rows,
+            key,
+            modifiers,
+            1.0,
+        ));
+    }
+
+    fn caret_focus(window: &PodLogWindowState) -> LogTextPosition {
+        window.selection.expect("test positions a log caret").focus
+    }
+
+    #[test]
+    fn keyboard_caret_moves_by_character_word_and_line() {
+        let log_store = LogStoreService::default();
+        let mut window = log_window(&["alpha beta", "xy", "012345"]);
+        select_log_position(&mut window, 0, 5);
+
+        assert!(move_log_caret(
+            &mut window,
+            &log_store,
+            3,
+            1,
+            egui::Key::ArrowRight,
+            egui::Modifiers::NONE,
+            1.0,
+        ));
+        assert_eq!(window.selection.unwrap().focus.byte_offset, 6);
+
+        assert!(move_log_caret(
+            &mut window,
+            &log_store,
+            3,
+            1,
+            egui::Key::ArrowRight,
+            egui::Modifiers::CTRL,
+            2.0,
+        ));
+        assert_eq!(window.selection.unwrap().focus.byte_offset, 10);
+
+        assert!(move_log_caret(
+            &mut window,
+            &log_store,
+            3,
+            1,
+            egui::Key::ArrowRight,
+            egui::Modifiers::NONE,
+            3.0,
+        ));
+        assert_eq!(window.selection.unwrap().focus.display_row, 1);
+        assert_eq!(window.selection.unwrap().focus.byte_offset, 0);
+
+        assert!(move_log_caret(
+            &mut window,
+            &log_store,
+            3,
+            1,
+            egui::Key::ArrowDown,
+            egui::Modifiers::NONE,
+            4.0,
+        ));
+        assert_eq!(window.selection.unwrap().focus.display_row, 2);
+        assert_eq!(window.selection.unwrap().focus.byte_offset, 0);
+    }
+
+    #[test]
+    fn keyboard_caret_shift_extends_and_plain_arrow_collapses_selection() {
+        let log_store = LogStoreService::default();
+        let mut window = log_window(&["abcdef"]);
+        select_log_position(&mut window, 0, 2);
+
+        assert!(move_log_caret(
+            &mut window,
+            &log_store,
+            1,
+            1,
+            egui::Key::ArrowRight,
+            egui::Modifiers::SHIFT,
+            1.0,
+        ));
+        assert_eq!(
+            window.selection,
+            Some(LogTextSelection {
+                anchor: LogTextPosition {
+                    display_row: 0,
+                    byte_offset: 2,
+                },
+                focus: LogTextPosition {
+                    display_row: 0,
+                    byte_offset: 3,
+                },
+            })
+        );
+
+        assert!(move_log_caret(
+            &mut window,
+            &log_store,
+            1,
+            1,
+            egui::Key::ArrowLeft,
+            egui::Modifiers::NONE,
+            2.0,
+        ));
+        assert_eq!(
+            window.selection,
+            Some(LogTextSelection {
+                anchor: LogTextPosition {
+                    display_row: 0,
+                    byte_offset: 2,
+                },
+                focus: LogTextPosition {
+                    display_row: 0,
+                    byte_offset: 2,
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn keyboard_caret_moves_in_every_direction_and_preserves_vertical_column() {
+        let log_store = LogStoreService::default();
+        let mut window = log_window(&["abc", "d", "abcdef"]);
+        select_log_position(&mut window, 1, 1);
+
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::ArrowLeft,
+            egui::Modifiers::NONE,
+            1,
+        );
+        assert_eq!(
+            caret_focus(&window),
+            LogTextPosition {
+                display_row: 1,
+                byte_offset: 0
+            }
+        );
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::ArrowLeft,
+            egui::Modifiers::NONE,
+            1,
+        );
+        assert_eq!(
+            caret_focus(&window),
+            LogTextPosition {
+                display_row: 0,
+                byte_offset: 3
+            }
+        );
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::ArrowUp,
+            egui::Modifiers::NONE,
+            1,
+        );
+        assert_eq!(
+            caret_focus(&window),
+            LogTextPosition {
+                display_row: 0,
+                byte_offset: 3
+            }
+        );
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::ArrowDown,
+            egui::Modifiers::NONE,
+            1,
+        );
+        assert_eq!(
+            caret_focus(&window),
+            LogTextPosition {
+                display_row: 1,
+                byte_offset: 1
+            }
+        );
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::ArrowDown,
+            egui::Modifiers::NONE,
+            1,
+        );
+        assert_eq!(
+            caret_focus(&window),
+            LogTextPosition {
+                display_row: 2,
+                byte_offset: 3
+            }
+        );
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::ArrowUp,
+            egui::Modifiers::NONE,
+            1,
+        );
+        assert_eq!(
+            caret_focus(&window),
+            LogTextPosition {
+                display_row: 1,
+                byte_offset: 1
+            }
+        );
+
+        select_log_position(&mut window, 0, 3);
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::ArrowRight,
+            egui::Modifiers::NONE,
+            1,
+        );
+        assert_eq!(
+            caret_focus(&window),
+            LogTextPosition {
+                display_row: 1,
+                byte_offset: 0
+            }
+        );
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::ArrowRight,
+            egui::Modifiers::NONE,
+            1,
+        );
+        assert_eq!(
+            caret_focus(&window),
+            LogTextPosition {
+                display_row: 1,
+                byte_offset: 1
+            }
+        );
+    }
+
+    #[test]
+    fn keyboard_caret_word_navigation_and_shift_control_selection_work_in_both_directions() {
+        let log_store = LogStoreService::default();
+        let mut window = log_window(&["alpha beta gamma"]);
+        select_log_position(&mut window, 0, 11);
+
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::ArrowLeft,
+            egui::Modifiers::CTRL,
+            1,
+        );
+        assert_eq!(caret_focus(&window).byte_offset, 6);
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::ArrowRight,
+            egui::Modifiers::CTRL,
+            1,
+        );
+        assert_eq!(caret_focus(&window).byte_offset, 10);
+
+        select_log_position(&mut window, 0, 6);
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::ArrowRight,
+            egui::Modifiers::CTRL | egui::Modifiers::SHIFT,
+            1,
+        );
+        assert_eq!(
+            window.selection.unwrap().normalized(),
+            (
+                LogTextPosition {
+                    display_row: 0,
+                    byte_offset: 6
+                },
+                LogTextPosition {
+                    display_row: 0,
+                    byte_offset: 10
+                },
+            )
+        );
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::ArrowLeft,
+            egui::Modifiers::CTRL | egui::Modifiers::SHIFT,
+            1,
+        );
+        assert_eq!(
+            window.selection,
+            Some(LogTextSelection {
+                anchor: LogTextPosition {
+                    display_row: 0,
+                    byte_offset: 6
+                },
+                focus: LogTextPosition {
+                    display_row: 0,
+                    byte_offset: 6
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn keyboard_caret_supports_line_document_page_and_select_all_navigation() {
+        let log_store = LogStoreService::default();
+        let mut window = log_window(&["zero", "one", "two", "three", "four", "five"]);
+        select_log_position(&mut window, 3, 2);
+
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::Home,
+            egui::Modifiers::NONE,
+            2,
+        );
+        assert_eq!(
+            caret_focus(&window),
+            LogTextPosition {
+                display_row: 3,
+                byte_offset: 0
+            }
+        );
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::End,
+            egui::Modifiers::NONE,
+            2,
+        );
+        assert_eq!(
+            caret_focus(&window),
+            LogTextPosition {
+                display_row: 3,
+                byte_offset: 5
+            }
+        );
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::PageUp,
+            egui::Modifiers::NONE,
+            2,
+        );
+        assert_eq!(
+            caret_focus(&window),
+            LogTextPosition {
+                display_row: 1,
+                byte_offset: 3
+            }
+        );
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::PageDown,
+            egui::Modifiers::NONE,
+            2,
+        );
+        assert_eq!(
+            caret_focus(&window),
+            LogTextPosition {
+                display_row: 3,
+                byte_offset: 5
+            }
+        );
+
+        select_log_position(&mut window, 3, 2);
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::Home,
+            egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+            2,
+        );
+        assert_eq!(
+            window.selection.unwrap().normalized(),
+            (
+                LogTextPosition {
+                    display_row: 0,
+                    byte_offset: 0
+                },
+                LogTextPosition {
+                    display_row: 3,
+                    byte_offset: 2
+                },
+            )
+        );
+
+        select_log_position(&mut window, 2, 1);
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::End,
+            egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+            2,
+        );
+        assert_eq!(
+            window.selection.unwrap().normalized(),
+            (
+                LogTextPosition {
+                    display_row: 2,
+                    byte_offset: 1
+                },
+                LogTextPosition {
+                    display_row: 5,
+                    byte_offset: 4
+                },
+            )
+        );
+
+        select_log_position(&mut window, 3, 2);
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::PageDown,
+            egui::Modifiers::SHIFT,
+            2,
+        );
+        assert_eq!(
+            window.selection.unwrap().normalized(),
+            (
+                LogTextPosition {
+                    display_row: 3,
+                    byte_offset: 2
+                },
+                LogTextPosition {
+                    display_row: 5,
+                    byte_offset: 2
+                },
+            )
+        );
+
+        select_log_position(&mut window, 2, 1);
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::PageUp,
+            egui::Modifiers::SHIFT,
+            2,
+        );
+        assert_eq!(
+            window.selection.unwrap().normalized(),
+            (
+                LogTextPosition {
+                    display_row: 0,
+                    byte_offset: 1
+                },
+                LogTextPosition {
+                    display_row: 2,
+                    byte_offset: 1
+                },
+            )
+        );
+
+        select_log_position(&mut window, 2, 1);
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::ArrowUp,
+            egui::Modifiers::COMMAND,
+            2,
+        );
+        assert_eq!(
+            caret_focus(&window),
+            LogTextPosition {
+                display_row: 0,
+                byte_offset: 0
+            }
+        );
+        select_log_position(&mut window, 2, 1);
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::ArrowDown,
+            egui::Modifiers::COMMAND,
+            2,
+        );
+        assert_eq!(
+            caret_focus(&window),
+            LogTextPosition {
+                display_row: 5,
+                byte_offset: 4
+            }
+        );
+
+        select_log_position(&mut window, 2, 1);
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::ArrowUp,
+            egui::Modifiers::SHIFT,
+            2,
+        );
+        assert_eq!(
+            window.selection.unwrap().normalized(),
+            (
+                LogTextPosition {
+                    display_row: 1,
+                    byte_offset: 1
+                },
+                LogTextPosition {
+                    display_row: 2,
+                    byte_offset: 1
+                },
+            )
+        );
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::ArrowDown,
+            egui::Modifiers::SHIFT,
+            2,
+        );
+        assert_eq!(
+            window.selection,
+            Some(LogTextSelection {
+                anchor: LogTextPosition {
+                    display_row: 2,
+                    byte_offset: 1
+                },
+                focus: LogTextPosition {
+                    display_row: 2,
+                    byte_offset: 1
+                },
+            })
+        );
+
+        select_log_position(&mut window, 2, 1);
+        move_key(
+            &mut window,
+            &log_store,
+            egui::Key::A,
+            egui::Modifiers::COMMAND,
+            2,
+        );
+        assert_eq!(
+            window.selection.unwrap().normalized(),
+            (
+                LogTextPosition {
+                    display_row: 0,
+                    byte_offset: 0
+                },
+                LogTextPosition {
+                    display_row: 5,
+                    byte_offset: 4
+                },
+            )
+        );
+    }
+
+    #[test]
+    fn keyboard_caret_ignores_typing() {
+        let log_store = LogStoreService::default();
+        let mut window = log_window(&["readonly"]);
+        select_log_position(&mut window, 0, 2);
+
+        assert!(!move_log_caret(
+            &mut window,
+            &log_store,
+            1,
+            1,
+            egui::Key::A,
+            egui::Modifiers::NONE,
+            1.0,
+        ));
+        assert_eq!(
+            caret_focus(&window),
+            LogTextPosition {
+                display_row: 0,
+                byte_offset: 2
+            }
+        );
+    }
+
+    #[test]
+    fn keyboard_caret_waits_for_an_unloaded_target_page() {
+        let log_store = LogStoreService::default();
+        let context = egui::Context::default();
+        let mut window = log_window(&["start"]);
+        window.total_lines = LOG_PAGE_SIZE + 1;
+        let total_lines = window.total_lines;
+        select_log_position(&mut window, 0, 0);
+
+        assert!(move_log_caret(
+            &mut window,
+            &log_store,
+            total_lines,
+            1,
+            egui::Key::End,
+            egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+            1.0,
+        ));
+        assert_eq!(
+            window.pending_caret,
+            Some(PendingLogCaret {
+                display_row: LOG_PAGE_SIZE,
+                character_column: usize::MAX,
+                anchor: Some(LogTextPosition {
+                    display_row: 0,
+                    byte_offset: 0,
+                }),
+            })
+        );
+
+        window.insert_page(
+            LogPageKey {
+                generation: 0,
+                filter_matches: false,
+                page_start: LOG_PAGE_SIZE,
+            },
+            vec![LogPageRow {
+                display_row: LOG_PAGE_SIZE,
+                line_index: LOG_PAGE_SIZE,
+                timestamp: None,
+                text: "destination".to_owned(),
+                style_spans: Vec::new(),
+                match_ranges: Vec::new(),
+            }],
+        );
+        resolve_pending_caret(&mut window, &log_store, total_lines, &context);
+
+        assert_eq!(window.pending_caret, None);
+        assert_eq!(
+            window.selection,
+            Some(LogTextSelection {
+                anchor: LogTextPosition {
+                    display_row: 0,
+                    byte_offset: 0,
+                },
+                focus: LogTextPosition {
+                    display_row: LOG_PAGE_SIZE,
+                    byte_offset: "destination".len(),
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn clicking_a_log_row_focuses_the_keyboard_caret() {
+        let window = Rc::new(RefCell::new(log_window(&["clickable log line"])));
+        let window_for_ui = window.clone();
+        let display_options = Rc::new(RefCell::new(LogDisplayOptions::default()));
+        let display_options_for_ui = display_options.clone();
+        let log_store = LogStoreService::default();
+        let mut close_requested = false;
+        let mut harness = Harness::builder().build(move |ctx| {
+            show_log_window(
+                ctx,
+                &mut window_for_ui.borrow_mut(),
+                &mut display_options_for_ui.borrow_mut(),
+                &log_store,
+                &mut close_requested,
+            );
+        });
+        components::test_support::setup_egui(&mut harness);
+        harness.run_steps(2);
+        harness.get_by_label("clickable log line").click();
+        harness.step();
+        let clicked_position = window
+            .borrow()
+            .selection
+            .expect("clicking a log row places the caret")
+            .focus;
+
+        harness.key_press(egui::Key::ArrowRight);
+        harness.step();
+        let moved_position = window
+            .borrow()
+            .selection
+            .expect("focused log caret remains present")
+            .focus;
+
+        assert_eq!(moved_position.display_row, clicked_position.display_row);
+        assert!(moved_position.byte_offset > clicked_position.byte_offset);
+    }
+
+    #[test]
+    fn hovering_a_log_row_uses_a_text_cursor() {
+        let window = Rc::new(RefCell::new(log_window(&["hoverable log line"])));
+        let window_for_ui = window.clone();
+        let display_options = Rc::new(RefCell::new(LogDisplayOptions::default()));
+        let display_options_for_ui = display_options.clone();
+        let log_store = LogStoreService::default();
+        let mut close_requested = false;
+        let mut harness = Harness::builder().build(move |ctx| {
+            show_log_window(
+                ctx,
+                &mut window_for_ui.borrow_mut(),
+                &mut display_options_for_ui.borrow_mut(),
+                &log_store,
+                &mut close_requested,
+            );
+        });
+        components::test_support::setup_egui(&mut harness);
+        harness.run_steps(2);
+        let hover_position = harness.get_by_label("hoverable log line").rect().center();
+        harness.event(egui::Event::PointerMoved(hover_position));
+        harness.step();
+
+        assert_eq!(
+            harness.output().platform_output.cursor_icon,
+            egui::CursorIcon::Text
+        );
+    }
+
+    #[test]
+    fn focused_log_caret_moves_between_rows_in_the_ui() {
+        let window = Rc::new(RefCell::new(log_window(&["first row", "second row"])));
+        let window_for_ui = window.clone();
+        let display_options = Rc::new(RefCell::new(LogDisplayOptions::default()));
+        let display_options_for_ui = display_options.clone();
+        let log_store = LogStoreService::default();
+        let mut close_requested = false;
+        let mut harness = Harness::builder().build(move |ctx| {
+            show_log_window(
+                ctx,
+                &mut window_for_ui.borrow_mut(),
+                &mut display_options_for_ui.borrow_mut(),
+                &log_store,
+                &mut close_requested,
+            );
+        });
+        components::test_support::setup_egui(&mut harness);
+        harness.run_steps(2);
+        harness.get_by_label("first row").click();
+        harness.step();
+        harness.key_press(egui::Key::ArrowDown);
+        harness.step();
+
+        assert_eq!(caret_focus(&window.borrow()).display_row, 1);
+    }
+
+    #[test]
+    fn clicking_a_prefixed_log_row_places_the_caret_in_its_message() {
+        let window = Rc::new(RefCell::new(log_window(&[
+            "2026-08-11T10:00:00Z focused caret line",
+        ])));
+        let window_for_ui = window.clone();
+        let display_options = Rc::new(RefCell::new(LogDisplayOptions {
+            show_line_numbers: true,
+            show_timestamps: true,
+            ..LogDisplayOptions::default()
+        }));
+        let display_options_for_ui = display_options.clone();
+        let log_store = LogStoreService::default();
+        let mut close_requested = false;
+        let mut harness = Harness::builder().build(move |ctx| {
+            show_log_window(
+                ctx,
+                &mut window_for_ui.borrow_mut(),
+                &mut display_options_for_ui.borrow_mut(),
+                &log_store,
+                &mut close_requested,
+            );
+        });
+        components::test_support::setup_egui(&mut harness);
+        harness.run_steps(2);
+        let label = harness.get_by_label_contains("focused caret line");
+        let character_width = label.rect().width()
+            / "       0  2026-08-11T10:00:00Z  focused caret line"
+                .chars()
+                .count() as f32;
+        let prefix_width =
+            "       0  2026-08-11T10:00:00Z  ".chars().count() as f32 * character_width;
+        let clicked_column = 7;
+        let click_position = egui::pos2(
+            label.rect().left() + prefix_width + clicked_column as f32 * character_width,
+            label.rect().center().y,
+        );
+        harness.event(egui::Event::PointerMoved(click_position));
+        harness.event(egui::Event::PointerButton {
+            pos: click_position,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.event(egui::Event::PointerButton {
+            pos: click_position,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.run();
+
+        let position = caret_focus(&window.borrow());
+        assert_eq!(position.display_row, 0);
+        assert_eq!(position.byte_offset, clicked_column);
+    }
+
+    #[test]
+    fn clicking_a_horizontally_scrolled_log_row_uses_the_original_text_column() {
+        let line = "x".repeat(2_000);
+        let window = Rc::new(RefCell::new(log_window(&[&line])));
+        let window_for_ui = window.clone();
+        let display_options = Rc::new(RefCell::new(LogDisplayOptions::default()));
+        let display_options_for_ui = display_options.clone();
+        let scroll_state = Rc::new(RefCell::new(None));
+        let scroll_state_for_ui = scroll_state.clone();
+        let viewport = Rc::new(RefCell::new(egui::Rect::NOTHING));
+        let viewport_for_ui = viewport.clone();
+        let character_width = Rc::new(RefCell::new(0.0));
+        let character_width_for_ui = character_width.clone();
+        let log_store = LogStoreService::default();
+        let mut close_requested = false;
+        let mut harness = Harness::builder().build(move |ctx| {
+            *character_width_for_ui.borrow_mut() = ctx
+                .fonts_mut(|fonts| fonts.glyph_width(&egui::FontId::monospace(LOG_FONT_SIZE), '0'));
+            let output = show_log_window_with_scroll_state(
+                ctx,
+                &mut window_for_ui.borrow_mut(),
+                &mut display_options_for_ui.borrow_mut(),
+                &log_store,
+                &mut close_requested,
+            );
+            *scroll_state_for_ui.borrow_mut() = Some(output.state);
+            *viewport_for_ui.borrow_mut() = output.inner_rect;
+        });
+        components::test_support::setup_egui(&mut harness);
+        harness.run_steps(2);
+        harness.event(egui::Event::PointerMoved(egui::pos2(400.0, 100.0)));
+        harness.step();
+        harness.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(-500.0, 0.0),
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.step();
+        harness.run_steps(2);
+
+        let viewport = *viewport.borrow();
+        let scroll_offset = scroll_state
+            .borrow()
+            .as_ref()
+            .expect("the log scroll area was rendered")
+            .offset;
+        assert!(
+            scroll_offset.x > 0.0,
+            "the log view was horizontally scrolled"
+        );
+        let click_position = egui::pos2(viewport.left() + 160.0, viewport.top() + 8.0);
+        let expected_column = ((scroll_offset.x + click_position.x - viewport.left())
+            / *character_width.borrow())
+        .round() as usize;
+        harness.event(egui::Event::PointerMoved(click_position));
+        harness.event(egui::Event::PointerButton {
+            pos: click_position,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.event(egui::Event::PointerButton {
+            pos: click_position,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.run();
+
+        assert_eq!(
+            caret_focus(&window.borrow()),
+            LogTextPosition {
+                display_row: 0,
+                byte_offset: expected_column,
+            }
+        );
+    }
+
+    #[test]
+    fn pod_log_viewer_keyboard_caret_after_arrow_down_snapshot() {
+        let window = Rc::new(RefCell::new(log_window(&[
+            "first row",
+            "second row",
+            "third row",
+        ])));
+        let window_for_ui = window.clone();
+        let display_options = Rc::new(RefCell::new(LogDisplayOptions::default()));
+        let display_options_for_ui = display_options.clone();
+        let log_store = LogStoreService::default();
+        let mut close_requested = false;
+        let mut harness = Harness::builder().build(move |ctx| {
+            show_log_window(
+                ctx,
+                &mut window_for_ui.borrow_mut(),
+                &mut display_options_for_ui.borrow_mut(),
+                &log_store,
+                &mut close_requested,
+            );
+        });
+        components::test_support::setup_egui(&mut harness);
+        harness.run_steps(2);
+        harness.get_by_label("first row").click();
+        harness.step();
+        harness.key_press(egui::Key::ArrowDown);
+        harness.step();
+        harness.snapshot("pod_logs/keyboard_caret_after_arrow_down");
+    }
+
+    #[test]
+    fn pod_log_viewer_keyboard_caret_after_arrow_up_snapshot() {
+        let window = Rc::new(RefCell::new(log_window(&[
+            "first row",
+            "second row",
+            "third row",
+        ])));
+        let window_for_ui = window.clone();
+        let display_options = Rc::new(RefCell::new(LogDisplayOptions::default()));
+        let display_options_for_ui = display_options.clone();
+        let caret_has_focus = Rc::new(RefCell::new(false));
+        let caret_has_focus_for_ui = caret_has_focus.clone();
+        let log_store = LogStoreService::default();
+        let mut close_requested = false;
+        let mut harness = Harness::builder().build(move |ctx| {
+            show_log_window(
+                ctx,
+                &mut window_for_ui.borrow_mut(),
+                &mut display_options_for_ui.borrow_mut(),
+                &log_store,
+                &mut close_requested,
+            );
+            *caret_has_focus_for_ui.borrow_mut() =
+                ctx.memory(|memory| memory.has_focus(egui::Id::new(("pod-log-caret", 1))));
+        });
+        components::test_support::setup_egui(&mut harness);
+        harness.run_steps(2);
+        harness.get_by_label("second row").click();
+        harness.step();
+        harness.key_press(egui::Key::ArrowUp);
+        harness.step();
+        harness.run_steps(2);
+
+        assert_eq!(caret_focus(&window.borrow()).display_row, 0);
+        assert!(*caret_has_focus.borrow(), "ArrowUp must retain caret focus");
+        harness.snapshot("pod_logs/keyboard_caret_after_arrow_up");
+    }
+
+    #[test]
+    fn pod_log_viewer_keyboard_caret_snapshot() {
+        let window = Rc::new(RefCell::new(log_window(&[
+            "2026-08-11T10:00:00Z first readonly line",
+            "2026-08-11T10:00:01Z focused caret line",
+        ])));
+        let window_for_ui = window.clone();
+        let display_options = Rc::new(RefCell::new(LogDisplayOptions {
+            show_line_numbers: true,
+            show_timestamps: true,
+            ..LogDisplayOptions::default()
+        }));
+        let display_options_for_ui = display_options.clone();
+        let log_store = LogStoreService::default();
+        let mut close_requested = false;
+        let mut harness = Harness::builder().build(move |ctx| {
+            show_log_window(
+                ctx,
+                &mut window_for_ui.borrow_mut(),
+                &mut display_options_for_ui.borrow_mut(),
+                &log_store,
+                &mut close_requested,
+            );
+        });
+        components::test_support::setup_egui(&mut harness);
+        harness.run_steps(2);
+        let label = harness.get_by_label_contains("focused caret line");
+        let character_width = label.rect().width()
+            / "       1  2026-08-11T10:00:01Z  focused caret line"
+                .chars()
+                .count() as f32;
+        let prefix_width =
+            "       1  2026-08-11T10:00:01Z  ".chars().count() as f32 * character_width;
+        let click_position = egui::pos2(
+            label.rect().left()
+                + prefix_width
+                + "focused ".chars().count() as f32 * character_width,
+            label.rect().center().y,
+        );
+        harness.event(egui::Event::PointerMoved(click_position));
+        harness.event(egui::Event::PointerButton {
+            pos: click_position,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.event(egui::Event::PointerButton {
+            pos: click_position,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.run();
+        harness.snapshot("pod_logs/keyboard_caret");
     }
 
     #[test]
@@ -1543,6 +3063,36 @@ mod tests {
         assert_eq!(character_column_range(text, 1, 3), 1..6);
         assert_eq!(&text[character_column_range(text, 1, 3)], "é日");
         assert_eq!(character_column_range(text, 3, 4), 6..7);
+    }
+
+    #[test]
+    fn pointer_position_excludes_metadata_prefix_and_restores_fragment_offset() {
+        let text = "abcdef";
+
+        assert_eq!(
+            byte_offset_at_response_x(text, 70.0, 30.0, 0.0, 10.0),
+            4,
+            "line numbers and timestamps are before the text, not part of its cursor offset",
+        );
+        assert_eq!(
+            byte_offset_at_response_x(text, 30.0, 10.0, 30.0, 10.0),
+            5,
+            "a horizontally clipped fragment restores its omitted character columns",
+        );
+    }
+
+    #[test]
+    fn caret_vertical_scroll_moves_only_when_the_caret_leaves_the_viewport() {
+        let mut window = log_window(&["zero", "one", "two", "three", "four"]);
+        select_log_position(&mut window, 2, 0);
+
+        assert_eq!(caret_vertical_offset(&window, 20.0, 20.0, 10.0), 20.0);
+
+        select_log_position(&mut window, 1, 0);
+        assert_eq!(caret_vertical_offset(&window, 20.0, 20.0, 10.0), 10.0);
+
+        select_log_position(&mut window, 4, 0);
+        assert_eq!(caret_vertical_offset(&window, 20.0, 20.0, 10.0), 30.0);
     }
 
     #[test]
