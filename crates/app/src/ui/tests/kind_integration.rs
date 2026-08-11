@@ -14,12 +14,17 @@ use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
 use kube::api::Patch;
 use kube::{Api, Client};
 use std::collections::BTreeMap;
+use std::process::Command;
+use std::time::{Duration, Instant};
 
 const WATCHER_CONFIGMAP_NAME: &str = "resource-watcher";
 const ACTIONS_CONFIGMAP_NAME: &str = "resource-actions";
 const ACTIONS_SECRET_NAME: &str = "resource-secret-actions";
+const TEST_NAMESPACE_PREFIX: &str = "kdui-it-";
+const TEST_FINALIZER: &str = "tests.kubernetes-dev-ui/finalizer";
+const FIXTURE_CLEANUP_TIMEOUT: Duration = Duration::from_secs(30);
 
-struct IntegrationConfigMap {
+struct IntegrationNamespaceFixture {
     runtime: tokio::runtime::Runtime,
     namespaces: Api<Namespace>,
     configmaps: Api<ConfigMap>,
@@ -28,7 +33,7 @@ struct IntegrationConfigMap {
     name: String,
 }
 
-impl IntegrationConfigMap {
+impl IntegrationNamespaceFixture {
     fn create(test_name: &str, name: &str, value: &str) -> Self {
         let runtime = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
         let client = runtime.block_on(async {
@@ -38,7 +43,7 @@ impl IntegrationConfigMap {
         });
         let namespaces: Api<Namespace> = Api::all(client.clone());
         let namespace = format!(
-            "kdui-it-{test_name}-{}-{:x}",
+            "{TEST_NAMESPACE_PREFIX}{test_name}-{}-{:x}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -96,8 +101,11 @@ impl IntegrationConfigMap {
 /// plaintext until the test explicitly operates on the editor state.
 #[test]
 fn test_secret_inspector_actions_integration() {
-    let fixture =
-        IntegrationConfigMap::create("resource-secret-actions", "secret-actions-anchor", "unused");
+    let fixture = IntegrationNamespaceFixture::create(
+        "resource-secret-actions",
+        "secret-actions-anchor",
+        "unused",
+    );
     let test_secret_name = ACTIONS_SECRET_NAME.to_owned();
     let runtime = &fixture.runtime;
     let secrets = &fixture.secrets;
@@ -124,7 +132,7 @@ fn test_secret_inspector_actions_integration() {
 
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
-    select_namespace(&mut harness, &fixture.namespace);
+    select_namespace(&mut harness, cluster_key, &fixture.namespace);
     let secrets_resource = select_resource(&mut harness, "Config", "Secrets");
     wait_for_resource_sync(
         &mut harness,
@@ -139,18 +147,7 @@ fn test_secret_inspector_actions_integration() {
         .get_by_label(&format!("Open details for {test_secret_name}"))
         .click();
     harness.run_steps(1);
-    wait_for(
-        &mut harness,
-        |app| {
-            app.ui_state.clusters[&cluster_key]
-                .resource_detail_panel
-                .as_ref()
-                .and_then(|panel| panel.data_editor.as_ref())
-                .filter(|editor| editor.draft_values.contains_key("password"))
-                .map(|_| ())
-        },
-        10_000,
-    );
+    wait_for_data_editor(&mut harness, cluster_key, "password");
     harness
         .state_mut()
         .ui_state
@@ -185,9 +182,49 @@ fn test_secret_inspector_actions_integration() {
     );
 }
 
-impl Drop for IntegrationConfigMap {
+#[test]
+fn test_kind_setup_purges_leftover_test_namespaces() {
+    let fixture = IntegrationNamespaceFixture::create("setup-purge", "stuck", "unused");
+    fixture.runtime.block_on(async {
+        fixture
+            .configmaps
+            .patch(
+                &fixture.name,
+                &Default::default(),
+                &Patch::Merge(&k8s_openapi::serde_json::json!({
+                    "metadata": { "finalizers": [TEST_FINALIZER] }
+                })),
+            )
+            .await
+            .expect("Failed to add finalizer to purge-test ConfigMap");
+    });
+
+    let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("app manifest directory should be two levels below the workspace root");
+    let status = Command::new("bash")
+        .arg("scripts/ensure-kind-cluster.sh")
+        .current_dir(workspace_root)
+        .status()
+        .expect("Failed to invoke Kind setup script");
+    assert!(status.success(), "Kind setup script should succeed");
+
+    let namespace_exists = fixture.runtime.block_on(async {
+        !matches!(
+            fixture.namespaces.get(&fixture.namespace).await,
+            Err(kube::Error::Api(error)) if error.code == 404
+        )
+    });
+    assert!(
+        !namespace_exists,
+        "Kind setup script should delete leftover integration namespaces"
+    );
+}
+
+impl Drop for IntegrationNamespaceFixture {
     fn drop(&mut self) {
-        let _ = self.runtime.block_on(async {
+        let cleanup_result = self.runtime.block_on(async {
             // A failure in the force-delete test can otherwise strand this fixture's
             // ConfigMap (and therefore its namespace) in Terminating.
             let _ = self
@@ -200,10 +237,43 @@ impl Drop for IntegrationConfigMap {
                     })),
                 )
                 .await;
-            self.namespaces
+            if let Err(error) = self
+                .namespaces
                 .delete(&self.namespace, &Default::default())
                 .await
+                && !matches!(&error, kube::Error::Api(response) if response.code == 404)
+            {
+                return Err(error.into());
+            }
+
+            let deadline = Instant::now() + FIXTURE_CLEANUP_TIMEOUT;
+            loop {
+                match self.namespaces.get(&self.namespace).await {
+                    Err(kube::Error::Api(error)) if error.code == 404 => return Ok(()),
+                    Ok(_) if Instant::now() < deadline => {
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
+                    Ok(_) => anyhow::bail!(
+                        "Timed out waiting for integration namespace {} to be deleted",
+                        self.namespace
+                    ),
+                    Err(error) => return Err(error.into()),
+                }
+            }
         });
+        if let Err(error) = cleanup_result {
+            if std::thread::panicking() {
+                eprintln!(
+                    "Failed to clean up integration namespace {}: {error:#}",
+                    self.namespace
+                );
+            } else {
+                panic!(
+                    "Failed to clean up integration namespace {}: {error:#}",
+                    self.namespace
+                );
+            }
+        }
     }
 }
 
@@ -212,13 +282,40 @@ fn wait_for<T>(
     condition: impl Fn(&MyEguiApp<Worker>) -> Option<T>,
     max_ms: u64,
 ) -> T {
-    let start = std::time::Instant::now();
+    wait_for_with_diagnostic(harness, condition, |_| None, max_ms)
+}
+
+fn wait_for_with_diagnostic<T>(
+    harness: &mut Harness<MyEguiApp<Worker>>,
+    condition: impl Fn(&MyEguiApp<Worker>) -> Option<T>,
+    diagnostic: impl Fn(&MyEguiApp<Worker>) -> Option<String>,
+    max_ms: u64,
+) -> T {
+    wait_for_harness(
+        harness,
+        |harness| {
+            let app = harness.state();
+            if let Some(message) = diagnostic(app) {
+                panic!("{message}");
+            }
+            condition(app)
+        },
+        max_ms,
+    )
+}
+
+fn wait_for_harness<T>(
+    harness: &mut Harness<MyEguiApp<Worker>>,
+    condition: impl Fn(&mut Harness<MyEguiApp<Worker>>) -> Option<T>,
+    max_ms: u64,
+) -> T {
+    let start = Instant::now();
     while start.elapsed().as_millis() < max_ms as u128 {
         harness.run_steps(1);
-        if let Some(result) = condition(harness.state()) {
+        if let Some(result) = condition(harness) {
             return result;
         }
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::thread::sleep(Duration::from_millis(50));
     }
     panic!("Timed out after {max_ms}ms waiting for UI state");
 }
@@ -257,13 +354,71 @@ fn wait_for_cluster_data(harness: &mut Harness<MyEguiApp<Worker>>, cluster_key: 
     );
 }
 
-fn select_namespace(harness: &mut Harness<MyEguiApp<Worker>>, namespace: &str) {
+fn select_namespace(harness: &mut Harness<MyEguiApp<Worker>>, cluster_key: i32, namespace: &str) {
+    let namespace = namespace.to_owned();
+    wait_for(
+        harness,
+        |app| {
+            app.ui_state
+                .clusters
+                .get(&cluster_key)
+                .filter(|cluster| {
+                    cluster
+                        .namespaces
+                        .contains_key(&SortedName::new(&namespace))
+                })
+                .map(|_| ())
+        },
+        10_000,
+    );
     harness
         .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
         .click();
-    harness.run_steps(1);
-    harness.get_by_label(namespace).click();
-    harness.run_steps(1);
+    wait_for_harness(
+        harness,
+        |harness| harness.query_by_label(&namespace).map(|_| ()),
+        10_000,
+    );
+    harness.get_by_label(&namespace).click();
+    wait_for(
+        harness,
+        |app| {
+            app.ui_state
+                .clusters
+                .get(&cluster_key)
+                .filter(|cluster| cluster.selected_namespaces.contains(&namespace))
+                .map(|_| ())
+        },
+        10_000,
+    );
+}
+
+fn wait_for_data_editor(
+    harness: &mut Harness<MyEguiApp<Worker>>,
+    cluster_key: i32,
+    data_key: &str,
+) {
+    wait_for_with_diagnostic(
+        harness,
+        |app| {
+            app.ui_state.clusters[&cluster_key]
+                .resource_detail_panel
+                .as_ref()
+                .and_then(|panel| panel.data_editor.as_ref())
+                .filter(|editor| editor.draft_values.contains_key(data_key))
+                .map(|_| ())
+        },
+        |app| {
+            app.ui_state.clusters[&cluster_key]
+                .resource_detail_panel
+                .as_ref()
+                .and_then(|panel| panel.detail_error.as_ref())
+                .map(|error| {
+                    format!("Resource detail watch failed while loading data editor: {error}")
+                })
+        },
+        10_000,
+    );
 }
 
 fn select_resource(
@@ -332,11 +487,14 @@ fn test_real_cluster_connection() {
 /// Integration test for a real resource watcher using accessibility interactions.
 #[test]
 fn test_resource_watcher_integration() {
-    let fixture =
-        IntegrationConfigMap::create("resource-watcher", WATCHER_CONFIGMAP_NAME, "watcher-value");
+    let fixture = IntegrationNamespaceFixture::create(
+        "resource-watcher",
+        WATCHER_CONFIGMAP_NAME,
+        "watcher-value",
+    );
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
-    select_namespace(&mut harness, &fixture.namespace);
+    select_namespace(&mut harness, cluster_key, &fixture.namespace);
     assert!(
         harness.state().ui_state.clusters[&cluster_key]
             .selected_namespaces
@@ -366,7 +524,8 @@ fn test_resource_watcher_integration() {
 /// ownership chain without relying on table-cache data.
 #[test]
 fn test_managed_resource_inspector_integration() {
-    let fixture = IntegrationConfigMap::create("managed-resource-inspector", "anchor", "unused");
+    let fixture =
+        IntegrationNamespaceFixture::create("managed-resource-inspector", "anchor", "unused");
     let deployment_name = "managed-resource-inspector".to_owned();
     let runtime = &fixture.runtime;
     let client = runtime.block_on(async {
@@ -424,7 +583,7 @@ fn test_managed_resource_inspector_integration() {
 
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
-    select_namespace(&mut harness, &fixture.namespace);
+    select_namespace(&mut harness, cluster_key, &fixture.namespace);
     let deployments_resource = select_resource(&mut harness, "Apps & Containers", "Deployments");
     wait_for_resource_sync(
         &mut harness,
@@ -491,7 +650,7 @@ fn test_managed_resource_inspector_integration() {
 /// scheduled to the selected Node through the shared inspector table path.
 #[test]
 fn test_node_inspector_lists_scheduled_pods_integration() {
-    let fixture = IntegrationConfigMap::create("node-inspector", "anchor", "unused");
+    let fixture = IntegrationNamespaceFixture::create("node-inspector", "anchor", "unused");
     let pod_name = "node-inspector-pod".to_owned();
     let client = fixture.runtime.block_on(async {
         Client::try_default()
@@ -598,15 +757,18 @@ fn test_node_inspector_lists_scheduled_pods_integration() {
 /// Creates a ConfigMap, edits it through the UI, and then deletes it through the UI.
 #[test]
 fn test_resource_actions_integration() {
-    let fixture =
-        IntegrationConfigMap::create("resource-actions", ACTIONS_CONFIGMAP_NAME, "original-value");
+    let fixture = IntegrationNamespaceFixture::create(
+        "resource-actions",
+        ACTIONS_CONFIGMAP_NAME,
+        "original-value",
+    );
     let test_configmap_name = fixture.name.clone();
     let runtime = &fixture.runtime;
     let configmaps = &fixture.configmaps;
 
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
-    select_namespace(&mut harness, &fixture.namespace);
+    select_namespace(&mut harness, cluster_key, &fixture.namespace);
     let configmaps_resource = select_resource(&mut harness, "Config", "Config Maps");
     wait_for_resource_sync(
         &mut harness,
@@ -746,7 +908,7 @@ fn test_resource_actions_integration() {
 /// Deletes two independently selected ConfigMaps through the bulk action.
 #[test]
 fn test_bulk_resource_delete_integration() {
-    let fixture = IntegrationConfigMap::create("bulk-delete", "bulk-delete-a", "first");
+    let fixture = IntegrationNamespaceFixture::create("bulk-delete", "bulk-delete-a", "first");
     let second_name = "bulk-delete-b".to_owned();
     let runtime = &fixture.runtime;
     let configmaps = &fixture.configmaps;
@@ -773,7 +935,7 @@ fn test_bulk_resource_delete_integration() {
 
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
-    select_namespace(&mut harness, &fixture.namespace);
+    select_namespace(&mut harness, cluster_key, &fixture.namespace);
     let configmaps_resource = select_resource(&mut harness, "Config", "Config Maps");
     wait_for_resource_sync(
         &mut harness,
@@ -845,7 +1007,8 @@ fn test_bulk_resource_delete_integration() {
 /// Removes a deliberately stuck ConfigMap's finalizer through the guarded UI action.
 #[test]
 fn test_force_delete_resource_with_finalizer_integration() {
-    let fixture = IntegrationConfigMap::create("force-delete", "force-delete-stuck", "value");
+    let fixture =
+        IntegrationNamespaceFixture::create("force-delete", "force-delete-stuck", "value");
     let resource_name = fixture.name.clone();
     let runtime = &fixture.runtime;
     let configmaps = &fixture.configmaps;
@@ -855,7 +1018,7 @@ fn test_force_delete_resource_with_finalizer_integration() {
                 &resource_name,
                 &Default::default(),
                 &Patch::Merge(&k8s_openapi::serde_json::json!({
-                    "metadata": { "finalizers": ["tests.kubernetes-dev-ui/finalizer"] }
+                    "metadata": { "finalizers": [TEST_FINALIZER] }
                 })),
             )
             .await
@@ -874,13 +1037,13 @@ fn test_force_delete_resource_with_finalizer_integration() {
                 .metadata
                 .finalizers
                 .as_ref()
-                .is_some_and(|finalizers| finalizers == &["tests.kubernetes-dev-ui/finalizer"])
+                .is_some_and(|finalizers| finalizers == &[TEST_FINALIZER])
         );
     });
 
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
-    select_namespace(&mut harness, &fixture.namespace);
+    select_namespace(&mut harness, cluster_key, &fixture.namespace);
     let configmaps_resource = select_resource(&mut harness, "Config", "Config Maps");
     wait_for_resource_sync(
         &mut harness,
@@ -959,7 +1122,7 @@ fn test_force_delete_resource_with_finalizer_integration() {
 /// existing `spec.selector.matchLabels` key after it has been partially edited.
 #[test]
 fn test_deployment_match_labels_completion_integration() {
-    let fixture = IntegrationConfigMap::create("deployment-completion", "anchor", "unused");
+    let fixture = IntegrationNamespaceFixture::create("deployment-completion", "anchor", "unused");
     let deployment_name = "deployment-completion".to_owned();
     let client = fixture.runtime.block_on(async {
         Client::try_default()
@@ -1016,7 +1179,7 @@ fn test_deployment_match_labels_completion_integration() {
 
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
-    select_namespace(&mut harness, &fixture.namespace);
+    select_namespace(&mut harness, cluster_key, &fixture.namespace);
     let deployments_resource = select_resource(&mut harness, "Apps & Containers", "Deployments");
     wait_for_resource_sync(
         &mut harness,
@@ -1100,7 +1263,7 @@ spec:
 fn test_coredns_deployment_property_completion_integration() {
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
-    select_namespace(&mut harness, "kube-system");
+    select_namespace(&mut harness, cluster_key, "kube-system");
     let deployments_resource = select_resource(&mut harness, "Apps & Containers", "Deployments");
     wait_for_resource_sync(
         &mut harness,
@@ -1180,7 +1343,8 @@ fn yaml_mapping_key_positions(yaml: &str) -> Vec<(usize, String, usize)> {
 /// by `kubectl rollout restart` against a real Kubernetes API server.
 #[test]
 fn test_deployment_rollout_restart_integration() {
-    let fixture = IntegrationConfigMap::create("deployment-rollout-restart", "anchor", "unused");
+    let fixture =
+        IntegrationNamespaceFixture::create("deployment-rollout-restart", "anchor", "unused");
     let deployment_name = "restartable-deployment".to_owned();
     let runtime = &fixture.runtime;
     let client = runtime.block_on(async {
@@ -1238,7 +1402,7 @@ fn test_deployment_rollout_restart_integration() {
 
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
-    select_namespace(&mut harness, &fixture.namespace);
+    select_namespace(&mut harness, cluster_key, &fixture.namespace);
     let deployments_resource = select_resource(&mut harness, "Apps & Containers", "Deployments");
     wait_for_resource_sync(
         &mut harness,
@@ -1293,7 +1457,7 @@ fn test_deployment_rollout_restart_integration() {
 /// Verifies that the generic Scale action uses the discovered Deployment scale endpoint.
 #[test]
 fn test_resource_scale_integration() {
-    let fixture = IntegrationConfigMap::create("resource-scale", "anchor", "unused");
+    let fixture = IntegrationNamespaceFixture::create("resource-scale", "anchor", "unused");
     let deployment_name = "scalable-deployment".to_owned();
     let runtime = &fixture.runtime;
     let client = runtime.block_on(async {
@@ -1351,7 +1515,7 @@ fn test_resource_scale_integration() {
 
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
-    select_namespace(&mut harness, &fixture.namespace);
+    select_namespace(&mut harness, cluster_key, &fixture.namespace);
     let deployments_resource = select_resource(&mut harness, "Apps & Containers", "Deployments");
     wait_for_resource_sync(
         &mut harness,

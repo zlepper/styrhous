@@ -1,4 +1,5 @@
 use super::resource_actions::show_resource_action_items;
+use super::resource_owner;
 use super::state::{
     BulkDeleteTarget, ClusterConnectionState, ClusterLoadState, PendingBulkDelete, PendingDelete,
     PendingDeploymentRestart, PendingForceDelete, ResourceAction, ResourceSearchState, UiState,
@@ -9,6 +10,7 @@ use super::widgets::{
 };
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
+use crate::resource_catalog::ResourceNavigation;
 use crate::resource_handlers::table_definition;
 use crate::resource_table::{CellValue, CustomResourceColumn, NODE_COLUMN};
 use crate::terminal_launcher::PodShellRequest;
@@ -54,6 +56,7 @@ struct ResourceSelectionControls<'a> {
 
 struct ResourceTableOptions<'a> {
     custom_columns: &'a [CustomResourceColumn],
+    resource_navigation: &'a ResourceNavigation,
     hidden_resource_count: usize,
     show_namespace_column: bool,
     actions: ResourceActionAvailability,
@@ -237,6 +240,7 @@ pub(super) fn show(
                             .get(api_resource)
                             .map(Vec::as_slice)
                             .unwrap_or_default(),
+                        resource_navigation: &cluster.resource_navigation,
                         hidden_resource_count: all_resources.len()
                             - filtered_resources.resources.len(),
                         show_namespace_column: api_resource.namespaced
@@ -786,8 +790,10 @@ fn show_resource_table(
         ));
     }
     let definition = table_definition(api_resource, options.custom_columns);
+    let owner_column_index = 1 + usize::from(options.show_namespace_column);
     let node_column_index = (api_resource.kind == "Pod").then(|| {
-        1 + usize::from(options.show_namespace_column)
+        owner_column_index
+            + 1
             + definition
                 .columns
                 .iter()
@@ -804,6 +810,7 @@ fn show_resource_table(
             col.sortable().initial_width(180.0)
         });
     }
+    table = table.column("owner", "Owner", |col| col.initial_width(160.0));
     for column in &definition.columns {
         table = table.column(column.id.clone(), column.label.clone(), |col| {
             let col = col.initial_width(column.initial_width);
@@ -826,7 +833,7 @@ fn show_resource_table(
         },
         |ui, row, column_index| {
             let namespace_index = options.show_namespace_column.then_some(1);
-            let type_specific_start = 1 + usize::from(options.show_namespace_column);
+            let type_specific_start = owner_column_index + 1;
             let age_index = type_specific_start + definition.columns.len();
             let actions_index = age_index + 1;
             match row {
@@ -863,6 +870,43 @@ fn show_resource_table(
                             resource.namespace.as_deref().unwrap_or("-"),
                             false,
                         );
+                    }
+                    index if index == owner_column_index => {
+                        let Some(owner) = &resource.controller_owner else {
+                            TableRowBuilder::text(ui, "-", false);
+                            return;
+                        };
+                        let label = owner.label();
+                        if let Some(action) = resource_owner::navigation_action(
+                            options.resource_navigation,
+                            owner,
+                            resource.namespace.as_deref(),
+                        ) {
+                            if options.actions.enabled {
+                                let response = TableRowBuilder::clickable_text(
+                                    ui,
+                                    &label,
+                                    components::colors::indigo::_600,
+                                    format!("Open details for {label}"),
+                                );
+                                response.clone().on_hover_text(&label);
+                                if response.clicked() {
+                                    resource_owner::queue_navigation_action(
+                                        &mut pending_action.borrow_mut(),
+                                        action,
+                                    );
+                                }
+                            } else {
+                                TableRowBuilder::text(ui, &label, false);
+                            }
+                        } else {
+                            ui.label(
+                                egui::RichText::new(label)
+                                    .font(typography::body())
+                                    .color(components::colors::gray::_500),
+                            )
+                            .on_hover_text(resource_owner::unavailable_tooltip(owner));
+                        }
                     }
                     index
                         if index >= type_specific_start
@@ -1006,6 +1050,7 @@ mod tests {
             name: name.into(),
             namespace: Some("default".into()),
             creation_timestamp: None,
+            controller_owner: None,
             cells: Default::default(),
             log_containers: Vec::new(),
         }

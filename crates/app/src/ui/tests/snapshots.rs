@@ -15,8 +15,8 @@ use crate::resource_catalog::build_resource_navigation;
 use crate::resource_detail::{
     ConfigMapDetail, ManagedResource, ManagedResourceAssociation, NodeDetail, PodConditionDetail,
     PodContainerDetail, PodDetail, PodEnvironmentVariableDetail, PodEnvironmentVariableSource,
-    PodVolumeDetail, ResourceDetail, ResourceDetailPayload, ResourceEvent, SecretDataDetail,
-    SecretDetail,
+    PodVolumeDetail, ResourceDetail, ResourceDetailPayload, ResourceEvent, ResourceOwner,
+    SecretDataDetail, SecretDetail,
 };
 use crate::resource_schema::ResourceSchema;
 use crate::resource_table::{
@@ -318,6 +318,7 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
                 name: "kind-control-plane".into(),
                 namespace: None,
                 creation_timestamp: None,
+                controller_owner: None,
                 cells: Default::default(),
                 log_containers: Vec::new(),
             }],
@@ -448,6 +449,7 @@ fn pod_resource_table_shows_per_container_status_indicators() {
                     name: "api-pod".into(),
                     namespace: Some("kube-system".into()),
                     creation_timestamp: None,
+                    controller_owner: None,
                     cells: BTreeMap::from([
                         (READY_COLUMN.to_owned(), CellValue::Text("1/2".to_owned())),
                         (
@@ -547,6 +549,7 @@ fn resource_table_snapshot_keeps_namespace_column_readable() {
                     name: "default-pod".into(),
                     namespace: Some("default".into()),
                     creation_timestamp: None,
+                    controller_owner: None,
                     cells: Default::default(),
                     log_containers: Vec::new(),
                 },
@@ -583,6 +586,7 @@ fn deployment_resource_table_snapshot_uses_typed_columns() {
                     creation_timestamp: Some(
                         time::OffsetDateTime::now_utc() - time::Duration::days(220),
                     ),
+                    controller_owner: None,
                     cells: BTreeMap::from([
                         (READY_COLUMN.to_owned(), CellValue::Text("3/4".to_owned())),
                         (UP_TO_DATE_COLUMN.to_owned(), CellValue::Number(3)),
@@ -623,6 +627,7 @@ fn deployment_restart_action_opens_a_confirmation_and_sends_a_worker_command() {
                     name: "coredns".to_owned(),
                     namespace: Some("kube-system".to_owned()),
                     creation_timestamp: None,
+                    controller_owner: None,
                     cells: BTreeMap::new(),
                     log_containers: Vec::new(),
                 },
@@ -676,6 +681,7 @@ fn scalable_resource_action_fetches_and_updates_the_scale() {
                     name: "coredns".to_owned(),
                     namespace: Some("kube-system".to_owned()),
                     creation_timestamp: None,
+                    controller_owner: None,
                     cells: BTreeMap::new(),
                     log_containers: Vec::new(),
                 },
@@ -1424,7 +1430,7 @@ fn resource_name_opens_and_closes_a_live_detail_inspector() {
                 is_deleting: false,
                 finalizers: Vec::new(),
                 creation_timestamp: None,
-                owner: None,
+                owners: Vec::new(),
                 labels: BTreeMap::new(),
                 annotations: BTreeMap::new(),
                 payload: ResourceDetailPayload::Generic,
@@ -1509,6 +1515,127 @@ fn clicking_a_pod_node_in_the_resource_table_opens_the_node_inspector() {
 }
 
 #[test]
+fn clicking_a_controller_owner_in_the_resource_table_opens_its_inspector() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    let pods = fixture_api_resource("core", "Pod", "pods");
+    let replica_set = fixture_api_resource("apps", "ReplicaSet", "replicasets");
+    let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
+    cluster.resource_navigation =
+        build_resource_navigation(vec![pods.clone(), replica_set.clone()]);
+    let pod = cluster
+        .resource_cache
+        .get_mut(&(pods, Some("kube-system".into())))
+        .expect("Pod watch fixture exists")
+        .resources
+        .values_mut()
+        .next()
+        .expect("Pod fixture exists");
+    pod.controller_owner = Some(ResourceOwner {
+        api_version: "apps/v1".into(),
+        kind: "ReplicaSet".into(),
+        name: "api-7b948f".into(),
+        uid: "replicaset-uid".into(),
+        controller: true,
+    });
+    harness.state_mut().ui_state = state;
+    harness.run();
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "resource_tables/controller_owner_link_opens_its_inspector/controller_owner_link",
+    ));
+
+    let owner_position = harness
+        .get_by_label("Open details for ReplicaSet / api-7b948f")
+        .rect()
+        .center();
+    primary_click(&mut harness, owner_position);
+    harness.run_steps(1);
+
+    assert!(matches!(
+        harness.state().worker.commands.last(),
+        Some(WorkerCommand::StartResourceDetailWatch {
+            api_resource,
+            namespace,
+            resource_name,
+            resource_uid,
+            ..
+        }) if api_resource == &replica_set
+            && namespace.as_deref() == Some("kube-system")
+            && resource_name == "api-7b948f"
+            && resource_uid == "replicaset-uid"
+    ));
+}
+
+#[test]
+fn owner_reference_card_lists_every_owner_and_navigates_resolved_links() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    let pod = fixture_api_resource("core", "Pod", "pods");
+    let deployment = fixture_api_resource("apps", "Deployment", "deployments");
+    open_typed_detail(
+        &mut harness,
+        pod.clone(),
+        ResourceDetail {
+            api_resource: pod,
+            name: "api-pod".into(),
+            namespace: Some("kube-system".into()),
+            uid: "pod-uid".into(),
+            resource_version: "1".into(),
+            is_deleting: false,
+            finalizers: Vec::new(),
+            creation_timestamp: None,
+            owners: vec![
+                ResourceOwner {
+                    api_version: "apps/v1".into(),
+                    kind: "Deployment".into(),
+                    name: "api".into(),
+                    uid: "deployment-uid".into(),
+                    controller: true,
+                },
+                ResourceOwner {
+                    api_version: "example.dev/v1".into(),
+                    kind: "Widget".into(),
+                    name: "api-widget".into(),
+                    uid: "widget-uid".into(),
+                    controller: false,
+                },
+            ],
+            labels: BTreeMap::new(),
+            annotations: BTreeMap::new(),
+            payload: ResourceDetailPayload::Generic,
+        },
+    );
+
+    harness.get_by_label("Owner references").click_accesskit();
+    harness.run();
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "resource_inspectors/owner_reference_card_lists_every_owner_and_navigates_resolved_links/owner_references",
+    ));
+    harness.get_by_label("Widget / api-widget");
+    let owner_position = harness
+        .get_by_label("Open details for Deployment / api")
+        .rect()
+        .center();
+    primary_click(&mut harness, owner_position);
+    harness.run_steps(1);
+
+    assert!(matches!(
+        harness.state().worker.commands.last(),
+        Some(WorkerCommand::StartResourceDetailWatch {
+            api_resource,
+            namespace,
+            resource_name,
+            resource_uid,
+            history_entry_id: 2,
+            ..
+        }) if api_resource == &deployment
+            && namespace.as_deref() == Some("kube-system")
+            && resource_name == "api"
+            && resource_uid == "deployment-uid"
+    ));
+}
+
+#[test]
 fn clicking_a_pod_node_in_the_inspector_navigates_to_the_node_inspector() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = oracle_resource_table_state();
@@ -1538,7 +1665,7 @@ fn clicking_a_pod_node_in_the_inspector_navigates_to_the_node_inspector() {
                 is_deleting: false,
                 finalizers: Vec::new(),
                 creation_timestamp: None,
-                owner: None,
+                owners: Vec::new(),
                 labels: BTreeMap::new(),
                 annotations: BTreeMap::new(),
                 payload: ResourceDetailPayload::Pod(Box::new(overflowing_pod_detail())),
@@ -1597,7 +1724,7 @@ fn node_inspector_shows_its_spec() {
                 is_deleting: false,
                 finalizers: Vec::new(),
                 creation_timestamp: None,
-                owner: None,
+                owners: Vec::new(),
                 labels: BTreeMap::new(),
                 annotations: BTreeMap::new(),
                 payload: ResourceDetailPayload::Node(NodeDetail {
@@ -1646,7 +1773,7 @@ fn node_inspector_lists_cross_namespace_pods_in_the_shared_pod_table() {
                 is_deleting: false,
                 finalizers: Vec::new(),
                 creation_timestamp: None,
-                owner: None,
+                owners: Vec::new(),
                 labels: BTreeMap::new(),
                 annotations: BTreeMap::new(),
                 payload: ResourceDetailPayload::Node(NodeDetail::default()),
@@ -1834,7 +1961,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         is_deleting: false,
         finalizers: Vec::new(),
         creation_timestamp: None,
-        owner: None,
+        owners: Vec::new(),
         labels: BTreeMap::new(),
         annotations: BTreeMap::new(),
         payload: ResourceDetailPayload::Generic,
@@ -1939,10 +2066,13 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
                 creation_timestamp: Some(
                     time::OffsetDateTime::now_utc() - time::Duration::hours(2),
                 ),
-                owner: Some(crate::resource_detail::ResourceOwner {
+                owners: vec![crate::resource_detail::ResourceOwner {
+                    api_version: "apps/v1".into(),
                     kind: "Deployment".into(),
                     name: "api".into(),
-                }),
+                    uid: "deployment-uid".into(),
+                    controller: true,
+                }],
                 labels: BTreeMap::new(),
                 annotations: BTreeMap::new(),
                 payload: ResourceDetailPayload::Generic,
@@ -2067,10 +2197,13 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
                 creation_timestamp: Some(
                     time::OffsetDateTime::now_utc() - time::Duration::minutes(15),
                 ),
-                owner: Some(crate::resource_detail::ResourceOwner {
+                owners: vec![crate::resource_detail::ResourceOwner {
+                    api_version: "apps/v1".into(),
                     kind: "ReplicaSet".into(),
                     name: "api-7b948f".into(),
-                }),
+                    uid: "replicaset-uid".into(),
+                    controller: true,
+                }],
                 labels: BTreeMap::new(),
                 annotations: BTreeMap::new(),
                 payload: ResourceDetailPayload::Pod(Box::new(overflowing_pod_detail())),
@@ -2192,7 +2325,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
                 creation_timestamp: Some(
                     time::OffsetDateTime::now_utc() - time::Duration::minutes(10),
                 ),
-                owner: None,
+                owners: Vec::new(),
                 labels: BTreeMap::new(),
                 annotations: BTreeMap::new(),
                 payload: ResourceDetailPayload::Generic,
@@ -2253,7 +2386,7 @@ fn pod_resource_detail_inspector_snapshot() {
                 is_deleting: false,
                 finalizers: Vec::new(),
                 creation_timestamp: None,
-                owner: None,
+                owners: Vec::new(),
                 labels: BTreeMap::from([("k8s-app".into(), "kube-dns".into())]),
                 annotations: BTreeMap::new(),
                 payload: ResourceDetailPayload::Pod(Box::new(PodDetail {
@@ -2413,7 +2546,7 @@ fn config_map_detail(data: BTreeMap<String, String>) -> ResourceDetail {
         is_deleting: false,
         finalizers: Vec::new(),
         creation_timestamp: None,
-        owner: None,
+        owners: Vec::new(),
         labels: BTreeMap::new(),
         annotations: BTreeMap::new(),
         payload: ResourceDetailPayload::ConfigMap(ConfigMapDetail {
@@ -2435,7 +2568,7 @@ fn deployment_editor_completes_match_labels_in_a_selector() {
         is_deleting: false,
         finalizers: Vec::new(),
         creation_timestamp: None,
-        owner: None,
+        owners: Vec::new(),
         labels: BTreeMap::new(),
         annotations: BTreeMap::new(),
         payload: ResourceDetailPayload::Generic,
@@ -2591,7 +2724,7 @@ fn deployment_inspector_exposes_the_shared_restart_action() {
         is_deleting: false,
         finalizers: Vec::new(),
         creation_timestamp: None,
-        owner: None,
+        owners: Vec::new(),
         labels: BTreeMap::new(),
         annotations: BTreeMap::new(),
         payload: ResourceDetailPayload::Generic,
@@ -2720,7 +2853,7 @@ fn secret_inspector_masks_values_and_prompts_for_a_real_external_change() {
         is_deleting: false,
         finalizers: Vec::new(),
         creation_timestamp: None,
-        owner: None,
+        owners: Vec::new(),
         labels: BTreeMap::new(),
         annotations: BTreeMap::new(),
         payload: ResourceDetailPayload::Secret(SecretDetail {
@@ -2815,7 +2948,7 @@ fn secret_resource_detail_inspector_snapshot() {
         is_deleting: false,
         finalizers: Vec::new(),
         creation_timestamp: None,
-        owner: None,
+        owners: Vec::new(),
         labels: BTreeMap::from([("app.kubernetes.io/name".into(), "api".into())]),
         annotations: BTreeMap::new(),
         payload: ResourceDetailPayload::Secret(SecretDetail {

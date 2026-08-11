@@ -11,9 +11,9 @@ capture-stderr = true
 max-threads = 1
 
 [[profile.default.overrides]]
-filter = 'test(/test_(real_cluster_connection|resource_watcher_integration|managed_resource_inspector_integration|node_inspector_lists_scheduled_pods_integration|resource_actions_integration|force_delete_resource_with_finalizer_integration|deployment_match_labels_completion_integration|coredns_deployment_property_completion_integration|deployment_rollout_restart_integration|secret_inspector_actions_integration)$/)'
+filter = 'test(/ui::tests::kind_integration::/)'
 test-group = "kind-integration"
 
 [[profile.default.scripts]]
-filter = 'test(/test_(real_cluster_connection|resource_watcher_integration|managed_resource_inspector_integration|node_inspector_lists_scheduled_pods_integration|resource_actions_integration|force_delete_resource_with_finalizer_integration|deployment_match_labels_completion_integration|coredns_deployment_property_completion_integration|deployment_rollout_restart_integration|secret_inspector_actions_integration)$/)'
+filter = 'test(/ui::tests::kind_integration::/)'
 setup = "ensure-kind-cluster"

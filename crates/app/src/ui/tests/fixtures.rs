@@ -87,6 +87,7 @@ fn fixture_resource(index: usize, name: &str) -> MinimalResource {
         name: name.into(),
         namespace: Some("kube-system".into()),
         creation_timestamp: Some(time::OffsetDateTime::now_utc() - time::Duration::days(220)),
+        controller_owner: None,
         cells: BTreeMap::from([
             (READY_COLUMN.to_owned(), CellValue::Text("1/1".into())),
             (

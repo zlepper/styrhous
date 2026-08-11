@@ -1,4 +1,5 @@
 use crate::api_resource::ApiResource;
+use crate::resource_detail::ResourceOwner;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// A fixed section in the primary resource navigator.
@@ -24,6 +25,25 @@ pub(super) enum CuratedNavigationEntry {
 pub(super) struct ResourceNavigation {
     pub(super) curated_entries: Vec<CuratedNavigationEntry>,
     pub(super) other_api_groups: BTreeMap<String, Vec<ApiResource>>,
+}
+
+impl ResourceNavigation {
+    pub(super) fn api_resource_for_owner(&self, owner: &ResourceOwner) -> Option<ApiResource> {
+        let group = owner.api_group();
+        self.api_resources()
+            .find(|resource| resource.group == group && resource.kind == owner.kind)
+            .cloned()
+    }
+
+    fn api_resources(&self) -> impl Iterator<Item = &ApiResource> {
+        self.curated_entries
+            .iter()
+            .flat_map(|entry| match entry {
+                CuratedNavigationEntry::Resource(resource) => std::slice::from_ref(resource),
+                CuratedNavigationEntry::Section(section) => section.api_resources.as_slice(),
+            })
+            .chain(self.other_api_groups.values().flatten())
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -428,6 +448,54 @@ mod tests {
             vec!["Gateway API"]
         );
         assert!(navigation.other_api_groups.is_empty());
+    }
+
+    #[test]
+    fn resolves_owner_resources_by_group_and_kind_across_api_versions() {
+        let replica_set = ApiResource {
+            group: "apps".into(),
+            version: "v1".into(),
+            kind: "ReplicaSet".into(),
+            name: "replicasets".into(),
+            namespaced: true,
+        };
+        let node = ApiResource {
+            group: "core".into(),
+            version: "v1".into(),
+            kind: "Node".into(),
+            name: "nodes".into(),
+            namespaced: false,
+        };
+        let navigation = build_resource_navigation(vec![replica_set.clone(), node.clone()]);
+
+        let replica_set_owner = ResourceOwner {
+            api_version: "apps/v1beta1".into(),
+            kind: "ReplicaSet".into(),
+            name: "api-7b948f".into(),
+            uid: "replicaset-uid".into(),
+            controller: true,
+        };
+        let node_owner = ResourceOwner {
+            api_version: "v1".into(),
+            kind: "Node".into(),
+            name: "kind-control-plane".into(),
+            uid: "node-uid".into(),
+            controller: false,
+        };
+        let unresolved_owner = ResourceOwner {
+            api_version: "example.dev/v1".into(),
+            kind: "Widget".into(),
+            name: "api-widget".into(),
+            uid: "widget-uid".into(),
+            controller: false,
+        };
+
+        assert_eq!(
+            navigation.api_resource_for_owner(&replica_set_owner),
+            Some(replica_set)
+        );
+        assert_eq!(navigation.api_resource_for_owner(&node_owner), Some(node));
+        assert_eq!(navigation.api_resource_for_owner(&unresolved_owner), None);
     }
 
     fn entry_name(entry: &CuratedNavigationEntry) -> &str {

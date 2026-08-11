@@ -18,7 +18,7 @@ pub(crate) struct ResourceDetail {
     /// Controller cleanup hooks that currently block deletion.
     pub(crate) finalizers: Vec<String>,
     pub(crate) creation_timestamp: Option<OffsetDateTime>,
-    pub(crate) owner: Option<ResourceOwner>,
+    pub(crate) owners: Vec<ResourceOwner>,
     pub(crate) labels: BTreeMap<String, String>,
     pub(crate) annotations: BTreeMap<String, String>,
     pub(crate) payload: ResourceDetailPayload,
@@ -26,8 +26,24 @@ pub(crate) struct ResourceDetail {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ResourceOwner {
+    pub(crate) api_version: String,
     pub(crate) kind: String,
     pub(crate) name: String,
+    pub(crate) uid: String,
+    pub(crate) controller: bool,
+}
+
+impl ResourceOwner {
+    pub(crate) fn label(&self) -> String {
+        format!("{} / {}", self.kind, self.name)
+    }
+
+    pub(crate) fn api_group(&self) -> &str {
+        self.api_version
+            .split_once('/')
+            .map(|(group, _)| group)
+            .unwrap_or("core")
+    }
 }
 
 /// A resource related to the object currently shown in the inspector.
