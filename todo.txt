@@ -1,21 +1,20 @@
 TODO list:
 
-* Code editor
-    * Search function
 * Multi select resources
 * Ownership references
 * test reduced permission handling
-* Debug shell to pod
 * Resource details view
-* Scale resource where the resource type supports a scale endpoint
 * Add explicit support for Helm
 * Blade component should support back/forward navigation via relevant buttons on mouse
 * Create a shell on a node
+* Debug shell to pod
 * Display resource usages of pods
 * Force delete by removing finalizers
 * Connect to kubernetes cluster by discovering via the Az cli/AWS cli/Tailscale
-* Add option for whole word matching only in search
-* Add option for case-sensitive matching in search
+* Search
+    * Add option for whole word matching only in search
+    * Add option for case-sensitive matching in search
+* For "CronJobs": Add option to start a job run right now
 * Table improvements
     * Make columns on table user configuable (And remember per resource type in user's config folder)
     * Allow resizing the columns in a table on-the-fly
