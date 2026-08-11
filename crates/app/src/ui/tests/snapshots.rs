@@ -672,6 +672,102 @@ fn deployment_restart_action_opens_a_confirmation_and_sends_a_worker_command() {
 }
 
 #[test]
+fn scalable_resource_action_fetches_and_updates_the_scale() {
+    let deployment = fixture_api_resource("apps", "Deployment", "deployments");
+    let mut state = oracle_resource_table_state();
+    let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
+    cluster.selected_api_resource = Some(deployment.clone());
+    cluster.scalable_api_resources.insert(deployment.clone());
+    cluster.resource_cache.insert(
+        (deployment.clone(), Some("kube-system".to_owned())),
+        ResourceWatchState {
+            resources: BTreeMap::from([(
+                "deployment-uid".to_owned(),
+                MinimalResource {
+                    uid: "deployment-uid".to_owned(),
+                    name: "coredns".to_owned(),
+                    namespace: Some("kube-system".to_owned()),
+                    creation_timestamp: None,
+                    cells: BTreeMap::new(),
+                    log_containers: Vec::new(),
+                },
+            )]),
+            is_synced: true,
+            error: None,
+        },
+    );
+
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = state;
+    harness.run();
+    harness.get_by_label("Apps & Containers").click_accesskit();
+    harness.run();
+    harness.get_by_label("Deployments").click_accesskit();
+    harness.run();
+    harness
+        .get_by_label("More actions for coredns")
+        .click_accesskit();
+    harness.run();
+    harness.get_by_label("Scale").click_accesskit();
+    harness.run();
+
+    assert!(matches!(
+        harness.state().worker.commands.last(),
+        Some(WorkerCommand::GetResourceScale {
+            cluster_key: 2,
+            api_resource,
+            namespace,
+            resource_name,
+        }) if api_resource == &deployment
+            && namespace.as_deref() == Some("kube-system")
+            && resource_name == "coredns"
+    ));
+
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(WorkerResult::ResourceScaleFetched {
+            cluster_key: 2,
+            api_resource: deployment.clone(),
+            namespace: Some("kube-system".into()),
+            resource_name: "coredns".into(),
+            replicas: 3,
+        });
+    harness.run();
+    harness.snapshot("resource_scale_dialog");
+    harness
+        .state_mut()
+        .ui_state
+        .clusters
+        .get_mut(&2)
+        .unwrap()
+        .pending_scale = Some(super::super::state::PendingScale {
+        api_resource: deployment.clone(),
+        resource_name: "coredns".into(),
+        namespace: Some("kube-system".into()),
+        current_replicas: 3,
+        desired_replicas: "4".into(),
+    });
+    harness.run();
+    harness.get_by_label("Update scale").click_accesskit();
+    harness.run();
+
+    assert!(matches!(
+        harness.state().worker.commands.last(),
+        Some(WorkerCommand::UpdateResourceScale {
+            cluster_key: 2,
+            api_resource,
+            namespace,
+            resource_name,
+            replicas: 4,
+        }) if api_resource == &deployment
+            && namespace.as_deref() == Some("kube-system")
+            && resource_name == "coredns"
+    ));
+}
+
+#[test]
 fn resource_search_filters_rows_and_restores_its_mode_per_resource_type() {
     let pods = fixture_api_resource("core", "Pod", "pods");
     let nodes = fixture_api_resource("core", "Node", "nodes");
@@ -2896,6 +2992,7 @@ fn test_ui_flow() {
                 fixture_api_resource("apps", "StatefulSet", "statefulsets"),
                 fixture_api_resource("networking.k8s.io", "Ingress", "ingresses"),
             ],
+            scalable_api_resources: Default::default(),
         });
     harness.run();
 

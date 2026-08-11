@@ -1064,3 +1064,110 @@ fn test_deployment_rollout_restart_integration() {
         10_000,
     );
 }
+
+/// Verifies that the generic Scale action uses the discovered Deployment scale endpoint.
+#[test]
+fn test_resource_scale_integration() {
+    let fixture = IntegrationConfigMap::create("resource-scale", "anchor", "unused");
+    let deployment_name = "scalable-deployment".to_owned();
+    let runtime = &fixture.runtime;
+    let client = runtime.block_on(async {
+        Client::try_default()
+            .await
+            .expect("Failed to create Kubernetes client")
+    });
+    let deployments: Api<Deployment> = Api::namespaced(client, &fixture.namespace);
+    runtime.block_on(async {
+        deployments
+            .create(
+                &Default::default(),
+                &Deployment {
+                    metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                        name: Some(deployment_name.clone()),
+                        namespace: Some(fixture.namespace.clone()),
+                        ..Default::default()
+                    },
+                    spec: Some(DeploymentSpec {
+                        replicas: Some(1),
+                        selector: LabelSelector {
+                            match_labels: Some(BTreeMap::from([(
+                                "app".to_owned(),
+                                deployment_name.clone(),
+                            )])),
+                            ..Default::default()
+                        },
+                        template: PodTemplateSpec {
+                            metadata: Some(
+                                k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                                    labels: Some(BTreeMap::from([(
+                                        "app".to_owned(),
+                                        deployment_name.clone(),
+                                    )])),
+                                    ..Default::default()
+                                },
+                            ),
+                            spec: Some(PodSpec {
+                                containers: vec![Container {
+                                    name: "pause".to_owned(),
+                                    image: Some("registry.k8s.io/pause:3.10".to_owned()),
+                                    ..Default::default()
+                                }],
+                                ..Default::default()
+                            }),
+                        },
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("Failed to create Deployment");
+    });
+
+    let (mut harness, cluster_key) = connected_kind_harness();
+    wait_for_cluster_data(&mut harness, cluster_key);
+    select_namespace(&mut harness, &fixture.namespace);
+    let deployments_resource = select_resource(&mut harness, "Apps & Containers", "Deployments");
+    wait_for_resource_sync(
+        &mut harness,
+        cluster_key,
+        deployments_resource,
+        &fixture.namespace,
+    );
+    for _ in 0..3 {
+        harness.run_steps(1);
+    }
+    let actions_label = format!("More actions for {deployment_name}");
+    harness.get_by_label(&actions_label).click_accesskit();
+    harness.run_steps(1);
+    harness.get_by_label("Scale").click_accesskit();
+    wait_for(
+        &mut harness,
+        |app| {
+            app.ui_state.clusters[&cluster_key]
+                .pending_scale
+                .as_ref()
+                .map(|_| ())
+        },
+        10_000,
+    );
+    harness
+        .get_by_label("Increase desired replicas")
+        .click_accesskit();
+    harness.run_steps(1);
+    harness.get_by_label("Update scale").click_accesskit();
+    harness.run_steps(1);
+
+    wait_for(
+        &mut harness,
+        |_| {
+            runtime
+                .block_on(async { deployments.get(&deployment_name).await })
+                .ok()
+                .and_then(|deployment| deployment.spec.and_then(|spec| spec.replicas))
+                .filter(|replicas| *replicas == 2)
+                .map(|_| ())
+        },
+        10_000,
+    );
+}

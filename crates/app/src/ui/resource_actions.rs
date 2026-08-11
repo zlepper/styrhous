@@ -11,6 +11,7 @@ pub(super) fn show_resource_action_items(
     api_resource: &ApiResource,
     resource: &MinimalResource,
     log_containers: &[PodLogContainer],
+    supports_scale: bool,
     pending_action: &mut Option<ResourceAction>,
 ) {
     let shell_containers = log_containers
@@ -98,6 +99,15 @@ pub(super) fn show_resource_action_items(
             name: resource.name.clone(),
             namespace: resource.namespace.clone(),
         });
+    }
+    if supports_scale {
+        menu.separator();
+        if menu.action("Scale").clicked() && pending_action.is_none() {
+            *pending_action = Some(ResourceAction::RequestScale {
+                name: resource.name.clone(),
+                namespace: resource.namespace.clone(),
+            });
+        }
     }
     if crate::resource_handlers::deployment::supports_rollout_restart(api_resource) {
         menu.separator();
