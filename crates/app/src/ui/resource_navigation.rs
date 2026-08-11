@@ -5,7 +5,7 @@ use components::WideSidebar;
 use components::colors::{NAVIGATION_BACKGROUND, WHITE};
 use components::design::typography;
 
-pub(super) fn show(ctx: &egui::Context, ui_state: &mut UiState) -> Option<ApiResource> {
+pub(super) fn show(ui: &mut egui::Ui, ui_state: &mut UiState) -> Option<ApiResource> {
     let selected_cluster_id = ui_state.selected_cluster?;
     let cluster = ui_state.clusters.get(&selected_cluster_id)?;
     let cluster_name = cluster.name.clone();
@@ -13,11 +13,11 @@ pub(super) fn show(ctx: &egui::Context, ui_state: &mut UiState) -> Option<ApiRes
     let selected_api_resource = cluster.selected_api_resource.clone();
     let mut clicked_api_resource = None;
 
-    egui::SidePanel::left("api-selector")
-        .exact_width(292.0)
+    egui::Panel::left("api-selector")
+        .exact_size(292.0)
         .resizable(false)
         .frame(egui::Frame::NONE.fill(NAVIGATION_BACKGROUND))
-        .show(ctx, |ui| {
+        .show(ui, |ui| {
             WideSidebar::new().dark().show(ui, |sidebar| {
                 sidebar.ui_mut().add_space(23.0);
                 sidebar.ui_mut().horizontal(|ui| {

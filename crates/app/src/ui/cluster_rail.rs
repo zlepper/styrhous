@@ -7,17 +7,17 @@ use components::{NarrowSidebar, PointingHand, icons};
 use tracing::info;
 
 pub(super) fn show(
-    ctx: &egui::Context,
+    ui: &mut egui::Ui,
     ui_state: &mut UiState,
     commands_to_send: &mut Vec<WorkerCommand>,
     terminal_settings: &TerminalLaunchSettings,
 ) {
-    egui::SidePanel::left("cluster-panel")
-        .exact_width(68.0)
+    egui::Panel::left("cluster-panel")
+        .exact_size(68.0)
         .resizable(false)
         .show_separator_line(false)
         .frame(egui::Frame::NONE.fill(CLUSTER_RAIL_BACKGROUND))
-        .show(ctx, |ui| {
+        .show(ui, |ui| {
             NarrowSidebar::new()
                 .dark_background(CLUSTER_RAIL_BACKGROUND)
                 .show(ui, |sidebar| {

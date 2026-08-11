@@ -104,10 +104,9 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
 }
 
 impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn logic(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.worker.start();
         let mut commands_to_send = self.ui_state.update(&mut self.worker);
-        let mut shell_requests = Vec::<PodShellRequest>::new();
         while let Some(result) = self.log_store.try_next_result() {
             if let crate::log_store::LogStoreResult::Failed { window_id, .. } = &result
                 && let Some(window) = self.ui_state.log_windows.get(window_id)
@@ -121,37 +120,47 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             self.ui_state.apply_log_store_result(result);
         }
 
+        for command in commands_to_send {
+            self.worker.send_command(command);
+        }
+    }
+
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
+        let mut commands_to_send = Vec::new();
+        let mut shell_requests = Vec::<PodShellRequest>::new();
+
         cluster_rail::show(
-            ctx,
+            ui,
             &mut self.ui_state,
             &mut commands_to_send,
             &self.terminal_launch_settings,
         );
-        let clicked_api_resource = resource_navigation::show(ctx, &mut self.ui_state);
-        yaml_editor::show(ctx, &mut self.ui_state, &mut commands_to_send);
+        let clicked_api_resource = resource_navigation::show(ui, &mut self.ui_state);
+        yaml_editor::show(&ctx, &mut self.ui_state, &mut commands_to_send);
         workspace::show(
-            ctx,
+            ui,
             &mut self.ui_state,
             &mut commands_to_send,
             &mut shell_requests,
         );
         resource_detail::show(
-            ctx,
+            &ctx,
             &mut self.ui_state,
             &mut commands_to_send,
             &mut shell_requests,
         );
         log_windows::show(
-            ctx,
+            &ctx,
             &mut self.ui_state,
             &self.log_store,
             &mut commands_to_send,
         );
-        show_delete_confirmation(ctx, &mut self.ui_state, &mut commands_to_send);
-        show_deployment_restart_confirmation(ctx, &mut self.ui_state, &mut commands_to_send);
-        settings::show(ctx, &mut self.ui_state, &mut self.terminal_launch_settings);
-        show_terminal_launch_error(ctx, &mut self.ui_state, &self.terminal_launch_settings);
-        show_deployment_restart_error(ctx, &mut self.ui_state);
+        show_delete_confirmation(&ctx, &mut self.ui_state, &mut commands_to_send);
+        show_deployment_restart_confirmation(&ctx, &mut self.ui_state, &mut commands_to_send);
+        settings::show(&ctx, &mut self.ui_state, &mut self.terminal_launch_settings);
+        show_terminal_launch_error(&ctx, &mut self.ui_state, &self.terminal_launch_settings);
+        show_deployment_restart_error(&ctx, &mut self.ui_state);
 
         if let (Some(cluster_key), Some(api_resource)) =
             (self.ui_state.selected_cluster, clicked_api_resource)
@@ -225,6 +234,10 @@ mod persistence_tests {
 
         fn set_string(&mut self, key: &str, value: String) {
             self.0.insert(key.to_owned(), value);
+        }
+
+        fn remove_string(&mut self, key: &str) {
+            self.0.remove(key);
         }
 
         fn flush(&mut self) {}

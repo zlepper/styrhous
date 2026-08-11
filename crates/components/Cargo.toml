@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-egui = "0.33"
-egui_extras = { version = "0.33", features = ["svg"] }
-egui_kittest = { version = "0.33", features = ["eframe", "wgpu", "snapshot"] }
+egui = "0.36.1"
+egui_extras = { version = "0.36.1", features = ["svg"] }
+egui_kittest = { version = "0.36.1", features = ["eframe", "wgpu", "snapshot"] }
 unicode-normalization = "0.1"
 
 [dev-dependencies]

@@ -24,7 +24,7 @@ mod tests {
     fn render_button(enabled: bool) -> egui::PlatformOutput {
         let ctx = egui::Context::default();
         let screen_rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(120.0, 80.0));
-        let _ = ctx.run(
+        let mut first_output = ctx.run_ui(
             egui::RawInput {
                 screen_rect: Some(screen_rect),
                 ..Default::default()
@@ -36,7 +36,8 @@ mod tests {
                 });
             },
         );
-        ctx.run(
+        first_output.textures_delta.clear();
+        let mut output = ctx.run_ui(
             egui::RawInput {
                 screen_rect: Some(screen_rect),
                 events: vec![egui::Event::PointerMoved(egui::pos2(16.0, 16.0))],
@@ -48,8 +49,9 @@ mod tests {
                         .with_pointing_hand();
                 });
             },
-        )
-        .platform_output
+        );
+        output.textures_delta.clear();
+        output.platform_output
     }
 
     #[test]

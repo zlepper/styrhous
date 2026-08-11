@@ -622,7 +622,7 @@ pub(super) fn seed_detail_transition(ctx: &egui::Context, ui_state: &UiState, cl
 }
 
 fn blade_transition_duration(ctx: &egui::Context) -> f32 {
-    if ctx.style().animation_time == 0.0 {
+    if ctx.global_style().animation_time == 0.0 {
         0.0
     } else {
         BLADE_TRANSITION_DURATION

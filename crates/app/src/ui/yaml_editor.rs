@@ -46,7 +46,7 @@ pub(super) fn show(
                 .with_title(title)
                 .with_inner_size(crate::DEFAULT_NATIVE_WINDOW_SIZE)
                 .with_min_inner_size(crate::MIN_NATIVE_WINDOW_SIZE),
-            |window_ctx, _| show_editor_window(window_ctx, editor, commands_to_send),
+            |window_ui, _| show_editor_window(window_ui, editor, commands_to_send),
         );
     }
     ui_state
@@ -55,18 +55,19 @@ pub(super) fn show(
 }
 
 pub(super) fn show_editor_window(
-    ctx: &egui::Context,
+    ui: &mut egui::Ui,
     editor: &mut YamlEditorWindowState,
     commands_to_send: &mut Vec<WorkerCommand>,
 ) {
+    let ctx = ui.ctx().clone();
     if ctx.input(|input| input.viewport().close_requested()) {
-        request_close(ctx, editor);
+        request_close(&ctx, editor);
     }
 
-    egui::TopBottomPanel::top("yaml-editor-header")
-        .exact_height(TOOLBAR_HEIGHT)
+    egui::Panel::top("yaml-editor-header")
+        .exact_size(TOOLBAR_HEIGHT)
         .frame(toolbar_frame())
-        .show(ctx, |ui| {
+        .show(ui, |ui| {
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 ui.label(
                     egui::RichText::new("Edit")
@@ -114,16 +115,16 @@ pub(super) fn show_editor_window(
                         .with_pointing_hand()
                         .clicked()
                     {
-                        request_close(ctx, editor);
+                        request_close(&ctx, editor);
                     }
                 });
             });
         });
 
-    egui::TopBottomPanel::bottom("yaml-editor-footer")
-        .exact_height(40.0)
+    egui::Panel::bottom("yaml-editor-footer")
+        .exact_size(40.0)
         .frame(toolbar_frame())
-        .show(ctx, |ui| {
+        .show(ui, |ui| {
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 ui.label(
                     egui::RichText::new("Changes apply directly to the cluster")
@@ -134,9 +135,9 @@ pub(super) fn show_editor_window(
         });
 
     if has_diagnostics_feedback(editor) {
-        egui::TopBottomPanel::bottom("yaml-editor-diagnostics")
+        egui::Panel::bottom("yaml-editor-diagnostics")
             .frame(toolbar_frame())
-            .show(ctx, |ui| show_diagnostics(ctx, ui, editor));
+            .show(ui, |ui| show_diagnostics(&ctx, ui, editor));
     }
 
     egui::CentralPanel::default()
@@ -145,7 +146,7 @@ pub(super) fn show_editor_window(
                 .fill(surface::TERMINAL_BACKGROUND)
                 .inner_margin(egui::Margin::same(spacing::LG as i8)),
         )
-        .show(ctx, |ui| {
+        .show(ui, |ui| {
             if editor.loading {
                 ui.centered_and_justified(|ui| {
                     ui.label("Loading…");
@@ -162,7 +163,7 @@ pub(super) fn show_editor_window(
                 if let Some(error) = &editor.error {
                     error_strip(ui, error);
                 }
-                if show_code_editor(ctx, ui, editor) {
+                if show_code_editor(&ctx, ui, editor) {
                     refresh_local_validation(editor);
                 }
             }
@@ -173,7 +174,7 @@ pub(super) fn show_editor_window(
     if let Some(due) = editor.validation_due {
         ctx.request_repaint_after(due.saturating_duration_since(Instant::now()));
     }
-    show_discard_confirmation(ctx, editor);
+    show_discard_confirmation(&ctx, editor);
 }
 
 fn toolbar_frame() -> egui::Frame {
@@ -326,7 +327,7 @@ fn show_code_editor(
                     .id(yaml_editor_text_edit_id(editor.id))
                     .font(typography::monospace())
                     .code_editor()
-                    .frame(false)
+                    .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(4, 2)))
                     .text_color(gray::_100)
                     .background_color(surface::TERMINAL_BACKGROUND)
                     .desired_width(f32::INFINITY)
@@ -336,7 +337,7 @@ fn show_code_editor(
                 changed = output.response.changed();
                 cursor_byte = output
                     .cursor_range
-                    .map(|range| byte_index(&editor.edited_yaml, range.primary.index));
+                    .map(|range| byte_index(&editor.edited_yaml, range.primary.index.into()));
                 caret_rect = output.cursor_range.map(|range| {
                     egui::text_selection::text_cursor_state::cursor_rect(
                         &output.galley,
@@ -580,20 +581,23 @@ fn diagnostic_rects(
     let mut character_index = 0;
     let mut rects = Vec::new();
     for row in &galley.rows {
-        let row_character_count = row.char_count_including_newline();
+        let row_character_count: usize = row.char_count_including_newline().into();
         let row_end = character_index + row_character_count;
         let first = range.start.max(character_index);
         let last = range.end.min(row_end);
-        let row_text_length = row.char_count_excluding_newline();
+        let row_text_length: usize = row.char_count_excluding_newline().into();
         if first < last && first - character_index < row_text_length {
             let start_column = first - character_index;
             let end_column = (last - character_index).min(row_text_length);
             let end_column = end_column.max((start_column + 1).min(row_text_length));
             let row_rect = row.rect().translate(galley_pos.to_vec2());
             rects.push(egui::Rect::from_min_max(
-                egui::pos2(row_rect.left() + row.x_offset(start_column), row_rect.top()),
                 egui::pos2(
-                    row_rect.left() + row.x_offset(end_column),
+                    row_rect.left() + row.x_offset(egui::text::CharIndex(start_column)),
+                    row_rect.top(),
+                ),
+                egui::pos2(
+                    row_rect.left() + row.x_offset(egui::text::CharIndex(end_column)),
                     row_rect.bottom(),
                 ),
             ));
@@ -1699,7 +1703,7 @@ mod tests {
     fn yaml_editor_retained_diagnostics_snapshot() {
         let mut editor = diagnostic_editor();
         editor.diagnostics.clear();
-        editor.validation_due = Some(Instant::now() + VALIDATION_DEBOUNCE);
+        editor.server_validation = ValidationState::Pending;
         snapshot_editor(editor, "yaml_editor/diagnostics_validating");
     }
 
@@ -1743,8 +1747,11 @@ mod tests {
             .range
             .as_ref()
             .expect("diagnostic has a source range");
-        assert_eq!(selection.secondary.index, range.start);
-        assert_eq!(selection.primary.index, range.end);
+        assert_eq!(
+            selection.secondary.index,
+            egui::text::CharIndex(range.start)
+        );
+        assert_eq!(selection.primary.index, egui::text::CharIndex(range.end));
         assert!(harness.state().editor.scroll_to_diagnostic.is_none());
     }
 
@@ -1810,7 +1817,19 @@ mod tests {
         let confirm_discard = editor.confirm_discard;
         let mut editor = editor;
         editor.confirm_discard = false;
-        let mut harness = Harness::builder().build_state(
+        // Snapshot rendering can take longer than the server-validation
+        // debounce when the suite is running in parallel. Keep ordinary
+        // fixtures in their explicitly clean state; validation-specific
+        // fixtures set a non-idle state before reaching this helper.
+        if matches!(editor.server_validation, ValidationState::Idle)
+            && editor.diagnostics.is_empty()
+            && !editor.schema_loading
+            && editor.validation_due.is_none()
+        {
+            editor.validation_revision = editor.validation_revision.max(1);
+            editor.validation_due = None;
+        }
+        let mut harness = Harness::builder().build_ui_state(
             |ctx, state: &mut SnapshotState| {
                 show_editor_window(ctx, &mut state.editor, &mut state.commands);
             },
@@ -1833,7 +1852,7 @@ mod tests {
     }
 
     fn editor_harness(editor: YamlEditorWindowState) -> Harness<'static, SnapshotState> {
-        let mut harness = Harness::builder().build_state(
+        let mut harness = Harness::builder().build_ui_state(
             |ctx, state: &mut SnapshotState| {
                 state.ctx = Some(ctx.clone());
                 show_editor_window(ctx, &mut state.editor, &mut state.commands);
@@ -1874,10 +1893,7 @@ mod tests {
         set_editor_caret(&ctx, text_edit_id, yaml.chars().count());
 
         harness.run();
-        harness.snapshot_options(
-            name,
-            &SnapshotOptions::new().failed_pixel_count_threshold(1),
-        );
+        harness.snapshot_options(name, &SnapshotOptions::new().max_failed_pixels(1));
     }
 
     fn set_editor_caret(ctx: &egui::Context, id: egui::Id, character_index: usize) {
@@ -1896,5 +1912,6 @@ mod tests {
             .expect("editor caret is available")
             .primary
             .index
+            .into()
     }
 }

@@ -29,7 +29,7 @@ impl<'a> TailwindTextArea<'a> {
     }
 
     /// Set a stable ID salt for the text area's persistent editor state.
-    pub fn id_salt(mut self, id_salt: impl Hash) -> Self {
+    pub fn id_salt(mut self, id_salt: impl Hash + std::fmt::Debug) -> Self {
         self.id_salt = Some(Id::new(id_salt));
         self
     }
@@ -75,7 +75,7 @@ impl<'a> TailwindTextArea<'a> {
             .show(ui, |ui| {
                 let mut editor = TextEdit::multiline(self.text)
                     .id(id)
-                    .frame(false)
+                    .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(4, 2)))
                     .text_color(gray::_800)
                     .desired_width(f32::INFINITY)
                     .desired_rows(self.desired_rows);

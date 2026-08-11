@@ -83,7 +83,7 @@ impl Tabs {
     /// Create a new tabs component with the given id source.
     ///
     /// The id is used to persist the selected tab across frames.
-    pub fn new(id_source: impl std::hash::Hash) -> Self {
+    pub fn new(id_source: impl std::hash::Hash + std::fmt::Debug) -> Self {
         Self {
             id: egui::Id::new(id_source),
         }

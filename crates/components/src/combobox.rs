@@ -334,7 +334,7 @@ struct ComboboxInput<'a> {
 
 impl TailwindCombobox<NoFilter> {
     /// Create a new combobox with an explicit ID.
-    pub fn new(id_salt: impl std::hash::Hash) -> Self {
+    pub fn new(id_salt: impl std::hash::Hash + std::fmt::Debug) -> Self {
         TailwindCombobox {
             id_salt: Id::new(id_salt),
             label: None,
@@ -637,7 +637,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
                 .layout(egui::Layout::left_to_right(egui::Align::Center)),
         );
         let mut text_edit = TextEdit::singleline(&mut state.filter_text)
-            .frame(false)
+            .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(4, 2)))
             .desired_width(input_rect.width())
             .vertical_align(egui::Align::Center)
             .id(response.id.with("input"));
@@ -683,8 +683,8 @@ impl<F> TailwindCombobox<WithFilter<F>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use egui_kittest::Harness;
     use egui_kittest::kittest::Queryable;
+    use egui_kittest::{Harness, SnapshotResults};
     use std::cell::RefCell;
     use std::collections::HashSet;
     use std::rc::Rc;
@@ -828,7 +828,7 @@ mod tests {
             ctrl: true,
             ..Default::default()
         };
-        harness.input_mut().modifiers = modifiers;
+        harness.event(egui::Event::ModifiersChanged(modifiers));
         harness.event(egui::Event::PointerMoved(floyd_position));
         harness.event(egui::Event::PointerButton {
             pos: floyd_position,
@@ -843,7 +843,7 @@ mod tests {
             modifiers,
         });
         harness.run();
-        harness.input_mut().modifiers = egui::Modifiers::default();
+        harness.event(egui::Event::ModifiersChanged(egui::Modifiers::default()));
         assert_eq!(*selected.borrow(), HashSet::from([1, 2]));
         harness.get_by_label("Select all");
         assert!(!*select_all_activated.borrow());
@@ -923,6 +923,7 @@ mod tests {
 
     #[test]
     fn long_namespace_names_are_truncated_without_hiding_selection_affordances() {
+        let mut results = SnapshotResults::new();
         let namespaces = [
             "namespace-with-a-very-long-name-that-must-not-overlap-the-status-or-checkmark",
             "default",
@@ -940,12 +941,12 @@ mod tests {
         });
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness.snapshot("comboboxes/long_namespace_closed");
+        results.add(harness.try_snapshot("comboboxes/long_namespace_closed"));
         harness
             .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespaces")
             .hover();
         harness.run();
-        harness.snapshot("comboboxes/long_namespace_closed_tooltip");
+        results.add(harness.try_snapshot("comboboxes/long_namespace_closed_tooltip"));
 
         let namespaces = [
             "namespace-with-a-very-long-name-that-must-not-overlap-the-status-or-checkmark",
@@ -967,10 +968,10 @@ mod tests {
             .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespaces")
             .click();
         open_harness.run();
-        open_harness.snapshot("comboboxes/long_namespace_open");
+        results.add(open_harness.try_snapshot("comboboxes/long_namespace_open"));
         open_harness.get_by_label(selected_namespace).hover();
         open_harness.run_ok();
-        open_harness.snapshot("comboboxes/long_namespace_open_tooltip");
+        results.add(open_harness.try_snapshot("comboboxes/long_namespace_open_tooltip"));
     }
 
     #[test]

@@ -44,10 +44,11 @@ pub(super) fn show(
                 .with_title(title)
                 .with_inner_size(crate::DEFAULT_NATIVE_WINDOW_SIZE)
                 .with_min_inner_size(crate::MIN_NATIVE_WINDOW_SIZE),
-            |window_ctx, _| {
+            |window_ui, _| {
+                let window_ctx = window_ui.ctx().clone();
                 close_requested = window_ctx.input(|input| input.viewport().close_requested());
                 show_log_window(
-                    window_ctx,
+                    window_ui,
                     window,
                     display_options,
                     log_store,
@@ -75,35 +76,31 @@ pub(super) fn show(
 }
 
 pub(super) fn show_log_window(
-    ctx: &egui::Context,
+    ui: &mut egui::Ui,
     window: &mut PodLogWindowState,
     display_options: &mut LogDisplayOptions,
     log_store: &LogStoreService,
     _close_requested: &mut bool,
 ) {
-    let _ = show_log_window_with_scroll_state(
-        ctx,
-        window,
-        display_options,
-        log_store,
-        _close_requested,
-    );
+    let _ =
+        show_log_window_with_scroll_state(ui, window, display_options, log_store, _close_requested);
 }
 
 fn show_log_window_with_scroll_state(
-    ctx: &egui::Context,
+    ui: &mut egui::Ui,
     window: &mut PodLogWindowState,
     display_options: &mut LogDisplayOptions,
     log_store: &LogStoreService,
     _close_requested: &mut bool,
 ) -> egui::scroll_area::ScrollAreaOutput<()> {
-    sync_search(ctx, window, log_store);
+    let ctx = ui.ctx().clone();
+    sync_search(&ctx, window, log_store);
     if let Some(text) = window.copied_text.take() {
         ctx.copy_text(text);
     }
-    request_copy(ctx, window, display_options, log_store);
-    egui::TopBottomPanel::top("pod-log-header")
-        .exact_height(52.0)
+    request_copy(&ctx, window, display_options, log_store);
+    egui::Panel::top("pod-log-header")
+        .exact_size(52.0)
         .frame(
             egui::Frame::new()
                 .fill(TOOLBAR_BACKGROUND)
@@ -113,7 +110,7 @@ fn show_log_window_with_scroll_state(
                     spacing::SM as i8,
                 )),
         )
-        .show(ctx, |ui| {
+        .show(ui, |ui| {
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 ui.label(
                     egui::RichText::new("Logs")
@@ -144,7 +141,7 @@ fn show_log_window_with_scroll_state(
                         .color(gray::_600),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    show_log_search_controls(ctx, ui, window, display_options, log_store)
+                    show_log_search_controls(&ctx, ui, window, display_options, log_store)
                 });
             });
         });
@@ -155,7 +152,7 @@ fn show_log_window_with_scroll_state(
                 .fill(surface::TERMINAL_BACKGROUND)
                 .inner_margin(egui::Margin::same(spacing::LG as i8)),
         )
-        .show(ctx, |ui| {
+        .show(ui, |ui| {
             let pixels_per_point = ui.pixels_per_point();
             let font_row_height =
                 ui.fonts_mut(|fonts| fonts.row_height(&egui::FontId::monospace(LOG_FONT_SIZE)));
@@ -180,10 +177,10 @@ fn show_log_window_with_scroll_state(
             }
 
             let display_count = displayed_line_count(window);
-            // `ScrollArea::id_salt` hashes the salt into an `Id` before it
+            // `ScrollArea::id_salt` hashes the salt into an `IdSalt` before it
             // scopes it to this UI. Mirror both steps when reading its state.
-            let scroll_id = ui.make_persistent_id(egui::Id::new(scroll_area_salt));
-            let scroll_state = egui::scroll_area::State::load(ctx, scroll_id);
+            let scroll_id = ui.make_persistent_id(egui::IdSalt::new(scroll_area_salt));
+            let scroll_state = egui::scroll_area::State::load(&ctx, scroll_id);
             let horizontal_offset = scroll_state.as_ref().map_or(0.0, |state| state.offset.x);
             // The virtual fragment renderer rounds its content origin to the
             // physical pixel grid. Store that same normalized value so a
@@ -205,7 +202,7 @@ fn show_log_window_with_scroll_state(
                 caret_focus_id,
                 egui::Sense::focusable_noninteractive(),
             );
-            resolve_pending_caret(window, log_store, displayed_line_count(window), ctx);
+            resolve_pending_caret(window, log_store, displayed_line_count(window), &ctx);
             let caret_has_focus = ctx.memory(|memory| memory.has_focus(caret_focus_id));
             if caret_has_focus {
                 ctx.memory_mut(|memory| {
@@ -219,7 +216,7 @@ fn show_log_window_with_scroll_state(
                     );
                 });
                 handle_log_keyboard(
-                    ctx,
+                    &ctx,
                     window,
                     log_store,
                     displayed_line_count(window),
@@ -418,7 +415,7 @@ fn show_log_window_with_scroll_state(
                             (response.rect.left(), fragment.start_x)
                         };
                         selection_update = selection_position(
-                            ctx,
+                            &ctx,
                             display_row,
                             &row.text,
                             &interaction_response,
@@ -471,7 +468,7 @@ fn show_log_window_with_scroll_state(
                     if let Some((text, byte_range, response_rect, prefix_width)) = caret_paint {
                         paint_log_caret(
                             ui,
-                            ctx,
+                            &ctx,
                             window,
                             caret_focus_id,
                             display_row,
@@ -1010,7 +1007,8 @@ fn move_log_caret(
                     &text,
                     egui::text::CCursor::new(character_column),
                 )
-                .index;
+                .index
+                .into();
             } else if modifiers.mac_cmd {
                 target_column = 0;
             } else if character_column > 0 {
@@ -1026,7 +1024,8 @@ fn move_log_caret(
                     &text,
                     egui::text::CCursor::new(character_column),
                 )
-                .index;
+                .index
+                .into();
             } else if modifiers.mac_cmd {
                 target_column = line_length;
             } else if character_column < line_length {
@@ -1131,11 +1130,19 @@ fn selection_is_empty(selection: LogTextSelection) -> bool {
 }
 
 fn character_column_at_byte(text: &str, byte_offset: usize) -> usize {
-    egui::text_selection::text_cursor_state::char_index_from_byte_index(text, byte_offset)
+    egui::text_selection::text_cursor_state::char_index_from_byte_index(
+        text,
+        egui::text::ByteIndex(byte_offset),
+    )
+    .into()
 }
 
 fn byte_offset_at_character_column(text: &str, character_column: usize) -> usize {
-    egui::text_selection::text_cursor_state::byte_index_from_char_index(text, character_column)
+    egui::text_selection::text_cursor_state::byte_index_from_char_index(
+        text,
+        egui::text::CharIndex(character_column),
+    )
+    .into()
 }
 
 fn caret_horizontal_offset(
@@ -2451,7 +2458,7 @@ mod tests {
         let display_options_for_ui = display_options.clone();
         let log_store = LogStoreService::default();
         let mut close_requested = false;
-        let mut harness = Harness::builder().build(move |ctx| {
+        let mut harness = Harness::builder().build_ui(move |ctx| {
             show_log_window(
                 ctx,
                 &mut window_for_ui.borrow_mut(),
@@ -2490,7 +2497,7 @@ mod tests {
         let display_options_for_ui = display_options.clone();
         let log_store = LogStoreService::default();
         let mut close_requested = false;
-        let mut harness = Harness::builder().build(move |ctx| {
+        let mut harness = Harness::builder().build_ui(move |ctx| {
             show_log_window(
                 ctx,
                 &mut window_for_ui.borrow_mut(),
@@ -2519,7 +2526,7 @@ mod tests {
         let display_options_for_ui = display_options.clone();
         let log_store = LogStoreService::default();
         let mut close_requested = false;
-        let mut harness = Harness::builder().build(move |ctx| {
+        let mut harness = Harness::builder().build_ui(move |ctx| {
             show_log_window(
                 ctx,
                 &mut window_for_ui.borrow_mut(),
@@ -2552,7 +2559,7 @@ mod tests {
         let display_options_for_ui = display_options.clone();
         let log_store = LogStoreService::default();
         let mut close_requested = false;
-        let mut harness = Harness::builder().build(move |ctx| {
+        let mut harness = Harness::builder().build_ui(move |ctx| {
             show_log_window(
                 ctx,
                 &mut window_for_ui.borrow_mut(),
@@ -2610,7 +2617,7 @@ mod tests {
         let character_width_for_ui = character_width.clone();
         let log_store = LogStoreService::default();
         let mut close_requested = false;
-        let mut harness = Harness::builder().build(move |ctx| {
+        let mut harness = Harness::builder().build_ui(move |ctx| {
             *character_width_for_ui.borrow_mut() = ctx
                 .fonts_mut(|fonts| fonts.glyph_width(&egui::FontId::monospace(LOG_FONT_SIZE), '0'));
             let output = show_log_window_with_scroll_state(
@@ -2630,6 +2637,7 @@ mod tests {
         harness.event(egui::Event::MouseWheel {
             unit: egui::MouseWheelUnit::Point,
             delta: egui::vec2(-500.0, 0.0),
+            phase: egui::TouchPhase::Move,
             modifiers: egui::Modifiers::NONE,
         });
         harness.step();
@@ -2685,7 +2693,7 @@ mod tests {
         let display_options_for_ui = display_options.clone();
         let log_store = LogStoreService::default();
         let mut close_requested = false;
-        let mut harness = Harness::builder().build(move |ctx| {
+        let mut harness = Harness::builder().build_ui(move |ctx| {
             show_log_window(
                 ctx,
                 &mut window_for_ui.borrow_mut(),
@@ -2717,7 +2725,7 @@ mod tests {
         let caret_has_focus_for_ui = caret_has_focus.clone();
         let log_store = LogStoreService::default();
         let mut close_requested = false;
-        let mut harness = Harness::builder().build(move |ctx| {
+        let mut harness = Harness::builder().build_ui(move |ctx| {
             show_log_window(
                 ctx,
                 &mut window_for_ui.borrow_mut(),
@@ -2756,7 +2764,7 @@ mod tests {
         let display_options_for_ui = display_options.clone();
         let log_store = LogStoreService::default();
         let mut close_requested = false;
-        let mut harness = Harness::builder().build(move |ctx| {
+        let mut harness = Harness::builder().build_ui(move |ctx| {
             show_log_window(
                 ctx,
                 &mut window_for_ui.borrow_mut(),
@@ -2807,7 +2815,7 @@ mod tests {
         let scroll_state_for_ui = scroll_state.clone();
         let log_store = LogStoreService::default();
         let mut close_requested = false;
-        let mut harness = Harness::builder().build(move |ctx| {
+        let mut harness = Harness::builder().build_ui(move |ctx| {
             *scroll_state_for_ui.borrow_mut() = Some(show_log_window_with_scroll_state(
                 ctx,
                 &mut window_for_ui.borrow_mut(),
@@ -2836,6 +2844,7 @@ mod tests {
             harness.input_mut().events.push(egui::Event::MouseWheel {
                 unit: egui::MouseWheelUnit::Point,
                 delta: egui::vec2(0.0, -120.0),
+                phase: egui::TouchPhase::Move,
                 modifiers: egui::Modifiers::default(),
             });
             harness.step();
@@ -2888,7 +2897,7 @@ mod tests {
         let mut close_requested = false;
         let mut render = |window: &mut PodLogWindowState| {
             let mut scroll_state = None;
-            let _ = context.run(input.clone(), |ctx| {
+            let mut output = context.run_ui(input.clone(), |ctx| {
                 scroll_state = Some(show_log_window_with_scroll_state(
                     ctx,
                     window,
@@ -2897,6 +2906,7 @@ mod tests {
                     &mut close_requested,
                 ));
             });
+            output.textures_delta.clear();
             scroll_state.expect("log scroll area was rendered")
         };
 
@@ -2949,7 +2959,7 @@ mod tests {
         let mut close_requested = false;
         let mut render = |window: &mut PodLogWindowState| {
             let mut scroll_state = None;
-            let _ = context.run(input.clone(), |ctx| {
+            let mut output = context.run_ui(input.clone(), |ctx| {
                 scroll_state = Some(show_log_window_with_scroll_state(
                     ctx,
                     window,
@@ -2958,6 +2968,7 @@ mod tests {
                     &mut close_requested,
                 ));
             });
+            output.textures_delta.clear();
             scroll_state.expect("log scroll area was rendered")
         };
 
@@ -3020,7 +3031,7 @@ mod tests {
         let mut close_requested = false;
         let mut render = |window: &mut PodLogWindowState| {
             let mut scroll_state = None;
-            let _ = context.run(input.clone(), |ctx| {
+            let mut output = context.run_ui(input.clone(), |ctx| {
                 scroll_state = Some(show_log_window_with_scroll_state(
                     ctx,
                     window,
@@ -3029,6 +3040,7 @@ mod tests {
                     &mut close_requested,
                 ));
             });
+            output.textures_delta.clear();
             scroll_state.expect("log scroll area was rendered")
         };
 
@@ -3121,7 +3133,7 @@ mod tests {
         let log_store = LogStoreService::default();
         let mut close_requested = false;
 
-        let _ = context.run(input, |context| {
+        let mut output = context.run_ui(input, |context| {
             show_log_window(
                 context,
                 &mut window,
@@ -3130,6 +3142,7 @@ mod tests {
                 &mut close_requested,
             );
         });
+        output.textures_delta.clear();
 
         assert!(window.horizontal_content_width > 320.0);
     }
@@ -3196,11 +3209,12 @@ mod tests {
             ..Default::default()
         };
         let mut first_scroll_output = None;
-        let _ = context.run(input(), |context| {
+        let mut first_output_frame = context.run_ui(input(), |context| {
             egui::CentralPanel::default().show(context, |ui| {
                 first_scroll_output = Some(show_wide_test_scroll_area(ui, &wide_line));
             });
         });
+        first_output_frame.textures_delta.clear();
 
         let first_output = first_scroll_output.expect("scroll area was rendered");
         assert!(first_output.content_size.x > first_output.inner_rect.width());
@@ -3211,15 +3225,17 @@ mod tests {
             egui::Event::MouseWheel {
                 unit: egui::MouseWheelUnit::Point,
                 delta: egui::vec2(-120.0, 0.0),
+                phase: egui::TouchPhase::Move,
                 modifiers: egui::Modifiers::default(),
             },
         ];
         let mut second_scroll_output = None;
-        let _ = context.run(scroll_input, |context| {
+        let mut second_output_frame = context.run_ui(scroll_input, |context| {
             egui::CentralPanel::default().show(context, |ui| {
                 second_scroll_output = Some(show_wide_test_scroll_area(ui, &wide_line));
             });
         });
+        second_output_frame.textures_delta.clear();
 
         assert!(
             second_scroll_output
@@ -3288,7 +3304,7 @@ mod tests {
         let display_options_for_ui = display_options.clone();
         let log_store = LogStoreService::default();
         let mut close_requested = false;
-        let mut harness = Harness::builder().build(move |ctx| {
+        let mut harness = Harness::builder().build_ui(move |ctx| {
             show_log_window(
                 ctx,
                 &mut window_for_ui.borrow_mut(),
@@ -3533,7 +3549,7 @@ mod tests {
         let display_options_for_ui = display_options.clone();
         let log_store = LogStoreService::default();
         let mut close_requested = false;
-        let mut harness = Harness::builder().build(move |ctx| {
+        let mut harness = Harness::builder().build_ui(move |ctx| {
             show_log_window(
                 ctx,
                 &mut window_for_ui.borrow_mut(),
@@ -3598,7 +3614,7 @@ mod tests {
         let rendered_scroll_id_for_ui = rendered_scroll_id.clone();
         let log_store = LogStoreService::default();
         let mut close_requested = false;
-        let mut harness = Harness::builder().build(move |ctx| {
+        let mut harness = Harness::builder().build_ui(move |ctx| {
             let mut state = state_for_ui.borrow_mut();
             let UiState {
                 log_windows,
@@ -3625,7 +3641,14 @@ mod tests {
         harness.step();
         harness.input_mut().events.push(egui::Event::MouseWheel {
             unit: egui::MouseWheelUnit::Point,
+            delta: egui::Vec2::ZERO,
+            phase: egui::TouchPhase::Start,
+            modifiers: egui::Modifiers::default(),
+        });
+        harness.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
             delta: egui::vec2(-600.0, -700.0),
+            phase: egui::TouchPhase::Move,
             modifiers: egui::Modifiers::default(),
         });
         harness.run_steps(3);
@@ -3740,6 +3763,7 @@ mod tests {
         harness.input_mut().events.push(egui::Event::MouseWheel {
             unit: egui::MouseWheelUnit::Point,
             delta: egui::vec2(0.0, 10_000.0),
+            phase: egui::TouchPhase::Move,
             modifiers: egui::Modifiers::default(),
         });
         harness.run_steps(3);
@@ -3912,7 +3936,7 @@ mod tests {
         let mut window = window;
         let log_store = LogStoreService::default();
         let mut close_requested = false;
-        let mut harness = Harness::builder().build(move |ctx| {
+        let mut harness = Harness::builder().build_ui(move |ctx| {
             show_log_window(
                 ctx,
                 &mut window,
@@ -3938,6 +3962,7 @@ mod tests {
             harness.input_mut().events.push(egui::Event::MouseWheel {
                 unit: egui::MouseWheelUnit::Point,
                 delta: egui::vec2(-horizontal_offset, 0.0),
+                phase: egui::TouchPhase::Move,
                 modifiers: egui::Modifiers::default(),
             });
             harness.step();
