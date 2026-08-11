@@ -1351,6 +1351,8 @@ fn show_discard_confirmation(ctx: &egui::Context, editor: &mut YamlEditorWindowS
         confirm_label: "Discard changes",
         kind: ConfirmationDialogKind::Destructive,
         confirm_enabled: true,
+        warning: None,
+        acknowledgement: None,
     })
     .show(ctx)
     {

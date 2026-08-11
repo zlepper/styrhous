@@ -1,10 +1,10 @@
 use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::{
     Cluster, ClusterConnection, ResourceDataUpdateRequest, ResourceDetailWatchRequest,
-    ResourceYamlValidationRequest, apply_resource_yaml, delete_resource, get_resource_scale,
-    get_resource_schema, get_resource_yaml, reload_kubeconfig, restart_deployment,
-    start_cluster_connection, start_resource_watcher, update_resource_data, update_resource_scale,
-    validate_resource_yaml, watch_resource_detail,
+    ResourceYamlValidationRequest, apply_resource_yaml, delete_resource, force_delete_resource,
+    get_resource_scale, get_resource_schema, get_resource_yaml, reload_kubeconfig,
+    restart_deployment, start_cluster_connection, start_resource_watcher, update_resource_data,
+    update_resource_scale, validate_resource_yaml, watch_resource_detail,
 };
 use crate::helpers::ResultExt;
 use crate::log_store::LogStoreAppender;
@@ -204,6 +204,13 @@ pub enum WorkerCommand {
         api_resource: ApiResource,
         namespace: Option<String>,
         resource_name: String,
+    },
+    ForceDeleteResource {
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: Option<String>,
+        resource_name: String,
+        resource_uid: String,
     },
     RestartDeployment {
         cluster_key: i32,
@@ -423,6 +430,11 @@ pub enum WorkerResult {
     },
     /// Resource was successfully deleted
     ResourceDeleteCompleted {
+        cluster_key: i32,
+        resource_name: String,
+    },
+    /// A deleting resource's finalizers were removed.
+    ResourceForceDeleteCompleted {
         cluster_key: i32,
         resource_name: String,
     },
@@ -707,6 +719,32 @@ impl WorkerRuntime {
                         api_resource.clone(),
                         namespace.clone(),
                         resource_name.clone(),
+                    )
+                    .await
+                    .map(Some)
+                } else {
+                    Err(anyhow::anyhow!(
+                        "No client found for cluster_key {}",
+                        cluster_key
+                    ))
+                }
+            }
+            WorkerCommand::ForceDeleteResource {
+                cluster_key,
+                api_resource,
+                namespace,
+                resource_name,
+                resource_uid,
+            } => {
+                let clients = shared.clients.read().await;
+                if let Some(client) = clients.get(cluster_key) {
+                    force_delete_resource(
+                        *cluster_key,
+                        client.clone(),
+                        api_resource.clone(),
+                        namespace.clone(),
+                        resource_name.clone(),
+                        resource_uid.clone(),
                     )
                     .await
                     .map(Some)

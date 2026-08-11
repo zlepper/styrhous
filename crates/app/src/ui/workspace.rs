@@ -1,7 +1,7 @@
 use super::resource_actions::show_resource_action_items;
 use super::state::{
     ClusterConnectionState, ClusterLoadState, PendingDelete, PendingDeploymentRestart,
-    ResourceAction, ResourceSearchState, UiState,
+    PendingForceDelete, ResourceAction, ResourceSearchState, UiState,
 };
 use super::widgets::{
     show_resource_cell, workspace_empty_state, workspace_error_state, workspace_loading_state,
@@ -227,6 +227,20 @@ pub(super) fn show(
                         ResourceAction::RequestDelete { name, namespace } => {
                             cluster.pending_delete =
                                 Some(PendingDelete::new(api_resource.clone(), name, namespace));
+                        }
+                        ResourceAction::RequestForceDelete {
+                            name,
+                            uid,
+                            namespace,
+                            finalizers,
+                        } => {
+                            cluster.pending_force_delete = Some(PendingForceDelete::new(
+                                api_resource.clone(),
+                                name,
+                                uid,
+                                namespace,
+                                finalizers,
+                            ));
                         }
                         ResourceAction::RequestDeploymentRestart { name, namespace } => {
                             cluster.pending_deployment_restart = Some(PendingDeploymentRestart {

@@ -4,8 +4,9 @@ use crate::worker::WorkerCommand;
 use components::colors::{WHITE, gray};
 use components::design::{radius, spacing, surface, typography};
 use components::{
-    ButtonSize, ConfirmationDialog, ConfirmationDialogAction, ConfirmationDialogKind, ErrorDialog,
-    ErrorDialogAction, PointingHand, TailwindButton,
+    ButtonSize, ConfirmationDialog, ConfirmationDialogAcknowledgement, ConfirmationDialogAction,
+    ConfirmationDialogKind, ConfirmationDialogWarning, ErrorDialog, ErrorDialogAction,
+    PointingHand, TailwindButton,
 };
 use egui::{Align, Color32, Frame, Key, Margin, Modal, Modifiers, Shadow};
 use std::time::Instant;
@@ -52,6 +53,8 @@ pub(super) fn show_delete_confirmation(
         confirm_label: &format!("Delete {}", pending.resource_name),
         kind: ConfirmationDialogKind::Destructive,
         confirm_enabled,
+        warning: None,
+        acknowledgement: None,
     }
     .show(ctx);
 
@@ -69,6 +72,123 @@ pub(super) fn show_delete_confirmation(
         if let Some(cluster) = ui_state.clusters.get_mut(&cluster_id) {
             cluster.pending_delete = None;
         }
+    }
+}
+
+pub(super) fn show_force_delete_confirmation(
+    ctx: &egui::Context,
+    ui_state: &mut UiState,
+    commands_to_send: &mut Vec<WorkerCommand>,
+) {
+    let Some(cluster_id) = ui_state.selected_cluster else {
+        return;
+    };
+    let Some(cluster) = ui_state.clusters.get(&cluster_id) else {
+        return;
+    };
+    let Some(pending) = cluster.pending_force_delete.as_ref() else {
+        return;
+    };
+    let cluster_key = cluster.cluster_key;
+    let remaining = pending
+        .confirmation_available_at
+        .saturating_duration_since(Instant::now());
+    let delay_elapsed = remaining.is_zero();
+    if !delay_elapsed {
+        ctx.request_repaint_after(remaining);
+    }
+    let finalizers = pending
+        .finalizers
+        .iter()
+        .map(|finalizer| format!("• {finalizer}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let message = "This permanently removes every finalizer from this deleting resource.";
+    let unavailable_message = (!delay_elapsed).then(|| {
+        format!(
+            "Remove finalizers will be available in {} seconds.",
+            remaining.as_millis().div_ceil(1_000)
+        )
+    });
+    let pending = ui_state
+        .clusters
+        .get_mut(&cluster_id)
+        .and_then(|cluster| cluster.pending_force_delete.as_mut())
+        .expect("pending force deletion was checked above");
+    let acknowledgement_label = format!(
+        "Type {} to acknowledge that you are bypassing cleanup:",
+        pending.resource_name
+    );
+    let confirm_enabled = delay_elapsed && pending.acknowledgement == pending.resource_name;
+    let action = ConfirmationDialog {
+        id: egui::Id::new("force-delete-resource-confirmation"),
+        eyebrow: "DANGEROUS: REMOVE FINALIZERS",
+        title: "Force delete resource?",
+        message,
+        unavailable_message: unavailable_message.as_deref(),
+        cancel_label: "Cancel",
+        confirm_label: "Remove finalizers",
+        kind: ConfirmationDialogKind::Destructive,
+        confirm_enabled,
+        warning: Some(ConfirmationDialogWarning {
+            title: "This bypasses controller cleanup",
+            message: "It can orphan external infrastructure, leak data, and corrupt application state. Only continue if you understand why the controllers cannot finish deletion.",
+            details: Some(&finalizers),
+        }),
+        acknowledgement: Some(ConfirmationDialogAcknowledgement {
+            label: &acknowledgement_label,
+            hint_text: "Resource name",
+            value: &mut pending.acknowledgement,
+        }),
+    }
+    .show(ctx);
+
+    if action == ConfirmationDialogAction::Cancel {
+        if let Some(cluster) = ui_state.clusters.get_mut(&cluster_id) {
+            cluster.pending_force_delete = None;
+        }
+    } else if action == ConfirmationDialogAction::Confirm {
+        commands_to_send.push(WorkerCommand::ForceDeleteResource {
+            cluster_key,
+            api_resource: pending.api_resource.clone(),
+            namespace: pending.namespace.clone(),
+            resource_name: pending.resource_name.clone(),
+            resource_uid: pending.resource_uid.clone(),
+        });
+        if let Some(cluster) = ui_state.clusters.get_mut(&cluster_id) {
+            cluster.pending_force_delete = None;
+        }
+    }
+}
+
+pub(super) fn show_force_delete_error(ctx: &egui::Context, ui_state: &mut UiState) {
+    let Some(cluster_id) = ui_state.selected_cluster else {
+        return;
+    };
+    let Some(error) = ui_state
+        .clusters
+        .get(&cluster_id)
+        .and_then(|cluster| cluster.force_delete_error.as_deref())
+    else {
+        return;
+    };
+    if matches!(
+        (ErrorDialog {
+            id: egui::Id::new("force-delete-resource-error"),
+            eyebrow: "REMOVE FINALIZERS",
+            title: "Couldn’t remove finalizers",
+            message: "Kubernetes Dev UI could not remove the finalizers from this resource.",
+            details: Some(error),
+            recovery: Some(
+                "Check the resource’s current deletion state and your Kubernetes permissions."
+            ),
+            primary_action_label: None,
+        })
+        .show(ctx),
+        ErrorDialogAction::Dismiss
+    ) && let Some(cluster) = ui_state.clusters.get_mut(&cluster_id)
+    {
+        cluster.force_delete_error = None;
     }
 }
 
@@ -101,6 +221,8 @@ pub(super) fn show_deployment_restart_confirmation(
         confirm_label: "Restart rollout",
         kind: ConfirmationDialogKind::Primary,
         confirm_enabled: true,
+        warning: None,
+        acknowledgement: None,
     }
     .show(ctx);
 

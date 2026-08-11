@@ -51,7 +51,8 @@ pub use combobox::{
     WithFilter,
 };
 pub use confirmation_dialog::{
-    ConfirmationDialog, ConfirmationDialogAction, ConfirmationDialogKind,
+    ConfirmationDialog, ConfirmationDialogAcknowledgement, ConfirmationDialogAction,
+    ConfirmationDialogKind, ConfirmationDialogWarning,
 };
 pub use error_dialog::{ErrorDialog, ErrorDialogAction};
 pub use interaction::PointingHand;

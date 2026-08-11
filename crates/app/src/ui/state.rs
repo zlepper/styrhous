@@ -490,6 +490,37 @@ pub(super) struct PendingDelete {
     pub(super) confirmation_available_at: Instant,
 }
 
+#[derive(Debug, Clone)]
+pub(super) struct PendingForceDelete {
+    pub(super) api_resource: ApiResource,
+    pub(super) resource_name: String,
+    pub(super) resource_uid: String,
+    pub(super) namespace: Option<String>,
+    pub(super) finalizers: Vec<String>,
+    pub(super) acknowledgement: String,
+    pub(super) confirmation_available_at: Instant,
+}
+
+impl PendingForceDelete {
+    pub(super) fn new(
+        api_resource: ApiResource,
+        resource_name: String,
+        resource_uid: String,
+        namespace: Option<String>,
+        finalizers: Vec<String>,
+    ) -> Self {
+        Self {
+            api_resource,
+            resource_name,
+            resource_uid,
+            namespace,
+            finalizers,
+            acknowledgement: String::new(),
+            confirmation_available_at: Instant::now() + DELETE_CONFIRMATION_DELAY,
+        }
+    }
+}
+
 impl PendingDelete {
     pub(super) fn new(
         api_resource: ApiResource,
@@ -706,6 +737,12 @@ pub(super) enum ResourceAction {
         name: String,
         namespace: Option<String>,
     },
+    RequestForceDelete {
+        name: String,
+        uid: String,
+        namespace: Option<String>,
+        finalizers: Vec<String>,
+    },
     RequestDeploymentRestart {
         name: String,
         namespace: String,
@@ -759,6 +796,8 @@ pub(super) struct ClusterState {
     pub(super) resource_detail_panel: Option<ResourceDetailPanelState>,
     pub(super) next_detail_generation: u64,
     pub(super) pending_delete: Option<PendingDelete>,
+    pub(super) pending_force_delete: Option<PendingForceDelete>,
+    pub(super) force_delete_error: Option<String>,
     pub(super) pending_deployment_restart: Option<PendingDeploymentRestart>,
     pub(super) deployment_restart_error: Option<String>,
     pub(super) pending_scale: Option<PendingScale>,
@@ -1551,6 +1590,14 @@ impl UiState {
                                 cluster.deployment_restart_error = Some(message);
                             }
                         }
+                        Some(crate::worker::WorkerCommand::ForceDeleteResource {
+                            cluster_key,
+                            ..
+                        }) => {
+                            if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
+                                cluster.force_delete_error = Some(message);
+                            }
+                        }
                         Some(crate::worker::WorkerCommand::GetResourceScale {
                             cluster_key,
                             ..
@@ -1597,6 +1644,8 @@ impl UiState {
                                 resource_detail_panel: None,
                                 next_detail_generation: 0,
                                 pending_delete: None,
+                                pending_force_delete: None,
+                                force_delete_error: None,
                                 pending_deployment_restart: None,
                                 deployment_restart_error: None,
                                 pending_scale: None,
@@ -2029,6 +2078,15 @@ impl UiState {
                     info!("Resource deleted: {resource_name}");
                     if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
                         cluster.pending_delete = None;
+                    }
+                }
+                WorkerResult::ResourceForceDeleteCompleted {
+                    cluster_key,
+                    resource_name,
+                } => {
+                    info!("Removed finalizers from deleting resource: {resource_name}");
+                    if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
+                        cluster.pending_force_delete = None;
                     }
                 }
                 WorkerResult::ResourceApplyCompleted {

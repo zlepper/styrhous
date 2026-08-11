@@ -13,6 +13,10 @@ pub(crate) struct ResourceDetail {
     pub(crate) uid: String,
     /// Kubernetes' optimistic-concurrency token for the watched object.
     pub(crate) resource_version: String,
+    /// Kubernetes has accepted a deletion request but retains the object.
+    pub(crate) is_deleting: bool,
+    /// Controller cleanup hooks that currently block deletion.
+    pub(crate) finalizers: Vec<String>,
     pub(crate) creation_timestamp: Option<OffsetDateTime>,
     pub(crate) owner: Option<ResourceOwner>,
     pub(crate) labels: BTreeMap<String, String>,

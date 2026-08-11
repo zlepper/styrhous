@@ -1,7 +1,8 @@
 use super::super::MyEguiApp;
 use super::super::state::ClusterConnectionState;
 use super::super::state::{
-    PendingDelete, ResourceWatchState, UiState, ValidationState, YamlEditorWindowState,
+    PendingDelete, PendingForceDelete, ResourceWatchState, UiState, ValidationState,
+    YamlEditorWindowState,
 };
 use super::fixtures::{
     application_harness, application_harness_with_terminal, fixture_api_resource, fixture_cluster,
@@ -1236,6 +1237,8 @@ fn resource_name_opens_and_closes_a_live_detail_inspector() {
                 namespace: Some("kube-system".into()),
                 uid: "fixture-0".into(),
                 resource_version: "1".into(),
+                is_deleting: false,
+                finalizers: Vec::new(),
                 creation_timestamp: None,
                 owner: None,
                 labels: BTreeMap::new(),
@@ -1348,6 +1351,8 @@ fn clicking_a_pod_node_in_the_inspector_navigates_to_the_node_inspector() {
                 namespace: Some("kube-system".into()),
                 uid: "pod-uid".into(),
                 resource_version: "1".into(),
+                is_deleting: false,
+                finalizers: Vec::new(),
                 creation_timestamp: None,
                 owner: None,
                 labels: BTreeMap::new(),
@@ -1405,6 +1410,8 @@ fn node_inspector_shows_its_spec() {
                 namespace: None,
                 uid: "node-uid".into(),
                 resource_version: "1".into(),
+                is_deleting: false,
+                finalizers: Vec::new(),
                 creation_timestamp: None,
                 owner: None,
                 labels: BTreeMap::new(),
@@ -1452,6 +1459,8 @@ fn node_inspector_lists_cross_namespace_pods_in_the_shared_pod_table() {
                 namespace: None,
                 uid: "node-uid".into(),
                 resource_version: "1".into(),
+                is_deleting: false,
+                finalizers: Vec::new(),
                 creation_timestamp: None,
                 owner: None,
                 labels: BTreeMap::new(),
@@ -1638,6 +1647,8 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         namespace: Some("kube-system".into()),
         uid: "deployment-uid".into(),
         resource_version: "1".into(),
+        is_deleting: false,
+        finalizers: Vec::new(),
         creation_timestamp: None,
         owner: None,
         labels: BTreeMap::new(),
@@ -1739,6 +1750,8 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
                 namespace: Some("kube-system".into()),
                 uid: "replicaset-uid".into(),
                 resource_version: "1".into(),
+                is_deleting: false,
+                finalizers: Vec::new(),
                 creation_timestamp: Some(
                     time::OffsetDateTime::now_utc() - time::Duration::hours(2),
                 ),
@@ -1865,6 +1878,8 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
                 namespace: Some("kube-system".into()),
                 uid: "pod-uid".into(),
                 resource_version: "1".into(),
+                is_deleting: false,
+                finalizers: Vec::new(),
                 creation_timestamp: Some(
                     time::OffsetDateTime::now_utc() - time::Duration::minutes(15),
                 ),
@@ -1988,6 +2003,8 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
                 namespace: Some("kube-system".into()),
                 uid: "pod-debug-uid".into(),
                 resource_version: "1".into(),
+                is_deleting: false,
+                finalizers: Vec::new(),
                 creation_timestamp: Some(
                     time::OffsetDateTime::now_utc() - time::Duration::minutes(10),
                 ),
@@ -2049,6 +2066,8 @@ fn pod_resource_detail_inspector_snapshot() {
                 namespace: Some("kube-system".into()),
                 uid: "fixture-0".into(),
                 resource_version: "1".into(),
+                is_deleting: false,
+                finalizers: Vec::new(),
                 creation_timestamp: None,
                 owner: None,
                 labels: BTreeMap::from([("k8s-app".into(), "kube-dns".into())]),
@@ -2207,6 +2226,8 @@ fn config_map_detail(data: BTreeMap<String, String>) -> ResourceDetail {
         namespace: Some("kube-system".into()),
         uid: "configmap-uid".into(),
         resource_version: "1".into(),
+        is_deleting: false,
+        finalizers: Vec::new(),
         creation_timestamp: None,
         owner: None,
         labels: BTreeMap::new(),
@@ -2227,6 +2248,8 @@ fn deployment_editor_completes_match_labels_in_a_selector() {
         namespace: Some("kube-system".into()),
         uid: "deployment-match-labels-uid".into(),
         resource_version: "1".into(),
+        is_deleting: false,
+        finalizers: Vec::new(),
         creation_timestamp: None,
         owner: None,
         labels: BTreeMap::new(),
@@ -2381,6 +2404,8 @@ fn deployment_inspector_exposes_the_shared_restart_action() {
         namespace: Some("kube-system".into()),
         uid: "deployment-uid".into(),
         resource_version: "1".into(),
+        is_deleting: false,
+        finalizers: Vec::new(),
         creation_timestamp: None,
         owner: None,
         labels: BTreeMap::new(),
@@ -2508,6 +2533,8 @@ fn secret_inspector_masks_values_and_prompts_for_a_real_external_change() {
         namespace: Some("kube-system".into()),
         uid: "secret-uid".into(),
         resource_version: "1".into(),
+        is_deleting: false,
+        finalizers: Vec::new(),
         creation_timestamp: None,
         owner: None,
         labels: BTreeMap::new(),
@@ -2601,6 +2628,8 @@ fn secret_resource_detail_inspector_snapshot() {
         namespace: Some("kube-system".into()),
         uid: "secret-snapshot-uid".into(),
         resource_version: "1".into(),
+        is_deleting: false,
+        finalizers: Vec::new(),
         creation_timestamp: None,
         owner: None,
         labels: BTreeMap::from([("app.kubernetes.io/name".into(), "api".into())]),
@@ -2761,6 +2790,128 @@ fn delete_confirmation_waits_before_enabling_the_destructive_action() {
         harness.state().worker.commands.as_slice(),
         [WorkerCommand::DeleteResource { resource_name, .. }] if resource_name == "important-config"
     ));
+}
+
+#[test]
+fn force_delete_confirmation_requires_the_resource_name_before_removing_finalizers() {
+    let api_resource = fixture_api_resource("", "ConfigMap", "configmaps");
+    let mut cluster = fixture_cluster(1, "dev");
+    cluster.pending_force_delete = Some(PendingForceDelete {
+        api_resource,
+        resource_name: "important-config".into(),
+        resource_uid: "important-config-uid".into(),
+        namespace: Some("default".into()),
+        finalizers: vec!["example.com/cleanup".into()],
+        acknowledgement: "wrong-name".into(),
+        confirmation_available_at: std::time::Instant::now() + std::time::Duration::from_secs(3),
+    });
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = UiState {
+        clusters: HashMap::from([(1, cluster)]),
+        next_cluster_key: 1,
+        selected_cluster: Some(1),
+        ..Default::default()
+    };
+
+    harness.run();
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "resource_actions/force_delete_confirmation_requires_the_resource_name_before_removing_finalizers/force_delete_confirmation",
+    ));
+    harness.get_by_label("Remove finalizers").click_accesskit();
+    harness.run();
+    assert!(harness.state().worker.commands.is_empty());
+
+    harness
+        .state_mut()
+        .ui_state
+        .clusters
+        .get_mut(&1)
+        .and_then(|cluster| cluster.pending_force_delete.as_mut())
+        .expect("force deletion should still be pending")
+        .confirmation_available_at = std::time::Instant::now();
+    harness.run();
+    // The delay has elapsed, but a non-empty wrong acknowledgement is still rejected.
+    harness.get_by_label("Remove finalizers").click_accesskit();
+    harness.run();
+    assert!(harness.state().worker.commands.is_empty());
+    harness
+        .state_mut()
+        .ui_state
+        .clusters
+        .get_mut(&1)
+        .and_then(|cluster| cluster.pending_force_delete.as_mut())
+        .expect("force deletion should still be pending")
+        .acknowledgement = "important-config".into();
+    harness.run();
+    harness.get_by_label("Remove finalizers").click_accesskit();
+    harness.run();
+
+    assert!(matches!(
+        harness.state().worker.commands.as_slice(),
+        [WorkerCommand::ForceDeleteResource { resource_name, .. }]
+            if resource_name == "important-config"
+    ));
+}
+
+#[test]
+fn force_delete_is_available_from_a_deleting_resource_inspector() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    let mut detail = config_map_detail(BTreeMap::new());
+    detail.is_deleting = true;
+    detail.finalizers = vec!["example.com/cleanup".into()];
+    open_typed_detail(&mut harness, detail.api_resource.clone(), detail);
+
+    harness
+        .get_by_label("More actions for settings")
+        .click_accesskit();
+    harness.run();
+    harness
+        .get_by_label("Force delete (remove finalizers)")
+        .click_accesskit();
+    harness.run();
+
+    assert!(
+        harness.state().ui_state.clusters[&2]
+            .pending_force_delete
+            .as_ref()
+            .is_some_and(|pending| {
+                pending.resource_name == "settings"
+                    && pending.resource_uid == "configmap-uid"
+                    && pending.finalizers == ["example.com/cleanup"]
+            })
+    );
+}
+
+#[test]
+fn force_delete_failure_is_shown_and_can_be_dismissed() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(WorkerResult::CommandFailed {
+            command: Some(WorkerCommand::ForceDeleteResource {
+                cluster_key: 2,
+                api_resource: fixture_api_resource("", "ConfigMap", "configmaps"),
+                namespace: Some("kube-system".into()),
+                resource_name: "settings".into(),
+                resource_uid: "configmap-uid".into(),
+            }),
+            error: anyhow::anyhow!("Resource was replaced while awaiting confirmation"),
+        });
+
+    harness.run();
+    harness.get_by_label("Couldn’t remove finalizers");
+    harness.get_by_label("Dismiss").click_accesskit();
+    harness.run();
+
+    assert!(
+        harness.state().ui_state.clusters[&2]
+            .force_delete_error
+            .is_none()
+    );
 }
 
 #[test]
