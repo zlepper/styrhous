@@ -211,12 +211,16 @@ impl BladeStack {
         let transition_back_steps = matches!(transition, Some((BladeTransition::Back, _)))
             .then(|| navigator.back_steps())
             .unwrap_or(1);
+        let history_len = navigator.back_stack.len();
+        let is_closing = matches!(transition, Some((BladeTransition::Closing, _)));
+        let active_interactable =
+            !is_closing && !matches!(transition, Some((_, progress)) if progress < 1.0);
+        let mouse_navigation = mouse_navigation_action(ctx, self.id, is_closing);
         let closing_progress = matches!(transition, Some((BladeTransition::Closing, _)))
             .then(|| transition.expect("transition exists").1)
             .unwrap_or_default();
         paint_scrim(ctx, self.id, viewport, closing_progress);
 
-        let history_len = navigator.back_stack.len();
         let first_history = history_len.saturating_sub(HISTORY_SCALES.len());
         for stack_index in 0..first_history {
             retain_hidden_layer(ctx, self.layer_id(stack_index), viewport);
@@ -247,8 +251,6 @@ impl BladeStack {
             );
         }
 
-        let history_interactable = !matches!(transition, Some((BladeTransition::Closing, _)))
-            && !matches!(transition, Some((_, progress)) if progress < 1.0);
         let mut history_targets = Vec::new();
         for (index, entry) in navigator.back_stack_mut()[first_history..]
             .iter_mut()
@@ -260,7 +262,7 @@ impl BladeStack {
                 history_layer_transform(viewport, depth, transition, transition_back_steps);
             let content_id = self.content_id(stack_index);
             let steps = depth + 1;
-            if history_interactable {
+            if active_interactable {
                 history_targets.push((content_id, transformed_rect(viewport, transform), steps));
             }
             show_layer(
@@ -340,7 +342,6 @@ impl BladeStack {
             active_blade_transform.position,
             egui::vec2(WIDTH, height(viewport)) * active_blade_transform.scale,
         );
-        let outgoing = matches!(transition, Some((BladeTransition::Back, value)) if value < 1.0);
         let active_content_id = self.content_id(history_len);
         let active_area_id = self.layer_id(history_len);
         let popup_was_open = egui::Popup::is_any_open(ctx);
@@ -364,9 +365,7 @@ impl BladeStack {
             active_area_id,
             viewport,
             active_blade_transform,
-            !matches!(transition, Some((BladeTransition::Closing, _)))
-                && !outgoing
-                && active_blade_transform == active_transform(viewport),
+            active_interactable,
             |ui| {
                 let can_go_back = navigator.can_go_back();
                 let can_go_forward = navigator.can_go_forward();
@@ -392,7 +391,11 @@ impl BladeStack {
         } else {
             (scrim_dismissed, scrim_history_selection)
         };
-        match header_action {
+        match if header_action == HeaderAction::None {
+            mouse_navigation
+        } else {
+            header_action
+        } {
             HeaderAction::Back => {
                 navigator.go_back();
             }
@@ -408,6 +411,7 @@ impl BladeStack {
                 }
             }
         }
+        record_topmost_blade_stack(ctx, self.id, !is_closing);
         BladeResponse {
             header,
             active,
@@ -562,6 +566,104 @@ enum HeaderAction {
     Back,
     Forward,
     Close,
+}
+
+/// Dispatch a side-button press to the stack that was topmost in the event
+/// pass. The subsequent transition immediately replaces any animation in
+/// progress, while presses on a closing stack are discarded.
+fn mouse_navigation_action(ctx: &egui::Context, stack_id: Id, is_closing: bool) -> HeaderAction {
+    let pass = ctx.cumulative_pass_nr();
+    let pending_action = ctx.data_mut(|data| {
+        let mut state = data
+            .get_temp::<MouseNavigationState>(topmost_blade_stack_id())
+            .unwrap_or_default();
+        if state.pass != pass {
+            state.pending = state.current.zip(state.captured.take());
+            state.current = None;
+            state.pass = pass;
+        }
+        let action = if state.pending.map(|(id, _)| id) != Some(stack_id) {
+            HeaderAction::None
+        } else if is_closing {
+            state.pending.take();
+            HeaderAction::None
+        } else {
+            state
+                .pending
+                .take()
+                .expect("pending action belongs to this stack")
+                .1
+        };
+        data.insert_temp(topmost_blade_stack_id(), state);
+        action
+    });
+    let should_capture = ctx.data(|data| {
+        data.get_temp::<MouseNavigationState>(topmost_blade_stack_id())
+            .is_none_or(|state| state.captured.is_none())
+    });
+    let captured_action = should_capture
+        .then(|| {
+            ctx.input_mut(|input| {
+                let action = input.events.iter().find_map(|event| match event {
+                    egui::Event::PointerButton {
+                        button: egui::PointerButton::Extra1,
+                        pressed: true,
+                        ..
+                    } => Some(HeaderAction::Back),
+                    egui::Event::PointerButton {
+                        button: egui::PointerButton::Extra2,
+                        pressed: true,
+                        ..
+                    } => Some(HeaderAction::Forward),
+                    _ => None,
+                });
+                input.events.retain(|event| {
+                    !matches!(
+                        event,
+                        egui::Event::PointerButton {
+                            button: egui::PointerButton::Extra1 | egui::PointerButton::Extra2,
+                            pressed: true,
+                            ..
+                        }
+                    )
+                });
+                action
+            })
+        })
+        .flatten();
+    if let Some(action) = captured_action {
+        ctx.data_mut(|data| {
+            let mut state = data
+                .get_temp::<MouseNavigationState>(topmost_blade_stack_id())
+                .unwrap_or_default();
+            state.captured = Some(action);
+            data.insert_temp(topmost_blade_stack_id(), state);
+        });
+        ctx.request_repaint();
+    }
+    pending_action
+}
+
+#[derive(Clone, Copy, Default)]
+struct MouseNavigationState {
+    pass: u64,
+    current: Option<Id>,
+    captured: Option<HeaderAction>,
+    pending: Option<(Id, HeaderAction)>,
+}
+
+fn topmost_blade_stack_id() -> Id {
+    Id::new("topmost-blade-stack")
+}
+
+fn record_topmost_blade_stack(ctx: &egui::Context, stack_id: Id, accepts_navigation: bool) {
+    ctx.data_mut(|data| {
+        let mut state = data
+            .get_temp::<MouseNavigationState>(topmost_blade_stack_id())
+            .unwrap_or_default();
+        state.current = accepts_navigation.then_some(stack_id);
+        data.insert_temp(topmost_blade_stack_id(), state);
+    });
 }
 
 fn show_header<H>(
@@ -2030,6 +2132,284 @@ mod tests {
         harness.get_by_label("Close blade").click_accesskit();
         harness.run();
         assert!(*close_finished.borrow());
+    }
+
+    #[test]
+    fn extra_mouse_buttons_navigate_blade_history() {
+        let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 1,
+            title: "First",
+        })));
+        navigator.borrow_mut().clear_transition();
+        navigator.borrow_mut().push(TestBlade {
+            id: 2,
+            title: "Second",
+        });
+        navigator.borrow_mut().clear_transition();
+        let stack = BladeStack::new("blade-extra-mouse-navigation");
+        let navigator_for_ui = Rc::clone(&navigator);
+        let mut harness = Harness::new_ui(move |ui| {
+            stack.show_with_title(
+                ui.ctx(),
+                &mut navigator_for_ui.borrow_mut(),
+                |blade| blade.title.to_owned(),
+                render_test_blade,
+            );
+        });
+        crate::test_support::setup_egui(&mut harness);
+        harness.run();
+
+        for button in [egui::PointerButton::Extra1, egui::PointerButton::Extra2] {
+            harness.event(egui::Event::PointerButton {
+                pos: egui::pos2(0.0, 0.0),
+                button,
+                pressed: true,
+                modifiers: egui::Modifiers::default(),
+            });
+            harness.run();
+        }
+
+        assert_eq!(navigator.borrow().current().id, 2);
+        assert_eq!(navigator.borrow().back_stack().len(), 1);
+        assert!(navigator.borrow().forward_stack().is_empty());
+    }
+
+    #[test]
+    fn extra_mouse_buttons_do_not_navigate_without_available_history() {
+        let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 1,
+            title: "Only",
+        })));
+        navigator.borrow_mut().clear_transition();
+        let stack = BladeStack::new("blade-extra-mouse-navigation-unavailable");
+        let navigator_for_ui = Rc::clone(&navigator);
+        let mut harness = Harness::new_ui(move |ui| {
+            stack.show_with_title(
+                ui.ctx(),
+                &mut navigator_for_ui.borrow_mut(),
+                |blade| blade.title.to_owned(),
+                render_test_blade,
+            );
+        });
+        crate::test_support::setup_egui(&mut harness);
+        harness.run();
+
+        for button in [egui::PointerButton::Extra1, egui::PointerButton::Extra2] {
+            harness.event(egui::Event::PointerButton {
+                pos: egui::pos2(0.0, 0.0),
+                button,
+                pressed: true,
+                modifiers: egui::Modifiers::default(),
+            });
+            harness.run();
+        }
+
+        assert_eq!(navigator.borrow().current().id, 1);
+        assert!(navigator.borrow().back_stack().is_empty());
+        assert!(navigator.borrow().forward_stack().is_empty());
+    }
+
+    #[test]
+    fn extra_mouse_buttons_immediately_replace_blade_transitions() {
+        let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 1,
+            title: "First",
+        })));
+        navigator.borrow_mut().clear_transition();
+        navigator.borrow_mut().push(TestBlade {
+            id: 2,
+            title: "Second",
+        });
+        let stack = BladeStack::new("blade-extra-mouse-navigation-transition");
+        let navigator_for_ui = Rc::clone(&navigator);
+        let mut harness = Harness::new_ui(move |ui| {
+            stack.show_with_title(
+                ui.ctx(),
+                &mut navigator_for_ui.borrow_mut(),
+                |blade| blade.title.to_owned(),
+                render_test_blade,
+            );
+        });
+        crate::test_support::setup_egui(&mut harness);
+        harness
+            .ctx
+            .global_style_mut(|style| style.animation_time = 1.0);
+        // `Harness::new_ui` renders once before the configured test clock.
+        // Restart this transition so the next frame is its first animation frame.
+        {
+            let mut navigator = navigator.borrow_mut();
+            navigator.transition = Some(BladeTransition::Forward);
+            navigator.transition_started_at = None;
+        }
+        harness.input_mut().time = Some(1.0);
+        harness.event(egui::Event::PointerButton {
+            pos: egui::pos2(0.0, 0.0),
+            button: egui::PointerButton::Extra1,
+            pressed: true,
+            modifiers: egui::Modifiers::default(),
+        });
+        harness.step();
+        assert_eq!(navigator.borrow().current().id, 2);
+
+        harness.input_mut().time = Some(1.0 + f64::from(TRANSITION_DURATION));
+        harness.step();
+        assert_eq!(navigator.borrow().current().id, 1);
+    }
+
+    #[test]
+    fn extra_mouse_buttons_navigate_only_the_topmost_blade_stack() {
+        let background = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 1,
+            title: "Background first",
+        })));
+        let foreground = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 3,
+            title: "Foreground first",
+        })));
+        for (navigator, next) in [
+            (
+                &background,
+                TestBlade {
+                    id: 2,
+                    title: "Background second",
+                },
+            ),
+            (
+                &foreground,
+                TestBlade {
+                    id: 4,
+                    title: "Foreground second",
+                },
+            ),
+        ] {
+            navigator.borrow_mut().clear_transition();
+            navigator.borrow_mut().push(next);
+            navigator.borrow_mut().clear_transition();
+        }
+        let background_stack = BladeStack::new("background-blade-stack");
+        let foreground_stack = BladeStack::new("foreground-blade-stack");
+        let background_for_ui = Rc::clone(&background);
+        let foreground_for_ui = Rc::clone(&foreground);
+        let mut harness = Harness::new_ui(move |ui| {
+            background_stack.show_with_title(
+                ui.ctx(),
+                &mut background_for_ui.borrow_mut(),
+                |blade| blade.title.to_owned(),
+                render_test_blade,
+            );
+            foreground_stack.show_with_title(
+                ui.ctx(),
+                &mut foreground_for_ui.borrow_mut(),
+                |blade| blade.title.to_owned(),
+                render_test_blade,
+            );
+        });
+        crate::test_support::setup_egui(&mut harness);
+        harness.run();
+
+        harness.event(egui::Event::PointerButton {
+            pos: egui::pos2(0.0, 0.0),
+            button: egui::PointerButton::Extra1,
+            pressed: true,
+            modifiers: egui::Modifiers::default(),
+        });
+        harness.run();
+
+        assert_eq!(background.borrow().current().id, 2);
+        assert_eq!(foreground.borrow().current().id, 3);
+    }
+
+    #[test]
+    fn extra_mouse_buttons_navigate_the_remaining_stack_after_the_foreground_closes() {
+        let background = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 1,
+            title: "Background first",
+        })));
+        background.borrow_mut().clear_transition();
+        background.borrow_mut().push(TestBlade {
+            id: 2,
+            title: "Background second",
+        });
+        background.borrow_mut().clear_transition();
+        let foreground = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 3,
+            title: "Foreground",
+        })));
+        foreground.borrow_mut().clear_transition();
+        let show_foreground = Rc::new(RefCell::new(true));
+        let background_stack = BladeStack::new("remaining-background-blade-stack");
+        let foreground_stack = BladeStack::new("removed-foreground-blade-stack");
+        let background_for_ui = Rc::clone(&background);
+        let foreground_for_ui = Rc::clone(&foreground);
+        let show_foreground_for_ui = Rc::clone(&show_foreground);
+        let mut harness = Harness::new_ui(move |ui| {
+            background_stack.show_with_title(
+                ui.ctx(),
+                &mut background_for_ui.borrow_mut(),
+                |blade| blade.title.to_owned(),
+                render_test_blade,
+            );
+            if *show_foreground_for_ui.borrow() {
+                foreground_stack.show_with_title(
+                    ui.ctx(),
+                    &mut foreground_for_ui.borrow_mut(),
+                    |blade| blade.title.to_owned(),
+                    render_test_blade,
+                );
+            }
+        });
+        crate::test_support::setup_egui(&mut harness);
+        harness.run();
+
+        *show_foreground.borrow_mut() = false;
+        harness.event(egui::Event::PointerButton {
+            pos: egui::pos2(0.0, 0.0),
+            button: egui::PointerButton::Extra1,
+            pressed: true,
+            modifiers: egui::Modifiers::default(),
+        });
+        harness.run();
+
+        assert_eq!(background.borrow().current().id, 1);
+    }
+
+    #[test]
+    fn extra_mouse_buttons_are_ignored_while_a_blade_is_closing() {
+        let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 1,
+            title: "First",
+        })));
+        navigator.borrow_mut().clear_transition();
+        navigator.borrow_mut().push(TestBlade {
+            id: 2,
+            title: "Second",
+        });
+        navigator.borrow_mut().clear_transition();
+        let stack = BladeStack::new("blade-extra-mouse-navigation-closing");
+        let navigator_for_ui = Rc::clone(&navigator);
+        let mut harness = Harness::new_ui(move |ui| {
+            stack.show_with_title(
+                ui.ctx(),
+                &mut navigator_for_ui.borrow_mut(),
+                |blade| blade.title.to_owned(),
+                render_test_blade,
+            );
+        });
+        crate::test_support::setup_egui(&mut harness);
+        harness.run();
+
+        assert!(navigator.borrow_mut().begin_close());
+        harness.event(egui::Event::PointerButton {
+            pos: egui::pos2(0.0, 0.0),
+            button: egui::PointerButton::Extra1,
+            pressed: true,
+            modifiers: egui::Modifiers::default(),
+        });
+        harness.run();
+
+        assert_eq!(navigator.borrow().current().id, 2);
+        assert_eq!(navigator.borrow().back_stack().len(), 1);
+        assert!(navigator.borrow().forward_stack().is_empty());
     }
     #[test]
     fn closing_is_idempotent() {
