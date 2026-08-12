@@ -6,6 +6,8 @@ use crate::design::{radius, spacing, status, typography};
 use egui::{Id, Margin, Response, Stroke, Ui, Vec2};
 
 const INPUT_WIDTH: f32 = 150.0;
+/// Square size for compact previous/next buttons shown beside a search result count.
+pub const SEARCH_NAVIGATION_BUTTON_SIZE: f32 = 28.0;
 // The frame adds 4 px above and below plus a 1 px border on each edge, so the
 // editor must remain 26 px tall to fit the 36 px toolbar slots used by callers.
 const INPUT_HEIGHT: f32 = 26.0;
@@ -14,6 +16,24 @@ const INPUT_HEIGHT: f32 = 26.0;
 pub struct SearchInputResponse {
     pub text: Response,
     pub regex: Response,
+}
+
+/// Render the compact, accessible previous/next action used beside search-result counts.
+///
+/// Search implementations keep ownership of their navigation state; this helper only keeps the
+/// repeated visual and accessibility contract consistent across toolbars.
+pub fn search_navigation_button(ui: &mut Ui, icon: egui::Image<'static>, label: &str) -> bool {
+    let response = ui
+        .add_sized(
+            Vec2::splat(SEARCH_NAVIGATION_BUTTON_SIZE),
+            egui::Button::image(icon.fit_to_exact_size(Vec2::splat(14.0)).tint(gray::_700))
+                .frame(false),
+        )
+        .with_pointing_hand();
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label.to_owned())
+    });
+    response.on_hover_text(label).clicked()
 }
 
 /// The compact search and regex-toggle control used in workspace toolbars.

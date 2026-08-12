@@ -7,7 +7,8 @@ use components::colors::{TABLE_BORDER, TOOLBAR_BACKGROUND, gray, indigo};
 use components::design::{search, spacing, status, surface, typography};
 use components::{
     ConfirmationDialog, ConfirmationDialogAction, ConfirmationDialogKind, PointingHand,
-    TailwindButton, TailwindSearchInput, icons,
+    SEARCH_NAVIGATION_BUTTON_SIZE, TailwindButton, TailwindSearchInput, icons,
+    search_navigation_button,
 };
 use egui::text::{CCursor, CCursorRange};
 use egui_extras::syntax_highlighting::{CodeTheme, highlight};
@@ -25,7 +26,6 @@ const COMPLETION_POPUP_CHROME_HEIGHT: f32 = 68.0;
 const DIAGNOSTIC_ROW_HEIGHT: f32 = 21.0;
 const DIAGNOSTIC_LIST_MAX_HEIGHT: f32 = 6.0 * DIAGNOSTIC_ROW_HEIGHT;
 const SEARCH_CONTROL_WIDTH: f32 = 212.0;
-const SEARCH_NAVIGATION_BUTTON_SIZE: f32 = 28.0;
 
 pub(super) fn show(
     ctx: &egui::Context,
@@ -274,23 +274,6 @@ fn show_search_controls(
     if next_requested {
         advance_search_match(editor, match_count, true);
     }
-}
-
-fn search_navigation_button(ui: &mut egui::Ui, icon: egui::Image<'static>, label: &str) -> bool {
-    let response = ui
-        .add_sized(
-            egui::Vec2::splat(SEARCH_NAVIGATION_BUTTON_SIZE),
-            egui::Button::image(
-                icon.fit_to_exact_size(egui::Vec2::splat(14.0))
-                    .tint(gray::_700),
-            )
-            .frame(false),
-        )
-        .with_pointing_hand();
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label.to_owned())
-    });
-    response.on_hover_text(label).clicked()
 }
 
 fn match_count_label(editor: &YamlEditorWindowState, match_count: usize) -> String {

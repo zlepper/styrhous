@@ -3,6 +3,7 @@ mod dialogs;
 #[doc(hidden)]
 pub mod log_viewer_profile;
 mod log_windows;
+mod persistence;
 mod resource_actions;
 mod resource_detail;
 mod resource_navigation;

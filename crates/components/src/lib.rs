@@ -57,7 +57,10 @@ pub use confirmation_dialog::{
 pub use error_dialog::{ErrorDialog, ErrorDialogAction};
 pub use interaction::PointingHand;
 pub use more_button::{MoreButton, MoreMenu};
-pub use search::{SearchInputResponse, TailwindSearchInput};
+pub use search::{
+    SEARCH_NAVIGATION_BUTTON_SIZE, SearchInputResponse, TailwindSearchInput,
+    search_navigation_button,
+};
 pub use sidebar::{
     ExpandableResponse, NarrowSidebar, NarrowSidebarContent, WideSidebar, WideSidebarContent,
 };
