@@ -12,7 +12,7 @@ use crate::resource_schema::{
 };
 use crate::resource_table::CustomResourceColumn;
 use crate::sorted_name::SortedName;
-use crate::terminal_launcher::TerminalLaunchSettings;
+use crate::terminal_launcher::{NodeShellPreset, ShellRequest, TerminalLaunchSettings};
 use crate::worker::{ResourceApiError, WorkerCommandBox, WorkerResult, WorkerTrait};
 use components::BladeNavigator;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -567,6 +567,10 @@ pub(super) enum ResourceAction {
         namespace: Option<String>,
         container: PodLogContainer,
     },
+    NodeShell {
+        name: String,
+        preset: NodeShellPreset,
+    },
     NavigateDetails {
         api_resource: ApiResource,
         name: String,
@@ -577,6 +581,42 @@ pub(super) enum ResourceAction {
     NavigateBack,
     #[allow(dead_code)]
     NavigateForward,
+}
+
+impl ResourceAction {
+    pub(super) fn shell_request(&self, kube_context: &str) -> Option<ShellRequest> {
+        match self {
+            Self::Shell {
+                name,
+                namespace: Some(namespace),
+                container,
+            } => Some(ShellRequest::Pod {
+                kube_context: kube_context.to_owned(),
+                namespace: namespace.clone(),
+                pod_name: name.clone(),
+                container: container.name.clone(),
+            }),
+            Self::NodeShell { name, preset } => Some(ShellRequest::Node {
+                kube_context: kube_context.to_owned(),
+                node_name: name.clone(),
+                preset: preset.clone(),
+            }),
+            Self::Shell {
+                namespace: None, ..
+            }
+            | Self::OpenDetails { .. }
+            | Self::EditYaml { .. }
+            | Self::RequestDelete { .. }
+            | Self::RequestForceDelete { .. }
+            | Self::RequestDeploymentRestart { .. }
+            | Self::RequestScale { .. }
+            | Self::SaveData { .. }
+            | Self::ViewLogs { .. }
+            | Self::NavigateDetails { .. }
+            | Self::NavigateBack
+            | Self::NavigateForward => None,
+        }
+    }
 }
 
 #[derive(Debug)]

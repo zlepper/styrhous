@@ -518,8 +518,8 @@ Window state=[focused] rect=<none>
                 GenericContainer rect=<none>
                   Label value="Terminal launcher" rect=(x=809.0 y=204.0 width=135.1 height=19.0 center_x=876.6 center_y=213.5)
                     TextRun value="Terminal launcher" rect=(x=809.0 y=204.0 width=135.1 height=19.0 center_x=876.6 center_y=213.5)
-                  Label value="Choose how pod shells open on this computer." rect=(x=809.0 y=234.0 width=310.1 height=17.0 center_x=964.0 center_y=242.5)
-                    TextRun value="Choose how pod shells open on this computer." rect=(x=809.0 y=234.0 width=310.1 height=17.0 center_x=964.0 center_y=242.5)
+                  Label value="Choose how shells open on this computer." rect=(x=809.0 y=234.0 width=280.6 height=17.0 center_x=949.3 center_y=242.5)
+                    TextRun value="Choose how shells open on this computer." rect=(x=809.0 y=234.0 width=280.6 height=17.0 center_x=949.3 center_y=242.5)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       RadioButton name="Automatic" state=[toggled=True] rect=(x=842.0 y=323.0 width=24.0 height=20.0 center_x=854.0 center_y=333.0)
@@ -536,6 +536,103 @@ Window state=[focused] rect=<none>
                           TextRun value="Custom launcher" rect=(x=882.0 y=442.0 width=148.4 height=22.0 center_x=956.2 center_y=453.0)
                         Label value="Use a command template for your preferred terminal." rect=(x=882.0 y=471.0 width=351.6 height=17.0 center_x=1057.8 center_y=479.5)
                           TextRun value="Use a command template for your preferred terminal." rect=(x=882.0 y=471.0 width=351.6 height=17.0 center_x=1057.8 center_y=479.5)
+                  Label value="Node shells" rect=(x=809.0 y=581.0 width=88.7 height=19.0 center_x=853.4 center_y=590.5)
+                    TextRun value="Node shells" rect=(x=809.0 y=581.0 width=88.7 height=19.0 center_x=853.4 center_y=590.5)
+                  Label value="Choose the debug images and profiles offered from a Node’s Shell menu. Each session creates a debug Pod; the node filesystem is available at /host and the generated Pod remains for you to remove." rect=(x=809.0 y=611.0 width=689.9 height=34.0 center_x=1154.0 center_y=628.0)
+                    TextRun value="Choose the debug images and profiles offered from a Node’s Shell menu. Each session creates a debug " rect=(x=809.0 y=611.0 width=689.9 height=17.0 center_x=1154.0 center_y=619.5)
+                    TextRun value="Pod; the node filesystem is available at /host and the generated Pod remains for you to remove." rect=(x=809.0 y=628.0 width=630.0 height=17.0 center_x=1124.0 center_y=636.5)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      Label value="" rect=(x=825.0 y=675.5 width=0.0 height=17.0 center_x=825.0 center_y=684.0)
+                        TextRun value="" rect=(x=825.0 y=675.5 width=0.0 height=17.0 center_x=825.0 center_y=684.0)
+                    GenericContainer rect=<none>
+                      Label value="Name" rect=(x=869.0 y=675.5 width=38.8 height=17.0 center_x=888.4 center_y=684.0)
+                        TextRun value="Name" rect=(x=869.0 y=675.5 width=38.8 height=17.0 center_x=888.4 center_y=684.0)
+                    GenericContainer rect=<none>
+                      Label value="Image" rect=(x=1039.0 y=675.5 width=40.6 height=17.0 center_x=1059.3 center_y=684.0)
+                        TextRun value="Image" rect=(x=1039.0 y=675.5 width=40.6 height=17.0 center_x=1059.3 center_y=684.0)
+                    GenericContainer rect=<none>
+                      Label value="Debug profile" rect=(x=1297.0 y=675.5 width=89.8 height=17.0 center_x=1341.9 center_y=684.0)
+                        TextRun value="Debug profile" rect=(x=1297.0 y=675.5 width=89.8 height=17.0 center_x=1341.9 center_y=684.0)
+                    GenericContainer rect=<none>
+                      Label value="" rect=(x=1467.0 y=675.5 width=0.0 height=17.0 center_x=1467.0 center_y=684.0)
+                        TextRun value="" rect=(x=1467.0 y=675.5 width=0.0 height=17.0 center_x=1467.0 center_y=684.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        Image rect=(x=825.0 y=718.0 width=16.0 height=16.0 center_x=833.0 center_y=726.0)
+                      Button name="Reorder Busybox" rect=(x=825.0 y=718.0 width=16.0 height=16.0 center_x=833.0 center_y=726.0)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        GenericContainer rect=<none>
+                          GenericContainer rect=<none>
+                            TextInput name="Node shell 1 name" value="Busybox" rect=(x=878.0 y=716.0 width=136.0 height=21.0 center_x=946.0 center_y=726.5)
+                              TextRun value="Busybox" rect=(x=882.0 y=718.0 width=57.1 height=17.0 center_x=910.5 center_y=726.5)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        GenericContainer rect=<none>
+                          GenericContainer rect=<none>
+                            TextInput name="Node shell 1 image" value="busybox" rect=(x=1048.0 y=716.0 width=224.0 height=21.0 center_x=1160.0 center_y=726.5)
+                              TextRun value="busybox" rect=(x=1052.0 y=718.0 width=56.5 height=17.0 center_x=1080.2 center_y=726.5)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        ComboBox name="Node shell 1 debug profile" rect=(x=1297.0 y=710.0 width=150.0 height=32.0 center_x=1372.0 center_y=726.0)
+                        GenericContainer rect=<none>
+                          Image rect=(x=1423.0 y=718.0 width=16.0 height=16.0 center_x=1431.0 center_y=726.0)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        Button name="Remove Busybox" rect=(x=1467.0 y=710.0 width=32.0 height=32.0 center_x=1483.0 center_y=726.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        Image rect=(x=825.0 y=762.0 width=16.0 height=16.0 center_x=833.0 center_y=770.0)
+                      Button name="Reorder Ubuntu" rect=(x=825.0 y=762.0 width=16.0 height=16.0 center_x=833.0 center_y=770.0)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        GenericContainer rect=<none>
+                          GenericContainer rect=<none>
+                            TextInput name="Node shell 2 name" value="Ubuntu" rect=(x=878.0 y=760.0 width=136.0 height=21.0 center_x=946.0 center_y=770.5)
+                              TextRun value="Ubuntu" rect=(x=882.0 y=762.0 width=48.4 height=17.0 center_x=906.2 center_y=770.5)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        GenericContainer rect=<none>
+                          GenericContainer rect=<none>
+                            TextInput name="Node shell 2 image" value="ubuntu" rect=(x=1048.0 y=760.0 width=224.0 height=21.0 center_x=1160.0 center_y=770.5)
+                              TextRun value="ubuntu" rect=(x=1052.0 y=762.0 width=46.2 height=17.0 center_x=1075.1 center_y=770.5)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        ComboBox name="Node shell 2 debug profile" rect=(x=1297.0 y=754.0 width=150.0 height=32.0 center_x=1372.0 center_y=770.0)
+                        GenericContainer rect=<none>
+                          Image rect=(x=1423.0 y=762.0 width=16.0 height=16.0 center_x=1431.0 center_y=770.0)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        Button name="Remove Ubuntu" rect=(x=1467.0 y=754.0 width=32.0 height=32.0 center_x=1483.0 center_y=770.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        Image rect=(x=825.0 y=806.0 width=16.0 height=16.0 center_x=833.0 center_y=814.0)
+                      Button name="Reorder Netshoot" rect=(x=825.0 y=806.0 width=16.0 height=16.0 center_x=833.0 center_y=814.0)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        GenericContainer rect=<none>
+                          GenericContainer rect=<none>
+                            TextInput name="Node shell 3 name" value="Netshoot" rect=(x=878.0 y=804.0 width=136.0 height=21.0 center_x=946.0 center_y=814.5)
+                              TextRun value="Netshoot" rect=(x=882.0 y=806.0 width=60.2 height=17.0 center_x=912.1 center_y=814.5)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        GenericContainer rect=<none>
+                          GenericContainer rect=<none>
+                            TextInput name="Node shell 3 image" value="nicolaka/netshoot" rect=(x=1048.0 y=804.0 width=224.0 height=21.0 center_x=1160.0 center_y=814.5)
+                              TextRun value="nicolaka/netshoot" rect=(x=1052.0 y=806.0 width=117.8 height=17.0 center_x=1110.9 center_y=814.5)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        ComboBox name="Node shell 3 debug profile" rect=(x=1297.0 y=798.0 width=150.0 height=32.0 center_x=1372.0 center_y=814.0)
+                        GenericContainer rect=<none>
+                          Image rect=(x=1423.0 y=806.0 width=16.0 height=16.0 center_x=1431.0 center_y=814.0)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        Button name="Remove Netshoot" rect=(x=1467.0 y=798.0 width=32.0 height=32.0 center_x=1483.0 center_y=814.0)
+                  Button name="Add node shell" rect=(x=809.0 y=836.0 width=32.0 height=32.0 center_x=825.0 center_y=852.0)
             GenericContainer rect=<none>
               Button name="Save changes" rect=(x=1386.1 y=961.0 width=116.9 height=33.0 center_x=1444.6 center_y=977.5)
               Button name="Reset" rect=(x=1317.0 y=961.0 width=61.1 height=33.0 center_x=1347.6 center_y=977.5)

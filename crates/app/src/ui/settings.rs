@@ -1,11 +1,27 @@
 use super::state::UiState;
-use crate::terminal_launcher::TerminalLaunchSettings;
-use components::colors::{WHITE, gray, indigo};
+use crate::terminal_launcher::{DebugProfile, NodeShellPreset, TerminalLaunchSettings};
+use components::colors::{
+    CONTENT_BACKGROUND, TABLE_BORDER, TABLE_HEADER_BACKGROUND, WHITE, gray, indigo,
+};
 use components::design::{radius, spacing, status, surface, typography};
-use components::{BladeNavigator, BladeStack, ButtonSize, PointingHand, TailwindButton};
+use components::{
+    BladeNavigator, BladeStack, ButtonSize, ButtonVariant, PointingHand, TailwindButton,
+    TailwindCombobox, icons,
+};
 
 const FOOTER_HEIGHT: f32 = 52.0;
 const CHOICE_CONTENT_MIN_HEIGHT: f32 = 44.0;
+const NODE_SHELL_TABLE_HEADER_HEIGHT: f32 = 40.0;
+const NODE_SHELL_TABLE_ROW_HEIGHT: f32 = 44.0;
+const NODE_SHELL_REORDER_COLUMN_WIDTH: f32 = 44.0;
+const NODE_SHELL_NAME_COLUMN_WIDTH: f32 = 170.0;
+const NODE_SHELL_PROFILE_COLUMN_WIDTH: f32 = 170.0;
+const NODE_SHELL_ACTIONS_COLUMN_WIDTH: f32 = 52.0;
+
+#[derive(Clone, Copy)]
+struct NodeShellPresetDrag {
+    from: usize,
+}
 
 /// Render application settings as a first-class workspace blade rather than a
 /// transient native dialog, so its controls have room for explanation.
@@ -43,7 +59,13 @@ pub(super) fn show(
                 |ui| {
                     components::scroll::vertical()
                         .auto_shrink([false, false])
-                        .show(ui, |ui| show_terminal_launcher(ui, ui_state));
+                        .show(ui, |ui| {
+                            show_terminal_launcher(ui, ui_state);
+                            ui.add_space(spacing::XL);
+                            ui.separator();
+                            ui.add_space(spacing::XL);
+                            show_node_shell_presets(ui, ui_state);
+                        });
                 },
             );
 
@@ -109,7 +131,7 @@ fn show_terminal_launcher(ui: &mut egui::Ui, ui_state: &mut UiState) {
     );
     ui.add_space(spacing::SM);
     ui.label(
-        egui::RichText::new("Choose how pod shells open on this computer.")
+        egui::RichText::new("Choose how shells open on this computer.")
             .font(typography::body())
             .color(gray::_600),
     );
@@ -131,6 +153,8 @@ fn show_terminal_launcher(ui: &mut egui::Ui, ui_state: &mut UiState) {
     ui.add_space(spacing::LG);
     let custom_launcher_clicked = {
         let template_error = ui_state.terminal_settings_error.clone();
+        let template_error =
+            template_error.filter(|error| error.starts_with("The launcher template"));
         let template_invalid = template_error.is_some();
         let template = ui_state.terminal_settings_draft.custom_template.as_mut();
         launcher_choice(
@@ -146,6 +170,566 @@ fn show_terminal_launcher(ui: &mut egui::Ui, ui_state: &mut UiState) {
     if custom_launcher_clicked && ui_state.terminal_settings_draft.custom_template.is_none() {
         ui_state.terminal_settings_draft.custom_template = Some(String::new());
     }
+}
+
+fn show_node_shell_presets(ui: &mut egui::Ui, ui_state: &mut UiState) {
+    ui.label(
+        egui::RichText::new("Node shells")
+            .font(typography::section_heading())
+            .color(gray::_900),
+    );
+    ui.add_space(spacing::SM);
+    ui.label(
+        egui::RichText::new(
+            "Choose the debug images and profiles offered from a Node’s Shell menu. Each session creates a debug Pod; the node filesystem is available at /host and the generated Pod remains for you to remove.",
+        )
+        .font(typography::body())
+        .color(gray::_600),
+    );
+    ui.add_space(spacing::LG);
+
+    let preset_count = ui_state.terminal_settings_draft.node_shell_presets.len();
+    let mut remove_preset = None;
+    let table_width = ui.available_width();
+    let original_item_spacing = ui.spacing().item_spacing;
+    ui.spacing_mut().item_spacing.y = 0.0;
+    show_node_shell_preset_table_header(ui, table_width);
+    let table_rect = egui::Rect::from_min_size(
+        ui.cursor().min,
+        egui::vec2(
+            table_width,
+            preset_count as f32 * NODE_SHELL_TABLE_ROW_HEIGHT,
+        ),
+    );
+    let visible_table_rect = table_rect.intersect(ui.clip_rect());
+    let drag = egui::DragAndDrop::payload::<NodeShellPresetDrag>(ui.ctx())
+        .filter(|dragged_preset| dragged_preset.from < preset_count);
+    let dragged_preset_index = drag.as_ref().map(|dragged_preset| dragged_preset.from);
+    if let Some(from) = dragged_preset_index {
+        // The source row is intentionally omitted from the table during a drag,
+        // so keep its egui payload alive while the replacement layout is rendered.
+        egui::DragAndDrop::set_payload(ui.ctx(), NodeShellPresetDrag { from });
+    }
+    let drop_index = dragged_preset_index.map_or(0, |from| {
+        node_shell_preset_drop_index(
+            ui.ctx()
+                .pointer_interact_pos()
+                .map_or(table_rect.center().y, |position| position.y),
+            table_rect,
+            preset_count,
+            from,
+        )
+    });
+    let placeholder_index = dragged_preset_index
+        .map(|from| node_shell_preset_index_after_removing_source(from, drop_index));
+    let mut dropped_preset = None;
+    let mut preset_indices = (0..preset_count).filter(|index| Some(*index) != dragged_preset_index);
+    for visual_index in 0..preset_count {
+        if placeholder_index == Some(visual_index) {
+            show_node_shell_preset_drop_placeholder(ui, table_width);
+            continue;
+        }
+
+        let index = preset_indices
+            .next()
+            .expect("every visible node shell preset has a table row");
+        let drag_handle_id = ui.make_persistent_id(("node-shell-preset-handle", index));
+        let preset = &mut ui_state.terminal_settings_draft.node_shell_presets[index];
+        show_node_shell_preset_row(
+            ui,
+            table_width,
+            preset,
+            index,
+            drag_handle_id,
+            &mut remove_preset,
+        );
+    }
+    if let Some(dragged_preset) = drag.as_ref().filter(|dragged_preset| {
+        ui.ctx().is_being_dragged(
+            ui.make_persistent_id(("node-shell-preset-handle", dragged_preset.from)),
+        )
+    }) && let Some(preset) = ui_state
+        .terminal_settings_draft
+        .node_shell_presets
+        .get(dragged_preset.from)
+        && node_shell_preset_has_room_for_drag_preview(visible_table_rect)
+    {
+        show_node_shell_preset_drag_preview(ui, visible_table_rect, preset, dragged_preset.from);
+    }
+    if ui.input(|input| input.pointer.any_released())
+        && ui
+            .ctx()
+            .pointer_interact_pos()
+            .is_some_and(|position| node_shell_preset_drop_is_visible(position, visible_table_rect))
+        && let Some(dragged_preset) = drag
+    {
+        dropped_preset = Some((dragged_preset.from, drop_index));
+    }
+    ui.spacing_mut().item_spacing = original_item_spacing;
+    if let Some((from, to)) = dropped_preset
+        && move_node_shell_preset(
+            &mut ui_state.terminal_settings_draft.node_shell_presets,
+            from,
+            to,
+        )
+    {
+        ui_state.terminal_settings_error = None;
+    }
+    if let Some(index) = remove_preset {
+        ui_state
+            .terminal_settings_draft
+            .node_shell_presets
+            .remove(index);
+        ui_state.terminal_settings_error = None;
+    }
+    if TailwindButton::icon(
+        icons::plus_icon()
+            .fit_to_exact_size(egui::Vec2::splat(16.0))
+            .tint(indigo::_600),
+    )
+    .variant(ButtonVariant::Secondary)
+    .size(ButtonSize::Sm)
+    .accessibility_label("Add node shell")
+    .show(ui)
+    .clicked()
+    {
+        ui_state
+            .terminal_settings_draft
+            .node_shell_presets
+            .push(NodeShellPreset {
+                name: String::new(),
+                image: String::new(),
+                profile: DebugProfile::General,
+            });
+        ui_state.terminal_settings_error = None;
+    }
+    if let Some(error) = ui_state
+        .terminal_settings_error
+        .as_deref()
+        .filter(|error| !error.starts_with("The launcher template"))
+    {
+        ui.add_space(spacing::MD);
+        show_validation_error(ui, "Node shell settings need attention", error);
+    }
+}
+
+fn show_node_shell_preset_drag_preview(
+    ui: &mut egui::Ui,
+    table_rect: egui::Rect,
+    preset: &NodeShellPreset,
+    index: usize,
+) {
+    let preview_id = ui.make_persistent_id(("node-shell-preset-drag-preview", index));
+    let layer_id = egui::LayerId::new(egui::Order::Tooltip, preview_id);
+    let Some(pointer_position) = ui.ctx().pointer_interact_pos() else {
+        return;
+    };
+    let preview_rect = node_shell_preset_drag_preview_rect(table_rect, pointer_position);
+    let mut preview_ui = ui.new_child(
+        egui::UiBuilder::new()
+            .layer_id(layer_id)
+            .max_rect(preview_rect),
+    );
+    show_node_shell_preset_preview_row(&mut preview_ui, table_rect.width(), preset);
+}
+
+fn node_shell_preset_drag_preview_rect(
+    table_rect: egui::Rect,
+    pointer_position: egui::Pos2,
+) -> egui::Rect {
+    let preview_y = pointer_position.y.clamp(
+        table_rect.top() + NODE_SHELL_TABLE_ROW_HEIGHT / 2.0,
+        table_rect.bottom() - NODE_SHELL_TABLE_ROW_HEIGHT / 2.0,
+    );
+    egui::Rect::from_min_size(
+        egui::pos2(
+            table_rect.left(),
+            preview_y - NODE_SHELL_TABLE_ROW_HEIGHT / 2.0,
+        ),
+        egui::vec2(table_rect.width(), NODE_SHELL_TABLE_ROW_HEIGHT),
+    )
+}
+
+fn node_shell_preset_has_room_for_drag_preview(visible_table_rect: egui::Rect) -> bool {
+    visible_table_rect.height() >= NODE_SHELL_TABLE_ROW_HEIGHT
+}
+
+fn node_shell_preset_drop_is_visible(
+    pointer_position: egui::Pos2,
+    visible_table_rect: egui::Rect,
+) -> bool {
+    visible_table_rect.contains(pointer_position)
+}
+
+fn node_shell_preset_drop_index(
+    pointer_y: f32,
+    table_rect: egui::Rect,
+    preset_count: usize,
+    from: usize,
+) -> usize {
+    let offset = (pointer_y - table_rect.top()).clamp(0.0, table_rect.height());
+    let visual_insert_index = (offset / NODE_SHELL_TABLE_ROW_HEIGHT)
+        .floor()
+        .min(preset_count.saturating_sub(1) as f32) as usize;
+
+    // The source is omitted while dragging. Each visible row becomes its new
+    // destination once half of the preview overlaps it, which happens when
+    // the preview's centre reaches that row's top edge.
+    if visual_insert_index >= from {
+        visual_insert_index + 1
+    } else {
+        visual_insert_index
+    }
+}
+
+fn node_shell_preset_index_after_removing_source(from: usize, to: usize) -> usize {
+    if from < to { to - 1 } else { to }
+}
+
+fn show_node_shell_preset_drop_placeholder(ui: &mut egui::Ui, table_width: f32) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(
+        egui::vec2(table_width, NODE_SHELL_TABLE_ROW_HEIGHT),
+        egui::Sense::hover(),
+    );
+    ui.painter().rect_filled(rect, 0.0, indigo::_50);
+    ui.painter().rect_stroke(
+        rect.shrink(1.0),
+        0.0,
+        egui::Stroke::new(2.0, indigo::_500),
+        egui::StrokeKind::Inside,
+    );
+    response
+}
+
+fn centered_table_control_ui(ui: &mut egui::Ui) -> egui::Ui {
+    let cell_rect = ui.available_rect_before_wrap();
+    let control_rect = egui::Rect::from_min_max(
+        egui::pos2(cell_rect.left(), cell_rect.center().y - 16.0),
+        egui::pos2(cell_rect.right(), cell_rect.center().y + 16.0),
+    );
+    ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(control_rect)
+            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+    )
+}
+
+fn show_node_shell_preset_table_header(ui: &mut egui::Ui, table_width: f32) {
+    let image_column_width = node_shell_image_column_width(table_width);
+    let original_item_spacing = ui.spacing().item_spacing;
+    ui.spacing_mut().item_spacing.x = 0.0;
+    ui.horizontal(|ui| {
+        show_node_shell_table_header_cell(ui, NODE_SHELL_REORDER_COLUMN_WIDTH, "");
+        show_node_shell_table_header_cell(ui, NODE_SHELL_NAME_COLUMN_WIDTH, "Name");
+        show_node_shell_table_header_cell(ui, image_column_width, "Image");
+        show_node_shell_table_header_cell(ui, NODE_SHELL_PROFILE_COLUMN_WIDTH, "Debug profile");
+        show_node_shell_table_header_cell(ui, NODE_SHELL_ACTIONS_COLUMN_WIDTH, "");
+    });
+    ui.spacing_mut().item_spacing = original_item_spacing;
+}
+
+fn show_node_shell_preset_row(
+    ui: &mut egui::Ui,
+    table_width: f32,
+    preset: &mut NodeShellPreset,
+    index: usize,
+    drag_handle_id: egui::Id,
+    remove_preset: &mut Option<usize>,
+) -> egui::Response {
+    let image_column_width = node_shell_image_column_width(table_width);
+    let original_item_spacing = ui.spacing().item_spacing;
+    ui.spacing_mut().item_spacing.x = 0.0;
+    let response = ui
+        .allocate_ui_with_layout(
+            egui::vec2(table_width, NODE_SHELL_TABLE_ROW_HEIGHT),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                show_node_shell_table_cell(ui, NODE_SHELL_REORDER_COLUMN_WIDTH, |ui| {
+                    let (handle_rect, _) =
+                        ui.allocate_exact_size(egui::Vec2::splat(16.0), egui::Sense::hover());
+                    let mut handle_ui = ui.new_child(
+                        egui::UiBuilder::new()
+                            .max_rect(handle_rect)
+                            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+                    );
+                    icons::bars_3(&mut handle_ui, 16.0, gray::_500);
+                    let response = ui
+                        .interact(handle_rect, drag_handle_id, egui::Sense::drag())
+                        .with_pointing_hand();
+                    response.widget_info(|| {
+                        egui::WidgetInfo::labeled(
+                            egui::WidgetType::Button,
+                            ui.is_enabled(),
+                            format!("Reorder {}", preset.name),
+                        )
+                    });
+                    response.dnd_set_drag_payload(NodeShellPresetDrag { from: index });
+                });
+                show_node_shell_table_cell(ui, NODE_SHELL_NAME_COLUMN_WIDTH, |ui| {
+                    let mut control_ui = centered_table_control_ui(ui);
+                    show_table_text_input(
+                        &mut control_ui,
+                        &mut preset.name,
+                        ("node-shell-name", index),
+                        format!("Node shell {} name", index + 1),
+                    );
+                });
+                show_node_shell_table_cell(ui, image_column_width, |ui| {
+                    let mut control_ui = centered_table_control_ui(ui);
+                    show_table_text_input(
+                        &mut control_ui,
+                        &mut preset.image,
+                        ("node-shell-image", index),
+                        format!("Node shell {} image", index + 1),
+                    );
+                });
+                show_node_shell_table_cell(ui, NODE_SHELL_PROFILE_COLUMN_WIDTH, |ui| {
+                    let mut combobox_ui = centered_table_control_ui(ui);
+                    let response = TailwindCombobox::new(("node-shell-profile", index))
+                        .selected_text(preset.profile.label())
+                        .width(150.0)
+                        .compact()
+                        .filter_by(|profile: &DebugProfile| profile.label())
+                        .show_items(&mut combobox_ui, &DebugProfile::ALL, |options, profile| {
+                            if options
+                                .item(profile.label(), *profile == preset.profile)
+                                .clicked()
+                            {
+                                preset.profile = *profile;
+                            }
+                        });
+                    response.response.widget_info(|| {
+                        egui::WidgetInfo::labeled(
+                            egui::WidgetType::ComboBox,
+                            combobox_ui.is_enabled(),
+                            format!("Node shell {} debug profile", index + 1),
+                        )
+                    });
+                });
+                show_node_shell_table_cell(ui, NODE_SHELL_ACTIONS_COLUMN_WIDTH, |ui| {
+                    let mut control_ui = centered_table_control_ui(ui);
+                    if TailwindButton::icon(
+                        icons::trash_icon()
+                            .fit_to_exact_size(egui::Vec2::splat(16.0))
+                            .tint(status::DANGER),
+                    )
+                    .variant(ButtonVariant::Secondary)
+                    .size(ButtonSize::Sm)
+                    .accessibility_label(format!("Remove {}", preset.name))
+                    .show(&mut control_ui)
+                    .clicked()
+                    {
+                        *remove_preset = Some(index);
+                    }
+                });
+            },
+        )
+        .response;
+    ui.spacing_mut().item_spacing = original_item_spacing;
+    response
+}
+
+/// Render the floating drag preview without registering a second set of
+/// editable controls or accessibility nodes for the preset.
+fn show_node_shell_preset_preview_row(
+    ui: &mut egui::Ui,
+    table_width: f32,
+    preset: &NodeShellPreset,
+) {
+    let image_column_width = node_shell_image_column_width(table_width);
+    let original_item_spacing = ui.spacing().item_spacing;
+    ui.spacing_mut().item_spacing.x = 0.0;
+    ui.allocate_ui_with_layout(
+        egui::vec2(table_width, NODE_SHELL_TABLE_ROW_HEIGHT),
+        egui::Layout::left_to_right(egui::Align::Center),
+        |ui| {
+            show_node_shell_table_cell(ui, NODE_SHELL_REORDER_COLUMN_WIDTH, |ui| {
+                icons::bars_3(ui, 16.0, gray::_500);
+            });
+            show_node_shell_table_cell(ui, NODE_SHELL_NAME_COLUMN_WIDTH, |ui| {
+                show_node_shell_preview_text_input(ui, &preset.name);
+            });
+            show_node_shell_table_cell(ui, image_column_width, |ui| {
+                show_node_shell_preview_text_input(ui, &preset.image);
+            });
+            show_node_shell_table_cell(ui, NODE_SHELL_PROFILE_COLUMN_WIDTH, |ui| {
+                show_node_shell_preview_combobox(ui, preset.profile.label());
+            });
+            show_node_shell_table_cell(ui, NODE_SHELL_ACTIONS_COLUMN_WIDTH, |ui| {
+                show_node_shell_preview_remove_button(ui);
+            });
+        },
+    );
+    ui.spacing_mut().item_spacing = original_item_spacing;
+}
+
+fn show_node_shell_preview_text_input(ui: &mut egui::Ui, value: &str) {
+    let (rect, _) =
+        ui.allocate_exact_size(egui::vec2(ui.available_width(), 21.0), egui::Sense::hover());
+    ui.painter().rect_filled(rect, radius::control(), WHITE);
+    ui.painter().rect_stroke(
+        rect,
+        radius::control(),
+        surface::control_border(),
+        egui::StrokeKind::Inside,
+    );
+    ui.painter().text(
+        rect.left_center() + egui::vec2(4.0, 0.0),
+        egui::Align2::LEFT_CENTER,
+        value,
+        typography::body(),
+        gray::_800,
+    );
+}
+
+fn show_node_shell_preview_combobox(ui: &mut egui::Ui, label: &str) {
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(150.0, 32.0), egui::Sense::hover());
+    ui.painter().rect_filled(rect, radius::control(), WHITE);
+    ui.painter().rect_stroke(
+        rect,
+        radius::control(),
+        surface::control_border(),
+        egui::StrokeKind::Inside,
+    );
+    ui.painter().text(
+        rect.left_center() + egui::vec2(spacing::MD, 0.0),
+        egui::Align2::LEFT_CENTER,
+        label,
+        typography::metadata(),
+        gray::_800,
+    );
+    let icon_rect = egui::Rect::from_center_size(
+        rect.right_center() - egui::vec2(spacing::MD, 0.0),
+        egui::Vec2::splat(16.0),
+    );
+    let mut icon_ui = ui.new_child(egui::UiBuilder::new().max_rect(icon_rect));
+    icons::chevron_down(&mut icon_ui, 16.0, gray::_400);
+}
+
+fn show_node_shell_preview_remove_button(ui: &mut egui::Ui) {
+    let (rect, _) = ui.allocate_exact_size(egui::Vec2::splat(32.0), egui::Sense::hover());
+    ui.painter().rect_filled(rect, radius::control(), WHITE);
+    ui.painter().rect_stroke(
+        rect,
+        radius::control(),
+        surface::control_border(),
+        egui::StrokeKind::Inside,
+    );
+    let icon_rect = egui::Rect::from_center_size(rect.center(), egui::Vec2::splat(16.0));
+    let mut icon_ui = ui.new_child(egui::UiBuilder::new().max_rect(icon_rect));
+    icon_ui.add(
+        icons::trash_icon()
+            .fit_to_exact_size(egui::Vec2::splat(16.0))
+            .tint(status::DANGER),
+    );
+}
+
+fn node_shell_image_column_width(table_width: f32) -> f32 {
+    (table_width
+        - NODE_SHELL_REORDER_COLUMN_WIDTH
+        - NODE_SHELL_NAME_COLUMN_WIDTH
+        - NODE_SHELL_PROFILE_COLUMN_WIDTH
+        - NODE_SHELL_ACTIONS_COLUMN_WIDTH)
+        .max(120.0)
+}
+
+fn show_node_shell_table_header_cell(ui: &mut egui::Ui, width: f32, label: &str) {
+    let (rect, _) = ui.allocate_exact_size(
+        egui::vec2(width, NODE_SHELL_TABLE_HEADER_HEIGHT),
+        egui::Sense::hover(),
+    );
+    ui.painter().rect_filled(rect, 0.0, TABLE_HEADER_BACKGROUND);
+    ui.painter().hline(
+        rect.x_range(),
+        rect.bottom(),
+        egui::Stroke::new(1.0, TABLE_BORDER),
+    );
+    let mut cell_ui = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(rect)
+            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+    );
+    cell_ui.add_space(spacing::LG);
+    cell_ui.label(
+        egui::RichText::new(label)
+            .font(typography::body())
+            .color(gray::_900)
+            .strong(),
+    );
+}
+
+fn show_node_shell_table_cell(ui: &mut egui::Ui, width: f32, content: impl FnOnce(&mut egui::Ui)) {
+    let (rect, _) = ui.allocate_exact_size(
+        egui::vec2(width, NODE_SHELL_TABLE_ROW_HEIGHT),
+        egui::Sense::hover(),
+    );
+    ui.painter().rect_filled(rect, 0.0, CONTENT_BACKGROUND);
+    ui.painter().hline(
+        rect.x_range(),
+        rect.bottom(),
+        egui::Stroke::new(1.0, TABLE_BORDER),
+    );
+    let mut cell_ui = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(rect)
+            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+    );
+    cell_ui.add_space(spacing::LG);
+    content(&mut cell_ui);
+}
+
+/// Move a preset to a row boundary. Removing the source first means downward
+/// moves use the preceding insertion index.
+fn move_node_shell_preset(presets: &mut Vec<NodeShellPreset>, from: usize, to: usize) -> bool {
+    if from >= presets.len() || to > presets.len() {
+        return false;
+    }
+
+    let preset = presets.remove(from);
+    let insert_at = node_shell_preset_index_after_removing_source(from, to);
+    if insert_at == from {
+        presets.insert(from, preset);
+        return false;
+    }
+    presets.insert(insert_at, preset);
+    true
+}
+
+fn show_table_text_input(
+    ui: &mut egui::Ui,
+    value: &mut String,
+    id_salt: impl std::hash::Hash + std::fmt::Debug,
+    accessibility_label: String,
+) {
+    let id = ui.make_persistent_id(id_salt);
+    let focused = ui.memory(|memory| memory.has_focus(id));
+    let stroke = if focused {
+        egui::Stroke::new(1.0, indigo::_500)
+    } else {
+        surface::control_border()
+    };
+    let response = egui::Frame::new()
+        .fill(WHITE)
+        .stroke(stroke)
+        .corner_radius(radius::control())
+        .inner_margin(egui::Margin::symmetric(
+            spacing::SM as i8,
+            spacing::XS as i8,
+        ))
+        .show(ui, |ui| {
+            ui.add_sized(
+                egui::vec2(ui.available_width(), 20.0),
+                egui::TextEdit::singleline(value).id(id),
+            )
+        })
+        .inner;
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(
+            egui::WidgetType::TextEdit,
+            ui.is_enabled(),
+            accessibility_label.clone(),
+        )
+    });
 }
 
 fn launcher_choice(
@@ -241,7 +825,7 @@ fn launcher_choice(
                     });
                 if let Some(error) = template_error {
                     ui.add_space(spacing::LG);
-                    show_validation_error(ui, error);
+                    show_validation_error(ui, "Command template needs attention", error);
                 }
             }
             choice_clicked
@@ -313,14 +897,14 @@ fn template_guidance() -> egui::text::LayoutJob {
         },
     );
     guidance.append(
-        " as the placeholder.\nIt is replaced with the complete kubectl exec command.",
+        " as the placeholder.\nIt is replaced with the complete kubectl shell command.",
         0.0,
         text,
     );
     guidance
 }
 
-fn show_validation_error(ui: &mut egui::Ui, error: &str) {
+fn show_validation_error(ui: &mut egui::Ui, title: &str, error: &str) {
     egui::Frame::new()
         .fill(WHITE)
         .stroke(egui::Stroke::new(1.0, status::DANGER))
@@ -329,7 +913,7 @@ fn show_validation_error(ui: &mut egui::Ui, error: &str) {
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             ui.label(
-                egui::RichText::new("Command template needs attention")
+                egui::RichText::new(title)
                     .font(typography::semibold(typography::BODY_SIZE))
                     .color(status::DANGER),
             );
@@ -340,4 +924,118 @@ fn show_validation_error(ui: &mut egui::Ui, error: &str) {
                     .color(gray::_700),
             );
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn preset(name: &str) -> NodeShellPreset {
+        NodeShellPreset {
+            name: name.into(),
+            image: format!("example/{name}"),
+            profile: DebugProfile::General,
+        }
+    }
+
+    #[test]
+    fn moving_node_shell_preset_inserts_at_the_requested_row_boundary() {
+        let mut presets = vec![preset("Busybox"), preset("Ubuntu"), preset("Netshoot")];
+
+        assert!(move_node_shell_preset(&mut presets, 0, 2));
+        assert_eq!(
+            presets
+                .iter()
+                .map(|preset| &preset.name)
+                .collect::<Vec<_>>(),
+            ["Ubuntu", "Busybox", "Netshoot"]
+        );
+
+        assert!(move_node_shell_preset(&mut presets, 1, 3));
+        assert_eq!(
+            presets
+                .iter()
+                .map(|preset| &preset.name)
+                .collect::<Vec<_>>(),
+            ["Ubuntu", "Netshoot", "Busybox"]
+        );
+    }
+
+    #[test]
+    fn moving_node_shell_preset_ignores_current_or_invalid_row() {
+        let mut presets = vec![preset("Busybox"), preset("Ubuntu")];
+
+        assert!(!move_node_shell_preset(&mut presets, 1, 1));
+        assert!(!move_node_shell_preset(&mut presets, 2, 0));
+        assert!(!move_node_shell_preset(&mut presets, 0, 3));
+        assert_eq!(
+            presets
+                .iter()
+                .map(|preset| &preset.name)
+                .collect::<Vec<_>>(),
+            ["Busybox", "Ubuntu"]
+        );
+    }
+
+    #[test]
+    fn node_shell_drop_changes_slots_at_half_preview_overlap() {
+        let table_rect = egui::Rect::from_min_size(
+            egui::pos2(100.0, 200.0),
+            egui::vec2(600.0, NODE_SHELL_TABLE_ROW_HEIGHT * 3.0),
+        );
+
+        // With the first row omitted, the preview reaches 50% overlap with
+        // the next visible row at that row's top edge.
+        assert_eq!(node_shell_preset_drop_index(244.0, table_rect, 3, 0), 2);
+        assert_eq!(node_shell_preset_drop_index(288.0, table_rect, 3, 0), 3);
+        assert_eq!(node_shell_preset_drop_index(244.0, table_rect, 3, 2), 1);
+    }
+
+    #[test]
+    fn node_shell_drag_preview_stays_within_the_table() {
+        let table_rect = egui::Rect::from_min_size(
+            egui::pos2(100.0, 200.0),
+            egui::vec2(600.0, NODE_SHELL_TABLE_ROW_HEIGHT * 3.0),
+        );
+
+        let above_table = node_shell_preset_drag_preview_rect(table_rect, egui::pos2(-50.0, 0.0));
+        let below_table =
+            node_shell_preset_drag_preview_rect(table_rect, egui::pos2(2_000.0, 2_000.0));
+
+        assert_eq!(above_table.left(), table_rect.left());
+        assert_eq!(above_table.width(), table_rect.width());
+        assert_eq!(above_table.top(), table_rect.top());
+        assert_eq!(below_table.left(), table_rect.left());
+        assert_eq!(below_table.width(), table_rect.width());
+        assert_eq!(below_table.bottom(), table_rect.bottom());
+        assert!(!node_shell_preset_has_room_for_drag_preview(
+            egui::Rect::from_min_size(egui::pos2(100.0, 200.0), egui::vec2(600.0, 43.0))
+        ));
+    }
+
+    #[test]
+    fn node_shell_drag_rejects_positions_outside_the_visible_table() {
+        let full_table = egui::Rect::from_min_size(
+            egui::pos2(100.0, 200.0),
+            egui::vec2(600.0, NODE_SHELL_TABLE_ROW_HEIGHT * 12.0),
+        );
+        let scroll_viewport = egui::Rect::from_min_size(
+            egui::pos2(0.0, 100.0),
+            egui::vec2(800.0, NODE_SHELL_TABLE_ROW_HEIGHT * 4.0),
+        );
+        let visible_table = full_table.intersect(scroll_viewport);
+
+        assert!(node_shell_preset_drop_is_visible(
+            egui::pos2(200.0, 250.0),
+            visible_table
+        ));
+        assert!(!node_shell_preset_drop_is_visible(
+            egui::pos2(200.0, 450.0),
+            visible_table
+        ));
+        assert!(!node_shell_preset_drop_is_visible(
+            egui::pos2(50.0, 250.0),
+            visible_table
+        ));
+    }
 }

@@ -23,7 +23,10 @@ use crate::resource_table::{
     AVAILABLE_COLUMN, CONTAINERS_COLUMN, CellValue, ContainerIndicator, ContainerKind, NODE_COLUMN,
     READY_COLUMN, RESTARTS_COLUMN, STATUS_COLUMN, StatusTone, UP_TO_DATE_COLUMN,
 };
-use crate::terminal_launcher::{TerminalLaunchSettings, test_support::MockTerminalLauncher};
+use crate::terminal_launcher::{
+    DebugProfile, NodeShellPreset, ShellRequest, TerminalLaunchSettings, TerminalLauncher,
+    test_support::MockTerminalLauncher,
+};
 use crate::worker::*;
 use components::test_support::{HarnessSnapshotOptions, UiHarnessSnapshot};
 use egui::text::{CCursor, CCursorRange};
@@ -133,7 +136,10 @@ fn secondary_click(harness: &mut Harness<MyEguiApp<MockWorker>>, position: egui:
     });
 }
 
-fn primary_click(harness: &mut Harness<MyEguiApp<MockWorker>>, position: egui::Pos2) {
+fn primary_click<L: TerminalLauncher>(
+    harness: &mut Harness<MyEguiApp<MockWorker, L>>,
+    position: egui::Pos2,
+) {
     harness.event(egui::Event::PointerMoved(position));
     harness.event(egui::Event::PointerButton {
         pos: position,
@@ -147,6 +153,45 @@ fn primary_click(harness: &mut Harness<MyEguiApp<MockWorker>>, position: egui::P
         pressed: false,
         modifiers: egui::Modifiers::default(),
     });
+}
+
+fn drag<L: TerminalLauncher>(
+    harness: &mut Harness<MyEguiApp<MockWorker, L>>,
+    from: egui::Pos2,
+    to: egui::Pos2,
+) {
+    harness.event(egui::Event::PointerMoved(from));
+    harness.event(egui::Event::PointerButton {
+        pos: from,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::default(),
+    });
+    harness.run();
+    harness.event(egui::Event::PointerMoved(to));
+    harness.run();
+    harness.event(egui::Event::PointerButton {
+        pos: to,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::default(),
+    });
+    harness.run();
+}
+
+fn type_text<L: TerminalLauncher>(
+    harness: &mut Harness<MyEguiApp<MockWorker, L>>,
+    accessibility_label: &str,
+    value: &str,
+) {
+    let position = harness.get_by_label(accessibility_label).rect().center();
+    primary_click(harness, position);
+    harness.run();
+    harness
+        .input_mut()
+        .events
+        .push(egui::Event::Text(value.into()));
+    harness.run();
 }
 
 #[test]
@@ -1449,11 +1494,70 @@ fn shell_action_launches_the_selected_context_pod_and_application_container() {
 
     assert_eq!(
         harness.state().terminal_launcher.requests.as_slice(),
-        &[crate::terminal_launcher::PodShellRequest {
+        &[ShellRequest::Pod {
             kube_context: "kind-kind".into(),
             namespace: "kube-system".into(),
             pod_name,
             container: "coredns".into(),
+        }]
+    );
+}
+
+#[test]
+fn node_shell_action_launches_the_selected_context_node_and_preset() {
+    let mut harness = application_harness_with_terminal::<MockWorker, MockTerminalLauncher>();
+    let nodes = fixture_cluster_scoped_api_resource("core", "Node", "nodes");
+    let mut state = oracle_resource_table_state();
+    let cluster = state.clusters.get_mut(&2).unwrap();
+    cluster.selected_api_resource = Some(nodes.clone());
+    cluster.resource_cache.insert(
+        (nodes, None),
+        ResourceWatchState {
+            resources: BTreeMap::from([(
+                "node-uid".into(),
+                MinimalResource {
+                    uid: "node-uid".into(),
+                    name: "kind-control-plane".into(),
+                    namespace: None,
+                    creation_timestamp: None,
+                    controller_owner: None,
+                    cells: BTreeMap::new(),
+                    log_containers: Vec::new(),
+                },
+            )]),
+            is_synced: true,
+            error: None,
+        },
+    );
+    harness.state_mut().ui_state = state;
+    harness.run();
+
+    let more_actions_position = harness
+        .get_by_label("More actions for kind-control-plane")
+        .rect()
+        .center();
+    primary_click(&mut harness, more_actions_position);
+    harness.run();
+    let shell_position = harness.get_by_label("Shell ⏵").rect().center();
+    primary_click(&mut harness, shell_position);
+    harness.run();
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "terminal/node_shell_action_launches_the_selected_context_node_and_preset/node_shell_presets",
+    ));
+    let busybox_position = harness.get_by_label("Busybox — General").rect().center();
+    primary_click(&mut harness, busybox_position);
+    harness.run();
+
+    assert_eq!(
+        harness.state().terminal_launcher.requests.as_slice(),
+        &[ShellRequest::Node {
+            kube_context: "kind-kind".into(),
+            node_name: "kind-control-plane".into(),
+            preset: NodeShellPreset {
+                name: "Busybox".into(),
+                image: "busybox".into(),
+                profile: DebugProfile::General,
+            },
         }]
     );
 }
@@ -1492,7 +1596,7 @@ fn shell_launch_failure_uses_the_styled_error_modal_and_opens_terminal_settings(
     harness.get_by_label("Shell").click_accesskit();
     harness.run_steps(2);
 
-    harness.get_by_label("POD SHELL");
+    harness.get_by_label("SHELL");
     harness.get_by_label("Couldn’t open a terminal");
     harness.get_by_label(
         "No supported terminal launcher was found. Tried: xdg-terminal-exec (No such file or directory (os error 2)).",
@@ -1532,7 +1636,8 @@ fn settings_button_opens_the_terminal_launcher_blade() {
     harness.state_mut().ui_state = oracle_resource_table_state();
     harness.run();
 
-    harness.get_by_label("Settings").click_accesskit();
+    let settings_position = harness.get_by_label("Settings").rect().center();
+    primary_click(&mut harness, settings_position);
     harness.run();
 
     harness.get_by_label("Terminal launcher");
@@ -1549,6 +1654,7 @@ fn settings_blade_shows_custom_terminal_launcher_details() {
     state.terminal_settings_open = true;
     state.terminal_settings_draft = TerminalLaunchSettings {
         custom_template: Some("alacritty -e {command}".into()),
+        ..Default::default()
     };
     harness.state_mut().ui_state = state;
     harness.run();
@@ -1561,16 +1667,252 @@ fn settings_blade_shows_custom_terminal_launcher_details() {
 }
 
 #[test]
+fn saving_node_shell_presets_applies_the_settings_draft() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    state.terminal_settings_open = true;
+    state.terminal_settings_draft = TerminalLaunchSettings {
+        custom_template: None,
+        node_shell_presets: vec![NodeShellPreset {
+            name: "Operations".into(),
+            image: "registry.example/debug-tools:v1".into(),
+            profile: DebugProfile::Sysadmin,
+        }],
+    };
+    harness.state_mut().ui_state = state;
+    harness.run();
+
+    let save_position = harness.get_by_label("Save changes").rect().center();
+    primary_click(&mut harness, save_position);
+    harness.run_steps(2);
+
+    assert_eq!(
+        harness.state().terminal_launch_settings.node_shell_presets,
+        vec![NodeShellPreset {
+            name: "Operations".into(),
+            image: "registry.example/debug-tools:v1".into(),
+            profile: DebugProfile::Sysadmin,
+        }]
+    );
+    assert!(!harness.state().ui_state.terminal_settings_open);
+}
+
+#[test]
+fn node_shell_preset_table_adds_and_removes_rows() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    state.terminal_settings_open = true;
+    state.terminal_settings_draft = TerminalLaunchSettings {
+        custom_template: None,
+        node_shell_presets: vec![NodeShellPreset {
+            name: "Operations".into(),
+            image: "registry.example/debug-tools:v1".into(),
+            profile: DebugProfile::Sysadmin,
+        }],
+    };
+    harness.state_mut().ui_state = state;
+    harness.run();
+
+    let remove_position = harness.get_by_label("Remove Operations").rect().center();
+    primary_click(&mut harness, remove_position);
+    harness.run();
+    assert!(
+        harness
+            .state()
+            .ui_state
+            .terminal_settings_draft
+            .node_shell_presets
+            .is_empty()
+    );
+
+    let add_position = harness.get_by_label("Add node shell").rect().center();
+    primary_click(&mut harness, add_position);
+    harness.run();
+    assert_eq!(
+        harness
+            .state()
+            .ui_state
+            .terminal_settings_draft
+            .node_shell_presets,
+        vec![NodeShellPreset {
+            name: String::new(),
+            image: String::new(),
+            profile: DebugProfile::General,
+        }]
+    );
+}
+
+#[test]
+fn node_shell_preset_table_reorders_rows_by_dragging_the_handle() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    state.terminal_settings_open = true;
+    state.terminal_settings_draft = TerminalLaunchSettings::default();
+    harness.state_mut().ui_state = state;
+    harness.run();
+
+    let busybox_position = harness.get_by_label("Reorder Busybox").rect().center();
+    let first_visible_row = harness.get_by_label("Reorder Ubuntu").rect();
+    // Busybox overlaps the first visible destination row by exactly half here,
+    // so it takes the next slot without requiring a full-row movement.
+    let half_overlap_position = egui::pos2(first_visible_row.center().x, first_visible_row.top());
+    drag(&mut harness, busybox_position, half_overlap_position);
+
+    assert_eq!(
+        harness
+            .state()
+            .ui_state
+            .terminal_settings_draft
+            .node_shell_presets
+            .iter()
+            .map(|preset| preset.name.as_str())
+            .collect::<Vec<_>>(),
+        ["Ubuntu", "Busybox", "Netshoot"]
+    );
+}
+
+#[test]
+fn node_shell_preset_table_moves_the_dragged_row() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    state.terminal_settings_open = true;
+    state.terminal_settings_draft = TerminalLaunchSettings::default();
+    harness.state_mut().ui_state = state;
+    harness.run();
+
+    let busybox_position = harness.get_by_label("Reorder Busybox").rect().center();
+    let netshoot_rect = harness.get_by_label("Reorder Netshoot").rect();
+    let target_position = egui::pos2(netshoot_rect.center().x, netshoot_rect.bottom() - 4.0);
+    harness.event(egui::Event::PointerMoved(busybox_position));
+    harness.event(egui::Event::PointerButton {
+        pos: busybox_position,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::default(),
+    });
+    harness.run();
+    harness.event(egui::Event::PointerMoved(target_position));
+    harness.run_steps(2);
+
+    // The preview is intentionally rendered above the destination row on egui's
+    // tooltip layer while a drag is active.
+    harness.ui_harness(
+        HarnessSnapshotOptions::one_pixel(
+            "terminal/node_shell_preset_table_moves_the_dragged_row/dragging_row",
+        )
+        .check_illegal_overlaps(false),
+    );
+
+    harness.event(egui::Event::PointerButton {
+        pos: target_position,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::default(),
+    });
+    harness.run();
+    assert_eq!(
+        harness
+            .state()
+            .ui_state
+            .terminal_settings_draft
+            .node_shell_presets
+            .iter()
+            .map(|preset| preset.name.as_str())
+            .collect::<Vec<_>>(),
+        ["Ubuntu", "Netshoot", "Busybox"]
+    );
+}
+
+#[test]
+fn node_shell_preset_table_edits_and_saves_a_profile() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    state.terminal_settings_open = true;
+    state.terminal_settings_draft = TerminalLaunchSettings {
+        custom_template: None,
+        node_shell_presets: vec![NodeShellPreset {
+            name: String::new(),
+            image: String::new(),
+            profile: DebugProfile::General,
+        }],
+    };
+    harness.state_mut().ui_state = state;
+    harness.run();
+
+    type_text(&mut harness, "Node shell 1 name", "Operations");
+    type_text(
+        &mut harness,
+        "Node shell 1 image",
+        "registry.example/debug-tools:v1",
+    );
+    let profile_position = harness
+        .get_by_role_and_label(
+            egui::accesskit::Role::ComboBox,
+            "Node shell 1 debug profile",
+        )
+        .rect()
+        .center();
+    primary_click(&mut harness, profile_position);
+    harness.run();
+    let profile_position = harness.get_by_label("System admin").rect().center();
+    primary_click(&mut harness, profile_position);
+    harness.run();
+    let save_position = harness.get_by_label("Save changes").rect().center();
+    primary_click(&mut harness, save_position);
+    harness.run_steps(2);
+
+    assert_eq!(
+        harness.state().terminal_launch_settings.node_shell_presets,
+        vec![NodeShellPreset {
+            name: "Operations".into(),
+            image: "registry.example/debug-tools:v1".into(),
+            profile: DebugProfile::Sysadmin,
+        }]
+    );
+}
+
+#[test]
+fn node_shell_preset_profile_menu_stays_within_the_settings_blade() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    state.terminal_settings_open = true;
+    state.terminal_settings_draft = TerminalLaunchSettings {
+        custom_template: Some("alacritty -e {command}".into()),
+        ..Default::default()
+    };
+    harness.state_mut().ui_state = state;
+    harness.run();
+
+    let profile_position = harness
+        .get_by_role_and_label(
+            egui::accesskit::Role::ComboBox,
+            "Node shell 1 debug profile",
+        )
+        .rect()
+        .center();
+    primary_click(&mut harness, profile_position);
+    harness.run();
+
+    harness.get_by_label("System admin");
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "terminal/node_shell_preset_profile_menu_stays_within_the_settings_blade/profile_menu",
+    ));
+}
+
+#[test]
 fn settings_blade_shows_invalid_custom_template_after_save() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = oracle_resource_table_state();
     harness.run();
 
-    harness.get_by_label("Settings").click_accesskit();
+    let settings_position = harness.get_by_label("Settings").rect().center();
+    primary_click(&mut harness, settings_position);
     harness.run();
-    harness
+    let custom_launcher_position = harness
         .get_by_role_and_label(egui::accesskit::Role::RadioButton, "Custom launcher")
-        .click_accesskit();
+        .rect()
+        .center();
+    primary_click(&mut harness, custom_launcher_position);
     harness.run();
     harness
         .get_by_role_and_label(egui::accesskit::Role::TextInput, "Command template")
@@ -1589,7 +1931,8 @@ fn settings_blade_shows_invalid_custom_template_after_save() {
             .custom_template,
         Some("alacritty".into())
     );
-    harness.get_by_label("Save changes").click_accesskit();
+    let save_position = harness.get_by_label("Save changes").rect().center();
+    primary_click(&mut harness, save_position);
     harness.run();
 
     assert_eq!(
@@ -1992,6 +2335,73 @@ fn node_inspector_shows_its_spec() {
     harness.get_by_label("Scheduling disabled");
     harness.get_by_label("10.244.0.0/24");
     harness.get_by_label("node-role.kubernetes.io/control-plane:NoSchedule");
+}
+
+#[test]
+fn node_inspector_shell_action_launches_the_selected_preset() {
+    let mut harness = application_harness_with_terminal::<MockWorker, MockTerminalLauncher>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    let mut commands = Vec::new();
+    harness.state_mut().ui_state.open_resource_detail(
+        2,
+        crate::resource_handlers::node::api_resource(),
+        "kind-control-plane".into(),
+        None,
+        "node-uid".into(),
+        &mut commands,
+    );
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(Box::new(ResourceDetailUpdated {
+            cluster_key: 2,
+            history_entry_id: 1,
+            detail: Box::new(ResourceDetail {
+                api_resource: crate::resource_handlers::node::api_resource(),
+                name: "kind-control-plane".into(),
+                namespace: None,
+                uid: "node-uid".into(),
+                resource_version: "1".into(),
+                is_deleting: false,
+                finalizers: Vec::new(),
+                creation_timestamp: None,
+                owners: Vec::new(),
+                labels: BTreeMap::new(),
+                annotations: BTreeMap::new(),
+                payload: ResourceDetailPayload::Node(NodeDetail::default()),
+            }),
+        }) as WorkerResultBox);
+    harness.run_steps(2);
+
+    let more_actions_position = harness
+        .get_by_label("More actions for kind-control-plane")
+        .rect()
+        .center();
+    primary_click(&mut harness, more_actions_position);
+    harness.run();
+    let shell_position = harness.get_by_label("Shell ⏵").rect().center();
+    primary_click(&mut harness, shell_position);
+    harness.run();
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "terminal/node_inspector_shell_action_launches_the_selected_preset/node_shell_presets",
+    ));
+    let ubuntu_position = harness.get_by_label("Ubuntu — General").rect().center();
+    primary_click(&mut harness, ubuntu_position);
+    harness.run();
+
+    assert_eq!(
+        harness.state().terminal_launcher.requests.as_slice(),
+        &[ShellRequest::Node {
+            kube_context: "kind-kind".into(),
+            node_name: "kind-control-plane".into(),
+            preset: NodeShellPreset {
+                name: "Ubuntu".into(),
+                image: "ubuntu".into(),
+                profile: DebugProfile::General,
+            },
+        }]
+    );
 }
 
 #[test]

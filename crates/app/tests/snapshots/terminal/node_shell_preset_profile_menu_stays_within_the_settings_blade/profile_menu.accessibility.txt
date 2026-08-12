@@ -1,5 +1,5 @@
 viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
-Window state=[focused] rect=<none>
+Window rect=<none>
   GenericContainer rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
@@ -590,6 +590,9 @@ Window state=[focused] rect=<none>
                         ComboBox name="Node shell 1 debug profile" rect=(x=1305.0 y=894.0 width=150.0 height=32.0 center_x=1380.0 center_y=910.0)
                         GenericContainer rect=<none>
                           Image rect=(x=1431.0 y=902.0 width=16.0 height=16.0 center_x=1439.0 center_y=910.0)
+                        GenericContainer rect=<none>
+                          TextInput name="Search combobox options" value="" state=[focused] rect=(x=1317.0 y=900.5 width=106.0 height=19.0 center_x=1370.0 center_y=910.0)
+                            TextRun value="" rect=(x=1321.0 y=902.5 width=0.0 height=15.0 center_x=1321.0 center_y=910.0)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
                         Button name="Remove Busybox" rect=(x=1475.0 y=894.0 width=32.0 height=32.0 center_x=1491.0 center_y=910.0)
@@ -647,3 +650,14 @@ Window state=[focused] rect=<none>
               Button name="Save changes" rect=(x=1394.1 y=961.0 width=116.9 height=33.0 center_x=1452.6 center_y=977.5)
               Button name="Reset" rect=(x=1325.0 y=961.0 width=61.1 height=33.0 center_x=1355.6 center_y=977.5)
       ScrollBar rect=(x=1526.0 y=8.0 width=10.0 height=1008.0 center_x=1531.0 center_y=512.0)
+  Unknown rect=(x=1305.0 y=720.0 width=150.0 height=174.0 center_x=1380.0 center_y=807.0)
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            CheckBox name="General" state=[toggled=True] rect=(x=1312.0 y=727.0 width=136.0 height=32.0 center_x=1380.0 center_y=743.0)
+            CheckBox name="Baseline" state=[toggled=False] rect=(x=1312.0 y=762.0 width=136.0 height=32.0 center_x=1380.0 center_y=778.0)
+            CheckBox name="Restricted" state=[toggled=False] rect=(x=1312.0 y=797.0 width=136.0 height=32.0 center_x=1380.0 center_y=813.0)
+            CheckBox name="Network admin" state=[toggled=False] rect=(x=1312.0 y=832.0 width=136.0 height=32.0 center_x=1380.0 center_y=848.0)
+            CheckBox name="System admin" state=[toggled=False] rect=(x=1312.0 y=867.0 width=136.0 height=32.0 center_x=1380.0 center_y=883.0)
+        ScrollBar rect=(x=1438.0 y=727.0 width=10.0 height=160.0 center_x=1443.0 center_y=807.0)
