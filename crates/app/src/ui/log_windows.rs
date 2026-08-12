@@ -251,10 +251,12 @@ fn show_log_window_with_scroll_state(
             } else {
                 horizontal_offset
             };
-            let requested_offset = window
-                .search
-                .scroll_to_display_row
-                .take()
+            // Keep a navigation target alive until the virtual scroll area has
+            // actually brought that row into view. A one-frame request can be
+            // clamped while the area is still measuring or loading its target
+            // page, which made the toolbar arrows appear to do nothing.
+            let requested_scroll_row = window.search.scroll_to_display_row;
+            let requested_offset = requested_scroll_row
                 .map(|row| {
                     let requested_vertical_offset = window
                         .search
@@ -484,9 +486,30 @@ fn show_log_window_with_scroll_state(
             });
             window.following_bottom = output.state.offset.y + output.inner_rect.height()
                 >= output.content_size.y - row_step;
+            if let Some(row) = requested_scroll_row {
+                if display_row_is_visible(row, row_step, &output) {
+                    window.search.scroll_to_display_row = None;
+                } else {
+                    // Keep repainting until egui has accepted the requested
+                    // offset. This also covers the frame that replaces a
+                    // virtual placeholder with the requested disk page.
+                    ctx.request_repaint();
+                }
+            }
             output
         })
         .inner
+}
+
+fn display_row_is_visible(
+    display_row: usize,
+    row_step: f32,
+    output: &egui::scroll_area::ScrollAreaOutput<()>,
+) -> bool {
+    let row_top = display_row as f32 * row_step;
+    let row_bottom = row_top + row_step;
+    row_bottom > output.state.offset.y
+        && row_top < output.state.offset.y + output.inner_rect.height()
 }
 
 fn initial_spool_is_pending(window: &PodLogWindowState) -> bool {
@@ -2858,6 +2881,158 @@ mod tests {
                 .y;
             assert_eq!(offset, bottom_offset);
         }
+    }
+
+    #[test]
+    fn displayed_line_navigation_scrolls_the_viewer_and_snapshots_the_destination() {
+        let window = Rc::new(RefCell::new(fully_loaded_log_window(512)));
+        let window_for_ui = window.clone();
+        let display_options = Rc::new(RefCell::new(LogDisplayOptions::default()));
+        let display_options_for_ui = display_options.clone();
+        let scroll_state = Rc::new(RefCell::new(None));
+        let scroll_state_for_ui = scroll_state.clone();
+        let log_store = LogStoreService::default();
+        let mut close_requested = false;
+        let mut harness = Harness::builder().build_ui(move |ctx| {
+            *scroll_state_for_ui.borrow_mut() = Some(show_log_window_with_scroll_state(
+                ctx,
+                &mut window_for_ui.borrow_mut(),
+                &mut display_options_for_ui.borrow_mut(),
+                &log_store,
+                &mut close_requested,
+            ));
+        });
+        components::test_support::setup_egui(&mut harness);
+        harness.run_steps(2);
+
+        window.borrow_mut().search.active_display_row = Some(0);
+        harness.get_by_label("Previous displayed line").click();
+        harness.run_steps(2);
+        assert_eq!(window.borrow().search.active_display_row, Some(511));
+        assert!(
+            harness.get_by_label("line 511").rect().intersects(
+                scroll_state
+                    .borrow()
+                    .as_ref()
+                    .expect("log scroll area was rendered")
+                    .inner_rect
+            ),
+            "wrapped previous navigation must move the viewport"
+        );
+
+        window.borrow_mut().search.active_display_row = Some(399);
+        harness.get_by_label("Next displayed line").click();
+        harness.run_steps(2);
+
+        let scroll_state = scroll_state.borrow();
+        let output = scroll_state.as_ref().expect("log scroll area was rendered");
+        assert_eq!(window.borrow().search.active_display_row, Some(400));
+        assert_eq!(window.borrow().search.scroll_to_display_row, None);
+        assert!(
+            output.state.offset.y > 0.0,
+            "navigation must move the viewport"
+        );
+        assert!(
+            harness
+                .get_by_label("line 400")
+                .rect()
+                .intersects(output.inner_rect),
+            "the requested line must be visible after navigation"
+        );
+        harness.ui_harness(
+            "pod_logs/pod_log_viewer_displayed_line_navigation_snapshot/next_displayed_line",
+        );
+    }
+
+    #[test]
+    fn resolved_match_navigation_scrolls_the_viewer_and_snapshots_the_destination() {
+        let window = Rc::new(RefCell::new(fully_loaded_log_window(512)));
+        let window_for_ui = window.clone();
+        let display_options = Rc::new(RefCell::new(LogDisplayOptions::default()));
+        let display_options_for_ui = display_options.clone();
+        let scroll_state = Rc::new(RefCell::new(None));
+        let scroll_state_for_ui = scroll_state.clone();
+        let log_store = LogStoreService::default();
+        let mut close_requested = false;
+        let mut harness = Harness::builder().build_ui(move |ctx| {
+            *scroll_state_for_ui.borrow_mut() = Some(show_log_window_with_scroll_state(
+                ctx,
+                &mut window_for_ui.borrow_mut(),
+                &mut display_options_for_ui.borrow_mut(),
+                &log_store,
+                &mut close_requested,
+            ));
+        });
+        components::test_support::setup_egui(&mut harness);
+        harness.run_steps(2);
+
+        {
+            let mut window = window.borrow_mut();
+            let page = window
+                .pages
+                .get_mut(&LogPageKey {
+                    generation: 0,
+                    filter_matches: false,
+                    page_start: LOG_PAGE_SIZE,
+                })
+                .expect("target page is loaded");
+            let target = &mut page.rows[400 - LOG_PAGE_SIZE];
+            target.text = "needle line 400".to_owned();
+            target.match_ranges = vec![(0, "needle".len())];
+            window.search.query = "needle".to_owned();
+            window.search.match_count = 2;
+            window.search.active_match = Some(0);
+        }
+        harness.get_by_label("Previous matching line").click();
+        harness.step();
+        assert_eq!(window.borrow().search.active_match, Some(1));
+        window.borrow_mut().search.active_match = Some(0);
+        harness.get_by_label("Next matching line").click();
+        harness.step();
+        assert_eq!(window.borrow().search.active_match, Some(1));
+        // The store resolves the selected match asynchronously. State-level
+        // coverage below verifies that this result maps unfiltered matches to
+        // their source line and filtered matches to their match row.
+        window.borrow_mut().search.active_display_row = Some(400);
+        window.borrow_mut().search.scroll_to_display_row = Some(400);
+        harness.run_steps(2);
+
+        let scroll_state = scroll_state.borrow();
+        let output = scroll_state.as_ref().expect("log scroll area was rendered");
+        assert_eq!(window.borrow().search.active_match, Some(1));
+        assert_eq!(window.borrow().search.active_display_row, Some(400));
+        assert_eq!(window.borrow().search.scroll_to_display_row, None);
+        assert!(
+            output.state.offset.y > 0.0,
+            "match navigation must move the viewport"
+        );
+        assert!(
+            harness
+                .get_by_label("needle line 400")
+                .rect()
+                .intersects(output.inner_rect),
+            "the resolved matching line must be visible"
+        );
+        harness.ui_harness(
+            "pod_logs/pod_log_viewer_match_navigation_snapshot/resolved_match_destination",
+        );
+    }
+
+    #[test]
+    fn log_navigation_wraps_at_both_ends() {
+        let log_store = LogStoreService::default();
+        let mut window = log_window(&["zero", "one", "two"]);
+        window.search.match_count = 3;
+
+        advance_log_line(&mut window, false);
+        assert_eq!(window.search.active_display_row, Some(2));
+        advance_log_line(&mut window, true);
+        assert_eq!(window.search.active_display_row, Some(0));
+
+        advance_log_match(&mut window, &log_store, false);
+        assert_eq!(window.search.active_match, Some(2));
+        advance_log_match(&mut window, &log_store, true);
+        assert_eq!(window.search.active_match, Some(0));
     }
 
     #[test]
