@@ -6,7 +6,7 @@ use crate::resource_table::{READY_COLUMN, STATUS_COLUMN};
 use crate::sorted_name::SortedName;
 use crate::worker::Worker;
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 use k8s_openapi::api::apps::v1::{Deployment, DeploymentSpec};
 use k8s_openapi::api::core::v1::{ConfigMap, Namespace, Secret};
 use k8s_openapi::api::core::v1::{Container, Pod, PodSpec, PodTemplateSpec};
@@ -1079,9 +1079,24 @@ fn test_force_delete_resource_with_finalizer_integration() {
         .push(egui::Event::Text(resource_name.clone()));
     harness.run_steps(1);
     harness.get_by_label("Remove finalizers").click_accesskit();
-    harness.run_steps(1);
 
-    wait_for(
+    wait_for_with_diagnostic(
+        &mut harness,
+        |_| {
+            runtime
+                .block_on(async { configmaps.get(&resource_name).await })
+                .err()
+                .filter(|error| matches!(error, kube::Error::Api(response) if response.code == 404))
+                .map(|_| ())
+        },
+        |app| {
+            app.ui_state.clusters[&cluster_key]
+                .force_delete_error
+                .clone()
+        },
+        10_000,
+    );
+    wait_for_with_diagnostic(
         &mut harness,
         |app| {
             (!app.ui_state.clusters[&cluster_key].resource_cache
@@ -1091,12 +1106,16 @@ fn test_force_delete_resource_with_finalizer_integration() {
                 .any(|resource| resource.name == resource_name))
             .then_some(())
         },
+        |app| {
+            app.ui_state.clusters[&cluster_key].resource_cache
+                [&(configmaps_resource.clone(), Some(fixture.namespace.clone()))]
+                .error
+                .as_ref()
+                .map(|error| {
+                    format!("ConfigMap watcher failed while waiting for deletion: {error}")
+                })
+        },
         10_000,
-    );
-    assert!(
-        runtime
-            .block_on(async { configmaps.get(&resource_name).await })
-            .is_err()
     );
 }
 
@@ -1397,16 +1416,40 @@ fn test_deployment_rollout_restart_integration() {
     }
     let actions_label = format!("More actions for {deployment_name}");
     harness.get_by_label(&actions_label).click();
-    harness.run_steps(1);
-    harness.get_by_label("Restart rollout").click_accesskit();
-    // The action menu and confirmation dialog use the same label while the
-    // menu blade animates out. Advance its bounded transition before querying
-    // the confirmation button.
-    harness.run_steps(2);
-    harness.get_by_label("Restart rollout").click_accesskit();
-    harness.run_steps(1);
-
+    wait_for_harness(
+        &mut harness,
+        |harness| {
+            harness
+                .query_by_role_and_label(egui::accesskit::Role::Button, "Restart rollout")
+                .map(|_| ())
+        },
+        5_000,
+    );
+    harness.get_by_label("Restart rollout").click();
     wait_for(
+        &mut harness,
+        |app| {
+            app.ui_state.clusters[&cluster_key]
+                .pending_deployment_restart
+                .as_ref()
+                .filter(|pending| pending.resource_name == deployment_name)
+                .map(|_| ())
+        },
+        5_000,
+    );
+    wait_for_harness(
+        &mut harness,
+        |harness| {
+            let mut buttons = harness
+                .query_all_by_role_and_label(egui::accesskit::Role::Button, "Restart rollout");
+            let button = buttons.next()?;
+            (buttons.next().is_none() && !button.accesskit_node().is_disabled()).then_some(())
+        },
+        5_000,
+    );
+    harness.get_by_label("Restart rollout").click();
+
+    wait_for_with_diagnostic(
         &mut harness,
         |_| {
             runtime
@@ -1431,6 +1474,11 @@ fn test_deployment_rollout_restart_integration() {
                     .is_ok()
                 })
                 .map(|_| ())
+        },
+        |app| {
+            app.ui_state.clusters[&cluster_key]
+                .deployment_restart_error
+                .clone()
         },
         10_000,
     );

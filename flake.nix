@@ -22,7 +22,7 @@ outputs = { self, nixpkgs}:
           cargo-nextest
           jetbrains.rust-rover
           imagemagick
-
+          codex
              xorg.libXcursor
                       xorg.libXrandr
                       xorg.libXi
