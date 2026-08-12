@@ -2958,6 +2958,49 @@ mod tests {
         assert_eq!(rebase_display_row(40, 100, 0), 140);
     }
 
+    #[test]
+    fn resolved_matches_scroll_in_source_or_filtered_display_row_space() {
+        let mut state = UiState::default();
+        let mut commands = Vec::new();
+        state.open_pod_log_window(
+            7,
+            "api-pod".into(),
+            Some("default".into()),
+            PodLogContainer {
+                name: "api".into(),
+                kind: ContainerKind::App,
+            },
+            &mut commands,
+        );
+        let window = state.log_windows.get_mut(&1).expect("log window exists");
+        window.search.generation = 3;
+        window.search.active_match = Some(4);
+
+        state.apply_log_store_result(LogStoreResult::MatchResolved {
+            window_id: 1,
+            generation: 3,
+            match_row: 4,
+            line_index: 400,
+        });
+        assert_eq!(state.log_windows[&1].search.active_display_row, Some(400));
+        assert_eq!(
+            state.log_windows[&1].search.scroll_to_display_row,
+            Some(400)
+        );
+
+        let window = state.log_windows.get_mut(&1).expect("log window exists");
+        window.search.filter_matches = true;
+        window.search.active_match = Some(5);
+        state.apply_log_store_result(LogStoreResult::MatchResolved {
+            window_id: 1,
+            generation: 3,
+            match_row: 5,
+            line_index: 400,
+        });
+        assert_eq!(state.log_windows[&1].search.active_display_row, Some(5));
+        assert_eq!(state.log_windows[&1].search.scroll_to_display_row, Some(5));
+    }
+
     fn test_log_row(display_row: usize, text: &str) -> LogPageRow {
         LogPageRow {
             display_row,
