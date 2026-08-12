@@ -47,7 +47,7 @@ Window rect=<none>
             GenericContainer rect=<none>
               Image rect=(x=697.0 y=18.0 width=16.0 height=16.0 center_x=705.0 center_y=26.0)
             GenericContainer rect=<none>
-              TextInput value="m" state=[focused] rect=(x=503.0 y=16.5 width=186.0 height=19.0 center_x=596.0 center_y=26.0)
+              TextInput name="Search Namespace" value="m" state=[focused] rect=(x=503.0 y=16.5 width=186.0 height=19.0 center_x=596.0 center_y=26.0)
                 TextRun value="m" rect=(x=507.0 y=18.5 width=10.5 height=15.0 center_x=512.2 center_y=26.0)
           GenericContainer rect=<none>
             Label value="8 items" rect=(x=775.0 y=16.5 width=55.2 height=19.0 center_x=802.6 center_y=26.0)

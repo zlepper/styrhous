@@ -486,6 +486,12 @@ Window state=[focused] rect=<none>
                     Button name="More actions for kube-scheduler-kind-control-plane" rect=(x=1460.0 y=432.0 width=36.0 height=36.0 center_x=1478.0 center_y=450.0)
   GenericContainer rect=<none>
   GenericContainer rect=<none>
+    Unknown rect=(x=0.0 y=0.0 width=784.0 height=1024.0 center_x=392.0 center_y=512.0)
+  GenericContainer rect=<none>
+    Unknown rect=(x=784.0 y=1016.0 width=744.0 height=8.0 center_x=1156.0 center_y=1020.0)
+  GenericContainer rect=<none>
+    Unknown rect=(x=1528.0 y=0.0 width=8.0 height=1024.0 center_x=1532.0 center_y=512.0)
+  GenericContainer rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
@@ -534,9 +540,3 @@ Window state=[focused] rect=<none>
               Button name="Save changes" rect=(x=1386.1 y=961.0 width=116.9 height=33.0 center_x=1444.6 center_y=977.5)
               Button name="Reset" rect=(x=1317.0 y=961.0 width=61.1 height=33.0 center_x=1347.6 center_y=977.5)
       ScrollBar rect=(x=1518.0 y=8.0 width=10.0 height=1008.0 center_x=1523.0 center_y=512.0)
-  GenericContainer rect=<none>
-    Unknown rect=(x=0.0 y=0.0 width=784.0 height=1024.0 center_x=392.0 center_y=512.0)
-  GenericContainer rect=<none>
-    Unknown rect=(x=784.0 y=1016.0 width=744.0 height=8.0 center_x=1156.0 center_y=1020.0)
-  GenericContainer rect=<none>
-    Unknown rect=(x=1528.0 y=0.0 width=8.0 height=1024.0 center_x=1532.0 center_y=512.0)

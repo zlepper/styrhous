@@ -315,6 +315,7 @@ pub struct TailwindCombobox<Filter> {
     id_salt: Id,
     label: Option<WidgetText>,
     placeholder: Option<String>,
+    search_accessibility_label: Option<String>,
     selected_text: Option<String>,
     selected_status: Option<bool>,
     width: Option<f32>,
@@ -327,6 +328,7 @@ struct ComboboxInput<'a> {
     width: f32,
     is_open: bool,
     placeholder: Option<&'a str>,
+    accessibility_label: String,
     selected_text: Option<&'a str>,
     selected_status: Option<bool>,
     size: ComboboxSize,
@@ -339,6 +341,7 @@ impl TailwindCombobox<NoFilter> {
             id_salt: Id::new(id_salt),
             label: None,
             placeholder: None,
+            search_accessibility_label: None,
             selected_text: None,
             selected_status: None,
             width: None,
@@ -355,6 +358,7 @@ impl TailwindCombobox<NoFilter> {
             id_salt: Id::new(label.text()),
             label: Some(label),
             placeholder: None,
+            search_accessibility_label: None,
             selected_text: None,
             selected_status: None,
             width: None,
@@ -373,6 +377,7 @@ impl TailwindCombobox<NoFilter> {
             id_salt: self.id_salt,
             label: self.label,
             placeholder: self.placeholder,
+            search_accessibility_label: self.search_accessibility_label,
             selected_text: self.selected_text,
             selected_status: self.selected_status,
             width: self.width,
@@ -387,6 +392,15 @@ impl<Filter> TailwindCombobox<Filter> {
     /// Set the placeholder shown when the input is empty.
     pub fn placeholder(mut self, placeholder: impl Into<String>) -> Self {
         self.placeholder = Some(placeholder.into());
+        self
+    }
+
+    /// Sets the accessible name for the popup's filter input.
+    ///
+    /// Use this with [`Self::new`] when the combobox label is rendered by the
+    /// caller rather than by the component itself.
+    pub fn search_accessibility_label(mut self, label: impl Into<String>) -> Self {
+        self.search_accessibility_label = Some(label.into());
         self
     }
 
@@ -437,6 +451,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             id_salt,
             label,
             placeholder,
+            search_accessibility_label,
             selected_text,
             selected_status,
             width,
@@ -466,6 +481,12 @@ impl<F> TailwindCombobox<WithFilter<F>> {
                 width,
                 is_open,
                 placeholder: placeholder.as_deref(),
+                accessibility_label: search_accessibility_label.unwrap_or_else(|| {
+                    label.as_ref().map_or_else(
+                        || "Search combobox options".to_owned(),
+                        |label| format!("Search {}", label.text()),
+                    )
+                }),
                 selected_text: selected_text.as_deref(),
                 selected_status,
                 size,
@@ -555,6 +576,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             width,
             is_open,
             placeholder,
+            accessibility_label,
             selected_text,
             selected_status,
             size,
@@ -648,6 +670,14 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             text_edit = text_edit.hint_text(placeholder);
         }
         let text_response = input_ui.add(text_edit);
+        let is_enabled = input_ui.is_enabled();
+        text_response.widget_info(|| {
+            egui::WidgetInfo::labeled(
+                egui::WidgetType::TextEdit,
+                is_enabled,
+                accessibility_label.clone(),
+            )
+        });
         if !text_response.has_focus() {
             text_response.request_focus();
         }
@@ -996,6 +1026,12 @@ mod tests {
             .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespaces")
             .click();
         harness.run();
+        assert!(
+            harness
+                .get_by_role_and_label(egui::accesskit::Role::TextInput, "Search Namespaces")
+                .is_focused(),
+            "the opened combobox must expose its focused filter as a labelled text input"
+        );
         harness
             .input_mut()
             .events

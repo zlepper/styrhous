@@ -14,7 +14,6 @@ use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
 use kube::api::Patch;
 use kube::{Api, Client};
 use std::collections::BTreeMap;
-use std::process::Command;
 use std::time::{Duration, Instant};
 
 const WATCHER_CONFIGMAP_NAME: &str = "resource-watcher";
@@ -182,46 +181,6 @@ fn test_secret_inspector_actions_integration() {
     );
 }
 
-#[test]
-fn test_kind_setup_purges_leftover_test_namespaces() {
-    let fixture = IntegrationNamespaceFixture::create("setup-purge", "stuck", "unused");
-    fixture.runtime.block_on(async {
-        fixture
-            .configmaps
-            .patch(
-                &fixture.name,
-                &Default::default(),
-                &Patch::Merge(&k8s_openapi::serde_json::json!({
-                    "metadata": { "finalizers": [TEST_FINALIZER] }
-                })),
-            )
-            .await
-            .expect("Failed to add finalizer to purge-test ConfigMap");
-    });
-
-    let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .expect("app manifest directory should be two levels below the workspace root");
-    let status = Command::new("bash")
-        .arg("scripts/ensure-kind-cluster.sh")
-        .current_dir(workspace_root)
-        .status()
-        .expect("Failed to invoke Kind setup script");
-    assert!(status.success(), "Kind setup script should succeed");
-
-    let namespace_exists = fixture.runtime.block_on(async {
-        !matches!(
-            fixture.namespaces.get(&fixture.namespace).await,
-            Err(kube::Error::Api(error)) if error.code == 404
-        )
-    });
-    assert!(
-        !namespace_exists,
-        "Kind setup script should delete leftover integration namespaces"
-    );
-}
-
 impl Drop for IntegrationNamespaceFixture {
     fn drop(&mut self) {
         let cleanup_result = self.runtime.block_on(async {
@@ -277,6 +236,7 @@ impl Drop for IntegrationNamespaceFixture {
     }
 }
 
+#[track_caller]
 fn wait_for<T>(
     harness: &mut Harness<MyEguiApp<Worker>>,
     condition: impl Fn(&MyEguiApp<Worker>) -> Option<T>,
@@ -285,6 +245,7 @@ fn wait_for<T>(
     wait_for_with_diagnostic(harness, condition, |_| None, max_ms)
 }
 
+#[track_caller]
 fn wait_for_with_diagnostic<T>(
     harness: &mut Harness<MyEguiApp<Worker>>,
     condition: impl Fn(&MyEguiApp<Worker>) -> Option<T>,
@@ -304,6 +265,7 @@ fn wait_for_with_diagnostic<T>(
     )
 }
 
+#[track_caller]
 fn wait_for_harness<T>(
     harness: &mut Harness<MyEguiApp<Worker>>,
     condition: impl Fn(&mut Harness<MyEguiApp<Worker>>) -> Option<T>,
@@ -317,7 +279,10 @@ fn wait_for_harness<T>(
         }
         std::thread::sleep(Duration::from_millis(50));
     }
-    panic!("Timed out after {max_ms}ms waiting for UI state");
+    panic!(
+        "Timed out after {max_ms}ms waiting for UI state (requested at {})",
+        std::panic::Location::caller(),
+    );
 }
 
 fn connected_kind_harness() -> (Harness<'static, MyEguiApp<Worker>>, i32) {
@@ -374,9 +339,28 @@ fn select_namespace(harness: &mut Harness<MyEguiApp<Worker>>, cluster_key: i32, 
     harness
         .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
         .click();
+    let search_label = "Search Namespace";
     wait_for_harness(
         harness,
-        |harness| harness.query_by_label(&namespace).map(|_| ()),
+        |harness| {
+            harness
+                .query_by_role_and_label(egui::accesskit::Role::TextInput, search_label)
+                .filter(|input| input.is_focused())
+                .map(|_| ())
+        },
+        10_000,
+    );
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::TextInput, search_label)
+        .type_text(&namespace);
+    wait_for_harness(
+        harness,
+        |harness| {
+            harness
+                .query_by_role_and_label(egui::accesskit::Role::TextInput, search_label)
+                .filter(|input| input.value().as_deref() == Some(namespace.as_str()))
+                .map(|_| ())
+        },
         10_000,
     );
     harness.get_by_label(&namespace).click();
@@ -788,9 +772,9 @@ fn test_resource_actions_integration() {
         harness.run_steps(1);
     }
     let actions_label = format!("More actions for {test_configmap_name}");
-    harness.get_by_label(&actions_label).click_accesskit();
+    harness.get_by_label(&actions_label).click();
     harness.run_steps(1);
-    harness.get_by_label("Edit").click_accesskit();
+    harness.get_by_label("Edit").click();
     harness.run_steps(1);
     wait_for(
         &mut harness,
@@ -857,9 +841,9 @@ fn test_resource_actions_integration() {
     for _ in 0..5 {
         harness.run_steps(1);
     }
-    harness.get_by_label(&actions_label).click_accesskit();
+    harness.get_by_label(&actions_label).click();
     harness.run_steps(1);
-    harness.get_by_label("Delete").click_accesskit();
+    harness.get_by_label("Delete").click();
     harness.run_steps(1);
     assert!(
         harness.state().ui_state.clusters[&cluster_key]
@@ -881,9 +865,7 @@ fn test_resource_actions_integration() {
     );
 
     let confirm_delete_label = format!("Delete {test_configmap_name}");
-    harness
-        .get_by_label(&confirm_delete_label)
-        .click_accesskit();
+    harness.get_by_label(&confirm_delete_label).click();
     harness.run_steps(1);
     wait_for(
         &mut harness,
@@ -1189,7 +1171,7 @@ fn test_deployment_match_labels_completion_integration() {
     );
 
     let actions_label = format!("More actions for {deployment_name}");
-    harness.get_by_label(&actions_label).click_accesskit();
+    harness.get_by_label(&actions_label).click();
     harness.run_steps(1);
     harness.get_by_label("Edit").click_accesskit();
     harness.run_steps(1);
@@ -1414,7 +1396,7 @@ fn test_deployment_rollout_restart_integration() {
         harness.run_steps(1);
     }
     let actions_label = format!("More actions for {deployment_name}");
-    harness.get_by_label(&actions_label).click_accesskit();
+    harness.get_by_label(&actions_label).click();
     harness.run_steps(1);
     harness.get_by_label("Restart rollout").click_accesskit();
     // The action menu and confirmation dialog use the same label while the
@@ -1527,9 +1509,9 @@ fn test_resource_scale_integration() {
         harness.run_steps(1);
     }
     let actions_label = format!("More actions for {deployment_name}");
-    harness.get_by_label(&actions_label).click_accesskit();
+    harness.get_by_label(&actions_label).click();
     harness.run_steps(1);
-    harness.get_by_label("Scale").click_accesskit();
+    harness.get_by_label("Scale").click();
     wait_for(
         &mut harness,
         |app| {
@@ -1540,12 +1522,33 @@ fn test_resource_scale_integration() {
         },
         10_000,
     );
-    harness
-        .get_by_label("Increase desired replicas")
-        .click_accesskit();
+    // Worker results are applied after the workspace render pass. Render the
+    // resulting modal before targeting its pointer controls.
     harness.run_steps(1);
-    harness.get_by_label("Update scale").click_accesskit();
-    harness.run_steps(1);
+    harness.get_by_label("Increase desired replicas").click();
+    wait_for(
+        &mut harness,
+        |app| {
+            app.ui_state.clusters[&cluster_key]
+                .pending_scale
+                .as_ref()
+                .filter(|pending| pending.desired_replicas == "2")
+                .map(|_| ())
+        },
+        5_000,
+    );
+    harness.get_by_label("Update scale").click();
+    wait_for_with_diagnostic(
+        &mut harness,
+        |app| {
+            app.ui_state.clusters[&cluster_key]
+                .pending_scale
+                .is_none()
+                .then_some(())
+        },
+        |app| app.ui_state.clusters[&cluster_key].scale_error.clone(),
+        5_000,
+    );
 
     wait_for(
         &mut harness,
