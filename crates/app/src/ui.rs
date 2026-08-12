@@ -1,5 +1,6 @@
 mod cluster_rail;
 mod dialogs;
+mod log_state;
 #[doc(hidden)]
 pub mod log_viewer_profile;
 mod log_windows;
