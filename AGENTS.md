@@ -57,12 +57,15 @@ Whenever an accessibility snapshot changes, take a look at it, and make sure thi
 * Check that icons and text in boxes is actually positions the expected way in those boxes, usually vertically centered
 * Check that there is a proper margin around elements or between elements as necessary so things maintain a nice coherence.
 
+#### General ui test rules
+* Only ever use `accesskit_click` while troubleshooting. It should _never_ be in the final test code, as it might mask laying issues.
+
 ### Kind-backed integration tests
 
 `test_real_cluster_connection`, `test_resource_watcher_integration`, and
 `test_resource_actions_integration` are regular nextest tests. `.config/nextest.toml`
-assigns them to a single-threaded `kind-integration` group and runs
-`scripts/ensure-kind-cluster.sh` before them.
+runs `scripts/ensure-kind-cluster.sh` once before the matching Kind tests. The
+tests run in parallel; each mutable test owns a unique `kdui-it-*` namespace.
 
 When running Kind-backed tests from a sandboxed agent, request command approval
 escalation for the nextest command. Rootless Podman needs to create a user namespace,
@@ -73,8 +76,9 @@ missing cluster, starts existing Kind node containers, exports its kubeconfig, a
 for the API server, nodes, and CoreDNS. It leaves the cluster running. A pre-existing,
 unhealthy cluster is reported as a failure rather than deleted or recreated.
 
-These tests use the real local Kubernetes cluster and may create, edit, or delete their
-own test resources. Keep them serialized and do not mark them `#[ignore]`.
+These tests use the real local Kubernetes cluster and may create, edit, or delete
+their own test resources. Keep fixtures isolated to their unique namespace and do
+not mark the tests `#[ignore]`.
 
 ## Architecture
 
@@ -103,3 +107,14 @@ Use a real `Worker` only when testing the Kind integration path.
 - API resources and namespaces are keyed using the project helper types (`ApiResource`,
   `MinimalNamespace`, and `SortedName`); preserve their ordering/display semantics.
 - Breaking changes are permitted: this project has no external users yet.
+
+## Post-changes review
+Once a changeset is done, use a set of sub agents to review for each of these things:
+1. A critical code review agent. The agent should especially focus on possible bugs and edge cases. 
+2. Look for possible duplicated code within the project and opportunities for refactoring and
+extraction of shared behavior and/or components. The agent should also check for coding 
+patterns that could be done better or cleaner by using common language abstractions (Such as
+default spreads)
+3. Focus on test handling. Are the changes well enough covered by tests?
+
+All of those agents can be launched in parallel if the harness supports it.
