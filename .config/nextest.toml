@@ -7,13 +7,6 @@ slow-timeout = { period = "2m", terminate-after = 1, grace-period = "10s" }
 capture-stdout = true
 capture-stderr = true
 
-[test-groups.kind-integration]
-max-threads = 1
-
-[[profile.default.overrides]]
-filter = 'test(/ui::tests::kind_integration::/)'
-test-group = "kind-integration"
-
 [[profile.default.scripts]]
 filter = 'test(/ui::tests::kind_integration::/)'
 setup = "ensure-kind-cluster"

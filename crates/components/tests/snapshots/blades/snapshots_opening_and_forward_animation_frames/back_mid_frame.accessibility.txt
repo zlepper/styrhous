@@ -27,6 +27,12 @@ Window state=[focused] rect=<none>
               TextRun value="back: true · forward: false" rect=(x=809.0 y=108.0 width=169.7 height=17.0 center_x=893.8 center_y=116.5)
       ScrollBar rect=(x=1518.0 y=8.0 width=10.0 height=1008.0 center_x=1523.0 center_y=512.0)
   GenericContainer rect=<none>
+    Unknown rect=(x=0.0 y=0.0 width=660.0 height=1024.0 center_x=330.0 center_y=512.0)
+  GenericContainer rect=<none>
+    Unknown rect=(x=660.0 y=966.0 width=706.8 height=58.4 center_x=1013.4 center_y=995.2)
+  GenericContainer rect=<none>
+    Unknown rect=(x=1206.0 y=0.0 width=330.4 height=1024.0 center_x=1371.2 center_y=512.0)
+  GenericContainer rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
@@ -48,9 +54,3 @@ Window state=[focused] rect=<none>
             Label value="back: false · forward: true" rect=(x=809.0 y=108.0 width=169.7 height=17.0 center_x=893.8 center_y=116.5)
               TextRun value="back: false · forward: true" rect=(x=809.0 y=108.0 width=169.7 height=17.0 center_x=893.8 center_y=116.5)
       ScrollBar rect=(x=1518.0 y=8.0 width=10.0 height=1008.0 center_x=1523.0 center_y=512.0)
-  GenericContainer rect=<none>
-    Unknown rect=(x=0.0 y=0.0 width=660.0 height=1024.0 center_x=330.0 center_y=512.0)
-  GenericContainer rect=<none>
-    Unknown rect=(x=660.0 y=966.0 width=706.8 height=58.4 center_x=1013.4 center_y=995.2)
-  GenericContainer rect=<none>
-    Unknown rect=(x=1206.0 y=0.0 width=330.4 height=1024.0 center_x=1371.2 center_y=512.0)

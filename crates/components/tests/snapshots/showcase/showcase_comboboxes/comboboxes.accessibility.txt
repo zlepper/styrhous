@@ -21,7 +21,7 @@ Window rect=<none>
         GenericContainer rect=<none>
           Image rect=(x=264.0 y=219.0 width=16.0 height=16.0 center_x=272.0 center_y=227.0)
         GenericContainer rect=<none>
-          TextInput value="" state=[focused] rect=(x=20.0 y=216.5 width=232.0 height=21.0 center_x=136.0 center_y=227.0)
+          TextInput name="Search Multi-select" value="" state=[focused] rect=(x=20.0 y=216.5 width=232.0 height=21.0 center_x=136.0 center_y=227.0)
             TextRun value="" rect=(x=24.0 y=218.5 width=0.0 height=17.0 center_x=24.0 center_y=227.0)
         Label value="Filter results" rect=(x=8.0 y=260.0 width=81.4 height=17.0 center_x=48.7 center_y=268.5)
           TextRun value="Filter results" rect=(x=8.0 y=260.0 width=81.4 height=17.0 center_x=48.7 center_y=268.5)

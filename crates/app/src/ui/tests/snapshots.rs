@@ -667,42 +667,70 @@ fn deployment_restart_action_opens_a_confirmation_and_sends_a_worker_command() {
 #[test]
 fn scalable_resource_action_fetches_and_updates_the_scale() {
     let deployment = fixture_api_resource("apps", "Deployment", "deployments");
-    let mut state = oracle_resource_table_state();
-    let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
-    cluster.selected_api_resource = Some(deployment.clone());
-    cluster.scalable_api_resources.insert(deployment.clone());
-    cluster.resource_cache.insert(
-        (deployment.clone(), Some("kube-system".to_owned())),
-        ResourceWatchState {
-            resources: BTreeMap::from([(
-                "deployment-uid".to_owned(),
-                MinimalResource {
-                    uid: "deployment-uid".to_owned(),
-                    name: "coredns".to_owned(),
-                    namespace: Some("kube-system".to_owned()),
-                    creation_timestamp: None,
-                    controller_owner: None,
-                    cells: BTreeMap::new(),
-                    log_containers: Vec::new(),
-                },
-            )]),
-            is_synced: true,
-            error: None,
-        },
-    );
+    let setup_state = || {
+        let mut state = oracle_resource_table_state();
+        let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
+        cluster.selected_api_resource = Some(deployment.clone());
+        cluster.scalable_api_resources.insert(deployment.clone());
+        cluster.resource_cache.insert(
+            (deployment.clone(), Some("kube-system".to_owned())),
+            ResourceWatchState {
+                resources: BTreeMap::from([(
+                    "deployment-uid".to_owned(),
+                    MinimalResource {
+                        uid: "deployment-uid".to_owned(),
+                        name: "coredns".to_owned(),
+                        namespace: Some("kube-system".to_owned()),
+                        creation_timestamp: None,
+                        controller_owner: None,
+                        cells: BTreeMap::new(),
+                        log_containers: Vec::new(),
+                    },
+                )]),
+                is_synced: true,
+                error: None,
+            },
+        );
+        state
+    };
+
+    let mut snapshot_harness = application_harness::<MockWorker>();
+    snapshot_harness.state_mut().ui_state = setup_state();
+    snapshot_harness.run();
+    snapshot_harness
+        .get_by_label("Apps & Containers")
+        .click_accesskit();
+    snapshot_harness.run();
+    snapshot_harness
+        .get_by_label("Deployments")
+        .click_accesskit();
+    snapshot_harness.run();
+    snapshot_harness
+        .state_mut()
+        .ui_state
+        .clusters
+        .get_mut(&2)
+        .unwrap()
+        .pending_scale = Some(super::super::state::PendingScale {
+        api_resource: deployment.clone(),
+        resource_name: "coredns".into(),
+        namespace: Some("kube-system".into()),
+        current_replicas: 3,
+        desired_replicas: "3".into(),
+    });
+    snapshot_harness.run();
+    snapshot_harness.ui_harness("resource_actions/scalable_resource_action_fetches_and_updates_the_scale/resource_scale_dialog");
 
     let mut harness = application_harness::<MockWorker>();
-    harness.state_mut().ui_state = state;
+    harness.state_mut().ui_state = setup_state();
     harness.run();
-    harness.get_by_label("Apps & Containers").click_accesskit();
+    harness.get_by_label("Apps & Containers").click();
     harness.run();
-    harness.get_by_label("Deployments").click_accesskit();
+    harness.get_by_label("Deployments").click();
     harness.run();
-    harness
-        .get_by_label("More actions for coredns")
-        .click_accesskit();
+    harness.get_by_label("More actions for coredns").click();
     harness.run();
-    harness.get_by_label("Scale").click_accesskit();
+    harness.get_by_label("Scale").click();
     harness.run();
 
     assert!(matches!(
@@ -729,22 +757,19 @@ fn scalable_resource_action_fetches_and_updates_the_scale() {
             replicas: 3,
         });
     harness.run();
-    harness.ui_harness("resource_actions/scalable_resource_action_fetches_and_updates_the_scale/resource_scale_dialog");
-    harness
-        .state_mut()
-        .ui_state
-        .clusters
-        .get_mut(&2)
-        .unwrap()
-        .pending_scale = Some(super::super::state::PendingScale {
-        api_resource: deployment.clone(),
-        resource_name: "coredns".into(),
-        namespace: Some("kube-system".into()),
-        current_replicas: 3,
-        desired_replicas: "4".into(),
-    });
+    harness.get_by_label("Increase desired replicas").click();
     harness.run();
-    harness.get_by_label("Update scale").click_accesskit();
+
+    assert_eq!(
+        harness.state().ui_state.clusters[&2]
+            .pending_scale
+            .as_ref()
+            .map(|pending| pending.desired_replicas.as_str()),
+        Some("4"),
+        "the pointer click must update the visible scale dialog before submitting it"
+    );
+
+    harness.get_by_label("Update scale").click();
     harness.run();
 
     assert!(matches!(
@@ -1194,6 +1219,102 @@ fn namespace_popup_option_does_not_activate_the_overlapped_resource_button() {
             .iter()
             .any(|command| matches!(command, WorkerCommand::StartResourceDetailWatch { .. })),
         "the namespace click must not start an underlying detail watch"
+    );
+}
+
+#[test]
+fn namespace_popup_filters_to_an_offscreen_option_before_pointer_click() {
+    let generated_namespaces = (0..12)
+        .map(|index| MinimalNamespace {
+            name: format!("kdui-it-concurrent-{index:02}"),
+            display_name: None,
+        })
+        .collect::<Vec<_>>();
+    let target_namespace = "kube-system";
+    let mut namespaces = vec![MinimalNamespace {
+        name: "default".into(),
+        display_name: None,
+    }];
+    namespaces.extend(generated_namespaces);
+    namespaces.extend([
+        MinimalNamespace {
+            name: "kube-node-lease".into(),
+            display_name: None,
+        },
+        MinimalNamespace {
+            name: "kube-public".into(),
+            display_name: None,
+        },
+    ]);
+    namespaces.push(MinimalNamespace {
+        name: target_namespace.into(),
+        display_name: None,
+    });
+    let setup_state = || {
+        let mut state = oracle_resource_table_state();
+        let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
+        cluster.selected_namespaces.clear();
+        cluster.selected_api_resource = None;
+        cluster.namespaces = namespaces
+            .iter()
+            .cloned()
+            .map(|namespace| (namespace.name.clone().into(), namespace))
+            .collect();
+        state
+    };
+
+    let mut offscreen_harness = application_harness::<MockWorker>();
+    offscreen_harness.state_mut().ui_state = setup_state();
+    offscreen_harness.run();
+    offscreen_harness
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
+        .click();
+    offscreen_harness.run();
+    offscreen_harness.get_by_label(target_namespace).click();
+    offscreen_harness.run_steps(1);
+    assert!(
+        offscreen_harness.state().ui_state.clusters[&2]
+            .selected_namespaces
+            .is_empty(),
+        "the unfiltered target is off-screen, so its accessibility node must not be used for a pointer click"
+    );
+
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = setup_state();
+    harness.run();
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
+        .click();
+    harness.run();
+    let search_input = harness
+        .query_by_role_and_label(egui::accesskit::Role::TextInput, "Search Namespace")
+        .expect("the namespace popup search input should be present");
+    assert!(
+        search_input.is_focused(),
+        "the popup search field must receive focus before typing"
+    );
+    search_input.type_text(target_namespace);
+    harness.run_steps(1);
+    assert!(
+        harness
+            .query_by_role_and_label(egui::accesskit::Role::TextInput, "Search Namespace")
+            .is_some_and(|input| input.value().as_deref() == Some(target_namespace)),
+        "the text input must contain the namespace filter before the test clicks its option"
+    );
+
+    harness.state_mut().worker.results.extend((0..32).map(|_| {
+        WorkerResult::KubernetesNamespacesReplaced {
+            cluster_key: 2,
+            namespaces: namespaces.clone(),
+        }
+    }));
+    harness.get_by_label(target_namespace).click();
+    harness.run_steps(1);
+
+    assert_eq!(
+        harness.state().ui_state.clusters[&2].selected_namespaces,
+        HashSet::from([target_namespace.to_owned()]),
+        "the filtered namespace option must receive a pointer click even while the worker delivers a burst of discovery results"
     );
 }
 

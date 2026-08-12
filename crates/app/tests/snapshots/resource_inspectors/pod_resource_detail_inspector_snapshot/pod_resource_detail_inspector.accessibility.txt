@@ -482,6 +482,12 @@ Window state=[focused] rect=<none>
                 GenericContainer rect=<none>
   GenericContainer rect=<none>
   GenericContainer rect=<none>
+    Unknown rect=(x=0.0 y=0.0 width=784.0 height=1024.0 center_x=392.0 center_y=512.0)
+  GenericContainer rect=<none>
+    Unknown rect=(x=784.0 y=1016.0 width=744.0 height=8.0 center_x=1156.0 center_y=1020.0)
+  GenericContainer rect=<none>
+    Unknown rect=(x=1528.0 y=0.0 width=8.0 height=1024.0 center_x=1532.0 center_y=512.0)
+  GenericContainer rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
@@ -763,9 +769,3 @@ Window state=[focused] rect=<none>
                   Label value="DNS policy: " rect=(x=822.0 y=1723.0 width=69.3 height=18.0 center_x=856.7 center_y=1732.0)
                   Label value="ClusterFirst" rect=(x=899.0 y=1723.0 width=65.7 height=18.0 center_x=931.9 center_y=1732.0)
       ScrollBar rect=(x=1518.1 y=8.0 width=10.0 height=1008.0 center_x=1523.1 center_y=512.0)
-  GenericContainer rect=<none>
-    Unknown rect=(x=0.0 y=0.0 width=784.0 height=1024.0 center_x=392.0 center_y=512.0)
-  GenericContainer rect=<none>
-    Unknown rect=(x=784.0 y=1016.0 width=744.0 height=8.0 center_x=1156.0 center_y=1020.0)
-  GenericContainer rect=<none>
-    Unknown rect=(x=1528.0 y=0.0 width=8.0 height=1024.0 center_x=1532.0 center_y=512.0)

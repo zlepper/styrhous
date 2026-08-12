@@ -343,6 +343,22 @@ impl BladeStack {
         let outgoing = matches!(transition, Some((BladeTransition::Back, value)) if value < 1.0);
         let active_content_id = self.content_id(history_len);
         let active_area_id = self.layer_id(history_len);
+        let popup_was_open = egui::Popup::is_any_open(ctx);
+        let (scrim_dismissed, scrim_history_selection) = show_input_scrim(
+            ctx,
+            self.id,
+            viewport,
+            active_rect,
+            &history_targets,
+            !popup_was_open,
+        );
+        let opening_popup = ctx.input(|input| input.pointer.any_click());
+        if !popup_was_open
+            && !opening_popup
+            && should_promote_active_blade(history_len > 0, transition)
+        {
+            ctx.move_to_top(egui::LayerId::new(Order::Foreground, active_area_id));
+        }
         let (header, active, header_action) = show_layer(
             ctx,
             active_area_id,
@@ -367,11 +383,15 @@ impl BladeStack {
                 (header, active, header_action)
             },
         );
-        if should_promote_active_blade(history_len > 0, transition) {
-            ctx.move_to_top(egui::LayerId::new(Order::Foreground, active_area_id));
-        }
-        let (dismissed, history_selection) =
-            show_input_scrim(ctx, self.id, viewport, active_rect, &history_targets);
+        // The input scrim keeps workspace and history layers from receiving a
+        // click outside a popup. While a popup is open its click is intentionally
+        // ignored here: egui closes the popup, while the scrim prevents the click
+        // from reaching the covered layer or dismissing the blade.
+        let (dismissed, history_selection) = if popup_was_open {
+            (false, None)
+        } else {
+            (scrim_dismissed, scrim_history_selection)
+        };
         match header_action {
             HeaderAction::Back => {
                 navigator.go_back();
@@ -738,6 +758,7 @@ fn show_input_scrim(
     viewport: Rect,
     active: Rect,
     history: &[(Id, Rect, usize)],
+    promote: bool,
 ) -> (bool, Option<usize>) {
     let mut clicked = false;
     let mut history_selection = None;
@@ -816,7 +837,9 @@ fn show_input_scrim(
             .inner;
         clicked |= dismissed;
         history_selection = history_selection.or(selection);
-        ctx.move_to_top(egui::LayerId::new(Order::Foreground, area_id));
+        if promote {
+            ctx.move_to_top(egui::LayerId::new(Order::Foreground, area_id));
+        }
     }
     (clicked, history_selection)
 }
@@ -860,6 +883,95 @@ mod tests {
             "back: {} · forward: {}",
             layer.can_go_back, layer.can_go_forward
         ));
+    }
+
+    #[test]
+    fn popup_option_overlapping_the_input_scrim_receives_a_pointer_click() {
+        let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+            id: 1,
+            title: "History",
+        })));
+        navigator.borrow_mut().push(TestBlade {
+            id: 2,
+            title: "Popup",
+        });
+        navigator.borrow_mut().clear_transition();
+        let selected = Rc::new(RefCell::new(false));
+        let underlying_action_clicked = Rc::new(RefCell::new(false));
+        let dismissed = Rc::new(RefCell::new(false));
+        let stack = BladeStack::new("blade-popup-input-order");
+        let navigator_for_ui = Rc::clone(&navigator);
+        let selected_for_ui = Rc::clone(&selected);
+        let underlying_action_clicked_for_ui = Rc::clone(&underlying_action_clicked);
+        let dismissed_for_ui = Rc::clone(&dismissed);
+        let mut harness = Harness::new_ui(move |ui| {
+            if ui.button("Underlying workspace action").clicked() {
+                *underlying_action_clicked_for_ui.borrow_mut() = true;
+            }
+            let response = stack.show_with_title(
+                ui.ctx(),
+                &mut navigator_for_ui.borrow_mut(),
+                |blade| blade.title.to_owned(),
+                |ui, _blade, _layer| {
+                    let trigger = ui.button("Open popup");
+                    egui::Popup::menu(&trigger)
+                        .align(egui::RectAlign::BOTTOM_END)
+                        .width(320.0)
+                        .show(|ui| {
+                            if ui.button("Choose popup option").clicked() {
+                                *selected_for_ui.borrow_mut() = true;
+                            }
+                        });
+                },
+            );
+            *dismissed_for_ui.borrow_mut() = response.dismissed;
+        });
+        crate::test_support::setup_egui(&mut harness);
+        harness.run();
+
+        harness
+            .get_all_by_label("Open popup")
+            .max_by(|left, right| left.rect().left().total_cmp(&right.rect().left()))
+            .expect("the foreground blade must render an open-popup button")
+            .click();
+        harness.run();
+
+        harness.get_by_label("Underlying workspace action").click();
+        harness.run();
+        assert!(
+            !*underlying_action_clicked.borrow(),
+            "a click outside the popup must not reach the workspace beneath the blade"
+        );
+        assert!(
+            !*dismissed.borrow(),
+            "a click outside the popup must close the popup without dismissing the blade"
+        );
+        assert!(
+            harness.query_by_label("Choose popup option").is_none(),
+            "the outside click must close the popup"
+        );
+
+        harness
+            .get_all_by_label("Open popup")
+            .max_by(|left, right| left.rect().left().total_cmp(&right.rect().left()))
+            .expect("the foreground blade must render an open-popup button")
+            .click();
+        harness.run();
+        harness.run_steps(1);
+
+        let option = harness.get_by_label("Choose popup option");
+        let blade_left = harness.ctx.content_rect().right() - INSET - WIDTH;
+        assert!(
+            option.rect().left() < blade_left,
+            "the popup option must extend into the input-scrim region"
+        );
+
+        option.click();
+        harness.run();
+        assert!(
+            *selected.borrow(),
+            "the popup option must receive the physical pointer click"
+        );
     }
 
     #[test]

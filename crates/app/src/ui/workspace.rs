@@ -573,6 +573,7 @@ fn show_toolbar(
                             ui.add_space(7.0);
                             let namespace_response = TailwindCombobox::new("namespace-selector")
                                 .placeholder("Search namespaces...")
+                                .search_accessibility_label("Search Namespace")
                                 .selected_text(selected_text)
                                 .selected_status(selected_status)
                                 .width(230.0)
