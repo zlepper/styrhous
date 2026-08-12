@@ -51,6 +51,55 @@ pub(crate) enum CellValue {
     Empty,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) enum SortValue {
+    Empty,
+    Number(i64),
+    Text(String),
+}
+
+pub(crate) fn cell_sort_value(value: &CellValue) -> SortValue {
+    match value {
+        CellValue::Text(value) => SortValue::Text(value.clone()),
+        CellValue::Number(value) => SortValue::Number(*value),
+        CellValue::Timestamp(value) => SortValue::Number(value.unix_timestamp()),
+        CellValue::Status { label, .. } => SortValue::Text(label.clone()),
+        CellValue::ContainerIndicators(values) => SortValue::Text(
+            values
+                .iter()
+                .map(|value| format!("{}:{}", value.name, value.state))
+                .collect::<Vec<_>>()
+                .join(","),
+        ),
+        CellValue::List(values) => SortValue::Text(values.join(",")),
+        CellValue::Empty => SortValue::Empty,
+    }
+}
+
+pub(crate) fn compare_sort_values(
+    left: SortValue,
+    right: SortValue,
+    direction: components::SortDirection,
+) -> std::cmp::Ordering {
+    let ordering = match (&left, &right) {
+        (SortValue::Empty, SortValue::Empty) => std::cmp::Ordering::Equal,
+        (SortValue::Empty, _) => std::cmp::Ordering::Greater,
+        (_, SortValue::Empty) => std::cmp::Ordering::Less,
+        (SortValue::Number(left), SortValue::Number(right)) => left.cmp(right),
+        (SortValue::Text(left), SortValue::Text(right)) => left.cmp(right),
+        (SortValue::Number(left), SortValue::Text(right)) => left.to_string().cmp(right),
+        (SortValue::Text(left), SortValue::Number(right)) => left.cmp(&right.to_string()),
+    };
+    if direction == components::SortDirection::Descending
+        && !matches!(left, SortValue::Empty)
+        && !matches!(right, SortValue::Empty)
+    {
+        ordering.reverse()
+    } else {
+        ordering
+    }
+}
+
 /// A compact container state summary transported from the Kubernetes worker to
 /// the Pod table. Rendering stays in the UI, while Kubernetes-specific state
 /// interpretation remains in the worker-side extractor.
@@ -157,5 +206,17 @@ mod tests {
 
         assert_eq!(definition.columns[0].id, "crd-0");
         assert_eq!(definition.columns[0].label, "State");
+    }
+
+    #[test]
+    fn numeric_sort_values_sort_numerically() {
+        assert_eq!(
+            compare_sort_values(
+                SortValue::Number(9),
+                SortValue::Number(10),
+                components::SortDirection::Ascending,
+            ),
+            std::cmp::Ordering::Less,
+        );
     }
 }

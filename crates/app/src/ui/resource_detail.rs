@@ -4,6 +4,7 @@ use super::state::{
     PendingDelete, PendingDeploymentRestart, PendingForceDelete, ResourceAction,
     ResourceDetailHistoryEntry, ResourceDetailPanelState, UiState,
 };
+use super::table_preferences::{ResourceTableKey, TableColumnDefinition};
 use super::widgets::show_resource_cell;
 use crate::minimal_resource::{MinimalResource, format_age};
 use crate::resource_catalog::ResourceNavigation;
@@ -12,7 +13,10 @@ use crate::resource_detail::{
     ResourceEvent, SecretDetail,
 };
 use crate::resource_handlers::table_definition;
-use crate::resource_table::{CONTAINERS_COLUMN, NODE_COLUMN, ResourceTableDefinition};
+use crate::resource_table::{
+    CONTAINERS_COLUMN, NODE_COLUMN, ResourceTableDefinition, SortValue, cell_sort_value,
+    compare_sort_values,
+};
 use crate::terminal_launcher::{DebugImagePreset, ShellRequest};
 use crate::worker::{
     GetResourceScale, ResourceDataUpdate, ResourceDataUpdateCompleted, ResourceDataUpdateFailed,
@@ -25,6 +29,7 @@ use components::{
     BladeTransition as ResourceDetailTransition, ButtonSize, ButtonVariant, MoreButton,
     PointingHand, TableRowBuilder, TailwindButton, TailwindTable, TailwindTextArea, WorkspaceCard,
 };
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 const PANEL_WIDTH: f32 = 744.0;
@@ -104,6 +109,8 @@ pub(super) fn show(
     commands_to_send: &mut Vec<WorkerCommandBox>,
     shell_requests: &mut Vec<ShellRequest>,
     debug_image_presets: &[DebugImagePreset],
+    table_preferences: &mut super::table_preferences::PersistedResourceTablePreferences,
+    table_settings: &mut super::resource_table_settings::ResourceTableSettingsState,
 ) {
     show_shared_blade(
         ctx,
@@ -111,6 +118,8 @@ pub(super) fn show(
         commands_to_send,
         shell_requests,
         debug_image_presets,
+        table_preferences,
+        table_settings,
     );
 }
 
@@ -121,6 +130,8 @@ fn show_legacy(
     commands_to_send: &mut Vec<WorkerCommandBox>,
     shell_requests: &mut Vec<ShellRequest>,
     debug_image_presets: &[DebugImagePreset],
+    table_preferences: &mut super::table_preferences::PersistedResourceTablePreferences,
+    table_settings: &mut super::resource_table_settings::ResourceTableSettingsState,
 ) {
     show_shared_blade(
         ctx,
@@ -128,6 +139,8 @@ fn show_legacy(
         commands_to_send,
         shell_requests,
         debug_image_presets,
+        table_preferences,
+        table_settings,
     );
     return;
 
@@ -323,6 +336,8 @@ fn show_legacy(
                         &entry.managed_resources,
                         entry.managed_resources_error.as_deref(),
                         entry.data_editor.as_mut(),
+                        None,
+                        None,
                     );
                     if !outgoing_foreground_blade_is_visible {
                         blade_result = result;
@@ -514,6 +529,8 @@ fn show_shared_blade(
     commands_to_send: &mut Vec<WorkerCommandBox>,
     shell_requests: &mut Vec<ShellRequest>,
     debug_image_presets: &[DebugImagePreset],
+    table_preferences: &mut super::table_preferences::PersistedResourceTablePreferences,
+    table_settings: &mut super::resource_table_settings::ResourceTableSettingsState,
 ) {
     let Some(cluster_key) = ui_state.selected_cluster else {
         return;
@@ -561,6 +578,8 @@ fn show_shared_blade(
                 } else {
                     None
                 },
+                Some(table_preferences),
+                Some(table_settings),
             )
         },
     );
@@ -1171,6 +1190,8 @@ fn show_entry_blade_frame(
             &entry.managed_resources,
             entry.managed_resources_error.as_deref(),
             data_editor.as_mut(),
+            None,
+            None,
         );
     });
 }
@@ -1298,6 +1319,8 @@ fn show_resource_detail_blade(
     managed_resources: &[ManagedResource],
     managed_resources_error: Option<&str>,
     data_editor: Option<&mut super::state::ResourceDataEditorState>,
+    table_preferences: Option<&mut super::table_preferences::PersistedResourceTablePreferences>,
+    table_settings: Option<&mut super::resource_table_settings::ResourceTableSettingsState>,
 ) -> BladeResult {
     let mut result = BladeResult::default();
     ui.set_max_width(ui.available_width() - 9.0);
@@ -1320,6 +1343,8 @@ fn show_resource_detail_blade(
         managed_resources,
         managed_resources_error,
         &mut result.action,
+        table_preferences,
+        table_settings,
     );
     ui.add_space(16.0);
     show_events(ui, events, events_error);
@@ -1331,6 +1356,7 @@ fn show_resource_detail_blade(
     result
 }
 
+#[allow(clippy::too_many_arguments)]
 fn show_managed_resources_for(
     ui: &mut egui::Ui,
     api_resource: &crate::api_resource::ApiResource,
@@ -1338,6 +1364,8 @@ fn show_managed_resources_for(
     managed_resources: &[ManagedResource],
     managed_resources_error: Option<&str>,
     pending_action: &mut Option<ResourceAction>,
+    mut table_preferences: Option<&mut super::table_preferences::PersistedResourceTablePreferences>,
+    mut table_settings: Option<&mut super::resource_table_settings::ResourceTableSettingsState>,
 ) {
     let table_kinds = managed_resource_table_kinds(api_resource);
     if table_kinds.is_empty() {
@@ -1352,11 +1380,14 @@ fn show_managed_resources_for(
         section_header(ui, title, Some(format!("{} resources", rows.len())));
         show_managed_resource_table(
             ui,
+            api_resource,
             resource_uid,
             kind,
             &rows,
             api_resource.kind == "Node",
             pending_action,
+            table_preferences.as_deref_mut(),
+            table_settings.as_deref_mut(),
         );
         if rows.is_empty() {
             ui.add_space(8.0);
@@ -1370,15 +1401,166 @@ fn show_managed_resources_for(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn show_managed_resource_table(
     ui: &mut egui::Ui,
+    detail_api_resource: &crate::api_resource::ApiResource,
     resource_uid: &str,
     kind: &str,
     rows: &[ManagedResourceRow],
     show_namespace_column: bool,
     pending_action: &mut Option<ResourceAction>,
+    table_preferences: Option<&mut super::table_preferences::PersistedResourceTablePreferences>,
+    table_settings: Option<&mut super::resource_table_settings::ResourceTableSettingsState>,
 ) {
     let definition = managed_resource_table_definition(kind, show_namespace_column);
+    if let (Some(table_preferences), Some(table_settings)) = (table_preferences, table_settings) {
+        let mut column_definitions = vec![TableColumnDefinition {
+            id: "name".into(),
+            label: "Name".into(),
+            default_width: 160.0,
+            sortable: true,
+        }];
+        if show_namespace_column {
+            column_definitions.push(TableColumnDefinition {
+                id: "namespace".into(),
+                label: "Namespace".into(),
+                default_width: 150.0,
+                sortable: true,
+            });
+        }
+        column_definitions.extend(
+            definition
+                .columns
+                .iter()
+                .map(|column| TableColumnDefinition {
+                    id: column.id.clone(),
+                    label: column.label.clone(),
+                    default_width: column.initial_width,
+                    sortable: true,
+                }),
+        );
+        column_definitions.push(TableColumnDefinition {
+            id: "age".into(),
+            label: "Age".into(),
+            default_width: 77.0,
+            sortable: true,
+        });
+        let fixed_width = column_definitions
+            .iter()
+            .skip(1)
+            .map(|column| column.default_width)
+            .sum::<f32>();
+        column_definitions[0].default_width =
+            (ui.available_width() - fixed_width - 16.0).max(160.0);
+        let table_resource = managed_resource_api_resource(kind);
+        let table_key = ResourceTableKey::detail(detail_api_resource, &table_resource);
+        let visible_columns = table_preferences.resolved_columns(&table_key, &column_definitions);
+        let sort_state = table_preferences
+            .sort(&table_key, &column_definitions)
+            .map(|(column_id, direction)| components::SortState::new(column_id, direction));
+        let mut sorted_rows = rows.to_vec();
+        if let Some(sort) = &sort_state {
+            sorted_rows.sort_by(|left, right| {
+                compare_managed_resource_column(left, right, &sort.column_id, sort.direction)
+            });
+        }
+        let mut table =
+            TailwindTable::new(format!("managed-resource-table-{resource_uid}-{kind}")).roomy();
+        for column in &visible_columns {
+            table = table.column(
+                column.definition.id.clone(),
+                column.definition.label.clone(),
+                |builder| {
+                    let builder = builder.initial_width(column.width);
+                    if column.definition.sortable {
+                        builder.sortable()
+                    } else {
+                        builder
+                    }
+                },
+            );
+        }
+        let table_preferences = RefCell::new(table_preferences);
+        let pending_action = RefCell::new(pending_action);
+        table.show_configurable_with_row_response(
+            ui,
+            &sorted_rows,
+            sort_state.as_ref(),
+            |header, id, _label, sortable| {
+                MoreButton::show_context_menu(header, |menu| {
+                    if sortable {
+                        if menu.action("Sort ascending").clicked() {
+                            table_preferences.borrow_mut().set_sort(
+                                &table_key,
+                                &column_definitions,
+                                id,
+                                components::SortDirection::Ascending,
+                            );
+                        }
+                        if menu.action("Sort descending").clicked() {
+                            table_preferences.borrow_mut().set_sort(
+                                &table_key,
+                                &column_definitions,
+                                id,
+                                components::SortDirection::Descending,
+                            );
+                        }
+                        menu.separator();
+                    }
+                    if menu.action("Configure columns").clicked() {
+                        table_settings.open(
+                            &mut table_preferences.borrow_mut(),
+                            table_key.clone(),
+                            &column_definitions,
+                        );
+                    }
+                });
+            },
+            |id, width| {
+                table_preferences
+                    .borrow_mut()
+                    .set_width(&table_key, &column_definitions, id, width)
+            },
+            |ui, row, column_index| match visible_columns[column_index].definition.id.as_str() {
+                "name" => {
+                    if TableRowBuilder::clickable_text(
+                        ui,
+                        &row.name,
+                        gray::_900,
+                        format!("Open details for {}", row.name),
+                    )
+                    .clicked()
+                        && pending_action.borrow().is_none()
+                    {
+                        **pending_action.borrow_mut() = Some(ResourceAction::NavigateDetails {
+                            api_resource: row.api_resource.clone(),
+                            name: row.name.clone(),
+                            namespace: row.namespace.clone(),
+                            uid: row.uid.clone(),
+                        });
+                    }
+                }
+                "namespace" => {
+                    TableRowBuilder::text(ui, row.namespace.as_deref().unwrap_or("-"), false)
+                }
+                "age" => TableRowBuilder::text(ui, &format_age(row.creation_timestamp), false),
+                id => show_resource_cell(ui, row.cells.get(id)),
+            },
+            |response, row, column_index| {
+                if response.clicked() && pending_action.borrow().is_none() {
+                    **pending_action.borrow_mut() = Some(ResourceAction::NavigateDetails {
+                        api_resource: row.api_resource.clone(),
+                        name: row.name.clone(),
+                        namespace: row.namespace.clone(),
+                        uid: row.uid.clone(),
+                    });
+                }
+                let _ = column_index;
+            },
+        );
+        return;
+    }
     let mut table = TailwindTable::new(format!("managed-resource-table-{resource_uid}-{kind}",))
         .roomy()
         .column("name", "Name", |column| column.fill_remaining());
@@ -1452,6 +1634,33 @@ fn managed_resource_rows(resources: &[ManagedResource], kind: &str) -> Vec<Manag
         .collect::<Vec<_>>();
     rows.sort_by(|left, right| left.name.cmp(&right.name));
     rows
+}
+
+fn compare_managed_resource_column(
+    left: &ManagedResourceRow,
+    right: &ManagedResourceRow,
+    column_id: &str,
+    direction: components::SortDirection,
+) -> std::cmp::Ordering {
+    let value = |row: &ManagedResourceRow| match column_id {
+        "name" => SortValue::Text(row.name.clone()),
+        "namespace" => SortValue::Text(row.namespace.clone().unwrap_or_default()),
+        "age" => row
+            .creation_timestamp
+            .map(|time| SortValue::Number(time.unix_timestamp()))
+            .unwrap_or(SortValue::Empty),
+        id => row
+            .cells
+            .get(id)
+            .map(cell_sort_value)
+            .unwrap_or(SortValue::Empty),
+    };
+    let left_value = value(left);
+    let right_value = value(right);
+    let ordering = compare_sort_values(left_value, right_value, direction);
+    ordering
+        .then_with(|| left.name.cmp(&right.name))
+        .then_with(|| left.uid.cmp(&right.uid))
 }
 
 impl From<&ManagedResource> for ManagedResourceRow {

@@ -1,8 +1,12 @@
 use super::resource_actions::show_resource_action_items;
 use super::resource_owner;
+use super::resource_table_settings::ResourceTableSettingsState;
 use super::state::{
     BulkDeleteTarget, ClusterConnectionState, ClusterLoadState, PendingBulkDelete, PendingDelete,
     PendingDeploymentRestart, PendingForceDelete, ResourceAction, ResourceSearchState, UiState,
+};
+use super::table_preferences::{
+    PersistedResourceTablePreferences, ResourceTableKey, TableColumnDefinition,
 };
 use super::widgets::{
     show_resource_cell, workspace_empty_state, workspace_error_state, workspace_loading_state,
@@ -12,7 +16,9 @@ use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use crate::resource_catalog::ResourceNavigation;
 use crate::resource_handlers::table_definition;
-use crate::resource_table::{CellValue, CustomResourceColumn, NODE_COLUMN};
+use crate::resource_table::{
+    CellValue, CustomResourceColumn, NODE_COLUMN, SortValue, cell_sort_value, compare_sort_values,
+};
 use crate::terminal_launcher::{DebugImagePreset, ShellRequest};
 use crate::worker::{GetResourceScale, WorkerCommandBox};
 use components::colors::{TOOLBAR_BACKGROUND, gray};
@@ -31,6 +37,7 @@ const TOOLBAR_RIGHT_INSET: f32 = spacing::XL;
 const TOOLBAR_HEIGHT: f32 = 52.0;
 const TOOLBAR_CONTENT_HEIGHT: f32 = 36.0;
 const TOOLBAR_VERTICAL_PADDING: f32 = (TOOLBAR_HEIGHT - TOOLBAR_CONTENT_HEIGHT) / 2.0;
+const RESOURCE_TABLE_SELECTION_WIDTH: f32 = 48.0;
 
 struct FilteredResources {
     resources: Vec<MinimalResource>,
@@ -81,6 +88,8 @@ pub(super) fn show(
     commands_to_send: &mut Vec<WorkerCommandBox>,
     shell_requests: &mut Vec<ShellRequest>,
     debug_image_presets: &[DebugImagePreset],
+    table_preferences: &mut PersistedResourceTablePreferences,
+    table_settings: &mut ResourceTableSettingsState,
 ) {
     let ctx = ui.ctx().clone();
     let mut namespace_selection = None;
@@ -257,6 +266,8 @@ pub(super) fn show(
                         .resource_selections
                         .entry(api_resource.clone())
                         .or_default(),
+                    table_preferences,
+                    table_settings,
                 ) {
                     match action {
                         ResourceAction::OpenDetails {
@@ -775,10 +786,76 @@ fn show_resource_table(
     resources: &[MinimalResource],
     options: ResourceTableOptions<'_>,
     selection: &mut HashSet<String>,
+    table_preferences: &mut PersistedResourceTablePreferences,
+    table_settings: &mut ResourceTableSettingsState,
 ) -> Option<ResourceAction> {
     let pending_action = RefCell::new(None);
-    let mut rows = resources
-        .iter()
+    let definition = table_definition(api_resource, options.custom_columns);
+    let mut column_definitions = vec![TableColumnDefinition {
+        id: "name".into(),
+        label: "Name".into(),
+        default_width: 160.0,
+        sortable: true,
+    }];
+    if options.show_namespace_column {
+        column_definitions.push(TableColumnDefinition {
+            id: "namespace".into(),
+            label: "Namespace".into(),
+            default_width: 180.0,
+            sortable: true,
+        });
+    }
+    column_definitions.push(TableColumnDefinition {
+        id: "owner".into(),
+        label: "Owner".into(),
+        default_width: 160.0,
+        sortable: true,
+    });
+    column_definitions.extend(
+        definition
+            .columns
+            .iter()
+            .map(|column| TableColumnDefinition {
+                id: column.id.clone(),
+                label: column.label.clone(),
+                default_width: column.initial_width,
+                sortable: true,
+            }),
+    );
+    column_definitions.extend([
+        TableColumnDefinition {
+            id: "age".into(),
+            label: "Age".into(),
+            default_width: 77.0,
+            sortable: true,
+        },
+        TableColumnDefinition {
+            id: "actions".into(),
+            label: "Actions".into(),
+            default_width: 104.0,
+            sortable: false,
+        },
+    ]);
+    let fixed_width = RESOURCE_TABLE_SELECTION_WIDTH
+        + column_definitions
+            .iter()
+            .skip(1)
+            .map(|column| column.default_width)
+            .sum::<f32>();
+    column_definitions[0].default_width = (ui.available_width() - fixed_width - 16.0).max(160.0);
+    let table_key = ResourceTableKey::workspace(api_resource);
+    let visible_columns = table_preferences.resolved_columns(&table_key, &column_definitions);
+    let sort_state = table_preferences
+        .sort(&table_key, &column_definitions)
+        .map(|(column_id, direction)| components::SortState::new(column_id, direction));
+    let mut resource_rows = resources.iter().collect::<Vec<_>>();
+    if let Some(sort) = &sort_state {
+        resource_rows.sort_by(|left, right| {
+            compare_resource_column(left, right, &sort.column_id, sort.direction)
+        });
+    }
+    let mut rows = resource_rows
+        .into_iter()
         .map(ResourceTableRow::Resource)
         .collect::<Vec<_>>();
     if options.hidden_resource_count > 0 {
@@ -786,41 +863,31 @@ fn show_resource_table(
             options.hidden_resource_count,
         ));
     }
-    let definition = table_definition(api_resource, options.custom_columns);
-    let owner_column_index = 1 + usize::from(options.show_namespace_column);
-    let node_column_index = (api_resource.kind == "Pod").then(|| {
-        owner_column_index
-            + 1
-            + definition
-                .columns
-                .iter()
-                .position(|column| column.id == NODE_COLUMN)
-                .expect("Pod table defines a Node column")
-    });
+    let node_column_index = visible_columns
+        .iter()
+        .position(|column| column.definition.id == NODE_COLUMN);
     let mut table = TailwindTable::new(format!(
         "resource-table-{}-{}-{}",
         api_resource.group, api_resource.version, api_resource.name
-    ))
-    .column("name", "Name", |col| col.sortable().fill_remaining());
-    if options.show_namespace_column {
-        table = table.column("namespace", "Namespace", |col| {
-            col.sortable().initial_width(180.0)
-        });
+    ));
+    for column in &visible_columns {
+        table = table.column(
+            column.definition.id.clone(),
+            column.definition.label.clone(),
+            |builder| {
+                let builder = builder.initial_width(column.width);
+                if column.definition.sortable {
+                    builder.sortable()
+                } else {
+                    builder
+                }
+            },
+        );
     }
-    table = table.column("owner", "Owner", |col| col.initial_width(160.0));
-    for column in &definition.columns {
-        table = table.column(column.id.clone(), column.label.clone(), |col| {
-            let col = col.initial_width(column.initial_width);
-            if column.sortable { col.sortable() } else { col }
-        });
-    }
-    table = table
-        .column("age", "Age", |col| col.sortable().initial_width(77.0))
-        .column("actions", "", |col| col.initial_width(104.0))
-        .selectable()
-        .fill_available_height();
+    table = table.selectable().fill_available_height();
 
-    table.show_selectable_with_row_response(
+    let table_preferences = RefCell::new(table_preferences);
+    table.show_selectable_configurable_with_row_response(
         ui,
         &rows,
         selection,
@@ -828,14 +895,47 @@ fn show_resource_table(
             ResourceTableRow::Resource(resource) => Some(resource.uid.clone()),
             ResourceTableRow::HiddenBySearch(_) => None,
         },
+        sort_state.as_ref(),
+        |header, id, _label, sortable| {
+            MoreButton::show_context_menu(header, |menu| {
+                if sortable {
+                    if menu.action("Sort ascending").clicked() {
+                        table_preferences.borrow_mut().set_sort(
+                            &table_key,
+                            &column_definitions,
+                            id,
+                            components::SortDirection::Ascending,
+                        );
+                    }
+                    if menu.action("Sort descending").clicked() {
+                        table_preferences.borrow_mut().set_sort(
+                            &table_key,
+                            &column_definitions,
+                            id,
+                            components::SortDirection::Descending,
+                        );
+                    }
+                    menu.separator();
+                }
+                if menu.action("Configure columns").clicked() {
+                    table_settings.open(
+                        &mut table_preferences.borrow_mut(),
+                        table_key.clone(),
+                        &column_definitions,
+                    );
+                }
+            });
+        },
+        |id, width| {
+            table_preferences
+                .borrow_mut()
+                .set_width(&table_key, &column_definitions, id, width)
+        },
         |ui, row, column_index| {
-            let namespace_index = options.show_namespace_column.then_some(1);
-            let type_specific_start = owner_column_index + 1;
-            let age_index = type_specific_start + definition.columns.len();
-            let actions_index = age_index + 1;
+            let column_id = &visible_columns[column_index].definition.id;
             match row {
-                ResourceTableRow::Resource(resource) => match column_index {
-                    0 if options.actions.enabled => {
+                ResourceTableRow::Resource(resource) => match column_id.as_str() {
+                    "name" if options.actions.enabled => {
                         let response = TableRowBuilder::clickable_text(
                             ui,
                             &resource.name,
@@ -861,15 +961,15 @@ fn show_resource_table(
                             );
                         });
                     }
-                    0 => TableRowBuilder::text(ui, &resource.name, true),
-                    index if Some(index) == namespace_index => {
+                    "name" => TableRowBuilder::text(ui, &resource.name, true),
+                    "namespace" => {
                         TableRowBuilder::text(
                             ui,
                             resource.namespace.as_deref().unwrap_or("-"),
                             false,
                         );
                     }
-                    index if index == owner_column_index => {
+                    "owner" => {
                         let Some(owner) = &resource.controller_owner else {
                             TableRowBuilder::text(ui, "-", false);
                             return;
@@ -906,11 +1006,12 @@ fn show_resource_table(
                             .on_hover_text(resource_owner::unavailable_tooltip(owner));
                         }
                     }
-                    index
-                        if index >= type_specific_start
-                            && index < type_specific_start + definition.columns.len() =>
-                    {
-                        let column = &definition.columns[index - type_specific_start];
+                    id if definition.columns.iter().any(|column| column.id == id) => {
+                        let column = definition
+                            .columns
+                            .iter()
+                            .find(|column| column.id == id)
+                            .expect("resource column was checked");
                         if column.id == NODE_COLUMN
                             && api_resource.kind == "Pod"
                             && let Some(CellValue::Text(node_name)) = resource.cells.get(&column.id)
@@ -950,10 +1051,8 @@ fn show_resource_table(
                             show_resource_cell(ui, resource.cells.get(&column.id));
                         }
                     }
-                    index if index == age_index => {
-                        TableRowBuilder::text(ui, &resource.age(), false)
-                    }
-                    index if index == actions_index && options.actions.enabled => {
+                    "age" => TableRowBuilder::text(ui, &resource.age(), false),
+                    "actions" if options.actions.enabled => {
                         show_resource_actions(
                             ui,
                             api_resource,
@@ -978,6 +1077,18 @@ fn show_resource_table(
         },
         |row_response, row, column_index| {
             if let ResourceTableRow::Resource(resource) = row {
+                let column_id = &visible_columns[column_index].definition.id;
+                if options.actions.enabled
+                    && column_id != "actions"
+                    && row_response.clicked()
+                    && pending_action.borrow().is_none()
+                {
+                    *pending_action.borrow_mut() = Some(ResourceAction::OpenDetails {
+                        name: resource.name.clone(),
+                        namespace: resource.namespace.clone(),
+                        uid: resource.uid.clone(),
+                    });
+                }
                 if Some(column_index) == node_column_index
                     && let Some(CellValue::Text(node_name)) = resource.cells.get(NODE_COLUMN)
                     && node_name == "-"
@@ -1038,6 +1149,40 @@ fn show_resource_actions(
             pending_action,
         );
     });
+}
+
+fn compare_resource_column(
+    left: &MinimalResource,
+    right: &MinimalResource,
+    column_id: &str,
+    direction: components::SortDirection,
+) -> std::cmp::Ordering {
+    let value = |resource: &MinimalResource| match column_id {
+        "name" => SortValue::Text(resource.name.clone()),
+        "namespace" => SortValue::Text(resource.namespace.clone().unwrap_or_default()),
+        "owner" => SortValue::Text(
+            resource
+                .controller_owner
+                .as_ref()
+                .map(|owner| owner.label())
+                .unwrap_or_default(),
+        ),
+        "age" => resource
+            .creation_timestamp
+            .map(|time| SortValue::Number(time.unix_timestamp()))
+            .unwrap_or(SortValue::Empty),
+        id => resource
+            .cells
+            .get(id)
+            .map(cell_sort_value)
+            .unwrap_or(SortValue::Empty),
+    };
+    let left_value = value(left);
+    let right_value = value(right);
+    let ordering = compare_sort_values(left_value, right_value, direction);
+    ordering
+        .then_with(|| left.name.cmp(&right.name))
+        .then_with(|| left.uid.cmp(&right.uid))
 }
 
 #[cfg(test)]

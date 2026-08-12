@@ -31,6 +31,7 @@ pub mod fuzzy;
 pub mod icons;
 pub mod interaction;
 pub mod more_button;
+pub mod reorderable_table;
 pub mod scroll;
 pub mod search;
 pub mod sidebar;
@@ -57,6 +58,7 @@ pub use confirmation_dialog::{
 pub use error_dialog::{ErrorDialog, ErrorDialogAction};
 pub use interaction::PointingHand;
 pub use more_button::{MoreButton, MoreMenu};
+pub use reorderable_table::{ReorderHandle, ReorderableTable, move_item};
 pub use search::{
     SEARCH_NAVIGATION_BUTTON_SIZE, SearchInputResponse, TailwindSearchInput,
     search_navigation_button,
@@ -64,7 +66,9 @@ pub use search::{
 pub use sidebar::{
     ExpandableResponse, NarrowSidebar, NarrowSidebarContent, WideSidebar, WideSidebarContent,
 };
-pub use table::{SortDirection, SortState, TableColumnBuilder, TableRowBuilder, TailwindTable};
+pub use table::{
+    SortDirection, SortState, TableColumnBuilder, TableRowBuilder, TailwindTable, tailwind_checkbox,
+};
 pub use tabs::{Tabs, TabsContent, TabsResponse};
 pub use textarea::TailwindTextArea;
 pub use theme::{apply_light_theme, semibold_font};

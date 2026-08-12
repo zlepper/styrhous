@@ -5,8 +5,8 @@ use components::colors::{
 };
 use components::design::{radius, spacing, status, surface, typography};
 use components::{
-    BladeNavigator, BladeStack, ButtonSize, ButtonVariant, PointingHand, TailwindButton,
-    TailwindCombobox, icons,
+    BladeNavigator, BladeStack, ButtonSize, ButtonVariant, PointingHand, ReorderHandle,
+    ReorderableTable, TailwindButton, TailwindCombobox, icons,
 };
 
 const FOOTER_HEIGHT: f32 = 52.0;
@@ -17,11 +17,6 @@ const DEBUG_IMAGE_REORDER_COLUMN_WIDTH: f32 = 44.0;
 const DEBUG_IMAGE_NAME_COLUMN_WIDTH: f32 = 170.0;
 const DEBUG_IMAGE_PROFILE_COLUMN_WIDTH: f32 = 170.0;
 const DEBUG_IMAGE_ACTIONS_COLUMN_WIDTH: f32 = 52.0;
-
-#[derive(Clone, Copy)]
-struct DebugImagePresetDrag {
-    from: usize,
-}
 
 /// Render application settings as a first-class workspace blade rather than a
 /// transient native dialog, so its controls have room for explanation.
@@ -188,90 +183,22 @@ fn show_debug_image_presets(ui: &mut egui::Ui, ui_state: &mut UiState) {
     );
     ui.add_space(spacing::LG);
 
-    let preset_count = ui_state.terminal_settings_draft.debug_image_presets.len();
     let mut remove_preset = None;
     let table_width = ui.available_width();
     let original_item_spacing = ui.spacing().item_spacing;
     ui.spacing_mut().item_spacing.y = 0.0;
     show_debug_image_preset_table_header(ui, table_width);
-    let table_rect = egui::Rect::from_min_size(
-        ui.cursor().min,
-        egui::vec2(
-            table_width,
-            preset_count as f32 * DEBUG_IMAGE_TABLE_ROW_HEIGHT,
-        ),
+    let moved = ReorderableTable::new("debug-image-presets", DEBUG_IMAGE_TABLE_ROW_HEIGHT).show(
+        ui,
+        &mut ui_state.terminal_settings_draft.debug_image_presets,
+        table_width,
+        |ui, preset, index, handle| {
+            show_debug_image_preset_row(ui, table_width, preset, index, handle, &mut remove_preset);
+        },
+        |ui, preset| show_debug_image_preset_preview_row(ui, table_width, preset),
     );
-    let visible_table_rect = table_rect.intersect(ui.clip_rect());
-    let drag = egui::DragAndDrop::payload::<DebugImagePresetDrag>(ui.ctx())
-        .filter(|dragged_preset| dragged_preset.from < preset_count);
-    let dragged_preset_index = drag.as_ref().map(|dragged_preset| dragged_preset.from);
-    if let Some(from) = dragged_preset_index {
-        // The source row is intentionally omitted from the table during a drag,
-        // so keep its egui payload alive while the replacement layout is rendered.
-        egui::DragAndDrop::set_payload(ui.ctx(), DebugImagePresetDrag { from });
-    }
-    let drop_index = dragged_preset_index.map_or(0, |from| {
-        debug_image_preset_drop_index(
-            ui.ctx()
-                .pointer_interact_pos()
-                .map_or(table_rect.center().y, |position| position.y),
-            table_rect,
-            preset_count,
-            from,
-        )
-    });
-    let placeholder_index = dragged_preset_index
-        .map(|from| debug_image_preset_index_after_removing_source(from, drop_index));
-    let mut dropped_preset = None;
-    let mut preset_indices = (0..preset_count).filter(|index| Some(*index) != dragged_preset_index);
-    for visual_index in 0..preset_count {
-        if placeholder_index == Some(visual_index) {
-            show_debug_image_preset_drop_placeholder(ui, table_width);
-            continue;
-        }
-
-        let index = preset_indices
-            .next()
-            .expect("every visible debug image preset has a table row");
-        let drag_handle_id = ui.make_persistent_id(("debug-image-preset-handle", index));
-        let preset = &mut ui_state.terminal_settings_draft.debug_image_presets[index];
-        show_debug_image_preset_row(
-            ui,
-            table_width,
-            preset,
-            index,
-            drag_handle_id,
-            &mut remove_preset,
-        );
-    }
-    if let Some(dragged_preset) = drag.as_ref().filter(|dragged_preset| {
-        ui.ctx().is_being_dragged(
-            ui.make_persistent_id(("debug-image-preset-handle", dragged_preset.from)),
-        )
-    }) && let Some(preset) = ui_state
-        .terminal_settings_draft
-        .debug_image_presets
-        .get(dragged_preset.from)
-        && debug_image_preset_has_room_for_drag_preview(visible_table_rect)
-    {
-        show_debug_image_preset_drag_preview(ui, visible_table_rect, preset, dragged_preset.from);
-    }
-    if ui.input(|input| input.pointer.any_released())
-        && ui.ctx().pointer_interact_pos().is_some_and(|position| {
-            debug_image_preset_drop_is_visible(position, visible_table_rect)
-        })
-        && let Some(dragged_preset) = drag
-    {
-        dropped_preset = Some((dragged_preset.from, drop_index));
-    }
     ui.spacing_mut().item_spacing = original_item_spacing;
-    if let Some((from, to)) = dropped_preset
-        && move_debug_image_preset(
-            &mut ui_state.terminal_settings_draft.debug_image_presets,
-            from,
-            to,
-        )
-    {
+    if moved {
         ui_state.terminal_settings_error = None;
     }
     if let Some(index) = remove_preset {
@@ -312,94 +239,6 @@ fn show_debug_image_presets(ui: &mut egui::Ui, ui_state: &mut UiState) {
     }
 }
 
-fn show_debug_image_preset_drag_preview(
-    ui: &mut egui::Ui,
-    table_rect: egui::Rect,
-    preset: &DebugImagePreset,
-    index: usize,
-) {
-    let preview_id = ui.make_persistent_id(("debug-image-preset-drag-preview", index));
-    let layer_id = egui::LayerId::new(egui::Order::Tooltip, preview_id);
-    let Some(pointer_position) = ui.ctx().pointer_interact_pos() else {
-        return;
-    };
-    let preview_rect = debug_image_preset_drag_preview_rect(table_rect, pointer_position);
-    let mut preview_ui = ui.new_child(
-        egui::UiBuilder::new()
-            .layer_id(layer_id)
-            .max_rect(preview_rect),
-    );
-    show_debug_image_preset_preview_row(&mut preview_ui, table_rect.width(), preset);
-}
-
-fn debug_image_preset_drag_preview_rect(
-    table_rect: egui::Rect,
-    pointer_position: egui::Pos2,
-) -> egui::Rect {
-    let preview_y = pointer_position.y.clamp(
-        table_rect.top() + DEBUG_IMAGE_TABLE_ROW_HEIGHT / 2.0,
-        table_rect.bottom() - DEBUG_IMAGE_TABLE_ROW_HEIGHT / 2.0,
-    );
-    egui::Rect::from_min_size(
-        egui::pos2(
-            table_rect.left(),
-            preview_y - DEBUG_IMAGE_TABLE_ROW_HEIGHT / 2.0,
-        ),
-        egui::vec2(table_rect.width(), DEBUG_IMAGE_TABLE_ROW_HEIGHT),
-    )
-}
-
-fn debug_image_preset_has_room_for_drag_preview(visible_table_rect: egui::Rect) -> bool {
-    visible_table_rect.height() >= DEBUG_IMAGE_TABLE_ROW_HEIGHT
-}
-
-fn debug_image_preset_drop_is_visible(
-    pointer_position: egui::Pos2,
-    visible_table_rect: egui::Rect,
-) -> bool {
-    visible_table_rect.contains(pointer_position)
-}
-
-fn debug_image_preset_drop_index(
-    pointer_y: f32,
-    table_rect: egui::Rect,
-    preset_count: usize,
-    from: usize,
-) -> usize {
-    let offset = (pointer_y - table_rect.top()).clamp(0.0, table_rect.height());
-    let visual_insert_index = (offset / DEBUG_IMAGE_TABLE_ROW_HEIGHT)
-        .floor()
-        .min(preset_count.saturating_sub(1) as f32) as usize;
-
-    // The source is omitted while dragging. Each visible row becomes its new
-    // destination once half of the preview overlaps it, which happens when
-    // the preview's centre reaches that row's top edge.
-    if visual_insert_index >= from {
-        visual_insert_index + 1
-    } else {
-        visual_insert_index
-    }
-}
-
-fn debug_image_preset_index_after_removing_source(from: usize, to: usize) -> usize {
-    if from < to { to - 1 } else { to }
-}
-
-fn show_debug_image_preset_drop_placeholder(ui: &mut egui::Ui, table_width: f32) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(
-        egui::vec2(table_width, DEBUG_IMAGE_TABLE_ROW_HEIGHT),
-        egui::Sense::hover(),
-    );
-    ui.painter().rect_filled(rect, 0.0, indigo::_50);
-    ui.painter().rect_stroke(
-        rect.shrink(1.0),
-        0.0,
-        egui::Stroke::new(2.0, indigo::_500),
-        egui::StrokeKind::Inside,
-    );
-    response
-}
-
 fn centered_table_control_ui(ui: &mut egui::Ui) -> egui::Ui {
     let cell_rect = ui.available_rect_before_wrap();
     let control_rect = egui::Rect::from_min_max(
@@ -432,7 +271,7 @@ fn show_debug_image_preset_row(
     table_width: f32,
     preset: &mut DebugImagePreset,
     index: usize,
-    drag_handle_id: egui::Id,
+    drag_handle: &ReorderHandle,
     remove_preset: &mut Option<usize>,
 ) -> egui::Response {
     let image_column_width = debug_image_column_width(table_width);
@@ -453,7 +292,11 @@ fn show_debug_image_preset_row(
                     );
                     icons::bars_3(&mut handle_ui, 16.0, gray::_500);
                     let response = ui
-                        .interact(handle_rect, drag_handle_id, egui::Sense::drag())
+                        .interact(
+                            handle_rect,
+                            ui.id().with(("debug-image-preset-handle", index)),
+                            egui::Sense::drag(),
+                        )
                         .with_pointing_hand();
                     response.widget_info(|| {
                         egui::WidgetInfo::labeled(
@@ -462,7 +305,7 @@ fn show_debug_image_preset_row(
                             format!("Reorder {}", preset.name),
                         )
                     });
-                    response.dnd_set_drag_payload(DebugImagePresetDrag { from: index });
+                    drag_handle.register(&response);
                 });
                 show_debug_image_table_cell(ui, DEBUG_IMAGE_NAME_COLUMN_WIDTH, |ui| {
                     let mut control_ui = centered_table_control_ui(ui);
@@ -675,23 +518,6 @@ fn show_debug_image_table_cell(ui: &mut egui::Ui, width: f32, content: impl FnOn
     );
     cell_ui.add_space(spacing::LG);
     content(&mut cell_ui);
-}
-
-/// Move a preset to a row boundary. Removing the source first means downward
-/// moves use the preceding insertion index.
-fn move_debug_image_preset(presets: &mut Vec<DebugImagePreset>, from: usize, to: usize) -> bool {
-    if from >= presets.len() || to > presets.len() {
-        return false;
-    }
-
-    let preset = presets.remove(from);
-    let insert_at = debug_image_preset_index_after_removing_source(from, to);
-    if insert_at == from {
-        presets.insert(from, preset);
-        return false;
-    }
-    presets.insert(insert_at, preset);
-    true
 }
 
 fn show_table_text_input(
@@ -923,118 +749,4 @@ fn show_validation_error(ui: &mut egui::Ui, title: &str, error: &str) {
                     .color(gray::_700),
             );
         });
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn preset(name: &str) -> DebugImagePreset {
-        DebugImagePreset {
-            name: name.into(),
-            image: format!("example/{name}"),
-            profile: DebugProfile::General,
-        }
-    }
-
-    #[test]
-    fn moving_debug_image_preset_inserts_at_the_requested_row_boundary() {
-        let mut presets = vec![preset("Busybox"), preset("Ubuntu"), preset("Netshoot")];
-
-        assert!(move_debug_image_preset(&mut presets, 0, 2));
-        assert_eq!(
-            presets
-                .iter()
-                .map(|preset| &preset.name)
-                .collect::<Vec<_>>(),
-            ["Ubuntu", "Busybox", "Netshoot"]
-        );
-
-        assert!(move_debug_image_preset(&mut presets, 1, 3));
-        assert_eq!(
-            presets
-                .iter()
-                .map(|preset| &preset.name)
-                .collect::<Vec<_>>(),
-            ["Ubuntu", "Netshoot", "Busybox"]
-        );
-    }
-
-    #[test]
-    fn moving_debug_image_preset_ignores_current_or_invalid_row() {
-        let mut presets = vec![preset("Busybox"), preset("Ubuntu")];
-
-        assert!(!move_debug_image_preset(&mut presets, 1, 1));
-        assert!(!move_debug_image_preset(&mut presets, 2, 0));
-        assert!(!move_debug_image_preset(&mut presets, 0, 3));
-        assert_eq!(
-            presets
-                .iter()
-                .map(|preset| &preset.name)
-                .collect::<Vec<_>>(),
-            ["Busybox", "Ubuntu"]
-        );
-    }
-
-    #[test]
-    fn debug_image_drop_changes_slots_at_half_preview_overlap() {
-        let table_rect = egui::Rect::from_min_size(
-            egui::pos2(100.0, 200.0),
-            egui::vec2(600.0, DEBUG_IMAGE_TABLE_ROW_HEIGHT * 3.0),
-        );
-
-        // With the first row omitted, the preview reaches 50% overlap with
-        // the next visible row at that row's top edge.
-        assert_eq!(debug_image_preset_drop_index(244.0, table_rect, 3, 0), 2);
-        assert_eq!(debug_image_preset_drop_index(288.0, table_rect, 3, 0), 3);
-        assert_eq!(debug_image_preset_drop_index(244.0, table_rect, 3, 2), 1);
-    }
-
-    #[test]
-    fn debug_image_drag_preview_stays_within_the_table() {
-        let table_rect = egui::Rect::from_min_size(
-            egui::pos2(100.0, 200.0),
-            egui::vec2(600.0, DEBUG_IMAGE_TABLE_ROW_HEIGHT * 3.0),
-        );
-
-        let above_table = debug_image_preset_drag_preview_rect(table_rect, egui::pos2(-50.0, 0.0));
-        let below_table =
-            debug_image_preset_drag_preview_rect(table_rect, egui::pos2(2_000.0, 2_000.0));
-
-        assert_eq!(above_table.left(), table_rect.left());
-        assert_eq!(above_table.width(), table_rect.width());
-        assert_eq!(above_table.top(), table_rect.top());
-        assert_eq!(below_table.left(), table_rect.left());
-        assert_eq!(below_table.width(), table_rect.width());
-        assert_eq!(below_table.bottom(), table_rect.bottom());
-        assert!(!debug_image_preset_has_room_for_drag_preview(
-            egui::Rect::from_min_size(egui::pos2(100.0, 200.0), egui::vec2(600.0, 43.0))
-        ));
-    }
-
-    #[test]
-    fn debug_image_drag_rejects_positions_outside_the_visible_table() {
-        let full_table = egui::Rect::from_min_size(
-            egui::pos2(100.0, 200.0),
-            egui::vec2(600.0, DEBUG_IMAGE_TABLE_ROW_HEIGHT * 12.0),
-        );
-        let scroll_viewport = egui::Rect::from_min_size(
-            egui::pos2(0.0, 100.0),
-            egui::vec2(800.0, DEBUG_IMAGE_TABLE_ROW_HEIGHT * 4.0),
-        );
-        let visible_table = full_table.intersect(scroll_viewport);
-
-        assert!(debug_image_preset_drop_is_visible(
-            egui::pos2(200.0, 250.0),
-            visible_table
-        ));
-        assert!(!debug_image_preset_drop_is_visible(
-            egui::pos2(200.0, 450.0),
-            visible_table
-        ));
-        assert!(!debug_image_preset_drop_is_visible(
-            egui::pos2(50.0, 250.0),
-            visible_table
-        ));
-    }
 }

@@ -9,8 +9,10 @@ mod resource_actions;
 mod resource_detail;
 mod resource_navigation;
 mod resource_owner;
+mod resource_table_settings;
 mod settings;
 pub(crate) mod state;
+mod table_preferences;
 mod widgets;
 mod workspace;
 mod yaml_editor;
@@ -27,17 +29,22 @@ use dialogs::{
     show_force_delete_confirmation, show_force_delete_error, show_scale_dialog, show_scale_error,
     show_terminal_launch_error,
 };
+use resource_table_settings::ResourceTableSettingsState;
 use state::{LogDisplayOptions, PersistedClusterSelections, ResourceNavigationExpansion, UiState};
+use table_preferences::PersistedResourceTablePreferences;
 
 const CLUSTER_SELECTIONS_STORAGE_KEY: &str = "cluster_selections";
 const LOG_DISPLAY_OPTIONS_STORAGE_KEY: &str = "log_display_options";
 const RESOURCE_NAVIGATION_EXPANSION_STORAGE_KEY: &str = "resource_navigation_expansion";
 const TERMINAL_LAUNCH_SETTINGS_STORAGE_KEY: &str = "terminal_launch_settings";
+const RESOURCE_TABLE_PREFERENCES_STORAGE_KEY: &str = "resource_table_preferences";
 
 pub struct MyEguiApp<W: WorkerTrait = Worker, L: TerminalLauncher = SystemTerminalLauncher> {
     worker: W,
     terminal_launcher: L,
     terminal_launch_settings: TerminalLaunchSettings,
+    resource_table_preferences: PersistedResourceTablePreferences,
+    resource_table_settings: ResourceTableSettingsState,
     ui_state: UiState,
     log_store: LogStoreService,
 }
@@ -51,6 +58,8 @@ impl<W: WorkerTrait, L: TerminalLauncher> Default for MyEguiApp<W, L> {
             worker,
             terminal_launcher: L::default(),
             terminal_launch_settings: TerminalLaunchSettings::default(),
+            resource_table_preferences: PersistedResourceTablePreferences::default(),
+            resource_table_settings: ResourceTableSettingsState::default(),
             ui_state: UiState::default(),
             log_store,
         }
@@ -67,6 +76,8 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
             worker,
             terminal_launcher: L::default(),
             terminal_launch_settings: TerminalLaunchSettings::default(),
+            resource_table_preferences: PersistedResourceTablePreferences::default(),
+            resource_table_settings: ResourceTableSettingsState::default(),
             ui_state: UiState::default(),
             log_store,
         };
@@ -101,6 +112,14 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
                 eframe::get_value::<ResourceNavigationExpansion>(
                     storage,
                     RESOURCE_NAVIGATION_EXPANSION_STORAGE_KEY,
+                )
+            })
+            .unwrap_or_default();
+        self.resource_table_preferences = storage
+            .and_then(|storage| {
+                eframe::get_value::<PersistedResourceTablePreferences>(
+                    storage,
+                    RESOURCE_TABLE_PREFERENCES_STORAGE_KEY,
                 )
             })
             .unwrap_or_default();
@@ -155,6 +174,8 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             &mut commands_to_send,
             &mut shell_requests,
             &self.terminal_launch_settings.debug_image_presets,
+            &mut self.resource_table_preferences,
+            &mut self.resource_table_settings,
         );
         resource_detail::show(
             &ctx,
@@ -162,6 +183,8 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             &mut commands_to_send,
             &mut shell_requests,
             &self.terminal_launch_settings.debug_image_presets,
+            &mut self.resource_table_preferences,
+            &mut self.resource_table_settings,
         );
         log_windows::show(
             &ctx,
@@ -175,6 +198,11 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
         show_deployment_restart_confirmation(&ctx, &mut self.ui_state, &mut commands_to_send);
         show_scale_dialog(&ctx, &mut self.ui_state, &mut commands_to_send);
         settings::show(&ctx, &mut self.ui_state, &mut self.terminal_launch_settings);
+        resource_table_settings::show(
+            &ctx,
+            &mut self.resource_table_settings,
+            &mut self.resource_table_preferences,
+        );
         show_terminal_launch_error(&ctx, &mut self.ui_state, &self.terminal_launch_settings);
         show_deployment_restart_error(&ctx, &mut self.ui_state);
         show_bulk_delete_error(&ctx, &mut self.ui_state);
@@ -221,6 +249,11 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             storage,
             TERMINAL_LAUNCH_SETTINGS_STORAGE_KEY,
             &self.terminal_launch_settings,
+        );
+        eframe::set_value(
+            storage,
+            RESOURCE_TABLE_PREFERENCES_STORAGE_KEY,
+            &self.resource_table_preferences,
         );
     }
 
@@ -303,6 +336,40 @@ mod persistence_tests {
                 TERMINAL_LAUNCH_SETTINGS_STORAGE_KEY
             ),
             Some(expected)
+        );
+    }
+
+    #[test]
+    fn resource_table_preferences_round_trip_through_app_storage() {
+        let resource = ApiResource {
+            group: "core".into(),
+            version: "v1".into(),
+            kind: "Pod".into(),
+            name: "pods".into(),
+            namespaced: true,
+        };
+        let key = table_preferences::ResourceTableKey::workspace(&resource);
+        let columns = vec![table_preferences::TableColumnDefinition {
+            id: "name".into(),
+            label: "Name".into(),
+            default_width: 160.0,
+            sortable: true,
+        }];
+        let mut storage = MemoryStorage::default();
+        let mut app = MyEguiApp::<MockWorker>::default();
+        app.resource_table_preferences
+            .set_width(&key, &columns, "name", 260.0);
+
+        eframe::App::save(&mut app, &mut storage);
+
+        let mut restored = MyEguiApp::<MockWorker>::default();
+        restored.load_persisted_state(Some(&storage));
+        assert_eq!(
+            restored
+                .resource_table_preferences
+                .resolved_columns(&key, &columns)[0]
+                .width,
+            260.0
         );
     }
 
