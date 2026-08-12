@@ -229,10 +229,16 @@ impl PodLogWindowState {
         self.pending_pages.clear();
         self.live_rows.clear();
         self.horizontal_content_width = 0.0;
-        self.selection = None;
+        self.set_selection(None);
         self.caret_preferred_column = None;
         self.pending_caret = None;
         self.ensure_caret_visible = false;
+    }
+
+    /// Updates selection state and invalidates any in-flight copy result for
+    /// the previous selection.
+    pub(super) fn set_selection(&mut self, selection: Option<LogTextSelection>) {
+        self.selection = selection;
         self.selection_generation = self.selection_generation.wrapping_add(1);
     }
 
