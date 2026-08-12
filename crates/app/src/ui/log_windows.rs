@@ -4,7 +4,10 @@ use super::state::{
 };
 use crate::ansi::AnsiStyleSpan;
 use crate::log_store::LogStoreService;
-use crate::worker::WorkerCommand;
+use crate::worker::{
+    PodLogStreamEnded, PodLogStreamFailed, PodLogStreamStarted, StopPodLogStream, WorkerCommandBox,
+    WorkerResult,
+};
 use anstyle::{Ansi256Color, AnsiColor, Color, Effects, RgbColor, Style};
 use components::colors::{SUCCESS, TABLE_BORDER, TOOLBAR_BACKGROUND, gray};
 use components::design::{radius, search, spacing, status, surface, typography};
@@ -14,13 +17,41 @@ use std::time::{Duration, Instant};
 const LOG_FONT_SIZE: f32 = 14.0;
 const HORIZONTAL_OVERSCAN_POINTS: f32 = 120.0;
 
+impl WorkerResult for PodLogStreamStarted {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(window) = ui.log_windows.get_mut(&self.log_window_id)
+            && matches!(window.status, PodLogStatus::Connecting)
+        {
+            window.status = PodLogStatus::Following;
+        }
+    }
+}
+
+impl WorkerResult for PodLogStreamEnded {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(window) = ui.log_windows.get_mut(&self.log_window_id)
+            && !matches!(window.status, PodLogStatus::Failed(_))
+        {
+            window.status = PodLogStatus::Finished;
+        }
+    }
+}
+
+impl WorkerResult for PodLogStreamFailed {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(window) = ui.log_windows.get_mut(&self.log_window_id) {
+            window.status = PodLogStatus::Failed(self.error);
+        }
+    }
+}
+
 /// Render native, independent Pod log windows and stop both the Kubernetes
 /// stream and the independent disk store when a window is closed.
 pub(super) fn show(
     ctx: &egui::Context,
     ui_state: &mut UiState,
     log_store: &LogStoreService,
-    commands_to_send: &mut Vec<WorkerCommand>,
+    commands_to_send: &mut Vec<WorkerCommandBox>,
 ) {
     let ids = ui_state.log_windows.keys().copied().collect::<Vec<_>>();
     for id in ids {
@@ -68,10 +99,10 @@ pub(super) fn show(
     for (id, cluster_key) in closed {
         ui_state.log_windows.remove(&id);
         log_store.close(id);
-        commands_to_send.push(WorkerCommand::StopPodLogStream {
+        commands_to_send.push(Box::new(StopPodLogStream {
             cluster_key,
             log_window_id: id,
-        });
+        }));
     }
 }
 
@@ -1698,7 +1729,7 @@ mod tests {
     use crate::log_store::{LOG_PAGE_SIZE, LogPageRow, LogStoreConfig, LogStoreResult};
     use crate::minimal_resource::PodLogContainer;
     use crate::resource_table::ContainerKind;
-    use crate::worker::{MockWorker, WorkerResult};
+    use crate::worker::MockWorker;
     use components::test_support::UiHarnessSnapshot;
     use egui_kittest::{Harness, kittest::Queryable};
     use std::cell::RefCell;
@@ -3749,7 +3780,9 @@ mod tests {
             &mut commands,
         );
         let mut worker = MockWorker {
-            results: VecDeque::from([WorkerResult::PodLogStreamStarted { log_window_id: 1 }]),
+            results: VecDeque::from([Box::new(crate::worker::PodLogStreamStarted {
+                log_window_id: 1,
+            }) as crate::worker::WorkerResultBox]),
             commands: Vec::new(),
         };
         let _ = state.update(&mut worker);

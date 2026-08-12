@@ -2,7 +2,7 @@
 
 use super::{KubernetesApiInspector, KubernetesNamespaceWatcher};
 use crate::helpers::ResultExt;
-use crate::worker::{WorkerResult, WorkerResultSender};
+use crate::worker::*;
 use anyhow::{Context, Result};
 use kube::config::{KubeConfigOptions, Kubeconfig};
 use std::fmt::Debug;
@@ -14,7 +14,7 @@ pub struct Cluster {
     pub is_current: bool,
 }
 
-pub async fn reload_kubeconfig() -> Result<WorkerResult> {
+pub async fn reload_kubeconfig() -> Result<KubernetesClustersUpdated> {
     let cfg = Kubeconfig::read().with_context(|| "Error reading kubeconfig")?;
     let current_context = cfg.current_context.clone();
     let clusters = cfg
@@ -25,7 +25,7 @@ pub async fn reload_kubeconfig() -> Result<WorkerResult> {
             name: named_context.name,
         })
         .collect();
-    Ok(WorkerResult::KubernetesClustersUpdated(clusters))
+    Ok(KubernetesClustersUpdated(clusters))
 }
 
 pub struct ClusterConnection {
@@ -99,7 +99,7 @@ async fn load_api_resources(
 ) {
     match (KubernetesApiInspector { client }).inspect_api().await {
         Err(error) => event_output
-            .send(WorkerResult::KubernetesApisLoadFailed {
+            .send(KubernetesApisLoadFailed {
                 cluster_key,
                 error: format!("{error:#?}"),
             })
@@ -107,7 +107,7 @@ async fn load_api_resources(
             .log_if_error("Failed to send error from inspecting resource api"),
         Ok(inspection) => {
             event_output
-                .send(WorkerResult::KubernetesApisLoaded {
+                .send(KubernetesApisLoaded {
                     cluster_key,
                     api_resources: inspection.api_resources,
                     scalable_api_resources: inspection.scalable_api_resources,
@@ -115,14 +115,14 @@ async fn load_api_resources(
                 .await
                 .log_if_error("Failed to send kubernetes API resources");
             event_output
-                .send(WorkerResult::KubernetesCustomResourceColumnsLoaded {
+                .send(KubernetesCustomResourceColumnsLoaded {
                     cluster_key,
                     columns: inspection.custom_resource_columns,
                 })
                 .await
                 .log_if_error("Failed to send custom resource columns");
             event_output
-                .send(WorkerResult::KubernetesResourceSchemasLoaded {
+                .send(KubernetesResourceSchemasLoaded {
                     cluster_key,
                     schemas: inspection.resource_schemas,
                 })

@@ -10,7 +10,7 @@ use crate::resource_detail::{
 use crate::resource_handlers;
 use crate::resource_schema::ResourceSchema;
 use crate::resource_table::{CellValue, CustomResourceColumn};
-use crate::worker::{ResourceApiError, ResourceApiErrorCause, WorkerResult, WorkerResultSender};
+use crate::worker::*;
 use anyhow::{Context, Result, bail};
 use futures_util::future::try_join_all;
 use futures_util::pin_mut;
@@ -271,7 +271,7 @@ impl KubernetesNamespaceWatcher {
                 Err(error) => {
                     warn!("Namespace watcher error: {error:?}");
                     self.event_sender
-                        .send(WorkerResult::KubernetesNamespacesLoadFailed {
+                        .send(KubernetesNamespacesLoadFailed {
                             cluster_key: self.cluster_key,
                             error: format!("{error:#?}"),
                         })
@@ -283,7 +283,7 @@ impl KubernetesNamespaceWatcher {
             match ev {
                 Event::Apply(item) => {
                     self.event_sender
-                        .send(WorkerResult::KubernetesNamespacesAdded {
+                        .send(KubernetesNamespacesAdded {
                             namespace: item.into(),
                             cluster_key: self.cluster_key,
                         })
@@ -292,7 +292,7 @@ impl KubernetesNamespaceWatcher {
                 }
                 Event::Delete(item) => {
                     self.event_sender
-                        .send(WorkerResult::KubernetesNamespacesDeleted {
+                        .send(KubernetesNamespacesDeleted {
                             cluster_key: self.cluster_key,
                             namespace_name: item.metadata.name.expect(
                                 "Deleted Namespace from the api server did not have a name",
@@ -309,7 +309,7 @@ impl KubernetesNamespaceWatcher {
                 }
                 Event::InitDone => {
                     self.event_sender
-                        .send(WorkerResult::KubernetesNamespacesReplaced {
+                        .send(KubernetesNamespacesReplaced {
                             cluster_key: self.cluster_key,
                             namespaces: buffer,
                         })
@@ -346,7 +346,7 @@ pub async fn start_resource_watcher(
     api_resource: ApiResource,
     namespace: Option<String>,
     event_sender: WorkerResultSender,
-) -> Result<(WorkerResult, tokio::task::JoinHandle<()>)> {
+) -> Result<(KubernetesResourceWatchStarted, tokio::task::JoinHandle<()>)> {
     info!(
         "Starting resource watcher for {}/{} in {}",
         api_resource.group,
@@ -372,7 +372,7 @@ pub async fn start_resource_watcher(
         .remove(&api_resource)
         .unwrap_or_default();
         event_sender
-            .send(WorkerResult::KubernetesCustomResourceColumnsLoaded {
+            .send(KubernetesCustomResourceColumnsLoaded {
                 cluster_key,
                 columns: BTreeMap::from([(api_resource.clone(), custom_columns.clone())]),
             })
@@ -391,7 +391,7 @@ pub async fn start_resource_watcher(
     let task = tokio::spawn(watcher.watch_resources());
 
     Ok((
-        WorkerResult::KubernetesResourceWatchStarted {
+        KubernetesResourceWatchStarted {
             cluster_key,
             api_resource,
             namespace,
@@ -445,7 +445,7 @@ impl DynamicKubernetesResourceWatcher {
                     self.api_resource.group, self.api_resource.name, error
                 );
                 self.event_sender
-                    .send(WorkerResult::KubernetesResourceWatchFailed {
+                    .send(KubernetesResourceWatchFailed {
                         cluster_key: self.cluster_key,
                         api_resource: self.api_resource.clone(),
                         namespace: self.namespace.clone(),
@@ -467,7 +467,7 @@ impl DynamicKubernetesResourceWatcher {
                     "Resource scope mismatch: discovered {scope:?} scope with namespace {namespace:?}"
                 );
                 self.event_sender
-                    .send(WorkerResult::KubernetesResourceWatchFailed {
+                    .send(KubernetesResourceWatchFailed {
                         cluster_key: self.cluster_key,
                         api_resource: self.api_resource.clone(),
                         namespace: self.namespace.clone(),
@@ -490,7 +490,7 @@ impl DynamicKubernetesResourceWatcher {
                 Err(error) => {
                     warn!("Resource watcher error: {error:?}");
                     self.event_sender
-                        .send(WorkerResult::KubernetesResourceWatchFailed {
+                        .send(KubernetesResourceWatchFailed {
                             cluster_key: self.cluster_key,
                             api_resource: self.api_resource.clone(),
                             namespace: self.namespace.clone(),
@@ -505,7 +505,7 @@ impl DynamicKubernetesResourceWatcher {
                 Event::Apply(item) => {
                     let resource = extract_minimal_resource(&item, &self.custom_columns);
                     self.event_sender
-                        .send(WorkerResult::KubernetesResourceAdded {
+                        .send(KubernetesResourceAdded {
                             cluster_key: self.cluster_key,
                             api_resource: self.api_resource.clone(),
                             namespace: self.namespace.clone(),
@@ -517,7 +517,7 @@ impl DynamicKubernetesResourceWatcher {
                 Event::Delete(item) => {
                     let uid = get_resource_uid(&item);
                     self.event_sender
-                        .send(WorkerResult::KubernetesResourceDeleted {
+                        .send(KubernetesResourceDeleted {
                             cluster_key: self.cluster_key,
                             api_resource: self.api_resource.clone(),
                             namespace: self.namespace.clone(),
@@ -534,7 +534,7 @@ impl DynamicKubernetesResourceWatcher {
                 }
                 Event::InitDone => {
                     self.event_sender
-                        .send(WorkerResult::KubernetesResourcesReplaced {
+                        .send(KubernetesResourcesReplaced {
                             cluster_key: self.cluster_key,
                             api_resource: self.api_resource.clone(),
                             namespace: self.namespace.clone(),
@@ -577,7 +577,7 @@ where
     async fn watch_resources(self) {
         let Some(namespace) = self.namespace.as_deref() else {
             self.event_sender
-                .send(WorkerResult::KubernetesResourceWatchFailed {
+                .send(KubernetesResourceWatchFailed {
                     cluster_key: self.cluster_key,
                     api_resource: self.api_resource,
                     namespace: None,
@@ -599,7 +599,7 @@ where
                 Err(error) => {
                     warn!("Typed resource watcher error: {error:?}");
                     self.event_sender
-                        .send(WorkerResult::KubernetesResourceWatchFailed {
+                        .send(KubernetesResourceWatchFailed {
                             cluster_key: self.cluster_key,
                             api_resource: self.api_resource.clone(),
                             namespace: self.namespace.clone(),
@@ -614,7 +614,7 @@ where
             match event {
                 Event::Apply(item) => self
                     .event_sender
-                    .send(WorkerResult::KubernetesResourceAdded {
+                    .send(KubernetesResourceAdded {
                         cluster_key: self.cluster_key,
                         api_resource: self.api_resource.clone(),
                         namespace: self.namespace.clone(),
@@ -624,7 +624,7 @@ where
                     .log_if_error("Failed to send typed resource added"),
                 Event::Delete(item) => self
                     .event_sender
-                    .send(WorkerResult::KubernetesResourceDeleted {
+                    .send(KubernetesResourceDeleted {
                         cluster_key: self.cluster_key,
                         api_resource: self.api_resource.clone(),
                         namespace: self.namespace.clone(),
@@ -636,7 +636,7 @@ where
                 Event::InitApply(item) => buffer.push((self.extract)(&item)),
                 Event::InitDone => {
                     self.event_sender
-                        .send(WorkerResult::KubernetesResourcesReplaced {
+                        .send(KubernetesResourcesReplaced {
                             cluster_key: self.cluster_key,
                             api_resource: self.api_resource.clone(),
                             namespace: self.namespace.clone(),
@@ -711,7 +711,7 @@ where
     async fn watch_resources(self) {
         if self.namespace.is_some() {
             self.event_sender
-                .send(WorkerResult::KubernetesResourceWatchFailed {
+                .send(KubernetesResourceWatchFailed {
                     cluster_key: self.cluster_key,
                     api_resource: self.api_resource,
                     namespace: self.namespace,
@@ -733,7 +733,7 @@ where
                 Err(error) => {
                     warn!("Typed resource watcher error: {error:?}");
                     self.event_sender
-                        .send(WorkerResult::KubernetesResourceWatchFailed {
+                        .send(KubernetesResourceWatchFailed {
                             cluster_key: self.cluster_key,
                             api_resource: self.api_resource.clone(),
                             namespace: None,
@@ -748,7 +748,7 @@ where
             match event {
                 Event::Apply(item) => self
                     .event_sender
-                    .send(WorkerResult::KubernetesResourceAdded {
+                    .send(KubernetesResourceAdded {
                         cluster_key: self.cluster_key,
                         api_resource: self.api_resource.clone(),
                         namespace: None,
@@ -758,7 +758,7 @@ where
                     .log_if_error("Failed to send typed resource added"),
                 Event::Delete(item) => self
                     .event_sender
-                    .send(WorkerResult::KubernetesResourceDeleted {
+                    .send(KubernetesResourceDeleted {
                         cluster_key: self.cluster_key,
                         api_resource: self.api_resource.clone(),
                         namespace: None,
@@ -770,7 +770,7 @@ where
                 Event::InitApply(item) => buffer.push((self.extract)(&item)),
                 Event::InitDone => {
                     self.event_sender
-                        .send(WorkerResult::KubernetesResourcesReplaced {
+                        .send(KubernetesResourcesReplaced {
                             cluster_key: self.cluster_key,
                             api_resource: self.api_resource.clone(),
                             namespace: None,
@@ -1027,7 +1027,7 @@ async fn watch_managed_resources(request: ManagedResourceWatchRequest) {
     let resource_types = managed_resource_types(&root_api_resource);
     if resource_types.is_empty() {
         event_sender
-            .send(WorkerResult::ManagedResourcesReplaced {
+            .send(ManagedResourcesReplaced {
                 cluster_key,
                 history_entry_id,
                 resources: Vec::new(),
@@ -1113,7 +1113,7 @@ async fn watch_managed_resources(request: ManagedResourceWatchRequest) {
                     .cloned()
                     .collect();
                 event_sender
-                    .send(WorkerResult::ManagedResourcesReplaced {
+                    .send(ManagedResourcesReplaced {
                         cluster_key,
                         history_entry_id,
                         resources,
@@ -1125,7 +1125,7 @@ async fn watch_managed_resources(request: ManagedResourceWatchRequest) {
                 api_resource,
                 error,
             } => event_sender
-                .send(WorkerResult::ManagedResourcesWatchFailed {
+                .send(ManagedResourcesWatchFailed {
                     cluster_key,
                     history_entry_id,
                     error: format!("Unable to watch {}: {error}", api_resource.display_name()),
@@ -1408,7 +1408,7 @@ async fn watch_detail_object(
         match event {
             Event::Apply(object) => {
                 event_sender
-                    .send(WorkerResult::ResourceDetailUpdated {
+                    .send(ResourceDetailUpdated {
                         cluster_key,
                         history_entry_id,
                         detail: Box::new(
@@ -1422,7 +1422,7 @@ async fn watch_detail_object(
             Event::InitApply(object) => {
                 found_during_initial_list = true;
                 event_sender
-                    .send(WorkerResult::ResourceDetailUpdated {
+                    .send(ResourceDetailUpdated {
                         cluster_key,
                         history_entry_id,
                         detail: Box::new(
@@ -1434,7 +1434,7 @@ async fn watch_detail_object(
                     .log_if_error("Failed to send resource detail update");
             }
             Event::Delete(_) => event_sender
-                .send(WorkerResult::ResourceDetailDeleted {
+                .send(ResourceDetailDeleted {
                     cluster_key,
                     history_entry_id,
                 })
@@ -1442,7 +1442,7 @@ async fn watch_detail_object(
                 .log_if_error("Failed to send resource detail deletion"),
             Event::Init => found_during_initial_list = false,
             Event::InitDone if !found_during_initial_list => event_sender
-                .send(WorkerResult::ResourceDetailDeleted {
+                .send(ResourceDetailDeleted {
                     cluster_key,
                     history_entry_id,
                 })
@@ -1503,7 +1503,7 @@ async fn send_detail_events(
     let mut events = events.values().cloned().collect::<Vec<_>>();
     events.sort_by_key(|event| std::cmp::Reverse(event.last_timestamp));
     event_sender
-        .send(WorkerResult::ResourceEventsReplaced {
+        .send(ResourceEventsReplaced {
             cluster_key,
             history_entry_id,
             events,
@@ -1520,7 +1520,7 @@ async fn send_detail_error(
     error: impl std::fmt::Debug,
 ) {
     event_sender
-        .send(WorkerResult::ResourceDetailWatchFailed {
+        .send(ResourceDetailWatchFailed {
             cluster_key,
             history_entry_id,
             events,
@@ -1805,7 +1805,7 @@ pub async fn get_resource_scale(
     api_resource: ApiResource,
     namespace: Option<String>,
     resource_name: String,
-) -> Result<WorkerResult> {
+) -> Result<ResourceScaleFetched> {
     let api = dynamic_api::create(&client, &api_resource, namespace.as_deref()).await?;
     let scale = api.get_scale(&resource_name).await?;
     let replicas = scale
@@ -1814,7 +1814,7 @@ pub async fn get_resource_scale(
         .replicas
         .context("Scale endpoint returned no desired replica count")?;
 
-    Ok(WorkerResult::ResourceScaleFetched {
+    Ok(ResourceScaleFetched {
         cluster_key,
         api_resource,
         namespace,
@@ -1831,7 +1831,7 @@ pub async fn update_resource_scale(
     namespace: Option<String>,
     resource_name: String,
     replicas: i32,
-) -> Result<WorkerResult> {
+) -> Result<ResourceScaleUpdated> {
     let api = dynamic_api::create(&client, &api_resource, namespace.as_deref()).await?;
     let patch: serde_yaml::Value =
         serde_yaml::from_str(&format!("spec:\n  replicas: {replicas}\n"))?;
@@ -1842,7 +1842,7 @@ pub async fn update_resource_scale(
     )
     .await?;
 
-    Ok(WorkerResult::ResourceScaleUpdated {
+    Ok(ResourceScaleUpdated {
         cluster_key,
         resource_name,
     })
@@ -1856,7 +1856,7 @@ pub async fn get_resource_yaml(
     api_resource: ApiResource,
     namespace: Option<String>,
     resource_name: String,
-) -> Result<WorkerResult> {
+) -> Result<ResourceYamlFetched> {
     info!(
         "Getting YAML for {}/{} {} in {}",
         api_resource.group,
@@ -1872,7 +1872,7 @@ pub async fn get_resource_yaml(
 
     let yaml = serde_yaml::to_string(&obj)?;
 
-    Ok(WorkerResult::ResourceYamlFetched {
+    Ok(ResourceYamlFetched {
         editor_id,
         cluster_key,
         api_resource,
@@ -1889,7 +1889,7 @@ pub async fn get_resource_schema(
     cluster_key: i32,
     client: kube::Client,
     api_resource: ApiResource,
-) -> Result<WorkerResult> {
+) -> Result<ResourceSchemaLoaded> {
     let group_version = if api_resource.group == "core" {
         format!("api/{}", api_resource.version)
     } else {
@@ -1913,7 +1913,7 @@ pub async fn get_resource_schema(
         .await?;
     let schema = ResourceSchema::from_openapi_document(document, &api_resource)
         .ok_or_else(|| anyhow::anyhow!("No OpenAPI schema matches {}", api_resource.kind))?;
-    Ok(WorkerResult::ResourceSchemaLoaded {
+    Ok(ResourceSchemaLoaded {
         editor_id,
         cluster_key,
         api_resource,
@@ -1935,7 +1935,7 @@ pub struct ResourceYamlValidationRequest {
 /// Validate the same server-side apply request used by Save without persisting a change.
 pub async fn validate_resource_yaml(
     request: ResourceYamlValidationRequest,
-) -> Result<WorkerResult> {
+) -> Result<Result<ResourceYamlValidated, ResourceYamlValidationFailed>> {
     let ResourceYamlValidationRequest {
         editor_id,
         revision,
@@ -1958,15 +1958,15 @@ pub async fn validate_resource_yaml(
         .patch(&resource_name, &params, &kube::api::Patch::Apply(&obj))
         .await
     {
-        Ok(_) => Ok(WorkerResult::ResourceYamlValidated {
+        Ok(_) => Ok(Ok(ResourceYamlValidated {
             editor_id,
             revision,
             cluster_key,
             api_resource,
             namespace,
             resource_name,
-        }),
-        Err(kube::Error::Api(status)) => Ok(WorkerResult::ResourceYamlValidationFailed {
+        })),
+        Err(kube::Error::Api(status)) => Ok(Err(ResourceYamlValidationFailed {
             editor_id,
             revision,
             cluster_key,
@@ -1974,7 +1974,7 @@ pub async fn validate_resource_yaml(
             namespace,
             resource_name,
             error: resource_api_error(&status),
-        }),
+        })),
         Err(error) => Err(error.into()),
     }
 }
@@ -2005,7 +2005,7 @@ pub async fn delete_resource(
     resource_name: String,
     resource_uid: Option<String>,
     bulk_delete_id: Option<u64>,
-) -> Result<WorkerResult> {
+) -> Result<ResourceDeleteCompleted> {
     info!(
         "Deleting {}/{} {} in {}",
         api_resource.group,
@@ -2024,7 +2024,7 @@ pub async fn delete_resource(
     api.delete(&resource_name, &delete_params.unwrap_or_default())
         .await?;
 
-    Ok(WorkerResult::ResourceDeleteCompleted {
+    Ok(ResourceDeleteCompleted {
         cluster_key,
         api_resource,
         namespace,
@@ -2041,7 +2041,7 @@ pub async fn force_delete_resource(
     namespace: Option<String>,
     resource_name: String,
     resource_uid: String,
-) -> Result<WorkerResult> {
+) -> Result<ResourceForceDeleteCompleted> {
     let api = dynamic_api::create(&client, &api_resource, namespace.as_deref()).await?;
     let resource = api.get(&resource_name).await?;
     let metadata = resource.meta();
@@ -2076,7 +2076,7 @@ pub async fn force_delete_resource(
         &kube::api::Patch::Merge(&patch),
     )
     .await?;
-    Ok(WorkerResult::ResourceForceDeleteCompleted {
+    Ok(ResourceForceDeleteCompleted {
         cluster_key,
         resource_name,
     })
@@ -2087,7 +2087,7 @@ pub async fn restart_deployment(
     client: kube::Client,
     namespace: String,
     resource_name: String,
-) -> Result<WorkerResult> {
+) -> Result<DeploymentRestartCompleted> {
     let restarted_at = OffsetDateTime::now_utc()
         .format(&time::format_description::well_known::Rfc3339)
         .context("Formatting Deployment restart timestamp")?;
@@ -2107,7 +2107,7 @@ pub async fn restart_deployment(
     )
     .await?;
 
-    Ok(WorkerResult::DeploymentRestartCompleted {
+    Ok(DeploymentRestartCompleted {
         namespace,
         resource_name,
     })
@@ -2122,7 +2122,7 @@ pub async fn apply_resource_yaml(
     namespace: Option<String>,
     resource_name: String,
     yaml: String,
-) -> Result<WorkerResult> {
+) -> Result<Result<ResourceApplyCompleted, ResourceApplyFailed>> {
     info!(
         "Applying YAML for {}/{} {} in {}",
         api_resource.group,
@@ -2147,21 +2147,21 @@ pub async fn apply_resource_yaml(
         )
         .await
     {
-        Ok(_) => Ok(WorkerResult::ResourceApplyCompleted {
+        Ok(_) => Ok(Ok(ResourceApplyCompleted {
             editor_id,
             cluster_key,
             api_resource,
             namespace,
             resource_name,
-        }),
-        Err(kube::Error::Api(status)) => Ok(WorkerResult::ResourceApplyFailed {
+        })),
+        Err(kube::Error::Api(status)) => Ok(Err(ResourceApplyFailed {
             editor_id,
             cluster_key,
             api_resource,
             namespace,
             resource_name,
             error: resource_api_error(&status),
-        }),
+        })),
         Err(error) => Err(error.into()),
     }
 }
@@ -2182,7 +2182,9 @@ pub struct ResourceDataUpdateRequest<'a> {
 /// Replace selected existing data values while preserving every other field. The
 /// fetched object's resourceVersion makes a concurrent update fail rather than
 /// silently overwriting it.
-pub async fn update_resource_data(request: ResourceDataUpdateRequest<'_>) -> Result<WorkerResult> {
+pub async fn update_resource_data(
+    request: ResourceDataUpdateRequest<'_>,
+) -> Result<ResourceDataUpdateCompleted> {
     let ResourceDataUpdateRequest {
         cluster_key,
         history_entry_id,
@@ -2257,7 +2259,7 @@ pub async fn update_resource_data(request: ResourceDataUpdateRequest<'_>) -> Res
         bail!("Resource data updates are only supported for ConfigMaps and Secrets");
     }
 
-    Ok(WorkerResult::ResourceDataUpdateCompleted {
+    Ok(ResourceDataUpdateCompleted {
         cluster_key,
         history_entry_id,
         request_id,

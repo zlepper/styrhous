@@ -1,8 +1,16 @@
-use super::state::{UiState, ValidationState, YamlEditorWindowState};
+use super::state::{
+    UiState, ValidationState, YamlEditorWindowState, api_error_message, diagnostics_from_api_error,
+    set_editor_diagnostics,
+};
 use crate::resource_schema::{
     CompletionContext, CompletionContextKind, SourceRange, YamlDiagnostic,
 };
-use crate::worker::WorkerCommand;
+use crate::worker::{
+    ApplyResourceYaml, ResourceApplyCompleted, ResourceApplyFailed, ResourceSchemaLoadFailed,
+    ResourceSchemaLoaded, ResourceYamlApplyCommandFailed, ResourceYamlFetchFailed,
+    ResourceYamlFetched, ResourceYamlValidated, ResourceYamlValidationCommandFailed,
+    ResourceYamlValidationFailed, ValidateResourceYaml, WorkerCommandBox, WorkerResult,
+};
 use components::colors::{TABLE_BORDER, TOOLBAR_BACKGROUND, gray, indigo};
 use components::design::{search, spacing, status, surface, typography};
 use components::{
@@ -27,10 +35,171 @@ const DIAGNOSTIC_ROW_HEIGHT: f32 = 21.0;
 const DIAGNOSTIC_LIST_MAX_HEIGHT: f32 = 6.0 * DIAGNOSTIC_ROW_HEIGHT;
 const SEARCH_CONTROL_WIDTH: f32 = 212.0;
 
+impl WorkerResult for ResourceYamlFetchFailed {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(editor) = ui.yaml_editors.get_mut(&self.editor_id) {
+            editor.loading = false;
+            editor.error = Some(self.error);
+        }
+    }
+}
+
+impl WorkerResult for ResourceSchemaLoadFailed {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(editor) = ui.yaml_editors.get_mut(&self.editor_id) {
+            editor.schema_loading = false;
+            editor.server_validation = ValidationState::Failed(self.error);
+        }
+    }
+}
+
+impl WorkerResult for ResourceYamlApplyCommandFailed {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(editor) = ui.yaml_editors.get_mut(&self.editor_id) {
+            editor.saving = false;
+            editor.error = Some(self.error);
+        }
+    }
+}
+
+impl WorkerResult for ResourceYamlValidationCommandFailed {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(editor) = ui.yaml_editors.get_mut(&self.editor_id)
+            && editor.validation_revision == self.revision
+        {
+            editor.server_validation = ValidationState::Failed(self.error);
+        }
+    }
+}
+
+impl WorkerResult for ResourceYamlFetched {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let ResourceYamlFetched {
+            editor_id,
+            cluster_key,
+            api_resource,
+            namespace,
+            resource_name,
+            yaml,
+        } = self;
+        if let Some(editor) = ui.yaml_editors.get_mut(&editor_id)
+            && editor.resource_matches(cluster_key, &api_resource, &namespace, &resource_name)
+        {
+            editor.original_yaml = Some(yaml.clone());
+            editor.edited_yaml = yaml;
+            editor.loading = false;
+            editor.error = None;
+        }
+    }
+}
+
+impl WorkerResult for ResourceSchemaLoaded {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let ResourceSchemaLoaded {
+            editor_id,
+            cluster_key,
+            api_resource,
+            schema,
+        } = self;
+        ui.resource_schemas
+            .insert((cluster_key, api_resource.clone()), schema.clone());
+        if let Some(editor) = ui.yaml_editors.get_mut(&editor_id)
+            && editor.cluster_key == cluster_key
+            && editor.api_resource == api_resource
+        {
+            editor.schema = Some(schema);
+            editor.schema_loading = false;
+            editor.validation_revision = 0;
+        }
+    }
+}
+
+impl WorkerResult for ResourceYamlValidated {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let ResourceYamlValidated {
+            editor_id,
+            revision,
+            cluster_key,
+            api_resource,
+            namespace,
+            resource_name,
+        } = self;
+        if let Some(editor) = ui.yaml_editors.get_mut(&editor_id)
+            && editor.validation_revision == revision
+            && editor.resource_matches(cluster_key, &api_resource, &namespace, &resource_name)
+        {
+            editor.server_validation = ValidationState::Valid;
+        }
+    }
+}
+
+impl WorkerResult for ResourceYamlValidationFailed {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let ResourceYamlValidationFailed {
+            editor_id,
+            revision,
+            cluster_key,
+            api_resource,
+            namespace,
+            resource_name,
+            error,
+        } = self;
+        if let Some(editor) = ui.yaml_editors.get_mut(&editor_id)
+            && editor.validation_revision == revision
+            && editor.resource_matches(cluster_key, &api_resource, &namespace, &resource_name)
+        {
+            let message = api_error_message(&error);
+            let diagnostics = diagnostics_from_api_error(&error, &editor.edited_yaml);
+            editor.server_validation = ValidationState::Failed(message);
+            set_editor_diagnostics(editor, diagnostics);
+        }
+    }
+}
+
+impl WorkerResult for ResourceApplyCompleted {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let ResourceApplyCompleted {
+            editor_id,
+            cluster_key,
+            api_resource,
+            namespace,
+            resource_name,
+        } = self;
+        if let Some(editor) = ui.yaml_editors.get_mut(&editor_id)
+            && editor.resource_matches(cluster_key, &api_resource, &namespace, &resource_name)
+        {
+            editor.original_yaml = Some(editor.edited_yaml.clone());
+            editor.saving = false;
+            editor.error = None;
+        }
+    }
+}
+
+impl WorkerResult for ResourceApplyFailed {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let ResourceApplyFailed {
+            editor_id,
+            cluster_key,
+            api_resource,
+            namespace,
+            resource_name,
+            error,
+        } = self;
+        if let Some(editor) = ui.yaml_editors.get_mut(&editor_id)
+            && editor.resource_matches(cluster_key, &api_resource, &namespace, &resource_name)
+        {
+            editor.saving = false;
+            editor.error = Some(api_error_message(&error));
+            let diagnostics = diagnostics_from_api_error(&error, &editor.edited_yaml);
+            set_editor_diagnostics(editor, diagnostics);
+        }
+    }
+}
+
 pub(super) fn show(
     ctx: &egui::Context,
     ui_state: &mut UiState,
-    commands_to_send: &mut Vec<WorkerCommand>,
+    commands_to_send: &mut Vec<WorkerCommandBox>,
 ) {
     let ids = ui_state.yaml_editors.keys().copied().collect::<Vec<_>>();
     for id in ids {
@@ -60,7 +229,7 @@ pub(super) fn show(
 pub(super) fn show_editor_window(
     ui: &mut egui::Ui,
     editor: &mut YamlEditorWindowState,
-    commands_to_send: &mut Vec<WorkerCommand>,
+    commands_to_send: &mut Vec<WorkerCommandBox>,
 ) {
     let ctx = ui.ctx().clone();
     if ctx.input(|input| input.viewport().close_requested()) {
@@ -1181,7 +1350,7 @@ fn yaml_error_range(yaml: &str, message: &str) -> Option<SourceRange> {
 
 fn maybe_request_server_validation(
     editor: &mut YamlEditorWindowState,
-    commands_to_send: &mut Vec<WorkerCommand>,
+    commands_to_send: &mut Vec<WorkerCommandBox>,
 ) {
     if editor
         .validation_due
@@ -1189,7 +1358,7 @@ fn maybe_request_server_validation(
     {
         editor.validation_due = None;
         editor.server_validation = ValidationState::Pending;
-        commands_to_send.push(WorkerCommand::ValidateResourceYaml {
+        commands_to_send.push(Box::new(ValidateResourceYaml {
             editor_id: editor.id,
             revision: editor.validation_revision,
             cluster_key: editor.cluster_key,
@@ -1197,7 +1366,7 @@ fn maybe_request_server_validation(
             namespace: editor.namespace.clone(),
             resource_name: editor.resource_name.clone(),
             yaml: editor.edited_yaml.clone(),
-        });
+        }));
     }
 }
 
@@ -1298,17 +1467,17 @@ fn has_diagnostics_feedback(editor: &YamlEditorWindowState) -> bool {
         || !matches!(editor.server_validation, ValidationState::Idle)
 }
 
-fn apply_editor(editor: &mut YamlEditorWindowState, commands_to_send: &mut Vec<WorkerCommand>) {
+fn apply_editor(editor: &mut YamlEditorWindowState, commands_to_send: &mut Vec<WorkerCommandBox>) {
     editor.saving = true;
     editor.error = None;
-    commands_to_send.push(WorkerCommand::ApplyResourceYaml {
+    commands_to_send.push(Box::new(ApplyResourceYaml {
         editor_id: editor.id,
         cluster_key: editor.cluster_key,
         api_resource: editor.api_resource.clone(),
         namespace: editor.namespace.clone(),
         resource_name: editor.resource_name.clone(),
         yaml: editor.edited_yaml.clone(),
-    });
+    }));
 }
 
 fn request_close(ctx: &egui::Context, editor: &mut YamlEditorWindowState) {
@@ -1520,13 +1689,13 @@ mod tests {
         harness.run();
 
         assert!(!harness.state().editor.saving);
-        assert!(
-            harness
-                .state()
-                .commands
-                .iter()
-                .all(|command| !matches!(command, WorkerCommand::ApplyResourceYaml { .. }))
-        );
+        assert!(harness.state().commands.iter().all(|command| {
+            command
+                .as_ref()
+                .as_any()
+                .downcast_ref::<ApplyResourceYaml>()
+                .is_none()
+        }));
     }
 
     #[test]
@@ -2260,7 +2429,7 @@ mod tests {
 
     struct SnapshotState {
         editor: YamlEditorWindowState,
-        commands: Vec<WorkerCommand>,
+        commands: Vec<WorkerCommandBox>,
         ctx: Option<egui::Context>,
     }
 

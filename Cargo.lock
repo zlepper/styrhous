@@ -2708,6 +2708,7 @@ dependencies = [
  "anstyle",
  "anstyle-parse",
  "anyhow",
+ "async-trait",
  "components",
  "criterion",
  "eframe",
