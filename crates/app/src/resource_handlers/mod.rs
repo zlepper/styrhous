@@ -69,98 +69,60 @@ where
         && api_resource.namespaced == namespaced
 }
 
-pub(crate) trait ResourceHandler: Sync {
-    fn watcher(&self, context: TypedWatcherContext) -> Option<Box<dyn ResourceWatcher>>;
-    fn table_definition(&self, api_resource: &ApiResource) -> Option<ResourceTableDefinition>;
-}
-
+#[derive(Clone, Copy)]
 struct HandlerDefinition {
     watcher: fn(TypedWatcherContext) -> Option<Box<dyn ResourceWatcher>>,
     table_definition: fn(&ApiResource) -> Option<ResourceTableDefinition>,
 }
 
-impl ResourceHandler for HandlerDefinition {
-    fn watcher(&self, context: TypedWatcherContext) -> Option<Box<dyn ResourceWatcher>> {
-        (self.watcher)(context)
-    }
-
-    fn table_definition(&self, api_resource: &ApiResource) -> Option<ResourceTableDefinition> {
-        (self.table_definition)(api_resource)
-    }
+struct DetailHandler {
+    matches: fn(&ApiResource) -> bool,
+    detail_payload: fn(&kube::api::DynamicObject) -> Option<ResourceDetailPayload>,
 }
 
-static POD_HANDLER: HandlerDefinition = HandlerDefinition {
-    watcher: pod::watcher,
-    table_definition: pod::table_definition,
-};
-static DEPLOYMENT_HANDLER: HandlerDefinition = HandlerDefinition {
-    watcher: deployment::watcher,
-    table_definition: deployment::table_definition,
-};
-static STATEFUL_SET_HANDLER: HandlerDefinition = HandlerDefinition {
-    watcher: stateful_set::watcher,
-    table_definition: stateful_set::table_definition,
-};
-static DAEMON_SET_HANDLER: HandlerDefinition = HandlerDefinition {
-    watcher: daemon_set::watcher,
-    table_definition: daemon_set::table_definition,
-};
-static REPLICA_SET_HANDLER: HandlerDefinition = HandlerDefinition {
-    watcher: replica_set::watcher,
-    table_definition: replica_set::table_definition,
-};
-static REPLICATION_CONTROLLER_HANDLER: HandlerDefinition = HandlerDefinition {
-    watcher: replication_controller::watcher,
-    table_definition: replication_controller::table_definition,
-};
-static JOB_HANDLER: HandlerDefinition = HandlerDefinition {
-    watcher: job::watcher,
-    table_definition: job::table_definition,
-};
-static CRON_JOB_HANDLER: HandlerDefinition = HandlerDefinition {
-    watcher: cron_job::watcher,
-    table_definition: cron_job::table_definition,
-};
-static SERVICE_HANDLER: HandlerDefinition = HandlerDefinition {
-    watcher: service::watcher,
-    table_definition: service::table_definition,
-};
-static NODE_HANDLER: HandlerDefinition = HandlerDefinition {
-    watcher: node::watcher,
-    table_definition: node::table_definition,
-};
-static PERSISTENT_VOLUME_HANDLER: HandlerDefinition = HandlerDefinition {
-    watcher: persistent_volume::watcher,
-    table_definition: persistent_volume::table_definition,
-};
-static STORAGE_CLASS_HANDLER: HandlerDefinition = HandlerDefinition {
-    watcher: storage_class::watcher,
-    table_definition: storage_class::table_definition,
-};
-static METADATA_HANDLER: HandlerDefinition = HandlerDefinition {
-    watcher: metadata::watcher,
-    table_definition: metadata::table_definition,
-};
-static CLUSTER_METADATA_HANDLER: HandlerDefinition = HandlerDefinition {
-    watcher: cluster_metadata::watcher,
-    table_definition: cluster_metadata::table_definition,
-};
+macro_rules! handler {
+    ($module:ident) => {
+        HandlerDefinition {
+            watcher: $module::watcher,
+            table_definition: $module::table_definition,
+        }
+    };
+}
 
-static HANDLERS: [&dyn ResourceHandler; 14] = [
-    &POD_HANDLER,
-    &DEPLOYMENT_HANDLER,
-    &STATEFUL_SET_HANDLER,
-    &DAEMON_SET_HANDLER,
-    &REPLICA_SET_HANDLER,
-    &REPLICATION_CONTROLLER_HANDLER,
-    &JOB_HANDLER,
-    &CRON_JOB_HANDLER,
-    &SERVICE_HANDLER,
-    &NODE_HANDLER,
-    &PERSISTENT_VOLUME_HANDLER,
-    &STORAGE_CLASS_HANDLER,
-    &METADATA_HANDLER,
-    &CLUSTER_METADATA_HANDLER,
+const HANDLERS: [HandlerDefinition; 14] = [
+    handler!(pod),
+    handler!(deployment),
+    handler!(stateful_set),
+    handler!(daemon_set),
+    handler!(replica_set),
+    handler!(replication_controller),
+    handler!(job),
+    handler!(cron_job),
+    handler!(service),
+    handler!(node),
+    handler!(persistent_volume),
+    handler!(storage_class),
+    handler!(metadata),
+    handler!(cluster_metadata),
+];
+
+const DETAIL_HANDLERS: [DetailHandler; 4] = [
+    DetailHandler {
+        matches: matches_namespaced_api_resource::<k8s_openapi::api::core::v1::Pod>,
+        detail_payload: pod::detail_payload,
+    },
+    DetailHandler {
+        matches: matches_cluster_api_resource::<k8s_openapi::api::core::v1::Node>,
+        detail_payload: node::detail_payload,
+    },
+    DetailHandler {
+        matches: matches_namespaced_api_resource::<k8s_openapi::api::core::v1::ConfigMap>,
+        detail_payload: config_map::detail_payload,
+    },
+    DetailHandler {
+        matches: matches_namespaced_api_resource::<k8s_openapi::api::core::v1::Secret>,
+        detail_payload: secret::detail_payload,
+    },
 ];
 
 pub(crate) fn table_definition(
@@ -172,14 +134,14 @@ pub(crate) fn table_definition(
     }
     HANDLERS
         .iter()
-        .find_map(|handler| handler.table_definition(api_resource))
+        .find_map(|handler| (handler.table_definition)(api_resource))
         .unwrap_or_default()
 }
 
 pub(crate) fn watcher_for(context: TypedWatcherContext) -> Option<Box<dyn ResourceWatcher>> {
     HANDLERS
         .iter()
-        .find_map(|handler| handler.watcher(context.clone()))
+        .find_map(|handler| (handler.watcher)(context.clone()))
 }
 
 /// Builds the resource-specific portion of a detail response. The generic metadata
@@ -188,17 +150,115 @@ pub(crate) fn detail_payload(
     api_resource: &ApiResource,
     object: &kube::api::DynamicObject,
 ) -> ResourceDetailPayload {
-    if matches_namespaced_api_resource::<k8s_openapi::api::core::v1::Pod>(api_resource) {
-        return pod::detail_payload(object).unwrap_or(ResourceDetailPayload::Generic);
+    DETAIL_HANDLERS
+        .iter()
+        .find(|handler| (handler.matches)(api_resource))
+        .and_then(|handler| (handler.detail_payload)(object))
+        .unwrap_or(ResourceDetailPayload::Generic)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn api_resource(kind: &str, name: &str) -> ApiResource {
+        ApiResource {
+            group: "core".to_owned(),
+            version: "v1".to_owned(),
+            kind: kind.to_owned(),
+            name: name.to_owned(),
+            namespaced: true,
+        }
     }
-    if matches_cluster_api_resource::<k8s_openapi::api::core::v1::Node>(api_resource) {
-        return node::detail_payload(object).unwrap_or(ResourceDetailPayload::Generic);
+
+    #[test]
+    fn registry_routes_config_map_detail_payloads() {
+        let object = k8s_openapi::serde_json::from_value(k8s_openapi::serde_json::json!({
+            "apiVersion": "v1",
+            "kind": "ConfigMap",
+            "metadata": {"name": "settings"},
+            "data": {"theme": "dark"}
+        }))
+        .unwrap();
+
+        assert!(matches!(
+            detail_payload(&api_resource("ConfigMap", "configmaps"), &object),
+            ResourceDetailPayload::ConfigMap(_)
+        ));
     }
-    if matches_namespaced_api_resource::<k8s_openapi::api::core::v1::ConfigMap>(api_resource) {
-        return config_map::detail_payload(object).unwrap_or(ResourceDetailPayload::Generic);
+
+    #[test]
+    fn registry_routes_secret_and_cluster_scoped_node_detail_payloads() {
+        let secret = k8s_openapi::serde_json::from_value(k8s_openapi::serde_json::json!({
+            "apiVersion": "v1", "kind": "Secret", "metadata": {"name": "credentials"}
+        }))
+        .unwrap();
+        assert!(matches!(
+            detail_payload(&api_resource("Secret", "secrets"), &secret),
+            ResourceDetailPayload::Secret(_)
+        ));
+
+        let node = k8s_openapi::serde_json::from_value(k8s_openapi::serde_json::json!({
+            "apiVersion": "v1", "kind": "Node", "metadata": {"name": "node-1"}
+        }))
+        .unwrap();
+        let node_resource = ApiResource {
+            namespaced: false,
+            ..api_resource("Node", "nodes")
+        };
+        assert!(matches!(
+            detail_payload(&node_resource, &node),
+            ResourceDetailPayload::Node(_)
+        ));
     }
-    if matches_namespaced_api_resource::<k8s_openapi::api::core::v1::Secret>(api_resource) {
-        return secret::detail_payload(object).unwrap_or(ResourceDetailPayload::Generic);
+
+    #[test]
+    fn registry_selects_representative_typed_table_definitions() {
+        assert!(
+            !table_definition(&api_resource("Pod", "pods"), &[])
+                .columns
+                .is_empty()
+        );
+        let node_resource = ApiResource {
+            namespaced: false,
+            ..api_resource("Node", "nodes")
+        };
+        assert!(!table_definition(&node_resource, &[]).columns.is_empty());
+        assert!(
+            table_definition(
+                &ApiResource {
+                    group: "example.dev".into(),
+                    version: "v1".into(),
+                    kind: "Backup".into(),
+                    name: "backups".into(),
+                    namespaced: true,
+                },
+                &[],
+            )
+            .columns
+            .is_empty()
+        );
     }
-    ResourceDetailPayload::Generic
+
+    #[test]
+    fn registry_keeps_unknown_resource_payloads_generic() {
+        let object = k8s_openapi::serde_json::from_value(k8s_openapi::serde_json::json!({
+            "apiVersion": "example.dev/v1",
+            "kind": "Backup",
+            "metadata": {"name": "nightly"}
+        }))
+        .unwrap();
+        let resource = ApiResource {
+            group: "example.dev".to_owned(),
+            version: "v1".to_owned(),
+            kind: "Backup".to_owned(),
+            name: "backups".to_owned(),
+            namespaced: true,
+        };
+
+        assert!(matches!(
+            detail_payload(&resource, &object),
+            ResourceDetailPayload::Generic
+        ));
+    }
 }

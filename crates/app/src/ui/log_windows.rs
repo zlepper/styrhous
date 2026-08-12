@@ -8,7 +8,7 @@ use crate::worker::WorkerCommand;
 use anstyle::{Ansi256Color, AnsiColor, Color, Effects, RgbColor, Style};
 use components::colors::{SUCCESS, TABLE_BORDER, TOOLBAR_BACKGROUND, gray};
 use components::design::{radius, search, spacing, status, surface, typography};
-use components::{PointingHand, TailwindSearchInput, icons};
+use components::{PointingHand, TailwindSearchInput, icons, search_navigation_button};
 use std::time::{Duration, Instant};
 
 const LOG_FONT_SIZE: f32 = 14.0;
@@ -628,25 +628,25 @@ fn show_log_search_controls(
                     .show(ui, |ui| {
                         ui.spacing_mut().item_spacing.x = 0.0;
                         ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                            let previous_line = navigation_button(
+                            let previous_line = search_navigation_button(
                                 ui,
                                 icons::arrow_up_icon(),
                                 "Previous displayed line",
                             );
                             ui.separator();
-                            let previous_match = navigation_button(
+                            let previous_match = search_navigation_button(
                                 ui,
                                 icons::arrow_left_icon(),
                                 "Previous matching line",
                             );
                             ui.separator();
-                            let next_match = navigation_button(
+                            let next_match = search_navigation_button(
                                 ui,
                                 icons::arrow_right_icon(),
                                 "Next matching line",
                             );
                             ui.separator();
-                            let next_line = navigation_button(
+                            let next_line = search_navigation_button(
                                 ui,
                                 icons::arrow_down_icon(),
                                 "Next displayed line",
@@ -769,23 +769,6 @@ fn sync_search(ctx: &egui::Context, window: &mut PodLogWindowState, log_store: &
         window.search.search_deadline = Some(Instant::now() + Duration::from_millis(100));
         ctx.request_repaint_after(Duration::from_millis(100));
     }
-}
-
-fn navigation_button(ui: &mut egui::Ui, icon: egui::Image<'static>, label: &str) -> bool {
-    let response = ui
-        .add_sized(
-            egui::Vec2::splat(28.0),
-            egui::Button::image(
-                icon.fit_to_exact_size(egui::Vec2::splat(14.0))
-                    .tint(gray::_700),
-            )
-            .frame(false),
-        )
-        .with_pointing_hand();
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label.to_owned())
-    });
-    response.on_hover_text(label).clicked()
 }
 
 fn filter_button(ui: &mut egui::Ui, active: bool) -> bool {

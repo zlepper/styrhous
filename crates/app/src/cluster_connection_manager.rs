@@ -25,8 +25,6 @@ use k8s_openapi::apimachinery::pkg::apis::meta::v1::{
 };
 use k8s_openapi::{ClusterResourceScope, NamespaceResourceScope};
 use kube::api::{DeleteParams, DynamicObject, GroupVersionKind, Preconditions};
-use kube::config::KubeConfigOptions;
-use kube::config::Kubeconfig;
 use kube::runtime::watcher;
 use kube::runtime::watcher::{Event, ListSemantic};
 use kube::{Api, Resource};
@@ -35,125 +33,15 @@ use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
 use time::OffsetDateTime;
-use tokio::task::{JoinHandle, JoinSet};
+use tokio::task::JoinSet;
 use tracing::{info, warn};
 
-#[derive(Debug, Clone)]
-pub struct Cluster {
-    pub name: String,
-    pub is_current: bool,
-}
+mod connection;
+mod dynamic_api;
+mod resource_data;
+mod resource_yaml;
 
-pub async fn reload_kubeconfig() -> Result<WorkerResult> {
-    let cfg = Kubeconfig::read().with_context(|| "Error reading kubeconfig")?;
-    let current_context = cfg.current_context.clone();
-
-    let mut clusters = Vec::new();
-
-    for named_context in cfg.contexts {
-        clusters.push(Cluster {
-            name: named_context.name.clone(),
-            is_current: current_context.as_deref() == Some(named_context.name.as_str()),
-        });
-    }
-
-    Ok(WorkerResult::KubernetesClustersUpdated(clusters))
-}
-
-pub struct ClusterConnection {
-    client: kube::Client,
-    join_handles: Vec<JoinHandle<()>>,
-    cluster_key: i32,
-}
-
-impl Debug for ClusterConnection {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ClusterStateRunner")
-            .field("cluster_key", &self.cluster_key)
-            .finish()
-    }
-}
-
-impl ClusterConnection {
-    /// Get a clone of the kube client for starting additional watchers
-    pub fn client(&self) -> kube::Client {
-        self.client.clone()
-    }
-
-    pub async fn new(
-        cluster_key: i32,
-        context_name: &str,
-        event_output: WorkerResultSender,
-    ) -> Result<Self> {
-        let config = kube::Config::from_kubeconfig(&KubeConfigOptions {
-            context: Some(context_name.to_string()),
-            ..Default::default()
-        })
-        .await
-        .with_context(|| "Error creating Kubernetes config")?;
-        let client =
-            kube::Client::try_from(config).with_context(|| "Error creating Kubernetes client")?;
-
-        let namespaces_task = {
-            let namespace_watcher = KubernetesNamespaceWatcher {
-                event_sender: event_output.clone(),
-                client: client.clone(),
-                cluster_key,
-            };
-
-            namespace_watcher.watch_namespaces()
-        };
-
-        let namespaces_handle = tokio::spawn(namespaces_task);
-
-        let api_resources_task = {
-            let api_resource_inspector = KubernetesApiInspector {
-                client: client.clone(),
-            };
-            let event_output = event_output.clone();
-
-            async move {
-                match api_resource_inspector.inspect_api().await {
-                    Err(error) => event_output
-                        .send(WorkerResult::KubernetesApisLoadFailed {
-                            cluster_key,
-                            error: format!("{error:#?}"),
-                        })
-                        .log_if_error("Failed to send error from inspecting resource api"),
-                    Ok(inspection) => {
-                        event_output
-                            .send(WorkerResult::KubernetesApisLoaded {
-                                cluster_key,
-                                api_resources: inspection.api_resources,
-                                scalable_api_resources: inspection.scalable_api_resources,
-                            })
-                            .log_if_error("Failed to send kubernetes API resources");
-                        event_output
-                            .send(WorkerResult::KubernetesCustomResourceColumnsLoaded {
-                                cluster_key,
-                                columns: inspection.custom_resource_columns,
-                            })
-                            .log_if_error("Failed to send custom resource columns");
-                        event_output
-                            .send(WorkerResult::KubernetesResourceSchemasLoaded {
-                                cluster_key,
-                                schemas: inspection.resource_schemas,
-                            })
-                            .log_if_error("Failed to send custom resource schemas");
-                    }
-                }
-            }
-        };
-
-        let api_resources_handle = tokio::spawn(api_resources_task);
-
-        Ok(Self {
-            client,
-            join_handles: vec![namespaces_handle, api_resources_handle],
-            cluster_key,
-        })
-    }
-}
+pub use connection::{Cluster, ClusterConnection, reload_kubeconfig};
 
 struct KubernetesApiInspector {
     client: kube::Client,
@@ -359,14 +247,6 @@ impl KubernetesApiInspector {
 
     async fn custom_resource_columns(&self) -> BTreeMap<ApiResource, Vec<CustomResourceColumn>> {
         self.custom_resource_metadata().await.0
-    }
-}
-
-impl Drop for ClusterConnection {
-    fn drop(&mut self) {
-        for handle in self.join_handles.drain(..) {
-            handle.abort_handle().abort()
-        }
     }
 }
 
@@ -1512,7 +1392,7 @@ async fn watch_detail_object(
     history_entry_id: u64,
     event_sender: WorkerResultSender,
 ) {
-    let api = match create_dynamic_api(&client, &api_resource, namespace.as_deref()).await {
+    let api = match dynamic_api::create(&client, &api_resource, namespace.as_deref()).await {
         Ok(api) => api,
         Err(error) => {
             send_detail_error(&event_sender, cluster_key, history_entry_id, false, error);
@@ -1906,34 +1786,6 @@ fn resource_event_from_kubernetes(event: KubernetesEvent) -> ResourceEvent {
     }
 }
 
-/// Helper to create a namespaced or cluster-scoped API for a given resource type
-async fn create_dynamic_api(
-    client: &kube::Client,
-    api_resource: &ApiResource,
-    namespace: Option<&str>,
-) -> Result<Api<DynamicObject>> {
-    let group = if api_resource.group == "core" {
-        ""
-    } else {
-        &api_resource.group
-    };
-
-    let gvk = GroupVersionKind::gvk(group, &api_resource.version, &api_resource.kind);
-    let (ar, caps) = kube::discovery::pinned_kind(client, &gvk).await?;
-
-    let api = match (caps.scope, namespace) {
-        (kube::discovery::Scope::Namespaced, Some(namespace)) => {
-            Api::namespaced_with(client.clone(), namespace, &ar)
-        }
-        (kube::discovery::Scope::Cluster, None) => Api::all_with(client.clone(), &ar),
-        (scope, namespace) => bail!(
-            "Resource scope mismatch: discovered {scope:?} scope with namespace {namespace:?}"
-        ),
-    };
-
-    Ok(api)
-}
-
 fn supports_scale_subresource(
     resources: &[k8s_openapi::apimachinery::pkg::apis::meta::v1::APIResource],
     resource_name: &str,
@@ -1954,7 +1806,7 @@ pub async fn get_resource_scale(
     namespace: Option<String>,
     resource_name: String,
 ) -> Result<WorkerResult> {
-    let api = create_dynamic_api(&client, &api_resource, namespace.as_deref()).await?;
+    let api = dynamic_api::create(&client, &api_resource, namespace.as_deref()).await?;
     let scale = api.get_scale(&resource_name).await?;
     let replicas = scale
         .spec
@@ -1980,7 +1832,7 @@ pub async fn update_resource_scale(
     resource_name: String,
     replicas: i32,
 ) -> Result<WorkerResult> {
-    let api = create_dynamic_api(&client, &api_resource, namespace.as_deref()).await?;
+    let api = dynamic_api::create(&client, &api_resource, namespace.as_deref()).await?;
     let patch: serde_yaml::Value =
         serde_yaml::from_str(&format!("spec:\n  replicas: {replicas}\n"))?;
     api.patch_scale(
@@ -2013,22 +1865,10 @@ pub async fn get_resource_yaml(
         namespace.as_deref().unwrap_or("cluster-wide scope")
     );
 
-    let api = create_dynamic_api(&client, &api_resource, namespace.as_deref()).await?;
+    let api = dynamic_api::create(&client, &api_resource, namespace.as_deref()).await?;
     let mut obj = api.get(&resource_name).await?;
 
-    // Strip server-managed fields that clutter the editor and cause issues on apply
-    if let Some(metadata) = obj.data.get_mut("metadata")
-        && let Some(meta_obj) = metadata.as_object_mut()
-    {
-        meta_obj.remove("managedFields");
-        meta_obj.remove("resourceVersion");
-        meta_obj.remove("uid");
-        meta_obj.remove("creationTimestamp");
-    }
-    obj.metadata.managed_fields = None;
-    obj.metadata.resource_version = None;
-    obj.metadata.uid = None;
-    obj.metadata.creation_timestamp = None;
+    resource_yaml::strip_server_managed_metadata(&mut obj);
 
     let yaml = serde_yaml::to_string(&obj)?;
 
@@ -2107,24 +1947,9 @@ pub async fn validate_resource_yaml(
         yaml,
     } = request;
     let mut obj: DynamicObject = serde_yaml::from_str(&yaml)?;
-    if let Some(metadata) = obj.data.get_mut("metadata")
-        && let Some(meta_obj) = metadata.as_object_mut()
-    {
-        for field in [
-            "managedFields",
-            "resourceVersion",
-            "uid",
-            "creationTimestamp",
-        ] {
-            meta_obj.remove(field);
-        }
-    }
-    obj.metadata.managed_fields = None;
-    obj.metadata.resource_version = None;
-    obj.metadata.uid = None;
-    obj.metadata.creation_timestamp = None;
+    resource_yaml::strip_server_managed_metadata(&mut obj);
 
-    let api = create_dynamic_api(&client, &api_resource, namespace.as_deref()).await?;
+    let api = dynamic_api::create(&client, &api_resource, namespace.as_deref()).await?;
     let params = kube::api::PatchParams::apply("kubernetes-dev-ui")
         .force()
         .validation(kube::api::ValidationDirective::Strict)
@@ -2189,7 +2014,7 @@ pub async fn delete_resource(
         namespace.as_deref().unwrap_or("cluster-wide scope")
     );
 
-    let api = create_dynamic_api(&client, &api_resource, namespace.as_deref()).await?;
+    let api = dynamic_api::create(&client, &api_resource, namespace.as_deref()).await?;
     let delete_params = resource_uid.map(|uid| {
         DeleteParams::default().preconditions(Preconditions {
             uid: Some(uid),
@@ -2217,7 +2042,7 @@ pub async fn force_delete_resource(
     resource_name: String,
     resource_uid: String,
 ) -> Result<WorkerResult> {
-    let api = create_dynamic_api(&client, &api_resource, namespace.as_deref()).await?;
+    let api = dynamic_api::create(&client, &api_resource, namespace.as_deref()).await?;
     let resource = api.get(&resource_name).await?;
     let metadata = resource.meta();
     if metadata.uid.as_deref() != Some(&resource_uid) {
@@ -2308,22 +2133,9 @@ pub async fn apply_resource_yaml(
 
     let mut obj: DynamicObject = serde_yaml::from_str(&yaml)?;
 
-    // Strip fields that cannot be sent with server-side apply
-    if let Some(metadata) = obj.data.get_mut("metadata")
-        && let Some(meta_obj) = metadata.as_object_mut()
-    {
-        meta_obj.remove("managedFields");
-        meta_obj.remove("resourceVersion");
-        meta_obj.remove("uid");
-        meta_obj.remove("creationTimestamp");
-    }
-    // Also clear from the typed metadata
-    obj.metadata.managed_fields = None;
-    obj.metadata.resource_version = None;
-    obj.metadata.uid = None;
-    obj.metadata.creation_timestamp = None;
+    resource_yaml::strip_server_managed_metadata(&mut obj);
 
-    let api = create_dynamic_api(&client, &api_resource, namespace.as_deref()).await?;
+    let api = dynamic_api::create(&client, &api_resource, namespace.as_deref()).await?;
 
     // Use server-side apply with force to take ownership of fields
     let patch_params = kube::api::PatchParams::apply("kubernetes-dev-ui").force();
@@ -2379,22 +2191,20 @@ pub async fn update_resource_data(request: ResourceDataUpdateRequest<'_>) -> Res
         updated_values,
         expected_resource_version,
     } = request;
-    if expected_values.is_empty() || updated_values.is_empty() {
-        bail!("Resource data update must contain at least one existing value");
-    }
-    if expected_values.keys().ne(updated_values.keys()) {
-        bail!("Resource data update expected and updated keys must match");
-    }
-    if expected_resource_version.is_empty() {
-        bail!("Resource data update is missing the watched resource version");
-    }
+    resource_data::validate_update_request(
+        expected_values,
+        updated_values,
+        expected_resource_version,
+    )?;
 
     if resource_handlers::matches_namespaced_api_resource::<ConfigMap>(&api_resource) {
         let api: Api<ConfigMap> = Api::namespaced(client, &namespace);
         let mut config_map = api.get(&resource_name).await?;
-        if config_map.metadata.resource_version.as_deref() != Some(expected_resource_version) {
-            bail!("ConfigMap changed on the cluster; reload its data before saving");
-        }
+        resource_data::validate_resource_version(
+            config_map.metadata.resource_version.as_deref(),
+            expected_resource_version,
+            "ConfigMap",
+        )?;
         let data = config_map
             .data
             .as_mut()
@@ -2414,9 +2224,11 @@ pub async fn update_resource_data(request: ResourceDataUpdateRequest<'_>) -> Res
     } else if resource_handlers::matches_namespaced_api_resource::<Secret>(&api_resource) {
         let api: Api<Secret> = Api::namespaced(client, &namespace);
         let mut secret = api.get(&resource_name).await?;
-        if secret.metadata.resource_version.as_deref() != Some(expected_resource_version) {
-            bail!("Secret changed on the cluster; reload its data before saving");
-        }
+        resource_data::validate_resource_version(
+            secret.metadata.resource_version.as_deref(),
+            expected_resource_version,
+            "Secret",
+        )?;
         let data = secret
             .data
             .as_mut()

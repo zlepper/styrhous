@@ -21,6 +21,11 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::time::{Duration, Instant};
 use tracing::{error, info};
 
+pub(super) use super::persistence::{
+    PersistedApiResource, PersistedClusterSelection, PersistedClusterSelections,
+    ResourceNavigationExpansion,
+};
+
 const DELETE_CONFIRMATION_DELAY: Duration = Duration::from_secs(3);
 
 #[derive(Default)]
@@ -42,54 +47,6 @@ pub(super) struct UiState {
     pub(super) terminal_launch_error: Option<String>,
     pub(super) cluster_selections: PersistedClusterSelections,
     pub(super) resource_navigation_expansion: ResourceNavigationExpansion,
-}
-
-/// Workspace choices retained independently of the transient cluster connection state.
-///
-/// Cluster contexts are rebuilt whenever the kubeconfig is reloaded, while namespace and API
-/// discovery complete asynchronously. Keeping these choices separately prevents that rebuild
-/// from overwriting the values which still need to be restored.
-#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
-pub(super) struct PersistedClusterSelections {
-    #[serde(default)]
-    pub(super) selections: BTreeMap<String, PersistedClusterSelection>,
-}
-
-#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
-pub(super) struct ResourceNavigationExpansion {
-    #[serde(default)]
-    pub(super) expanded_nodes: BTreeSet<String>,
-}
-
-#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
-pub(super) struct PersistedClusterSelection {
-    #[serde(default)]
-    pub(super) selected_namespaces: BTreeSet<String>,
-    #[serde(default)]
-    pub(super) selected_api_resource: Option<PersistedApiResource>,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub(super) struct PersistedApiResource {
-    pub(super) group: String,
-    pub(super) name: String,
-}
-
-impl PersistedApiResource {
-    fn from_api_resource(api_resource: &ApiResource) -> Self {
-        Self {
-            group: canonical_api_group(&api_resource.group).to_owned(),
-            name: api_resource.name.clone(),
-        }
-    }
-
-    fn matches(&self, api_resource: &ApiResource) -> bool {
-        self.group == canonical_api_group(&api_resource.group) && self.name == api_resource.name
-    }
-}
-
-fn canonical_api_group(group: &str) -> &str {
-    if group.is_empty() { "core" } else { group }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
