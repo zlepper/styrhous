@@ -29,11 +29,14 @@ pub struct MinimalResource {
     pub log_containers: Vec<PodLogContainer>,
 }
 
-/// A declared Pod container available as a log-stream target.
+/// A declared Pod container available as a log-stream or debug-shell target.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct PodLogContainer {
     pub(crate) name: String,
     pub(crate) kind: ContainerKind,
+    /// The declared container image, when Kubernetes supplied one. Debug-shell
+    /// menus use this to offer images already used by the Pod.
+    pub(crate) image: Option<String>,
 }
 
 impl Ord for MinimalResource {

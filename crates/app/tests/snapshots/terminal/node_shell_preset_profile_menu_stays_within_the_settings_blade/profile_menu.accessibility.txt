@@ -547,11 +547,11 @@ Window rect=<none>
                         Label value="Use {command} as the placeholder.\nIt is replaced with the complete kubectl shell command." rect=(x=879.0 y=621.0 width=367.6 height=34.0 center_x=1062.8 center_y=638.0)
                           TextRun value="Use {command} as the placeholder.\n" rect=(x=879.0 y=621.0 width=229.7 height=17.0 center_x=993.8 center_y=629.5)
                           TextRun value="It is replaced with the complete kubectl shell command." rect=(x=879.0 y=638.0 width=367.6 height=17.0 center_x=1062.8 center_y=646.5)
-                  Label value="Node shells" rect=(x=793.0 y=765.0 width=88.7 height=19.0 center_x=837.4 center_y=774.5)
-                    TextRun value="Node shells" rect=(x=793.0 y=765.0 width=88.7 height=19.0 center_x=837.4 center_y=774.5)
-                  Label value="Choose the debug images and profiles offered from a Node’s Shell menu. Each session creates a debug Pod; the node filesystem is available at /host and the generated Pod remains for you to remove." rect=(x=793.0 y=795.0 width=689.9 height=34.0 center_x=1138.0 center_y=812.0)
-                    TextRun value="Choose the debug images and profiles offered from a Node’s Shell menu. Each session creates a debug " rect=(x=793.0 y=795.0 width=689.9 height=17.0 center_x=1138.0 center_y=803.5)
-                    TextRun value="Pod; the node filesystem is available at /host and the generated Pod remains for you to remove." rect=(x=793.0 y=812.0 width=630.0 height=17.0 center_x=1108.0 center_y=820.5)
+                  Label value="Debug images" rect=(x=793.0 y=765.0 width=108.9 height=19.0 center_x=847.5 center_y=774.5)
+                    TextRun value="Debug images" rect=(x=793.0 y=765.0 width=108.9 height=19.0 center_x=847.5 center_y=774.5)
+                  Label value="Choose the images and profiles offered for Debug images and Pod debug shells. Node sessions create a debug Pod with the node filesystem available at /host; Pod sessions add an ephemeral debug container." rect=(x=793.0 y=795.0 width=695.9 height=34.0 center_x=1141.0 center_y=812.0)
+                    TextRun value="Choose the images and profiles offered for Debug images and Pod debug shells. Node sessions create a " rect=(x=793.0 y=795.0 width=695.9 height=17.0 center_x=1141.0 center_y=803.5)
+                    TextRun value="debug Pod with the node filesystem available at /host; Pod sessions add an ephemeral debug container." rect=(x=793.0 y=812.0 width=687.0 height=17.0 center_x=1136.5 center_y=820.5)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       Label value="" rect=(x=809.0 y=859.5 width=0.0 height=17.0 center_x=809.0 center_y=868.0)
@@ -577,17 +577,17 @@ Window rect=<none>
                       GenericContainer rect=<none>
                         GenericContainer rect=<none>
                           GenericContainer rect=<none>
-                            TextInput name="Node shell 1 name" value="Busybox" rect=(x=862.0 y=900.0 width=136.0 height=21.0 center_x=930.0 center_y=910.5)
+                            TextInput name="Debug image 1 name" value="Busybox" rect=(x=862.0 y=900.0 width=136.0 height=21.0 center_x=930.0 center_y=910.5)
                               TextRun value="Busybox" rect=(x=866.0 y=902.0 width=57.1 height=17.0 center_x=894.5 center_y=910.5)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
                         GenericContainer rect=<none>
                           GenericContainer rect=<none>
-                            TextInput name="Node shell 1 image" value="busybox" rect=(x=1032.0 y=900.0 width=248.0 height=21.0 center_x=1156.0 center_y=910.5)
+                            TextInput name="Debug image 1 image" value="busybox" rect=(x=1032.0 y=900.0 width=248.0 height=21.0 center_x=1156.0 center_y=910.5)
                               TextRun value="busybox" rect=(x=1036.0 y=902.0 width=56.5 height=17.0 center_x=1064.2 center_y=910.5)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        ComboBox name="Node shell 1 debug profile" rect=(x=1305.0 y=894.0 width=150.0 height=32.0 center_x=1380.0 center_y=910.0)
+                        ComboBox name="Debug image 1 debug profile" rect=(x=1305.0 y=894.0 width=150.0 height=32.0 center_x=1380.0 center_y=910.0)
                         GenericContainer rect=<none>
                           Image rect=(x=1431.0 y=902.0 width=16.0 height=16.0 center_x=1439.0 center_y=910.0)
                         GenericContainer rect=<none>
@@ -605,17 +605,17 @@ Window rect=<none>
                       GenericContainer rect=<none>
                         GenericContainer rect=<none>
                           GenericContainer rect=<none>
-                            TextInput name="Node shell 2 name" value="Ubuntu" rect=(x=862.0 y=944.0 width=136.0 height=21.0 center_x=930.0 center_y=954.5)
+                            TextInput name="Debug image 2 name" value="Ubuntu" rect=(x=862.0 y=944.0 width=136.0 height=21.0 center_x=930.0 center_y=954.5)
                               TextRun value="Ubuntu" rect=(x=866.0 y=946.0 width=48.4 height=17.0 center_x=890.2 center_y=954.5)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
                         GenericContainer rect=<none>
                           GenericContainer rect=<none>
-                            TextInput name="Node shell 2 image" value="ubuntu" rect=(x=1032.0 y=944.0 width=248.0 height=21.0 center_x=1156.0 center_y=954.5)
+                            TextInput name="Debug image 2 image" value="ubuntu" rect=(x=1032.0 y=944.0 width=248.0 height=21.0 center_x=1156.0 center_y=954.5)
                               TextRun value="ubuntu" rect=(x=1036.0 y=946.0 width=46.2 height=17.0 center_x=1059.1 center_y=954.5)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        ComboBox name="Node shell 2 debug profile" rect=(x=1305.0 y=938.0 width=150.0 height=32.0 center_x=1380.0 center_y=954.0)
+                        ComboBox name="Debug image 2 debug profile" rect=(x=1305.0 y=938.0 width=150.0 height=32.0 center_x=1380.0 center_y=954.0)
                         GenericContainer rect=<none>
                           Image rect=(x=1431.0 y=946.0 width=16.0 height=16.0 center_x=1439.0 center_y=954.0)
                     GenericContainer rect=<none>
@@ -630,21 +630,21 @@ Window rect=<none>
                       GenericContainer rect=<none>
                         GenericContainer rect=<none>
                           GenericContainer rect=<none>
-                            TextInput name="Node shell 3 name" value="Netshoot" rect=(x=862.0 y=988.0 width=136.0 height=21.0 center_x=930.0 center_y=998.5)
+                            TextInput name="Debug image 3 name" value="Netshoot" rect=(x=862.0 y=988.0 width=136.0 height=21.0 center_x=930.0 center_y=998.5)
                               TextRun value="Netshoot" rect=(x=866.0 y=990.0 width=60.2 height=17.0 center_x=896.1 center_y=998.5)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
                         GenericContainer rect=<none>
                           GenericContainer rect=<none>
-                            TextInput name="Node shell 3 image" value="nicolaka/netshoot" rect=(x=1032.0 y=988.0 width=248.0 height=21.0 center_x=1156.0 center_y=998.5)
+                            TextInput name="Debug image 3 image" value="nicolaka/netshoot" rect=(x=1032.0 y=988.0 width=248.0 height=21.0 center_x=1156.0 center_y=998.5)
                               TextRun value="nicolaka/netshoot" rect=(x=1036.0 y=990.0 width=117.8 height=17.0 center_x=1094.9 center_y=998.5)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        ComboBox name="Node shell 3 debug profile" rect=(x=1305.0 y=982.0 width=150.0 height=32.0 center_x=1380.0 center_y=998.0)
+                        ComboBox name="Debug image 3 debug profile" rect=(x=1305.0 y=982.0 width=150.0 height=32.0 center_x=1380.0 center_y=998.0)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
                         Button name="Remove Netshoot" rect=(x=1475.0 y=982.0 width=32.0 height=32.0 center_x=1491.0 center_y=998.0)
-                  Button name="Add node shell" rect=(x=793.0 y=1020.0 width=32.0 height=32.0 center_x=809.0 center_y=1036.0)
+                  Button name="Add debug image" rect=(x=793.0 y=1020.0 width=32.0 height=32.0 center_x=809.0 center_y=1036.0)
               ScrollBar rect=(x=1501.0 y=204.0 width=10.0 height=737.0 center_x=1506.0 center_y=572.5)
             GenericContainer rect=<none>
               Button name="Save changes" rect=(x=1394.1 y=961.0 width=116.9 height=33.0 center_x=1452.6 center_y=977.5)

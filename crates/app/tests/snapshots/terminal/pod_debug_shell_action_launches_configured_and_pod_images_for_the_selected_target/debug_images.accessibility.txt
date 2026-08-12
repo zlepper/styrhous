@@ -484,157 +484,26 @@ Window state=[focused] rect=<none>
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
                     Button name="More actions for kube-scheduler-kind-control-plane" rect=(x=1460.0 y=432.0 width=36.0 height=36.0 center_x=1478.0 center_y=450.0)
-  GenericContainer rect=<none>
-  GenericContainer rect=<none>
-    Unknown rect=(x=0.0 y=0.0 width=784.0 height=1024.0 center_x=392.0 center_y=512.0)
-  GenericContainer rect=<none>
-    Unknown rect=(x=784.0 y=1016.0 width=744.0 height=8.0 center_x=1156.0 center_y=1020.0)
-  GenericContainer rect=<none>
-    Unknown rect=(x=1528.0 y=0.0 width=8.0 height=1024.0 center_x=1532.0 center_y=512.0)
-  GenericContainer rect=<none>
+  Unknown rect=(x=1294.0 y=139.0 width=202.0 height=227.0 center_x=1395.0 center_y=252.5)
     GenericContainer rect=<none>
       GenericContainer rect=<none>
-        GenericContainer rect=<none>
-          GenericContainer rect=<none>
-            GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Button name="Back" state=[disabled] rect=(x=809.0 y=35.0 width=32.0 height=32.0 center_x=825.0 center_y=51.0)
-                GenericContainer rect=<none>
-                  Button name="Forward" state=[disabled] rect=(x=849.0 y=35.0 width=32.0 height=32.0 center_x=865.0 center_y=51.0)
-              GenericContainer rect=<none>
-                Label value="Settings" rect=(x=917.0 y=39.0 width=77.1 height=24.0 center_x=955.5 center_y=51.0)
-                  TextRun value="Settings" rect=(x=917.0 y=39.0 width=77.1 height=24.0 center_x=955.5 center_y=51.0)
-              GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Button name="Close blade" rect=(x=1471.0 y=35.0 width=32.0 height=32.0 center_x=1487.0 center_y=51.0)
-            Label value="APPLICATION" rect=(x=809.0 y=88.0 width=78.6 height=15.0 center_x=848.3 center_y=95.5)
-              TextRun value="APPLICATION" rect=(x=809.0 y=88.0 width=78.6 height=15.0 center_x=848.3 center_y=95.5)
-            Label value="Configure local tools and display preferences.\nThese settings apply only to this application on this device." rect=(x=809.0 y=110.0 width=390.2 height=34.0 center_x=1004.1 center_y=127.0)
-              TextRun value="Configure local tools and display preferences.\n" rect=(x=809.0 y=110.0 width=303.7 height=17.0 center_x=960.9 center_y=118.5)
-              TextRun value="These settings apply only to this application on this device." rect=(x=809.0 y=127.0 width=390.2 height=17.0 center_x=1004.1 center_y=135.5)
-            GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Label value="Terminal launcher" rect=(x=809.0 y=204.0 width=135.1 height=19.0 center_x=876.6 center_y=213.5)
-                    TextRun value="Terminal launcher" rect=(x=809.0 y=204.0 width=135.1 height=19.0 center_x=876.6 center_y=213.5)
-                  Label value="Choose how shells open on this computer." rect=(x=809.0 y=234.0 width=280.6 height=17.0 center_x=949.3 center_y=242.5)
-                    TextRun value="Choose how shells open on this computer." rect=(x=809.0 y=234.0 width=280.6 height=17.0 center_x=949.3 center_y=242.5)
-                  GenericContainer rect=<none>
-                    GenericContainer rect=<none>
-                      RadioButton name="Automatic" state=[toggled=True] rect=(x=842.0 y=323.0 width=24.0 height=20.0 center_x=854.0 center_y=333.0)
-                      GenericContainer rect=<none>
-                        Label value="Automatic" rect=(x=882.0 y=311.0 width=89.3 height=22.0 center_x=926.7 center_y=322.0)
-                          TextRun value="Automatic" rect=(x=882.0 y=311.0 width=89.3 height=22.0 center_x=926.7 center_y=322.0)
-                        Label value="Use your system’s preferred terminal." rect=(x=882.0 y=340.0 width=247.8 height=17.0 center_x=1005.9 center_y=348.5)
-                          TextRun value="Use your system’s preferred terminal." rect=(x=882.0 y=340.0 width=247.8 height=17.0 center_x=1005.9 center_y=348.5)
-                  GenericContainer rect=<none>
-                    GenericContainer rect=<none>
-                      RadioButton name="Custom launcher" state=[toggled=False] rect=(x=842.0 y=454.0 width=24.0 height=20.0 center_x=854.0 center_y=464.0)
-                      GenericContainer rect=<none>
-                        Label value="Custom launcher" rect=(x=882.0 y=442.0 width=148.4 height=22.0 center_x=956.2 center_y=453.0)
-                          TextRun value="Custom launcher" rect=(x=882.0 y=442.0 width=148.4 height=22.0 center_x=956.2 center_y=453.0)
-                        Label value="Use a command template for your preferred terminal." rect=(x=882.0 y=471.0 width=351.6 height=17.0 center_x=1057.8 center_y=479.5)
-                          TextRun value="Use a command template for your preferred terminal." rect=(x=882.0 y=471.0 width=351.6 height=17.0 center_x=1057.8 center_y=479.5)
-                  Label value="Debug images" rect=(x=809.0 y=581.0 width=108.9 height=19.0 center_x=863.5 center_y=590.5)
-                    TextRun value="Debug images" rect=(x=809.0 y=581.0 width=108.9 height=19.0 center_x=863.5 center_y=590.5)
-                  Label value="Choose the images and profiles offered for Debug images and Pod debug shells. Node sessions create a debug Pod with the node filesystem available at /host; Pod sessions add an ephemeral debug container." rect=(x=809.0 y=611.0 width=683.9 height=51.0 center_x=1151.0 center_y=636.5)
-                    TextRun value="Choose the images and profiles offered for Debug images and Pod debug shells. Node sessions create " rect=(x=809.0 y=611.0 width=683.9 height=17.0 center_x=1151.0 center_y=619.5)
-                    TextRun value="a debug Pod with the node filesystem available at /host; Pod sessions add an ephemeral debug " rect=(x=809.0 y=628.0 width=633.9 height=17.0 center_x=1126.0 center_y=636.5)
-                    TextRun value="container." rect=(x=809.0 y=645.0 width=65.0 height=17.0 center_x=841.5 center_y=653.5)
-                  GenericContainer rect=<none>
-                    GenericContainer rect=<none>
-                      Label value="" rect=(x=825.0 y=692.5 width=0.0 height=17.0 center_x=825.0 center_y=701.0)
-                        TextRun value="" rect=(x=825.0 y=692.5 width=0.0 height=17.0 center_x=825.0 center_y=701.0)
-                    GenericContainer rect=<none>
-                      Label value="Name" rect=(x=869.0 y=692.5 width=38.8 height=17.0 center_x=888.4 center_y=701.0)
-                        TextRun value="Name" rect=(x=869.0 y=692.5 width=38.8 height=17.0 center_x=888.4 center_y=701.0)
-                    GenericContainer rect=<none>
-                      Label value="Image" rect=(x=1039.0 y=692.5 width=40.6 height=17.0 center_x=1059.3 center_y=701.0)
-                        TextRun value="Image" rect=(x=1039.0 y=692.5 width=40.6 height=17.0 center_x=1059.3 center_y=701.0)
-                    GenericContainer rect=<none>
-                      Label value="Debug profile" rect=(x=1297.0 y=692.5 width=89.8 height=17.0 center_x=1341.9 center_y=701.0)
-                        TextRun value="Debug profile" rect=(x=1297.0 y=692.5 width=89.8 height=17.0 center_x=1341.9 center_y=701.0)
-                    GenericContainer rect=<none>
-                      Label value="" rect=(x=1467.0 y=692.5 width=0.0 height=17.0 center_x=1467.0 center_y=701.0)
-                        TextRun value="" rect=(x=1467.0 y=692.5 width=0.0 height=17.0 center_x=1467.0 center_y=701.0)
-                  GenericContainer rect=<none>
-                    GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        Image rect=(x=825.0 y=735.0 width=16.0 height=16.0 center_x=833.0 center_y=743.0)
-                      Button name="Reorder Busybox" rect=(x=825.0 y=735.0 width=16.0 height=16.0 center_x=833.0 center_y=743.0)
-                    GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        GenericContainer rect=<none>
-                          GenericContainer rect=<none>
-                            TextInput name="Debug image 1 name" value="Busybox" rect=(x=878.0 y=733.0 width=136.0 height=21.0 center_x=946.0 center_y=743.5)
-                              TextRun value="Busybox" rect=(x=882.0 y=735.0 width=57.1 height=17.0 center_x=910.5 center_y=743.5)
-                    GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        GenericContainer rect=<none>
-                          GenericContainer rect=<none>
-                            TextInput name="Debug image 1 image" value="busybox" rect=(x=1048.0 y=733.0 width=224.0 height=21.0 center_x=1160.0 center_y=743.5)
-                              TextRun value="busybox" rect=(x=1052.0 y=735.0 width=56.5 height=17.0 center_x=1080.2 center_y=743.5)
-                    GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        ComboBox name="Debug image 1 debug profile" rect=(x=1297.0 y=727.0 width=150.0 height=32.0 center_x=1372.0 center_y=743.0)
-                        GenericContainer rect=<none>
-                          Image rect=(x=1423.0 y=735.0 width=16.0 height=16.0 center_x=1431.0 center_y=743.0)
-                    GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        Button name="Remove Busybox" rect=(x=1467.0 y=727.0 width=32.0 height=32.0 center_x=1483.0 center_y=743.0)
-                  GenericContainer rect=<none>
-                    GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        Image rect=(x=825.0 y=779.0 width=16.0 height=16.0 center_x=833.0 center_y=787.0)
-                      Button name="Reorder Ubuntu" rect=(x=825.0 y=779.0 width=16.0 height=16.0 center_x=833.0 center_y=787.0)
-                    GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        GenericContainer rect=<none>
-                          GenericContainer rect=<none>
-                            TextInput name="Debug image 2 name" value="Ubuntu" rect=(x=878.0 y=777.0 width=136.0 height=21.0 center_x=946.0 center_y=787.5)
-                              TextRun value="Ubuntu" rect=(x=882.0 y=779.0 width=48.4 height=17.0 center_x=906.2 center_y=787.5)
-                    GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        GenericContainer rect=<none>
-                          GenericContainer rect=<none>
-                            TextInput name="Debug image 2 image" value="ubuntu" rect=(x=1048.0 y=777.0 width=224.0 height=21.0 center_x=1160.0 center_y=787.5)
-                              TextRun value="ubuntu" rect=(x=1052.0 y=779.0 width=46.2 height=17.0 center_x=1075.1 center_y=787.5)
-                    GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        ComboBox name="Debug image 2 debug profile" rect=(x=1297.0 y=771.0 width=150.0 height=32.0 center_x=1372.0 center_y=787.0)
-                        GenericContainer rect=<none>
-                          Image rect=(x=1423.0 y=779.0 width=16.0 height=16.0 center_x=1431.0 center_y=787.0)
-                    GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        Button name="Remove Ubuntu" rect=(x=1467.0 y=771.0 width=32.0 height=32.0 center_x=1483.0 center_y=787.0)
-                  GenericContainer rect=<none>
-                    GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        Image rect=(x=825.0 y=823.0 width=16.0 height=16.0 center_x=833.0 center_y=831.0)
-                      Button name="Reorder Netshoot" rect=(x=825.0 y=823.0 width=16.0 height=16.0 center_x=833.0 center_y=831.0)
-                    GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        GenericContainer rect=<none>
-                          GenericContainer rect=<none>
-                            TextInput name="Debug image 3 name" value="Netshoot" rect=(x=878.0 y=821.0 width=136.0 height=21.0 center_x=946.0 center_y=831.5)
-                              TextRun value="Netshoot" rect=(x=882.0 y=823.0 width=60.2 height=17.0 center_x=912.1 center_y=831.5)
-                    GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        GenericContainer rect=<none>
-                          GenericContainer rect=<none>
-                            TextInput name="Debug image 3 image" value="nicolaka/netshoot" rect=(x=1048.0 y=821.0 width=224.0 height=21.0 center_x=1160.0 center_y=831.5)
-                              TextRun value="nicolaka/netshoot" rect=(x=1052.0 y=823.0 width=117.8 height=17.0 center_x=1110.9 center_y=831.5)
-                    GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        ComboBox name="Debug image 3 debug profile" rect=(x=1297.0 y=815.0 width=150.0 height=32.0 center_x=1372.0 center_y=831.0)
-                        GenericContainer rect=<none>
-                          Image rect=(x=1423.0 y=823.0 width=16.0 height=16.0 center_x=1431.0 center_y=831.0)
-                    GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        Button name="Remove Netshoot" rect=(x=1467.0 y=815.0 width=32.0 height=32.0 center_x=1483.0 center_y=831.0)
-                  Button name="Add debug image" rect=(x=809.0 y=853.0 width=32.0 height=32.0 center_x=825.0 center_y=869.0)
-            GenericContainer rect=<none>
-              Button name="Save changes" rect=(x=1386.1 y=961.0 width=116.9 height=33.0 center_x=1444.6 center_y=977.5)
-              Button name="Reset" rect=(x=1317.0 y=961.0 width=61.1 height=33.0 center_x=1347.6 center_y=977.5)
-      ScrollBar rect=(x=1518.0 y=8.0 width=10.0 height=1008.0 center_x=1523.0 center_y=512.0)
+        Button name="Debug shell ⏵" rect=(x=1299.0 y=144.0 width=192.0 height=33.0 center_x=1395.0 center_y=160.5)
+        Button name="Shell ⏵" rect=(x=1299.0 y=190.0 width=192.0 height=33.0 center_x=1395.0 center_y=206.5)
+        Button name="View logs ⏵" rect=(x=1299.0 y=236.0 width=192.0 height=33.0 center_x=1395.0 center_y=252.5)
+        Button name="Edit" rect=(x=1299.0 y=282.0 width=192.0 height=33.0 center_x=1395.0 center_y=298.5)
+        Button name="Delete" rect=(x=1299.0 y=328.0 width=192.0 height=33.0 center_x=1395.0 center_y=344.5)
+  Unknown rect=(x=1084.0 y=137.0 width=206.0 height=83.0 center_x=1187.0 center_y=178.5)
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        Button name="coredns ⏵" rect=(x=1091.0 y=144.0 width=192.0 height=33.0 center_x=1187.0 center_y=160.5)
+        Button name="sidecar ⏵" rect=(x=1091.0 y=180.0 width=192.0 height=33.0 center_x=1187.0 center_y=196.5)
+  Unknown rect=(x=482.0 y=137.0 width=600.0 height=273.0 center_x=782.0 center_y=273.5)
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        Button name="Busybox — General" rect=(x=489.0 y=144.0 width=586.0 height=33.0 center_x=782.0 center_y=160.5)
+        Button name="Ubuntu — General" rect=(x=489.0 y=180.0 width=586.0 height=33.0 center_x=782.0 center_y=196.5)
+        Button name="Netshoot — Network admin" rect=(x=489.0 y=216.0 width=586.0 height=33.0 center_x=782.0 center_y=232.5)
+        Button name="registry.example/setup:v1 — General" rect=(x=489.0 y=262.0 width=586.0 height=33.0 center_x=782.0 center_y=278.5)
+        Button name="registry.example/coredns:v1 — General" rect=(x=489.0 y=298.0 width=586.0 height=33.0 center_x=782.0 center_y=314.5)
+        Button name="registry.example/sidecar:v1 — General" rect=(x=489.0 y=334.0 width=586.0 height=33.0 center_x=782.0 center_y=350.5)
+        Button name="registry.example/debugger:v1 — General" rect=(x=489.0 y=370.0 width=586.0 height=33.0 center_x=782.0 center_y=386.5)

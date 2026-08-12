@@ -13,7 +13,7 @@ use crate::minimal_resource::MinimalResource;
 use crate::resource_catalog::ResourceNavigation;
 use crate::resource_handlers::table_definition;
 use crate::resource_table::{CellValue, CustomResourceColumn, NODE_COLUMN};
-use crate::terminal_launcher::{NodeShellPreset, ShellRequest};
+use crate::terminal_launcher::{DebugImagePreset, ShellRequest};
 use crate::worker::{GetResourceScale, WorkerCommandBox};
 use components::colors::{TOOLBAR_BACKGROUND, gray};
 use components::design::{spacing, typography};
@@ -60,7 +60,7 @@ struct ResourceTableOptions<'a> {
     hidden_resource_count: usize,
     show_namespace_column: bool,
     actions: ResourceActionAvailability,
-    node_shell_presets: &'a [NodeShellPreset],
+    debug_image_presets: &'a [DebugImagePreset],
 }
 
 enum NamespaceSelection {
@@ -80,7 +80,7 @@ pub(super) fn show(
     ui_state: &mut UiState,
     commands_to_send: &mut Vec<WorkerCommandBox>,
     shell_requests: &mut Vec<ShellRequest>,
-    node_shell_presets: &[NodeShellPreset],
+    debug_image_presets: &[DebugImagePreset],
 ) {
     let ctx = ui.ctx().clone();
     let mut namespace_selection = None;
@@ -251,7 +251,7 @@ pub(super) fn show(
                             enabled: resource_actions_enabled,
                             supports_scale: cluster.scalable_api_resources.contains(api_resource),
                         },
-                        node_shell_presets,
+                        debug_image_presets,
                     },
                     cluster
                         .resource_selections
@@ -310,6 +310,7 @@ pub(super) fn show(
                             log_to_open = Some((cluster.cluster_key, name, namespace, container));
                         }
                         action @ (ResourceAction::Shell { .. }
+                        | ResourceAction::PodDebugShell { .. }
                         | ResourceAction::NodeShell { .. }) => {
                             shell_to_open = action.shell_request(&cluster.name);
                         }
@@ -854,7 +855,7 @@ fn show_resource_table(
                                 api_resource,
                                 resource,
                                 &resource.log_containers,
-                                options.node_shell_presets,
+                                options.debug_image_presets,
                                 options.actions.supports_scale,
                                 &mut pending_action.borrow_mut(),
                             );
@@ -937,7 +938,7 @@ fn show_resource_table(
                                         api_resource,
                                         resource,
                                         &resource.log_containers,
-                                        options.node_shell_presets,
+                                        options.debug_image_presets,
                                         options.actions.supports_scale,
                                         &mut pending_action.borrow_mut(),
                                     );
@@ -958,7 +959,7 @@ fn show_resource_table(
                             api_resource,
                             resource,
                             options.actions.supports_scale,
-                            options.node_shell_presets,
+                            options.debug_image_presets,
                             &mut pending_action.borrow_mut(),
                         );
                     }
@@ -992,7 +993,7 @@ fn show_resource_table(
                             api_resource,
                             resource,
                             &resource.log_containers,
-                            options.node_shell_presets,
+                            options.debug_image_presets,
                             options.actions.supports_scale,
                             &mut pending_action.borrow_mut(),
                         );
@@ -1009,7 +1010,7 @@ fn show_resource_actions(
     api_resource: &crate::api_resource::ApiResource,
     resource: &MinimalResource,
     supports_scale: bool,
-    node_shell_presets: &[NodeShellPreset],
+    debug_image_presets: &[DebugImagePreset],
     pending_action: &mut Option<ResourceAction>,
 ) {
     let mut action_ui = ui.new_child(
@@ -1032,7 +1033,7 @@ fn show_resource_actions(
             api_resource,
             resource,
             &resource.log_containers,
-            node_shell_presets,
+            debug_image_presets,
             supports_scale,
             pending_action,
         );

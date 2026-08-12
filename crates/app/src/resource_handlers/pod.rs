@@ -203,11 +203,13 @@ fn pod_log_containers(pod: &Pod) -> Vec<PodLogContainer> {
             .map(|container| PodLogContainer {
                 name: container.name.clone(),
                 kind: ContainerKind::Init,
+                image: container.image.clone(),
             }),
     );
     containers.extend(spec.containers.iter().map(|container| PodLogContainer {
         name: container.name.clone(),
         kind: ContainerKind::App,
+        image: container.image.clone(),
     }));
     containers.extend(
         spec.ephemeral_containers
@@ -217,6 +219,7 @@ fn pod_log_containers(pod: &Pod) -> Vec<PodLogContainer> {
             .map(|container| PodLogContainer {
                 name: container.name.clone(),
                 kind: ContainerKind::Ephemeral,
+                image: container.image.clone(),
             }),
     );
     containers
@@ -547,24 +550,29 @@ mod tests {
             spec: Some(PodSpec {
                 init_containers: Some(vec![Container {
                     name: "setup".to_owned(),
+                    image: Some("registry.example/setup:v1".to_owned()),
                     ..Default::default()
                 }]),
                 containers: vec![
                     Container {
                         name: "api".to_owned(),
+                        image: Some("registry.example/api:v1".to_owned()),
                         ..Default::default()
                     },
                     Container {
                         name: "worker".to_owned(),
+                        image: Some("registry.example/worker:v1".to_owned()),
                         ..Default::default()
                     },
                     Container {
                         name: "sidecar".to_owned(),
+                        image: Some("registry.example/api:v1".to_owned()),
                         ..Default::default()
                     },
                 ],
                 ephemeral_containers: Some(vec![EphemeralContainer {
                     name: "debugger".to_owned(),
+                    image: Some("registry.example/debugger:v1".to_owned()),
                     ..Default::default()
                 }]),
                 ..Default::default()
@@ -672,14 +680,34 @@ mod tests {
             resource
                 .log_containers
                 .iter()
-                .map(|container| (container.name.as_str(), container.kind))
+                .map(|container| (
+                    container.name.as_str(),
+                    container.kind,
+                    container.image.as_deref(),
+                ))
                 .collect::<Vec<_>>(),
             vec![
-                ("setup", ContainerKind::Init),
-                ("api", ContainerKind::App),
-                ("worker", ContainerKind::App),
-                ("sidecar", ContainerKind::App),
-                ("debugger", ContainerKind::Ephemeral),
+                (
+                    "setup",
+                    ContainerKind::Init,
+                    Some("registry.example/setup:v1")
+                ),
+                ("api", ContainerKind::App, Some("registry.example/api:v1")),
+                (
+                    "worker",
+                    ContainerKind::App,
+                    Some("registry.example/worker:v1")
+                ),
+                (
+                    "sidecar",
+                    ContainerKind::App,
+                    Some("registry.example/api:v1")
+                ),
+                (
+                    "debugger",
+                    ContainerKind::Ephemeral,
+                    Some("registry.example/debugger:v1")
+                ),
             ]
         );
     }

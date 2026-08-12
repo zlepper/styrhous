@@ -154,14 +154,14 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             &mut self.ui_state,
             &mut commands_to_send,
             &mut shell_requests,
-            &self.terminal_launch_settings.node_shell_presets,
+            &self.terminal_launch_settings.debug_image_presets,
         );
         resource_detail::show(
             &ctx,
             &mut self.ui_state,
             &mut commands_to_send,
             &mut shell_requests,
-            &self.terminal_launch_settings.node_shell_presets,
+            &self.terminal_launch_settings.debug_image_presets,
         );
         log_windows::show(
             &ctx,
@@ -283,7 +283,7 @@ mod persistence_tests {
     fn terminal_launch_settings_round_trip_through_eframe_storage() {
         let expected = TerminalLaunchSettings {
             custom_template: Some("alacritty -e {command}".into()),
-            node_shell_presets: vec![crate::terminal_launcher::NodeShellPreset {
+            debug_image_presets: vec![crate::terminal_launcher::DebugImagePreset {
                 name: "Operations".into(),
                 image: "registry.example/debug-tools:v1".into(),
                 profile: crate::terminal_launcher::DebugProfile::Sysadmin,

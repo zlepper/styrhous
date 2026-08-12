@@ -209,6 +209,7 @@ fn empty_log_window(total_lines: usize) -> PodLogWindowState {
         PodLogContainer {
             name: "api".to_owned(),
             kind: ContainerKind::App,
+            image: None,
         },
     );
     window.total_lines = total_lines;

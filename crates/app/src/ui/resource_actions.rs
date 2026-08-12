@@ -1,7 +1,8 @@
 use super::state::ResourceAction;
 use crate::api_resource::ApiResource;
 use crate::minimal_resource::{MinimalResource, PodLogContainer};
-use crate::terminal_launcher::NodeShellPreset;
+use crate::resource_table::ContainerKind;
+use crate::terminal_launcher::DebugImagePreset;
 use components::colors::gray;
 use components::design::status;
 use components::{MoreMenu, icons};
@@ -12,13 +13,13 @@ pub(super) fn show_resource_action_items(
     api_resource: &ApiResource,
     resource: &MinimalResource,
     log_containers: &[PodLogContainer],
-    node_shell_presets: &[NodeShellPreset],
+    debug_image_presets: &[DebugImagePreset],
     supports_scale: bool,
     pending_action: &mut Option<ResourceAction>,
 ) {
-    if api_resource.kind == "Node" && !node_shell_presets.is_empty() {
+    if api_resource.kind == "Node" && !debug_image_presets.is_empty() {
         menu.submenu("Shell", |menu: &mut MoreMenu<'_>| {
-            for preset in node_shell_presets {
+            for preset in debug_image_presets {
                 if menu.action(preset.menu_label()).clicked() && pending_action.is_none() {
                     *pending_action = Some(ResourceAction::NodeShell {
                         name: resource.name.clone(),
@@ -32,8 +33,30 @@ pub(super) fn show_resource_action_items(
     }
     let shell_containers = log_containers
         .iter()
-        .filter(|container| matches!(container.kind, crate::resource_table::ContainerKind::App))
+        .filter(|container| matches!(container.kind, ContainerKind::App))
         .collect::<Vec<_>>();
+    let pod_image_presets = pod_image_presets(log_containers, debug_image_presets);
+    if api_resource.kind == "Pod"
+        && !shell_containers.is_empty()
+        && (!debug_image_presets.is_empty() || !pod_image_presets.is_empty())
+    {
+        menu.submenu("Debug shell", |menu: &mut MoreMenu<'_>| {
+            for target in &shell_containers {
+                menu.submenu(&target.name, |menu: &mut MoreMenu<'_>| {
+                    for preset in debug_image_presets {
+                        add_pod_debug_shell_action(menu, resource, target, preset, pending_action);
+                    }
+                    if !debug_image_presets.is_empty() && !pod_image_presets.is_empty() {
+                        menu.separator();
+                    }
+                    for preset in &pod_image_presets {
+                        add_pod_debug_shell_action(menu, resource, target, preset, pending_action);
+                    }
+                });
+            }
+        });
+        menu.separator();
+    }
     match shell_containers.as_slice() {
         [] => {}
         [container] => {
@@ -153,5 +176,109 @@ pub(super) fn show_resource_action_items(
             namespace: resource.namespace.clone(),
             finalizers: resource.finalizers().to_vec(),
         });
+    }
+}
+
+fn pod_image_presets(
+    log_containers: &[PodLogContainer],
+    configured_presets: &[DebugImagePreset],
+) -> Vec<DebugImagePreset> {
+    let mut pod_image_presets = Vec::new();
+    for image in log_containers
+        .iter()
+        .filter_map(|container| container.image.as_ref())
+        .filter(|image| !image.trim().is_empty())
+    {
+        let preset = DebugImagePreset {
+            name: image.clone(),
+            image: image.clone(),
+            profile: crate::terminal_launcher::DebugProfile::General,
+        };
+        if !configured_presets
+            .iter()
+            .any(|existing| existing.image == preset.image && existing.profile == preset.profile)
+            && !pod_image_presets
+                .iter()
+                .any(|existing: &DebugImagePreset| existing.image == preset.image)
+        {
+            pod_image_presets.push(preset);
+        }
+    }
+    pod_image_presets
+}
+
+fn add_pod_debug_shell_action(
+    menu: &mut MoreMenu<'_>,
+    resource: &MinimalResource,
+    target: &PodLogContainer,
+    preset: &DebugImagePreset,
+    pending_action: &mut Option<ResourceAction>,
+) {
+    if menu.action(preset.menu_label()).clicked() && pending_action.is_none() {
+        *pending_action = Some(ResourceAction::PodDebugShell {
+            name: resource.name.clone(),
+            namespace: resource.namespace.clone(),
+            target_container: target.name.clone(),
+            preset: preset.clone(),
+        });
+        menu.close();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn container(name: &str, kind: ContainerKind, image: Option<&str>) -> PodLogContainer {
+        PodLogContainer {
+            name: name.into(),
+            kind,
+            image: image.map(str::to_owned),
+        }
+    }
+
+    #[test]
+    fn pod_image_presets_collect_distinct_declared_images_not_offered_by_configured_presets() {
+        let configured = vec![DebugImagePreset {
+            name: "Busybox".into(),
+            image: "busybox".into(),
+            profile: crate::terminal_launcher::DebugProfile::General,
+        }];
+        let containers = vec![
+            container(
+                "setup",
+                ContainerKind::Init,
+                Some("registry.example/setup:v1"),
+            ),
+            container("api", ContainerKind::App, Some("busybox")),
+            container(
+                "sidecar",
+                ContainerKind::App,
+                Some("registry.example/api:v1"),
+            ),
+            container(
+                "debugger",
+                ContainerKind::Ephemeral,
+                Some("registry.example/api:v1"),
+            ),
+            container("missing", ContainerKind::Ephemeral, None),
+            container("blank", ContainerKind::Ephemeral, Some("  ")),
+        ];
+
+        assert_eq!(
+            pod_image_presets(&containers, &configured),
+            vec![
+                DebugImagePreset {
+                    name: "registry.example/setup:v1".into(),
+                    image: "registry.example/setup:v1".into(),
+                    profile: crate::terminal_launcher::DebugProfile::General,
+                },
+                DebugImagePreset {
+                    name: "registry.example/api:v1".into(),
+                    image: "registry.example/api:v1".into(),
+                    profile: crate::terminal_launcher::DebugProfile::General,
+                },
+            ]
+        );
     }
 }
