@@ -893,6 +893,87 @@ fn resource_table_more_actions_snapshot() {
     );
 }
 
+fn multi_container_pod_table_state() -> (UiState, String) {
+    let pods = fixture_api_resource("core", "Pod", "pods");
+    let mut state = oracle_resource_table_state();
+    let resource = state
+        .clusters
+        .get_mut(&2)
+        .expect("kind fixture exists")
+        .resource_cache
+        .get_mut(&(pods, Some("kube-system".into())))
+        .expect("pod fixture exists")
+        .resources
+        .values_mut()
+        .next()
+        .expect("pod resource exists");
+    resource.log_containers = vec![
+        PodLogContainer {
+            name: "coredns".into(),
+            kind: ContainerKind::App,
+        },
+        PodLogContainer {
+            name: "dns-autoscaler".into(),
+            kind: ContainerKind::App,
+        },
+    ];
+    let pod_name = resource.name.clone();
+    (state, pod_name)
+}
+
+#[test]
+fn pod_resource_table_multi_container_logs_menu_snapshot() {
+    let (state, pod_name) = multi_container_pod_table_state();
+
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = state;
+    harness.run();
+    harness.get_by_label("Apps & Containers").click();
+    harness.run();
+    harness
+        .get_by_label(&format!("More actions for {pod_name}"))
+        .click();
+    harness.run();
+
+    harness.get_by_label("View logs ⏵");
+    harness.ui_harness(
+        "resource_tables/pod_resource_table_multi_container_logs_menu_snapshot/multi_container_logs_menu",
+    );
+
+    harness.get_by_label("View logs ⏵").click();
+    harness.run();
+    harness.get_by_label("coredns — Container");
+    harness.get_by_label("dns-autoscaler — Container");
+    harness.ui_harness(
+        "resource_tables/pod_resource_table_multi_container_logs_menu_snapshot/multi_container_logs_submenu",
+    );
+}
+
+#[test]
+fn pod_resource_table_multi_container_logs_context_submenu_snapshot() {
+    let (state, pod_name) = multi_container_pod_table_state();
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = state;
+    harness.run();
+    harness.get_by_label("Apps & Containers").click();
+    harness.run();
+
+    let row_position = harness
+        .get_by_label(&format!("Open details for {pod_name}"))
+        .rect()
+        .center();
+    secondary_click(&mut harness, row_position);
+    harness.run();
+    harness.get_by_label("View logs ⏵").click();
+    harness.run();
+
+    harness.get_by_label("coredns — Container");
+    harness.get_by_label("dns-autoscaler — Container");
+    harness.ui_harness(
+        "resource_tables/pod_resource_table_multi_container_logs_context_submenu_snapshot/multi_container_logs_context_submenu",
+    );
+}
+
 #[test]
 fn resource_table_multi_selection_confirms_and_dispatches_bulk_delete() {
     let mut harness = application_harness::<MockWorker>();
