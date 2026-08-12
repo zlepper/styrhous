@@ -13,7 +13,7 @@ use crate::resource_detail::{
 };
 use crate::resource_handlers::table_definition;
 use crate::resource_table::{CONTAINERS_COLUMN, NODE_COLUMN, ResourceTableDefinition};
-use crate::terminal_launcher::PodShellRequest;
+use crate::terminal_launcher::{NodeShellPreset, ShellRequest};
 use crate::worker::{
     GetResourceScale, ResourceDataUpdate, ResourceDataUpdateCompleted, ResourceDataUpdateFailed,
     UpdateResourceData, WorkerCommandBox, WorkerResult,
@@ -102,9 +102,16 @@ pub(super) fn show(
     ctx: &egui::Context,
     ui_state: &mut UiState,
     commands_to_send: &mut Vec<WorkerCommandBox>,
-    shell_requests: &mut Vec<PodShellRequest>,
+    shell_requests: &mut Vec<ShellRequest>,
+    node_shell_presets: &[NodeShellPreset],
 ) {
-    show_shared_blade(ctx, ui_state, commands_to_send, shell_requests);
+    show_shared_blade(
+        ctx,
+        ui_state,
+        commands_to_send,
+        shell_requests,
+        node_shell_presets,
+    );
 }
 
 #[allow(dead_code, unreachable_code)]
@@ -112,9 +119,16 @@ fn show_legacy(
     ctx: &egui::Context,
     ui_state: &mut UiState,
     commands_to_send: &mut Vec<WorkerCommandBox>,
-    shell_requests: &mut Vec<PodShellRequest>,
+    shell_requests: &mut Vec<ShellRequest>,
+    node_shell_presets: &[NodeShellPreset],
 ) {
-    show_shared_blade(ctx, ui_state, commands_to_send, shell_requests);
+    show_shared_blade(
+        ctx,
+        ui_state,
+        commands_to_send,
+        shell_requests,
+        node_shell_presets,
+    );
     return;
 
     let Some(cluster_key) = ui_state.selected_cluster else {
@@ -441,17 +455,9 @@ fn show_legacy(
                         } => {
                             log_to_open = Some((cluster.cluster_key, name, namespace, container));
                         }
-                        ResourceAction::Shell {
-                            name,
-                            namespace,
-                            container,
-                        } => {
-                            shell_to_open = namespace.map(|namespace| PodShellRequest {
-                                kube_context: cluster.name.clone(),
-                                namespace,
-                                pod_name: name,
-                                container: container.name,
-                            });
+                        action @ (ResourceAction::Shell { .. }
+                        | ResourceAction::NodeShell { .. }) => {
+                            shell_to_open = action.shell_request(&cluster.name);
                         }
                         ResourceAction::OpenDetails { .. } => {
                             unreachable!("inspector actions cannot open detail")
@@ -505,7 +511,8 @@ fn show_shared_blade(
     ctx: &egui::Context,
     ui_state: &mut UiState,
     commands_to_send: &mut Vec<WorkerCommandBox>,
-    shell_requests: &mut Vec<PodShellRequest>,
+    shell_requests: &mut Vec<ShellRequest>,
+    node_shell_presets: &[NodeShellPreset],
 ) {
     let Some(cluster_key) = ui_state.selected_cluster else {
         return;
@@ -531,6 +538,7 @@ fn show_shared_blade(
                 entry,
                 layer.is_foreground,
                 scalable_api_resources.contains(&entry.api_resource),
+                node_shell_presets,
             )
         },
         |ui, entry, layer| {
@@ -683,20 +691,11 @@ fn show_shared_blade(
                 container,
                 commands_to_send,
             ),
-            ResourceAction::Shell {
-                name,
-                namespace,
-                container,
-            } => {
-                if let (Some(namespace), Some(cluster)) =
-                    (namespace, ui_state.clusters.get(&cluster_key))
+            action @ (ResourceAction::Shell { .. } | ResourceAction::NodeShell { .. }) => {
+                if let Some(cluster) = ui_state.clusters.get(&cluster_key)
+                    && let Some(request) = action.shell_request(&cluster.name)
                 {
-                    shell_requests.push(PodShellRequest {
-                        kube_context: cluster.name.clone(),
-                        namespace,
-                        pod_name: name,
-                        container: container.name,
-                    });
+                    shell_requests.push(request);
                 }
             }
             ResourceAction::OpenDetails { .. } => {
@@ -1208,6 +1207,7 @@ fn show_resource_detail_header(
     entry: &ResourceDetailHistoryEntry,
     is_foreground: bool,
     supports_scale: bool,
+    node_shell_presets: &[NodeShellPreset],
 ) -> BladeResult {
     let mut result = BladeResult::default();
     let log_containers = entry
@@ -1250,6 +1250,7 @@ fn show_resource_detail_header(
                 &entry.api_resource,
                 &resource,
                 &resource.log_containers,
+                node_shell_presets,
                 supports_scale,
                 &mut result.action,
             );

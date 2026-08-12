@@ -13,7 +13,7 @@ use crate::minimal_resource::MinimalResource;
 use crate::resource_catalog::ResourceNavigation;
 use crate::resource_handlers::table_definition;
 use crate::resource_table::{CellValue, CustomResourceColumn, NODE_COLUMN};
-use crate::terminal_launcher::PodShellRequest;
+use crate::terminal_launcher::{NodeShellPreset, ShellRequest};
 use crate::worker::{GetResourceScale, WorkerCommandBox};
 use components::colors::{TOOLBAR_BACKGROUND, gray};
 use components::design::{spacing, typography};
@@ -60,6 +60,7 @@ struct ResourceTableOptions<'a> {
     hidden_resource_count: usize,
     show_namespace_column: bool,
     actions: ResourceActionAvailability,
+    node_shell_presets: &'a [NodeShellPreset],
 }
 
 enum NamespaceSelection {
@@ -78,7 +79,8 @@ pub(super) fn show(
     ui: &mut egui::Ui,
     ui_state: &mut UiState,
     commands_to_send: &mut Vec<WorkerCommandBox>,
-    shell_requests: &mut Vec<PodShellRequest>,
+    shell_requests: &mut Vec<ShellRequest>,
+    node_shell_presets: &[NodeShellPreset],
 ) {
     let ctx = ui.ctx().clone();
     let mut namespace_selection = None;
@@ -249,6 +251,7 @@ pub(super) fn show(
                             enabled: resource_actions_enabled,
                             supports_scale: cluster.scalable_api_resources.contains(api_resource),
                         },
+                        node_shell_presets,
                     },
                     cluster
                         .resource_selections
@@ -306,17 +309,9 @@ pub(super) fn show(
                         } => {
                             log_to_open = Some((cluster.cluster_key, name, namespace, container));
                         }
-                        ResourceAction::Shell {
-                            name,
-                            namespace,
-                            container,
-                        } => {
-                            shell_to_open = namespace.map(|namespace| PodShellRequest {
-                                kube_context: cluster.name.clone(),
-                                namespace,
-                                pod_name: name,
-                                container: container.name,
-                            });
+                        action @ (ResourceAction::Shell { .. }
+                        | ResourceAction::NodeShell { .. }) => {
+                            shell_to_open = action.shell_request(&cluster.name);
                         }
                         ResourceAction::SaveData { .. } => {
                             unreachable!("resource table actions cannot save inspector data")
@@ -859,6 +854,7 @@ fn show_resource_table(
                                 api_resource,
                                 resource,
                                 &resource.log_containers,
+                                options.node_shell_presets,
                                 options.actions.supports_scale,
                                 &mut pending_action.borrow_mut(),
                             );
@@ -941,6 +937,7 @@ fn show_resource_table(
                                         api_resource,
                                         resource,
                                         &resource.log_containers,
+                                        options.node_shell_presets,
                                         options.actions.supports_scale,
                                         &mut pending_action.borrow_mut(),
                                     );
@@ -961,6 +958,7 @@ fn show_resource_table(
                             api_resource,
                             resource,
                             options.actions.supports_scale,
+                            options.node_shell_presets,
                             &mut pending_action.borrow_mut(),
                         );
                     }
@@ -994,6 +992,7 @@ fn show_resource_table(
                             api_resource,
                             resource,
                             &resource.log_containers,
+                            options.node_shell_presets,
                             options.actions.supports_scale,
                             &mut pending_action.borrow_mut(),
                         );
@@ -1010,6 +1009,7 @@ fn show_resource_actions(
     api_resource: &crate::api_resource::ApiResource,
     resource: &MinimalResource,
     supports_scale: bool,
+    node_shell_presets: &[NodeShellPreset],
     pending_action: &mut Option<ResourceAction>,
 ) {
     let mut action_ui = ui.new_child(
@@ -1032,6 +1032,7 @@ fn show_resource_actions(
             api_resource,
             resource,
             &resource.log_containers,
+            node_shell_presets,
             supports_scale,
             pending_action,
         );

@@ -159,6 +159,11 @@ pub fn trash_icon() -> Image<'static> {
     Image::new(include_image!("icons/trash.svg"))
 }
 
+/// Returns a plus icon for add controls.
+pub fn plus_icon() -> Image<'static> {
+    Image::new(include_image!("icons/plus.svg"))
+}
+
 /// Returns a cog icon for application settings.
 pub fn settings_icon() -> Image<'static> {
     Image::new(include_image!("icons/settings.svg"))

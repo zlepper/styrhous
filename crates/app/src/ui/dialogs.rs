@@ -758,9 +758,9 @@ pub(super) fn show_terminal_launch_error(
     };
     match (ErrorDialog {
         id: egui::Id::new("terminal-launch-error"),
-        eyebrow: "POD SHELL",
+        eyebrow: "SHELL",
         title: "Couldn’t open a terminal",
-        message: "Kubernetes Dev UI could not start an external terminal for this pod shell.",
+        message: "Kubernetes Dev UI could not start an external terminal for this shell.",
         details: Some(&error),
         recovery: Some("Choose a custom command in Settings to use another installed terminal."),
         primary_action_label: Some("Open settings"),

@@ -1,6 +1,7 @@
 use super::state::ResourceAction;
 use crate::api_resource::ApiResource;
 use crate::minimal_resource::{MinimalResource, PodLogContainer};
+use crate::terminal_launcher::NodeShellPreset;
 use components::colors::gray;
 use components::design::status;
 use components::{MoreMenu, icons};
@@ -11,9 +12,24 @@ pub(super) fn show_resource_action_items(
     api_resource: &ApiResource,
     resource: &MinimalResource,
     log_containers: &[PodLogContainer],
+    node_shell_presets: &[NodeShellPreset],
     supports_scale: bool,
     pending_action: &mut Option<ResourceAction>,
 ) {
+    if api_resource.kind == "Node" && !node_shell_presets.is_empty() {
+        menu.submenu("Shell", |menu: &mut MoreMenu<'_>| {
+            for preset in node_shell_presets {
+                if menu.action(preset.menu_label()).clicked() && pending_action.is_none() {
+                    *pending_action = Some(ResourceAction::NodeShell {
+                        name: resource.name.clone(),
+                        preset: preset.clone(),
+                    });
+                    menu.close();
+                }
+            }
+        });
+        menu.separator();
+    }
     let shell_containers = log_containers
         .iter()
         .filter(|container| matches!(container.kind, crate::resource_table::ContainerKind::App))
@@ -31,7 +47,7 @@ pub(super) fn show_resource_action_items(
             menu.separator();
         }
         containers => {
-            menu.submenu("Shell", |menu| {
+            menu.submenu("Shell", |menu: &mut MoreMenu<'_>| {
                 for container in containers {
                     if menu.action(&container.name).clicked() && pending_action.is_none() {
                         *pending_action = Some(ResourceAction::Shell {
@@ -58,7 +74,7 @@ pub(super) fn show_resource_action_items(
             menu.separator();
         }
         containers => {
-            menu.submenu("View logs", |menu| {
+            menu.submenu("View logs", |menu: &mut MoreMenu<'_>| {
                 for container in containers {
                     let label = format!("{} — {}", container.name, container.kind.label());
                     if menu.action(label).clicked() && pending_action.is_none() {
