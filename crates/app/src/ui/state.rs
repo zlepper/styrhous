@@ -2551,6 +2551,57 @@ mod tests {
     }
 
     #[test]
+    fn changing_a_log_selection_rejects_an_in_flight_copy_for_its_old_range() {
+        let mut state = UiState::default();
+        let mut commands = Vec::new();
+        state.open_pod_log_window(
+            7,
+            "api-pod".into(),
+            Some("default".into()),
+            PodLogContainer {
+                name: "api".into(),
+                kind: ContainerKind::App,
+            },
+            &mut commands,
+        );
+        let window = state.log_windows.get_mut(&1).expect("log window exists");
+        let selection_start = LogTextPosition {
+            display_row: 0,
+            byte_offset: 0,
+        };
+        window.set_selection(Some(LogTextSelection {
+            anchor: selection_start,
+            focus: selection_start,
+        }));
+        let old_generation = window.selection_generation;
+        window.set_selection(Some(LogTextSelection {
+            anchor: selection_start,
+            focus: LogTextPosition {
+                display_row: 0,
+                byte_offset: 8,
+            },
+        }));
+        let current_generation = window.selection_generation;
+
+        state.apply_log_store_result(LogStoreResult::Copied {
+            window_id: 1,
+            selection_generation: old_generation,
+            text: "old range".into(),
+        });
+        assert!(state.log_windows[&1].copied_text.is_none());
+
+        state.apply_log_store_result(LogStoreResult::Copied {
+            window_id: 1,
+            selection_generation: current_generation,
+            text: "current range".into(),
+        });
+        assert_eq!(
+            state.log_windows[&1].copied_text.as_deref(),
+            Some("current range")
+        );
+    }
+
+    #[test]
     fn rebasing_maps_an_overlapping_tail_row_to_its_history_position() {
         assert_eq!(rebase_display_row(40, 200, 100), 140);
     }

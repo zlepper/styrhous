@@ -452,20 +452,22 @@ fn show_log_window_with_scroll_state(
                     }
                     if let Some((position, starts_selection)) = selection_update {
                         if starts_selection {
-                            window.selection = Some(LogTextSelection {
+                            window.set_selection(Some(LogTextSelection {
                                 anchor: position,
                                 focus: position,
-                            });
+                            }));
                             ctx.memory_mut(|memory| memory.request_focus(caret_focus_id));
-                        } else if let Some(selection) = &mut window.selection {
-                            selection.focus = position;
+                        } else if let Some(selection) = window.selection {
+                            window.set_selection(Some(LogTextSelection {
+                                anchor: selection.anchor,
+                                focus: position,
+                            }));
                         }
                         window.caret_preferred_column =
                             Some(caret_paint.as_ref().map_or(0, |(text, _, _, _)| {
                                 character_column_at_byte(text, position.byte_offset)
                             }));
                         window.ensure_caret_visible = false;
-                        window.selection_generation = window.selection_generation.wrapping_add(1);
                     }
                     if let Some((text, byte_range, response_rect, prefix_width)) = caret_paint {
                         paint_log_caret(
@@ -897,13 +899,12 @@ fn resolve_pending_caret(
         request_page_for_display_row(window, log_store, pending.display_row);
         return;
     };
-    window.selection = Some(LogTextSelection {
+    window.set_selection(Some(LogTextSelection {
         anchor: pending.anchor.unwrap_or(position),
         focus: position,
-    });
+    }));
     window.pending_caret = None;
     window.ensure_caret_visible = true;
-    window.selection_generation = window.selection_generation.wrapping_add(1);
 }
 
 fn handle_log_keyboard(
@@ -984,13 +985,12 @@ fn move_log_caret(
             _ => {}
         }
         if matches!(key, egui::Key::ArrowLeft | egui::Key::ArrowRight) {
-            window.selection = Some(LogTextSelection {
+            window.set_selection(Some(LogTextSelection {
                 anchor: focus,
                 focus,
-            });
+            }));
             window.caret_preferred_column = None;
             window.ensure_caret_visible = true;
-            window.selection_generation = window.selection_generation.wrapping_add(1);
             return true;
         }
     }
@@ -1114,13 +1114,12 @@ fn set_caret_target(
         byte_offset: byte_offset_at_character_column(&row.text, character_column),
     });
     if let Some(position) = position {
-        window.selection = Some(LogTextSelection {
+        window.set_selection(Some(LogTextSelection {
             anchor: anchor.unwrap_or(position),
             focus: position,
-        });
+        }));
         window.pending_caret = None;
         window.ensure_caret_visible = true;
-        window.selection_generation = window.selection_generation.wrapping_add(1);
     } else {
         window.pending_caret = Some(PendingLogCaret {
             display_row,
