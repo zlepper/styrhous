@@ -106,12 +106,28 @@ impl MoreMenu<'_> {
     /// Add a nested menu for actions that require a further choice.
     pub fn submenu<R>(
         &mut self,
-        label: impl Into<egui::WidgetText>,
-        add_contents: impl FnOnce(&mut Ui) -> R,
+        label: impl Into<String>,
+        add_contents: impl FnOnce(&mut MoreMenu<'_>) -> R,
     ) -> InnerResponse<Option<R>> {
-        let response = self.ui.menu_button(label, add_contents);
-        response.response.clone().with_pointing_hand();
-        response
+        let popup_id = self.popup_id;
+        self.with_menu_item_style(gray::_700, |ui| {
+            let label = egui::RichText::new(label.into())
+                .font(typography::body())
+                .color(gray::_700);
+            let button = Button::new(label)
+                .right_text(
+                    egui::RichText::new(egui::menu::SubMenuButton::RIGHT_ARROW).color(gray::_700),
+                )
+                .min_size(Vec2::new(MENU_WIDTH, MENU_ITEM_HEIGHT));
+            let (response, inner) = egui::menu::SubMenuButton::from_button(button).ui(ui, |ui| {
+                let mut menu = MoreMenu { ui, popup_id };
+                add_contents(&mut menu)
+            });
+            InnerResponse::new(
+                inner.map(|inner| inner.inner),
+                response.with_pointing_hand(),
+            )
+        })
     }
 
     /// Close the containing menu after a nested action has been selected.
@@ -151,6 +167,29 @@ impl MoreMenu<'_> {
         icon: Option<Image<'static>>,
         color: Color32,
     ) -> Response {
+        let response = self.with_menu_item_style(color, |ui| {
+            let text = egui::RichText::new(label)
+                .font(typography::body())
+                .color(color);
+            let button = match icon {
+                Some(icon) => Button::image_and_text(icon, text),
+                None => Button::new(text),
+            }
+            .min_size(Vec2::new(MENU_WIDTH, MENU_ITEM_HEIGHT));
+            ui.add(button).with_pointing_hand()
+        });
+
+        if response.clicked() {
+            Popup::close_id(self.ui.ctx(), self.popup_id);
+        }
+        response
+    }
+
+    fn with_menu_item_style<R>(
+        &mut self,
+        color: Color32,
+        add_contents: impl FnOnce(&mut Ui) -> R,
+    ) -> R {
         let saved_widgets = self.ui.visuals().widgets.clone();
         let saved_padding = self.ui.spacing().button_padding;
 
@@ -170,24 +209,17 @@ impl MoreMenu<'_> {
         visuals.active.bg_stroke = Stroke::NONE;
         visuals.active.fg_stroke = Stroke::new(1.0, color);
         visuals.active.corner_radius = radius::control();
+        visuals.open.weak_bg_fill = gray::_100;
+        visuals.open.bg_fill = gray::_100;
+        visuals.open.bg_stroke = Stroke::NONE;
+        visuals.open.fg_stroke = Stroke::new(1.0, color);
+        visuals.open.corner_radius = radius::control();
         self.ui.spacing_mut().button_padding = MENU_ITEM_PADDING;
 
-        let text = egui::RichText::new(label)
-            .font(typography::body())
-            .color(color);
-        let button = match icon {
-            Some(icon) => Button::image_and_text(icon, text),
-            None => Button::new(text),
-        }
-        .min_size(Vec2::new(MENU_WIDTH, MENU_ITEM_HEIGHT));
-        let response = self.ui.add(button).with_pointing_hand();
+        let response = add_contents(self.ui);
 
         self.ui.visuals_mut().widgets = saved_widgets;
         self.ui.spacing_mut().button_padding = saved_padding;
-
-        if response.clicked() {
-            Popup::close_id(self.ui.ctx(), self.popup_id);
-        }
         response
     }
 }
@@ -233,14 +265,12 @@ mod tests {
 
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness
-            .get_by_label("More actions for coredns")
-            .click_accesskit();
+        harness.get_by_label("More actions for coredns").click();
         harness.run();
         harness
             .ui_harness("more_button/more_button_actions_are_accessible_and_close_the_menu/open");
 
-        harness.get_by_label("Delete").click_accesskit();
+        harness.get_by_label("Delete").click();
         harness.run();
 
         assert_eq!(*selected_action.borrow(), Some("delete"));
@@ -255,8 +285,8 @@ mod tests {
         let selected_in_ui = selected.clone();
         let mut harness = Harness::new_ui(move |ui| {
             MoreButton::new("More actions for api-pod").show(ui, |menu| {
-                menu.submenu("View logs", |ui| {
-                    if ui.button("api — Container").clicked() {
+                menu.submenu("View logs", |menu| {
+                    if menu.action("api — Container").clicked() {
                         *selected_in_ui.borrow_mut() = Some("api");
                     }
                 });
@@ -265,15 +295,18 @@ mod tests {
 
         crate::test_support::setup_egui(&mut harness);
         harness.run();
-        harness
-            .get_by_label("More actions for api-pod")
-            .click_accesskit();
+        harness.get_by_label("More actions for api-pod").click();
         harness.run();
-        harness.get_by_label("View logs ⏵").click_accesskit();
+        harness.get_by_label("View logs ⏵").click();
         harness.run();
-        harness.get_by_label("api — Container").click_accesskit();
+        harness.get_by_label("api — Container").click();
         harness.run();
 
         assert_eq!(*selected.borrow(), Some("api"));
+        assert!(harness.query_by_label("api — Container").is_none());
+
+        harness.get_by_label("More actions for api-pod").click();
+        harness.run();
+        assert!(harness.query_by_label("api — Container").is_none());
     }
 }

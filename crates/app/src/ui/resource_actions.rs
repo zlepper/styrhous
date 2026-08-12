@@ -3,7 +3,7 @@ use crate::api_resource::ApiResource;
 use crate::minimal_resource::{MinimalResource, PodLogContainer};
 use components::colors::gray;
 use components::design::status;
-use components::{MoreMenu, PointingHand, icons};
+use components::{MoreMenu, icons};
 
 /// Render the shared resource-level actions used by table rows and inspectors.
 pub(super) fn show_resource_action_items(
@@ -31,24 +31,17 @@ pub(super) fn show_resource_action_items(
             menu.separator();
         }
         containers => {
-            let mut selected = false;
-            menu.submenu("Shell", |ui| {
+            menu.submenu("Shell", |menu| {
                 for container in containers {
-                    if ui.button(&container.name).with_pointing_hand().clicked()
-                        && pending_action.is_none()
-                    {
+                    if menu.action(&container.name).clicked() && pending_action.is_none() {
                         *pending_action = Some(ResourceAction::Shell {
                             name: resource.name.clone(),
                             namespace: resource.namespace.clone(),
                             container: (*container).clone(),
                         });
-                        selected = true;
                     }
                 }
             });
-            if selected {
-                menu.close();
-            }
             menu.separator();
         }
     }
@@ -65,23 +58,18 @@ pub(super) fn show_resource_action_items(
             menu.separator();
         }
         containers => {
-            let mut selected = false;
-            menu.submenu("View logs", |ui| {
+            menu.submenu("View logs", |menu| {
                 for container in containers {
                     let label = format!("{} — {}", container.name, container.kind.label());
-                    if ui.button(label).with_pointing_hand().clicked() && pending_action.is_none() {
+                    if menu.action(label).clicked() && pending_action.is_none() {
                         *pending_action = Some(ResourceAction::ViewLogs {
                             name: resource.name.clone(),
                             namespace: resource.namespace.clone(),
                             container: container.clone(),
                         });
-                        selected = true;
                     }
                 }
             });
-            if selected {
-                menu.close();
-            }
             menu.separator();
         }
     }
