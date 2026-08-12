@@ -368,25 +368,28 @@ fn show_legacy(
                             expected_values,
                             updated_values,
                         } => {
+                            cluster.next_data_save_request_id += 1;
+                            let request_id = cluster.next_data_save_request_id;
                             let panel = cluster
                                 .resource_detail_panel
-                                .as_ref()
+                                .as_mut()
                                 .expect("detail panel remains open while data is saved");
-                            if let Some(namespace) = panel.namespace.clone() {
+                            let history_entry_id = panel.history_entry_id;
+                            let api_resource = panel.api_resource.clone();
+                            let resource_name = panel.resource_name.clone();
+                            if let (Some(namespace), Some(editor)) =
+                                (panel.namespace.clone(), panel.data_editor.as_mut())
+                            {
+                                editor.pending_save_request_id = Some(request_id);
                                 commands_to_send.push(WorkerCommand::UpdateResourceData {
                                     cluster_key: cluster.cluster_key,
-                                    api_resource: panel.api_resource.clone(),
+                                    history_entry_id,
+                                    request_id,
+                                    api_resource,
                                     namespace,
-                                    resource_name: panel.resource_name.clone(),
+                                    resource_name,
                                     update: ResourceDataUpdate {
-                                        expected_resource_version: panel
-                                            .data_editor
-                                            .as_ref()
-                                            .expect(
-                                                "data save action requires an initialized editor",
-                                            )
-                                            .resource_version
-                                            .clone(),
+                                        expected_resource_version: editor.resource_version.clone(),
                                         expected_values,
                                         updated_values,
                                     },
@@ -603,22 +606,32 @@ fn show_shared_blade(
                 expected_values,
                 updated_values,
             } => {
-                if let Some(cluster) = ui_state.clusters.get_mut(&cluster_key)
-                    && let Some(panel) = cluster.resource_detail_panel.as_ref()
-                    && let (Some(namespace), Some(editor)) =
-                        (panel.namespace.clone(), panel.data_editor.as_ref())
-                {
-                    commands_to_send.push(WorkerCommand::UpdateResourceData {
-                        cluster_key: cluster.cluster_key,
-                        api_resource: panel.api_resource.clone(),
-                        namespace,
-                        resource_name: panel.resource_name.clone(),
-                        update: ResourceDataUpdate {
-                            expected_resource_version: editor.resource_version.clone(),
-                            expected_values,
-                            updated_values,
-                        },
-                    });
+                if let Some(cluster) = ui_state.clusters.get_mut(&cluster_key) {
+                    cluster.next_data_save_request_id += 1;
+                    let request_id = cluster.next_data_save_request_id;
+                    if let Some(panel) = cluster.resource_detail_panel.as_mut() {
+                        let history_entry_id = panel.history_entry_id;
+                        let api_resource = panel.api_resource.clone();
+                        let resource_name = panel.resource_name.clone();
+                        if let (Some(namespace), Some(editor)) =
+                            (panel.namespace.clone(), panel.data_editor.as_mut())
+                        {
+                            editor.pending_save_request_id = Some(request_id);
+                            commands_to_send.push(WorkerCommand::UpdateResourceData {
+                                cluster_key: cluster.cluster_key,
+                                history_entry_id,
+                                request_id,
+                                api_resource,
+                                namespace,
+                                resource_name,
+                                update: ResourceDataUpdate {
+                                    expected_resource_version: editor.resource_version.clone(),
+                                    expected_values,
+                                    updated_values,
+                                },
+                            });
+                        }
+                    }
                 }
             }
             ResourceAction::ViewLogs {

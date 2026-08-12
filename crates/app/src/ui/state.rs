@@ -375,6 +375,11 @@ impl ResourceDetailPanelState {
             .entries_mut()
             .find(|entry| entry.history_entry_id == history_entry_id)
     }
+
+    fn data_editor_mut(&mut self, history_entry_id: u64) -> Option<&mut ResourceDataEditorState> {
+        self.history_entry_mut(history_entry_id)
+            .and_then(|entry| entry.data_editor.as_mut())
+    }
 }
 
 impl std::ops::Deref for ResourceDetailPanelState {
@@ -401,6 +406,7 @@ pub(super) struct ResourceDataEditorState {
     pub(super) pending_external_resource_version: Option<String>,
     pub(super) revealed_secret_keys: HashSet<String>,
     pub(super) saving: bool,
+    pub(super) pending_save_request_id: Option<u64>,
     pub(super) save_error: Option<String>,
 }
 
@@ -414,6 +420,7 @@ impl ResourceDataEditorState {
             pending_external_resource_version: None,
             revealed_secret_keys: HashSet::new(),
             saving: false,
+            pending_save_request_id: None,
             save_error: None,
         }
     }
@@ -505,6 +512,7 @@ impl ResourceDataEditorState {
             }
         }
         self.saving = false;
+        self.pending_save_request_id = None;
         self.save_error = None;
     }
 }
@@ -583,6 +591,7 @@ pub(super) struct ClusterState {
     pub(super) next_bulk_delete_id: u64,
     pub(super) resource_detail_panel: Option<ResourceDetailPanelState>,
     pub(super) next_detail_generation: u64,
+    pub(super) next_data_save_request_id: u64,
     pub(super) pending_delete: Option<PendingDelete>,
     pub(super) pending_bulk_delete: Option<PendingBulkDelete>,
     pub(super) bulk_delete_progress: Option<BulkDeleteProgress>,
@@ -1345,16 +1354,18 @@ impl UiState {
                         }
                         WorkerOperation::UpdateResourceData {
                             cluster_key,
-                            resource_name,
+                            history_entry_id,
+                            request_id,
                         } => {
                             if let Some(editor) = self
                                 .clusters
                                 .get_mut(&cluster_key)
                                 .and_then(|cluster| cluster.resource_detail_panel.as_mut())
-                                .filter(|panel| panel.resource_name == resource_name)
-                                .and_then(|panel| panel.data_editor.as_mut())
+                                .and_then(|panel| panel.data_editor_mut(history_entry_id))
+                                && editor.pending_save_request_id == Some(request_id)
                             {
                                 editor.saving = false;
+                                editor.pending_save_request_id = None;
                                 editor.save_error = Some(message);
                             }
                         }
@@ -1440,6 +1451,7 @@ impl UiState {
                                 next_bulk_delete_id: 0,
                                 resource_detail_panel: None,
                                 next_detail_generation: 0,
+                                next_data_save_request_id: 0,
                                 pending_delete: None,
                                 pending_bulk_delete: None,
                                 bulk_delete_progress: None,
@@ -1992,14 +2004,15 @@ impl UiState {
                 }
                 WorkerResult::ResourceDataUpdateCompleted {
                     cluster_key,
-                    resource_name,
+                    history_entry_id,
+                    request_id,
                 } => {
                     if let Some(editor) = self
                         .clusters
                         .get_mut(&cluster_key)
                         .and_then(|cluster| cluster.resource_detail_panel.as_mut())
-                        .filter(|panel| panel.resource_name == resource_name)
-                        .and_then(|panel| panel.data_editor.as_mut())
+                        .and_then(|panel| panel.data_editor_mut(history_entry_id))
+                        && editor.pending_save_request_id == Some(request_id)
                     {
                         editor.mark_saved();
                     }
@@ -2292,6 +2305,156 @@ mod tests {
                 .yaml_editors
                 .values()
                 .all(|editor| !editor.loading && editor.original_yaml.is_some())
+        );
+    }
+
+    #[test]
+    fn resource_data_completion_updates_only_the_initiating_history_entry() {
+        let config_maps = ApiResource {
+            group: "core".into(),
+            version: "v1".into(),
+            kind: "ConfigMap".into(),
+            name: "configmaps".into(),
+            namespaced: true,
+        };
+        let secrets = ApiResource {
+            group: "core".into(),
+            version: "v1".into(),
+            kind: "Secret".into(),
+            name: "secrets".into(),
+            namespaced: true,
+        };
+        let mut state = UiState::default();
+        let mut commands = Vec::new();
+        let mut setup_worker = MockWorker {
+            results: VecDeque::from([WorkerResult::KubernetesClustersUpdated(vec![Cluster {
+                name: "kind".into(),
+                is_current: true,
+            }])]),
+            commands: Vec::new(),
+        };
+        state.update(&mut setup_worker);
+        state.open_resource_detail(
+            1,
+            config_maps.clone(),
+            "settings".into(),
+            Some("default".into()),
+            "config-map-uid".into(),
+            &mut commands,
+        );
+        state.navigate_resource_detail(
+            1,
+            secrets,
+            "settings".into(),
+            Some("default".into()),
+            "secret-uid".into(),
+            &mut commands,
+        );
+        let panel = state
+            .clusters
+            .get_mut(&1)
+            .expect("fixture cluster exists")
+            .resource_detail_panel
+            .as_mut()
+            .expect("detail panel is open");
+        let config_map_history_entry_id = panel
+            .navigator
+            .entries()
+            .find(|entry| entry.api_resource == config_maps)
+            .expect("ConfigMap history entry exists")
+            .history_entry_id;
+        for entry in panel.navigator.entries_mut() {
+            entry.data_editor = Some(ResourceDataEditorState {
+                saving: true,
+                pending_save_request_id: Some(2),
+                ..ResourceDataEditorState::new(BTreeMap::new(), "1".into())
+            });
+        }
+
+        let mut worker = MockWorker {
+            results: VecDeque::from([
+                WorkerResult::ResourceDataUpdateCompleted {
+                    cluster_key: 1,
+                    history_entry_id: config_map_history_entry_id,
+                    request_id: 999,
+                },
+                WorkerResult::ResourceDataUpdateCompleted {
+                    cluster_key: 1,
+                    history_entry_id: config_map_history_entry_id,
+                    request_id: 2,
+                },
+            ]),
+            commands: Vec::new(),
+        };
+        state.update(&mut worker);
+
+        let panel = state.clusters[&1]
+            .resource_detail_panel
+            .as_ref()
+            .expect("detail panel is open");
+        let config_map_editor = panel
+            .navigator
+            .entries()
+            .find(|entry| entry.history_entry_id == config_map_history_entry_id)
+            .and_then(|entry| entry.data_editor.as_ref())
+            .expect("config map editor exists");
+        assert!(!config_map_editor.saving);
+        assert!(
+            panel
+                .data_editor
+                .as_ref()
+                .expect("secret editor exists")
+                .saving
+        );
+
+        for entry in state
+            .clusters
+            .get_mut(&1)
+            .expect("fixture cluster exists")
+            .resource_detail_panel
+            .as_mut()
+            .expect("detail panel is open")
+            .navigator
+            .entries_mut()
+        {
+            let editor = entry.data_editor.as_mut().expect("editor exists");
+            editor.saving = true;
+            editor.pending_save_request_id = Some(3);
+            editor.save_error = None;
+        }
+        let mut worker = MockWorker {
+            results: VecDeque::from([WorkerResult::CommandFailed {
+                operation: WorkerOperation::UpdateResourceData {
+                    cluster_key: 1,
+                    history_entry_id: config_map_history_entry_id,
+                    request_id: 3,
+                },
+                error: anyhow::anyhow!("stale update failed"),
+            }]),
+            commands: Vec::new(),
+        };
+        state.update(&mut worker);
+
+        let panel = state.clusters[&1]
+            .resource_detail_panel
+            .as_ref()
+            .expect("detail panel is open");
+        assert_eq!(
+            panel
+                .navigator
+                .entries()
+                .find(|entry| entry.history_entry_id == config_map_history_entry_id)
+                .and_then(|entry| entry.data_editor.as_ref())
+                .and_then(|editor| editor.save_error.as_deref()),
+            Some("\"stale update failed\"")
+        );
+        assert_eq!(
+            panel
+                .data_editor
+                .as_ref()
+                .expect("secret editor exists")
+                .save_error,
+            None
         );
     }
 

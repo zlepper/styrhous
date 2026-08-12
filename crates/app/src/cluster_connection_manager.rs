@@ -275,6 +275,7 @@ impl KubernetesNamespaceWatcher {
                             cluster_key: self.cluster_key,
                             error: format!("{error:#?}"),
                         })
+                        .await
                         .log_if_error("Failed to send namespace watcher error");
                     return;
                 }
@@ -286,6 +287,7 @@ impl KubernetesNamespaceWatcher {
                             namespace: item.into(),
                             cluster_key: self.cluster_key,
                         })
+                        .await
                         .log_if_error("Failed to send updated namespace");
                 }
                 Event::Delete(item) => {
@@ -296,6 +298,7 @@ impl KubernetesNamespaceWatcher {
                                 "Deleted Namespace from the api server did not have a name",
                             ),
                         })
+                        .await
                         .log_if_error("Failed to send notification about deleted namespace");
                 }
                 Event::Init => {
@@ -310,6 +313,7 @@ impl KubernetesNamespaceWatcher {
                             cluster_key: self.cluster_key,
                             namespaces: buffer,
                         })
+                        .await
                         .log_if_error("Failed to send entire replaced namespace list");
                     buffer = Vec::new();
                 }
@@ -372,6 +376,7 @@ pub async fn start_resource_watcher(
                 cluster_key,
                 columns: BTreeMap::from([(api_resource.clone(), custom_columns.clone())]),
             })
+            .await
             .log_if_error("Failed to send custom resource columns");
         Box::new(DynamicKubernetesResourceWatcher {
             client,
@@ -446,6 +451,7 @@ impl DynamicKubernetesResourceWatcher {
                         namespace: self.namespace.clone(),
                         error: format!("{error:#?}"),
                     })
+                    .await
                     .log_if_error("Failed to send resource watcher discovery error");
                 return;
             }
@@ -467,6 +473,7 @@ impl DynamicKubernetesResourceWatcher {
                         namespace: self.namespace.clone(),
                         error,
                     })
+                    .await
                     .log_if_error("Failed to send resource watcher scope error");
                 return;
             }
@@ -489,6 +496,7 @@ impl DynamicKubernetesResourceWatcher {
                             namespace: self.namespace.clone(),
                             error: format!("{error:#?}"),
                         })
+                        .await
                         .log_if_error("Failed to send resource watcher error");
                     return;
                 }
@@ -503,6 +511,7 @@ impl DynamicKubernetesResourceWatcher {
                             namespace: self.namespace.clone(),
                             resource,
                         })
+                        .await
                         .log_if_error("Failed to send resource added");
                 }
                 Event::Delete(item) => {
@@ -514,6 +523,7 @@ impl DynamicKubernetesResourceWatcher {
                             namespace: self.namespace.clone(),
                             resource_uid: uid,
                         })
+                        .await
                         .log_if_error("Failed to send resource deleted");
                 }
                 Event::Init => {
@@ -530,6 +540,7 @@ impl DynamicKubernetesResourceWatcher {
                             namespace: self.namespace.clone(),
                             resources: buffer,
                         })
+                        .await
                         .log_if_error("Failed to send resources replaced");
                     buffer = Vec::new();
                 }
@@ -572,6 +583,7 @@ where
                     namespace: None,
                     error: "A namespaced typed watcher was started without a namespace".to_owned(),
                 })
+                .await
                 .log_if_error("Failed to send resource watcher scope error");
             return;
         };
@@ -593,6 +605,7 @@ where
                             namespace: self.namespace.clone(),
                             error: format!("{error:#?}"),
                         })
+                        .await
                         .log_if_error("Failed to send typed resource watcher error");
                     return;
                 }
@@ -607,6 +620,7 @@ where
                         namespace: self.namespace.clone(),
                         resource: (self.extract)(&item),
                     })
+                    .await
                     .log_if_error("Failed to send typed resource added"),
                 Event::Delete(item) => self
                     .event_sender
@@ -616,6 +630,7 @@ where
                         namespace: self.namespace.clone(),
                         resource_uid: get_resource_uid(&item),
                     })
+                    .await
                     .log_if_error("Failed to send typed resource deleted"),
                 Event::Init => buffer.clear(),
                 Event::InitApply(item) => buffer.push((self.extract)(&item)),
@@ -627,6 +642,7 @@ where
                             namespace: self.namespace.clone(),
                             resources: buffer,
                         })
+                        .await
                         .log_if_error("Failed to send typed resources replaced");
                     buffer = Vec::new();
                 }
@@ -701,6 +717,7 @@ where
                     namespace: self.namespace,
                     error: "A cluster-scoped typed watcher was started with a namespace".to_owned(),
                 })
+                .await
                 .log_if_error("Failed to send resource watcher scope error");
             return;
         }
@@ -722,6 +739,7 @@ where
                             namespace: None,
                             error: format!("{error:#?}"),
                         })
+                        .await
                         .log_if_error("Failed to send typed resource watcher error");
                     return;
                 }
@@ -736,6 +754,7 @@ where
                         namespace: None,
                         resource: (self.extract)(&item),
                     })
+                    .await
                     .log_if_error("Failed to send typed resource added"),
                 Event::Delete(item) => self
                     .event_sender
@@ -745,6 +764,7 @@ where
                         namespace: None,
                         resource_uid: get_resource_uid(&item),
                     })
+                    .await
                     .log_if_error("Failed to send typed resource deleted"),
                 Event::Init => buffer.clear(),
                 Event::InitApply(item) => buffer.push((self.extract)(&item)),
@@ -756,6 +776,7 @@ where
                             namespace: None,
                             resources: buffer,
                         })
+                        .await
                         .log_if_error("Failed to send typed resources replaced");
                     buffer = Vec::new();
                 }
@@ -1011,6 +1032,7 @@ async fn watch_managed_resources(request: ManagedResourceWatchRequest) {
                 history_entry_id,
                 resources: Vec::new(),
             })
+            .await
             .log_if_error("Failed to send empty managed resources");
         return;
     }
@@ -1096,6 +1118,7 @@ async fn watch_managed_resources(request: ManagedResourceWatchRequest) {
                         history_entry_id,
                         resources,
                     })
+                    .await
                     .log_if_error("Failed to send managed resource update");
             }
             ManagedResourceUpdate::Failed {
@@ -1107,6 +1130,7 @@ async fn watch_managed_resources(request: ManagedResourceWatchRequest) {
                     history_entry_id,
                     error: format!("Unable to watch {}: {error}", api_resource.display_name()),
                 })
+                .await
                 .log_if_error("Failed to send managed resource watch failure"),
         }
     }
@@ -1365,7 +1389,7 @@ async fn watch_detail_object(
     let api = match dynamic_api::create(&client, &api_resource, namespace.as_deref()).await {
         Ok(api) => api,
         Err(error) => {
-            send_detail_error(&event_sender, cluster_key, history_entry_id, false, error);
+            send_detail_error(&event_sender, cluster_key, history_entry_id, false, error).await;
             return;
         }
     };
@@ -1377,7 +1401,7 @@ async fn watch_detail_object(
         let event = match event {
             Ok(event) => event,
             Err(error) => {
-                send_detail_error(&event_sender, cluster_key, history_entry_id, false, error);
+                send_detail_error(&event_sender, cluster_key, history_entry_id, false, error).await;
                 return;
             }
         };
@@ -1392,6 +1416,7 @@ async fn watch_detail_object(
                                 .await,
                         ),
                     })
+                    .await
                     .log_if_error("Failed to send resource detail update");
             }
             Event::InitApply(object) => {
@@ -1405,6 +1430,7 @@ async fn watch_detail_object(
                                 .await,
                         ),
                     })
+                    .await
                     .log_if_error("Failed to send resource detail update");
             }
             Event::Delete(_) => event_sender
@@ -1412,6 +1438,7 @@ async fn watch_detail_object(
                     cluster_key,
                     history_entry_id,
                 })
+                .await
                 .log_if_error("Failed to send resource detail deletion"),
             Event::Init => found_during_initial_list = false,
             Event::InitDone if !found_during_initial_list => event_sender
@@ -1419,6 +1446,7 @@ async fn watch_detail_object(
                     cluster_key,
                     history_entry_id,
                 })
+                .await
                 .log_if_error("Failed to send missing resource detail deletion"),
             Event::InitDone => {}
         }
@@ -1445,7 +1473,7 @@ async fn watch_detail_events(
         let event = match event {
             Ok(event) => event,
             Err(error) => {
-                send_detail_error(&event_sender, cluster_key, history_entry_id, true, error);
+                send_detail_error(&event_sender, cluster_key, history_entry_id, true, error).await;
                 return;
             }
         };
@@ -1462,11 +1490,11 @@ async fn watch_detail_events(
             }
             Event::InitDone => {}
         }
-        send_detail_events(&event_sender, cluster_key, history_entry_id, &events);
+        send_detail_events(&event_sender, cluster_key, history_entry_id, &events).await;
     }
 }
 
-fn send_detail_events(
+async fn send_detail_events(
     event_sender: &WorkerResultSender,
     cluster_key: i32,
     history_entry_id: u64,
@@ -1480,10 +1508,11 @@ fn send_detail_events(
             history_entry_id,
             events,
         })
+        .await
         .log_if_error("Failed to send resource event update");
 }
 
-fn send_detail_error(
+async fn send_detail_error(
     event_sender: &WorkerResultSender,
     cluster_key: i32,
     history_entry_id: u64,
@@ -1497,6 +1526,7 @@ fn send_detail_error(
             events,
             error: format!("{error:#?}"),
         })
+        .await
         .log_if_error("Failed to send resource detail watch failure");
 }
 
@@ -2138,6 +2168,8 @@ pub async fn apply_resource_yaml(
 
 pub struct ResourceDataUpdateRequest<'a> {
     pub cluster_key: i32,
+    pub history_entry_id: u64,
+    pub request_id: u64,
     pub client: kube::Client,
     pub api_resource: ApiResource,
     pub namespace: String,
@@ -2153,6 +2185,8 @@ pub struct ResourceDataUpdateRequest<'a> {
 pub async fn update_resource_data(request: ResourceDataUpdateRequest<'_>) -> Result<WorkerResult> {
     let ResourceDataUpdateRequest {
         cluster_key,
+        history_entry_id,
+        request_id,
         client,
         api_resource,
         namespace,
@@ -2225,7 +2259,8 @@ pub async fn update_resource_data(request: ResourceDataUpdateRequest<'_>) -> Res
 
     Ok(WorkerResult::ResourceDataUpdateCompleted {
         cluster_key,
-        resource_name,
+        history_entry_id,
+        request_id,
     })
 }
 

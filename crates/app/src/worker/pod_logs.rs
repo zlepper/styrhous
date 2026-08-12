@@ -63,6 +63,7 @@ pub(super) async fn stream(
     };
     sender
         .send(result)
+        .await
         .log_if_error("Failed to send Pod log stream result");
 }
 
