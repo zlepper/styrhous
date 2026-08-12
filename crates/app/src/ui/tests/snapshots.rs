@@ -4,6 +4,7 @@ use super::super::state::{
     BulkDeleteProgress, BulkDeleteTarget, PendingDelete, PendingForceDelete, ResourceWatchState,
     UiState, ValidationState, YamlEditorWindowState,
 };
+use super::super::table_preferences::{ResourceTableKey, TableColumnDefinition};
 use super::fixtures::{
     application_harness, application_harness_with_terminal, fixture_api_resource, fixture_cluster,
     fixture_cluster_scoped_api_resource, oracle_resource_table_state,
@@ -3837,6 +3838,178 @@ fn resource_table_reflows_after_viewport_resize() {
     harness.ui_harness(
         "resource_tables/resource_table_reflows_after_viewport_resize/resource_table_resized",
     );
+}
+
+fn show_apps_resource_table(harness: &mut Harness<MyEguiApp<MockWorker>>) {
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness.run();
+    let apps_and_containers = harness.get_by_label("Apps & Containers").rect().center();
+    primary_click(harness, apps_and_containers);
+    harness.run_steps(2);
+}
+
+fn resource_table_name_header_left(harness: &Harness<MyEguiApp<MockWorker>>) -> egui::Pos2 {
+    let selection = harness
+        .get_by_role_and_label(egui::accesskit::Role::CheckBox, "Select all rows")
+        .rect();
+    egui::pos2(selection.right() + 16.0, selection.center().y)
+}
+
+fn resource_table_name_header_context_position(
+    harness: &Harness<MyEguiApp<MockWorker>>,
+) -> egui::Pos2 {
+    let header = resource_table_name_header_left(harness);
+    egui::pos2(header.x + 132.0, header.y)
+}
+
+fn resource_table_name_resize_handle(harness: &Harness<MyEguiApp<MockWorker>>) -> egui::Rect {
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Resize Name column")
+        .rect()
+}
+
+fn resource_table_name_width(harness: &mut Harness<MyEguiApp<MockWorker>>) -> f32 {
+    let resource = fixture_api_resource("core", "Pod", "pods");
+    let name_column = TableColumnDefinition {
+        id: "name".into(),
+        label: "Name".into(),
+        default_width: 160.0,
+        sortable: true,
+    };
+    harness
+        .state_mut()
+        .resource_table_preferences
+        .resolved_columns(
+            &ResourceTableKey::workspace(&resource),
+            std::slice::from_ref(&name_column),
+        )
+        .into_iter()
+        .next()
+        .expect("the Name column remains visible")
+        .width
+}
+
+fn open_workspace_column_settings(harness: &mut Harness<MyEguiApp<MockWorker>>) {
+    let header = resource_table_name_header_context_position(harness);
+    secondary_click(harness, header);
+    harness.run_steps(2);
+    let configure = harness.get_by_label("Configure columns").rect().center();
+    primary_click(harness, configure);
+    harness.run_steps(2);
+}
+
+#[test]
+fn resource_table_header_menu_opens_the_column_settings_blade() {
+    let mut harness = application_harness::<MockWorker>();
+    show_apps_resource_table(&mut harness);
+
+    let header = resource_table_name_header_context_position(&harness);
+    secondary_click(&mut harness, header);
+    harness.run_steps(2);
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "resource_tables/resource_table_column_configuration/header_context_menu",
+    ));
+
+    let configure = harness.get_by_label("Configure columns").rect().center();
+    primary_click(&mut harness, configure);
+    harness.run_steps(2);
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "resource_tables/resource_table_column_configuration/settings_blade",
+    ));
+}
+
+#[test]
+fn resource_table_column_settings_hide_and_reorder_columns() {
+    let mut harness = application_harness::<MockWorker>();
+    show_apps_resource_table(&mut harness);
+    open_workspace_column_settings(&mut harness);
+
+    let owner = harness
+        .get_by_role_and_label(egui::accesskit::Role::CheckBox, "Owner")
+        .rect();
+    primary_click(&mut harness, owner.center());
+    harness.run();
+    let age_checkbox = harness
+        .get_by_role_and_label(egui::accesskit::Role::CheckBox, "Age")
+        .rect();
+    let age_handle = egui::pos2(age_checkbox.left() - 38.0, age_checkbox.center().y);
+    let name_handle = harness
+        .get_by_role_and_label(egui::accesskit::Role::CheckBox, "Name")
+        .rect();
+    drag(
+        &mut harness,
+        age_handle,
+        egui::pos2(age_handle.x, name_handle.top()),
+    );
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "resource_tables/resource_table_column_configuration/reordered_settings",
+    ));
+
+    harness.state_mut().resource_table_settings = Default::default();
+    harness.run_steps(2);
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "resource_tables/resource_table_column_configuration/configured_table",
+    ));
+}
+
+#[test]
+fn resource_table_resizes_and_horizontally_scrolls() {
+    let mut harness = application_harness::<MockWorker>();
+    show_apps_resource_table(&mut harness);
+    harness.set_size(egui::vec2(850.0, 1024.0));
+    harness.run_steps(2);
+
+    let resize_handle = resource_table_name_resize_handle(&harness);
+    let drag_start = resize_handle.center();
+    let drag_target = drag_start + egui::vec2(120.0, 0.0);
+    harness.event(egui::Event::PointerMoved(drag_start));
+    harness.event(egui::Event::PointerButton {
+        pos: drag_start,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::default(),
+    });
+    harness.run();
+    harness.event(egui::Event::PointerMoved(drag_target));
+    harness.run_steps(2);
+
+    assert_eq!(resource_table_name_width(&mut harness), 280.0);
+    assert!(
+        (resource_table_name_resize_handle(&harness).center().x - drag_target.x).abs() < 0.1,
+        "the resize handle should remain beneath the pointer while dragging"
+    );
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "resource_tables/resource_table_column_configuration/resizing_column",
+    ));
+
+    harness.event(egui::Event::PointerButton {
+        pos: drag_target,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::default(),
+    });
+    harness.run_steps(2);
+    assert_eq!(resource_table_name_width(&mut harness), 280.0);
+    assert!(
+        (resource_table_name_resize_handle(&harness).center().x - drag_target.x).abs() < 0.1,
+        "the resize handle should stay in place after releasing it"
+    );
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "resource_tables/resource_table_column_configuration/resized_column",
+    ));
+
+    let table_header = resource_table_name_header_left(&harness);
+    harness.event(egui::Event::PointerMoved(table_header));
+    harness.event(egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: egui::vec2(-1_000.0, 0.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: egui::Modifiers::NONE,
+    });
+    harness.run_steps(2);
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "resource_tables/resource_table_column_configuration/resized_and_horizontally_scrolled",
+    ));
 }
 
 #[test]
