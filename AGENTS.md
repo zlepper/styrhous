@@ -115,6 +115,10 @@ Once a changeset is done, use a set of sub agents to review for each of these th
 extraction of shared behavior and/or components. The agent should also check for coding 
 patterns that could be done better or cleaner by using common language abstractions (Such as
 default spreads)
-3. Focus on test handling. Are the changes well enough covered by tests?
+3. Focus on test handling. Are the changes well enough covered by tests? Especially consider
+adding snapshot tests for better coverage.
+4. If a UI snapshot have changed, have an agent check the related accessibility snapshots for
+alignment of elements. Focusing on things that are supports to be aligned which each other actually being
+aligned horizontally/vertically as relevant.
 
 All of those agents can be launched in parallel if the harness supports it.
