@@ -183,6 +183,45 @@ impl LogTextSelection {
 impl PodLogWindowState {
     pub(super) const DEFAULT_PAGE_CACHE_LIMIT: usize = 128 * 1024 * 1024;
 
+    pub(super) fn new(
+        id: u64,
+        cluster_key: i32,
+        namespace: String,
+        pod_name: String,
+        container: PodLogContainer,
+    ) -> Self {
+        Self {
+            id,
+            cluster_key,
+            namespace,
+            pod_name,
+            container,
+            total_lines: 0,
+            backfill_lines: None,
+            live_rows: BTreeMap::new(),
+            following_bottom: true,
+            pages: HashMap::new(),
+            page_order: VecDeque::new(),
+            page_cache_bytes: 0,
+            page_cache_limit: Self::DEFAULT_PAGE_CACHE_LIMIT,
+            page_size: LOG_PAGE_SIZE,
+            pending_pages: HashSet::new(),
+            initial_page_loaded: false,
+            visible_top_display_row: 0,
+            store_opened: false,
+            status: PodLogStatus::Connecting,
+            close_requested: false,
+            search: LogSearchState::default(),
+            horizontal_content_width: 0.0,
+            selection: None,
+            selection_generation: 0,
+            caret_preferred_column: None,
+            pending_caret: None,
+            ensure_caret_visible: false,
+            copied_text: None,
+        }
+    }
+
     pub(super) fn clear_pages(&mut self) {
         self.pages.clear();
         self.page_order.clear();

@@ -201,39 +201,21 @@ impl LogViewerProfile {
 }
 
 fn empty_log_window(total_lines: usize) -> PodLogWindowState {
-    PodLogWindowState {
-        id: 1,
-        cluster_key: 1,
-        namespace: "default".to_owned(),
-        pod_name: "profiled-pod".to_owned(),
-        container: PodLogContainer {
+    let mut window = PodLogWindowState::new(
+        1,
+        1,
+        "default".to_owned(),
+        "profiled-pod".to_owned(),
+        PodLogContainer {
             name: "api".to_owned(),
             kind: ContainerKind::App,
         },
-        total_lines,
-        backfill_lines: None,
-        live_rows: Default::default(),
-        following_bottom: true,
-        pages: Default::default(),
-        page_order: Default::default(),
-        page_cache_bytes: 0,
-        page_cache_limit: PodLogWindowState::DEFAULT_PAGE_CACHE_LIMIT,
-        page_size: PAGE_SIZE,
-        pending_pages: Default::default(),
-        initial_page_loaded: true,
-        visible_top_display_row: 0,
-        store_opened: true,
-        status: PodLogStatus::Finished,
-        close_requested: false,
-        search: Default::default(),
-        horizontal_content_width: 0.0,
-        selection: None,
-        selection_generation: 0,
-        caret_preferred_column: None,
-        pending_caret: None,
-        ensure_caret_visible: false,
-        copied_text: None,
-    }
+    );
+    window.total_lines = total_lines;
+    window.initial_page_loaded = true;
+    window.store_opened = true;
+    window.status = PodLogStatus::Finished;
+    window
 }
 
 fn synthetic_log_lines(start: usize, count: usize, payload_bytes: usize) -> Vec<String> {

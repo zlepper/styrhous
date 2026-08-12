@@ -15,13 +15,13 @@ use crate::sorted_name::SortedName;
 use crate::terminal_launcher::TerminalLaunchSettings;
 use crate::worker::{ResourceApiError, WorkerOperation, WorkerResult, WorkerTrait};
 use components::BladeNavigator;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::time::{Duration, Instant};
 use tracing::{error, info};
 
 pub(super) use super::log_state::{
-    LogDisplayOptions, LogPageKey, LogSearchState, LogTextPosition, LogTextSelection,
-    PendingLogCaret, PodLogStatus, PodLogWindowState,
+    LogDisplayOptions, LogPageKey, LogTextPosition, LogTextSelection, PendingLogCaret,
+    PodLogStatus, PodLogWindowState,
 };
 
 pub(super) use super::persistence::{
@@ -761,36 +761,13 @@ impl UiState {
         let log_window_id = self.next_log_window_id;
         self.log_windows.insert(
             log_window_id,
-            PodLogWindowState {
-                id: log_window_id,
+            PodLogWindowState::new(
+                log_window_id,
                 cluster_key,
-                namespace: namespace.clone(),
-                pod_name: pod_name.clone(),
-                container: container.clone(),
-                total_lines: 0,
-                backfill_lines: None,
-                live_rows: BTreeMap::new(),
-                following_bottom: true,
-                pages: HashMap::new(),
-                page_order: VecDeque::new(),
-                page_cache_bytes: 0,
-                page_cache_limit: PodLogWindowState::DEFAULT_PAGE_CACHE_LIMIT,
-                page_size: crate::log_store::LOG_PAGE_SIZE,
-                pending_pages: HashSet::new(),
-                initial_page_loaded: false,
-                visible_top_display_row: 0,
-                store_opened: false,
-                status: PodLogStatus::Connecting,
-                close_requested: false,
-                search: LogSearchState::default(),
-                horizontal_content_width: 0.0,
-                selection: None,
-                selection_generation: 0,
-                caret_preferred_column: None,
-                pending_caret: None,
-                ensure_caret_visible: false,
-                copied_text: None,
-            },
+                namespace.clone(),
+                pod_name.clone(),
+                container.clone(),
+            ),
         );
         commands_to_send.push(crate::worker::WorkerCommand::StartPodLogStream {
             cluster_key,
