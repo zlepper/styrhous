@@ -1,6 +1,6 @@
 //! Pod-log stream ingestion, including concurrent tail and history backfill.
 
-use super::{WorkerResult, WorkerResultSender};
+use super::{PodLogStreamEnded, PodLogStreamFailed, WorkerResultSender};
 use crate::helpers::ResultExt;
 use crate::log_store::LogStoreAppender;
 use futures_util::{AsyncBufReadExt, TryStreamExt};
@@ -54,17 +54,18 @@ pub(super) async fn stream(
         anyhow::Ok(())
     }
     .await;
-    let result = match result {
-        Ok(()) => WorkerResult::PodLogStreamEnded { log_window_id },
-        Err(error) => WorkerResult::PodLogStreamFailed {
-            log_window_id,
-            error: format!("{error:#}"),
-        },
-    };
-    sender
-        .send(result)
-        .await
-        .log_if_error("Failed to send Pod log stream result");
+    match result {
+        Ok(()) => sender.send(PodLogStreamEnded { log_window_id }).await,
+        Err(error) => {
+            sender
+                .send(PodLogStreamFailed {
+                    log_window_id,
+                    error: format!("{error:#}"),
+                })
+                .await
+        }
+    }
+    .log_if_error("Failed to send Pod log stream result");
 }
 
 async fn append_stream(

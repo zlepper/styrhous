@@ -14,7 +14,10 @@ use crate::resource_detail::{
 use crate::resource_handlers::table_definition;
 use crate::resource_table::{CONTAINERS_COLUMN, NODE_COLUMN, ResourceTableDefinition};
 use crate::terminal_launcher::PodShellRequest;
-use crate::worker::{ResourceDataUpdate, WorkerCommand};
+use crate::worker::{
+    GetResourceScale, ResourceDataUpdate, ResourceDataUpdateCompleted, ResourceDataUpdateFailed,
+    UpdateResourceData, WorkerCommandBox, WorkerResult,
+};
 use components::colors::{WHITE, gray, indigo};
 use components::design::{radius, spacing, status, typography};
 use components::icons;
@@ -41,6 +44,41 @@ const HISTORY_BLADE_X_TRANSLATIONS: [f32; 2] = [
 ];
 const BLADE_TRANSITION_DURATION: f32 = 0.25;
 
+impl WorkerResult for ResourceDataUpdateFailed {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(editor) = ui
+            .clusters
+            .get_mut(&self.cluster_key)
+            .and_then(|cluster| cluster.resource_detail_panel.as_mut())
+            .and_then(|panel| panel.data_editor_mut(self.history_entry_id))
+            && editor.pending_save_request_id == Some(self.request_id)
+        {
+            editor.saving = false;
+            editor.pending_save_request_id = None;
+            editor.save_error = Some(self.error);
+        }
+    }
+}
+
+impl WorkerResult for ResourceDataUpdateCompleted {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let ResourceDataUpdateCompleted {
+            cluster_key,
+            history_entry_id,
+            request_id,
+        } = self;
+        if let Some(editor) = ui
+            .clusters
+            .get_mut(&cluster_key)
+            .and_then(|cluster| cluster.resource_detail_panel.as_mut())
+            .and_then(|panel| panel.data_editor_mut(history_entry_id))
+            && editor.pending_save_request_id == Some(request_id)
+        {
+            editor.mark_saved();
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 struct BladeTransform {
     position: egui::Pos2,
@@ -63,7 +101,7 @@ struct BladeResult {
 pub(super) fn show(
     ctx: &egui::Context,
     ui_state: &mut UiState,
-    commands_to_send: &mut Vec<WorkerCommand>,
+    commands_to_send: &mut Vec<WorkerCommandBox>,
     shell_requests: &mut Vec<PodShellRequest>,
 ) {
     show_shared_blade(ctx, ui_state, commands_to_send, shell_requests);
@@ -73,7 +111,7 @@ pub(super) fn show(
 fn show_legacy(
     ctx: &egui::Context,
     ui_state: &mut UiState,
-    commands_to_send: &mut Vec<WorkerCommand>,
+    commands_to_send: &mut Vec<WorkerCommandBox>,
     shell_requests: &mut Vec<PodShellRequest>,
 ) {
     show_shared_blade(ctx, ui_state, commands_to_send, shell_requests);
@@ -357,12 +395,12 @@ fn show_legacy(
                             });
                         }
                         ResourceAction::RequestScale { name, namespace } => {
-                            commands_to_send.push(WorkerCommand::GetResourceScale {
+                            commands_to_send.push(Box::new(GetResourceScale {
                                 cluster_key: cluster.cluster_key,
                                 api_resource: panel_api_resource(cluster),
                                 namespace,
                                 resource_name: name,
-                            });
+                            }));
                         }
                         ResourceAction::SaveData {
                             expected_values,
@@ -381,7 +419,7 @@ fn show_legacy(
                                 (panel.namespace.clone(), panel.data_editor.as_mut())
                             {
                                 editor.pending_save_request_id = Some(request_id);
-                                commands_to_send.push(WorkerCommand::UpdateResourceData {
+                                commands_to_send.push(Box::new(UpdateResourceData {
                                     cluster_key: cluster.cluster_key,
                                     history_entry_id,
                                     request_id,
@@ -393,7 +431,7 @@ fn show_legacy(
                                         expected_values,
                                         updated_values,
                                     },
-                                });
+                                }));
                             }
                         }
                         ResourceAction::ViewLogs {
@@ -466,7 +504,7 @@ fn show_legacy(
 fn show_shared_blade(
     ctx: &egui::Context,
     ui_state: &mut UiState,
-    commands_to_send: &mut Vec<WorkerCommand>,
+    commands_to_send: &mut Vec<WorkerCommandBox>,
     shell_requests: &mut Vec<PodShellRequest>,
 ) {
     let Some(cluster_key) = ui_state.selected_cluster else {
@@ -594,12 +632,12 @@ fn show_shared_blade(
             }
             ResourceAction::RequestScale { name, namespace } => {
                 if let Some(cluster) = ui_state.clusters.get(&cluster_key) {
-                    commands_to_send.push(WorkerCommand::GetResourceScale {
+                    commands_to_send.push(Box::new(GetResourceScale {
                         cluster_key: cluster.cluster_key,
                         api_resource: panel_api_resource(cluster),
                         namespace,
                         resource_name: name,
-                    });
+                    }));
                 }
             }
             ResourceAction::SaveData {
@@ -617,7 +655,7 @@ fn show_shared_blade(
                             (panel.namespace.clone(), panel.data_editor.as_mut())
                         {
                             editor.pending_save_request_id = Some(request_id);
-                            commands_to_send.push(WorkerCommand::UpdateResourceData {
+                            commands_to_send.push(Box::new(UpdateResourceData {
                                 cluster_key: cluster.cluster_key,
                                 history_entry_id,
                                 request_id,
@@ -629,7 +667,7 @@ fn show_shared_blade(
                                     expected_values,
                                     updated_values,
                                 },
-                            });
+                            }));
                         }
                     }
                 }

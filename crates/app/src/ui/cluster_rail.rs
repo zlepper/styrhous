@@ -1,6 +1,6 @@
 use super::state::{ClusterConnectionState, UiState};
 use crate::terminal_launcher::TerminalLaunchSettings;
-use crate::worker::WorkerCommand;
+use crate::worker::WorkerCommandBox;
 use components::colors::{CLUSTER_RAIL_BACKGROUND, gray};
 use components::design::{spacing, status};
 use components::{NarrowSidebar, PointingHand, icons};
@@ -9,7 +9,7 @@ use tracing::info;
 pub(super) fn show(
     ui: &mut egui::Ui,
     ui_state: &mut UiState,
-    commands_to_send: &mut Vec<WorkerCommand>,
+    commands_to_send: &mut Vec<WorkerCommandBox>,
     terminal_settings: &TerminalLaunchSettings,
 ) {
     egui::Panel::left("cluster-panel")

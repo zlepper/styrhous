@@ -1,6 +1,6 @@
 use super::state::{BulkDeleteProgress, UiState};
 use crate::terminal_launcher::TerminalLaunchSettings;
-use crate::worker::WorkerCommand;
+use crate::worker::*;
 use components::colors::{WHITE, gray};
 use components::design::{radius, spacing, surface, typography};
 use components::{
@@ -10,13 +10,126 @@ use components::{
 };
 use egui::{Align, Color32, Frame, Key, Margin, Modal, Modifiers, Shadow};
 use std::time::Instant;
+use tracing::info;
 
 const SCALE_DIALOG_WIDTH: f32 = 530.0;
+
+impl WorkerResult for ResourceDeleteFailed {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        ui.settle_bulk_delete_target(
+            self.cluster_key,
+            self.bulk_delete_id,
+            &self.api_resource,
+            &self.resource_name,
+            &self.namespace,
+            Some(self.error),
+        );
+    }
+}
+
+impl WorkerResult for ResourceDeleteCompleted {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let ResourceDeleteCompleted {
+            cluster_key,
+            api_resource,
+            namespace,
+            resource_name,
+            bulk_delete_id,
+        } = self;
+        ui.settle_bulk_delete_target(
+            cluster_key,
+            bulk_delete_id,
+            &api_resource,
+            &resource_name,
+            &namespace,
+            None,
+        );
+        if let Some(cluster) = ui.clusters.get_mut(&cluster_key) {
+            cluster.pending_delete = None;
+        }
+    }
+}
+
+impl WorkerResult for ResourceForceDeleteFailed {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(cluster) = ui.clusters.get_mut(&self.cluster_key) {
+            cluster.force_delete_error = Some(self.error);
+        }
+    }
+}
+
+impl WorkerResult for ResourceForceDeleteCompleted {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let ResourceForceDeleteCompleted {
+            cluster_key,
+            resource_name,
+        } = self;
+        info!("Finalizers removed from resource: {resource_name}");
+        if let Some(cluster) = ui.clusters.get_mut(&cluster_key) {
+            cluster.pending_force_delete = None;
+        }
+    }
+}
+
+impl WorkerResult for DeploymentRestartFailed {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(cluster) = ui.clusters.get_mut(&self.cluster_key) {
+            cluster.deployment_restart_error = Some(self.error);
+        }
+    }
+}
+
+impl WorkerResult for DeploymentRestartCompleted {
+    fn apply(self, _ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        info!(
+            "Deployment rollout restart requested: {} in {}",
+            self.resource_name, self.namespace
+        );
+    }
+}
+
+impl WorkerResult for ResourceScaleFailed {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(cluster) = ui.clusters.get_mut(&self.cluster_key) {
+            cluster.scale_error = Some(self.error);
+        }
+    }
+}
+
+impl WorkerResult for ResourceScaleFetched {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let ResourceScaleFetched {
+            cluster_key,
+            api_resource,
+            namespace,
+            resource_name,
+            replicas,
+        } = self;
+        if let Some(cluster) = ui.clusters.get_mut(&cluster_key) {
+            cluster.pending_scale = Some(super::state::PendingScale {
+                api_resource,
+                resource_name,
+                namespace,
+                current_replicas: replicas,
+                desired_replicas: replicas.to_string(),
+            });
+        }
+    }
+}
+
+impl WorkerResult for ResourceScaleUpdated {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        info!("Scale updated for resource: {}", self.resource_name);
+        if let Some(cluster) = ui.clusters.get_mut(&self.cluster_key) {
+            cluster.pending_scale = None;
+        }
+    }
+}
 
 pub(super) fn show_delete_confirmation(
     ctx: &egui::Context,
     ui_state: &mut UiState,
-    commands_to_send: &mut Vec<WorkerCommand>,
+    commands_to_send: &mut Vec<WorkerCommandBox>,
 ) {
     let Some(cluster_id) = ui_state.selected_cluster else {
         return;
@@ -63,14 +176,14 @@ pub(super) fn show_delete_confirmation(
             cluster.pending_delete = None;
         }
     } else if action == ConfirmationDialogAction::Confirm {
-        commands_to_send.push(WorkerCommand::DeleteResource {
+        commands_to_send.push(Box::new(DeleteResource {
             cluster_key,
             api_resource: pending.api_resource,
             namespace: pending.namespace,
             resource_name: pending.resource_name,
             resource_uid: None,
             bulk_delete_id: None,
-        });
+        }));
         if let Some(cluster) = ui_state.clusters.get_mut(&cluster_id) {
             cluster.pending_delete = None;
         }
@@ -80,7 +193,7 @@ pub(super) fn show_delete_confirmation(
 pub(super) fn show_bulk_delete_confirmation(
     ctx: &egui::Context,
     ui_state: &mut UiState,
-    commands_to_send: &mut Vec<WorkerCommand>,
+    commands_to_send: &mut Vec<WorkerCommandBox>,
 ) {
     let Some(cluster_id) = ui_state.selected_cluster else {
         return;
@@ -148,14 +261,14 @@ pub(super) fn show_bulk_delete_confirmation(
             })
             .expect("selected cluster still exists while confirming bulk deletion");
         for target in &pending.targets {
-            commands_to_send.push(WorkerCommand::DeleteResource {
+            commands_to_send.push(Box::new(DeleteResource {
                 cluster_key,
                 api_resource: pending.api_resource.clone(),
                 namespace: target.namespace.clone(),
                 resource_name: target.name.clone(),
                 resource_uid: Some(target.uid.clone()),
                 bulk_delete_id: Some(bulk_delete_id),
-            });
+            }));
         }
         if let Some(cluster) = ui_state.clusters.get_mut(&cluster_id) {
             cluster.bulk_delete_progress = Some(BulkDeleteProgress::new(
@@ -202,7 +315,7 @@ pub(super) fn show_bulk_delete_error(ctx: &egui::Context, ui_state: &mut UiState
 pub(super) fn show_force_delete_confirmation(
     ctx: &egui::Context,
     ui_state: &mut UiState,
-    commands_to_send: &mut Vec<WorkerCommand>,
+    commands_to_send: &mut Vec<WorkerCommandBox>,
 ) {
     let Some(cluster_id) = ui_state.selected_cluster else {
         return;
@@ -272,13 +385,13 @@ pub(super) fn show_force_delete_confirmation(
             cluster.pending_force_delete = None;
         }
     } else if action == ConfirmationDialogAction::Confirm {
-        commands_to_send.push(WorkerCommand::ForceDeleteResource {
+        commands_to_send.push(Box::new(ForceDeleteResource {
             cluster_key,
             api_resource: pending.api_resource.clone(),
             namespace: pending.namespace.clone(),
             resource_name: pending.resource_name.clone(),
             resource_uid: pending.resource_uid.clone(),
-        });
+        }));
         if let Some(cluster) = ui_state.clusters.get_mut(&cluster_id) {
             cluster.pending_force_delete = None;
         }
@@ -319,7 +432,7 @@ pub(super) fn show_force_delete_error(ctx: &egui::Context, ui_state: &mut UiStat
 pub(super) fn show_deployment_restart_confirmation(
     ctx: &egui::Context,
     ui_state: &mut UiState,
-    commands_to_send: &mut Vec<WorkerCommand>,
+    commands_to_send: &mut Vec<WorkerCommandBox>,
 ) {
     let Some(cluster_id) = ui_state.selected_cluster else {
         return;
@@ -355,11 +468,11 @@ pub(super) fn show_deployment_restart_confirmation(
             cluster.pending_deployment_restart = None;
         }
     } else if action == ConfirmationDialogAction::Confirm {
-        commands_to_send.push(WorkerCommand::RestartDeployment {
+        commands_to_send.push(Box::new(RestartDeployment {
             cluster_key,
             namespace: pending.namespace,
             resource_name: pending.resource_name,
-        });
+        }));
         if let Some(cluster) = ui_state.clusters.get_mut(&cluster_id) {
             cluster.pending_deployment_restart = None;
         }
@@ -398,7 +511,7 @@ pub(super) fn show_deployment_restart_error(ctx: &egui::Context, ui_state: &mut 
 pub(super) fn show_scale_dialog(
     ctx: &egui::Context,
     ui_state: &mut UiState,
-    commands_to_send: &mut Vec<WorkerCommand>,
+    commands_to_send: &mut Vec<WorkerCommandBox>,
 ) {
     let Some(cluster_id) = ui_state.selected_cluster else {
         return;
@@ -570,13 +683,13 @@ pub(super) fn show_scale_dialog(
         cluster.pending_scale = None;
     }
     if let Some((api_resource, namespace, resource_name, replicas)) = scale_request {
-        commands_to_send.push(WorkerCommand::UpdateResourceScale {
+        commands_to_send.push(Box::new(UpdateResourceScale {
             cluster_key: cluster.cluster_key,
             api_resource,
             namespace,
             resource_name,
             replicas,
-        });
+        }));
     }
 }
 

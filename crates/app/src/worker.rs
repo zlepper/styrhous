@@ -14,6 +14,8 @@ use crate::resource_detail::{ManagedResource, ResourceDetail, ResourceEvent};
 use crate::resource_schema::ResourceSchema;
 use crate::resource_table::CustomResourceColumn;
 use anyhow::Error;
+use async_trait::async_trait;
+use std::any::Any;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
@@ -23,6 +25,111 @@ use tracing::info;
 
 mod pod_logs;
 
+#[allow(dead_code)]
+pub(crate) trait AsAny: Any {
+    fn as_any(&self) -> &dyn Any;
+}
+
+impl<T: Any> AsAny for T {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// The concrete command API. It is deliberately not object-safe: each command
+/// owns itself, receives worker state, and returns its normal Rust output.
+#[async_trait]
+pub(crate) trait WorkerCommand: Send + std::fmt::Debug + 'static {
+    type Output: CommandOutput;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output;
+
+    fn serializes_session_lifecycle(&self) -> bool {
+        false
+    }
+}
+
+/// The channel-only, object-safe adapter for concrete commands.
+#[async_trait]
+pub(crate) trait ErasedWorkerCommand: AsAny + Send + std::fmt::Debug {
+    async fn execute_boxed(self: Box<Self>, state: &WorkerState) -> Option<WorkerResultBox>;
+    fn serializes_session_lifecycle(&self) -> bool;
+}
+
+#[async_trait]
+impl<C: WorkerCommand> ErasedWorkerCommand for C {
+    async fn execute_boxed(self: Box<Self>, state: &WorkerState) -> Option<WorkerResultBox> {
+        (*self).execute(state).await.into_result_box()
+    }
+
+    fn serializes_session_lifecycle(&self) -> bool {
+        WorkerCommand::serializes_session_lifecycle(self)
+    }
+}
+
+pub(crate) type WorkerCommandBox = Box<dyn ErasedWorkerCommand>;
+
+/// Converts a concrete command output into an optional channel update.
+/// Commands whose successful outcome is purely worker-local use `NoResult`,
+/// while still forwarding a typed failure result.
+pub(crate) trait CommandOutput: Send + std::fmt::Debug + 'static {
+    fn into_result_box(self) -> Option<WorkerResultBox>;
+}
+
+impl<R: WorkerResult> CommandOutput for R {
+    fn into_result_box(self) -> Option<WorkerResultBox> {
+        Some(Box::new(self))
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct NoResult;
+
+impl<E: WorkerResult> CommandOutput for Result<NoResult, E> {
+    fn into_result_box(self) -> Option<WorkerResultBox> {
+        self.err().map(|error| Box::new(error) as WorkerResultBox)
+    }
+}
+
+/// A concrete UI update emitted by the worker.
+pub(crate) trait WorkerResult: Send + std::fmt::Debug + 'static {
+    fn apply(self, ui: &mut crate::ui::state::UiState, commands: &mut Vec<WorkerCommandBox>);
+}
+
+impl<S: WorkerResult, E: WorkerResult> WorkerResult for Result<S, E> {
+    fn apply(self, ui: &mut crate::ui::state::UiState, commands: &mut Vec<WorkerCommandBox>) {
+        match self {
+            Ok(result) => result.apply(ui, commands),
+            Err(result) => result.apply(ui, commands),
+        }
+    }
+}
+
+impl WorkerResult for () {
+    fn apply(self, _ui: &mut crate::ui::state::UiState, _commands: &mut Vec<WorkerCommandBox>) {}
+}
+
+/// The channel-only, object-safe adapter for concrete UI updates.
+pub(crate) trait ErasedWorkerResult: AsAny + Send + std::fmt::Debug {
+    fn apply_boxed(
+        self: Box<Self>,
+        ui: &mut crate::ui::state::UiState,
+        commands: &mut Vec<WorkerCommandBox>,
+    );
+}
+
+impl<R: WorkerResult> ErasedWorkerResult for R {
+    fn apply_boxed(
+        self: Box<Self>,
+        ui: &mut crate::ui::state::UiState,
+        commands: &mut Vec<WorkerCommandBox>,
+    ) {
+        (*self).apply(ui, commands);
+    }
+}
+
+pub(crate) type WorkerResultBox = Box<dyn ErasedWorkerResult>;
+
 /// Trait abstracting the worker interface for testability
 pub trait WorkerTrait: Default {
     fn with_repaint_context(_context: egui::Context) -> Self {
@@ -30,15 +137,15 @@ pub trait WorkerTrait: Default {
     }
 
     fn start(&mut self);
-    fn get_next_message(&mut self) -> Option<WorkerResult>;
-    fn send_command(&mut self, command: WorkerCommand);
+    fn get_next_message(&mut self) -> Option<WorkerResultBox>;
+    fn send_command(&mut self, command: WorkerCommandBox);
     fn set_log_store_appender(&mut self, _appender: LogStoreAppender) {}
 }
 
 #[derive(Default)]
 pub struct Worker {
     inner: Option<WorkerInner>,
-    pending_commands: VecDeque<WorkerCommand>,
+    pending_commands: VecDeque<WorkerCommandBox>,
     repaint_context: Option<egui::Context>,
     log_store_appender: Option<LogStoreAppender>,
 }
@@ -55,16 +162,18 @@ impl Worker {
 
     pub fn start(&mut self) {
         if self.inner.is_none() {
-            let (command_channel_sender, command_channel_receiver) = mpsc::channel(64);
+            let (command_channel_sender, command_channel_receiver) =
+                mpsc::channel::<WorkerCommandBox>(64);
             let (result_channel_sender, result_channel_receiver) = mpsc::channel(1024);
             let result_sender =
                 WorkerResultSender::new(result_channel_sender, self.repaint_context.clone());
 
             command_channel_sender
-                .try_send(WorkerCommand::LoadClusters)
+                .try_send(Box::new(LoadClusters))
                 .expect("Failed to send initial LoadClusters command");
 
-            let shared = Arc::new(SharedWorkerState {
+            let state = Arc::new(WorkerState {
+                results: result_sender,
                 connections: Mutex::new(HashMap::new()),
                 resource_watches: Mutex::new(HashMap::new()),
                 detail_watches: Mutex::new(HashMap::new()),
@@ -73,9 +182,8 @@ impl Worker {
             });
 
             let worker = WorkerRuntime {
-                sender: result_sender,
                 receiver: command_channel_receiver,
-                shared,
+                state,
             };
 
             let _ = std::thread::spawn(move || {
@@ -89,7 +197,7 @@ impl Worker {
         }
     }
 
-    pub(crate) fn get_next_message(&mut self) -> Option<WorkerResult> {
+    pub(crate) fn get_next_message(&mut self) -> Option<WorkerResultBox> {
         self.flush_pending_commands();
         if let Some(inner) = &mut self.inner {
             inner.receiver.try_recv().ok()
@@ -98,7 +206,7 @@ impl Worker {
         }
     }
 
-    pub(crate) fn send_command(&mut self, command: WorkerCommand) {
+    pub(crate) fn send_command(&mut self, command: WorkerCommandBox) {
         self.pending_commands.push_back(command);
         self.flush_pending_commands();
     }
@@ -147,11 +255,11 @@ impl WorkerTrait for Worker {
         Worker::start(self)
     }
 
-    fn get_next_message(&mut self) -> Option<WorkerResult> {
+    fn get_next_message(&mut self) -> Option<WorkerResultBox> {
         Worker::get_next_message(self)
     }
 
-    fn send_command(&mut self, command: WorkerCommand) {
+    fn send_command(&mut self, command: WorkerCommandBox) {
         Worker::send_command(self, command)
     }
 
@@ -164,8 +272,8 @@ impl WorkerTrait for Worker {
 #[cfg(test)]
 #[derive(Default)]
 pub struct MockWorker {
-    pub results: VecDeque<WorkerResult>,
-    pub commands: Vec<WorkerCommand>,
+    pub results: VecDeque<WorkerResultBox>,
+    pub commands: Vec<WorkerCommandBox>,
 }
 
 #[cfg(test)]
@@ -174,197 +282,146 @@ impl WorkerTrait for MockWorker {
         // No-op for mock
     }
 
-    fn get_next_message(&mut self) -> Option<WorkerResult> {
+    fn get_next_message(&mut self) -> Option<WorkerResultBox> {
         self.results.pop_front()
     }
 
-    fn send_command(&mut self, command: WorkerCommand) {
+    fn send_command(&mut self, command: WorkerCommandBox) {
         self.commands.push(command);
     }
 }
 
 struct WorkerInner {
-    sender: mpsc::Sender<WorkerCommand>,
-    receiver: mpsc::Receiver<WorkerResult>,
+    sender: mpsc::Sender<WorkerCommandBox>,
+    receiver: mpsc::Receiver<WorkerResultBox>,
 }
 
-/// Identifies a Kubernetes resource collection within a connected cluster.
-///
-/// This is shared by worker outcomes so the UI never needs to reconstruct a
-/// watch identity from an entire failed command.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct ResourceScope {
+/// Worker watch registry key for a resource scope.
+struct ResourceScope {
     pub cluster_key: i32,
     pub api_resource: ApiResource,
     pub namespace: Option<String>,
 }
 
-/// The operation that produced a worker failure. Values such as YAML and
-/// Secret data intentionally never appear here.
 #[derive(Debug)]
-pub enum WorkerOperation {
-    LoadClusters,
-    ConnectCluster {
-        cluster_key: i32,
-    },
-    StartResourceWatch {
-        scope: ResourceScope,
-    },
-    StartResourceDetailWatch {
-        cluster_key: i32,
-        history_entry_id: u64,
-    },
-    StopResourceDetailWatch,
-    GetResourceYaml {
-        editor_id: u64,
-    },
-    DeleteResource {
-        scope: ResourceScope,
-        resource_name: String,
-        bulk_delete_id: Option<u64>,
-    },
-    ForceDeleteResource {
-        cluster_key: i32,
-    },
-    RestartDeployment {
-        cluster_key: i32,
-    },
-    GetOrUpdateResourceScale {
-        cluster_key: i32,
-    },
-    ApplyResourceYaml {
-        editor_id: u64,
-    },
-    LoadResourceSchema {
-        editor_id: u64,
-    },
-    ValidateResourceYaml {
-        editor_id: u64,
-        revision: u64,
-    },
-    UpdateResourceData {
-        cluster_key: i32,
-        history_entry_id: u64,
-        request_id: u64,
-    },
-    StartPodLogStream {
-        log_window_id: u64,
-    },
-    StopPodLogStream,
+pub(crate) struct LoadClusters;
+#[derive(Debug)]
+pub(crate) struct ConnectToCluster {
+    pub(crate) cluster: String,
+    pub(crate) cluster_key: i32,
 }
-
-/// Messages that can be sent to the worker
 #[derive(Debug)]
-pub enum WorkerCommand {
-    LoadClusters,
-    ConnectToCluster {
-        cluster: String,
-        cluster_key: i32,
-    },
-    StartResourceWatch {
-        cluster_key: i32,
-        api_resource: ApiResource,
-        namespace: Option<String>,
-    },
-    StartResourceDetailWatch {
-        cluster_key: i32,
-        /// Stable identity of this visit in the inspector history. A resource
-        /// may be revisited, so it cannot be keyed by Kubernetes UID alone.
-        history_entry_id: u64,
-        api_resource: ApiResource,
-        namespace: Option<String>,
-        resource_name: String,
-        resource_uid: String,
-    },
-    StopResourceDetailWatch {
-        cluster_key: i32,
-        history_entry_id: u64,
-    },
-    GetResourceYaml {
-        editor_id: u64,
-        cluster_key: i32,
-        api_resource: ApiResource,
-        namespace: Option<String>,
-        resource_name: String,
-    },
-    DeleteResource {
-        cluster_key: i32,
-        api_resource: ApiResource,
-        namespace: Option<String>,
-        resource_name: String,
-        resource_uid: Option<String>,
-        bulk_delete_id: Option<u64>,
-    },
-    ForceDeleteResource {
-        cluster_key: i32,
-        api_resource: ApiResource,
-        namespace: Option<String>,
-        resource_name: String,
-        resource_uid: String,
-    },
-    RestartDeployment {
-        cluster_key: i32,
-        namespace: String,
-        resource_name: String,
-    },
-    GetResourceScale {
-        cluster_key: i32,
-        api_resource: ApiResource,
-        namespace: Option<String>,
-        resource_name: String,
-    },
-    UpdateResourceScale {
-        cluster_key: i32,
-        api_resource: ApiResource,
-        namespace: Option<String>,
-        resource_name: String,
-        replicas: i32,
-    },
-    ApplyResourceYaml {
-        editor_id: u64,
-        cluster_key: i32,
-        api_resource: ApiResource,
-        namespace: Option<String>,
-        resource_name: String,
-        yaml: String,
-    },
-    LoadResourceSchema {
-        editor_id: u64,
-        cluster_key: i32,
-        api_resource: ApiResource,
-    },
-    ValidateResourceYaml {
-        editor_id: u64,
-        revision: u64,
-        cluster_key: i32,
-        api_resource: ApiResource,
-        namespace: Option<String>,
-        resource_name: String,
-        yaml: String,
-    },
-    UpdateResourceData {
-        cluster_key: i32,
-        /// Identifies the inspector visit that initiated this mutation. This prevents an
-        /// in-flight update from changing the status of a same-named resource visited later.
-        history_entry_id: u64,
-        /// Distinguishes retries or overlapping saves from the same inspector visit.
-        request_id: u64,
-        api_resource: ApiResource,
-        namespace: String,
-        resource_name: String,
-        update: ResourceDataUpdate,
-    },
-    StartPodLogStream {
-        cluster_key: i32,
-        log_window_id: u64,
-        namespace: String,
-        pod_name: String,
-        container: String,
-    },
-    StopPodLogStream {
-        cluster_key: i32,
-        log_window_id: u64,
-    },
+pub(crate) struct StartResourceWatch {
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+}
+#[derive(Debug)]
+pub(crate) struct StartResourceDetailWatch {
+    pub(crate) cluster_key: i32,
+    pub(crate) history_entry_id: u64,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) resource_name: String,
+    pub(crate) resource_uid: String,
+}
+#[derive(Debug)]
+pub(crate) struct StopResourceDetailWatch {
+    pub(crate) cluster_key: i32,
+    pub(crate) history_entry_id: u64,
+}
+#[derive(Debug)]
+pub(crate) struct GetResourceYaml {
+    pub(crate) editor_id: u64,
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) resource_name: String,
+}
+#[derive(Debug)]
+pub(crate) struct DeleteResource {
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) resource_name: String,
+    pub(crate) resource_uid: Option<String>,
+    pub(crate) bulk_delete_id: Option<u64>,
+}
+#[derive(Debug)]
+pub(crate) struct ForceDeleteResource {
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) resource_name: String,
+    pub(crate) resource_uid: String,
+}
+#[derive(Debug)]
+pub(crate) struct RestartDeployment {
+    pub(crate) cluster_key: i32,
+    pub(crate) namespace: String,
+    pub(crate) resource_name: String,
+}
+#[derive(Debug)]
+pub(crate) struct GetResourceScale {
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) resource_name: String,
+}
+#[derive(Debug)]
+pub(crate) struct UpdateResourceScale {
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) resource_name: String,
+    pub(crate) replicas: i32,
+}
+pub(crate) struct ApplyResourceYaml {
+    pub(crate) editor_id: u64,
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) resource_name: String,
+    pub(crate) yaml: String,
+}
+#[derive(Debug)]
+pub(crate) struct LoadResourceSchema {
+    pub(crate) editor_id: u64,
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+}
+pub(crate) struct ValidateResourceYaml {
+    pub(crate) editor_id: u64,
+    pub(crate) revision: u64,
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) resource_name: String,
+    pub(crate) yaml: String,
+}
+#[derive(Debug)]
+pub(crate) struct UpdateResourceData {
+    pub(crate) cluster_key: i32,
+    pub(crate) history_entry_id: u64,
+    pub(crate) request_id: u64,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: String,
+    pub(crate) resource_name: String,
+    pub(crate) update: ResourceDataUpdate,
+}
+#[derive(Debug)]
+pub(crate) struct StartPodLogStream {
+    pub(crate) cluster_key: i32,
+    pub(crate) log_window_id: u64,
+    pub(crate) namespace: String,
+    pub(crate) pod_name: String,
+    pub(crate) container: String,
+}
+#[derive(Debug)]
+pub(crate) struct StopPodLogStream {
+    pub(crate) cluster_key: i32,
+    pub(crate) log_window_id: u64,
 }
 
 /// The values are intentionally omitted from Debug output because this command can
@@ -375,109 +432,6 @@ pub struct ResourceDataUpdate {
     pub updated_values: BTreeMap<String, String>,
 }
 
-impl WorkerCommand {
-    fn serializes_session_lifecycle(&self) -> bool {
-        matches!(
-            self,
-            Self::LoadClusters
-                | Self::ConnectToCluster { .. }
-                | Self::StartResourceWatch { .. }
-                | Self::StartResourceDetailWatch { .. }
-                | Self::StopResourceDetailWatch { .. }
-                | Self::StartPodLogStream { .. }
-                | Self::StopPodLogStream { .. }
-        )
-    }
-
-    fn operation(&self) -> WorkerOperation {
-        match self {
-            Self::LoadClusters => WorkerOperation::LoadClusters,
-            Self::ConnectToCluster { cluster_key, .. } => WorkerOperation::ConnectCluster {
-                cluster_key: *cluster_key,
-            },
-            Self::StartResourceWatch {
-                cluster_key,
-                api_resource,
-                namespace,
-            } => WorkerOperation::StartResourceWatch {
-                scope: ResourceScope {
-                    cluster_key: *cluster_key,
-                    api_resource: api_resource.clone(),
-                    namespace: namespace.clone(),
-                },
-            },
-            Self::StartResourceDetailWatch {
-                cluster_key,
-                history_entry_id,
-                ..
-            } => WorkerOperation::StartResourceDetailWatch {
-                cluster_key: *cluster_key,
-                history_entry_id: *history_entry_id,
-            },
-            Self::StopResourceDetailWatch { .. } => WorkerOperation::StopResourceDetailWatch,
-            Self::GetResourceYaml { editor_id, .. } => WorkerOperation::GetResourceYaml {
-                editor_id: *editor_id,
-            },
-            Self::DeleteResource {
-                cluster_key,
-                api_resource,
-                namespace,
-                resource_name,
-                bulk_delete_id,
-                ..
-            } => WorkerOperation::DeleteResource {
-                scope: ResourceScope {
-                    cluster_key: *cluster_key,
-                    api_resource: api_resource.clone(),
-                    namespace: namespace.clone(),
-                },
-                resource_name: resource_name.clone(),
-                bulk_delete_id: *bulk_delete_id,
-            },
-            Self::ForceDeleteResource { cluster_key, .. } => WorkerOperation::ForceDeleteResource {
-                cluster_key: *cluster_key,
-            },
-            Self::RestartDeployment { cluster_key, .. } => WorkerOperation::RestartDeployment {
-                cluster_key: *cluster_key,
-            },
-            Self::GetResourceScale { cluster_key, .. }
-            | Self::UpdateResourceScale { cluster_key, .. } => {
-                WorkerOperation::GetOrUpdateResourceScale {
-                    cluster_key: *cluster_key,
-                }
-            }
-            Self::ApplyResourceYaml { editor_id, .. } => WorkerOperation::ApplyResourceYaml {
-                editor_id: *editor_id,
-            },
-            Self::LoadResourceSchema { editor_id, .. } => WorkerOperation::LoadResourceSchema {
-                editor_id: *editor_id,
-            },
-            Self::ValidateResourceYaml {
-                editor_id,
-                revision,
-                ..
-            } => WorkerOperation::ValidateResourceYaml {
-                editor_id: *editor_id,
-                revision: *revision,
-            },
-            Self::UpdateResourceData {
-                cluster_key,
-                history_entry_id,
-                request_id,
-                ..
-            } => WorkerOperation::UpdateResourceData {
-                cluster_key: *cluster_key,
-                history_entry_id: *history_entry_id,
-                request_id: *request_id,
-            },
-            Self::StartPodLogStream { log_window_id, .. } => WorkerOperation::StartPodLogStream {
-                log_window_id: *log_window_id,
-            },
-            Self::StopPodLogStream { .. } => WorkerOperation::StopPodLogStream,
-        }
-    }
-}
-
 impl std::fmt::Debug for ResourceDataUpdate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ResourceDataUpdate")
@@ -486,215 +440,890 @@ impl std::fmt::Debug for ResourceDataUpdate {
     }
 }
 
-/// Messages that can be received from the worker
+impl std::fmt::Debug for ApplyResourceYaml {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApplyResourceYaml")
+            .field("editor_id", &self.editor_id)
+            .field("cluster_key", &self.cluster_key)
+            .field("api_resource", &self.api_resource)
+            .field("namespace", &self.namespace)
+            .field("resource_name", &self.resource_name)
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for ValidateResourceYaml {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ValidateResourceYaml")
+            .field("editor_id", &self.editor_id)
+            .field("revision", &self.revision)
+            .field("cluster_key", &self.cluster_key)
+            .field("api_resource", &self.api_resource)
+            .field("namespace", &self.namespace)
+            .field("resource_name", &self.resource_name)
+            .finish_non_exhaustive()
+    }
+}
+
 #[derive(Debug)]
-pub enum WorkerResult {
-    CommandFailed {
-        operation: WorkerOperation,
-        error: Error,
-    },
-    KubernetesClustersUpdated(Vec<Cluster>),
-    KubernetesNamespacesAdded {
-        cluster_key: i32,
-        namespace: MinimalNamespace,
-    },
-    KubernetesNamespacesDeleted {
-        cluster_key: i32,
-        namespace_name: String,
-    },
-    KubernetesNamespacesReplaced {
-        cluster_key: i32,
-        namespaces: Vec<MinimalNamespace>,
-    },
-    KubernetesNamespacesLoadFailed {
-        cluster_key: i32,
-        error: String,
-    },
-    KubernetesApisLoaded {
-        cluster_key: i32,
-        api_resources: Vec<ApiResource>,
-        scalable_api_resources: std::collections::BTreeSet<ApiResource>,
-    },
-    KubernetesCustomResourceColumnsLoaded {
-        cluster_key: i32,
-        columns: std::collections::BTreeMap<ApiResource, Vec<CustomResourceColumn>>,
-    },
-    KubernetesResourceSchemasLoaded {
-        cluster_key: i32,
-        schemas: std::collections::BTreeMap<ApiResource, ResourceSchema>,
-    },
-    KubernetesApisLoadFailed {
-        cluster_key: i32,
-        error: String,
-    },
-    KubernetesClusterConnectionCreated {
-        cluster_key: i32,
-    },
-    /// A resource was added or updated
-    KubernetesResourceAdded {
-        cluster_key: i32,
-        api_resource: ApiResource,
-        namespace: Option<String>,
-        resource: MinimalResource,
-    },
-    /// A resource was deleted
-    KubernetesResourceDeleted {
-        cluster_key: i32,
-        api_resource: ApiResource,
-        namespace: Option<String>,
-        resource_uid: String,
-    },
-    /// Initial resource list complete
-    KubernetesResourcesReplaced {
-        cluster_key: i32,
-        api_resource: ApiResource,
-        namespace: Option<String>,
-        resources: Vec<MinimalResource>,
-    },
-    /// Resource watcher started successfully
-    KubernetesResourceWatchStarted {
-        cluster_key: i32,
-        api_resource: ApiResource,
-        namespace: Option<String>,
-    },
-    KubernetesResourceWatchFailed {
-        cluster_key: i32,
-        api_resource: ApiResource,
-        namespace: Option<String>,
-        error: String,
-    },
-    ResourceDetailUpdated {
-        cluster_key: i32,
-        history_entry_id: u64,
-        detail: Box<ResourceDetail>,
-    },
-    ResourceDetailDeleted {
-        cluster_key: i32,
-        history_entry_id: u64,
-    },
-    ManagedResourcesReplaced {
-        cluster_key: i32,
-        history_entry_id: u64,
-        resources: Vec<ManagedResource>,
-    },
-    ManagedResourcesWatchFailed {
-        cluster_key: i32,
-        history_entry_id: u64,
-        error: String,
-    },
-    ResourceEventsReplaced {
-        cluster_key: i32,
-        history_entry_id: u64,
-        events: Vec<ResourceEvent>,
-    },
-    ResourceDetailWatchFailed {
-        cluster_key: i32,
-        history_entry_id: u64,
-        events: bool,
-        error: String,
-    },
-    /// Resource YAML fetched for viewing/editing
-    ResourceYamlFetched {
-        editor_id: u64,
-        cluster_key: i32,
-        api_resource: ApiResource,
-        namespace: Option<String>,
-        resource_name: String,
-        yaml: String,
-    },
-    ResourceSchemaLoaded {
-        editor_id: u64,
-        cluster_key: i32,
-        api_resource: ApiResource,
-        schema: ResourceSchema,
-    },
-    ResourceYamlValidated {
-        editor_id: u64,
-        revision: u64,
-        cluster_key: i32,
-        api_resource: ApiResource,
-        namespace: Option<String>,
-        resource_name: String,
-    },
-    ResourceYamlValidationFailed {
-        editor_id: u64,
-        revision: u64,
-        cluster_key: i32,
-        api_resource: ApiResource,
-        namespace: Option<String>,
-        resource_name: String,
-        error: ResourceApiError,
-    },
-    /// Resource was successfully deleted
-    ResourceDeleteCompleted {
-        cluster_key: i32,
-        api_resource: ApiResource,
-        namespace: Option<String>,
-        resource_name: String,
-        bulk_delete_id: Option<u64>,
-    },
-    /// A deleting resource's finalizers were removed.
-    ResourceForceDeleteCompleted {
-        cluster_key: i32,
-        resource_name: String,
-    },
-    /// Resource YAML was successfully applied
-    ResourceApplyCompleted {
-        editor_id: u64,
-        cluster_key: i32,
-        api_resource: ApiResource,
-        namespace: Option<String>,
-        resource_name: String,
-    },
-    ResourceApplyFailed {
-        editor_id: u64,
-        cluster_key: i32,
-        api_resource: ApiResource,
-        namespace: Option<String>,
-        resource_name: String,
-        error: ResourceApiError,
-    },
-    /// A Deployment rollout restart patch was accepted by the API server.
-    DeploymentRestartCompleted {
-        namespace: String,
-        resource_name: String,
-    },
-    ResourceScaleFetched {
-        cluster_key: i32,
-        api_resource: ApiResource,
-        namespace: Option<String>,
-        resource_name: String,
-        replicas: i32,
-    },
-    ResourceScaleUpdated {
-        cluster_key: i32,
-        resource_name: String,
-    },
-    ResourceDataUpdateCompleted {
-        cluster_key: i32,
-        history_entry_id: u64,
-        request_id: u64,
-    },
-    PodLogStreamStarted {
-        log_window_id: u64,
-    },
-    PodLogStreamEnded {
-        log_window_id: u64,
-    },
-    PodLogStreamFailed {
-        log_window_id: u64,
-        error: String,
-    },
+pub(crate) struct KubernetesClustersUpdated(pub(crate) Vec<Cluster>);
+#[derive(Debug)]
+pub(crate) struct KubernetesNamespacesAdded {
+    pub(crate) cluster_key: i32,
+    pub(crate) namespace: MinimalNamespace,
+}
+#[derive(Debug)]
+pub(crate) struct KubernetesNamespacesDeleted {
+    pub(crate) cluster_key: i32,
+    pub(crate) namespace_name: String,
+}
+#[derive(Debug)]
+pub(crate) struct KubernetesNamespacesReplaced {
+    pub(crate) cluster_key: i32,
+    pub(crate) namespaces: Vec<MinimalNamespace>,
+}
+#[derive(Debug)]
+pub(crate) struct KubernetesNamespacesLoadFailed {
+    pub(crate) cluster_key: i32,
+    pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct KubernetesApisLoaded {
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resources: Vec<ApiResource>,
+    pub(crate) scalable_api_resources: std::collections::BTreeSet<ApiResource>,
+}
+#[derive(Debug)]
+pub(crate) struct KubernetesCustomResourceColumnsLoaded {
+    pub(crate) cluster_key: i32,
+    pub(crate) columns: std::collections::BTreeMap<ApiResource, Vec<CustomResourceColumn>>,
+}
+#[derive(Debug)]
+pub(crate) struct KubernetesResourceSchemasLoaded {
+    pub(crate) cluster_key: i32,
+    pub(crate) schemas: std::collections::BTreeMap<ApiResource, ResourceSchema>,
+}
+#[derive(Debug)]
+pub(crate) struct KubernetesApisLoadFailed {
+    pub(crate) cluster_key: i32,
+    pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct KubernetesClusterConnectionCreated {
+    pub(crate) cluster_key: i32,
+}
+#[derive(Debug)]
+pub(crate) struct KubernetesResourceAdded {
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) resource: MinimalResource,
+}
+#[derive(Debug)]
+pub(crate) struct KubernetesResourceDeleted {
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) resource_uid: String,
+}
+#[derive(Debug)]
+pub(crate) struct KubernetesResourcesReplaced {
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) resources: Vec<MinimalResource>,
+}
+#[derive(Debug)]
+pub(crate) struct KubernetesResourceWatchStarted {
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+}
+#[derive(Debug)]
+pub(crate) struct KubernetesResourceWatchFailed {
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceDetailUpdated {
+    pub(crate) cluster_key: i32,
+    pub(crate) history_entry_id: u64,
+    pub(crate) detail: Box<ResourceDetail>,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceDetailDeleted {
+    pub(crate) cluster_key: i32,
+    pub(crate) history_entry_id: u64,
+}
+#[derive(Debug)]
+pub(crate) struct ManagedResourcesReplaced {
+    pub(crate) cluster_key: i32,
+    pub(crate) history_entry_id: u64,
+    pub(crate) resources: Vec<ManagedResource>,
+}
+#[derive(Debug)]
+pub(crate) struct ManagedResourcesWatchFailed {
+    pub(crate) cluster_key: i32,
+    pub(crate) history_entry_id: u64,
+    pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceEventsReplaced {
+    pub(crate) cluster_key: i32,
+    pub(crate) history_entry_id: u64,
+    pub(crate) events: Vec<ResourceEvent>,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceDetailWatchFailed {
+    pub(crate) cluster_key: i32,
+    pub(crate) history_entry_id: u64,
+    pub(crate) events: bool,
+    pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceYamlFetched {
+    pub(crate) editor_id: u64,
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) resource_name: String,
+    pub(crate) yaml: String,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceSchemaLoaded {
+    pub(crate) editor_id: u64,
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) schema: ResourceSchema,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceYamlValidated {
+    pub(crate) editor_id: u64,
+    pub(crate) revision: u64,
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) resource_name: String,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceYamlValidationFailed {
+    pub(crate) editor_id: u64,
+    pub(crate) revision: u64,
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) resource_name: String,
+    pub(crate) error: ResourceApiError,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceDeleteCompleted {
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) resource_name: String,
+    pub(crate) bulk_delete_id: Option<u64>,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceForceDeleteCompleted {
+    pub(crate) cluster_key: i32,
+    pub(crate) resource_name: String,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceApplyCompleted {
+    pub(crate) editor_id: u64,
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) resource_name: String,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceApplyFailed {
+    pub(crate) editor_id: u64,
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) resource_name: String,
+    pub(crate) error: ResourceApiError,
+}
+#[derive(Debug)]
+pub(crate) struct DeploymentRestartCompleted {
+    pub(crate) namespace: String,
+    pub(crate) resource_name: String,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceScaleFetched {
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) resource_name: String,
+    pub(crate) replicas: i32,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceScaleUpdated {
+    pub(crate) cluster_key: i32,
+    pub(crate) resource_name: String,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceDataUpdateCompleted {
+    pub(crate) cluster_key: i32,
+    pub(crate) history_entry_id: u64,
+    pub(crate) request_id: u64,
+}
+#[derive(Debug)]
+pub(crate) struct PodLogStreamStarted {
+    pub(crate) log_window_id: u64,
+}
+#[derive(Debug)]
+pub(crate) struct PodLogStreamEnded {
+    pub(crate) log_window_id: u64,
+}
+#[derive(Debug)]
+pub(crate) struct PodLogStreamFailed {
+    pub(crate) log_window_id: u64,
+    pub(crate) error: String,
+}
+
+#[derive(Debug)]
+pub(crate) struct WorkerError {
+    pub(crate) error: Error,
+}
+
+#[derive(Debug)]
+pub(crate) struct ClusterConnectionFailed {
+    pub(crate) cluster_key: i32,
+    pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceYamlFetchFailed {
+    pub(crate) editor_id: u64,
+    pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceSchemaLoadFailed {
+    pub(crate) editor_id: u64,
+    pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceDeleteFailed {
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) resource_name: String,
+    pub(crate) bulk_delete_id: Option<u64>,
+    pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceForceDeleteFailed {
+    pub(crate) cluster_key: i32,
+    pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct DeploymentRestartFailed {
+    pub(crate) cluster_key: i32,
+    pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceScaleFailed {
+    pub(crate) cluster_key: i32,
+    pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceYamlApplyCommandFailed {
+    pub(crate) editor_id: u64,
+    pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceYamlValidationCommandFailed {
+    pub(crate) editor_id: u64,
+    pub(crate) revision: u64,
+    pub(crate) error: String,
+}
+
+#[derive(Debug)]
+pub(crate) enum ResourceYamlApplyFailure {
+    Api(ResourceApplyFailed),
+    Command(ResourceYamlApplyCommandFailed),
+}
+
+impl WorkerResult for ResourceYamlApplyFailure {
+    fn apply(self, ui: &mut crate::ui::state::UiState, commands: &mut Vec<WorkerCommandBox>) {
+        match self {
+            Self::Api(failure) => failure.apply(ui, commands),
+            Self::Command(failure) => failure.apply(ui, commands),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) enum ResourceYamlValidationFailure {
+    Api(ResourceYamlValidationFailed),
+    Command(ResourceYamlValidationCommandFailed),
+}
+
+impl WorkerResult for ResourceYamlValidationFailure {
+    fn apply(self, ui: &mut crate::ui::state::UiState, commands: &mut Vec<WorkerCommandBox>) {
+        match self {
+            Self::Api(failure) => failure.apply(ui, commands),
+            Self::Command(failure) => failure.apply(ui, commands),
+        }
+    }
+}
+#[derive(Debug)]
+pub(crate) struct ResourceDataUpdateFailed {
+    pub(crate) cluster_key: i32,
+    pub(crate) history_entry_id: u64,
+    pub(crate) request_id: u64,
+    pub(crate) error: String,
+}
+
+impl WorkerResult for WorkerError {
+    fn apply(self, _ui: &mut crate::ui::state::UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        tracing::error!(error = ?self.error, "Worker command failed");
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for LoadClusters {
+    type Output = Result<KubernetesClustersUpdated, WorkerError>;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output {
+        state.stop_all_clusters().await;
+        reload_kubeconfig()
+            .await
+            .map_err(|error| WorkerError { error })
+    }
+
+    fn serializes_session_lifecycle(&self) -> bool {
+        true
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for ConnectToCluster {
+    type Output = Result<KubernetesClusterConnectionCreated, ClusterConnectionFailed>;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output {
+        let cluster_key = self.cluster_key;
+        state.stop_cluster(cluster_key).await;
+        let result =
+            start_cluster_connection(cluster_key, &self.cluster, state.results.clone()).await;
+        match result {
+            Ok(connection) => {
+                state
+                    .connections
+                    .lock()
+                    .await
+                    .insert(cluster_key, connection);
+                Ok(KubernetesClusterConnectionCreated { cluster_key })
+            }
+            Err(error) => Err(ClusterConnectionFailed {
+                cluster_key,
+                error: format!("{error:#?}"),
+            }),
+        }
+    }
+
+    fn serializes_session_lifecycle(&self) -> bool {
+        true
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for StartResourceWatch {
+    type Output = Result<KubernetesResourceWatchStarted, KubernetesResourceWatchFailed>;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output {
+        let failure = KubernetesResourceWatchFailed {
+            cluster_key: self.cluster_key,
+            api_resource: self.api_resource.clone(),
+            namespace: self.namespace.clone(),
+            error: String::new(),
+        };
+        let client = match state.client_for_cluster(self.cluster_key).await {
+            Ok(client) => client,
+            Err(error) => {
+                return Err(KubernetesResourceWatchFailed {
+                    error: format!("{error:#?}"),
+                    ..failure
+                });
+            }
+        };
+        let key = ResourceScope {
+            cluster_key: self.cluster_key,
+            api_resource: self.api_resource.clone(),
+            namespace: self.namespace.clone(),
+        };
+        match start_resource_watcher(
+            self.cluster_key,
+            client,
+            self.api_resource,
+            self.namespace,
+            state.results.clone(),
+        )
+        .await
+        {
+            Ok((result, task)) => {
+                state.replace_resource_watch(key, task).await;
+                Ok(result)
+            }
+            Err(error) => Err(KubernetesResourceWatchFailed {
+                error: format!("{error:#?}"),
+                ..failure
+            }),
+        }
+    }
+
+    fn serializes_session_lifecycle(&self) -> bool {
+        true
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for StartResourceDetailWatch {
+    type Output = Result<NoResult, ResourceDetailWatchFailed>;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output {
+        let failure = |error| ResourceDetailWatchFailed {
+            cluster_key: self.cluster_key,
+            history_entry_id: self.history_entry_id,
+            events: false,
+            error: format!("{error:#?}"),
+        };
+        let client = state
+            .client_for_cluster(self.cluster_key)
+            .await
+            .map_err(failure)?;
+        let key = (self.cluster_key, self.history_entry_id);
+        let previous = state.detail_watches.lock().await.remove(&key);
+        if let Some(previous) = previous {
+            abort_task(previous).await;
+        }
+        let handle = tokio::spawn(watch_resource_detail(ResourceDetailWatchRequest {
+            cluster_key: self.cluster_key,
+            client,
+            api_resource: self.api_resource,
+            namespace: self.namespace,
+            resource_name: self.resource_name,
+            resource_uid: self.resource_uid,
+            history_entry_id: self.history_entry_id,
+            event_sender: state.results.clone(),
+        }));
+        state.detail_watches.lock().await.insert(key, handle);
+        Ok(NoResult)
+    }
+
+    fn serializes_session_lifecycle(&self) -> bool {
+        true
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for StopResourceDetailWatch {
+    type Output = Result<NoResult, WorkerError>;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output {
+        let handle = state
+            .detail_watches
+            .lock()
+            .await
+            .remove(&(self.cluster_key, self.history_entry_id));
+        if let Some(handle) = handle {
+            abort_task(handle).await;
+        }
+        Ok(NoResult)
+    }
+
+    fn serializes_session_lifecycle(&self) -> bool {
+        true
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for GetResourceYaml {
+    type Output = Result<ResourceYamlFetched, ResourceYamlFetchFailed>;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output {
+        let editor_id = self.editor_id;
+        match state.client_for_cluster(self.cluster_key).await {
+            Ok(client) => get_resource_yaml(
+                editor_id,
+                self.cluster_key,
+                client,
+                self.api_resource,
+                self.namespace,
+                self.resource_name,
+            )
+            .await
+            .map_err(|error| ResourceYamlFetchFailed {
+                editor_id,
+                error: format!("{error:#?}"),
+            }),
+            Err(error) => Err(ResourceYamlFetchFailed {
+                editor_id,
+                error: format!("{error:#?}"),
+            }),
+        }
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for LoadResourceSchema {
+    type Output = Result<ResourceSchemaLoaded, ResourceSchemaLoadFailed>;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output {
+        let editor_id = self.editor_id;
+        match state.client_for_cluster(self.cluster_key).await {
+            Ok(client) => {
+                get_resource_schema(editor_id, self.cluster_key, client, self.api_resource)
+                    .await
+                    .map_err(|error| ResourceSchemaLoadFailed {
+                        editor_id,
+                        error: format!("{error:#?}"),
+                    })
+            }
+            Err(error) => Err(ResourceSchemaLoadFailed {
+                editor_id,
+                error: format!("{error:#?}"),
+            }),
+        }
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for DeleteResource {
+    type Output = Result<ResourceDeleteCompleted, ResourceDeleteFailed>;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output {
+        let failure = ResourceDeleteFailed {
+            cluster_key: self.cluster_key,
+            api_resource: self.api_resource.clone(),
+            namespace: self.namespace.clone(),
+            resource_name: self.resource_name.clone(),
+            bulk_delete_id: self.bulk_delete_id,
+            error: String::new(),
+        };
+        match state.client_for_cluster(self.cluster_key).await {
+            Ok(client) => delete_resource(
+                self.cluster_key,
+                client,
+                self.api_resource,
+                self.namespace,
+                self.resource_name,
+                self.resource_uid,
+                self.bulk_delete_id,
+            )
+            .await
+            .map_err(|error| ResourceDeleteFailed {
+                error: format!("{error:#?}"),
+                ..failure
+            }),
+            Err(error) => Err(ResourceDeleteFailed {
+                error: format!("{error:#?}"),
+                ..failure
+            }),
+        }
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for ForceDeleteResource {
+    type Output = Result<ResourceForceDeleteCompleted, ResourceForceDeleteFailed>;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output {
+        let cluster_key = self.cluster_key;
+        match state.client_for_cluster(cluster_key).await {
+            Ok(client) => force_delete_resource(
+                cluster_key,
+                client,
+                self.api_resource,
+                self.namespace,
+                self.resource_name,
+                self.resource_uid,
+            )
+            .await
+            .map_err(|error| ResourceForceDeleteFailed {
+                cluster_key,
+                error: format!("{error:#?}"),
+            }),
+            Err(error) => Err(ResourceForceDeleteFailed {
+                cluster_key,
+                error: format!("{error:#?}"),
+            }),
+        }
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for RestartDeployment {
+    type Output = Result<DeploymentRestartCompleted, DeploymentRestartFailed>;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output {
+        let cluster_key = self.cluster_key;
+        match state.client_for_cluster(cluster_key).await {
+            Ok(client) => restart_deployment(client, self.namespace, self.resource_name)
+                .await
+                .map_err(|error| DeploymentRestartFailed {
+                    cluster_key,
+                    error: format!("{error:#?}"),
+                }),
+            Err(error) => Err(DeploymentRestartFailed {
+                cluster_key,
+                error: format!("{error:#?}"),
+            }),
+        }
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for GetResourceScale {
+    type Output = Result<ResourceScaleFetched, ResourceScaleFailed>;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output {
+        let cluster_key = self.cluster_key;
+        match state.client_for_cluster(cluster_key).await {
+            Ok(client) => get_resource_scale(
+                cluster_key,
+                client,
+                self.api_resource,
+                self.namespace,
+                self.resource_name,
+            )
+            .await
+            .map_err(|error| ResourceScaleFailed {
+                cluster_key,
+                error: format!("{error:#?}"),
+            }),
+            Err(error) => Err(ResourceScaleFailed {
+                cluster_key,
+                error: format!("{error:#?}"),
+            }),
+        }
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for UpdateResourceScale {
+    type Output = Result<ResourceScaleUpdated, ResourceScaleFailed>;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output {
+        let cluster_key = self.cluster_key;
+        match state.client_for_cluster(cluster_key).await {
+            Ok(client) => update_resource_scale(
+                cluster_key,
+                client,
+                self.api_resource,
+                self.namespace,
+                self.resource_name,
+                self.replicas,
+            )
+            .await
+            .map_err(|error| ResourceScaleFailed {
+                cluster_key,
+                error: format!("{error:#?}"),
+            }),
+            Err(error) => Err(ResourceScaleFailed {
+                cluster_key,
+                error: format!("{error:#?}"),
+            }),
+        }
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for ApplyResourceYaml {
+    type Output = Result<ResourceApplyCompleted, ResourceYamlApplyFailure>;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output {
+        let editor_id = self.editor_id;
+        match state.client_for_cluster(self.cluster_key).await {
+            Ok(client) => match apply_resource_yaml(
+                editor_id,
+                self.cluster_key,
+                client,
+                self.api_resource,
+                self.namespace,
+                self.resource_name,
+                self.yaml,
+            )
+            .await
+            {
+                Ok(result) => result.map_err(ResourceYamlApplyFailure::Api),
+                Err(error) => Err(ResourceYamlApplyFailure::Command(
+                    ResourceYamlApplyCommandFailed {
+                        editor_id,
+                        error: format!("{error:#?}"),
+                    },
+                )),
+            },
+            Err(error) => Err(ResourceYamlApplyFailure::Command(
+                ResourceYamlApplyCommandFailed {
+                    editor_id,
+                    error: format!("{error:#?}"),
+                },
+            )),
+        }
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for ValidateResourceYaml {
+    type Output = Result<ResourceYamlValidated, ResourceYamlValidationFailure>;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output {
+        let editor_id = self.editor_id;
+        let revision = self.revision;
+        match state.client_for_cluster(self.cluster_key).await {
+            Ok(client) => match validate_resource_yaml(ResourceYamlValidationRequest {
+                editor_id,
+                revision,
+                cluster_key: self.cluster_key,
+                client,
+                api_resource: self.api_resource,
+                namespace: self.namespace,
+                resource_name: self.resource_name,
+                yaml: self.yaml,
+            })
+            .await
+            {
+                Ok(result) => result.map_err(ResourceYamlValidationFailure::Api),
+                Err(error) => Err(ResourceYamlValidationFailure::Command(
+                    ResourceYamlValidationCommandFailed {
+                        editor_id,
+                        revision,
+                        error: format!("{error:#?}"),
+                    },
+                )),
+            },
+            Err(error) => Err(ResourceYamlValidationFailure::Command(
+                ResourceYamlValidationCommandFailed {
+                    editor_id,
+                    revision,
+                    error: format!("{error:#?}"),
+                },
+            )),
+        }
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for UpdateResourceData {
+    type Output = Result<ResourceDataUpdateCompleted, ResourceDataUpdateFailed>;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output {
+        let failure = ResourceDataUpdateFailed {
+            cluster_key: self.cluster_key,
+            history_entry_id: self.history_entry_id,
+            request_id: self.request_id,
+            error: String::new(),
+        };
+        match state.client_for_cluster(self.cluster_key).await {
+            Ok(client) => update_resource_data(ResourceDataUpdateRequest {
+                cluster_key: self.cluster_key,
+                history_entry_id: self.history_entry_id,
+                request_id: self.request_id,
+                client,
+                api_resource: self.api_resource,
+                namespace: self.namespace,
+                resource_name: self.resource_name,
+                expected_values: &self.update.expected_values,
+                updated_values: &self.update.updated_values,
+                expected_resource_version: &self.update.expected_resource_version,
+            })
+            .await
+            .map_err(|error| ResourceDataUpdateFailed {
+                error: format!("{error:#?}"),
+                ..failure
+            }),
+            Err(error) => Err(ResourceDataUpdateFailed {
+                error: format!("{error:#?}"),
+                ..failure
+            }),
+        }
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for StartPodLogStream {
+    type Output = Result<PodLogStreamStarted, PodLogStreamFailed>;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output {
+        let failure = |error| PodLogStreamFailed {
+            log_window_id: self.log_window_id,
+            error: format!("{error:#?}"),
+        };
+        let client = state
+            .client_for_cluster(self.cluster_key)
+            .await
+            .map_err(failure)?;
+        let log_store_appender =
+            state
+                .log_store_appender
+                .clone()
+                .ok_or_else(|| PodLogStreamFailed {
+                    log_window_id: self.log_window_id,
+                    error: format!(
+                        "Pod log storage is not initialized for cluster_key {}",
+                        self.cluster_key
+                    ),
+                })?;
+        let key = (self.cluster_key, self.log_window_id);
+        let previous = state.log_streams.lock().await.remove(&key);
+        if let Some(previous) = previous {
+            abort_task(previous).await;
+        }
+        let task = tokio::spawn(pod_logs::stream(
+            self.log_window_id,
+            client,
+            self.namespace,
+            self.pod_name,
+            self.container,
+            log_store_appender,
+            state.results.clone(),
+        ));
+        state.log_streams.lock().await.insert(key, task);
+        Ok(PodLogStreamStarted {
+            log_window_id: self.log_window_id,
+        })
+    }
+
+    fn serializes_session_lifecycle(&self) -> bool {
+        true
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for StopPodLogStream {
+    type Output = Result<PodLogStreamEnded, WorkerError>;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output {
+        let task = state
+            .log_streams
+            .lock()
+            .await
+            .remove(&(self.cluster_key, self.log_window_id));
+        if let Some(task) = task {
+            abort_task(task).await;
+        }
+        Ok(PodLogStreamEnded {
+            log_window_id: self.log_window_id,
+        })
+    }
+
+    fn serializes_session_lifecycle(&self) -> bool {
+        true
+    }
 }
 
 #[derive(Clone)]
 pub struct WorkerResultSender {
-    sender: mpsc::Sender<WorkerResult>,
+    sender: mpsc::Sender<WorkerResultBox>,
     repaint_context: Option<egui::Context>,
 }
 
 impl WorkerResultSender {
-    fn new(sender: mpsc::Sender<WorkerResult>, repaint_context: Option<egui::Context>) -> Self {
+    fn new(sender: mpsc::Sender<WorkerResultBox>, repaint_context: Option<egui::Context>) -> Self {
         Self {
             sender,
             repaint_context,
@@ -703,10 +1332,17 @@ impl WorkerResultSender {
 
     /// Await queue capacity instead of blocking a Tokio worker thread. The await is cancellation
     /// safe, so tearing down a watcher always releases it even while the UI is busy.
-    pub async fn send(
+    pub async fn send<R: WorkerResult + 'static>(
         &self,
-        result: WorkerResult,
-    ) -> Result<(), mpsc::error::SendError<WorkerResult>> {
+        result: R,
+    ) -> Result<(), mpsc::error::SendError<WorkerResultBox>> {
+        self.send_box(Box::new(result)).await
+    }
+
+    pub async fn send_box(
+        &self,
+        result: WorkerResultBox,
+    ) -> Result<(), mpsc::error::SendError<WorkerResultBox>> {
         self.sender.send(result).await?;
         if let Some(context) = &self.repaint_context {
             context.request_repaint();
@@ -730,7 +1366,8 @@ pub struct ResourceApiErrorCause {
 }
 
 /// Shared state accessible from spawned async tasks
-struct SharedWorkerState {
+pub(crate) struct WorkerState {
+    results: WorkerResultSender,
     /// Connected clusters and their root watcher tasks. This stays entirely on the
     /// worker side so UI state can never determine a Kubernetes task's lifetime.
     connections: Mutex<HashMap<i32, ClusterConnection>>,
@@ -747,7 +1384,7 @@ struct SharedWorkerState {
     log_store_appender: Option<LogStoreAppender>,
 }
 
-impl SharedWorkerState {
+impl WorkerState {
     async fn client_for_cluster(&self, cluster_key: i32) -> anyhow::Result<kube::Client> {
         self.connections
             .lock()
@@ -841,9 +1478,8 @@ async fn abort_task(task: JoinHandle<()>) {
 }
 
 struct WorkerRuntime {
-    sender: WorkerResultSender,
-    receiver: mpsc::Receiver<WorkerCommand>,
-    shared: Arc<SharedWorkerState>,
+    receiver: mpsc::Receiver<WorkerCommandBox>,
+    state: Arc<WorkerState>,
 }
 
 impl WorkerRuntime {
@@ -859,423 +1495,22 @@ impl WorkerRuntime {
             // Kubernetes reads and mutations run independently so a slow API
             // call cannot prevent a close, reconnect, or reload from running.
             if command.serializes_session_lifecycle() {
-                runtime.block_on(WorkerRuntime::handle_command(
-                    self.sender.clone(),
-                    self.shared.clone(),
-                    command,
-                ));
+                runtime.block_on(dispatch_command(command, self.state.clone()));
             } else {
-                runtime.spawn(WorkerRuntime::handle_command(
-                    self.sender.clone(),
-                    self.shared.clone(),
-                    command,
-                ));
+                let state = self.state.clone();
+                runtime.spawn(dispatch_command(command, state));
             }
         }
     }
+}
 
-    async fn handle_command(
-        result_channel: WorkerResultSender,
-        shared: Arc<SharedWorkerState>,
-        command: WorkerCommand,
-    ) {
-        let result = match &command {
-            WorkerCommand::LoadClusters => {
-                shared.stop_all_clusters().await;
-                reload_kubeconfig().await.map(Some)
-            }
-            WorkerCommand::ConnectToCluster {
-                cluster_key,
-                cluster,
-            } => {
-                async {
-                    shared.stop_cluster(*cluster_key).await;
-                    let connection =
-                        start_cluster_connection(*cluster_key, cluster, result_channel.clone())
-                            .await?;
-                    shared
-                        .connections
-                        .lock()
-                        .await
-                        .insert(*cluster_key, connection);
-                    Ok(Some(WorkerResult::KubernetesClusterConnectionCreated {
-                        cluster_key: *cluster_key,
-                    }))
-                }
-                .await
-            }
-            WorkerCommand::StartResourceWatch {
-                cluster_key,
-                api_resource,
-                namespace,
-            } => {
-                async {
-                    let client = shared.client_for_cluster(*cluster_key).await?;
-                    let watch_key = ResourceScope {
-                        cluster_key: *cluster_key,
-                        api_resource: api_resource.clone(),
-                        namespace: namespace.clone(),
-                    };
-                    let (result, task) = start_resource_watcher(
-                        *cluster_key,
-                        client,
-                        api_resource.clone(),
-                        namespace.clone(),
-                        result_channel.clone(),
-                    )
-                    .await?;
-                    shared.replace_resource_watch(watch_key, task).await;
-                    Ok(Some(result))
-                }
-                .await
-            }
-            WorkerCommand::StartResourceDetailWatch {
-                cluster_key,
-                history_entry_id,
-                api_resource,
-                namespace,
-                resource_name,
-                resource_uid,
-            } => {
-                async {
-                    let client = shared.client_for_cluster(*cluster_key).await?;
-                    let watch_key = (*cluster_key, *history_entry_id);
-                    let previous = shared.detail_watches.lock().await.remove(&watch_key);
-                    if let Some(previous) = previous {
-                        abort_task(previous).await;
-                    }
-                    let handle = tokio::spawn(watch_resource_detail(ResourceDetailWatchRequest {
-                        cluster_key: *cluster_key,
-                        client,
-                        api_resource: api_resource.clone(),
-                        namespace: namespace.clone(),
-                        resource_name: resource_name.clone(),
-                        resource_uid: resource_uid.clone(),
-                        history_entry_id: *history_entry_id,
-                        event_sender: result_channel.clone(),
-                    }));
-                    shared.detail_watches.lock().await.insert(watch_key, handle);
-                    Ok(None)
-                }
-                .await
-            }
-            WorkerCommand::StopResourceDetailWatch {
-                cluster_key,
-                history_entry_id,
-            } => {
-                async {
-                    let handle = shared
-                        .detail_watches
-                        .lock()
-                        .await
-                        .remove(&(*cluster_key, *history_entry_id));
-                    if let Some(handle) = handle {
-                        abort_task(handle).await;
-                    }
-                    Ok(None)
-                }
-                .await
-            }
-            WorkerCommand::GetResourceYaml {
-                editor_id,
-                cluster_key,
-                api_resource,
-                namespace,
-                resource_name,
-            } => {
-                async {
-                    let client = shared.client_for_cluster(*cluster_key).await?;
-                    get_resource_yaml(
-                        *editor_id,
-                        *cluster_key,
-                        client,
-                        api_resource.clone(),
-                        namespace.clone(),
-                        resource_name.clone(),
-                    )
-                    .await
-                    .map(Some)
-                }
-                .await
-            }
-            WorkerCommand::LoadResourceSchema {
-                editor_id,
-                cluster_key,
-                api_resource,
-            } => {
-                async {
-                    let client = shared.client_for_cluster(*cluster_key).await?;
-                    get_resource_schema(*editor_id, *cluster_key, client, api_resource.clone())
-                        .await
-                        .map(Some)
-                }
-                .await
-            }
-            WorkerCommand::DeleteResource {
-                cluster_key,
-                api_resource,
-                namespace,
-                resource_name,
-                resource_uid,
-                bulk_delete_id,
-            } => {
-                async {
-                    let client = shared.client_for_cluster(*cluster_key).await?;
-                    delete_resource(
-                        *cluster_key,
-                        client,
-                        api_resource.clone(),
-                        namespace.clone(),
-                        resource_name.clone(),
-                        resource_uid.clone(),
-                        *bulk_delete_id,
-                    )
-                    .await
-                    .map(Some)
-                }
-                .await
-            }
-            WorkerCommand::ForceDeleteResource {
-                cluster_key,
-                api_resource,
-                namespace,
-                resource_name,
-                resource_uid,
-            } => {
-                async {
-                    let client = shared.client_for_cluster(*cluster_key).await?;
-                    force_delete_resource(
-                        *cluster_key,
-                        client,
-                        api_resource.clone(),
-                        namespace.clone(),
-                        resource_name.clone(),
-                        resource_uid.clone(),
-                    )
-                    .await
-                    .map(Some)
-                }
-                .await
-            }
-            WorkerCommand::RestartDeployment {
-                cluster_key,
-                namespace,
-                resource_name,
-            } => {
-                async {
-                    let client = shared.client_for_cluster(*cluster_key).await?;
-                    restart_deployment(client, namespace.clone(), resource_name.clone())
-                        .await
-                        .map(Some)
-                }
-                .await
-            }
-            WorkerCommand::GetResourceScale {
-                cluster_key,
-                api_resource,
-                namespace,
-                resource_name,
-            } => {
-                async {
-                    let client = shared.client_for_cluster(*cluster_key).await?;
-                    get_resource_scale(
-                        *cluster_key,
-                        client,
-                        api_resource.clone(),
-                        namespace.clone(),
-                        resource_name.clone(),
-                    )
-                    .await
-                    .map(Some)
-                }
-                .await
-            }
-            WorkerCommand::UpdateResourceScale {
-                cluster_key,
-                api_resource,
-                namespace,
-                resource_name,
-                replicas,
-            } => {
-                async {
-                    let client = shared.client_for_cluster(*cluster_key).await?;
-                    update_resource_scale(
-                        *cluster_key,
-                        client,
-                        api_resource.clone(),
-                        namespace.clone(),
-                        resource_name.clone(),
-                        *replicas,
-                    )
-                    .await
-                    .map(Some)
-                }
-                .await
-            }
-            WorkerCommand::ApplyResourceYaml {
-                editor_id,
-                cluster_key,
-                api_resource,
-                namespace,
-                resource_name,
-                yaml,
-            } => {
-                async {
-                    let client = shared.client_for_cluster(*cluster_key).await?;
-                    apply_resource_yaml(
-                        *editor_id,
-                        *cluster_key,
-                        client,
-                        api_resource.clone(),
-                        namespace.clone(),
-                        resource_name.clone(),
-                        yaml.clone(),
-                    )
-                    .await
-                    .map(Some)
-                }
-                .await
-            }
-            WorkerCommand::ValidateResourceYaml {
-                editor_id,
-                revision,
-                cluster_key,
-                api_resource,
-                namespace,
-                resource_name,
-                yaml,
-            } => {
-                async {
-                    let client = shared.client_for_cluster(*cluster_key).await?;
-                    validate_resource_yaml(ResourceYamlValidationRequest {
-                        editor_id: *editor_id,
-                        revision: *revision,
-                        cluster_key: *cluster_key,
-                        client,
-                        api_resource: api_resource.clone(),
-                        namespace: namespace.clone(),
-                        resource_name: resource_name.clone(),
-                        yaml: yaml.clone(),
-                    })
-                    .await
-                    .map(Some)
-                }
-                .await
-            }
-            WorkerCommand::UpdateResourceData {
-                cluster_key,
-                history_entry_id,
-                request_id,
-                api_resource,
-                namespace,
-                resource_name,
-                update,
-            } => {
-                async {
-                    let client = shared.client_for_cluster(*cluster_key).await?;
-                    update_resource_data(ResourceDataUpdateRequest {
-                        cluster_key: *cluster_key,
-                        history_entry_id: *history_entry_id,
-                        request_id: *request_id,
-                        client,
-                        api_resource: api_resource.clone(),
-                        namespace: namespace.clone(),
-                        resource_name: resource_name.clone(),
-                        expected_values: &update.expected_values,
-                        updated_values: &update.updated_values,
-                        expected_resource_version: &update.expected_resource_version,
-                    })
-                    .await
-                    .map(Some)
-                }
-                .await
-            }
-            WorkerCommand::StartPodLogStream {
-                cluster_key,
-                log_window_id,
-                namespace,
-                pod_name,
-                container,
-            } => {
-                async {
-                    let client = shared.client_for_cluster(*cluster_key).await?;
-                    if let Some(log_store_appender) = shared.log_store_appender.clone() {
-                        let cluster_key = *cluster_key;
-                        let log_window_id = *log_window_id;
-                        let stream_key = (cluster_key, log_window_id);
-                        let previous = shared.log_streams.lock().await.remove(&stream_key);
-                        if let Some(previous) = previous {
-                            abort_task(previous).await;
-                        }
-                        let task_sender = result_channel.clone();
-                        let namespace = namespace.clone();
-                        let pod_name = pod_name.clone();
-                        let container = container.clone();
-                        let task = tokio::spawn(async move {
-                            pod_logs::stream(
-                                log_window_id,
-                                client,
-                                namespace,
-                                pod_name,
-                                container,
-                                log_store_appender,
-                                task_sender,
-                            )
-                            .await;
-                            // The registry is owned by command handling. A
-                            // replaced stream must never remove its successor.
-                        });
-                        shared.log_streams.lock().await.insert(stream_key, task);
-                        Ok(Some(WorkerResult::PodLogStreamStarted { log_window_id }))
-                    } else {
-                        Err(anyhow::anyhow!(
-                            "Pod log storage is not initialized for cluster_key {}",
-                            cluster_key
-                        ))
-                    }
-                }
-                .await
-            }
-            WorkerCommand::StopPodLogStream {
-                cluster_key,
-                log_window_id,
-            } => {
-                async {
-                    let task = shared
-                        .log_streams
-                        .lock()
-                        .await
-                        .remove(&(*cluster_key, *log_window_id));
-                    if let Some(task) = task {
-                        abort_task(task).await;
-                    }
-                    Ok(Some(WorkerResult::PodLogStreamEnded {
-                        log_window_id: *log_window_id,
-                    }))
-                }
-                .await
-            }
-        };
-
-        let notification = match result {
-            Err(error) => Some(WorkerResult::CommandFailed {
-                operation: command.operation(),
-                error,
-            }),
-            Ok(Some(result)) => Some(result),
-            Ok(None) => None,
-        };
-        if let Some(notification) = notification {
-            // Lifecycle commands are handled serially, but reporting their result must not hold
-            // that serialization hostage to a busy UI. This task remains cancellation-safe while
-            // it awaits capacity, and lets later stop/reload commands reach the supervisor.
-            tokio::spawn(async move {
-                result_channel
-                    .send(notification)
-                    .await
-                    .log_if_error("Failed to send result notification");
-            });
-        }
+async fn dispatch_command(command: WorkerCommandBox, state: Arc<WorkerState>) {
+    if let Some(result) = command.execute_boxed(&state).await {
+        state
+            .results
+            .send_box(result)
+            .await
+            .log_if_error("Failed to send worker result");
     }
 }
 
@@ -1302,8 +1537,10 @@ mod tests {
         }
     }
 
-    fn shared_worker_state() -> SharedWorkerState {
-        SharedWorkerState {
+    fn worker_state() -> WorkerState {
+        let (sender, _receiver) = mpsc::channel(1);
+        WorkerState {
+            results: WorkerResultSender::new(sender, None),
             connections: Mutex::new(HashMap::new()),
             resource_watches: Mutex::new(HashMap::new()),
             detail_watches: Mutex::new(HashMap::new()),
@@ -1336,23 +1573,29 @@ mod tests {
 
         runtime.block_on(async {
             result_sender
-                .send(WorkerResult::PodLogStreamEnded { log_window_id: 2 })
+                .send(PodLogStreamEnded { log_window_id: 2 })
                 .await
                 .expect("result receiver is open");
         });
 
-        assert!(matches!(
-            receiver.try_recv(),
-            Ok(WorkerResult::PodLogStreamEnded { log_window_id: 2 })
-        ));
+        assert_eq!(
+            receiver
+                .try_recv()
+                .expect("result is queued")
+                .as_ref()
+                .as_any()
+                .downcast_ref::<PodLogStreamEnded>()
+                .map(|result| result.log_window_id),
+            Some(2)
+        );
         assert_eq!(repaint_count.load(Ordering::Relaxed), 1);
     }
 
     #[test]
     fn full_command_channel_queues_without_blocking_the_ui() {
-        let (command_sender, _command_receiver) = mpsc::channel(1);
+        let (command_sender, _command_receiver) = mpsc::channel::<WorkerCommandBox>(1);
         command_sender
-            .try_send(WorkerCommand::LoadClusters)
+            .try_send(Box::new(LoadClusters))
             .expect("channel starts empty");
         let (_result_sender, result_receiver) = mpsc::channel(1);
         let mut worker = Worker {
@@ -1365,19 +1608,16 @@ mod tests {
             log_store_appender: None,
         };
 
-        worker.send_command(WorkerCommand::LoadClusters);
+        worker.send_command(Box::new(LoadClusters));
 
-        assert!(matches!(
-            worker.pending_commands.as_slices(),
-            ([WorkerCommand::LoadClusters], [])
-        ));
+        assert_eq!(worker.pending_commands.len(), 1);
     }
 
     #[test]
     fn pending_commands_are_forwarded_in_order_after_capacity_returns() {
-        let (command_sender, mut command_receiver) = mpsc::channel(1);
+        let (command_sender, mut command_receiver) = mpsc::channel::<WorkerCommandBox>(1);
         command_sender
-            .try_send(WorkerCommand::LoadClusters)
+            .try_send(Box::new(LoadClusters))
             .expect("channel starts empty");
         let (_result_sender, result_receiver) = mpsc::channel(1);
         let mut worker = Worker {
@@ -1389,73 +1629,192 @@ mod tests {
             repaint_context: None,
             log_store_appender: None,
         };
-        worker.send_command(WorkerCommand::StopPodLogStream {
+        worker.send_command(Box::new(StopPodLogStream {
             cluster_key: 1,
             log_window_id: 2,
-        });
-        worker.send_command(WorkerCommand::StopResourceDetailWatch {
+        }));
+        worker.send_command(Box::new(StopResourceDetailWatch {
             cluster_key: 1,
             history_entry_id: 3,
-        });
+        }));
 
-        assert!(matches!(
-            command_receiver.try_recv(),
-            Ok(WorkerCommand::LoadClusters)
-        ));
+        assert!(
+            command_receiver
+                .try_recv()
+                .expect("queued command is available")
+                .as_ref()
+                .as_any()
+                .downcast_ref::<LoadClusters>()
+                .is_some()
+        );
         let _ = worker.get_next_message();
-        assert!(matches!(
-            command_receiver.try_recv(),
-            Ok(WorkerCommand::StopPodLogStream {
-                cluster_key: 1,
-                log_window_id: 2,
-            })
-        ));
+        assert!(
+            command_receiver
+                .try_recv()
+                .expect("queued command is available")
+                .as_ref()
+                .as_any()
+                .downcast_ref::<StopPodLogStream>()
+                .is_some_and(|command| command.cluster_key == 1 && command.log_window_id == 2)
+        );
         let _ = worker.get_next_message();
-        assert!(matches!(
-            command_receiver.try_recv(),
-            Ok(WorkerCommand::StopResourceDetailWatch {
-                cluster_key: 1,
-                history_entry_id: 3,
-            })
-        ));
+        assert!(
+            command_receiver
+                .try_recv()
+                .expect("queued command is available")
+                .as_ref()
+                .as_any()
+                .downcast_ref::<StopResourceDetailWatch>()
+                .is_some_and(|command| command.cluster_key == 1 && command.history_entry_id == 3)
+        );
     }
 
     #[test]
-    fn lifecycle_command_completes_while_its_result_queue_is_full() {
+    fn lifecycle_command_waits_for_result_capacity_to_preserve_delivery_order() {
         let runtime = tokio::runtime::Runtime::new().expect("runtime initializes");
         runtime.block_on(async {
-            let (result_sender, mut result_receiver) = mpsc::channel(1);
-            result_sender
-                .try_send(WorkerResult::PodLogStreamEnded { log_window_id: 1 })
+            let (result_channel_sender, mut result_receiver) = mpsc::channel(1);
+            result_channel_sender
+                .try_send(Box::new(PodLogStreamEnded { log_window_id: 1 }) as WorkerResultBox)
                 .expect("channel starts empty");
-            let result_sender = WorkerResultSender::new(result_sender, None);
-            let shared = Arc::new(shared_worker_state());
+            let state = Arc::new(WorkerState {
+                results: WorkerResultSender::new(result_channel_sender, None),
+                connections: Mutex::new(HashMap::new()),
+                resource_watches: Mutex::new(HashMap::new()),
+                detail_watches: Mutex::new(HashMap::new()),
+                log_streams: Mutex::new(HashMap::new()),
+                log_store_appender: None,
+            });
 
-            tokio::time::timeout(
-                Duration::from_millis(100),
-                WorkerRuntime::handle_command(
-                    result_sender,
-                    shared,
-                    WorkerCommand::StopPodLogStream {
-                        cluster_key: 1,
-                        log_window_id: 2,
-                    },
-                ),
-            )
-            .await
-            .expect("lifecycle dispatch must not wait for result capacity");
-
-            assert!(matches!(
-                result_receiver.try_recv(),
-                Ok(WorkerResult::PodLogStreamEnded { log_window_id: 1 })
+            let dispatch = tokio::spawn(dispatch_command(
+                Box::new(StopPodLogStream {
+                    cluster_key: 1,
+                    log_window_id: 2,
+                }),
+                state,
             ));
-            assert!(matches!(
+            assert!(
+                tokio::time::timeout(Duration::from_millis(25), dispatch)
+                    .await
+                    .is_err(),
+                "the lifecycle command must not overtake the queued result"
+            );
+
+            assert_eq!(
+                result_receiver
+                    .try_recv()
+                    .expect("initial result is queued")
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<PodLogStreamEnded>()
+                    .map(|result| result.log_window_id),
+                Some(1)
+            );
+            assert_eq!(
                 tokio::time::timeout(Duration::from_millis(100), result_receiver.recv())
                     .await
-                    .expect("notification task should finish after capacity returns"),
-                Some(WorkerResult::PodLogStreamEnded { log_window_id: 2 })
-            ));
+                    .expect("dispatch should finish after capacity returns")
+                    .expect("result notification")
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<<StopPodLogStream as WorkerCommand>::Output>()
+                    .and_then(|result| result.as_ref().ok())
+                    .map(|result| result.log_window_id),
+                Some(2)
+            );
         });
+    }
+
+    #[test]
+    fn successful_worker_local_commands_do_not_emit_channel_results() {
+        let runtime = tokio::runtime::Runtime::new().expect("runtime initializes");
+        let result = runtime.block_on(
+            Box::new(StopResourceDetailWatch {
+                cluster_key: 1,
+                history_entry_id: 2,
+            })
+            .execute_boxed(&worker_state()),
+        );
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn failed_worker_local_commands_emit_their_typed_failure() {
+        let runtime = tokio::runtime::Runtime::new().expect("runtime initializes");
+        let result = runtime.block_on(
+            Box::new(StartResourceDetailWatch {
+                cluster_key: 7,
+                history_entry_id: 8,
+                api_resource: pod_resource(),
+                namespace: Some("default".to_owned()),
+                resource_name: "missing".to_owned(),
+                resource_uid: "uid".to_owned(),
+            })
+            .execute_boxed(&worker_state()),
+        );
+
+        assert_eq!(
+            result
+                .expect("failure is forwarded to the UI")
+                .as_ref()
+                .as_any()
+                .downcast_ref::<ResourceDetailWatchFailed>()
+                .map(|failure| (
+                    failure.cluster_key,
+                    failure.history_entry_id,
+                    failure.events
+                )),
+            Some((7, 8, false))
+        );
+    }
+
+    #[derive(Debug)]
+    struct QueuesLoadClusters;
+
+    impl WorkerResult for QueuesLoadClusters {
+        fn apply(self, _ui: &mut crate::ui::state::UiState, commands: &mut Vec<WorkerCommandBox>) {
+            commands.push(Box::new(LoadClusters));
+        }
+    }
+
+    #[derive(Debug)]
+    struct QueuesStopLogs;
+
+    impl WorkerResult for QueuesStopLogs {
+        fn apply(self, _ui: &mut crate::ui::state::UiState, commands: &mut Vec<WorkerCommandBox>) {
+            commands.push(Box::new(StopPodLogStream {
+                cluster_key: 1,
+                log_window_id: 2,
+            }));
+        }
+    }
+
+    #[test]
+    fn erased_result_adapter_applies_both_result_branches() {
+        let mut ui = crate::ui::state::UiState::default();
+        let mut commands = Vec::new();
+        let success: WorkerResultBox =
+            Box::new(Ok::<QueuesLoadClusters, QueuesStopLogs>(QueuesLoadClusters));
+        success.apply_boxed(&mut ui, &mut commands);
+        assert!(
+            commands[0]
+                .as_ref()
+                .as_any()
+                .downcast_ref::<LoadClusters>()
+                .is_some()
+        );
+
+        let failure: WorkerResultBox =
+            Box::new(Err::<QueuesLoadClusters, QueuesStopLogs>(QueuesStopLogs));
+        failure.apply_boxed(&mut ui, &mut commands);
+        assert!(
+            commands[1]
+                .as_ref()
+                .as_any()
+                .downcast_ref::<StopPodLogStream>()
+                .is_some()
+        );
     }
 
     #[test]
@@ -1464,12 +1823,12 @@ mod tests {
         runtime.block_on(async {
             let (sender, mut receiver) = mpsc::channel(1);
             sender
-                .try_send(WorkerResult::PodLogStreamEnded { log_window_id: 1 })
+                .try_send(Box::new(PodLogStreamEnded { log_window_id: 1 }) as WorkerResultBox)
                 .expect("channel starts empty");
             let result_sender = WorkerResultSender::new(sender, None);
             let task = tokio::spawn(async move {
                 result_sender
-                    .send(WorkerResult::PodLogStreamEnded { log_window_id: 2 })
+                    .send(PodLogStreamEnded { log_window_id: 2 })
                     .await
             });
             tokio::task::yield_now().await;
@@ -1477,10 +1836,16 @@ mod tests {
 
             task.abort();
             assert!(task.await.expect_err("task was aborted").is_cancelled());
-            assert!(matches!(
-                receiver.try_recv(),
-                Ok(WorkerResult::PodLogStreamEnded { log_window_id: 1 })
-            ));
+            assert_eq!(
+                receiver
+                    .try_recv()
+                    .expect("initial result is queued")
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<PodLogStreamEnded>()
+                    .map(|result| result.log_window_id),
+                Some(1)
+            );
         });
     }
 
@@ -1488,7 +1853,7 @@ mod tests {
     fn replacing_a_resource_watch_aborts_the_previous_task() {
         let runtime = tokio::runtime::Runtime::new().expect("runtime initializes");
         runtime.block_on(async {
-            let state = shared_worker_state();
+            let state = worker_state();
             let aborted = Arc::new(AtomicUsize::new(0));
             let key = ResourceScope {
                 cluster_key: 1,
@@ -1512,7 +1877,7 @@ mod tests {
     fn stopping_all_clusters_aborts_supervised_tasks() {
         let runtime = tokio::runtime::Runtime::new().expect("runtime initializes");
         runtime.block_on(async {
-            let state = shared_worker_state();
+            let state = worker_state();
             let resource_aborted = Arc::new(AtomicUsize::new(0));
             let detail_aborted = Arc::new(AtomicUsize::new(0));
             let log_aborted = Arc::new(AtomicUsize::new(0));
@@ -1554,7 +1919,7 @@ mod tests {
     fn stopping_one_cluster_preserves_other_cluster_tasks() {
         let runtime = tokio::runtime::Runtime::new().expect("runtime initializes");
         runtime.block_on(async {
-            let state = shared_worker_state();
+            let state = worker_state();
             let first_aborted = Arc::new(AtomicUsize::new(0));
             let second_aborted = Arc::new(AtomicUsize::new(0));
             state
@@ -1597,8 +1962,8 @@ mod tests {
     }
 
     #[test]
-    fn failure_operation_omits_resource_data_values() {
-        let operation = WorkerCommand::UpdateResourceData {
+    fn sensitive_commands_omit_resource_data_values_from_debug_output() {
+        let command = UpdateResourceData {
             cluster_key: 7,
             history_entry_id: 12,
             request_id: 34,
@@ -1610,33 +1975,22 @@ mod tests {
                 expected_values: BTreeMap::from([("token".to_owned(), "old-secret".to_owned())]),
                 updated_values: BTreeMap::from([("token".to_owned(), "new-secret".to_owned())]),
             },
-        }
-        .operation();
-
-        assert!(matches!(
-            &operation,
-            WorkerOperation::UpdateResourceData {
-                cluster_key: 7,
-                history_entry_id: 12,
-                request_id: 34,
-            }
-        ));
-        assert!(!format!("{operation:?}").contains("secret"));
+        };
+        assert!(!format!("{command:?}").contains("secret"));
     }
 
     #[test]
-    fn yaml_failure_operations_omit_document_text() {
+    fn yaml_commands_omit_document_text_from_debug_output() {
         let secret_yaml = "data:\n  token: definitely-secret".to_owned();
-        let apply = WorkerCommand::ApplyResourceYaml {
+        let apply = ApplyResourceYaml {
             editor_id: 9,
             cluster_key: 7,
             api_resource: pod_resource(),
             namespace: Some("default".to_owned()),
             resource_name: "credentials".to_owned(),
             yaml: secret_yaml.clone(),
-        }
-        .operation();
-        let validation = WorkerCommand::ValidateResourceYaml {
+        };
+        let validation = ValidateResourceYaml {
             editor_id: 9,
             revision: 4,
             cluster_key: 7,
@@ -1644,42 +1998,28 @@ mod tests {
             namespace: Some("default".to_owned()),
             resource_name: "credentials".to_owned(),
             yaml: secret_yaml,
-        }
-        .operation();
-
-        assert!(matches!(
-            apply,
-            WorkerOperation::ApplyResourceYaml { editor_id: 9 }
-        ));
-        assert!(matches!(
-            validation,
-            WorkerOperation::ValidateResourceYaml {
-                editor_id: 9,
-                revision: 4,
-            }
-        ));
+        };
         assert!(!format!("{apply:?}{validation:?}").contains("definitely-secret"));
     }
 
     #[test]
     fn session_control_commands_are_serialized_while_api_requests_are_not() {
-        assert!(WorkerCommand::LoadClusters.serializes_session_lifecycle());
-        assert!(
-            WorkerCommand::StopPodLogStream {
-                cluster_key: 1,
-                log_window_id: 1,
-            }
-            .serializes_session_lifecycle()
-        );
-        assert!(
-            !WorkerCommand::GetResourceYaml {
-                editor_id: 1,
-                cluster_key: 1,
-                api_resource: pod_resource(),
-                namespace: Some("default".to_owned()),
-                resource_name: "pod".to_owned(),
-            }
-            .serializes_session_lifecycle()
-        );
+        let load_clusters: WorkerCommandBox = Box::new(LoadClusters);
+        assert!(load_clusters.serializes_session_lifecycle());
+        let stop_logs = StopPodLogStream {
+            cluster_key: 1,
+            log_window_id: 1,
+        };
+        let stop_logs: WorkerCommandBox = Box::new(stop_logs);
+        assert!(stop_logs.serializes_session_lifecycle());
+        let get_yaml = GetResourceYaml {
+            editor_id: 1,
+            cluster_key: 1,
+            api_resource: pod_resource(),
+            namespace: Some("default".to_owned()),
+            resource_name: "pod".to_owned(),
+        };
+        let get_yaml: WorkerCommandBox = Box::new(get_yaml);
+        assert!(!get_yaml.serializes_session_lifecycle());
     }
 }

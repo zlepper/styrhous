@@ -14,7 +14,7 @@ use crate::resource_catalog::ResourceNavigation;
 use crate::resource_handlers::table_definition;
 use crate::resource_table::{CellValue, CustomResourceColumn, NODE_COLUMN};
 use crate::terminal_launcher::PodShellRequest;
-use crate::worker::WorkerCommand;
+use crate::worker::{GetResourceScale, WorkerCommandBox};
 use components::colors::{TOOLBAR_BACKGROUND, gray};
 use components::design::{spacing, typography};
 use components::fuzzy::{matches_fuzzy, normalize_for_search};
@@ -77,7 +77,7 @@ enum ResourceSelectionAction {
 pub(super) fn show(
     ui: &mut egui::Ui,
     ui_state: &mut UiState,
-    commands_to_send: &mut Vec<WorkerCommand>,
+    commands_to_send: &mut Vec<WorkerCommandBox>,
     shell_requests: &mut Vec<PodShellRequest>,
 ) {
     let ctx = ui.ctx().clone();
@@ -292,12 +292,12 @@ pub(super) fn show(
                             });
                         }
                         ResourceAction::RequestScale { name, namespace } => {
-                            commands_to_send.push(WorkerCommand::GetResourceScale {
+                            commands_to_send.push(Box::new(GetResourceScale {
                                 cluster_key: cluster.cluster_key,
                                 api_resource: api_resource.clone(),
                                 namespace,
                                 resource_name: name,
-                            });
+                            }));
                         }
                         ResourceAction::ViewLogs {
                             name,

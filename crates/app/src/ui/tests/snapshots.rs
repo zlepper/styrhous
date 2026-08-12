@@ -24,7 +24,7 @@ use crate::resource_table::{
     READY_COLUMN, RESTARTS_COLUMN, STATUS_COLUMN, StatusTone, UP_TO_DATE_COLUMN,
 };
 use crate::terminal_launcher::{TerminalLaunchSettings, test_support::MockTerminalLauncher};
-use crate::worker::{MockWorker, WorkerCommand, WorkerResult};
+use crate::worker::*;
 use components::test_support::{HarnessSnapshotOptions, UiHarnessSnapshot};
 use egui::text::{CCursor, CCursorRange};
 use egui_kittest::Harness;
@@ -34,7 +34,11 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 struct YamlEditorSnapshotState {
     editor: YamlEditorWindowState,
-    commands: Vec<WorkerCommand>,
+    commands: Vec<WorkerCommandBox>,
+}
+
+fn command_is<T: WorkerCommand + 'static>(command: &WorkerCommandBox) -> Option<&T> {
+    command.as_ref().as_any().downcast_ref()
 }
 
 fn select_namespace(harness: &mut Harness<MyEguiApp<MockWorker>>, namespace: &str) {
@@ -268,7 +272,7 @@ fn namespace_selector_replaces_toggles_and_selects_all_without_stopping_watches(
     assert_eq!(
         commands
             .iter()
-            .filter(|command| matches!(command, WorkerCommand::StartResourceWatch { .. }))
+            .filter(|command| command_is::<StartResourceWatch>(command).is_some())
             .count(),
         3
     );
@@ -297,19 +301,21 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
             .selected_namespaces
             .is_empty()
     );
-    assert!(matches!(
-        harness.state().worker.commands.as_slice(),
-        [WorkerCommand::StartResourceWatch {
-            cluster_key: 1,
-            api_resource,
-            namespace: None,
-        }] if api_resource == &nodes
-    ));
+    assert_eq!(harness.state().worker.commands.len(), 1);
+    assert!(
+        harness.state().worker.commands[0]
+            .as_ref()
+            .as_any()
+            .downcast_ref::<StartResourceWatch>()
+            .is_some_and(|command| command.cluster_key == 1
+                && command.api_resource == nodes
+                && command.namespace.is_none())
+    );
     harness
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::KubernetesResourcesReplaced {
+        .push_back(Box::new(KubernetesResourcesReplaced {
             cluster_key: 1,
             api_resource: nodes.clone(),
             namespace: None,
@@ -322,7 +328,7 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
                 cells: Default::default(),
                 log_containers: Vec::new(),
             }],
-        });
+        }) as WorkerResultBox);
     harness.run();
     harness.get_by_label("Cluster-wide");
     harness.get_by_label("Open details for kind-control-plane");
@@ -345,7 +351,7 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
             .worker
             .commands
             .iter()
-            .filter(|command| matches!(command, WorkerCommand::StartResourceWatch { .. }))
+            .filter(|command| command_is::<StartResourceWatch>(command).is_some())
             .count(),
         1
     );
@@ -401,10 +407,10 @@ fn no_current_context_leaves_cluster_selection_manual() {
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::KubernetesClustersUpdated(vec![Cluster {
+        .push_back(Box::new(KubernetesClustersUpdated(vec![Cluster {
             name: "dev".into(),
             is_current: false,
-        }]));
+        }])) as WorkerResultBox);
 
     harness.run();
 
@@ -654,14 +660,20 @@ fn deployment_restart_action_opens_a_confirmation_and_sends_a_worker_command() {
     harness.ui_harness("resource_actions/deployment_restart_action_opens_a_confirmation_and_sends_a_worker_command/deployment_restart_confirmation");
     harness.get_by_label("Restart rollout").click_accesskit();
     harness.run();
-    assert!(matches!(
-        harness.state().worker.commands.last(),
-        Some(WorkerCommand::RestartDeployment {
-            cluster_key: 2,
-            namespace,
-            resource_name,
-        }) if namespace == "kube-system" && resource_name == "coredns"
-    ));
+    assert!(
+        harness
+            .state()
+            .worker
+            .commands
+            .last()
+            .and_then(|command| command
+                .as_ref()
+                .as_any()
+                .downcast_ref::<RestartDeployment>())
+            .is_some_and(|command| command.cluster_key == 2
+                && command.namespace == "kube-system"
+                && command.resource_name == "coredns")
+    );
 }
 
 #[test]
@@ -733,29 +745,30 @@ fn scalable_resource_action_fetches_and_updates_the_scale() {
     harness.get_by_label("Scale").click();
     harness.run();
 
-    assert!(matches!(
-        harness.state().worker.commands.last(),
-        Some(WorkerCommand::GetResourceScale {
-            cluster_key: 2,
-            api_resource,
-            namespace,
-            resource_name,
-        }) if api_resource == &deployment
-            && namespace.as_deref() == Some("kube-system")
-            && resource_name == "coredns"
-    ));
+    assert!(
+        harness
+            .state()
+            .worker
+            .commands
+            .last()
+            .and_then(|command| command.as_ref().as_any().downcast_ref::<GetResourceScale>())
+            .is_some_and(|command| command.cluster_key == 2
+                && command.api_resource == deployment
+                && command.namespace.as_deref() == Some("kube-system")
+                && command.resource_name == "coredns")
+    );
 
     harness
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::ResourceScaleFetched {
+        .push_back(Box::new(ResourceScaleFetched {
             cluster_key: 2,
             api_resource: deployment.clone(),
             namespace: Some("kube-system".into()),
             resource_name: "coredns".into(),
             replicas: 3,
-        });
+        }) as WorkerResultBox);
     harness.run();
     harness.get_by_label("Increase desired replicas").click();
     harness.run();
@@ -772,18 +785,22 @@ fn scalable_resource_action_fetches_and_updates_the_scale() {
     harness.get_by_label("Update scale").click();
     harness.run();
 
-    assert!(matches!(
-        harness.state().worker.commands.last(),
-        Some(WorkerCommand::UpdateResourceScale {
-            cluster_key: 2,
-            api_resource,
-            namespace,
-            resource_name,
-            replicas: 4,
-        }) if api_resource == &deployment
-            && namespace.as_deref() == Some("kube-system")
-            && resource_name == "coredns"
-    ));
+    assert!(
+        harness
+            .state()
+            .worker
+            .commands
+            .last()
+            .and_then(|command| command
+                .as_ref()
+                .as_any()
+                .downcast_ref::<UpdateResourceScale>())
+            .is_some_and(|command| command.cluster_key == 2
+                && command.api_resource == deployment
+                && command.namespace.as_deref() == Some("kube-system")
+                && command.resource_name == "coredns"
+                && command.replicas == 4)
+    );
 }
 
 #[test]
@@ -1012,38 +1029,42 @@ fn resource_table_multi_selection_confirms_and_dispatches_bulk_delete() {
     harness.get_by_label("Delete 2 resources").click_accesskit();
     harness.run();
 
-    assert!(matches!(
-        harness.state().worker.commands.as_slice(),
-        [
-            WorkerCommand::DeleteResource {
-                cluster_key: 2,
-                namespace: Some(first_namespace),
-                resource_name: first_name,
-                ..
-            },
-            WorkerCommand::DeleteResource {
-                cluster_key: 2,
-                namespace: Some(second_namespace),
-                resource_name: second_name,
-                ..
-            },
-        ] if first_namespace == "kube-system"
-            && second_namespace == "kube-system"
-            && first_name == "coredns-66bc5c9577-ffw2s"
-            && second_name == "coredns-66bc5c9577-z9gt9"
-    ));
+    let commands = &harness.state().worker.commands;
+    assert_eq!(commands.len(), 2);
+    assert!(
+        commands[0]
+            .as_ref()
+            .as_any()
+            .downcast_ref::<DeleteResource>()
+            .is_some_and(|command| {
+                command.cluster_key == 2
+                    && command.namespace.as_deref() == Some("kube-system")
+                    && command.resource_name == "coredns-66bc5c9577-ffw2s"
+            })
+    );
+    assert!(
+        commands[1]
+            .as_ref()
+            .as_any()
+            .downcast_ref::<DeleteResource>()
+            .is_some_and(|command| {
+                command.cluster_key == 2
+                    && command.namespace.as_deref() == Some("kube-system")
+                    && command.resource_name == "coredns-66bc5c9577-z9gt9"
+            })
+    );
 
     harness
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::ResourceDeleteCompleted {
+        .push_back(Box::new(ResourceDeleteCompleted {
             cluster_key: 2,
             api_resource: fixture_api_resource("core", "Pod", "pods"),
             namespace: Some("kube-system".into()),
             resource_name: "coredns-66bc5c9577-ffw2s".into(),
             bulk_delete_id: Some(1),
-        });
+        }) as WorkerResultBox);
     harness.run();
     assert_eq!(
         harness.state().ui_state.clusters[&2].resource_selections
@@ -1055,13 +1076,13 @@ fn resource_table_multi_selection_confirms_and_dispatches_bulk_delete() {
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::ResourceDeleteCompleted {
+        .push_back(Box::new(ResourceDeleteCompleted {
             cluster_key: 2,
             api_resource: fixture_api_resource("core", "Pod", "pods"),
             namespace: Some("kube-system".into()),
             resource_name: "coredns-66bc5c9577-z9gt9".into(),
             bulk_delete_id: Some(1),
-        });
+        }) as WorkerResultBox);
     harness.run();
     assert!(
         harness.state().ui_state.clusters[&2].resource_selections
@@ -1104,13 +1125,13 @@ fn bulk_delete_keeps_failed_resources_selected_and_reports_them_together() {
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::ResourceDeleteCompleted {
+        .push_back(Box::new(ResourceDeleteCompleted {
             cluster_key: 1,
             api_resource: fixture_api_resource("core", "ConfigMap", "configmaps"),
             namespace: succeeded.namespace.clone(),
             resource_name: succeeded.name.clone(),
             bulk_delete_id: None,
-        });
+        }) as WorkerResultBox);
     harness.run();
     assert_eq!(
         harness.state().ui_state.clusters[&1].resource_selections[&api_resource],
@@ -1120,29 +1141,25 @@ fn bulk_delete_keeps_failed_resources_selected_and_reports_them_together() {
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::CommandFailed {
-            operation: crate::worker::WorkerOperation::DeleteResource {
-                scope: crate::worker::ResourceScope {
-                    cluster_key: 1,
-                    api_resource: api_resource.clone(),
-                    namespace: failed.namespace.clone(),
-                },
-                resource_name: failed.name.clone(),
-                bulk_delete_id: Some(42),
-            },
-            error: anyhow::anyhow!("forbidden"),
-        });
+        .push_back(Box::new(ResourceDeleteFailed {
+            cluster_key: 1,
+            api_resource: api_resource.clone(),
+            namespace: failed.namespace.clone(),
+            resource_name: failed.name.clone(),
+            bulk_delete_id: Some(42),
+            error: "forbidden".into(),
+        }) as WorkerResultBox);
     harness
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::ResourceDeleteCompleted {
+        .push_back(Box::new(ResourceDeleteCompleted {
             cluster_key: 1,
             api_resource: api_resource.clone(),
             namespace: succeeded.namespace.clone(),
             resource_name: succeeded.name.clone(),
             bulk_delete_id: Some(42),
-        });
+        }) as WorkerResultBox);
 
     harness.run();
     harness.get_by_label("Some resources could not be deleted");
@@ -1242,7 +1259,7 @@ fn context_menu_action_does_not_activate_the_overlapped_resource_button() {
             .worker
             .commands
             .iter()
-            .any(|command| matches!(command, WorkerCommand::StartResourceDetailWatch { .. })),
+            .any(|command| command_is::<StartResourceDetailWatch>(command).is_some()),
         "the context-menu click must not start an underlying detail watch"
     );
 }
@@ -1299,7 +1316,7 @@ fn namespace_popup_option_does_not_activate_the_overlapped_resource_button() {
             .worker
             .commands
             .iter()
-            .any(|command| matches!(command, WorkerCommand::StartResourceDetailWatch { .. })),
+            .any(|command| command_is::<StartResourceDetailWatch>(command).is_some()),
         "the namespace click must not start an underlying detail watch"
     );
 }
@@ -1385,10 +1402,10 @@ fn namespace_popup_filters_to_an_offscreen_option_before_pointer_click() {
     );
 
     harness.state_mut().worker.results.extend((0..32).map(|_| {
-        WorkerResult::KubernetesNamespacesReplaced {
+        Box::new(KubernetesNamespacesReplaced {
             cluster_key: 2,
             namespaces: namespaces.clone(),
-        }
+        }) as WorkerResultBox
     }));
     harness.get_by_label(target_namespace).click();
     harness.run_steps(1);
@@ -1602,16 +1619,21 @@ fn resource_name_opens_and_closes_a_live_detail_inspector() {
     harness.run_steps(1);
 
     assert!(
-        matches!(
-            harness.state().worker.commands.last(),
-            Some(WorkerCommand::StartResourceDetailWatch {
-                cluster_key: 2,
-                resource_name,
-                resource_uid,
-                history_entry_id: 1,
-                ..
-            }) if resource_name == name && resource_uid == "fixture-0"
-        ),
+        harness
+            .state()
+            .worker
+            .commands
+            .last()
+            .is_some_and(|command| command
+                .as_ref()
+                .as_any()
+                .downcast_ref::<StartResourceDetailWatch>()
+                .is_some_and(|command| {
+                    command.cluster_key == 2
+                        && command.resource_name == name
+                        && command.resource_uid == "fixture-0"
+                        && command.history_entry_id == 1
+                })),
         "commands: {:?}",
         harness.state().worker.commands
     );
@@ -1621,7 +1643,7 @@ fn resource_name_opens_and_closes_a_live_detail_inspector() {
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::ResourceDetailUpdated {
+        .push_back(Box::new(ResourceDetailUpdated {
             cluster_key: 2,
             history_entry_id: 1,
             detail: Box::new(ResourceDetail {
@@ -1638,7 +1660,7 @@ fn resource_name_opens_and_closes_a_live_detail_inspector() {
                 annotations: BTreeMap::new(),
                 payload: ResourceDetailPayload::Generic,
             }),
-        });
+        }) as WorkerResultBox);
     harness.run();
     assert!(
         harness.state().ui_state.clusters[&2]
@@ -1669,10 +1691,18 @@ fn resource_name_opens_and_closes_a_live_detail_inspector() {
             .resource_detail_panel
             .is_none()
     );
-    assert!(matches!(
-        harness.state().worker.commands.last(),
-        Some(WorkerCommand::StopResourceDetailWatch { cluster_key: 2, .. })
-    ));
+    assert!(
+        harness
+            .state()
+            .worker
+            .commands
+            .last()
+            .is_some_and(|command| command
+                .as_ref()
+                .as_any()
+                .downcast_ref::<StopResourceDetailWatch>()
+                .is_some_and(|command| command.cluster_key == 2))
+    );
 }
 
 #[test]
@@ -1703,18 +1733,23 @@ fn clicking_a_pod_node_in_the_resource_table_opens_the_node_inspector() {
     primary_click(&mut harness, node_position);
     harness.run_steps(1);
 
-    assert!(matches!(
-        harness.state().worker.commands.last(),
-        Some(WorkerCommand::StartResourceDetailWatch {
-            api_resource,
-            namespace: None,
-            resource_name,
-            resource_uid,
-            ..
-        }) if api_resource == &crate::resource_handlers::node::api_resource()
-            && resource_name == "kind-control-plane"
-            && resource_uid == "kind-control-plane"
-    ));
+    assert!(
+        harness
+            .state()
+            .worker
+            .commands
+            .last()
+            .is_some_and(|command| command
+                .as_ref()
+                .as_any()
+                .downcast_ref::<StartResourceDetailWatch>()
+                .is_some_and(|command| {
+                    command.api_resource == crate::resource_handlers::node::api_resource()
+                        && command.namespace.is_none()
+                        && command.resource_name == "kind-control-plane"
+                        && command.resource_uid == "kind-control-plane"
+                }))
+    );
 }
 
 #[test]
@@ -1754,19 +1789,23 @@ fn clicking_a_controller_owner_in_the_resource_table_opens_its_inspector() {
     primary_click(&mut harness, owner_position);
     harness.run_steps(1);
 
-    assert!(matches!(
-        harness.state().worker.commands.last(),
-        Some(WorkerCommand::StartResourceDetailWatch {
-            api_resource,
-            namespace,
-            resource_name,
-            resource_uid,
-            ..
-        }) if api_resource == &replica_set
-            && namespace.as_deref() == Some("kube-system")
-            && resource_name == "api-7b948f"
-            && resource_uid == "replicaset-uid"
-    ));
+    assert!(
+        harness
+            .state()
+            .worker
+            .commands
+            .last()
+            .is_some_and(|command| command
+                .as_ref()
+                .as_any()
+                .downcast_ref::<StartResourceDetailWatch>()
+                .is_some_and(|command| {
+                    command.api_resource == replica_set
+                        && command.namespace.as_deref() == Some("kube-system")
+                        && command.resource_name == "api-7b948f"
+                        && command.resource_uid == "replicaset-uid"
+                }))
+    );
 }
 
 #[test]
@@ -1822,20 +1861,24 @@ fn owner_reference_card_lists_every_owner_and_navigates_resolved_links() {
     primary_click(&mut harness, owner_position);
     harness.run_steps(1);
 
-    assert!(matches!(
-        harness.state().worker.commands.last(),
-        Some(WorkerCommand::StartResourceDetailWatch {
-            api_resource,
-            namespace,
-            resource_name,
-            resource_uid,
-            history_entry_id: 2,
-            ..
-        }) if api_resource == &deployment
-            && namespace.as_deref() == Some("kube-system")
-            && resource_name == "api"
-            && resource_uid == "deployment-uid"
-    ));
+    assert!(
+        harness
+            .state()
+            .worker
+            .commands
+            .last()
+            .is_some_and(|command| command
+                .as_ref()
+                .as_any()
+                .downcast_ref::<StartResourceDetailWatch>()
+                .is_some_and(|command| {
+                    command.api_resource == deployment
+                        && command.namespace.as_deref() == Some("kube-system")
+                        && command.resource_name == "api"
+                        && command.resource_uid == "deployment-uid"
+                        && command.history_entry_id == 2
+                }))
+    );
 }
 
 #[test]
@@ -1856,7 +1899,7 @@ fn clicking_a_pod_node_in_the_inspector_navigates_to_the_node_inspector() {
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::ResourceDetailUpdated {
+        .push_back(Box::new(ResourceDetailUpdated {
             cluster_key: 2,
             history_entry_id: 1,
             detail: Box::new(ResourceDetail {
@@ -1873,7 +1916,7 @@ fn clicking_a_pod_node_in_the_inspector_navigates_to_the_node_inspector() {
                 annotations: BTreeMap::new(),
                 payload: ResourceDetailPayload::Pod(Box::new(overflowing_pod_detail())),
             }),
-        });
+        }) as WorkerResultBox);
     harness.run_steps(2);
 
     let node_position = harness
@@ -1883,19 +1926,24 @@ fn clicking_a_pod_node_in_the_inspector_navigates_to_the_node_inspector() {
     primary_click(&mut harness, node_position);
     harness.run_steps(1);
 
-    assert!(matches!(
-        harness.state().worker.commands.last(),
-        Some(WorkerCommand::StartResourceDetailWatch {
-            api_resource,
-            namespace: None,
-            resource_name,
-            resource_uid,
-            history_entry_id: 2,
-            ..
-        }) if api_resource == &crate::resource_handlers::node::api_resource()
-            && resource_name == "kind-control-plane"
-            && resource_uid == "kind-control-plane"
-    ));
+    assert!(
+        harness
+            .state()
+            .worker
+            .commands
+            .last()
+            .is_some_and(|command| command
+                .as_ref()
+                .as_any()
+                .downcast_ref::<StartResourceDetailWatch>()
+                .is_some_and(|command| {
+                    command.api_resource == crate::resource_handlers::node::api_resource()
+                        && command.namespace.is_none()
+                        && command.resource_name == "kind-control-plane"
+                        && command.resource_uid == "kind-control-plane"
+                        && command.history_entry_id == 2
+                }))
+    );
 }
 
 #[test]
@@ -1915,7 +1963,7 @@ fn node_inspector_shows_its_spec() {
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::ResourceDetailUpdated {
+        .push_back(Box::new(ResourceDetailUpdated {
             cluster_key: 2,
             history_entry_id: 1,
             detail: Box::new(ResourceDetail {
@@ -1937,7 +1985,7 @@ fn node_inspector_shows_its_spec() {
                     taints: vec!["node-role.kubernetes.io/control-plane:NoSchedule".into()],
                 }),
             }),
-        });
+        }) as WorkerResultBox);
     harness.run_steps(2);
 
     harness.get_by_label("Spec");
@@ -1964,7 +2012,7 @@ fn node_inspector_lists_cross_namespace_pods_in_the_shared_pod_table() {
         &mut commands,
     );
     harness.state_mut().worker.results.extend([
-        WorkerResult::ResourceDetailUpdated {
+        Box::new(ResourceDetailUpdated {
             cluster_key: 2,
             history_entry_id: 1,
             detail: Box::new(ResourceDetail {
@@ -1981,8 +2029,8 @@ fn node_inspector_lists_cross_namespace_pods_in_the_shared_pod_table() {
                 annotations: BTreeMap::new(),
                 payload: ResourceDetailPayload::Node(NodeDetail::default()),
             }),
-        },
-        WorkerResult::ManagedResourcesReplaced {
+        }) as WorkerResultBox,
+        Box::new(ManagedResourcesReplaced {
             cluster_key: 2,
             history_entry_id: 1,
             resources: vec![ManagedResource {
@@ -2010,7 +2058,7 @@ fn node_inspector_lists_cross_namespace_pods_in_the_shared_pod_table() {
                     ),
                 ]),
             }],
-        },
+        }) as WorkerResultBox,
     ]);
     harness.run_steps(2);
 
@@ -2174,7 +2222,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::ManagedResourcesReplaced {
+        .push_back(Box::new(ManagedResourcesReplaced {
             cluster_key: 2,
             history_entry_id: 1,
             resources: vec![
@@ -2222,7 +2270,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
                     ]),
                 },
             ],
-        });
+        }) as WorkerResultBox);
     harness.run();
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "resource_inspectors/managed_resource_tables_navigate_with_back_and_forward_history/deployment_managed_resource_tables",
@@ -2241,21 +2289,28 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
     assert_eq!(panel.api_resource, replica_set);
     assert_eq!(panel.navigator.back_stack().len(), 1);
     assert!(panel.navigator.forward_stack().is_empty());
-    assert!(matches!(
-        harness.state().worker.commands.last(),
-        Some(WorkerCommand::StartResourceDetailWatch {
-            resource_name,
-            resource_uid,
-            history_entry_id: 2,
-            ..
-        }) if resource_name == "api-7b948f" && resource_uid == "replicaset-uid"
-    ));
+    assert!(
+        harness
+            .state()
+            .worker
+            .commands
+            .last()
+            .is_some_and(|command| command
+                .as_ref()
+                .as_any()
+                .downcast_ref::<StartResourceDetailWatch>()
+                .is_some_and(|command| {
+                    command.resource_name == "api-7b948f"
+                        && command.resource_uid == "replicaset-uid"
+                        && command.history_entry_id == 2
+                }))
+    );
 
     harness
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::ResourceDetailUpdated {
+        .push_back(Box::new(ResourceDetailUpdated {
             cluster_key: 2,
             history_entry_id: 2,
             detail: Box::new(ResourceDetail {
@@ -2280,12 +2335,12 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
                 annotations: BTreeMap::new(),
                 payload: ResourceDetailPayload::Generic,
             }),
-        });
+        }) as WorkerResultBox);
     harness
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::ManagedResourcesReplaced {
+        .push_back(Box::new(ManagedResourcesReplaced {
             cluster_key: 2,
             history_entry_id: 2,
             resources: vec![ManagedResource {
@@ -2315,7 +2370,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
                     (RESTARTS_COLUMN.to_owned(), CellValue::Number(0)),
                 ]),
             }],
-        });
+        }) as WorkerResultBox);
     harness.run();
     harness
         .state_mut()
@@ -2386,7 +2441,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::ResourceDetailUpdated {
+        .push_back(Box::new(ResourceDetailUpdated {
             cluster_key: 2,
             history_entry_id,
             detail: Box::new(ResourceDetail {
@@ -2411,7 +2466,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
                 annotations: BTreeMap::new(),
                 payload: ResourceDetailPayload::Pod(Box::new(overflowing_pod_detail())),
             }),
-        });
+        }) as WorkerResultBox);
     harness.run();
     harness
         .state_mut()
@@ -2442,7 +2497,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .worker
         .commands
         .iter()
-        .filter(|command| matches!(command, WorkerCommand::StartResourceDetailWatch { .. }))
+        .filter(|command| command_is::<StartResourceDetailWatch>(command).is_some())
         .count();
     harness.get_by_label("Back").click_accesskit();
     harness.run_steps(1);
@@ -2452,7 +2507,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
             .worker
             .commands
             .iter()
-            .filter(|command| matches!(command, WorkerCommand::StartResourceDetailWatch { .. }))
+            .filter(|command| command_is::<StartResourceDetailWatch>(command).is_some())
             .count(),
         detail_watch_starts_before_back,
         "Back promotes the already-watched history entry instead of restarting it",
@@ -2477,7 +2532,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
             .worker
             .commands
             .iter()
-            .filter(|command| matches!(command, WorkerCommand::StartResourceDetailWatch { .. }))
+            .filter(|command| command_is::<StartResourceDetailWatch>(command).is_some())
             .count(),
         detail_watch_starts_before_back,
         "Forward promotes the already-watched history entry instead of restarting it",
@@ -2514,7 +2569,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::ResourceDetailUpdated {
+        .push_back(Box::new(ResourceDetailUpdated {
             cluster_key: 2,
             history_entry_id,
             detail: Box::new(ResourceDetail {
@@ -2533,7 +2588,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
                 annotations: BTreeMap::new(),
                 payload: ResourceDetailPayload::Generic,
             }),
-        });
+        }) as WorkerResultBox);
     harness.run();
     harness
         .state_mut()
@@ -2577,7 +2632,7 @@ fn pod_resource_detail_inspector_snapshot() {
     harness.run_steps(1);
     let pods = fixture_api_resource("core", "Pod", "pods");
     harness.state_mut().worker.results.extend([
-        WorkerResult::ResourceDetailUpdated {
+        Box::new(ResourceDetailUpdated {
             cluster_key: 2,
             history_entry_id: 1,
             detail: Box::new(ResourceDetail {
@@ -2676,8 +2731,8 @@ fn pod_resource_detail_inspector_snapshot() {
                     ],
                 })),
             }),
-        },
-        WorkerResult::ResourceEventsReplaced {
+        }) as WorkerResultBox,
+        Box::new(ResourceEventsReplaced {
             cluster_key: 2,
             history_entry_id: 1,
             events: vec![ResourceEvent {
@@ -2689,7 +2744,7 @@ fn pod_resource_detail_inspector_snapshot() {
                 count: 1,
                 last_timestamp: None,
             }],
-        },
+        }) as WorkerResultBox,
     ]);
     harness.run();
 
@@ -2731,11 +2786,11 @@ fn open_typed_detail(
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::ResourceDetailUpdated {
+        .push_back(Box::new(ResourceDetailUpdated {
             cluster_key: 2,
             history_entry_id: 1,
             detail: Box::new(detail),
-        });
+        }) as WorkerResultBox);
     harness.run();
 }
 
@@ -2792,9 +2847,12 @@ fn deployment_editor_completes_match_labels_in_a_selector() {
         .worker
         .commands
         .iter()
-        .find_map(|command| match command {
-            WorkerCommand::GetResourceYaml { editor_id, .. } => Some(*editor_id),
-            _ => None,
+        .find_map(|command| {
+            command
+                .as_ref()
+                .as_any()
+                .downcast_ref::<GetResourceYaml>()
+                .map(|command| command.editor_id)
         })
         .expect("editing the deployment fetches its YAML");
     let original_yaml = "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: coredns\nspec:\n  selector:\n    matchLabels:\n      app: coredns";
@@ -2808,20 +2866,20 @@ fn deployment_editor_completes_match_labels_in_a_selector() {
         "the deployment schema should complete the partial selector key"
     );
     harness.state_mut().worker.results.extend([
-        WorkerResult::ResourceYamlFetched {
+        Box::new(ResourceYamlFetched {
             editor_id,
             cluster_key: 2,
             api_resource: deployment.clone(),
             namespace: Some("kube-system".into()),
             resource_name: "coredns".into(),
             yaml: original_yaml.into(),
-        },
-        WorkerResult::ResourceSchemaLoaded {
+        }) as WorkerResultBox,
+        Box::new(ResourceSchemaLoaded {
             editor_id,
             cluster_key: 2,
             api_resource: deployment.clone(),
             schema: deployment_selector_schema(),
-        },
+        }) as WorkerResultBox,
     ]);
     harness.run();
 
@@ -2979,19 +3037,26 @@ fn config_map_inspector_saves_only_changed_existing_data_values() {
     harness.get_by_label("Save data").click_accesskit();
     harness.run();
 
-    assert!(matches!(
-        harness.state().worker.commands.last(),
-        Some(WorkerCommand::UpdateResourceData {
-            history_entry_id,
-            request_id,
-            update,
-            ..
-        }) if *history_entry_id > 0
-            && *request_id > 0
-            && update.expected_resource_version == "1"
-                && update.expected_values == BTreeMap::from([("mode".into(), "development".into())])
-                && update.updated_values == BTreeMap::from([("mode".into(), "production".into())])
-    ));
+    assert!(
+        harness
+            .state()
+            .worker
+            .commands
+            .last()
+            .is_some_and(|command| command
+                .as_ref()
+                .as_any()
+                .downcast_ref::<UpdateResourceData>()
+                .is_some_and(|command| {
+                    command.history_entry_id > 0
+                        && command.request_id > 0
+                        && command.update.expected_resource_version == "1"
+                        && command.update.expected_values
+                            == BTreeMap::from([("mode".into(), "development".into())])
+                        && command.update.updated_values
+                            == BTreeMap::from([("mode".into(), "production".into())])
+                }))
+    );
 }
 
 #[test]
@@ -3025,14 +3090,32 @@ fn resource_detail_more_actions_use_the_shared_resource_menu() {
     ));
     harness.get_by_label("Edit").click_accesskit();
     harness.run();
-    assert!(matches!(
-        harness.state().worker.commands.iter().rev().nth(1),
-        Some(WorkerCommand::GetResourceYaml { resource_name, .. }) if resource_name == "settings"
-    ));
-    assert!(matches!(
-        harness.state().worker.commands.last(),
-        Some(WorkerCommand::LoadResourceSchema { .. })
-    ));
+    assert!(
+        harness
+            .state()
+            .worker
+            .commands
+            .iter()
+            .rev()
+            .nth(1)
+            .is_some_and(|command| command
+                .as_ref()
+                .as_any()
+                .downcast_ref::<GetResourceYaml>()
+                .is_some_and(|command| command.resource_name == "settings"))
+    );
+    assert!(
+        harness
+            .state()
+            .worker
+            .commands
+            .last()
+            .is_some_and(|command| command
+                .as_ref()
+                .as_any()
+                .downcast_ref::<LoadResourceSchema>()
+                .is_some())
+    );
 
     harness
         .get_by_label("More actions for settings")
@@ -3110,7 +3193,7 @@ fn secret_inspector_masks_values_and_prompts_for_a_real_external_change() {
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::ResourceDetailUpdated {
+        .push_back(Box::new(ResourceDetailUpdated {
             cluster_key: 2,
             history_entry_id: 1,
             detail: Box::new(ResourceDetail {
@@ -3127,7 +3210,7 @@ fn secret_inspector_masks_values_and_prompts_for_a_real_external_change() {
                 }),
                 ..config_map_detail(BTreeMap::new())
             }),
-        });
+        }) as WorkerResultBox);
     harness.run();
     harness.get_by_label("Data changed on cluster");
     harness.get_by_label("Keep my edits").click_accesskit();
@@ -3314,7 +3397,8 @@ fn delete_confirmation_waits_before_enabling_the_destructive_action() {
     harness.run();
     assert!(matches!(
         harness.state().worker.commands.as_slice(),
-        [WorkerCommand::DeleteResource { resource_name, .. }] if resource_name == "important-config"
+        [command] if command.as_ref().as_any().downcast_ref::<DeleteResource>()
+            .is_some_and(|command| command.resource_name == "important-config")
     ));
 }
 
@@ -3374,8 +3458,8 @@ fn force_delete_confirmation_requires_the_resource_name_before_removing_finalize
 
     assert!(matches!(
         harness.state().worker.commands.as_slice(),
-        [WorkerCommand::ForceDeleteResource { resource_name, .. }]
-            if resource_name == "important-config"
+        [command] if command.as_ref().as_any().downcast_ref::<ForceDeleteResource>()
+            .is_some_and(|command| command.resource_name == "important-config")
     ));
 }
 
@@ -3417,10 +3501,10 @@ fn force_delete_failure_is_shown_and_can_be_dismissed() {
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::CommandFailed {
-            operation: crate::worker::WorkerOperation::ForceDeleteResource { cluster_key: 2 },
-            error: anyhow::anyhow!("Resource was replaced while awaiting confirmation"),
-        });
+        .push_back(Box::new(ResourceForceDeleteFailed {
+            cluster_key: 2,
+            error: "Resource was replaced while awaiting confirmation".into(),
+        }) as WorkerResultBox);
 
     harness.run();
     harness.get_by_label("Couldn’t remove finalizers");
@@ -3523,10 +3607,12 @@ fn resource_navigation_selects_primary_curated_gateway_and_other_resources() {
         app.worker
             .commands
             .iter()
-            .filter_map(|command| match command {
-                WorkerCommand::StartResourceWatch { api_resource, .. } =>
-                    Some(api_resource.name.as_str()),
-                _ => None,
+            .filter_map(|command| {
+                command
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<StartResourceWatch>()
+                    .map(|command| command.api_resource.name.as_str())
             })
             .collect::<Vec<_>>(),
         vec![
@@ -3564,7 +3650,7 @@ fn test_ui_flow() {
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::KubernetesClustersUpdated(vec![
+        .push_back(Box::new(KubernetesClustersUpdated(vec![
             Cluster {
                 name: "dev".into(),
                 is_current: true,
@@ -3573,7 +3659,7 @@ fn test_ui_flow() {
                 name: "prod".into(),
                 is_current: false,
             },
-        ]));
+        ])) as WorkerResultBox);
     harness.run_steps(1);
     assert_eq!(harness.state().ui_state.selected_cluster, Some(1));
     assert!(matches!(
@@ -3582,10 +3668,8 @@ fn test_ui_flow() {
     ));
     assert!(matches!(
         harness.state().worker.commands.as_slice(),
-        [WorkerCommand::ConnectToCluster {
-            cluster_key: 1,
-            cluster,
-        }] if cluster == "dev"
+        [command] if command.as_ref().as_any().downcast_ref::<ConnectToCluster>()
+            .is_some_and(|command| command.cluster_key == 1 && command.cluster == "dev")
     ));
     harness.ui_harness("cluster_connection/test_ui_flow/current_context_connecting");
 
@@ -3593,13 +3677,15 @@ fn test_ui_flow() {
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::KubernetesClusterConnectionCreated { cluster_key: 1 });
+        .push_back(
+            Box::new(KubernetesClusterConnectionCreated { cluster_key: 1 }) as WorkerResultBox,
+        );
 
     harness
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::KubernetesNamespacesReplaced {
+        .push_back(Box::new(KubernetesNamespacesReplaced {
             cluster_key: 1,
             namespaces: vec![
                 MinimalNamespace {
@@ -3615,14 +3701,14 @@ fn test_ui_flow() {
                     display_name: Some("Monitoring Stack".into()),
                 },
             ],
-        });
+        }) as WorkerResultBox);
     harness.run_steps(1);
 
     harness
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::KubernetesApisLoaded {
+        .push_back(Box::new(KubernetesApisLoaded {
             cluster_key: 1,
             api_resources: vec![
                 fixture_api_resource("", "Pod", "pods"),
@@ -3633,7 +3719,7 @@ fn test_ui_flow() {
                 fixture_api_resource("networking.k8s.io", "Ingress", "ingresses"),
             ],
             scalable_api_resources: Default::default(),
-        });
+        }) as WorkerResultBox);
     harness.run();
 
     select_namespace(&mut harness, "default");
@@ -3644,21 +3730,17 @@ fn test_ui_flow() {
     harness.run_steps(1);
 
     let pods = fixture_api_resource("", "Pod", "pods");
-    assert!(
-        harness
-            .state()
-            .worker
-            .commands
-            .iter()
-            .any(|command| matches!(
-                command,
-                WorkerCommand::StartResourceWatch {
-                    cluster_key: 1,
-                    api_resource,
-                    namespace,
-                } if api_resource == &pods && namespace.as_deref() == Some("default")
-            ))
-    );
+    assert!(harness.state().worker.commands.iter().any(|command| {
+        command
+            .as_ref()
+            .as_any()
+            .downcast_ref::<StartResourceWatch>()
+            .is_some_and(|command| {
+                command.cluster_key == 1
+                    && command.api_resource == pods
+                    && command.namespace.as_deref() == Some("default")
+            })
+    }));
     harness.get_by_label("Loading resources");
     harness.ui_harness("cluster_connection/test_ui_flow/resource_watch_loading");
 
@@ -3666,12 +3748,12 @@ fn test_ui_flow() {
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::KubernetesResourcesReplaced {
+        .push_back(Box::new(KubernetesResourcesReplaced {
             cluster_key: 1,
             api_resource: pods.clone(),
             namespace: Some("default".into()),
             resources: Vec::new(),
-        });
+        }) as WorkerResultBox);
     harness.run();
     harness.get_by_label("No resources found");
 
@@ -3679,12 +3761,12 @@ fn test_ui_flow() {
         .state_mut()
         .worker
         .results
-        .push_back(WorkerResult::KubernetesResourceWatchFailed {
+        .push_back(Box::new(KubernetesResourceWatchFailed {
             cluster_key: 1,
             api_resource: pods,
             namespace: Some("default".into()),
             error: watch_error.into(),
-        });
+        }) as WorkerResultBox);
     harness.run();
     harness.get_by_label("Unable to load resources");
     harness.get_by_label(watch_error);
@@ -3697,7 +3779,7 @@ fn test_ui_flow() {
             .worker
             .commands
             .iter()
-            .filter(|command| matches!(command, WorkerCommand::StartResourceWatch { .. }))
+            .filter(|command| command_is::<StartResourceWatch>(command).is_some())
             .count(),
         2
     );

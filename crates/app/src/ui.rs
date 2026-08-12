@@ -10,7 +10,7 @@ mod resource_detail;
 mod resource_navigation;
 mod resource_owner;
 mod settings;
-mod state;
+pub(crate) mod state;
 mod widgets;
 mod workspace;
 mod yaml_editor;
@@ -123,10 +123,10 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
                 && let Some(window) = self.ui_state.log_windows.get(window_id)
                 && !matches!(window.status, state::PodLogStatus::Failed(_))
             {
-                commands_to_send.push(crate::worker::WorkerCommand::StopPodLogStream {
+                commands_to_send.push(Box::new(crate::worker::StopPodLogStream {
                     cluster_key: window.cluster_key,
                     log_window_id: *window_id,
-                });
+                }));
             }
             self.ui_state.apply_log_store_result(result);
         }
@@ -238,7 +238,7 @@ mod persistence_tests {
     use crate::api_resource::ApiResource;
     use crate::cluster_connection_manager::Cluster;
     use crate::minimal_namespace::MinimalNamespace;
-    use crate::worker::{MockWorker, WorkerResult};
+    use crate::worker::*;
     use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
     #[derive(Default)]
@@ -344,8 +344,8 @@ mod persistence_tests {
 
     fn apply_results(
         ui_state: &mut UiState,
-        results: impl IntoIterator<Item = WorkerResult>,
-    ) -> Vec<crate::worker::WorkerCommand> {
+        results: impl IntoIterator<Item = WorkerResultBox>,
+    ) -> Vec<WorkerCommandBox> {
         let mut worker = MockWorker {
             results: VecDeque::from_iter(results),
             ..Default::default()
@@ -353,29 +353,29 @@ mod persistence_tests {
         ui_state.update(&mut worker)
     }
 
-    fn current_dev_cluster() -> WorkerResult {
-        WorkerResult::KubernetesClustersUpdated(vec![Cluster {
+    fn current_dev_cluster() -> WorkerResultBox {
+        Box::new(KubernetesClustersUpdated(vec![Cluster {
             name: "dev".into(),
             is_current: true,
-        }])
+        }]))
     }
 
-    fn dev_namespaces() -> WorkerResult {
-        WorkerResult::KubernetesNamespacesReplaced {
+    fn dev_namespaces() -> WorkerResultBox {
+        Box::new(KubernetesNamespacesReplaced {
             cluster_key: 1,
             namespaces: vec![MinimalNamespace {
                 name: "default".into(),
                 display_name: None,
             }],
-        }
+        })
     }
 
-    fn dev_api_resources() -> WorkerResult {
-        WorkerResult::KubernetesApisLoaded {
+    fn dev_api_resources() -> WorkerResultBox {
+        Box::new(KubernetesApisLoaded {
             cluster_key: 1,
             api_resources: vec![api_resource("apps", "v1", "Deployment", "deployments")],
             scalable_api_resources: Default::default(),
-        }
+        })
     }
 
     #[test]
@@ -438,14 +438,17 @@ mod persistence_tests {
                     .map(|resource| resource.name.as_str()),
                 Some("deployments")
             );
-            assert!(commands.iter().any(|command| matches!(
-                command,
-                crate::worker::WorkerCommand::StartResourceWatch {
-                    cluster_key: 1,
-                    api_resource,
-                    namespace,
-                } if api_resource.name == "deployments" && namespace.as_deref() == Some("default")
-            )));
+            assert!(commands.iter().any(|command| {
+                command
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<StartResourceWatch>()
+                    .is_some_and(|command| {
+                        command.cluster_key == 1
+                            && command.api_resource.name == "deployments"
+                            && command.namespace.as_deref() == Some("default")
+                    })
+            }));
         }
     }
 
@@ -476,18 +479,18 @@ mod persistence_tests {
             &mut ui_state,
             [
                 current_dev_cluster(),
-                WorkerResult::KubernetesNamespacesReplaced {
+                Box::new(KubernetesNamespacesReplaced {
                     cluster_key: 1,
                     namespaces: vec![MinimalNamespace {
                         name: "default".into(),
                         display_name: None,
                     }],
-                },
-                WorkerResult::KubernetesApisLoaded {
+                }),
+                Box::new(KubernetesApisLoaded {
                     cluster_key: 1,
                     api_resources: vec![api_resource("apps", "v1", "Service", "services")],
                     scalable_api_resources: Default::default(),
-                },
+                }),
             ],
         );
 
@@ -519,11 +522,11 @@ mod persistence_tests {
             [
                 current_dev_cluster(),
                 dev_namespaces(),
-                WorkerResult::KubernetesApisLoaded {
+                Box::new(KubernetesApisLoaded {
                     cluster_key: 1,
                     api_resources: vec![api_resource("apps", "v1", "Deployment", "deployments")],
                     scalable_api_resources: Default::default(),
-                },
+                }),
             ],
         );
 
