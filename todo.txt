@@ -1,6 +1,5 @@
 TODO list:
 
-* Multi select resources
 * Ownership references
 * test reduced permission handling
 * Resource details view
@@ -9,16 +8,16 @@ TODO list:
 * Create a shell on a node
 * Debug shell to pod
 * Display resource usages of pods
-* Force delete by removing finalizers
 * Connect to kubernetes cluster by discovering via the Az cli/AWS cli/Tailscale
 * Search
     * Add option for whole word matching only in search
     * Add option for case-sensitive matching in search
 * For "CronJobs": Add option to start a job run right now
 * Table improvements
-    * Make columns on table user configuable (And remember per resource type in user's config folder)
+    * Make columns on table user configurable (And remember per resource type in user's config folder)
     * Allow resizing the columns in a table on-the-fly
-
+* Make the accessibility check require a "label" on all interactable elements, such as input fields or buttons.
+* Double-check for "busy waits" in tests
 
 Deferred
 * Make the "TailwindTable" handle sizes more automatically so we don't have to sit and pixel fiddle.
