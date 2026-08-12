@@ -11,31 +11,38 @@ pub(crate) enum ShellRequest {
         pod_name: String,
         container: String,
     },
+    PodDebug {
+        kube_context: String,
+        namespace: String,
+        pod_name: String,
+        target_container: String,
+        preset: DebugImagePreset,
+    },
     Node {
         kube_context: String,
         node_name: String,
-        preset: NodeShellPreset,
+        preset: DebugImagePreset,
     },
 }
 
 impl ShellRequest {
     fn title_target(&self) -> &str {
         match self {
-            Self::Pod { pod_name, .. } => pod_name,
+            Self::Pod { pod_name, .. } | Self::PodDebug { pod_name, .. } => pod_name,
             Self::Node { node_name, .. } => node_name,
         }
     }
 }
 
-/// A named `kubectl debug` choice available from a Node's Shell menu.
+/// A named `kubectl debug` image and security profile choice.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub(crate) struct NodeShellPreset {
+pub(crate) struct DebugImagePreset {
     pub(crate) name: String,
     pub(crate) image: String,
     pub(crate) profile: DebugProfile,
 }
 
-impl NodeShellPreset {
+impl DebugImagePreset {
     pub(crate) fn menu_label(&self) -> String {
         format!("{} — {}", self.name, self.profile.label())
     }
@@ -82,19 +89,19 @@ impl DebugProfile {
     }
 }
 
-pub(crate) fn default_node_shell_presets() -> Vec<NodeShellPreset> {
+pub(crate) fn default_debug_image_presets() -> Vec<DebugImagePreset> {
     vec![
-        NodeShellPreset {
+        DebugImagePreset {
             name: "Busybox".into(),
             image: "busybox".into(),
             profile: DebugProfile::General,
         },
-        NodeShellPreset {
+        DebugImagePreset {
             name: "Ubuntu".into(),
             image: "ubuntu".into(),
             profile: DebugProfile::General,
         },
-        NodeShellPreset {
+        DebugImagePreset {
             name: "Netshoot".into(),
             image: "nicolaka/netshoot".into(),
             profile: DebugProfile::Netadmin,
@@ -107,15 +114,15 @@ pub(crate) struct TerminalLaunchSettings {
     /// `None` delegates to the platform default; a custom value must contain
     /// exactly one `{command}` placeholder.
     pub(crate) custom_template: Option<String>,
-    #[serde(default = "default_node_shell_presets")]
-    pub(crate) node_shell_presets: Vec<NodeShellPreset>,
+    #[serde(default = "default_debug_image_presets")]
+    pub(crate) debug_image_presets: Vec<DebugImagePreset>,
 }
 
 impl Default for TerminalLaunchSettings {
     fn default() -> Self {
         Self {
             custom_template: None,
-            node_shell_presets: default_node_shell_presets(),
+            debug_image_presets: default_debug_image_presets(),
         }
     }
 }
@@ -131,16 +138,16 @@ impl TerminalLaunchSettings {
             }
         }
         let mut names = std::collections::HashSet::new();
-        for preset in &self.node_shell_presets {
+        for preset in &self.debug_image_presets {
             let name = preset.name.trim();
             if name.is_empty() || preset.image.trim().is_empty() {
-                return Err("Each node shell must have a name and image.".into());
+                return Err("Each debug image must have a name and image.".into());
             }
             if preset.image != preset.image.trim() {
-                return Err("Node shell images cannot start or end with whitespace.".into());
+                return Err("Debug images cannot start or end with whitespace.".into());
             }
             if !names.insert(name.to_lowercase()) {
-                return Err("Node shell names must be unique.".into());
+                return Err("Debug image names must be unique.".into());
             }
         }
         Ok(())
@@ -326,6 +333,29 @@ fn kubectl_arguments(request: &ShellRequest) -> Vec<String> {
             "--".into(),
             "sh".into(),
         ],
+        ShellRequest::PodDebug {
+            kube_context,
+            namespace,
+            pod_name,
+            target_container,
+            preset,
+        } => vec![
+            "kubectl".into(),
+            "--context".into(),
+            kube_context.clone(),
+            "--namespace".into(),
+            namespace.clone(),
+            "debug".into(),
+            pod_name.clone(),
+            "--stdin".into(),
+            "--tty".into(),
+            "--image".into(),
+            preset.image.clone(),
+            "--profile".into(),
+            preset.profile.kubectl_value().into(),
+            "--target".into(),
+            target_container.clone(),
+        ],
         ShellRequest::Node {
             kube_context,
             node_name,
@@ -456,7 +486,7 @@ mod tests {
         let request = ShellRequest::Node {
             kube_context: "team dev".into(),
             node_name: "worker-1".into(),
-            preset: NodeShellPreset {
+            preset: DebugImagePreset {
                 name: "Network tools".into(),
                 image: "nicolaka/netshoot".into(),
                 profile: DebugProfile::Netadmin,
@@ -477,6 +507,78 @@ mod tests {
                 "nicolaka/netshoot",
                 "--profile",
                 "netadmin",
+            ]
+        );
+    }
+
+    #[test]
+    fn kubectl_command_starts_a_pod_debug_shell_with_the_selected_target_and_image() {
+        let request = ShellRequest::PodDebug {
+            kube_context: "team dev".into(),
+            namespace: "default".into(),
+            pod_name: "api".into(),
+            target_container: "server".into(),
+            preset: DebugImagePreset {
+                name: "Network tools".into(),
+                image: "nicolaka/netshoot".into(),
+                profile: DebugProfile::Netadmin,
+            },
+        };
+
+        assert_eq!(
+            kubectl_arguments(&request),
+            [
+                "kubectl",
+                "--context",
+                "team dev",
+                "--namespace",
+                "default",
+                "debug",
+                "api",
+                "--stdin",
+                "--tty",
+                "--image",
+                "nicolaka/netshoot",
+                "--profile",
+                "netadmin",
+                "--target",
+                "server",
+            ]
+        );
+    }
+
+    #[test]
+    fn pod_debug_shell_uses_the_general_profile_for_a_pod_declared_image() {
+        let request = ShellRequest::PodDebug {
+            kube_context: "team dev".into(),
+            namespace: "default".into(),
+            pod_name: "api".into(),
+            target_container: "server".into(),
+            preset: DebugImagePreset {
+                name: "example/api:v1".into(),
+                image: "example/api:v1".into(),
+                profile: DebugProfile::General,
+            },
+        };
+
+        assert_eq!(
+            kubectl_arguments(&request),
+            [
+                "kubectl",
+                "--context",
+                "team dev",
+                "--namespace",
+                "default",
+                "debug",
+                "api",
+                "--stdin",
+                "--tty",
+                "--image",
+                "example/api:v1",
+                "--profile",
+                "general",
+                "--target",
+                "server",
             ]
         );
     }
@@ -510,31 +612,31 @@ mod tests {
     }
 
     #[test]
-    fn node_shell_presets_require_unique_names_and_images() {
+    fn debug_image_presets_require_unique_names_and_images() {
         let mut settings = TerminalLaunchSettings::default();
-        settings.node_shell_presets.push(NodeShellPreset {
+        settings.debug_image_presets.push(DebugImagePreset {
             name: " busybox ".into(),
             image: "other".into(),
             profile: DebugProfile::General,
         });
         assert_eq!(
             settings.validate(),
-            Err("Node shell names must be unique.".into())
+            Err("Debug image names must be unique.".into())
         );
 
-        settings.node_shell_presets.pop();
-        settings.node_shell_presets[0].image.clear();
+        settings.debug_image_presets.pop();
+        settings.debug_image_presets[0].image.clear();
         assert_eq!(
             settings.validate(),
-            Err("Each node shell must have a name and image.".into())
+            Err("Each debug image must have a name and image.".into())
         );
     }
 
     #[test]
-    fn node_shell_preset_images_reject_surrounding_whitespace() {
+    fn debug_image_preset_images_reject_surrounding_whitespace() {
         let settings = TerminalLaunchSettings {
             custom_template: None,
-            node_shell_presets: vec![NodeShellPreset {
+            debug_image_presets: vec![DebugImagePreset {
                 name: "Ubuntu".into(),
                 image: " ubuntu ".into(),
                 profile: DebugProfile::General,
@@ -543,28 +645,28 @@ mod tests {
 
         assert_eq!(
             settings.validate(),
-            Err("Node shell images cannot start or end with whitespace.".into())
+            Err("Debug images cannot start or end with whitespace.".into())
         );
     }
 
     #[test]
-    fn saved_settings_without_node_shell_presets_receive_the_defaults() {
+    fn saved_settings_without_debug_image_presets_receive_the_defaults() {
         let settings = serde_yaml::from_str::<TerminalLaunchSettings>(
             "custom_template: 'alacritty -e {command}'\n",
         )
         .expect("legacy settings deserialize");
 
-        assert_eq!(settings.node_shell_presets, default_node_shell_presets());
+        assert_eq!(settings.debug_image_presets, default_debug_image_presets());
     }
 
     #[test]
-    fn saved_empty_node_shell_preset_list_stays_empty() {
+    fn saved_empty_debug_image_preset_list_stays_empty() {
         let settings = serde_yaml::from_str::<TerminalLaunchSettings>(
-            "custom_template: null\nnode_shell_presets: []\n",
+            "custom_template: null\ndebug_image_presets: []\n",
         )
         .expect("settings deserialize");
 
-        assert!(settings.node_shell_presets.is_empty());
+        assert!(settings.debug_image_presets.is_empty());
     }
 
     #[test]

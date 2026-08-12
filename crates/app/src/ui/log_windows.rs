@@ -1745,6 +1745,7 @@ mod tests {
             PodLogContainer {
                 name: "api".to_owned(),
                 kind: ContainerKind::App,
+                image: None,
             },
         );
         window.total_lines = lines.len();
@@ -3776,6 +3777,7 @@ mod tests {
             PodLogContainer {
                 name: "api".into(),
                 kind: ContainerKind::App,
+                image: None,
             },
             &mut commands,
         );

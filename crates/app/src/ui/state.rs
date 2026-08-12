@@ -12,7 +12,7 @@ use crate::resource_schema::{
 };
 use crate::resource_table::CustomResourceColumn;
 use crate::sorted_name::SortedName;
-use crate::terminal_launcher::{NodeShellPreset, ShellRequest, TerminalLaunchSettings};
+use crate::terminal_launcher::{DebugImagePreset, ShellRequest, TerminalLaunchSettings};
 use crate::worker::{ResourceApiError, WorkerCommandBox, WorkerResult, WorkerTrait};
 use components::BladeNavigator;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -567,9 +567,15 @@ pub(super) enum ResourceAction {
         namespace: Option<String>,
         container: PodLogContainer,
     },
+    PodDebugShell {
+        name: String,
+        namespace: Option<String>,
+        target_container: String,
+        preset: DebugImagePreset,
+    },
     NodeShell {
         name: String,
-        preset: NodeShellPreset,
+        preset: DebugImagePreset,
     },
     NavigateDetails {
         api_resource: ApiResource,
@@ -601,7 +607,22 @@ impl ResourceAction {
                 node_name: name.clone(),
                 preset: preset.clone(),
             }),
+            Self::PodDebugShell {
+                name,
+                namespace: Some(namespace),
+                target_container,
+                preset,
+            } => Some(ShellRequest::PodDebug {
+                kube_context: kube_context.to_owned(),
+                namespace: namespace.clone(),
+                pod_name: name.clone(),
+                target_container: target_container.clone(),
+                preset: preset.clone(),
+            }),
             Self::Shell {
+                namespace: None, ..
+            }
+            | Self::PodDebugShell {
                 namespace: None, ..
             }
             | Self::OpenDetails { .. }
@@ -1874,6 +1895,7 @@ mod tests {
             PodLogContainer {
                 name: "api".into(),
                 kind: ContainerKind::App,
+                image: None,
             },
             &mut commands,
         );
@@ -1884,6 +1906,7 @@ mod tests {
             PodLogContainer {
                 name: "sidecar".into(),
                 kind: ContainerKind::App,
+                image: None,
             },
             &mut commands,
         );
@@ -2328,6 +2351,7 @@ mod tests {
             PodLogContainer {
                 name: "api".into(),
                 kind: ContainerKind::App,
+                image: None,
             },
             &mut commands,
         );
@@ -2379,6 +2403,7 @@ mod tests {
             PodLogContainer {
                 name: "api".into(),
                 kind: ContainerKind::App,
+                image: None,
             },
             &mut commands,
         );
@@ -2436,6 +2461,7 @@ mod tests {
             PodLogContainer {
                 name: "api".into(),
                 kind: ContainerKind::App,
+                image: None,
             },
             &mut commands,
         );
@@ -2503,6 +2529,7 @@ mod tests {
             PodLogContainer {
                 name: "api".into(),
                 kind: ContainerKind::App,
+                image: None,
             },
             &mut commands,
         );
@@ -2569,6 +2596,7 @@ mod tests {
             PodLogContainer {
                 name: "api".into(),
                 kind: ContainerKind::App,
+                image: None,
             },
             &mut commands,
         );

@@ -24,7 +24,7 @@ use crate::resource_table::{
     READY_COLUMN, RESTARTS_COLUMN, STATUS_COLUMN, StatusTone, UP_TO_DATE_COLUMN,
 };
 use crate::terminal_launcher::{
-    DebugProfile, NodeShellPreset, ShellRequest, TerminalLaunchSettings, TerminalLauncher,
+    DebugImagePreset, DebugProfile, ShellRequest, TerminalLaunchSettings, TerminalLauncher,
     test_support::MockTerminalLauncher,
 };
 use crate::worker::*;
@@ -973,10 +973,12 @@ fn multi_container_pod_table_state() -> (UiState, String) {
         PodLogContainer {
             name: "coredns".into(),
             kind: ContainerKind::App,
+            image: None,
         },
         PodLogContainer {
             name: "dns-autoscaler".into(),
             kind: ContainerKind::App,
+            image: None,
         },
     ];
     let pod_name = resource.name.clone();
@@ -1481,6 +1483,7 @@ fn shell_action_launches_the_selected_context_pod_and_application_container() {
     resource.log_containers = vec![PodLogContainer {
         name: "coredns".into(),
         kind: ContainerKind::App,
+        image: None,
     }];
     let pod_name = resource.name.clone();
     harness.state_mut().ui_state = state;
@@ -1500,6 +1503,132 @@ fn shell_action_launches_the_selected_context_pod_and_application_container() {
             pod_name,
             container: "coredns".into(),
         }]
+    );
+}
+
+#[test]
+fn pod_debug_shell_action_launches_configured_and_pod_images_for_the_selected_target() {
+    let mut harness = application_harness_with_terminal::<MockWorker, MockTerminalLauncher>();
+    let mut state = oracle_resource_table_state();
+    let pods = fixture_api_resource("core", "Pod", "pods");
+    let resource = state
+        .clusters
+        .get_mut(&2)
+        .unwrap()
+        .resource_cache
+        .get_mut(&(pods, Some("kube-system".into())))
+        .unwrap()
+        .resources
+        .values_mut()
+        .next()
+        .unwrap();
+    resource.log_containers = vec![
+        PodLogContainer {
+            name: "setup".into(),
+            kind: ContainerKind::Init,
+            image: Some("registry.example/setup:v1".into()),
+        },
+        PodLogContainer {
+            name: "coredns".into(),
+            kind: ContainerKind::App,
+            image: Some("registry.example/coredns:v1".into()),
+        },
+        PodLogContainer {
+            name: "sidecar".into(),
+            kind: ContainerKind::App,
+            image: Some("registry.example/sidecar:v1".into()),
+        },
+        PodLogContainer {
+            name: "debugger".into(),
+            kind: ContainerKind::Ephemeral,
+            image: Some("registry.example/debugger:v1".into()),
+        },
+    ];
+    let pod_name = resource.name.clone();
+    harness.state_mut().ui_state = state;
+    harness.run();
+
+    let more_actions_label = format!("More actions for {pod_name}");
+    let more_actions_position = harness.get_by_label(&more_actions_label).rect().center();
+    primary_click(&mut harness, more_actions_position);
+    harness.run();
+    let debug_shell_position = harness.get_by_label("Debug shell ⏵").rect().center();
+    primary_click(&mut harness, debug_shell_position);
+    harness.run();
+    let target_position = harness.get_by_label("coredns ⏵").rect().center();
+    primary_click(&mut harness, target_position);
+    harness.run();
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "terminal/pod_debug_shell_action_launches_configured_and_pod_images_for_the_selected_target/debug_images",
+    ));
+    let busybox_position = harness.get_by_label("Busybox — General").rect().center();
+    primary_click(&mut harness, busybox_position);
+    harness.run();
+
+    primary_click(&mut harness, more_actions_position);
+    harness.run();
+    let debug_shell_position = harness.get_by_label("Debug shell ⏵").rect().center();
+    primary_click(&mut harness, debug_shell_position);
+    harness.run();
+    let target_position = harness.get_by_label("coredns ⏵").rect().center();
+    primary_click(&mut harness, target_position);
+    harness.run();
+    let pod_image_position = harness
+        .get_by_label("registry.example/coredns:v1 — General")
+        .rect()
+        .center();
+    primary_click(&mut harness, pod_image_position);
+    harness.run();
+
+    primary_click(&mut harness, more_actions_position);
+    harness.run();
+    let debug_shell_position = harness.get_by_label("Debug shell ⏵").rect().center();
+    primary_click(&mut harness, debug_shell_position);
+    harness.run();
+    let target_position = harness.get_by_label("sidecar ⏵").rect().center();
+    primary_click(&mut harness, target_position);
+    harness.run();
+    let busybox_position = harness.get_by_label("Busybox — General").rect().center();
+    primary_click(&mut harness, busybox_position);
+    harness.run();
+
+    assert_eq!(
+        harness.state().terminal_launcher.requests.as_slice(),
+        [
+            ShellRequest::PodDebug {
+                kube_context: "kind-kind".into(),
+                namespace: "kube-system".into(),
+                pod_name: pod_name.clone(),
+                target_container: "coredns".into(),
+                preset: DebugImagePreset {
+                    name: "Busybox".into(),
+                    image: "busybox".into(),
+                    profile: DebugProfile::General,
+                },
+            },
+            ShellRequest::PodDebug {
+                kube_context: "kind-kind".into(),
+                namespace: "kube-system".into(),
+                pod_name: pod_name.clone(),
+                target_container: "coredns".into(),
+                preset: DebugImagePreset {
+                    name: "registry.example/coredns:v1".into(),
+                    image: "registry.example/coredns:v1".into(),
+                    profile: DebugProfile::General,
+                },
+            },
+            ShellRequest::PodDebug {
+                kube_context: "kind-kind".into(),
+                namespace: "kube-system".into(),
+                pod_name,
+                target_container: "sidecar".into(),
+                preset: DebugImagePreset {
+                    name: "Busybox".into(),
+                    image: "busybox".into(),
+                    profile: DebugProfile::General,
+                },
+            },
+        ]
     );
 }
 
@@ -1553,7 +1682,7 @@ fn node_shell_action_launches_the_selected_context_node_and_preset() {
         &[ShellRequest::Node {
             kube_context: "kind-kind".into(),
             node_name: "kind-control-plane".into(),
-            preset: NodeShellPreset {
+            preset: DebugImagePreset {
                 name: "Busybox".into(),
                 image: "busybox".into(),
                 profile: DebugProfile::General,
@@ -1581,6 +1710,7 @@ fn shell_launch_failure_uses_the_styled_error_modal_and_opens_terminal_settings(
     resource.log_containers = vec![PodLogContainer {
         name: "coredns".into(),
         kind: ContainerKind::App,
+        image: None,
     }];
     let pod_name = resource.name.clone();
     harness.state_mut().ui_state = state;
@@ -1667,13 +1797,13 @@ fn settings_blade_shows_custom_terminal_launcher_details() {
 }
 
 #[test]
-fn saving_node_shell_presets_applies_the_settings_draft() {
+fn saving_debug_image_presets_applies_the_settings_draft() {
     let mut harness = application_harness::<MockWorker>();
     let mut state = oracle_resource_table_state();
     state.terminal_settings_open = true;
     state.terminal_settings_draft = TerminalLaunchSettings {
         custom_template: None,
-        node_shell_presets: vec![NodeShellPreset {
+        debug_image_presets: vec![DebugImagePreset {
             name: "Operations".into(),
             image: "registry.example/debug-tools:v1".into(),
             profile: DebugProfile::Sysadmin,
@@ -1687,8 +1817,8 @@ fn saving_node_shell_presets_applies_the_settings_draft() {
     harness.run_steps(2);
 
     assert_eq!(
-        harness.state().terminal_launch_settings.node_shell_presets,
-        vec![NodeShellPreset {
+        harness.state().terminal_launch_settings.debug_image_presets,
+        vec![DebugImagePreset {
             name: "Operations".into(),
             image: "registry.example/debug-tools:v1".into(),
             profile: DebugProfile::Sysadmin,
@@ -1698,13 +1828,13 @@ fn saving_node_shell_presets_applies_the_settings_draft() {
 }
 
 #[test]
-fn node_shell_preset_table_adds_and_removes_rows() {
+fn debug_image_preset_table_adds_and_removes_rows() {
     let mut harness = application_harness::<MockWorker>();
     let mut state = oracle_resource_table_state();
     state.terminal_settings_open = true;
     state.terminal_settings_draft = TerminalLaunchSettings {
         custom_template: None,
-        node_shell_presets: vec![NodeShellPreset {
+        debug_image_presets: vec![DebugImagePreset {
             name: "Operations".into(),
             image: "registry.example/debug-tools:v1".into(),
             profile: DebugProfile::Sysadmin,
@@ -1721,11 +1851,11 @@ fn node_shell_preset_table_adds_and_removes_rows() {
             .state()
             .ui_state
             .terminal_settings_draft
-            .node_shell_presets
+            .debug_image_presets
             .is_empty()
     );
 
-    let add_position = harness.get_by_label("Add node shell").rect().center();
+    let add_position = harness.get_by_label("Add debug image").rect().center();
     primary_click(&mut harness, add_position);
     harness.run();
     assert_eq!(
@@ -1733,8 +1863,8 @@ fn node_shell_preset_table_adds_and_removes_rows() {
             .state()
             .ui_state
             .terminal_settings_draft
-            .node_shell_presets,
-        vec![NodeShellPreset {
+            .debug_image_presets,
+        vec![DebugImagePreset {
             name: String::new(),
             image: String::new(),
             profile: DebugProfile::General,
@@ -1743,7 +1873,7 @@ fn node_shell_preset_table_adds_and_removes_rows() {
 }
 
 #[test]
-fn node_shell_preset_table_reorders_rows_by_dragging_the_handle() {
+fn debug_image_preset_table_reorders_rows_by_dragging_the_handle() {
     let mut harness = application_harness::<MockWorker>();
     let mut state = oracle_resource_table_state();
     state.terminal_settings_open = true;
@@ -1763,7 +1893,7 @@ fn node_shell_preset_table_reorders_rows_by_dragging_the_handle() {
             .state()
             .ui_state
             .terminal_settings_draft
-            .node_shell_presets
+            .debug_image_presets
             .iter()
             .map(|preset| preset.name.as_str())
             .collect::<Vec<_>>(),
@@ -1772,7 +1902,7 @@ fn node_shell_preset_table_reorders_rows_by_dragging_the_handle() {
 }
 
 #[test]
-fn node_shell_preset_table_moves_the_dragged_row() {
+fn debug_image_preset_table_moves_the_dragged_row() {
     let mut harness = application_harness::<MockWorker>();
     let mut state = oracle_resource_table_state();
     state.terminal_settings_open = true;
@@ -1815,7 +1945,7 @@ fn node_shell_preset_table_moves_the_dragged_row() {
             .state()
             .ui_state
             .terminal_settings_draft
-            .node_shell_presets
+            .debug_image_presets
             .iter()
             .map(|preset| preset.name.as_str())
             .collect::<Vec<_>>(),
@@ -1824,13 +1954,13 @@ fn node_shell_preset_table_moves_the_dragged_row() {
 }
 
 #[test]
-fn node_shell_preset_table_edits_and_saves_a_profile() {
+fn debug_image_preset_table_edits_and_saves_a_profile() {
     let mut harness = application_harness::<MockWorker>();
     let mut state = oracle_resource_table_state();
     state.terminal_settings_open = true;
     state.terminal_settings_draft = TerminalLaunchSettings {
         custom_template: None,
-        node_shell_presets: vec![NodeShellPreset {
+        debug_image_presets: vec![DebugImagePreset {
             name: String::new(),
             image: String::new(),
             profile: DebugProfile::General,
@@ -1839,16 +1969,16 @@ fn node_shell_preset_table_edits_and_saves_a_profile() {
     harness.state_mut().ui_state = state;
     harness.run();
 
-    type_text(&mut harness, "Node shell 1 name", "Operations");
+    type_text(&mut harness, "Debug image 1 name", "Operations");
     type_text(
         &mut harness,
-        "Node shell 1 image",
+        "Debug image 1 image",
         "registry.example/debug-tools:v1",
     );
     let profile_position = harness
         .get_by_role_and_label(
             egui::accesskit::Role::ComboBox,
-            "Node shell 1 debug profile",
+            "Debug image 1 debug profile",
         )
         .rect()
         .center();
@@ -1862,8 +1992,8 @@ fn node_shell_preset_table_edits_and_saves_a_profile() {
     harness.run_steps(2);
 
     assert_eq!(
-        harness.state().terminal_launch_settings.node_shell_presets,
-        vec![NodeShellPreset {
+        harness.state().terminal_launch_settings.debug_image_presets,
+        vec![DebugImagePreset {
             name: "Operations".into(),
             image: "registry.example/debug-tools:v1".into(),
             profile: DebugProfile::Sysadmin,
@@ -1872,7 +2002,7 @@ fn node_shell_preset_table_edits_and_saves_a_profile() {
 }
 
 #[test]
-fn node_shell_preset_profile_menu_stays_within_the_settings_blade() {
+fn debug_image_preset_profile_menu_stays_within_the_settings_blade() {
     let mut harness = application_harness::<MockWorker>();
     let mut state = oracle_resource_table_state();
     state.terminal_settings_open = true;
@@ -1886,7 +2016,7 @@ fn node_shell_preset_profile_menu_stays_within_the_settings_blade() {
     let profile_position = harness
         .get_by_role_and_label(
             egui::accesskit::Role::ComboBox,
-            "Node shell 1 debug profile",
+            "Debug image 1 debug profile",
         )
         .rect()
         .center();
@@ -2395,7 +2525,7 @@ fn node_inspector_shell_action_launches_the_selected_preset() {
         &[ShellRequest::Node {
             kube_context: "kind-kind".into(),
             node_name: "kind-control-plane".into(),
-            preset: NodeShellPreset {
+            preset: DebugImagePreset {
                 name: "Ubuntu".into(),
                 image: "ubuntu".into(),
                 profile: DebugProfile::General,

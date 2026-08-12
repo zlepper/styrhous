@@ -13,7 +13,7 @@ use crate::resource_detail::{
 };
 use crate::resource_handlers::table_definition;
 use crate::resource_table::{CONTAINERS_COLUMN, NODE_COLUMN, ResourceTableDefinition};
-use crate::terminal_launcher::{NodeShellPreset, ShellRequest};
+use crate::terminal_launcher::{DebugImagePreset, ShellRequest};
 use crate::worker::{
     GetResourceScale, ResourceDataUpdate, ResourceDataUpdateCompleted, ResourceDataUpdateFailed,
     UpdateResourceData, WorkerCommandBox, WorkerResult,
@@ -103,14 +103,14 @@ pub(super) fn show(
     ui_state: &mut UiState,
     commands_to_send: &mut Vec<WorkerCommandBox>,
     shell_requests: &mut Vec<ShellRequest>,
-    node_shell_presets: &[NodeShellPreset],
+    debug_image_presets: &[DebugImagePreset],
 ) {
     show_shared_blade(
         ctx,
         ui_state,
         commands_to_send,
         shell_requests,
-        node_shell_presets,
+        debug_image_presets,
     );
 }
 
@@ -120,14 +120,14 @@ fn show_legacy(
     ui_state: &mut UiState,
     commands_to_send: &mut Vec<WorkerCommandBox>,
     shell_requests: &mut Vec<ShellRequest>,
-    node_shell_presets: &[NodeShellPreset],
+    debug_image_presets: &[DebugImagePreset],
 ) {
     show_shared_blade(
         ctx,
         ui_state,
         commands_to_send,
         shell_requests,
-        node_shell_presets,
+        debug_image_presets,
     );
     return;
 
@@ -456,6 +456,7 @@ fn show_legacy(
                             log_to_open = Some((cluster.cluster_key, name, namespace, container));
                         }
                         action @ (ResourceAction::Shell { .. }
+                        | ResourceAction::PodDebugShell { .. }
                         | ResourceAction::NodeShell { .. }) => {
                             shell_to_open = action.shell_request(&cluster.name);
                         }
@@ -512,7 +513,7 @@ fn show_shared_blade(
     ui_state: &mut UiState,
     commands_to_send: &mut Vec<WorkerCommandBox>,
     shell_requests: &mut Vec<ShellRequest>,
-    node_shell_presets: &[NodeShellPreset],
+    debug_image_presets: &[DebugImagePreset],
 ) {
     let Some(cluster_key) = ui_state.selected_cluster else {
         return;
@@ -538,7 +539,7 @@ fn show_shared_blade(
                 entry,
                 layer.is_foreground,
                 scalable_api_resources.contains(&entry.api_resource),
-                node_shell_presets,
+                debug_image_presets,
             )
         },
         |ui, entry, layer| {
@@ -691,7 +692,9 @@ fn show_shared_blade(
                 container,
                 commands_to_send,
             ),
-            action @ (ResourceAction::Shell { .. } | ResourceAction::NodeShell { .. }) => {
+            action @ (ResourceAction::Shell { .. }
+            | ResourceAction::PodDebugShell { .. }
+            | ResourceAction::NodeShell { .. }) => {
                 if let Some(cluster) = ui_state.clusters.get(&cluster_key)
                     && let Some(request) = action.shell_request(&cluster.name)
                 {
@@ -1207,7 +1210,7 @@ fn show_resource_detail_header(
     entry: &ResourceDetailHistoryEntry,
     is_foreground: bool,
     supports_scale: bool,
-    node_shell_presets: &[NodeShellPreset],
+    debug_image_presets: &[DebugImagePreset],
 ) -> BladeResult {
     let mut result = BladeResult::default();
     let log_containers = entry
@@ -1250,7 +1253,7 @@ fn show_resource_detail_header(
                 &entry.api_resource,
                 &resource,
                 &resource.log_containers,
-                node_shell_presets,
+                debug_image_presets,
                 supports_scale,
                 &mut result.action,
             );
