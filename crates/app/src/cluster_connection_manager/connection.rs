@@ -103,6 +103,7 @@ async fn load_api_resources(
                 cluster_key,
                 error: format!("{error:#?}"),
             })
+            .await
             .log_if_error("Failed to send error from inspecting resource api"),
         Ok(inspection) => {
             event_output
@@ -111,18 +112,21 @@ async fn load_api_resources(
                     api_resources: inspection.api_resources,
                     scalable_api_resources: inspection.scalable_api_resources,
                 })
+                .await
                 .log_if_error("Failed to send kubernetes API resources");
             event_output
                 .send(WorkerResult::KubernetesCustomResourceColumnsLoaded {
                     cluster_key,
                     columns: inspection.custom_resource_columns,
                 })
+                .await
                 .log_if_error("Failed to send custom resource columns");
             event_output
                 .send(WorkerResult::KubernetesResourceSchemasLoaded {
                     cluster_key,
                     schemas: inspection.resource_schemas,
                 })
+                .await
                 .log_if_error("Failed to send custom resource schemas");
         }
     }

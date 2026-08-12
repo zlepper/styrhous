@@ -14,12 +14,10 @@ use crate::resource_detail::{ManagedResource, ResourceDetail, ResourceEvent};
 use crate::resource_schema::ResourceSchema;
 use crate::resource_table::CustomResourceColumn;
 use anyhow::Error;
-#[cfg(test)]
-use std::collections::VecDeque;
-use std::collections::{BTreeMap, HashMap};
-use std::sync::{Arc, mpsc};
+use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, mpsc};
 use tokio::task::JoinHandle;
 use tracing::info;
 
@@ -40,6 +38,7 @@ pub trait WorkerTrait: Default {
 #[derive(Default)]
 pub struct Worker {
     inner: Option<WorkerInner>,
+    pending_commands: VecDeque<WorkerCommand>,
     repaint_context: Option<egui::Context>,
     log_store_appender: Option<LogStoreAppender>,
 }
@@ -48,6 +47,7 @@ impl Worker {
     pub(crate) fn with_repaint_context(context: egui::Context) -> Self {
         Self {
             inner: None,
+            pending_commands: VecDeque::new(),
             repaint_context: Some(context),
             log_store_appender: None,
         }
@@ -55,13 +55,13 @@ impl Worker {
 
     pub fn start(&mut self) {
         if self.inner.is_none() {
-            let (command_channel_sender, command_channel_receiver) = mpsc::sync_channel(10);
-            let (result_channel_sender, result_channel_receiver) = mpsc::sync_channel(1024);
+            let (command_channel_sender, command_channel_receiver) = mpsc::channel(64);
+            let (result_channel_sender, result_channel_receiver) = mpsc::channel(1024);
             let result_sender =
                 WorkerResultSender::new(result_channel_sender, self.repaint_context.clone());
 
             command_channel_sender
-                .send(WorkerCommand::LoadClusters)
+                .try_send(WorkerCommand::LoadClusters)
                 .expect("Failed to send initial LoadClusters command");
 
             let shared = Arc::new(SharedWorkerState {
@@ -90,6 +90,7 @@ impl Worker {
     }
 
     pub(crate) fn get_next_message(&mut self) -> Option<WorkerResult> {
+        self.flush_pending_commands();
         if let Some(inner) = &mut self.inner {
             inner.receiver.try_recv().ok()
         } else {
@@ -98,11 +99,33 @@ impl Worker {
     }
 
     pub(crate) fn send_command(&mut self, command: WorkerCommand) {
-        if let Some(inner) = &mut self.inner {
-            inner
-                .sender
-                .send(command)
-                .log_if_error("Failed to send command");
+        self.pending_commands.push_back(command);
+        self.flush_pending_commands();
+    }
+
+    /// Move as many queued UI commands as the bounded worker channel currently accepts.
+    /// This method deliberately never waits: a slow Kubernetes operation must not freeze the UI.
+    fn flush_pending_commands(&mut self) {
+        let Some(inner) = &self.inner else {
+            return;
+        };
+        while let Some(command) = self.pending_commands.pop_front() {
+            match inner.sender.try_send(command) {
+                Ok(()) => {}
+                Err(mpsc::error::TrySendError::Full(command)) => {
+                    self.pending_commands.push_front(command);
+                    // Channel capacity changes do not themselves wake egui. Keep retrying at a
+                    // modest cadence so queued stop commands are delivered even when the worker
+                    // command produces no result and the user is otherwise idle.
+                    if let Some(context) = &self.repaint_context {
+                        context.request_repaint_after(Duration::from_millis(10));
+                    }
+                    break;
+                }
+                Err(mpsc::error::TrySendError::Closed(command)) => {
+                    tracing::error!(?command, "Worker command channel closed");
+                }
+            }
         }
     }
 
@@ -161,7 +184,7 @@ impl WorkerTrait for MockWorker {
 }
 
 struct WorkerInner {
-    sender: mpsc::SyncSender<WorkerCommand>,
+    sender: mpsc::Sender<WorkerCommand>,
     receiver: mpsc::Receiver<WorkerResult>,
 }
 
@@ -221,7 +244,8 @@ pub enum WorkerOperation {
     },
     UpdateResourceData {
         cluster_key: i32,
-        resource_name: String,
+        history_entry_id: u64,
+        request_id: u64,
     },
     StartPodLogStream {
         log_window_id: u64,
@@ -320,6 +344,11 @@ pub enum WorkerCommand {
     },
     UpdateResourceData {
         cluster_key: i32,
+        /// Identifies the inspector visit that initiated this mutation. This prevents an
+        /// in-flight update from changing the status of a same-named resource visited later.
+        history_entry_id: u64,
+        /// Distinguishes retries or overlapping saves from the same inspector visit.
+        request_id: u64,
         api_resource: ApiResource,
         namespace: String,
         resource_name: String,
@@ -433,11 +462,13 @@ impl WorkerCommand {
             },
             Self::UpdateResourceData {
                 cluster_key,
-                resource_name,
+                history_entry_id,
+                request_id,
                 ..
             } => WorkerOperation::UpdateResourceData {
                 cluster_key: *cluster_key,
-                resource_name: resource_name.clone(),
+                history_entry_id: *history_entry_id,
+                request_id: *request_id,
             },
             Self::StartPodLogStream { log_window_id, .. } => WorkerOperation::StartPodLogStream {
                 log_window_id: *log_window_id,
@@ -641,7 +672,8 @@ pub enum WorkerResult {
     },
     ResourceDataUpdateCompleted {
         cluster_key: i32,
-        resource_name: String,
+        history_entry_id: u64,
+        request_id: u64,
     },
     PodLogStreamStarted {
         log_window_id: u64,
@@ -657,20 +689,25 @@ pub enum WorkerResult {
 
 #[derive(Clone)]
 pub struct WorkerResultSender {
-    sender: mpsc::SyncSender<WorkerResult>,
+    sender: mpsc::Sender<WorkerResult>,
     repaint_context: Option<egui::Context>,
 }
 
 impl WorkerResultSender {
-    fn new(sender: mpsc::SyncSender<WorkerResult>, repaint_context: Option<egui::Context>) -> Self {
+    fn new(sender: mpsc::Sender<WorkerResult>, repaint_context: Option<egui::Context>) -> Self {
         Self {
             sender,
             repaint_context,
         }
     }
 
-    pub fn send(&self, result: WorkerResult) -> Result<(), Box<mpsc::SendError<WorkerResult>>> {
-        self.sender.send(result).map_err(Box::new)?;
+    /// Await queue capacity instead of blocking a Tokio worker thread. The await is cancellation
+    /// safe, so tearing down a watcher always releases it even while the UI is busy.
+    pub async fn send(
+        &self,
+        result: WorkerResult,
+    ) -> Result<(), mpsc::error::SendError<WorkerResult>> {
+        self.sender.send(result).await?;
         if let Some(context) = &self.repaint_context {
             context.request_repaint();
         }
@@ -810,14 +847,14 @@ struct WorkerRuntime {
 }
 
 impl WorkerRuntime {
-    fn run(self) {
+    fn run(mut self) {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
             .expect("Failed to build tokio runtime");
 
         info!("Worker thread running");
-        while let Ok(command) = self.receiver.recv() {
+        while let Some(command) = self.receiver.blocking_recv() {
             // Only session/watch control operations need linearization. Regular
             // Kubernetes reads and mutations run independently so a slow API
             // call cannot prevent a close, reconnect, or reload from running.
@@ -1127,6 +1164,8 @@ impl WorkerRuntime {
             }
             WorkerCommand::UpdateResourceData {
                 cluster_key,
+                history_entry_id,
+                request_id,
                 api_resource,
                 namespace,
                 resource_name,
@@ -1136,6 +1175,8 @@ impl WorkerRuntime {
                     let client = shared.client_for_cluster(*cluster_key).await?;
                     update_resource_data(ResourceDataUpdateRequest {
                         cluster_key: *cluster_key,
+                        history_entry_id: *history_entry_id,
+                        request_id: *request_id,
                         client,
                         api_resource: api_resource.clone(),
                         namespace: namespace.clone(),
@@ -1216,21 +1257,24 @@ impl WorkerRuntime {
             }
         };
 
-        match result {
-            Err(e) => {
+        let notification = match result {
+            Err(error) => Some(WorkerResult::CommandFailed {
+                operation: command.operation(),
+                error,
+            }),
+            Ok(Some(result)) => Some(result),
+            Ok(None) => None,
+        };
+        if let Some(notification) = notification {
+            // Lifecycle commands are handled serially, but reporting their result must not hold
+            // that serialization hostage to a busy UI. This task remains cancellation-safe while
+            // it awaits capacity, and lets later stop/reload commands reach the supervisor.
+            tokio::spawn(async move {
                 result_channel
-                    .send(WorkerResult::CommandFailed {
-                        operation: command.operation(),
-                        error: e,
-                    })
-                    .log_if_error("Failed to send command failed notification");
-            }
-            Ok(Some(result)) => {
-                result_channel
-                    .send(result)
+                    .send(notification)
+                    .await
                     .log_if_error("Failed to send result notification");
-            }
-            Ok(None) => {}
+            });
         }
     }
 }
@@ -1280,24 +1324,164 @@ mod tests {
 
     #[test]
     fn worker_results_request_a_repaint_when_context_is_attached() {
+        let runtime = tokio::runtime::Runtime::new().expect("runtime initializes");
         let context = egui::Context::default();
         let repaint_count = Arc::new(AtomicUsize::new(0));
         let repaint_count_for_callback = repaint_count.clone();
         context.set_request_repaint_callback(move |_| {
             repaint_count_for_callback.fetch_add(1, Ordering::Relaxed);
         });
-        let (sender, receiver) = mpsc::sync_channel(1);
+        let (sender, mut receiver) = mpsc::channel(1);
         let result_sender = WorkerResultSender::new(sender, Some(context));
 
-        result_sender
-            .send(WorkerResult::PodLogStreamEnded { log_window_id: 2 })
-            .expect("result receiver is open");
+        runtime.block_on(async {
+            result_sender
+                .send(WorkerResult::PodLogStreamEnded { log_window_id: 2 })
+                .await
+                .expect("result receiver is open");
+        });
 
         assert!(matches!(
             receiver.try_recv(),
             Ok(WorkerResult::PodLogStreamEnded { log_window_id: 2 })
         ));
         assert_eq!(repaint_count.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn full_command_channel_queues_without_blocking_the_ui() {
+        let (command_sender, _command_receiver) = mpsc::channel(1);
+        command_sender
+            .try_send(WorkerCommand::LoadClusters)
+            .expect("channel starts empty");
+        let (_result_sender, result_receiver) = mpsc::channel(1);
+        let mut worker = Worker {
+            inner: Some(WorkerInner {
+                sender: command_sender,
+                receiver: result_receiver,
+            }),
+            pending_commands: VecDeque::new(),
+            repaint_context: None,
+            log_store_appender: None,
+        };
+
+        worker.send_command(WorkerCommand::LoadClusters);
+
+        assert!(matches!(
+            worker.pending_commands.as_slices(),
+            ([WorkerCommand::LoadClusters], [])
+        ));
+    }
+
+    #[test]
+    fn pending_commands_are_forwarded_in_order_after_capacity_returns() {
+        let (command_sender, mut command_receiver) = mpsc::channel(1);
+        command_sender
+            .try_send(WorkerCommand::LoadClusters)
+            .expect("channel starts empty");
+        let (_result_sender, result_receiver) = mpsc::channel(1);
+        let mut worker = Worker {
+            inner: Some(WorkerInner {
+                sender: command_sender,
+                receiver: result_receiver,
+            }),
+            pending_commands: VecDeque::new(),
+            repaint_context: None,
+            log_store_appender: None,
+        };
+        worker.send_command(WorkerCommand::StopPodLogStream {
+            cluster_key: 1,
+            log_window_id: 2,
+        });
+        worker.send_command(WorkerCommand::StopResourceDetailWatch {
+            cluster_key: 1,
+            history_entry_id: 3,
+        });
+
+        assert!(matches!(
+            command_receiver.try_recv(),
+            Ok(WorkerCommand::LoadClusters)
+        ));
+        let _ = worker.get_next_message();
+        assert!(matches!(
+            command_receiver.try_recv(),
+            Ok(WorkerCommand::StopPodLogStream {
+                cluster_key: 1,
+                log_window_id: 2,
+            })
+        ));
+        let _ = worker.get_next_message();
+        assert!(matches!(
+            command_receiver.try_recv(),
+            Ok(WorkerCommand::StopResourceDetailWatch {
+                cluster_key: 1,
+                history_entry_id: 3,
+            })
+        ));
+    }
+
+    #[test]
+    fn lifecycle_command_completes_while_its_result_queue_is_full() {
+        let runtime = tokio::runtime::Runtime::new().expect("runtime initializes");
+        runtime.block_on(async {
+            let (result_sender, mut result_receiver) = mpsc::channel(1);
+            result_sender
+                .try_send(WorkerResult::PodLogStreamEnded { log_window_id: 1 })
+                .expect("channel starts empty");
+            let result_sender = WorkerResultSender::new(result_sender, None);
+            let shared = Arc::new(shared_worker_state());
+
+            tokio::time::timeout(
+                Duration::from_millis(100),
+                WorkerRuntime::handle_command(
+                    result_sender,
+                    shared,
+                    WorkerCommand::StopPodLogStream {
+                        cluster_key: 1,
+                        log_window_id: 2,
+                    },
+                ),
+            )
+            .await
+            .expect("lifecycle dispatch must not wait for result capacity");
+
+            assert!(matches!(
+                result_receiver.try_recv(),
+                Ok(WorkerResult::PodLogStreamEnded { log_window_id: 1 })
+            ));
+            assert!(matches!(
+                tokio::time::timeout(Duration::from_millis(100), result_receiver.recv())
+                    .await
+                    .expect("notification task should finish after capacity returns"),
+                Some(WorkerResult::PodLogStreamEnded { log_window_id: 2 })
+            ));
+        });
+    }
+
+    #[test]
+    fn waiting_for_result_capacity_is_cancellable() {
+        let runtime = tokio::runtime::Runtime::new().expect("runtime initializes");
+        runtime.block_on(async {
+            let (sender, mut receiver) = mpsc::channel(1);
+            sender
+                .try_send(WorkerResult::PodLogStreamEnded { log_window_id: 1 })
+                .expect("channel starts empty");
+            let result_sender = WorkerResultSender::new(sender, None);
+            let task = tokio::spawn(async move {
+                result_sender
+                    .send(WorkerResult::PodLogStreamEnded { log_window_id: 2 })
+                    .await
+            });
+            tokio::task::yield_now().await;
+            assert!(!task.is_finished());
+
+            task.abort();
+            assert!(task.await.expect_err("task was aborted").is_cancelled());
+            assert!(matches!(
+                receiver.try_recv(),
+                Ok(WorkerResult::PodLogStreamEnded { log_window_id: 1 })
+            ));
+        });
     }
 
     #[test]
@@ -1416,6 +1600,8 @@ mod tests {
     fn failure_operation_omits_resource_data_values() {
         let operation = WorkerCommand::UpdateResourceData {
             cluster_key: 7,
+            history_entry_id: 12,
+            request_id: 34,
             api_resource: pod_resource(),
             namespace: "default".to_owned(),
             resource_name: "credentials".to_owned(),
@@ -1431,8 +1617,9 @@ mod tests {
             &operation,
             WorkerOperation::UpdateResourceData {
                 cluster_key: 7,
-                resource_name,
-            } if resource_name == "credentials"
+                history_entry_id: 12,
+                request_id: 34,
+            }
         ));
         assert!(!format!("{operation:?}").contains("secret"));
     }

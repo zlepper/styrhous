@@ -2981,8 +2981,14 @@ fn config_map_inspector_saves_only_changed_existing_data_values() {
 
     assert!(matches!(
         harness.state().worker.commands.last(),
-        Some(WorkerCommand::UpdateResourceData { update, .. })
-            if update.expected_resource_version == "1"
+        Some(WorkerCommand::UpdateResourceData {
+            history_entry_id,
+            request_id,
+            update,
+            ..
+        }) if *history_entry_id > 0
+            && *request_id > 0
+            && update.expected_resource_version == "1"
                 && update.expected_values == BTreeMap::from([("mode".into(), "development".into())])
                 && update.updated_values == BTreeMap::from([("mode".into(), "production".into())])
     ));
