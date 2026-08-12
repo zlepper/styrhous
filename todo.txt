@@ -1,6 +1,5 @@
 TODO list:
 
-* Ownership references
 * test reduced permission handling
 * Resource details view
 * Add explicit support for Helm
