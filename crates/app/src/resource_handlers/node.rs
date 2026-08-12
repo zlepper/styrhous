@@ -1,9 +1,8 @@
 use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::{
     ResourceWatcher, TypedWatcherContext, api_resource_for, cluster_typed_watcher,
-    minimal_resource_from_typed,
 };
-use crate::minimal_resource::MinimalResource;
+use crate::minimal_resource::{MinimalResource, from_kubernetes_resource};
 use crate::resource_detail::{NodeDetail, ResourceDetailPayload};
 use crate::resource_handlers::{matches_cluster_api_resource, matches_cluster_resource};
 use crate::resource_table::{
@@ -91,7 +90,7 @@ fn extract(resource: &Node) -> MinimalResource {
         .map(|info| info.kubelet_version.clone())
         .unwrap_or_default();
     let label = if ready { "Ready" } else { "NotReady" };
-    minimal_resource_from_typed(
+    from_kubernetes_resource(
         resource,
         BTreeMap::from([
             (

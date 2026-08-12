@@ -330,14 +330,9 @@ pub async fn start_cluster_connection(
     cluster_key: i32,
     cluster_name: &str,
     event_sender: WorkerResultSender,
-) -> Result<WorkerResult> {
+) -> Result<ClusterConnection> {
     info!("Starting cluster connection: {}", cluster_name);
-    let runner = ClusterConnection::new(cluster_key, cluster_name, event_sender).await?;
-
-    Ok(WorkerResult::KubernetesClusterConnectionCreated {
-        cluster_key,
-        runner: Some(runner),
-    })
+    ClusterConnection::new(cluster_key, cluster_name, event_sender).await
 }
 
 /// Start watching a resource type in its selected namespace scope.
@@ -347,7 +342,7 @@ pub async fn start_resource_watcher(
     api_resource: ApiResource,
     namespace: Option<String>,
     event_sender: WorkerResultSender,
-) -> Result<WorkerResult> {
+) -> Result<(WorkerResult, tokio::task::JoinHandle<()>)> {
     info!(
         "Starting resource watcher for {}/{} in {}",
         api_resource.group,
@@ -388,13 +383,16 @@ pub async fn start_resource_watcher(
         })
     };
 
-    tokio::spawn(watcher.watch_resources());
+    let task = tokio::spawn(watcher.watch_resources());
 
-    Ok(WorkerResult::KubernetesResourceWatchStarted {
-        cluster_key,
-        api_resource,
-        namespace,
-    })
+    Ok((
+        WorkerResult::KubernetesResourceWatchStarted {
+            cluster_key,
+            api_resource,
+            namespace,
+        },
+        task,
+    ))
 }
 
 type ResourceWatcherFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
@@ -922,34 +920,6 @@ fn json_value_to_text(value: &k8s_openapi::serde_json::Value) -> Option<String> 
         k8s_openapi::serde_json::Value::Number(value) => Some(value.to_string()),
         other => Some(other.to_string()),
     }
-}
-
-pub(crate) fn minimal_resource_from_typed<T: Resource>(
-    obj: &T,
-    cells: BTreeMap<String, CellValue>,
-) -> MinimalResource {
-    let metadata = obj.meta();
-    let creation_timestamp = metadata.creation_timestamp.as_ref().and_then(|timestamp| {
-        OffsetDateTime::parse(
-            &timestamp.0.to_string(),
-            &time::format_description::well_known::Rfc3339,
-        )
-        .ok()
-    });
-
-    MinimalResource {
-        uid: get_resource_uid(obj),
-        name: metadata.name.clone().unwrap_or_default(),
-        namespace: metadata.namespace.clone(),
-        creation_timestamp,
-        controller_owner: controller_owner(metadata),
-        cells,
-        log_containers: Vec::new(),
-    }
-    .with_lifecycle_metadata(
-        metadata.deletion_timestamp.is_some(),
-        metadata.finalizers.clone().unwrap_or_default(),
-    )
 }
 
 pub struct ResourceDetailWatchRequest {
@@ -2302,7 +2272,7 @@ mod tests {
             },
             &[],
         );
-        let typed_resource = minimal_resource_from_typed(
+        let typed_resource = crate::minimal_resource::from_kubernetes_resource(
             &Pod {
                 metadata: metadata.clone(),
                 ..Default::default()

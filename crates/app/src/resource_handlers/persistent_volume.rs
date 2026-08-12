@@ -1,7 +1,7 @@
 use crate::cluster_connection_manager::{
-    ResourceWatcher, TypedWatcherContext, cluster_typed_watcher, minimal_resource_from_typed,
+    ResourceWatcher, TypedWatcherContext, cluster_typed_watcher,
 };
-use crate::minimal_resource::MinimalResource;
+use crate::minimal_resource::{MinimalResource, from_kubernetes_resource};
 use crate::resource_handlers::{matches_cluster_api_resource, matches_cluster_resource};
 use crate::resource_table::{
     ACCESS_MODES_COLUMN, CAPACITY_COLUMN, CellValue, RECLAIM_POLICY_COLUMN,
@@ -43,7 +43,7 @@ fn extract(resource: &PersistentVolume) -> MinimalResource {
         .as_ref()
         .and_then(|status| status.phase.as_deref())
         .unwrap_or("Unknown");
-    minimal_resource_from_typed(
+    from_kubernetes_resource(
         resource,
         BTreeMap::from([
             (CAPACITY_COLUMN.to_owned(), CellValue::Text(capacity)),

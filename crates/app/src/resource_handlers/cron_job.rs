@@ -1,7 +1,7 @@
 use crate::cluster_connection_manager::{
-    ResourceWatcher, TypedWatcherContext, minimal_resource_from_typed, namespaced_typed_watcher,
+    ResourceWatcher, TypedWatcherContext, namespaced_typed_watcher,
 };
-use crate::minimal_resource::MinimalResource;
+use crate::minimal_resource::{MinimalResource, from_kubernetes_resource};
 use crate::resource_handlers::{matches_namespaced_api_resource, matches_namespaced_resource};
 use crate::resource_table::{
     ACTIVE_COLUMN, CellValue, ResourceTableDefinition, SCHEDULE_COLUMN, SUSPEND_COLUMN, column,
@@ -31,7 +31,7 @@ fn extract(resource: &CronJob) -> MinimalResource {
         .as_ref()
         .and_then(|status| status.active.as_ref())
         .map_or(0, Vec::len);
-    minimal_resource_from_typed(
+    from_kubernetes_resource(
         resource,
         BTreeMap::from([
             (

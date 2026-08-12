@@ -1,8 +1,7 @@
-use crate::cluster_connection_manager::minimal_resource_from_typed;
 use crate::cluster_connection_manager::{
     ResourceWatcher, TypedWatcherContext, namespaced_typed_watcher,
 };
-use crate::minimal_resource::MinimalResource;
+use crate::minimal_resource::{MinimalResource, from_kubernetes_resource};
 use crate::resource_handlers::{matches_namespaced_api_resource, matches_namespaced_resource};
 use crate::resource_table::{
     AVAILABLE_COLUMN, CellValue, READY_COLUMN, ResourceTableDefinition, UP_TO_DATE_COLUMN, column,
@@ -41,7 +40,7 @@ pub(crate) fn extract(deployment: &Deployment) -> MinimalResource {
         .and_then(|status| status.available_replicas)
         .unwrap_or(0);
 
-    minimal_resource_from_typed(
+    from_kubernetes_resource(
         deployment,
         BTreeMap::from([
             (
