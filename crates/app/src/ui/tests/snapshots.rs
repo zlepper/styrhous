@@ -1121,14 +1121,15 @@ fn bulk_delete_keeps_failed_resources_selected_and_reports_them_together() {
         .worker
         .results
         .push_back(WorkerResult::CommandFailed {
-            command: Some(WorkerCommand::DeleteResource {
-                cluster_key: 1,
-                api_resource: api_resource.clone(),
-                namespace: failed.namespace.clone(),
+            operation: crate::worker::WorkerOperation::DeleteResource {
+                scope: crate::worker::ResourceScope {
+                    cluster_key: 1,
+                    api_resource: api_resource.clone(),
+                    namespace: failed.namespace.clone(),
+                },
                 resource_name: failed.name.clone(),
-                resource_uid: Some(failed.uid.clone()),
                 bulk_delete_id: Some(42),
-            }),
+            },
             error: anyhow::anyhow!("forbidden"),
         });
     harness
@@ -3411,13 +3412,7 @@ fn force_delete_failure_is_shown_and_can_be_dismissed() {
         .worker
         .results
         .push_back(WorkerResult::CommandFailed {
-            command: Some(WorkerCommand::ForceDeleteResource {
-                cluster_key: 2,
-                api_resource: fixture_api_resource("", "ConfigMap", "configmaps"),
-                namespace: Some("kube-system".into()),
-                resource_name: "settings".into(),
-                resource_uid: "configmap-uid".into(),
-            }),
+            operation: crate::worker::WorkerOperation::ForceDeleteResource { cluster_key: 2 },
             error: anyhow::anyhow!("Resource was replaced while awaiting confirmation"),
         });
 
@@ -3588,12 +3583,11 @@ fn test_ui_flow() {
     ));
     harness.ui_harness("cluster_connection/test_ui_flow/current_context_connecting");
 
-    harness.state_mut().worker.results.push_back(
-        WorkerResult::KubernetesClusterConnectionCreated {
-            cluster_key: 1,
-            runner: None,
-        },
-    );
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(WorkerResult::KubernetesClusterConnectionCreated { cluster_key: 1 });
 
     harness
         .state_mut()

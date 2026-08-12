@@ -5,9 +5,9 @@
 
 use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::{
-    ResourceWatcher, TypedWatcherContext, minimal_resource_from_typed, namespaced_typed_watcher,
+    ResourceWatcher, TypedWatcherContext, namespaced_typed_watcher,
 };
-use crate::minimal_resource::MinimalResource;
+use crate::minimal_resource::{MinimalResource, from_kubernetes_resource};
 use crate::resource_handlers::matches_namespaced_resource;
 use crate::resource_table::ResourceTableDefinition;
 use k8s_openapi::api::autoscaling::v2::HorizontalPodAutoscaler;
@@ -56,5 +56,5 @@ pub(crate) fn table_definition(_api_resource: &ApiResource) -> Option<ResourceTa
 }
 
 fn extract<T: Resource>(resource: &T) -> MinimalResource {
-    minimal_resource_from_typed(resource, BTreeMap::new())
+    from_kubernetes_resource(resource, BTreeMap::new())
 }

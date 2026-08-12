@@ -1,5 +1,4 @@
 use crate::api_resource::ApiResource;
-use crate::cluster_connection_manager::ClusterConnection;
 use crate::log_store::{LogPageRow, LogStoreResult};
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::{MinimalResource, PodLogContainer};
@@ -14,7 +13,7 @@ use crate::resource_schema::{
 use crate::resource_table::CustomResourceColumn;
 use crate::sorted_name::SortedName;
 use crate::terminal_launcher::TerminalLaunchSettings;
-use crate::worker::{ResourceApiError, WorkerResult, WorkerTrait};
+use crate::worker::{ResourceApiError, WorkerOperation, WorkerResult, WorkerTrait};
 use components::BladeNavigator;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
@@ -31,7 +30,6 @@ const DELETE_CONFIRMATION_DELAY: Duration = Duration::from_secs(3);
 #[derive(Default)]
 pub(super) struct UiState {
     pub(super) clusters: HashMap<i32, ClusterState>,
-    pub(super) cluster_connections: HashMap<i32, ClusterConnection>,
     pub(super) next_cluster_key: i32,
     pub(super) selected_cluster: Option<i32>,
     pub(super) log_windows: BTreeMap<u64, PodLogWindowState>,
@@ -1554,53 +1552,42 @@ impl UiState {
             match result {
                 WorkerResult::CommandFailed {
                     error: message,
-                    command,
+                    operation,
                 } => {
-                    error!("Command '{command:?}' failed with error: {message}");
+                    error!("Worker operation '{operation:?}' failed with error: {message}");
                     let message = format!("{message:#?}");
-                    match command {
-                        Some(crate::worker::WorkerCommand::ConnectToCluster {
-                            cluster_key,
-                            ..
-                        }) => {
+                    match operation {
+                        WorkerOperation::ConnectCluster { cluster_key } => {
                             if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
                                 cluster.connection = ClusterConnectionState::Failed(message);
                             }
                         }
-                        Some(crate::worker::WorkerCommand::StartResourceWatch {
-                            cluster_key,
-                            api_resource,
-                            namespace,
-                        }) => {
+                        WorkerOperation::StartResourceWatch { scope } => {
                             self.resource_watch_failed(
-                                cluster_key,
-                                api_resource,
-                                namespace,
+                                scope.cluster_key,
+                                scope.api_resource,
+                                scope.namespace,
                                 message,
                             );
                         }
-                        Some(crate::worker::WorkerCommand::DeleteResource {
-                            cluster_key,
-                            api_resource,
+                        WorkerOperation::DeleteResource {
+                            scope,
                             bulk_delete_id,
-                            namespace,
                             resource_name,
-                            ..
-                        }) => {
+                        } => {
                             self.settle_bulk_delete_target(
-                                cluster_key,
+                                scope.cluster_key,
                                 bulk_delete_id,
-                                &api_resource,
+                                &scope.api_resource,
                                 &resource_name,
-                                &namespace,
+                                &scope.namespace,
                                 Some(message),
                             );
                         }
-                        Some(crate::worker::WorkerCommand::StartResourceDetailWatch {
+                        WorkerOperation::StartResourceDetailWatch {
                             cluster_key,
                             history_entry_id,
-                            ..
-                        }) => {
+                        } => {
                             if let Some(panel) = self
                                 .clusters
                                 .get_mut(&cluster_key)
@@ -1615,11 +1602,10 @@ impl UiState {
                                 }
                             }
                         }
-                        Some(crate::worker::WorkerCommand::UpdateResourceData {
+                        WorkerOperation::UpdateResourceData {
                             cluster_key,
                             resource_name,
-                            ..
-                        }) => {
+                        } => {
                             if let Some(editor) = self
                                 .clusters
                                 .get_mut(&cluster_key)
@@ -1631,74 +1617,50 @@ impl UiState {
                                 editor.save_error = Some(message);
                             }
                         }
-                        Some(crate::worker::WorkerCommand::GetResourceYaml {
-                            editor_id, ..
-                        }) => {
+                        WorkerOperation::GetResourceYaml { editor_id } => {
                             if let Some(editor) = self.yaml_editors.get_mut(&editor_id) {
                                 editor.loading = false;
                                 editor.error = Some(message);
                             }
                         }
-                        Some(crate::worker::WorkerCommand::ApplyResourceYaml {
-                            editor_id, ..
-                        }) => {
+                        WorkerOperation::ApplyResourceYaml { editor_id } => {
                             if let Some(editor) = self.yaml_editors.get_mut(&editor_id) {
                                 editor.saving = false;
                                 editor.error = Some(message);
                             }
                         }
-                        Some(crate::worker::WorkerCommand::LoadResourceSchema {
-                            editor_id,
-                            ..
-                        }) => {
+                        WorkerOperation::LoadResourceSchema { editor_id } => {
                             if let Some(editor) = self.yaml_editors.get_mut(&editor_id) {
                                 editor.schema_loading = false;
                                 editor.server_validation = ValidationState::Failed(message);
                             }
                         }
-                        Some(crate::worker::WorkerCommand::ValidateResourceYaml {
+                        WorkerOperation::ValidateResourceYaml {
                             editor_id,
                             revision,
-                            ..
-                        }) => {
+                        } => {
                             if let Some(editor) = self.yaml_editors.get_mut(&editor_id)
                                 && editor.validation_revision == revision
                             {
                                 editor.server_validation = ValidationState::Failed(message);
                             }
                         }
-                        Some(crate::worker::WorkerCommand::StartPodLogStream {
-                            log_window_id,
-                            ..
-                        }) => {
+                        WorkerOperation::StartPodLogStream { log_window_id } => {
                             if let Some(window) = self.log_windows.get_mut(&log_window_id) {
                                 window.status = PodLogStatus::Failed(message);
                             }
                         }
-                        Some(crate::worker::WorkerCommand::RestartDeployment {
-                            cluster_key,
-                            ..
-                        }) => {
+                        WorkerOperation::RestartDeployment { cluster_key } => {
                             if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
                                 cluster.deployment_restart_error = Some(message);
                             }
                         }
-                        Some(crate::worker::WorkerCommand::ForceDeleteResource {
-                            cluster_key,
-                            ..
-                        }) => {
+                        WorkerOperation::ForceDeleteResource { cluster_key } => {
                             if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
                                 cluster.force_delete_error = Some(message);
                             }
                         }
-                        Some(crate::worker::WorkerCommand::GetResourceScale {
-                            cluster_key,
-                            ..
-                        })
-                        | Some(crate::worker::WorkerCommand::UpdateResourceScale {
-                            cluster_key,
-                            ..
-                        }) => {
+                        WorkerOperation::GetOrUpdateResourceScale { cluster_key } => {
                             if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
                                 cluster.scale_error = Some(message);
                             }
@@ -1708,7 +1670,6 @@ impl UiState {
                 }
                 WorkerResult::KubernetesClustersUpdated(clusters) => {
                     self.clusters.clear();
-                    self.cluster_connections.clear();
                     self.selected_cluster = None;
                     let mut current_cluster_key = None;
                     for cluster in clusters {
@@ -1853,15 +1814,9 @@ impl UiState {
                         cluster.api_resources_load = ClusterLoadState::Failed(error);
                     }
                 }
-                WorkerResult::KubernetesClusterConnectionCreated {
-                    cluster_key,
-                    runner,
-                } => {
+                WorkerResult::KubernetesClusterConnectionCreated { cluster_key } => {
                     info!("Cluster connection created");
                     if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
-                        if let Some(connection) = runner {
-                            self.cluster_connections.insert(cluster_key, connection);
-                        }
                         cluster.connection = ClusterConnectionState::Connected;
                     }
                 }
@@ -2557,6 +2512,8 @@ fn sync_resource_data_editor(
 mod tests {
     use super::*;
     use crate::api_resource::ApiResource;
+    use crate::cluster_connection_manager::Cluster;
+    use crate::minimal_resource::MinimalResource;
     use crate::resource_table::ContainerKind;
     use crate::worker::{MockWorker, WorkerCommand};
     use std::collections::VecDeque;
@@ -2628,6 +2585,53 @@ mod tests {
         assert_eq!(state.log_windows[&1].status, PodLogStatus::Finished);
         assert_eq!(state.log_windows[&2].total_lines, 1);
         assert_eq!(state.log_windows[&2].status, PodLogStatus::Following);
+    }
+
+    #[test]
+    fn cluster_reload_ignores_resource_events_from_the_retired_cluster_key() {
+        let api_resource = ApiResource {
+            group: "core".into(),
+            version: "v1".into(),
+            kind: "Pod".into(),
+            name: "pods".into(),
+            namespaced: true,
+        };
+        let stale_resource = MinimalResource {
+            uid: "stale".into(),
+            name: "stale-pod".into(),
+            namespace: Some("default".into()),
+            creation_timestamp: None,
+            controller_owner: None,
+            cells: BTreeMap::new(),
+            log_containers: Vec::new(),
+        };
+        let mut state = UiState::default();
+        let mut worker = MockWorker {
+            results: VecDeque::from([
+                WorkerResult::KubernetesClustersUpdated(vec![Cluster {
+                    name: "old".into(),
+                    is_current: true,
+                }]),
+                WorkerResult::KubernetesClustersUpdated(vec![Cluster {
+                    name: "new".into(),
+                    is_current: true,
+                }]),
+                WorkerResult::KubernetesResourceAdded {
+                    cluster_key: 1,
+                    api_resource,
+                    namespace: Some("default".into()),
+                    resource: stale_resource,
+                },
+            ]),
+            commands: Vec::new(),
+        };
+
+        let _ = state.update(&mut worker);
+
+        assert_eq!(state.selected_cluster, Some(2));
+        assert_eq!(state.clusters.len(), 1);
+        assert_eq!(state.clusters[&2].name, "new");
+        assert!(state.clusters[&2].resource_cache.is_empty());
     }
 
     #[test]

@@ -2,9 +2,9 @@
 
 use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::{
-    ResourceWatcher, TypedWatcherContext, cluster_typed_watcher, minimal_resource_from_typed,
+    ResourceWatcher, TypedWatcherContext, cluster_typed_watcher,
 };
-use crate::minimal_resource::MinimalResource;
+use crate::minimal_resource::{MinimalResource, from_kubernetes_resource};
 use crate::resource_handlers::matches_cluster_resource;
 use crate::resource_table::ResourceTableDefinition;
 use k8s_openapi::api::core::v1::Namespace;
@@ -38,5 +38,5 @@ pub(crate) fn table_definition(_api_resource: &ApiResource) -> Option<ResourceTa
 }
 
 fn extract<T: Resource>(resource: &T) -> MinimalResource {
-    minimal_resource_from_typed(resource, BTreeMap::new())
+    from_kubernetes_resource(resource, BTreeMap::new())
 }

@@ -1,8 +1,7 @@
-use crate::cluster_connection_manager::minimal_resource_from_typed;
 use crate::cluster_connection_manager::{
     ResourceWatcher, TypedWatcherContext, namespaced_typed_watcher,
 };
-use crate::minimal_resource::MinimalResource;
+use crate::minimal_resource::{MinimalResource, from_kubernetes_resource};
 use crate::resource_handlers::{matches_namespaced_api_resource, matches_namespaced_resource};
 use crate::resource_table::{CellValue, READY_COLUMN, ResourceTableDefinition, column};
 use k8s_openapi::api::apps::v1::ReplicaSet;
@@ -23,7 +22,7 @@ pub(crate) fn extract(resource: &ReplicaSet) -> MinimalResource {
     let status = resource.status.as_ref();
     let ready = status.and_then(|status| status.ready_replicas).unwrap_or(0);
     let desired = status.map(|status| status.replicas).unwrap_or(0);
-    minimal_resource_from_typed(
+    from_kubernetes_resource(
         resource,
         BTreeMap::from([(
             READY_COLUMN.to_owned(),

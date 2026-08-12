@@ -1,7 +1,7 @@
 use crate::cluster_connection_manager::{
-    ResourceWatcher, TypedWatcherContext, minimal_resource_from_typed, namespaced_typed_watcher,
+    ResourceWatcher, TypedWatcherContext, namespaced_typed_watcher,
 };
-use crate::minimal_resource::MinimalResource;
+use crate::minimal_resource::{MinimalResource, from_kubernetes_resource};
 use crate::resource_handlers::{matches_namespaced_api_resource, matches_namespaced_resource};
 use crate::resource_table::{
     COMPLETIONS_COLUMN, CellValue, ResourceTableDefinition, STATUS_COLUMN, column, status_tone,
@@ -40,7 +40,7 @@ pub(crate) fn extract(resource: &Job) -> MinimalResource {
     } else {
         "Pending"
     };
-    minimal_resource_from_typed(
+    from_kubernetes_resource(
         resource,
         BTreeMap::from([
             (

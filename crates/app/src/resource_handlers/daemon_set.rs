@@ -1,8 +1,7 @@
-use crate::cluster_connection_manager::minimal_resource_from_typed;
 use crate::cluster_connection_manager::{
     ResourceWatcher, TypedWatcherContext, namespaced_typed_watcher,
 };
-use crate::minimal_resource::MinimalResource;
+use crate::minimal_resource::{MinimalResource, from_kubernetes_resource};
 use crate::resource_handlers::{matches_namespaced_api_resource, matches_namespaced_resource};
 use crate::resource_table::{
     CURRENT_COLUMN, CellValue, DESIRED_COLUMN, READY_COLUMN, ResourceTableDefinition,
@@ -39,7 +38,7 @@ fn extract(resource: &DaemonSet) -> MinimalResource {
     let updated = status
         .and_then(|status| status.updated_number_scheduled)
         .unwrap_or(0);
-    minimal_resource_from_typed(
+    from_kubernetes_resource(
         resource,
         BTreeMap::from([
             (

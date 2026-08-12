@@ -1,9 +1,8 @@
 use crate::api_resource::ApiResource;
-use crate::cluster_connection_manager::minimal_resource_from_typed;
 use crate::cluster_connection_manager::{
     ResourceWatcher, TypedWatcherContext, namespaced_typed_watcher,
 };
-use crate::minimal_resource::{MinimalResource, PodLogContainer};
+use crate::minimal_resource::{MinimalResource, PodLogContainer, from_kubernetes_resource};
 use crate::resource_detail::{
     PodConditionDetail, PodContainerDetail, PodDetail, PodEnvironmentVariableDetail,
     PodEnvironmentVariableSource, PodVolumeDetail, ResourceDetailPayload,
@@ -58,7 +57,7 @@ pub(crate) fn extract(pod: &Pod) -> MinimalResource {
         .unwrap_or("Unknown");
     let indicators = status.map(container_indicators).unwrap_or_default();
 
-    let mut resource = minimal_resource_from_typed(
+    let mut resource = from_kubernetes_resource(
         pod,
         BTreeMap::from([
             (
