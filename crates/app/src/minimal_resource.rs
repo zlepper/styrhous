@@ -22,6 +22,10 @@ pub struct MinimalResource {
     pub creation_timestamp: Option<OffsetDateTime>,
     /// The Kubernetes controller owner, if this resource has one.
     pub controller_owner: Option<ResourceOwner>,
+    /// Resource metadata available for user-configured table columns.
+    pub labels: BTreeMap<String, String>,
+    /// Resource metadata available for user-configured table columns.
+    pub annotations: BTreeMap<String, String>,
     /// Type-specific values keyed by the selected resource table definition.
     pub cells: BTreeMap<String, CellValue>,
     /// Declared Pod containers that can be selected for log streaming. This is
@@ -120,6 +124,8 @@ pub(crate) fn from_kubernetes_resource<T: Resource>(
         namespace: metadata.namespace.clone(),
         creation_timestamp,
         controller_owner: controller_owner(metadata),
+        labels: metadata.labels.clone().unwrap_or_default(),
+        annotations: metadata.annotations.clone().unwrap_or_default(),
         cells,
         log_containers: Vec::new(),
     }
@@ -181,6 +187,7 @@ fn format_duration(duration: time::Duration) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use k8s_openapi::api::core::v1::Pod;
 
     #[test]
     fn test_age_formatting() {
@@ -193,6 +200,8 @@ mod tests {
             namespace: Some("default".to_string()),
             creation_timestamp: Some(now - time::Duration::hours(2)),
             controller_owner: None,
+            labels: BTreeMap::new(),
+            annotations: BTreeMap::new(),
             cells: BTreeMap::new(),
             log_containers: Vec::new(),
         };
@@ -205,6 +214,8 @@ mod tests {
             namespace: Some("default".to_string()),
             creation_timestamp: Some(now - time::Duration::days(3)),
             controller_owner: None,
+            labels: BTreeMap::new(),
+            annotations: BTreeMap::new(),
             cells: BTreeMap::new(),
             log_containers: Vec::new(),
         };
@@ -217,6 +228,8 @@ mod tests {
             namespace: Some("default".to_string()),
             creation_timestamp: Some(now - time::Duration::minutes(45)),
             controller_owner: None,
+            labels: BTreeMap::new(),
+            annotations: BTreeMap::new(),
             cells: BTreeMap::new(),
             log_containers: Vec::new(),
         };
@@ -229,6 +242,8 @@ mod tests {
             namespace: Some("default".to_string()),
             creation_timestamp: Some(now - time::Duration::seconds(30)),
             controller_owner: None,
+            labels: BTreeMap::new(),
+            annotations: BTreeMap::new(),
             cells: BTreeMap::new(),
             log_containers: Vec::new(),
         };
@@ -243,6 +258,8 @@ mod tests {
             namespace: None,
             creation_timestamp: None,
             controller_owner: None,
+            labels: BTreeMap::new(),
+            annotations: BTreeMap::new(),
             cells: BTreeMap::new(),
             log_containers: Vec::new(),
         };
@@ -257,6 +274,8 @@ mod tests {
             namespace: None,
             creation_timestamp: None,
             controller_owner: None,
+            labels: BTreeMap::new(),
+            annotations: BTreeMap::new(),
             cells: BTreeMap::new(),
             log_containers: Vec::new(),
         };
@@ -278,5 +297,26 @@ mod tests {
                 .with_lifecycle_metadata(true, vec!["example.com/cleanup".into()])
                 .can_force_delete()
         );
+    }
+
+    #[test]
+    fn extraction_preserves_labels_and_annotations_for_table_columns() {
+        let pod = Pod {
+            metadata: ObjectMeta {
+                name: Some("api".into()),
+                labels: Some(BTreeMap::from([("app".into(), "api".into())])),
+                annotations: Some(BTreeMap::from([(
+                    "example.com/team".into(),
+                    "platform".into(),
+                )])),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let resource = from_kubernetes_resource(&pod, BTreeMap::new());
+
+        assert_eq!(resource.labels["app"], "api");
+        assert_eq!(resource.annotations["example.com/team"], "platform");
     }
 }

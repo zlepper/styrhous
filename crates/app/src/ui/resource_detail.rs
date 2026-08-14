@@ -392,6 +392,8 @@ fn show_resource_detail_header(
         namespace: entry.namespace.clone(),
         creation_timestamp: None,
         controller_owner: None,
+        labels: Default::default(),
+        annotations: Default::default(),
         cells: Default::default(),
         log_containers,
     }

@@ -496,67 +496,68 @@ Window state=[focused] rect=<none>
                   Button name="Close blade" rect=(x=1471.0 y=35.0 width=32.0 height=32.0 center_x=1487.0 center_y=51.0)
             Label value="Choose which columns are visible and drag rows to change their order." rect=(x=809.0 y=88.0 width=470.1 height=17.0 center_x=1044.0 center_y=96.5)
               TextRun value="Choose which columns are visible and drag rows to change their order." rect=(x=809.0 y=88.0 width=470.1 height=17.0 center_x=1044.0 center_y=96.5)
-            GenericContainer rect=<none>
-              Unknown rect=(x=825.0 y=145.0 width=18.0 height=18.0 center_x=834.0 center_y=154.0)
-              GenericContainer rect=<none>
-                Image rect=(x=825.0 y=146.0 width=16.0 height=16.0 center_x=833.0 center_y=154.0)
-              CheckBox name="Age" state=[toggled=True] rect=(x=863.0 y=146.0 width=16.0 height=16.0 center_x=871.0 center_y=154.0)
-              Label value="Age" rect=(x=899.0 y=145.5 width=26.4 height=17.0 center_x=912.2 center_y=154.0)
-                TextRun value="Age" rect=(x=899.0 y=145.5 width=26.4 height=17.0 center_x=912.2 center_y=154.0)
+            Button name="Add custom column" rect=(x=809.0 y=132.0 width=156.0 height=28.0 center_x=887.0 center_y=146.0)
             GenericContainer rect=<none>
               Unknown rect=(x=825.0 y=192.0 width=18.0 height=18.0 center_x=834.0 center_y=201.0)
               GenericContainer rect=<none>
                 Image rect=(x=825.0 y=193.0 width=16.0 height=16.0 center_x=833.0 center_y=201.0)
-              CheckBox name="Name" state=[toggled=True] rect=(x=863.0 y=193.0 width=16.0 height=16.0 center_x=871.0 center_y=201.0)
-              Label value="Name" rect=(x=899.0 y=192.5 width=38.8 height=17.0 center_x=918.4 center_y=201.0)
-                TextRun value="Name" rect=(x=899.0 y=192.5 width=38.8 height=17.0 center_x=918.4 center_y=201.0)
+              CheckBox name="Age" state=[toggled=True] rect=(x=863.0 y=193.0 width=16.0 height=16.0 center_x=871.0 center_y=201.0)
+              Label value="Age" rect=(x=899.0 y=192.5 width=26.4 height=17.0 center_x=912.2 center_y=201.0)
+                TextRun value="Age" rect=(x=899.0 y=192.5 width=26.4 height=17.0 center_x=912.2 center_y=201.0)
             GenericContainer rect=<none>
               Unknown rect=(x=825.0 y=239.0 width=18.0 height=18.0 center_x=834.0 center_y=248.0)
               GenericContainer rect=<none>
                 Image rect=(x=825.0 y=240.0 width=16.0 height=16.0 center_x=833.0 center_y=248.0)
-              CheckBox name="Owner" state=[toggled=False] rect=(x=863.0 y=240.0 width=16.0 height=16.0 center_x=871.0 center_y=248.0)
-              Label value="Owner" rect=(x=899.0 y=239.5 width=43.9 height=17.0 center_x=920.9 center_y=248.0)
-                TextRun value="Owner" rect=(x=899.0 y=239.5 width=43.9 height=17.0 center_x=920.9 center_y=248.0)
+              CheckBox name="Name" state=[toggled=True] rect=(x=863.0 y=240.0 width=16.0 height=16.0 center_x=871.0 center_y=248.0)
+              Label value="Name" rect=(x=899.0 y=239.5 width=38.8 height=17.0 center_x=918.4 center_y=248.0)
+                TextRun value="Name" rect=(x=899.0 y=239.5 width=38.8 height=17.0 center_x=918.4 center_y=248.0)
             GenericContainer rect=<none>
               Unknown rect=(x=825.0 y=286.0 width=18.0 height=18.0 center_x=834.0 center_y=295.0)
               GenericContainer rect=<none>
                 Image rect=(x=825.0 y=287.0 width=16.0 height=16.0 center_x=833.0 center_y=295.0)
-              CheckBox name="Ready" state=[toggled=True] rect=(x=863.0 y=287.0 width=16.0 height=16.0 center_x=871.0 center_y=295.0)
-              Label value="Ready" rect=(x=899.0 y=286.5 width=41.5 height=17.0 center_x=919.7 center_y=295.0)
-                TextRun value="Ready" rect=(x=899.0 y=286.5 width=41.5 height=17.0 center_x=919.7 center_y=295.0)
+              CheckBox name="Owner" state=[toggled=False] rect=(x=863.0 y=287.0 width=16.0 height=16.0 center_x=871.0 center_y=295.0)
+              Label value="Owner" rect=(x=899.0 y=286.5 width=43.9 height=17.0 center_x=920.9 center_y=295.0)
+                TextRun value="Owner" rect=(x=899.0 y=286.5 width=43.9 height=17.0 center_x=920.9 center_y=295.0)
             GenericContainer rect=<none>
               Unknown rect=(x=825.0 y=333.0 width=18.0 height=18.0 center_x=834.0 center_y=342.0)
               GenericContainer rect=<none>
                 Image rect=(x=825.0 y=334.0 width=16.0 height=16.0 center_x=833.0 center_y=342.0)
-              CheckBox name="Containers" state=[toggled=True] rect=(x=863.0 y=334.0 width=16.0 height=16.0 center_x=871.0 center_y=342.0)
-              Label value="Containers" rect=(x=899.0 y=333.5 width=71.9 height=17.0 center_x=934.9 center_y=342.0)
-                TextRun value="Containers" rect=(x=899.0 y=333.5 width=71.9 height=17.0 center_x=934.9 center_y=342.0)
+              CheckBox name="Ready" state=[toggled=True] rect=(x=863.0 y=334.0 width=16.0 height=16.0 center_x=871.0 center_y=342.0)
+              Label value="Ready" rect=(x=899.0 y=333.5 width=41.5 height=17.0 center_x=919.7 center_y=342.0)
+                TextRun value="Ready" rect=(x=899.0 y=333.5 width=41.5 height=17.0 center_x=919.7 center_y=342.0)
             GenericContainer rect=<none>
               Unknown rect=(x=825.0 y=380.0 width=18.0 height=18.0 center_x=834.0 center_y=389.0)
               GenericContainer rect=<none>
                 Image rect=(x=825.0 y=381.0 width=16.0 height=16.0 center_x=833.0 center_y=389.0)
-              CheckBox name="Status" state=[toggled=True] rect=(x=863.0 y=381.0 width=16.0 height=16.0 center_x=871.0 center_y=389.0)
-              Label value="Status" rect=(x=899.0 y=380.5 width=41.8 height=17.0 center_x=919.9 center_y=389.0)
-                TextRun value="Status" rect=(x=899.0 y=380.5 width=41.8 height=17.0 center_x=919.9 center_y=389.0)
+              CheckBox name="Containers" state=[toggled=True] rect=(x=863.0 y=381.0 width=16.0 height=16.0 center_x=871.0 center_y=389.0)
+              Label value="Containers" rect=(x=899.0 y=380.5 width=71.9 height=17.0 center_x=934.9 center_y=389.0)
+                TextRun value="Containers" rect=(x=899.0 y=380.5 width=71.9 height=17.0 center_x=934.9 center_y=389.0)
             GenericContainer rect=<none>
               Unknown rect=(x=825.0 y=427.0 width=18.0 height=18.0 center_x=834.0 center_y=436.0)
               GenericContainer rect=<none>
                 Image rect=(x=825.0 y=428.0 width=16.0 height=16.0 center_x=833.0 center_y=436.0)
-              CheckBox name="Restarts" state=[toggled=True] rect=(x=863.0 y=428.0 width=16.0 height=16.0 center_x=871.0 center_y=436.0)
-              Label value="Restarts" rect=(x=899.0 y=427.5 width=54.2 height=17.0 center_x=926.1 center_y=436.0)
-                TextRun value="Restarts" rect=(x=899.0 y=427.5 width=54.2 height=17.0 center_x=926.1 center_y=436.0)
+              CheckBox name="Status" state=[toggled=True] rect=(x=863.0 y=428.0 width=16.0 height=16.0 center_x=871.0 center_y=436.0)
+              Label value="Status" rect=(x=899.0 y=427.5 width=41.8 height=17.0 center_x=919.9 center_y=436.0)
+                TextRun value="Status" rect=(x=899.0 y=427.5 width=41.8 height=17.0 center_x=919.9 center_y=436.0)
             GenericContainer rect=<none>
               Unknown rect=(x=825.0 y=474.0 width=18.0 height=18.0 center_x=834.0 center_y=483.0)
               GenericContainer rect=<none>
                 Image rect=(x=825.0 y=475.0 width=16.0 height=16.0 center_x=833.0 center_y=483.0)
-              CheckBox name="Node" state=[toggled=True] rect=(x=863.0 y=475.0 width=16.0 height=16.0 center_x=871.0 center_y=483.0)
-              Label value="Node" rect=(x=899.0 y=474.5 width=35.7 height=17.0 center_x=916.8 center_y=483.0)
-                TextRun value="Node" rect=(x=899.0 y=474.5 width=35.7 height=17.0 center_x=916.8 center_y=483.0)
+              CheckBox name="Restarts" state=[toggled=True] rect=(x=863.0 y=475.0 width=16.0 height=16.0 center_x=871.0 center_y=483.0)
+              Label value="Restarts" rect=(x=899.0 y=474.5 width=54.2 height=17.0 center_x=926.1 center_y=483.0)
+                TextRun value="Restarts" rect=(x=899.0 y=474.5 width=54.2 height=17.0 center_x=926.1 center_y=483.0)
             GenericContainer rect=<none>
               Unknown rect=(x=825.0 y=521.0 width=18.0 height=18.0 center_x=834.0 center_y=530.0)
               GenericContainer rect=<none>
                 Image rect=(x=825.0 y=522.0 width=16.0 height=16.0 center_x=833.0 center_y=530.0)
-              CheckBox name="Actions" state=[toggled=True] rect=(x=863.0 y=522.0 width=16.0 height=16.0 center_x=871.0 center_y=530.0)
-              Label value="Actions" rect=(x=899.0 y=521.5 width=49.7 height=17.0 center_x=923.8 center_y=530.0)
-                TextRun value="Actions" rect=(x=899.0 y=521.5 width=49.7 height=17.0 center_x=923.8 center_y=530.0)
+              CheckBox name="Node" state=[toggled=True] rect=(x=863.0 y=522.0 width=16.0 height=16.0 center_x=871.0 center_y=530.0)
+              Label value="Node" rect=(x=899.0 y=521.5 width=35.7 height=17.0 center_x=916.8 center_y=530.0)
+                TextRun value="Node" rect=(x=899.0 y=521.5 width=35.7 height=17.0 center_x=916.8 center_y=530.0)
+            GenericContainer rect=<none>
+              Unknown rect=(x=825.0 y=568.0 width=18.0 height=18.0 center_x=834.0 center_y=577.0)
+              GenericContainer rect=<none>
+                Image rect=(x=825.0 y=569.0 width=16.0 height=16.0 center_x=833.0 center_y=577.0)
+              CheckBox name="Actions" state=[toggled=True] rect=(x=863.0 y=569.0 width=16.0 height=16.0 center_x=871.0 center_y=577.0)
+              Label value="Actions" rect=(x=899.0 y=568.5 width=49.7 height=17.0 center_x=923.8 center_y=577.0)
+                TextRun value="Actions" rect=(x=899.0 y=568.5 width=49.7 height=17.0 center_x=923.8 center_y=577.0)
       ScrollBar rect=(x=1518.0 y=8.0 width=10.0 height=1008.0 center_x=1523.0 center_y=512.0)

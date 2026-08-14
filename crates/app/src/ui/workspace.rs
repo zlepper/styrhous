@@ -5,7 +5,8 @@ use super::state::{
     PendingDeploymentRestart, PendingForceDelete, ResourceAction, ResourceSearchState, UiState,
 };
 use super::table_preferences::{
-    PersistedResourceTablePreferences, ResourceTableKey, TableColumnDefinition,
+    MetadataColumnSource, PersistedResourceTablePreferences, ResourceTableKey,
+    TableColumnDefinition,
 };
 use super::widgets::{
     show_resource_cell, workspace_empty_state, workspace_error_state, workspace_loading_state,
@@ -29,7 +30,7 @@ use components::{
 };
 use egui_extras::{Size, StripBuilder};
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 
 const RESOURCE_SEARCH_WIDTH: f32 = 210.0;
 const TOOLBAR_RIGHT_INSET: f32 = spacing::XL;
@@ -62,6 +63,7 @@ struct ResourceSelectionControls<'a> {
 
 struct ResourceTableOptions<'a> {
     custom_columns: &'a [CustomResourceColumn],
+    metadata_suggestion_resources: &'a [MinimalResource],
     resource_navigation: &'a ResourceNavigation,
     hidden_resource_count: usize,
     show_namespace_column: bool,
@@ -250,6 +252,7 @@ pub(super) fn show(
                             .get(api_resource)
                             .map(Vec::as_slice)
                             .unwrap_or_default(),
+                        metadata_suggestion_resources: &all_resources,
                         resource_navigation: &cluster.resource_navigation,
                         hidden_resource_count: all_resources.len()
                             - filtered_resources.resources.len(),
@@ -791,6 +794,8 @@ fn show_resource_table(
 ) -> Option<ResourceAction> {
     let pending_action = RefCell::new(None);
     let definition = table_definition(api_resource, options.custom_columns);
+    let table_key = ResourceTableKey::workspace(api_resource);
+    let metadata_columns = table_preferences.custom_columns(&table_key);
     let mut column_definitions = vec![TableColumnDefinition {
         id: "name".into(),
         label: "Name".into(),
@@ -822,6 +827,12 @@ fn show_resource_table(
                 sortable: true,
             }),
     );
+    column_definitions.extend(metadata_columns.iter().map(|column| TableColumnDefinition {
+        id: column.id(),
+        label: column.label.clone(),
+        default_width: 160.0,
+        sortable: true,
+    }));
     column_definitions.extend([
         TableColumnDefinition {
             id: "age".into(),
@@ -843,7 +854,6 @@ fn show_resource_table(
             .map(|column| column.default_width)
             .sum::<f32>();
     column_definitions[0].default_width = (ui.available_width() - fixed_width - 16.0).max(160.0);
-    let table_key = ResourceTableKey::workspace(api_resource);
     let visible_columns = table_preferences.resolved_columns(&table_key, &column_definitions);
     let sort_state = table_preferences
         .sort(&table_key, &column_definitions)
@@ -851,7 +861,13 @@ fn show_resource_table(
     let mut resource_rows = resources.iter().collect::<Vec<_>>();
     if let Some(sort) = &sort_state {
         resource_rows.sort_by(|left, right| {
-            compare_resource_column(left, right, &sort.column_id, sort.direction)
+            compare_resource_column(
+                left,
+                right,
+                &sort.column_id,
+                sort.direction,
+                &metadata_columns,
+            )
         });
     }
     let mut rows = resource_rows
@@ -918,11 +934,14 @@ fn show_resource_table(
                     menu.separator();
                 }
                 if menu.action("Configure columns").clicked() {
-                    *column_settings_to_open = Some(super::resource_table_settings::target(
-                        &mut table_preferences.borrow_mut(),
-                        table_key.clone(),
-                        &column_definitions,
-                    ));
+                    *column_settings_to_open = Some(
+                        super::resource_table_settings::target_with_metadata_key_suggestions(
+                            &mut table_preferences.borrow_mut(),
+                            table_key.clone(),
+                            &column_definitions,
+                            metadata_key_suggestions(options.metadata_suggestion_resources),
+                        ),
+                    );
                 }
             });
         },
@@ -1005,6 +1024,17 @@ fn show_resource_table(
                             )
                             .on_hover_text(resource_owner::unavailable_tooltip(owner));
                         }
+                    }
+                    id if metadata_columns.iter().any(|column| column.id() == id) => {
+                        let column = metadata_columns
+                            .iter()
+                            .find(|column| column.id() == id)
+                            .expect("metadata column was checked");
+                        show_metadata_cell(
+                            ui,
+                            resource_metadata_value(resource, column.source, &column.key)
+                                .unwrap_or("-"),
+                        );
                     }
                     id if definition.columns.iter().any(|column| column.id == id) => {
                         let column = definition
@@ -1156,6 +1186,7 @@ fn compare_resource_column(
     right: &MinimalResource,
     column_id: &str,
     direction: components::SortDirection,
+    metadata_columns: &[super::table_preferences::CustomMetadataColumn],
 ) -> std::cmp::Ordering {
     let value = |resource: &MinimalResource| match column_id {
         "name" => SortValue::Text(resource.name.clone()),
@@ -1171,10 +1202,12 @@ fn compare_resource_column(
             .creation_timestamp
             .map(|time| SortValue::Number(time.unix_timestamp()))
             .unwrap_or(SortValue::Empty),
-        id => resource
-            .cells
-            .get(id)
-            .map(cell_sort_value)
+        id => metadata_columns
+            .iter()
+            .find(|column| column.id() == id)
+            .and_then(|column| resource_metadata_value(resource, column.source, &column.key))
+            .map(|value| SortValue::Text(value.to_owned()))
+            .or_else(|| resource.cells.get(id).map(cell_sort_value))
             .unwrap_or(SortValue::Empty),
     };
     let left_value = value(left);
@@ -1185,11 +1218,55 @@ fn compare_resource_column(
         .then_with(|| left.uid.cmp(&right.uid))
 }
 
+fn resource_metadata_value<'a>(
+    resource: &'a MinimalResource,
+    source: MetadataColumnSource,
+    key: &str,
+) -> Option<&'a str> {
+    match source {
+        MetadataColumnSource::Label => resource.labels.get(key),
+        MetadataColumnSource::Annotation => resource.annotations.get(key),
+    }
+    .map(String::as_str)
+}
+
+fn show_metadata_cell(ui: &mut egui::Ui, value: &str) {
+    ui.add(
+        egui::Label::new(
+            egui::RichText::new(value)
+                .font(typography::body())
+                .color(gray::_500),
+        )
+        .truncate(),
+    )
+    .on_hover_text(value);
+}
+
+fn metadata_key_suggestions(
+    resources: &[MinimalResource],
+) -> super::resource_table_settings::MetadataKeySuggestions {
+    super::resource_table_settings::MetadataKeySuggestions {
+        labels: resources
+            .iter()
+            .flat_map(|resource| resource.labels.keys().cloned())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect(),
+        annotations: resources
+            .iter()
+            .flat_map(|resource| resource.annotations.keys().cloned())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use egui_kittest::Harness;
     use std::cell::RefCell;
+    use std::collections::BTreeMap;
     use std::rc::Rc;
 
     fn resource(name: &str) -> MinimalResource {
@@ -1199,6 +1276,8 @@ mod tests {
             namespace: Some("default".into()),
             creation_timestamp: None,
             controller_owner: None,
+            labels: Default::default(),
+            annotations: Default::default(),
             cells: Default::default(),
             log_containers: Vec::new(),
         }
@@ -1258,6 +1337,70 @@ mod tests {
                 .regex_error
                 .as_deref()
                 .is_some_and(|error| error.starts_with("regex parse error:"))
+        );
+    }
+
+    #[test]
+    fn metadata_suggestions_are_sorted_and_cover_labels_and_annotations() {
+        let mut first = resource("first");
+        first.labels = BTreeMap::from([("app".into(), "api".into())]);
+        first.annotations = BTreeMap::from([("example.com/team".into(), "platform".into())]);
+        let mut second = resource("second");
+        second.labels = BTreeMap::from([
+            ("app".into(), "worker".into()),
+            ("tier".into(), "backend".into()),
+        ]);
+        second.annotations = BTreeMap::from([("example.com/owner".into(), "ops".into())]);
+
+        let suggestions = metadata_key_suggestions(&[first, second]);
+
+        assert_eq!(suggestions.labels, ["app", "tier"]);
+        assert_eq!(
+            suggestions.annotations,
+            ["example.com/owner", "example.com/team"]
+        );
+    }
+
+    #[test]
+    fn custom_metadata_columns_render_and_sort_by_metadata_values() {
+        let mut api = resource("api");
+        api.labels.insert("app".into(), "api".into());
+        let worker = resource("worker");
+        let column = super::super::table_preferences::CustomMetadataColumn {
+            source: MetadataColumnSource::Label,
+            key: "app".into(),
+            label: "Application".into(),
+        };
+
+        assert_eq!(
+            resource_metadata_value(&api, column.source, &column.key),
+            Some("api")
+        );
+        assert_eq!(
+            resource_metadata_value(&worker, column.source, &column.key),
+            None
+        );
+        assert_eq!(
+            compare_resource_column(
+                &api,
+                &worker,
+                &column.id(),
+                components::SortDirection::Ascending,
+                std::slice::from_ref(&column),
+            ),
+            std::cmp::Ordering::Less
+        );
+
+        let annotation_column = super::super::table_preferences::CustomMetadataColumn {
+            source: MetadataColumnSource::Annotation,
+            key: "example.com/team".into(),
+            label: "Team".into(),
+        };
+        api.annotations
+            .insert("example.com/team".into(), "platform".into());
+        assert_eq!(
+            resource_metadata_value(&api, annotation_column.source, &annotation_column.key),
+            Some("platform")
         );
     }
 

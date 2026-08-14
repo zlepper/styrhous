@@ -39,6 +39,7 @@ pub mod table;
 pub mod tabs;
 #[doc(hidden)]
 pub mod test_support;
+pub mod text_input;
 pub mod textarea;
 pub mod theme;
 pub mod workspace;
@@ -70,6 +71,7 @@ pub use table::{
     SortDirection, SortState, TableColumnBuilder, TableRowBuilder, TailwindTable, tailwind_checkbox,
 };
 pub use tabs::{Tabs, TabsContent, TabsResponse};
+pub use text_input::TailwindTextInput;
 pub use textarea::TailwindTextArea;
 pub use theme::{apply_light_theme, semibold_font};
 pub use workspace::{

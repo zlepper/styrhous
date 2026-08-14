@@ -596,15 +596,13 @@ Window state=[focused] rect=<none>
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
                         GenericContainer rect=<none>
-                          GenericContainer rect=<none>
-                            TextInput name="Debug image 2 name" value="Ubuntu" rect=(x=878.0 y=733.0 width=136.0 height=21.0 center_x=946.0 center_y=743.5)
-                              TextRun value="Ubuntu" rect=(x=882.0 y=735.0 width=48.4 height=17.0 center_x=906.2 center_y=743.5)
+                          TextInput name="Debug image 2 name" value="Ubuntu" rect=(x=869.0 y=729.0 width=154.0 height=28.0 center_x=946.0 center_y=743.0)
+                            TextRun value="Ubuntu" rect=(x=878.0 y=734.0 width=48.4 height=17.0 center_x=902.2 center_y=742.5)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
                         GenericContainer rect=<none>
-                          GenericContainer rect=<none>
-                            TextInput name="Debug image 2 image" value="ubuntu" rect=(x=1048.0 y=733.0 width=224.0 height=21.0 center_x=1160.0 center_y=743.5)
-                              TextRun value="ubuntu" rect=(x=1052.0 y=735.0 width=46.2 height=17.0 center_x=1075.1 center_y=743.5)
+                          TextInput name="Debug image 2 image" value="ubuntu" rect=(x=1039.0 y=729.0 width=242.0 height=28.0 center_x=1160.0 center_y=743.0)
+                            TextRun value="ubuntu" rect=(x=1048.0 y=734.0 width=46.2 height=17.0 center_x=1071.1 center_y=742.5)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
                         ComboBox name="Debug image 2 debug profile" rect=(x=1297.0 y=727.0 width=150.0 height=32.0 center_x=1372.0 center_y=743.0)
@@ -621,15 +619,13 @@ Window state=[focused] rect=<none>
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
                         GenericContainer rect=<none>
-                          GenericContainer rect=<none>
-                            TextInput name="Debug image 3 name" value="Netshoot" rect=(x=878.0 y=777.0 width=136.0 height=21.0 center_x=946.0 center_y=787.5)
-                              TextRun value="Netshoot" rect=(x=882.0 y=779.0 width=60.2 height=17.0 center_x=912.1 center_y=787.5)
+                          TextInput name="Debug image 3 name" value="Netshoot" rect=(x=869.0 y=773.0 width=154.0 height=28.0 center_x=946.0 center_y=787.0)
+                            TextRun value="Netshoot" rect=(x=878.0 y=778.0 width=60.2 height=17.0 center_x=908.1 center_y=786.5)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
                         GenericContainer rect=<none>
-                          GenericContainer rect=<none>
-                            TextInput name="Debug image 3 image" value="nicolaka/netshoot" rect=(x=1048.0 y=777.0 width=224.0 height=21.0 center_x=1160.0 center_y=787.5)
-                              TextRun value="nicolaka/netshoot" rect=(x=1052.0 y=779.0 width=117.8 height=17.0 center_x=1110.9 center_y=787.5)
+                          TextInput name="Debug image 3 image" value="nicolaka/netshoot" rect=(x=1039.0 y=773.0 width=242.0 height=28.0 center_x=1160.0 center_y=787.0)
+                            TextRun value="nicolaka/netshoot" rect=(x=1048.0 y=778.0 width=117.8 height=17.0 center_x=1106.9 center_y=786.5)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
                         ComboBox name="Debug image 3 debug profile" rect=(x=1297.0 y=771.0 width=150.0 height=32.0 center_x=1372.0 center_y=787.0)

@@ -880,6 +880,8 @@ fn extract_minimal_resource(
         namespace: metadata.namespace.clone(),
         creation_timestamp,
         controller_owner: controller_owner(metadata),
+        labels: metadata.labels.clone().unwrap_or_default(),
+        annotations: metadata.annotations.clone().unwrap_or_default(),
         cells: extract_custom_cells(&obj.data, custom_columns),
         log_containers: Vec::new(),
     }
@@ -2561,6 +2563,26 @@ mod tests {
                 "Synced".to_owned()
             ]))
         );
+
+        let resource = extract_minimal_resource(
+            &DynamicObject {
+                types: None,
+                metadata: ObjectMeta {
+                    name: Some("widget".into()),
+                    labels: Some(BTreeMap::from([("app".into(), "api".into())])),
+                    annotations: Some(BTreeMap::from([(
+                        "example.com/team".into(),
+                        "platform".into(),
+                    )])),
+                    ..Default::default()
+                },
+                data: k8s_openapi::serde_json::json!({}),
+            },
+            &[],
+        );
+
+        assert_eq!(resource.labels["app"], "api");
+        assert_eq!(resource.annotations["example.com/team"], "platform");
     }
 
     #[test]

@@ -408,6 +408,8 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
                 namespace: None,
                 creation_timestamp: None,
                 controller_owner: None,
+                labels: Default::default(),
+                annotations: Default::default(),
                 cells: Default::default(),
                 log_containers: Vec::new(),
             }],
@@ -539,6 +541,8 @@ fn pod_resource_table_shows_per_container_status_indicators() {
                     namespace: Some("kube-system".into()),
                     creation_timestamp: None,
                     controller_owner: None,
+                    labels: Default::default(),
+                    annotations: Default::default(),
                     cells: BTreeMap::from([
                         (READY_COLUMN.to_owned(), CellValue::Text("1/2".to_owned())),
                         (
@@ -639,6 +643,8 @@ fn resource_table_snapshot_keeps_namespace_column_readable() {
                     namespace: Some("default".into()),
                     creation_timestamp: None,
                     controller_owner: None,
+                    labels: Default::default(),
+                    annotations: Default::default(),
                     cells: Default::default(),
                     log_containers: Vec::new(),
                 },
@@ -676,6 +682,8 @@ fn deployment_resource_table_snapshot_uses_typed_columns() {
                         time::OffsetDateTime::now_utc() - time::Duration::days(220),
                     ),
                     controller_owner: None,
+                    labels: Default::default(),
+                    annotations: Default::default(),
                     cells: BTreeMap::from([
                         (READY_COLUMN.to_owned(), CellValue::Text("3/4".to_owned())),
                         (UP_TO_DATE_COLUMN.to_owned(), CellValue::Number(3)),
@@ -717,6 +725,8 @@ fn deployment_restart_action_opens_a_confirmation_and_sends_a_worker_command() {
                     namespace: Some("kube-system".to_owned()),
                     creation_timestamp: None,
                     controller_owner: None,
+                    labels: Default::default(),
+                    annotations: Default::default(),
                     cells: BTreeMap::new(),
                     log_containers: Vec::new(),
                 },
@@ -778,6 +788,8 @@ fn scalable_resource_action_fetches_and_updates_the_scale() {
                         namespace: Some("kube-system".to_owned()),
                         creation_timestamp: None,
                         controller_owner: None,
+                        labels: Default::default(),
+                        annotations: Default::default(),
                         cells: BTreeMap::new(),
                         log_containers: Vec::new(),
                     },
@@ -1688,6 +1700,8 @@ fn node_shell_action_launches_the_selected_context_node_and_preset() {
                     namespace: None,
                     creation_timestamp: None,
                     controller_owner: None,
+                    labels: Default::default(),
+                    annotations: Default::default(),
                     cells: BTreeMap::new(),
                     log_containers: Vec::new(),
                 },
@@ -4246,6 +4260,74 @@ fn resource_table_column_settings_hide_and_reorder_columns() {
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "resource_tables/resource_table_column_configuration/configured_table",
     ));
+}
+
+#[test]
+fn resource_table_custom_metadata_column_can_be_added_from_column_settings() {
+    let mut harness = application_harness::<MockWorker>();
+    show_apps_resource_table(&mut harness);
+    open_workspace_column_settings(&mut harness);
+
+    harness.get_by_label("Add custom column").click();
+    harness.run_steps(2);
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "resource_tables/resource_table_column_configuration/custom_column_form",
+    ));
+
+    let metadata_key = harness
+        .get_by_role_and_label(egui::accesskit::Role::TextInput, "Metadata key")
+        .rect()
+        .center();
+    primary_click(&mut harness, metadata_key);
+    harness.run();
+    harness
+        .input_mut()
+        .events
+        .push(egui::Event::Text("app.kubernetes.io/name".into()));
+    harness.run();
+    let column_header = harness
+        .get_by_role_and_label(egui::accesskit::Role::TextInput, "Column header")
+        .rect()
+        .center();
+    primary_click(&mut harness, column_header);
+    harness.run();
+    harness
+        .input_mut()
+        .events
+        .push(egui::Event::Text("Application".into()));
+    harness.run();
+    let add_column = harness.get_by_label("Add column").rect().center();
+    primary_click(&mut harness, add_column);
+    harness.run_steps(2);
+
+    let pods = fixture_api_resource("core", "Pod", "pods");
+    let column = harness
+        .state_mut()
+        .resource_table_preferences
+        .custom_columns(&ResourceTableKey::workspace(&pods));
+    assert_eq!(column[0].key, "app.kubernetes.io/name");
+    assert_eq!(column[0].label, "Application");
+
+    harness.state_mut().ui_state.global_blades.clear();
+    harness.run_steps(2);
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "resource_tables/resource_table_column_configuration/table_with_custom_metadata_column",
+    ));
+
+    open_workspace_column_settings(&mut harness);
+    let remove_column = harness
+        .get_by_label("Remove Application column")
+        .rect()
+        .center();
+    primary_click(&mut harness, remove_column);
+    harness.run_steps(2);
+    assert!(
+        harness
+            .state_mut()
+            .resource_table_preferences
+            .custom_columns(&ResourceTableKey::workspace(&pods))
+            .is_empty()
+    );
 }
 
 #[test]

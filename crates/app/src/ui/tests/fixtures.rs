@@ -89,6 +89,8 @@ fn fixture_resource(index: usize, name: &str) -> MinimalResource {
         namespace: Some("kube-system".into()),
         creation_timestamp: Some(time::OffsetDateTime::now_utc() - time::Duration::days(220)),
         controller_owner: None,
+        labels: BTreeMap::from([("app.kubernetes.io/name".into(), name.into())]),
+        annotations: BTreeMap::new(),
         cells: BTreeMap::from([
             (READY_COLUMN.to_owned(), CellValue::Text("1/1".into())),
             (
