@@ -11,15 +11,18 @@ use super::state::{
 use super::table_preferences::{ResourceTableKey, TableColumnDefinition};
 use super::widgets::show_resource_cell;
 use crate::minimal_resource::{MinimalResource, format_age};
+use crate::pod_metrics::{
+    ContainerUsage, POD_USAGE_HISTORY_WINDOW, PodUsage, format_cpu, format_memory,
+};
 use crate::resource_catalog::ResourceNavigation;
 use crate::resource_detail::{
-    ConfigMapDetail, ManagedResource, NodeDetail, PodDetail, ResourceDetail, ResourceDetailPayload,
-    ResourceEvent, SecretDetail,
+    ConfigMapDetail, ManagedResource, NodeDetail, PodContainerDetail, PodDetail,
+    PodResourceThresholds, ResourceDetail, ResourceDetailPayload, ResourceEvent, SecretDetail,
 };
 use crate::resource_handlers::table_definition;
 use crate::resource_table::{
-    CONTAINERS_COLUMN, NODE_COLUMN, ResourceTableDefinition, SortValue, cell_sort_value,
-    compare_sort_values,
+    CONTAINERS_COLUMN, CPU_COLUMN, MEMORY_COLUMN, NODE_COLUMN, READY_COLUMN, RESTARTS_COLUMN,
+    ResourceTableDefinition, STATUS_COLUMN, SortValue, cell_sort_value, compare_sort_values,
 };
 use crate::terminal_launcher::DebugImagePreset;
 use crate::worker::{
@@ -39,6 +42,13 @@ const CARD_CONTENT_PADDING: i8 = spacing::MD as i8;
 const CARD_HEADER_HEIGHT: f32 = 40.0;
 const CARD_HEADER_PADDING: f32 = spacing::LG;
 const CARD_GAP: f32 = spacing::MD;
+const USAGE_CHART_HEIGHT: f32 = 80.0;
+const USAGE_CHART_LEFT_INSET: f32 = 30.0;
+const USAGE_CHART_TOP_INSET: f32 = 3.0;
+const USAGE_CHART_RIGHT_INSET: f32 = 2.0;
+const USAGE_CHART_BOTTOM_INSET: f32 = 16.0;
+const USAGE_CHART_AREA_OPACITY: f32 = 0.14;
+const USAGE_CHART_REFERENCE_OPACITY: f32 = 0.8;
 
 impl WorkerResult for ResourceDataUpdateFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
@@ -134,6 +144,10 @@ impl GlobalBladeContent for ResourceDetailHistoryEntry {
             self.events_error.as_deref(),
             &self.managed_resources,
             self.managed_resources_error.as_deref(),
+            self.pod_usage.as_ref(),
+            &self.pod_usage_history,
+            self.pod_usage_missing,
+            self.pod_usage_error.as_deref(),
             if layer.is_foreground {
                 self.data_editor.as_mut()
             } else {
@@ -355,6 +369,10 @@ fn navigate_resource_detail_in_navigator(
         events_error: None,
         managed_resources: Vec::new(),
         managed_resources_error: None,
+        pod_usage: None,
+        pod_usage_history: Vec::new(),
+        pod_usage_missing: false,
+        pod_usage_error: None,
         data_editor: None,
         pending_action: None,
     }));
@@ -490,6 +508,10 @@ fn show_resource_detail_blade(
     events_error: Option<&str>,
     managed_resources: &[ManagedResource],
     managed_resources_error: Option<&str>,
+    pod_usage: Option<&PodUsage>,
+    pod_usage_history: &[PodUsage],
+    pod_usage_missing: bool,
+    pod_usage_error: Option<&str>,
     data_editor: Option<&mut super::state::ResourceDataEditorState>,
     table_preferences: Option<&mut super::table_preferences::PersistedResourceTablePreferences>,
     column_settings: Option<
@@ -501,7 +523,15 @@ fn show_resource_detail_blade(
     if let Some(error) = detail_error {
         error_card(ui, "Unable to load resource details", error);
     } else if let Some(detail) = detail {
-        show_detail(ui, detail, &mut result.action);
+        show_detail(
+            ui,
+            detail,
+            pod_usage,
+            pod_usage_history,
+            pod_usage_missing,
+            pod_usage_error,
+            &mut result.action,
+        );
         ui.add_space(16.0);
         show_resource_data(ui, detail, data_editor, &mut result.action);
         metadata_maps(ui, detail);
@@ -859,6 +889,23 @@ fn managed_resource_table_definition(
     omit_contextual_node_column: bool,
 ) -> ResourceTableDefinition {
     let mut definition = table_definition(&managed_resource_api_resource(kind), &[]);
+    // Live Metrics API values belong to the Pods workspace. Managed-resource tables are compact
+    // relationship views and do not receive the namespace metric cache.
+    definition
+        .columns
+        .retain(|column| column.id != CPU_COLUMN && column.id != MEMORY_COLUMN);
+    if kind == "Pod" {
+        for column in &mut definition.columns {
+            column.initial_width = match column.id.as_str() {
+                READY_COLUMN => 90.0,
+                CONTAINERS_COLUMN => 150.0,
+                STATUS_COLUMN => 128.0,
+                RESTARTS_COLUMN => 120.0,
+                NODE_COLUMN => 180.0,
+                _ => column.initial_width,
+            };
+        }
+    }
     if kind == "Pod" {
         // The inspector panel is substantially narrower than the workspace.
         // Container indicators are useful in the primary list, but in this
@@ -911,12 +958,23 @@ fn managed_resource_table_kinds(
 fn show_detail(
     ui: &mut egui::Ui,
     detail: &ResourceDetail,
+    pod_usage: Option<&PodUsage>,
+    pod_usage_history: &[PodUsage],
+    pod_usage_missing: bool,
+    pod_usage_error: Option<&str>,
     pending_action: &mut Option<ResourceAction>,
 ) {
     if let ResourceDetailPayload::Pod(pod) = &detail.payload {
         show_pod_summary(ui, detail, pod, pending_action);
         ui.add_space(13.0);
-        show_pod_detail(ui, pod);
+        show_pod_detail(
+            ui,
+            pod,
+            pod_usage,
+            pod_usage_history,
+            pod_usage_missing,
+            pod_usage_error,
+        );
     } else if let ResourceDetailPayload::Node(node) = &detail.payload {
         show_generic_summary(ui, detail);
         ui.add_space(13.0);
@@ -1388,7 +1446,28 @@ fn detail_node_value(
     }
 }
 
-fn show_pod_detail(ui: &mut egui::Ui, pod: &PodDetail) {
+fn show_pod_detail(
+    ui: &mut egui::Ui,
+    pod: &PodDetail,
+    usage: Option<&PodUsage>,
+    usage_history: &[PodUsage],
+    usage_missing: bool,
+    usage_error: Option<&str>,
+) {
+    let pod_requests =
+        total_resource_thresholds(&pod.containers, |container| container.resource_requests);
+    let pod_limits =
+        total_resource_thresholds(&pod.containers, |container| container.resource_limits);
+    show_pod_usage(
+        ui,
+        usage,
+        usage_history,
+        pod_requests,
+        pod_limits,
+        usage_missing,
+        usage_error,
+    );
+    ui.add_space(CARD_GAP);
     section_header(ui, "Containers", None);
     for container in &pod.containers {
         detail_item_card(
@@ -1406,6 +1485,16 @@ fn show_pod_detail(ui: &mut egui::Ui, pod: &PodDetail) {
                     1 => detail_value(ui, "State", &container.state),
                     _ => {}
                 });
+                show_container_usage(
+                    ui,
+                    &container.name,
+                    usage.and_then(|usage| usage.containers.get(&container.name)),
+                    usage_history,
+                    container.resource_requests,
+                    container.resource_limits,
+                    usage_missing,
+                    usage_error,
+                );
                 ui.add_space(6.0);
                 detail_grid_columns(ui, 2, |ui, column| match column {
                     0 => detail_value(ui, "Ready", if container.ready { "Yes" } else { "No" }),
@@ -1456,6 +1545,578 @@ fn show_pod_detail(ui: &mut egui::Ui, pod: &PodDetail) {
             if index + 1 < pod.volumes.len() {
                 ui.add_space(CARD_GAP);
             }
+        }
+    }
+}
+
+fn show_pod_usage(
+    ui: &mut egui::Ui,
+    usage: Option<&PodUsage>,
+    history: &[PodUsage],
+    requests: PodResourceThresholds,
+    limits: PodResourceThresholds,
+    _missing: bool,
+    error: Option<&str>,
+) {
+    let cpu_references = usage_references(
+        requests.cpu_nanocores,
+        limits.cpu_nanocores,
+        ["Request", "Limit"],
+    );
+    let memory_references = usage_references(
+        requests.memory_bytes,
+        limits.memory_bytes,
+        ["Request", "Limit"],
+    );
+    section_header(ui, "Resource usage", None);
+    WorkspaceCard::new().show(ui, |ui| {
+        let displayed_usage = displayed_usage_values(
+            usage.map(|usage| (usage.cpu_nanocores, usage.memory_bytes)),
+            error,
+        );
+        show_usage_value_grid(ui, displayed_usage);
+        if !history.is_empty()
+            || has_usage_references(&cpu_references)
+            || has_usage_references(&memory_references)
+        {
+            if usage.is_none() {
+                usage_chart_pair_labels(ui);
+            }
+            ui.add_space(8.0);
+            ui.columns(2, |columns| {
+                usage_chart(
+                    &mut columns[0],
+                    "Pod CPU usage chart",
+                    history,
+                    |sample| Some(sample.cpu_nanocores),
+                    format_cpu,
+                    if error.is_some() {
+                        gray::_400
+                    } else {
+                        indigo::_600
+                    },
+                    error.is_some(),
+                    &cpu_references,
+                );
+                usage_chart(
+                    &mut columns[1],
+                    "Pod memory usage chart",
+                    history,
+                    |sample| Some(sample.memory_bytes),
+                    format_memory,
+                    if error.is_some() {
+                        gray::_400
+                    } else {
+                        status::SUCCESS
+                    },
+                    error.is_some(),
+                    &memory_references,
+                );
+            });
+        }
+    });
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_container_usage(
+    ui: &mut egui::Ui,
+    name: &str,
+    usage: Option<&ContainerUsage>,
+    history: &[PodUsage],
+    requests: PodResourceThresholds,
+    limits: PodResourceThresholds,
+    _missing: bool,
+    error: Option<&str>,
+) {
+    let cpu_references = usage_references(
+        requests.cpu_nanocores,
+        limits.cpu_nanocores,
+        ["Request", "Limit"],
+    );
+    let memory_references = usage_references(
+        requests.memory_bytes,
+        limits.memory_bytes,
+        ["Request", "Limit"],
+    );
+    ui.add_space(10.0);
+    let displayed_usage = displayed_usage_values(
+        usage.map(|usage| (usage.cpu_nanocores, usage.memory_bytes)),
+        error,
+    );
+    show_usage_value_grid(ui, displayed_usage);
+    if history
+        .iter()
+        .any(|sample| sample.containers.contains_key(name))
+        || has_usage_references(&cpu_references)
+        || has_usage_references(&memory_references)
+    {
+        if usage.is_none() {
+            usage_chart_pair_labels(ui);
+        }
+        ui.add_space(6.0);
+        ui.columns(2, |columns| {
+            usage_chart(
+                &mut columns[0],
+                &format!("{name} CPU usage chart"),
+                history,
+                |sample| sample.containers.get(name).map(|usage| usage.cpu_nanocores),
+                format_cpu,
+                if error.is_some() {
+                    gray::_400
+                } else {
+                    indigo::_600
+                },
+                error.is_some(),
+                &cpu_references,
+            );
+            usage_chart(
+                &mut columns[1],
+                &format!("{name} memory usage chart"),
+                history,
+                |sample| sample.containers.get(name).map(|usage| usage.memory_bytes),
+                format_memory,
+                if error.is_some() {
+                    gray::_400
+                } else {
+                    status::SUCCESS
+                },
+                error.is_some(),
+                &memory_references,
+            );
+        });
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn usage_chart(
+    ui: &mut egui::Ui,
+    accessibility_label: &str,
+    history: &[PodUsage],
+    value: impl Fn(&PodUsage) -> Option<i64>,
+    format: impl Fn(i64) -> String,
+    color: egui::Color32,
+    metrics_unavailable: bool,
+    references: &UsageReferences,
+) {
+    let samples = history
+        .iter()
+        .filter_map(|sample| value(sample).map(|value| (sample.timestamp, value)))
+        .collect::<Vec<_>>();
+    let max_value = samples
+        .iter()
+        .map(|(_, value)| *value)
+        .chain(references.iter().flatten().map(|reference| reference.value))
+        .max()
+        .unwrap_or(1)
+        .max(1);
+    let max = max_value as f32;
+    let reference_summary = references
+        .iter()
+        .flatten()
+        .map(|reference| format!("{} {}", reference.label, format(reference.value)))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let chart_summary = format!(
+        "{accessibility_label}; {}; {} history; scale from 0 to {}; {}",
+        if metrics_unavailable {
+            "metrics unavailable; displayed history may be stale"
+        } else if samples.len() < 2 {
+            "collecting samples"
+        } else {
+            "usage history available"
+        },
+        format_history_window(),
+        format(max_value),
+        if reference_summary.is_empty() {
+            "no request or limit configured"
+        } else {
+            &reference_summary
+        }
+    );
+    let (rect, response) = ui.allocate_exact_size(
+        egui::vec2(ui.available_width(), USAGE_CHART_HEIGHT),
+        egui::Sense::hover(),
+    );
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Image, true, chart_summary.clone())
+    });
+    let status_message = if metrics_unavailable {
+        "Unavailable"
+    } else {
+        "Collecting…"
+    };
+    if samples.len() < 2 && !has_usage_references(references) {
+        ui.painter().text(
+            rect.center(),
+            egui::Align2::CENTER_CENTER,
+            status_message,
+            typography::metadata(),
+            gray::_500,
+        );
+        return;
+    }
+    let start = time::OffsetDateTime::now_utc() - POD_USAGE_HISTORY_WINDOW;
+    let plot = egui::Rect::from_min_max(
+        egui::pos2(
+            rect.left() + USAGE_CHART_LEFT_INSET,
+            rect.top() + USAGE_CHART_TOP_INSET,
+        ),
+        egui::pos2(
+            rect.right() - USAGE_CHART_RIGHT_INSET,
+            rect.bottom() - USAGE_CHART_BOTTOM_INSET,
+        ),
+    );
+    draw_chart_axes(ui.painter(), plot, &format, max);
+    for reference in references.iter().flatten() {
+        let y = plot.bottom() - plot.height() * (reference.value as f32 / max);
+        dashed_reference_line(
+            ui.painter(),
+            plot.left(),
+            plot.right(),
+            y,
+            egui::Stroke::new(
+                1.0,
+                reference
+                    .color
+                    .gamma_multiply(USAGE_CHART_REFERENCE_OPACITY),
+            ),
+        );
+    }
+    let points = samples
+        .iter()
+        .map(|(timestamp, sample)| {
+            let fraction = ((*timestamp - start).whole_seconds() as f32
+                / POD_USAGE_HISTORY_WINDOW.whole_seconds() as f32)
+                .clamp(0.0, 1.0);
+            egui::pos2(
+                egui::lerp(plot.left()..=plot.right(), fraction),
+                plot.bottom() - plot.height() * (*sample as f32 / max),
+            )
+        })
+        .collect::<Vec<_>>();
+    if points.len() >= 2 {
+        ui.painter().add(egui::Shape::mesh(usage_area_mesh(
+            &points,
+            plot.bottom(),
+            color.gamma_multiply(USAGE_CHART_AREA_OPACITY),
+        )));
+        ui.painter().add(egui::Shape::line(
+            points.clone(),
+            egui::Stroke::new(1.7, color),
+        ));
+    } else {
+        ui.painter().text(
+            rect.center(),
+            egui::Align2::CENTER_CENTER,
+            status_message,
+            typography::metadata(),
+            gray::_500,
+        );
+    }
+    if let Some(pointer) = response
+        .hover_pos()
+        .filter(|pointer| plot.contains(*pointer))
+        && let Some((timestamp, sample)) = points
+            .iter()
+            .zip(&samples)
+            .min_by(|(left, _), (right, _)| {
+                (pointer.x - left.x)
+                    .abs()
+                    .total_cmp(&(pointer.x - right.x).abs())
+            })
+            .map(|(_, sample)| *sample)
+    {
+        let mut tooltip = format!(
+            "{}\n{}",
+            format(sample),
+            timestamp
+                .format(&time::format_description::well_known::Rfc3339)
+                .unwrap_or_default()
+        );
+        for reference in references.iter().flatten() {
+            tooltip.push_str(&format!(
+                "\n{}: {}",
+                reference.label,
+                format(reference.value)
+            ));
+        }
+        response.on_hover_text(tooltip);
+    }
+}
+
+fn usage_area_mesh(points: &[egui::Pos2], baseline: f32, color: egui::Color32) -> egui::Mesh {
+    let mut mesh = egui::Mesh::default();
+    let segment_count = points.len().saturating_sub(1);
+    mesh.reserve_vertices(segment_count * 4);
+    mesh.reserve_triangles(segment_count * 2);
+    for segment in points.windows(2) {
+        let base_index = mesh.vertices.len() as u32;
+        let [start, end] = segment else {
+            unreachable!("windows of two always contain two points")
+        };
+        mesh.colored_vertex(*start, color);
+        mesh.colored_vertex(egui::pos2(start.x, baseline), color);
+        mesh.colored_vertex(*end, color);
+        mesh.colored_vertex(egui::pos2(end.x, baseline), color);
+        mesh.add_triangle(base_index, base_index + 1, base_index + 2);
+        mesh.add_triangle(base_index + 2, base_index + 1, base_index + 3);
+    }
+    mesh
+}
+
+#[derive(Clone, Copy)]
+struct UsageReference {
+    label: &'static str,
+    value: i64,
+    color: egui::Color32,
+}
+
+type UsageReferences = [Option<UsageReference>; 2];
+
+fn usage_references(
+    request: Option<i64>,
+    limit: Option<i64>,
+    labels: [&'static str; 2],
+) -> UsageReferences {
+    [
+        request.map(|value| UsageReference {
+            label: labels[0],
+            value,
+            color: status::WARNING,
+        }),
+        limit.map(|value| UsageReference {
+            label: labels[1],
+            value,
+            color: status::CRITICAL,
+        }),
+    ]
+}
+
+fn usage_chart_pair_labels(ui: &mut egui::Ui) {
+    ui.columns(2, |columns| {
+        columns[0].label(egui::RichText::new("CPU").color(gray::_500));
+        columns[1].label(egui::RichText::new("Memory").color(gray::_500));
+    });
+}
+
+fn has_usage_references(references: &UsageReferences) -> bool {
+    references.iter().any(Option::is_some)
+}
+
+fn format_history_window() -> String {
+    let seconds = POD_USAGE_HISTORY_WINDOW.whole_seconds();
+    if seconds % 60 == 0 {
+        format!("{}-minute", seconds / 60)
+    } else {
+        format!("{seconds}-second")
+    }
+}
+
+fn dashed_reference_line(
+    painter: &egui::Painter,
+    left: f32,
+    right: f32,
+    y: f32,
+    stroke: egui::Stroke,
+) {
+    draw_dashed_horizontal_line(painter, left, right, y, stroke, 3.0, 3.0);
+}
+
+fn draw_chart_axes(
+    painter: &egui::Painter,
+    plot: egui::Rect,
+    format: &impl Fn(i64) -> String,
+    max: f32,
+) {
+    let tick_color = gray::_300;
+    dashed_grid_line(painter, plot.left(), plot.right(), plot.center().y);
+    for fraction in [0.0, 1.0] {
+        let y = egui::lerp(plot.bottom()..=plot.top(), fraction);
+        painter.line_segment(
+            [egui::pos2(plot.left() - 3.0, y), egui::pos2(plot.left(), y)],
+            egui::Stroke::new(1.0, tick_color),
+        );
+        painter.line_segment(
+            [
+                egui::pos2(plot.right(), y),
+                egui::pos2(plot.right() + 3.0, y),
+            ],
+            egui::Stroke::new(1.0, tick_color),
+        );
+        let value = (max * fraction).round() as i64;
+        painter.text(
+            egui::pos2(plot.left() - 6.0, y),
+            egui::Align2::RIGHT_CENTER,
+            if value == 0 {
+                "0".to_owned()
+            } else {
+                format(value)
+            },
+            typography::chart_axis(),
+            gray::_500,
+        );
+    }
+    let time_labels = history_axis_labels();
+    for (fraction, label, align) in [
+        (0.0, time_labels[0].as_str(), egui::Align2::LEFT_TOP),
+        (1.0, time_labels[1].as_str(), egui::Align2::RIGHT_TOP),
+    ] {
+        let x = egui::lerp(plot.left()..=plot.right(), fraction);
+        painter.line_segment(
+            [
+                egui::pos2(x, plot.bottom()),
+                egui::pos2(x, plot.bottom() + 3.0),
+            ],
+            egui::Stroke::new(1.0, tick_color),
+        );
+        painter.text(
+            egui::pos2(x, plot.bottom() + 4.0),
+            align,
+            label,
+            typography::chart_axis(),
+            gray::_500,
+        );
+    }
+}
+
+fn dashed_grid_line(painter: &egui::Painter, left: f32, right: f32, y: f32) {
+    draw_dashed_horizontal_line(
+        painter,
+        left,
+        right,
+        y,
+        egui::Stroke::new(1.0, gray::_200),
+        2.0,
+        2.0,
+    );
+}
+
+fn draw_dashed_horizontal_line(
+    painter: &egui::Painter,
+    left: f32,
+    right: f32,
+    y: f32,
+    stroke: egui::Stroke,
+    dash_length: f32,
+    gap_length: f32,
+) {
+    let mut start = left;
+    while start < right {
+        let end = (start + dash_length).min(right);
+        painter.line_segment([egui::pos2(start, y), egui::pos2(end, y)], stroke);
+        start += dash_length + gap_length;
+    }
+}
+
+fn history_axis_labels() -> [String; 2] {
+    let seconds = POD_USAGE_HISTORY_WINDOW.whole_seconds();
+    let unit = if seconds % 60 == 0 { "m" } else { "s" };
+    let amount = if unit == "m" { seconds / 60 } else { seconds };
+    [format!("{amount}{unit} ago"), "now".to_owned()]
+}
+
+fn total_resource_thresholds(
+    containers: &[PodContainerDetail],
+    thresholds: impl Fn(&PodContainerDetail) -> PodResourceThresholds,
+) -> PodResourceThresholds {
+    PodResourceThresholds {
+        cpu_nanocores: sum_resource_quantities(
+            containers
+                .iter()
+                .map(|container| thresholds(container).cpu_nanocores),
+        ),
+        memory_bytes: sum_resource_quantities(
+            containers
+                .iter()
+                .map(|container| thresholds(container).memory_bytes),
+        ),
+    }
+}
+
+fn sum_resource_quantities(values: impl Iterator<Item = Option<i64>>) -> Option<i64> {
+    let mut found = false;
+    let mut total = 0_i64;
+    for value in values.flatten() {
+        found = true;
+        total = total.checked_add(value)?;
+    }
+    found.then_some(total)
+}
+
+#[cfg(test)]
+#[allow(clippy::items_after_test_module)]
+mod tests {
+    use super::*;
+
+    fn container(requests: PodResourceThresholds) -> PodContainerDetail {
+        PodContainerDetail {
+            name: "app".to_owned(),
+            image: "example/app".to_owned(),
+            ready: true,
+            restart_count: 0,
+            state: "Running".to_owned(),
+            reason: None,
+            message: None,
+            command: Vec::new(),
+            args: Vec::new(),
+            ports: Vec::new(),
+            environment_variables: Vec::new(),
+            resource_requests: requests,
+            resource_limits: PodResourceThresholds::default(),
+        }
+    }
+
+    #[test]
+    fn app_resource_thresholds_sum_known_values_and_reject_overflow() {
+        let containers = [
+            container(PodResourceThresholds {
+                cpu_nanocores: Some(25_000_000),
+                memory_bytes: None,
+            }),
+            container(PodResourceThresholds {
+                cpu_nanocores: None,
+                memory_bytes: Some(32 * 1024 * 1024),
+            }),
+        ];
+
+        assert_eq!(
+            total_resource_thresholds(&containers, |container| container.resource_requests),
+            PodResourceThresholds {
+                cpu_nanocores: Some(25_000_000),
+                memory_bytes: Some(32 * 1024 * 1024),
+            }
+        );
+        assert_eq!(sum_resource_quantities([None, None].into_iter()), None);
+        assert_eq!(sum_resource_quantities([Some(0)].into_iter()), Some(0));
+        assert_eq!(
+            sum_resource_quantities([Some(i64::MAX), Some(1)].into_iter()),
+            None
+        );
+    }
+
+    #[test]
+    fn usage_area_mesh_tessellates_each_non_monotonic_segment_independently() {
+        let points = [
+            egui::pos2(0.0, 6.0),
+            egui::pos2(10.0, 30.0),
+            egui::pos2(20.0, 8.0),
+            egui::pos2(30.0, 24.0),
+        ];
+        let baseline = 40.0;
+        let mesh = usage_area_mesh(&points, baseline, indigo::_600);
+
+        assert_eq!(mesh.vertices.len(), 4 * (points.len() - 1));
+        assert_eq!(mesh.indices.len(), 6 * (points.len() - 1));
+        assert!(
+            mesh.indices
+                .iter()
+                .all(|index| (*index as usize) < mesh.vertices.len())
+        );
+        for (segment, vertices) in points.windows(2).zip(mesh.vertices.chunks_exact(4)) {
+            assert_eq!(vertices[0].pos, segment[0]);
+            assert_eq!(vertices[1].pos, egui::pos2(segment[0].x, baseline));
+            assert_eq!(vertices[2].pos, segment[1]);
+            assert_eq!(vertices[3].pos, egui::pos2(segment[1].x, baseline));
         }
     }
 }
@@ -1983,6 +2644,43 @@ fn detail_value(ui: &mut egui::Ui, label: &str, value: &str) {
             .font(typography::metadata())
             .color(gray::_900),
     );
+}
+
+fn show_usage_value_grid(ui: &mut egui::Ui, usage: Option<(i64, i64)>) {
+    detail_grid_columns(ui, 2, |ui, column| match (column, usage) {
+        (0, Some((cpu, _))) => detail_value(ui, "CPU", &format_cpu(cpu)),
+        (_, Some((_, memory))) => detail_value(ui, "Memory", &format_memory(memory)),
+        (0, None) => unavailable_detail_value(ui, "CPU"),
+        (_, None) => unavailable_detail_value(ui, "Memory"),
+    });
+}
+
+fn displayed_usage_values(
+    usage: Option<(i64, i64)>,
+    metrics_error: Option<&str>,
+) -> Option<(i64, i64)> {
+    metrics_error.is_none().then_some(usage).flatten()
+}
+
+fn unavailable_detail_value(ui: &mut egui::Ui, label: &str) {
+    ui.label(
+        egui::RichText::new(label)
+            .font(typography::metadata())
+            .color(gray::_500),
+    );
+    let response = ui.label(
+        egui::RichText::new("-")
+            .font(typography::metadata())
+            .color(gray::_900),
+    );
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(
+            egui::WidgetType::Label,
+            true,
+            format!("{label}: unavailable"),
+        )
+    });
+    response.on_hover_text("Unavailable");
 }
 
 fn status_value(ui: &mut egui::Ui, label: &str, value: &str) {

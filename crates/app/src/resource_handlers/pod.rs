@@ -3,16 +3,19 @@ use crate::cluster_connection_manager::{
     ResourceWatcher, TypedWatcherContext, namespaced_typed_watcher,
 };
 use crate::minimal_resource::{MinimalResource, PodLogContainer, from_kubernetes_resource};
+use crate::pod_metrics::{parse_cpu_nanocores, parse_memory_bytes};
 use crate::resource_detail::{
     PodConditionDetail, PodContainerDetail, PodDetail, PodEnvironmentVariableDetail,
-    PodEnvironmentVariableSource, PodVolumeDetail, ResourceDetailPayload,
+    PodEnvironmentVariableSource, PodResourceThresholds, PodVolumeDetail, ResourceDetailPayload,
 };
 use crate::resource_handlers::{matches_namespaced_api_resource, matches_namespaced_resource};
 use crate::resource_table::{
-    CONTAINERS_COLUMN, CellValue, ContainerIndicator, ContainerKind, NODE_COLUMN, READY_COLUMN,
-    RESTARTS_COLUMN, ResourceTableDefinition, STATUS_COLUMN, StatusTone, column, status_tone,
+    CONTAINERS_COLUMN, CPU_COLUMN, CellValue, ContainerIndicator, ContainerKind, MEMORY_COLUMN,
+    NODE_COLUMN, READY_COLUMN, RESTARTS_COLUMN, ResourceTableDefinition, STATUS_COLUMN, StatusTone,
+    column, status_tone,
 };
 use k8s_openapi::api::core::v1::{ContainerStatus, Pod};
+use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
 use std::collections::BTreeMap;
 
 pub(crate) fn watcher(context: TypedWatcherContext) -> Option<Box<dyn ResourceWatcher>> {
@@ -23,11 +26,13 @@ pub(crate) fn watcher(context: TypedWatcherContext) -> Option<Box<dyn ResourceWa
 pub(crate) fn table_definition(api_resource: &ApiResource) -> Option<ResourceTableDefinition> {
     matches_namespaced_api_resource::<Pod>(api_resource).then(|| ResourceTableDefinition {
         columns: vec![
-            column(READY_COLUMN, "Ready", 90.0),
-            column(CONTAINERS_COLUMN, "Containers", 150.0),
-            column(STATUS_COLUMN, "Status", 128.0),
-            column(RESTARTS_COLUMN, "Restarts", 120.0),
-            column(NODE_COLUMN, "Node", 180.0),
+            column(READY_COLUMN, "Ready", 55.0),
+            column(CONTAINERS_COLUMN, "Containers", 110.0),
+            column(STATUS_COLUMN, "Status", 85.0),
+            column(CPU_COLUMN, "CPU", 65.0),
+            column(MEMORY_COLUMN, "Memory", 75.0),
+            column(RESTARTS_COLUMN, "Restarts", 70.0),
+            column(NODE_COLUMN, "Node", 95.0),
         ],
     })
 }
@@ -136,6 +141,18 @@ pub(crate) fn detail_payload(object: &kube::api::DynamicObject) -> Option<Resour
                             })
                             .collect(),
                         environment_variables: pod_environment_variables(container, &pod),
+                        resource_requests: resource_thresholds(
+                            container
+                                .resources
+                                .as_ref()
+                                .and_then(|resources| resources.requests.as_ref()),
+                        ),
+                        resource_limits: resource_thresholds(
+                            container
+                                .resources
+                                .as_ref()
+                                .and_then(|resources| resources.limits.as_ref()),
+                        ),
                     }
                 })
                 .collect()
@@ -188,6 +205,18 @@ pub(crate) fn detail_payload(object: &kube::api::DynamicObject) -> Option<Resour
         log_containers: pod_log_containers(&pod),
         volumes,
     })))
+}
+
+fn resource_thresholds(resources: Option<&BTreeMap<String, Quantity>>) -> PodResourceThresholds {
+    let quantity = |name| {
+        resources
+            .and_then(|resources| resources.get(name))
+            .map(|value| &value.0)
+    };
+    PodResourceThresholds {
+        cpu_nanocores: quantity("cpu").and_then(|value| parse_cpu_nanocores(value).ok()),
+        memory_bytes: quantity("memory").and_then(|value| parse_memory_bytes(value).ok()),
+    }
 }
 
 fn pod_log_containers(pod: &Pod) -> Vec<PodLogContainer> {
@@ -743,6 +772,10 @@ mod tests {
                     "containers": [{
                         "name": "api",
                         "image": "example/api:v1",
+                        "resources": {
+                            "requests": {"cpu": "25m", "memory": "32Mi"},
+                            "limits": {"cpu": "100m", "memory": "128Mi"}
+                        },
                         "env": [
                             {"name": "LOG_LEVEL", "value": "info"},
                             {"name": "CONFIG_VALUE", "valueFrom": {"configMapKeyRef": {"name": "settings", "key": "mode", "optional": true}}},
@@ -782,6 +815,20 @@ mod tests {
         assert_eq!(detail.containers[0].image, "example/api:v1");
         assert_eq!(detail.containers[0].restart_count, 2);
         assert_eq!(
+            detail.containers[0].resource_requests,
+            PodResourceThresholds {
+                cpu_nanocores: Some(25_000_000),
+                memory_bytes: Some(32 * 1024 * 1024),
+            }
+        );
+        assert_eq!(
+            detail.containers[0].resource_limits,
+            PodResourceThresholds {
+                cpu_nanocores: Some(100_000_000),
+                memory_bytes: Some(128 * 1024 * 1024),
+            }
+        );
+        assert_eq!(
             detail.containers[0]
                 .environment_variables
                 .iter()
@@ -811,5 +858,27 @@ mod tests {
         ));
         assert_eq!(detail.volumes[0].name, "config");
         assert_eq!(detail.restart_policy.as_deref(), Some("Always"));
+    }
+
+    #[test]
+    fn resource_thresholds_normalize_supported_cpu_and_memory_quantities() {
+        let thresholds = resource_thresholds(Some(&BTreeMap::from([
+            ("cpu".to_owned(), Quantity("1.5".to_owned())),
+            ("memory".to_owned(), Quantity("48Mi".to_owned())),
+            ("ephemeral-storage".to_owned(), Quantity("1Gi".to_owned())),
+        ])));
+        assert_eq!(
+            thresholds,
+            PodResourceThresholds {
+                cpu_nanocores: Some(1_500_000_000),
+                memory_bytes: Some(48 * 1024 * 1024),
+            }
+        );
+
+        let thresholds = resource_thresholds(Some(&BTreeMap::from([(
+            "cpu".to_owned(),
+            Quantity("not-a-quantity".to_owned()),
+        )])));
+        assert_eq!(thresholds, PodResourceThresholds::default());
     }
 }

@@ -2,6 +2,7 @@ use crate::api_resource::ApiResource;
 use crate::helpers::ResultExt;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
+use crate::pod_metrics::{POD_METRICS_POLL_INTERVAL, PodUsage, pod_usage_from_value};
 use crate::resource_detail::{
     ManagedResource, ManagedResourceAssociation, PodEnvironmentVariableDetail,
     PodEnvironmentVariableSource, ResourceDetail, ResourceDetailPayload, ResourceEvent,
@@ -24,7 +25,7 @@ use k8s_openapi::apimachinery::pkg::apis::meta::v1::{
     APIGroup, GroupVersionForDiscovery, ObjectMeta,
 };
 use k8s_openapi::{ClusterResourceScope, NamespaceResourceScope};
-use kube::api::{DeleteParams, DynamicObject, GroupVersionKind, Preconditions};
+use kube::api::{DeleteParams, DynamicObject, GroupVersionKind, ListParams, Preconditions};
 use kube::runtime::watcher;
 use kube::runtime::watcher::{Event, ListSemantic};
 use kube::{Api, Resource};
@@ -34,6 +35,7 @@ use std::future::Future;
 use std::pin::Pin;
 use time::OffsetDateTime;
 use tokio::task::JoinSet;
+use tokio::time::MissedTickBehavior;
 use tracing::{info, warn};
 
 mod connection;
@@ -970,6 +972,7 @@ pub async fn watch_resource_detail(request: ResourceDetailWatchRequest) {
         event_sender,
     } = request;
     let root_name = resource_name.clone();
+    let metrics_api_resource = api_resource.clone();
     tokio::join!(
         watch_detail_object(
             cluster_key,
@@ -990,15 +993,138 @@ pub async fn watch_resource_detail(request: ResourceDetailWatchRequest) {
         ),
         watch_managed_resources(ManagedResourceWatchRequest {
             cluster_key,
-            client,
-            root_api_resource: api_resource,
-            namespace,
-            root_name,
+            client: client.clone(),
+            root_api_resource: api_resource.clone(),
+            namespace: namespace.clone(),
+            root_name: root_name.clone(),
             root_uid: resource_uid,
             history_entry_id,
-            event_sender,
+            event_sender: event_sender.clone(),
         }),
+        watch_pod_detail_metrics(
+            cluster_key,
+            client.clone(),
+            metrics_api_resource,
+            namespace.clone(),
+            root_name,
+            history_entry_id,
+            event_sender.clone(),
+        ),
     );
+}
+
+/// Poll a visible namespace rather than watching the Metrics API: metrics-server publishes
+/// sampled values and is not a source of Kubernetes object lifecycle events.
+pub async fn watch_pod_metrics_namespace(
+    cluster_key: i32,
+    client: kube::Client,
+    namespace: String,
+    event_sender: WorkerResultSender,
+) {
+    let mut interval = tokio::time::interval(POD_METRICS_POLL_INTERVAL);
+    interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    loop {
+        interval.tick().await;
+        match list_pod_metrics(&client, &namespace).await {
+            Ok(usages) => event_sender
+                .send(PodMetricsUpdated {
+                    cluster_key,
+                    namespace: namespace.clone(),
+                    usages,
+                })
+                .await
+                .log_if_error("Failed to send Pod metrics update"),
+            Err(error) => event_sender
+                .send(PodMetricsWatchFailed {
+                    cluster_key,
+                    namespace: namespace.clone(),
+                    error: format!("{error:#?}"),
+                })
+                .await
+                .log_if_error("Failed to send Pod metrics error"),
+        }
+    }
+}
+
+async fn watch_pod_detail_metrics(
+    cluster_key: i32,
+    client: kube::Client,
+    api_resource: ApiResource,
+    namespace: Option<String>,
+    resource_name: String,
+    history_entry_id: u64,
+    event_sender: WorkerResultSender,
+) {
+    if api_resource.kind != "Pod" || api_resource.group != "core" {
+        return;
+    }
+    let Some(namespace) = namespace else {
+        return;
+    };
+    let mut interval = tokio::time::interval(POD_METRICS_POLL_INTERVAL);
+    interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    loop {
+        interval.tick().await;
+        match get_pod_metrics(&client, &namespace, &resource_name).await {
+            Ok(Some(usage)) => event_sender
+                .send(ResourceDetailPodUsageUpdated {
+                    cluster_key,
+                    history_entry_id,
+                    usage,
+                })
+                .await
+                .log_if_error("Failed to send Pod detail metrics update"),
+            Ok(None) => event_sender
+                .send(ResourceDetailPodUsageMissing {
+                    cluster_key,
+                    history_entry_id,
+                })
+                .await
+                .log_if_error("Failed to send missing Pod detail metrics update"),
+            Err(error) => event_sender
+                .send(ResourceDetailPodUsageFailed {
+                    cluster_key,
+                    history_entry_id,
+                    error: format!("{error:#?}"),
+                })
+                .await
+                .log_if_error("Failed to send Pod detail metrics error"),
+        }
+    }
+}
+
+fn metrics_pod_api(client: &kube::Client, namespace: &str) -> Api<DynamicObject> {
+    let gvk = GroupVersionKind::gvk("metrics.k8s.io", "v1beta1", "PodMetrics");
+    let resource = kube::core::ApiResource::from_gvk_with_plural(&gvk, "pods");
+    Api::namespaced_with(client.clone(), namespace, &resource)
+}
+
+async fn list_pod_metrics(
+    client: &kube::Client,
+    namespace: &str,
+) -> Result<BTreeMap<String, PodUsage>> {
+    let metrics = metrics_pod_api(client, namespace)
+        .list(&ListParams::default())
+        .await?;
+    metrics
+        .items
+        .into_iter()
+        .map(|metric| pod_usage_from_value(k8s_openapi::serde_json::to_value(metric)?))
+        .collect()
+}
+
+async fn get_pod_metrics(
+    client: &kube::Client,
+    namespace: &str,
+    name: &str,
+) -> Result<Option<PodUsage>> {
+    let metrics = match metrics_pod_api(client, namespace).get(name).await {
+        Ok(metrics) => metrics,
+        Err(kube::Error::Api(response)) if response.code == 404 => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    let (_, usage) = pod_usage_from_value(k8s_openapi::serde_json::to_value(metrics)?)?;
+    Ok(Some(usage))
 }
 
 /// Watch the small, well-known set of resource kinds which can make up a

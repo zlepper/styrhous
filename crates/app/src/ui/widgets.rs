@@ -50,6 +50,7 @@ pub(super) fn show_resource_cell(ui: &mut egui::Ui, cell: Option<&CellValue>) {
     match cell.unwrap_or(&CellValue::Empty) {
         CellValue::Text(value) => TableRowBuilder::text(ui, value, false),
         CellValue::Number(value) => TableRowBuilder::text(ui, &value.to_string(), false),
+        CellValue::Usage { label, .. } => TableRowBuilder::text(ui, label, false),
         CellValue::Timestamp(value) => TableRowBuilder::text(ui, &format_age(Some(*value)), false),
         CellValue::Status { label, tone } => resource_status(ui, label, *tone),
         CellValue::ContainerIndicators(indicators) => container_indicators(ui, indicators),

@@ -14,10 +14,12 @@ use super::widgets::{
 };
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
+use crate::pod_metrics::{format_cpu, format_memory};
 use crate::resource_catalog::ResourceNavigation;
 use crate::resource_handlers::table_definition;
 use crate::resource_table::{
-    CellValue, CustomResourceColumn, NODE_COLUMN, SortValue, cell_sort_value, compare_sort_values,
+    CPU_COLUMN, CellValue, CustomResourceColumn, MEMORY_COLUMN, NODE_COLUMN, SortValue,
+    cell_sort_value, compare_sort_values,
 };
 use crate::terminal_launcher::{DebugImagePreset, ShellRequest};
 use crate::worker::{GetResourceScale, WorkerCommandBox};
@@ -170,7 +172,11 @@ pub(super) fn show(
                 }
 
                 let selected_api_resource = cluster.selected_api_resource.clone();
-                let all_resources = selected_resources(cluster, selected_api_resource.as_ref());
+                let all_resources = decorate_pod_usage_rows(
+                    cluster,
+                    selected_api_resource.as_ref(),
+                    selected_resources(cluster, selected_api_resource.as_ref()),
+                );
                 let selected_resource_count = selected_api_resource
                     .as_ref()
                     .and_then(|api_resource| cluster.resource_selections.get(api_resource))
@@ -412,7 +418,7 @@ pub(super) fn show(
                 ui_state.select_all_namespaces(cluster_key, commands_to_send);
             }
             NamespaceSelection::ClearAll => {
-                ui_state.clear_selected_namespaces(cluster_key);
+                ui_state.clear_selected_namespaces(cluster_key, commands_to_send);
             }
         }
         if let Some(cluster) = ui_state.clusters.get_mut(&cluster_key)
@@ -477,6 +483,48 @@ fn selected_resources(
         }
     }
     resources.sort_by_key(|resource| resource.name.to_lowercase());
+    resources
+}
+
+fn decorate_pod_usage_rows(
+    cluster: &super::state::ClusterState,
+    api_resource: Option<&crate::api_resource::ApiResource>,
+    mut resources: Vec<MinimalResource>,
+) -> Vec<MinimalResource> {
+    let is_pod =
+        api_resource.is_some_and(|resource| resource.group == "core" && resource.kind == "Pod");
+    if !is_pod {
+        return resources;
+    }
+    for resource in &mut resources {
+        let Some(namespace) = resource.namespace.as_deref() else {
+            continue;
+        };
+        let metrics = cluster.pod_metrics.get(namespace);
+        if metrics.is_some_and(|metrics| metrics.error.is_some()) {
+            resource
+                .cells
+                .insert(CPU_COLUMN.into(), CellValue::Text("Unavailable".into()));
+            resource
+                .cells
+                .insert(MEMORY_COLUMN.into(), CellValue::Text("Unavailable".into()));
+        } else if let Some(usage) = metrics.and_then(|metrics| metrics.usages.get(&resource.name)) {
+            resource.cells.insert(
+                CPU_COLUMN.into(),
+                CellValue::Usage {
+                    label: format_cpu(usage.cpu_nanocores),
+                    value: usage.cpu_nanocores,
+                },
+            );
+            resource.cells.insert(
+                MEMORY_COLUMN.into(),
+                CellValue::Usage {
+                    label: format_memory(usage.memory_bytes),
+                    value: usage.memory_bytes,
+                },
+            );
+        }
+    }
     resources
 }
 

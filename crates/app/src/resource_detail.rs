@@ -155,6 +155,15 @@ pub(crate) struct PodContainerDetail {
     pub(crate) args: Vec<String>,
     pub(crate) ports: Vec<String>,
     pub(crate) environment_variables: Vec<PodEnvironmentVariableDetail>,
+    pub(crate) resource_requests: PodResourceThresholds,
+    pub(crate) resource_limits: PodResourceThresholds,
+}
+
+/// CPU and memory quantities normalized to the same units used by Metrics API samples.
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
+pub(crate) struct PodResourceThresholds {
+    pub(crate) cpu_nanocores: Option<i64>,
+    pub(crate) memory_bytes: Option<i64>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
