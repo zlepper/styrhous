@@ -15,7 +15,6 @@ TODO list:
 * Make the accessibility check require a "label" on all interactable elements, such as input fields or buttons.
 * Double-check for "busy waits" in tests
 * Allow extracting annotations/labels to be displayed in custom columns in the table view
-* BUG: If you open the resource inspector, and then right click to customize the columns, that open a new bladestack, rather than extending the existing one. We need to ensure the application can only ever have 1 global blade stack. 
 
 Deferred
 * Make the "TailwindTable" handle sizes more automatically so we don't have to sit and pixel fiddle.

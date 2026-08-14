@@ -6,7 +6,7 @@ use components::colors::{
 use components::design::{radius, spacing, status, surface, typography};
 use components::{
     ButtonSize, ButtonVariant, PointingHand, ReorderHandle, ReorderableTable, TailwindButton,
-    TailwindCombobox, icons,
+    TailwindCombobox, TailwindTextInput, icons,
 };
 
 const FOOTER_HEIGHT: f32 = 52.0;
@@ -315,21 +315,17 @@ fn show_debug_image_preset_row(
                 });
                 show_debug_image_table_cell(ui, DEBUG_IMAGE_NAME_COLUMN_WIDTH, |ui| {
                     let mut control_ui = centered_table_control_ui(ui);
-                    show_table_text_input(
-                        &mut control_ui,
-                        &mut preset.name,
-                        ("debug-image-name", index),
-                        format!("Debug image {} name", index + 1),
-                    );
+                    TailwindTextInput::new(&mut preset.name)
+                        .id_salt(("debug-image-name", index))
+                        .accessibility_label(format!("Debug image {} name", index + 1))
+                        .show(&mut control_ui);
                 });
                 show_debug_image_table_cell(ui, image_column_width, |ui| {
                     let mut control_ui = centered_table_control_ui(ui);
-                    show_table_text_input(
-                        &mut control_ui,
-                        &mut preset.image,
-                        ("debug-image-image", index),
-                        format!("Debug image {} image", index + 1),
-                    );
+                    TailwindTextInput::new(&mut preset.image)
+                        .id_salt(("debug-image-image", index))
+                        .accessibility_label(format!("Debug image {} image", index + 1))
+                        .show(&mut control_ui);
                 });
                 show_debug_image_table_cell(ui, DEBUG_IMAGE_PROFILE_COLUMN_WIDTH, |ui| {
                     let mut combobox_ui = centered_table_control_ui(ui);
@@ -524,43 +520,6 @@ fn show_debug_image_table_cell(ui: &mut egui::Ui, width: f32, content: impl FnOn
     );
     cell_ui.add_space(spacing::LG);
     content(&mut cell_ui);
-}
-
-fn show_table_text_input(
-    ui: &mut egui::Ui,
-    value: &mut String,
-    id_salt: impl std::hash::Hash + std::fmt::Debug,
-    accessibility_label: String,
-) {
-    let id = ui.make_persistent_id(id_salt);
-    let focused = ui.memory(|memory| memory.has_focus(id));
-    let stroke = if focused {
-        egui::Stroke::new(1.0, indigo::_500)
-    } else {
-        surface::control_border()
-    };
-    let response = egui::Frame::new()
-        .fill(WHITE)
-        .stroke(stroke)
-        .corner_radius(radius::control())
-        .inner_margin(egui::Margin::symmetric(
-            spacing::SM as i8,
-            spacing::XS as i8,
-        ))
-        .show(ui, |ui| {
-            ui.add_sized(
-                egui::vec2(ui.available_width(), 20.0),
-                egui::TextEdit::singleline(value).id(id),
-            )
-        })
-        .inner;
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(
-            egui::WidgetType::TextEdit,
-            ui.is_enabled(),
-            accessibility_label.clone(),
-        )
-    });
 }
 
 fn launcher_choice(

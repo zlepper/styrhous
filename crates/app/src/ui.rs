@@ -355,6 +355,14 @@ mod persistence_tests {
         let mut app = MyEguiApp::<MockWorker>::default();
         app.resource_table_preferences
             .set_width(&key, &columns, "name", 260.0);
+        assert!(app.resource_table_preferences.add_custom_column(
+            &key,
+            table_preferences::CustomMetadataColumn {
+                source: table_preferences::MetadataColumnSource::Label,
+                key: "app.kubernetes.io/name".into(),
+                label: "Application".into(),
+            },
+        ));
 
         eframe::App::save(&mut app, &mut storage);
 
@@ -366,6 +374,10 @@ mod persistence_tests {
                 .resolved_columns(&key, &columns)[0]
                 .width,
             260.0
+        );
+        assert_eq!(
+            restored.resource_table_preferences.custom_columns(&key)[0].label,
+            "Application"
         );
     }
 

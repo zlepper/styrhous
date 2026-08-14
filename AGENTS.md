@@ -6,12 +6,8 @@ UI receives `WorkerResult` updates and sends `WorkerCommand`s.
 
 ## Development
 
-Enter the Nix shell before local development; it provides the native graphics libraries,
-`cargo-nextest`, `kind`, and `kubectl`.
 
 ```bash
-nix develop
-
 # Build or run the app
 cargo build
 cargo run -p kubernetes-dev-ui
@@ -122,3 +118,8 @@ alignment of elements. Focusing on things that are supports to be aligned which 
 aligned horizontally/vertically as relevant.
 
 All of those agents can be launched in parallel if the harness supports it.
+
+## Other notes
+
+* Do not worry about running out of context. When you are working on a task, keep working until it 
+is actually complete. The context will auto-compact if necessary.

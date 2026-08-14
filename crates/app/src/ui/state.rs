@@ -1964,6 +1964,8 @@ mod tests {
             namespace: Some("default".into()),
             creation_timestamp: None,
             controller_owner: None,
+            labels: BTreeMap::new(),
+            annotations: BTreeMap::new(),
             cells: BTreeMap::new(),
             log_containers: Vec::new(),
         };

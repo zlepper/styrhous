@@ -1,0 +1,11 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          TextInput name="Metadata key" value="" state=[focused] rect=(x=8.0 y=8.0 width=320.0 height=28.0 center_x=168.0 center_y=22.0)
+            TextRun value="" rect=(x=17.0 y=13.0 width=0.0 height=17.0 center_x=17.0 center_y=21.5)
+        GenericContainer rect=<none>
+          TextInput name="Column header" value="Application" rect=(x=8.0 y=51.0 width=320.0 height=28.0 center_x=168.0 center_y=65.0)
+            TextRun value="Application" rect=(x=17.0 y=56.0 width=74.2 height=17.0 center_x=54.1 center_y=64.5)
