@@ -5,6 +5,8 @@ pub(crate) const CONTAINERS_COLUMN: &str = "containers";
 pub(crate) const STATUS_COLUMN: &str = "status";
 pub(crate) const RESTARTS_COLUMN: &str = "restarts";
 pub(crate) const NODE_COLUMN: &str = "node";
+pub(crate) const CPU_COLUMN: &str = "cpu";
+pub(crate) const MEMORY_COLUMN: &str = "memory";
 pub(crate) const UP_TO_DATE_COLUMN: &str = "up-to-date";
 pub(crate) const AVAILABLE_COLUMN: &str = "available";
 pub(crate) const DESIRED_COLUMN: &str = "desired";
@@ -44,8 +46,16 @@ pub(crate) struct CustomResourceColumn {
 pub(crate) enum CellValue {
     Text(String),
     Number(i64),
+    /// A quantity whose rendered label differs from the normalized numeric sort value.
+    Usage {
+        label: String,
+        value: i64,
+    },
     Timestamp(OffsetDateTime),
-    Status { label: String, tone: StatusTone },
+    Status {
+        label: String,
+        tone: StatusTone,
+    },
     ContainerIndicators(Vec<ContainerIndicator>),
     List(Vec<String>),
     Empty,
@@ -62,6 +72,7 @@ pub(crate) fn cell_sort_value(value: &CellValue) -> SortValue {
     match value {
         CellValue::Text(value) => SortValue::Text(value.clone()),
         CellValue::Number(value) => SortValue::Number(*value),
+        CellValue::Usage { value, .. } => SortValue::Number(*value),
         CellValue::Timestamp(value) => SortValue::Number(value.unix_timestamp()),
         CellValue::Status { label, .. } => SortValue::Text(label.clone()),
         CellValue::ContainerIndicators(values) => SortValue::Text(

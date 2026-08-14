@@ -1,8 +1,8 @@
 use super::super::MyEguiApp;
 use super::super::state::ClusterConnectionState;
 use super::super::state::{
-    BulkDeleteProgress, BulkDeleteTarget, PendingDelete, PendingForceDelete, ResourceWatchState,
-    UiState, ValidationState, YamlEditorWindowState,
+    BulkDeleteProgress, BulkDeleteTarget, PendingDelete, PendingForceDelete,
+    PodMetricsNamespaceState, ResourceWatchState, UiState, ValidationState, YamlEditorWindowState,
 };
 use super::super::table_preferences::{
     PersistedResourceTablePreferences, ResourceTableKey, TableColumnDefinition,
@@ -14,12 +14,13 @@ use super::fixtures::{
 use crate::cluster_connection_manager::Cluster;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::{MinimalResource, PodLogContainer};
+use crate::pod_metrics::{ContainerUsage, PodUsage};
 use crate::resource_catalog::build_resource_navigation;
 use crate::resource_detail::{
     ConfigMapDetail, ManagedResource, ManagedResourceAssociation, NodeDetail, PodConditionDetail,
     PodContainerDetail, PodDetail, PodEnvironmentVariableDetail, PodEnvironmentVariableSource,
-    PodVolumeDetail, ResourceDetail, ResourceDetailPayload, ResourceEvent, ResourceOwner,
-    SecretDataDetail, SecretDetail,
+    PodResourceThresholds, PodVolumeDetail, ResourceDetail, ResourceDetailPayload, ResourceEvent,
+    ResourceOwner, SecretDataDetail, SecretDetail,
 };
 use crate::resource_schema::ResourceSchema;
 use crate::resource_table::{
@@ -37,6 +38,7 @@ use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use k8s_openapi::serde_json::json;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use time::OffsetDateTime;
 
 struct YamlEditorSnapshotState {
     editor: YamlEditorWindowState,
@@ -143,6 +145,8 @@ fn overflowing_pod_detail() -> PodDetail {
                         },
                     },
                 ],
+                resource_requests: Default::default(),
+                resource_limits: Default::default(),
             })
             .collect(),
         log_containers: Vec::new(),
@@ -530,6 +534,21 @@ fn pod_resource_table_shows_per_container_status_indicators() {
     let pods = fixture_api_resource("core", "Pod", "pods");
     let mut state = oracle_resource_table_state();
     let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
+    cluster.pod_metrics.insert(
+        "kube-system".into(),
+        PodMetricsNamespaceState {
+            usages: BTreeMap::from([(
+                "api-pod".into(),
+                PodUsage {
+                    timestamp: OffsetDateTime::now_utc(),
+                    cpu_nanocores: 125_000_000,
+                    memory_bytes: 96 * 1024 * 1024,
+                    containers: BTreeMap::new(),
+                },
+            )]),
+            error: None,
+        },
+    );
     cluster.resource_cache.insert(
         (pods, Some("kube-system".into())),
         ResourceWatchState {
@@ -1284,10 +1303,7 @@ fn resource_table_row_context_menu_snapshot() {
     let resource_name_rect = harness
         .get_by_label("Open details for coredns-66bc5c9577-ffw2s")
         .rect();
-    let click_position = egui::pos2(
-        resource_name_rect.right() + 32.0,
-        resource_name_rect.center().y,
-    );
+    let click_position = resource_name_rect.center();
     secondary_click(&mut harness, click_position);
     harness.run();
 
@@ -3561,6 +3577,14 @@ fn pod_resource_detail_inspector_snapshot() {
                                 },
                             },
                         ],
+                        resource_requests: PodResourceThresholds {
+                            cpu_nanocores: Some(10_000_000),
+                            memory_bytes: Some(16 * 1024 * 1024),
+                        },
+                        resource_limits: PodResourceThresholds {
+                            cpu_nanocores: Some(100_000_000),
+                            memory_bytes: Some(128 * 1024 * 1024),
+                        },
                     }],
                     log_containers: Vec::new(),
                     volumes: vec![
@@ -3598,6 +3622,33 @@ fn pod_resource_detail_inspector_snapshot() {
             }],
         }) as WorkerResultBox,
     ]);
+    let now = OffsetDateTime::now_utc();
+    for (seconds_ago, cpu_nanocores, memory_bytes) in [
+        (90, 12_000_000, 20 * 1024 * 1024),
+        (45, 18_000_000, 24 * 1024 * 1024),
+        (0, 15_000_000, 22 * 1024 * 1024),
+    ] {
+        harness
+            .state_mut()
+            .worker
+            .results
+            .push_back(Box::new(ResourceDetailPodUsageUpdated {
+                cluster_key: 2,
+                history_entry_id: 1,
+                usage: PodUsage {
+                    timestamp: now - time::Duration::seconds(seconds_ago),
+                    cpu_nanocores,
+                    memory_bytes,
+                    containers: BTreeMap::from([(
+                        "coredns".into(),
+                        ContainerUsage {
+                            cpu_nanocores,
+                            memory_bytes,
+                        },
+                    )]),
+                },
+            }) as WorkerResultBox);
+    }
     harness.run();
 
     let first_arg_top = harness.get_by_label("-conf").rect().top();
@@ -3611,9 +3662,34 @@ fn pod_resource_detail_inspector_snapshot() {
     assert_eq!(first_arg_top, second_arg_top);
     assert_eq!(second_arg_top, long_arg_top);
 
-    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
-        "resource_inspectors/pod_resource_detail_inspector_snapshot/pod_resource_detail_inspector",
-    ));
+    harness.event(egui::Event::PointerGone);
+    harness.run();
+    // Chart points are positioned against the live clock, so allow their anti-aliased edges to
+    // move by a fraction of a pixel between snapshot runs.
+    harness.ui_harness(
+        HarnessSnapshotOptions::strict(
+            "resource_inspectors/pod_resource_detail_inspector_snapshot/pod_resource_detail_inspector",
+        )
+        .max_failed_pixels(100),
+    );
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(Box::new(ResourceDetailPodUsageFailed {
+            cluster_key: 2,
+            history_entry_id: 1,
+            error: "Metrics API unavailable".into(),
+        }) as WorkerResultBox);
+    harness.run();
+    harness.event(egui::Event::PointerGone);
+    harness.run();
+    harness.ui_harness(
+        HarnessSnapshotOptions::strict(
+            "resource_inspectors/pod_resource_detail_inspector_snapshot/pod_resource_detail_inspector_usage_unavailable",
+        )
+        .max_failed_pixels(100),
+    );
     harness.get_by_label("Reveal").click_accesskit();
     harness.run();
     harness.get_by_label("test-token");
@@ -4337,6 +4413,7 @@ fn resource_table_resizes_and_horizontally_scrolls() {
     harness.set_size(egui::vec2(850.0, 1024.0));
     harness.run_steps(2);
 
+    let original_name_width = resource_table_name_width(&mut harness);
     let resize_handle = resource_table_name_resize_handle(&harness);
     let drag_start = resize_handle.center();
     let drag_target = drag_start + egui::vec2(120.0, 0.0);
@@ -4351,7 +4428,10 @@ fn resource_table_resizes_and_horizontally_scrolls() {
     harness.event(egui::Event::PointerMoved(drag_target));
     harness.run_steps(2);
 
-    assert_eq!(resource_table_name_width(&mut harness), 280.0);
+    assert_eq!(
+        resource_table_name_width(&mut harness),
+        original_name_width + 120.0
+    );
     assert!(
         (resource_table_name_resize_handle(&harness).center().x - drag_target.x).abs() < 0.1,
         "the resize handle should remain beneath the pointer while dragging"
@@ -4367,7 +4447,10 @@ fn resource_table_resizes_and_horizontally_scrolls() {
         modifiers: egui::Modifiers::default(),
     });
     harness.run_steps(2);
-    assert_eq!(resource_table_name_width(&mut harness), 280.0);
+    assert_eq!(
+        resource_table_name_width(&mut harness),
+        original_name_width + 120.0
+    );
     assert!(
         (resource_table_name_resize_handle(&harness).center().x - drag_target.x).abs() < 0.1,
         "the resize handle should stay in place after releasing it"

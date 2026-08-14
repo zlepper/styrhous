@@ -5,6 +5,7 @@ mod helpers;
 mod log_store;
 mod minimal_namespace;
 mod minimal_resource;
+mod pod_metrics;
 mod resource_catalog;
 mod resource_detail;
 mod resource_extensions;

@@ -14,6 +14,7 @@ pub mod typography {
     const INTER_SEMIBOLD: &str = "Inter SemiBold";
 
     pub const META_SIZE: f32 = 12.0;
+    pub const CHART_AXIS_SIZE: f32 = 10.0;
     pub const BODY_SIZE: f32 = 14.0;
     pub const SECTION_SIZE: f32 = 16.0;
     pub const PAGE_TITLE_SIZE: f32 = 20.0;
@@ -21,6 +22,10 @@ pub mod typography {
 
     pub fn metadata() -> FontId {
         FontId::proportional(META_SIZE)
+    }
+
+    pub fn chart_axis() -> FontId {
+        FontId::proportional(CHART_AXIS_SIZE)
     }
 
     pub fn body() -> FontId {
