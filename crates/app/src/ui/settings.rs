@@ -1,12 +1,12 @@
-use super::state::UiState;
+use super::global_blade::{GlobalBladeContent, GlobalBladeRenderContext, GlobalBladeRenderResult};
 use crate::terminal_launcher::{DebugImagePreset, DebugProfile, TerminalLaunchSettings};
 use components::colors::{
     CONTENT_BACKGROUND, TABLE_BORDER, TABLE_HEADER_BACKGROUND, WHITE, gray, indigo,
 };
 use components::design::{radius, spacing, status, surface, typography};
 use components::{
-    BladeNavigator, BladeStack, ButtonSize, ButtonVariant, PointingHand, ReorderHandle,
-    ReorderableTable, TailwindButton, TailwindCombobox, icons,
+    ButtonSize, ButtonVariant, PointingHand, ReorderHandle, ReorderableTable, TailwindButton,
+    TailwindCombobox, icons,
 };
 
 const FOOTER_HEIGHT: f32 = 52.0;
@@ -18,87 +18,92 @@ const DEBUG_IMAGE_NAME_COLUMN_WIDTH: f32 = 170.0;
 const DEBUG_IMAGE_PROFILE_COLUMN_WIDTH: f32 = 170.0;
 const DEBUG_IMAGE_ACTIONS_COLUMN_WIDTH: f32 = 52.0;
 
-/// Render application settings as a first-class workspace blade rather than a
-/// transient native dialog, so its controls have room for explanation.
-pub(super) fn show(
-    ctx: &egui::Context,
-    ui_state: &mut UiState,
-    settings: &mut TerminalLaunchSettings,
-) {
-    if !ui_state.terminal_settings_open {
-        return;
+#[derive(Debug)]
+pub(super) struct TerminalSettingsBlade {
+    pub(super) draft: TerminalLaunchSettings,
+    pub(super) error: Option<String>,
+}
+
+impl TerminalSettingsBlade {
+    pub(super) fn new(draft: TerminalLaunchSettings) -> Self {
+        Self { draft, error: None }
+    }
+}
+
+impl GlobalBladeContent for TerminalSettingsBlade {
+    #[cfg(test)]
+    fn terminal_settings(&self) -> Option<&TerminalSettingsBlade> {
+        Some(self)
+    }
+    fn render_header(
+        &mut self,
+        ui: &mut egui::Ui,
+        _layer: components::BladeLayer,
+        _context: &mut GlobalBladeRenderContext<'_>,
+    ) -> GlobalBladeRenderResult {
+        ui.label(
+            egui::RichText::new("Settings")
+                .font(typography::page_title())
+                .color(gray::_900),
+        );
+        GlobalBladeRenderResult::default()
     }
 
-    let mut close = ctx.input(|input| input.key_pressed(egui::Key::Escape));
-    let mut save = false;
-    let mut reset = false;
-    let stack = BladeStack::new("settings-blade");
-    let mut blade = ui_state
-        .terminal_settings_blade
-        .take()
-        .unwrap_or_else(|| BladeNavigator::new(()));
-    let response = stack.show_with_title(
-        ctx,
-        &mut blade,
-        |_| "Settings".to_owned(),
-        |ui, _, _| {
-            show_settings_introduction(ui);
-            ui.add_space(spacing::XL);
-            ui.separator();
-            ui.add_space(spacing::XL);
-
-            let content_height = (ui.available_height() - FOOTER_HEIGHT).max(120.0);
-            ui.allocate_ui_with_layout(
-                egui::vec2(ui.available_width(), content_height),
-                egui::Layout::top_down(egui::Align::Min),
-                |ui| {
-                    components::scroll::vertical()
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| {
-                            show_terminal_launcher(ui, ui_state);
-                            ui.add_space(spacing::XL);
-                            ui.separator();
-                            ui.add_space(spacing::XL);
-                            show_debug_image_presets(ui, ui_state);
-                        });
-                },
-            );
-
-            ui.separator();
-            ui.add_space(spacing::SM);
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                save |= TailwindButton::new("Save changes").show(ui).clicked();
-                reset |= TailwindButton::secondary("Reset")
-                    .size(ButtonSize::Md)
-                    .show(ui)
-                    .clicked();
-            });
-        },
-    );
-    close |= response.dismissed;
-
-    if reset {
-        ui_state.terminal_settings_draft = TerminalLaunchSettings::default();
-        ui_state.terminal_settings_error = None;
-    }
-    if save {
-        match ui_state.terminal_settings_draft.validate() {
-            Ok(()) => {
-                *settings = ui_state.terminal_settings_draft.clone();
-                ui_state.terminal_settings_error = None;
-                close = true;
-            }
-            Err(error) => ui_state.terminal_settings_error = Some(error),
+    fn render_body(
+        &mut self,
+        ui: &mut egui::Ui,
+        _layer: components::BladeLayer,
+        context: &mut GlobalBladeRenderContext<'_>,
+    ) -> GlobalBladeRenderResult {
+        let mut save = false;
+        let mut reset = false;
+        show_settings_introduction(ui);
+        ui.add_space(spacing::XL);
+        ui.separator();
+        ui.add_space(spacing::XL);
+        let content_height = (ui.available_height() - FOOTER_HEIGHT).max(120.0);
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width(), content_height),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                components::scroll::vertical()
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        show_terminal_launcher(ui, &mut self.draft, &mut self.error);
+                        ui.add_space(spacing::XL);
+                        ui.separator();
+                        ui.add_space(spacing::XL);
+                        show_debug_image_presets(ui, &mut self.draft, &mut self.error);
+                    });
+            },
+        );
+        ui.separator();
+        ui.add_space(spacing::SM);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            save |= TailwindButton::new("Save changes").show(ui).clicked();
+            reset |= TailwindButton::secondary("Reset")
+                .size(ButtonSize::Md)
+                .show(ui)
+                .clicked();
+        });
+        if reset {
+            self.draft = TerminalLaunchSettings::default();
+            self.error = None;
         }
-    }
-    if close && blade.begin_close() {
-        stack.seed_transition(ctx, &mut blade);
-    }
-    if response.close_finished {
-        ui_state.terminal_settings_open = false;
-        ui_state.terminal_settings_blade = None;
-    } else {
-        ui_state.terminal_settings_blade = Some(blade);
+        if save {
+            match self.draft.validate() {
+                Ok(()) => {
+                    *context.terminal_launch_settings() = self.draft.clone();
+                    self.error = None;
+                    return GlobalBladeRenderResult {
+                        close: true,
+                        ..Default::default()
+                    };
+                }
+                Err(error) => self.error = Some(error),
+            }
+        }
+        GlobalBladeRenderResult::default()
     }
 }
 
@@ -118,7 +123,11 @@ fn show_settings_introduction(ui: &mut egui::Ui) {
     );
 }
 
-fn show_terminal_launcher(ui: &mut egui::Ui, ui_state: &mut UiState) {
+fn show_terminal_launcher(
+    ui: &mut egui::Ui,
+    draft: &mut TerminalLaunchSettings,
+    error: &mut Option<String>,
+) {
     ui.label(
         egui::RichText::new("Terminal launcher")
             .font(typography::section_heading())
@@ -132,7 +141,7 @@ fn show_terminal_launcher(ui: &mut egui::Ui, ui_state: &mut UiState) {
     );
     ui.add_space(spacing::XL);
 
-    let automatic = ui_state.terminal_settings_draft.custom_template.is_none();
+    let automatic = draft.custom_template.is_none();
     if launcher_choice(
         ui,
         automatic,
@@ -142,16 +151,16 @@ fn show_terminal_launcher(ui: &mut egui::Ui, ui_state: &mut UiState) {
         false,
         None,
     ) {
-        ui_state.terminal_settings_draft.custom_template = None;
-        ui_state.terminal_settings_error = None;
+        draft.custom_template = None;
+        *error = None;
     }
     ui.add_space(spacing::LG);
     let custom_launcher_clicked = {
-        let template_error = ui_state.terminal_settings_error.clone();
+        let template_error = error.clone();
         let template_error =
             template_error.filter(|error| error.starts_with("The launcher template"));
         let template_invalid = template_error.is_some();
-        let template = ui_state.terminal_settings_draft.custom_template.as_mut();
+        let template = draft.custom_template.as_mut();
         launcher_choice(
             ui,
             !automatic,
@@ -162,12 +171,16 @@ fn show_terminal_launcher(ui: &mut egui::Ui, ui_state: &mut UiState) {
             template_error.as_deref(),
         )
     };
-    if custom_launcher_clicked && ui_state.terminal_settings_draft.custom_template.is_none() {
-        ui_state.terminal_settings_draft.custom_template = Some(String::new());
+    if custom_launcher_clicked && draft.custom_template.is_none() {
+        draft.custom_template = Some(String::new());
     }
 }
 
-fn show_debug_image_presets(ui: &mut egui::Ui, ui_state: &mut UiState) {
+fn show_debug_image_presets(
+    ui: &mut egui::Ui,
+    draft: &mut TerminalLaunchSettings,
+    error: &mut Option<String>,
+) {
     ui.label(
         egui::RichText::new("Debug images")
             .font(typography::section_heading())
@@ -190,7 +203,7 @@ fn show_debug_image_presets(ui: &mut egui::Ui, ui_state: &mut UiState) {
     show_debug_image_preset_table_header(ui, table_width);
     let moved = ReorderableTable::new("debug-image-presets", DEBUG_IMAGE_TABLE_ROW_HEIGHT).show(
         ui,
-        &mut ui_state.terminal_settings_draft.debug_image_presets,
+        &mut draft.debug_image_presets,
         table_width,
         |ui, preset, index, handle| {
             show_debug_image_preset_row(ui, table_width, preset, index, handle, &mut remove_preset);
@@ -199,14 +212,11 @@ fn show_debug_image_presets(ui: &mut egui::Ui, ui_state: &mut UiState) {
     );
     ui.spacing_mut().item_spacing = original_item_spacing;
     if moved {
-        ui_state.terminal_settings_error = None;
+        *error = None;
     }
     if let Some(index) = remove_preset {
-        ui_state
-            .terminal_settings_draft
-            .debug_image_presets
-            .remove(index);
-        ui_state.terminal_settings_error = None;
+        draft.debug_image_presets.remove(index);
+        *error = None;
     }
     if TailwindButton::icon(
         icons::plus_icon()
@@ -219,18 +229,14 @@ fn show_debug_image_presets(ui: &mut egui::Ui, ui_state: &mut UiState) {
     .show(ui)
     .clicked()
     {
-        ui_state
-            .terminal_settings_draft
-            .debug_image_presets
-            .push(DebugImagePreset {
-                name: String::new(),
-                image: String::new(),
-                profile: DebugProfile::General,
-            });
-        ui_state.terminal_settings_error = None;
+        draft.debug_image_presets.push(DebugImagePreset {
+            name: String::new(),
+            image: String::new(),
+            profile: DebugProfile::General,
+        });
+        *error = None;
     }
-    if let Some(error) = ui_state
-        .terminal_settings_error
+    if let Some(error) = error
         .as_deref()
         .filter(|error| !error.starts_with("The launcher template"))
     {

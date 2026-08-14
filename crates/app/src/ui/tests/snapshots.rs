@@ -4,7 +4,9 @@ use super::super::state::{
     BulkDeleteProgress, BulkDeleteTarget, PendingDelete, PendingForceDelete, ResourceWatchState,
     UiState, ValidationState, YamlEditorWindowState,
 };
-use super::super::table_preferences::{ResourceTableKey, TableColumnDefinition};
+use super::super::table_preferences::{
+    PersistedResourceTablePreferences, ResourceTableKey, TableColumnDefinition,
+};
 use super::fixtures::{
     application_harness, application_harness_with_terminal, fixture_api_resource, fixture_cluster,
     fixture_cluster_scoped_api_resource, oracle_resource_table_state,
@@ -43,6 +45,41 @@ struct YamlEditorSnapshotState {
 
 fn command_is<T: WorkerCommand + 'static>(command: &WorkerCommandBox) -> Option<&T> {
     command.as_ref().as_any().downcast_ref()
+}
+
+fn open_terminal_settings(state: &mut UiState, draft: TerminalLaunchSettings) {
+    let mut commands = Vec::new();
+    state.open_terminal_settings(&draft, &mut commands);
+    assert!(
+        commands.is_empty(),
+        "opening local settings must not start worker work"
+    );
+}
+
+fn open_inspector_with_column_settings(state: &mut UiState, commands: &mut Vec<WorkerCommandBox>) {
+    let deployment = fixture_api_resource("apps", "Deployment", "deployments");
+    state.open_resource_detail(
+        2,
+        deployment.clone(),
+        "api".into(),
+        Some("kube-system".into()),
+        "deployment-uid".into(),
+        commands,
+    );
+    let mut preferences = PersistedResourceTablePreferences::default();
+    let mut settings = super::super::resource_table_settings::target(
+        &mut preferences,
+        ResourceTableKey::workspace(&deployment),
+        &[TableColumnDefinition {
+            id: "name".into(),
+            label: "Name".into(),
+            default_width: 160.0,
+            sortable: true,
+        }],
+    );
+    settings.set_resource_detail_owner(1);
+    let discarded = state.global_blades.push(Box::new(settings));
+    assert!(discarded.is_empty());
 }
 
 fn select_namespace(harness: &mut Harness<MyEguiApp<MockWorker>>, namespace: &str) {
@@ -1742,7 +1779,7 @@ fn shell_launch_failure_uses_the_styled_error_modal_and_opens_terminal_settings(
     harness.run_steps(2);
 
     assert!(harness.state().ui_state.terminal_launch_error.is_none());
-    assert!(harness.state().ui_state.terminal_settings_open);
+    assert!(harness.state().ui_state.global_blades.navigator().is_some());
     harness.get_by_label("Terminal launcher");
 }
 
@@ -1758,7 +1795,7 @@ fn terminal_launch_error_dismisses_without_opening_settings() {
     harness.run();
 
     assert!(harness.state().ui_state.terminal_launch_error.is_none());
-    assert!(!harness.state().ui_state.terminal_settings_open);
+    assert!(harness.state().ui_state.global_blades.navigator().is_none());
 }
 
 #[test]
@@ -1779,14 +1816,221 @@ fn settings_button_opens_the_terminal_launcher_blade() {
 }
 
 #[test]
+fn settings_replaces_an_inspector_owned_child_blade_without_resurrecting_history() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    let mut commands = Vec::new();
+    open_inspector_with_column_settings(&mut state, &mut commands);
+    assert_eq!(
+        state.global_blades.navigator().unwrap().back_stack().len(),
+        1
+    );
+    state.open_terminal_settings(&TerminalLaunchSettings::default(), &mut commands);
+    assert!(state.clusters[&2].resource_detail_panel.is_none());
+    assert!(state.terminal_settings_blade().is_some());
+    assert!(commands.iter().any(|command| {
+        command_is::<StopResourceDetailWatch>(command)
+            .is_some_and(|command| command.cluster_key == 2 && command.history_entry_id == 1)
+    }));
+    harness.state_mut().ui_state = state;
+    harness.state_mut().worker.commands.append(&mut commands);
+    harness
+        .ctx
+        .global_style_mut(|style| style.animation_time = 0.0);
+    harness.run_steps(2);
+
+    harness.get_by_label("Close blade").click();
+    harness.run_steps(2);
+
+    assert!(harness.state().ui_state.global_blades.navigator().is_none());
+    assert!(
+        harness.state().ui_state.clusters[&2]
+            .resource_detail_panel
+            .is_none()
+    );
+}
+
+#[test]
+fn opening_an_inspector_in_another_cluster_replaces_all_panel_state() {
+    let mut state = oracle_resource_table_state();
+    let deployment = fixture_api_resource("apps", "Deployment", "deployments");
+    let mut commands = Vec::new();
+    state.open_resource_detail(
+        1,
+        deployment.clone(),
+        "dev-api".into(),
+        Some("default".into()),
+        "dev-deployment-uid".into(),
+        &mut commands,
+    );
+    state.open_resource_detail(
+        2,
+        deployment,
+        "kind-api".into(),
+        Some("kube-system".into()),
+        "kind-deployment-uid".into(),
+        &mut commands,
+    );
+
+    assert!(state.clusters[&1].resource_detail_panel.is_none());
+    assert!(state.clusters[&2].resource_detail_panel.is_some());
+    assert_eq!(
+        state
+            .global_blades
+            .navigator()
+            .unwrap()
+            .current()
+            .resource_detail()
+            .unwrap()
+            .cluster_key,
+        2
+    );
+    assert!(commands.iter().any(|command| {
+        command_is::<StopResourceDetailWatch>(command)
+            .is_some_and(|command| command.cluster_key == 1 && command.history_entry_id == 1)
+    }));
+}
+
+#[test]
+fn closing_an_inspector_owned_column_settings_blade_cleans_up_the_inspector() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    let mut commands = Vec::new();
+    open_inspector_with_column_settings(&mut state, &mut commands);
+    harness.state_mut().ui_state = state;
+    harness.state_mut().worker.commands.append(&mut commands);
+    harness
+        .ctx
+        .global_style_mut(|style| style.animation_time = 0.0);
+    harness.run_steps(2);
+
+    harness.get_by_label("Configure columns");
+    harness.get_by_label("Close blade").click();
+    harness.run_steps(2);
+
+    assert!(harness.state().ui_state.global_blades.navigator().is_none());
+    assert!(
+        harness.state().ui_state.clusters[&2]
+            .resource_detail_panel
+            .is_none()
+    );
+    assert!(harness.state().worker.commands.iter().any(|command| {
+        command_is::<StopResourceDetailWatch>(command)
+            .is_some_and(|command| command.cluster_key == 2 && command.history_entry_id == 1)
+    }));
+}
+
+#[test]
+fn escape_closes_an_inspector_owned_column_settings_blade_and_cleans_up() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    let mut commands = Vec::new();
+    open_inspector_with_column_settings(&mut state, &mut commands);
+    harness.state_mut().ui_state = state;
+    harness.state_mut().worker.commands.append(&mut commands);
+    harness
+        .ctx
+        .global_style_mut(|style| style.animation_time = 0.0);
+    harness.run_steps(2);
+
+    harness.input_mut().events.push(egui::Event::Key {
+        key: egui::Key::Escape,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    harness.run_steps(2);
+
+    assert!(harness.state().ui_state.global_blades.navigator().is_none());
+    assert!(
+        harness.state().ui_state.clusters[&2]
+            .resource_detail_panel
+            .is_none()
+    );
+    assert!(harness.state().worker.commands.iter().any(|command| {
+        command_is::<StopResourceDetailWatch>(command)
+            .is_some_and(|command| command.cluster_key == 2 && command.history_entry_id == 1)
+    }));
+}
+
+#[test]
+fn deleting_an_inspector_removes_its_foreground_column_settings_child() {
+    let mut state = oracle_resource_table_state();
+    let mut commands = Vec::new();
+    open_inspector_with_column_settings(&mut state, &mut commands);
+
+    ResourceDetailDeleted {
+        cluster_key: 2,
+        history_entry_id: 1,
+    }
+    .apply(&mut state, &mut commands);
+
+    assert!(state.global_blades.navigator().is_none());
+    assert!(state.clusters[&2].resource_detail_panel.is_none());
+    assert!(commands.iter().any(|command| {
+        command_is::<StopResourceDetailWatch>(command)
+            .is_some_and(|command| command.cluster_key == 2 && command.history_entry_id == 1)
+    }));
+}
+
+#[test]
+fn refreshing_clusters_discards_open_inspectors_and_stops_their_watches() {
+    let mut state = oracle_resource_table_state();
+    let mut commands = Vec::new();
+    state.open_resource_detail(
+        2,
+        fixture_api_resource("apps", "Deployment", "deployments"),
+        "api".into(),
+        Some("kube-system".into()),
+        "deployment-uid".into(),
+        &mut commands,
+    );
+
+    KubernetesClustersUpdated(vec![Cluster {
+        name: "refreshed".into(),
+        is_current: true,
+    }])
+    .apply(&mut state, &mut commands);
+
+    assert!(state.global_blades.navigator().is_none());
+    assert!(commands.iter().any(|command| {
+        command_is::<StopResourceDetailWatch>(command)
+            .is_some_and(|command| command.cluster_key == 2 && command.history_entry_id == 1)
+    }));
+}
+
+#[test]
+fn refreshing_clusters_preserves_a_non_resource_global_blade() {
+    let mut state = oracle_resource_table_state();
+    let mut commands = Vec::new();
+    open_terminal_settings(&mut state, TerminalLaunchSettings::default());
+
+    KubernetesClustersUpdated(vec![Cluster {
+        name: "refreshed".into(),
+        is_current: true,
+    }])
+    .apply(&mut state, &mut commands);
+
+    assert!(state.terminal_settings_blade().is_some());
+    assert!(
+        !commands
+            .iter()
+            .any(|command| { command_is::<StopResourceDetailWatch>(command).is_some() })
+    );
+}
+
+#[test]
 fn settings_blade_shows_custom_terminal_launcher_details() {
     let mut harness = application_harness::<MockWorker>();
     let mut state = oracle_resource_table_state();
-    state.terminal_settings_open = true;
-    state.terminal_settings_draft = TerminalLaunchSettings {
-        custom_template: Some("alacritty -e {command}".into()),
-        ..Default::default()
-    };
+    open_terminal_settings(
+        &mut state,
+        TerminalLaunchSettings {
+            custom_template: Some("alacritty -e {command}".into()),
+            ..Default::default()
+        },
+    );
     harness.state_mut().ui_state = state;
     harness.run();
 
@@ -1801,15 +2045,17 @@ fn settings_blade_shows_custom_terminal_launcher_details() {
 fn saving_debug_image_presets_applies_the_settings_draft() {
     let mut harness = application_harness::<MockWorker>();
     let mut state = oracle_resource_table_state();
-    state.terminal_settings_open = true;
-    state.terminal_settings_draft = TerminalLaunchSettings {
-        custom_template: None,
-        debug_image_presets: vec![DebugImagePreset {
-            name: "Operations".into(),
-            image: "registry.example/debug-tools:v1".into(),
-            profile: DebugProfile::Sysadmin,
-        }],
-    };
+    open_terminal_settings(
+        &mut state,
+        TerminalLaunchSettings {
+            custom_template: None,
+            debug_image_presets: vec![DebugImagePreset {
+                name: "Operations".into(),
+                image: "registry.example/debug-tools:v1".into(),
+                profile: DebugProfile::Sysadmin,
+            }],
+        },
+    );
     harness.state_mut().ui_state = state;
     harness.run();
 
@@ -1825,22 +2071,24 @@ fn saving_debug_image_presets_applies_the_settings_draft() {
             profile: DebugProfile::Sysadmin,
         }]
     );
-    assert!(!harness.state().ui_state.terminal_settings_open);
+    assert!(harness.state().ui_state.global_blades.navigator().is_none());
 }
 
 #[test]
 fn debug_image_preset_table_adds_and_removes_rows() {
     let mut harness = application_harness::<MockWorker>();
     let mut state = oracle_resource_table_state();
-    state.terminal_settings_open = true;
-    state.terminal_settings_draft = TerminalLaunchSettings {
-        custom_template: None,
-        debug_image_presets: vec![DebugImagePreset {
-            name: "Operations".into(),
-            image: "registry.example/debug-tools:v1".into(),
-            profile: DebugProfile::Sysadmin,
-        }],
-    };
+    open_terminal_settings(
+        &mut state,
+        TerminalLaunchSettings {
+            custom_template: None,
+            debug_image_presets: vec![DebugImagePreset {
+                name: "Operations".into(),
+                image: "registry.example/debug-tools:v1".into(),
+                profile: DebugProfile::Sysadmin,
+            }],
+        },
+    );
     harness.state_mut().ui_state = state;
     harness.run();
 
@@ -1851,7 +2099,9 @@ fn debug_image_preset_table_adds_and_removes_rows() {
         harness
             .state()
             .ui_state
-            .terminal_settings_draft
+            .terminal_settings_blade()
+            .unwrap()
+            .draft
             .debug_image_presets
             .is_empty()
     );
@@ -1863,7 +2113,9 @@ fn debug_image_preset_table_adds_and_removes_rows() {
         harness
             .state()
             .ui_state
-            .terminal_settings_draft
+            .terminal_settings_blade()
+            .unwrap()
+            .draft
             .debug_image_presets,
         vec![DebugImagePreset {
             name: String::new(),
@@ -1877,8 +2129,7 @@ fn debug_image_preset_table_adds_and_removes_rows() {
 fn debug_image_preset_table_reorders_rows_by_dragging_the_handle() {
     let mut harness = application_harness::<MockWorker>();
     let mut state = oracle_resource_table_state();
-    state.terminal_settings_open = true;
-    state.terminal_settings_draft = TerminalLaunchSettings::default();
+    open_terminal_settings(&mut state, TerminalLaunchSettings::default());
     harness.state_mut().ui_state = state;
     harness.run();
 
@@ -1893,7 +2144,9 @@ fn debug_image_preset_table_reorders_rows_by_dragging_the_handle() {
         harness
             .state()
             .ui_state
-            .terminal_settings_draft
+            .terminal_settings_blade()
+            .unwrap()
+            .draft
             .debug_image_presets
             .iter()
             .map(|preset| preset.name.as_str())
@@ -1906,8 +2159,7 @@ fn debug_image_preset_table_reorders_rows_by_dragging_the_handle() {
 fn debug_image_preset_table_moves_the_dragged_row() {
     let mut harness = application_harness::<MockWorker>();
     let mut state = oracle_resource_table_state();
-    state.terminal_settings_open = true;
-    state.terminal_settings_draft = TerminalLaunchSettings::default();
+    open_terminal_settings(&mut state, TerminalLaunchSettings::default());
     harness.state_mut().ui_state = state;
     harness.run();
 
@@ -1945,7 +2197,9 @@ fn debug_image_preset_table_moves_the_dragged_row() {
         harness
             .state()
             .ui_state
-            .terminal_settings_draft
+            .terminal_settings_blade()
+            .unwrap()
+            .draft
             .debug_image_presets
             .iter()
             .map(|preset| preset.name.as_str())
@@ -1958,15 +2212,17 @@ fn debug_image_preset_table_moves_the_dragged_row() {
 fn debug_image_preset_table_edits_and_saves_a_profile() {
     let mut harness = application_harness::<MockWorker>();
     let mut state = oracle_resource_table_state();
-    state.terminal_settings_open = true;
-    state.terminal_settings_draft = TerminalLaunchSettings {
-        custom_template: None,
-        debug_image_presets: vec![DebugImagePreset {
-            name: String::new(),
-            image: String::new(),
-            profile: DebugProfile::General,
-        }],
-    };
+    open_terminal_settings(
+        &mut state,
+        TerminalLaunchSettings {
+            custom_template: None,
+            debug_image_presets: vec![DebugImagePreset {
+                name: String::new(),
+                image: String::new(),
+                profile: DebugProfile::General,
+            }],
+        },
+    );
     harness.state_mut().ui_state = state;
     harness.run();
 
@@ -2006,11 +2262,13 @@ fn debug_image_preset_table_edits_and_saves_a_profile() {
 fn debug_image_preset_profile_menu_stays_within_the_settings_blade() {
     let mut harness = application_harness::<MockWorker>();
     let mut state = oracle_resource_table_state();
-    state.terminal_settings_open = true;
-    state.terminal_settings_draft = TerminalLaunchSettings {
-        custom_template: Some("alacritty -e {command}".into()),
-        ..Default::default()
-    };
+    open_terminal_settings(
+        &mut state,
+        TerminalLaunchSettings {
+            custom_template: Some("alacritty -e {command}".into()),
+            ..Default::default()
+        },
+    );
     harness.state_mut().ui_state = state;
     harness.run();
 
@@ -2058,7 +2316,9 @@ fn settings_blade_shows_invalid_custom_template_after_save() {
         harness
             .state()
             .ui_state
-            .terminal_settings_draft
+            .terminal_settings_blade()
+            .unwrap()
+            .draft
             .custom_template,
         Some("alacritty".into())
     );
@@ -2067,7 +2327,13 @@ fn settings_blade_shows_invalid_custom_template_after_save() {
     harness.run();
 
     assert_eq!(
-        harness.state().ui_state.terminal_settings_error.as_deref(),
+        harness
+            .state()
+            .ui_state
+            .terminal_settings_blade()
+            .unwrap()
+            .error
+            .as_deref(),
         Some("The launcher template must contain exactly one {command} placeholder.")
     );
     harness.get_by_label("Command template needs attention");
@@ -2137,10 +2403,13 @@ fn resource_name_opens_and_closes_a_live_detail_inspector() {
         }) as WorkerResultBox);
     harness.run();
     assert!(
-        harness.state().ui_state.clusters[&2]
-            .resource_detail_panel
-            .as_ref()
-            .and_then(|panel| panel.detail.as_ref())
+        harness
+            .state()
+            .ui_state
+            .global_blades
+            .navigator()
+            .and_then(|navigator| navigator.current().resource_detail())
+            .and_then(|entry| entry.detail.as_ref())
             .is_some()
     );
     harness
@@ -2608,6 +2877,36 @@ fn node_inspector_lists_cross_namespace_pods_in_the_shared_pod_table() {
     ));
     harness.get_by_label("monitoring");
     harness.get_by_label("Open details for api");
+    harness
+        .ctx
+        .global_style_mut(|style| style.animation_time = 0.0);
+
+    let name_resize_handle = harness
+        .get_all_by_label("Resize Name column")
+        .max_by(|left, right| left.rect().left().total_cmp(&right.rect().left()))
+        .expect("the inspector managed-resource table has a Name resize handle")
+        .rect();
+    secondary_click(
+        &mut harness,
+        egui::pos2(
+            name_resize_handle.left() - 80.0,
+            name_resize_handle.center().y,
+        ),
+    );
+    harness.run_steps(2);
+    let configure_columns = harness.get_by_label("Configure columns").rect().center();
+    primary_click(&mut harness, configure_columns);
+    harness
+        .ctx
+        .global_style_mut(|style| style.animation_time = 0.0);
+    harness.run_steps(5);
+    harness.ui_harness(
+        "resource_inspectors/node_inspector_lists_cross_namespace_pods_in_the_shared_pod_table/column_settings_in_shared_blade_stack",
+    );
+
+    harness.get_by_label("Go back one blade").click();
+    harness.run_steps(4);
+    harness.get_by_label("Open details for api");
 }
 
 #[test]
@@ -2639,11 +2938,24 @@ fn clicking_a_history_blade_returns_to_that_history_entry() {
     harness.get_by_label("Go back one blade").click();
     harness.run_steps(4);
 
-    let panel = harness.state().ui_state.clusters[&2]
-        .resource_detail_panel
-        .as_ref()
-        .expect("history blade click must not dismiss the detail panel");
-    assert_eq!(panel.navigator.current().api_resource, deployment);
+    assert!(
+        harness.state().ui_state.clusters[&2]
+            .resource_detail_panel
+            .is_some()
+    );
+    assert_eq!(
+        harness
+            .state()
+            .ui_state
+            .global_blades
+            .navigator()
+            .unwrap()
+            .current()
+            .resource_detail()
+            .unwrap()
+            .api_resource,
+        deployment
+    );
 }
 
 #[test]
@@ -2666,13 +2978,9 @@ fn promoted_history_blade_stays_above_its_back_history() {
     harness
         .state_mut()
         .ui_state
-        .clusters
-        .get_mut(&2)
+        .global_blades
+        .navigator_mut()
         .unwrap()
-        .resource_detail_panel
-        .as_mut()
-        .unwrap()
-        .navigator
         .clear_transition();
     harness.run_steps(1);
 
@@ -2689,13 +2997,9 @@ fn promoted_history_blade_stays_above_its_back_history() {
         harness
             .state_mut()
             .ui_state
-            .clusters
-            .get_mut(&2)
+            .global_blades
+            .navigator_mut()
             .unwrap()
-            .resource_detail_panel
-            .as_mut()
-            .unwrap()
-            .navigator
             .clear_transition();
         harness.run_steps(1);
     }
@@ -2709,26 +3013,22 @@ fn promoted_history_blade_stays_above_its_back_history() {
         harness
             .state_mut()
             .ui_state
-            .clusters
-            .get_mut(&2)
+            .global_blades
+            .navigator_mut()
             .unwrap()
-            .resource_detail_panel
-            .as_mut()
-            .unwrap()
-            .navigator
             .clear_transition();
         harness.run_steps(1);
     }
 
-    let panel = harness.state().ui_state.clusters[&2]
-        .resource_detail_panel
-        .as_ref()
-        .expect("inspector should remain open");
-    assert_eq!(panel.resource_name, "second");
-    assert_eq!(panel.navigator.back_stack().len(), 1);
+    let navigator = harness.state().ui_state.global_blades.navigator().unwrap();
+    assert_eq!(
+        navigator.current().resource_detail().unwrap().resource_name,
+        "second"
+    );
+    assert_eq!(navigator.back_stack().len(), 1);
     let active_layer = egui::LayerId::new(
         egui::Order::Foreground,
-        egui::Id::new("resource-detail-blade").with(("blade", panel.navigator.back_stack().len())),
+        egui::Id::new("global-blade-stack").with(("blade", navigator.back_stack().len())),
     );
     let active_header = harness.get_by_label("Back").rect().center();
     assert_eq!(harness.ctx.layer_id_at(active_header), Some(active_layer));
@@ -2743,6 +3043,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
     harness.state_mut().ui_state = oracle_resource_table_state();
     let deployment = fixture_api_resource("apps", "Deployment", "deployments");
     let replica_set = fixture_api_resource("apps", "ReplicaSet", "replicasets");
+    let replica_set_name = "digizuitecore-configurationmanagementservice-6558ccd787";
     let pod = fixture_api_resource("core", "Pod", "pods");
     let detail = ResourceDetail {
         api_resource: deployment.clone(),
@@ -2769,7 +3070,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
             resources: vec![
                 ManagedResource {
                     api_resource: replica_set.clone(),
-                    name: "api-7b948f".into(),
+                    name: replica_set_name.into(),
                     namespace: Some("kube-system".into()),
                     uid: "replicaset-uid".into(),
                     association: ManagedResourceAssociation::ControllerOwnerUid(
@@ -2816,20 +3117,18 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "resource_inspectors/managed_resource_tables_navigate_with_back_and_forward_history/deployment_managed_resource_tables",
     ));
-    let replica_set_position = harness
-        .get_by_label("Open details for api-7b948f")
-        .rect()
-        .center();
+    let replica_set_label = format!("Open details for {replica_set_name}");
+    let replica_set_position = harness.get_by_label(&replica_set_label).rect().center();
     primary_click(&mut harness, replica_set_position);
     harness.run_steps(1);
 
-    let panel = harness.state().ui_state.clusters[&2]
-        .resource_detail_panel
-        .as_ref()
-        .expect("inspector should remain open");
-    assert_eq!(panel.api_resource, replica_set);
-    assert_eq!(panel.navigator.back_stack().len(), 1);
-    assert!(panel.navigator.forward_stack().is_empty());
+    let navigator = harness.state().ui_state.global_blades.navigator().unwrap();
+    assert_eq!(
+        navigator.current().resource_detail().unwrap().api_resource,
+        replica_set
+    );
+    assert_eq!(navigator.back_stack().len(), 1);
+    assert!(navigator.forward_stack().is_empty());
     assert!(
         harness
             .state()
@@ -2841,7 +3140,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
                 .as_any()
                 .downcast_ref::<StartResourceDetailWatch>()
                 .is_some_and(|command| {
-                    command.resource_name == "api-7b948f"
+                    command.resource_name == replica_set_name
                         && command.resource_uid == "replicaset-uid"
                         && command.history_entry_id == 2
                 }))
@@ -2856,7 +3155,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
             history_entry_id: 2,
             detail: Box::new(ResourceDetail {
                 api_resource: replica_set.clone(),
-                name: "api-7b948f".into(),
+                name: replica_set_name.into(),
                 namespace: Some("kube-system".into()),
                 uid: "replicaset-uid".into(),
                 resource_version: "1".into(),
@@ -2916,36 +3215,33 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
     harness
         .state_mut()
         .ui_state
-        .clusters
-        .get_mut(&2)
+        .global_blades
+        .navigator_mut()
         .unwrap()
-        .resource_detail_panel
-        .as_mut()
-        .unwrap()
-        .navigator
         .clear_transition();
     harness.run();
     harness.ui_harness("resource_inspectors/managed_resource_tables_navigate_with_back_and_forward_history/replica_set_inspector_with_back_history");
 
     harness.get_by_label("Back").click_accesskit();
     harness.run_steps(1);
-    let panel = harness.state().ui_state.clusters[&2]
-        .resource_detail_panel
-        .as_ref()
-        .expect("inspector should remain open");
-    assert_eq!(panel.api_resource.kind, "Deployment");
-    assert!(panel.navigator.back_stack().is_empty());
-    assert_eq!(panel.navigator.forward_stack().len(), 1);
+    let navigator = harness.state().ui_state.global_blades.navigator().unwrap();
+    assert_eq!(
+        navigator
+            .current()
+            .resource_detail()
+            .unwrap()
+            .api_resource
+            .kind,
+        "Deployment"
+    );
+    assert!(navigator.back_stack().is_empty());
+    assert_eq!(navigator.forward_stack().len(), 1);
     harness
         .state_mut()
         .ui_state
-        .clusters
-        .get_mut(&2)
+        .global_blades
+        .navigator_mut()
         .unwrap()
-        .resource_detail_panel
-        .as_mut()
-        .unwrap()
-        .navigator
         .clear_transition();
     harness.run();
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
@@ -2955,10 +3251,15 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
     harness.get_by_label("Forward").click_accesskit();
     harness.run_steps(1);
     assert_eq!(
-        harness.state().ui_state.clusters[&2]
-            .resource_detail_panel
-            .as_ref()
-            .expect("inspector should remain open")
+        harness
+            .state()
+            .ui_state
+            .global_blades
+            .navigator()
+            .unwrap()
+            .current()
+            .resource_detail()
+            .unwrap()
             .api_resource,
         replica_set
     );
@@ -2973,9 +3274,14 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         &mut commands,
     );
     harness.state_mut().worker.commands.extend(commands);
-    let history_entry_id = harness.state().ui_state.clusters[&2]
-        .resource_detail_panel
-        .as_ref()
+    let history_entry_id = harness
+        .state()
+        .ui_state
+        .global_blades
+        .navigator()
+        .unwrap()
+        .current()
+        .resource_detail()
         .unwrap()
         .history_entry_id;
     harness
@@ -3012,21 +3318,18 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
     harness
         .state_mut()
         .ui_state
-        .clusters
-        .get_mut(&2)
+        .global_blades
+        .navigator_mut()
         .unwrap()
-        .resource_detail_panel
-        .as_mut()
-        .unwrap()
-        .navigator
         .clear_transition();
     harness.run();
     assert_eq!(
-        harness.state().ui_state.clusters[&2]
-            .resource_detail_panel
-            .as_ref()
+        harness
+            .state()
+            .ui_state
+            .global_blades
+            .navigator()
             .unwrap()
-            .navigator
             .back_stack()
             .len(),
         2
@@ -3056,13 +3359,9 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
     harness
         .state_mut()
         .ui_state
-        .clusters
-        .get_mut(&2)
+        .global_blades
+        .navigator_mut()
         .unwrap()
-        .resource_detail_panel
-        .as_mut()
-        .unwrap()
-        .navigator
         .clear_transition();
     harness.run();
     harness.get_by_label("Forward").click_accesskit();
@@ -3081,13 +3380,9 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
     harness
         .state_mut()
         .ui_state
-        .clusters
-        .get_mut(&2)
+        .global_blades
+        .navigator_mut()
         .unwrap()
-        .resource_detail_panel
-        .as_mut()
-        .unwrap()
-        .navigator
         .clear_transition();
     harness.run();
 
@@ -3101,9 +3396,14 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         &mut commands,
     );
     harness.state_mut().worker.commands.extend(commands);
-    let history_entry_id = harness.state().ui_state.clusters[&2]
-        .resource_detail_panel
-        .as_ref()
+    let history_entry_id = harness
+        .state()
+        .ui_state
+        .global_blades
+        .navigator()
+        .unwrap()
+        .current()
+        .resource_detail()
         .unwrap()
         .history_entry_id;
     harness
@@ -3134,21 +3434,18 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
     harness
         .state_mut()
         .ui_state
-        .clusters
-        .get_mut(&2)
+        .global_blades
+        .navigator_mut()
         .unwrap()
-        .resource_detail_panel
-        .as_mut()
-        .unwrap()
-        .navigator
         .clear_transition();
     harness.run();
     assert_eq!(
-        harness.state().ui_state.clusters[&2]
-            .resource_detail_panel
-            .as_ref()
+        harness
+            .state()
+            .ui_state
+            .global_blades
+            .navigator()
             .unwrap()
-            .navigator
             .back_stack()
             .len(),
         3
@@ -3564,12 +3861,10 @@ fn config_map_inspector_saves_only_changed_existing_data_values() {
     let editor = harness
         .state_mut()
         .ui_state
-        .clusters
-        .get_mut(&2)
-        .expect("fixture cluster should exist")
-        .resource_detail_panel
-        .as_mut()
-        .and_then(|panel| panel.data_editor.as_mut())
+        .global_blades
+        .navigator_mut()
+        .and_then(|navigator| navigator.current_mut().resource_detail_mut())
+        .and_then(|entry| entry.data_editor.as_mut())
         .expect("ConfigMap editor should initialize from the detail payload");
     editor
         .draft_values
@@ -3721,12 +4016,10 @@ fn secret_inspector_masks_values_and_prompts_for_a_real_external_change() {
     harness
         .state_mut()
         .ui_state
-        .clusters
-        .get_mut(&2)
-        .expect("fixture cluster should exist")
-        .resource_detail_panel
-        .as_mut()
-        .and_then(|panel| panel.data_editor.as_mut())
+        .global_blades
+        .navigator_mut()
+        .and_then(|navigator| navigator.current_mut().resource_detail_mut())
+        .and_then(|entry| entry.data_editor.as_mut())
         .expect("Secret editor should initialize")
         .draft_values
         .insert("password".into(), "changed".into());
@@ -3757,10 +4050,13 @@ fn secret_inspector_masks_values_and_prompts_for_a_real_external_change() {
     harness.get_by_label("Keep my edits").click_accesskit();
     harness.run();
     assert_eq!(
-        harness.state().ui_state.clusters[&2]
-            .resource_detail_panel
-            .as_ref()
-            .and_then(|panel| panel.data_editor.as_ref())
+        harness
+            .state()
+            .ui_state
+            .global_blades
+            .navigator()
+            .and_then(|navigator| navigator.current().resource_detail())
+            .and_then(|entry| entry.data_editor.as_ref())
             .and_then(|editor| editor.draft_values.get("password"))
             .map(String::as_str),
         Some("changed")
@@ -3945,7 +4241,7 @@ fn resource_table_column_settings_hide_and_reorder_columns() {
         "resource_tables/resource_table_column_configuration/reordered_settings",
     ));
 
-    harness.state_mut().resource_table_settings = Default::default();
+    harness.state_mut().ui_state.global_blades.clear();
     harness.run_steps(2);
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "resource_tables/resource_table_column_configuration/configured_table",
