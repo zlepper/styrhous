@@ -90,7 +90,8 @@ pub(super) fn show(
                                 )
                             });
                             if response.on_hover_text("Settings").clicked() {
-                                ui_state.open_terminal_settings(terminal_settings);
+                                ui_state
+                                    .open_terminal_settings(terminal_settings, commands_to_send);
                             }
                         },
                     );

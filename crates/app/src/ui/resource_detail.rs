@@ -1,8 +1,12 @@
+use super::global_blade::{
+    GlobalBladeContent, GlobalBladeEffect, GlobalBladeEffectContext, GlobalBladeNavigation,
+    GlobalBladeRenderContext, GlobalBladeRenderResult,
+};
 use super::resource_actions::show_resource_action_items;
 use super::resource_owner;
 use super::state::{
     PendingDelete, PendingDeploymentRestart, PendingForceDelete, ResourceAction,
-    ResourceDetailHistoryEntry, ResourceDetailPanelState, UiState,
+    ResourceDetailHistoryEntry, UiState,
 };
 use super::table_preferences::{ResourceTableKey, TableColumnDefinition};
 use super::widgets::show_resource_cell;
@@ -17,45 +21,31 @@ use crate::resource_table::{
     CONTAINERS_COLUMN, NODE_COLUMN, ResourceTableDefinition, SortValue, cell_sort_value,
     compare_sort_values,
 };
-use crate::terminal_launcher::{DebugImagePreset, ShellRequest};
+use crate::terminal_launcher::DebugImagePreset;
 use crate::worker::{
     GetResourceScale, ResourceDataUpdate, ResourceDataUpdateCompleted, ResourceDataUpdateFailed,
     UpdateResourceData, WorkerCommandBox, WorkerResult,
 };
 use components::colors::{WHITE, gray, indigo};
 use components::design::{radius, spacing, status, typography};
-use components::icons;
 use components::{
-    BladeTransition as ResourceDetailTransition, ButtonSize, ButtonVariant, MoreButton,
-    PointingHand, TableRowBuilder, TailwindButton, TailwindTable, TailwindTextArea, WorkspaceCard,
+    ButtonSize, MoreButton, PointingHand, TableRowBuilder, TailwindButton, TailwindTable,
+    TailwindTextArea, WorkspaceCard,
 };
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
-const PANEL_WIDTH: f32 = 744.0;
-const PANEL_PADDING: i8 = spacing::XL as i8;
 const CARD_CONTENT_PADDING: i8 = spacing::MD as i8;
 const CARD_HEADER_HEIGHT: f32 = 40.0;
 const CARD_HEADER_PADDING: f32 = spacing::LG;
 const CARD_GAP: f32 = spacing::MD;
-const ACTIVE_BLADE_INSET: f32 = 8.0;
-const HISTORY_BLADE_SCALES: [f32; 2] = [0.9, 0.8];
-/// Horizontal recession as a fraction of the unscaled blade width. The older
-/// blade's additional step shrinks with the blade, so its recession remains
-/// visually proportional to its scale.
-const HISTORY_BLADE_X_TRANSLATIONS: [f32; 2] = [
-    1.0 / 3.0,
-    (1.0 / 3.0) * (1.0 + HISTORY_BLADE_SCALES[1] / HISTORY_BLADE_SCALES[0]),
-];
-const BLADE_TRANSITION_DURATION: f32 = 0.25;
 
 impl WorkerResult for ResourceDataUpdateFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         if let Some(editor) = ui
-            .clusters
-            .get_mut(&self.cluster_key)
-            .and_then(|cluster| cluster.resource_detail_panel.as_mut())
-            .and_then(|panel| panel.data_editor_mut(self.history_entry_id))
+            .resource_detail_entry_mut(self.history_entry_id)
+            .filter(|entry| entry.cluster_key == self.cluster_key)
+            .and_then(|entry| entry.data_editor.as_mut())
             && editor.pending_save_request_id == Some(self.request_id)
         {
             editor.saving = false;
@@ -73,28 +63,14 @@ impl WorkerResult for ResourceDataUpdateCompleted {
             request_id,
         } = self;
         if let Some(editor) = ui
-            .clusters
-            .get_mut(&cluster_key)
-            .and_then(|cluster| cluster.resource_detail_panel.as_mut())
-            .and_then(|panel| panel.data_editor_mut(history_entry_id))
+            .resource_detail_entry_mut(history_entry_id)
+            .filter(|entry| entry.cluster_key == cluster_key)
+            .and_then(|entry| entry.data_editor.as_mut())
             && editor.pending_save_request_id == Some(request_id)
         {
             editor.mark_saved();
         }
     }
-}
-
-#[derive(Clone, Copy)]
-struct BladeTransform {
-    position: egui::Pos2,
-    scale: f32,
-}
-
-#[allow(dead_code)]
-#[derive(Clone, Copy)]
-struct BladeNavigation {
-    can_go_back: bool,
-    can_go_forward: bool,
 }
 
 #[derive(Default)]
@@ -103,353 +79,205 @@ struct BladeResult {
     close: bool,
 }
 
-pub(super) fn show(
-    ctx: &egui::Context,
-    ui_state: &mut UiState,
-    commands_to_send: &mut Vec<WorkerCommandBox>,
-    shell_requests: &mut Vec<ShellRequest>,
-    debug_image_presets: &[DebugImagePreset],
-    table_preferences: &mut super::table_preferences::PersistedResourceTablePreferences,
-    table_settings: &mut super::resource_table_settings::ResourceTableSettingsState,
-) {
-    show_shared_blade(
-        ctx,
-        ui_state,
-        commands_to_send,
-        shell_requests,
-        debug_image_presets,
-        table_preferences,
-        table_settings,
-    );
-}
-
-#[allow(dead_code, unreachable_code)]
-fn show_legacy(
-    ctx: &egui::Context,
-    ui_state: &mut UiState,
-    commands_to_send: &mut Vec<WorkerCommandBox>,
-    shell_requests: &mut Vec<ShellRequest>,
-    debug_image_presets: &[DebugImagePreset],
-    table_preferences: &mut super::table_preferences::PersistedResourceTablePreferences,
-    table_settings: &mut super::resource_table_settings::ResourceTableSettingsState,
-) {
-    show_shared_blade(
-        ctx,
-        ui_state,
-        commands_to_send,
-        shell_requests,
-        debug_image_presets,
-        table_preferences,
-        table_settings,
-    );
-    return;
-
-    let Some(cluster_key) = ui_state.selected_cluster else {
-        return;
-    };
-    if ui_state
-        .clusters
-        .get(&cluster_key)
-        .and_then(|cluster| cluster.resource_detail_panel.as_ref())
-        .is_none()
-    {
-        return;
+impl GlobalBladeContent for ResourceDetailHistoryEntry {
+    fn resource_detail(&self) -> Option<&ResourceDetailHistoryEntry> {
+        Some(self)
     }
 
-    let viewport = ctx.content_rect();
-    let closing_progress = ui_state
-        .clusters
-        .get(&cluster_key)
-        .and_then(|cluster| cluster.resource_detail_panel.as_ref())
-        .and_then(|panel| {
-            matches!(
-                panel.navigator.transition(),
-                Some(ResourceDetailTransition::Closing)
-            )
-            .then(|| animated_blade_transition_progress(ctx, panel))
-        })
-        .unwrap_or(0.0);
-    let mut close = ctx.input(|input| input.key_pressed(egui::Key::Escape));
-    let dismiss_on_outside_click = ui_state
-        .clusters
-        .get_mut(&cluster_key)
-        .and_then(|cluster| cluster.resource_detail_panel.as_mut())
-        .map(|panel| {
-            let value = panel.dismiss_on_outside_click;
-            panel.dismiss_on_outside_click = true;
-            value
-        })
-        .unwrap_or(false);
-    egui::Area::new(egui::Id::new("resource-detail-scrim"))
-        .order(egui::Order::Foreground)
-        .fixed_pos(viewport.min)
-        .interactable(false)
-        .show(ctx, |ui| {
-            ui.set_min_size(viewport.size());
-            ui.painter().rect_filled(
-                ui.max_rect(),
-                0.0,
-                egui::Color32::BLACK.gamma_multiply(0.58 * (1.0 - closing_progress)),
-            );
-        });
+    fn resource_detail_mut(&mut self) -> Option<&mut ResourceDetailHistoryEntry> {
+        Some(self)
+    }
 
-    let (history_layers, history_offset, transition, active_blade_id) = ui_state
-        .clusters
-        .get(&cluster_key)
-        .and_then(|cluster| cluster.resource_detail_panel.as_ref())
-        .map(|panel| {
-            let transition = panel.navigator.transition().map(|transition| {
-                let progress = animated_blade_transition_progress(ctx, panel);
-                (transition, progress)
-            });
-            let first_visible_history = panel.navigator.back_stack().len().saturating_sub(2);
-            (
-                panel.navigator.back_stack()[first_visible_history..]
-                    .iter()
-                    .collect::<Vec<_>>(),
-                first_visible_history,
-                transition,
-                blade_id(panel.history_entry_id),
-            )
-        })
-        .unwrap_or_else(|| {
-            (
-                Vec::new(),
-                0,
-                None,
-                egui::Id::new("missing-resource-detail-blade"),
-            )
-        });
-    let panel_layer_id = blade_layer_id(active_blade_id);
-    let blade_height = viewport.height() - ACTIVE_BLADE_INSET * 2.0;
-    let active_transform = transition.map_or_else(
-        || active_blade_transform(viewport),
-        |(transition, progress)| match transition {
-            ResourceDetailTransition::Opening => BladeTransform {
-                position: active_blade_transform(viewport).position
-                    + egui::vec2((1.0 - progress) * PANEL_WIDTH, 0.0),
-                scale: 1.0,
-            },
-            ResourceDetailTransition::Forward => BladeTransform {
-                position: active_blade_transform(viewport).position
-                    + egui::vec2((1.0 - progress) * PANEL_WIDTH, 0.0),
-                scale: 1.0,
-            },
-            ResourceDetailTransition::Back => interpolate_blade_transform(
-                history_blade_transform(viewport, 0),
-                active_blade_transform(viewport),
-                progress,
-            ),
-            ResourceDetailTransition::Closing => {
-                closing_blade_transform(viewport, active_blade_transform(viewport), progress)
-            }
-        },
-    );
-    let has_history_layers = !history_layers.is_empty();
-    show_history_layers(ctx, viewport, &history_layers, history_offset, transition);
-
-    let active_rect = egui::Rect::from_min_size(
-        active_transform.position,
-        egui::vec2(PANEL_WIDTH, blade_height) * active_transform.scale,
-    );
-    let panel = ui_state
-        .clusters
-        .get_mut(&cluster_key)
-        .and_then(|cluster| cluster.resource_detail_panel.as_mut())
-        .expect("resource detail panel was checked above");
-    let is_closing = matches!(transition, Some((ResourceDetailTransition::Closing, _)));
-    let outgoing_foreground_blade_is_visible = matches!(
-        transition,
-        Some((ResourceDetailTransition::Back, progress)) if progress < 1.0
-    );
-
-    let panel_blade_id = blade_id(panel.history_entry_id);
-    if let Some((transition_kind, progress)) = transition
-        && progress < 1.0
-    {
-        match transition_kind {
-            ResourceDetailTransition::Back => {
-                if let Some(outgoing_entry) = panel.navigator.forward_stack().last() {
-                    show_outgoing_blade(
-                        ctx,
-                        viewport,
-                        outgoing_entry,
-                        BladeNavigation {
-                            // The back action was available only if the
-                            // outgoing blade had an older predecessor.
-                            can_go_back: true,
-                            // `forward_stack` now also contains the outgoing
-                            // blade, so entries beneath it were already its
-                            // forward history.
-                            can_go_forward: panel.navigator.forward_stack().len() > 1,
-                        },
-                        BladeTransform {
-                            position: active_blade_transform(viewport).position
-                                + egui::vec2(
-                                    progress * (PANEL_WIDTH + ACTIVE_BLADE_INSET * 2.0),
-                                    0.0,
-                                ),
-                            scale: 1.0,
-                        },
-                    );
-                }
-            }
-            ResourceDetailTransition::Opening
-            | ResourceDetailTransition::Forward
-            | ResourceDetailTransition::Closing => {}
+    fn render_header(
+        &mut self,
+        ui: &mut egui::Ui,
+        layer: components::BladeLayer,
+        context: &mut GlobalBladeRenderContext<'_>,
+    ) -> GlobalBladeRenderResult {
+        let supports_scale = context.supports_scale(self.cluster_key, &self.api_resource);
+        let result = show_resource_detail_header(
+            ui,
+            self,
+            layer.is_foreground,
+            supports_scale,
+            context.debug_image_presets(),
+        );
+        if layer.is_foreground
+            && let Some(action) = result.action
+        {
+            self.pending_action = Some(action);
+        }
+        GlobalBladeRenderResult {
+            close: result.close,
+            ..Default::default()
         }
     }
-    let active_origin = active_blade_transform(viewport).position;
-    let active_visual_transform = blade_visual_transform(active_origin, active_transform);
 
-    let mut blade_result = BladeResult::default();
-    egui::Area::new(panel_blade_id)
-        .order(egui::Order::Foreground)
-        .fixed_pos(active_origin)
-        .fade_in(false)
-        .interactable(
-            !is_closing
-                && !outgoing_foreground_blade_is_visible
-                && active_visual_transform == egui::emath::TSTransform::IDENTITY,
-        )
-        .show(ctx, |ui| {
-            ui.set_width(PANEL_WIDTH);
-            ui.set_height(blade_height);
-            ui.with_visual_transform(active_visual_transform, |ui| {
-                show_blade_frame(ui, blade_height, panel.history_entry_id, |ui| {
-                    let _navigation = BladeNavigation {
-                        can_go_back: panel.navigator.can_go_back(),
-                        can_go_forward: panel.navigator.can_go_forward(),
-                    };
-                    let entry = panel.navigator.current_mut();
-                    let result = show_resource_detail_blade(
-                        ui,
-                        &ResourceNavigation::default(),
-                        &entry.api_resource,
-                        &entry.namespace,
-                        &entry.resource_name,
-                        &entry.resource_uid,
-                        &entry.detail,
-                        &entry.events,
-                        entry.detail_error.as_deref(),
-                        entry.events_error.as_deref(),
-                        &entry.managed_resources,
-                        entry.managed_resources_error.as_deref(),
-                        entry.data_editor.as_mut(),
-                        None,
-                        None,
-                    );
-                    if !outgoing_foreground_blade_is_visible {
-                        blade_result = result;
-                    }
-                });
-            });
-        });
-    if should_promote_active_blade(has_history_layers, transition) {
-        ctx.move_to_top(panel_layer_id);
+    fn render_body(
+        &mut self,
+        ui: &mut egui::Ui,
+        layer: components::BladeLayer,
+        context: &mut GlobalBladeRenderContext<'_>,
+    ) -> GlobalBladeRenderResult {
+        let resource_navigation = context.resource_navigation(self.cluster_key);
+        let mut column_settings = None;
+        let result = show_resource_detail_blade(
+            ui,
+            &resource_navigation,
+            &self.api_resource,
+            &self.namespace,
+            &self.resource_name,
+            &self.resource_uid,
+            &self.detail,
+            &self.events,
+            self.detail_error.as_deref(),
+            self.events_error.as_deref(),
+            &self.managed_resources,
+            self.managed_resources_error.as_deref(),
+            if layer.is_foreground {
+                self.data_editor.as_mut()
+            } else {
+                None
+            },
+            Some(context.table_preferences()),
+            Some(&mut column_settings),
+        );
+        if let Some(column_settings) = column_settings.as_mut() {
+            column_settings.set_resource_detail_owner(self.history_entry_id);
+        }
+        if layer.is_foreground
+            && let Some(action) = result.action
+        {
+            self.pending_action = Some(action);
+        }
+        GlobalBladeRenderResult {
+            close: result.close,
+            next_content: column_settings
+                .map(|target| Box::new(target) as Box<dyn GlobalBladeContent>),
+        }
     }
 
-    // Register the input-only scrim after every blade layer. Its regions
-    // deliberately exclude the active blade, so it captures history and
-    // workspace clicks without blocking foreground controls or menus.
-    close |= dismiss_on_outside_click && show_input_scrim(ctx, viewport, active_rect);
+    fn take_effect(&mut self) -> Option<Box<dyn GlobalBladeEffect>> {
+        self.pending_action.take().map(|action| {
+            Box::new(ResourceDetailEffect {
+                cluster_key: self.cluster_key,
+                api_resource: self.api_resource.clone(),
+                action,
+            }) as Box<dyn GlobalBladeEffect>
+        })
+    }
 
-    close |= blade_result.close;
-    if let Some(action) = blade_result.action {
-        let mut log_to_open = None;
-        let mut shell_to_open = None;
-        let mut yaml_to_open = None;
-        let navigation_action = matches!(
-            &action,
-            ResourceAction::NavigateDetails { .. }
-                | ResourceAction::NavigateBack
-                | ResourceAction::NavigateForward
-        );
+    fn show_overlay(&mut self, ctx: &egui::Context) {
+        show_data_conflict_dialog(ctx, self.data_editor.as_mut());
+    }
+}
+
+#[derive(Debug)]
+struct ResourceDetailEffect {
+    cluster_key: i32,
+    api_resource: crate::api_resource::ApiResource,
+    action: ResourceAction,
+}
+
+impl GlobalBladeEffect for ResourceDetailEffect {
+    fn apply(
+        self: Box<Self>,
+        context: &mut GlobalBladeEffectContext<'_>,
+        navigation: &mut GlobalBladeNavigation<'_>,
+    ) {
+        let Self {
+            cluster_key,
+            api_resource,
+            action,
+        } = *self;
         match action {
             ResourceAction::NavigateDetails {
                 api_resource,
                 name,
                 namespace,
                 uid,
-            } => ui_state.navigate_resource_detail(
+            } => {
+                navigate_resource_detail_in_navigator(
+                    context.ui_state,
+                    navigation,
+                    cluster_key,
+                    api_resource,
+                    name,
+                    namespace,
+                    uid,
+                );
+            }
+            ResourceAction::EditYaml { name, namespace } => context.ui_state.open_yaml_editor(
+                context.ctx,
                 cluster_key,
                 api_resource,
-                name,
                 namespace,
-                uid,
-                commands_to_send,
+                name,
+                navigation.commands_to_send(),
             ),
-            ResourceAction::NavigateBack => {
-                ui_state.navigate_resource_detail_history(cluster_key, false, commands_to_send)
+            ResourceAction::RequestDelete { name, namespace } => {
+                if let Some(cluster) = context.ui_state.clusters.get_mut(&cluster_key) {
+                    cluster.pending_delete =
+                        Some(PendingDelete::new(api_resource, name, namespace));
+                }
             }
-            ResourceAction::NavigateForward => {
-                ui_state.navigate_resource_detail_history(cluster_key, true, commands_to_send)
+            ResourceAction::RequestForceDelete {
+                name,
+                uid,
+                namespace,
+                finalizers,
+            } => {
+                if let Some(cluster) = context.ui_state.clusters.get_mut(&cluster_key) {
+                    cluster.pending_force_delete = Some(PendingForceDelete::new(
+                        api_resource,
+                        name,
+                        uid,
+                        namespace,
+                        finalizers,
+                    ));
+                }
             }
-            action => {
-                if let Some(cluster) = ui_state.clusters.get_mut(&cluster_key) {
-                    match action {
-                        ResourceAction::EditYaml { name, namespace } => {
-                            yaml_to_open = Some((
-                                cluster.cluster_key,
-                                panel_api_resource(cluster),
-                                namespace,
-                                name,
-                            ));
-                        }
-                        ResourceAction::RequestDelete { name, namespace } => {
-                            cluster.pending_delete = Some(PendingDelete::new(
-                                panel_api_resource(cluster),
-                                name,
-                                namespace,
-                            ));
-                        }
-                        ResourceAction::RequestForceDelete {
-                            name,
-                            uid,
+            ResourceAction::RequestDeploymentRestart { name, namespace } => {
+                if let Some(cluster) = context.ui_state.clusters.get_mut(&cluster_key) {
+                    cluster.pending_deployment_restart = Some(PendingDeploymentRestart {
+                        resource_name: name,
+                        namespace,
+                    });
+                }
+            }
+            ResourceAction::RequestScale { name, namespace } => {
+                if let Some(cluster) = context.ui_state.clusters.get(&cluster_key) {
+                    navigation
+                        .commands_to_send()
+                        .push(Box::new(GetResourceScale {
+                            cluster_key: cluster.cluster_key,
+                            api_resource,
                             namespace,
-                            finalizers,
-                        } => {
-                            cluster.pending_force_delete = Some(PendingForceDelete::new(
-                                panel_api_resource(cluster),
-                                name,
-                                uid,
-                                namespace,
-                                finalizers,
-                            ));
-                        }
-                        ResourceAction::RequestDeploymentRestart { name, namespace } => {
-                            cluster.pending_deployment_restart = Some(PendingDeploymentRestart {
-                                resource_name: name,
-                                namespace,
-                            });
-                        }
-                        ResourceAction::RequestScale { name, namespace } => {
-                            commands_to_send.push(Box::new(GetResourceScale {
-                                cluster_key: cluster.cluster_key,
-                                api_resource: panel_api_resource(cluster),
-                                namespace,
-                                resource_name: name,
-                            }));
-                        }
-                        ResourceAction::SaveData {
-                            expected_values,
-                            updated_values,
-                        } => {
-                            cluster.next_data_save_request_id += 1;
-                            let request_id = cluster.next_data_save_request_id;
-                            let panel = cluster
-                                .resource_detail_panel
-                                .as_mut()
-                                .expect("detail panel remains open while data is saved");
-                            let history_entry_id = panel.history_entry_id;
-                            let api_resource = panel.api_resource.clone();
-                            let resource_name = panel.resource_name.clone();
+                            resource_name: name,
+                        }));
+                }
+            }
+            ResourceAction::SaveData {
+                expected_values,
+                updated_values,
+            } => {
+                if let Some(cluster) = context.ui_state.clusters.get_mut(&cluster_key) {
+                    cluster.next_data_save_request_id += 1;
+                    let request_id = cluster.next_data_save_request_id;
+                    let cluster_key = cluster.cluster_key;
+                    let update = navigation
+                        .current_mut()
+                        .resource_detail_mut()
+                        .and_then(|entry| {
+                            let history_entry_id = entry.history_entry_id;
+                            let api_resource = entry.api_resource.clone();
+                            let resource_name = entry.resource_name.clone();
                             if let (Some(namespace), Some(editor)) =
-                                (panel.namespace.clone(), panel.data_editor.as_mut())
+                                (entry.namespace.clone(), entry.data_editor.as_mut())
                             {
                                 editor.pending_save_request_id = Some(request_id);
-                                commands_to_send.push(Box::new(UpdateResourceData {
-                                    cluster_key: cluster.cluster_key,
+                                Some(UpdateResourceData {
+                                    cluster_key,
                                     history_entry_id,
                                     request_id,
                                     api_resource,
@@ -460,243 +288,13 @@ fn show_legacy(
                                         expected_values,
                                         updated_values,
                                     },
-                                }));
+                                })
+                            } else {
+                                None
                             }
-                        }
-                        ResourceAction::ViewLogs {
-                            name,
-                            namespace,
-                            container,
-                        } => {
-                            log_to_open = Some((cluster.cluster_key, name, namespace, container));
-                        }
-                        action @ (ResourceAction::Shell { .. }
-                        | ResourceAction::PodDebugShell { .. }
-                        | ResourceAction::NodeShell { .. }) => {
-                            shell_to_open = action.shell_request(&cluster.name);
-                        }
-                        ResourceAction::OpenDetails { .. } => {
-                            unreachable!("inspector actions cannot open detail")
-                        }
-                        ResourceAction::NavigateDetails { .. }
-                        | ResourceAction::NavigateBack
-                        | ResourceAction::NavigateForward => {
-                            unreachable!("navigation actions were handled above")
-                        }
-                    }
-                }
-            }
-        }
-        if navigation_action {
-            seed_detail_transition(ctx, ui_state, cluster_key);
-        }
-        if let Some((cluster_key, name, namespace, container)) = log_to_open {
-            ui_state.open_pod_log_window(cluster_key, name, namespace, container, commands_to_send);
-        }
-        if let Some((cluster_key, api_resource, namespace, resource_name)) = yaml_to_open {
-            ui_state.open_yaml_editor(
-                ctx,
-                cluster_key,
-                api_resource,
-                namespace,
-                resource_name,
-                commands_to_send,
-            );
-        }
-        shell_requests.extend(shell_to_open);
-    }
-    if let Some(panel) = ui_state
-        .clusters
-        .get_mut(&cluster_key)
-        .and_then(|cluster| cluster.resource_detail_panel.as_mut())
-    {
-        show_data_conflict_dialog(ctx, panel.data_editor.as_mut());
-    }
-    let closing_finished = matches!(
-        transition,
-        Some((ResourceDetailTransition::Closing, progress)) if progress >= 1.0
-    );
-    if close && ui_state.begin_close_resource_detail(cluster_key) {
-        seed_detail_transition(ctx, ui_state, cluster_key);
-    } else if closing_finished {
-        ui_state.close_resource_detail(cluster_key, commands_to_send);
-    }
-}
-
-fn show_shared_blade(
-    ctx: &egui::Context,
-    ui_state: &mut UiState,
-    commands_to_send: &mut Vec<WorkerCommandBox>,
-    shell_requests: &mut Vec<ShellRequest>,
-    debug_image_presets: &[DebugImagePreset],
-    table_preferences: &mut super::table_preferences::PersistedResourceTablePreferences,
-    table_settings: &mut super::resource_table_settings::ResourceTableSettingsState,
-) {
-    let Some(cluster_key) = ui_state.selected_cluster else {
-        return;
-    };
-    let Some(cluster) = ui_state.clusters.get_mut(&cluster_key) else {
-        return;
-    };
-    let scalable_api_resources = cluster.scalable_api_resources.clone();
-    let resource_navigation = cluster.resource_navigation.clone();
-    let Some(panel) = cluster.resource_detail_panel.as_mut() else {
-        return;
-    };
-
-    let dismiss_on_outside_click = panel.dismiss_on_outside_click;
-    panel.dismiss_on_outside_click = true;
-    let stack = components::BladeStack::new("resource-detail-blade");
-    let response = stack.show(
-        ctx,
-        &mut panel.navigator,
-        |ui, entry, layer| {
-            show_resource_detail_header(
-                ui,
-                entry,
-                layer.is_foreground,
-                scalable_api_resources.contains(&entry.api_resource),
-                debug_image_presets,
-            )
-        },
-        |ui, entry, layer| {
-            show_resource_detail_blade(
-                ui,
-                &resource_navigation,
-                &entry.api_resource,
-                &entry.namespace,
-                &entry.resource_name,
-                &entry.resource_uid,
-                &entry.detail,
-                &entry.events,
-                entry.detail_error.as_deref(),
-                entry.events_error.as_deref(),
-                &entry.managed_resources,
-                entry.managed_resources_error.as_deref(),
-                if layer.is_foreground {
-                    entry.data_editor.as_mut()
-                } else {
-                    None
-                },
-                Some(table_preferences),
-                Some(table_settings),
-            )
-        },
-    );
-
-    let mut close = ctx.input(|input| input.key_pressed(egui::Key::Escape));
-    close |= dismiss_on_outside_click && response.dismissed;
-    close |= response.header.close || response.active.close;
-    let action = response.header.action.or(response.active.action);
-    if let Some(action) = action {
-        match action {
-            ResourceAction::NavigateDetails {
-                api_resource,
-                name,
-                namespace,
-                uid,
-            } => {
-                ui_state.navigate_resource_detail(
-                    cluster_key,
-                    api_resource,
-                    name,
-                    namespace,
-                    uid,
-                    commands_to_send,
-                );
-            }
-            ResourceAction::NavigateBack => {
-                ui_state.navigate_resource_detail_history(cluster_key, false, commands_to_send);
-            }
-            ResourceAction::NavigateForward => {
-                ui_state.navigate_resource_detail_history(cluster_key, true, commands_to_send);
-            }
-            ResourceAction::EditYaml { name, namespace } => {
-                if let Some(api_resource) =
-                    ui_state.clusters.get(&cluster_key).map(panel_api_resource)
-                {
-                    ui_state.open_yaml_editor(
-                        ctx,
-                        cluster_key,
-                        api_resource,
-                        namespace,
-                        name,
-                        commands_to_send,
-                    );
-                }
-            }
-            ResourceAction::RequestDelete { name, namespace } => {
-                if let Some(cluster) = ui_state.clusters.get_mut(&cluster_key) {
-                    cluster.pending_delete = Some(PendingDelete::new(
-                        panel_api_resource(cluster),
-                        name,
-                        namespace,
-                    ));
-                }
-            }
-            ResourceAction::RequestForceDelete {
-                name,
-                uid,
-                namespace,
-                finalizers,
-            } => {
-                if let Some(cluster) = ui_state.clusters.get_mut(&cluster_key) {
-                    cluster.pending_force_delete = Some(PendingForceDelete::new(
-                        panel_api_resource(cluster),
-                        name,
-                        uid,
-                        namespace,
-                        finalizers,
-                    ));
-                }
-            }
-            ResourceAction::RequestDeploymentRestart { name, namespace } => {
-                if let Some(cluster) = ui_state.clusters.get_mut(&cluster_key) {
-                    cluster.pending_deployment_restart = Some(PendingDeploymentRestart {
-                        resource_name: name,
-                        namespace,
-                    });
-                }
-            }
-            ResourceAction::RequestScale { name, namespace } => {
-                if let Some(cluster) = ui_state.clusters.get(&cluster_key) {
-                    commands_to_send.push(Box::new(GetResourceScale {
-                        cluster_key: cluster.cluster_key,
-                        api_resource: panel_api_resource(cluster),
-                        namespace,
-                        resource_name: name,
-                    }));
-                }
-            }
-            ResourceAction::SaveData {
-                expected_values,
-                updated_values,
-            } => {
-                if let Some(cluster) = ui_state.clusters.get_mut(&cluster_key) {
-                    cluster.next_data_save_request_id += 1;
-                    let request_id = cluster.next_data_save_request_id;
-                    if let Some(panel) = cluster.resource_detail_panel.as_mut() {
-                        let history_entry_id = panel.history_entry_id;
-                        let api_resource = panel.api_resource.clone();
-                        let resource_name = panel.resource_name.clone();
-                        if let (Some(namespace), Some(editor)) =
-                            (panel.namespace.clone(), panel.data_editor.as_mut())
-                        {
-                            editor.pending_save_request_id = Some(request_id);
-                            commands_to_send.push(Box::new(UpdateResourceData {
-                                cluster_key: cluster.cluster_key,
-                                history_entry_id,
-                                request_id,
-                                api_resource,
-                                namespace,
-                                resource_name,
-                                update: ResourceDataUpdate {
-                                    expected_resource_version: editor.resource_version.clone(),
-                                    expected_values,
-                                    updated_values,
-                                },
-                            }));
-                        }
+                        });
+                    if let Some(update) = update {
+                        navigation.commands_to_send().push(Box::new(update));
                     }
                 }
             }
@@ -704,20 +302,20 @@ fn show_shared_blade(
                 name,
                 namespace,
                 container,
-            } => ui_state.open_pod_log_window(
+            } => context.ui_state.open_pod_log_window(
                 cluster_key,
                 name,
                 namespace,
                 container,
-                commands_to_send,
+                navigation.commands_to_send(),
             ),
             action @ (ResourceAction::Shell { .. }
             | ResourceAction::PodDebugShell { .. }
             | ResourceAction::NodeShell { .. }) => {
-                if let Some(cluster) = ui_state.clusters.get(&cluster_key)
+                if let Some(cluster) = context.ui_state.clusters.get(&cluster_key)
                     && let Some(request) = action.shell_request(&cluster.name)
                 {
-                    shell_requests.push(request);
+                    context.shell_requests.push(request);
                 }
             }
             ResourceAction::OpenDetails { .. } => {
@@ -725,505 +323,51 @@ fn show_shared_blade(
             }
         }
     }
-    if let Some(panel) = ui_state
-        .clusters
-        .get_mut(&cluster_key)
-        .and_then(|cluster| cluster.resource_detail_panel.as_mut())
-    {
-        show_data_conflict_dialog(ctx, panel.data_editor.as_mut());
-    }
-    if close {
-        ui_state.begin_close_resource_detail(cluster_key);
-    } else if response.close_finished {
-        ui_state.close_resource_detail(cluster_key, commands_to_send);
-    }
 }
 
-pub(super) fn seed_detail_transition(ctx: &egui::Context, ui_state: &UiState, cluster_key: i32) {
-    if let Some(panel) = ui_state
-        .clusters
-        .get(&cluster_key)
-        .and_then(|cluster| cluster.resource_detail_panel.as_ref())
-        .filter(|panel| panel.navigator.transition().is_some())
-    {
-        ctx.animate_value_with_time(
-            detail_transition_id(panel),
-            0.0,
-            blade_transition_duration(ctx),
-        );
-    }
-}
-
-fn blade_transition_duration(ctx: &egui::Context) -> f32 {
-    if ctx.global_style().animation_time == 0.0 {
-        0.0
-    } else {
-        BLADE_TRANSITION_DURATION
-    }
-}
-
-fn animated_blade_transition_progress(
-    ctx: &egui::Context,
-    panel: &ResourceDetailPanelState,
-) -> f32 {
-    let linear_progress = ctx.animate_value_with_time(
-        detail_transition_id(panel),
-        1.0,
-        blade_transition_duration(ctx),
-    );
-    ease_blade_transition(linear_progress)
-}
-
-fn should_promote_active_blade(
-    has_history_layers: bool,
-    transition: Option<(ResourceDetailTransition, f32)>,
-) -> bool {
-    has_history_layers
-        && !matches!(
-            transition,
-            Some((ResourceDetailTransition::Back, progress)) if progress < 1.0
-        )
-}
-
-fn show_input_scrim(ctx: &egui::Context, viewport: egui::Rect, active_rect: egui::Rect) -> bool {
-    let regions = if active_rect.intersects(viewport) {
-        let active_rect = active_rect.intersect(viewport);
-        [
-            (
-                "left",
-                egui::Rect::from_min_max(
-                    viewport.min,
-                    egui::pos2(active_rect.min.x, viewport.max.y),
-                ),
-            ),
-            (
-                "top",
-                egui::Rect::from_min_max(
-                    egui::pos2(active_rect.min.x, viewport.min.y),
-                    active_rect.min,
-                ),
-            ),
-            (
-                "bottom",
-                egui::Rect::from_min_max(
-                    egui::pos2(active_rect.min.x, active_rect.max.y),
-                    egui::pos2(active_rect.max.x, viewport.max.y),
-                ),
-            ),
-            (
-                "right",
-                egui::Rect::from_min_max(
-                    egui::pos2(active_rect.max.x, viewport.min.y),
-                    viewport.max,
-                ),
-            ),
-        ]
-        .into_iter()
-        .collect::<Vec<_>>()
-    } else {
-        vec![("full", viewport)]
-    };
-
-    let mut clicked = false;
-    for (name, region) in regions {
-        if !region.is_positive() {
-            continue;
-        }
-        let id = egui::Id::new(("resource-detail-input-scrim", name));
-        let layer_id = egui::LayerId::new(egui::Order::Foreground, id);
-        clicked |= egui::Area::new(id)
-            .order(egui::Order::Foreground)
-            .fixed_pos(region.min)
-            .movable(false)
-            .show(ctx, |ui| {
-                ui.set_min_size(region.size());
-                ui.interact(ui.max_rect(), ui.id().with("dismiss"), egui::Sense::click())
-                    .clicked()
-            })
-            .inner;
-        // Input-only regions must be above the history visuals. They do not
-        // overlap the active blade, so its controls and menus remain usable.
-        ctx.move_to_top(layer_id);
-    }
-    clicked
-}
-
-fn detail_transition_id(panel: &ResourceDetailPanelState) -> egui::Id {
-    let transition_kind = match panel.navigator.transition() {
-        Some(ResourceDetailTransition::Opening) => "opening",
-        Some(ResourceDetailTransition::Forward) => "forward",
-        Some(ResourceDetailTransition::Back) => "back",
-        Some(ResourceDetailTransition::Closing) => "closing",
-        None => "none",
-    };
-    egui::Id::new((
-        "resource-detail-transition",
-        panel.selection_generation,
-        transition_kind,
-    ))
-}
-
-fn show_history_layers(
-    ctx: &egui::Context,
-    viewport: egui::Rect,
-    layers: &[&ResourceDetailHistoryEntry],
-    history_offset: usize,
-    transition: Option<(ResourceDetailTransition, f32)>,
+fn navigate_resource_detail_in_navigator(
+    ui_state: &mut UiState,
+    navigation: &mut GlobalBladeNavigation<'_>,
+    cluster_key: i32,
+    api_resource: crate::api_resource::ApiResource,
+    name: String,
+    namespace: Option<String>,
+    uid: String,
 ) {
-    // Paint oldest to newest so each newer blade naturally occludes the one
-    // directly behind it.
-    for index in 0..layers.len() {
-        let entry = layers[index];
-        let depth = layers.len() - index - 1;
-        let target_transform = history_blade_transform(viewport, depth);
-        let start_transform = match transition {
-            Some((ResourceDetailTransition::Forward, _)) if depth == 0 => {
-                active_blade_transform(viewport)
-            }
-            Some((ResourceDetailTransition::Forward, _)) => {
-                history_blade_transform(viewport, depth - 1)
-            }
-            Some((ResourceDetailTransition::Back, _)) => {
-                history_blade_transform(viewport, depth + 1)
-            }
-            Some((ResourceDetailTransition::Opening | ResourceDetailTransition::Closing, _)) => {
-                target_transform
-            }
-            None => target_transform,
-        };
-        let transform = match transition {
-            Some((ResourceDetailTransition::Closing, progress)) => {
-                closing_blade_transform(viewport, target_transform, progress)
-            }
-            Some((_, progress)) => {
-                interpolate_blade_transform(start_transform, target_transform, progress)
-            }
-            None => target_transform,
-        };
-        let untransformed_position = active_blade_transform(viewport).position;
-        let visual_transform = blade_visual_transform(untransformed_position, transform);
-
-        egui::Area::new(history_blade_id(entry))
-            // Keep every blade in the same layer class as it moves between
-            // active and history. Foreground keeps application tooltips above
-            // the blade while avoiding a handoff between layer classes.
-            .order(egui::Order::Foreground)
-            .fixed_pos(untransformed_position)
-            .fade_in(false)
-            .interactable(false)
-            .show(ctx, |ui| {
-                ui.set_width(PANEL_WIDTH);
-                let blade_height = viewport.height() - ACTIVE_BLADE_INSET * 2.0;
-                ui.set_height(blade_height);
-                ui.with_visual_transform(visual_transform, |ui| {
-                    show_entry_blade_frame(
-                        ui,
-                        blade_height,
-                        entry,
-                        BladeNavigation {
-                            can_go_back: history_offset + index > 0,
-                            // The current foreground blade is always the
-                            // immediate next entry from a history blade.
-                            can_go_forward: true,
-                        },
-                        false,
-                    );
-                });
-            });
-        // History blades retain the layer order established while they were
-        // foreground. Promoting several layers with `move_to_top` in one
-        // frame is intentionally unordered in egui, so it cannot represent a
-        // deterministic back-to-front stack.
-    }
-}
-
-fn history_blade_id(entry: &ResourceDetailHistoryEntry) -> egui::Id {
-    blade_id(entry.history_entry_id)
-}
-
-fn blade_layer_id(blade_id: egui::Id) -> egui::LayerId {
-    egui::LayerId::new(egui::Order::Foreground, blade_id)
-}
-
-fn active_blade_transform(viewport: egui::Rect) -> BladeTransform {
-    BladeTransform {
-        position: egui::pos2(
-            viewport.max.x - PANEL_WIDTH - ACTIVE_BLADE_INSET,
-            viewport.min.y + ACTIVE_BLADE_INSET,
-        ),
-        scale: 1.0,
-    }
-}
-
-fn blade_visual_transform(
-    untransformed_position: egui::Pos2,
-    transform: BladeTransform,
-) -> egui::emath::TSTransform {
-    egui::emath::TSTransform::new(
-        transform.position.to_vec2() - untransformed_position.to_vec2() * transform.scale,
-        transform.scale,
-    )
-}
-
-fn history_blade_transform(viewport: egui::Rect, index: usize) -> BladeTransform {
-    let depth = index.min(HISTORY_BLADE_SCALES.len() - 1);
-    let scale = HISTORY_BLADE_SCALES[depth];
-    let blade_height = viewport.height() - ACTIVE_BLADE_INSET * 2.0;
-    let horizontal_offset = PANEL_WIDTH * HISTORY_BLADE_X_TRANSLATIONS[depth];
-    BladeTransform {
-        position: egui::pos2(
-            active_blade_transform(viewport).position.x - horizontal_offset,
-            viewport.min.y + ACTIVE_BLADE_INSET + (blade_height - blade_height * scale) / 2.0,
-        ),
-        scale,
-    }
-}
-
-fn closing_blade_transform(
-    viewport: egui::Rect,
-    transform: BladeTransform,
-    progress: f32,
-) -> BladeTransform {
-    BladeTransform {
-        position: egui::pos2(
-            egui::lerp(
-                transform.position.x..=viewport.max.x + ACTIVE_BLADE_INSET,
-                progress,
-            ),
-            transform.position.y,
-        ),
-        scale: transform.scale,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn closing_transform_moves_active_and_history_blades_beyond_the_right_viewport_edge() {
-        let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1536.0, 1024.0));
-        let active = active_blade_transform(viewport);
-        let history = history_blade_transform(viewport, 1);
-
-        for blade in [active, history] {
-            let closing = closing_blade_transform(viewport, blade, 1.0);
-            assert!(closing.position.x > viewport.max.x);
-            assert_eq!(closing.scale, blade.scale);
-        }
-    }
-
-    #[test]
-    fn historical_blade_recession_scales_its_second_step_with_the_blade_width() {
-        let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1536.0, 1024.0));
-        let active = active_blade_transform(viewport);
-        let nearer = history_blade_transform(viewport, 0);
-        let older = history_blade_transform(viewport, 1);
-
-        let nearer_recession = active.position.x - nearer.position.x;
-        let older_recession = active.position.x - older.position.x;
-        let older_step = older_recession - nearer_recession;
-
-        assert!((older_step - nearer_recession * older.scale / nearer.scale).abs() < 0.001);
-    }
-
-    #[test]
-    fn active_blade_waits_for_the_outgoing_back_blade_to_leave_before_promotion() {
-        assert!(!should_promote_active_blade(
-            true,
-            Some((ResourceDetailTransition::Back, 0.0)),
-        ));
-        assert!(!should_promote_active_blade(
-            true,
-            Some((ResourceDetailTransition::Back, 0.99)),
-        ));
-        assert!(should_promote_active_blade(
-            true,
-            Some((ResourceDetailTransition::Back, 1.0)),
-        ));
-    }
-
-    #[test]
-    fn blade_transition_easing_starts_and_ends_gently() {
-        assert_eq!(ease_blade_transition(0.0), 0.0);
-        assert!(ease_blade_transition(0.25) < 0.25);
-        assert_eq!(ease_blade_transition(0.5), 0.5);
-        assert!(ease_blade_transition(0.75) > 0.75);
-        assert_eq!(ease_blade_transition(1.0), 1.0);
-    }
-}
-
-fn ease_blade_transition(progress: f32) -> f32 {
-    egui::emath::easing::cubic_in_out(progress)
-}
-
-fn interpolate_blade_transform(
-    from: BladeTransform,
-    to: BladeTransform,
-    progress: f32,
-) -> BladeTransform {
-    BladeTransform {
-        position: from.position + (to.position - from.position) * progress,
-        scale: from.scale + (to.scale - from.scale) * progress,
-    }
-}
-
-fn show_outgoing_blade(
-    ctx: &egui::Context,
-    viewport: egui::Rect,
-    entry: &ResourceDetailHistoryEntry,
-    navigation: BladeNavigation,
-    transform: BladeTransform,
-) {
-    let origin = active_blade_transform(viewport).position;
-    let visual_transform = blade_visual_transform(origin, transform);
-
-    let blade_height = viewport.height() - ACTIVE_BLADE_INSET * 2.0;
-    egui::Area::new(history_blade_id(entry))
-        .order(egui::Order::Foreground)
-        .fixed_pos(origin)
-        .fade_in(false)
-        .interactable(false)
-        .show(ctx, |ui| {
-            ui.set_width(PANEL_WIDTH);
-            ui.set_height(blade_height);
-            ui.with_visual_transform(visual_transform, |ui| {
-                show_entry_blade_frame(ui, blade_height, entry, navigation, true);
-            });
-        });
-}
-
-fn blade_id(history_entry_id: u64) -> egui::Id {
-    egui::Id::new(("resource-detail-blade", history_entry_id))
-}
-
-#[allow(dead_code)]
-fn show_blade_navigation_controls(
-    ui: &mut egui::Ui,
-    navigation: BladeNavigation,
-    is_foreground: bool,
-) -> Option<ResourceAction> {
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(80.0, 36.0), egui::Sense::hover());
-    let mut controls_ui = ui.new_child(
-        egui::UiBuilder::new()
-            .max_rect(rect)
-            .layout(egui::Layout::left_to_right(egui::Align::Center)),
-    );
-
-    let mut action = None;
-    let back_label = if is_foreground {
-        "Back"
-    } else {
-        "Back in background blade"
+    let Some(cluster) = ui_state.clusters.get_mut(&cluster_key) else {
+        return;
     };
-    let back_clicked = controls_ui
-        .add_enabled_ui(navigation.can_go_back, |ui| {
-            TailwindButton::icon(
-                icons::arrow_left_icon()
-                    .fit_to_exact_size(egui::Vec2::splat(16.0))
-                    .tint(gray::_700),
-            )
-            .variant(ButtonVariant::Secondary)
-            .size(ButtonSize::Sm)
-            .accessibility_label(back_label)
-            .show(ui)
-            .clicked()
-        })
-        .inner;
-    if back_clicked {
-        action = Some(ResourceAction::NavigateBack);
+    cluster.next_detail_generation += 1;
+    let history_entry_id = cluster.next_detail_generation;
+    if cluster.resource_detail_panel.is_none() {
+        return;
     }
-    let forward_label = if is_foreground {
-        "Forward"
-    } else {
-        "Forward in background blade"
-    };
-    let forward_clicked = controls_ui
-        .add_enabled_ui(navigation.can_go_forward, |ui| {
-            TailwindButton::icon(
-                icons::arrow_right_icon()
-                    .fit_to_exact_size(egui::Vec2::splat(16.0))
-                    .tint(gray::_700),
-            )
-            .variant(ButtonVariant::Secondary)
-            .size(ButtonSize::Sm)
-            .accessibility_label(forward_label)
-            .show(ui)
-            .clicked()
-        })
-        .inner;
-    if forward_clicked {
-        action = Some(ResourceAction::NavigateForward);
-    }
-    action
-}
-
-fn panel_api_resource(cluster: &super::state::ClusterState) -> crate::api_resource::ApiResource {
-    cluster
-        .resource_detail_panel
-        .as_ref()
-        .expect("detail panel remains open while an action is handled")
-        .api_resource
-        .clone()
-}
-
-fn show_entry_blade_frame(
-    ui: &mut egui::Ui,
-    blade_height: f32,
-    entry: &ResourceDetailHistoryEntry,
-    _navigation: BladeNavigation,
-    _is_foreground: bool,
-) {
-    let mut data_editor = entry.data_editor.clone();
-    show_blade_frame(ui, blade_height, entry.history_entry_id, |ui| {
-        let _ = show_resource_detail_blade(
-            ui,
-            &ResourceNavigation::default(),
-            &entry.api_resource,
-            &entry.namespace,
-            &entry.resource_name,
-            &entry.resource_uid,
-            &entry.detail,
-            &entry.events,
-            entry.detail_error.as_deref(),
-            entry.events_error.as_deref(),
-            &entry.managed_resources,
-            entry.managed_resources_error.as_deref(),
-            data_editor.as_mut(),
-            None,
-            None,
-        );
-    });
-}
-
-fn show_blade_frame(
-    ui: &mut egui::Ui,
-    blade_height: f32,
-    history_entry_id: u64,
-    add_content: impl FnOnce(&mut egui::Ui),
-) {
-    components::scroll::vertical()
-        .id_salt(("resource-detail-panel-scroll", history_entry_id))
-        .auto_shrink([false, false])
-        .min_scrolled_height(blade_height)
-        .max_height(blade_height)
-        .show(ui, |ui| {
-            ui.set_width(PANEL_WIDTH);
-            egui::Frame::new()
-                .fill(WHITE)
-                .stroke(egui::Stroke::new(1.0, gray::_200))
-                .shadow(egui::Shadow {
-                    offset: [-4, 0],
-                    blur: 16,
-                    spread: 0,
-                    color: egui::Color32::BLACK.gamma_multiply(0.12),
-                })
-                .inner_margin(egui::Margin::same(PANEL_PADDING))
-                .show(ui, |ui| {
-                    ui.set_min_height(blade_height - f32::from(PANEL_PADDING) * 2.0);
-                    add_content(ui);
-                });
-        });
+    navigation.push(Box::new(ResourceDetailHistoryEntry {
+        history_entry_id,
+        cluster_key,
+        api_resource: api_resource.clone(),
+        namespace: namespace.clone(),
+        resource_name: name.clone(),
+        resource_uid: uid.clone(),
+        detail: None,
+        events: Vec::new(),
+        detail_error: None,
+        events_error: None,
+        managed_resources: Vec::new(),
+        managed_resources_error: None,
+        data_editor: None,
+        pending_action: None,
+    }));
+    navigation
+        .commands_to_send()
+        .push(Box::new(crate::worker::StartResourceDetailWatch {
+            cluster_key: cluster.cluster_key,
+            history_entry_id,
+            api_resource,
+            namespace,
+            resource_name: name,
+            resource_uid: uid,
+        }));
 }
 
 fn show_resource_detail_header(
@@ -1280,11 +424,37 @@ fn show_resource_detail_header(
             );
         });
         ui.add_space(spacing::MD);
-        ui.label(
-            egui::RichText::new(&entry.resource_name)
-                .font(typography::page_title())
-                .color(gray::_900),
-        );
+        let kind_width = ui
+            .painter()
+            .layout_no_wrap(
+                entry.api_resource.kind.clone(),
+                typography::body(),
+                indigo::_600,
+            )
+            .size()
+            .x
+            + spacing::SM * 2.0;
+        let available_name_width = (ui.available_width() - kind_width - spacing::MD).max(0.0);
+        let natural_name_width = ui
+            .painter()
+            .layout_no_wrap(
+                entry.resource_name.clone(),
+                typography::page_title(),
+                gray::_900,
+            )
+            .size()
+            .x;
+        let name = egui::RichText::new(&entry.resource_name)
+            .font(typography::page_title())
+            .color(gray::_900);
+        if natural_name_width <= available_name_width {
+            ui.label(name);
+        } else {
+            ui.add_sized(
+                egui::vec2(available_name_width, 24.0),
+                egui::Label::new(name).truncate().halign(egui::Align::RIGHT),
+            );
+        }
         ui.add_space(spacing::MD);
         egui::Frame::new()
             .fill(indigo::_50)
@@ -1320,7 +490,9 @@ fn show_resource_detail_blade(
     managed_resources_error: Option<&str>,
     data_editor: Option<&mut super::state::ResourceDataEditorState>,
     table_preferences: Option<&mut super::table_preferences::PersistedResourceTablePreferences>,
-    table_settings: Option<&mut super::resource_table_settings::ResourceTableSettingsState>,
+    column_settings: Option<
+        &mut Option<super::resource_table_settings::ResourceTableSettingsTarget>,
+    >,
 ) -> BladeResult {
     let mut result = BladeResult::default();
     ui.set_max_width(ui.available_width() - 9.0);
@@ -1344,7 +516,7 @@ fn show_resource_detail_blade(
         managed_resources_error,
         &mut result.action,
         table_preferences,
-        table_settings,
+        column_settings,
     );
     ui.add_space(16.0);
     show_events(ui, events, events_error);
@@ -1365,7 +537,9 @@ fn show_managed_resources_for(
     managed_resources_error: Option<&str>,
     pending_action: &mut Option<ResourceAction>,
     mut table_preferences: Option<&mut super::table_preferences::PersistedResourceTablePreferences>,
-    mut table_settings: Option<&mut super::resource_table_settings::ResourceTableSettingsState>,
+    mut column_settings: Option<
+        &mut Option<super::resource_table_settings::ResourceTableSettingsTarget>,
+    >,
 ) {
     let table_kinds = managed_resource_table_kinds(api_resource);
     if table_kinds.is_empty() {
@@ -1387,7 +561,7 @@ fn show_managed_resources_for(
             api_resource.kind == "Node",
             pending_action,
             table_preferences.as_deref_mut(),
-            table_settings.as_deref_mut(),
+            column_settings.as_deref_mut(),
         );
         if rows.is_empty() {
             ui.add_space(8.0);
@@ -1411,10 +585,12 @@ fn show_managed_resource_table(
     show_namespace_column: bool,
     pending_action: &mut Option<ResourceAction>,
     table_preferences: Option<&mut super::table_preferences::PersistedResourceTablePreferences>,
-    table_settings: Option<&mut super::resource_table_settings::ResourceTableSettingsState>,
+    column_settings: Option<
+        &mut Option<super::resource_table_settings::ResourceTableSettingsTarget>,
+    >,
 ) {
     let definition = managed_resource_table_definition(kind, show_namespace_column);
-    if let (Some(table_preferences), Some(table_settings)) = (table_preferences, table_settings) {
+    if let (Some(table_preferences), Some(column_settings)) = (table_preferences, column_settings) {
         let mut column_definitions = vec![TableColumnDefinition {
             id: "name".into(),
             label: "Name".into(),
@@ -1509,11 +685,11 @@ fn show_managed_resource_table(
                         menu.separator();
                     }
                     if menu.action("Configure columns").clicked() {
-                        table_settings.open(
+                        *column_settings = Some(super::resource_table_settings::target(
                             &mut table_preferences.borrow_mut(),
                             table_key.clone(),
                             &column_definitions,
-                        );
+                        ));
                     }
                 });
             },

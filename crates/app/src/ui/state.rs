@@ -1,3 +1,4 @@
+use super::global_blade::{GlobalBladeContent, GlobalBladeCoordinator};
 use crate::api_resource::ApiResource;
 use crate::log_store::LogStoreResult;
 use crate::minimal_namespace::MinimalNamespace;
@@ -14,6 +15,7 @@ use crate::resource_table::CustomResourceColumn;
 use crate::sorted_name::SortedName;
 use crate::terminal_launcher::{DebugImagePreset, ShellRequest, TerminalLaunchSettings};
 use crate::worker::{ResourceApiError, WorkerCommandBox, WorkerResult, WorkerTrait};
+#[cfg(test)]
 use components::BladeNavigator;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::time::{Duration, Instant};
@@ -41,10 +43,7 @@ pub(crate) struct UiState {
     pub(super) next_yaml_editor_id: u64,
     pub(super) resource_schemas: HashMap<(i32, ApiResource), ResourceSchema>,
     pub(super) log_display_options: LogDisplayOptions,
-    pub(super) terminal_settings_open: bool,
-    pub(super) terminal_settings_blade: Option<BladeNavigator<()>>,
-    pub(super) terminal_settings_draft: TerminalLaunchSettings,
-    pub(super) terminal_settings_error: Option<String>,
+    pub(super) global_blades: GlobalBladeCoordinator,
     pub(super) terminal_launch_error: Option<String>,
     pub(super) cluster_selections: PersistedClusterSelections,
     pub(super) resource_navigation_expansion: ResourceNavigationExpansion,
@@ -342,18 +341,17 @@ pub(super) struct PendingScale {
     pub(super) desired_replicas: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(super) struct ResourceDetailPanelState {
-    pub(super) navigator: BladeNavigator<ResourceDetailHistoryEntry>,
-    pub(super) selection_generation: u64,
     /// Avoid treating the row click which opened the overlay as a scrim dismissal.
     pub(super) dismiss_on_outside_click: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(super) struct ResourceDetailHistoryEntry {
     /// Distinguishes repeated visits to the same Kubernetes resource.
     pub(super) history_entry_id: u64,
+    pub(super) cluster_key: i32,
     pub(super) api_resource: ApiResource,
     pub(super) namespace: Option<String>,
     pub(super) resource_name: String,
@@ -365,41 +363,63 @@ pub(super) struct ResourceDetailHistoryEntry {
     pub(super) managed_resources: Vec<ManagedResource>,
     pub(super) managed_resources_error: Option<String>,
     pub(super) data_editor: Option<ResourceDataEditorState>,
+    /// UI interactions are recorded while rendering, then consumed by the
+    /// global blade coordinator after the navigator borrow ends.
+    pub(super) pending_action: Option<ResourceAction>,
 }
 
-impl ResourceDetailPanelState {
-    fn retained_history_entry_ids(&self) -> impl Iterator<Item = u64> + '_ {
-        self.navigator.entries().map(|entry| entry.history_entry_id)
+impl UiState {
+    /// Replace the sole global blade root and perform the lifecycle cleanup
+    /// that every root replacement requires. Feature modules must use this
+    /// instead of manipulating the coordinator directly.
+    pub(super) fn replace_global_blade(
+        &mut self,
+        content: Box<dyn GlobalBladeContent>,
+        commands_to_send: &mut Vec<WorkerCommandBox>,
+    ) {
+        let discarded = self.global_blades.open(content);
+        Self::stop_discarded_blades(discarded, commands_to_send);
+        for cluster in self.clusters.values_mut() {
+            cluster.resource_detail_panel = None;
+        }
     }
 
-    fn history_entry_mut(
+    #[cfg(test)]
+    pub(super) fn terminal_settings_blade(
+        &self,
+    ) -> Option<&super::settings::TerminalSettingsBlade> {
+        self.global_blades
+            .navigator()?
+            .current()
+            .terminal_settings()
+    }
+    pub(super) fn resource_detail_entry_mut(
         &mut self,
         history_entry_id: u64,
     ) -> Option<&mut ResourceDetailHistoryEntry> {
-        self.navigator
+        self.global_blades
+            .navigator_mut()?
             .entries_mut()
+            .filter_map(|entry| entry.resource_detail_mut())
             .find(|entry| entry.history_entry_id == history_entry_id)
     }
 
-    pub(super) fn data_editor_mut(
-        &mut self,
-        history_entry_id: u64,
-    ) -> Option<&mut ResourceDataEditorState> {
-        self.history_entry_mut(history_entry_id)
-            .and_then(|entry| entry.data_editor.as_mut())
-    }
-}
-
-impl std::ops::Deref for ResourceDetailPanelState {
-    type Target = ResourceDetailHistoryEntry;
-    fn deref(&self) -> &Self::Target {
-        self.navigator.current()
-    }
-}
-
-impl std::ops::DerefMut for ResourceDetailPanelState {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.navigator.current_mut()
+    pub(super) fn stop_discarded_blades(
+        discarded: impl IntoIterator<Item = Box<dyn GlobalBladeContent>>,
+        commands_to_send: &mut Vec<WorkerCommandBox>,
+    ) {
+        let mut entries_by_cluster = HashMap::<i32, Vec<u64>>::new();
+        for content in discarded {
+            if let Some(entry) = content.resource_detail() {
+                entries_by_cluster
+                    .entry(entry.cluster_key)
+                    .or_default()
+                    .push(entry.history_entry_id);
+            }
+        }
+        for (cluster_key, history_entry_ids) in entries_by_cluster {
+            stop_resource_detail_watches(cluster_key, history_entry_ids, commands_to_send);
+        }
     }
 }
 
@@ -525,6 +545,7 @@ impl ResourceDataEditorState {
     }
 }
 
+#[derive(Debug)]
 pub(super) enum ResourceAction {
     OpenDetails {
         name: String,
@@ -583,10 +604,6 @@ pub(super) enum ResourceAction {
         namespace: Option<String>,
         uid: String,
     },
-    #[allow(dead_code)]
-    NavigateBack,
-    #[allow(dead_code)]
-    NavigateForward,
 }
 
 impl ResourceAction {
@@ -633,9 +650,7 @@ impl ResourceAction {
             | Self::RequestScale { .. }
             | Self::SaveData { .. }
             | Self::ViewLogs { .. }
-            | Self::NavigateDetails { .. }
-            | Self::NavigateBack
-            | Self::NavigateForward => None,
+            | Self::NavigateDetails { .. } => None,
         }
     }
 }
@@ -818,10 +833,17 @@ impl UiState {
         api_resource
     }
 
-    pub(super) fn open_terminal_settings(&mut self, settings: &TerminalLaunchSettings) {
-        self.terminal_settings_open = true;
-        self.terminal_settings_blade = Some(BladeNavigator::new(()));
-        self.terminal_settings_draft = settings.clone();
+    pub(super) fn open_terminal_settings(
+        &mut self,
+        settings: &TerminalLaunchSettings,
+        commands_to_send: &mut Vec<WorkerCommandBox>,
+    ) {
+        self.replace_global_blade(
+            Box::new(super::settings::TerminalSettingsBlade::new(
+                settings.clone(),
+            )),
+            commands_to_send,
+        );
     }
 
     pub(super) fn open_pod_log_window(
@@ -969,24 +991,24 @@ impl UiState {
         api_resource: ApiResource,
         commands_to_send: &mut Vec<WorkerCommandBox>,
     ) {
-        let api_resource = {
+        let (api_resource, closed_resource_detail) = {
             let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
                 return;
             };
 
-            if let Some(panel) = cluster.resource_detail_panel.take() {
-                stop_resource_detail_watches(
-                    cluster.cluster_key,
-                    panel.retained_history_entry_ids(),
-                    commands_to_send,
-                );
-            }
+            let closed_resource_detail = cluster.resource_detail_panel.take().is_some();
             cluster.selected_api_resource = Some(api_resource);
-            cluster
-                .selected_api_resource
-                .clone()
-                .expect("selected API resource was just set")
+            (
+                cluster
+                    .selected_api_resource
+                    .clone()
+                    .expect("selected API resource was just set"),
+                closed_resource_detail,
+            )
         };
+        if closed_resource_detail {
+            Self::stop_discarded_blades(self.global_blades.clear(), commands_to_send);
+        }
         if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
             Self::request_selected_resource_watches(cluster, &api_resource, commands_to_send);
         }
@@ -1002,14 +1024,17 @@ impl UiState {
         uid: String,
         commands_to_send: &mut Vec<WorkerCommandBox>,
     ) {
-        let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
-            return;
+        let selection_generation = {
+            let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
+                return;
+            };
+            cluster.next_detail_generation += 1;
+            cluster.next_detail_generation
         };
-        cluster.next_detail_generation += 1;
-        let selection_generation = cluster.next_detail_generation;
-        cluster.resource_detail_panel = Some(ResourceDetailPanelState {
-            navigator: BladeNavigator::new(ResourceDetailHistoryEntry {
+        self.replace_global_blade(
+            Box::new(ResourceDetailHistoryEntry {
                 history_entry_id: selection_generation,
+                cluster_key,
                 api_resource: api_resource.clone(),
                 namespace: namespace.clone(),
                 resource_name: name.clone(),
@@ -1021,8 +1046,15 @@ impl UiState {
                 managed_resources: Vec::new(),
                 managed_resources_error: None,
                 data_editor: None,
+                pending_action: None,
             }),
-            selection_generation,
+            commands_to_send,
+        );
+        let cluster = self
+            .clusters
+            .get_mut(&cluster_key)
+            .expect("cluster was checked before opening its blade");
+        cluster.resource_detail_panel = Some(ResourceDetailPanelState {
             dismiss_on_outside_click: false,
         });
         commands_to_send.push(Box::new(crate::worker::StartResourceDetailWatch {
@@ -1035,6 +1067,7 @@ impl UiState {
         }));
     }
 
+    #[cfg(test)]
     pub(super) fn navigate_resource_detail(
         &mut self,
         cluster_key: i32,
@@ -1049,11 +1082,12 @@ impl UiState {
         };
         cluster.next_detail_generation += 1;
         let selection_generation = cluster.next_detail_generation;
-        let Some(panel) = cluster.resource_detail_panel.as_mut() else {
+        if cluster.resource_detail_panel.is_none() {
             return;
-        };
+        }
         let entry = ResourceDetailHistoryEntry {
             history_entry_id: selection_generation,
+            cluster_key,
             api_resource: api_resource.clone(),
             namespace: namespace.clone(),
             resource_name: name.clone(),
@@ -1065,17 +1099,10 @@ impl UiState {
             managed_resources: Vec::new(),
             managed_resources_error: None,
             data_editor: None,
+            pending_action: None,
         };
-        stop_resource_detail_watches(
-            cluster.cluster_key,
-            panel
-                .navigator
-                .push(entry)
-                .into_iter()
-                .map(|entry| entry.history_entry_id),
-            commands_to_send,
-        );
-        panel.selection_generation = selection_generation;
+        let discarded = self.global_blades.push(Box::new(entry));
+        Self::stop_discarded_blades(discarded, commands_to_send);
         commands_to_send.push(Box::new(crate::worker::StartResourceDetailWatch {
             cluster_key: cluster.cluster_key,
             history_entry_id: selection_generation,
@@ -1086,6 +1113,7 @@ impl UiState {
         }));
     }
 
+    #[cfg(test)]
     pub(super) fn navigate_resource_detail_history(
         &mut self,
         cluster_key: i32,
@@ -1095,47 +1123,20 @@ impl UiState {
         let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
             return;
         };
-        let Some(panel) = cluster.resource_detail_panel.as_mut() else {
+        let Some(_panel) = cluster.resource_detail_panel.as_mut() else {
             return;
         };
-        let moved = if forward {
-            panel.navigator.go_forward()
+        if forward {
+            let _ = self
+                .global_blades
+                .navigator_mut()
+                .is_some_and(BladeNavigator::go_forward);
         } else {
-            panel.navigator.go_back()
-        };
-        if !moved {
-            return;
+            let _ = self
+                .global_blades
+                .navigator_mut()
+                .is_some_and(BladeNavigator::go_back);
         }
-        cluster.next_detail_generation += 1;
-        panel.selection_generation = cluster.next_detail_generation;
-    }
-
-    pub(super) fn close_resource_detail(
-        &mut self,
-        cluster_key: i32,
-        commands_to_send: &mut Vec<WorkerCommandBox>,
-    ) {
-        let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
-            return;
-        };
-        if let Some(panel) = cluster.resource_detail_panel.take() {
-            stop_resource_detail_watches(
-                cluster.cluster_key,
-                panel.retained_history_entry_ids(),
-                commands_to_send,
-            );
-        }
-    }
-
-    pub(super) fn begin_close_resource_detail(&mut self, cluster_key: i32) -> bool {
-        let Some(panel) = self
-            .clusters
-            .get_mut(&cluster_key)
-            .and_then(|cluster| cluster.resource_detail_panel.as_mut())
-        else {
-            return false;
-        };
-        panel.navigator.begin_close()
     }
 
     pub(super) fn close_all_resource_details(
@@ -1143,13 +1144,14 @@ impl UiState {
         commands_to_send: &mut Vec<WorkerCommandBox>,
     ) {
         for cluster in self.clusters.values_mut() {
-            if let Some(panel) = cluster.resource_detail_panel.take() {
-                stop_resource_detail_watches(
-                    cluster.cluster_key,
-                    panel.retained_history_entry_ids(),
-                    commands_to_send,
-                );
-            }
+            cluster.resource_detail_panel = None;
+        }
+        if self.global_blades.navigator().is_some_and(|navigator| {
+            navigator
+                .entries()
+                .any(|entry| entry.resource_detail().is_some())
+        }) {
+            Self::stop_discarded_blades(self.global_blades.clear(), commands_to_send);
         }
     }
 
@@ -1397,8 +1399,15 @@ impl WorkerResult for crate::worker::ClusterConnectionFailed {
 }
 
 impl WorkerResult for crate::worker::KubernetesClustersUpdated {
-    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+    fn apply(self, ui: &mut UiState, commands: &mut Vec<WorkerCommandBox>) {
         let crate::worker::KubernetesClustersUpdated(clusters) = self;
+        if ui.global_blades.navigator().is_some_and(|navigator| {
+            navigator
+                .entries()
+                .any(|content| content.resource_detail().is_some())
+        }) {
+            UiState::stop_discarded_blades(ui.global_blades.clear(), commands);
+        }
         ui.clusters.clear();
         ui.selected_cluster = None;
         let mut current_cluster_key = None;
@@ -1446,7 +1455,7 @@ impl WorkerResult for crate::worker::KubernetesClustersUpdated {
         if let Some(cluster_key) = current_cluster_key
             && let Some(command) = ui.select_cluster(cluster_key)
         {
-            _commands.push(command);
+            commands.push(command);
         }
     }
 }
@@ -1607,6 +1616,26 @@ impl WorkerResult for crate::worker::KubernetesResourceDeleted {
             namespace,
             resource_uid,
         } = self;
+        let deleted_history_entry_id = ui.global_blades.navigator().and_then(|navigator| {
+            navigator
+                .entries()
+                .filter_map(|content| content.resource_detail())
+                .find(|entry| {
+                    entry.cluster_key == cluster_key && entry.resource_uid == resource_uid
+                })
+                .map(|entry| entry.history_entry_id)
+        });
+        let closes_active_blade = deleted_history_entry_id.is_some_and(|history_entry_id| {
+            ui.global_blades.navigator().is_some_and(|navigator| {
+                navigator
+                    .current()
+                    .resource_detail()
+                    .is_some_and(|entry| entry.history_entry_id == history_entry_id)
+                    || navigator
+                        .current()
+                        .is_owned_by_resource_detail(history_entry_id)
+            })
+        });
         if let Some(cluster) = ui.clusters.get_mut(&cluster_key) {
             if let Some(watch) = cluster
                 .resource_cache
@@ -1614,18 +1643,12 @@ impl WorkerResult for crate::worker::KubernetesResourceDeleted {
             {
                 watch.resources.remove(&resource_uid);
             }
-            if cluster
-                .resource_detail_panel
-                .as_ref()
-                .is_some_and(|panel| panel.resource_uid == resource_uid)
-                && let Some(panel) = cluster.resource_detail_panel.take()
-            {
-                stop_resource_detail_watches(
-                    cluster_key,
-                    panel.retained_history_entry_ids(),
-                    commands,
-                );
+            if closes_active_blade {
+                cluster.resource_detail_panel = None;
             }
+        }
+        if closes_active_blade {
+            UiState::stop_discarded_blades(ui.global_blades.clear(), commands);
         }
     }
 }
@@ -1696,20 +1719,13 @@ impl WorkerResult for crate::worker::ResourceDetailUpdated {
             history_entry_id,
             detail,
         } = self;
-        if let Some(panel) = ui
-            .clusters
-            .get_mut(&cluster_key)
-            .and_then(|cluster| cluster.resource_detail_panel.as_mut())
+        if let Some(entry) = ui
+            .resource_detail_entry_mut(history_entry_id)
+            .filter(|entry| entry.cluster_key == cluster_key)
         {
-            if panel.history_entry_id == history_entry_id {
-                sync_resource_data_editor(&mut panel.data_editor, &detail);
-                panel.detail = Some(*detail);
-                panel.detail_error = None;
-            } else if let Some(entry) = panel.history_entry_mut(history_entry_id) {
-                sync_resource_data_editor(&mut entry.data_editor, &detail);
-                entry.detail = Some(*detail);
-                entry.detail_error = None;
-            }
+            sync_resource_data_editor(&mut entry.data_editor, &detail);
+            entry.detail = Some(*detail);
+            entry.detail_error = None;
         }
     }
 }
@@ -1720,18 +1736,12 @@ impl WorkerResult for crate::worker::ResourceEventsReplaced {
             history_entry_id,
             events,
         } = self;
-        if let Some(panel) = ui
-            .clusters
-            .get_mut(&cluster_key)
-            .and_then(|cluster| cluster.resource_detail_panel.as_mut())
+        if let Some(entry) = ui
+            .resource_detail_entry_mut(history_entry_id)
+            .filter(|entry| entry.cluster_key == cluster_key)
         {
-            if panel.history_entry_id == history_entry_id {
-                panel.events = events;
-                panel.events_error = None;
-            } else if let Some(entry) = panel.history_entry_mut(history_entry_id) {
-                entry.events = events;
-                entry.events_error = None;
-            }
+            entry.events = events;
+            entry.events_error = None;
         }
     }
 }
@@ -1743,23 +1753,14 @@ impl WorkerResult for crate::worker::ResourceDetailWatchFailed {
             events,
             error,
         } = self;
-        if let Some(panel) = ui
-            .clusters
-            .get_mut(&cluster_key)
-            .and_then(|cluster| cluster.resource_detail_panel.as_mut())
+        if let Some(entry) = ui
+            .resource_detail_entry_mut(history_entry_id)
+            .filter(|entry| entry.cluster_key == cluster_key)
         {
-            if panel.history_entry_id == history_entry_id {
-                if events {
-                    panel.events_error = Some(error);
-                } else {
-                    panel.detail_error = Some(error);
-                }
-            } else if let Some(entry) = panel.history_entry_mut(history_entry_id) {
-                if events {
-                    entry.events_error = Some(error);
-                } else {
-                    entry.detail_error = Some(error);
-                }
+            if events {
+                entry.events_error = Some(error);
+            } else {
+                entry.detail_error = Some(error);
             }
         }
     }
@@ -1770,30 +1771,30 @@ impl WorkerResult for crate::worker::ResourceDetailDeleted {
             cluster_key,
             history_entry_id,
         } = self;
-        if let Some(cluster) = ui.clusters.get_mut(&cluster_key)
-            && let Some(panel) = cluster.resource_detail_panel.as_mut()
-        {
-            if panel.history_entry_id == history_entry_id {
-                let panel = cluster
-                    .resource_detail_panel
-                    .take()
-                    .expect("panel was checked above");
-                stop_resource_detail_watches(
-                    cluster.cluster_key,
-                    panel.retained_history_entry_ids(),
-                    commands,
-                );
-            } else {
-                panel
-                    .navigator
-                    .back_stack_mut()
-                    .retain(|entry| entry.history_entry_id != history_entry_id);
-                panel
-                    .navigator
-                    .forward_stack_mut()
-                    .retain(|entry| entry.history_entry_id != history_entry_id);
-                stop_resource_detail_watches(cluster.cluster_key, [history_entry_id], commands);
+        let closes_active_blade = ui.global_blades.navigator().is_some_and(|navigator| {
+            navigator.current().resource_detail().is_some_and(|entry| {
+                entry.cluster_key == cluster_key && entry.history_entry_id == history_entry_id
+            }) || navigator
+                .current()
+                .is_owned_by_resource_detail(history_entry_id)
+        });
+        if closes_active_blade {
+            if let Some(cluster) = ui.clusters.get_mut(&cluster_key) {
+                cluster.resource_detail_panel = None;
             }
+            UiState::stop_discarded_blades(ui.global_blades.clear(), commands);
+        } else if let Some(navigator) = ui.global_blades.navigator_mut() {
+            navigator.back_stack_mut().retain(|entry| {
+                entry.resource_detail().is_none_or(|entry| {
+                    entry.cluster_key != cluster_key || entry.history_entry_id != history_entry_id
+                }) && !entry.is_owned_by_resource_detail(history_entry_id)
+            });
+            navigator.forward_stack_mut().retain(|entry| {
+                entry.resource_detail().is_none_or(|entry| {
+                    entry.cluster_key != cluster_key || entry.history_entry_id != history_entry_id
+                }) && !entry.is_owned_by_resource_detail(history_entry_id)
+            });
+            stop_resource_detail_watches(cluster_key, [history_entry_id], commands);
         }
     }
 }
@@ -1804,18 +1805,12 @@ impl WorkerResult for crate::worker::ManagedResourcesReplaced {
             history_entry_id,
             resources,
         } = self;
-        if let Some(panel) = ui
-            .clusters
-            .get_mut(&cluster_key)
-            .and_then(|cluster| cluster.resource_detail_panel.as_mut())
+        if let Some(entry) = ui
+            .resource_detail_entry_mut(history_entry_id)
+            .filter(|entry| entry.cluster_key == cluster_key)
         {
-            if panel.history_entry_id == history_entry_id {
-                panel.managed_resources = resources;
-                panel.managed_resources_error = None;
-            } else if let Some(entry) = panel.history_entry_mut(history_entry_id) {
-                entry.managed_resources = resources;
-                entry.managed_resources_error = None;
-            }
+            entry.managed_resources = resources;
+            entry.managed_resources_error = None;
         }
     }
 }
@@ -1826,16 +1821,11 @@ impl WorkerResult for crate::worker::ManagedResourcesWatchFailed {
             history_entry_id,
             error,
         } = self;
-        if let Some(panel) = ui
-            .clusters
-            .get_mut(&cluster_key)
-            .and_then(|cluster| cluster.resource_detail_panel.as_mut())
+        if let Some(entry) = ui
+            .resource_detail_entry_mut(history_entry_id)
+            .filter(|entry| entry.cluster_key == cluster_key)
         {
-            if panel.history_entry_id == history_entry_id {
-                panel.managed_resources_error = Some(error);
-            } else if let Some(entry) = panel.history_entry_mut(history_entry_id) {
-                entry.managed_resources_error = Some(error);
-            }
+            entry.managed_resources_error = Some(error);
         }
     }
 }
@@ -2154,20 +2144,20 @@ mod tests {
             "secret-uid".into(),
             &mut commands,
         );
-        let panel = state
-            .clusters
-            .get_mut(&1)
-            .expect("fixture cluster exists")
-            .resource_detail_panel
-            .as_mut()
+        let navigator = state
+            .global_blades
+            .navigator_mut()
             .expect("detail panel is open");
-        let config_map_history_entry_id = panel
-            .navigator
+        let config_map_history_entry_id = navigator
             .entries()
+            .filter_map(|entry| entry.resource_detail())
             .find(|entry| entry.api_resource == config_maps)
             .expect("ConfigMap history entry exists")
             .history_entry_id;
-        for entry in panel.navigator.entries_mut() {
+        for entry in navigator.entries_mut() {
+            let entry = entry
+                .resource_detail_mut()
+                .expect("the test only creates resource detail content");
             entry.data_editor = Some(ResourceDataEditorState {
                 saving: true,
                 pending_save_request_id: Some(2),
@@ -2192,36 +2182,38 @@ mod tests {
         };
         state.update(&mut worker);
 
-        let panel = state.clusters[&1]
-            .resource_detail_panel
-            .as_ref()
+        let navigator = state
+            .global_blades
+            .navigator()
             .expect("detail panel is open");
-        let config_map_editor = panel
-            .navigator
+        let config_map_editor = navigator
             .entries()
+            .filter_map(|entry| entry.resource_detail())
             .find(|entry| entry.history_entry_id == config_map_history_entry_id)
             .and_then(|entry| entry.data_editor.as_ref())
             .expect("config map editor exists");
         assert!(!config_map_editor.saving);
         assert!(
-            panel
-                .data_editor
-                .as_ref()
+            navigator
+                .current()
+                .resource_detail()
+                .and_then(|entry| entry.data_editor.as_ref())
                 .expect("secret editor exists")
                 .saving
         );
 
         for entry in state
-            .clusters
-            .get_mut(&1)
-            .expect("fixture cluster exists")
-            .resource_detail_panel
-            .as_mut()
+            .global_blades
+            .navigator_mut()
             .expect("detail panel is open")
-            .navigator
             .entries_mut()
         {
-            let editor = entry.data_editor.as_mut().expect("editor exists");
+            let editor = entry
+                .resource_detail_mut()
+                .expect("the test only creates resource detail content")
+                .data_editor
+                .as_mut()
+                .expect("editor exists");
             editor.saving = true;
             editor.pending_save_request_id = Some(3);
             editor.save_error = None;
@@ -2237,23 +2229,26 @@ mod tests {
         };
         state.update(&mut worker);
 
-        let panel = state.clusters[&1]
-            .resource_detail_panel
-            .as_ref()
-            .expect("detail panel is open");
         assert_eq!(
-            panel
-                .navigator
+            state
+                .global_blades
+                .navigator()
+                .expect("detail panel is open")
                 .entries()
+                .filter_map(|entry| entry.resource_detail())
                 .find(|entry| entry.history_entry_id == config_map_history_entry_id)
                 .and_then(|entry| entry.data_editor.as_ref())
                 .and_then(|editor| editor.save_error.as_deref()),
             Some("stale update failed")
         );
         assert_eq!(
-            panel
-                .data_editor
-                .as_ref()
+            state
+                .global_blades
+                .navigator()
+                .expect("detail panel is open")
+                .current()
+                .resource_detail()
+                .and_then(|entry| entry.data_editor.as_ref())
                 .expect("secret editor exists")
                 .save_error,
             None

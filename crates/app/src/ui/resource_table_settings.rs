@@ -1,121 +1,131 @@
+use super::global_blade::{GlobalBladeContent, GlobalBladeRenderContext, GlobalBladeRenderResult};
 use super::table_preferences::{
     PersistedResourceTablePreferences, ResourceTableKey, TableColumnDefinition,
 };
-use components::{BladeNavigator, BladeStack, ReorderHandle, ReorderableTable};
+use components::{ReorderHandle, ReorderableTable};
 
-#[derive(Default)]
-pub(super) struct ResourceTableSettingsState {
-    navigator: Option<BladeNavigator<ResourceTableSettingsTarget>>,
-}
-
-#[derive(Clone)]
-struct ResourceTableSettingsTarget {
+#[derive(Debug, Clone)]
+pub(super) struct ResourceTableSettingsTarget {
     key: ResourceTableKey,
     columns: Vec<EditableColumn>,
+    resource_detail_owner: Option<u64>,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct EditableColumn {
     definition: TableColumnDefinition,
     visible: bool,
 }
 
-impl ResourceTableSettingsState {
-    pub(super) fn open(
-        &mut self,
-        preferences: &mut PersistedResourceTablePreferences,
-        key: ResourceTableKey,
-        definitions: &[TableColumnDefinition],
-    ) {
-        let columns = preferences
-            .all_columns(&key, definitions)
-            .into_iter()
-            .map(|(definition, visible)| EditableColumn {
-                definition,
-                visible,
-            })
-            .collect();
-        self.navigator = Some(BladeNavigator::new(ResourceTableSettingsTarget {
-            key,
-            columns,
-        }));
+pub(super) fn target(
+    preferences: &mut PersistedResourceTablePreferences,
+    key: ResourceTableKey,
+    definitions: &[TableColumnDefinition],
+) -> ResourceTableSettingsTarget {
+    let columns = preferences
+        .all_columns(&key, definitions)
+        .into_iter()
+        .map(|(definition, visible)| EditableColumn {
+            definition,
+            visible,
+        })
+        .collect();
+    ResourceTableSettingsTarget {
+        key,
+        columns,
+        resource_detail_owner: None,
     }
 }
 
-pub(super) fn show(
-    ctx: &egui::Context,
-    state: &mut ResourceTableSettingsState,
+impl ResourceTableSettingsTarget {
+    pub(super) fn set_resource_detail_owner(&mut self, history_entry_id: u64) {
+        self.resource_detail_owner = Some(history_entry_id);
+    }
+}
+
+pub(super) fn show_target(
+    ui: &mut egui::Ui,
+    target: &mut ResourceTableSettingsTarget,
     preferences: &mut PersistedResourceTablePreferences,
 ) {
-    let Some(navigator) = state.navigator.as_mut() else {
-        return;
-    };
-    let stack = BladeStack::new("resource-table-settings");
-    let response = stack.show(
-        ctx,
-        navigator,
-        |ui, _, _| {
-            ui.label(
-                egui::RichText::new("Configure columns")
-                    .font(components::design::typography::page_title())
-                    .color(components::colors::gray::_900),
-            );
-        },
-        |ui, target, _| {
-            ui.label(
-                egui::RichText::new(
-                    "Choose which columns are visible and drag rows to change their order.",
-                )
-                .font(components::design::typography::body())
-                .color(components::colors::gray::_600),
-            );
-            ui.add_space(components::design::spacing::XL);
-            let width = ui.available_width();
-            let moved = ReorderableTable::new(("resource-table-settings-rows", &target.key), 44.0)
-                .show(
-                    ui,
-                    &mut target.columns,
-                    width,
-                    |ui, column, _index, handle| show_column_row(ui, column, handle),
-                    show_column_preview,
-                );
-            let definitions = target
+    ui.label(
+        egui::RichText::new(
+            "Choose which columns are visible and drag rows to change their order.",
+        )
+        .font(components::design::typography::body())
+        .color(components::colors::gray::_600),
+    );
+    ui.add_space(components::design::spacing::XL);
+    let width = ui.available_width();
+    let moved = ReorderableTable::new(("resource-table-settings-rows", &target.key), 44.0).show(
+        ui,
+        &mut target.columns,
+        width,
+        |ui, column, _index, handle| show_column_row(ui, column, handle),
+        show_column_preview,
+    );
+    let definitions = target
+        .columns
+        .iter()
+        .map(|column| column.definition.clone())
+        .collect::<Vec<_>>();
+    for column in &target.columns {
+        preferences.set_visible(
+            &target.key,
+            &definitions,
+            &column.definition.id,
+            column.visible,
+        );
+    }
+    let persisted_columns = preferences.all_columns(&target.key, &definitions);
+    for column in &mut target.columns {
+        if let Some((_, visible)) = persisted_columns
+            .iter()
+            .find(|(definition, _)| definition.id == column.definition.id)
+        {
+            column.visible = *visible;
+        }
+    }
+    if moved {
+        preferences.set_order(
+            &target.key,
+            &definitions,
+            &target
                 .columns
                 .iter()
-                .map(|column| column.definition.clone())
-                .collect::<Vec<_>>();
-            for column in &target.columns {
-                preferences.set_visible(
-                    &target.key,
-                    &definitions,
-                    &column.definition.id,
-                    column.visible,
-                );
-            }
-            let persisted_columns = preferences.all_columns(&target.key, &definitions);
-            for column in &mut target.columns {
-                if let Some((_, visible)) = persisted_columns
-                    .iter()
-                    .find(|(definition, _)| definition.id == column.definition.id)
-                {
-                    column.visible = *visible;
-                }
-            }
-            if moved {
-                preferences.set_order(
-                    &target.key,
-                    &definitions,
-                    &target
-                        .columns
-                        .iter()
-                        .map(|column| column.definition.id.clone())
-                        .collect::<Vec<_>>(),
-                );
-            }
-        },
-    );
-    if response.dismissed || response.close_finished {
-        state.navigator = None;
+                .map(|column| column.definition.id.clone())
+                .collect::<Vec<_>>(),
+        );
+    }
+}
+
+impl GlobalBladeContent for ResourceTableSettingsTarget {
+    fn render_header(
+        &mut self,
+        ui: &mut egui::Ui,
+        _layer: components::BladeLayer,
+        _context: &mut GlobalBladeRenderContext<'_>,
+    ) -> GlobalBladeRenderResult {
+        ui.label(
+            egui::RichText::new("Configure columns")
+                .font(components::design::typography::page_title())
+                .color(components::colors::gray::_900),
+        );
+        GlobalBladeRenderResult::default()
+    }
+
+    fn render_body(
+        &mut self,
+        ui: &mut egui::Ui,
+        _layer: components::BladeLayer,
+        context: &mut GlobalBladeRenderContext<'_>,
+    ) -> GlobalBladeRenderResult {
+        show_target(ui, self, context.table_preferences());
+        GlobalBladeRenderResult::default()
+    }
+
+    fn is_owned_by_resource_detail(&self, history_entry_id: u64) -> bool {
+        self.resource_detail_owner == Some(history_entry_id)
     }
 }
 

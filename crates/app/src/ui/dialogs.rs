@@ -752,6 +752,7 @@ pub(super) fn show_terminal_launch_error(
     ctx: &egui::Context,
     ui_state: &mut UiState,
     settings: &TerminalLaunchSettings,
+    commands_to_send: &mut Vec<WorkerCommandBox>,
 ) {
     let Some(error) = ui_state.terminal_launch_error.clone() else {
         return;
@@ -768,7 +769,7 @@ pub(super) fn show_terminal_launch_error(
     .show(ctx)
     {
         ErrorDialogAction::PrimaryAction => {
-            ui_state.open_terminal_settings(settings);
+            ui_state.open_terminal_settings(settings, commands_to_send);
             ui_state.terminal_launch_error = None;
         }
         ErrorDialogAction::Dismiss => ui_state.terminal_launch_error = None,

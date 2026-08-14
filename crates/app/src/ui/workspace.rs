@@ -1,6 +1,5 @@
 use super::resource_actions::show_resource_action_items;
 use super::resource_owner;
-use super::resource_table_settings::ResourceTableSettingsState;
 use super::state::{
     BulkDeleteTarget, ClusterConnectionState, ClusterLoadState, PendingBulkDelete, PendingDelete,
     PendingDeploymentRestart, PendingForceDelete, ResourceAction, ResourceSearchState, UiState,
@@ -89,7 +88,6 @@ pub(super) fn show(
     shell_requests: &mut Vec<ShellRequest>,
     debug_image_presets: &[DebugImagePreset],
     table_preferences: &mut PersistedResourceTablePreferences,
-    table_settings: &mut ResourceTableSettingsState,
 ) {
     let ctx = ui.ctx().clone();
     let mut namespace_selection = None;
@@ -99,6 +97,7 @@ pub(super) fn show(
     let mut yaml_to_open = None;
     let mut shell_to_open = None;
     let mut resource_selection_action = None;
+    let mut column_settings_to_open = None;
     egui::CentralPanel::default()
         .frame(WorkspacePage::frame())
         .show(ui, |ui| {
@@ -267,7 +266,7 @@ pub(super) fn show(
                         .entry(api_resource.clone())
                         .or_default(),
                     table_preferences,
-                    table_settings,
+                    &mut column_settings_to_open,
                 ) {
                     match action {
                         ResourceAction::OpenDetails {
@@ -336,9 +335,6 @@ pub(super) fn show(
                         } => {
                             detail_to_open = Some((api_resource, name, namespace, uid));
                         }
-                        ResourceAction::NavigateBack | ResourceAction::NavigateForward => {
-                            unreachable!("resource table cannot emit inspector navigation")
-                        }
                     }
                 }
 
@@ -383,7 +379,9 @@ pub(super) fn show(
             uid,
             commands_to_send,
         );
-        super::resource_detail::seed_detail_transition(&ctx, ui_state, cluster_key);
+    }
+    if let Some(target) = column_settings_to_open {
+        ui_state.replace_global_blade(Box::new(target), commands_to_send);
     }
     if let Some((cluster_key, name, namespace, container)) = log_to_open {
         ui_state.open_pod_log_window(cluster_key, name, namespace, container, commands_to_send);
@@ -787,7 +785,9 @@ fn show_resource_table(
     options: ResourceTableOptions<'_>,
     selection: &mut HashSet<String>,
     table_preferences: &mut PersistedResourceTablePreferences,
-    table_settings: &mut ResourceTableSettingsState,
+    column_settings_to_open: &mut Option<
+        super::resource_table_settings::ResourceTableSettingsTarget,
+    >,
 ) -> Option<ResourceAction> {
     let pending_action = RefCell::new(None);
     let definition = table_definition(api_resource, options.custom_columns);
@@ -918,11 +918,11 @@ fn show_resource_table(
                     menu.separator();
                 }
                 if menu.action("Configure columns").clicked() {
-                    table_settings.open(
+                    *column_settings_to_open = Some(super::resource_table_settings::target(
                         &mut table_preferences.borrow_mut(),
                         table_key.clone(),
                         &column_definitions,
-                    );
+                    ));
                 }
             });
         },

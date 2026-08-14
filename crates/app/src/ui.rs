@@ -1,5 +1,6 @@
 mod cluster_rail;
 mod dialogs;
+mod global_blade;
 mod log_state;
 #[doc(hidden)]
 pub mod log_viewer_profile;
@@ -29,7 +30,6 @@ use dialogs::{
     show_force_delete_confirmation, show_force_delete_error, show_scale_dialog, show_scale_error,
     show_terminal_launch_error,
 };
-use resource_table_settings::ResourceTableSettingsState;
 use state::{LogDisplayOptions, PersistedClusterSelections, ResourceNavigationExpansion, UiState};
 use table_preferences::PersistedResourceTablePreferences;
 
@@ -44,7 +44,6 @@ pub struct MyEguiApp<W: WorkerTrait = Worker, L: TerminalLauncher = SystemTermin
     terminal_launcher: L,
     terminal_launch_settings: TerminalLaunchSettings,
     resource_table_preferences: PersistedResourceTablePreferences,
-    resource_table_settings: ResourceTableSettingsState,
     ui_state: UiState,
     log_store: LogStoreService,
 }
@@ -59,7 +58,6 @@ impl<W: WorkerTrait, L: TerminalLauncher> Default for MyEguiApp<W, L> {
             terminal_launcher: L::default(),
             terminal_launch_settings: TerminalLaunchSettings::default(),
             resource_table_preferences: PersistedResourceTablePreferences::default(),
-            resource_table_settings: ResourceTableSettingsState::default(),
             ui_state: UiState::default(),
             log_store,
         }
@@ -77,7 +75,6 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
             terminal_launcher: L::default(),
             terminal_launch_settings: TerminalLaunchSettings::default(),
             resource_table_preferences: PersistedResourceTablePreferences::default(),
-            resource_table_settings: ResourceTableSettingsState::default(),
             ui_state: UiState::default(),
             log_store,
         };
@@ -159,6 +156,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
         let ctx = ui.ctx().clone();
         let mut commands_to_send = Vec::new();
         let mut shell_requests = Vec::<ShellRequest>::new();
+        let debug_image_presets = self.terminal_launch_settings.debug_image_presets.clone();
 
         cluster_rail::show(
             ui,
@@ -173,18 +171,17 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             &mut self.ui_state,
             &mut commands_to_send,
             &mut shell_requests,
-            &self.terminal_launch_settings.debug_image_presets,
+            &debug_image_presets,
             &mut self.resource_table_preferences,
-            &mut self.resource_table_settings,
         );
-        resource_detail::show(
+        global_blade::show(
             &ctx,
             &mut self.ui_state,
             &mut commands_to_send,
             &mut shell_requests,
-            &self.terminal_launch_settings.debug_image_presets,
+            &debug_image_presets,
             &mut self.resource_table_preferences,
-            &mut self.resource_table_settings,
+            &mut self.terminal_launch_settings,
         );
         log_windows::show(
             &ctx,
@@ -197,13 +194,12 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
         show_force_delete_confirmation(&ctx, &mut self.ui_state, &mut commands_to_send);
         show_deployment_restart_confirmation(&ctx, &mut self.ui_state, &mut commands_to_send);
         show_scale_dialog(&ctx, &mut self.ui_state, &mut commands_to_send);
-        settings::show(&ctx, &mut self.ui_state, &mut self.terminal_launch_settings);
-        resource_table_settings::show(
+        show_terminal_launch_error(
             &ctx,
-            &mut self.resource_table_settings,
-            &mut self.resource_table_preferences,
+            &mut self.ui_state,
+            &self.terminal_launch_settings,
+            &mut commands_to_send,
         );
-        show_terminal_launch_error(&ctx, &mut self.ui_state, &self.terminal_launch_settings);
         show_deployment_restart_error(&ctx, &mut self.ui_state);
         show_bulk_delete_error(&ctx, &mut self.ui_state);
         show_force_delete_error(&ctx, &mut self.ui_state);

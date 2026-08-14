@@ -146,6 +146,15 @@ impl<T> BladeNavigator<T> {
             .chain(&mut self.back_stack)
             .chain(&mut self.forward_stack)
     }
+
+    /// Consume the navigator and return every entry it owns.  This lets a
+    /// parent coordinator perform lifecycle cleanup when it replaces or
+    /// closes an entire stack.
+    pub fn into_entries(self) -> impl Iterator<Item = T> {
+        std::iter::once(self.current)
+            .chain(self.back_stack)
+            .chain(self.forward_stack)
+    }
     fn seed_transition(&mut self, ctx: &egui::Context) {
         if self.transition.is_some() && self.transition_started_at.is_none() {
             self.transition_started_at = Some(ctx.input(|input| input.time));
@@ -174,6 +183,7 @@ pub struct BladeResponse<H, R> {
     pub close_finished: bool,
 }
 
+#[derive(Clone)]
 pub struct BladeStack {
     id: Id,
 }

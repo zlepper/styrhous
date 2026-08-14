@@ -150,12 +150,10 @@ fn test_secret_inspector_actions_integration() {
     harness
         .state_mut()
         .ui_state
-        .clusters
-        .get_mut(&cluster_key)
-        .expect("selected cluster should exist")
-        .resource_detail_panel
-        .as_mut()
-        .and_then(|panel| panel.data_editor.as_mut())
+        .global_blades
+        .navigator_mut()
+        .and_then(|navigator| navigator.current_mut().resource_detail_mut())
+        .and_then(|entry| entry.data_editor.as_mut())
         .expect("Secret detail editor should be available")
         .draft_values
         .insert("password".to_owned(), "updated-secret".to_owned());
@@ -385,18 +383,22 @@ fn wait_for_data_editor(
     wait_for_with_diagnostic(
         harness,
         |app| {
-            app.ui_state.clusters[&cluster_key]
-                .resource_detail_panel
-                .as_ref()
-                .and_then(|panel| panel.data_editor.as_ref())
+            app.ui_state
+                .global_blades
+                .navigator()
+                .and_then(|navigator| navigator.current().resource_detail())
+                .filter(|entry| entry.cluster_key == cluster_key)
+                .and_then(|entry| entry.data_editor.as_ref())
                 .filter(|editor| editor.draft_values.contains_key(data_key))
                 .map(|_| ())
         },
         |app| {
-            app.ui_state.clusters[&cluster_key]
-                .resource_detail_panel
-                .as_ref()
-                .and_then(|panel| panel.detail_error.as_ref())
+            app.ui_state
+                .global_blades
+                .navigator()
+                .and_then(|navigator| navigator.current().resource_detail())
+                .filter(|entry| entry.cluster_key == cluster_key)
+                .and_then(|entry| entry.detail_error.as_ref())
                 .map(|error| {
                     format!("Resource detail watch failed while loading data editor: {error}")
                 })
@@ -583,9 +585,8 @@ fn test_managed_resource_inspector_integration() {
     let start = std::time::Instant::now();
     while start.elapsed() < std::time::Duration::from_secs(15) {
         harness.run_steps(1);
-        if let Some(panel) = harness.state().ui_state.clusters[&cluster_key]
-            .resource_detail_panel
-            .as_ref()
+        if let Some(panel) = harness.state().ui_state.global_blades.navigator()
+            .and_then(|navigator| navigator.current().resource_detail())
             && panel
                 .managed_resources
                 .iter()
@@ -720,9 +721,10 @@ fn test_node_inspector_lists_scheduled_pods_integration() {
     wait_for(
         &mut harness,
         |app| {
-            app.ui_state.clusters[&cluster_key]
-                .resource_detail_panel
-                .as_ref()
+            app.ui_state
+                .global_blades
+                .navigator()
+                .and_then(|navigator| navigator.current().resource_detail())
                 .and_then(|panel| {
                     panel
                         .managed_resources
