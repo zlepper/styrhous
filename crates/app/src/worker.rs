@@ -4,14 +4,14 @@ use crate::cluster_connection_manager::{
     ResourceYamlValidationRequest, apply_resource_yaml, delete_resource, force_delete_resource,
     get_resource_scale, get_resource_schema, get_resource_yaml, reload_kubeconfig,
     restart_deployment, start_cluster_connection, start_resource_watcher, update_resource_data,
-    update_resource_scale, validate_resource_yaml, watch_pod_metrics_namespace,
+    update_resource_scale, validate_resource_yaml, watch_node_metrics, watch_pod_metrics_namespace,
     watch_resource_detail,
 };
 use crate::helpers::ResultExt;
 use crate::log_store::LogStoreAppender;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
-use crate::pod_metrics::PodUsage;
+use crate::pod_metrics::{NodeUsage, PodUsage};
 use crate::resource_detail::{ManagedResource, ResourceDetail, ResourceEvent};
 use crate::resource_schema::ResourceSchema;
 use crate::resource_table::CustomResourceColumn;
@@ -180,6 +180,7 @@ impl Worker {
                 resource_watches: Mutex::new(HashMap::new()),
                 detail_watches: Mutex::new(HashMap::new()),
                 pod_metrics_watches: Mutex::new(HashMap::new()),
+                node_metrics_watches: Mutex::new(HashMap::new()),
                 log_streams: Mutex::new(HashMap::new()),
                 log_store_appender: self.log_store_appender.clone(),
             });
@@ -329,6 +330,7 @@ pub(crate) struct StartResourceDetailWatch {
     pub(crate) resource_name: String,
     pub(crate) resource_uid: String,
     pub(crate) pod_metrics_api_available: bool,
+    pub(crate) node_metrics_api_available: bool,
 }
 #[derive(Debug)]
 pub(crate) struct StopResourceDetailWatch {
@@ -344,6 +346,14 @@ pub(crate) struct StartPodMetricsWatch {
 pub(crate) struct StopPodMetricsWatch {
     pub(crate) cluster_key: i32,
     pub(crate) namespace: String,
+}
+#[derive(Debug)]
+pub(crate) struct StartNodeMetricsWatch {
+    pub(crate) cluster_key: i32,
+}
+#[derive(Debug)]
+pub(crate) struct StopNodeMetricsWatch {
+    pub(crate) cluster_key: i32,
 }
 #[derive(Debug)]
 pub(crate) struct GetResourceYaml {
@@ -507,6 +517,7 @@ pub(crate) struct KubernetesApisLoaded {
     pub(crate) api_resources: Vec<ApiResource>,
     pub(crate) scalable_api_resources: std::collections::BTreeSet<ApiResource>,
     pub(crate) pod_metrics_api_available: bool,
+    pub(crate) node_metrics_api_available: bool,
 }
 #[derive(Debug)]
 pub(crate) struct KubernetesCustomResourceColumnsLoaded {
@@ -614,6 +625,20 @@ pub(crate) struct PodMetricsApiUnavailable {
     pub(crate) cluster_key: i32,
 }
 #[derive(Debug)]
+pub(crate) struct NodeMetricsUpdated {
+    pub(crate) cluster_key: i32,
+    pub(crate) usages: BTreeMap<String, NodeUsage>,
+}
+#[derive(Debug)]
+pub(crate) struct NodeMetricsWatchFailed {
+    pub(crate) cluster_key: i32,
+    pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct NodeMetricsApiUnavailable {
+    pub(crate) cluster_key: i32,
+}
+#[derive(Debug)]
 pub(crate) struct ResourceDetailPodUsageUpdated {
     pub(crate) cluster_key: i32,
     pub(crate) history_entry_id: u64,
@@ -627,6 +652,23 @@ pub(crate) struct ResourceDetailPodUsageFailed {
 }
 #[derive(Debug)]
 pub(crate) struct ResourceDetailPodUsageMissing {
+    pub(crate) cluster_key: i32,
+    pub(crate) history_entry_id: u64,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceDetailNodeUsageUpdated {
+    pub(crate) cluster_key: i32,
+    pub(crate) history_entry_id: u64,
+    pub(crate) usage: NodeUsage,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceDetailNodeUsageFailed {
+    pub(crate) cluster_key: i32,
+    pub(crate) history_entry_id: u64,
+    pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceDetailNodeUsageMissing {
     pub(crate) cluster_key: i32,
     pub(crate) history_entry_id: u64,
 }
@@ -957,6 +999,7 @@ impl WorkerCommand for StartResourceDetailWatch {
             resource_uid: self.resource_uid,
             history_entry_id: self.history_entry_id,
             pod_metrics_api_available: self.pod_metrics_api_available,
+            node_metrics_api_available: self.node_metrics_api_available,
             event_sender: state.results.clone(),
         }));
         state.detail_watches.lock().await.insert(key, handle);
@@ -1025,6 +1068,50 @@ impl WorkerCommand for StopPodMetricsWatch {
     async fn execute(self, state: &WorkerState) -> Self::Output {
         state
             .abort_pod_metrics_watches(|key| key.0 == self.cluster_key && key.1 == self.namespace)
+            .await;
+        Ok(NoResult)
+    }
+
+    fn serializes_session_lifecycle(&self) -> bool {
+        true
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for StartNodeMetricsWatch {
+    type Output = Result<NoResult, NodeMetricsWatchFailed>;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output {
+        let client = state
+            .client_for_cluster(self.cluster_key)
+            .await
+            .map_err(|error| NodeMetricsWatchFailed {
+                cluster_key: self.cluster_key,
+                error: format!("{error:#?}"),
+            })?;
+        let task = tokio::spawn(watch_node_metrics(
+            self.cluster_key,
+            client,
+            state.results.clone(),
+        ));
+        state
+            .replace_node_metrics_watch(self.cluster_key, task)
+            .await;
+        Ok(NoResult)
+    }
+
+    fn serializes_session_lifecycle(&self) -> bool {
+        true
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for StopNodeMetricsWatch {
+    type Output = Result<NoResult, WorkerError>;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output {
+        state
+            .abort_node_metrics_watches(|cluster_key| *cluster_key == self.cluster_key)
             .await;
         Ok(NoResult)
     }
@@ -1473,6 +1560,8 @@ pub(crate) struct WorkerState {
     detail_watches: Mutex<HashMap<(i32, u64), JoinHandle<()>>>,
     /// Namespace-scoped Metrics API pollers used only while Pods are visible.
     pod_metrics_watches: Mutex<HashMap<(i32, String), JoinHandle<()>>>,
+    /// Cluster-scoped Metrics API pollers used only while Nodes are visible.
+    node_metrics_watches: Mutex<HashMap<i32, JoinHandle<()>>>,
     /// Native log windows each own one cancellable follow stream.
     log_streams: Mutex<HashMap<(i32, u64), JoinHandle<()>>>,
     /// The bounded, disk-backed ingress for pod logs. A Kubernetes stream
@@ -1498,6 +1587,8 @@ impl WorkerState {
             .await;
         self.abort_pod_metrics_watches(|(watch_cluster_key, _)| *watch_cluster_key == cluster_key)
             .await;
+        self.abort_node_metrics_watches(|watch_cluster_key| *watch_cluster_key == cluster_key)
+            .await;
         self.abort_log_streams(|(watch_cluster_key, _)| *watch_cluster_key == cluster_key)
             .await;
     }
@@ -1507,6 +1598,7 @@ impl WorkerState {
         self.abort_resource_watches(|_| true).await;
         self.abort_detail_watches(|_| true).await;
         self.abort_pod_metrics_watches(|_| true).await;
+        self.abort_node_metrics_watches(|_| true).await;
         self.abort_log_streams(|_| true).await;
     }
 
@@ -1564,6 +1656,30 @@ impl WorkerState {
             .keys()
             .filter(|key| matches(key))
             .cloned()
+            .collect::<Vec<_>>();
+        let tasks = keys
+            .into_iter()
+            .filter_map(|key| watches.remove(&key))
+            .collect::<Vec<_>>();
+        drop(watches);
+        for task in tasks {
+            abort_task(task).await;
+        }
+    }
+
+    async fn replace_node_metrics_watch(&self, key: i32, task: JoinHandle<()>) {
+        let previous = self.node_metrics_watches.lock().await.insert(key, task);
+        if let Some(previous) = previous {
+            abort_task(previous).await;
+        }
+    }
+
+    async fn abort_node_metrics_watches(&self, matches: impl Fn(&i32) -> bool) {
+        let mut watches = self.node_metrics_watches.lock().await;
+        let keys = watches
+            .keys()
+            .filter(|key| matches(key))
+            .copied()
             .collect::<Vec<_>>();
         let tasks = keys
             .into_iter()
@@ -1668,6 +1784,7 @@ mod tests {
             resource_watches: Mutex::new(HashMap::new()),
             detail_watches: Mutex::new(HashMap::new()),
             pod_metrics_watches: Mutex::new(HashMap::new()),
+            node_metrics_watches: Mutex::new(HashMap::new()),
             log_streams: Mutex::new(HashMap::new()),
             log_store_appender: None,
         }
@@ -1807,6 +1924,7 @@ mod tests {
                 resource_watches: Mutex::new(HashMap::new()),
                 detail_watches: Mutex::new(HashMap::new()),
                 pod_metrics_watches: Mutex::new(HashMap::new()),
+                node_metrics_watches: Mutex::new(HashMap::new()),
                 log_streams: Mutex::new(HashMap::new()),
                 log_store_appender: None,
             });
@@ -1876,6 +1994,7 @@ mod tests {
                 resource_name: "missing".to_owned(),
                 resource_uid: "uid".to_owned(),
                 pod_metrics_api_available: true,
+                node_metrics_api_available: true,
             })
             .execute_boxed(&worker_state()),
         );
@@ -2020,6 +2139,25 @@ mod tests {
     }
 
     #[test]
+    fn replacing_a_node_metrics_watch_aborts_the_previous_task() {
+        let runtime = tokio::runtime::Runtime::new().expect("runtime initializes");
+        runtime.block_on(async {
+            let state = worker_state();
+            let aborted = Arc::new(AtomicUsize::new(0));
+
+            state
+                .replace_node_metrics_watch(1, tokio::spawn(AbortProbe(aborted.clone())))
+                .await;
+            state
+                .replace_node_metrics_watch(1, tokio::spawn(std::future::pending()))
+                .await;
+            tokio::task::yield_now().await;
+
+            assert_eq!(aborted.load(Ordering::Relaxed), 1);
+        });
+    }
+
+    #[test]
     fn stopping_all_clusters_aborts_supervised_tasks() {
         let runtime = tokio::runtime::Runtime::new().expect("runtime initializes");
         runtime.block_on(async {
@@ -2027,6 +2165,7 @@ mod tests {
             let resource_aborted = Arc::new(AtomicUsize::new(0));
             let detail_aborted = Arc::new(AtomicUsize::new(0));
             let metrics_aborted = Arc::new(AtomicUsize::new(0));
+            let node_metrics_aborted = Arc::new(AtomicUsize::new(0));
             let log_aborted = Arc::new(AtomicUsize::new(0));
 
             state
@@ -2049,6 +2188,11 @@ mod tests {
                 tokio::spawn(AbortProbe(metrics_aborted.clone())),
             );
             state
+                .node_metrics_watches
+                .lock()
+                .await
+                .insert(1, tokio::spawn(AbortProbe(node_metrics_aborted.clone())));
+            state
                 .log_streams
                 .lock()
                 .await
@@ -2060,10 +2204,12 @@ mod tests {
             assert_eq!(resource_aborted.load(Ordering::Relaxed), 1);
             assert_eq!(detail_aborted.load(Ordering::Relaxed), 1);
             assert_eq!(metrics_aborted.load(Ordering::Relaxed), 1);
+            assert_eq!(node_metrics_aborted.load(Ordering::Relaxed), 1);
             assert_eq!(log_aborted.load(Ordering::Relaxed), 1);
             assert!(state.resource_watches.lock().await.is_empty());
             assert!(state.detail_watches.lock().await.is_empty());
             assert!(state.pod_metrics_watches.lock().await.is_empty());
+            assert!(state.node_metrics_watches.lock().await.is_empty());
             assert!(state.log_streams.lock().await.is_empty());
         });
     }
@@ -2077,6 +2223,8 @@ mod tests {
             let second_aborted = Arc::new(AtomicUsize::new(0));
             let first_metrics_aborted = Arc::new(AtomicUsize::new(0));
             let second_metrics_aborted = Arc::new(AtomicUsize::new(0));
+            let first_node_metrics_aborted = Arc::new(AtomicUsize::new(0));
+            let second_node_metrics_aborted = Arc::new(AtomicUsize::new(0));
             state
                 .replace_resource_watch(
                     ResourceScope {
@@ -2105,6 +2253,18 @@ mod tests {
                 )
                 .await;
             state
+                .replace_node_metrics_watch(
+                    1,
+                    tokio::spawn(AbortProbe(first_node_metrics_aborted.clone())),
+                )
+                .await;
+            state
+                .replace_node_metrics_watch(
+                    2,
+                    tokio::spawn(AbortProbe(second_node_metrics_aborted.clone())),
+                )
+                .await;
+            state
                 .replace_pod_metrics_watch(
                     (2, "default".to_owned()),
                     tokio::spawn(AbortProbe(second_metrics_aborted.clone())),
@@ -2117,6 +2277,8 @@ mod tests {
             assert_eq!(second_aborted.load(Ordering::Relaxed), 0);
             assert_eq!(first_metrics_aborted.load(Ordering::Relaxed), 1);
             assert_eq!(second_metrics_aborted.load(Ordering::Relaxed), 0);
+            assert_eq!(first_node_metrics_aborted.load(Ordering::Relaxed), 1);
+            assert_eq!(second_node_metrics_aborted.load(Ordering::Relaxed), 0);
             assert!(
                 state
                     .resource_watches
@@ -2135,6 +2297,7 @@ mod tests {
                     .await
                     .contains_key(&(2, "default".to_owned()))
             );
+            assert!(state.node_metrics_watches.lock().await.contains_key(&2));
         });
     }
 

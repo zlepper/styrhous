@@ -14,7 +14,7 @@ use super::fixtures::{
 use crate::cluster_connection_manager::Cluster;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::{MinimalResource, PodLogContainer};
-use crate::pod_metrics::{ContainerUsage, PodUsage};
+use crate::pod_metrics::{ContainerUsage, NodeUsage, POD_USAGE_HISTORY_WINDOW, PodUsage};
 use crate::resource_catalog::build_resource_navigation;
 use crate::resource_detail::{
     ConfigMapDetail, ManagedResource, ManagedResourceAssociation, NodeDetail, PodConditionDetail,
@@ -388,7 +388,7 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
             .selected_namespaces
             .is_empty()
     );
-    assert_eq!(harness.state().worker.commands.len(), 1);
+    assert_eq!(harness.state().worker.commands.len(), 2);
     assert!(
         harness.state().worker.commands[0]
             .as_ref()
@@ -398,6 +398,13 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
                 && command.api_resource == nodes
                 && command.namespace.is_none())
     );
+    assert!(harness.state().worker.commands.iter().any(|command| {
+        command
+            .as_ref()
+            .as_any()
+            .downcast_ref::<StartNodeMetricsWatch>()
+            .is_some_and(|command| command.cluster_key == 1)
+    }));
     harness
         .state_mut()
         .worker
@@ -418,9 +425,29 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
                 log_containers: Vec::new(),
             }],
         }) as WorkerResultBox);
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(Box::new(NodeMetricsUpdated {
+            cluster_key: 1,
+            usages: BTreeMap::from([(
+                "kind-control-plane".into(),
+                NodeUsage {
+                    timestamp: OffsetDateTime::now_utc(),
+                    cpu_nanocores: 500_000_000,
+                    memory_bytes: 1024 * 1024 * 1024,
+                },
+            )]),
+        }) as WorkerResultBox);
     harness.run();
     harness.get_by_label("Cluster-wide");
     harness.get_by_label("Open details for kind-control-plane");
+    harness.get_by_label("500m");
+    harness.get_by_label("1Gi");
+    harness.ui_harness(
+        "resource_tables/cluster_scoped_resources_load_once_without_a_namespace_selection/node_metrics",
+    );
 
     let cluster = harness.state_mut().ui_state.clusters.get_mut(&1).unwrap();
     cluster.selected_namespaces = HashSet::from(["default".into(), "kube-system".into()]);
@@ -2756,17 +2783,84 @@ fn node_inspector_shows_its_spec() {
                     provider_id: Some("kind://docker/kind/kind-control-plane".into()),
                     unschedulable: true,
                     taints: vec!["node-role.kubernetes.io/control-plane:NoSchedule".into()],
+                    allocatable: PodResourceThresholds {
+                        cpu_nanocores: Some(2_000_000_000),
+                        memory_bytes: Some(4 * 1024 * 1024 * 1024),
+                    },
                 }),
             }),
         }) as WorkerResultBox);
-    harness.run_steps(2);
+    // Model the Metrics API's 15-second cadence across the full retained window. Offset the
+    // series slightly into the future so all samples survive the rolling history prune while
+    // the harness renders; chart positions are clamped to the window's current edge.
+    let now = OffsetDateTime::now_utc();
+    let last_sample = now + time::Duration::seconds(10);
+    let first_sample = last_sample - POD_USAGE_HISTORY_WINDOW;
+    for sample_index in 0_i64..=40 {
+        harness
+            .state_mut()
+            .worker
+            .results
+            .push_back(Box::new(ResourceDetailNodeUsageUpdated {
+                cluster_key: 2,
+                history_entry_id: 1,
+                usage: NodeUsage {
+                    timestamp: first_sample + time::Duration::seconds(sample_index * 15),
+                    cpu_nanocores: 350_000_000 + sample_index * 3_750_000,
+                    memory_bytes: 768 * 1024 * 1024 + (256 * 1024 * 1024 * sample_index / 40),
+                },
+            }) as WorkerResultBox);
+    }
+    harness.run_steps(42);
+    let usage_history = &harness
+        .state_mut()
+        .ui_state
+        .resource_detail_entry_mut(1)
+        .expect("node inspector should remain open")
+        .node_usage_history;
+    assert_eq!(usage_history.len(), 41);
+    assert_eq!(
+        usage_history.first().map(|sample| sample.timestamp),
+        Some(first_sample)
+    );
+    assert_eq!(
+        usage_history.last().map(|sample| sample.timestamp),
+        Some(last_sample)
+    );
+    assert_eq!(
+        usage_history.last().map(|sample| sample.cpu_nanocores),
+        Some(500_000_000)
+    );
+    assert_eq!(
+        usage_history.last().map(|sample| sample.memory_bytes),
+        Some(1024 * 1024 * 1024)
+    );
 
     harness.get_by_label("Spec");
     harness.get_by_label("Scheduling disabled");
     harness.get_by_label("10.244.0.0/24");
     harness.get_by_label("node-role.kubernetes.io/control-plane:NoSchedule");
+    harness.get_by_label("Resource usage");
+    harness.get_by_label("500m");
+    harness.get_by_label(
+        "Node CPU usage chart; usage history available; 10-minute history; scale from 0 to 2; Allocatable 2",
+    );
+    harness.get_by_label(
+        "Node memory usage chart; usage history available; 10-minute history; scale from 0 to 4Gi; Allocatable 4Gi",
+    );
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "resource_inspectors/node_inspector_shows_its_spec/populated_node_spec",
+    ));
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(Box::new(NodeMetricsApiUnavailable { cluster_key: 2 }) as WorkerResultBox);
+    harness.run();
+    harness.get_by_label("Metrics API unavailable");
+    harness.get_by_label("CPU allocatable");
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "resource_inspectors/node_inspector_shows_its_spec/node_usage_unavailable",
     ));
 }
 
@@ -4893,6 +4987,7 @@ fn test_ui_flow() {
             ],
             scalable_api_resources: Default::default(),
             pod_metrics_api_available: true,
+            node_metrics_api_available: true,
         }) as WorkerResultBox);
     harness.run();
 

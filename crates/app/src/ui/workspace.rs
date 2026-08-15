@@ -172,7 +172,7 @@ pub(super) fn show(
                 }
 
                 let selected_api_resource = cluster.selected_api_resource.clone();
-                let all_resources = decorate_pod_usage_rows(
+                let all_resources = decorate_usage_rows(
                     cluster,
                     selected_api_resource.as_ref(),
                     selected_resources(cluster, selected_api_resource.as_ref()),
@@ -486,17 +486,45 @@ fn selected_resources(
     resources
 }
 
-fn decorate_pod_usage_rows(
+fn decorate_usage_rows(
     cluster: &super::state::ClusterState,
     api_resource: Option<&crate::api_resource::ApiResource>,
     mut resources: Vec<MinimalResource>,
 ) -> Vec<MinimalResource> {
     let is_pod =
         api_resource.is_some_and(|resource| resource.group == "core" && resource.kind == "Pod");
-    if !is_pod {
+    let is_node =
+        api_resource.is_some_and(|resource| resource.group == "core" && resource.kind == "Node");
+    if !is_pod && !is_node {
         return resources;
     }
     for resource in &mut resources {
+        if is_node {
+            if !cluster.node_metrics_api_available || cluster.node_metrics.error.is_some() {
+                resource
+                    .cells
+                    .insert(CPU_COLUMN.into(), CellValue::Text("Unavailable".into()));
+                resource
+                    .cells
+                    .insert(MEMORY_COLUMN.into(), CellValue::Text("Unavailable".into()));
+            } else if let Some(usage) = cluster.node_metrics.usages.get(&resource.name) {
+                resource.cells.insert(
+                    CPU_COLUMN.into(),
+                    CellValue::Usage {
+                        label: format_cpu(usage.cpu_nanocores),
+                        value: usage.cpu_nanocores,
+                    },
+                );
+                resource.cells.insert(
+                    MEMORY_COLUMN.into(),
+                    CellValue::Usage {
+                        label: format_memory(usage.memory_bytes),
+                        value: usage.memory_bytes,
+                    },
+                );
+            }
+            continue;
+        }
         let Some(namespace) = resource.namespace.as_deref() else {
             continue;
         };

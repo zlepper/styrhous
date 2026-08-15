@@ -143,6 +143,8 @@ pub(crate) struct NodeDetail {
     pub(crate) provider_id: Option<String>,
     pub(crate) unschedulable: bool,
     pub(crate) taints: Vec<String>,
+    /// Schedulable CPU and memory reported by the kubelet, normalized to Metrics API units.
+    pub(crate) allocatable: PodResourceThresholds,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

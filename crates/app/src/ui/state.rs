@@ -3,7 +3,7 @@ use crate::api_resource::ApiResource;
 use crate::log_store::LogStoreResult;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::{MinimalResource, PodLogContainer};
-use crate::pod_metrics::{POD_USAGE_HISTORY_WINDOW, PodUsage};
+use crate::pod_metrics::{NodeUsage, POD_USAGE_HISTORY_WINDOW, PodUsage};
 use crate::resource_catalog::{ResourceNavigation, build_resource_navigation};
 use crate::resource_detail::{
     ManagedResource, ResourceDetail, ResourceDetailPayload, ResourceEvent,
@@ -371,6 +371,10 @@ pub(super) struct ResourceDetailHistoryEntry {
     /// The cluster does not serve PodMetrics, so resource usage cannot be collected.
     pub(super) pod_metrics_api_unavailable: bool,
     pub(super) pod_usage_error: Option<String>,
+    pub(super) node_usage: Option<NodeUsage>,
+    pub(super) node_usage_history: Vec<NodeUsage>,
+    pub(super) node_metrics_api_unavailable: bool,
+    pub(super) node_usage_error: Option<String>,
     pub(super) data_editor: Option<ResourceDataEditorState>,
     /// UI interactions are recorded while rendering, then consumed by the
     /// global blade coordinator after the navigator borrow ends.
@@ -399,6 +403,29 @@ impl ResourceDetailHistoryEntry {
     pub(super) fn prune_pod_usage_history(&mut self, now: time::OffsetDateTime) {
         let oldest = now - POD_USAGE_HISTORY_WINDOW;
         self.pod_usage_history
+            .retain(|sample| sample.timestamp >= oldest);
+    }
+
+    pub(super) fn record_node_usage(&mut self, usage: NodeUsage) {
+        self.node_usage = Some(usage.clone());
+        if let Some(existing) = self
+            .node_usage_history
+            .iter_mut()
+            .find(|sample| sample.timestamp == usage.timestamp)
+        {
+            *existing = usage;
+        } else {
+            self.node_usage_history.push(usage);
+            self.node_usage_history
+                .sort_by_key(|sample| sample.timestamp);
+        }
+        self.prune_node_usage_history(time::OffsetDateTime::now_utc());
+        self.node_usage_error = None;
+    }
+
+    pub(super) fn prune_node_usage_history(&mut self, now: time::OffsetDateTime) {
+        let oldest = now - POD_USAGE_HISTORY_WINDOW;
+        self.node_usage_history
             .retain(|sample| sample.timestamp >= oldest);
     }
 }
@@ -449,6 +476,23 @@ impl UiState {
             .filter(|entry| entry.cluster_key == cluster_key)
         {
             entry.pod_metrics_api_unavailable = true;
+        }
+    }
+
+    fn mark_node_metrics_api_unavailable(&mut self, cluster_key: i32) {
+        let Some(navigator) = self.global_blades.navigator_mut() else {
+            return;
+        };
+        for entry in navigator
+            .entries_mut()
+            .filter_map(|entry| entry.resource_detail_mut())
+            .filter(|entry| {
+                entry.cluster_key == cluster_key
+                    && entry.api_resource.group == "core"
+                    && entry.api_resource.kind == "Node"
+            })
+        {
+            entry.node_metrics_api_unavailable = true;
         }
     }
 
@@ -721,6 +765,9 @@ pub(super) struct ClusterState {
     pub(super) pod_metrics_api_available: bool,
     pub(super) pod_metrics: HashMap<String, PodMetricsNamespaceState>,
     pub(super) active_pod_metrics: HashSet<String>,
+    pub(super) node_metrics_api_available: bool,
+    pub(super) node_metrics: NodeMetricsState,
+    pub(super) node_metrics_active: bool,
     pub(super) resource_searches: HashMap<ApiResource, ResourceSearchState>,
     pub(super) resource_selections: HashMap<ApiResource, HashSet<String>>,
     pub(super) next_bulk_delete_id: u64,
@@ -742,6 +789,12 @@ pub(super) struct ClusterState {
 #[derive(Debug, Default)]
 pub(super) struct PodMetricsNamespaceState {
     pub(super) usages: BTreeMap<String, PodUsage>,
+    pub(super) error: Option<String>,
+}
+
+#[derive(Debug, Default)]
+pub(super) struct NodeMetricsState {
+    pub(super) usages: BTreeMap<String, NodeUsage>,
     pub(super) error: Option<String>,
 }
 
@@ -1037,6 +1090,9 @@ impl UiState {
         cluster.pod_metrics_api_available = false;
         cluster.pod_metrics.clear();
         cluster.active_pod_metrics.clear();
+        cluster.node_metrics_api_available = false;
+        cluster.node_metrics = NodeMetricsState::default();
+        cluster.node_metrics_active = false;
         cluster.resource_searches.clear();
 
         Some(Box::new(crate::worker::ConnectToCluster {
@@ -1084,7 +1140,7 @@ impl UiState {
         uid: String,
         commands_to_send: &mut Vec<WorkerCommandBox>,
     ) {
-        let (selection_generation, pod_metrics_api_available) = {
+        let (selection_generation, pod_metrics_api_available, node_metrics_api_available) = {
             let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
                 return;
             };
@@ -1092,6 +1148,7 @@ impl UiState {
             (
                 cluster.next_detail_generation,
                 cluster.pod_metrics_api_available,
+                cluster.node_metrics_api_available,
             )
         };
         self.replace_global_blade(
@@ -1113,6 +1170,10 @@ impl UiState {
                 pod_usage_missing: false,
                 pod_metrics_api_unavailable: !pod_metrics_api_available,
                 pod_usage_error: None,
+                node_usage: None,
+                node_usage_history: Vec::new(),
+                node_metrics_api_unavailable: !node_metrics_api_available,
+                node_usage_error: None,
                 data_editor: None,
                 pending_action: None,
             }),
@@ -1133,6 +1194,7 @@ impl UiState {
             resource_name: name,
             resource_uid: uid,
             pod_metrics_api_available,
+            node_metrics_api_available,
         }));
     }
 
@@ -1152,6 +1214,7 @@ impl UiState {
         cluster.next_detail_generation += 1;
         let selection_generation = cluster.next_detail_generation;
         let pod_metrics_api_available = cluster.pod_metrics_api_available;
+        let node_metrics_api_available = cluster.node_metrics_api_available;
         if cluster.resource_detail_panel.is_none() {
             return;
         }
@@ -1173,6 +1236,10 @@ impl UiState {
             pod_usage_missing: false,
             pod_metrics_api_unavailable: !pod_metrics_api_available,
             pod_usage_error: None,
+            node_usage: None,
+            node_usage_history: Vec::new(),
+            node_metrics_api_unavailable: !node_metrics_api_available,
+            node_usage_error: None,
             data_editor: None,
             pending_action: None,
         };
@@ -1186,6 +1253,7 @@ impl UiState {
             resource_name: name,
             resource_uid: uid,
             pod_metrics_api_available,
+            node_metrics_api_available,
         }));
     }
 
@@ -1251,6 +1319,7 @@ impl UiState {
         if was_selected {
             if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
                 Self::reconcile_pod_metrics(cluster, commands_to_send);
+                Self::reconcile_node_metrics(cluster, commands_to_send);
             }
             return;
         }
@@ -1260,6 +1329,7 @@ impl UiState {
         if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
             Self::request_resource_watch(cluster, &api_resource, Some(namespace), commands_to_send);
             Self::reconcile_pod_metrics(cluster, commands_to_send);
+            Self::reconcile_node_metrics(cluster, commands_to_send);
         }
     }
 
@@ -1329,6 +1399,7 @@ impl UiState {
         if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
             cluster.selected_namespaces.clear();
             Self::reconcile_pod_metrics(cluster, commands_to_send);
+            Self::reconcile_node_metrics(cluster, commands_to_send);
         }
         self.remember_selected_namespaces(cluster_key);
     }
@@ -1378,6 +1449,7 @@ impl UiState {
             Self::request_resource_watch(cluster, api_resource, None, commands_to_send);
         }
         Self::reconcile_pod_metrics(cluster, commands_to_send);
+        Self::reconcile_node_metrics(cluster, commands_to_send);
     }
 
     fn reconcile_pod_metrics(
@@ -1410,6 +1482,30 @@ impl UiState {
                     namespace,
                 }));
             }
+        }
+    }
+
+    fn reconcile_node_metrics(
+        cluster: &mut ClusterState,
+        commands_to_send: &mut Vec<WorkerCommandBox>,
+    ) {
+        let desired = cluster
+            .selected_api_resource
+            .as_ref()
+            .is_some_and(|resource| resource.group == "core" && resource.kind == "Node")
+            && cluster.node_metrics_api_available;
+        if desired == cluster.node_metrics_active {
+            return;
+        }
+        cluster.node_metrics_active = desired;
+        if desired {
+            commands_to_send.push(Box::new(crate::worker::StartNodeMetricsWatch {
+                cluster_key: cluster.cluster_key,
+            }));
+        } else {
+            commands_to_send.push(Box::new(crate::worker::StopNodeMetricsWatch {
+                cluster_key: cluster.cluster_key,
+            }));
         }
     }
 
@@ -1555,6 +1651,9 @@ impl WorkerResult for crate::worker::KubernetesClustersUpdated {
                     pod_metrics_api_available: false,
                     pod_metrics: HashMap::new(),
                     active_pod_metrics: HashSet::new(),
+                    node_metrics_api_available: false,
+                    node_metrics: NodeMetricsState::default(),
+                    node_metrics_active: false,
                     resource_searches: HashMap::new(),
                     resource_selections: HashMap::new(),
                     next_bulk_delete_id: 0,
@@ -1651,16 +1750,21 @@ impl WorkerResult for crate::worker::KubernetesApisLoaded {
             api_resources,
             scalable_api_resources,
             pod_metrics_api_available,
+            node_metrics_api_available,
         } = self;
         let restored_api_resource = ui.restored_api_resource(cluster_key, &api_resources);
         if let Some(cluster) = ui.clusters.get_mut(&cluster_key) {
             cluster.resource_navigation = build_resource_navigation(api_resources);
             cluster.scalable_api_resources = scalable_api_resources;
             cluster.pod_metrics_api_available = pod_metrics_api_available;
+            cluster.node_metrics_api_available = node_metrics_api_available;
             cluster.api_resources_load = ClusterLoadState::Ready;
         }
         if !pod_metrics_api_available {
             ui.mark_pod_metrics_api_unavailable(cluster_key);
+        }
+        if !node_metrics_api_available {
+            ui.mark_node_metrics_api_unavailable(cluster_key);
         }
         if let Some(api_resource) = restored_api_resource {
             ui.select_api_resource(cluster_key, api_resource, _commands);
@@ -1883,6 +1987,46 @@ impl WorkerResult for crate::worker::PodMetricsApiUnavailable {
         }
     }
 }
+impl WorkerResult for crate::worker::NodeMetricsUpdated {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(cluster) = ui.clusters.get_mut(&self.cluster_key)
+            && cluster.node_metrics_active
+        {
+            cluster.node_metrics.usages = self.usages;
+            cluster.node_metrics.error = None;
+        }
+    }
+}
+impl WorkerResult for crate::worker::NodeMetricsWatchFailed {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(cluster) = ui.clusters.get_mut(&self.cluster_key)
+            && cluster.node_metrics_active
+        {
+            cluster.node_metrics.error = Some(self.error);
+        }
+    }
+}
+impl WorkerResult for crate::worker::NodeMetricsApiUnavailable {
+    fn apply(self, ui: &mut UiState, commands: &mut Vec<WorkerCommandBox>) {
+        let was_active = {
+            let Some(cluster) = ui.clusters.get_mut(&self.cluster_key) else {
+                return;
+            };
+            if !cluster.node_metrics_api_available {
+                return;
+            }
+            cluster.node_metrics_api_available = false;
+            cluster.node_metrics = NodeMetricsState::default();
+            std::mem::replace(&mut cluster.node_metrics_active, false)
+        };
+        ui.mark_node_metrics_api_unavailable(self.cluster_key);
+        if was_active {
+            commands.push(Box::new(crate::worker::StopNodeMetricsWatch {
+                cluster_key: self.cluster_key,
+            }));
+        }
+    }
+}
 impl WorkerResult for crate::worker::ResourceDetailPodUsageUpdated {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         if let Some(entry) = ui
@@ -1890,6 +2034,39 @@ impl WorkerResult for crate::worker::ResourceDetailPodUsageUpdated {
             .filter(|entry| entry.cluster_key == self.cluster_key)
         {
             entry.record_pod_usage(self.usage);
+        }
+    }
+}
+impl WorkerResult for crate::worker::ResourceDetailNodeUsageUpdated {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(entry) = ui
+            .resource_detail_entry_mut(self.history_entry_id)
+            .filter(|entry| entry.cluster_key == self.cluster_key)
+        {
+            entry.record_node_usage(self.usage);
+        }
+    }
+}
+impl WorkerResult for crate::worker::ResourceDetailNodeUsageFailed {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(entry) = ui
+            .resource_detail_entry_mut(self.history_entry_id)
+            .filter(|entry| entry.cluster_key == self.cluster_key)
+        {
+            entry.prune_node_usage_history(time::OffsetDateTime::now_utc());
+            entry.node_usage_error = Some(self.error);
+        }
+    }
+}
+impl WorkerResult for crate::worker::ResourceDetailNodeUsageMissing {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(entry) = ui
+            .resource_detail_entry_mut(self.history_entry_id)
+            .filter(|entry| entry.cluster_key == self.cluster_key)
+        {
+            entry.prune_node_usage_history(time::OffsetDateTime::now_utc());
+            entry.node_usage = None;
+            entry.node_usage_error = None;
         }
     }
 }
@@ -2121,6 +2298,10 @@ mod tests {
             pod_usage_missing: false,
             pod_metrics_api_unavailable: false,
             pod_usage_error: None,
+            node_usage: None,
+            node_usage_history: Vec::new(),
+            node_metrics_api_unavailable: false,
+            node_usage_error: None,
             data_editor: None,
             pending_action: None,
         }
@@ -2154,6 +2335,40 @@ mod tests {
             Some(4)
         );
         assert!(entry.pod_usage_error.is_none());
+    }
+
+    #[test]
+    fn node_usage_history_replaces_duplicates_and_prunes_against_the_current_time() {
+        let now = time::OffsetDateTime::now_utc();
+        let mut entry = pod_detail_history_entry();
+        entry.node_usage_history = vec![NodeUsage {
+            timestamp: now - POD_USAGE_HISTORY_WINDOW - time::Duration::seconds(1),
+            cpu_nanocores: 1,
+            memory_bytes: 1,
+        }];
+        entry.prune_node_usage_history(now);
+        assert!(entry.node_usage_history.is_empty());
+
+        let timestamp = now - time::Duration::seconds(1);
+        entry.record_node_usage(NodeUsage {
+            timestamp,
+            cpu_nanocores: 2,
+            memory_bytes: 2,
+        });
+        entry.node_usage_error = Some("temporary outage".to_owned());
+        entry.record_node_usage(NodeUsage {
+            timestamp,
+            cpu_nanocores: 3,
+            memory_bytes: 3,
+        });
+
+        assert_eq!(entry.node_usage_history.len(), 1);
+        assert_eq!(entry.node_usage_history[0].cpu_nanocores, 3);
+        assert_eq!(
+            entry.node_usage.as_ref().map(|usage| usage.cpu_nanocores),
+            Some(3)
+        );
+        assert!(entry.node_usage_error.is_none());
     }
 
     #[test]
@@ -2226,6 +2441,53 @@ mod tests {
                 })
                 .count(),
             1
+        );
+    }
+
+    #[test]
+    fn node_metrics_watch_follows_node_selection_and_stops_independently() {
+        let node = ApiResource {
+            group: "core".to_owned(),
+            version: "v1".to_owned(),
+            kind: "Node".to_owned(),
+            name: "nodes".to_owned(),
+            namespaced: false,
+        };
+        let config_map = ApiResource {
+            group: "core".to_owned(),
+            version: "v1".to_owned(),
+            kind: "ConfigMap".to_owned(),
+            name: "configmaps".to_owned(),
+            namespaced: true,
+        };
+        let mut state = UiState::default();
+        let mut commands = Vec::new();
+        KubernetesClustersUpdated(vec![Cluster {
+            name: "kind".to_owned(),
+            is_current: true,
+        }])
+        .apply(&mut state, &mut commands);
+        state
+            .clusters
+            .get_mut(&1)
+            .unwrap()
+            .node_metrics_api_available = true;
+
+        state.select_api_resource(1, node, &mut commands);
+        assert!(state.clusters[&1].node_metrics_active);
+        assert!(
+            commands
+                .iter()
+                .any(|command| command.as_ref().as_any().is::<StartNodeMetricsWatch>())
+        );
+
+        commands.clear();
+        state.select_api_resource(1, config_map, &mut commands);
+        assert!(!state.clusters[&1].node_metrics_active);
+        assert!(
+            commands
+                .iter()
+                .any(|command| command.as_ref().as_any().is::<StopNodeMetricsWatch>())
         );
     }
 
@@ -2312,6 +2574,41 @@ mod tests {
                 .filter(|command| command.as_ref().as_any().is::<StopPodMetricsWatch>())
                 .count(),
             1
+        );
+    }
+
+    #[test]
+    fn unavailable_node_metrics_do_not_disable_pod_metrics() {
+        let mut state = UiState::default();
+        let mut commands = Vec::new();
+        KubernetesClustersUpdated(vec![Cluster {
+            name: "kind".to_owned(),
+            is_current: true,
+        }])
+        .apply(&mut state, &mut commands);
+        let cluster = state.clusters.get_mut(&1).unwrap();
+        cluster.pod_metrics_api_available = true;
+        cluster.node_metrics_api_available = true;
+        cluster.node_metrics_active = true;
+        cluster.node_metrics.usages.insert(
+            "worker-a".into(),
+            NodeUsage {
+                timestamp: time::OffsetDateTime::now_utc(),
+                cpu_nanocores: 1,
+                memory_bytes: 1,
+            },
+        );
+        commands.clear();
+
+        NodeMetricsApiUnavailable { cluster_key: 1 }.apply(&mut state, &mut commands);
+
+        assert!(state.clusters[&1].pod_metrics_api_available);
+        assert!(!state.clusters[&1].node_metrics_api_available);
+        assert!(state.clusters[&1].node_metrics.usages.is_empty());
+        assert!(
+            commands
+                .iter()
+                .any(|command| command.as_ref().as_any().is::<StopNodeMetricsWatch>())
         );
     }
 

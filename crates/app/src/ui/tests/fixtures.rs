@@ -1,6 +1,7 @@
 use super::super::MyEguiApp;
 use super::super::state::{
-    ClusterConnectionState, ClusterLoadState, ClusterState, ResourceWatchState, UiState,
+    ClusterConnectionState, ClusterLoadState, ClusterState, NodeMetricsState, ResourceWatchState,
+    UiState,
 };
 use crate::api_resource::ApiResource;
 use crate::minimal_namespace::MinimalNamespace;
@@ -45,6 +46,9 @@ pub(super) fn fixture_cluster(cluster_key: i32, name: &str) -> ClusterState {
         pod_metrics_api_available: true,
         pod_metrics: HashMap::new(),
         active_pod_metrics: HashSet::new(),
+        node_metrics_api_available: true,
+        node_metrics: NodeMetricsState::default(),
+        node_metrics_active: false,
         resource_searches: HashMap::new(),
         resource_selections: HashMap::new(),
         next_bulk_delete_id: 0,
