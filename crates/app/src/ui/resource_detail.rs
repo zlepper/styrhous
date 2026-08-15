@@ -32,7 +32,8 @@ use crate::worker::{
 use components::colors::{WHITE, gray, indigo};
 use components::design::{radius, spacing, status, typography};
 use components::{
-    ButtonSize, MoreButton, PointingHand, TableRowBuilder, TailwindButton, TailwindTable,
+    ButtonSize, DetailCell, DetailColumn, DetailRow, DetailTableRow, DetailTone, DetailValue,
+    InspectorDetails, MoreButton, PointingHand, TableRowBuilder, TailwindButton, TailwindTable,
     TailwindTextArea, WorkspaceCard,
 };
 use std::cell::RefCell;
@@ -985,7 +986,6 @@ fn show_detail(
 }
 
 fn show_node_detail(ui: &mut egui::Ui, node: &NodeDetail) {
-    section_header(ui, "Spec", None);
     let pod_cidrs = if node.pod_cidrs.is_empty() {
         "-".to_owned()
     } else {
@@ -996,41 +996,45 @@ fn show_node_detail(ui: &mut egui::Ui, node: &NodeDetail) {
     } else {
         node.taints.join(", ")
     };
-    detail_item_card(
+    InspectorDetails::show_titled_properties(
         ui,
-        |_| {},
-        |ui| {
-            detail_row(
-                ui,
+        "Spec",
+        &[DetailRow::new([
+            DetailCell::status(
                 "Scheduling",
                 if node.unschedulable {
                     "Scheduling disabled"
                 } else {
                     "Schedulable"
                 },
-            );
-            detail_row(
-                ui,
-                "Provider ID",
-                node.provider_id.as_deref().unwrap_or("-"),
-            );
-            detail_row(ui, "Pod CIDRs", &pod_cidrs);
-            detail_row(ui, "Taints", &taints);
-        },
+                if node.unschedulable {
+                    DetailTone::Warning
+                } else {
+                    DetailTone::Success
+                },
+            ),
+            DetailCell::new("Provider ID", node.provider_id.as_deref().unwrap_or("-")),
+            DetailCell::new("Pod CIDRs", pod_cidrs.as_str()),
+            DetailCell::new("Taints", taints.as_str()),
+        ])],
     );
 }
 
 fn show_generic_summary(ui: &mut egui::Ui, detail: &ResourceDetail) {
     detail_summary_card(ui, |ui| {
-        detail_grid(ui, |ui, column| match column {
-            0 => detail_value(
-                ui,
-                "Namespace",
-                detail.namespace.as_deref().unwrap_or("Cluster-wide"),
-            ),
-            1 => detail_value(ui, "Age", &format_age(detail.creation_timestamp)),
-            _ => detail_value(ui, "UID", &detail.uid),
-        });
+        InspectorDetails::show_properties(
+            ui,
+            &[
+                DetailRow::new([
+                    DetailCell::new(
+                        "Namespace",
+                        detail.namespace.as_deref().unwrap_or("Cluster-wide"),
+                    ),
+                    DetailCell::new("Age", format_age(detail.creation_timestamp)),
+                ]),
+                DetailRow::new([DetailCell::new("UID", detail.uid.as_str()).copyable()]),
+            ],
+        );
     });
 }
 
@@ -1374,76 +1378,45 @@ fn show_pod_summary(
         pod.containers.len()
     );
     detail_summary_card(ui, |ui| {
-        detail_grid(ui, |ui, column| match column {
-            0 => detail_value(
-                ui,
-                "Namespace",
-                detail.namespace.as_deref().unwrap_or("Cluster-wide"),
-            ),
-            1 => status_value(ui, "Status", &pod.phase),
-            _ => detail_node_value(ui, pod.node_name.as_deref(), pending_action),
-        });
-        ui.separator();
-        detail_grid(ui, |ui, column| match column {
-            0 => detail_value(ui, "Pod IP", pod.pod_ip.as_deref().unwrap_or("-")),
-            1 => detail_value(ui, "Host IP", pod.host_ip.as_deref().unwrap_or("-")),
-            _ => detail_value(ui, "QoS class", pod.qos_class.as_deref().unwrap_or("-")),
-        });
-        ui.separator();
-        detail_grid(ui, |ui, column| match column {
-            0 => detail_value(ui, "Ready", &ready),
-            1 => detail_value(ui, "Age", &format_age(detail.creation_timestamp)),
-            _ => {}
-        });
-        // Keep the final, two-column row balanced with the full rows above.
-        ui.add_space(8.0);
+        let node_action = ui.id().with("pod-summary-node");
+        let node_cell = pod.node_name.as_deref().map_or_else(
+            || DetailCell::unavailable("Node"),
+            |node_name| DetailCell::link("Node", node_name, node_action),
+        );
+        let response = InspectorDetails::show_properties(
+            ui,
+            &[
+                DetailRow::new([
+                    DetailCell::new(
+                        "Namespace",
+                        detail.namespace.as_deref().unwrap_or("Cluster-wide"),
+                    ),
+                    DetailCell::status("Status", pod.phase.as_str(), pod_phase_tone(&pod.phase)),
+                    node_cell,
+                ]),
+                DetailRow::new([
+                    DetailCell::new("Pod IP", pod.pod_ip.as_deref().unwrap_or("-")),
+                    DetailCell::new("Host IP", pod.host_ip.as_deref().unwrap_or("-")),
+                    DetailCell::new("QoS class", pod.qos_class.as_deref().unwrap_or("-")),
+                ]),
+                DetailRow::new([
+                    DetailCell::new("Ready", ready),
+                    DetailCell::new("Age", format_age(detail.creation_timestamp)),
+                ]),
+            ],
+        );
+        if response.activated.contains(&node_action)
+            && let Some(node_name) = pod.node_name.as_deref()
+            && pending_action.is_none()
+        {
+            *pending_action = Some(ResourceAction::NavigateDetails {
+                api_resource: crate::resource_handlers::node::api_resource(),
+                name: node_name.to_owned(),
+                namespace: None,
+                uid: node_name.to_owned(),
+            });
+        }
     });
-}
-
-fn detail_node_value(
-    ui: &mut egui::Ui,
-    node_name: Option<&str>,
-    pending_action: &mut Option<ResourceAction>,
-) {
-    ui.label(
-        egui::RichText::new("Node")
-            .font(typography::metadata())
-            .color(gray::_500),
-    );
-    let Some(node_name) = node_name else {
-        ui.label(
-            egui::RichText::new("-")
-                .font(typography::metadata())
-                .color(gray::_900),
-        )
-        .on_hover_text("Kubernetes has not assigned this Pod to a Node.");
-        return;
-    };
-    let response = ui.add(
-        egui::Label::new(
-            egui::RichText::new(node_name)
-                .font(typography::metadata())
-                .color(indigo::_600),
-        )
-        .sense(egui::Sense::click()),
-    );
-    response.clone().with_pointing_hand().widget_info(|| {
-        egui::WidgetInfo::labeled(
-            egui::WidgetType::Button,
-            response.enabled(),
-            format!("Open details for Node {node_name}"),
-        )
-    });
-    if response.clicked() && pending_action.is_none() {
-        *pending_action = Some(ResourceAction::NavigateDetails {
-            api_resource: crate::resource_handlers::node::api_resource(),
-            name: node_name.to_owned(),
-            namespace: None,
-            // The node watcher can load the detail by name. Until its first
-            // detail update, use the name for the event selector as well.
-            uid: node_name.to_owned(),
-        });
-    }
 }
 
 fn show_pod_detail(
@@ -1480,11 +1453,13 @@ fn show_pod_detail(
                 );
             },
             |ui| {
-                detail_grid_columns(ui, 2, |ui, column| match column {
-                    0 => detail_value(ui, "Image", &container.image),
-                    1 => detail_value(ui, "State", &container.state),
-                    _ => {}
-                });
+                InspectorDetails::show_properties(
+                    ui,
+                    &[DetailRow::new([
+                        DetailCell::new("Image", container.image.as_str()),
+                        DetailCell::new("State", container.state.as_str()),
+                    ])],
+                );
                 show_container_usage(
                     ui,
                     &container.name,
@@ -1496,11 +1471,13 @@ fn show_pod_detail(
                     usage_error,
                 );
                 ui.add_space(6.0);
-                detail_grid_columns(ui, 2, |ui, column| match column {
-                    0 => detail_value(ui, "Ready", if container.ready { "Yes" } else { "No" }),
-                    1 => detail_value(ui, "Restarts", &container.restart_count.to_string()),
-                    _ => {}
-                });
+                InspectorDetails::show_properties(
+                    ui,
+                    &[DetailRow::new([
+                        DetailCell::new("Ready", if container.ready { "Yes" } else { "No" }),
+                        DetailCell::new("Restarts", container.restart_count.to_string()),
+                    ])],
+                );
                 if !container.command.is_empty() {
                     chip_row(ui, "Command", &container.command);
                 }
@@ -1515,7 +1492,10 @@ fn show_pod_detail(
                     environment_variables(ui, &container.environment_variables);
                 }
                 if let Some(reason) = &container.reason {
-                    detail_value(ui, "Reason", reason);
+                    InspectorDetails::show_properties(
+                        ui,
+                        &[DetailRow::new([DetailCell::new("Reason", reason.as_str())])],
+                    );
                 }
                 if let Some(message) = &container.message {
                     ui.label(
@@ -2119,6 +2099,22 @@ mod tests {
             assert_eq!(vertices[3].pos, egui::pos2(segment[1].x, baseline));
         }
     }
+
+    #[test]
+    fn inspector_status_tones_reflect_kubernetes_status_values() {
+        assert_eq!(pod_phase_tone("Running"), DetailTone::Success);
+        assert_eq!(pod_phase_tone("Pending"), DetailTone::Warning);
+        assert_eq!(pod_phase_tone("Failed"), DetailTone::Danger);
+        assert_eq!(pod_phase_tone("Unknown"), DetailTone::Neutral);
+
+        assert_eq!(event_tone("Normal"), DetailTone::Success);
+        assert_eq!(event_tone("Warning"), DetailTone::Warning);
+        assert_eq!(event_tone("Other"), DetailTone::Neutral);
+
+        assert_eq!(condition_tone("True"), DetailTone::Success);
+        assert_eq!(condition_tone("False"), DetailTone::Neutral);
+        assert_eq!(condition_tone("Unknown"), DetailTone::Warning);
+    }
 }
 
 fn metadata_maps(ui: &mut egui::Ui, detail: &ResourceDetail) {
@@ -2129,18 +2125,24 @@ fn metadata_maps(ui: &mut egui::Ui, detail: &ResourceDetail) {
         false,
         |ui| {
             ui.label(egui::RichText::new("Labels").strong().color(gray::_800));
-            for (key, value) in &detail.labels {
-                detail_row(ui, key, value);
-            }
+            InspectorDetails::show_properties(
+                ui,
+                &[DetailRow::new(detail.labels.iter().map(|(key, value)| {
+                    DetailCell::new(key.as_str(), value.as_str())
+                }))],
+            );
             ui.add_space(8.0);
             ui.label(
                 egui::RichText::new("Annotations")
                     .strong()
                     .color(gray::_800),
             );
-            for (key, value) in &detail.annotations {
-                detail_row(ui, key, value);
-            }
+            InspectorDetails::show_properties(
+                ui,
+                &[DetailRow::new(detail.annotations.iter().map(
+                    |(key, value)| DetailCell::new(key.as_str(), value.as_str()),
+                ))],
+            );
         },
     );
 }
@@ -2169,31 +2171,36 @@ fn show_events(ui: &mut egui::Ui, events: &[ResourceEvent], error: Option<&str>)
                 } else if events.is_empty() {
                     ui.label(egui::RichText::new("No events recorded.").color(gray::_500));
                 } else {
-                    detail_grid_columns(ui, 5, |ui, column| match column {
-                        0 => event_header(ui, "Type"),
-                        1 => event_header(ui, "Reason"),
-                        2 => event_header(ui, "Message"),
-                        3 => event_header(ui, "Source"),
-                        _ => event_header(ui, "Time"),
-                    });
-                    ui.separator();
-                    for event in events {
-                        detail_grid_columns(ui, 5, |ui, column| match column {
-                            0 => status_value(ui, "", &event.type_),
-                            1 => detail_value(ui, "", &event.reason),
-                            2 => detail_value(ui, "", &event.message),
-                            3 => detail_value(
-                                ui,
-                                "",
-                                event.source.as_deref().unwrap_or("Kubernetes"),
-                            ),
-                            _ => detail_value(
-                                ui,
-                                "",
-                                &format!("{} ago", format_age(event.last_timestamp)),
-                            ),
-                        });
-                    }
+                    let rows = events
+                        .iter()
+                        .map(|event| {
+                            DetailTableRow::new([
+                                DetailValue::Status {
+                                    text: event.type_.as_str().into(),
+                                    tone: event_tone(&event.type_),
+                                },
+                                DetailValue::Text(event.reason.as_str().into()),
+                                DetailValue::Text(event.message.as_str().into()),
+                                DetailValue::Text(
+                                    event.source.as_deref().unwrap_or("Kubernetes").into(),
+                                ),
+                                DetailValue::Text(
+                                    format!("{} ago", format_age(event.last_timestamp)).into(),
+                                ),
+                            ])
+                        })
+                        .collect::<Vec<_>>();
+                    InspectorDetails::show_table(
+                        ui,
+                        &[
+                            DetailColumn::new("Type"),
+                            DetailColumn::new("Reason"),
+                            DetailColumn::new("Message").weight(2.0),
+                            DetailColumn::new("Source"),
+                            DetailColumn::new("Time"),
+                        ],
+                        &rows,
+                    );
                 }
             });
     });
@@ -2210,21 +2217,31 @@ fn show_additional_sections(
             if pod.conditions.is_empty() {
                 ui.label(egui::RichText::new("No conditions reported.").color(gray::_500));
             } else {
-                detail_grid_columns(ui, 4, |ui, column| match column {
-                    0 => event_header(ui, "Type"),
-                    1 => event_header(ui, "Status"),
-                    2 => event_header(ui, "Reason"),
-                    _ => event_header(ui, "Message"),
-                });
-                ui.separator();
-                for condition in &pod.conditions {
-                    detail_grid_columns(ui, 4, |ui, column| match column {
-                        0 => detail_value(ui, "", &condition.type_),
-                        1 => status_value(ui, "", &condition.status),
-                        2 => detail_value(ui, "", condition.reason.as_deref().unwrap_or("-")),
-                        _ => detail_value(ui, "", condition.message.as_deref().unwrap_or("-")),
-                    });
-                }
+                let rows = pod
+                    .conditions
+                    .iter()
+                    .map(|condition| {
+                        DetailTableRow::new([
+                            DetailValue::Text(condition.type_.as_str().into()),
+                            DetailValue::Status {
+                                text: condition.status.as_str().into(),
+                                tone: condition_tone(&condition.status),
+                            },
+                            DetailValue::Text(condition.reason.as_deref().unwrap_or("-").into()),
+                            DetailValue::Text(condition.message.as_deref().unwrap_or("-").into()),
+                        ])
+                    })
+                    .collect::<Vec<_>>();
+                InspectorDetails::show_table(
+                    ui,
+                    &[
+                        DetailColumn::new("Type"),
+                        DetailColumn::new("Status"),
+                        DetailColumn::new("Reason"),
+                        DetailColumn::new("Message").weight(2.0),
+                    ],
+                    &rows,
+                );
             }
         });
         ui.add_space(16.0);
@@ -2277,19 +2294,48 @@ fn show_additional_sections(
             "Resource configuration",
             true,
             |ui| {
-                detail_row(
+                InspectorDetails::show_properties(
                     ui,
-                    "Restart policy",
-                    pod.restart_policy.as_deref().unwrap_or("-"),
+                    &[DetailRow::new([
+                        DetailCell::new(
+                            "Restart policy",
+                            pod.restart_policy.as_deref().unwrap_or("-"),
+                        ),
+                        DetailCell::new(
+                            "Service account",
+                            pod.service_account_name.as_deref().unwrap_or("-"),
+                        ),
+                        DetailCell::new("DNS policy", pod.dns_policy.as_deref().unwrap_or("-")),
+                    ])],
                 );
-                detail_row(
-                    ui,
-                    "Service account",
-                    pod.service_account_name.as_deref().unwrap_or("-"),
-                );
-                detail_row(ui, "DNS policy", pod.dns_policy.as_deref().unwrap_or("-"));
             },
         );
+    }
+}
+
+fn pod_phase_tone(phase: &str) -> DetailTone {
+    match phase {
+        "Running" | "Succeeded" => DetailTone::Success,
+        "Pending" => DetailTone::Warning,
+        "Failed" => DetailTone::Danger,
+        _ => DetailTone::Neutral,
+    }
+}
+
+fn event_tone(event_type: &str) -> DetailTone {
+    match event_type {
+        "Normal" => DetailTone::Success,
+        "Warning" => DetailTone::Warning,
+        _ => DetailTone::Neutral,
+    }
+}
+
+fn condition_tone(condition_status: &str) -> DetailTone {
+    match condition_status {
+        "True" => DetailTone::Success,
+        "False" => DetailTone::Neutral,
+        "Unknown" => DetailTone::Warning,
+        _ => DetailTone::Neutral,
     }
 }
 
@@ -2363,21 +2409,6 @@ fn section_header(ui: &mut egui::Ui, title: &str, detail: Option<String>) {
         }
     });
     ui.add_space(6.0);
-}
-
-fn detail_row(ui: &mut egui::Ui, label: &str, value: &str) {
-    ui.horizontal_wrapped(|ui| {
-        ui.label(
-            egui::RichText::new(format!("{label}: "))
-                .font(typography::metadata())
-                .color(gray::_500),
-        );
-        ui.label(
-            egui::RichText::new(value)
-                .font(typography::metadata())
-                .color(gray::_800),
-        );
-    });
 }
 
 fn environment_variables(
@@ -2614,45 +2645,18 @@ fn optional_label(optional: bool) -> &'static str {
     if optional { " (optional)" } else { "" }
 }
 
-fn detail_grid(ui: &mut egui::Ui, add_column: impl FnMut(&mut egui::Ui, usize)) {
-    detail_grid_columns(ui, 3, add_column);
-}
-
-fn detail_grid_columns(
-    ui: &mut egui::Ui,
-    column_count: usize,
-    mut add_column: impl FnMut(&mut egui::Ui, usize),
-) {
-    ui.columns(column_count, |columns| {
-        for (index, column) in columns.iter_mut().enumerate() {
-            add_column(column, index);
-        }
-    });
-    ui.add_space(10.0);
-}
-
-fn detail_value(ui: &mut egui::Ui, label: &str, value: &str) {
-    if !label.is_empty() {
-        ui.label(
-            egui::RichText::new(label)
-                .font(typography::metadata())
-                .color(gray::_500),
-        );
-    }
-    ui.label(
-        egui::RichText::new(value)
-            .font(typography::metadata())
-            .color(gray::_900),
-    );
-}
-
 fn show_usage_value_grid(ui: &mut egui::Ui, usage: Option<(i64, i64)>) {
-    detail_grid_columns(ui, 2, |ui, column| match (column, usage) {
-        (0, Some((cpu, _))) => detail_value(ui, "CPU", &format_cpu(cpu)),
-        (_, Some((_, memory))) => detail_value(ui, "Memory", &format_memory(memory)),
-        (0, None) => unavailable_detail_value(ui, "CPU"),
-        (_, None) => unavailable_detail_value(ui, "Memory"),
-    });
+    let cells = match usage {
+        Some((cpu, memory)) => [
+            DetailCell::new("CPU", format_cpu(cpu)),
+            DetailCell::new("Memory", format_memory(memory)),
+        ],
+        None => [
+            DetailCell::unavailable("CPU"),
+            DetailCell::unavailable("Memory"),
+        ],
+    };
+    InspectorDetails::show_properties(ui, &[DetailRow::new(cells)]);
 }
 
 fn displayed_usage_values(
@@ -2660,53 +2664,6 @@ fn displayed_usage_values(
     metrics_error: Option<&str>,
 ) -> Option<(i64, i64)> {
     metrics_error.is_none().then_some(usage).flatten()
-}
-
-fn unavailable_detail_value(ui: &mut egui::Ui, label: &str) {
-    ui.label(
-        egui::RichText::new(label)
-            .font(typography::metadata())
-            .color(gray::_500),
-    );
-    let response = ui.label(
-        egui::RichText::new("-")
-            .font(typography::metadata())
-            .color(gray::_900),
-    );
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(
-            egui::WidgetType::Label,
-            true,
-            format!("{label}: unavailable"),
-        )
-    });
-    response.on_hover_text("Unavailable");
-}
-
-fn status_value(ui: &mut egui::Ui, label: &str, value: &str) {
-    if !label.is_empty() {
-        ui.label(
-            egui::RichText::new(label)
-                .font(typography::metadata())
-                .color(gray::_500),
-        );
-    }
-    ui.horizontal(|ui| {
-        ui.colored_label(status::SUCCESS, "●");
-        ui.label(
-            egui::RichText::new(value)
-                .font(typography::metadata())
-                .color(gray::_900),
-        );
-    });
-}
-
-fn event_header(ui: &mut egui::Ui, label: &str) {
-    ui.label(
-        egui::RichText::new(label)
-            .font(typography::metadata())
-            .color(gray::_500),
-    );
 }
 
 fn chip_row(ui: &mut egui::Ui, label: &str, values: &[String]) {
@@ -2749,29 +2706,20 @@ fn chip_row(ui: &mut egui::Ui, label: &str, values: &[String]) {
 }
 
 fn volume_detail_row(ui: &mut egui::Ui, volume: &crate::resource_detail::PodVolumeDetail) {
-    const COLUMN_WIDTHS: [f32; 3] = [117.0, 159.0, 307.0];
-    ui.horizontal_top(|ui| {
-        for (width, label, value) in [
-            (COLUMN_WIDTHS[0], "Type", volume.kind.as_str()),
-            (COLUMN_WIDTHS[1], "Source", volume.source.as_str()),
-            (
-                COLUMN_WIDTHS[2],
+    InspectorDetails::show_properties(
+        ui,
+        &[
+            DetailRow::new([
+                DetailCell::new("Type", volume.kind.as_str()),
+                DetailCell::new("Source", volume.source.as_str()),
+                DetailCell::new("Read-only", if volume.read_only { "true" } else { "false" }),
+            ]),
+            DetailRow::new([DetailCell::new(
                 "Mount path",
                 volume.mount_path.as_deref().unwrap_or("-"),
-            ),
-        ] {
-            ui.allocate_ui_with_layout(
-                egui::vec2(width, 0.0),
-                egui::Layout::top_down(egui::Align::LEFT),
-                |ui| detail_value(ui, label, value),
-            );
-        }
-        detail_value(
-            ui,
-            "Read-only",
-            if volume.read_only { "true" } else { "false" },
-        );
-    });
+            )]),
+        ],
+    );
 }
 
 fn error_card(ui: &mut egui::Ui, title: &str, error: &str) {

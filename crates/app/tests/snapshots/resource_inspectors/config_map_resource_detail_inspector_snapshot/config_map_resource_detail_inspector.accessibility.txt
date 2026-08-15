@@ -631,55 +631,60 @@ Window state=[focused] rect=<none>
                   Button name="Close blade" rect=(x=1471.0 y=35.0 width=32.0 height=32.0 center_x=1487.0 center_y=51.0)
             GenericContainer rect=<none>
               GenericContainer rect=<none>
-                Label value="Namespace" rect=(x=828.0 y=107.0 width=213.3 height=15.0 center_x=934.7 center_y=114.5)
-                  TextRun value="Namespace" rect=(x=828.0 y=107.0 width=67.0 height=15.0 center_x=861.5 center_y=114.5)
-                Label value="kube-system" rect=(x=828.0 y=125.0 width=213.3 height=15.0 center_x=934.7 center_y=132.5)
-                  TextRun value="kube-system" rect=(x=828.0 y=125.0 width=73.5 height=15.0 center_x=864.8 center_y=132.5)
-              GenericContainer rect=<none>
-                Label value="Age" rect=(x=1049.3 y=107.0 width=213.3 height=15.0 center_x=1156.0 center_y=114.5)
-                  TextRun value="Age" rect=(x=1049.3 y=107.0 width=22.0 height=15.0 center_x=1060.3 center_y=114.5)
-                Label value="Unknown" rect=(x=1049.3 y=125.0 width=213.3 height=15.0 center_x=1156.0 center_y=132.5)
-                  TextRun value="Unknown" rect=(x=1049.3 y=125.0 width=53.1 height=15.0 center_x=1075.9 center_y=132.5)
-              GenericContainer rect=<none>
-                Label value="UID" rect=(x=1270.7 y=107.0 width=213.3 height=15.0 center_x=1377.3 center_y=114.5)
-                  TextRun value="UID" rect=(x=1270.7 y=107.0 width=20.7 height=15.0 center_x=1281.0 center_y=114.5)
-                Label value="configmap-uid" rect=(x=1270.7 y=125.0 width=213.3 height=15.0 center_x=1377.3 center_y=132.5)
-                  TextRun value="configmap-uid" rect=(x=1270.7 y=125.0 width=83.3 height=15.0 center_x=1312.3 center_y=132.5)
-            GenericContainer rect=<none>
-              Label value="Data" rect=(x=809.0 y=191.0 width=34.8 height=19.0 center_x=826.4 center_y=200.5)
-                TextRun value="Data" rect=(x=809.0 y=191.0 width=34.8 height=19.0 center_x=826.4 center_y=200.5)
-              Label value="2 entries · Mutable" rect=(x=851.8 y=192.0 width=123.3 height=17.0 center_x=913.5 center_y=200.5)
-                TextRun value="2 entries · Mutable" rect=(x=851.8 y=192.0 width=123.3 height=17.0 center_x=913.5 center_y=200.5)
-            GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="app.toml" rect=(x=822.0 y=233.5 width=62.6 height=15.0 center_x=853.3 center_y=241.0)
-                  TextRun value="app.toml" rect=(x=822.0 y=233.5 width=62.6 height=15.0 center_x=853.3 center_y=241.0)
                 GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                MultilineTextInput value="[server]\nport = 8080" rect=(x=835.0 y=287.0 width=642.0 height=49.4 center_x=1156.0 center_y=311.7)
-                  TextRun value="[server]\n" rect=(x=839.0 y=289.0 width=62.6 height=15.0 center_x=870.3 center_y=296.5)
-                  TextRun value="port = 8080" rect=(x=839.0 y=304.0 width=86.1 height=15.0 center_x=882.0 center_y=311.5)
-            GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="log-level" rect=(x=822.0 y=383.9 width=70.4 height=15.0 center_x=857.2 center_y=391.4)
-                  TextRun value="log-level" rect=(x=822.0 y=383.9 width=70.4 height=15.0 center_x=857.2 center_y=391.4)
-                GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                MultilineTextInput value="info" rect=(x=835.0 y=437.4 width=642.0 height=49.4 center_x=1156.0 center_y=462.1)
-                  TextRun value="info" rect=(x=839.0 y=439.4 width=31.3 height=15.0 center_x=854.7 center_y=446.9)
-            GenericContainer rect=<none>
+                  Label value="Namespace" rect=(x=828.0 y=107.0 width=67.7 height=15.0 center_x=861.8 center_y=114.5)
+                    TextRun value="Namespace" rect=(x=828.0 y=107.0 width=67.7 height=15.0 center_x=861.8 center_y=114.5)
+                  Label value="kube-system" rect=(x=828.0 y=125.0 width=74.3 height=15.0 center_x=865.1 center_y=132.5)
+                    TextRun value="kube-system" rect=(x=828.0 y=125.0 width=74.3 height=15.0 center_x=865.1 center_y=132.5)
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
-                  Button name="Save data" state=[disabled] rect=(x=1413.8 y=519.8 width=89.3 height=28.0 center_x=1458.4 center_y=533.8)
+                  Label value="Age" rect=(x=1160.0 y=107.0 width=22.6 height=15.0 center_x=1171.3 center_y=114.5)
+                    TextRun value="Age" rect=(x=1160.0 y=107.0 width=22.6 height=15.0 center_x=1171.3 center_y=114.5)
+                  Label value="Unknown" rect=(x=1160.0 y=125.0 width=53.6 height=15.0 center_x=1186.8 center_y=132.5)
+                    TextRun value="Unknown" rect=(x=1160.0 y=125.0 width=53.6 height=15.0 center_x=1186.8 center_y=132.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Label value="UID" rect=(x=828.0 y=151.0 width=20.8 height=15.0 center_x=838.4 center_y=158.5)
+                    TextRun value="UID" rect=(x=828.0 y=151.0 width=20.8 height=15.0 center_x=838.4 center_y=158.5)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      Button name="Copy UID" value="configmap-uid" rect=(x=828.0 y=169.0 width=83.3 height=15.0 center_x=869.7 center_y=176.5)
+                        TextRun value="configmap-uid" rect=(x=828.0 y=169.0 width=83.3 height=15.0 center_x=869.7 center_y=176.5)
             GenericContainer rect=<none>
-              Button name="Labels & annotations" state=[toggled=False] rect=(x=810.0 y=567.8 width=692.0 height=40.0 center_x=1156.0 center_y=587.8)
+              Label value="Data" rect=(x=809.0 y=222.0 width=34.8 height=19.0 center_x=826.4 center_y=231.5)
+                TextRun value="Data" rect=(x=809.0 y=222.0 width=34.8 height=19.0 center_x=826.4 center_y=231.5)
+              Label value="2 entries · Mutable" rect=(x=851.8 y=223.0 width=123.3 height=17.0 center_x=913.5 center_y=231.5)
+                TextRun value="2 entries · Mutable" rect=(x=851.8 y=223.0 width=123.3 height=17.0 center_x=913.5 center_y=231.5)
             GenericContainer rect=<none>
               GenericContainer rect=<none>
-                Label value="Events" rect=(x=826.0 y=659.2 width=50.6 height=19.0 center_x=851.3 center_y=668.8)
-                  TextRun value="Events" rect=(x=826.0 y=659.2 width=50.6 height=19.0 center_x=851.3 center_y=668.8)
+                Label value="app.toml" rect=(x=822.0 y=264.5 width=62.6 height=15.0 center_x=853.3 center_y=272.0)
+                  TextRun value="app.toml" rect=(x=822.0 y=264.5 width=62.6 height=15.0 center_x=853.3 center_y=272.0)
+                GenericContainer rect=<none>
               GenericContainer rect=<none>
-                Label value="No events recorded." rect=(x=822.0 y=712.8 width=134.5 height=17.0 center_x=889.3 center_y=721.2)
-                  TextRun value="No events recorded." rect=(x=822.0 y=712.8 width=134.5 height=17.0 center_x=889.3 center_y=721.2)
+                MultilineTextInput value="[server]\nport = 8080" rect=(x=835.0 y=318.0 width=642.0 height=49.4 center_x=1156.0 center_y=342.7)
+                  TextRun value="[server]\n" rect=(x=839.0 y=320.0 width=62.6 height=15.0 center_x=870.3 center_y=327.5)
+                  TextRun value="port = 8080" rect=(x=839.0 y=335.0 width=86.1 height=15.0 center_x=882.0 center_y=342.5)
             GenericContainer rect=<none>
-              Button name="Owner references" state=[toggled=False] rect=(x=810.0 y=762.8 width=692.0 height=40.0 center_x=1156.0 center_y=782.8)
+              GenericContainer rect=<none>
+                Label value="log-level" rect=(x=822.0 y=414.9 width=70.4 height=15.0 center_x=857.2 center_y=422.4)
+                  TextRun value="log-level" rect=(x=822.0 y=414.9 width=70.4 height=15.0 center_x=857.2 center_y=422.4)
+                GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                MultilineTextInput value="info" rect=(x=835.0 y=468.4 width=642.0 height=49.4 center_x=1156.0 center_y=493.1)
+                  TextRun value="info" rect=(x=839.0 y=470.4 width=31.3 height=15.0 center_x=854.7 center_y=477.9)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Button name="Save data" state=[disabled] rect=(x=1413.7 y=550.8 width=89.3 height=28.0 center_x=1458.4 center_y=564.8)
+            GenericContainer rect=<none>
+              Button name="Labels & annotations" state=[toggled=False] rect=(x=810.0 y=598.8 width=692.0 height=40.0 center_x=1156.0 center_y=618.8)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Events" rect=(x=826.0 y=690.2 width=50.6 height=19.0 center_x=851.3 center_y=699.8)
+                  TextRun value="Events" rect=(x=826.0 y=690.2 width=50.6 height=19.0 center_x=851.3 center_y=699.8)
+              GenericContainer rect=<none>
+                Label value="No events recorded." rect=(x=822.0 y=743.8 width=134.5 height=17.0 center_x=889.3 center_y=752.2)
+                  TextRun value="No events recorded." rect=(x=822.0 y=743.8 width=134.5 height=17.0 center_x=889.3 center_y=752.2)
+            GenericContainer rect=<none>
+              Button name="Owner references" state=[toggled=False] rect=(x=810.0 y=793.8 width=692.0 height=40.0 center_x=1156.0 center_y=813.8)
       ScrollBar rect=(x=1518.0 y=8.0 width=10.0 height=1008.0 center_x=1523.0 center_y=512.0)

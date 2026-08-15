@@ -29,6 +29,7 @@ pub mod design;
 pub mod error_dialog;
 pub mod fuzzy;
 pub mod icons;
+pub mod inspector_details;
 pub mod interaction;
 pub mod more_button;
 pub mod reorderable_table;
@@ -57,6 +58,10 @@ pub use confirmation_dialog::{
     ConfirmationDialogKind, ConfirmationDialogWarning,
 };
 pub use error_dialog::{ErrorDialog, ErrorDialogAction};
+pub use inspector_details::{
+    DetailCell, DetailColumn, DetailRow, DetailTableRow, DetailTone, DetailValue, InspectorDetails,
+    InspectorDetailsResponse,
+};
 pub use interaction::PointingHand;
 pub use more_button::{MoreButton, MoreMenu};
 pub use reorderable_table::{ReorderHandle, ReorderableTable, move_item};
