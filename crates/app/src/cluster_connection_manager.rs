@@ -2,7 +2,9 @@ use crate::api_resource::ApiResource;
 use crate::helpers::ResultExt;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
-use crate::pod_metrics::{POD_METRICS_POLL_INTERVAL, PodUsage, pod_usage_from_value};
+use crate::pod_metrics::{
+    NodeUsage, POD_METRICS_POLL_INTERVAL, PodUsage, node_usage_from_value, pod_usage_from_value,
+};
 use crate::resource_detail::{
     ManagedResource, ManagedResourceAssociation, PodEnvironmentVariableDetail,
     PodEnvironmentVariableSource, ResourceDetail, ResourceDetailPayload, ResourceEvent,
@@ -53,6 +55,7 @@ struct ApiInspection {
     api_resources: Vec<ApiResource>,
     scalable_api_resources: BTreeSet<ApiResource>,
     pod_metrics_api_available: bool,
+    node_metrics_api_available: bool,
     custom_resource_columns: BTreeMap<ApiResource, Vec<CustomResourceColumn>>,
     resource_schemas: BTreeMap<ApiResource, ResourceSchema>,
 }
@@ -187,11 +190,14 @@ impl KubernetesApiInspector {
 
         let pod_metrics_api_available =
             pod_metrics_api_available(&discovered_resources.api_resources);
+        let node_metrics_api_available =
+            node_metrics_api_available(&discovered_resources.api_resources);
         let (custom_resource_columns, resource_schemas) = self.custom_resource_metadata().await;
         Ok(ApiInspection {
             api_resources: discovered_resources.api_resources,
             scalable_api_resources: discovered_resources.scalable_api_resources,
             pod_metrics_api_available,
+            node_metrics_api_available,
             custom_resource_columns,
             resource_schemas,
         })
@@ -257,11 +263,19 @@ impl KubernetesApiInspector {
 }
 
 fn pod_metrics_api_available(api_resources: &[ApiResource]) -> bool {
+    metrics_api_available(api_resources, "PodMetrics", "pods")
+}
+
+fn node_metrics_api_available(api_resources: &[ApiResource]) -> bool {
+    metrics_api_available(api_resources, "NodeMetrics", "nodes")
+}
+
+fn metrics_api_available(api_resources: &[ApiResource], kind: &str, name: &str) -> bool {
     api_resources.iter().any(|resource| {
         resource.group == "metrics.k8s.io"
             && resource.version == "v1beta1"
-            && resource.kind == "PodMetrics"
-            && resource.name == "pods"
+            && resource.kind == kind
+            && resource.name == name
     })
 }
 
@@ -969,6 +983,7 @@ pub struct ResourceDetailWatchRequest {
     pub resource_uid: String,
     pub history_entry_id: u64,
     pub pod_metrics_api_available: bool,
+    pub node_metrics_api_available: bool,
     pub event_sender: WorkerResultSender,
 }
 
@@ -984,6 +999,7 @@ pub async fn watch_resource_detail(request: ResourceDetailWatchRequest) {
         resource_uid,
         history_entry_id,
         pod_metrics_api_available,
+        node_metrics_api_available,
         event_sender,
     } = request;
     let root_name = resource_name.clone();
@@ -1021,10 +1037,19 @@ pub async fn watch_resource_detail(request: ResourceDetailWatchRequest) {
             client: client.clone(),
             api_resource: metrics_api_resource,
             namespace: namespace.clone(),
-            resource_name: root_name,
+            resource_name: root_name.clone(),
             history_entry_id,
             pod_metrics_api_available,
             event_sender: event_sender.clone(),
+        }),
+        watch_node_detail_metrics(NodeDetailMetricsWatchRequest {
+            cluster_key,
+            client,
+            api_resource,
+            resource_name: root_name,
+            history_entry_id,
+            node_metrics_api_available,
+            event_sender,
         }),
     );
 }
@@ -1062,6 +1087,39 @@ pub async fn watch_pod_metrics_namespace(
                 })
                 .await
                 .log_if_error("Failed to send Pod metrics error"),
+        }
+    }
+}
+
+/// Nodes are cluster-scoped, so one poller supplies the visible Nodes workspace.
+pub async fn watch_node_metrics(
+    cluster_key: i32,
+    client: kube::Client,
+    event_sender: WorkerResultSender,
+) {
+    let mut interval = tokio::time::interval(POD_METRICS_POLL_INTERVAL);
+    interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    loop {
+        interval.tick().await;
+        match list_node_metrics(&client).await {
+            Ok(usages) => event_sender
+                .send(NodeMetricsUpdated {
+                    cluster_key,
+                    usages,
+                })
+                .await
+                .log_if_error("Failed to send Node metrics update"),
+            Err(error) if is_metrics_api_not_found(&error) => {
+                report_node_metrics_api_unavailable(&event_sender, cluster_key).await;
+                return;
+            }
+            Err(error) => event_sender
+                .send(NodeMetricsWatchFailed {
+                    cluster_key,
+                    error: format!("{error:#?}"),
+                })
+                .await
+                .log_if_error("Failed to send Node metrics error"),
         }
     }
 }
@@ -1130,6 +1188,65 @@ async fn watch_pod_detail_metrics(request: PodDetailMetricsWatchRequest) {
     }
 }
 
+struct NodeDetailMetricsWatchRequest {
+    cluster_key: i32,
+    client: kube::Client,
+    api_resource: ApiResource,
+    resource_name: String,
+    history_entry_id: u64,
+    node_metrics_api_available: bool,
+    event_sender: WorkerResultSender,
+}
+
+async fn watch_node_detail_metrics(request: NodeDetailMetricsWatchRequest) {
+    let NodeDetailMetricsWatchRequest {
+        cluster_key,
+        client,
+        api_resource,
+        resource_name,
+        history_entry_id,
+        node_metrics_api_available,
+        event_sender,
+    } = request;
+    if api_resource.kind != "Node" || api_resource.group != "core" || !node_metrics_api_available {
+        return;
+    }
+    let mut interval = tokio::time::interval(POD_METRICS_POLL_INTERVAL);
+    interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    loop {
+        interval.tick().await;
+        match get_node_metrics(&client, &resource_name).await {
+            Ok(Some(usage)) => event_sender
+                .send(ResourceDetailNodeUsageUpdated {
+                    cluster_key,
+                    history_entry_id,
+                    usage,
+                })
+                .await
+                .log_if_error("Failed to send Node detail metrics update"),
+            Ok(None) => event_sender
+                .send(ResourceDetailNodeUsageMissing {
+                    cluster_key,
+                    history_entry_id,
+                })
+                .await
+                .log_if_error("Failed to send missing Node detail metrics update"),
+            Err(error) if is_metrics_api_not_found(&error) => {
+                report_node_metrics_api_unavailable(&event_sender, cluster_key).await;
+                return;
+            }
+            Err(error) => event_sender
+                .send(ResourceDetailNodeUsageFailed {
+                    cluster_key,
+                    history_entry_id,
+                    error: format!("{error:#?}"),
+                })
+                .await
+                .log_if_error("Failed to send Node detail metrics error"),
+        }
+    }
+}
+
 fn is_metrics_api_not_found(error: &anyhow::Error) -> bool {
     error.downcast_ref::<kube::Error>().is_some_and(|error| {
         matches!(error, kube::Error::Api(response)
@@ -1145,10 +1262,23 @@ async fn report_metrics_api_unavailable(event_sender: &WorkerResultSender, clust
         .log_if_error("Failed to send Metrics API unavailable");
 }
 
+async fn report_node_metrics_api_unavailable(event_sender: &WorkerResultSender, cluster_key: i32) {
+    event_sender
+        .send(NodeMetricsApiUnavailable { cluster_key })
+        .await
+        .log_if_error("Failed to send Node Metrics API unavailable");
+}
+
 fn metrics_pod_api(client: &kube::Client, namespace: &str) -> Api<DynamicObject> {
     let gvk = GroupVersionKind::gvk("metrics.k8s.io", "v1beta1", "PodMetrics");
     let resource = kube::core::ApiResource::from_gvk_with_plural(&gvk, "pods");
     Api::namespaced_with(client.clone(), namespace, &resource)
+}
+
+fn metrics_node_api(client: &kube::Client) -> Api<DynamicObject> {
+    let gvk = GroupVersionKind::gvk("metrics.k8s.io", "v1beta1", "NodeMetrics");
+    let resource = kube::core::ApiResource::from_gvk_with_plural(&gvk, "nodes");
+    Api::all_with(client.clone(), &resource)
 }
 
 async fn list_pod_metrics(
@@ -1181,7 +1311,38 @@ async fn get_pod_metrics(
     Ok(Some(usage))
 }
 
+async fn list_node_metrics(client: &kube::Client) -> Result<BTreeMap<String, NodeUsage>> {
+    let metrics = metrics_node_api(client)
+        .list(&ListParams::default())
+        .await?;
+    metrics
+        .items
+        .into_iter()
+        .map(|metric| node_usage_from_value(k8s_openapi::serde_json::to_value(metric)?))
+        .collect()
+}
+
+async fn get_node_metrics(client: &kube::Client, name: &str) -> Result<Option<NodeUsage>> {
+    let metrics = match metrics_node_api(client).get(name).await {
+        Ok(metrics) => metrics,
+        Err(kube::Error::Api(response)) if is_node_metric_sample_missing(&response, name) => {
+            return Ok(None);
+        }
+        Err(error) => return Err(error.into()),
+    };
+    let (_, usage) = node_usage_from_value(k8s_openapi::serde_json::to_value(metrics)?)?;
+    Ok(Some(usage))
+}
+
 fn is_pod_metric_sample_missing(response: &kube::core::Status, name: &str) -> bool {
+    response.code == 404
+        && response
+            .details
+            .as_ref()
+            .is_some_and(|details| details.group == "metrics.k8s.io" && details.name == name)
+}
+
+fn is_node_metric_sample_missing(response: &kube::core::Status, name: &str) -> bool {
     response.code == 404
         && response
             .details
@@ -2467,7 +2628,7 @@ mod tests {
     use k8s_openapi::apimachinery::pkg::apis::meta::v1::{APIResource, ObjectMeta, OwnerReference};
 
     #[test]
-    fn pod_metrics_availability_requires_the_served_podmetrics_resource() {
+    fn metrics_availability_requires_the_matching_served_resource() {
         let resources = vec![ApiResource {
             group: "metrics.k8s.io".into(),
             version: "v1beta1".into(),
@@ -2476,6 +2637,7 @@ mod tests {
             namespaced: true,
         }];
         assert!(pod_metrics_api_available(&resources));
+        assert!(!node_metrics_api_available(&resources));
 
         let missing_metrics = vec![ApiResource {
             group: "metrics.k8s.io".into(),
@@ -2485,6 +2647,7 @@ mod tests {
             namespaced: false,
         }];
         assert!(!pod_metrics_api_available(&missing_metrics));
+        assert!(node_metrics_api_available(&missing_metrics));
     }
 
     #[test]
@@ -2517,6 +2680,29 @@ mod tests {
         };
 
         assert!(is_pod_metric_sample_missing(&response, "api"));
+        assert!(!is_metrics_api_not_found(&anyhow::Error::new(
+            kube::Error::Api(response.boxed(),)
+        )));
+    }
+
+    #[test]
+    fn missing_node_metric_sample_is_not_an_unavailable_metrics_api() {
+        let response = kube::core::Status {
+            code: 404,
+            details: Some(kube::core::response::StatusDetails {
+                group: "metrics.k8s.io".into(),
+                name: "worker-a".into(),
+                // Kubernetes status details use the resource name, not the GVK kind.
+                kind: "nodes".into(),
+                uid: String::new(),
+                causes: Vec::new(),
+                retry_after_seconds: 0,
+            }),
+            ..Default::default()
+        };
+
+        assert!(is_node_metric_sample_missing(&response, "worker-a"));
+        assert!(!is_node_metric_sample_missing(&response, "worker-b"));
         assert!(!is_metrics_api_not_found(&anyhow::Error::new(
             kube::Error::Api(response.boxed(),)
         )));

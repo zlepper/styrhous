@@ -29,6 +29,14 @@ pub(crate) struct ContainerUsage {
     pub(crate) memory_bytes: i64,
 }
 
+/// A normalized current node-use sample. CPU is nanocores and memory is bytes.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct NodeUsage {
+    pub(crate) timestamp: OffsetDateTime,
+    pub(crate) cpu_nanocores: i64,
+    pub(crate) memory_bytes: i64,
+}
+
 #[derive(Debug, Deserialize)]
 struct PodMetrics {
     metadata: MetricsMetadata,
@@ -44,6 +52,13 @@ struct MetricsMetadata {
 #[derive(Debug, Deserialize)]
 struct ContainerMetrics {
     name: String,
+    usage: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct NodeMetrics {
+    metadata: MetricsMetadata,
+    timestamp: String,
     usage: BTreeMap<String, String>,
 }
 
@@ -76,6 +91,22 @@ pub(crate) fn pod_usage_from_value(value: serde_json::Value) -> Result<(String, 
             cpu_nanocores,
             memory_bytes,
             containers,
+        },
+    ))
+}
+
+pub(crate) fn node_usage_from_value(value: serde_json::Value) -> Result<(String, NodeUsage)> {
+    let metrics: NodeMetrics = serde_json::from_value(value)?;
+    let timestamp = OffsetDateTime::parse(
+        &metrics.timestamp,
+        &time::format_description::well_known::Rfc3339,
+    )?;
+    Ok((
+        metrics.metadata.name,
+        NodeUsage {
+            timestamp,
+            cpu_nanocores: parse_cpu_nanocores(required_usage(&metrics.usage, "cpu")?)?,
+            memory_bytes: parse_memory_bytes(required_usage(&metrics.usage, "memory")?)?,
         },
     ))
 }
@@ -229,5 +260,19 @@ mod tests {
             }))
             .is_err()
         );
+    }
+
+    #[test]
+    fn parses_node_metrics() {
+        let (name, usage) = node_usage_from_value(serde_json::json!({
+            "metadata": { "name": "worker-a" },
+            "timestamp": "2026-08-14T09:00:00Z",
+            "usage": { "cpu": "1500m", "memory": "3Gi" }
+        }))
+        .unwrap();
+
+        assert_eq!(name, "worker-a");
+        assert_eq!(usage.cpu_nanocores, 1_500_000_000);
+        assert_eq!(usage.memory_bytes, 3 * 1024 * 1024 * 1024);
     }
 }

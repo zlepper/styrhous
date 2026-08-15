@@ -458,6 +458,7 @@ mod persistence_tests {
             api_resources: vec![api_resource("apps", "v1", "Deployment", "deployments")],
             scalable_api_resources: Default::default(),
             pod_metrics_api_available: false,
+            node_metrics_api_available: false,
         })
     }
 
@@ -574,6 +575,7 @@ mod persistence_tests {
                     api_resources: vec![api_resource("apps", "v1", "Service", "services")],
                     scalable_api_resources: Default::default(),
                     pod_metrics_api_available: false,
+                    node_metrics_api_available: false,
                 }),
             ],
         );
@@ -611,6 +613,7 @@ mod persistence_tests {
                     api_resources: vec![api_resource("apps", "v1", "Deployment", "deployments")],
                     scalable_api_resources: Default::default(),
                     pod_metrics_api_available: false,
+                    node_metrics_api_available: false,
                 }),
             ],
         );

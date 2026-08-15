@@ -12,7 +12,7 @@ use super::table_preferences::{ResourceTableKey, TableColumnDefinition};
 use super::widgets::show_resource_cell;
 use crate::minimal_resource::{MinimalResource, format_age};
 use crate::pod_metrics::{
-    ContainerUsage, POD_USAGE_HISTORY_WINDOW, PodUsage, format_cpu, format_memory,
+    ContainerUsage, NodeUsage, POD_USAGE_HISTORY_WINDOW, PodUsage, format_cpu, format_memory,
 };
 use crate::resource_catalog::ResourceNavigation;
 use crate::resource_detail::{
@@ -99,6 +99,14 @@ struct PodUsageDisplay<'a> {
     error: Option<&'a str>,
 }
 
+#[derive(Clone, Copy)]
+struct NodeUsageDisplay<'a> {
+    usage: Option<&'a NodeUsage>,
+    history: &'a [NodeUsage],
+    metrics_api_unavailable: bool,
+    error: Option<&'a str>,
+}
+
 impl GlobalBladeContent for ResourceDetailHistoryEntry {
     fn resource_detail(&self) -> Option<&ResourceDetailHistoryEntry> {
         Some(self)
@@ -159,6 +167,10 @@ impl GlobalBladeContent for ResourceDetailHistoryEntry {
             self.pod_usage_missing,
             self.pod_metrics_api_unavailable,
             self.pod_usage_error.as_deref(),
+            self.node_usage.as_ref(),
+            &self.node_usage_history,
+            self.node_metrics_api_unavailable,
+            self.node_usage_error.as_deref(),
             if layer.is_foreground {
                 self.data_editor.as_mut()
             } else {
@@ -365,6 +377,7 @@ fn navigate_resource_detail_in_navigator(
     cluster.next_detail_generation += 1;
     let history_entry_id = cluster.next_detail_generation;
     let pod_metrics_api_available = cluster.pod_metrics_api_available;
+    let node_metrics_api_available = cluster.node_metrics_api_available;
     if cluster.resource_detail_panel.is_none() {
         return;
     }
@@ -386,6 +399,10 @@ fn navigate_resource_detail_in_navigator(
         pod_usage_missing: false,
         pod_metrics_api_unavailable: !pod_metrics_api_available,
         pod_usage_error: None,
+        node_usage: None,
+        node_usage_history: Vec::new(),
+        node_metrics_api_unavailable: !node_metrics_api_available,
+        node_usage_error: None,
         data_editor: None,
         pending_action: None,
     }));
@@ -399,6 +416,7 @@ fn navigate_resource_detail_in_navigator(
             resource_name: name,
             resource_uid: uid,
             pod_metrics_api_available,
+            node_metrics_api_available,
         }));
 }
 
@@ -527,6 +545,10 @@ fn show_resource_detail_blade(
     pod_usage_missing: bool,
     pod_metrics_api_unavailable: bool,
     pod_usage_error: Option<&str>,
+    node_usage: Option<&NodeUsage>,
+    node_usage_history: &[NodeUsage],
+    node_metrics_api_unavailable: bool,
+    node_usage_error: Option<&str>,
     data_editor: Option<&mut super::state::ResourceDataEditorState>,
     table_preferences: Option<&mut super::table_preferences::PersistedResourceTablePreferences>,
     column_settings: Option<
@@ -547,6 +569,12 @@ fn show_resource_detail_blade(
                 missing: pod_usage_missing,
                 metrics_api_unavailable: pod_metrics_api_unavailable,
                 error: pod_usage_error,
+            },
+            NodeUsageDisplay {
+                usage: node_usage,
+                history: node_usage_history,
+                metrics_api_unavailable: node_metrics_api_unavailable,
+                error: node_usage_error,
             },
             &mut result.action,
         );
@@ -977,6 +1005,7 @@ fn show_detail(
     ui: &mut egui::Ui,
     detail: &ResourceDetail,
     usage: PodUsageDisplay<'_>,
+    node_usage: NodeUsageDisplay<'_>,
     pending_action: &mut Option<ResourceAction>,
 ) {
     show_generic_summary(ui, detail);
@@ -986,13 +1015,13 @@ fn show_detail(
         ui.add_space(13.0);
         show_pod_detail(ui, pod, usage);
     } else if let ResourceDetailPayload::Node(node) = &detail.payload {
-        show_node_detail(ui, node);
+        show_node_detail(ui, node, node_usage);
     } else if let ResourceDetailPayload::Diagnostic(diagnostic) = &detail.payload {
         show_diagnostic_detail(ui, diagnostic);
     }
 }
 
-fn show_node_detail(ui: &mut egui::Ui, node: &NodeDetail) {
+fn show_node_detail(ui: &mut egui::Ui, node: &NodeDetail, usage: NodeUsageDisplay<'_>) {
     let pod_cidrs = if node.pod_cidrs.is_empty() {
         "-".to_owned()
     } else {
@@ -1025,6 +1054,8 @@ fn show_node_detail(ui: &mut egui::Ui, node: &NodeDetail) {
             DetailCell::new("Taints", taints.as_str()).copyable(),
         ])],
     );
+    ui.add_space(13.0);
+    show_node_usage(ui, usage, node.allocatable);
 }
 
 fn show_generic_summary(ui: &mut egui::Ui, detail: &ResourceDetail) {
@@ -1616,8 +1647,11 @@ fn show_pod_usage(
                 usage_chart(
                     &mut columns[0],
                     "Pod CPU usage chart",
-                    usage.history,
-                    |sample| Some(sample.cpu_nanocores),
+                    usage
+                        .history
+                        .iter()
+                        .map(|sample| (sample.timestamp, sample.cpu_nanocores))
+                        .collect(),
                     format_cpu,
                     if usage.error.is_some() {
                         gray::_400
@@ -1630,8 +1664,82 @@ fn show_pod_usage(
                 usage_chart(
                     &mut columns[1],
                     "Pod memory usage chart",
-                    usage.history,
-                    |sample| Some(sample.memory_bytes),
+                    usage
+                        .history
+                        .iter()
+                        .map(|sample| (sample.timestamp, sample.memory_bytes))
+                        .collect(),
+                    format_memory,
+                    if usage.error.is_some() {
+                        gray::_400
+                    } else {
+                        status::SUCCESS
+                    },
+                    usage.error.is_some(),
+                    &memory_references,
+                );
+            });
+        }
+    });
+}
+
+fn show_node_usage(
+    ui: &mut egui::Ui,
+    usage: NodeUsageDisplay<'_>,
+    allocatable: PodResourceThresholds,
+) {
+    section_header(ui, "Resource usage", None);
+    WorkspaceCard::new().show(ui, |ui| {
+        if usage.metrics_api_unavailable {
+            show_node_metrics_api_unavailable(ui, allocatable);
+            return;
+        }
+        let cpu_references = usage_references(allocatable.cpu_nanocores, None, ["Allocatable", ""]);
+        let memory_references =
+            usage_references(allocatable.memory_bytes, None, ["Allocatable", ""]);
+        show_usage_value_grid(
+            ui,
+            displayed_usage_values(
+                usage
+                    .usage
+                    .map(|usage| (usage.cpu_nanocores, usage.memory_bytes)),
+                usage.error,
+            ),
+        );
+        if !usage.history.is_empty()
+            || has_usage_references(&cpu_references)
+            || has_usage_references(&memory_references)
+        {
+            if usage.usage.is_none() {
+                usage_chart_pair_labels(ui);
+            }
+            ui.add_space(8.0);
+            ui.columns(2, |columns| {
+                usage_chart(
+                    &mut columns[0],
+                    "Node CPU usage chart",
+                    usage
+                        .history
+                        .iter()
+                        .map(|sample| (sample.timestamp, sample.cpu_nanocores))
+                        .collect(),
+                    format_cpu,
+                    if usage.error.is_some() {
+                        gray::_400
+                    } else {
+                        indigo::_600
+                    },
+                    usage.error.is_some(),
+                    &cpu_references,
+                );
+                usage_chart(
+                    &mut columns[1],
+                    "Node memory usage chart",
+                    usage
+                        .history
+                        .iter()
+                        .map(|sample| (sample.timestamp, sample.memory_bytes))
+                        .collect(),
                     format_memory,
                     if usage.error.is_some() {
                         gray::_400
@@ -1692,8 +1800,15 @@ fn show_container_usage(
             usage_chart(
                 &mut columns[0],
                 &format!("{name} CPU usage chart"),
-                history,
-                |sample| sample.containers.get(name).map(|usage| usage.cpu_nanocores),
+                history
+                    .iter()
+                    .filter_map(|sample| {
+                        sample
+                            .containers
+                            .get(name)
+                            .map(|usage| (sample.timestamp, usage.cpu_nanocores))
+                    })
+                    .collect(),
                 format_cpu,
                 if error.is_some() {
                     gray::_400
@@ -1706,8 +1821,15 @@ fn show_container_usage(
             usage_chart(
                 &mut columns[1],
                 &format!("{name} memory usage chart"),
-                history,
-                |sample| sample.containers.get(name).map(|usage| usage.memory_bytes),
+                history
+                    .iter()
+                    .filter_map(|sample| {
+                        sample
+                            .containers
+                            .get(name)
+                            .map(|usage| (sample.timestamp, usage.memory_bytes))
+                    })
+                    .collect(),
                 format_memory,
                 if error.is_some() {
                     gray::_400
@@ -1725,17 +1847,12 @@ fn show_container_usage(
 fn usage_chart(
     ui: &mut egui::Ui,
     accessibility_label: &str,
-    history: &[PodUsage],
-    value: impl Fn(&PodUsage) -> Option<i64>,
+    samples: Vec<(time::OffsetDateTime, i64)>,
     format: impl Fn(i64) -> String,
     color: egui::Color32,
     metrics_unavailable: bool,
     references: &UsageReferences,
 ) {
-    let samples = history
-        .iter()
-        .filter_map(|sample| value(sample).map(|value| (sample.timestamp, value)))
-        .collect::<Vec<_>>();
     let max_value = samples
         .iter()
         .map(|(_, value)| *value)
@@ -1762,7 +1879,7 @@ fn usage_chart(
         format_history_window(),
         format(max_value),
         if reference_summary.is_empty() {
-            "no request or limit configured"
+            "no usage reference configured"
         } else {
             &reference_summary
         }
@@ -2812,6 +2929,39 @@ fn show_metrics_api_unavailable(
                 ),
             ]),
         ],
+    );
+}
+
+fn show_node_metrics_api_unavailable(ui: &mut egui::Ui, allocatable: PodResourceThresholds) {
+    ui.label(
+        egui::RichText::new("Metrics API unavailable")
+            .font(typography::body())
+            .color(gray::_700),
+    );
+    ui.label(
+        egui::RichText::new("Live CPU and memory usage requires the Kubernetes Metrics API.")
+            .font(typography::metadata())
+            .color(gray::_500),
+    );
+    ui.add_space(8.0);
+    InspectorDetails::show_properties(
+        ui,
+        &[DetailRow::new([
+            DetailCell::new(
+                "CPU allocatable",
+                allocatable
+                    .cpu_nanocores
+                    .map(format_cpu)
+                    .unwrap_or_else(|| "Not reported".into()),
+            ),
+            DetailCell::new(
+                "Memory allocatable",
+                allocatable
+                    .memory_bytes
+                    .map(format_memory)
+                    .unwrap_or_else(|| "Not reported".into()),
+            ),
+        ])],
     );
 }
 
