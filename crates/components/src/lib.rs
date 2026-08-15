@@ -59,8 +59,8 @@ pub use confirmation_dialog::{
 };
 pub use error_dialog::{ErrorDialog, ErrorDialogAction};
 pub use inspector_details::{
-    DetailCell, DetailColumn, DetailRow, DetailTableRow, DetailTone, DetailValue, InspectorDetails,
-    InspectorDetailsResponse,
+    DetailCell, DetailColumn, DetailRow, DetailTableCell, DetailTableRow, DetailTone, DetailValue,
+    InspectorDetails, InspectorDetailsResponse,
 };
 pub use interaction::PointingHand;
 pub use more_button::{MoreButton, MoreMenu};

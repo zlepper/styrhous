@@ -53,7 +53,7 @@ impl From<String> for DetailValue<'static> {
 pub struct DetailCell<'a> {
     pub label: Cow<'a, str>,
     pub value: DetailValue<'a>,
-    pub copyable: bool,
+    copy_text: Option<Cow<'a, str>>,
 }
 
 impl<'a> DetailCell<'a> {
@@ -61,7 +61,7 @@ impl<'a> DetailCell<'a> {
         Self {
             label: label.into(),
             value: value.into(),
-            copyable: false,
+            copy_text: None,
         }
     }
 
@@ -69,7 +69,7 @@ impl<'a> DetailCell<'a> {
         Self {
             label: label.into(),
             value: DetailValue::Unavailable,
-            copyable: false,
+            copy_text: None,
         }
     }
 
@@ -84,7 +84,7 @@ impl<'a> DetailCell<'a> {
                 text: text.into(),
                 tone,
             },
-            copyable: false,
+            copy_text: None,
         }
     }
 
@@ -95,16 +95,22 @@ impl<'a> DetailCell<'a> {
                 text: text.into(),
                 action,
             },
-            copyable: false,
+            copy_text: None,
         }
     }
 
     pub fn copyable(mut self) -> Self {
-        assert!(
-            matches!(self.value, DetailValue::Text(_)),
-            "only text property values can be copyable"
-        );
-        self.copyable = true;
+        let DetailValue::Text(text) = &self.value else {
+            panic!("only text property values can be copyable");
+        };
+        self.copy_text = Some(text.clone());
+        self
+    }
+
+    /// Copy a value that is more useful than the rendered text, for example
+    /// a label rendered as `key` / `value` but copied as `key=value`.
+    pub fn copyable_as(mut self, text: impl Into<Cow<'a, str>>) -> Self {
+        self.copy_text = Some(text.into());
         self
     }
 }
@@ -156,14 +162,60 @@ impl<'a> DetailColumn<'a> {
 
 #[derive(Clone, Debug)]
 pub struct DetailTableRow<'a> {
-    pub cells: Vec<DetailValue<'a>>,
+    pub cells: Vec<DetailTableCell<'a>>,
 }
 
 impl<'a> DetailTableRow<'a> {
-    pub fn new(cells: impl IntoIterator<Item = DetailValue<'a>>) -> Self {
+    pub fn new(cells: impl IntoIterator<Item = impl Into<DetailTableCell<'a>>>) -> Self {
         Self {
-            cells: cells.into_iter().collect(),
+            cells: cells.into_iter().map(Into::into).collect(),
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct DetailTableCell<'a> {
+    pub value: DetailValue<'a>,
+    copy_text: Option<Cow<'a, str>>,
+}
+
+impl<'a> DetailTableCell<'a> {
+    pub fn new(value: impl Into<DetailValue<'a>>) -> Self {
+        Self {
+            value: value.into(),
+            copy_text: None,
+        }
+    }
+
+    pub fn copyable(mut self) -> Self {
+        let DetailValue::Text(text) = &self.value else {
+            panic!("only text table values can be copyable");
+        };
+        self.copy_text = Some(text.clone());
+        self
+    }
+
+    pub fn copyable_as(mut self, text: impl Into<Cow<'a, str>>) -> Self {
+        self.copy_text = Some(text.into());
+        self
+    }
+}
+
+impl<'a> From<DetailValue<'a>> for DetailTableCell<'a> {
+    fn from(value: DetailValue<'a>) -> Self {
+        Self::new(value)
+    }
+}
+
+impl<'a> From<&'a str> for DetailTableCell<'a> {
+    fn from(value: &'a str) -> Self {
+        Self::new(value)
+    }
+}
+
+impl From<String> for DetailTableCell<'static> {
+    fn from(value: String) -> Self {
+        Self::new(value)
     }
 }
 
@@ -248,8 +300,15 @@ impl InspectorDetails {
         for row in rows {
             ui.add_space(spacing::SM);
             show_table_row(ui, columns, |ui, index| {
-                if let Some(value) = row.cells.get(index) {
-                    show_value(ui, value, None, None, &mut response);
+                if let Some(cell) = row.cells.get(index) {
+                    let label = columns[index].label.as_ref();
+                    show_value(
+                        ui,
+                        &cell.value,
+                        cell.copy_text.as_deref().map(|text| (label, text)),
+                        Some(label),
+                        &mut response,
+                    );
                 }
             });
             ui.add_space(spacing::SM);
@@ -335,7 +394,9 @@ fn show_property_cell(ui: &mut Ui, cell: &DetailCell<'_>, response: &mut Inspect
     show_value(
         ui,
         &cell.value,
-        cell.copyable.then_some(cell.label.as_ref()),
+        cell.copy_text
+            .as_deref()
+            .map(|text| (cell.label.as_ref(), text)),
         Some(cell.label.as_ref()),
         response,
     );
@@ -344,12 +405,12 @@ fn show_property_cell(ui: &mut Ui, cell: &DetailCell<'_>, response: &mut Inspect
 fn show_value(
     ui: &mut Ui,
     value: &DetailValue<'_>,
-    copy_label: Option<&str>,
+    copy: Option<(&str, &str)>,
     field_label: Option<&str>,
     response: &mut InspectorDetailsResponse,
 ) {
     match value {
-        DetailValue::Text(text) => show_text_value(ui, text, gray::_900, copy_label, response),
+        DetailValue::Text(text) => show_text_value(ui, text, gray::_900, copy, response),
         DetailValue::Unavailable => {
             let unavailable = ui.label(
                 RichText::new("Unavailable")
@@ -418,10 +479,10 @@ fn show_text_value(
     ui: &mut Ui,
     text: &str,
     color: egui::Color32,
-    copy_label: Option<&str>,
+    copy: Option<(&str, &str)>,
     response: &mut InspectorDetailsResponse,
 ) {
-    if let Some(label) = copy_label {
+    if let Some((label, copy_text)) = copy {
         let metadata_line_height = ui.fonts_mut(|fonts| fonts.row_height(&typography::metadata()));
         ui.horizontal_top(|ui| {
             let text_layout = ui.allocate_ui_with_layout(
@@ -437,8 +498,7 @@ fn show_text_value(
                                 .font(typography::metadata())
                                 .color(color),
                         )
-                        .wrap()
-                        .sense(egui::Sense::click()),
+                        .wrap(),
                     )
                 },
             );
@@ -449,7 +509,13 @@ fn show_text_value(
                 ),
                 Vec2::splat(COPY_ICON_SIZE),
             );
-            let copy_action = text_layout.inner.with_pointing_hand();
+            let copy_action = ui
+                .interact(
+                    icon_rect,
+                    ui.id().with(("copy", label, copy_text)),
+                    egui::Sense::click(),
+                )
+                .with_pointing_hand();
             copy_action.widget_info(|| {
                 WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), format!("Copy {label}"))
             });
@@ -460,8 +526,8 @@ fn show_text_value(
                     .paint_at(ui, icon_rect);
             }
             if copy_action.clicked() {
-                ui.ctx().copy_text(text.to_owned());
-                response.copied.push(text.to_owned());
+                ui.ctx().copy_text(copy_text.to_owned());
+                response.copied.push(copy_text.to_owned());
             }
         });
     } else {

@@ -1996,6 +1996,7 @@ fn sync_resource_data_editor(
                 .collect(),
         ),
         ResourceDetailPayload::Generic
+        | ResourceDetailPayload::Diagnostic(_)
         | ResourceDetailPayload::Pod(_)
         | ResourceDetailPayload::Node(_) => None,
     };
