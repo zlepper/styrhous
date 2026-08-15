@@ -9,13 +9,14 @@
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-output_dir="$repo_root/target/visual-diffs"
-oracle="$repo_root/crates/app/integration_resource_table_oracle.png"
-snapshot="$repo_root/crates/app/tests/snapshots/oracle_resource_table_injected.png"
-amplified_difference="$output_dir/integration-resource-table-difference-autolevel.png"
+oracle=${1:-"$repo_root/crates/app/integration_resource_table_oracle.png"}
+snapshot=${2:-"$repo_root/crates/app/tests/snapshots/oracle_resource_table_injected.png"}
+output_dir=${3:-"$repo_root/target/visual-diffs"}
+oracle_name=$(basename "$oracle" .png)
+amplified_difference="$output_dir/${oracle_name}-difference-autolevel.png"
 report="$output_dir/codex-visual-review.md"
 
-"$repo_root/scripts/compare-oracle-snapshot.sh"
+"$repo_root/scripts/compare-oracle-snapshot.sh" "$oracle" "$snapshot" "$output_dir"
 
 if ! command -v codex >/dev/null; then
     echo "Codex CLI is required for the visual review." >&2

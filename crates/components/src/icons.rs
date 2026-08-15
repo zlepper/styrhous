@@ -169,6 +169,11 @@ pub fn settings_icon() -> Image<'static> {
     Image::new(include_image!("icons/settings.svg"))
 }
 
+/// Returns the Heroicons document-duplicate image used for copy actions.
+pub fn document_duplicate_icon() -> Image<'static> {
+    Image::new(include_image!("icons/document-duplicate.svg"))
+}
+
 /// Render a trash (delete) icon (non-interactive)
 ///
 /// For a clickable button version, use `trash_button()` instead.
@@ -210,16 +215,13 @@ pub fn pencil(ui: &mut Ui, size: f32, color: Color32) -> Response {
 /// * `color` - Icon color (applied as tint)
 /// * `label` - Accessibility label for the button (e.g., "Delete my-resource")
 pub fn trash_button(ui: &mut Ui, size: f32, color: Color32, label: &str) -> Response {
-    let image = Image::new(include_image!("icons/trash.svg"))
-        .fit_to_exact_size(Vec2::splat(size))
-        .tint(color);
-    let response = ui
-        .add(egui::Button::image(image).frame(false))
-        .with_pointing_hand();
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label)
-    });
-    response
+    icon_button(
+        ui,
+        Image::new(include_image!("icons/trash.svg")),
+        size,
+        color,
+        label,
+    )
 }
 
 /// Render a clickable pencil (edit) icon button using native egui Button
@@ -233,28 +235,43 @@ pub fn trash_button(ui: &mut Ui, size: f32, color: Color32, label: &str) -> Resp
 /// * `color` - Icon color (applied as tint)
 /// * `label` - Accessibility label for the button (e.g., "Edit my-resource")
 pub fn pencil_button(ui: &mut Ui, size: f32, color: Color32, label: &str) -> Response {
-    let image = Image::new(include_image!("icons/pencil.svg"))
-        .fit_to_exact_size(Vec2::splat(size))
-        .tint(color);
-    let response = ui
-        .add(egui::Button::image(image).frame(false))
-        .with_pointing_hand();
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label)
-    });
-    response
+    icon_button(
+        ui,
+        Image::new(include_image!("icons/pencil.svg")),
+        size,
+        color,
+        label,
+    )
 }
 
 /// Render a clickable eye icon button using native egui Button.
 ///
 /// The label is exposed to assistive technologies while the button remains icon-only.
 pub fn eye_button(ui: &mut Ui, size: f32, color: Color32, label: &str) -> Response {
-    let image = Image::new(include_image!("icons/eye.svg"))
-        .fit_to_exact_size(Vec2::splat(size))
-        .tint(color);
+    icon_button(
+        ui,
+        Image::new(include_image!("icons/eye.svg")),
+        size,
+        color,
+        label,
+    )
+}
+
+fn icon_button(
+    ui: &mut Ui,
+    image: Image<'static>,
+    size: f32,
+    color: Color32,
+    label: &str,
+) -> Response {
+    let image = image.fit_to_exact_size(Vec2::splat(size)).tint(color);
     let response = ui
         .add(egui::Button::image(image).frame(false))
         .with_pointing_hand();
+    decorate_icon_button(ui, response, label)
+}
+
+fn decorate_icon_button(ui: &Ui, response: Response, label: &str) -> Response {
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label)
     });

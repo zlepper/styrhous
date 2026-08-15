@@ -37,8 +37,9 @@ metric() {
     magick compare -metric "$1" "$oracle" "$snapshot" null: 2>&1 || true
 }
 
-difference="$output_dir/integration-resource-table-difference.png"
-amplified_difference="$output_dir/integration-resource-table-difference-autolevel.png"
+oracle_name=$(basename "$oracle" .png)
+difference="$output_dir/${oracle_name}-difference.png"
+amplified_difference="$output_dir/${oracle_name}-difference-autolevel.png"
 magick "$oracle" "$snapshot" -compose difference -composite -colorspace gray "$difference"
 magick "$difference" -auto-level "$amplified_difference"
 
@@ -77,18 +78,27 @@ echo "RMSE:     $(metric RMSE)"
 echo "pixels above 2%: $(changed_pixels 2%)"
 echo "pixels above 5%: $(changed_pixels 5%)"
 echo "regions (MAE):"
-region_mae rail 0 0 68 1024
-region_mae navigation 68 0 292 1024
-region_mae toolbar 360 0 1176 102
-region_mae table-header 360 102 1176 72
-region_mae table-body 360 174 1176 670
-echo "surface samples:"
-sample rail 34 300
-sample navigation-left 300 500
-sample navigation-right 350 500
-sample navigation-bottom 340 900
-sample toolbar 700 20
-sample table-header 500 130
-sample table-body 800 900
+if [[ "$oracle" == *"inspector_details"* ]]; then
+    region_mae properties 24 96 694 800
+    region_mae detail-tables 744 96 744 800
+    echo "surface samples:"
+    sample canvas 20 20
+    sample properties 100 200
+    sample detail-tables 900 200
+else
+    region_mae rail 0 0 68 1024
+    region_mae navigation 68 0 292 1024
+    region_mae toolbar 360 0 1176 102
+    region_mae table-header 360 102 1176 72
+    region_mae table-body 360 174 1176 670
+    echo "surface samples:"
+    sample rail 34 300
+    sample navigation-left 300 500
+    sample navigation-right 350 500
+    sample navigation-bottom 340 900
+    sample toolbar 700 20
+    sample table-header 500 130
+    sample table-body 800 900
+fi
 echo "difference: $difference"
 echo "amplified difference: $amplified_difference"

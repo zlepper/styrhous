@@ -1,0 +1,35 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Label value="Spec" rect=(x=20.0 y=72.0 width=38.5 height=19.0 center_x=39.3 center_y=81.5)
+              TextRun value="Spec" rect=(x=20.0 y=72.0 width=38.5 height=19.0 center_x=39.3 center_y=81.5)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Scheduling" rect=(x=21.0 y=94.5 width=63.3 height=15.0 center_x=52.7 center_y=102.0)
+                  TextRun value="Scheduling" rect=(x=21.0 y=94.5 width=63.3 height=15.0 center_x=52.7 center_y=102.0)
+                GenericContainer rect=<none>
+                  Label value="Schedulable" rect=(x=41.0 y=112.5 width=70.0 height=15.0 center_x=76.0 center_y=120.0)
+                    TextRun value="Schedulable" rect=(x=41.0 y=112.5 width=70.0 height=15.0 center_x=76.0 center_y=120.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Provider ID" rect=(x=21.0 y=138.5 width=62.7 height=15.0 center_x=52.4 center_y=146.0)
+                  TextRun value="Provider ID" rect=(x=21.0 y=138.5 width=62.7 height=15.0 center_x=52.4 center_y=146.0)
+                Label value="kind://docker/kind/kind-control-plane" rect=(x=21.0 y=156.5 width=213.0 height=15.0 center_x=127.5 center_y=164.0)
+                  TextRun value="kind://docker/kind/kind-control-plane" rect=(x=21.0 y=156.5 width=213.0 height=15.0 center_x=127.5 center_y=164.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Pod CIDRs" rect=(x=21.0 y=182.5 width=60.2 height=15.0 center_x=51.1 center_y=190.0)
+                  TextRun value="Pod CIDRs" rect=(x=21.0 y=182.5 width=60.2 height=15.0 center_x=51.1 center_y=190.0)
+                Label value="10.244.0.0/24, fd00:10:244::/56" rect=(x=21.0 y=200.5 width=179.0 height=15.0 center_x=110.5 center_y=208.0)
+                  TextRun value="10.244.0.0/24, fd00:10:244::/56" rect=(x=21.0 y=200.5 width=179.0 height=15.0 center_x=110.5 center_y=208.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Taints" rect=(x=21.0 y=226.5 width=33.8 height=15.0 center_x=37.9 center_y=234.0)
+                  TextRun value="Taints" rect=(x=21.0 y=226.5 width=33.8 height=15.0 center_x=37.9 center_y=234.0)
+                Label value="None" rect=(x=21.0 y=244.5 width=30.3 height=15.0 center_x=36.2 center_y=252.0)
+                  TextRun value="None" rect=(x=21.0 y=244.5 width=30.3 height=15.0 center_x=36.2 center_y=252.0)

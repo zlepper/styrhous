@@ -1524,6 +1524,7 @@ mod tests {
     use crate::resource_schema::{
         CompletionContext, CompletionContextKind, CompletionSuggestion, ResourceSchema,
     };
+    use crate::worker::ResourceApiError;
     use components::test_support::{HarnessSnapshotOptions, UiHarnessSnapshot};
     use egui_kittest::{Harness, kittest::Queryable};
     use k8s_openapi::serde_json::json;
@@ -1665,11 +1666,62 @@ mod tests {
         );
         // Keep this interaction snapshot focused on find results rather than
         // allowing the asynchronous server-validation footer to race it.
-        harness.state_mut().editor.validation_revision = 1;
-        harness.state_mut().editor.validation_due = None;
+        let editor = &mut harness.state_mut().editor;
+        editor.validation_revision = editor.validation_revision.saturating_add(1);
+        editor.validation_due = None;
+        editor.server_validation = ValidationState::Idle;
         harness.ui_harness(
             "yaml_editor/yaml_editor_search_interaction_snapshot/searches_and_highlights_matches",
         );
+    }
+
+    #[test]
+    fn stale_yaml_validation_results_do_not_overwrite_a_newer_revision() {
+        let mut editor = editor("kind: ConfigMap");
+        editor.validation_revision = 8;
+        editor.server_validation = ValidationState::Idle;
+        let editor_id = editor.id;
+        let cluster_key = editor.cluster_key;
+        let api_resource = editor.api_resource.clone();
+        let namespace = editor.namespace.clone();
+        let resource_name = editor.resource_name.clone();
+        let mut ui = UiState::default();
+        ui.yaml_editors.insert(editor_id, editor);
+        let mut commands = Vec::new();
+
+        ResourceYamlValidated {
+            editor_id,
+            revision: 7,
+            cluster_key,
+            api_resource: api_resource.clone(),
+            namespace: namespace.clone(),
+            resource_name: resource_name.clone(),
+        }
+        .apply(&mut ui, &mut commands);
+        ResourceYamlValidationFailed {
+            editor_id,
+            revision: 7,
+            cluster_key,
+            api_resource,
+            namespace,
+            resource_name,
+            error: ResourceApiError {
+                message: "stale validation error".into(),
+                causes: Vec::new(),
+            },
+        }
+        .apply(&mut ui, &mut commands);
+        ResourceYamlValidationCommandFailed {
+            editor_id,
+            revision: 7,
+            error: "stale command error".into(),
+        }
+        .apply(&mut ui, &mut commands);
+
+        let editor = ui.yaml_editors.get(&editor_id).expect("editor is retained");
+        assert_eq!(editor.server_validation, ValidationState::Idle);
+        assert!(editor.diagnostics.is_empty());
+        assert!(editor.retained_diagnostics.is_empty());
     }
 
     #[test]

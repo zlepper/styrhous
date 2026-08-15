@@ -2765,6 +2765,9 @@ fn node_inspector_shows_its_spec() {
     harness.get_by_label("Scheduling disabled");
     harness.get_by_label("10.244.0.0/24");
     harness.get_by_label("node-role.kubernetes.io/control-plane:NoSchedule");
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "resource_inspectors/node_inspector_shows_its_spec/populated_node_spec",
+    ));
 }
 
 #[test]
@@ -2848,7 +2851,7 @@ fn node_inspector_lists_cross_namespace_pods_in_the_shared_pod_table() {
         nodes.clone(),
         "kind-control-plane".into(),
         None,
-        "node-uid".into(),
+        "d1f2c3a4-b5e6-47f8-9a0b-1c2d3e4f5a6b".into(),
         &mut commands,
     );
     harness.state_mut().worker.results.extend([
@@ -2859,7 +2862,7 @@ fn node_inspector_lists_cross_namespace_pods_in_the_shared_pod_table() {
                 api_resource: nodes,
                 name: "kind-control-plane".into(),
                 namespace: None,
-                uid: "node-uid".into(),
+                uid: "d1f2c3a4-b5e6-47f8-9a0b-1c2d3e4f5a6b".into(),
                 resource_version: "1".into(),
                 is_deleting: false,
                 finalizers: Vec::new(),
