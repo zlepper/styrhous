@@ -30,8 +30,9 @@ Window state=[focused] rect=<none>
                   TextRun value="Provider ID" rect=(x=21.0 y=165.0 width=62.7 height=15.0 center_x=52.4 center_y=172.5)
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Button name="Copy Provider ID" value="kind://docker/kind/kind-control-plane" rect=(x=21.0 y=183.0 width=213.0 height=15.0 center_x=127.5 center_y=190.5)
+                    Label value="kind://docker/kind/kind-control-plane" rect=(x=21.0 y=183.0 width=213.0 height=15.0 center_x=127.5 center_y=190.5)
                       TextRun value="kind://docker/kind/kind-control-plane" rect=(x=21.0 y=183.0 width=213.0 height=15.0 center_x=127.5 center_y=190.5)
+                  Button name="Copy Provider ID" rect=(x=242.0 y=183.3 width=14.0 height=14.0 center_x=249.0 center_y=190.3)
             GenericContainer rect=<none>
               GenericContainer rect=<none>
                 Label value="Pod CIDRs" rect=(x=21.0 y=209.0 width=60.2 height=15.0 center_x=51.1 center_y=216.5)
@@ -45,8 +46,9 @@ Window state=[focused] rect=<none>
                   TextRun value="UID" rect=(x=21.0 y=290.0 width=20.8 height=15.0 center_x=31.4 center_y=297.5)
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Button name="Copy UID" value="d1f2c3a4-b5e6-47f8-9a0b-1c2d3e4f5a6b" rect=(x=21.0 y=308.0 width=240.9 height=15.0 center_x=141.4 center_y=315.5)
+                    Label value="d1f2c3a4-b5e6-47f8-9a0b-1c2d3e4f5a6b" rect=(x=21.0 y=308.0 width=240.9 height=15.0 center_x=141.4 center_y=315.5)
                       TextRun value="d1f2c3a4-b5e6-47f8-9a0b-1c2d3e4f5a6b" rect=(x=21.0 y=308.0 width=240.9 height=15.0 center_x=141.4 center_y=315.5)
+                  Button name="Copy UID" rect=(x=269.9 y=308.3 width=14.0 height=14.0 center_x=276.9 center_y=315.3)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>

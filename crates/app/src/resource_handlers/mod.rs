@@ -3,6 +3,7 @@ pub(crate) mod config_map;
 pub(crate) mod cron_job;
 pub(crate) mod daemon_set;
 pub(crate) mod deployment;
+pub(crate) mod diagnostics;
 pub(crate) mod job;
 pub(crate) mod metadata;
 pub(crate) mod node;
@@ -154,6 +155,9 @@ pub(crate) fn detail_payload(
         .iter()
         .find(|handler| (handler.matches)(api_resource))
         .and_then(|handler| (handler.detail_payload)(object))
+        .or_else(|| {
+            diagnostics::detail_payload(api_resource, object).map(ResourceDetailPayload::Diagnostic)
+        })
         .unwrap_or(ResourceDetailPayload::Generic)
 }
 

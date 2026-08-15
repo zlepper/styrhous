@@ -72,10 +72,30 @@ pub(crate) enum ManagedResourceAssociation {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum ResourceDetailPayload {
     Generic,
+    Diagnostic(DiagnosticDetail),
     Pod(Box<PodDetail>),
     Node(NodeDetail),
     ConfigMap(ConfigMapDetail),
     Secret(SecretDetail),
+}
+
+/// Type-specific, display-ready diagnostic values for curated resources that do
+/// not need a bespoke interactive inspector.
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
+pub(crate) struct DiagnosticDetail {
+    pub(crate) sections: Vec<DiagnosticSection>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct DiagnosticSection {
+    pub(crate) title: String,
+    pub(crate) fields: Vec<DiagnosticField>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct DiagnosticField {
+    pub(crate) label: String,
+    pub(crate) value: String,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Default)]

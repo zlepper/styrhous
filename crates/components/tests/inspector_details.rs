@@ -1,8 +1,8 @@
 use components::colors::WHITE;
 use components::test_support::{UiHarnessSnapshot, setup_egui};
 use components::{
-    DetailCell, DetailColumn, DetailRow, DetailTableRow, DetailTone, DetailValue, InspectorDetails,
-    WorkspaceCard,
+    DetailCell, DetailColumn, DetailRow, DetailTableCell, DetailTableRow, DetailTone, DetailValue,
+    InspectorDetails, WorkspaceCard,
 };
 use egui_kittest::{Harness, kittest::Queryable};
 
@@ -253,6 +253,35 @@ fn inspector_details_copy_button_emits_the_full_uid() {
             .commands
             .iter()
             .any(|command| matches!(command, egui::OutputCommand::CopyText(text) if text == UID))
+    );
+}
+
+#[test]
+fn inspector_details_table_copy_button_emits_the_full_value() {
+    let mut harness = Harness::new_ui_state(
+        |ui, copied| {
+            copied.extend(
+                InspectorDetails::show_table(
+                    ui,
+                    &[DetailColumn::new("Message")],
+                    &[DetailTableRow::new([DetailTableCell::new(
+                        DetailValue::Text("probe failed: connection refused".into()),
+                    )
+                    .copyable()])],
+                )
+                .copied,
+            );
+        },
+        Vec::<String>::new(),
+    );
+
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Copy Message")
+        .click();
+    harness.step();
+    assert_eq!(
+        harness.state(),
+        &["probe failed: connection refused".to_owned()]
     );
 }
 

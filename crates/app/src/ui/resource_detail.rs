@@ -16,7 +16,7 @@ use crate::pod_metrics::{
 };
 use crate::resource_catalog::ResourceNavigation;
 use crate::resource_detail::{
-    ConfigMapDetail, ManagedResource, NodeDetail, PodContainerDetail, PodDetail,
+    ConfigMapDetail, DiagnosticDetail, ManagedResource, NodeDetail, PodContainerDetail, PodDetail,
     PodResourceThresholds, ResourceDetail, ResourceDetailPayload, ResourceEvent, SecretDetail,
 };
 use crate::resource_handlers::table_definition;
@@ -32,9 +32,9 @@ use crate::worker::{
 use components::colors::{WHITE, gray, indigo};
 use components::design::{radius, spacing, status, typography};
 use components::{
-    ButtonSize, DetailCell, DetailColumn, DetailRow, DetailTableRow, DetailTone, DetailValue,
-    InspectorDetails, MoreButton, PointingHand, TableRowBuilder, TailwindButton, TailwindTable,
-    TailwindTextArea, WorkspaceCard,
+    ButtonSize, DetailCell, DetailColumn, DetailRow, DetailTableCell, DetailTableRow, DetailTone,
+    DetailValue, InspectorDetails, MoreButton, PointingHand, TableRowBuilder, TailwindButton,
+    TailwindTable, TailwindTextArea, WorkspaceCard,
 };
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -965,6 +965,8 @@ fn show_detail(
     pod_usage_error: Option<&str>,
     pending_action: &mut Option<ResourceAction>,
 ) {
+    show_generic_summary(ui, detail);
+    ui.add_space(13.0);
     if let ResourceDetailPayload::Pod(pod) = &detail.payload {
         show_pod_summary(ui, detail, pod, pending_action);
         ui.add_space(13.0);
@@ -977,11 +979,9 @@ fn show_detail(
             pod_usage_error,
         );
     } else if let ResourceDetailPayload::Node(node) = &detail.payload {
-        show_generic_summary(ui, detail);
-        ui.add_space(13.0);
         show_node_detail(ui, node);
-    } else {
-        show_generic_summary(ui, detail);
+    } else if let ResourceDetailPayload::Diagnostic(diagnostic) = &detail.payload {
+        show_diagnostic_detail(ui, diagnostic);
     }
 }
 
@@ -1013,9 +1013,9 @@ fn show_node_detail(ui: &mut egui::Ui, node: &NodeDetail) {
                     DetailTone::Success
                 },
             ),
-            DetailCell::new("Provider ID", node.provider_id.as_deref().unwrap_or("-")),
-            DetailCell::new("Pod CIDRs", pod_cidrs.as_str()),
-            DetailCell::new("Taints", taints.as_str()),
+            DetailCell::new("Provider ID", node.provider_id.as_deref().unwrap_or("-")).copyable(),
+            DetailCell::new("Pod CIDRs", pod_cidrs.as_str()).copyable(),
+            DetailCell::new("Taints", taints.as_str()).copyable(),
         ])],
     );
 }
@@ -1026,16 +1026,37 @@ fn show_generic_summary(ui: &mut egui::Ui, detail: &ResourceDetail) {
             ui,
             &[
                 DetailRow::new([
-                    DetailCell::new(
-                        "Namespace",
-                        detail.namespace.as_deref().unwrap_or("Cluster-wide"),
+                    DetailCell::new("Kind", detail.api_resource.kind.as_str()).copyable(),
+                    DetailCell::new("Name", detail.name.as_str()).copyable(),
+                    detail.namespace.as_deref().map_or_else(
+                        || DetailCell::new("Namespace", "Cluster-wide"),
+                        |namespace| DetailCell::new("Namespace", namespace).copyable(),
                     ),
+                ]),
+                DetailRow::new([
+                    DetailCell::new("UID", detail.uid.as_str()).copyable(),
+                    DetailCell::new("Resource version", detail.resource_version.as_str())
+                        .copyable(),
                     DetailCell::new("Age", format_age(detail.creation_timestamp)),
                 ]),
-                DetailRow::new([DetailCell::new("UID", detail.uid.as_str()).copyable()]),
             ],
         );
     });
+}
+
+fn show_diagnostic_detail(ui: &mut egui::Ui, diagnostic: &DiagnosticDetail) {
+    for (index, section) in diagnostic.sections.iter().enumerate() {
+        InspectorDetails::show_titled_properties(
+            ui,
+            section.title.as_str(),
+            &[DetailRow::new(section.fields.iter().map(|field| {
+                DetailCell::new(field.label.as_str(), field.value.as_str()).copyable()
+            }))],
+        );
+        if index + 1 < diagnostic.sections.len() {
+            ui.add_space(CARD_GAP);
+        }
+    }
 }
 
 fn show_resource_data(
@@ -1055,6 +1076,7 @@ fn show_resource_data(
             show_secret_data(ui, secret, editor, pending_action)
         }
         ResourceDetailPayload::Generic
+        | ResourceDetailPayload::Diagnostic(_)
         | ResourceDetailPayload::Pod(_)
         | ResourceDetailPayload::Node(_) => {}
     }
@@ -1085,11 +1107,24 @@ fn show_config_map_data(
         });
     }
     for key in config_map.data.keys() {
+        let value = editor
+            .draft_values
+            .get(key)
+            .expect("typed data detail and editor keys remain in sync")
+            .clone();
         data_entry(
             ui,
             key,
             None,
-            |_| {},
+            |ui| {
+                if TailwindButton::secondary(format!("Copy {key}"))
+                    .size(ButtonSize::Sm)
+                    .show(ui)
+                    .clicked()
+                {
+                    ui.ctx().copy_text(value);
+                }
+            },
             |ui| data_value_editor(ui, key, editor, config_map.immutable),
         );
     }
@@ -1125,11 +1160,22 @@ fn show_secret_data(
     for (key, value) in &secret.data {
         let revealed = editor.revealed_secret_keys.contains(key);
         let mut visibility_toggled = false;
+        let copy_value = (revealed && value.text.is_some())
+            .then(|| editor.draft_values.get(key).cloned())
+            .flatten();
         data_entry(
             ui,
             key,
             Some(value.byte_len),
             |ui| {
+                if let Some(copy_value) = copy_value.as_ref()
+                    && TailwindButton::secondary(format!("Copy {key}"))
+                        .size(ButtonSize::Sm)
+                        .show(ui)
+                        .clicked()
+                {
+                    ui.ctx().copy_text(copy_value.clone());
+                }
                 if value.text.is_some()
                     && TailwindButton::secondary(if revealed { "Hide" } else { "Reveal" })
                         .size(ButtonSize::Sm)
@@ -1395,8 +1441,8 @@ fn show_pod_summary(
                     node_cell,
                 ]),
                 DetailRow::new([
-                    DetailCell::new("Pod IP", pod.pod_ip.as_deref().unwrap_or("-")),
-                    DetailCell::new("Host IP", pod.host_ip.as_deref().unwrap_or("-")),
+                    DetailCell::new("Pod IP", pod.pod_ip.as_deref().unwrap_or("-")).copyable(),
+                    DetailCell::new("Host IP", pod.host_ip.as_deref().unwrap_or("-")).copyable(),
                     DetailCell::new("QoS class", pod.qos_class.as_deref().unwrap_or("-")),
                 ]),
                 DetailRow::new([
@@ -1456,7 +1502,7 @@ fn show_pod_detail(
                 InspectorDetails::show_properties(
                     ui,
                     &[DetailRow::new([
-                        DetailCell::new("Image", container.image.as_str()),
+                        DetailCell::new("Image", container.image.as_str()).copyable(),
                         DetailCell::new("State", container.state.as_str()),
                     ])],
                 );
@@ -1494,14 +1540,19 @@ fn show_pod_detail(
                 if let Some(reason) = &container.reason {
                     InspectorDetails::show_properties(
                         ui,
-                        &[DetailRow::new([DetailCell::new("Reason", reason.as_str())])],
+                        &[DetailRow::new([
+                            DetailCell::new("Reason", reason.as_str()).copyable()
+                        ])],
                     );
                 }
                 if let Some(message) = &container.message {
-                    ui.label(
-                        egui::RichText::new(message)
-                            .font(typography::metadata())
-                            .color(gray::_500),
+                    InspectorDetails::show_properties(
+                        ui,
+                        &[DetailRow::new([DetailCell::new(
+                            "Message",
+                            message.as_str(),
+                        )
+                        .copyable()])],
                     );
                 }
             },
@@ -2129,6 +2180,7 @@ fn metadata_maps(ui: &mut egui::Ui, detail: &ResourceDetail) {
                 ui,
                 &[DetailRow::new(detail.labels.iter().map(|(key, value)| {
                     DetailCell::new(key.as_str(), value.as_str())
+                        .copyable_as(format!("{key}={value}"))
                 }))],
             );
             ui.add_space(8.0);
@@ -2140,7 +2192,10 @@ fn metadata_maps(ui: &mut egui::Ui, detail: &ResourceDetail) {
             InspectorDetails::show_properties(
                 ui,
                 &[DetailRow::new(detail.annotations.iter().map(
-                    |(key, value)| DetailCell::new(key.as_str(), value.as_str()),
+                    |(key, value)| {
+                        DetailCell::new(key.as_str(), value.as_str())
+                            .copyable_as(format!("{key}={value}"))
+                    },
                 ))],
             );
         },
@@ -2175,18 +2230,25 @@ fn show_events(ui: &mut egui::Ui, events: &[ResourceEvent], error: Option<&str>)
                         .iter()
                         .map(|event| {
                             DetailTableRow::new([
-                                DetailValue::Status {
+                                DetailTableCell::new(DetailValue::Status {
                                     text: event.type_.as_str().into(),
                                     tone: event_tone(&event.type_),
-                                },
-                                DetailValue::Text(event.reason.as_str().into()),
-                                DetailValue::Text(event.message.as_str().into()),
-                                DetailValue::Text(
+                                }),
+                                DetailTableCell::new(DetailValue::Text(
+                                    event.reason.as_str().into(),
+                                ))
+                                .copyable(),
+                                DetailTableCell::new(DetailValue::Text(
+                                    event.message.as_str().into(),
+                                ))
+                                .copyable(),
+                                DetailTableCell::new(DetailValue::Text(
                                     event.source.as_deref().unwrap_or("Kubernetes").into(),
-                                ),
-                                DetailValue::Text(
+                                ))
+                                .copyable(),
+                                DetailTableCell::new(DetailValue::Text(
                                     format!("{} ago", format_age(event.last_timestamp)).into(),
-                                ),
+                                )),
                             ])
                         })
                         .collect::<Vec<_>>();
@@ -2222,13 +2284,21 @@ fn show_additional_sections(
                     .iter()
                     .map(|condition| {
                         DetailTableRow::new([
-                            DetailValue::Text(condition.type_.as_str().into()),
-                            DetailValue::Status {
+                            DetailTableCell::new(DetailValue::Text(
+                                condition.type_.as_str().into(),
+                            )),
+                            DetailTableCell::new(DetailValue::Status {
                                 text: condition.status.as_str().into(),
                                 tone: condition_tone(&condition.status),
-                            },
-                            DetailValue::Text(condition.reason.as_deref().unwrap_or("-").into()),
-                            DetailValue::Text(condition.message.as_deref().unwrap_or("-").into()),
+                            }),
+                            DetailTableCell::new(DetailValue::Text(
+                                condition.reason.as_deref().unwrap_or("-").into(),
+                            ))
+                            .copyable(),
+                            DetailTableCell::new(DetailValue::Text(
+                                condition.message.as_deref().unwrap_or("-").into(),
+                            ))
+                            .copyable(),
                         ])
                     })
                     .collect::<Vec<_>>();
@@ -2252,37 +2322,47 @@ fn show_additional_sections(
         } else {
             for owner in &detail.owners {
                 let label = owner.label();
-                if let Some(action) = resource_owner::navigation_action(
-                    resource_navigation,
-                    owner,
-                    detail.namespace.as_deref(),
-                ) {
-                    let response = ui.add(
-                        egui::Label::new(
+                let copy_value = format!("{}/{} {}", owner.api_version, owner.kind, owner.name);
+                ui.horizontal(|ui| {
+                    if let Some(action) = resource_owner::navigation_action(
+                        resource_navigation,
+                        owner,
+                        detail.namespace.as_deref(),
+                    ) {
+                        let response = ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(&label)
+                                    .font(typography::metadata())
+                                    .color(indigo::_600),
+                            )
+                            .sense(egui::Sense::click()),
+                        );
+                        response.clone().with_pointing_hand().widget_info(|| {
+                            egui::WidgetInfo::labeled(
+                                egui::WidgetType::Button,
+                                response.enabled(),
+                                format!("Open details for {label}"),
+                            )
+                        });
+                        if response.clicked() {
+                            resource_owner::queue_navigation_action(pending_action, action);
+                        }
+                    } else {
+                        ui.label(
                             egui::RichText::new(&label)
                                 .font(typography::metadata())
-                                .color(indigo::_600),
+                                .color(gray::_900),
                         )
-                        .sense(egui::Sense::click()),
-                    );
-                    response.clone().with_pointing_hand().widget_info(|| {
-                        egui::WidgetInfo::labeled(
-                            egui::WidgetType::Button,
-                            response.enabled(),
-                            format!("Open details for {label}"),
-                        )
-                    });
-                    if response.clicked() {
-                        resource_owner::queue_navigation_action(pending_action, action);
+                        .on_hover_text(resource_owner::unavailable_tooltip(owner));
                     }
-                } else {
-                    ui.label(
-                        egui::RichText::new(label)
-                            .font(typography::metadata())
-                            .color(gray::_900),
-                    )
-                    .on_hover_text(resource_owner::unavailable_tooltip(owner));
-                }
+                    if TailwindButton::secondary(format!("Copy owner {label}"))
+                        .size(ButtonSize::Sm)
+                        .show(ui)
+                        .clicked()
+                    {
+                        ui.ctx().copy_text(copy_value);
+                    }
+                });
             }
         }
     });
@@ -2549,14 +2629,25 @@ fn environment_variable_source_cell(
             ui.set_min_width(ui.available_width());
             ui.set_max_width(ui.available_width());
             ui.horizontal_wrapped(|ui| {
-                ui.add(
+                let response = ui.add(
                     egui::Label::new(
-                        egui::RichText::new(source)
+                        egui::RichText::new(&source)
                             .font(typography::metadata())
                             .color(gray::_600),
                     )
-                    .wrap(),
+                    .wrap()
+                    .sense(egui::Sense::click()),
                 );
+                response.widget_info(|| {
+                    egui::WidgetInfo::labeled(
+                        egui::WidgetType::Button,
+                        response.enabled(),
+                        "Copy environment variable source",
+                    )
+                });
+                if response.clicked() {
+                    ui.ctx().copy_text(source);
+                }
             });
         });
 }
@@ -2676,7 +2767,7 @@ fn chip_row(ui: &mut egui::Ui, label: &str, values: &[String]) {
         egui::Layout::left_to_right(egui::Align::TOP).with_main_wrap(true),
         |ui| {
             for value in values {
-                let chip_width = (value.chars().count() as f32 * 6.7 + 10.0).clamp(36.0, 320.0);
+                let chip_width = (value.chars().count() as f32 * 6.7 + 28.0).clamp(54.0, 320.0);
                 ui.allocate_ui_with_layout(
                     egui::vec2(chip_width, 0.0),
                     egui::Layout::top_down(egui::Align::LEFT),
@@ -2688,15 +2779,37 @@ fn chip_row(ui: &mut egui::Ui, label: &str, values: &[String]) {
                             .inner_margin(egui::Margin::symmetric((spacing::SM - 3.0) as i8, 0))
                             .show(ui, |ui| {
                                 ui.set_max_width(chip_width - 10.0);
-                                ui.add(
-                                    egui::Label::new(
-                                        egui::RichText::new(value)
-                                            .monospace()
-                                            .font(typography::monospace())
-                                            .color(gray::_800),
-                                    )
-                                    .wrap(),
-                                );
+                                ui.horizontal_top(|ui| {
+                                    ui.add(
+                                        egui::Label::new(
+                                            egui::RichText::new(value)
+                                                .monospace()
+                                                .font(typography::monospace())
+                                                .color(gray::_800),
+                                        )
+                                        .wrap(),
+                                    );
+                                    let (icon_rect, copy_action) = ui.allocate_exact_size(
+                                        egui::vec2(14.0, 14.0),
+                                        egui::Sense::click(),
+                                    );
+                                    copy_action.widget_info(|| {
+                                        egui::WidgetInfo::labeled(
+                                            egui::WidgetType::Button,
+                                            copy_action.enabled(),
+                                            format!("Copy {label}"),
+                                        )
+                                    });
+                                    if copy_action.hovered() {
+                                        components::icons::document_duplicate_icon()
+                                            .fit_to_exact_size(egui::vec2(14.0, 14.0))
+                                            .tint(gray::_700)
+                                            .paint_at(ui, icon_rect);
+                                    }
+                                    if copy_action.clicked() {
+                                        ui.ctx().copy_text(value.clone());
+                                    }
+                                });
                             });
                     },
                 );
