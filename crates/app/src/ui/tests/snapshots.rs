@@ -3679,11 +3679,7 @@ fn pod_resource_detail_inspector_snapshot() {
         .state_mut()
         .worker
         .results
-        .push_back(Box::new(ResourceDetailPodUsageFailed {
-            cluster_key: 2,
-            history_entry_id: 1,
-            error: "Metrics API unavailable".into(),
-        }) as WorkerResultBox);
+        .push_back(Box::new(PodMetricsApiUnavailable { cluster_key: 2 }) as WorkerResultBox);
     harness.run();
     harness.event(egui::Event::PointerGone);
     harness.run();
@@ -4896,6 +4892,7 @@ fn test_ui_flow() {
                 fixture_api_resource("networking.k8s.io", "Ingress", "ingresses"),
             ],
             scalable_api_resources: Default::default(),
+            pod_metrics_api_available: true,
         }) as WorkerResultBox);
     harness.run();
 

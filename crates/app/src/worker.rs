@@ -328,6 +328,7 @@ pub(crate) struct StartResourceDetailWatch {
     pub(crate) namespace: Option<String>,
     pub(crate) resource_name: String,
     pub(crate) resource_uid: String,
+    pub(crate) pod_metrics_api_available: bool,
 }
 #[derive(Debug)]
 pub(crate) struct StopResourceDetailWatch {
@@ -505,6 +506,7 @@ pub(crate) struct KubernetesApisLoaded {
     pub(crate) cluster_key: i32,
     pub(crate) api_resources: Vec<ApiResource>,
     pub(crate) scalable_api_resources: std::collections::BTreeSet<ApiResource>,
+    pub(crate) pod_metrics_api_available: bool,
 }
 #[derive(Debug)]
 pub(crate) struct KubernetesCustomResourceColumnsLoaded {
@@ -606,6 +608,10 @@ pub(crate) struct PodMetricsWatchFailed {
     pub(crate) cluster_key: i32,
     pub(crate) namespace: String,
     pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct PodMetricsApiUnavailable {
+    pub(crate) cluster_key: i32,
 }
 #[derive(Debug)]
 pub(crate) struct ResourceDetailPodUsageUpdated {
@@ -950,6 +956,7 @@ impl WorkerCommand for StartResourceDetailWatch {
             resource_name: self.resource_name,
             resource_uid: self.resource_uid,
             history_entry_id: self.history_entry_id,
+            pod_metrics_api_available: self.pod_metrics_api_available,
             event_sender: state.results.clone(),
         }));
         state.detail_watches.lock().await.insert(key, handle);
@@ -1868,6 +1875,7 @@ mod tests {
                 namespace: Some("default".to_owned()),
                 resource_name: "missing".to_owned(),
                 resource_uid: "uid".to_owned(),
+                pod_metrics_api_available: true,
             })
             .execute_boxed(&worker_state()),
         );
