@@ -501,7 +501,9 @@ fn decorate_pod_usage_rows(
             continue;
         };
         let metrics = cluster.pod_metrics.get(namespace);
-        if metrics.is_some_and(|metrics| metrics.error.is_some()) {
+        if !cluster.pod_metrics_api_available
+            || metrics.is_some_and(|metrics| metrics.error.is_some())
+        {
             resource
                 .cells
                 .insert(CPU_COLUMN.into(), CellValue::Text("Unavailable".into()));

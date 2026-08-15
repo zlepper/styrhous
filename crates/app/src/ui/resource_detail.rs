@@ -90,6 +90,15 @@ struct BladeResult {
     close: bool,
 }
 
+#[derive(Clone, Copy)]
+struct PodUsageDisplay<'a> {
+    usage: Option<&'a PodUsage>,
+    history: &'a [PodUsage],
+    missing: bool,
+    metrics_api_unavailable: bool,
+    error: Option<&'a str>,
+}
+
 impl GlobalBladeContent for ResourceDetailHistoryEntry {
     fn resource_detail(&self) -> Option<&ResourceDetailHistoryEntry> {
         Some(self)
@@ -148,6 +157,7 @@ impl GlobalBladeContent for ResourceDetailHistoryEntry {
             self.pod_usage.as_ref(),
             &self.pod_usage_history,
             self.pod_usage_missing,
+            self.pod_metrics_api_unavailable,
             self.pod_usage_error.as_deref(),
             if layer.is_foreground {
                 self.data_editor.as_mut()
@@ -354,6 +364,7 @@ fn navigate_resource_detail_in_navigator(
     };
     cluster.next_detail_generation += 1;
     let history_entry_id = cluster.next_detail_generation;
+    let pod_metrics_api_available = cluster.pod_metrics_api_available;
     if cluster.resource_detail_panel.is_none() {
         return;
     }
@@ -373,6 +384,7 @@ fn navigate_resource_detail_in_navigator(
         pod_usage: None,
         pod_usage_history: Vec::new(),
         pod_usage_missing: false,
+        pod_metrics_api_unavailable: !pod_metrics_api_available,
         pod_usage_error: None,
         data_editor: None,
         pending_action: None,
@@ -386,6 +398,7 @@ fn navigate_resource_detail_in_navigator(
             namespace,
             resource_name: name,
             resource_uid: uid,
+            pod_metrics_api_available,
         }));
 }
 
@@ -512,6 +525,7 @@ fn show_resource_detail_blade(
     pod_usage: Option<&PodUsage>,
     pod_usage_history: &[PodUsage],
     pod_usage_missing: bool,
+    pod_metrics_api_unavailable: bool,
     pod_usage_error: Option<&str>,
     data_editor: Option<&mut super::state::ResourceDataEditorState>,
     table_preferences: Option<&mut super::table_preferences::PersistedResourceTablePreferences>,
@@ -527,10 +541,13 @@ fn show_resource_detail_blade(
         show_detail(
             ui,
             detail,
-            pod_usage,
-            pod_usage_history,
-            pod_usage_missing,
-            pod_usage_error,
+            PodUsageDisplay {
+                usage: pod_usage,
+                history: pod_usage_history,
+                missing: pod_usage_missing,
+                metrics_api_unavailable: pod_metrics_api_unavailable,
+                error: pod_usage_error,
+            },
             &mut result.action,
         );
         ui.add_space(16.0);
@@ -959,10 +976,7 @@ fn managed_resource_table_kinds(
 fn show_detail(
     ui: &mut egui::Ui,
     detail: &ResourceDetail,
-    pod_usage: Option<&PodUsage>,
-    pod_usage_history: &[PodUsage],
-    pod_usage_missing: bool,
-    pod_usage_error: Option<&str>,
+    usage: PodUsageDisplay<'_>,
     pending_action: &mut Option<ResourceAction>,
 ) {
     show_generic_summary(ui, detail);
@@ -970,14 +984,7 @@ fn show_detail(
     if let ResourceDetailPayload::Pod(pod) = &detail.payload {
         show_pod_summary(ui, detail, pod, pending_action);
         ui.add_space(13.0);
-        show_pod_detail(
-            ui,
-            pod,
-            pod_usage,
-            pod_usage_history,
-            pod_usage_missing,
-            pod_usage_error,
-        );
+        show_pod_detail(ui, pod, usage);
     } else if let ResourceDetailPayload::Node(node) = &detail.payload {
         show_node_detail(ui, node);
     } else if let ResourceDetailPayload::Diagnostic(diagnostic) = &detail.payload {
@@ -1465,27 +1472,12 @@ fn show_pod_summary(
     });
 }
 
-fn show_pod_detail(
-    ui: &mut egui::Ui,
-    pod: &PodDetail,
-    usage: Option<&PodUsage>,
-    usage_history: &[PodUsage],
-    usage_missing: bool,
-    usage_error: Option<&str>,
-) {
+fn show_pod_detail(ui: &mut egui::Ui, pod: &PodDetail, usage: PodUsageDisplay<'_>) {
     let pod_requests =
         total_resource_thresholds(&pod.containers, |container| container.resource_requests);
     let pod_limits =
         total_resource_thresholds(&pod.containers, |container| container.resource_limits);
-    show_pod_usage(
-        ui,
-        usage,
-        usage_history,
-        pod_requests,
-        pod_limits,
-        usage_missing,
-        usage_error,
-    );
+    show_pod_usage(ui, usage, pod_requests, pod_limits);
     ui.add_space(CARD_GAP);
     section_header(ui, "Containers", None);
     for container in &pod.containers {
@@ -1509,12 +1501,15 @@ fn show_pod_detail(
                 show_container_usage(
                     ui,
                     &container.name,
-                    usage.and_then(|usage| usage.containers.get(&container.name)),
-                    usage_history,
+                    usage
+                        .usage
+                        .and_then(|usage| usage.containers.get(&container.name)),
+                    usage.history,
                     container.resource_requests,
                     container.resource_limits,
-                    usage_missing,
-                    usage_error,
+                    usage.missing,
+                    usage.metrics_api_unavailable,
+                    usage.error,
                 );
                 ui.add_space(6.0);
                 InspectorDetails::show_properties(
@@ -1582,35 +1577,38 @@ fn show_pod_detail(
 
 fn show_pod_usage(
     ui: &mut egui::Ui,
-    usage: Option<&PodUsage>,
-    history: &[PodUsage],
+    usage: PodUsageDisplay<'_>,
     requests: PodResourceThresholds,
     limits: PodResourceThresholds,
-    _missing: bool,
-    error: Option<&str>,
 ) {
-    let cpu_references = usage_references(
-        requests.cpu_nanocores,
-        limits.cpu_nanocores,
-        ["Request", "Limit"],
-    );
-    let memory_references = usage_references(
-        requests.memory_bytes,
-        limits.memory_bytes,
-        ["Request", "Limit"],
-    );
     section_header(ui, "Resource usage", None);
     WorkspaceCard::new().show(ui, |ui| {
+        if usage.metrics_api_unavailable {
+            show_metrics_api_unavailable(ui, requests, limits);
+            return;
+        }
+        let cpu_references = usage_references(
+            requests.cpu_nanocores,
+            limits.cpu_nanocores,
+            ["Request", "Limit"],
+        );
+        let memory_references = usage_references(
+            requests.memory_bytes,
+            limits.memory_bytes,
+            ["Request", "Limit"],
+        );
         let displayed_usage = displayed_usage_values(
-            usage.map(|usage| (usage.cpu_nanocores, usage.memory_bytes)),
-            error,
+            usage
+                .usage
+                .map(|usage| (usage.cpu_nanocores, usage.memory_bytes)),
+            usage.error,
         );
         show_usage_value_grid(ui, displayed_usage);
-        if !history.is_empty()
+        if !usage.history.is_empty()
             || has_usage_references(&cpu_references)
             || has_usage_references(&memory_references)
         {
-            if usage.is_none() {
+            if usage.usage.is_none() {
                 usage_chart_pair_labels(ui);
             }
             ui.add_space(8.0);
@@ -1618,29 +1616,29 @@ fn show_pod_usage(
                 usage_chart(
                     &mut columns[0],
                     "Pod CPU usage chart",
-                    history,
+                    usage.history,
                     |sample| Some(sample.cpu_nanocores),
                     format_cpu,
-                    if error.is_some() {
+                    if usage.error.is_some() {
                         gray::_400
                     } else {
                         indigo::_600
                     },
-                    error.is_some(),
+                    usage.error.is_some(),
                     &cpu_references,
                 );
                 usage_chart(
                     &mut columns[1],
                     "Pod memory usage chart",
-                    history,
+                    usage.history,
                     |sample| Some(sample.memory_bytes),
                     format_memory,
-                    if error.is_some() {
+                    if usage.error.is_some() {
                         gray::_400
                     } else {
                         status::SUCCESS
                     },
-                    error.is_some(),
+                    usage.error.is_some(),
                     &memory_references,
                 );
             });
@@ -1657,8 +1655,14 @@ fn show_container_usage(
     requests: PodResourceThresholds,
     limits: PodResourceThresholds,
     _missing: bool,
+    metrics_api_unavailable: bool,
     error: Option<&str>,
 ) {
+    ui.add_space(10.0);
+    if metrics_api_unavailable {
+        show_metrics_api_unavailable(ui, requests, limits);
+        return;
+    }
     let cpu_references = usage_references(
         requests.cpu_nanocores,
         limits.cpu_nanocores,
@@ -1669,7 +1673,6 @@ fn show_container_usage(
         limits.memory_bytes,
         ["Request", "Limit"],
     );
-    ui.add_space(10.0);
     let displayed_usage = displayed_usage_values(
         usage.map(|usage| (usage.cpu_nanocores, usage.memory_bytes)),
         error,
@@ -2755,6 +2758,61 @@ fn displayed_usage_values(
     metrics_error: Option<&str>,
 ) -> Option<(i64, i64)> {
     metrics_error.is_none().then_some(usage).flatten()
+}
+
+fn show_metrics_api_unavailable(
+    ui: &mut egui::Ui,
+    requests: PodResourceThresholds,
+    limits: PodResourceThresholds,
+) {
+    ui.label(
+        egui::RichText::new("Metrics API unavailable")
+            .font(typography::body())
+            .color(gray::_700),
+    );
+    ui.label(
+        egui::RichText::new("Live CPU and memory usage requires the Kubernetes Metrics API.")
+            .font(typography::metadata())
+            .color(gray::_500),
+    );
+    ui.add_space(8.0);
+    InspectorDetails::show_properties(
+        ui,
+        &[
+            DetailRow::new([
+                DetailCell::new(
+                    "CPU request",
+                    requests
+                        .cpu_nanocores
+                        .map(format_cpu)
+                        .unwrap_or_else(|| "Not set".into()),
+                ),
+                DetailCell::new(
+                    "CPU limit",
+                    limits
+                        .cpu_nanocores
+                        .map(format_cpu)
+                        .unwrap_or_else(|| "Not set".into()),
+                ),
+            ]),
+            DetailRow::new([
+                DetailCell::new(
+                    "Memory request",
+                    requests
+                        .memory_bytes
+                        .map(format_memory)
+                        .unwrap_or_else(|| "Not set".into()),
+                ),
+                DetailCell::new(
+                    "Memory limit",
+                    limits
+                        .memory_bytes
+                        .map(format_memory)
+                        .unwrap_or_else(|| "Not set".into()),
+                ),
+            ]),
+        ],
+    );
 }
 
 fn chip_row(ui: &mut egui::Ui, label: &str, values: &[String]) {

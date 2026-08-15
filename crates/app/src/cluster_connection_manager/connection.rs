@@ -111,6 +111,7 @@ async fn load_api_resources(
                     cluster_key,
                     api_resources: inspection.api_resources,
                     scalable_api_resources: inspection.scalable_api_resources,
+                    pod_metrics_api_available: inspection.pod_metrics_api_available,
                 })
                 .await
                 .log_if_error("Failed to send kubernetes API resources");

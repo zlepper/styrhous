@@ -42,6 +42,7 @@ pub(super) fn fixture_cluster(cluster_key: i32, name: &str) -> ClusterState {
         selected_api_resource: None,
         resource_cache: HashMap::new(),
         active_watchers: HashSet::new(),
+        pod_metrics_api_available: true,
         pod_metrics: HashMap::new(),
         active_pod_metrics: HashSet::new(),
         resource_searches: HashMap::new(),

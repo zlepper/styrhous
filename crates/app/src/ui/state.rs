@@ -368,6 +368,8 @@ pub(super) struct ResourceDetailHistoryEntry {
     pub(super) pod_usage_history: Vec<PodUsage>,
     /// A successful Metrics API response confirmed that this Pod has no sample yet.
     pub(super) pod_usage_missing: bool,
+    /// The cluster does not serve PodMetrics, so resource usage cannot be collected.
+    pub(super) pod_metrics_api_unavailable: bool,
     pub(super) pod_usage_error: Option<String>,
     pub(super) data_editor: Option<ResourceDataEditorState>,
     /// UI interactions are recorded while rendering, then consumed by the
@@ -435,6 +437,19 @@ impl UiState {
             .entries_mut()
             .filter_map(|entry| entry.resource_detail_mut())
             .find(|entry| entry.history_entry_id == history_entry_id)
+    }
+
+    fn mark_pod_metrics_api_unavailable(&mut self, cluster_key: i32) {
+        let Some(navigator) = self.global_blades.navigator_mut() else {
+            return;
+        };
+        for entry in navigator
+            .entries_mut()
+            .filter_map(|entry| entry.resource_detail_mut())
+            .filter(|entry| entry.cluster_key == cluster_key)
+        {
+            entry.pod_metrics_api_unavailable = true;
+        }
     }
 
     pub(super) fn stop_discarded_blades(
@@ -703,6 +718,7 @@ pub(super) struct ClusterState {
     pub(super) selected_api_resource: Option<ApiResource>,
     pub(super) resource_cache: HashMap<ResourceWatchKey, ResourceWatchState>,
     pub(super) active_watchers: HashSet<ResourceWatchKey>,
+    pub(super) pod_metrics_api_available: bool,
     pub(super) pod_metrics: HashMap<String, PodMetricsNamespaceState>,
     pub(super) active_pod_metrics: HashSet<String>,
     pub(super) resource_searches: HashMap<ApiResource, ResourceSearchState>,
@@ -1018,6 +1034,7 @@ impl UiState {
         cluster.selected_api_resource = None;
         cluster.resource_cache.clear();
         cluster.active_watchers.clear();
+        cluster.pod_metrics_api_available = false;
         cluster.pod_metrics.clear();
         cluster.active_pod_metrics.clear();
         cluster.resource_searches.clear();
@@ -1067,12 +1084,15 @@ impl UiState {
         uid: String,
         commands_to_send: &mut Vec<WorkerCommandBox>,
     ) {
-        let selection_generation = {
+        let (selection_generation, pod_metrics_api_available) = {
             let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
                 return;
             };
             cluster.next_detail_generation += 1;
-            cluster.next_detail_generation
+            (
+                cluster.next_detail_generation,
+                cluster.pod_metrics_api_available,
+            )
         };
         self.replace_global_blade(
             Box::new(ResourceDetailHistoryEntry {
@@ -1091,6 +1111,7 @@ impl UiState {
                 pod_usage: None,
                 pod_usage_history: Vec::new(),
                 pod_usage_missing: false,
+                pod_metrics_api_unavailable: !pod_metrics_api_available,
                 pod_usage_error: None,
                 data_editor: None,
                 pending_action: None,
@@ -1111,6 +1132,7 @@ impl UiState {
             namespace,
             resource_name: name,
             resource_uid: uid,
+            pod_metrics_api_available,
         }));
     }
 
@@ -1129,6 +1151,7 @@ impl UiState {
         };
         cluster.next_detail_generation += 1;
         let selection_generation = cluster.next_detail_generation;
+        let pod_metrics_api_available = cluster.pod_metrics_api_available;
         if cluster.resource_detail_panel.is_none() {
             return;
         }
@@ -1148,6 +1171,7 @@ impl UiState {
             pod_usage: None,
             pod_usage_history: Vec::new(),
             pod_usage_missing: false,
+            pod_metrics_api_unavailable: !pod_metrics_api_available,
             pod_usage_error: None,
             data_editor: None,
             pending_action: None,
@@ -1161,6 +1185,7 @@ impl UiState {
             namespace,
             resource_name: name,
             resource_uid: uid,
+            pod_metrics_api_available,
         }));
     }
 
@@ -1363,6 +1388,7 @@ impl UiState {
             .selected_api_resource
             .as_ref()
             .filter(|resource| resource.group == "core" && resource.kind == "Pod")
+            .filter(|_| cluster.pod_metrics_api_available)
             .map(|_| cluster.selected_namespaces.clone())
             .unwrap_or_default();
         let inactive = cluster
@@ -1526,6 +1552,7 @@ impl WorkerResult for crate::worker::KubernetesClustersUpdated {
                     scalable_api_resources: BTreeSet::new(),
                     resource_cache: HashMap::new(),
                     active_watchers: HashSet::new(),
+                    pod_metrics_api_available: false,
                     pod_metrics: HashMap::new(),
                     active_pod_metrics: HashSet::new(),
                     resource_searches: HashMap::new(),
@@ -1623,12 +1650,17 @@ impl WorkerResult for crate::worker::KubernetesApisLoaded {
             cluster_key,
             api_resources,
             scalable_api_resources,
+            pod_metrics_api_available,
         } = self;
         let restored_api_resource = ui.restored_api_resource(cluster_key, &api_resources);
         if let Some(cluster) = ui.clusters.get_mut(&cluster_key) {
             cluster.resource_navigation = build_resource_navigation(api_resources);
             cluster.scalable_api_resources = scalable_api_resources;
+            cluster.pod_metrics_api_available = pod_metrics_api_available;
             cluster.api_resources_load = ClusterLoadState::Ready;
+        }
+        if !pod_metrics_api_available {
+            ui.mark_pod_metrics_api_unavailable(cluster_key);
         }
         if let Some(api_resource) = restored_api_resource {
             ui.select_api_resource(cluster_key, api_resource, _commands);
@@ -1826,6 +1858,28 @@ impl WorkerResult for crate::worker::PodMetricsWatchFailed {
                 return;
             }
             cluster.pod_metrics.entry(self.namespace).or_default().error = Some(self.error);
+        }
+    }
+}
+impl WorkerResult for crate::worker::PodMetricsApiUnavailable {
+    fn apply(self, ui: &mut UiState, commands: &mut Vec<WorkerCommandBox>) {
+        let namespaces = {
+            let Some(cluster) = ui.clusters.get_mut(&self.cluster_key) else {
+                return;
+            };
+            if !cluster.pod_metrics_api_available {
+                return;
+            }
+            cluster.pod_metrics_api_available = false;
+            cluster.pod_metrics.clear();
+            std::mem::take(&mut cluster.active_pod_metrics)
+        };
+        ui.mark_pod_metrics_api_unavailable(self.cluster_key);
+        for namespace in namespaces {
+            commands.push(Box::new(crate::worker::StopPodMetricsWatch {
+                cluster_key: self.cluster_key,
+                namespace,
+            }));
         }
     }
 }
@@ -2065,6 +2119,7 @@ mod tests {
             pod_usage: None,
             pod_usage_history: Vec::new(),
             pod_usage_missing: false,
+            pod_metrics_api_unavailable: false,
             pod_usage_error: None,
             data_editor: None,
             pending_action: None,
@@ -2124,6 +2179,11 @@ mod tests {
             is_current: true,
         }])
         .apply(&mut state, &mut commands);
+        state
+            .clusters
+            .get_mut(&1)
+            .unwrap()
+            .pod_metrics_api_available = true;
 
         state.select_api_resource(1, pod.clone(), &mut commands);
         commands.clear();
@@ -2164,6 +2224,92 @@ mod tests {
                         .downcast_ref::<StopPodMetricsWatch>()
                         .is_some()
                 })
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn unavailable_metrics_api_from_discovery_does_not_start_metrics_watches() {
+        let pod = ApiResource {
+            group: "core".to_owned(),
+            version: "v1".to_owned(),
+            kind: "Pod".to_owned(),
+            name: "pods".to_owned(),
+            namespaced: true,
+        };
+        let mut state = UiState::default();
+        let mut commands = Vec::new();
+        KubernetesClustersUpdated(vec![Cluster {
+            name: "kind".to_owned(),
+            is_current: true,
+        }])
+        .apply(&mut state, &mut commands);
+
+        state.select_api_resource(1, pod.clone(), &mut commands);
+        commands.clear();
+        state.toggle_namespace(1, "default".to_owned(), &mut commands);
+        assert!(commands.iter().all(|command| {
+            command
+                .as_ref()
+                .as_any()
+                .downcast_ref::<StartPodMetricsWatch>()
+                .is_none()
+        }));
+
+        commands.clear();
+        state.open_resource_detail(
+            1,
+            pod,
+            "api".to_owned(),
+            Some("default".to_owned()),
+            "uid".to_owned(),
+            &mut commands,
+        );
+        assert_eq!(
+            commands.iter().find_map(|command| {
+                command
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<StartResourceDetailWatch>()
+                    .map(|command| command.pod_metrics_api_available)
+            }),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn unavailable_metrics_api_stops_namespace_watches_and_marks_pod_details() {
+        let mut state = UiState::default();
+        let mut commands = Vec::new();
+        KubernetesClustersUpdated(vec![Cluster {
+            name: "kind".to_owned(),
+            is_current: true,
+        }])
+        .apply(&mut state, &mut commands);
+        let cluster = state.clusters.get_mut(&1).unwrap();
+        cluster.pod_metrics_api_available = true;
+        cluster.active_pod_metrics.insert("default".into());
+        cluster
+            .pod_metrics
+            .insert("default".into(), Default::default());
+        state.replace_global_blade(Box::new(pod_detail_history_entry()), &mut commands);
+        commands.clear();
+
+        PodMetricsApiUnavailable { cluster_key: 1 }.apply(&mut state, &mut commands);
+
+        assert!(!state.clusters[&1].pod_metrics_api_available);
+        assert!(state.clusters[&1].pod_metrics.is_empty());
+        assert!(
+            state
+                .resource_detail_entry_mut(1)
+                .unwrap()
+                .pod_metrics_api_unavailable
+        );
+        assert_eq!(
+            commands
+                .iter()
+                .filter(|command| command.as_ref().as_any().is::<StopPodMetricsWatch>())
                 .count(),
             1
         );
