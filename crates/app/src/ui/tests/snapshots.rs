@@ -1,7 +1,7 @@
 use super::super::MyEguiApp;
 use super::super::state::ClusterConnectionState;
 use super::super::state::{
-    BulkDeleteProgress, BulkDeleteTarget, PendingDelete, PendingForceDelete,
+    BulkDeleteProgress, BulkDeleteTarget, HelmReleaseWatchState, PendingDelete, PendingForceDelete,
     PodMetricsNamespaceState, ResourceWatchState, UiState, ValidationState, YamlEditorWindowState,
 };
 use super::super::table_preferences::{
@@ -12,6 +12,7 @@ use super::fixtures::{
     fixture_cluster_scoped_api_resource, oracle_resource_table_state,
 };
 use crate::cluster_connection_manager::Cluster;
+use crate::helm_release::{HelmRelease, StorageDriver};
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::{MinimalResource, PodLogContainer};
 use crate::pod_metrics::{ContainerUsage, NodeUsage, POD_USAGE_HISTORY_WINDOW, PodUsage};
@@ -43,6 +44,38 @@ use time::OffsetDateTime;
 struct YamlEditorSnapshotState {
     editor: YamlEditorWindowState,
     commands: Vec<WorkerCommandBox>,
+}
+
+fn fixture_helm_release() -> HelmRelease {
+    HelmRelease {
+        storage: StorageDriver::Secret,
+        storage_name: "sh.helm.release.v1.demo.v2".into(),
+        name: "demo".into(),
+        namespace: "kube-system".into(),
+        revision: 2,
+        status: "deployed".into(),
+        description: "Upgrade complete".into(),
+        notes: "Thank you for installing Demo.\n\nYour release is ready.".into(),
+        chart: "nginx".into(),
+        chart_version: "1.2.3".into(),
+        app_version: "1.25.0".into(),
+        first_deployed: "2026-08-01T12:00:00Z".into(),
+        last_deployed: "2026-08-15T12:00:00Z".into(),
+        values: json!({"replicaCount": 2}),
+        manifest: "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: demo".into(),
+        storage_labels: BTreeMap::new(),
+        storage_annotations: BTreeMap::new(),
+    }
+}
+
+fn fixture_helm_release_revisions() -> Vec<HelmRelease> {
+    let mut previous = fixture_helm_release();
+    previous.revision = 1;
+    previous.status = "superseded".into();
+    previous.description = "Initial install".into();
+    previous.notes = "The initial release was deployed.".into();
+    previous.last_deployed = "2026-08-01T12:00:00Z".into();
+    vec![fixture_helm_release(), previous]
 }
 
 fn command_is<T: WorkerCommand + 'static>(command: &WorkerCommandBox) -> Option<&T> {
@@ -542,6 +575,122 @@ fn oracle_resource_table_snapshot_uses_injected_cluster_state() {
     harness.get_by_label("Apps & Containers").click_accesskit();
     harness.run();
     harness.ui_harness("resource_tables/oracle_resource_table_snapshot_uses_injected_cluster_state/oracle_resource_table_injected");
+}
+
+#[test]
+fn helm_releases_snapshot_shows_read_only_inventory() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    let cluster = state.clusters.get_mut(&2).unwrap();
+    cluster.selected_api_resource = Some(crate::api_resource::ApiResource::helm_releases());
+    cluster.helm_release_cache.insert(
+        "kube-system".into(),
+        HelmReleaseWatchState {
+            releases: vec![fixture_helm_release()],
+            is_synced: true,
+            backend_errors: BTreeMap::new(),
+        },
+    );
+    harness.state_mut().ui_state = state;
+
+    harness.run();
+
+    harness.ui_harness(
+        "helm_releases/helm_releases_snapshot_shows_read_only_inventory/releases_inventory",
+    );
+}
+
+#[test]
+fn helm_release_inspector_snapshot_shows_values_warning_and_revision_details() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    state
+        .clusters
+        .get_mut(&2)
+        .unwrap()
+        .helm_release_cache
+        .insert(
+            "kube-system".into(),
+            HelmReleaseWatchState {
+                releases: fixture_helm_release_revisions(),
+                is_synced: true,
+                backend_errors: BTreeMap::new(),
+            },
+        );
+    let mut commands = Vec::new();
+    state.open_helm_release_detail(2, "demo".into(), "kube-system".into(), &mut commands);
+    assert!(commands.is_empty());
+    harness.state_mut().ui_state = state;
+
+    harness.run();
+
+    harness.ui_harness(
+        "helm_releases/helm_release_inspector_snapshot_shows_values_warning_and_revision_details/release_inspector",
+    );
+}
+
+#[test]
+fn helm_release_inspector_selects_a_previous_revision() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    state
+        .clusters
+        .get_mut(&2)
+        .unwrap()
+        .helm_release_cache
+        .insert(
+            "kube-system".into(),
+            HelmReleaseWatchState {
+                releases: fixture_helm_release_revisions(),
+                is_synced: true,
+                backend_errors: BTreeMap::new(),
+            },
+        );
+    let mut commands = Vec::new();
+    state.open_helm_release_detail(2, "demo".into(), "kube-system".into(), &mut commands);
+    harness.state_mut().ui_state = state;
+
+    harness.run();
+    harness.get_by_label("Select revision 1").click();
+    harness.run();
+
+    harness.get_by_label("Revision 1 selected");
+    harness.ui_harness(
+        "helm_releases/helm_release_inspector_selects_a_previous_revision/previous_revision",
+    );
+}
+
+#[test]
+fn helm_release_inspector_expands_values_with_an_accessible_disclosure() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    state
+        .clusters
+        .get_mut(&2)
+        .unwrap()
+        .helm_release_cache
+        .insert(
+            "kube-system".into(),
+            HelmReleaseWatchState {
+                releases: fixture_helm_release_revisions(),
+                is_synced: true,
+                backend_errors: BTreeMap::new(),
+            },
+        );
+    let mut commands = Vec::new();
+    state.open_helm_release_detail(2, "demo".into(), "kube-system".into(), &mut commands);
+    harness.state_mut().ui_state = state;
+
+    harness.run();
+    harness
+        .get_by_label("Values (sensitive values may be present)")
+        .click();
+    harness.run();
+
+    harness.get_by_label("Treat this content like a Kubernetes Secret.");
+    harness.ui_harness(
+        "helm_releases/helm_release_inspector_expands_values_with_an_accessible_disclosure/values_expanded",
+    );
 }
 
 #[test]

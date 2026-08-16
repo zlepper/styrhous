@@ -343,6 +343,43 @@ impl<'a> GlobalBladeRenderContext<'a> {
             .unwrap_or_default()
     }
 
+    pub(super) fn helm_releases(
+        &self,
+        cluster_key: i32,
+        namespace: &str,
+        release_name: &str,
+    ) -> Vec<crate::helm_release::HelmRelease> {
+        self.ui_state
+            .helm_releases(cluster_key, namespace, release_name)
+    }
+
+    /// Resolves a manifest inventory entry against an already-synchronized resource watch.
+    ///
+    /// Inventory data is historical, so the inspector only enables its detail link when the
+    /// object currently represented by the resource cache supplies a real UID.
+    pub(super) fn cached_resource_uid(
+        &self,
+        cluster_key: i32,
+        api_resource: &crate::api_resource::ApiResource,
+        namespace: Option<&str>,
+        name: &str,
+    ) -> Option<String> {
+        let watch = self
+            .ui_state
+            .clusters
+            .get(&cluster_key)?
+            .resource_cache
+            .get(&(api_resource.clone(), namespace.map(ToOwned::to_owned)))?;
+        if !watch.is_synced || watch.error.is_some() {
+            return None;
+        }
+        watch
+            .resources
+            .values()
+            .find(|resource| resource.name == name)
+            .map(|resource| resource.uid.clone())
+    }
+
     pub(super) fn supports_scale(
         &self,
         cluster_key: i32,

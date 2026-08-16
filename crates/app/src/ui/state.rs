@@ -1,5 +1,6 @@
 use super::global_blade::{GlobalBladeContent, GlobalBladeCoordinator};
 use crate::api_resource::ApiResource;
+use crate::helm_release::HelmRelease;
 use crate::log_store::LogStoreResult;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::{MinimalResource, PodLogContainer};
@@ -71,6 +72,13 @@ pub(super) struct ResourceWatchState {
     pub(super) resources: BTreeMap<String, MinimalResource>,
     pub(super) is_synced: bool,
     pub(super) error: Option<String>,
+}
+
+#[derive(Debug, Default)]
+pub(super) struct HelmReleaseWatchState {
+    pub(super) releases: Vec<HelmRelease>,
+    pub(super) is_synced: bool,
+    pub(super) backend_errors: BTreeMap<&'static str, String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -761,6 +769,7 @@ pub(super) struct ClusterState {
     pub(super) scalable_api_resources: BTreeSet<ApiResource>,
     pub(super) selected_api_resource: Option<ApiResource>,
     pub(super) resource_cache: HashMap<ResourceWatchKey, ResourceWatchState>,
+    pub(super) helm_release_cache: HashMap<String, HelmReleaseWatchState>,
     pub(super) active_watchers: HashSet<ResourceWatchKey>,
     pub(super) pod_metrics_api_available: bool,
     pub(super) pod_metrics: HashMap<String, PodMetricsNamespaceState>,
@@ -926,10 +935,14 @@ impl UiState {
             .get(&context_name)
             .and_then(|selection| selection.selected_api_resource.as_ref());
         let api_resource = saved_resource.and_then(|saved_resource| {
-            api_resources
-                .iter()
-                .find(|api_resource| saved_resource.matches(api_resource))
-                .cloned()
+            if saved_resource.matches(&ApiResource::helm_releases()) {
+                Some(ApiResource::helm_releases())
+            } else {
+                api_resources
+                    .iter()
+                    .find(|api_resource| saved_resource.matches(api_resource))
+                    .cloned()
+            }
         });
 
         if saved_resource.is_some() && api_resource.is_none() {
@@ -1086,6 +1099,7 @@ impl UiState {
         cluster.selected_namespaces.clear();
         cluster.selected_api_resource = None;
         cluster.resource_cache.clear();
+        cluster.helm_release_cache.clear();
         cluster.active_watchers.clear();
         cluster.pod_metrics_api_available = false;
         cluster.pod_metrics.clear();
@@ -1196,6 +1210,47 @@ impl UiState {
             pod_metrics_api_available,
             node_metrics_api_available,
         }));
+    }
+
+    pub(super) fn helm_releases(
+        &self,
+        cluster_key: i32,
+        namespace: &str,
+        release_name: &str,
+    ) -> Vec<HelmRelease> {
+        self.clusters
+            .get(&cluster_key)
+            .and_then(|cluster| cluster.helm_release_cache.get(namespace))
+            .map(|watch| {
+                watch
+                    .releases
+                    .iter()
+                    .filter(|release| release.name == release_name)
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    pub(super) fn open_helm_release_detail(
+        &mut self,
+        cluster_key: i32,
+        release_name: String,
+        namespace: String,
+        commands_to_send: &mut Vec<WorkerCommandBox>,
+    ) {
+        let releases = self.helm_releases(cluster_key, &namespace, &release_name);
+        if releases.is_empty() {
+            return;
+        }
+        self.replace_global_blade(
+            Box::new(super::helm_releases::HelmReleaseDetailBlade::new(
+                cluster_key,
+                release_name,
+                namespace,
+            )),
+            commands_to_send,
+        );
     }
 
     #[cfg(test)]
@@ -1596,8 +1651,16 @@ impl UiState {
         error: String,
     ) {
         if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
-            let key = (api_resource, namespace);
+            let key = (api_resource.clone(), namespace.clone());
             cluster.active_watchers.remove(&key);
+            if api_resource.is_helm_releases()
+                && let Some(namespace) = namespace
+            {
+                let watch = cluster.helm_release_cache.entry(namespace).or_default();
+                watch.is_synced = true;
+                watch.backend_errors.insert("Helm storage", error);
+                return;
+            }
             let watch = cluster.resource_cache.entry(key).or_default();
             watch.is_synced = false;
             watch.error = Some(error);
@@ -1647,6 +1710,7 @@ impl WorkerResult for crate::worker::KubernetesClustersUpdated {
                     custom_resource_columns: BTreeMap::new(),
                     scalable_api_resources: BTreeSet::new(),
                     resource_cache: HashMap::new(),
+                    helm_release_cache: HashMap::new(),
                     active_watchers: HashSet::new(),
                     pod_metrics_api_available: false,
                     pod_metrics: HashMap::new(),
@@ -1920,6 +1984,30 @@ impl WorkerResult for crate::worker::KubernetesResourcesReplaced {
         }
     }
 }
+impl WorkerResult for crate::worker::HelmReleasesReplaced {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(cluster) = ui.clusters.get_mut(&self.cluster_key) {
+            let watch = cluster
+                .helm_release_cache
+                .entry(self.namespace)
+                .or_default();
+            watch.releases = self.releases;
+            watch.is_synced = true;
+        }
+    }
+}
+impl WorkerResult for crate::worker::HelmReleaseBackendFailed {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(cluster) = ui.clusters.get_mut(&self.cluster_key) {
+            let watch = cluster
+                .helm_release_cache
+                .entry(self.namespace)
+                .or_default();
+            watch.is_synced = true;
+            watch.backend_errors.insert(self.backend, self.error);
+        }
+    }
+}
 impl WorkerResult for crate::worker::KubernetesResourceWatchStarted {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         let crate::worker::KubernetesResourceWatchStarted {
@@ -1928,7 +2016,14 @@ impl WorkerResult for crate::worker::KubernetesResourceWatchStarted {
             namespace,
         } = self;
         if let Some(cluster) = ui.clusters.get_mut(&cluster_key) {
+            let helm_namespace = api_resource
+                .is_helm_releases()
+                .then_some(namespace.clone())
+                .flatten();
             cluster.active_watchers.insert((api_resource, namespace));
+            if let Some(namespace) = helm_namespace {
+                cluster.helm_release_cache.entry(namespace).or_default();
+            }
         }
     }
 }
@@ -2441,6 +2536,62 @@ mod tests {
                 })
                 .count(),
             1
+        );
+    }
+
+    #[test]
+    fn helm_release_selection_watches_each_selected_namespace() {
+        let mut state = UiState::default();
+        let mut commands = Vec::new();
+        KubernetesClustersUpdated(vec![Cluster {
+            name: "kind".to_owned(),
+            is_current: true,
+        }])
+        .apply(&mut state, &mut commands);
+        state
+            .clusters
+            .get_mut(&1)
+            .unwrap()
+            .selected_namespaces
+            .insert("apps".to_owned());
+
+        state.select_api_resource(1, ApiResource::helm_releases(), &mut commands);
+
+        assert!(commands.iter().any(|command| {
+            command
+                .as_ref()
+                .as_any()
+                .downcast_ref::<StartResourceWatch>()
+                .is_some_and(|command| {
+                    command.api_resource.is_helm_releases()
+                        && command.namespace.as_deref() == Some("apps")
+                })
+        }));
+    }
+
+    #[test]
+    fn helm_release_watch_start_failure_unblocks_the_namespace_with_an_error() {
+        let mut state = UiState::default();
+        let mut commands = Vec::new();
+        KubernetesClustersUpdated(vec![Cluster {
+            name: "kind".to_owned(),
+            is_current: true,
+        }])
+        .apply(&mut state, &mut commands);
+
+        KubernetesResourceWatchFailed {
+            cluster_key: 1,
+            api_resource: ApiResource::helm_releases(),
+            namespace: Some("apps".to_owned()),
+            error: "forbidden".to_owned(),
+        }
+        .apply(&mut state, &mut commands);
+
+        let watch = &state.clusters[&1].helm_release_cache["apps"];
+        assert!(watch.is_synced);
+        assert_eq!(
+            watch.backend_errors.get("Helm storage"),
+            Some(&"forbidden".to_owned())
         );
     }
 

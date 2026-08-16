@@ -28,6 +28,8 @@ jsonpath-rust = "0.7.5"
 tempfile = "3"
 anstyle = "1.0"
 anstyle-parse = "1.0"
+base64 = "0.22"
+flate2 = "1.1"
 
 [dev-dependencies]
 criterion = "0.8.2"

@@ -1,6 +1,7 @@
 mod cluster_rail;
 mod dialogs;
 mod global_blade;
+mod helm_releases;
 mod log_state;
 #[doc(hidden)]
 pub mod log_viewer_profile;
