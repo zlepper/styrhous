@@ -8,6 +8,20 @@ pub struct ApiResource {
 }
 
 impl ApiResource {
+    pub(crate) fn helm_releases() -> Self {
+        Self {
+            group: crate::helm_release::GROUP.to_owned(),
+            version: crate::helm_release::VERSION.to_owned(),
+            kind: crate::helm_release::KIND.to_owned(),
+            name: crate::helm_release::NAME.to_owned(),
+            namespaced: true,
+        }
+    }
+
+    pub(crate) fn is_helm_releases(&self) -> bool {
+        self == &Self::helm_releases()
+    }
+
     /// A human-readable, plural label for use in resource navigation.
     ///
     /// Kubernetes discovery gives resource names as lowercase plurals, but its Kind retains

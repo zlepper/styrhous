@@ -272,7 +272,7 @@ pub(super) fn build_resource_navigation(api_resources: Vec<ApiResource>) -> Reso
     }
 
     let mut categorized = BTreeSet::new();
-    let curated_entries = CATALOG
+    let curated_entries: Vec<_> = CATALOG
         .iter()
         .filter_map(|item| match item {
             CatalogItem::Resource(entry) => {
@@ -305,6 +305,12 @@ pub(super) fn build_resource_navigation(api_resources: Vec<ApiResource>) -> Reso
     for resources in other_api_groups.values_mut() {
         resources.sort_by(|left, right| left.name.cmp(&right.name));
     }
+
+    let mut curated_entries = curated_entries;
+    curated_entries.push(CuratedNavigationEntry::Section(CuratedResourceSection {
+        name: "Helm",
+        api_resources: vec![ApiResource::helm_releases()],
+    }));
 
     ResourceNavigation {
         curated_entries,
@@ -366,6 +372,7 @@ mod tests {
                 "Networking",
                 "namespaces",
                 "events",
+                "Helm",
             ]
         );
         assert_eq!(
@@ -394,8 +401,13 @@ mod tests {
 
         let navigation = build_resource_navigation(discovered);
 
-        assert_eq!(navigation.curated_entries.len(), CATALOG.len());
-        for (actual, expected) in navigation.curated_entries.iter().zip(CATALOG) {
+        assert_eq!(navigation.curated_entries.len(), CATALOG.len() + 1);
+        for (actual, expected) in navigation
+            .curated_entries
+            .iter()
+            .take(CATALOG.len())
+            .zip(CATALOG)
+        {
             match (actual, expected) {
                 (CuratedNavigationEntry::Resource(actual), CatalogItem::Resource(expected)) => {
                     assert_eq!(actual.name, expected.name);
@@ -419,6 +431,11 @@ mod tests {
                 _ => panic!("catalog entry type should match its navigation entry"),
             }
         }
+        assert!(matches!(
+            navigation.curated_entries.last(),
+            Some(CuratedNavigationEntry::Section(section))
+                if section.name == "Helm" && section.api_resources == vec![ApiResource::helm_releases()]
+        ));
         assert!(navigation.other_api_groups.is_empty());
     }
 
@@ -426,11 +443,12 @@ mod tests {
     fn omits_catalog_entries_that_the_cluster_does_not_advertise() {
         let navigation = build_resource_navigation(vec![resource("core", "pods")]);
 
-        assert_eq!(navigation.curated_entries.len(), 1);
+        assert_eq!(navigation.curated_entries.len(), 2);
         assert_eq!(
             entry_name(&navigation.curated_entries[0]),
             "Apps & Containers"
         );
+        assert_eq!(entry_name(&navigation.curated_entries[1]), "Helm");
         assert!(navigation.other_api_groups.is_empty());
     }
 
@@ -445,7 +463,7 @@ mod tests {
                 .iter()
                 .map(entry_name)
                 .collect::<Vec<_>>(),
-            vec!["Gateway API"]
+            vec!["Gateway API", "Helm"]
         );
         assert!(navigation.other_api_groups.is_empty());
     }

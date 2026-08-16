@@ -54,6 +54,17 @@ pub(super) struct TableColumnDefinition {
     pub(super) sortable: bool,
 }
 
+impl TableColumnDefinition {
+    pub(super) fn sortable(id: &str, label: &str, default_width: f32) -> Self {
+        Self {
+            id: id.to_owned(),
+            label: label.to_owned(),
+            default_width,
+            sortable: true,
+        }
+    }
+}
+
 /// The metadata map a user-configured table column reads from.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub(super) enum MetadataColumnSource {

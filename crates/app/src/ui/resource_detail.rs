@@ -743,32 +743,15 @@ fn show_managed_resource_table(
             sort_state.as_ref(),
             |header, id, _label, sortable| {
                 MoreButton::show_context_menu(header, |menu| {
-                    if sortable {
-                        if menu.action("Sort ascending").clicked() {
-                            table_preferences.borrow_mut().set_sort(
-                                &table_key,
-                                &column_definitions,
-                                id,
-                                components::SortDirection::Ascending,
-                            );
-                        }
-                        if menu.action("Sort descending").clicked() {
-                            table_preferences.borrow_mut().set_sort(
-                                &table_key,
-                                &column_definitions,
-                                id,
-                                components::SortDirection::Descending,
-                            );
-                        }
-                        menu.separator();
-                    }
-                    if menu.action("Configure columns").clicked() {
-                        *column_settings = Some(super::resource_table_settings::target(
-                            &mut table_preferences.borrow_mut(),
-                            table_key.clone(),
-                            &column_definitions,
-                        ));
-                    }
+                    super::resource_table_settings::show_configurable_table_header(
+                        menu,
+                        sortable,
+                        id,
+                        &table_key,
+                        &column_definitions,
+                        &table_preferences,
+                        column_settings,
+                    );
                 });
             },
             |id, width| {
@@ -2539,7 +2522,7 @@ fn condition_tone(condition_status: &str) -> DetailTone {
     }
 }
 
-fn disclosure_card(
+pub(super) fn disclosure_card(
     ui: &mut egui::Ui,
     id_source: &str,
     title: &str,

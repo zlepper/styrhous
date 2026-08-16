@@ -7,6 +7,7 @@ use crate::cluster_connection_manager::{
     update_resource_scale, validate_resource_yaml, watch_node_metrics, watch_pod_metrics_namespace,
     watch_resource_detail,
 };
+use crate::helm_release::HelmRelease;
 use crate::helpers::ResultExt;
 use crate::log_store::LogStoreAppender;
 use crate::minimal_namespace::MinimalNamespace;
@@ -570,6 +571,19 @@ pub(crate) struct KubernetesResourceWatchFailed {
     pub(crate) cluster_key: i32,
     pub(crate) api_resource: ApiResource,
     pub(crate) namespace: Option<String>,
+    pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct HelmReleasesReplaced {
+    pub(crate) cluster_key: i32,
+    pub(crate) namespace: String,
+    pub(crate) releases: Vec<HelmRelease>,
+}
+#[derive(Debug)]
+pub(crate) struct HelmReleaseBackendFailed {
+    pub(crate) cluster_key: i32,
+    pub(crate) namespace: String,
+    pub(crate) backend: &'static str,
     pub(crate) error: String,
 }
 #[derive(Debug)]

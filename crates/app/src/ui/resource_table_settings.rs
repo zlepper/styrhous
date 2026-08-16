@@ -4,9 +4,10 @@ use super::table_preferences::{
     ResourceTableKey, TableColumnDefinition,
 };
 use components::{
-    ButtonSize, ReorderHandle, ReorderableTable, TailwindButton, TailwindCombobox,
+    ButtonSize, MoreMenu, ReorderHandle, ReorderableTable, TailwindButton, TailwindCombobox,
     TailwindTextInput,
 };
+use std::cell::RefCell;
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct MetadataKeySuggestions {
@@ -53,6 +54,43 @@ pub(super) fn target(
         MetadataKeySuggestions::default(),
         false,
     )
+}
+
+pub(super) fn show_configurable_table_header(
+    menu: &mut MoreMenu<'_>,
+    sortable: bool,
+    id: &str,
+    table_key: &ResourceTableKey,
+    column_definitions: &[TableColumnDefinition],
+    table_preferences: &RefCell<&mut PersistedResourceTablePreferences>,
+    column_settings: &mut Option<ResourceTableSettingsTarget>,
+) {
+    if sortable {
+        if menu.action("Sort ascending").clicked() {
+            table_preferences.borrow_mut().set_sort(
+                table_key,
+                column_definitions,
+                id,
+                components::SortDirection::Ascending,
+            );
+        }
+        if menu.action("Sort descending").clicked() {
+            table_preferences.borrow_mut().set_sort(
+                table_key,
+                column_definitions,
+                id,
+                components::SortDirection::Descending,
+            );
+        }
+        menu.separator();
+    }
+    if menu.action("Configure columns").clicked() {
+        *column_settings = Some(target(
+            &mut table_preferences.borrow_mut(),
+            table_key.clone(),
+            column_definitions,
+        ));
+    }
 }
 
 pub(super) fn target_with_metadata_key_suggestions(
