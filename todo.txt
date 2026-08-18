@@ -7,7 +7,4 @@ TODO list:
     * Add option for whole word matching only in search
     * Add option for case-sensitive matching in search
 * For "CronJobs": Add option to start a job run right now
-* Table improvements
-    * Make columns on table user configurable (And remember per resource type in user's config folder)
-    * Allow resizing the columns in a table on-the-fly
 * Make the accessibility check require a "label" on all interactable elements, such as input fields or buttons.
