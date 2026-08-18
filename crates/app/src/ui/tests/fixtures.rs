@@ -14,7 +14,7 @@ use egui_kittest::Harness;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 pub(super) fn application_harness<W: WorkerTrait + 'static>() -> Harness<'static, MyEguiApp<W>> {
-    let mut harness = Harness::builder().build_eframe(|cc| MyEguiApp::<W>::new(cc));
+    let mut harness = Harness::builder().build_eframe(|cc| MyEguiApp::<W>::new_for_test(cc));
     components::test_support::setup_egui(&mut harness);
     harness
 }
@@ -23,7 +23,7 @@ pub(super) fn application_harness_with_terminal<
     W: WorkerTrait + 'static,
     L: TerminalLauncher + 'static,
 >() -> Harness<'static, MyEguiApp<W, L>> {
-    let mut harness = Harness::builder().build_eframe(|cc| MyEguiApp::<W, L>::new(cc));
+    let mut harness = Harness::builder().build_eframe(|cc| MyEguiApp::<W, L>::new_for_test(cc));
     components::test_support::setup_egui(&mut harness);
     harness
 }
