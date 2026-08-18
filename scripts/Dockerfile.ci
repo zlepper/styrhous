@@ -1,0 +1,45 @@
+# Reusable, GitHub Actions-like Linux test image. Rebuild intentionally when the
+# pinned Ubuntu digest, Rust toolchain, or cargo-nextest version changes.
+FROM docker.io/library/ubuntu:24.04@sha256:019e8eb29a85e74d64925745884f2ec79aa27e3feab36353d24656f4d6b89467
+
+ARG CARGO_NEXTEST_VERSION=0.9.140
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PATH=/root/.cargo/bin:${PATH}
+ENV CARGO_TARGET_DIR=/opt/kubernetes-dev-ui-target
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        curl \
+        git \
+        libegl1 \
+        libgl1-mesa-dri \
+        libssl-dev \
+        pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+COPY rust-toolchain.toml ./
+
+RUN curl --proto '=https' --tlsv1.2 --silent --show-error --fail https://sh.rustup.rs \
+        | sh -s -- --default-toolchain none --profile minimal -y \
+    && rustup toolchain install "$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)" --profile minimal \
+    && cargo install cargo-nextest --version "${CARGO_NEXTEST_VERSION}" --locked
+
+COPY Cargo.toml Cargo.lock ./
+COPY crates/app/Cargo.toml crates/app/build.rs ./crates/app/
+COPY crates/components/Cargo.toml ./crates/components/
+
+# Compile the dependency graph in a cacheable layer. The real checkout mounted
+# at /workspace replaces only these placeholders; its dependencies remain in
+# CARGO_TARGET_DIR until Cargo.toml, Cargo.lock, or the toolchain changes.
+RUN mkdir --parents crates/app/src crates/app/benches crates/components/src \
+    && printf '%s\n' 'pub fn dependency_cache_placeholder() {}' > crates/app/src/lib.rs \
+    && printf '%s\n' 'fn main() {}' > crates/app/src/main.rs \
+    && printf '%s\n' 'fn main() {}' > crates/app/benches/log_viewer.rs \
+    && printf '%s\n' 'pub fn dependency_cache_placeholder() {}' > crates/components/src/lib.rs \
+    && cargo build --workspace --all-targets --locked \
+    && cargo clean --package components --package kubernetes-dev-ui

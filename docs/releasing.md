@@ -46,3 +46,22 @@ be marked as GitHub prereleases, because the updater intentionally uses GitHubâ€
 Before stable public releases, configure macOS Developer ID signing/notarization and Windows
 Authenticode signing in the workflow. The updater signature protects downloaded update payloads;
 it does not replace the operating systemâ€™s installer trust requirements.
+
+## Linux CI diagnostic image
+
+`scripts/Dockerfile.ci` is a pinned Ubuntu 24.04 image for reproducing Linux CI test issues without
+reinstalling the Rust toolchain, `cargo-nextest`, and Mesa dependencies each time:
+
+```bash
+docker build --file scripts/Dockerfile.ci --tag kubernetes-dev-ui-ci .
+docker run --rm --env WGPU_BACKEND=gl --volume "$PWD:/workspace" kubernetes-dev-ui-ci \
+  cargo nextest run --workspace --no-fail-fast --test-threads 1 \
+  -E 'not test(/kind_integration/)'
+```
+
+The Dockerfile compiles placeholder workspace targets after copying `Cargo.toml`, `Cargo.lock`,
+and `rust-toolchain.toml`, then removes only the placeholder packages. The resulting dependency
+build cache stays in the image at `CARGO_TARGET_DIR`; source files from the mounted checkout
+rebuild the workspace crates without inheriting placeholder artifacts.
+The Kind-backed integration tests require a host container runtime, so run those on the host or
+in GitHub Actions rather than inside this diagnostic image.
