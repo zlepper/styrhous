@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Kubernetes Dev UI">
+  <rect width="256" height="256" rx="52" fill="#1d4ed8"/>
+  <circle cx="128" cy="128" r="70" fill="none" stroke="#dbeafe" stroke-width="18"/>
+  <circle cx="128" cy="128" r="22" fill="#dbeafe"/>
+  <g fill="#dbeafe">
+    <circle cx="128" cy="47" r="13"/>
+    <circle cx="198" cy="87" r="13"/>
+    <circle cx="198" cy="169" r="13"/>
+    <circle cx="128" cy="209" r="13"/>
+    <circle cx="58" cy="169" r="13"/>
+    <circle cx="58" cy="87" r="13"/>
+  </g>
+  <g stroke="#dbeafe" stroke-width="12" stroke-linecap="round">
+    <path d="M128 69v37M178 98l-32 19M178 158l-32-19M128 187v-37M78 158l32-19M78 98l32 19"/>
+  </g>
+</svg>

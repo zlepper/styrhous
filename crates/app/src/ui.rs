@@ -47,6 +47,7 @@ pub struct MyEguiApp<W: WorkerTrait = Worker, L: TerminalLauncher = SystemTermin
     resource_table_preferences: PersistedResourceTablePreferences,
     ui_state: UiState,
     log_store: LogStoreService,
+    updater: crate::updater::UpdaterService,
 }
 
 impl<W: WorkerTrait, L: TerminalLauncher> Default for MyEguiApp<W, L> {
@@ -61,6 +62,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> Default for MyEguiApp<W, L> {
             resource_table_preferences: PersistedResourceTablePreferences::default(),
             ui_state: UiState::default(),
             log_store,
+            updater: crate::updater::UpdaterService::default(),
         }
     }
 }
@@ -78,6 +80,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
             resource_table_preferences: PersistedResourceTablePreferences::default(),
             ui_state: UiState::default(),
             log_store,
+            updater: crate::updater::UpdaterService::start(),
         };
         app.load_persisted_state(cc.storage);
         app
@@ -133,6 +136,7 @@ fn configure_egui_context(ctx: &egui::Context) {
 
 impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
     fn logic(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.updater.poll();
         self.worker.start();
         let mut commands_to_send = self.ui_state.update(&mut self.worker);
         while let Some(result) = self.log_store.try_next_result() {
@@ -164,6 +168,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             &mut self.ui_state,
             &mut commands_to_send,
             &self.terminal_launch_settings,
+            self.updater.status(),
         );
         let clicked_api_resource = resource_navigation::show(ui, &mut self.ui_state);
         yaml_editor::show(&ctx, &mut self.ui_state, &mut commands_to_send);
@@ -183,6 +188,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             &debug_image_presets,
             &mut self.resource_table_preferences,
             &mut self.terminal_launch_settings,
+            self.updater.status(),
         );
         log_windows::show(
             &ctx,

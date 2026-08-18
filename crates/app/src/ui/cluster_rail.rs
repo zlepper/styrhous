@@ -1,5 +1,6 @@
 use super::state::{ClusterConnectionState, UiState};
 use crate::terminal_launcher::TerminalLaunchSettings;
+use crate::updater::UpdateStatus;
 use crate::worker::WorkerCommandBox;
 use components::colors::{CLUSTER_RAIL_BACKGROUND, gray};
 use components::design::{spacing, status};
@@ -11,6 +12,7 @@ pub(super) fn show(
     ui_state: &mut UiState,
     commands_to_send: &mut Vec<WorkerCommandBox>,
     terminal_settings: &TerminalLaunchSettings,
+    update_status: &UpdateStatus,
 ) {
     egui::Panel::left("cluster-panel")
         .exact_size(68.0)
@@ -82,6 +84,12 @@ pub(super) fn show(
                                     .frame(false),
                                 )
                                 .with_pointing_hand();
+                            if update_status.shows_badge() {
+                                let marker_center =
+                                    response.rect.right_top() + egui::vec2(-3.0, 3.0);
+                                ui.painter()
+                                    .circle_filled(marker_center, 4.0, status::WARNING);
+                            }
                             response.widget_info(|| {
                                 egui::WidgetInfo::labeled(
                                     egui::WidgetType::Button,
@@ -89,7 +97,10 @@ pub(super) fn show(
                                     "Settings",
                                 )
                             });
-                            if response.on_hover_text("Settings").clicked() {
+                            if response
+                                .on_hover_text(format!("Settings\n{}", update_status.summary()))
+                                .clicked()
+                            {
                                 ui_state
                                     .open_terminal_settings(terminal_settings, commands_to_send);
                             }

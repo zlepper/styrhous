@@ -1,5 +1,6 @@
 use super::global_blade::{GlobalBladeContent, GlobalBladeRenderContext, GlobalBladeRenderResult};
 use crate::terminal_launcher::{DebugImagePreset, DebugProfile, TerminalLaunchSettings};
+use crate::updater::UpdateStatus;
 use components::colors::{
     CONTENT_BACKGROUND, TABLE_BORDER, TABLE_HEADER_BACKGROUND, WHITE, gray, indigo,
 };
@@ -58,6 +59,7 @@ impl GlobalBladeContent for TerminalSettingsBlade {
         let mut save = false;
         let mut reset = false;
         show_settings_introduction(ui);
+        show_update_status(ui, context.update_status());
         ui.add_space(spacing::XL);
         ui.separator();
         ui.add_space(spacing::XL);
@@ -120,6 +122,28 @@ fn show_settings_introduction(ui: &mut egui::Ui) {
         )
         .font(typography::body())
         .color(gray::_600),
+    );
+}
+
+fn show_update_status(ui: &mut egui::Ui, update_status: &UpdateStatus) {
+    if matches!(
+        update_status,
+        UpdateStatus::LocalBuild | UpdateStatus::NotIncluded
+    ) {
+        return;
+    }
+
+    ui.add_space(spacing::XL);
+    ui.label(
+        egui::RichText::new("Application updates")
+            .font(typography::section_heading())
+            .color(gray::_900),
+    );
+    ui.add_space(spacing::XS);
+    ui.label(
+        egui::RichText::new(update_status.summary())
+            .font(typography::body())
+            .color(gray::_600),
     );
 }
 
