@@ -16,6 +16,7 @@ mod resource_table;
 mod sorted_name;
 mod terminal_launcher;
 mod ui;
+mod updater;
 mod worker;
 
 use ui::MyEguiApp;
@@ -37,6 +38,7 @@ fn native_options() -> eframe::NativeOptions {
 
 pub fn run_native() {
     tracing_subscriber::fmt().init();
+    updater::apply_staged_update();
 
     eframe::run_native(
         "Kubernetes dev UI",

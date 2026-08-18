@@ -33,6 +33,7 @@ use crate::terminal_launcher::{
     DebugImagePreset, DebugProfile, ShellRequest, TerminalLaunchSettings, TerminalLauncher,
     test_support::MockTerminalLauncher,
 };
+use crate::updater::UpdateStatus;
 use crate::worker::*;
 use components::test_support::{HarnessSnapshotOptions, UiHarnessSnapshot};
 use egui::text::{CCursor, CCursorRange};
@@ -2080,6 +2081,29 @@ fn settings_button_opens_the_terminal_launcher_blade() {
     harness.get_by_label("Save changes");
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "terminal/settings_button_opens_the_terminal_launcher_blade/settings_terminal_launcher",
+    ));
+}
+
+#[test]
+fn settings_shows_a_staged_application_update() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness
+        .state_mut()
+        .updater
+        .set_status_for_test(UpdateStatus::Staged {
+            version: "0.2.0".into(),
+        });
+    harness.run();
+
+    let settings_position = harness.get_by_label("Settings").rect().center();
+    primary_click(&mut harness, settings_position);
+    harness.run();
+
+    harness.get_by_label("Application updates");
+    harness.get_by_label("Version 0.2.0 is ready and will be installed on the next launch.");
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "updater/settings_shows_a_staged_application_update/staged_update",
     ));
 }
 

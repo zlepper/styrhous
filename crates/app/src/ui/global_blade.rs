@@ -9,6 +9,7 @@ use super::state::{ResourceDetailHistoryEntry, UiState};
 use super::table_preferences::PersistedResourceTablePreferences;
 use crate::terminal_launcher::ShellRequest;
 use crate::terminal_launcher::{DebugImagePreset, TerminalLaunchSettings};
+use crate::updater::UpdateStatus;
 use crate::worker::WorkerCommandBox;
 use components::{BladeLayer, BladeNavigator, BladeResponse, BladeStack};
 use std::cell::RefCell;
@@ -112,6 +113,7 @@ impl GlobalBladeCoordinator {
         debug_image_presets: &[DebugImagePreset],
         table_preferences: &mut PersistedResourceTablePreferences,
         terminal_launch_settings: &mut TerminalLaunchSettings,
+        update_status: &UpdateStatus,
     ) {
         let Some(mut navigator) = self.navigator.take() else {
             return;
@@ -138,6 +140,7 @@ impl GlobalBladeCoordinator {
                 debug_image_presets,
                 table_preferences,
                 terminal_launch_settings,
+                update_status,
             ),
         );
 
@@ -186,6 +189,7 @@ impl GlobalBladeCoordinator {
 /// Render the single global blade history.  Individual content objects are
 /// dynamically dispatched by `show_contents`; this host entry point keeps the
 /// application frame loop independent of individual blade types.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn show(
     ctx: &egui::Context,
     ui_state: &mut UiState,
@@ -194,6 +198,7 @@ pub(super) fn show(
     debug_image_presets: &[DebugImagePreset],
     table_preferences: &mut PersistedResourceTablePreferences,
     terminal_launch_settings: &mut TerminalLaunchSettings,
+    update_status: &UpdateStatus,
 ) {
     // Split borrows deliberately: the coordinator owns navigator state, while
     // content gets only the narrow render services it requires.
@@ -206,6 +211,7 @@ pub(super) fn show(
         debug_image_presets,
         table_preferences,
         terminal_launch_settings,
+        update_status,
     );
     // Effects normally operate through `GlobalBladeNavigation`, but preserve
     // an explicitly requested root replacement rather than overwriting it if
@@ -315,6 +321,7 @@ pub(super) struct GlobalBladeRenderContext<'a> {
     debug_image_presets: &'a [DebugImagePreset],
     table_preferences: &'a mut PersistedResourceTablePreferences,
     terminal_launch_settings: &'a mut TerminalLaunchSettings,
+    update_status: &'a UpdateStatus,
 }
 
 impl<'a> GlobalBladeRenderContext<'a> {
@@ -323,12 +330,14 @@ impl<'a> GlobalBladeRenderContext<'a> {
         debug_image_presets: &'a [DebugImagePreset],
         table_preferences: &'a mut PersistedResourceTablePreferences,
         terminal_launch_settings: &'a mut TerminalLaunchSettings,
+        update_status: &'a UpdateStatus,
     ) -> Self {
         Self {
             ui_state,
             debug_image_presets,
             table_preferences,
             terminal_launch_settings,
+            update_status,
         }
     }
 
@@ -401,6 +410,10 @@ impl<'a> GlobalBladeRenderContext<'a> {
 
     pub(super) fn terminal_launch_settings(&mut self) -> &mut TerminalLaunchSettings {
         self.terminal_launch_settings
+    }
+
+    pub(super) fn update_status(&self) -> &UpdateStatus {
+        self.update_status
     }
 }
 

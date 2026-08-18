@@ -1,6 +1,9 @@
 nextest-version = { required = "0.9.98" }
 experimental = ["setup-scripts"]
 
+[test-groups]
+kind = { max-threads = 4 }
+
 [scripts.setup.ensure-kind-cluster]
 command = ["bash", "scripts/ensure-kind-cluster.sh"]
 slow-timeout = { period = "2m", terminate-after = 1, grace-period = "10s" }
@@ -10,3 +13,7 @@ capture-stderr = true
 [[profile.default.scripts]]
 filter = 'test(/ui::tests::kind_integration::/)'
 setup = "ensure-kind-cluster"
+
+[[profile.default.overrides]]
+filter = 'test(/ui::tests::kind_integration::/)'
+test-group = "kind"
