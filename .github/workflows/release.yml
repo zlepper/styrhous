@@ -25,6 +25,8 @@ jobs:
           lfs: true
       - name: Cache Rust build
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          cache-on-failure: true
       - name: Install cargo-nextest
         run: cargo install cargo-nextest --version "$CARGO_NEXTEST_VERSION" --locked
       - name: Verify tag and application version agree
@@ -91,6 +93,8 @@ jobs:
           persist-credentials: false
       - name: Cache Rust build
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          cache-on-failure: true
       - name: Verify updater signing configuration
         shell: bash
         run: |
@@ -148,6 +152,8 @@ jobs:
           persist-credentials: false
       - name: Cache Rust build
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          cache-on-failure: true
       - run: cargo install cargo-packager --version "$CARGO_PACKAGER_VERSION" --locked
       - run: cargo build --release -p kubernetes-dev-ui
       - run: cargo packager --manifest-path crates/app/Cargo.toml --release --formats deb
