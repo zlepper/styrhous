@@ -65,3 +65,5 @@ build cache stays in the image at `CARGO_TARGET_DIR`; source files from the moun
 rebuild the workspace crates without inheriting placeholder artifacts.
 The Kind-backed integration tests require a host container runtime, so run those on the host or
 in GitHub Actions rather than inside this diagnostic image.
+The image runs as its unprivileged `kdui` user (UID/GID 1000), matching the normal development
+container user and preventing root-owned files in the bind-mounted checkout.
