@@ -2,6 +2,7 @@ name: Release desktop application
 
 on:
   push:
+    branches: [master]
     tags: ["v*"]
 
 permissions:
@@ -15,7 +16,45 @@ env:
   KUBERNETES_DEV_UI_UPDATER_PUBLIC_KEY: ${{ vars.KUBERNETES_DEV_UI_UPDATER_PUBLIC_KEY }}
 
 jobs:
+  prime-cargo-tools:
+    if: github.ref == 'refs/heads/master'
+    name: Prime pinned Cargo tools (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-26-intel, macos-26, windows-2025]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # GitHub isolates tag caches from one another, but release tags can restore
+      # this trusted cache from the default branch. Keep extensions separate from
+      # the workspace cache so Cargo.toml/Cargo.lock changes do not evict them.
+      - name: Cache pinned Cargo tools
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: cargo-tools-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}
+          add-rust-environment-hash-key: false
+          cache-targets: false
+      - name: Install pinned Cargo tools
+        shell: bash
+        run: |
+          install_tool() {
+            local command="$1"
+            local crate="$2"
+            local version="$3"
+            if [[ "$("$command" --version 2>/dev/null | awk 'NR == 1 { print $2 }')" == "$version" ]]; then
+              return
+            fi
+            cargo install "$crate" --version "$version" --locked
+          }
+          install_tool cargo-nextest cargo-nextest "$CARGO_NEXTEST_VERSION"
+          install_tool cargo-packager cargo-packager "$CARGO_PACKAGER_VERSION"
+
   verify:
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -23,16 +62,27 @@ jobs:
         with:
           persist-credentials: false
           lfs: true
+      - name: Cache pinned Cargo tools
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: cargo-tools-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}
+          add-rust-environment-hash-key: false
+          cache-targets: false
+          save-if: false
+          cache-on-failure: true
       - name: Cache Rust build
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          cache-bin: false
           cache-on-failure: true
       - name: Install Mesa software renderer
         run: |
           sudo apt-get update
           sudo apt-get install --yes libegl1 libgl1-mesa-dri
       - name: Install cargo-nextest
-        run: cargo install cargo-nextest --version "$CARGO_NEXTEST_VERSION" --locked
+        run: |
+          [[ "$(cargo nextest --version 2>/dev/null | awk 'NR == 1 { print $2 }')" == "$CARGO_NEXTEST_VERSION" ]] || \
+            cargo install cargo-nextest --version "$CARGO_NEXTEST_VERSION" --locked
       - name: Verify tag and application version agree
         if: github.ref_type == 'tag'
         run: test "${GITHUB_REF_NAME#v}" = "$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | select(.name == "kubernetes-dev-ui") | .version')"
@@ -63,6 +113,7 @@ jobs:
       - run: cargo check -p kubernetes-dev-ui --no-default-features
 
   package-direct:
+    if: github.ref_type == 'tag'
     needs: verify
     environment: release
     timeout-minutes: 45
@@ -110,16 +161,28 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Cache pinned Cargo tools
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: cargo-tools-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}
+          add-rust-environment-hash-key: false
+          cache-targets: false
+          save-if: false
+          cache-on-failure: true
       - name: Cache Rust build
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          cache-bin: false
           cache-on-failure: true
       - name: Verify updater signing configuration
         shell: bash
         run: |
           test -n "$KUBERNETES_DEV_UI_UPDATER_PUBLIC_KEY"
       - name: Install cargo-packager
-        run: cargo install cargo-packager --version "$CARGO_PACKAGER_VERSION" --locked
+        shell: bash
+        run: |
+          [[ "$(cargo packager --version 2>/dev/null | awk 'NR == 1 { print $2 }')" == "$CARGO_PACKAGER_VERSION" ]] || \
+            cargo install cargo-packager --version "$CARGO_PACKAGER_VERSION" --locked
       - name: Build release binary
         run: cargo build --release -p kubernetes-dev-ui
       - name: Package direct-download build
@@ -152,6 +215,7 @@ jobs:
           retention-days: 1
 
   package-deb:
+    if: github.ref_type == 'tag'
     needs: verify
     timeout-minutes: 30
     strategy:
@@ -169,11 +233,23 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Cache pinned Cargo tools
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: cargo-tools-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}
+          add-rust-environment-hash-key: false
+          cache-targets: false
+          save-if: false
+          cache-on-failure: true
       - name: Cache Rust build
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          cache-bin: false
           cache-on-failure: true
-      - run: cargo install cargo-packager --version "$CARGO_PACKAGER_VERSION" --locked
+      - shell: bash
+        run: |
+          [[ "$(cargo packager --version 2>/dev/null | awk 'NR == 1 { print $2 }')" == "$CARGO_PACKAGER_VERSION" ]] || \
+            cargo install cargo-packager --version "$CARGO_PACKAGER_VERSION" --locked
       - run: cargo build --release -p kubernetes-dev-ui
       - run: cargo packager --manifest-path crates/app/Cargo.toml --release --formats deb
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -184,6 +260,7 @@ jobs:
           retention-days: 1
 
   publish:
+    if: github.ref_type == 'tag'
     needs: [package-direct, package-deb]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
