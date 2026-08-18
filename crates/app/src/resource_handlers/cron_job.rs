@@ -24,6 +24,10 @@ pub(crate) fn table_definition(api_resource: &ApiResource) -> Option<ResourceTab
     })
 }
 
+pub(crate) fn supports_manual_run(api_resource: &ApiResource) -> bool {
+    matches_namespaced_api_resource::<CronJob>(api_resource)
+}
+
 fn extract(resource: &CronJob) -> MinimalResource {
     let spec = resource.spec.as_ref();
     let active = resource

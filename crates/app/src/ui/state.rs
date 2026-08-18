@@ -342,6 +342,12 @@ pub(super) struct PendingDeploymentRestart {
 }
 
 #[derive(Debug, Clone)]
+pub(super) struct PendingCronJobRun {
+    pub(super) resource_name: String,
+    pub(super) namespace: String,
+}
+
+#[derive(Debug, Clone)]
 pub(super) struct PendingScale {
     pub(super) api_resource: ApiResource,
     pub(super) resource_name: String,
@@ -670,6 +676,10 @@ pub(super) enum ResourceAction {
         name: String,
         namespace: String,
     },
+    RequestCronJobRun {
+        name: String,
+        namespace: String,
+    },
     RequestScale {
         name: String,
         namespace: Option<String>,
@@ -747,6 +757,7 @@ impl ResourceAction {
             | Self::RequestDelete { .. }
             | Self::RequestForceDelete { .. }
             | Self::RequestDeploymentRestart { .. }
+            | Self::RequestCronJobRun { .. }
             | Self::RequestScale { .. }
             | Self::SaveData { .. }
             | Self::ViewLogs { .. }
@@ -791,6 +802,8 @@ pub(super) struct ClusterState {
     pub(super) force_delete_error: Option<String>,
     pub(super) pending_deployment_restart: Option<PendingDeploymentRestart>,
     pub(super) deployment_restart_error: Option<String>,
+    pub(super) pending_cron_job_run: Option<PendingCronJobRun>,
+    pub(super) cron_job_run_error: Option<String>,
     pub(super) pending_scale: Option<PendingScale>,
     pub(super) scale_error: Option<String>,
 }
@@ -1732,6 +1745,8 @@ impl WorkerResult for crate::worker::KubernetesClustersUpdated {
                     force_delete_error: None,
                     pending_deployment_restart: None,
                     deployment_restart_error: None,
+                    pending_cron_job_run: None,
+                    cron_job_run_error: None,
                     pending_scale: None,
                     scale_error: None,
                 },

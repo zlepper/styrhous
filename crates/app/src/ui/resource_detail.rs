@@ -5,7 +5,7 @@ use super::global_blade::{
 use super::resource_actions::show_resource_action_items;
 use super::resource_owner;
 use super::state::{
-    PendingDelete, PendingDeploymentRestart, PendingForceDelete, ResourceAction,
+    PendingCronJobRun, PendingDelete, PendingDeploymentRestart, PendingForceDelete, ResourceAction,
     ResourceDetailHistoryEntry, UiState,
 };
 use super::table_preferences::{ResourceTableKey, TableColumnDefinition};
@@ -277,6 +277,14 @@ impl GlobalBladeEffect for ResourceDetailEffect {
             ResourceAction::RequestDeploymentRestart { name, namespace } => {
                 if let Some(cluster) = context.ui_state.clusters.get_mut(&cluster_key) {
                     cluster.pending_deployment_restart = Some(PendingDeploymentRestart {
+                        resource_name: name,
+                        namespace,
+                    });
+                }
+            }
+            ResourceAction::RequestCronJobRun { name, namespace } => {
+                if let Some(cluster) = context.ui_state.clusters.get_mut(&cluster_key) {
+                    cluster.pending_cron_job_run = Some(PendingCronJobRun {
                         resource_name: name,
                         namespace,
                     });

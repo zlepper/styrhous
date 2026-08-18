@@ -21,11 +21,11 @@ use futures_util::pin_mut;
 use futures_util::stream::StreamExt;
 use http::Request;
 use k8s_openapi::api::apps::v1::{Deployment, ReplicaSet};
-use k8s_openapi::api::batch::v1::Job;
+use k8s_openapi::api::batch::v1::{CronJob, Job};
 use k8s_openapi::api::core::v1::{ConfigMap, Event as KubernetesEvent, Namespace, Pod, Secret};
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::{
-    APIGroup, GroupVersionForDiscovery, ObjectMeta,
+    APIGroup, GroupVersionForDiscovery, ObjectMeta, OwnerReference,
 };
 use k8s_openapi::{ClusterResourceScope, NamespaceResourceScope};
 use kube::api::{DeleteParams, DynamicObject, GroupVersionKind, ListParams, Preconditions};
@@ -2672,6 +2672,80 @@ pub async fn restart_deployment(
     })
 }
 
+/// Create a one-off Job from a CronJob's current job template.
+pub async fn run_cron_job(
+    client: kube::Client,
+    namespace: String,
+    resource_name: String,
+) -> Result<CronJobRunCompleted> {
+    let cron_jobs: Api<CronJob> = Api::namespaced(client.clone(), &namespace);
+    let cron_job = cron_jobs
+        .get(&resource_name)
+        .await
+        .with_context(|| format!("Fetching CronJob {resource_name} in {namespace}"))?;
+    let job = job_from_cron_job(&cron_job)?;
+
+    info!("Creating one-off Job from CronJob {resource_name} in {namespace}");
+    let jobs: Api<Job> = Api::namespaced(client, &namespace);
+    let created = jobs
+        .create(&Default::default(), &job)
+        .await
+        .with_context(|| format!("Creating Job from CronJob {resource_name} in {namespace}"))?;
+    let job_name = created
+        .metadata
+        .name
+        .context("Kubernetes created a Job without a name")?;
+
+    Ok(CronJobRunCompleted {
+        namespace,
+        cron_job_name: resource_name,
+        job_name,
+    })
+}
+
+fn job_from_cron_job(cron_job: &CronJob) -> Result<Job> {
+    let cron_job_name = cron_job
+        .metadata
+        .name
+        .as_deref()
+        .context("CronJob has no name")?;
+    let cron_job_spec = cron_job.spec.as_ref().context("CronJob has no spec")?;
+    let template = &cron_job_spec.job_template;
+    let spec = template
+        .spec
+        .clone()
+        .context("CronJob job template has no spec")?;
+    let template_metadata = template.metadata.as_ref();
+    let mut annotations = template_metadata
+        .and_then(|metadata| metadata.annotations.clone())
+        .unwrap_or_default();
+    annotations.insert("cronjob.kubernetes.io/instantiate".into(), "manual".into());
+    let owner_uid = cron_job
+        .metadata
+        .uid
+        .clone()
+        .context("CronJob has no UID")?;
+
+    Ok(Job {
+        metadata: ObjectMeta {
+            generate_name: Some(format!("{cron_job_name}-manual-")),
+            annotations: Some(annotations),
+            labels: template_metadata.and_then(|metadata| metadata.labels.clone()),
+            owner_references: Some(vec![OwnerReference {
+                api_version: "batch/v1".into(),
+                kind: "CronJob".into(),
+                name: cron_job_name.into(),
+                uid: owner_uid,
+                controller: Some(true),
+                block_owner_deletion: None,
+            }]),
+            ..Default::default()
+        },
+        spec: Some(spec),
+        status: None,
+    })
+}
+
 /// Apply (replace) a resource from YAML
 pub async fn apply_resource_yaml(
     editor_id: u64,
@@ -2832,6 +2906,7 @@ mod tests {
         AVAILABLE_COLUMN, READY_COLUMN, RESTARTS_COLUMN, STATUS_COLUMN, UP_TO_DATE_COLUMN,
     };
     use k8s_openapi::api::apps::v1::{Deployment, DeploymentStatus};
+    use k8s_openapi::api::batch::v1::{CronJobSpec, JobSpec, JobTemplateSpec};
     use k8s_openapi::api::core::v1::{ContainerStatus, Pod, PodStatus};
     use k8s_openapi::apimachinery::pkg::apis::meta::v1::{APIResource, ObjectMeta, OwnerReference};
 
@@ -2865,6 +2940,109 @@ mod tests {
 
         assert_eq!(merged.len(), 1);
         assert_eq!(merged[0].storage, StorageDriver::Secret);
+    }
+
+    #[test]
+    fn cron_job_run_copies_the_template_and_marks_the_job_as_manual() {
+        let cron_job = CronJob {
+            metadata: ObjectMeta {
+                name: Some("nightly-report".into()),
+                uid: Some("cron-job-uid".into()),
+                ..Default::default()
+            },
+            spec: Some(CronJobSpec {
+                schedule: "0 0 * * *".into(),
+                job_template: JobTemplateSpec {
+                    metadata: Some(ObjectMeta {
+                        labels: Some(BTreeMap::from([("team".into(), "analytics".into())])),
+                        annotations: Some(BTreeMap::from([(
+                            "example.com/runbook".into(),
+                            "nightly".into(),
+                        )])),
+                        ..Default::default()
+                    }),
+                    spec: Some(JobSpec::default()),
+                },
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let job = job_from_cron_job(&cron_job).expect("valid CronJob");
+
+        assert_eq!(
+            job.metadata.generate_name.as_deref(),
+            Some("nightly-report-manual-")
+        );
+        assert_eq!(job.metadata.name, None);
+        assert_eq!(job.metadata.labels.as_ref().unwrap()["team"], "analytics");
+        assert_eq!(
+            job.metadata.annotations.as_ref().unwrap()["example.com/runbook"],
+            "nightly"
+        );
+        assert_eq!(
+            job.metadata.annotations.as_ref().unwrap()["cronjob.kubernetes.io/instantiate"],
+            "manual"
+        );
+        assert_eq!(job.spec, Some(JobSpec::default()));
+        assert_eq!(
+            job.metadata.owner_references,
+            Some(vec![OwnerReference {
+                api_version: "batch/v1".into(),
+                kind: "CronJob".into(),
+                name: "nightly-report".into(),
+                uid: "cron-job-uid".into(),
+                controller: Some(true),
+                block_owner_deletion: None,
+            }])
+        );
+    }
+
+    #[test]
+    fn cron_job_run_rejects_missing_required_source_fields() {
+        assert!(job_from_cron_job(&CronJob::default()).is_err());
+
+        let missing_spec = CronJob {
+            metadata: ObjectMeta {
+                name: Some("nightly-report".into()),
+                uid: Some("cron-job-uid".into()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(job_from_cron_job(&missing_spec).is_err());
+
+        let missing_template_spec = CronJob {
+            metadata: ObjectMeta {
+                name: Some("nightly-report".into()),
+                uid: Some("cron-job-uid".into()),
+                ..Default::default()
+            },
+            spec: Some(CronJobSpec {
+                schedule: "0 0 * * *".into(),
+                job_template: JobTemplateSpec::default(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(job_from_cron_job(&missing_template_spec).is_err());
+
+        let missing_uid = CronJob {
+            metadata: ObjectMeta {
+                name: Some("nightly-report".into()),
+                ..Default::default()
+            },
+            spec: Some(CronJobSpec {
+                schedule: "0 0 * * *".into(),
+                job_template: JobTemplateSpec {
+                    spec: Some(JobSpec::default()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(job_from_cron_job(&missing_uid).is_err());
     }
 
     #[test]

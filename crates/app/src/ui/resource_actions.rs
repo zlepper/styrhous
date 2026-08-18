@@ -148,6 +148,17 @@ pub(super) fn show_resource_action_items(
             });
         }
     }
+    if crate::resource_handlers::cron_job::supports_manual_run(api_resource)
+        && let Some(namespace) = resource.namespace.clone()
+    {
+        menu.separator();
+        if menu.action("Run now").clicked() && pending_action.is_none() {
+            *pending_action = Some(ResourceAction::RequestCronJobRun {
+                name: resource.name.clone(),
+                namespace,
+            });
+        }
+    }
     menu.separator();
     if menu
         .destructive_action_with_icon(

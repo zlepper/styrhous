@@ -26,10 +26,10 @@ use crate::terminal_launcher::{
 use crate::worker::{Worker, WorkerTrait};
 use components::{apply_light_theme, scroll};
 use dialogs::{
-    show_bulk_delete_confirmation, show_bulk_delete_error, show_delete_confirmation,
-    show_deployment_restart_confirmation, show_deployment_restart_error,
-    show_force_delete_confirmation, show_force_delete_error, show_scale_dialog, show_scale_error,
-    show_terminal_launch_error,
+    show_bulk_delete_confirmation, show_bulk_delete_error, show_cron_job_run_confirmation,
+    show_cron_job_run_error, show_delete_confirmation, show_deployment_restart_confirmation,
+    show_deployment_restart_error, show_force_delete_confirmation, show_force_delete_error,
+    show_scale_dialog, show_scale_error, show_terminal_launch_error,
 };
 use state::{LogDisplayOptions, PersistedClusterSelections, ResourceNavigationExpansion, UiState};
 use table_preferences::PersistedResourceTablePreferences;
@@ -194,6 +194,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
         show_bulk_delete_confirmation(&ctx, &mut self.ui_state, &mut commands_to_send);
         show_force_delete_confirmation(&ctx, &mut self.ui_state, &mut commands_to_send);
         show_deployment_restart_confirmation(&ctx, &mut self.ui_state, &mut commands_to_send);
+        show_cron_job_run_confirmation(&ctx, &mut self.ui_state, &mut commands_to_send);
         show_scale_dialog(&ctx, &mut self.ui_state, &mut commands_to_send);
         show_terminal_launch_error(
             &ctx,
@@ -202,6 +203,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             &mut commands_to_send,
         );
         show_deployment_restart_error(&ctx, &mut self.ui_state);
+        show_cron_job_run_error(&ctx, &mut self.ui_state);
         show_bulk_delete_error(&ctx, &mut self.ui_state);
         show_force_delete_error(&ctx, &mut self.ui_state);
         show_scale_error(&ctx, &mut self.ui_state);
