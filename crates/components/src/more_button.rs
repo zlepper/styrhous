@@ -36,6 +36,7 @@ impl MoreButton {
     /// [`MoreMenu::destructive_action`], and [`MoreMenu::separator`] methods
     /// build the menu contents.
     pub fn show(self, ui: &mut Ui, add_contents: impl FnOnce(&mut MoreMenu<'_>)) -> Response {
+        let accessibility_label = self.accessibility_label;
         let trigger = TailwindButton::icon(
             icons::ellipsis_horizontal_icon()
                 .fit_to_exact_size(Vec2::splat(16.0))
@@ -43,11 +44,11 @@ impl MoreButton {
         )
         .variant(ButtonVariant::Secondary)
         .size(ButtonSize::Md)
-        .accessibility_label(self.accessibility_label)
+        .accessibility_label(accessibility_label.clone())
         .show(ui);
 
         let popup_id = Popup::default_response_id(&trigger);
-        let _popup = Popup::menu(&trigger)
+        if let Some(popup) = Popup::menu(&trigger)
             .align(egui::RectAlign::BOTTOM_END)
             .width(MENU_WIDTH)
             .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
@@ -55,7 +56,13 @@ impl MoreButton {
             .show(|ui| {
                 let mut menu = MoreMenu { ui, popup_id };
                 add_contents(&mut menu);
-            });
+            })
+        {
+            ui.ctx()
+                .accesskit_node_builder(popup.response.id, |builder| {
+                    builder.set_label(format!("{accessibility_label} menu"));
+                });
+        }
 
         trigger
     }
@@ -73,7 +80,7 @@ impl MoreButton {
         } else {
             None
         };
-        let _popup = Popup::context_menu(response)
+        if let Some(popup) = Popup::context_menu(response)
             .open_memory(set_open)
             .gap(4.0)
             .width(MENU_WIDTH)
@@ -82,7 +89,14 @@ impl MoreButton {
             .show(|ui| {
                 let mut menu = MoreMenu { ui, popup_id };
                 add_contents(&mut menu);
-            });
+            })
+        {
+            response
+                .ctx
+                .accesskit_node_builder(popup.response.id, |builder| {
+                    builder.set_label("Context menu");
+                });
+        }
     }
 }
 

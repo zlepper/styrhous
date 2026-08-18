@@ -911,6 +911,9 @@ fn show_input_scrim(
             .show(ctx, |ui| {
                 ui.set_min_size(region.size());
                 let dismissed = ui.interact(ui.max_rect(), ui.id().with("dismiss"), Sense::click());
+                ui.ctx().accesskit_node_builder(dismissed.id, |builder| {
+                    builder.set_label("Dismiss blade");
+                });
                 let mut selection = None;
                 for (index, (content_id, rect, steps)) in history.iter().enumerate() {
                     let target = history_navigation_rect(active, history, *rect).intersect(region);

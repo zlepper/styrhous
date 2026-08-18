@@ -69,7 +69,7 @@ Window rect=<none>
                       TextRun value="6" rect=(x=24.0 y=166.0 width=7.8 height=15.0 center_x=27.9 center_y=173.5)
                     Label value="7" rect=(x=24.0 y=184.0 width=7.8 height=15.0 center_x=27.9 center_y=191.5)
                       TextRun value="7" rect=(x=24.0 y=184.0 width=7.8 height=15.0 center_x=27.9 center_y=191.5)
-                  MultilineTextInput value="apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: coredns\nspec:\n  selector:\n    match" state=[focused] rect=(x=82.0 y=76.0 width=1430.0 height=109.9 center_x=797.0 center_y=130.9)
+                  MultilineTextInput name="Kubernetes resource manifest" value="apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: coredns\nspec:\n  selector:\n    match" state=[focused] rect=(x=82.0 y=76.0 width=1430.0 height=109.9 center_x=797.0 center_y=130.9)
                     TextRun value="apiVersion: apps/v1\n" rect=(x=86.0 y=78.0 width=148.7 height=15.0 center_x=160.4 center_y=85.5)
                     TextRun value="kind: Deployment\n" rect=(x=86.0 y=93.0 width=125.2 height=15.0 center_x=148.6 center_y=100.5)
                     TextRun value="metadata:\n" rect=(x=86.0 y=108.0 width=70.4 height=15.0 center_x=121.2 center_y=115.5)
@@ -90,11 +90,11 @@ Window rect=<none>
           GenericContainer rect=<none>
             Label value="matchLabels" rect=(x=177.0 y=232.0 width=86.1 height=15.0 center_x=220.0 center_y=239.5)
               TextRun value="matchLabels" rect=(x=177.0 y=232.0 width=86.1 height=15.0 center_x=220.0 center_y=239.5)
-          Unknown rect=(x=168.0 y=227.0 width=258.0 height=25.0 center_x=297.0 center_y=239.5)
+          Unknown name="Insert YAML completion: matchLabels" rect=(x=168.0 y=227.0 width=258.0 height=25.0 center_x=297.0 center_y=239.5)
           GenericContainer rect=<none>
             Label value="matchExpressions" rect=(x=177.0 y=260.0 width=125.2 height=15.0 center_x=239.6 center_y=267.5)
               TextRun value="matchExpressions" rect=(x=177.0 y=260.0 width=125.2 height=15.0 center_x=239.6 center_y=267.5)
-          Unknown rect=(x=168.0 y=255.0 width=258.0 height=25.0 center_x=297.0 center_y=267.5)
+          Unknown name="Insert YAML completion: matchExpressions" rect=(x=168.0 y=255.0 width=258.0 height=25.0 center_x=297.0 center_y=267.5)
       Label value="↑↓ navigate  ·  Enter apply  ·  Esc dismiss" rect=(x=168.0 y=300.0 width=236.1 height=15.0 center_x=286.0 center_y=307.5)
         TextRun value="↑↓ navigate  ·  Enter apply  ·  Esc dismiss" rect=(x=168.0 y=300.0 width=236.1 height=15.0 center_x=286.0 center_y=307.5)
   GenericContainer rect=<none>

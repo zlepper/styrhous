@@ -59,7 +59,7 @@ Window state=[focused] rect=<none>
                       TextRun value="3" rect=(x=24.0 y=112.0 width=7.8 height=15.0 center_x=27.9 center_y=119.5)
                     Label value="4" rect=(x=24.0 y=130.0 width=7.8 height=15.0 center_x=27.9 center_y=137.5)
                       TextRun value="4" rect=(x=24.0 y=130.0 width=7.8 height=15.0 center_x=27.9 center_y=137.5)
-                  MultilineTextInput value="apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: settings" rect=(x=82.0 y=76.0 width=1430.0 height=64.5 center_x=797.0 center_y=108.2)
+                  MultilineTextInput name="Kubernetes resource manifest" value="apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: settings" rect=(x=82.0 y=76.0 width=1430.0 height=64.5 center_x=797.0 center_y=108.2)
                     TextRun value="apiVersion: v1\n" rect=(x=86.0 y=78.0 width=109.6 height=15.0 center_x=140.8 center_y=85.5)
                     TextRun value="kind: ConfigMap\n" rect=(x=86.0 y=93.0 width=117.4 height=15.0 center_x=144.7 center_y=100.5)
                     TextRun value="metadata:\n" rect=(x=86.0 y=108.0 width=70.4 height=15.0 center_x=121.2 center_y=115.5)

@@ -520,7 +520,7 @@ fn show_values_disclosure(ui: &mut egui::Ui, values: &str) {
                     .color(gray::_700),
             );
             ui.add_space(spacing::SM);
-            show_read_only_code(ui, values, 8);
+            show_read_only_code(ui, values, 8, "Helm release values");
         },
     );
 }
@@ -540,20 +540,23 @@ fn show_release_notes(ui: &mut egui::Ui, notes: &str) {
                 .color(gray::_700),
             );
             ui.add_space(spacing::SM);
-            show_read_only_code(ui, notes, 6);
+            show_read_only_code(ui, notes, 6, "Helm release notes");
         }
     });
 }
 
-fn show_read_only_code(ui: &mut egui::Ui, content: &str, desired_rows: usize) {
+fn show_read_only_code(ui: &mut egui::Ui, content: &str, desired_rows: usize, label: &str) {
     let mut content = content.to_owned();
-    ui.add(
+    let response = ui.add(
         egui::TextEdit::multiline(&mut content)
             .code_editor()
             .interactive(false)
             .desired_width(f32::INFINITY)
             .desired_rows(desired_rows),
     );
+    ui.ctx().accesskit_node_builder(response.id, |builder| {
+        builder.set_label(label);
+    });
 }
 
 fn show_storage_metadata(ui: &mut egui::Ui, release: &HelmRelease) {

@@ -1297,6 +1297,7 @@ fn data_value_editor(
         .expect("typed data detail and editor keys remain in sync");
     let response = TailwindTextArea::new(value)
         .id_salt(("resource-data-value", key))
+        .accessibility_label(format!("Value for {key}"))
         .monospace()
         .desired_rows(3)
         .enabled(!immutable && !editor.saving)

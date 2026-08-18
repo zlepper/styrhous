@@ -48,39 +48,39 @@ Window state=[focused] rect=<none>
                         CheckBox name="Render ANSI styling" state=[toggled=Mixed] rect=(x=1076.0 y=21.0 width=28.0 height=28.0 center_x=1090.0 center_y=35.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
-            Unknown rect=(x=24.0 y=76.0 width=1488.0 height=924.0 center_x=768.0 center_y=538.0)
+            Unknown name="Pod log text" rect=(x=24.0 y=76.0 width=1488.0 height=924.0 center_x=768.0 center_y=538.0)
             GenericContainer rect=<none>
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
                     Label value=" INFO  server: listening on 0.0.0.0:8080" rect=(x=24.0 y=76.0 width=337.2 height=16.0 center_x=192.6 center_y=84.0)
-                  Unknown rect=(x=24.0 y=76.0 width=337.2 height=16.0 center_x=192.6 center_y=84.0)
+                  Unknown name="Pod log line 1" rect=(x=24.0 y=76.0 width=337.2 height=16.0 center_x=192.6 center_y=84.0)
                   GenericContainer rect=<none>
                     Label value=" INFO  database: connection pool initialized" rect=(x=24.0 y=95.0 width=370.9 height=16.0 center_x=209.4 center_y=103.0)
-                  Unknown rect=(x=24.0 y=95.0 width=370.9 height=16.0 center_x=209.4 center_y=103.0)
+                  Unknown name="Pod log line 2" rect=(x=24.0 y=95.0 width=370.9 height=16.0 center_x=209.4 center_y=103.0)
                   GenericContainer rect=<none>
                     Label value=" INFO  http: GET /healthz 200 2ms" rect=(x=24.0 y=114.0 width=278.2 height=16.0 center_x=163.1 center_y=122.0)
-                  Unknown rect=(x=24.0 y=114.0 width=278.2 height=16.0 center_x=163.1 center_y=122.0)
+                  Unknown name="Pod log line 3" rect=(x=24.0 y=114.0 width=278.2 height=16.0 center_x=163.1 center_y=122.0)
                   GenericContainer rect=<none>
                     Label value=" INFO  http: GET /v1/widgets 200 14ms" rect=(x=24.0 y=133.0 width=311.9 height=16.0 center_x=179.9 center_y=141.0)
-                  Unknown rect=(x=24.0 y=133.0 width=311.9 height=16.0 center_x=179.9 center_y=141.0)
+                  Unknown name="Pod log line 4" rect=(x=24.0 y=133.0 width=311.9 height=16.0 center_x=179.9 center_y=141.0)
                   GenericContainer rect=<none>
                     Label value=" WARN  cache: refreshing stale entry widgets:featured" rect=(x=24.0 y=152.0 width=446.7 height=16.0 center_x=247.4 center_y=160.0)
-                  Unknown rect=(x=24.0 y=152.0 width=446.7 height=16.0 center_x=247.4 center_y=160.0)
+                  Unknown name="Pod log line 5" rect=(x=24.0 y=152.0 width=446.7 height=16.0 center_x=247.4 center_y=160.0)
                   GenericContainer rect=<none>
                     Label value=" INFO  cache: refresh complete" rect=(x=24.0 y=171.0 width=252.9 height=16.0 center_x=150.4 center_y=179.0)
-                  Unknown rect=(x=24.0 y=171.0 width=252.9 height=16.0 center_x=150.4 center_y=179.0)
+                  Unknown name="Pod log line 6" rect=(x=24.0 y=171.0 width=252.9 height=16.0 center_x=150.4 center_y=179.0)
                   GenericContainer rect=<none>
                     Label value=" INFO  http: POST /v1/widgets 201 38ms" rect=(x=24.0 y=190.0 width=320.3 height=16.0 center_x=184.1 center_y=198.0)
-                  Unknown rect=(x=24.0 y=190.0 width=320.3 height=16.0 center_x=184.1 center_y=198.0)
+                  Unknown name="Pod log line 7" rect=(x=24.0 y=190.0 width=320.3 height=16.0 center_x=184.1 center_y=198.0)
                   GenericContainer rect=<none>
                     Label value=" INFO  metrics: flushed 18 samples" rect=(x=24.0 y=209.0 width=286.6 height=16.0 center_x=167.3 center_y=217.0)
-                  Unknown rect=(x=24.0 y=209.0 width=286.6 height=16.0 center_x=167.3 center_y=217.0)
+                  Unknown name="Pod log line 8" rect=(x=24.0 y=209.0 width=286.6 height=16.0 center_x=167.3 center_y=217.0)
                   GenericContainer rect=<none>
                     Label value=" INFO  http: GET /healthz 200 1ms" rect=(x=24.0 y=228.0 width=278.2 height=16.0 center_x=163.1 center_y=236.0)
-                  Unknown rect=(x=24.0 y=228.0 width=278.2 height=16.0 center_x=163.1 center_y=236.0)
+                  Unknown name="Pod log line 9" rect=(x=24.0 y=228.0 width=278.2 height=16.0 center_x=163.1 center_y=236.0)
                   GenericContainer rect=<none>
                     Label value=" INFO  worker: processed batch of 42 jobs" rect=(x=24.0 y=247.0 width=345.6 height=16.0 center_x=196.8 center_y=255.0)
-                  Unknown rect=(x=24.0 y=247.0 width=345.6 height=16.0 center_x=196.8 center_y=255.0)
+                  Unknown name="Pod log line 10" rect=(x=24.0 y=247.0 width=345.6 height=16.0 center_x=196.8 center_y=255.0)
             ScrollBar rect=(x=24.0 y=990.0 width=1488.0 height=10.0 center_x=768.0 center_y=995.0)
             ScrollBar rect=(x=1502.0 y=76.0 width=10.0 height=924.0 center_x=1507.0 center_y=538.0)

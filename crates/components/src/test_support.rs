@@ -8,7 +8,7 @@ use std::fmt::{Display, Write as _};
 use std::io;
 use std::path::{Path, PathBuf};
 
-use egui::accesskit::Role;
+use egui::accesskit::{Action, Role};
 use egui::{Pos2, Rect, Vec2};
 use egui_kittest::kittest::NodeT;
 use egui_kittest::{Harness, Node, SnapshotError, SnapshotOptions};
@@ -208,6 +208,28 @@ impl Display for AccessibilitySnapshotError {
 
 impl std::error::Error for AccessibilitySnapshotError {}
 
+/// A visible interactive accessibility node without a usable accessible name.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AccessibilityLabelViolation {
+    description: AccessibilityNodeDescription,
+    actions: Vec<Action>,
+}
+
+impl Display for AccessibilityLabelViolation {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "{} has no non-blank accessible name (actions: {})",
+            self.description,
+            self.actions
+                .iter()
+                .map(|action| format!("{action:?}"))
+                .collect::<Vec<_>>()
+                .join(", "),
+        )
+    }
+}
+
 /// Two unrelated visible accessibility nodes that collide in the same egui layer.
 #[derive(Clone, Debug, PartialEq)]
 pub struct AccessibilityOverlap {
@@ -233,6 +255,7 @@ impl Display for AccessibilityOverlap {
 pub struct UiHarnessSnapshotError {
     pixel: Option<Box<SnapshotError>>,
     accessibility: Option<Box<AccessibilitySnapshotError>>,
+    labels: Vec<AccessibilityLabelViolation>,
     overlaps: Vec<AccessibilityOverlap>,
 }
 
@@ -244,6 +267,9 @@ impl Display for UiHarnessSnapshotError {
         }
         if let Some(error) = &self.accessibility {
             sections.push(format!("Accessibility snapshot failed:\n{error}"));
+        }
+        if !self.labels.is_empty() {
+            sections.push(missing_labels_message(&self.labels));
         }
         if !self.overlaps.is_empty() {
             let overlaps = self
@@ -271,6 +297,12 @@ pub trait AccessibilitySnapshot {
         options: &AccessibilityTreeOptions,
     ) -> Vec<AccessibilityOverlap>;
 
+    /// Return visible interactive nodes whose accessible names are absent or blank.
+    fn unlabeled_interactive_accessibility_nodes(
+        &self,
+        options: &AccessibilityTreeOptions,
+    ) -> Vec<AccessibilityLabelViolation>;
+
     /// Compare the current tree with `{name}.accessibility.txt`.
     #[track_caller]
     fn accessibility_snapshot(&self, name: impl AsRef<str>) {
@@ -284,7 +316,11 @@ pub trait AccessibilitySnapshot {
         name: impl AsRef<str>,
         options: &AccessibilityTreeOptions,
     ) {
+        let labels = self.unlabeled_interactive_accessibility_nodes(options);
         let overlaps = self.illegal_accessibility_overlaps(options);
+        if !labels.is_empty() {
+            panic!("{}", missing_labels_message(&labels));
+        }
         if !overlaps.is_empty() {
             panic!("{}", illegal_overlaps_message(&overlaps));
         }
@@ -354,14 +390,16 @@ impl<State> AccessibilitySnapshot for Harness<'_, State> {
             return Vec::new();
         }
 
-        let mut nodes = Vec::new();
-        collect_accessibility_nodes(
-            &self.root(),
-            self.ctx.pixels_per_point(),
-            self.ctx.viewport_rect(),
-            &mut nodes,
-        );
+        let nodes = current_accessibility_nodes(self);
         find_illegal_overlaps(&nodes)
+    }
+
+    fn unlabeled_interactive_accessibility_nodes(
+        &self,
+        _options: &AccessibilityTreeOptions,
+    ) -> Vec<AccessibilityLabelViolation> {
+        let nodes = current_accessibility_nodes(self);
+        find_unlabeled_interactive_nodes(&nodes)
     }
 
     fn try_accessibility_snapshot_with_options(
@@ -429,14 +467,25 @@ impl<State> UiHarnessSnapshot for Harness<'_, State> {
         let pixel = self.try_snapshot_options(&options.name, &options.pixel);
         let accessibility =
             self.try_accessibility_snapshot_with_options(&options.name, &options.accessibility);
-        let overlaps = self.illegal_accessibility_overlaps(&options.accessibility);
+        let nodes = current_accessibility_nodes(self);
+        let labels = find_unlabeled_interactive_nodes(&nodes);
+        let overlaps = if options.accessibility.check_illegal_overlaps {
+            find_illegal_overlaps(&nodes)
+        } else {
+            Vec::new()
+        };
 
         let error = UiHarnessSnapshotError {
             pixel: pixel.err().map(Box::new),
             accessibility: accessibility.err().map(Box::new),
+            labels,
             overlaps,
         };
-        if error.pixel.is_none() && error.accessibility.is_none() && error.overlaps.is_empty() {
+        if error.pixel.is_none()
+            && error.accessibility.is_none()
+            && error.labels.is_empty()
+            && error.overlaps.is_empty()
+        {
             Ok(())
         } else {
             Err(error)
@@ -636,6 +685,8 @@ impl Display for AccessibilityNodeDescription {
 #[derive(Clone, Debug)]
 struct AccessibilityNodeInfo {
     description: AccessibilityNodeDescription,
+    actions: Vec<Action>,
+    child_count: usize,
     parent: Option<usize>,
     layer: Option<usize>,
     hidden: bool,
@@ -693,6 +744,7 @@ fn collect_accessibility_node(
     nodes: &mut Vec<AccessibilityNodeInfo>,
 ) -> usize {
     let accesskit_node = node.accesskit_node();
+    let child_count = node.children().count();
     let rect = accesskit_rect(accesskit_node.bounding_box(), pixels_per_point)
         .map(|rect| rect.intersect(visible_rect));
     let index = nodes.len();
@@ -704,6 +756,8 @@ fn collect_accessibility_node(
                 value: accesskit_node.value(),
                 rect,
             },
+            actions: label_required_actions(&accesskit_node),
+            child_count,
             parent,
             layer,
             hidden: accesskit_node.is_hidden() || !rect.is_positive(),
@@ -716,6 +770,8 @@ fn collect_accessibility_node(
                 value: accesskit_node.value(),
                 rect: Rect::NOTHING,
             },
+            actions: label_required_actions(&accesskit_node),
+            child_count,
             parent,
             layer,
             hidden: true,
@@ -723,6 +779,39 @@ fn collect_accessibility_node(
     }
 
     index
+}
+
+fn label_required_actions(node: &egui_kittest::kittest::AccessKitNode<'_>) -> Vec<Action> {
+    const ACTIONS: [Action; 11] = [
+        Action::Click,
+        Action::Focus,
+        Action::Collapse,
+        Action::Expand,
+        Action::CustomAction,
+        Action::Decrement,
+        Action::Increment,
+        Action::ReplaceSelectedText,
+        Action::SetTextSelection,
+        Action::SetValue,
+        Action::ShowContextMenu,
+    ];
+
+    ACTIONS
+        .iter()
+        .copied()
+        .filter(|action| node.data().supports_action(*action))
+        .collect()
+}
+
+fn current_accessibility_nodes<State>(harness: &Harness<'_, State>) -> Vec<AccessibilityNodeInfo> {
+    let mut nodes = Vec::new();
+    collect_accessibility_nodes(
+        &harness.root(),
+        harness.ctx.pixels_per_point(),
+        harness.ctx.viewport_rect(),
+        &mut nodes,
+    );
+    nodes
 }
 
 fn clip_rect_for_scrollbars(
@@ -797,6 +886,40 @@ fn find_illegal_overlaps(nodes: &[AccessibilityNodeInfo]) -> Vec<AccessibilityOv
     overlaps
 }
 
+fn find_unlabeled_interactive_nodes(
+    nodes: &[AccessibilityNodeInfo],
+) -> Vec<AccessibilityLabelViolation> {
+    nodes
+        .iter()
+        .filter(|node| {
+            !node.hidden
+                && !node.actions.is_empty()
+                // egui labels expose Click for text selection even when they are not controls.
+                && !matches!(
+                    node.description.role.as_str(),
+                    "Label" | "ScrollBar" | "TextRun"
+                )
+                // egui represents structural surfaces such as menus, tooltips, and scroll
+                // containers as action-bearing Unknown/GenericContainer parents. Their child
+                // controls are checked independently; a leaf of either role comes from a
+                // direct `ui.interact` and must itself have a name.
+                && (!matches!(
+                    node.description.role.as_str(),
+                    "GenericContainer" | "Unknown"
+                ) || node.child_count == 0)
+                && node
+                    .description
+                    .name
+                    .as_deref()
+                    .is_none_or(|name| name.trim().is_empty())
+        })
+        .map(|node| AccessibilityLabelViolation {
+            description: node.description.clone(),
+            actions: node.actions.clone(),
+        })
+        .collect()
+}
+
 fn is_overlap_candidate(index: usize, nodes: &[AccessibilityNodeInfo]) -> bool {
     let node = &nodes[index];
     !node.hidden
@@ -860,6 +983,15 @@ fn illegal_overlaps_message(overlaps: &[AccessibilityOverlap]) -> String {
         .collect::<Vec<_>>()
         .join("\n");
     format!("Illegal accessibility overlaps:\n{overlaps}")
+}
+
+fn missing_labels_message(labels: &[AccessibilityLabelViolation]) -> String {
+    let labels = labels
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!("Interactive accessibility nodes without labels:\n{labels}")
 }
 
 fn format_rect(rect: Rect) -> String {
@@ -937,6 +1069,69 @@ mod tests {
                 > semantic.matches("GenericContainer").count()
         );
         assert!(semantic.contains("Button name=\"Visible action\""));
+    }
+
+    #[test]
+    fn label_detection_rejects_unnamed_and_whitespace_named_interactive_controls() {
+        let mut text = String::new();
+        let harness = Harness::new_ui(|ui| {
+            ui.add(egui::TextEdit::singleline(&mut text));
+            let _ = ui.button(" ");
+            let (_, custom_rect) = ui.allocate_space(egui::vec2(80.0, 24.0));
+            ui.interact(
+                custom_rect,
+                egui::Id::new("unnamed-custom-control"),
+                egui::Sense::click(),
+            );
+            let (_, image_rect) = ui.allocate_space(egui::vec2(80.0, 24.0));
+            let image = ui.interact(
+                image_rect,
+                egui::Id::new("unnamed-clickable-image"),
+                egui::Sense::click(),
+            );
+            image.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Image, true, ""));
+            let _ = ui.button("Save changes");
+            ui.label("Passive description");
+        });
+
+        let violations =
+            harness.unlabeled_interactive_accessibility_nodes(&AccessibilityTreeOptions::default());
+
+        assert_eq!(
+            violations.len(),
+            4,
+            "{}",
+            missing_labels_message(&violations)
+        );
+        assert!(
+            violations
+                .iter()
+                .any(|violation| violation.description.role == "TextInput")
+        );
+        assert!(
+            violations
+                .iter()
+                .any(|violation| violation.description.role == "Button")
+        );
+        assert!(violations.iter().any(|violation| {
+            matches!(
+                violation.description.role.as_str(),
+                "GenericContainer" | "Unknown"
+            )
+        }));
+        assert!(
+            violations
+                .iter()
+                .any(|violation| violation.description.role == "Image")
+        );
+        assert!(violations.iter().all(|violation| {
+            violation
+                .description
+                .name
+                .as_deref()
+                .is_none_or(|name| name.trim().is_empty())
+        }));
+        assert!(missing_labels_message(&violations).contains("actions:"));
     }
 
     #[test]
@@ -1135,6 +1330,59 @@ mod tests {
             assert!(output_path.join("example.accessibility.new.txt").exists());
         }
 
+        std::fs::remove_dir_all(output_path).unwrap();
+    }
+
+    #[test]
+    fn ui_harness_reports_missing_interactive_labels_with_snapshot_failures() {
+        let output_path = test_directory();
+        let mut text = String::new();
+        let mut harness = Harness::new_ui(|ui| {
+            ui.add(egui::TextEdit::singleline(&mut text));
+        });
+
+        let error = harness
+            .try_ui_harness(HarnessSnapshotOptions::new("unlabeled").output_path(&output_path))
+            .expect_err("an unnamed interactive control must fail the combined snapshot");
+
+        assert_eq!(error.labels.len(), 1);
+        assert!(
+            error
+                .to_string()
+                .contains("Interactive accessibility nodes without labels")
+        );
+        if SnapshotMode::from_env().is_update() {
+            assert!(error.pixel.is_none());
+            assert!(error.accessibility.is_none());
+            assert!(output_path.join("unlabeled.png").exists());
+            assert!(output_path.join("unlabeled.accessibility.txt").exists());
+        } else {
+            assert!(error.pixel.is_some());
+            assert!(error.accessibility.is_some());
+            assert!(output_path.join("unlabeled.new.png").exists());
+            assert!(output_path.join("unlabeled.accessibility.new.txt").exists());
+        }
+        std::fs::remove_dir_all(output_path).unwrap();
+    }
+
+    #[test]
+    fn ui_harness_keeps_label_validation_when_overlap_checks_are_disabled() {
+        let output_path = test_directory();
+        let mut text = String::new();
+        let mut harness = Harness::new_ui(|ui| {
+            ui.add(egui::TextEdit::singleline(&mut text));
+        });
+
+        let error = harness
+            .try_ui_harness(
+                HarnessSnapshotOptions::new("unlabeled")
+                    .check_illegal_overlaps(false)
+                    .output_path(&output_path),
+            )
+            .expect_err("disabling overlap checks must not disable label validation");
+
+        assert_eq!(error.labels.len(), 1);
+        assert!(error.overlaps.is_empty());
         std::fs::remove_dir_all(output_path).unwrap();
     }
 

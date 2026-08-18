@@ -44,7 +44,7 @@ Window rect=<none>
                   GenericContainer rect=<none>
                     Label value="1" rect=(x=24.0 y=76.0 width=7.8 height=15.0 center_x=27.9 center_y=83.5)
                       TextRun value="1" rect=(x=24.0 y=76.0 width=7.8 height=15.0 center_x=27.9 center_y=83.5)
-                  MultilineTextInput value="mode: Read" state=[focused] rect=(x=82.0 y=76.0 width=1430.0 height=19.1 center_x=797.0 center_y=85.6)
+                  MultilineTextInput name="Kubernetes resource manifest" value="mode: Read" state=[focused] rect=(x=82.0 y=76.0 width=1430.0 height=19.1 center_x=797.0 center_y=85.6)
                     TextRun value="mode: Read" rect=(x=86.0 y=78.0 width=78.3 height=15.0 center_x=125.1 center_y=85.5)
   GenericContainer rect=<none>
     GenericContainer rect=<none>
@@ -53,7 +53,7 @@ Window rect=<none>
           GenericContainer rect=<none>
             Label value="ReadOnly" rect=(x=185.0 y=121.0 width=62.6 height=15.0 center_x=216.3 center_y=128.5)
               TextRun value="ReadOnly" rect=(x=185.0 y=121.0 width=62.6 height=15.0 center_x=216.3 center_y=128.5)
-          Unknown rect=(x=176.0 y=116.0 width=258.0 height=25.0 center_x=305.0 center_y=128.5)
+          Unknown name="Insert YAML completion: ReadOnly" rect=(x=176.0 y=116.0 width=258.0 height=25.0 center_x=305.0 center_y=128.5)
       Label value="↑↓ navigate  ·  Enter apply  ·  Esc dismiss" rect=(x=176.0 y=161.0 width=236.1 height=15.0 center_x=294.0 center_y=168.5)
         TextRun value="↑↓ navigate  ·  Enter apply  ·  Esc dismiss" rect=(x=176.0 y=161.0 width=236.1 height=15.0 center_x=294.0 center_y=168.5)
   GenericContainer rect=<none>

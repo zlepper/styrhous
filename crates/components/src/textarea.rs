@@ -14,6 +14,7 @@ pub struct TailwindTextArea<'a> {
     desired_rows: usize,
     monospace: bool,
     enabled: bool,
+    accessibility_label: Option<String>,
 }
 
 impl<'a> TailwindTextArea<'a> {
@@ -25,6 +26,7 @@ impl<'a> TailwindTextArea<'a> {
             desired_rows: 3,
             monospace: false,
             enabled: true,
+            accessibility_label: None,
         }
     }
 
@@ -52,9 +54,16 @@ impl<'a> TailwindTextArea<'a> {
         self
     }
 
+    /// Set the required label announced for this text area by assistive technologies.
+    pub fn accessibility_label(mut self, label: impl Into<String>) -> Self {
+        self.accessibility_label = Some(label.into());
+        self
+    }
+
     /// Render the text area.
     pub fn show(self, ui: &mut Ui) -> Response {
         let id = self.id_salt.unwrap_or_else(|| ui.next_auto_id());
+        let accessibility_label = self.accessibility_label;
         let focused = ui.memory(|memory| memory.has_focus(id));
         let (fill, stroke) = if !self.enabled {
             (gray::_100, egui::Stroke::new(1.0, gray::_200))
@@ -82,7 +91,13 @@ impl<'a> TailwindTextArea<'a> {
                 if self.monospace {
                     editor = editor.font(TextStyle::Monospace);
                 }
-                ui.add_enabled(self.enabled, editor)
+                let response = ui.add_enabled(self.enabled, editor);
+                if let Some(accessibility_label) = &accessibility_label {
+                    ui.ctx().accesskit_node_builder(response.id, |builder| {
+                        builder.set_label(accessibility_label.clone());
+                    });
+                }
+                response
             })
             .inner
     }

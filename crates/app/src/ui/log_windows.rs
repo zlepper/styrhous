@@ -228,11 +228,15 @@ fn show_log_window_with_scroll_state(
             // Register a real focusable egui node for the virtual text canvas.
             // Individual rows request this ID on click, but cannot own it because
             // their set changes as pages are virtualized in and out of view.
-            let _ = ui.interact(
+            let caret_focus_response = ui.interact(
                 ui.available_rect_before_wrap(),
                 caret_focus_id,
                 egui::Sense::focusable_noninteractive(),
             );
+            ui.ctx()
+                .accesskit_node_builder(caret_focus_response.id, |builder| {
+                    builder.set_label("Pod log text");
+                });
             resolve_pending_caret(window, log_store, displayed_line_count(window), &ctx);
             let caret_has_focus = ctx.memory(|memory| memory.has_focus(caret_focus_id));
             if caret_has_focus {
@@ -442,6 +446,10 @@ fn show_log_window_with_scroll_state(
                                 .on_hover_cursor(egui::CursorIcon::Text);
                             (row_response.inner, interaction_response)
                         };
+                        ui.ctx()
+                            .accesskit_node_builder(interaction_response.id, |builder| {
+                                builder.set_label(format!("Pod log line {}", display_row + 1));
+                            });
                         let (text_left, text_start_x) = if byte_range == (0..row.text.len()) {
                             (response.rect.left() + prefix_width, 0.0)
                         } else {

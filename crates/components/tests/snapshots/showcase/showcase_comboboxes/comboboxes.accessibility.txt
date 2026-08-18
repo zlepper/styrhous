@@ -28,7 +28,7 @@ Window rect=<none>
         ComboBox name="Filter results" rect=(x=8.0 y=280.0 width=280.0 height=36.0 center_x=148.0 center_y=298.0)
         GenericContainer rect=<none>
           Image rect=(x=264.0 y=290.0 width=16.0 height=16.0 center_x=272.0 center_y=298.0)
-  Unknown rect=(x=8.0 y=245.0 width=280.0 height=186.0 center_x=148.0 center_y=338.0)
+  Unknown name="Multi-select options" rect=(x=8.0 y=245.0 width=280.0 height=186.0 center_x=148.0 center_y=338.0)
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>

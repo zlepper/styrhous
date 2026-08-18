@@ -48,7 +48,7 @@ Window rect=<none>
                       TextRun value="2" rect=(x=24.0 y=94.0 width=7.8 height=15.0 center_x=27.9 center_y=101.5)
                     Label value="3" rect=(x=24.0 y=112.0 width=7.8 height=15.0 center_x=27.9 center_y=119.5)
                       TextRun value="3" rect=(x=24.0 y=112.0 width=7.8 height=15.0 center_x=27.9 center_y=119.5)
-                  MultilineTextInput value="kind: ConfigMap\nmetadata:\n  name: map-config" rect=(x=82.0 y=76.0 width=1430.0 height=49.4 center_x=797.0 center_y=100.7)
+                  MultilineTextInput name="Kubernetes resource manifest" value="kind: ConfigMap\nmetadata:\n  name: map-config" rect=(x=82.0 y=76.0 width=1430.0 height=49.4 center_x=797.0 center_y=100.7)
                     TextRun value="kind: ConfigMap\n" rect=(x=86.0 y=78.0 width=117.4 height=15.0 center_x=144.7 center_y=85.5)
                     TextRun value="metadata:\n" rect=(x=86.0 y=93.0 width=70.4 height=15.0 center_x=121.2 center_y=100.5)
                     TextRun value="  name: map-config" rect=(x=86.0 y=108.0 width=140.9 height=15.0 center_x=156.4 center_y=115.5)

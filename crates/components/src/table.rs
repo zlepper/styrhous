@@ -226,6 +226,11 @@ impl TailwindTable {
                                     table_id.with(("header-menu", &column.id)),
                                     egui::Sense::click(),
                                 );
+                                set_accessibility_label(
+                                    ui,
+                                    &header_response,
+                                    format!("{} column", column.header),
+                                );
                                 ui.horizontal(|ui| {
                                     ui.add_space(cell_padding_x);
                                     ui.label(
@@ -262,14 +267,13 @@ impl TailwindTable {
                                 let mut interaction = None;
                                 row.col(|ui| {
                                     let rect = ui.max_rect();
-                                    interaction = Some(ui.interact(
+                                    interaction = Some(row_context_menu_response(
+                                        ui,
                                         rect,
-                                        table_id.with((
-                                            "row-context-menu",
-                                            row_index,
-                                            column_index,
-                                        )),
-                                        egui::Sense::click(),
+                                        table_id,
+                                        row_index,
+                                        column_index,
+                                        &self.columns[column_index].header,
                                     ));
                                     ui.painter().rect_filled(rect, 0.0, CONTENT_BACKGROUND);
                                     ui.painter().line_segment(
@@ -394,6 +398,7 @@ impl TailwindTable {
                                 table_id.with("selection-header-menu"),
                                 egui::Sense::click(),
                             );
+                            set_accessibility_label(ui, &header_response, "Selection column");
                             render_header(&header_response, "selection", "Selection", false);
                         });
                         for column in &self.columns {
@@ -421,6 +426,11 @@ impl TailwindTable {
                                     rect.with_max_x(resize_rect.left()),
                                     table_id.with(("header-menu", &column.id)),
                                     egui::Sense::click(),
+                                );
+                                set_accessibility_label(
+                                    ui,
+                                    &header_response,
+                                    format!("{} column", column.header),
                                 );
                                 ui.horizontal(|ui| {
                                     ui.add_space(cell_padding_x);
@@ -488,14 +498,13 @@ impl TailwindTable {
                                 let mut interaction = None;
                                 row.col(|ui| {
                                     let rect = ui.max_rect();
-                                    interaction = Some(ui.interact(
+                                    interaction = Some(row_context_menu_response(
+                                        ui,
                                         rect,
-                                        table_id.with((
-                                            "row-context-menu",
-                                            row_index,
-                                            column_index,
-                                        )),
-                                        egui::Sense::click(),
+                                        table_id,
+                                        row_index,
+                                        column_index,
+                                        &self.columns[column_index].header,
                                     ));
                                     ui.painter().rect_filled(rect, 0.0, WHITE);
                                     ui.painter().line_segment(
@@ -666,10 +675,13 @@ impl TailwindTable {
                         let mut interaction = None;
                         row.col(|ui| {
                             let rect = ui.max_rect();
-                            interaction = Some(ui.interact(
+                            interaction = Some(row_context_menu_response(
+                                ui,
                                 rect,
-                                table_id.with(("row-context-menu", row_index, col_index)),
-                                egui::Sense::click(),
+                                table_id,
+                                row_index,
+                                col_index,
+                                &self.columns[col_index].header,
                             ));
                             ui.painter().rect_filled(rect, 0.0, CONTENT_BACKGROUND);
                             ui.painter().line_segment(
@@ -773,6 +785,34 @@ fn paint_resize_handle(ui: &Ui, rect: egui::Rect, response: &egui::Response) {
         ],
         stroke,
     );
+}
+
+fn row_context_menu_response(
+    ui: &mut Ui,
+    rect: egui::Rect,
+    table_id: Id,
+    row_index: usize,
+    column_index: usize,
+    column_header: &str,
+) -> egui::Response {
+    let response = ui.interact(
+        rect,
+        table_id.with(("row-context-menu", row_index, column_index)),
+        egui::Sense::click(),
+    );
+    set_accessibility_label(
+        ui,
+        &response,
+        format!("{column_header}, row {}", row_index + 1),
+    );
+    response
+}
+
+fn set_accessibility_label(ui: &Ui, response: &egui::Response, label: impl Into<String>) {
+    let label = label.into();
+    ui.ctx().accesskit_node_builder(response.id, |builder| {
+        builder.set_label(label);
+    });
 }
 
 fn handle_column_resize(
@@ -1077,10 +1117,13 @@ impl TailwindTable {
                         let mut interaction = None;
                         row.col(|ui| {
                             let rect = ui.max_rect();
-                            interaction = Some(ui.interact(
+                            interaction = Some(row_context_menu_response(
+                                ui,
                                 rect,
-                                table_id.with(("row-context-menu", row_index, col_index)),
-                                egui::Sense::click(),
+                                table_id,
+                                row_index,
+                                col_index,
+                                &self.columns[col_index].header,
                             ));
                             ui.painter().rect_filled(rect, 0.0, bg_color);
                             ui.painter().line_segment(

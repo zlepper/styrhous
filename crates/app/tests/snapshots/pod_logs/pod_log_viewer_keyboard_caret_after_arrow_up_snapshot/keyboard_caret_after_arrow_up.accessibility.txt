@@ -48,18 +48,18 @@ Window rect=<none>
                         CheckBox name="Render ANSI styling" state=[toggled=Mixed] rect=(x=1076.0 y=21.0 width=28.0 height=28.0 center_x=1090.0 center_y=35.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
-            Unknown state=[focused] rect=(x=24.0 y=76.0 width=1488.0 height=924.0 center_x=768.0 center_y=538.0)
+            Unknown name="Pod log text" state=[focused] rect=(x=24.0 y=76.0 width=1488.0 height=924.0 center_x=768.0 center_y=538.0)
             GenericContainer rect=<none>
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
                     Label value="first row" rect=(x=24.0 y=76.0 width=75.8 height=16.0 center_x=61.9 center_y=84.0)
-                  Unknown rect=(x=24.0 y=76.0 width=75.8 height=16.0 center_x=61.9 center_y=84.0)
+                  Unknown name="Pod log line 1" rect=(x=24.0 y=76.0 width=75.8 height=16.0 center_x=61.9 center_y=84.0)
                   GenericContainer rect=<none>
                     Label value="second row" rect=(x=24.0 y=95.0 width=84.3 height=16.0 center_x=66.1 center_y=103.0)
-                  Unknown rect=(x=24.0 y=95.0 width=84.3 height=16.0 center_x=66.1 center_y=103.0)
+                  Unknown name="Pod log line 2" rect=(x=24.0 y=95.0 width=84.3 height=16.0 center_x=66.1 center_y=103.0)
                   GenericContainer rect=<none>
                     Label value="third row" rect=(x=24.0 y=114.0 width=75.8 height=16.0 center_x=61.9 center_y=122.0)
-                  Unknown rect=(x=24.0 y=114.0 width=75.8 height=16.0 center_x=61.9 center_y=122.0)
+                  Unknown name="Pod log line 3" rect=(x=24.0 y=114.0 width=75.8 height=16.0 center_x=61.9 center_y=122.0)
             ScrollBar rect=(x=24.0 y=990.0 width=1488.0 height=10.0 center_x=768.0 center_y=995.0)
             ScrollBar rect=(x=1502.0 y=76.0 width=10.0 height=924.0 center_x=1507.0 center_y=538.0)
