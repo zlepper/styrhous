@@ -1,8 +1,9 @@
 use super::resource_actions::show_resource_action_items;
 use super::resource_owner;
 use super::state::{
-    BulkDeleteTarget, ClusterConnectionState, ClusterLoadState, PendingBulkDelete, PendingDelete,
-    PendingDeploymentRestart, PendingForceDelete, ResourceAction, ResourceSearchState, UiState,
+    BulkDeleteTarget, ClusterConnectionState, ClusterLoadState, PendingBulkDelete,
+    PendingCronJobRun, PendingDelete, PendingDeploymentRestart, PendingForceDelete, ResourceAction,
+    ResourceSearchState, UiState,
 };
 use super::table_preferences::{
     MetadataColumnSource, PersistedResourceTablePreferences, ResourceTableKey,
@@ -325,6 +326,12 @@ pub(super) fn show(
                         }
                         ResourceAction::RequestDeploymentRestart { name, namespace } => {
                             cluster.pending_deployment_restart = Some(PendingDeploymentRestart {
+                                resource_name: name,
+                                namespace,
+                            });
+                        }
+                        ResourceAction::RequestCronJobRun { name, namespace } => {
+                            cluster.pending_cron_job_run = Some(PendingCronJobRun {
                                 resource_name: name,
                                 namespace,
                             });

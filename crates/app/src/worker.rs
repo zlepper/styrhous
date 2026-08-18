@@ -3,9 +3,9 @@ use crate::cluster_connection_manager::{
     Cluster, ClusterConnection, ResourceDataUpdateRequest, ResourceDetailWatchRequest,
     ResourceYamlValidationRequest, apply_resource_yaml, delete_resource, force_delete_resource,
     get_resource_scale, get_resource_schema, get_resource_yaml, reload_kubeconfig,
-    restart_deployment, start_cluster_connection, start_resource_watcher, update_resource_data,
-    update_resource_scale, validate_resource_yaml, watch_node_metrics, watch_pod_metrics_namespace,
-    watch_resource_detail,
+    restart_deployment, run_cron_job, start_cluster_connection, start_resource_watcher,
+    update_resource_data, update_resource_scale, validate_resource_yaml, watch_node_metrics,
+    watch_pod_metrics_namespace, watch_resource_detail,
 };
 use crate::helm_release::HelmRelease;
 use crate::helpers::ResultExt;
@@ -383,6 +383,12 @@ pub(crate) struct ForceDeleteResource {
 }
 #[derive(Debug)]
 pub(crate) struct RestartDeployment {
+    pub(crate) cluster_key: i32,
+    pub(crate) namespace: String,
+    pub(crate) resource_name: String,
+}
+#[derive(Debug)]
+pub(crate) struct RunCronJob {
     pub(crate) cluster_key: i32,
     pub(crate) namespace: String,
     pub(crate) resource_name: String,
@@ -829,6 +835,17 @@ pub(crate) struct DeploymentRestartFailed {
     pub(crate) error: String,
 }
 #[derive(Debug)]
+pub(crate) struct CronJobRunCompleted {
+    pub(crate) namespace: String,
+    pub(crate) cron_job_name: String,
+    pub(crate) job_name: String,
+}
+#[derive(Debug)]
+pub(crate) struct CronJobRunFailed {
+    pub(crate) cluster_key: i32,
+    pub(crate) error: String,
+}
+#[derive(Debug)]
 pub(crate) struct ResourceScaleFailed {
     pub(crate) cluster_key: i32,
     pub(crate) error: String,
@@ -1264,6 +1281,27 @@ impl WorkerCommand for RestartDeployment {
                     error: format!("{error:#?}"),
                 }),
             Err(error) => Err(DeploymentRestartFailed {
+                cluster_key,
+                error: format!("{error:#?}"),
+            }),
+        }
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for RunCronJob {
+    type Output = Result<CronJobRunCompleted, CronJobRunFailed>;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output {
+        let cluster_key = self.cluster_key;
+        match state.client_for_cluster(cluster_key).await {
+            Ok(client) => run_cron_job(client, self.namespace, self.resource_name)
+                .await
+                .map_err(|error| CronJobRunFailed {
+                    cluster_key,
+                    error: format!("{error:#?}"),
+                }),
+            Err(error) => Err(CronJobRunFailed {
                 cluster_key,
                 error: format!("{error:#?}"),
             }),

@@ -1,8 +1,9 @@
 use super::super::MyEguiApp;
 use super::super::state::ClusterConnectionState;
 use super::super::state::{
-    BulkDeleteProgress, BulkDeleteTarget, HelmReleaseWatchState, PendingDelete, PendingForceDelete,
-    PodMetricsNamespaceState, ResourceWatchState, UiState, ValidationState, YamlEditorWindowState,
+    BulkDeleteProgress, BulkDeleteTarget, HelmReleaseWatchState, PendingCronJobRun, PendingDelete,
+    PendingForceDelete, PodMetricsNamespaceState, ResourceWatchState, UiState, ValidationState,
+    YamlEditorWindowState,
 };
 use super::super::table_preferences::{
     PersistedResourceTablePreferences, ResourceTableKey, TableColumnDefinition,
@@ -961,6 +962,67 @@ fn deployment_restart_action_opens_a_confirmation_and_sends_a_worker_command() {
             .is_some_and(|command| command.cluster_key == 2
                 && command.namespace == "kube-system"
                 && command.resource_name == "coredns")
+    );
+}
+
+#[test]
+fn cron_job_run_action_opens_a_confirmation_and_sends_a_worker_command() {
+    let cron_job = fixture_api_resource("batch", "CronJob", "cronjobs");
+    let mut state = oracle_resource_table_state();
+    let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
+    cluster.selected_api_resource = Some(cron_job.clone());
+    cluster.resource_navigation = build_resource_navigation(vec![cron_job.clone()]);
+    cluster.resource_cache.insert(
+        (cron_job, Some("kube-system".to_owned())),
+        ResourceWatchState {
+            resources: BTreeMap::from([(
+                "cron-job-uid".to_owned(),
+                MinimalResource {
+                    uid: "cron-job-uid".to_owned(),
+                    name: "nightly-report".to_owned(),
+                    namespace: Some("kube-system".to_owned()),
+                    creation_timestamp: None,
+                    controller_owner: None,
+                    labels: Default::default(),
+                    annotations: Default::default(),
+                    cells: BTreeMap::new(),
+                    log_containers: Vec::new(),
+                },
+            )]),
+            is_synced: true,
+            error: None,
+        },
+    );
+
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = state;
+    harness.run();
+    harness.get_by_label("Apps & Containers").click();
+    harness.run();
+    harness.get_by_label("Cron Jobs").click();
+    harness.run();
+    harness
+        .get_by_label("More actions for nightly-report")
+        .click();
+    harness.run();
+    harness.get_by_label("Run now").click();
+    harness.run();
+    harness.event(egui::Event::PointerGone);
+    harness.run();
+
+    harness.ui_harness("resource_actions/cron_job_run_action_opens_a_confirmation_and_sends_a_worker_command/cron_job_run_confirmation");
+    harness.get_by_label("Run now").click();
+    harness.run();
+    assert!(
+        harness
+            .state()
+            .worker
+            .commands
+            .last()
+            .and_then(|command| command.as_ref().as_any().downcast_ref::<RunCronJob>())
+            .is_some_and(|command| command.cluster_key == 2
+                && command.namespace == "kube-system"
+                && command.resource_name == "nightly-report")
     );
 }
 
@@ -4181,6 +4243,55 @@ fn deployment_inspector_exposes_the_shared_restart_action() {
 }
 
 #[test]
+fn cron_job_inspector_run_action_sends_a_worker_command() {
+    let cron_job = fixture_api_resource("batch", "CronJob", "cronjobs");
+    let detail = ResourceDetail {
+        api_resource: cron_job.clone(),
+        name: "nightly-report".into(),
+        namespace: Some("kube-system".into()),
+        uid: "cron-job-uid".into(),
+        resource_version: "1".into(),
+        is_deleting: false,
+        finalizers: Vec::new(),
+        creation_timestamp: None,
+        owners: Vec::new(),
+        labels: BTreeMap::new(),
+        annotations: BTreeMap::new(),
+        payload: ResourceDetailPayload::Generic,
+    };
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    open_typed_detail(&mut harness, cron_job, detail);
+
+    harness
+        .get_by_label("More actions for nightly-report")
+        .click();
+    harness.run();
+    harness.get_by_label("Run now").click();
+    harness.run();
+    assert!(
+        harness.state().ui_state.clusters[&2]
+            .pending_cron_job_run
+            .is_some()
+    );
+    harness.run();
+    harness.get_by_label("Run now").click();
+    harness.run();
+
+    assert!(
+        harness
+            .state()
+            .worker
+            .commands
+            .last()
+            .and_then(|command| command.as_ref().as_any().downcast_ref::<RunCronJob>())
+            .is_some_and(|command| command.cluster_key == 2
+                && command.namespace == "kube-system"
+                && command.resource_name == "nightly-report")
+    );
+}
+
+#[test]
 fn config_map_inspector_saves_only_changed_existing_data_values() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = oracle_resource_table_state();
@@ -4760,6 +4871,33 @@ fn delete_confirmation_can_be_cancelled_without_sending_a_command() {
     assert!(
         harness.state().ui_state.clusters[&1]
             .pending_delete
+            .is_none()
+    );
+}
+
+#[test]
+fn cron_job_run_confirmation_can_be_cancelled_without_sending_a_command() {
+    let mut cluster = fixture_cluster(1, "dev");
+    cluster.pending_cron_job_run = Some(PendingCronJobRun {
+        resource_name: "nightly-report".into(),
+        namespace: "default".into(),
+    });
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = UiState {
+        clusters: HashMap::from([(1, cluster)]),
+        next_cluster_key: 1,
+        selected_cluster: Some(1),
+        ..Default::default()
+    };
+
+    harness.run();
+    harness.get_by_label("Cancel").click();
+    harness.run();
+
+    assert!(harness.state().worker.commands.is_empty());
+    assert!(
+        harness.state().ui_state.clusters[&1]
+            .pending_cron_job_run
             .is_none()
     );
 }

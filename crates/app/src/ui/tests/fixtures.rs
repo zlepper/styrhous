@@ -64,6 +64,8 @@ pub(super) fn fixture_cluster(cluster_key: i32, name: &str) -> ClusterState {
         force_delete_error: None,
         pending_deployment_restart: None,
         deployment_restart_error: None,
+        pending_cron_job_run: None,
+        cron_job_run_error: None,
         pending_scale: None,
         scale_error: None,
     }
