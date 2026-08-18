@@ -38,10 +38,22 @@ jobs:
         run: test "${GITHUB_REF_NAME#v}" = "$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | select(.name == "kubernetes-dev-ui") | .version')"
       - name: Test updater manifest generator
         run: bash scripts/test-generate-update-manifest.sh
-      - name: Run application tests
+      - name: Run workspace tests
         env:
+          # Mesa OpenGL is the reproducible headless renderer for egui_kittest snapshots.
           WGPU_BACKEND: gl
-        run: cargo nextest run -p kubernetes-dev-ui
+        run: cargo nextest run --workspace --no-fail-fast --test-threads 1
+      - name: Upload snapshot test failures
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: snapshot-test-failures
+          path: |
+            crates/**/tests/snapshots/**/*.diff.png
+            crates/**/tests/snapshots/**/*.new.png
+            crates/**/tests/snapshots/**/*.accessibility.new.txt
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Verify direct-release updater build
         run: cargo nextest run -p kubernetes-dev-ui updater_activation_matches_the_compiled_build_kind
       - name: Verify package-managed updater build
