@@ -27,10 +27,10 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           cache-on-failure: true
-      - name: Install software Vulkan renderer
+      - name: Install Mesa software renderer
         run: |
           sudo apt-get update
-          sudo apt-get install --yes libvulkan1 mesa-vulkan-drivers
+          sudo apt-get install --yes libegl1 libgl1-mesa-dri
       - name: Install cargo-nextest
         run: cargo install cargo-nextest --version "$CARGO_NEXTEST_VERSION" --locked
       - name: Verify tag and application version agree
@@ -40,7 +40,7 @@ jobs:
         run: bash scripts/test-generate-update-manifest.sh
       - name: Run application tests
         env:
-          WGPU_BACKEND: vulkan
+          WGPU_BACKEND: gl
         run: cargo nextest run -p kubernetes-dev-ui
       - name: Verify direct-release updater build
         run: cargo nextest run -p kubernetes-dev-ui updater_activation_matches_the_compiled_build_kind
