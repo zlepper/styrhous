@@ -48,18 +48,18 @@ Window state=[focused] rect=<none>
                         CheckBox name="Render ANSI styling" state=[toggled=Mixed] rect=(x=1076.0 y=21.0 width=28.0 height=28.0 center_x=1090.0 center_y=35.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
-            Unknown rect=(x=24.0 y=76.0 width=1488.0 height=924.0 center_x=768.0 center_y=538.0)
+            Unknown name="Pod log text" rect=(x=24.0 y=76.0 width=1488.0 height=924.0 center_x=768.0 center_y=538.0)
             GenericContainer rect=<none>
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
                     Label value="-0007 column-0008 column-0009 column-0010 column-0011 column-0012 column-0013 column-0014 column-0015 column-0016 column-0017 column-0018 column-0019 column-0020 column-0021 column-0022 column-0023 column-00" rect=(x=-106.3 y=76.0 width=1744.8 height=16.0 center_x=766.1 center_y=84.0)
-                  Unknown rect=(x=-966.0 y=76.0 width=2604.5 height=16.0 center_x=336.2 center_y=84.0)
+                  Unknown name="Pod log line 1" rect=(x=-966.0 y=76.0 width=2604.5 height=16.0 center_x=336.2 center_y=84.0)
                   GenericContainer rect=<none>
                     Label value="-0007 column-0008 column-0009 column-0010 column-0011 column-0012 column-0013 column-0014 column-0015 column-0016 column-0017 column-0018 column-0019 column-0020 column-0021 column-0022 column-0023 column-00" rect=(x=-106.3 y=95.0 width=1744.8 height=16.0 center_x=766.1 center_y=103.0)
-                  Unknown rect=(x=-966.0 y=95.0 width=2604.5 height=16.0 center_x=336.2 center_y=103.0)
+                  Unknown name="Pod log line 2" rect=(x=-966.0 y=95.0 width=2604.5 height=16.0 center_x=336.2 center_y=103.0)
                   GenericContainer rect=<none>
                     Label value="-0007 column-0008 column-0009 column-0010 column-0011 column-0012 column-0013 column-0014 column-0015 column-0016 column-0017 column-0018 column-0019 column-0020 column-0021 column-0022 column-0023 column-00" rect=(x=-106.3 y=114.0 width=1744.8 height=16.0 center_x=766.1 center_y=122.0)
-                  Unknown rect=(x=-966.0 y=114.0 width=2604.5 height=16.0 center_x=336.2 center_y=122.0)
+                  Unknown name="Pod log line 3" rect=(x=-966.0 y=114.0 width=2604.5 height=16.0 center_x=336.2 center_y=122.0)
             ScrollBar rect=(x=24.0 y=990.0 width=1488.0 height=10.0 center_x=768.0 center_y=995.0)
             ScrollBar rect=(x=1502.0 y=76.0 width=10.0 height=924.0 center_x=1507.0 center_y=538.0)

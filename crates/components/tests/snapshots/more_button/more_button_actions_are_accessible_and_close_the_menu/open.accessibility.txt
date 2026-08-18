@@ -4,7 +4,7 @@ Window state=[focused] rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         Button name="More actions for coredns" rect=(x=8.0 y=8.0 width=36.0 height=36.0 center_x=26.0 center_y=26.0)
-  Unknown rect=(x=8.0 y=44.0 width=202.0 height=89.0 center_x=109.0 center_y=88.5)
+  Unknown name="More actions for coredns menu" rect=(x=8.0 y=44.0 width=202.0 height=89.0 center_x=109.0 center_y=88.5)
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         Button name="Edit" rect=(x=13.0 y=49.0 width=192.0 height=33.0 center_x=109.0 center_y=65.5)

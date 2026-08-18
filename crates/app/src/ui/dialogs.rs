@@ -581,7 +581,7 @@ pub(super) fn show_scale_dialog(
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
                 let field_width = ui.available_width() - 60.0;
-                ui.add_sized(
+                let desired_replicas = ui.add_sized(
                     egui::vec2(field_width, 30.0),
                     egui::TextEdit::singleline(&mut pending.desired_replicas)
                         .id(egui::Id::new("desired-replicas"))
@@ -595,6 +595,10 @@ pub(super) fn show_scale_dialog(
                         .font(typography::body())
                         .vertical_align(Align::Center),
                 );
+                ui.ctx()
+                    .accesskit_node_builder(desired_replicas.id, |builder| {
+                        builder.set_label("Desired replicas");
+                    });
                 Frame::new()
                     .fill(WHITE)
                     .stroke(surface::control_border())

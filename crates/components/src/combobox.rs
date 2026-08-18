@@ -314,6 +314,7 @@ impl ComboboxSize {
 pub struct TailwindCombobox<Filter> {
     id_salt: Id,
     label: Option<WidgetText>,
+    accessibility_label: Option<String>,
     placeholder: Option<String>,
     search_accessibility_label: Option<String>,
     selected_text: Option<String>,
@@ -340,6 +341,7 @@ impl TailwindCombobox<NoFilter> {
         TailwindCombobox {
             id_salt: Id::new(id_salt),
             label: None,
+            accessibility_label: None,
             placeholder: None,
             search_accessibility_label: None,
             selected_text: None,
@@ -357,6 +359,7 @@ impl TailwindCombobox<NoFilter> {
         TailwindCombobox {
             id_salt: Id::new(label.text()),
             label: Some(label),
+            accessibility_label: None,
             placeholder: None,
             search_accessibility_label: None,
             selected_text: None,
@@ -376,6 +379,7 @@ impl TailwindCombobox<NoFilter> {
         TailwindCombobox {
             id_salt: self.id_salt,
             label: self.label,
+            accessibility_label: self.accessibility_label,
             placeholder: self.placeholder,
             search_accessibility_label: self.search_accessibility_label,
             selected_text: self.selected_text,
@@ -389,6 +393,12 @@ impl TailwindCombobox<NoFilter> {
 }
 
 impl<Filter> TailwindCombobox<Filter> {
+    /// Set the accessible name for the combobox and its options popup.
+    pub fn accessibility_label(mut self, label: impl Into<String>) -> Self {
+        self.accessibility_label = Some(label.into());
+        self
+    }
+
     /// Set the placeholder shown when the input is empty.
     pub fn placeholder(mut self, placeholder: impl Into<String>) -> Self {
         self.placeholder = Some(placeholder.into());
@@ -450,6 +460,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
         let TailwindCombobox {
             id_salt,
             label,
+            accessibility_label,
             placeholder,
             search_accessibility_label,
             selected_text,
@@ -495,12 +506,11 @@ impl<F> TailwindCombobox<WithFilter<F>> {
 
         let is_enabled = ui.is_enabled();
         let label_text = label.as_ref().map(|label| label.text().to_owned());
+        let accessibility_label = accessibility_label
+            .or_else(|| label_text.clone())
+            .unwrap_or_else(|| "Combobox".to_owned());
         input_response.widget_info(|| {
-            egui::WidgetInfo::labeled(
-                egui::WidgetType::ComboBox,
-                is_enabled,
-                label_text.as_deref().unwrap_or("Combobox"),
-            )
+            egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, is_enabled, &accessibility_label)
         });
 
         let popup_id = Popup::default_response_id(&input_response);
@@ -522,7 +532,8 @@ impl<F> TailwindCombobox<WithFilter<F>> {
         }
 
         let mut select_all_clicked = false;
-        Popup::menu(&input_response)
+        let popup_label = format!("{accessibility_label} options");
+        if let Some(popup) = Popup::menu(&input_response)
             .width(width)
             .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
             .show(|ui| {
@@ -550,7 +561,13 @@ impl<F> TailwindCombobox<WithFilter<F>> {
                             render(&mut cb, item);
                         }
                     });
-            });
+            })
+        {
+            ui.ctx()
+                .accesskit_node_builder(popup.response.id, |builder| {
+                    builder.set_label(popup_label);
+                });
+        }
 
         if keyboard.close_requested {
             Popup::close_id(ui.ctx(), popup_id);

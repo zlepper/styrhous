@@ -312,6 +312,9 @@ fn show_column_row(ui: &mut egui::Ui, column: &mut EditableColumn, handle: &Reor
         row.id().with(("reorder", &column.definition.id)),
         egui::Sense::drag(),
     );
+    row.ctx().accesskit_node_builder(response.id, |builder| {
+        builder.set_label(format!("Reorder {} column", column.definition.label));
+    });
     handle.register(&response);
     components::icons::bars_3(
         &mut row.new_child(egui::UiBuilder::new().max_rect(handle_rect)),

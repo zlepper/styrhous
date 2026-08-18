@@ -11,7 +11,7 @@ Window rect=<none>
         GenericContainer rect=<none>
           TextInput name="Search Namespaces" value="" state=[focused] rect=(x=20.0 y=35.5 width=182.0 height=21.0 center_x=111.0 center_y=46.0)
             TextRun value="" rect=(x=24.0 y=37.5 width=0.0 height=17.0 center_x=24.0 center_y=46.0)
-  Unknown rect=(x=8.0 y=64.0 width=230.0 height=81.0 center_x=123.0 center_y=104.5)
+  Unknown name="Namespaces options" rect=(x=8.0 y=64.0 width=230.0 height=81.0 center_x=123.0 center_y=104.5)
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>

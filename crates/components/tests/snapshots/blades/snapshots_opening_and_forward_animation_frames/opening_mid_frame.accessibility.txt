@@ -5,9 +5,9 @@ Window state=[focused] rect=<none>
       GenericContainer rect=<none>
   GenericContainer rect=<none>
   GenericContainer rect=<none>
-    Unknown rect=(x=0.0 y=0.0 width=1528.0 height=1024.0 center_x=764.0 center_y=512.0)
+    Unknown name="Dismiss blade" rect=(x=0.0 y=0.0 width=1528.0 height=1024.0 center_x=764.0 center_y=512.0)
   GenericContainer rect=<none>
-    Unknown rect=(x=1156.0 y=1016.0 width=380.0 height=8.0 center_x=1346.0 center_y=1020.0)
+    Unknown name="Dismiss blade" rect=(x=1156.0 y=1016.0 width=380.0 height=8.0 center_x=1346.0 center_y=1020.0)
   GenericContainer rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>

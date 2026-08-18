@@ -686,6 +686,10 @@ fn show_code_editor(
                     .desired_rows(line_count)
                     .layouter(&mut layouter)
                     .show(ui);
+                ui.ctx()
+                    .accesskit_node_builder(output.response.id, |builder| {
+                        builder.set_label("Kubernetes resource manifest");
+                    });
                 changed = output.response.changed();
                 cursor_byte = output
                     .cursor_range
@@ -1144,7 +1148,11 @@ fn completion_row(
             );
         })
         .response;
-    response.interact(egui::Sense::click())
+    let response = response.interact(egui::Sense::click());
+    ui.ctx().accesskit_node_builder(response.id, |builder| {
+        builder.set_label(format!("Insert YAML completion: {}", suggestion.label));
+    });
+    response
 }
 
 fn completion_list_width(suggestions: &[crate::resource_schema::CompletionSuggestion]) -> f32 {

@@ -330,6 +330,7 @@ fn show_debug_image_preset_row(
                 show_debug_image_table_cell(ui, DEBUG_IMAGE_PROFILE_COLUMN_WIDTH, |ui| {
                     let mut combobox_ui = centered_table_control_ui(ui);
                     let response = TailwindCombobox::new(("debug-image-profile", index))
+                        .accessibility_label(format!("Debug image {} debug profile", index + 1))
                         .selected_text(preset.profile.label())
                         .width(150.0)
                         .compact()

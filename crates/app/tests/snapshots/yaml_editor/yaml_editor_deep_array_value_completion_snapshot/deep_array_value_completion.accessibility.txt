@@ -52,7 +52,7 @@ Window state=[focused] rect=<none>
                       TextRun value="4" rect=(x=24.0 y=130.0 width=7.8 height=15.0 center_x=27.9 center_y=137.5)
                     Label value="5" rect=(x=24.0 y=148.0 width=7.8 height=15.0 center_x=27.9 center_y=155.5)
                       TextRun value="5" rect=(x=24.0 y=148.0 width=7.8 height=15.0 center_x=27.9 center_y=155.5)
-                  MultilineTextInput value="spec:\n  templates:\n    - spec:\n        containers:\n          - imagePullPolicy: Al" rect=(x=82.0 y=76.0 width=1430.0 height=79.6 center_x=797.0 center_y=115.8)
+                  MultilineTextInput name="Kubernetes resource manifest" value="spec:\n  templates:\n    - spec:\n        containers:\n          - imagePullPolicy: Al" rect=(x=82.0 y=76.0 width=1430.0 height=79.6 center_x=797.0 center_y=115.8)
                     TextRun value="spec:\n" rect=(x=86.0 y=78.0 width=39.1 height=15.0 center_x=105.6 center_y=85.5)
                     TextRun value="  templates:\n" rect=(x=86.0 y=93.0 width=93.9 height=15.0 center_x=133.0 center_y=100.5)
                     TextRun value="    - spec:\n" rect=(x=86.0 y=108.0 width=86.1 height=15.0 center_x=129.0 center_y=115.5)
@@ -70,6 +70,6 @@ Window state=[focused] rect=<none>
           GenericContainer rect=<none>
             Label value="Always" rect=(x=104.0 y=171.0 width=47.0 height=15.0 center_x=127.5 center_y=178.5)
               TextRun value="Always" rect=(x=104.0 y=171.0 width=47.0 height=15.0 center_x=127.5 center_y=178.5)
-          Unknown rect=(x=95.0 y=166.0 width=258.0 height=25.0 center_x=224.0 center_y=178.5)
+          Unknown name="Insert YAML completion: Always" rect=(x=95.0 y=166.0 width=258.0 height=25.0 center_x=224.0 center_y=178.5)
       Label value="↑↓ navigate  ·  Enter apply  ·  Esc dismiss" rect=(x=95.0 y=211.0 width=236.1 height=15.0 center_x=213.0 center_y=218.5)
         TextRun value="↑↓ navigate  ·  Enter apply  ·  Esc dismiss" rect=(x=95.0 y=211.0 width=236.1 height=15.0 center_x=213.0 center_y=218.5)
