@@ -69,6 +69,20 @@ impl<W: WorkerTrait, L: TerminalLauncher> Default for MyEguiApp<W, L> {
 
 impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        Self::new_with_updater(cc, crate::updater::UpdaterService::start())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_for_test(cc: &eframe::CreationContext<'_>) -> Self {
+        let mut updater = crate::updater::UpdaterService::default();
+        updater.set_status_for_test(crate::updater::UpdateStatus::LocalBuild);
+        Self::new_with_updater(cc, updater)
+    }
+
+    fn new_with_updater(
+        cc: &eframe::CreationContext<'_>,
+        updater: crate::updater::UpdaterService,
+    ) -> Self {
         configure_egui_context(&cc.egui_ctx);
         let log_store = LogStoreService::with_repaint_context(cc.egui_ctx.clone());
         let mut worker = W::with_repaint_context(cc.egui_ctx.clone());
@@ -80,7 +94,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
             resource_table_preferences: PersistedResourceTablePreferences::default(),
             ui_state: UiState::default(),
             log_store,
-            updater: crate::updater::UpdaterService::start(),
+            updater,
         };
         app.load_persisted_state(cc.storage);
         app

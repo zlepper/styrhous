@@ -90,11 +90,7 @@ jobs:
         run: bash scripts/test-generate-update-manifest.sh
       - name: Run workspace tests
         env:
-          # Force Mesa's CPU renderer and a headless EGL platform. Merely selecting the
-          # OpenGL backend still lets the runner choose a different GL implementation.
-          EGL_PLATFORM: surfaceless
-          LIBGL_ALWAYS_SOFTWARE: "1"
-          MESA_LOADER_DRIVER_OVERRIDE: llvmpipe
+          # Select wgpu's OpenGL backend, matching the Docker CI diagnostic command.
           WGPU_BACKEND: gl
         run: cargo nextest run --workspace --no-fail-fast --test-threads 1
       - name: Upload snapshot test failures

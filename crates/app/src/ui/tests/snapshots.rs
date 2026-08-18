@@ -2085,6 +2085,27 @@ fn settings_button_opens_the_terminal_launcher_blade() {
 }
 
 #[test]
+fn settings_shows_that_application_updates_are_being_checked() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness
+        .state_mut()
+        .updater
+        .set_status_for_test(UpdateStatus::Checking);
+    harness.run();
+
+    let settings_position = harness.get_by_label("Settings").rect().center();
+    primary_click(&mut harness, settings_position);
+    harness.run();
+
+    harness.get_by_label("Application updates");
+    harness.get_by_label("Checking for updates…");
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "updater/settings_shows_that_application_updates_are_being_checked/checking",
+    ));
+}
+
+#[test]
 fn settings_shows_a_staged_application_update() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = oracle_resource_table_state();
