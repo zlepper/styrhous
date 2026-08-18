@@ -64,7 +64,9 @@ reinstalling the Rust toolchain, `cargo-nextest`, and Mesa dependencies each tim
 
 ```bash
 docker build --file scripts/Dockerfile.ci --tag kubernetes-dev-ui-ci .
-docker run --rm --env WGPU_BACKEND=gl --volume "$PWD:/workspace" kubernetes-dev-ui-ci \
+docker run --rm --env EGL_PLATFORM=surfaceless --env LIBGL_ALWAYS_SOFTWARE=1 \
+  --env MESA_LOADER_DRIVER_OVERRIDE=llvmpipe --env WGPU_BACKEND=gl \
+  --volume "$PWD:/workspace" kubernetes-dev-ui-ci \
   cargo nextest run --workspace --no-fail-fast --test-threads 1 \
   -E 'not test(/kind_integration/)'
 ```
