@@ -26,6 +26,16 @@ and reusable workflows**. Allow GitHub-owned actions and whitelist only
 pin requirement. Rust itself is pinned in `rust-toolchain.toml`; the release workflow pins
 `cargo-nextest` and `cargo-packager` in its top-level environment.
 
+A push to trusted `master` primes a dedicated, version-keyed cache for those Cargo extensions on
+each release runner platform. GitHub intentionally isolates caches produced by distinct tags, but
+release tags may restore caches produced by the default branch. Keeping the extensions separate
+from the lockfile-keyed workspace build cache avoids recompiling them for every release while
+still invalidating the cache when either pinned extension version changes.
+Merge this workflow change to `master` and let its priming job complete before creating the next
+release tag; a tag created first must install the tools once because it cannot read another tag's
+cache. The same one-time compilation is expected whenever either pinned Cargo extension version
+changes.
+
 The workflow publishes installers to GitHub Releases and creates a per-platform update manifest.
 Direct-download DMG, NSIS, and AppImage builds download and verify updates in the background,
 then apply them on the next launch. Debian packages are built with automatic updates disabled.
