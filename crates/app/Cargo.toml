@@ -1,6 +1,6 @@
 [package]
 name = "kubernetes-dev-ui"
-version = "0.0.1-alpha.8"
+version = "0.0.1-alpha.9"
 edition = "2024"
 description = "A desktop UI for exploring Kubernetes clusters"
 homepage = "https://github.com/zlepper/kubernetes-dev-ui"
@@ -30,6 +30,14 @@ binaries_dir = "../../target/release"
 [package.metadata.packager.nsis]
 installer_mode = "currentUser"
 installer_icon = "../../assets/icons/kubernetes-dev-ui.ico"
+
+[package.metadata.packager.appimage]
+# winit loads this through dlopen, so the AppImage dependency scanner cannot
+# discover it from the executable's ELF dependencies.
+libs = ["libxkbcommon-x11.so.0"]
+
+[package.metadata.packager.deb]
+depends = ["libxkbcommon-x11-0"]
 
 [dependencies]
 eframe = { version = "0.36.1", features = ["persistence"] }

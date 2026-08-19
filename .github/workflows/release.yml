@@ -161,6 +161,9 @@ jobs:
         with:
           path: ${{ runner.os == 'Windows' && 'target/release/kubernetes-dev-ui.exe' || 'target/release/kubernetes-dev-ui' }}
           key: application-binary-${{ matrix.id }}-${{ github.sha }}
+      - name: Install AppImage package dependency
+        if: runner.os == 'Linux'
+        run: bash scripts/install-appimage-package-dependencies.sh
       - name: Package direct-download build
         shell: bash
         env:
@@ -190,9 +193,20 @@ jobs:
         env:
           KUBERNETES_DEV_UI_DISABLE_AUTO_UPDATE: "1"
         run: |
-          bundle=$(find dist -type f -name '*.AppImage' -print -quit)
+          bundle=$(find dist -type f -name '*.AppImage' -exec realpath {} \; -quit)
           test -n "$bundle"
           chmod +x "$bundle"
+          temporary_directory=$(mktemp -d)
+          host_library=$(ldconfig -p | awk '$1 == "libxkbcommon-x11.so.0" { print $NF; exit }')
+          test -n "$host_library"
+          disabled_library="$host_library.kdui-smoke-disabled"
+          sudo mv "$host_library" "$disabled_library"
+          trap 'sudo mv "$disabled_library" "$host_library" 2>/dev/null || true; sudo ldconfig; rm -rf "$temporary_directory"' EXIT
+          (
+            cd "$temporary_directory"
+            "$bundle" --appimage-extract >/dev/null
+            find squashfs-root -type f -name 'libxkbcommon-x11.so.0' -print -quit | grep -q .
+          )
           # A GUI that stays alive is expected; timeout reports that as 124.
           set +e
           timeout --kill-after=5s 10s xvfb-run -a "$bundle" --appimage-extract-and-run
@@ -315,8 +329,9 @@ jobs:
         shell: bash
         timeout-minutes: 2
         run: |
-          package=$(find dist -type f -name '*.deb' -print -quit)
+          package=$(find dist -type f -name '*.deb' -exec realpath {} \; -quit)
           test -n "$package"
+          dpkg-deb -f "$package" Depends | grep -Fx 'libxkbcommon-x11-0'
           sudo apt-get install --yes "$package"
           executable=$(dpkg -L kubernetes-dev-ui | awk '/\/usr\/bin\// { print; exit }')
           test -n "$executable"
