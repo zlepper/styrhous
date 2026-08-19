@@ -80,10 +80,12 @@ jobs:
         with:
           path: ${{ matrix.binary }}
           key: application-binary-${{ matrix.id }}-${{ github.sha }}
+      - name: Install AppImage package dependency
+        if: startsWith(matrix.id, 'linux-')
+        run: bash scripts/install-appimage-package-dependencies.sh
       - name: Install Mesa software renderer
         if: matrix.run_tests
         run: |
-          sudo apt-get update
           sudo apt-get install --yes libegl1 libgl1-mesa-dri
       - name: Install cargo-packager
         shell: bash
