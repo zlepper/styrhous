@@ -1,0 +1,159 @@
+name: Build and test
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NEXTEST_VERSION: "0.9.140"
+  CARGO_PACKAGER_VERSION: "0.11.8"
+  KUBERNETES_DEV_UI_RELEASE_BUILD: "1"
+  KUBERNETES_DEV_UI_UPDATER_PUBLIC_KEY: ${{ vars.KUBERNETES_DEV_UI_UPDATER_PUBLIC_KEY }}
+
+jobs:
+  build-and-test:
+    name: Build and test (${{ matrix.id }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: linux-x86_64
+            runner: ubuntu-24.04
+            formats: appimage
+            binary: target/release/kubernetes-dev-ui
+            run_tests: true
+          - id: linux-aarch64
+            runner: ubuntu-24.04-arm
+            formats: appimage
+            binary: target/release/kubernetes-dev-ui
+            run_tests: false
+          - id: macos-x86_64
+            runner: macos-26-intel
+            formats: app,dmg
+            binary: target/release/kubernetes-dev-ui
+            run_tests: false
+          - id: macos-aarch64
+            runner: macos-26
+            formats: app,dmg
+            binary: target/release/kubernetes-dev-ui
+            run_tests: false
+          - id: windows-x86_64
+            runner: windows-2025
+            formats: nsis
+            binary: target/release/kubernetes-dev-ui.exe
+            run_tests: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
+          persist-credentials: false
+      # Only trusted default-branch pushes write caches. Pull requests may restore
+      # them, but cannot introduce executable content for a later release.
+      - name: Cache Cargo tools
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: cargo-tools-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}-${{ hashFiles('rust-toolchain.toml') }}
+          add-rust-environment-hash-key: false
+          cache-targets: false
+          save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+          cache-on-failure: true
+      - name: Cache application build
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: application-${{ matrix.id }}
+          cache-bin: false
+          save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+          cache-on-failure: true
+      # rust-cache intentionally excludes binaries. Preserve this exact, trusted
+      # source revision separately so a tag on the same master commit can package it.
+      - name: Restore release application binary
+        id: application-binary
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ matrix.binary }}
+          key: application-binary-${{ matrix.id }}-${{ github.sha }}
+      - name: Install Mesa software renderer
+        if: matrix.run_tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libegl1 libgl1-mesa-dri
+      - name: Install cargo-packager
+        shell: bash
+        run: |
+          [[ "$(cargo packager --version 2>/dev/null | awk 'NR == 1 { print $2 }')" == "$CARGO_PACKAGER_VERSION" ]] || \
+            cargo install cargo-packager --version "$CARGO_PACKAGER_VERSION" --locked
+      - name: Install cargo-nextest
+        if: matrix.run_tests
+        shell: bash
+        run: |
+          [[ "$(cargo nextest --version 2>/dev/null | awk 'NR == 1 { print $2 }')" == "$CARGO_NEXTEST_VERSION" ]] || \
+            cargo install cargo-nextest --version "$CARGO_NEXTEST_VERSION" --locked
+      - name: Build release application
+        if: steps.application-binary.outputs.cache-hit != 'true'
+        run: cargo build --release -p kubernetes-dev-ui
+      - name: Save release application binary
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.application-binary.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ matrix.binary }}
+          key: application-binary-${{ matrix.id }}-${{ github.sha }}
+      # This is a real package build on each release platform. It validates the
+      # packager inputs and keeps both the app and packager artifacts warm.
+      - name: Build native package
+        shell: bash
+        run: cargo packager --manifest-path crates/app/Cargo.toml --release --formats "${{ matrix.formats }}"
+      # Debian packages deliberately compile with the updater disabled. Cache that
+      # distinct binary too; it cannot share the direct-download build above.
+      - name: Restore package-managed application binary
+        if: startsWith(matrix.id, 'linux-')
+        id: package-managed-application-binary
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ matrix.binary }}
+          key: application-binary-package-managed-${{ matrix.id }}-${{ github.sha }}
+      - name: Build package-managed application
+        if: startsWith(matrix.id, 'linux-') && steps.package-managed-application-binary.outputs.cache-hit != 'true'
+        env:
+          KUBERNETES_DEV_UI_DISABLE_AUTO_UPDATE: "1"
+        run: cargo build --release -p kubernetes-dev-ui
+      - name: Save package-managed application binary
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && startsWith(matrix.id, 'linux-') && steps.package-managed-application-binary.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ matrix.binary }}
+          key: application-binary-package-managed-${{ matrix.id }}-${{ github.sha }}
+      - name: Run workspace tests
+        if: matrix.run_tests
+        env:
+          WGPU_BACKEND: gl
+        run: cargo nextest run --workspace --no-fail-fast --test-threads 1
+      - name: Upload snapshot test failures
+        if: failure() && matrix.run_tests
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: snapshot-test-failures
+          path: |
+            crates/**/tests/snapshots/**/*.diff.png
+            crates/**/tests/snapshots/**/*.new.png
+            crates/**/tests/snapshots/**/*.accessibility.new.txt
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Verify direct-release updater build
+        if: matrix.run_tests
+        run: cargo nextest run -p kubernetes-dev-ui updater_activation_matches_the_compiled_build_kind
+      - name: Verify package-managed updater build
+        if: matrix.run_tests
+        env:
+          KUBERNETES_DEV_UI_DISABLE_AUTO_UPDATE: "1"
+        run: cargo nextest run -p kubernetes-dev-ui updater_activation_matches_the_compiled_build_kind
+      - name: Check without the self-updater
+        if: matrix.run_tests
+        run: cargo check -p kubernetes-dev-ui --no-default-features
