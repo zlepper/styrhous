@@ -2,7 +2,6 @@ name: Release desktop application
 
 on:
   push:
-    branches: [master]
     tags: ["v*"]
 
 permissions:
@@ -16,43 +15,6 @@ env:
   KUBERNETES_DEV_UI_UPDATER_PUBLIC_KEY: ${{ vars.KUBERNETES_DEV_UI_UPDATER_PUBLIC_KEY }}
 
 jobs:
-  prime-cargo-tools:
-    if: github.ref == 'refs/heads/master'
-    name: Prime pinned Cargo tools (${{ matrix.runner }})
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-26-intel, macos-26, windows-2025]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      # GitHub isolates tag caches from one another, but release tags can restore
-      # this trusted cache from the default branch. Keep extensions separate from
-      # the workspace cache so Cargo.toml/Cargo.lock changes do not evict them.
-      - name: Cache pinned Cargo tools
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          shared-key: cargo-tools-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}
-          add-rust-environment-hash-key: false
-          cache-targets: false
-      - name: Install pinned Cargo tools
-        shell: bash
-        run: |
-          install_tool() {
-            local command="$1"
-            local crate="$2"
-            local version="$3"
-            if [[ "$("$command" --version 2>/dev/null | awk 'NR == 1 { print $2 }')" == "$version" ]]; then
-              return
-            fi
-            cargo install "$crate" --version "$version" --locked
-          }
-          install_tool cargo-nextest cargo-nextest "$CARGO_NEXTEST_VERSION"
-          install_tool cargo-packager cargo-packager "$CARGO_PACKAGER_VERSION"
-
   verify:
     if: github.ref_type == 'tag'
     runs-on: ubuntu-24.04
@@ -65,14 +27,14 @@ jobs:
       - name: Cache pinned Cargo tools
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          shared-key: cargo-tools-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}
+          shared-key: cargo-tools-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}-${{ hashFiles('rust-toolchain.toml') }}
           add-rust-environment-hash-key: false
           cache-targets: false
-          save-if: false
           cache-on-failure: true
       - name: Cache Rust build
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          shared-key: application-linux-x86_64
           cache-bin: false
           cache-on-failure: true
       - name: Install Mesa software renderer
@@ -165,16 +127,22 @@ jobs:
       - name: Cache pinned Cargo tools
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          shared-key: cargo-tools-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}
+          shared-key: cargo-tools-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}-${{ hashFiles('rust-toolchain.toml') }}
           add-rust-environment-hash-key: false
           cache-targets: false
-          save-if: false
           cache-on-failure: true
       - name: Cache Rust build
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          shared-key: application-${{ matrix.id }}
           cache-bin: false
           cache-on-failure: true
+      - name: Restore release application binary
+        id: application-binary
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.os == 'Windows' && 'target/release/kubernetes-dev-ui.exe' || 'target/release/kubernetes-dev-ui' }}
+          key: application-binary-${{ matrix.id }}-${{ github.sha }}
       - name: Verify updater signing configuration
         shell: bash
         run: |
@@ -185,7 +153,14 @@ jobs:
           [[ "$(cargo packager --version 2>/dev/null | awk 'NR == 1 { print $2 }')" == "$CARGO_PACKAGER_VERSION" ]] || \
             cargo install cargo-packager --version "$CARGO_PACKAGER_VERSION" --locked
       - name: Build release binary
+        if: steps.application-binary.outputs.cache-hit != 'true'
         run: cargo build --release -p kubernetes-dev-ui
+      - name: Save release application binary
+        if: steps.application-binary.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.os == 'Windows' && 'target/release/kubernetes-dev-ui.exe' || 'target/release/kubernetes-dev-ui' }}
+          key: application-binary-${{ matrix.id }}-${{ github.sha }}
       - name: Package direct-download build
         shell: bash
         env:
@@ -290,8 +265,10 @@ jobs:
       matrix:
         include:
           - id: linux-x86_64-deb
+            cache_id: linux-x86_64
             runner: ubuntu-24.04
           - id: linux-aarch64-deb
+            cache_id: linux-aarch64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     env:
@@ -304,21 +281,35 @@ jobs:
       - name: Cache pinned Cargo tools
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          shared-key: cargo-tools-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}
+          shared-key: cargo-tools-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}-${{ hashFiles('rust-toolchain.toml') }}
           add-rust-environment-hash-key: false
           cache-targets: false
-          save-if: false
           cache-on-failure: true
       - name: Cache Rust build
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          shared-key: application-${{ matrix.cache_id }}
           cache-bin: false
           cache-on-failure: true
+      - name: Restore package-managed application binary
+        id: application-binary
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: target/release/kubernetes-dev-ui
+          key: application-binary-package-managed-${{ matrix.cache_id }}-${{ github.sha }}
       - shell: bash
         run: |
           [[ "$(cargo packager --version 2>/dev/null | awk 'NR == 1 { print $2 }')" == "$CARGO_PACKAGER_VERSION" ]] || \
             cargo install cargo-packager --version "$CARGO_PACKAGER_VERSION" --locked
-      - run: cargo build --release -p kubernetes-dev-ui
+      - name: Build package-managed application
+        if: steps.application-binary.outputs.cache-hit != 'true'
+        run: cargo build --release -p kubernetes-dev-ui
+      - name: Save package-managed application binary
+        if: steps.application-binary.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: target/release/kubernetes-dev-ui
+          key: application-binary-package-managed-${{ matrix.cache_id }}-${{ github.sha }}
       - run: cargo packager --manifest-path crates/app/Cargo.toml --release --formats deb
       - name: Smoke test Debian package startup
         shell: bash
