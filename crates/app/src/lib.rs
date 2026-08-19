@@ -27,11 +27,19 @@ pub use ui::log_viewer_profile::LogViewerProfile;
 pub(crate) const DEFAULT_NATIVE_WINDOW_SIZE: [f32; 2] = [1200.0, 800.0];
 pub(crate) const MIN_NATIVE_WINDOW_SIZE: [f32; 2] = [1000.0, 600.0];
 
+fn native_app_icon() -> egui::IconData {
+    eframe::icon_data::from_png_bytes(include_bytes!(
+        "../../../assets/icons/kubernetes-dev-ui.png"
+    ))
+    .expect("the bundled application icon must be a valid PNG")
+}
+
 fn native_options() -> eframe::NativeOptions {
     eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size(DEFAULT_NATIVE_WINDOW_SIZE)
-            .with_min_inner_size(MIN_NATIVE_WINDOW_SIZE),
+            .with_min_inner_size(MIN_NATIVE_WINDOW_SIZE)
+            .with_icon(native_app_icon()),
         ..Default::default()
     }
 }
@@ -63,6 +71,10 @@ mod tests {
         assert_eq!(
             viewport.min_inner_size,
             Some(egui::Vec2::from(MIN_NATIVE_WINDOW_SIZE))
+        );
+        assert_eq!(
+            viewport.icon.as_ref().map(|icon| (icon.width, icon.height)),
+            Some((512, 512))
         );
     }
 }
