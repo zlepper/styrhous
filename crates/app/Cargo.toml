@@ -1,6 +1,6 @@
 [package]
 name = "kubernetes-dev-ui"
-version = "0.0.1-alpha.5"
+version = "0.0.1-alpha.6"
 edition = "2024"
 description = "A desktop UI for exploring Kubernetes clusters"
 homepage = "https://github.com/zlepper/kubernetes-dev-ui"
@@ -17,13 +17,19 @@ publisher = "Kubernetes Dev UI"
 description = "A desktop UI for exploring Kubernetes clusters"
 homepage = "https://github.com/zlepper/kubernetes-dev-ui"
 category = "DeveloperTool"
-icons = ["../../assets/icons/kubernetes-dev-ui.svg"]
+# Generate these platform-native assets from the editable SVG with
+# scripts/generate-app-icon.sh. cargo-packager only supports SVG icons on Linux.
+icons = [
+  "../../assets/icons/kubernetes-dev-ui.png",
+  "../../assets/icons/kubernetes-dev-ui@2x.png",
+]
 formats = ["app", "dmg", "nsis", "appimage", "deb"]
 out_dir = "../../dist"
 binaries_dir = "../../target/release"
 
 [package.metadata.packager.nsis]
 installer_mode = "currentUser"
+installer_icon = "../../assets/icons/kubernetes-dev-ui.ico"
 
 [dependencies]
 eframe = { version = "0.36.1", features = ["persistence"] }
