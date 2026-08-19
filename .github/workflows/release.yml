@@ -208,6 +208,72 @@ jobs:
           bundle=$(find dist -type f -name "${{ matrix.update_glob }}" -print -quit)
           test -n "$bundle"
           bash scripts/generate-update-manifest.sh "$(sed -n 's/^version = "\(.*\)"/\1/p' crates/app/Cargo.toml | head -1)" "${{ matrix.target }}" "${{ matrix.arch }}" "${{ matrix.update_format }}" "$bundle" "dist/kubernetes-dev-ui-update-${{ matrix.id }}.json"
+      - name: Smoke test AppImage startup
+        if: runner.os == 'Linux'
+        shell: bash
+        timeout-minutes: 2
+        env:
+          KUBERNETES_DEV_UI_DISABLE_AUTO_UPDATE: "1"
+        run: |
+          bundle=$(find dist -type f -name '*.AppImage' -print -quit)
+          test -n "$bundle"
+          chmod +x "$bundle"
+          # A GUI that stays alive is expected; timeout reports that as 124.
+          set +e
+          timeout --kill-after=5s 10s xvfb-run -a "$bundle" --appimage-extract-and-run
+          status=$?
+          set -e
+          test "$status" -eq 124
+      - name: Smoke test macOS DMG startup
+        if: runner.os == 'macOS'
+        shell: bash
+        timeout-minutes: 2
+        env:
+          KUBERNETES_DEV_UI_DISABLE_AUTO_UPDATE: "1"
+        run: |
+          temporary_directory=$(mktemp -d)
+          mount_point="$temporary_directory/mount"
+          mkdir "$mount_point"
+          trap 'hdiutil detach "$mount_point" -quiet || true; rm -rf "$temporary_directory"' EXIT
+          dmg=$(find dist -type f -name '*.dmg' -print -quit)
+          test -n "$dmg"
+          hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount_point"
+          app=$(find "$mount_point" -maxdepth 1 -name '*.app' -print -quit)
+          test -n "$app"
+          cp -R "$app" "$temporary_directory/Kubernetes Dev UI.app"
+          executable=$(find "$temporary_directory/Kubernetes Dev UI.app/Contents/MacOS" -type f -perm -u+x -print -quit)
+          test -n "$executable"
+          "$executable" &
+          process_id=$!
+          sleep 5
+          kill -0 "$process_id"
+          kill "$process_id" || true
+          wait "$process_id" || true
+      - name: Smoke test Windows NSIS install and startup
+        if: runner.os == 'Windows'
+        shell: pwsh
+        timeout-minutes: 2
+        env:
+          KUBERNETES_DEV_UI_DISABLE_AUTO_UPDATE: "1"
+        run: |
+          $destination = Join-Path $env:RUNNER_TEMP 'kubernetes-dev-ui-installer-smoke'
+          $installer = Get-ChildItem -Path dist -Filter '*.exe' -Recurse | Select-Object -First 1
+          if ($null -eq $installer) { throw 'NSIS installer was not produced' }
+          $install = Start-Process -FilePath $installer.FullName -ArgumentList @('/S', "/D=$destination") -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "NSIS installer exited with $($install.ExitCode)" }
+          $application = Get-ChildItem -Path $destination -Filter '*.exe' -Recurse |
+            Where-Object { $_.Name -ne 'Uninstall.exe' } |
+            Select-Object -First 1
+          if ($null -eq $application) { throw 'Installed application executable was not found' }
+          $process = Start-Process -FilePath $application.FullName -PassThru
+          Start-Sleep -Seconds 5
+          if ($process.HasExited) { throw "Installed application exited with $($process.ExitCode)" }
+          Stop-Process -Id $process.Id -Force
+          $uninstaller = Get-ChildItem -Path $destination -Filter 'Uninstall.exe' -Recurse | Select-Object -First 1
+          if ($null -eq $uninstaller) { throw 'NSIS uninstaller was not found' }
+          $uninstall = Start-Process -FilePath $uninstaller.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "NSIS uninstaller exited with $($uninstall.ExitCode)" }
+          if (Test-Path $destination) { throw 'NSIS uninstaller left its destination behind' }
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.id }}
@@ -254,6 +320,22 @@ jobs:
             cargo install cargo-packager --version "$CARGO_PACKAGER_VERSION" --locked
       - run: cargo build --release -p kubernetes-dev-ui
       - run: cargo packager --manifest-path crates/app/Cargo.toml --release --formats deb
+      - name: Smoke test Debian package startup
+        shell: bash
+        timeout-minutes: 2
+        run: |
+          package=$(find dist -type f -name '*.deb' -print -quit)
+          test -n "$package"
+          sudo apt-get install --yes "$package"
+          executable=$(dpkg -L kubernetes-dev-ui | awk '/\/usr\/bin\// { print; exit }')
+          test -n "$executable"
+          # A GUI that stays alive is expected; timeout reports that as 124.
+          set +e
+          timeout --kill-after=5s 10s xvfb-run -a "$executable"
+          status=$?
+          set -e
+          test "$status" -eq 124
+          sudo apt-get purge --yes kubernetes-dev-ui
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.id }}
