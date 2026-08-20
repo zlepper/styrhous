@@ -4,8 +4,10 @@ set -euo pipefail
 
 cluster_name="kind"
 context_name="kind-${cluster_name}"
-timeout="120s"
-timeout_seconds=120
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+metrics_server_manifest="${script_dir}/kind-metrics-server.yaml"
+timeout="180s"
+timeout_seconds=180
 test_namespace_prefix="kdui-it-"
 
 clusters="$(kind get clusters)"
@@ -38,6 +40,22 @@ done
 
 kubectl --context "${context_name}" wait --for=condition=Ready nodes --all --timeout="${timeout}"
 kubectl --context "${context_name}" --namespace kube-system rollout status deployment/coredns --timeout="${timeout}"
+
+echo "Ensuring metrics-server is available..."
+kubectl --context "${context_name}" apply --filename "${metrics_server_manifest}"
+kubectl --context "${context_name}" --namespace kube-system rollout status deployment/metrics-server --timeout="${timeout}"
+kubectl --context "${context_name}" wait \
+    --for=condition=Available apiservice/v1beta1.metrics.k8s.io --timeout="${timeout}"
+deadline=$((SECONDS + timeout_seconds))
+until kubectl --context "${context_name}" get --raw=/apis/metrics.k8s.io/v1beta1/nodes >/dev/null 2>&1; do
+    if (( SECONDS >= deadline )); then
+        echo "Timed out waiting for the Metrics API to become available." >&2
+        kubectl --context "${context_name}" --namespace kube-system get deployment metrics-server >&2 || true
+        kubectl --context "${context_name}" --namespace kube-system logs deployment/metrics-server >&2 || true
+        exit 1
+    fi
+    sleep 2
+done
 
 if ! namespace_names="$(kubectl --context "${context_name}" get namespaces \
     --output=jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')"; then

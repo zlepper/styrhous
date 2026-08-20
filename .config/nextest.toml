@@ -6,7 +6,7 @@ kind = { max-threads = 4 }
 
 [scripts.setup.ensure-kind-cluster]
 command = ["bash", "scripts/ensure-kind-cluster.sh"]
-slow-timeout = { period = "2m", terminate-after = 1, grace-period = "10s" }
+slow-timeout = { period = "5m", terminate-after = 1, grace-period = "10s" }
 capture-stdout = true
 capture-stderr = true
 
@@ -17,3 +17,7 @@ setup = "ensure-kind-cluster"
 [[profile.default.overrides]]
 filter = 'test(/ui::tests::kind_integration::/)'
 test-group = "kind"
+
+[[profile.default.overrides]]
+filter = 'test(/ui::tests::kind_integration::test_pod_metrics_charts_integration/)'
+slow-timeout = { period = "4m", terminate-after = 1, grace-period = "10s" }

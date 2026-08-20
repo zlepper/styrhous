@@ -13,6 +13,13 @@ cargo build
 cargo run -p kubernetes-dev-ui
 ```
 
+For a local Kind cluster with resource-usage metrics, prepare the shared test cluster first:
+
+```bash
+bash scripts/ensure-kind-cluster.sh
+cargo run -p kubernetes-dev-ui
+```
+
 ## Testing
 
 Use nextest for all normal test runs. Do not use `cargo test` for the package test suite.
