@@ -69,6 +69,7 @@ impl YamlEditorProfile {
                 suggestions_visible: false,
                 suggestion_selection: 0,
                 search: YamlEditorSearchState::default(),
+                highlight_cache: Default::default(),
             },
             commands: Vec::new(),
             elapsed_seconds: 0.0,
@@ -226,6 +227,12 @@ mod tests {
             .expect("benchmark profile initializes");
         profile.run_frame();
         let initial_offset = profile.scroll_metrics.offset.y;
+        let initial_job = profile
+            .editor
+            .highlight_cache
+            .stored_job()
+            .expect("initial frame creates a highlighted layout job")
+            .clone();
         assert!(
             profile
                 .scroll_metrics
@@ -235,9 +242,142 @@ mod tests {
 
         assert_eq!(profile.scroll_frame(), profile.editor.edited_yaml.len());
         assert!(profile.scroll_metrics.offset.y > initial_offset);
+        assert!(std::sync::Arc::ptr_eq(
+            &initial_job,
+            profile
+                .editor
+                .highlight_cache
+                .stored_job()
+                .expect("scrolling reuses the highlighted layout job")
+        ));
         let downward_offset = profile.scroll_metrics.offset.y;
 
         profile.scroll_frame();
         assert!(profile.scroll_metrics.offset.y < downward_offset);
+        assert!(std::sync::Arc::ptr_eq(
+            &initial_job,
+            profile
+                .editor
+                .highlight_cache
+                .stored_job()
+                .expect("scrolling back reuses the highlighted layout job")
+        ));
+    }
+
+    #[test]
+    fn changed_yaml_rebuilds_its_highlighted_layout_job() {
+        let mut profile = YamlEditorProfile::with_document_bytes(10 * 1024)
+            .expect("benchmark profile initializes");
+
+        profile.run_frame();
+        let first_job = profile
+            .editor
+            .highlight_cache
+            .stored_job()
+            .expect("first frame creates a highlighted layout job")
+            .clone();
+        profile.editor.edited_yaml.push_str("# changed\n");
+        profile.run_frame();
+
+        assert!(!std::sync::Arc::ptr_eq(
+            &first_job,
+            profile
+                .editor
+                .highlight_cache
+                .stored_job()
+                .expect("changed frame creates a highlighted layout job")
+        ));
+    }
+
+    #[test]
+    fn search_change_rebuilds_the_highlighted_layout_job() {
+        let mut profile = YamlEditorProfile::with_document_bytes(10 * 1024)
+            .expect("benchmark profile initializes");
+
+        profile.run_frame();
+        let first_job = profile
+            .editor
+            .highlight_cache
+            .stored_job()
+            .expect("first frame creates a highlighted layout job")
+            .clone();
+        profile.editor.search.query = "BENCHMARK_VARIABLE".to_owned();
+        profile.run_frame();
+
+        assert!(!std::sync::Arc::ptr_eq(
+            &first_job,
+            profile
+                .editor
+                .highlight_cache
+                .stored_job()
+                .expect("search frame creates a highlighted layout job")
+        ));
+    }
+
+    #[test]
+    fn regex_mode_change_rebuilds_the_highlighted_layout_job() {
+        let mut profile = YamlEditorProfile::with_document_bytes(10 * 1024)
+            .expect("benchmark profile initializes");
+        profile.editor.search.query = r"BENCHMARK_VARIABLE_\d+".to_owned();
+
+        profile.run_frame();
+        let literal_job = profile
+            .editor
+            .highlight_cache
+            .stored_job()
+            .expect("literal search creates a highlighted layout job")
+            .clone();
+
+        profile.editor.search.regex_mode = true;
+        profile.run_frame();
+
+        assert!(
+            !std::sync::Arc::ptr_eq(
+                &literal_job,
+                profile
+                    .editor
+                    .highlight_cache
+                    .stored_job()
+                    .expect("regex search creates a highlighted layout job")
+            ),
+            "switching a query with different literal and regex meanings must rebuild highlights"
+        );
+    }
+
+    #[test]
+    fn active_search_match_rebuilds_the_highlighted_layout_job() {
+        let mut profile = YamlEditorProfile::with_document_bytes(10 * 1024)
+            .expect("benchmark profile initializes");
+        profile.editor.search.query = "BENCHMARK_VARIABLE".to_owned();
+
+        profile.run_frame();
+        let inactive_job = profile
+            .editor
+            .highlight_cache
+            .stored_job()
+            .expect("search frame creates a highlighted layout job")
+            .clone();
+        profile.editor.search.active_match = Some(0);
+        profile.run_frame();
+        let first_active_job = profile
+            .editor
+            .highlight_cache
+            .stored_job()
+            .expect("active search frame creates a highlighted layout job")
+            .clone();
+
+        assert!(!std::sync::Arc::ptr_eq(&inactive_job, &first_active_job));
+
+        profile.editor.search.active_match = Some(1);
+        profile.run_frame();
+
+        assert!(!std::sync::Arc::ptr_eq(
+            &first_active_job,
+            profile
+                .editor
+                .highlight_cache
+                .stored_job()
+                .expect("next active search frame creates a highlighted layout job")
+        ));
     }
 }

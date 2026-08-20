@@ -1,6 +1,6 @@
 use super::state::{
-    UiState, ValidationState, YamlEditorWindowState, api_error_message, diagnostics_from_api_error,
-    set_editor_diagnostics,
+    UiState, ValidationState, YamlEditorHighlightCache, YamlEditorHighlightCacheKey,
+    YamlEditorWindowState, api_error_message, diagnostics_from_api_error, set_editor_diagnostics,
 };
 use crate::resource_schema::{
     CompletionContext, CompletionContextKind, SourceRange, YamlDiagnostic,
@@ -20,6 +20,7 @@ use components::{
 };
 use egui::text::{CCursor, CCursorRange};
 use egui_extras::syntax_highlighting::{CodeTheme, highlight};
+use std::collections::HashSet;
 use std::ops::Range;
 use std::time::{Duration, Instant};
 
@@ -689,37 +690,25 @@ fn show_code_editor(
             ui.horizontal_top(|ui| {
                 ui.vertical(|ui| {
                     ui.set_min_width(36.0);
-                    for line in 1..=line_count {
-                        let has_diagnostic = editor
-                            .diagnostics
-                            .iter()
-                            .any(|diagnostic| diagnostic.line == Some(line));
-                        ui.label(
-                            egui::RichText::new(line.to_string())
-                                .font(typography::monospace())
-                                .color(if has_diagnostic {
-                                    status::DANGER
-                                } else {
-                                    gray::_500
-                                }),
-                        );
-                    }
+                    ui.add_space(2.0);
+                    ui.label(line_number_layout_job(line_count, &editor.diagnostics));
                 });
                 ui.separator();
                 let theme = CodeTheme::dark(typography::MONOSPACE_SIZE);
-                let mut layouter = |ui: &egui::Ui,
-                                    buffer: &dyn egui::TextBuffer,
-                                    wrap_width: f32| {
-                    let mut layout_job =
-                        highlight(ui.ctx(), ui.style(), &theme, buffer.as_str(), "yaml");
-                    if let Ok(matches) =
-                        find_matches(buffer.as_str(), &search_query, search_regex_mode)
-                    {
-                        apply_search_highlights(&mut layout_job, &matches, active_match.as_ref());
-                    }
-                    layout_job.wrap.max_width = wrap_width;
-                    ui.fonts_mut(|fonts| fonts.layout_job(layout_job))
-                };
+                let mut layouter =
+                    |ui: &egui::Ui, buffer: &dyn egui::TextBuffer, wrap_width: f32| {
+                        let mut layout_job = yaml_editor_layout_job(
+                            ui,
+                            &mut editor.highlight_cache,
+                            &theme,
+                            buffer.as_str(),
+                            &search_query,
+                            search_regex_mode,
+                            active_match.as_ref(),
+                        );
+                        layout_job.wrap.max_width = wrap_width;
+                        ui.fonts_mut(|fonts| fonts.layout_job(layout_job))
+                    };
                 ui.style_mut().visuals.text_cursor.stroke = egui::Stroke::new(4.0, indigo::_100);
                 ui.style_mut().visuals.text_cursor.blink = false;
                 let output = egui::TextEdit::multiline(&mut editor.edited_yaml)
@@ -953,6 +942,53 @@ fn show_code_editor(
         }
     }
     changed
+}
+
+fn yaml_editor_layout_job(
+    ui: &egui::Ui,
+    cache: &mut YamlEditorHighlightCache,
+    theme: &CodeTheme,
+    yaml: &str,
+    search_query: &str,
+    search_regex_mode: bool,
+    active_match: Option<&Range<usize>>,
+) -> egui::text::LayoutJob {
+    let key = YamlEditorHighlightCacheKey::new(search_query, search_regex_mode, active_match);
+    if let Some(job) = cache.layout_job(&key, yaml) {
+        return (*job).clone();
+    }
+
+    let mut job = highlight(ui.ctx(), ui.style(), theme, yaml, "yaml");
+    if let Ok(matches) = find_matches(yaml, search_query, search_regex_mode) {
+        apply_search_highlights(&mut job, &matches, active_match);
+    }
+    cache.store(key, job.clone());
+    job
+}
+
+fn line_number_layout_job(
+    line_count: usize,
+    diagnostics: &[YamlDiagnostic],
+) -> egui::text::LayoutJob {
+    let diagnostic_lines: HashSet<_> = diagnostics
+        .iter()
+        .filter_map(|diagnostic| diagnostic.line)
+        .collect();
+    let normal_format = egui::text::TextFormat::simple(typography::monospace(), gray::_500);
+    let diagnostic_format = egui::text::TextFormat::simple(typography::monospace(), status::DANGER);
+    let mut job = egui::text::LayoutJob::default();
+    for line in 1..=line_count {
+        let format = if diagnostic_lines.contains(&line) {
+            &diagnostic_format
+        } else {
+            &normal_format
+        };
+        job.append(&line.to_string(), 0.0, format.clone());
+        if line < line_count {
+            job.append("\n", 0.0, format.clone());
+        }
+    }
+    job
 }
 
 fn show_diagnostic_underlines(
@@ -1655,6 +1691,37 @@ mod tests {
                 .expect("regex search is valid"),
             vec![6..24]
         );
+    }
+
+    #[test]
+    fn line_number_layout_job_numbers_and_marks_diagnostic_lines() {
+        let diagnostics = vec![YamlDiagnostic {
+            path: "/spec/containers/0/image".into(),
+            message: "image is required".into(),
+            line: Some(10),
+            range: None,
+        }];
+
+        let job = line_number_layout_job(12, &diagnostics);
+
+        assert_eq!(job.text, "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12");
+        let diagnostic_index = job.text.find("10\n").expect("line 10 is present");
+        let diagnostic_section = job
+            .sections
+            .iter()
+            .find(|section| {
+                section.byte_range.start.0 <= diagnostic_index
+                    && diagnostic_index < section.byte_range.end.0
+            })
+            .expect("line 10 has a layout section");
+        assert_eq!(diagnostic_section.format.color, status::DANGER);
+
+        let normal_section = job
+            .sections
+            .iter()
+            .find(|section| section.byte_range.start.0 == 0)
+            .expect("line 1 has a layout section");
+        assert_eq!(normal_section.format.color, gray::_500);
     }
 
     #[test]
@@ -2483,6 +2550,7 @@ mod tests {
             suggestions_visible: false,
             suggestion_selection: 0,
             search: Default::default(),
+            highlight_cache: Default::default(),
         }
     }
 

@@ -20,6 +20,8 @@ use crate::worker::{ResourceApiError, WorkerCommandBox, WorkerResult, WorkerTrai
 #[cfg(test)]
 use components::BladeNavigator;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::ops::Range;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 pub(super) use super::log_state::{
@@ -127,6 +129,60 @@ pub(super) struct YamlEditorWindowState {
     pub(super) suggestions_visible: bool,
     pub(super) suggestion_selection: usize,
     pub(super) search: YamlEditorSearchState,
+    pub(super) highlight_cache: YamlEditorHighlightCache,
+}
+
+/// A syntax-highlighted job, independent of egui's font atlas.
+///
+/// The job is invalidated whenever its source or search state differs. Egui
+/// continues to own the `Galley` cache, so glyph-atlas and font changes remain
+/// handled by its normal lifecycle.
+#[derive(Debug, Clone, Default)]
+pub(super) struct YamlEditorHighlightCache {
+    entry: Option<(YamlEditorHighlightCacheKey, Arc<egui::text::LayoutJob>)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct YamlEditorHighlightCacheKey {
+    search_query: String,
+    search_regex_mode: bool,
+    active_match: Option<Range<usize>>,
+}
+
+impl YamlEditorHighlightCacheKey {
+    pub(super) fn new(
+        search_query: &str,
+        search_regex_mode: bool,
+        active_match: Option<&Range<usize>>,
+    ) -> Self {
+        Self {
+            search_query: search_query.to_owned(),
+            search_regex_mode,
+            active_match: active_match.cloned(),
+        }
+    }
+}
+
+impl YamlEditorHighlightCache {
+    pub(super) fn layout_job(
+        &self,
+        key: &YamlEditorHighlightCacheKey,
+        yaml: &str,
+    ) -> Option<Arc<egui::text::LayoutJob>> {
+        self.entry
+            .as_ref()
+            .filter(|(cached_key, job)| cached_key == key && job.text == yaml)
+            .map(|(_, job)| Arc::clone(job))
+    }
+
+    pub(super) fn store(&mut self, key: YamlEditorHighlightCacheKey, job: egui::text::LayoutJob) {
+        self.entry = Some((key, Arc::new(job)));
+    }
+
+    #[cfg(test)]
+    pub(super) fn stored_job(&self) -> Option<&Arc<egui::text::LayoutJob>> {
+        self.entry.as_ref().map(|(_, job)| job)
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -1071,6 +1127,7 @@ impl UiState {
                 suggestions_visible: false,
                 suggestion_selection: 0,
                 search: YamlEditorSearchState::default(),
+                highlight_cache: YamlEditorHighlightCache::default(),
             },
         );
         commands_to_send.push(Box::new(crate::worker::GetResourceYaml {
