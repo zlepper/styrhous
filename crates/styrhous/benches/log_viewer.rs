@@ -1,7 +1,7 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use kubernetes_dev_ui::LogViewerProfile;
 use std::hint::black_box;
 use std::time::Duration;
+use styrhous::LogViewerProfile;
 
 const DEFAULT_WIDE_PAYLOAD_BYTES: &[usize] = &[256, 1024, 4 * 1024, 16 * 1024];
 

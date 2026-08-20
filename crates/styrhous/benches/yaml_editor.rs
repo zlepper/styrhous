@@ -1,7 +1,7 @@
 use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
-use kubernetes_dev_ui::YamlEditorProfile;
 use std::hint::black_box;
 use std::time::Duration;
+use styrhous::YamlEditorProfile;
 
 fn yaml_editor(c: &mut Criterion) {
     let mut group = c.benchmark_group("deployment_yaml_editor");

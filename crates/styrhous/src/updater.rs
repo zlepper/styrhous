@@ -8,7 +8,7 @@
 use std::env;
 
 #[cfg(any(feature = "self-updater", test))]
-const DISABLE_AUTO_UPDATE_ENV: &str = "KUBERNETES_DEV_UI_DISABLE_AUTO_UPDATE";
+const DISABLE_AUTO_UPDATE_ENV: &str = "STYRHOUS_DISABLE_AUTO_UPDATE";
 
 #[allow(
     dead_code,
@@ -87,7 +87,7 @@ impl UpdaterService {
             };
             let (sender, receiver) = std::sync::mpsc::channel();
             std::thread::Builder::new()
-                .name("kubernetes-dev-ui-updater".into())
+                .name("styrhous-updater".into())
                 .spawn(move || {
                     let status = download_latest_update(public_key, &sender);
                     let _ = sender.send(status);
@@ -171,14 +171,14 @@ fn updates_disabled_by_value(value: &str) -> bool {
 
 #[cfg(feature = "self-updater")]
 fn updater_activation() -> (UpdateStatus, Option<&'static str>) {
-    if updates_disabled_by_environment() || cfg!(kubernetes_dev_ui_package_managed_build) {
+    if updates_disabled_by_environment() || cfg!(styrhous_package_managed_build) {
         return (UpdateStatus::ExternallyManaged, None);
     }
-    if !cfg!(kubernetes_dev_ui_release_build) {
+    if !cfg!(styrhous_release_build) {
         return (UpdateStatus::LocalBuild, None);
     }
 
-    match option_env!("KUBERNETES_DEV_UI_UPDATER_PUBLIC_KEY").filter(|key| !key.trim().is_empty()) {
+    match option_env!("STYRHOUS_UPDATER_PUBLIC_KEY").filter(|key| !key.trim().is_empty()) {
         Some(public_key) => (UpdateStatus::Checking, Some(public_key)),
         None => (
             UpdateStatus::Failed {
@@ -205,7 +205,7 @@ mod implementation {
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::Duration;
 
-    const UPDATE_ENDPOINT: &str = "https://github.com/zlepper/kubernetes-dev-ui/releases/latest/download/kubernetes-dev-ui-update-{{target}}-{{arch}}.json";
+    const UPDATE_ENDPOINT: &str = "https://github.com/zlepper/styrhous/releases/latest/download/styrhous-update-{{target}}-{{arch}}.json";
     const UPDATE_STATE_NAME: &str = "pending-update.yaml";
     const MAX_APPLY_ATTEMPTS: u8 = 2;
 
@@ -474,7 +474,7 @@ mod implementation {
             return Ok(PathBuf::from(home)
                 .join("Library")
                 .join("Caches")
-                .join("Kubernetes Dev UI")
+                .join("Styrhous")
                 .join("updater"));
         } else if let Some(cache_home) = env::var_os("XDG_CACHE_HOME") {
             cache_home
@@ -482,12 +482,10 @@ mod implementation {
             let home = env::var_os("HOME").ok_or_else(|| anyhow!("HOME is not set"))?;
             return Ok(PathBuf::from(home)
                 .join(".cache")
-                .join("kubernetes-dev-ui")
+                .join("styrhous")
                 .join("updater"));
         };
-        Ok(PathBuf::from(base)
-            .join("Kubernetes Dev UI")
-            .join("updater"))
+        Ok(PathBuf::from(base).join("Styrhous").join("updater"))
     }
 
     fn package_path(pending: &PendingUpdate) -> Result<PathBuf> {
@@ -602,7 +600,7 @@ mod implementation {
                 version: version.into(),
                 date: None,
                 target: "linux-x86_64".into(),
-                extract_path: PathBuf::from("Kubernetes Dev UI.AppImage"),
+                extract_path: PathBuf::from("Styrhous.AppImage"),
                 download_url: Url::parse("https://invalid.example/update")
                     .expect("fixture URL should be valid"),
                 signature: "fixture signature".into(),
@@ -615,7 +613,7 @@ mod implementation {
         #[test]
         fn atomic_write_replaces_existing_staged_metadata() {
             let directory = std::env::temp_dir().join(format!(
-                "kubernetes-dev-ui-updater-test-{}-{}",
+                "styrhous-updater-test-{}-{}",
                 std::process::id(),
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -721,10 +719,10 @@ mod implementation {
         fn macos_staged_updates_target_the_application_bundle() {
             assert_eq!(
                 macos_application_bundle_path(Path::new(
-                    "/Applications/Kubernetes Dev UI.app/Contents/MacOS/kubernetes-dev-ui"
+                    "/Applications/Styrhous.app/Contents/MacOS/styrhous"
                 ))
                 .expect("a macOS bundle executable should have an application path"),
-                PathBuf::from("/Applications/Kubernetes Dev UI.app")
+                PathBuf::from("/Applications/Styrhous.app")
             );
         }
     }
@@ -791,10 +789,10 @@ mod tests {
     #[test]
     fn updater_activation_matches_the_compiled_build_kind() {
         let (status, public_key) = super::updater_activation();
-        if cfg!(kubernetes_dev_ui_package_managed_build) {
+        if cfg!(styrhous_package_managed_build) {
             assert_eq!(status, UpdateStatus::ExternallyManaged);
             assert!(public_key.is_none());
-        } else if cfg!(kubernetes_dev_ui_release_build) {
+        } else if cfg!(styrhous_release_build) {
             assert_eq!(status, UpdateStatus::Checking);
             assert!(public_key.is_some());
         } else {

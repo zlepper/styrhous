@@ -11,8 +11,8 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_NEXTEST_VERSION: "0.9.140"
   CARGO_PACKAGER_VERSION: "0.11.8"
-  KUBERNETES_DEV_UI_RELEASE_BUILD: "1"
-  KUBERNETES_DEV_UI_UPDATER_PUBLIC_KEY: ${{ vars.KUBERNETES_DEV_UI_UPDATER_PUBLIC_KEY }}
+  STYRHOUS_RELEASE_BUILD: "1"
+  STYRHOUS_UPDATER_PUBLIC_KEY: ${{ vars.STYRHOUS_UPDATER_PUBLIC_KEY }}
 
 jobs:
   verify:
@@ -47,7 +47,7 @@ jobs:
             cargo install cargo-nextest --version "$CARGO_NEXTEST_VERSION" --locked
       - name: Verify tag and application version agree
         if: github.ref_type == 'tag'
-        run: test "${GITHUB_REF_NAME#v}" = "$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | select(.name == "kubernetes-dev-ui") | .version')"
+        run: test "${GITHUB_REF_NAME#v}" = "$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | select(.name == "styrhous") | .version')"
       - name: Test updater manifest generator
         run: bash scripts/test-generate-update-manifest.sh
       - name: Run workspace tests
@@ -67,12 +67,12 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - name: Verify direct-release updater build
-        run: cargo nextest run -p kubernetes-dev-ui updater_activation_matches_the_compiled_build_kind
+        run: cargo nextest run -p styrhous updater_activation_matches_the_compiled_build_kind
       - name: Verify package-managed updater build
         env:
-          KUBERNETES_DEV_UI_DISABLE_AUTO_UPDATE: "1"
-        run: cargo nextest run -p kubernetes-dev-ui updater_activation_matches_the_compiled_build_kind
-      - run: cargo check -p kubernetes-dev-ui --no-default-features
+          STYRHOUS_DISABLE_AUTO_UPDATE: "1"
+        run: cargo nextest run -p styrhous updater_activation_matches_the_compiled_build_kind
+      - run: cargo check -p styrhous --no-default-features
 
   package-direct:
     if: github.ref_type == 'tag'
@@ -141,12 +141,12 @@ jobs:
         id: application-binary
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: ${{ runner.os == 'Windows' && 'target/release/kubernetes-dev-ui.exe' || 'target/release/kubernetes-dev-ui' }}
+          path: ${{ runner.os == 'Windows' && 'target/release/styrhous.exe' || 'target/release/styrhous' }}
           key: application-binary-${{ matrix.id }}-${{ github.sha }}
       - name: Verify updater signing configuration
         shell: bash
         run: |
-          test -n "$KUBERNETES_DEV_UI_UPDATER_PUBLIC_KEY"
+          test -n "$STYRHOUS_UPDATER_PUBLIC_KEY"
       - name: Install cargo-packager
         shell: bash
         run: |
@@ -154,12 +154,12 @@ jobs:
             cargo install cargo-packager --version "$CARGO_PACKAGER_VERSION" --locked
       - name: Build release binary
         if: steps.application-binary.outputs.cache-hit != 'true'
-        run: cargo build --release -p kubernetes-dev-ui
+        run: cargo build --release -p styrhous
       - name: Save release application binary
         if: steps.application-binary.outputs.cache-hit != 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: ${{ runner.os == 'Windows' && 'target/release/kubernetes-dev-ui.exe' || 'target/release/kubernetes-dev-ui' }}
+          path: ${{ runner.os == 'Windows' && 'target/release/styrhous.exe' || 'target/release/styrhous' }}
           key: application-binary-${{ matrix.id }}-${{ github.sha }}
       - name: Install AppImage package dependency
         if: runner.os == 'Linux'
@@ -171,27 +171,27 @@ jobs:
           CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD }}
         run: |
           test -n "$CARGO_PACKAGER_SIGN_PRIVATE_KEY"
-          cargo packager --manifest-path crates/app/Cargo.toml --release --formats "${{ matrix.formats }}"
+          cargo packager --manifest-path crates/styrhous/Cargo.toml --release --formats "${{ matrix.formats }}"
       - name: Generate updater manifest
         if: runner.os != 'Windows'
         shell: bash
         run: |
           bundle=$(find dist -type f -name "${{ matrix.update_glob }}" -print -quit)
           test -n "$bundle"
-          bash scripts/generate-update-manifest.sh "$(sed -n 's/^version = "\(.*\)"/\1/p' crates/app/Cargo.toml | head -1)" "${{ matrix.target }}" "${{ matrix.arch }}" "${{ matrix.update_format }}" "$bundle" "dist/kubernetes-dev-ui-update-${{ matrix.id }}.json"
+          bash scripts/generate-update-manifest.sh "$(sed -n 's/^version = "\(.*\)"/\1/p' crates/styrhous/Cargo.toml | head -1)" "${{ matrix.target }}" "${{ matrix.arch }}" "${{ matrix.update_format }}" "$bundle" "dist/styrhous-update-${{ matrix.id }}.json"
       - name: Generate Windows updater manifest
         if: runner.os == 'Windows'
         shell: bash
         run: |
           bundle=$(find dist -type f -name "${{ matrix.update_glob }}" -print -quit)
           test -n "$bundle"
-          bash scripts/generate-update-manifest.sh "$(sed -n 's/^version = "\(.*\)"/\1/p' crates/app/Cargo.toml | head -1)" "${{ matrix.target }}" "${{ matrix.arch }}" "${{ matrix.update_format }}" "$bundle" "dist/kubernetes-dev-ui-update-${{ matrix.id }}.json"
+          bash scripts/generate-update-manifest.sh "$(sed -n 's/^version = "\(.*\)"/\1/p' crates/styrhous/Cargo.toml | head -1)" "${{ matrix.target }}" "${{ matrix.arch }}" "${{ matrix.update_format }}" "$bundle" "dist/styrhous-update-${{ matrix.id }}.json"
       - name: Smoke test AppImage startup
         if: runner.os == 'Linux'
         shell: bash
         timeout-minutes: 2
         env:
-          KUBERNETES_DEV_UI_DISABLE_AUTO_UPDATE: "1"
+          STYRHOUS_DISABLE_AUTO_UPDATE: "1"
         run: |
           bundle=$(find dist -type f -name '*.AppImage' -exec realpath {} \; -quit)
           test -n "$bundle"
@@ -199,7 +199,7 @@ jobs:
           temporary_directory=$(mktemp -d)
           host_library=$(ldconfig -p | awk '$1 == "libxkbcommon-x11.so.0" { print $NF; exit }')
           test -n "$host_library"
-          disabled_library="$host_library.kdui-smoke-disabled"
+          disabled_library="$host_library.styrhous-smoke-disabled"
           sudo mv "$host_library" "$disabled_library"
           trap 'sudo mv "$disabled_library" "$host_library" 2>/dev/null || true; sudo ldconfig; rm -rf "$temporary_directory"' EXIT
           (
@@ -218,7 +218,7 @@ jobs:
         shell: bash
         timeout-minutes: 2
         env:
-          KUBERNETES_DEV_UI_DISABLE_AUTO_UPDATE: "1"
+          STYRHOUS_DISABLE_AUTO_UPDATE: "1"
         run: |
           temporary_directory=$(mktemp -d)
           mount_point="$temporary_directory/mount"
@@ -229,8 +229,8 @@ jobs:
           hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount_point"
           app=$(find "$mount_point" -maxdepth 1 -name '*.app' -print -quit)
           test -n "$app"
-          cp -R "$app" "$temporary_directory/Kubernetes Dev UI.app"
-          executable=$(find "$temporary_directory/Kubernetes Dev UI.app/Contents/MacOS" -type f -perm -u+x -print -quit)
+          cp -R "$app" "$temporary_directory/Styrhous.app"
+          executable=$(find "$temporary_directory/Styrhous.app/Contents/MacOS" -type f -perm -u+x -print -quit)
           test -n "$executable"
           "$executable" &
           process_id=$!
@@ -243,9 +243,9 @@ jobs:
         shell: pwsh
         timeout-minutes: 2
         env:
-          KUBERNETES_DEV_UI_DISABLE_AUTO_UPDATE: "1"
+          STYRHOUS_DISABLE_AUTO_UPDATE: "1"
         run: |
-          $destination = Join-Path $env:RUNNER_TEMP 'kubernetes-dev-ui-installer-smoke'
+          $destination = Join-Path $env:RUNNER_TEMP 'styrhous-installer-smoke'
           $installer = Get-ChildItem -Path dist -Filter '*.exe' -Recurse | Select-Object -First 1
           if ($null -eq $installer) { throw 'NSIS installer was not produced' }
           $install = Start-Process -FilePath $installer.FullName -ArgumentList @('/S', "/D=$destination") -Wait -PassThru
@@ -286,7 +286,7 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     env:
-      KUBERNETES_DEV_UI_DISABLE_AUTO_UPDATE: "1"
+      STYRHOUS_DISABLE_AUTO_UPDATE: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -309,7 +309,7 @@ jobs:
         id: application-binary
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: target/release/kubernetes-dev-ui
+          path: target/release/styrhous
           key: application-binary-package-managed-${{ matrix.cache_id }}-${{ github.sha }}
       - shell: bash
         run: |
@@ -317,14 +317,14 @@ jobs:
             cargo install cargo-packager --version "$CARGO_PACKAGER_VERSION" --locked
       - name: Build package-managed application
         if: steps.application-binary.outputs.cache-hit != 'true'
-        run: cargo build --release -p kubernetes-dev-ui
+        run: cargo build --release -p styrhous
       - name: Save package-managed application binary
         if: steps.application-binary.outputs.cache-hit != 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: target/release/kubernetes-dev-ui
+          path: target/release/styrhous
           key: application-binary-package-managed-${{ matrix.cache_id }}-${{ github.sha }}
-      - run: cargo packager --manifest-path crates/app/Cargo.toml --release --formats deb
+      - run: cargo packager --manifest-path crates/styrhous/Cargo.toml --release --formats deb
       - name: Smoke test Debian package startup
         shell: bash
         timeout-minutes: 2
@@ -333,7 +333,7 @@ jobs:
           test -n "$package"
           dpkg-deb -f "$package" Depends | grep -Fx 'libxkbcommon-x11-0'
           sudo apt-get install --yes "$package"
-          executable=$(dpkg -L kubernetes-dev-ui | awk '/\/usr\/bin\// { print; exit }')
+          executable=$(dpkg -L styrhous | awk '/\/usr\/bin\// { print; exit }')
           test -n "$executable"
           # A GUI that stays alive is expected; timeout reports that as 124.
           set +e
@@ -341,7 +341,7 @@ jobs:
           status=$?
           set -e
           test "$status" -eq 124
-          sudo apt-get purge --yes kubernetes-dev-ui
+          sudo apt-get purge --yes styrhous
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.id }}
@@ -373,11 +373,11 @@ jobs:
           version="${TAG#v}"
           update_ids=(macos-x86_64 macos-aarch64 windows-x86_64 linux-x86_64 linux-aarch64)
           for update_id in "${update_ids[@]}"; do
-            manifest="dist/kubernetes-dev-ui-update-${update_id}.json"
+            manifest="dist/styrhous-update-${update_id}.json"
             test -f "$manifest"
             jq -e --arg version "$version" '
               .version == $version
-              and (.url | startswith("https://github.com/zlepper/kubernetes-dev-ui/releases/download/v" + $version + "/"))
+              and (.url | startswith("https://github.com/zlepper/styrhous/releases/download/v" + $version + "/"))
               and (.signature | type == "string" and length > 0)
               and (.format | IN("app", "appimage", "nsis"))
             ' "$manifest" >/dev/null
@@ -389,7 +389,7 @@ jobs:
           mapfile -d '' assets < <(find dist -type f \( \
             -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.exe' -o \
             -name '*.AppImage' -o -name '*.deb' -o -name '*.sig' -o \
-            -name 'kubernetes-dev-ui-update-*.json' \
+            -name 'styrhous-update-*.json' \
           \) -print0)
           test "${#assets[@]}" -gt 0
           release_args=(--verify-tag --generate-notes)

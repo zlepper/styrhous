@@ -23,6 +23,7 @@ outputs = { self, nixpkgs}:
           jetbrains.rust-rover
           imagemagick
           codex
+          gh
              xorg.libXcursor
                       xorg.libXrandr
                       xorg.libXi

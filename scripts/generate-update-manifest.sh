@@ -27,7 +27,7 @@ fi
 bundle_name=$(basename "$bundle")
 jq -n \
   --arg version "$version" \
-  --arg url "https://github.com/zlepper/kubernetes-dev-ui/releases/download/v${version}/${bundle_name}" \
+  --arg url "https://github.com/zlepper/styrhous/releases/download/v${version}/${bundle_name}" \
   --rawfile signature "$signature" \
   --arg format "$format" \
   --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \

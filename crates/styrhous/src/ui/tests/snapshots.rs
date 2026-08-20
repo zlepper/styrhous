@@ -1677,7 +1677,7 @@ fn namespace_popup_option_does_not_activate_the_overlapped_resource_button() {
 fn namespace_popup_filters_to_an_offscreen_option_before_pointer_click() {
     let generated_namespaces = (0..12)
         .map(|index| MinimalNamespace {
-            name: format!("kdui-it-concurrent-{index:02}"),
+            name: format!("k8s-styrhous-fixture-{index:02}"),
             display_name: None,
         })
         .collect::<Vec<_>>();

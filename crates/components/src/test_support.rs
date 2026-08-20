@@ -1027,7 +1027,7 @@ mod tests {
     fn test_directory() -> PathBuf {
         let counter = TEST_DIRECTORY_COUNTER.fetch_add(1, Ordering::Relaxed);
         std::env::temp_dir().join(format!(
-            "kubernetes-dev-ui-accessibility-snapshot-{}-{counter}",
+            "styrhous-accessibility-snapshot-{}-{counter}",
             std::process::id()
         ))
     }

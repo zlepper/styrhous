@@ -2821,42 +2821,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kubernetes-dev-ui"
-version = "0.0.1-alpha.9"
-dependencies = [
- "anstyle",
- "anstyle-parse",
- "anyhow",
- "async-trait",
- "base64",
- "cargo-packager-updater",
- "components",
- "criterion",
- "eframe",
- "egui",
- "egui_extras",
- "egui_kittest",
- "flate2",
- "futures-util",
- "http",
- "itertools 0.14.0",
- "jsonpath-rust 0.7.5",
- "jsonschema",
- "k8s-openapi",
- "kube",
- "minisign-verify",
- "regex",
- "saphyr",
- "serde",
- "serde_yaml",
- "tempfile",
- "time",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "kurbo"
 version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5006,6 +4970,42 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6637bab7722d379c8b41ba849228d680cc12d0a45ba1fa2b48f2a30577a06731"
 dependencies = [
  "float-cmp",
+]
+
+[[package]]
+name = "styrhous"
+version = "0.0.1-alpha.9"
+dependencies = [
+ "anstyle",
+ "anstyle-parse",
+ "anyhow",
+ "async-trait",
+ "base64",
+ "cargo-packager-updater",
+ "components",
+ "criterion",
+ "eframe",
+ "egui",
+ "egui_extras",
+ "egui_kittest",
+ "flate2",
+ "futures-util",
+ "http",
+ "itertools 0.14.0",
+ "jsonpath-rust 0.7.5",
+ "jsonschema",
+ "k8s-openapi",
+ "kube",
+ "minisign-verify",
+ "regex",
+ "saphyr",
+ "serde",
+ "serde_yaml",
+ "tempfile",
+ "time",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
