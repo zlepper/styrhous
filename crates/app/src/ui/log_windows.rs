@@ -129,7 +129,7 @@ fn show_log_window_with_scroll_state(
     if let Some(text) = window.copied_text.take() {
         ctx.copy_text(text);
     }
-    request_copy(&ctx, window, display_options, log_store);
+    request_copy(&ctx, window, log_store);
     egui::Panel::top("pod-log-header")
         .exact_size(52.0)
         .frame(
@@ -450,10 +450,16 @@ fn show_log_window_with_scroll_state(
                             .accesskit_node_builder(interaction_response.id, |builder| {
                                 builder.set_label(format!("Pod log line {}", display_row + 1));
                             });
-                        let (text_left, text_start_x) = if byte_range == (0..row.text.len()) {
-                            (response.rect.left() + prefix_width, 0.0)
+                        let text_left = rendered_log_text_left(
+                            response.rect,
+                            &byte_range,
+                            row.text.len(),
+                            prefix_width,
+                        );
+                        let text_start_x = if byte_range != (0..row.text.len()) {
+                            fragment.start_x
                         } else {
-                            (response.rect.left(), fragment.start_x)
+                            0.0
                         };
                         selection_update = selection_position(
                             &ctx,
@@ -473,7 +479,7 @@ fn show_log_window_with_scroll_state(
                                 row.text.clone(),
                                 byte_range.clone(),
                                 response.rect,
-                                prefix_width,
+                                text_left,
                             ));
                         }
                     } else {
@@ -508,7 +514,7 @@ fn show_log_window_with_scroll_state(
                             }));
                         window.ensure_caret_visible = false;
                     }
-                    if let Some((text, byte_range, response_rect, prefix_width)) = caret_paint {
+                    if let Some((text, byte_range, response_rect, text_left)) = caret_paint {
                         paint_log_caret(
                             ui,
                             &ctx,
@@ -518,7 +524,7 @@ fn show_log_window_with_scroll_state(
                             &text,
                             &byte_range,
                             response_rect,
-                            prefix_width,
+                            text_left,
                             character_width,
                             row_height,
                         );
@@ -862,12 +868,7 @@ fn displayed_line_count(window: &PodLogWindowState) -> usize {
     }
 }
 
-fn request_copy(
-    ctx: &egui::Context,
-    window: &PodLogWindowState,
-    display_options: &LogDisplayOptions,
-    log_store: &LogStoreService,
-) {
+fn request_copy(ctx: &egui::Context, window: &PodLogWindowState, log_store: &LogStoreService) {
     let copy_requested = ctx.input(|input| {
         input
             .events
@@ -890,8 +891,6 @@ fn request_copy(
         start.byte_offset,
         end.display_row,
         end.byte_offset,
-        display_options.show_line_numbers,
-        display_options.show_timestamps,
     );
 }
 
@@ -1243,7 +1242,7 @@ fn paint_log_caret(
     text: &str,
     byte_range: &std::ops::Range<usize>,
     response_rect: egui::Rect,
-    prefix_width: f32,
+    text_left: f32,
     character_width: f32,
     row_height: f32,
 ) {
@@ -1260,12 +1259,7 @@ fn paint_log_caret(
         return;
     }
     let relative_byte_offset = focus.byte_offset.saturating_sub(byte_range.start);
-    let text_x = if byte_range.start == 0 {
-        response_rect.left() + prefix_width
-    } else {
-        response_rect.left()
-    };
-    let x = text_x
+    let x = text_left
         + character_column_at_byte(&text[byte_range.clone()], relative_byte_offset) as f32
             * character_width;
     let cursor_rect = egui::Rect::from_min_max(
@@ -1278,6 +1272,19 @@ fn paint_log_caret(
     );
 }
 
+fn rendered_log_text_left(
+    response_rect: egui::Rect,
+    byte_range: &std::ops::Range<usize>,
+    text_len: usize,
+    prefix_width: f32,
+) -> f32 {
+    if *byte_range == (0..text_len) {
+        response_rect.left() + prefix_width
+    } else {
+        response_rect.left()
+    }
+}
+
 fn selection_position(
     ctx: &egui::Context,
     display_row: usize,
@@ -1287,16 +1294,36 @@ fn selection_position(
     text_start_x: f32,
     character_width: f32,
 ) -> Option<(LogTextPosition, bool)> {
-    let pointer = response.interact_pointer_pos()?;
+    let clicked = response.clicked();
+    let pointer = response
+        .interact_pointer_pos()
+        .or_else(|| {
+            ctx.pointer_interact_pos().map(|pointer| {
+                ctx.layer_transform_from_global(response.layer_id)
+                    .map_or(pointer, |from_global| from_global * pointer)
+            })
+        })
+        .or_else(|| clicked.then_some(response.rect.center()))?;
     let byte_offset =
         byte_offset_at_response_x(text, pointer.x, text_left, text_start_x, character_width);
     let position = LogTextPosition {
         display_row,
         byte_offset,
     };
-    if response.drag_started() || response.clicked() {
+    let (primary_pressed, primary_down, primary_released) = ctx.input(|input| {
+        (
+            input.pointer.primary_pressed(),
+            input.pointer.primary_down(),
+            input.pointer.primary_released(),
+        )
+    });
+    if response.contains_pointer() && primary_pressed {
         Some((position, true))
-    } else if response.hovered() && ctx.input(|input| input.pointer.primary_down()) {
+    } else if clicked {
+        // Accessibility activation has no pointer position, so it uses the
+        // row centre above as a stable caret location.
+        Some((position, true))
+    } else if response.rect.contains(pointer) && (primary_down || primary_released) {
         Some((position, false))
     } else {
         None
@@ -2630,6 +2657,232 @@ mod tests {
     }
 
     #[test]
+    fn dragging_right_to_left_in_a_prefixed_log_row_keeps_the_caret_at_the_released_message_column()
+    {
+        let timestamp = "2026-08-11T10:00:00Z";
+        // The marker text makes the visible endpoint unambiguous: the white
+        // caret must be immediately before `RELEASE`, not inside the range.
+        let message = format!(
+            "--RELEASE--selected-text--ANCHOR--{}",
+            "after-selection-".repeat(128)
+        );
+        let line = format!("{timestamp} {message}");
+        let window = Rc::new(RefCell::new(log_window(&[&line])));
+        let window_for_ui = window.clone();
+        let character_width = Rc::new(RefCell::new(0.0));
+        let character_width_for_ui = character_width.clone();
+        let display_options = Rc::new(RefCell::new(LogDisplayOptions {
+            show_line_numbers: true,
+            ..LogDisplayOptions::default()
+        }));
+        let display_options_for_ui = display_options.clone();
+        let log_store = LogStoreService::default();
+        let mut close_requested = false;
+        let mut harness = Harness::builder().build_ui(move |ctx| {
+            *character_width_for_ui.borrow_mut() = ctx
+                .fonts_mut(|fonts| fonts.glyph_width(&egui::FontId::monospace(LOG_FONT_SIZE), '0'));
+            show_log_window(
+                ctx,
+                &mut window_for_ui.borrow_mut(),
+                &mut display_options_for_ui.borrow_mut(),
+                &log_store,
+                &mut close_requested,
+            );
+        });
+        components::test_support::setup_egui(&mut harness);
+        harness.run_steps(2);
+        let label = harness.get_by_label_contains("--RELEASE--selected-text--ANCHOR--");
+        let character_width = *character_width.borrow();
+        let start_column = message.find("ANCHOR").expect("anchor marker exists");
+        let moved_column = message
+            .find("selected-text")
+            .expect("selection marker exists");
+        let end_column = message.find("RELEASE").expect("release marker exists");
+        let start = egui::pos2(
+            label.rect().left() + start_column as f32 * character_width,
+            label.rect().center().y,
+        );
+        let moved = egui::pos2(
+            label.rect().left() + moved_column as f32 * character_width,
+            label.rect().center().y,
+        );
+        let end = egui::pos2(
+            label.rect().left() + end_column as f32 * character_width,
+            label.rect().center().y,
+        );
+
+        harness.event(egui::Event::PointerMoved(start));
+        harness.event(egui::Event::PointerButton {
+            pos: start,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.step();
+        harness.event(egui::Event::PointerMoved(moved));
+        harness.step();
+        harness.event(egui::Event::PointerButton {
+            pos: end,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.step();
+
+        assert_eq!(
+            window.borrow().selection,
+            Some(LogTextSelection {
+                anchor: LogTextPosition {
+                    display_row: 0,
+                    byte_offset: start_column,
+                },
+                focus: LogTextPosition {
+                    display_row: 0,
+                    byte_offset: end_column,
+                },
+            })
+        );
+        // The release event uses the pointer position from the event itself;
+        // moving the cursor away only prevents its image from hiding the
+        // caret in the visual fixture.
+        harness.event(egui::Event::PointerMoved(egui::pos2(400.0, 200.0)));
+        harness.step();
+        harness.ui_harness(
+            "pod_logs/pod_log_viewer_prefixed_drag_selection_snapshot/prefixed_drag_selection",
+        );
+    }
+
+    #[test]
+    fn pressing_a_second_log_row_immediately_replaces_the_previous_caret() {
+        let window = Rc::new(RefCell::new(log_window(&[
+            "first log row",
+            "second log row",
+        ])));
+        let window_for_ui = window.clone();
+        let display_options = Rc::new(RefCell::new(LogDisplayOptions::default()));
+        let display_options_for_ui = display_options.clone();
+        let log_store = LogStoreService::default();
+        let mut close_requested = false;
+        let mut harness = Harness::builder().build_ui(move |ctx| {
+            show_log_window(
+                ctx,
+                &mut window_for_ui.borrow_mut(),
+                &mut display_options_for_ui.borrow_mut(),
+                &log_store,
+                &mut close_requested,
+            );
+        });
+        components::test_support::setup_egui(&mut harness);
+        harness.run_steps(2);
+        harness.get_by_label("first log row").click();
+        harness.step();
+        let second = harness.get_by_label("second log row").rect().center();
+        harness.event(egui::Event::PointerMoved(second));
+        harness.event(egui::Event::PointerButton {
+            pos: second,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.step();
+
+        let selection = window
+            .borrow()
+            .selection
+            .expect("pressing a row positions the caret immediately");
+        assert_eq!(selection.anchor, selection.focus);
+        assert_eq!(selection.focus.display_row, 1);
+    }
+
+    #[test]
+    fn dragging_between_prefixed_log_rows_tracks_the_message_columns() {
+        let first_timestamp = "2026-08-11T10:00:00Z";
+        let second_timestamp = "2026-08-11T10:00:01Z";
+        let first_message = "first selected row";
+        let second_message = "second selected row";
+        let first_line = format!("{first_timestamp} {first_message}");
+        let second_line = format!("{second_timestamp} {second_message}");
+        let window = Rc::new(RefCell::new(log_window(&[&first_line, &second_line])));
+        let window_for_ui = window.clone();
+        let character_width = Rc::new(RefCell::new(0.0));
+        let character_width_for_ui = character_width.clone();
+        let display_options = Rc::new(RefCell::new(LogDisplayOptions {
+            show_line_numbers: true,
+            show_timestamps: true,
+            ..LogDisplayOptions::default()
+        }));
+        let display_options_for_ui = display_options.clone();
+        let log_store = LogStoreService::default();
+        let mut close_requested = false;
+        let mut harness = Harness::builder().build_ui(move |ctx| {
+            *character_width_for_ui.borrow_mut() = ctx
+                .fonts_mut(|fonts| fonts.glyph_width(&egui::FontId::monospace(LOG_FONT_SIZE), '0'));
+            show_log_window(
+                ctx,
+                &mut window_for_ui.borrow_mut(),
+                &mut display_options_for_ui.borrow_mut(),
+                &log_store,
+                &mut close_requested,
+            );
+        });
+        components::test_support::setup_egui(&mut harness);
+        harness.run_steps(2);
+        let character_width = *character_width.borrow();
+        let first_prefix = format!("{:>6}  {first_timestamp}  ", 0);
+        let second_prefix = format!("{:>6}  {second_timestamp}  ", 1);
+        let first_label_text = format!("{first_prefix}{first_message}");
+        let second_label_text = format!("{second_prefix}{second_message}");
+        let first_label = harness.get_by_label(&first_label_text);
+        let second_label = harness.get_by_label(&second_label_text);
+        let start_column = 2;
+        let end_column = 9;
+        let start = egui::pos2(
+            first_label.rect().left()
+                + first_prefix.chars().count() as f32 * character_width
+                + start_column as f32 * character_width,
+            first_label.rect().center().y,
+        );
+        let end = egui::pos2(
+            second_label.rect().left()
+                + second_prefix.chars().count() as f32 * character_width
+                + end_column as f32 * character_width,
+            second_label.rect().center().y,
+        );
+
+        harness.event(egui::Event::PointerMoved(start));
+        harness.event(egui::Event::PointerButton {
+            pos: start,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.step();
+        harness.event(egui::Event::PointerMoved(end));
+        harness.step();
+        harness.event(egui::Event::PointerButton {
+            pos: end,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.step();
+
+        assert_eq!(
+            window.borrow().selection,
+            Some(LogTextSelection {
+                anchor: LogTextPosition {
+                    display_row: 0,
+                    byte_offset: start_column,
+                },
+                focus: LogTextPosition {
+                    display_row: 1,
+                    byte_offset: end_column,
+                },
+            })
+        );
+    }
+
+    #[test]
     fn clicking_a_horizontally_scrolled_log_row_uses_the_original_text_column() {
         let line = "x".repeat(2_000);
         let window = Rc::new(RefCell::new(log_window(&[&line])));
@@ -3271,6 +3524,23 @@ mod tests {
             byte_offset_at_response_x(text, 30.0, 10.0, 30.0, 10.0),
             5,
             "a horizontally clipped fragment restores its omitted character columns",
+        );
+    }
+
+    #[test]
+    fn caret_origin_does_not_repeat_the_prefix_for_the_first_clipped_fragment() {
+        let text = "x".repeat(512);
+        let fragment = visible_text_fragment(&text, 0.0, 50.0, 10.0);
+        let response_rect =
+            egui::Rect::from_min_size(egui::pos2(100.0, 0.0), egui::vec2(50.0, 16.0));
+
+        assert_eq!(fragment.byte_range.start, 0);
+        assert!(fragment.byte_range.end < text.len());
+
+        assert_eq!(
+            rendered_log_text_left(response_rect, &fragment.byte_range, text.len(), 80.0),
+            response_rect.left(),
+            "a clipped fragment already rendered its line-number prefix separately",
         );
     }
 

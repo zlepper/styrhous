@@ -144,8 +144,6 @@ enum Command {
         start_byte: usize,
         end_row: usize,
         end_byte: usize,
-        show_line_numbers: bool,
-        show_timestamps: bool,
     },
     Close {
         window_id: u64,
@@ -507,8 +505,6 @@ impl LogStoreService {
         start_byte: usize,
         end_row: usize,
         end_byte: usize,
-        show_line_numbers: bool,
-        show_timestamps: bool,
     ) -> bool {
         self.send(Command::Copy {
             window_id,
@@ -519,8 +515,6 @@ impl LogStoreService {
             start_byte,
             end_row,
             end_byte,
-            show_line_numbers,
-            show_timestamps,
         })
     }
 
@@ -736,8 +730,6 @@ fn run_store(store_thread: StoreThread) {
                 start_byte,
                 end_row,
                 end_byte,
-                show_line_numbers,
-                show_timestamps,
             } => {
                 let Some(store) = stores.get_mut(&window_id) else {
                     continue;
@@ -749,8 +741,6 @@ fn run_store(store_thread: StoreThread) {
                     start_byte,
                     end_row,
                     end_byte,
-                    show_line_numbers,
-                    show_timestamps,
                 ) {
                     Ok(text) => send_result(
                         &result_sender,
@@ -1418,8 +1408,6 @@ impl LogStore {
         start_byte: usize,
         end_row: usize,
         end_byte: usize,
-        show_line_numbers: bool,
-        show_timestamps: bool,
     ) -> anyhow::Result<String> {
         let total_rows = if filter_matches {
             let Some(search) = &self.search else {
@@ -1468,14 +1456,6 @@ impl LogStore {
             };
             if display_row != start_row {
                 text.push('\n');
-            }
-            if show_line_numbers {
-                use std::fmt::Write as _;
-                write!(text, "{line_index:>6}  ")?;
-            }
-            if show_timestamps && let Some(timestamp) = parsed.timestamp {
-                text.push_str(&timestamp);
-                text.push_str("  ");
             }
             if start < end {
                 text.push_str(&line[start..end]);
@@ -2001,7 +1981,7 @@ mod tests {
     }
 
     #[test]
-    fn copy_reads_a_utf8_range_from_the_spool_with_displayed_metadata() {
+    fn copy_reads_only_the_selected_utf8_log_text_from_the_spool() {
         let service = LogStoreService::default();
         let first = "2026-08-10T12:34:56Z  alphaé";
         let second = "2026-08-10T12:34:57Z  beta";
@@ -2014,7 +1994,7 @@ mod tests {
         let start = first_text.find('é').expect("utf8 character is present");
         let end = second_text.len();
 
-        assert!(service.copy(8, 3, 0, false, 0, start, 1, end, true, true));
+        assert!(service.copy(8, 3, 0, false, 0, start, 1, end));
         let LogStoreResult::Copied {
             selection_generation,
             text,
@@ -2027,10 +2007,7 @@ mod tests {
         };
 
         assert_eq!(selection_generation, 3);
-        assert_eq!(
-            text,
-            format!("     0  2026-08-10T12:34:56Z  é\n     1  2026-08-10T12:34:57Z  {second_text}")
-        );
+        assert_eq!(text, format!("é\n{second_text}"));
     }
 
     #[test]
