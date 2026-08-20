@@ -1,7 +1,7 @@
-# Releasing Kubernetes Dev UI
+# Releasing Styrhous
 
 The release workflow runs when a `vX.Y.Z` tag is pushed. The tag must match the version in
-`crates/app/Cargo.toml` exactly.
+`crates/styrhous/Cargo.toml` exactly.
 
 Before the first release, create the updater signing key once:
 
@@ -12,7 +12,7 @@ cargo packager signer generate
 Store the printed private key and password as the GitHub Actions secrets
 `CARGO_PACKAGER_SIGN_PRIVATE_KEY` and `CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD` in the
 protected `release` environment, not as repository-level secrets. Store the public key as the
-repository variable `KUBERNETES_DEV_UI_UPDATER_PUBLIC_KEY`. Keep the private key backed up
+repository variable `STYRHOUS_UPDATER_PUBLIC_KEY`. Keep the private key backed up
 securely: changing it prevents already-installed versions from trusting updates signed by the
 replacement key.
 
@@ -43,7 +43,7 @@ then apply them on the next launch. Debian packages are built with automatic upd
 Any package manager or administrator can opt out at launch with:
 
 ```bash
-KUBERNETES_DEV_UI_DISABLE_AUTO_UPDATE=1 kubernetes-dev-ui
+STYRHOUS_DISABLE_AUTO_UPDATE=1 styrhous
 ```
 
 The opt-out accepts `1`, `true`, or `yes`, case-insensitively and with surrounding whitespace
@@ -63,9 +63,9 @@ it does not replace the operating system’s installer trust requirements.
 reinstalling the Rust toolchain, `cargo-nextest`, and Mesa dependencies each time:
 
 ```bash
-docker build --file scripts/Dockerfile.ci --tag kubernetes-dev-ui-ci .
+docker build --file scripts/Dockerfile.ci --tag styrhous-ci .
 docker run --rm --env WGPU_BACKEND=gl \
-  --volume "$PWD:/workspace" kubernetes-dev-ui-ci \
+  --volume "$PWD:/workspace" styrhous-ci \
   cargo nextest run --workspace --no-fail-fast --test-threads 1 \
   -E 'not test(/kind_integration/)'
 ```
@@ -76,5 +76,5 @@ build cache stays in the image at `CARGO_TARGET_DIR`; source files from the moun
 rebuild the workspace crates without inheriting placeholder artifacts.
 The Kind-backed integration tests require a host container runtime, so run those on the host or
 in GitHub Actions rather than inside this diagnostic image.
-The image runs as its unprivileged `kdui` user (UID/GID 1000), matching the normal development
+The image runs as its unprivileged `styrhous` user (UID/GID 1000), matching the normal development
 container user and preventing root-owned files in the bind-mounted checkout.

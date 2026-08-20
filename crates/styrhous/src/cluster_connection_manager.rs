@@ -2509,7 +2509,7 @@ pub async fn validate_resource_yaml(
     resource_yaml::strip_server_managed_metadata(&mut obj);
 
     let api = dynamic_api::create(&client, &api_resource, namespace.as_deref()).await?;
-    let params = kube::api::PatchParams::apply("kubernetes-dev-ui")
+    let params = kube::api::PatchParams::apply("styrhous")
         .force()
         .validation(kube::api::ValidationDirective::Strict)
         .dry_run();
@@ -2771,7 +2771,7 @@ pub async fn apply_resource_yaml(
     let api = dynamic_api::create(&client, &api_resource, namespace.as_deref()).await?;
 
     // Use server-side apply with force to take ownership of fields
-    let patch_params = kube::api::PatchParams::apply("kubernetes-dev-ui").force();
+    let patch_params = kube::api::PatchParams::apply("styrhous").force();
     match api
         .patch(
             &resource_name,

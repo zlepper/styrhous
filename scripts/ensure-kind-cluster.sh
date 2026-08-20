@@ -8,7 +8,7 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 metrics_server_manifest="${script_dir}/kind-metrics-server.yaml"
 timeout="180s"
 timeout_seconds=180
-test_namespace_prefix="kdui-it-"
+test_namespace_prefix="styrhous-it-"
 
 clusters="$(kind get clusters)"
 if ! grep -Fxq "${cluster_name}" <<<"${clusters}"; then
@@ -67,7 +67,7 @@ mapfile -t test_namespaces < <(
 )
 
 if (( ${#test_namespaces[@]} > 0 )); then
-    echo "Removing leftover Kubernetes Dev UI integration test namespaces..."
+    echo "Removing leftover Styrhous integration test namespaces..."
     namespace_resources=()
     for namespace in "${test_namespaces[@]}"; do
         namespace_resources+=("namespace/${namespace}")

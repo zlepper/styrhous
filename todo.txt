@@ -6,5 +6,3 @@ TODO list:
 * Search
     * Add option for whole word matching only in search
     * Add option for case-sensitive matching in search
-* For "CronJobs": Add option to start a job run right now
-* Make the accessibility check require a "label" on all interactable elements, such as input fields or buttons.

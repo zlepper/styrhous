@@ -8,8 +8,8 @@
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-oracle=${1:-"$repo_root/crates/app/integration_resource_table_oracle.png"}
-snapshot=${2:-"$repo_root/crates/app/tests/snapshots/oracle_resource_table_injected.png"}
+oracle=${1:-"$repo_root/crates/styrhous/integration_resource_table_oracle.png"}
+snapshot=${2:-"$repo_root/crates/styrhous/tests/snapshots/oracle_resource_table_injected.png"}
 output_dir=${3:-"$repo_root/target/visual-diffs"}
 
 if ! command -v magick >/dev/null; then

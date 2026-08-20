@@ -23,8 +23,8 @@ const WATCHER_CONFIGMAP_NAME: &str = "resource-watcher";
 const ACTIONS_CONFIGMAP_NAME: &str = "resource-actions";
 const ACTIONS_SECRET_NAME: &str = "resource-secret-actions";
 const METRICS_LOAD_POD_NAME: &str = "metrics-load";
-const TEST_NAMESPACE_PREFIX: &str = "kdui-it-";
-const TEST_FINALIZER: &str = "tests.kubernetes-dev-ui/finalizer";
+const TEST_NAMESPACE_PREFIX: &str = "styrhous-it-";
+const TEST_FINALIZER: &str = "tests.styrhous/finalizer";
 const FIXTURE_CLEANUP_TIMEOUT: Duration = Duration::from_secs(30);
 
 struct IntegrationNamespaceFixture {
@@ -1112,48 +1112,50 @@ fn test_bulk_resource_delete_integration() {
         10_000,
     );
 
-    harness.get_by_label("Select row 1").click_accesskit();
+    harness.get_by_label("Select row 1").click();
     harness.run_steps(1);
-    harness.get_by_label("Select row 2").click_accesskit();
+    harness.get_by_label("Select row 2").click();
     harness.run_steps(1);
-    harness.get_by_label("Delete selected").click_accesskit();
+    harness.get_by_label("Delete selected").click();
     harness.run_steps(1);
-    wait_for(
+    wait_for_harness(
         &mut harness,
-        |app| {
-            app.ui_state.clusters[&cluster_key]
-                .pending_bulk_delete
-                .as_ref()
-                .filter(|pending| pending.confirmation_available_at <= std::time::Instant::now())
+        |harness| {
+            harness
+                .query_by_role_and_label(egui::accesskit::Role::Button, "Delete 2 resources")
+                .filter(|button| !button.accesskit_node().is_disabled())
                 .map(|_| ())
         },
         5_000,
     );
-    harness.get_by_label("Delete 2 resources").click_accesskit();
+    harness.get_by_label("Delete 2 resources").click();
     harness.run_steps(1);
-    wait_for(
+    wait_for_with_diagnostic(
         &mut harness,
         |app| {
-            let resources = &app.ui_state.clusters[&cluster_key].resource_cache
-                [&(configmaps_resource.clone(), Some(fixture.namespace.clone()))]
-                .resources;
-            (!resources
-                .values()
-                .any(|resource| resource.name == fixture.name || resource.name == second_name))
+            let cluster = &app.ui_state.clusters[&cluster_key];
+            (cluster.bulk_delete_progress.is_none()
+                && cluster
+                    .resource_selections
+                    .get(&configmaps_resource)
+                    .is_none_or(|selection| selection.is_empty()))
             .then_some(())
+        },
+        |app| {
+            app.ui_state.clusters[&cluster_key]
+                .bulk_delete_error
+                .clone()
         },
         10_000,
     );
-    assert!(
-        runtime
-            .block_on(async { configmaps.get(&fixture.name).await })
-            .is_err()
-    );
-    assert!(
-        runtime
-            .block_on(async { configmaps.get(&second_name).await })
-            .is_err()
-    );
+    assert!(matches!(
+        runtime.block_on(async { configmaps.get(&fixture.name).await }),
+        Err(kube::Error::Api(response)) if response.code == 404
+    ));
+    assert!(matches!(
+        runtime.block_on(async { configmaps.get(&second_name).await }),
+        Err(kube::Error::Api(response)) if response.code == 404
+    ));
 }
 
 /// Removes a deliberately stuck ConfigMap's finalizer through the guarded UI action.

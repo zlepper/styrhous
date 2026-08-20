@@ -52,7 +52,7 @@ pub fn run_native() {
     updater::apply_staged_update();
 
     eframe::run_native(
-        "Kubernetes dev UI",
+        "Styrhous",
         native_options(),
         Box::new(|cc| Ok(Box::new(MyEguiApp::<worker::Worker>::new(cc)))),
     )

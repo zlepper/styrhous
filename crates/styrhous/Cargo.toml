@@ -1,10 +1,10 @@
 [package]
-name = "kubernetes-dev-ui"
+name = "styrhous"
 version = "0.0.1-alpha.9"
 edition = "2024"
-description = "A desktop UI for exploring Kubernetes clusters"
-homepage = "https://github.com/zlepper/kubernetes-dev-ui"
-repository = "https://github.com/zlepper/kubernetes-dev-ui"
+description = "Styrhous — the Kubernetes wheelhouse"
+homepage = "https://github.com/zlepper/styrhous"
+repository = "https://github.com/zlepper/styrhous"
 
 [features]
 default = ["self-updater"]
@@ -12,11 +12,11 @@ self-updater = ["dep:cargo-packager-updater", "dep:minisign-verify"]
 benchmarks = []
 
 [package.metadata.packager]
-product_name = "Kubernetes Dev UI"
-identifier = "io.github.zlepper.kubernetes-dev-ui"
-publisher = "Kubernetes Dev UI"
-description = "A desktop UI for exploring Kubernetes clusters"
-homepage = "https://github.com/zlepper/kubernetes-dev-ui"
+product_name = "Styrhous"
+identifier = "io.github.zlepper.styrhous"
+publisher = "Styrhous"
+description = "Styrhous — the Kubernetes wheelhouse"
+homepage = "https://github.com/zlepper/styrhous"
 category = "DeveloperTool"
 # Generate these platform-native assets from the editable SVG with
 # scripts/generate-app-icon.sh. cargo-packager only supports SVG icons on Linux.
