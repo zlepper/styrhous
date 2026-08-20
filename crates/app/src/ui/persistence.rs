@@ -11,6 +11,8 @@ use std::collections::{BTreeMap, BTreeSet};
 pub(super) struct PersistedClusterSelections {
     #[serde(default)]
     pub(super) selections: BTreeMap<String, PersistedClusterSelection>,
+    #[serde(default)]
+    pub(super) last_selected_context: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
