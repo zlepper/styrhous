@@ -1150,8 +1150,24 @@ impl UiState {
     }
 
     pub(super) fn select_cluster(&mut self, cluster_key: i32) -> Option<WorkerCommandBox> {
+        self.select_cluster_inner(cluster_key, true)
+    }
+
+    fn select_cluster_without_remembering(&mut self, cluster_key: i32) -> Option<WorkerCommandBox> {
+        self.select_cluster_inner(cluster_key, false)
+    }
+
+    fn select_cluster_inner(
+        &mut self,
+        cluster_key: i32,
+        remember_selection: bool,
+    ) -> Option<WorkerCommandBox> {
         self.selected_cluster = Some(cluster_key);
 
+        let context_name = self.clusters.get(&cluster_key)?.name.clone();
+        if remember_selection {
+            self.cluster_selections.last_selected_context = Some(context_name);
+        }
         let cluster = self.clusters.get_mut(&cluster_key)?;
         if matches!(
             &cluster.connection,
@@ -1540,7 +1556,7 @@ impl UiState {
                 || matches!(&cluster.api_resources_load, ClusterLoadState::Failed(_))
         });
         if retry_connection {
-            if let Some(command) = self.select_cluster(cluster_key) {
+            if let Some(command) = self.select_cluster_without_remembering(cluster_key) {
                 commands_to_send.push(command);
             }
             return;
@@ -1759,11 +1775,16 @@ impl WorkerResult for crate::worker::KubernetesClustersUpdated {
         ui.clusters.clear();
         ui.selected_cluster = None;
         let mut current_cluster_key = None;
+        let mut remembered_cluster_key = None;
         for cluster in clusters {
             ui.next_cluster_key += 1;
             let cluster_key = ui.next_cluster_key;
             if cluster.is_current {
                 current_cluster_key = Some(cluster_key);
+            }
+            if ui.cluster_selections.last_selected_context.as_deref() == Some(cluster.name.as_str())
+            {
+                remembered_cluster_key = Some(cluster_key);
             }
             ui.clusters.insert(
                 cluster_key,
@@ -1809,8 +1830,8 @@ impl WorkerResult for crate::worker::KubernetesClustersUpdated {
                 },
             );
         }
-        if let Some(cluster_key) = current_cluster_key
-            && let Some(command) = ui.select_cluster(cluster_key)
+        if let Some(cluster_key) = remembered_cluster_key.or(current_cluster_key)
+            && let Some(command) = ui.select_cluster_without_remembering(cluster_key)
         {
             commands.push(command);
         }
@@ -2438,6 +2459,128 @@ mod tests {
                 },
             )]),
         }
+    }
+
+    #[test]
+    fn selecting_context_remembers_the_latest_user_selection() {
+        let mut state = UiState::default();
+        let mut commands = Vec::new();
+        KubernetesClustersUpdated(vec![
+            Cluster {
+                name: "dev".to_owned(),
+                is_current: false,
+            },
+            Cluster {
+                name: "prod".to_owned(),
+                is_current: false,
+            },
+        ])
+        .apply(&mut state, &mut commands);
+
+        assert!(state.select_cluster(1).is_some());
+        assert_eq!(
+            state.cluster_selections.last_selected_context.as_deref(),
+            Some("dev")
+        );
+
+        state.clusters.get_mut(&2).unwrap().connection = ClusterConnectionState::Connected;
+        assert!(state.select_cluster(2).is_none());
+        assert_eq!(
+            state.cluster_selections.last_selected_context.as_deref(),
+            Some("prod")
+        );
+    }
+
+    #[test]
+    fn remembered_context_is_preferred_over_current_context_at_startup() {
+        let mut state = UiState::default();
+        state.cluster_selections.last_selected_context = Some("prod".to_owned());
+        let mut commands = Vec::new();
+
+        KubernetesClustersUpdated(vec![
+            Cluster {
+                name: "dev".to_owned(),
+                is_current: true,
+            },
+            Cluster {
+                name: "prod".to_owned(),
+                is_current: false,
+            },
+        ])
+        .apply(&mut state, &mut commands);
+
+        assert_eq!(state.selected_cluster, Some(2));
+        assert!(matches!(
+            commands.as_slice(),
+            [command] if command
+                .as_ref()
+                .as_any()
+                .downcast_ref::<ConnectToCluster>()
+                .is_some_and(|command| command.cluster_key == 2 && command.cluster == "prod")
+        ));
+    }
+
+    #[test]
+    fn missing_remembered_context_falls_back_without_overwriting_the_preference() {
+        let mut state = UiState::default();
+        state.cluster_selections.last_selected_context = Some("temporarily-missing".to_owned());
+        let mut commands = Vec::new();
+
+        KubernetesClustersUpdated(vec![Cluster {
+            name: "dev".to_owned(),
+            is_current: true,
+        }])
+        .apply(&mut state, &mut commands);
+
+        assert_eq!(state.selected_cluster, Some(1));
+        assert_eq!(
+            state.cluster_selections.last_selected_context.as_deref(),
+            Some("temporarily-missing")
+        );
+        assert!(commands.iter().any(|command| {
+            command
+                .as_ref()
+                .as_any()
+                .downcast_ref::<ConnectToCluster>()
+                .is_some_and(|command| command.cluster_key == 1 && command.cluster == "dev")
+        }));
+
+        state.clusters.get_mut(&1).unwrap().connection =
+            ClusterConnectionState::Failed("unavailable".to_owned());
+        commands.clear();
+        state.retry_selected_load(1, &mut commands);
+
+        assert_eq!(
+            state.cluster_selections.last_selected_context.as_deref(),
+            Some("temporarily-missing")
+        );
+        assert!(commands.iter().any(|command| {
+            command
+                .as_ref()
+                .as_any()
+                .downcast_ref::<ConnectToCluster>()
+                .is_some_and(|command| command.cluster_key == 1 && command.cluster == "dev")
+        }));
+    }
+
+    #[test]
+    fn missing_remembered_context_without_a_current_context_leaves_selection_manual() {
+        let mut state = UiState::default();
+        state.cluster_selections.last_selected_context = Some("temporarily-missing".to_owned());
+        let mut commands = Vec::new();
+
+        KubernetesClustersUpdated(vec![Cluster {
+            name: "dev".to_owned(),
+            is_current: false,
+        }])
+        .apply(&mut state, &mut commands);
+
+        assert_eq!(state.selected_cluster, None);
+        assert!(commands.is_empty());
+        assert_eq!(
+            state.cluster_selections.last_selected_context.as_deref(),
+            Some("temporarily-missing")
+        );
     }
 
     fn pod_detail_history_entry() -> ResourceDetailHistoryEntry {

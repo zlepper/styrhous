@@ -447,6 +447,7 @@ mod persistence_tests {
                     }),
                 },
             )]),
+            last_selected_context: None,
         }
     }
 
@@ -490,7 +491,10 @@ mod persistence_tests {
 
     #[test]
     fn cluster_selections_round_trip_through_app_storage_without_shared_state() {
-        let expected = saved_selections();
+        let expected = PersistedClusterSelections {
+            last_selected_context: Some("prod".into()),
+            ..saved_selections()
+        };
         let mut storage = MemoryStorage::default();
         let mut app = MyEguiApp::<MockWorker>::default();
         app.ui_state.cluster_selections = expected.clone();
@@ -501,6 +505,29 @@ mod persistence_tests {
         restored.load_persisted_state(Some(&storage));
 
         assert_eq!(restored.ui_state.cluster_selections, expected);
+    }
+
+    #[test]
+    fn legacy_cluster_selections_without_a_selected_context_remain_loadable() {
+        #[derive(serde::Serialize)]
+        struct LegacyPersistedClusterSelections {
+            selections: BTreeMap<String, state::PersistedClusterSelection>,
+        }
+
+        let expected = saved_selections();
+        let mut storage = MemoryStorage::default();
+        eframe::set_value(
+            &mut storage,
+            CLUSTER_SELECTIONS_STORAGE_KEY,
+            &LegacyPersistedClusterSelections {
+                selections: expected.selections.clone(),
+            },
+        );
+
+        let mut app = MyEguiApp::<MockWorker>::default();
+        app.load_persisted_state(Some(&storage));
+
+        assert_eq!(app.ui_state.cluster_selections, expected);
     }
 
     #[test]
@@ -626,6 +653,7 @@ mod persistence_tests {
                         }),
                     },
                 )]),
+                last_selected_context: None,
             },
             ..Default::default()
         };
