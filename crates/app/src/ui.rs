@@ -18,6 +18,9 @@ mod table_preferences;
 mod widgets;
 mod workspace;
 mod yaml_editor;
+#[cfg(any(test, feature = "benchmarks"))]
+#[doc(hidden)]
+pub mod yaml_editor_profile;
 
 use crate::log_store::LogStoreService;
 use crate::terminal_launcher::{

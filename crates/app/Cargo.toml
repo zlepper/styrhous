@@ -9,6 +9,7 @@ repository = "https://github.com/zlepper/kubernetes-dev-ui"
 [features]
 default = ["self-updater"]
 self-updater = ["dep:cargo-packager-updater", "dep:minisign-verify"]
+benchmarks = []
 
 [package.metadata.packager]
 product_name = "Kubernetes Dev UI"
@@ -76,3 +77,8 @@ egui_kittest = { version = "0.36.1", features = ["eframe", "wgpu", "snapshot"] }
 [[bench]]
 name = "log_viewer"
 harness = false
+
+[[bench]]
+name = "yaml_editor"
+harness = false
+required-features = ["benchmarks"]

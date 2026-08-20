@@ -23,6 +23,9 @@ use ui::MyEguiApp;
 
 #[doc(hidden)]
 pub use ui::log_viewer_profile::LogViewerProfile;
+#[cfg(any(test, feature = "benchmarks"))]
+#[doc(hidden)]
+pub use ui::yaml_editor_profile::YamlEditorProfile;
 
 pub(crate) const DEFAULT_NATIVE_WINDOW_SIZE: [f32; 2] = [1200.0, 800.0];
 pub(crate) const MIN_NATIVE_WINDOW_SIZE: [f32; 2] = [1000.0, 600.0];

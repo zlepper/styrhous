@@ -231,6 +231,45 @@ pub(super) fn show_editor_window(
     editor: &mut YamlEditorWindowState,
     commands_to_send: &mut Vec<WorkerCommandBox>,
 ) {
+    #[cfg(any(test, feature = "benchmarks"))]
+    show_editor_window_inner(ui, editor, commands_to_send, None);
+    #[cfg(not(any(test, feature = "benchmarks")))]
+    show_editor_window_inner(ui, editor, commands_to_send);
+}
+
+#[cfg(any(test, feature = "benchmarks"))]
+pub(super) fn show_editor_window_with_scroll_metrics(
+    ui: &mut egui::Ui,
+    editor: &mut YamlEditorWindowState,
+    commands_to_send: &mut Vec<WorkerCommandBox>,
+    scroll_metrics: Option<&mut YamlEditorScrollMetrics>,
+) {
+    show_editor_window_inner(ui, editor, commands_to_send, scroll_metrics);
+}
+
+#[cfg(any(test, feature = "benchmarks"))]
+#[derive(Debug, Clone, Copy)]
+pub(super) struct YamlEditorScrollMetrics {
+    pub(super) offset: egui::Vec2,
+    pub(super) inner_rect: egui::Rect,
+}
+
+#[cfg(any(test, feature = "benchmarks"))]
+impl Default for YamlEditorScrollMetrics {
+    fn default() -> Self {
+        Self {
+            offset: egui::Vec2::ZERO,
+            inner_rect: egui::Rect::NOTHING,
+        }
+    }
+}
+
+fn show_editor_window_inner(
+    ui: &mut egui::Ui,
+    editor: &mut YamlEditorWindowState,
+    commands_to_send: &mut Vec<WorkerCommandBox>,
+    #[cfg(any(test, feature = "benchmarks"))] scroll_metrics: Option<&mut YamlEditorScrollMetrics>,
+) {
     let ctx = ui.ctx().clone();
     if ctx.input(|input| input.viewport().close_requested()) {
         request_close(&ctx, editor);
@@ -339,7 +378,14 @@ pub(super) fn show_editor_window(
                 if let Some(error) = &editor.error {
                     error_strip(ui, error);
                 }
-                if show_code_editor(&ctx, ui, editor, search_matches.as_ref().ok()) {
+                if show_code_editor(
+                    &ctx,
+                    ui,
+                    editor,
+                    search_matches.as_ref().ok(),
+                    #[cfg(any(test, feature = "benchmarks"))]
+                    scroll_metrics,
+                ) {
                     refresh_local_validation(editor);
                 }
             }
@@ -573,6 +619,7 @@ fn show_code_editor(
     ui: &mut egui::Ui,
     editor: &mut YamlEditorWindowState,
     search_matches: Option<&Vec<Range<usize>>>,
+    #[cfg(any(test, feature = "benchmarks"))] scroll_metrics: Option<&mut YamlEditorScrollMetrics>,
 ) -> bool {
     let text_edit_id = yaml_editor_text_edit_id(editor.id);
     // Consume this before `TextEdit` processes input. Otherwise the editor can handle the
@@ -635,7 +682,7 @@ fn show_code_editor(
         .and_then(|index| search_matches.and_then(|matches| matches.get(index)))
         .cloned();
     let fallback_completion_position = ui.clip_rect().left_top() + egui::vec2(74.0, 68.0);
-    components::scroll::both()
+    let _scroll_output = components::scroll::both()
         .id_salt(("yaml-editor-scroll", editor.id))
         .auto_shrink([false, false])
         .show(ui, |ui| {
@@ -730,6 +777,11 @@ fn show_code_editor(
                 }
             });
         });
+    #[cfg(any(test, feature = "benchmarks"))]
+    if let Some(scroll_metrics) = scroll_metrics {
+        scroll_metrics.offset = _scroll_output.state.offset;
+        scroll_metrics.inner_rect = _scroll_output.inner_rect;
+    }
 
     if changed {
         clear_active_match(editor);
