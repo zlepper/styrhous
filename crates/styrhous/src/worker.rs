@@ -192,10 +192,10 @@ impl Worker {
                 results: result_sender,
                 connections: Arc::new(Mutex::new(HashMap::new())),
                 resource_watches: Arc::new(Mutex::new(ResourceWatchRegistry::default())),
-                detail_watches: Arc::new(Mutex::new(HashMap::new())),
-                pod_metrics_watches: Arc::new(Mutex::new(HashMap::new())),
-                node_metrics_watches: Arc::new(Mutex::new(HashMap::new())),
-                log_streams: Arc::new(Mutex::new(HashMap::new())),
+                detail_watches: Arc::new(TaskRegistry::default()),
+                pod_metrics_watches: Arc::new(TaskRegistry::default()),
+                node_metrics_watches: Arc::new(TaskRegistry::default()),
+                log_streams: Arc::new(TaskRegistry::default()),
                 watch_initialization_slots: Arc::new(Mutex::new(HashMap::new())),
                 log_store_appender: self.log_store_appender.clone(),
             });
@@ -1258,23 +1258,24 @@ impl WorkerCommand for StartResourceDetailWatch {
             .await
             .map_err(failure)?;
         let key = (self.cluster_key, self.history_entry_id);
-        let previous = state.detail_watches.lock().await.remove(&key);
-        if let Some(previous) = previous {
-            abort_task(previous).await;
-        }
-        let handle = tokio::spawn(watch_resource_detail(ResourceDetailWatchRequest {
-            cluster_key: self.cluster_key,
-            client,
-            api_resource: self.api_resource,
-            namespace: self.namespace,
-            resource_name: self.resource_name,
-            resource_uid: self.resource_uid,
-            history_entry_id: self.history_entry_id,
-            pod_metrics_api_available: self.pod_metrics_api_available,
-            node_metrics_api_available: self.node_metrics_api_available,
-            event_sender: state.results.clone(),
-        }));
-        state.detail_watches.lock().await.insert(key, handle);
+        let event_sender = state.results.clone();
+        state
+            .detail_watches
+            .replace_after_abort(key, move || {
+                tokio::spawn(watch_resource_detail(ResourceDetailWatchRequest {
+                    cluster_key: self.cluster_key,
+                    client,
+                    api_resource: self.api_resource,
+                    namespace: self.namespace,
+                    resource_name: self.resource_name,
+                    resource_uid: self.resource_uid,
+                    history_entry_id: self.history_entry_id,
+                    pod_metrics_api_available: self.pod_metrics_api_available,
+                    node_metrics_api_available: self.node_metrics_api_available,
+                    event_sender,
+                }))
+            })
+            .await;
         Ok(NoResult)
     }
 
@@ -1288,14 +1289,10 @@ impl WorkerCommand for StopResourceDetailWatch {
     type Output = Result<NoResult, WorkerError>;
 
     async fn execute(self, state: &WorkerState) -> Self::Output {
-        let handle = state
+        state
             .detail_watches
-            .lock()
-            .await
-            .remove(&(self.cluster_key, self.history_entry_id));
-        if let Some(handle) = handle {
-            abort_task(handle).await;
-        }
+            .abort(&(self.cluster_key, self.history_entry_id))
+            .await;
         Ok(NoResult)
     }
 
@@ -1339,7 +1336,8 @@ impl WorkerCommand for StopPodMetricsWatch {
 
     async fn execute(self, state: &WorkerState) -> Self::Output {
         state
-            .abort_pod_metrics_watches(|key| key.0 == self.cluster_key && key.1 == self.namespace)
+            .pod_metrics_watches
+            .abort_matching(|key| key.0 == self.cluster_key && key.1 == self.namespace)
             .await;
         Ok(NoResult)
     }
@@ -1383,7 +1381,8 @@ impl WorkerCommand for StopNodeMetricsWatch {
 
     async fn execute(self, state: &WorkerState) -> Self::Output {
         state
-            .abort_node_metrics_watches(|cluster_key| *cluster_key == self.cluster_key)
+            .node_metrics_watches
+            .abort_matching(|cluster_key| *cluster_key == self.cluster_key)
             .await;
         Ok(NoResult)
     }
@@ -1787,20 +1786,21 @@ impl WorkerCommand for StartPodLogStream {
                     ),
                 })?;
         let key = (self.cluster_key, self.log_window_id);
-        let previous = state.log_streams.lock().await.remove(&key);
-        if let Some(previous) = previous {
-            abort_task(previous).await;
-        }
-        let task = tokio::spawn(pod_logs::stream(
-            self.log_window_id,
-            client,
-            self.namespace,
-            self.pod_name,
-            self.container,
-            log_store_appender,
-            state.results.clone(),
-        ));
-        state.log_streams.lock().await.insert(key, task);
+        let event_sender = state.results.clone();
+        state
+            .log_streams
+            .replace_after_abort(key, move || {
+                tokio::spawn(pod_logs::stream(
+                    self.log_window_id,
+                    client,
+                    self.namespace,
+                    self.pod_name,
+                    self.container,
+                    log_store_appender,
+                    event_sender,
+                ))
+            })
+            .await;
         Ok(PodLogStreamStarted {
             log_window_id: self.log_window_id,
         })
@@ -1816,14 +1816,10 @@ impl WorkerCommand for StopPodLogStream {
     type Output = Result<PodLogStreamEnded, WorkerError>;
 
     async fn execute(self, state: &WorkerState) -> Self::Output {
-        let task = state
+        state
             .log_streams
-            .lock()
-            .await
-            .remove(&(self.cluster_key, self.log_window_id));
-        if let Some(task) = task {
-            abort_task(task).await;
-        }
+            .abort(&(self.cluster_key, self.log_window_id))
+            .await;
         Ok(PodLogStreamEnded {
             log_window_id: self.log_window_id,
         })
@@ -1841,7 +1837,10 @@ pub struct WorkerResultSender {
 }
 
 impl WorkerResultSender {
-    fn new(sender: mpsc::Sender<WorkerResultBox>, repaint_context: Option<egui::Context>) -> Self {
+    pub(crate) fn new(
+        sender: mpsc::Sender<WorkerResultBox>,
+        repaint_context: Option<egui::Context>,
+    ) -> Self {
         Self {
             sender,
             repaint_context,
@@ -1884,7 +1883,82 @@ pub struct ResourceApiErrorCause {
 }
 
 /// Shared state accessible from spawned async tasks
-type SharedTaskRegistry<Key> = Arc<Mutex<HashMap<Key, JoinHandle<()>>>>;
+type SharedTaskRegistry<Key> = Arc<TaskRegistry<Key>>;
+
+/// Owns one family of cancellable worker tasks.
+///
+/// Task removal happens while the registry is locked, but task abortion happens
+/// after releasing that lock. This keeps lifecycle operations short and avoids
+/// holding the registry lock across the bounded join in `abort_task`.
+struct TaskRegistry<Key> {
+    tasks: Mutex<HashMap<Key, JoinHandle<()>>>,
+}
+
+impl<Key> Default for TaskRegistry<Key> {
+    fn default() -> Self {
+        Self {
+            tasks: Mutex::new(HashMap::new()),
+        }
+    }
+}
+
+impl<Key> TaskRegistry<Key>
+where
+    Key: Eq + std::hash::Hash + Clone,
+{
+    async fn replace(&self, key: Key, task: JoinHandle<()>) {
+        let previous = self.tasks.lock().await.insert(key, task);
+        if let Some(previous) = previous {
+            abort_task(previous).await;
+        }
+    }
+
+    /// Replace a task whose creation must not overlap with the previous task.
+    /// Detail watches and pod log streams use this because both can emit data
+    /// immediately after they are spawned.
+    async fn replace_after_abort(&self, key: Key, create: impl FnOnce() -> JoinHandle<()>) {
+        self.abort(&key).await;
+        self.replace(key, create()).await;
+    }
+
+    async fn abort(&self, key: &Key) {
+        let task = self.tasks.lock().await.remove(key);
+        if let Some(task) = task {
+            abort_task(task).await;
+        }
+    }
+
+    async fn abort_matching(&self, matches: impl Fn(&Key) -> bool) {
+        let mut tasks = self.tasks.lock().await;
+        let keys = tasks
+            .keys()
+            .filter(|key| matches(key))
+            .cloned()
+            .collect::<Vec<_>>();
+        let removed = keys
+            .into_iter()
+            .filter_map(|key| tasks.remove(&key))
+            .collect::<Vec<_>>();
+        drop(tasks);
+        for task in removed {
+            abort_task(task).await;
+        }
+    }
+
+    async fn abort_all(&self) {
+        self.abort_matching(|_| true).await;
+    }
+
+    #[cfg(test)]
+    async fn is_empty(&self) -> bool {
+        self.tasks.lock().await.is_empty()
+    }
+
+    #[cfg(test)]
+    async fn contains_key(&self, key: &Key) -> bool {
+        self.tasks.lock().await.contains_key(key)
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct WorkerState {
@@ -1954,13 +2028,17 @@ impl WorkerState {
     async fn stop_cluster(&self, cluster_key: i32) {
         self.connections.lock().await.remove(&cluster_key);
         self.invalidate_cluster_resource_watches(cluster_key).await;
-        self.abort_detail_watches(|(watch_cluster_key, _)| *watch_cluster_key == cluster_key)
+        self.detail_watches
+            .abort_matching(|(watch_cluster_key, _)| *watch_cluster_key == cluster_key)
             .await;
-        self.abort_pod_metrics_watches(|(watch_cluster_key, _)| *watch_cluster_key == cluster_key)
+        self.pod_metrics_watches
+            .abort_matching(|(watch_cluster_key, _)| *watch_cluster_key == cluster_key)
             .await;
-        self.abort_node_metrics_watches(|watch_cluster_key| *watch_cluster_key == cluster_key)
+        self.node_metrics_watches
+            .abort_matching(|watch_cluster_key| *watch_cluster_key == cluster_key)
             .await;
-        self.abort_log_streams(|(watch_cluster_key, _)| *watch_cluster_key == cluster_key)
+        self.log_streams
+            .abort_matching(|(watch_cluster_key, _)| *watch_cluster_key == cluster_key)
             .await;
         self.watch_initialization_slots
             .lock()
@@ -1971,10 +2049,10 @@ impl WorkerState {
     async fn stop_all_clusters(&self) {
         self.connections.lock().await.clear();
         self.invalidate_all_resource_watches().await;
-        self.abort_detail_watches(|_| true).await;
-        self.abort_pod_metrics_watches(|_| true).await;
-        self.abort_node_metrics_watches(|_| true).await;
-        self.abort_log_streams(|_| true).await;
+        self.detail_watches.abort_all().await;
+        self.pod_metrics_watches.abort_all().await;
+        self.node_metrics_watches.abort_all().await;
+        self.log_streams.abort_all().await;
         self.watch_initialization_slots.lock().await.clear();
     }
 
@@ -2112,86 +2190,12 @@ impl WorkerState {
         }
     }
 
-    async fn abort_detail_watches(&self, matches: impl Fn(&(i32, u64)) -> bool) {
-        let mut watches = self.detail_watches.lock().await;
-        let keys = watches
-            .keys()
-            .filter(|key| matches(key))
-            .copied()
-            .collect::<Vec<_>>();
-        let tasks = keys
-            .into_iter()
-            .filter_map(|key| watches.remove(&key))
-            .collect::<Vec<_>>();
-        drop(watches);
-        for task in tasks {
-            abort_task(task).await;
-        }
-    }
-
     async fn replace_pod_metrics_watch(&self, key: (i32, String), task: JoinHandle<()>) {
-        let previous = self.pod_metrics_watches.lock().await.insert(key, task);
-        if let Some(previous) = previous {
-            abort_task(previous).await;
-        }
-    }
-
-    async fn abort_pod_metrics_watches(&self, matches: impl Fn(&(i32, String)) -> bool) {
-        let mut watches = self.pod_metrics_watches.lock().await;
-        let keys = watches
-            .keys()
-            .filter(|key| matches(key))
-            .cloned()
-            .collect::<Vec<_>>();
-        let tasks = keys
-            .into_iter()
-            .filter_map(|key| watches.remove(&key))
-            .collect::<Vec<_>>();
-        drop(watches);
-        for task in tasks {
-            abort_task(task).await;
-        }
+        self.pod_metrics_watches.replace(key, task).await;
     }
 
     async fn replace_node_metrics_watch(&self, key: i32, task: JoinHandle<()>) {
-        let previous = self.node_metrics_watches.lock().await.insert(key, task);
-        if let Some(previous) = previous {
-            abort_task(previous).await;
-        }
-    }
-
-    async fn abort_node_metrics_watches(&self, matches: impl Fn(&i32) -> bool) {
-        let mut watches = self.node_metrics_watches.lock().await;
-        let keys = watches
-            .keys()
-            .filter(|key| matches(key))
-            .copied()
-            .collect::<Vec<_>>();
-        let tasks = keys
-            .into_iter()
-            .filter_map(|key| watches.remove(&key))
-            .collect::<Vec<_>>();
-        drop(watches);
-        for task in tasks {
-            abort_task(task).await;
-        }
-    }
-
-    async fn abort_log_streams(&self, matches: impl Fn(&(i32, u64)) -> bool) {
-        let mut streams = self.log_streams.lock().await;
-        let keys = streams
-            .keys()
-            .filter(|key| matches(key))
-            .copied()
-            .collect::<Vec<_>>();
-        let tasks = keys
-            .into_iter()
-            .filter_map(|key| streams.remove(&key))
-            .collect::<Vec<_>>();
-        drop(streams);
-        for task in tasks {
-            abort_task(task).await;
-        }
+        self.node_metrics_watches.replace(key, task).await;
     }
 }
 
@@ -2374,10 +2378,10 @@ mod tests {
             results: WorkerResultSender::new(sender, None),
             connections: Arc::new(Mutex::new(HashMap::new())),
             resource_watches: Arc::new(Mutex::new(ResourceWatchRegistry::default())),
-            detail_watches: Arc::new(Mutex::new(HashMap::new())),
-            pod_metrics_watches: Arc::new(Mutex::new(HashMap::new())),
-            node_metrics_watches: Arc::new(Mutex::new(HashMap::new())),
-            log_streams: Arc::new(Mutex::new(HashMap::new())),
+            detail_watches: Arc::new(TaskRegistry::default()),
+            pod_metrics_watches: Arc::new(TaskRegistry::default()),
+            node_metrics_watches: Arc::new(TaskRegistry::default()),
+            log_streams: Arc::new(TaskRegistry::default()),
             watch_initialization_slots: Arc::new(Mutex::new(HashMap::new())),
             log_store_appender: None,
         }
@@ -2391,6 +2395,40 @@ mod tests {
             name: "pods".to_owned(),
             namespaced: true,
         }
+    }
+
+    #[test]
+    fn task_registry_replaces_and_selectively_aborts_tasks() {
+        let runtime = tokio::runtime::Runtime::new().expect("runtime initializes");
+        runtime.block_on(async {
+            let registry = TaskRegistry::default();
+            let first_aborted = Arc::new(AtomicUsize::new(0));
+            let second_aborted = Arc::new(AtomicUsize::new(0));
+            let retained_aborted = Arc::new(AtomicUsize::new(0));
+
+            registry
+                .replace(1, tokio::spawn(AbortProbe(first_aborted.clone())))
+                .await;
+            registry
+                .replace_after_abort(1, || tokio::spawn(AbortProbe(second_aborted.clone())))
+                .await;
+            registry
+                .replace(2, tokio::spawn(AbortProbe(retained_aborted.clone())))
+                .await;
+            tokio::task::yield_now().await;
+
+            assert_eq!(first_aborted.load(Ordering::Relaxed), 1);
+            registry.abort_matching(|key| *key == 1).await;
+            tokio::task::yield_now().await;
+
+            assert_eq!(second_aborted.load(Ordering::Relaxed), 1);
+            assert_eq!(retained_aborted.load(Ordering::Relaxed), 0);
+            assert!(registry.contains_key(&2).await);
+            registry.abort(&2).await;
+            tokio::task::yield_now().await;
+            assert_eq!(retained_aborted.load(Ordering::Relaxed), 1);
+            assert!(registry.is_empty().await);
+        });
     }
 
     #[test]
@@ -2515,10 +2553,10 @@ mod tests {
                 results: WorkerResultSender::new(result_channel_sender, None),
                 connections: Arc::new(Mutex::new(HashMap::new())),
                 resource_watches: Arc::new(Mutex::new(ResourceWatchRegistry::default())),
-                detail_watches: Arc::new(Mutex::new(HashMap::new())),
-                pod_metrics_watches: Arc::new(Mutex::new(HashMap::new())),
-                node_metrics_watches: Arc::new(Mutex::new(HashMap::new())),
-                log_streams: Arc::new(Mutex::new(HashMap::new())),
+                detail_watches: Arc::new(TaskRegistry::default()),
+                pod_metrics_watches: Arc::new(TaskRegistry::default()),
+                node_metrics_watches: Arc::new(TaskRegistry::default()),
+                log_streams: Arc::new(TaskRegistry::default()),
                 watch_initialization_slots: Arc::new(Mutex::new(HashMap::new())),
                 log_store_appender: None,
             });
@@ -2819,23 +2857,23 @@ mod tests {
                 .await;
             state
                 .detail_watches
-                .lock()
-                .await
-                .insert((1, 3), tokio::spawn(AbortProbe(detail_aborted.clone())));
-            state.pod_metrics_watches.lock().await.insert(
-                (1, "default".to_owned()),
-                tokio::spawn(AbortProbe(metrics_aborted.clone())),
-            );
+                .replace((1, 3), tokio::spawn(AbortProbe(detail_aborted.clone())))
+                .await;
+            state
+                .pod_metrics_watches
+                .replace(
+                    (1, "default".to_owned()),
+                    tokio::spawn(AbortProbe(metrics_aborted.clone())),
+                )
+                .await;
             state
                 .node_metrics_watches
-                .lock()
-                .await
-                .insert(1, tokio::spawn(AbortProbe(node_metrics_aborted.clone())));
+                .replace(1, tokio::spawn(AbortProbe(node_metrics_aborted.clone())))
+                .await;
             state
                 .log_streams
-                .lock()
-                .await
-                .insert((1, 4), tokio::spawn(AbortProbe(log_aborted.clone())));
+                .replace((1, 4), tokio::spawn(AbortProbe(log_aborted.clone())))
+                .await;
 
             state.stop_all_clusters().await;
             tokio::task::yield_now().await;
@@ -2846,10 +2884,10 @@ mod tests {
             assert_eq!(node_metrics_aborted.load(Ordering::Relaxed), 1);
             assert_eq!(log_aborted.load(Ordering::Relaxed), 1);
             assert!(state.resource_watches.lock().await.watches.is_empty());
-            assert!(state.detail_watches.lock().await.is_empty());
-            assert!(state.pod_metrics_watches.lock().await.is_empty());
-            assert!(state.node_metrics_watches.lock().await.is_empty());
-            assert!(state.log_streams.lock().await.is_empty());
+            assert!(state.detail_watches.is_empty().await);
+            assert!(state.pod_metrics_watches.is_empty().await);
+            assert!(state.node_metrics_watches.is_empty().await);
+            assert!(state.log_streams.is_empty().await);
         });
     }
 
@@ -2864,6 +2902,10 @@ mod tests {
             let second_metrics_aborted = Arc::new(AtomicUsize::new(0));
             let first_node_metrics_aborted = Arc::new(AtomicUsize::new(0));
             let second_node_metrics_aborted = Arc::new(AtomicUsize::new(0));
+            let first_detail_aborted = Arc::new(AtomicUsize::new(0));
+            let second_detail_aborted = Arc::new(AtomicUsize::new(0));
+            let first_log_aborted = Arc::new(AtomicUsize::new(0));
+            let second_log_aborted = Arc::new(AtomicUsize::new(0));
             state
                 .replace_resource_watch(
                     ResourceScope {
@@ -2910,6 +2952,32 @@ mod tests {
                 )
                 .await;
 
+            state
+                .detail_watches
+                .replace(
+                    (1, 10),
+                    tokio::spawn(AbortProbe(first_detail_aborted.clone())),
+                )
+                .await;
+            state
+                .detail_watches
+                .replace(
+                    (2, 10),
+                    tokio::spawn(AbortProbe(second_detail_aborted.clone())),
+                )
+                .await;
+            state
+                .log_streams
+                .replace((1, 11), tokio::spawn(AbortProbe(first_log_aborted.clone())))
+                .await;
+            state
+                .log_streams
+                .replace(
+                    (2, 11),
+                    tokio::spawn(AbortProbe(second_log_aborted.clone())),
+                )
+                .await;
+
             state.stop_cluster(1).await;
 
             assert_eq!(first_aborted.load(Ordering::Relaxed), 1);
@@ -2918,6 +2986,10 @@ mod tests {
             assert_eq!(second_metrics_aborted.load(Ordering::Relaxed), 0);
             assert_eq!(first_node_metrics_aborted.load(Ordering::Relaxed), 1);
             assert_eq!(second_node_metrics_aborted.load(Ordering::Relaxed), 0);
+            assert_eq!(first_detail_aborted.load(Ordering::Relaxed), 1);
+            assert_eq!(second_detail_aborted.load(Ordering::Relaxed), 0);
+            assert_eq!(first_log_aborted.load(Ordering::Relaxed), 1);
+            assert_eq!(second_log_aborted.load(Ordering::Relaxed), 0);
             assert!(
                 state
                     .resource_watches
@@ -2933,11 +3005,12 @@ mod tests {
             assert!(
                 state
                     .pod_metrics_watches
-                    .lock()
-                    .await
                     .contains_key(&(2, "default".to_owned()))
+                    .await
             );
-            assert!(state.node_metrics_watches.lock().await.contains_key(&2));
+            assert!(state.node_metrics_watches.contains_key(&2).await);
+            assert!(state.detail_watches.contains_key(&(2, 10)).await);
+            assert!(state.log_streams.contains_key(&(2, 11)).await);
         });
     }
 

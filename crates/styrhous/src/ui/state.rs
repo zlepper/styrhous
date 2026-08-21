@@ -860,6 +860,18 @@ pub(super) struct ClusterState {
     pub(super) namespaces_load: ClusterLoadState,
     pub(super) api_resources_load: ClusterLoadState,
     pub(super) selected_namespaces: HashSet<String>,
+    pub(super) resources: ClusterResourceState,
+}
+
+/// UI state owned by a connected cluster's resource workspace.
+///
+/// Keeping this separate from connection identity and namespace discovery makes
+/// it explicit which fields are replaced when a cluster session is re-opened.
+/// `ClusterState` dereferences to this state for a gradual migration of feature
+/// modules; new code should prefer `cluster.resources` when it needs to make
+/// the ownership boundary visible.
+#[derive(Debug)]
+pub(super) struct ClusterResourceState {
     pub(super) resource_navigation: ResourceNavigation,
     pub(super) custom_resource_columns: BTreeMap<ApiResource, Vec<CustomResourceColumn>>,
     pub(super) scalable_api_resources: BTreeSet<ApiResource>,
@@ -893,21 +905,50 @@ pub(super) struct ClusterState {
     pub(super) scale_error: Option<String>,
 }
 
-#[cfg(test)]
 impl ClusterState {
+    fn new(cluster_key: i32, name: String) -> Self {
+        Self {
+            name,
+            cluster_key,
+            namespaces: BTreeMap::new(),
+            connection: ClusterConnectionState::Disconnected,
+            namespaces_load: ClusterLoadState::Loading,
+            api_resources_load: ClusterLoadState::Loading,
+            selected_namespaces: HashSet::new(),
+            resources: ClusterResourceState::new(false),
+        }
+    }
+
+    /// Clear state derived from a previous connection before opening a new
+    /// session. The worker cancels the old session's watchers, so no workspace,
+    /// inspector, or pending resource action may survive into the new session.
+    fn reset_for_connection(&mut self) {
+        self.connection = ClusterConnectionState::Connecting;
+        self.namespaces_load = ClusterLoadState::Loading;
+        self.api_resources_load = ClusterLoadState::Loading;
+        self.namespaces.clear();
+        self.selected_namespaces.clear();
+        self.resources.reset_for_connection();
+    }
+
+    #[cfg(test)]
     /// Construct an inert cluster whose optional UI state is empty.
     ///
     /// UI tests should layer only their scenario-specific state on top of this
     /// fixture so additions to `ClusterState` have one test default to update.
     pub(super) fn for_test(cluster_key: i32, name: impl Into<String>) -> Self {
+        let mut state = Self::new(cluster_key, name.into());
+        state.namespaces_load = ClusterLoadState::Ready;
+        state.api_resources_load = ClusterLoadState::Ready;
+        state.resources.pod_metrics_api_available = true;
+        state.resources.node_metrics_api_available = true;
+        state
+    }
+}
+
+impl ClusterResourceState {
+    fn new(metrics_api_available: bool) -> Self {
         Self {
-            name: name.into(),
-            cluster_key,
-            namespaces: BTreeMap::new(),
-            connection: ClusterConnectionState::Disconnected,
-            namespaces_load: ClusterLoadState::Ready,
-            api_resources_load: ClusterLoadState::Ready,
-            selected_namespaces: HashSet::new(),
             resource_navigation: ResourceNavigation::default(),
             custom_resource_columns: BTreeMap::new(),
             scalable_api_resources: BTreeSet::new(),
@@ -915,10 +956,10 @@ impl ClusterState {
             resource_cache: HashMap::new(),
             helm_release_cache: HashMap::new(),
             active_watchers: HashSet::new(),
-            pod_metrics_api_available: true,
+            pod_metrics_api_available: metrics_api_available,
             pod_metrics: HashMap::new(),
             active_pod_metrics: HashSet::new(),
-            node_metrics_api_available: true,
+            node_metrics_api_available: metrics_api_available,
             node_metrics: NodeMetricsState::default(),
             node_metrics_active: false,
             resource_searches: HashMap::new(),
@@ -940,6 +981,24 @@ impl ClusterState {
             pending_scale: None,
             scale_error: None,
         }
+    }
+
+    fn reset_for_connection(&mut self) {
+        *self = Self::new(false);
+    }
+}
+
+impl std::ops::Deref for ClusterState {
+    type Target = ClusterResourceState;
+
+    fn deref(&self) -> &Self::Target {
+        &self.resources
+    }
+}
+
+impl std::ops::DerefMut for ClusterState {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.resources
     }
 }
 
@@ -1252,6 +1311,16 @@ impl UiState {
         if remember_selection {
             self.cluster_selections.last_selected_context = Some(context_name);
         }
+        if self
+            .clusters
+            .get(&cluster_key)
+            .is_some_and(|cluster| cluster.resource_detail_panel.is_some())
+        {
+            // `ConnectToCluster` tears down every worker watch for this session.
+            // Drop the matching UI history now so a cancelled inspector cannot
+            // remain above the reconnected workspace.
+            let _ = self.global_blades.clear();
+        }
         let cluster = self.clusters.get_mut(&cluster_key)?;
         if matches!(
             &cluster.connection,
@@ -1260,24 +1329,7 @@ impl UiState {
             return None;
         }
 
-        cluster.connection = ClusterConnectionState::Connecting;
-        cluster.namespaces_load = ClusterLoadState::Loading;
-        cluster.api_resources_load = ClusterLoadState::Loading;
-        cluster.namespaces.clear();
-        cluster.resource_navigation = ResourceNavigation::default();
-        cluster.custom_resource_columns.clear();
-        cluster.selected_namespaces.clear();
-        cluster.selected_api_resource = None;
-        cluster.resource_cache.clear();
-        cluster.helm_release_cache.clear();
-        cluster.active_watchers.clear();
-        cluster.pod_metrics_api_available = false;
-        cluster.pod_metrics.clear();
-        cluster.active_pod_metrics.clear();
-        cluster.node_metrics_api_available = false;
-        cluster.node_metrics = NodeMetricsState::default();
-        cluster.node_metrics_active = false;
-        cluster.resource_searches.clear();
+        cluster.reset_for_connection();
 
         Some(Box::new(crate::worker::ConnectToCluster {
             cluster: cluster.name.clone(),
@@ -1829,7 +1881,7 @@ impl UiState {
         let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
             return;
         };
-        let Some(progress) = cluster.bulk_delete_progress.as_mut() else {
+        let Some(progress) = cluster.resources.bulk_delete_progress.as_mut() else {
             return;
         };
         if bulk_delete_id != Some(progress.id) {
@@ -1843,7 +1895,8 @@ impl UiState {
         progress.remaining_targets.remove(&target);
         if let Some(failure) = failure {
             progress.failures.push((target, failure));
-        } else if let Some(selection) = cluster.resource_selections.get_mut(&api_resource) {
+        } else if let Some(selection) = cluster.resources.resource_selections.get_mut(&api_resource)
+        {
             selection.remove(&target.uid);
         }
 
@@ -1852,7 +1905,7 @@ impl UiState {
         }
 
         let failures = std::mem::take(&mut progress.failures);
-        cluster.bulk_delete_progress = None;
+        cluster.resources.bulk_delete_progress = None;
         if failures.is_empty() {
             return;
         }
@@ -1985,46 +2038,7 @@ fn apply_kubernetes_clusters(
 }
 
 fn cluster_state(cluster_key: i32, name: String) -> ClusterState {
-    ClusterState {
-        cluster_key,
-        name,
-        namespaces: BTreeMap::new(),
-        connection: ClusterConnectionState::Disconnected,
-        namespaces_load: ClusterLoadState::Loading,
-        api_resources_load: ClusterLoadState::Loading,
-        selected_namespaces: HashSet::new(),
-        selected_api_resource: None,
-        resource_navigation: ResourceNavigation::default(),
-        custom_resource_columns: BTreeMap::new(),
-        scalable_api_resources: BTreeSet::new(),
-        resource_cache: HashMap::new(),
-        helm_release_cache: HashMap::new(),
-        active_watchers: HashSet::new(),
-        pod_metrics_api_available: false,
-        pod_metrics: HashMap::new(),
-        active_pod_metrics: HashSet::new(),
-        node_metrics_api_available: false,
-        node_metrics: NodeMetricsState::default(),
-        node_metrics_active: false,
-        resource_searches: HashMap::new(),
-        resource_selections: HashMap::new(),
-        next_bulk_delete_id: 0,
-        resource_detail_panel: None,
-        next_detail_generation: 0,
-        next_data_save_request_id: 0,
-        pending_delete: None,
-        pending_bulk_delete: None,
-        bulk_delete_progress: None,
-        bulk_delete_error: None,
-        pending_force_delete: None,
-        force_delete_error: None,
-        pending_deployment_restart: None,
-        deployment_restart_error: None,
-        pending_cron_job_run: None,
-        cron_job_run_error: None,
-        pending_scale: None,
-        scale_error: None,
-    }
+    ClusterState::new(cluster_key, name)
 }
 
 impl WorkerResult for crate::worker::ManagedClusterDiscoveryUpdated {
@@ -2711,6 +2725,60 @@ mod tests {
             state.cluster_selections.last_selected_context.as_deref(),
             Some("prod")
         );
+    }
+
+    #[test]
+    fn reconnect_reset_clears_connection_derived_resource_state() {
+        let mut cluster = ClusterState::new(7, "dev".to_owned());
+        let resource = ApiResource::helm_releases();
+        cluster.selected_namespaces.insert("default".to_owned());
+        cluster.selected_api_resource = Some(resource.clone());
+        cluster.active_watchers.insert((resource.clone(), None));
+        cluster.resource_cache.insert(
+            (resource.clone(), None),
+            ResourceWatchState {
+                is_synced: true,
+                ..Default::default()
+            },
+        );
+        cluster.pod_metrics_api_available = true;
+        cluster.node_metrics_api_available = true;
+        cluster
+            .resource_searches
+            .insert(resource.clone(), ResourceSearchState::default());
+        cluster
+            .resource_selections
+            .insert(resource, HashSet::from(["uid".to_owned()]));
+        cluster.resource_detail_panel = Some(ResourceDetailPanelState {
+            dismiss_on_outside_click: true,
+        });
+        cluster.next_detail_generation = 4;
+        cluster.pending_delete = Some(PendingDelete {
+            api_resource: ApiResource::helm_releases(),
+            resource_name: "demo".to_owned(),
+            namespace: Some("default".to_owned()),
+            confirmation_available_at: Instant::now(),
+        });
+        cluster.next_bulk_delete_id = 3;
+
+        cluster.reset_for_connection();
+
+        assert!(matches!(
+            cluster.connection,
+            ClusterConnectionState::Connecting
+        ));
+        assert!(cluster.selected_namespaces.is_empty());
+        assert!(cluster.selected_api_resource.is_none());
+        assert!(cluster.active_watchers.is_empty());
+        assert!(cluster.resource_cache.is_empty());
+        assert!(!cluster.pod_metrics_api_available);
+        assert!(!cluster.node_metrics_api_available);
+        assert!(cluster.resource_searches.is_empty());
+        assert!(cluster.resource_selections.is_empty());
+        assert!(cluster.resource_detail_panel.is_none());
+        assert_eq!(cluster.next_detail_generation, 0);
+        assert!(cluster.pending_delete.is_none());
+        assert_eq!(cluster.next_bulk_delete_id, 0);
     }
 
     #[test]

@@ -265,35 +265,40 @@ pub(super) fn show(
                         "No matching resources",
                         "Try a different search term.",
                     );
-                } else if let Some(action) = show_resource_table(
-                    ui,
-                    api_resource,
-                    &filtered_resources.resources,
-                    ResourceTableOptions {
-                        custom_columns: cluster
-                            .custom_resource_columns
-                            .get(api_resource)
-                            .map(Vec::as_slice)
-                            .unwrap_or_default(),
-                        metadata_suggestion_resources: &all_resources,
-                        resource_navigation: &cluster.resource_navigation,
-                        hidden_resource_count: all_resources.len()
-                            - filtered_resources.resources.len(),
-                        show_namespace_column: api_resource.namespaced
-                            && cluster.selected_namespaces.len() > 1,
-                        actions: ResourceActionAvailability {
-                            enabled: resource_actions_enabled,
-                            supports_scale: cluster.scalable_api_resources.contains(api_resource),
+                } else if let Some(action) = {
+                    let resources = &mut cluster.resources;
+                    show_resource_table(
+                        ui,
+                        api_resource,
+                        &filtered_resources.resources,
+                        ResourceTableOptions {
+                            custom_columns: resources
+                                .custom_resource_columns
+                                .get(api_resource)
+                                .map(Vec::as_slice)
+                                .unwrap_or_default(),
+                            metadata_suggestion_resources: &all_resources,
+                            resource_navigation: &resources.resource_navigation,
+                            hidden_resource_count: all_resources.len()
+                                - filtered_resources.resources.len(),
+                            show_namespace_column: api_resource.namespaced
+                                && cluster.selected_namespaces.len() > 1,
+                            actions: ResourceActionAvailability {
+                                enabled: resource_actions_enabled,
+                                supports_scale: resources
+                                    .scalable_api_resources
+                                    .contains(api_resource),
+                            },
+                            debug_image_presets,
                         },
-                        debug_image_presets,
-                    },
-                    cluster
-                        .resource_selections
-                        .entry(api_resource.clone())
-                        .or_default(),
-                    table_preferences,
-                    &mut column_settings_to_open,
-                ) {
+                        resources
+                            .resource_selections
+                            .entry(api_resource.clone())
+                            .or_default(),
+                        table_preferences,
+                        &mut column_settings_to_open,
+                    )
+                } {
                     match action {
                         ResourceAction::OpenDetails {
                             name,
