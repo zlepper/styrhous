@@ -100,11 +100,7 @@ impl TailwindTable {
                 // Checkbox column header (select all)
                 header.col(|ui| {
                     let rect = ui.max_rect();
-                    ui.painter().rect_filled(rect, 0.0, HEADER_BG);
-                    ui.painter().line_segment(
-                        [rect.left_bottom(), rect.right_bottom()],
-                        egui::Stroke::new(1.0, TABLE_BORDER),
-                    );
+                    paint_table_cell(ui, rect, HEADER_BG);
                     ui.horizontal_centered(|ui| {
                         ui.add_space(cell_padding_x);
                         let response = render_checkbox(ui, select_all_state, "Select all rows");
@@ -124,11 +120,7 @@ impl TailwindTable {
                 for col in &self.columns {
                     header.col(|ui| {
                         let rect = ui.max_rect();
-                        ui.painter().rect_filled(rect, 0.0, HEADER_BG);
-                        ui.painter().line_segment(
-                            [rect.left_bottom(), rect.right_bottom()],
-                            egui::Stroke::new(1.0, TABLE_BORDER),
-                        );
+                        paint_table_cell(ui, rect, HEADER_BG);
                         ui.horizontal(|ui| {
                             ui.add_space(cell_padding_x);
                             ui.label(
@@ -152,11 +144,7 @@ impl TailwindTable {
                     // Checkbox column
                     row.col(|ui| {
                         let rect = ui.max_rect();
-                        ui.painter().rect_filled(rect, 0.0, bg_color);
-                        ui.painter().line_segment(
-                            [rect.left_bottom(), rect.right_bottom()],
-                            egui::Stroke::new(1.0, TABLE_BORDER),
-                        );
+                        paint_table_cell(ui, rect, bg_color);
                         ui.horizontal_centered(|ui| {
                             ui.add_space(cell_padding_x);
                             if let Some(key) = item_key.as_ref() {
@@ -194,11 +182,7 @@ impl TailwindTable {
                                 col_index,
                                 &self.columns[col_index].header,
                             ));
-                            ui.painter().rect_filled(rect, 0.0, bg_color);
-                            ui.painter().line_segment(
-                                [rect.left_bottom(), rect.right_bottom()],
-                                egui::Stroke::new(1.0, TABLE_BORDER),
-                            );
+                            paint_table_cell(ui, rect, bg_color);
                             ui.horizontal(|ui| {
                                 ui.add_space(cell_padding_x);
                                 render_cell(ui, item, col_index);

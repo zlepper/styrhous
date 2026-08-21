@@ -394,3 +394,211 @@ fn test_table_hidden_column() {
     harness.run();
     harness.ui_harness("tables/test_table_hidden_column/hidden_column");
 }
+
+#[test]
+fn configurable_table_preserves_header_and_row_accessibility_targets() {
+    let users = test_users();
+    let clicked_headers = Rc::new(RefCell::new(Vec::new()));
+    let clicked_headers_for_ui = clicked_headers.clone();
+    let mut harness = Harness::new_ui(move |ui| {
+        TailwindTable::new("configurable-accessibility")
+            .column("name", "Name", |column| {
+                column.sortable().initial_width(150.0)
+            })
+            .show_configurable_with_row_response(
+                ui,
+                &users,
+                Some(&SortState::new("name", SortDirection::Ascending)),
+                |response, id, _, _| {
+                    if response.clicked() {
+                        clicked_headers_for_ui.borrow_mut().push(id.to_owned());
+                    }
+                },
+                |_, _| {},
+                |ui, user, _| TableRowBuilder::text(ui, &user.name, true),
+                |_, _, _| {},
+            );
+    });
+
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+    harness.get_by_label("Name column");
+    harness.get_by_label("Resize Name column");
+    harness.get_by_label("Name, row 1");
+
+    harness.get_by_label("Name column").click();
+    harness.run();
+    assert_eq!(*clicked_headers.borrow(), vec!["name"]);
+}
+
+#[test]
+fn configurable_table_invokes_each_row_callback_for_its_cell() {
+    let users = test_users();
+    let callback_cells = Rc::new(RefCell::new(Vec::new()));
+    let callback_cells_for_ui = callback_cells.clone();
+    let mut harness = Harness::new_ui(move |ui| {
+        TailwindTable::new("configurable-row-callbacks")
+            .column("name", "Name", |column| column.initial_width(150.0))
+            .column("title", "Title", |column| column.initial_width(150.0))
+            .show_configurable_with_row_response(
+                ui,
+                &users[..2],
+                None,
+                |_, _, _, _| {},
+                |_, _| {},
+                |ui, user, column_index| {
+                    let text = if column_index == 0 {
+                        &user.name
+                    } else {
+                        &user.title
+                    };
+                    TableRowBuilder::text(ui, text, column_index == 0);
+                },
+                |_, user, column_index| {
+                    callback_cells_for_ui
+                        .borrow_mut()
+                        .push((user.id, column_index));
+                },
+            );
+    });
+
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+    let callback_cells = callback_cells.borrow();
+    let expected_cells = [(1, 0), (1, 1), (2, 0), (2, 1)];
+    assert!(!callback_cells.is_empty());
+    assert_eq!(callback_cells.len() % expected_cells.len(), 0);
+    assert!(
+        callback_cells
+            .chunks_exact(expected_cells.len())
+            .all(|cells| cells == expected_cells)
+    );
+}
+
+#[test]
+fn selectable_configurable_table_only_selects_rows_with_keys() {
+    let users = test_users();
+    let selected = Rc::new(RefCell::new(HashSet::new()));
+    let selected_for_ui = selected.clone();
+    let clicked_headers = Rc::new(RefCell::new(Vec::new()));
+    let clicked_headers_for_ui = clicked_headers.clone();
+    let visible_users = &users[..2];
+    let mut harness = Harness::new_ui(move |ui| {
+        TailwindTable::new("selectable-configurable-keys")
+            .column("name", "Name", |column| column.initial_width(150.0))
+            .selectable()
+            .show_selectable_configurable_with_row_response(
+                ui,
+                visible_users,
+                &mut selected_for_ui.borrow_mut(),
+                |user| (user.id == 1).then_some(user.id),
+                None,
+                |response, id, _, _| {
+                    if response.clicked() {
+                        clicked_headers_for_ui.borrow_mut().push(id.to_owned());
+                    }
+                },
+                |_, _| {},
+                |ui, user, _| TableRowBuilder::text(ui, &user.name, true),
+                |_, _, _| {},
+            );
+    });
+
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+    harness.get_by_label("Select all rows");
+    harness.get_by_label("Select row 1");
+
+    harness.get_by_label("Select all rows").click();
+    harness.run();
+    assert_eq!(*selected.borrow(), HashSet::from([1]));
+    assert!(clicked_headers.borrow().is_empty());
+
+    let selection_header = harness.get_by_label("Selection column").rect();
+    let header_edge = egui::pos2(selection_header.left() + 4.0, selection_header.center().y);
+    primary_click(&mut harness, header_edge);
+    harness.run();
+    assert_eq!(*clicked_headers.borrow(), vec!["selection"]);
+
+    harness.get_by_label("Select all rows").click();
+    harness.run();
+    assert!(selected.borrow().is_empty());
+}
+
+#[test]
+fn selectable_configurable_table_ignores_a_press_that_started_outside_its_checkbox() {
+    let users = test_users();
+    let selected = Rc::new(RefCell::new(HashSet::new()));
+    let selected_for_ui = selected.clone();
+    let mut harness = Harness::new_ui(move |ui| {
+        TailwindTable::new("selectable-configurable-press-origin")
+            .column("name", "Name", |column| column.initial_width(150.0))
+            .selectable()
+            .show_selectable_configurable_with_row_response(
+                ui,
+                &users[..1],
+                &mut selected_for_ui.borrow_mut(),
+                |user| Some(user.id),
+                None,
+                |_, _, _, _| {},
+                |_, _| {},
+                |ui, user, _| TableRowBuilder::text(ui, &user.name, true),
+                |_, _, _| {},
+            );
+    });
+
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+    let selection_header = harness.get_by_label("Selection column").rect();
+    let checkbox = harness.get_by_label("Select all rows").rect();
+
+    primary_press(
+        &mut harness,
+        egui::pos2(selection_header.left() + 4.0, selection_header.center().y),
+    );
+    primary_release(&mut harness, checkbox.center());
+    harness.run();
+    assert!(selected.borrow().is_empty());
+
+    primary_press(&mut harness, checkbox.center());
+    primary_release(
+        &mut harness,
+        egui::pos2(selection_header.left() + 4.0, selection_header.center().y),
+    );
+    primary_press(
+        &mut harness,
+        egui::pos2(selection_header.left() + 4.0, selection_header.center().y),
+    );
+    primary_release(&mut harness, checkbox.center());
+    harness.run();
+    assert!(selected.borrow().is_empty());
+
+    harness.get_by_label("Select all rows").click();
+    harness.run();
+    assert_eq!(*selected.borrow(), HashSet::from([1]));
+}
+
+fn primary_click<State>(harness: &mut Harness<'_, State>, position: egui::Pos2) {
+    primary_press(harness, position);
+    primary_release(harness, position);
+}
+
+fn primary_press<State>(harness: &mut Harness<'_, State>, position: egui::Pos2) {
+    harness.event(egui::Event::PointerMoved(position));
+    harness.event(egui::Event::PointerButton {
+        pos: position,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::default(),
+    });
+}
+
+fn primary_release<State>(harness: &mut Harness<'_, State>, position: egui::Pos2) {
+    harness.event(egui::Event::PointerMoved(position));
+    harness.event(egui::Event::PointerButton {
+        pos: position,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::default(),
+    });
+}

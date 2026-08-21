@@ -103,6 +103,14 @@ pub(super) fn row_context_menu_response(
     response
 }
 
+pub(super) fn paint_table_cell(ui: &Ui, rect: egui::Rect, background: Color32) {
+    ui.painter().rect_filled(rect, 0.0, background);
+    ui.painter().line_segment(
+        [rect.left_bottom(), rect.right_bottom()],
+        egui::Stroke::new(1.0, TABLE_BORDER),
+    );
+}
+
 pub(super) fn set_accessibility_label(
     ui: &Ui,
     response: &egui::Response,
