@@ -37,6 +37,7 @@ use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
 use time::OffsetDateTime;
+use tokio::sync::oneshot;
 use tokio::task::JoinSet;
 use tokio::time::MissedTickBehavior;
 use tracing::{info, warn};
@@ -383,6 +384,48 @@ pub async fn start_resource_watcher(
     api_resource: ApiResource,
     namespace: Option<String>,
     event_sender: WorkerResultSender,
+    initialized: Option<oneshot::Sender<()>>,
+) -> Result<(KubernetesResourceWatchStarted, tokio::task::JoinHandle<()>)> {
+    start_resource_watcher_with_scope(
+        cluster_key,
+        client,
+        api_resource,
+        namespace,
+        None,
+        event_sender,
+        initialized,
+    )
+    .await
+}
+
+pub async fn start_all_namespaces_resource_watcher(
+    cluster_key: i32,
+    client: kube::Client,
+    api_resource: ApiResource,
+    namespaces: BTreeSet<String>,
+    event_sender: WorkerResultSender,
+    initialized: Option<oneshot::Sender<()>>,
+) -> Result<(KubernetesResourceWatchStarted, tokio::task::JoinHandle<()>)> {
+    start_resource_watcher_with_scope(
+        cluster_key,
+        client,
+        api_resource,
+        None,
+        Some(namespaces),
+        event_sender,
+        initialized,
+    )
+    .await
+}
+
+async fn start_resource_watcher_with_scope(
+    cluster_key: i32,
+    client: kube::Client,
+    api_resource: ApiResource,
+    namespace: Option<String>,
+    watched_namespaces: Option<BTreeSet<String>>,
+    event_sender: WorkerResultSender,
+    initialized: Option<oneshot::Sender<()>>,
 ) -> Result<(KubernetesResourceWatchStarted, tokio::task::JoinHandle<()>)> {
     info!(
         "Starting resource watcher for {}/{} in {}",
@@ -398,6 +441,7 @@ pub async fn start_resource_watcher(
             client,
             namespace.clone(),
             event_sender,
+            initialized,
         ));
         return Ok((
             KubernetesResourceWatchStarted {
@@ -415,6 +459,7 @@ pub async fn start_resource_watcher(
         cluster_key,
         api_resource: api_resource.clone(),
         namespace: namespace.clone(),
+        watched_namespaces: watched_namespaces.clone(),
     };
     let watcher = if let Some(watcher) = resource_handlers::watcher_for(context) {
         watcher
@@ -439,11 +484,12 @@ pub async fn start_resource_watcher(
             cluster_key,
             api_resource: api_resource.clone(),
             namespace: namespace.clone(),
+            watched_namespaces,
             custom_columns,
         })
     };
 
-    let task = tokio::spawn(watcher.watch_resources());
+    let task = tokio::spawn(watcher.watch_resources(initialized));
 
     Ok((
         KubernetesResourceWatchStarted {
@@ -460,6 +506,7 @@ async fn watch_helm_releases(
     client: kube::Client,
     namespace: String,
     event_sender: WorkerResultSender,
+    mut initialized: Option<oneshot::Sender<()>>,
 ) {
     let secrets = Api::<Secret>::namespaced(client.clone(), &namespace);
     let config_maps = Api::<ConfigMap>::namespaced(client, &namespace);
@@ -479,13 +526,22 @@ async fn watch_helm_releases(
                 Some(Ok(event)) => {
                     secrets_synced |= matches!(&event, Event::InitDone);
                     let changed = apply_helm_secret_event(event, &mut records);
-                    if changed && secrets_synced && config_maps_synced { send_helm_releases(&event_sender, cluster_key, &namespace, &records).await; }
+                    if changed && secrets_synced && config_maps_synced {
+                        send_helm_releases(&event_sender, cluster_key, &namespace, &records).await;
+                    }
+                    if secrets_synced && config_maps_synced {
+                        let initial_sync_completed = initialized.take().is_some();
+                        if initial_sync_completed && !changed {
+                            send_helm_releases(&event_sender, cluster_key, &namespace, &records).await;
+                        }
+                    }
                 }
                 Some(Err(error)) => {
                     secrets_active = false;
                     secrets_synced = true;
                     event_sender.send(HelmReleaseBackendFailed { cluster_key, namespace: namespace.clone(), backend: "Secrets", error: format!("{error:#}") }).await.log_if_error("Failed to send Helm Secrets error");
                     if config_maps_synced {
+                        let _ = initialized.take();
                         send_helm_releases(&event_sender, cluster_key, &namespace, &records).await;
                     }
                 }
@@ -493,6 +549,7 @@ async fn watch_helm_releases(
                     secrets_active = false;
                     secrets_synced = true;
                     if config_maps_synced {
+                        let _ = initialized.take();
                         send_helm_releases(&event_sender, cluster_key, &namespace, &records).await;
                     }
                 },
@@ -501,13 +558,22 @@ async fn watch_helm_releases(
                 Some(Ok(event)) => {
                     config_maps_synced |= matches!(&event, Event::InitDone);
                     let changed = apply_helm_config_map_event(event, &mut records);
-                    if changed && secrets_synced && config_maps_synced { send_helm_releases(&event_sender, cluster_key, &namespace, &records).await; }
+                    if changed && secrets_synced && config_maps_synced {
+                        send_helm_releases(&event_sender, cluster_key, &namespace, &records).await;
+                    }
+                    if secrets_synced && config_maps_synced {
+                        let initial_sync_completed = initialized.take().is_some();
+                        if initial_sync_completed && !changed {
+                            send_helm_releases(&event_sender, cluster_key, &namespace, &records).await;
+                        }
+                    }
                 }
                 Some(Err(error)) => {
                     config_maps_active = false;
                     config_maps_synced = true;
                     event_sender.send(HelmReleaseBackendFailed { cluster_key, namespace: namespace.clone(), backend: "ConfigMaps", error: format!("{error:#}") }).await.log_if_error("Failed to send Helm ConfigMaps error");
                     if secrets_synced {
+                        let _ = initialized.take();
                         send_helm_releases(&event_sender, cluster_key, &namespace, &records).await;
                     }
                 }
@@ -515,6 +581,7 @@ async fn watch_helm_releases(
                     config_maps_active = false;
                     config_maps_synced = true;
                     if secrets_synced {
+                        let _ = initialized.take();
                         send_helm_releases(&event_sender, cluster_key, &namespace, &records).await;
                     }
                 },
@@ -648,7 +715,10 @@ type ResourceWatcherFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
 /// Object-safe dispatch point for concrete Kubernetes resource watchers.
 pub(crate) trait ResourceWatcher: Send {
-    fn watch_resources(self: Box<Self>) -> ResourceWatcherFuture;
+    fn watch_resources(
+        self: Box<Self>,
+        initialized: Option<oneshot::Sender<()>>,
+    ) -> ResourceWatcherFuture;
 }
 
 #[derive(Clone)]
@@ -658,6 +728,7 @@ pub(crate) struct TypedWatcherContext {
     pub(crate) cluster_key: i32,
     pub(crate) api_resource: ApiResource,
     pub(crate) namespace: Option<String>,
+    pub(crate) watched_namespaces: Option<BTreeSet<String>>,
 }
 
 struct DynamicKubernetesResourceWatcher {
@@ -666,11 +737,12 @@ struct DynamicKubernetesResourceWatcher {
     cluster_key: i32,
     api_resource: ApiResource,
     namespace: Option<String>,
+    watched_namespaces: Option<BTreeSet<String>>,
     custom_columns: Vec<CustomResourceColumn>,
 }
 
 impl DynamicKubernetesResourceWatcher {
-    async fn watch_resources(self) {
+    async fn watch_resources(self, mut initialized: Option<oneshot::Sender<()>>) {
         // Convert our ApiResource to kube's ApiResource using discovery
         let group = if self.api_resource.group == "core" {
             ""
@@ -697,6 +769,7 @@ impl DynamicKubernetesResourceWatcher {
                     })
                     .await
                     .log_if_error("Failed to send resource watcher discovery error");
+                drop(initialized);
                 return;
             }
         };
@@ -704,6 +777,9 @@ impl DynamicKubernetesResourceWatcher {
         let api: Api<DynamicObject> = match (caps.scope, self.namespace.as_deref()) {
             (kube::discovery::Scope::Namespaced, Some(namespace)) => {
                 Api::namespaced_with(self.client.clone(), namespace, &ar)
+            }
+            (kube::discovery::Scope::Namespaced, None) if self.watched_namespaces.is_some() => {
+                Api::all_with(self.client.clone(), &ar)
             }
             (kube::discovery::Scope::Cluster, None) => Api::all_with(self.client.clone(), &ar),
             (scope, namespace) => {
@@ -719,6 +795,7 @@ impl DynamicKubernetesResourceWatcher {
                     })
                     .await
                     .log_if_error("Failed to send resource watcher scope error");
+                drop(initialized);
                 return;
             }
         };
@@ -742,17 +819,32 @@ impl DynamicKubernetesResourceWatcher {
                         })
                         .await
                         .log_if_error("Failed to send resource watcher error");
+                    drop(initialized);
                     return;
                 }
             };
             match ev {
                 Event::Apply(item) => {
                     let resource = extract_minimal_resource(&item, &self.custom_columns);
+                    let namespace = self.watched_namespaces.as_ref().map_or_else(
+                        || Some(self.namespace.clone()),
+                        |namespaces| {
+                            resource
+                                .namespace
+                                .as_ref()
+                                .filter(|namespace| namespaces.contains(*namespace))
+                                .cloned()
+                                .map(Some)
+                        },
+                    );
+                    let Some(namespace) = namespace else {
+                        continue;
+                    };
                     self.event_sender
                         .send(KubernetesResourceAdded {
                             cluster_key: self.cluster_key,
                             api_resource: self.api_resource.clone(),
-                            namespace: self.namespace.clone(),
+                            namespace,
                             resource,
                         })
                         .await
@@ -760,11 +852,25 @@ impl DynamicKubernetesResourceWatcher {
                 }
                 Event::Delete(item) => {
                     let uid = get_resource_uid(&item);
+                    let namespace = self.watched_namespaces.as_ref().map_or_else(
+                        || Some(self.namespace.clone()),
+                        |namespaces| {
+                            item.metadata
+                                .namespace
+                                .as_ref()
+                                .filter(|namespace| namespaces.contains(*namespace))
+                                .cloned()
+                                .map(Some)
+                        },
+                    );
+                    let Some(namespace) = namespace else {
+                        continue;
+                    };
                     self.event_sender
                         .send(KubernetesResourceDeleted {
                             cluster_key: self.cluster_key,
                             api_resource: self.api_resource.clone(),
-                            namespace: self.namespace.clone(),
+                            namespace,
                             resource_uid: uid,
                         })
                         .await
@@ -777,15 +883,35 @@ impl DynamicKubernetesResourceWatcher {
                     buffer.push(extract_minimal_resource(&item, &self.custom_columns));
                 }
                 Event::InitDone => {
-                    self.event_sender
-                        .send(KubernetesResourcesReplaced {
-                            cluster_key: self.cluster_key,
-                            api_resource: self.api_resource.clone(),
-                            namespace: self.namespace.clone(),
-                            resources: buffer,
-                        })
-                        .await
-                        .log_if_error("Failed to send resources replaced");
+                    if let Some(namespaces) = &self.watched_namespaces {
+                        for namespace in namespaces {
+                            let resources = buffer
+                                .iter()
+                                .filter(|resource| resource.namespace.as_deref() == Some(namespace))
+                                .cloned()
+                                .collect();
+                            self.event_sender
+                                .send(KubernetesResourcesReplaced {
+                                    cluster_key: self.cluster_key,
+                                    api_resource: self.api_resource.clone(),
+                                    namespace: Some(namespace.clone()),
+                                    resources,
+                                })
+                                .await
+                                .log_if_error("Failed to send resources replaced");
+                        }
+                    } else {
+                        self.event_sender
+                            .send(KubernetesResourcesReplaced {
+                                cluster_key: self.cluster_key,
+                                api_resource: self.api_resource.clone(),
+                                namespace: self.namespace.clone(),
+                                resources: buffer.clone(),
+                            })
+                            .await
+                            .log_if_error("Failed to send resources replaced");
+                    }
+                    let _ = initialized.take();
                     buffer = Vec::new();
                 }
             }
@@ -794,8 +920,11 @@ impl DynamicKubernetesResourceWatcher {
 }
 
 impl ResourceWatcher for DynamicKubernetesResourceWatcher {
-    fn watch_resources(self: Box<Self>) -> ResourceWatcherFuture {
-        Box::pin(async move { (*self).watch_resources().await })
+    fn watch_resources(
+        self: Box<Self>,
+        initialized: Option<oneshot::Sender<()>>,
+    ) -> ResourceWatcherFuture {
+        Box::pin(async move { (*self).watch_resources(initialized).await })
     }
 }
 
@@ -805,6 +934,7 @@ struct TypedKubernetesResourceWatcher<T> {
     cluster_key: i32,
     api_resource: ApiResource,
     namespace: Option<String>,
+    watched_namespaces: Option<BTreeSet<String>>,
     extract: fn(&T) -> MinimalResource,
 }
 
@@ -818,21 +948,25 @@ where
         + for<'de> k8s_openapi::serde::Deserialize<'de>
         + 'static,
 {
-    async fn watch_resources(self) {
-        let Some(namespace) = self.namespace.as_deref() else {
-            self.event_sender
-                .send(KubernetesResourceWatchFailed {
-                    cluster_key: self.cluster_key,
-                    api_resource: self.api_resource,
-                    namespace: None,
-                    error: "A namespaced typed watcher was started without a namespace".to_owned(),
-                })
-                .await
-                .log_if_error("Failed to send resource watcher scope error");
-            return;
+    async fn watch_resources(self, mut initialized: Option<oneshot::Sender<()>>) {
+        let api = match (self.namespace.as_deref(), self.watched_namespaces.as_ref()) {
+            (Some(namespace), _) => Api::<T>::namespaced(self.client.clone(), namespace),
+            (None, Some(_)) => Api::<T>::all(self.client.clone()),
+            (None, None) => {
+                self.event_sender
+                    .send(KubernetesResourceWatchFailed {
+                        cluster_key: self.cluster_key,
+                        api_resource: self.api_resource,
+                        namespace: None,
+                        error: "A namespaced typed watcher was started without a namespace"
+                            .to_owned(),
+                    })
+                    .await
+                    .log_if_error("Failed to send resource watcher scope error");
+                drop(initialized);
+                return;
+            }
         };
-
-        let api = Api::<T>::namespaced(self.client.clone(), namespace);
         let mut buffer = Vec::<MinimalResource>::new();
         let stream = watcher(api, watcher_config());
         pin_mut!(stream);
@@ -851,43 +985,93 @@ where
                         })
                         .await
                         .log_if_error("Failed to send typed resource watcher error");
+                    drop(initialized);
                     return;
                 }
             };
 
             match event {
-                Event::Apply(item) => self
-                    .event_sender
-                    .send(KubernetesResourceAdded {
-                        cluster_key: self.cluster_key,
-                        api_resource: self.api_resource.clone(),
-                        namespace: self.namespace.clone(),
-                        resource: (self.extract)(&item),
-                    })
-                    .await
-                    .log_if_error("Failed to send typed resource added"),
-                Event::Delete(item) => self
-                    .event_sender
-                    .send(KubernetesResourceDeleted {
-                        cluster_key: self.cluster_key,
-                        api_resource: self.api_resource.clone(),
-                        namespace: self.namespace.clone(),
-                        resource_uid: get_resource_uid(&item),
-                    })
-                    .await
-                    .log_if_error("Failed to send typed resource deleted"),
+                Event::Apply(item) => {
+                    let resource = (self.extract)(&item);
+                    let namespace = self.watched_namespaces.as_ref().map_or_else(
+                        || Some(self.namespace.clone()),
+                        |namespaces| {
+                            resource
+                                .namespace
+                                .as_ref()
+                                .filter(|namespace| namespaces.contains(*namespace))
+                                .cloned()
+                                .map(Some)
+                        },
+                    );
+                    if let Some(namespace) = namespace {
+                        self.event_sender
+                            .send(KubernetesResourceAdded {
+                                cluster_key: self.cluster_key,
+                                api_resource: self.api_resource.clone(),
+                                namespace,
+                                resource,
+                            })
+                            .await
+                            .log_if_error("Failed to send typed resource added");
+                    }
+                }
+                Event::Delete(item) => {
+                    let namespace = self.watched_namespaces.as_ref().map_or_else(
+                        || Some(self.namespace.clone()),
+                        |namespaces| {
+                            item.meta()
+                                .namespace
+                                .as_ref()
+                                .filter(|namespace| namespaces.contains(*namespace))
+                                .cloned()
+                                .map(Some)
+                        },
+                    );
+                    if let Some(namespace) = namespace {
+                        self.event_sender
+                            .send(KubernetesResourceDeleted {
+                                cluster_key: self.cluster_key,
+                                api_resource: self.api_resource.clone(),
+                                namespace,
+                                resource_uid: get_resource_uid(&item),
+                            })
+                            .await
+                            .log_if_error("Failed to send typed resource deleted");
+                    }
+                }
                 Event::Init => buffer.clear(),
                 Event::InitApply(item) => buffer.push((self.extract)(&item)),
                 Event::InitDone => {
-                    self.event_sender
-                        .send(KubernetesResourcesReplaced {
-                            cluster_key: self.cluster_key,
-                            api_resource: self.api_resource.clone(),
-                            namespace: self.namespace.clone(),
-                            resources: buffer,
-                        })
-                        .await
-                        .log_if_error("Failed to send typed resources replaced");
+                    if let Some(namespaces) = &self.watched_namespaces {
+                        for namespace in namespaces {
+                            let resources = buffer
+                                .iter()
+                                .filter(|resource| resource.namespace.as_deref() == Some(namespace))
+                                .cloned()
+                                .collect();
+                            self.event_sender
+                                .send(KubernetesResourcesReplaced {
+                                    cluster_key: self.cluster_key,
+                                    api_resource: self.api_resource.clone(),
+                                    namespace: Some(namespace.clone()),
+                                    resources,
+                                })
+                                .await
+                                .log_if_error("Failed to send typed resources replaced");
+                        }
+                    } else {
+                        self.event_sender
+                            .send(KubernetesResourcesReplaced {
+                                cluster_key: self.cluster_key,
+                                api_resource: self.api_resource.clone(),
+                                namespace: self.namespace.clone(),
+                                resources: buffer.clone(),
+                            })
+                            .await
+                            .log_if_error("Failed to send typed resources replaced");
+                    }
+                    let _ = initialized.take();
                     buffer = Vec::new();
                 }
             }
@@ -905,8 +1089,11 @@ where
         + for<'de> k8s_openapi::serde::Deserialize<'de>
         + 'static,
 {
-    fn watch_resources(self: Box<Self>) -> ResourceWatcherFuture {
-        Box::pin(async move { (*self).watch_resources().await })
+    fn watch_resources(
+        self: Box<Self>,
+        initialized: Option<oneshot::Sender<()>>,
+    ) -> ResourceWatcherFuture {
+        Box::pin(async move { (*self).watch_resources(initialized).await })
     }
 }
 
@@ -929,6 +1116,7 @@ where
         cluster_key: context.cluster_key,
         api_resource: context.api_resource,
         namespace: context.namespace,
+        watched_namespaces: context.watched_namespaces,
         extract,
     })
 }
@@ -952,7 +1140,7 @@ where
         + for<'de> k8s_openapi::serde::Deserialize<'de>
         + 'static,
 {
-    async fn watch_resources(self) {
+    async fn watch_resources(self, mut initialized: Option<oneshot::Sender<()>>) {
         if self.namespace.is_some() {
             self.event_sender
                 .send(KubernetesResourceWatchFailed {
@@ -963,6 +1151,7 @@ where
                 })
                 .await
                 .log_if_error("Failed to send resource watcher scope error");
+            drop(initialized);
             return;
         }
 
@@ -985,6 +1174,7 @@ where
                         })
                         .await
                         .log_if_error("Failed to send typed resource watcher error");
+                    drop(initialized);
                     return;
                 }
             };
@@ -1022,6 +1212,7 @@ where
                         })
                         .await
                         .log_if_error("Failed to send typed resources replaced");
+                    let _ = initialized.take();
                     buffer = Vec::new();
                 }
             }
@@ -1039,8 +1230,11 @@ where
         + for<'de> k8s_openapi::serde::Deserialize<'de>
         + 'static,
 {
-    fn watch_resources(self: Box<Self>) -> ResourceWatcherFuture {
-        Box::pin(async move { (*self).watch_resources().await })
+    fn watch_resources(
+        self: Box<Self>,
+        initialized: Option<oneshot::Sender<()>>,
+    ) -> ResourceWatcherFuture {
+        Box::pin(async move { (*self).watch_resources(initialized).await })
     }
 }
 
