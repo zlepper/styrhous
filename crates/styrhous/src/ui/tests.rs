@@ -1,3 +1,4 @@
 mod fixtures;
-mod kind_integration;
+mod harness;
+mod kind;
 mod snapshots;

@@ -893,6 +893,56 @@ pub(super) struct ClusterState {
     pub(super) scale_error: Option<String>,
 }
 
+#[cfg(test)]
+impl ClusterState {
+    /// Construct an inert cluster whose optional UI state is empty.
+    ///
+    /// UI tests should layer only their scenario-specific state on top of this
+    /// fixture so additions to `ClusterState` have one test default to update.
+    pub(super) fn for_test(cluster_key: i32, name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            cluster_key,
+            namespaces: BTreeMap::new(),
+            connection: ClusterConnectionState::Disconnected,
+            namespaces_load: ClusterLoadState::Ready,
+            api_resources_load: ClusterLoadState::Ready,
+            selected_namespaces: HashSet::new(),
+            resource_navigation: ResourceNavigation::default(),
+            custom_resource_columns: BTreeMap::new(),
+            scalable_api_resources: BTreeSet::new(),
+            selected_api_resource: None,
+            resource_cache: HashMap::new(),
+            helm_release_cache: HashMap::new(),
+            active_watchers: HashSet::new(),
+            pod_metrics_api_available: true,
+            pod_metrics: HashMap::new(),
+            active_pod_metrics: HashSet::new(),
+            node_metrics_api_available: true,
+            node_metrics: NodeMetricsState::default(),
+            node_metrics_active: false,
+            resource_searches: HashMap::new(),
+            resource_selections: HashMap::new(),
+            next_bulk_delete_id: 0,
+            resource_detail_panel: None,
+            next_detail_generation: 0,
+            next_data_save_request_id: 0,
+            pending_delete: None,
+            pending_bulk_delete: None,
+            bulk_delete_progress: None,
+            bulk_delete_error: None,
+            pending_force_delete: None,
+            force_delete_error: None,
+            pending_deployment_restart: None,
+            deployment_restart_error: None,
+            pending_cron_job_run: None,
+            cron_job_run_error: None,
+            pending_scale: None,
+            scale_error: None,
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub(super) struct PodMetricsNamespaceState {
     pub(super) usages: BTreeMap<String, PodUsage>,
