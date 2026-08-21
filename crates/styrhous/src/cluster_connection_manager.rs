@@ -731,6 +731,169 @@ pub(crate) struct TypedWatcherContext {
     pub(crate) watched_namespaces: Option<BTreeSet<String>>,
 }
 
+#[derive(Clone)]
+enum ResourceWatchScope {
+    Single(Option<String>),
+    AllNamespaces(BTreeSet<String>),
+}
+
+struct ResourceWatchContext {
+    event_sender: WorkerResultSender,
+    cluster_key: i32,
+    api_resource: ApiResource,
+    scope: ResourceWatchScope,
+}
+
+impl ResourceWatchScope {
+    fn from_parts(namespace: Option<String>, watched_namespaces: Option<BTreeSet<String>>) -> Self {
+        watched_namespaces.map_or(Self::Single(namespace), Self::AllNamespaces)
+    }
+
+    fn source_namespace(&self) -> Option<String> {
+        match self {
+            Self::Single(namespace) => namespace.clone(),
+            Self::AllNamespaces(_) => None,
+        }
+    }
+
+    fn event_namespace(&self, resource_namespace: Option<&str>) -> Option<Option<String>> {
+        match self {
+            Self::Single(namespace) => Some(namespace.clone()),
+            Self::AllNamespaces(namespaces) => resource_namespace
+                .filter(|namespace| namespaces.contains(*namespace))
+                .map(|namespace| Some(namespace.to_owned())),
+        }
+    }
+
+    async fn send_initial_replacements(
+        &self,
+        event_sender: &WorkerResultSender,
+        cluster_key: i32,
+        api_resource: &ApiResource,
+        resources: Vec<MinimalResource>,
+    ) {
+        match self {
+            Self::Single(namespace) => {
+                event_sender
+                    .send(KubernetesResourcesReplaced {
+                        cluster_key,
+                        api_resource: api_resource.clone(),
+                        namespace: namespace.clone(),
+                        resources,
+                    })
+                    .await
+                    .log_if_error("Failed to send resources replaced");
+            }
+            Self::AllNamespaces(namespaces) => {
+                for namespace in namespaces {
+                    let resources = resources
+                        .iter()
+                        .filter(|resource| resource.namespace.as_deref() == Some(namespace))
+                        .cloned()
+                        .collect();
+                    event_sender
+                        .send(KubernetesResourcesReplaced {
+                            cluster_key,
+                            api_resource: api_resource.clone(),
+                            namespace: Some(namespace.clone()),
+                            resources,
+                        })
+                        .await
+                        .log_if_error("Failed to send resources replaced");
+                }
+            }
+        }
+    }
+}
+
+/// Execute the common list/watch lifecycle for dynamic and typed resources.
+/// Constructors remain responsible for selecting the Kubernetes API and
+/// validating its scope; this runner owns filtering, buffering, and UI events.
+async fn run_resource_watch<T, E, S>(
+    stream: S,
+    context: ResourceWatchContext,
+    mut initialized: Option<oneshot::Sender<()>>,
+    extract: impl Fn(&T) -> MinimalResource,
+    resource_namespace: impl for<'a> Fn(&'a T) -> Option<&'a str>,
+    resource_uid: impl Fn(&T) -> String,
+) where
+    S: futures_util::Stream<Item = std::result::Result<Event<T>, E>>,
+    E: Debug,
+{
+    let mut buffer = Vec::<MinimalResource>::new();
+    pin_mut!(stream);
+
+    while let Some(event) = stream.next().await {
+        let event = match event {
+            Ok(event) => event,
+            Err(error) => {
+                warn!("Resource watcher error: {error:?}");
+                context
+                    .event_sender
+                    .send(KubernetesResourceWatchFailed {
+                        cluster_key: context.cluster_key,
+                        api_resource: context.api_resource.clone(),
+                        namespace: context.scope.source_namespace(),
+                        error: format!("{error:#?}"),
+                    })
+                    .await
+                    .log_if_error("Failed to send resource watcher error");
+                return;
+            }
+        };
+
+        match event {
+            Event::Apply(item) => {
+                let resource = extract(&item);
+                let Some(namespace) = context.scope.event_namespace(resource.namespace.as_deref())
+                else {
+                    continue;
+                };
+                context
+                    .event_sender
+                    .send(KubernetesResourceAdded {
+                        cluster_key: context.cluster_key,
+                        api_resource: context.api_resource.clone(),
+                        namespace,
+                        resource,
+                    })
+                    .await
+                    .log_if_error("Failed to send resource added");
+            }
+            Event::Delete(item) => {
+                let Some(namespace) = context.scope.event_namespace(resource_namespace(&item))
+                else {
+                    continue;
+                };
+                context
+                    .event_sender
+                    .send(KubernetesResourceDeleted {
+                        cluster_key: context.cluster_key,
+                        api_resource: context.api_resource.clone(),
+                        namespace,
+                        resource_uid: resource_uid(&item),
+                    })
+                    .await
+                    .log_if_error("Failed to send resource deleted");
+            }
+            Event::Init => buffer.clear(),
+            Event::InitApply(item) => buffer.push(extract(&item)),
+            Event::InitDone => {
+                context
+                    .scope
+                    .send_initial_replacements(
+                        &context.event_sender,
+                        context.cluster_key,
+                        &context.api_resource,
+                        std::mem::take(&mut buffer),
+                    )
+                    .await;
+                let _ = initialized.take();
+            }
+        }
+    }
+}
+
 struct DynamicKubernetesResourceWatcher {
     client: kube::Client,
     event_sender: WorkerResultSender,
@@ -743,28 +906,37 @@ struct DynamicKubernetesResourceWatcher {
 
 impl DynamicKubernetesResourceWatcher {
     async fn watch_resources(self, mut initialized: Option<oneshot::Sender<()>>) {
+        let DynamicKubernetesResourceWatcher {
+            client,
+            event_sender,
+            cluster_key,
+            api_resource,
+            namespace,
+            watched_namespaces,
+            custom_columns,
+        } = self;
         // Convert our ApiResource to kube's ApiResource using discovery
-        let group = if self.api_resource.group == "core" {
+        let group = if api_resource.group == "core" {
             ""
         } else {
-            &self.api_resource.group
+            &api_resource.group
         };
 
-        let gvk = GroupVersionKind::gvk(group, &self.api_resource.version, &self.api_resource.kind);
+        let gvk = GroupVersionKind::gvk(group, &api_resource.version, &api_resource.kind);
 
-        let discovery_result = kube::discovery::pinned_kind(&self.client, &gvk).await;
+        let discovery_result = kube::discovery::pinned_kind(&client, &gvk).await;
         let (ar, caps) = match discovery_result {
             Ok(r) => r,
             Err(error) => {
                 warn!(
                     "Failed to discover API resource {}/{}: {}",
-                    self.api_resource.group, self.api_resource.name, error
+                    api_resource.group, api_resource.name, error
                 );
-                self.event_sender
+                event_sender
                     .send(KubernetesResourceWatchFailed {
-                        cluster_key: self.cluster_key,
-                        api_resource: self.api_resource.clone(),
-                        namespace: self.namespace.clone(),
+                        cluster_key,
+                        api_resource,
+                        namespace,
                         error: format!("{error:#?}"),
                     })
                     .await
@@ -774,23 +946,23 @@ impl DynamicKubernetesResourceWatcher {
             }
         };
 
-        let api: Api<DynamicObject> = match (caps.scope, self.namespace.as_deref()) {
+        let api: Api<DynamicObject> = match (caps.scope, namespace.as_deref()) {
             (kube::discovery::Scope::Namespaced, Some(namespace)) => {
-                Api::namespaced_with(self.client.clone(), namespace, &ar)
+                Api::namespaced_with(client, namespace, &ar)
             }
-            (kube::discovery::Scope::Namespaced, None) if self.watched_namespaces.is_some() => {
-                Api::all_with(self.client.clone(), &ar)
+            (kube::discovery::Scope::Namespaced, None) if watched_namespaces.is_some() => {
+                Api::all_with(client, &ar)
             }
-            (kube::discovery::Scope::Cluster, None) => Api::all_with(self.client.clone(), &ar),
-            (scope, namespace) => {
+            (kube::discovery::Scope::Cluster, None) => Api::all_with(client, &ar),
+            (discovered_scope, requested_namespace) => {
                 let error = format!(
-                    "Resource scope mismatch: discovered {scope:?} scope with namespace {namespace:?}"
+                    "Resource scope mismatch: discovered {discovered_scope:?} scope with namespace {requested_namespace:?}"
                 );
-                self.event_sender
+                event_sender
                     .send(KubernetesResourceWatchFailed {
-                        cluster_key: self.cluster_key,
-                        api_resource: self.api_resource.clone(),
-                        namespace: self.namespace.clone(),
+                        cluster_key,
+                        api_resource,
+                        namespace,
                         error,
                     })
                     .await
@@ -800,122 +972,20 @@ impl DynamicKubernetesResourceWatcher {
             }
         };
 
-        let mut buffer = Vec::<MinimalResource>::new();
-
-        let stream = watcher(api, watcher_config());
-        pin_mut!(stream);
-
-        while let Some(event) = stream.next().await {
-            let ev = match event {
-                Ok(event) => event,
-                Err(error) => {
-                    warn!("Resource watcher error: {error:?}");
-                    self.event_sender
-                        .send(KubernetesResourceWatchFailed {
-                            cluster_key: self.cluster_key,
-                            api_resource: self.api_resource.clone(),
-                            namespace: self.namespace.clone(),
-                            error: format!("{error:#?}"),
-                        })
-                        .await
-                        .log_if_error("Failed to send resource watcher error");
-                    drop(initialized);
-                    return;
-                }
-            };
-            match ev {
-                Event::Apply(item) => {
-                    let resource = extract_minimal_resource(&item, &self.custom_columns);
-                    let namespace = self.watched_namespaces.as_ref().map_or_else(
-                        || Some(self.namespace.clone()),
-                        |namespaces| {
-                            resource
-                                .namespace
-                                .as_ref()
-                                .filter(|namespace| namespaces.contains(*namespace))
-                                .cloned()
-                                .map(Some)
-                        },
-                    );
-                    let Some(namespace) = namespace else {
-                        continue;
-                    };
-                    self.event_sender
-                        .send(KubernetesResourceAdded {
-                            cluster_key: self.cluster_key,
-                            api_resource: self.api_resource.clone(),
-                            namespace,
-                            resource,
-                        })
-                        .await
-                        .log_if_error("Failed to send resource added");
-                }
-                Event::Delete(item) => {
-                    let uid = get_resource_uid(&item);
-                    let namespace = self.watched_namespaces.as_ref().map_or_else(
-                        || Some(self.namespace.clone()),
-                        |namespaces| {
-                            item.metadata
-                                .namespace
-                                .as_ref()
-                                .filter(|namespace| namespaces.contains(*namespace))
-                                .cloned()
-                                .map(Some)
-                        },
-                    );
-                    let Some(namespace) = namespace else {
-                        continue;
-                    };
-                    self.event_sender
-                        .send(KubernetesResourceDeleted {
-                            cluster_key: self.cluster_key,
-                            api_resource: self.api_resource.clone(),
-                            namespace,
-                            resource_uid: uid,
-                        })
-                        .await
-                        .log_if_error("Failed to send resource deleted");
-                }
-                Event::Init => {
-                    buffer.clear();
-                }
-                Event::InitApply(item) => {
-                    buffer.push(extract_minimal_resource(&item, &self.custom_columns));
-                }
-                Event::InitDone => {
-                    if let Some(namespaces) = &self.watched_namespaces {
-                        for namespace in namespaces {
-                            let resources = buffer
-                                .iter()
-                                .filter(|resource| resource.namespace.as_deref() == Some(namespace))
-                                .cloned()
-                                .collect();
-                            self.event_sender
-                                .send(KubernetesResourcesReplaced {
-                                    cluster_key: self.cluster_key,
-                                    api_resource: self.api_resource.clone(),
-                                    namespace: Some(namespace.clone()),
-                                    resources,
-                                })
-                                .await
-                                .log_if_error("Failed to send resources replaced");
-                        }
-                    } else {
-                        self.event_sender
-                            .send(KubernetesResourcesReplaced {
-                                cluster_key: self.cluster_key,
-                                api_resource: self.api_resource.clone(),
-                                namespace: self.namespace.clone(),
-                                resources: buffer.clone(),
-                            })
-                            .await
-                            .log_if_error("Failed to send resources replaced");
-                    }
-                    let _ = initialized.take();
-                    buffer = Vec::new();
-                }
-            }
-        }
+        run_resource_watch(
+            watcher(api, watcher_config()),
+            ResourceWatchContext {
+                event_sender,
+                cluster_key,
+                api_resource,
+                scope: ResourceWatchScope::from_parts(namespace, watched_namespaces),
+            },
+            initialized.take(),
+            |item| extract_minimal_resource(item, &custom_columns),
+            |item| item.metadata.namespace.as_deref(),
+            get_resource_uid,
+        )
+        .await;
     }
 }
 
@@ -949,14 +1019,23 @@ where
         + 'static,
 {
     async fn watch_resources(self, mut initialized: Option<oneshot::Sender<()>>) {
-        let api = match (self.namespace.as_deref(), self.watched_namespaces.as_ref()) {
-            (Some(namespace), _) => Api::<T>::namespaced(self.client.clone(), namespace),
-            (None, Some(_)) => Api::<T>::all(self.client.clone()),
+        let TypedKubernetesResourceWatcher {
+            client,
+            event_sender,
+            cluster_key,
+            api_resource,
+            namespace,
+            watched_namespaces,
+            extract,
+        } = self;
+        let api = match (namespace.as_deref(), watched_namespaces.as_ref()) {
+            (Some(namespace), _) => Api::<T>::namespaced(client, namespace),
+            (None, Some(_)) => Api::<T>::all(client),
             (None, None) => {
-                self.event_sender
+                event_sender
                     .send(KubernetesResourceWatchFailed {
-                        cluster_key: self.cluster_key,
-                        api_resource: self.api_resource,
+                        cluster_key,
+                        api_resource,
                         namespace: None,
                         error: "A namespaced typed watcher was started without a namespace"
                             .to_owned(),
@@ -967,115 +1046,20 @@ where
                 return;
             }
         };
-        let mut buffer = Vec::<MinimalResource>::new();
-        let stream = watcher(api, watcher_config());
-        pin_mut!(stream);
-
-        while let Some(event) = stream.next().await {
-            let event = match event {
-                Ok(event) => event,
-                Err(error) => {
-                    warn!("Typed resource watcher error: {error:?}");
-                    self.event_sender
-                        .send(KubernetesResourceWatchFailed {
-                            cluster_key: self.cluster_key,
-                            api_resource: self.api_resource.clone(),
-                            namespace: self.namespace.clone(),
-                            error: format!("{error:#?}"),
-                        })
-                        .await
-                        .log_if_error("Failed to send typed resource watcher error");
-                    drop(initialized);
-                    return;
-                }
-            };
-
-            match event {
-                Event::Apply(item) => {
-                    let resource = (self.extract)(&item);
-                    let namespace = self.watched_namespaces.as_ref().map_or_else(
-                        || Some(self.namespace.clone()),
-                        |namespaces| {
-                            resource
-                                .namespace
-                                .as_ref()
-                                .filter(|namespace| namespaces.contains(*namespace))
-                                .cloned()
-                                .map(Some)
-                        },
-                    );
-                    if let Some(namespace) = namespace {
-                        self.event_sender
-                            .send(KubernetesResourceAdded {
-                                cluster_key: self.cluster_key,
-                                api_resource: self.api_resource.clone(),
-                                namespace,
-                                resource,
-                            })
-                            .await
-                            .log_if_error("Failed to send typed resource added");
-                    }
-                }
-                Event::Delete(item) => {
-                    let namespace = self.watched_namespaces.as_ref().map_or_else(
-                        || Some(self.namespace.clone()),
-                        |namespaces| {
-                            item.meta()
-                                .namespace
-                                .as_ref()
-                                .filter(|namespace| namespaces.contains(*namespace))
-                                .cloned()
-                                .map(Some)
-                        },
-                    );
-                    if let Some(namespace) = namespace {
-                        self.event_sender
-                            .send(KubernetesResourceDeleted {
-                                cluster_key: self.cluster_key,
-                                api_resource: self.api_resource.clone(),
-                                namespace,
-                                resource_uid: get_resource_uid(&item),
-                            })
-                            .await
-                            .log_if_error("Failed to send typed resource deleted");
-                    }
-                }
-                Event::Init => buffer.clear(),
-                Event::InitApply(item) => buffer.push((self.extract)(&item)),
-                Event::InitDone => {
-                    if let Some(namespaces) = &self.watched_namespaces {
-                        for namespace in namespaces {
-                            let resources = buffer
-                                .iter()
-                                .filter(|resource| resource.namespace.as_deref() == Some(namespace))
-                                .cloned()
-                                .collect();
-                            self.event_sender
-                                .send(KubernetesResourcesReplaced {
-                                    cluster_key: self.cluster_key,
-                                    api_resource: self.api_resource.clone(),
-                                    namespace: Some(namespace.clone()),
-                                    resources,
-                                })
-                                .await
-                                .log_if_error("Failed to send typed resources replaced");
-                        }
-                    } else {
-                        self.event_sender
-                            .send(KubernetesResourcesReplaced {
-                                cluster_key: self.cluster_key,
-                                api_resource: self.api_resource.clone(),
-                                namespace: self.namespace.clone(),
-                                resources: buffer.clone(),
-                            })
-                            .await
-                            .log_if_error("Failed to send typed resources replaced");
-                    }
-                    let _ = initialized.take();
-                    buffer = Vec::new();
-                }
-            }
-        }
+        run_resource_watch(
+            watcher(api, watcher_config()),
+            ResourceWatchContext {
+                event_sender,
+                cluster_key,
+                api_resource,
+                scope: ResourceWatchScope::from_parts(namespace, watched_namespaces),
+            },
+            initialized.take(),
+            extract,
+            |item| item.meta().namespace.as_deref(),
+            get_resource_uid,
+        )
+        .await;
     }
 }
 
@@ -1141,12 +1125,20 @@ where
         + 'static,
 {
     async fn watch_resources(self, mut initialized: Option<oneshot::Sender<()>>) {
-        if self.namespace.is_some() {
-            self.event_sender
+        let ClusterTypedKubernetesResourceWatcher {
+            client,
+            event_sender,
+            cluster_key,
+            api_resource,
+            namespace,
+            extract,
+        } = self;
+        if namespace.is_some() {
+            event_sender
                 .send(KubernetesResourceWatchFailed {
-                    cluster_key: self.cluster_key,
-                    api_resource: self.api_resource,
-                    namespace: self.namespace,
+                    cluster_key,
+                    api_resource,
+                    namespace,
                     error: "A cluster-scoped typed watcher was started with a namespace".to_owned(),
                 })
                 .await
@@ -1155,68 +1147,20 @@ where
             return;
         }
 
-        let api = Api::<T>::all(self.client.clone());
-        let mut buffer = Vec::<MinimalResource>::new();
-        let stream = watcher(api, watcher_config());
-        pin_mut!(stream);
-
-        while let Some(event) = stream.next().await {
-            let event = match event {
-                Ok(event) => event,
-                Err(error) => {
-                    warn!("Typed resource watcher error: {error:?}");
-                    self.event_sender
-                        .send(KubernetesResourceWatchFailed {
-                            cluster_key: self.cluster_key,
-                            api_resource: self.api_resource.clone(),
-                            namespace: None,
-                            error: format!("{error:#?}"),
-                        })
-                        .await
-                        .log_if_error("Failed to send typed resource watcher error");
-                    drop(initialized);
-                    return;
-                }
-            };
-
-            match event {
-                Event::Apply(item) => self
-                    .event_sender
-                    .send(KubernetesResourceAdded {
-                        cluster_key: self.cluster_key,
-                        api_resource: self.api_resource.clone(),
-                        namespace: None,
-                        resource: (self.extract)(&item),
-                    })
-                    .await
-                    .log_if_error("Failed to send typed resource added"),
-                Event::Delete(item) => self
-                    .event_sender
-                    .send(KubernetesResourceDeleted {
-                        cluster_key: self.cluster_key,
-                        api_resource: self.api_resource.clone(),
-                        namespace: None,
-                        resource_uid: get_resource_uid(&item),
-                    })
-                    .await
-                    .log_if_error("Failed to send typed resource deleted"),
-                Event::Init => buffer.clear(),
-                Event::InitApply(item) => buffer.push((self.extract)(&item)),
-                Event::InitDone => {
-                    self.event_sender
-                        .send(KubernetesResourcesReplaced {
-                            cluster_key: self.cluster_key,
-                            api_resource: self.api_resource.clone(),
-                            namespace: None,
-                            resources: buffer,
-                        })
-                        .await
-                        .log_if_error("Failed to send typed resources replaced");
-                    let _ = initialized.take();
-                    buffer = Vec::new();
-                }
-            }
-        }
+        run_resource_watch(
+            watcher(Api::<T>::all(client), watcher_config()),
+            ResourceWatchContext {
+                event_sender,
+                cluster_key,
+                api_resource,
+                scope: ResourceWatchScope::Single(None),
+            },
+            initialized.take(),
+            extract,
+            |item| item.meta().namespace.as_deref(),
+            get_resource_uid,
+        )
+        .await;
     }
 }
 
@@ -3110,6 +3054,181 @@ mod tests {
     use k8s_openapi::api::batch::v1::{CronJobSpec, JobSpec, JobTemplateSpec};
     use k8s_openapi::api::core::v1::{ContainerStatus, Pod, PodStatus};
     use k8s_openapi::apimachinery::pkg::apis::meta::v1::{APIResource, ObjectMeta, OwnerReference};
+
+    #[test]
+    fn resource_watch_scope_filters_all_namespaces_and_preserves_cluster_scope() {
+        let all_namespaces = ResourceWatchScope::AllNamespaces(BTreeSet::from([
+            "apps".to_owned(),
+            "default".to_owned(),
+        ]));
+        assert_eq!(
+            all_namespaces.event_namespace(Some("apps")),
+            Some(Some("apps".to_owned()))
+        );
+        assert_eq!(all_namespaces.event_namespace(Some("kube-system")), None);
+        assert_eq!(all_namespaces.event_namespace(None), None);
+
+        let cluster = ResourceWatchScope::Single(None);
+        assert_eq!(cluster.event_namespace(None), Some(None));
+        assert_eq!(cluster.source_namespace(), None);
+    }
+
+    #[test]
+    fn resource_watch_runner_batches_filters_and_routes_events() {
+        #[derive(Clone)]
+        struct Item {
+            uid: &'static str,
+            namespace: Option<&'static str>,
+        }
+
+        let resource = |item: &Item| MinimalResource {
+            uid: item.uid.to_owned(),
+            name: item.uid.to_owned(),
+            namespace: item.namespace.map(str::to_owned),
+            creation_timestamp: None,
+            controller_owner: None,
+            labels: BTreeMap::new(),
+            annotations: BTreeMap::new(),
+            cells: BTreeMap::new(),
+            log_containers: Vec::new(),
+        };
+        let api_resource = ApiResource {
+            group: "core".to_owned(),
+            version: "v1".to_owned(),
+            kind: "Pod".to_owned(),
+            name: "pods".to_owned(),
+            namespaced: true,
+        };
+        let runtime = tokio::runtime::Runtime::new().expect("runtime initializes");
+        runtime.block_on(async {
+            let (sender, mut receiver) = tokio::sync::mpsc::channel(8);
+            let (initialized, initialized_receiver) = oneshot::channel();
+            run_resource_watch(
+                futures_util::stream::iter(vec![
+                    Ok::<Event<Item>, &'static str>(Event::Init),
+                    Ok(Event::InitApply(Item {
+                        uid: "apps-1",
+                        namespace: Some("apps"),
+                    })),
+                    Ok(Event::InitApply(Item {
+                        uid: "system-1",
+                        namespace: Some("kube-system"),
+                    })),
+                    Ok(Event::InitDone),
+                    Ok(Event::Apply(Item {
+                        uid: "apps-2",
+                        namespace: Some("apps"),
+                    })),
+                    Ok(Event::Delete(Item {
+                        uid: "apps-1",
+                        namespace: Some("apps"),
+                    })),
+                ]),
+                ResourceWatchContext {
+                    event_sender: WorkerResultSender::new(sender, None),
+                    cluster_key: 4,
+                    api_resource: api_resource.clone(),
+                    scope: ResourceWatchScope::AllNamespaces(BTreeSet::from([
+                        "apps".to_owned(),
+                        "default".to_owned(),
+                    ])),
+                },
+                Some(initialized),
+                resource,
+                |item| item.namespace,
+                |item| item.uid.to_owned(),
+            )
+            .await;
+
+            assert!(initialized_receiver.await.is_err());
+            let replaced_apps = receiver.recv().await.expect("apps replacement");
+            let replaced_default = receiver.recv().await.expect("empty default replacement");
+            let added = receiver.recv().await.expect("apply result");
+            let deleted = receiver.recv().await.expect("delete result");
+
+            assert!(
+                replaced_apps
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<KubernetesResourcesReplaced>()
+                    .is_some_and(|result| {
+                        result.cluster_key == 4
+                            && result.api_resource == api_resource
+                            && result.namespace.as_deref() == Some("apps")
+                            && result
+                                .resources
+                                .iter()
+                                .map(|resource| resource.uid.as_str())
+                                .eq(["apps-1"])
+                    })
+            );
+            assert!(
+                replaced_default
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<KubernetesResourcesReplaced>()
+                    .is_some_and(|result| {
+                        result.namespace.as_deref() == Some("default")
+                            && result.resources.is_empty()
+                    })
+            );
+            assert!(
+                added
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<KubernetesResourceAdded>()
+                    .is_some_and(|result| result.namespace.as_deref() == Some("apps")
+                        && result.resource.uid == "apps-2")
+            );
+            assert!(
+                deleted
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<KubernetesResourceDeleted>()
+                    .is_some_and(|result| result.namespace.as_deref() == Some("apps")
+                        && result.resource_uid == "apps-1")
+            );
+        });
+    }
+
+    #[test]
+    fn resource_watch_runner_reports_the_source_scope_on_failure() {
+        let runtime = tokio::runtime::Runtime::new().expect("runtime initializes");
+        runtime.block_on(async {
+            let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+            let (initialized, initialized_receiver) = oneshot::channel();
+            run_resource_watch(
+                futures_util::stream::iter(vec![Err::<Event<()>, _>("connection lost")]),
+                ResourceWatchContext {
+                    event_sender: WorkerResultSender::new(sender, None),
+                    cluster_key: 9,
+                    api_resource: ApiResource::helm_releases(),
+                    scope: ResourceWatchScope::Single(Some("apps".to_owned())),
+                },
+                Some(initialized),
+                |_| unreachable!("the failed stream has no resource"),
+                |_| unreachable!("the failed stream has no resource"),
+                |_| unreachable!("the failed stream has no resource"),
+            )
+            .await;
+
+            assert!(initialized_receiver.await.is_err());
+            assert!(
+                receiver
+                    .recv()
+                    .await
+                    .expect("watch failure result")
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<KubernetesResourceWatchFailed>()
+                    .is_some_and(|result| {
+                        result.cluster_key == 9
+                            && result.namespace.as_deref() == Some("apps")
+                            && result.error.contains("connection lost")
+                    })
+            );
+        });
+    }
 
     #[test]
     fn duplicate_helm_revisions_prefer_the_secret_storage_record() {
