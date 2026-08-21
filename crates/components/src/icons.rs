@@ -119,6 +119,11 @@ pub fn arrow_right_icon() -> Image<'static> {
     Image::new(include_image!("icons/arrow-right.svg"))
 }
 
+/// Returns a chevron-right icon for navigation affordances.
+pub fn chevron_right_icon() -> Image<'static> {
+    Image::new(include_image!("icons/chevron-right.svg"))
+}
+
 /// Returns an up arrow icon for upward navigation.
 pub fn arrow_up_icon() -> Image<'static> {
     Image::new(include_image!("icons/arrow-up.svg"))
@@ -127,6 +132,21 @@ pub fn arrow_up_icon() -> Image<'static> {
 /// Returns a down arrow icon for downward navigation.
 pub fn arrow_down_icon() -> Image<'static> {
     Image::new(include_image!("icons/arrow-down.svg"))
+}
+
+/// Returns a circular arrow icon for reload actions.
+pub fn arrow_path_icon() -> Image<'static> {
+    Image::new(include_image!("icons/arrow-path.svg"))
+}
+
+/// Returns the settings-home application destination tile.
+pub fn settings_destination_application_icon() -> Image<'static> {
+    Image::new(include_image!("icons/settings-destination-application.svg"))
+}
+
+/// Returns the settings-home cluster-discovery destination tile.
+pub fn settings_destination_discovery_icon() -> Image<'static> {
+    Image::new(include_image!("icons/settings-destination-discovery.svg"))
 }
 
 /// Returns a funnel icon for filtering controls.
@@ -167,6 +187,16 @@ pub fn plus_icon() -> Image<'static> {
 /// Returns a cog icon for application settings.
 pub fn settings_icon() -> Image<'static> {
     Image::new(include_image!("icons/settings.svg"))
+}
+
+/// Returns the bundled Microsoft Azure brand mark for Azure provider surfaces.
+pub fn azure_icon() -> Image<'static> {
+    Image::new(include_image!("icons/azure.svg"))
+}
+
+/// Returns the bundled Tailscale brand mark for Tailscale provider surfaces.
+pub fn tailscale_icon() -> Image<'static> {
+    Image::new(include_image!("icons/tailscale.svg"))
 }
 
 /// Returns the Heroicons document-duplicate image used for copy actions.

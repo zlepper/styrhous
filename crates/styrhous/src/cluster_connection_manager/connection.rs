@@ -28,6 +28,20 @@ pub async fn reload_kubeconfig() -> Result<KubernetesClustersUpdated> {
     Ok(KubernetesClustersUpdated(clusters))
 }
 
+/// Context names and their referenced cluster names, used to match managed
+/// discovery candidates against the user's authoritative kubeconfig.
+pub fn kubeconfig_context_references() -> Result<Vec<String>> {
+    let cfg = Kubeconfig::read().with_context(|| "Error reading kubeconfig")?;
+    Ok(cfg
+        .contexts
+        .into_iter()
+        .flat_map(|context| {
+            std::iter::once(context.name)
+                .chain(context.context.into_iter().map(|context| context.cluster))
+        })
+        .collect())
+}
+
 pub struct ClusterConnection {
     client: kube::Client,
     join_handles: Vec<JoinHandle<()>>,
