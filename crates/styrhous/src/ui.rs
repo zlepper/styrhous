@@ -579,11 +579,15 @@ mod persistence_tests {
                 command
                     .as_ref()
                     .as_any()
-                    .downcast_ref::<StartResourceWatch>()
+                    .downcast_ref::<ReconcileResourceWatches>()
                     .is_some_and(|command| {
                         command.cluster_key == 1
                             && command.api_resource.name == "deployments"
-                            && command.namespace.as_deref() == Some("default")
+                            && matches!(
+                                command.sources.as_slice(),
+                                [ResourceWatchSource::AllNamespaces(namespaces)]
+                                    if namespaces == &BTreeSet::from(["default".to_owned()])
+                            )
                     })
             }));
         }

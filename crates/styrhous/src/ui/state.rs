@@ -1011,9 +1011,7 @@ impl UiState {
 
         if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
             cluster.selected_namespaces = restored_namespaces.into_iter().collect();
-            if let Some(api_resource) = cluster.selected_api_resource.clone() {
-                Self::request_selected_resource_watches(cluster, &api_resource, commands_to_send);
-            }
+            Self::reconcile_after_namespace_change(cluster, commands_to_send);
         }
         self.prune_empty_cluster_selection(cluster_key);
     }
@@ -1482,7 +1480,7 @@ impl UiState {
         namespace: String,
         commands_to_send: &mut Vec<WorkerCommandBox>,
     ) {
-        let (was_selected, api_resource) = {
+        let api_resource = {
             let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
                 return;
             };
@@ -1490,27 +1488,18 @@ impl UiState {
             if was_selected {
                 cluster.selected_namespaces.remove(&namespace);
             }
-            (was_selected, cluster.selected_api_resource.clone())
+            cluster.selected_api_resource.clone()
         };
         self.remember_selected_namespaces(cluster_key);
-        if was_selected {
-            if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
-                Self::reconcile_pod_metrics(cluster, commands_to_send);
-                Self::reconcile_node_metrics(cluster, commands_to_send);
-            }
-            return;
-        }
         let Some(api_resource) = api_resource else {
             return;
         };
         if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
-            Self::request_resource_watch(cluster, &api_resource, Some(namespace), commands_to_send);
-            Self::reconcile_pod_metrics(cluster, commands_to_send);
-            Self::reconcile_node_metrics(cluster, commands_to_send);
+            Self::request_selected_resource_watches(cluster, &api_resource, commands_to_send);
         }
     }
 
-    /// Replace the visible namespace scope without cancelling existing watches.
+    /// Replace the visible namespace scope and reconcile its watch sources.
     pub(super) fn replace_selected_namespaces<I>(
         &mut self,
         cluster_key: i32,
@@ -1538,7 +1527,8 @@ impl UiState {
         }
     }
 
-    /// Select every discovered namespace without cancelling existing watches.
+    /// Select every discovered namespace and replace per-namespace sources with
+    /// one all-namespaces source when the resource supports it.
     pub(super) fn select_all_namespaces(
         &mut self,
         cluster_key: i32,
@@ -1567,16 +1557,24 @@ impl UiState {
         }
     }
 
-    /// Clear the visible namespace scope without cancelling existing watches.
+    /// Clear the visible namespace scope and stop its resource sources.
     pub(super) fn clear_selected_namespaces(
         &mut self,
         cluster_key: i32,
         commands_to_send: &mut Vec<WorkerCommandBox>,
     ) {
+        let api_resource = self
+            .clusters
+            .get(&cluster_key)
+            .and_then(|cluster| cluster.selected_api_resource.clone());
         if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
             cluster.selected_namespaces.clear();
-            Self::reconcile_pod_metrics(cluster, commands_to_send);
-            Self::reconcile_node_metrics(cluster, commands_to_send);
+            if let Some(api_resource) = api_resource {
+                Self::request_selected_resource_watches(cluster, &api_resource, commands_to_send);
+            } else {
+                Self::reconcile_pod_metrics(cluster, commands_to_send);
+                Self::reconcile_node_metrics(cluster, commands_to_send);
+            }
         }
         self.remember_selected_namespaces(cluster_key);
     }
@@ -1612,21 +1610,104 @@ impl UiState {
         api_resource: &ApiResource,
         commands_to_send: &mut Vec<WorkerCommandBox>,
     ) {
-        if api_resource.namespaced {
-            let namespaces = cluster.selected_namespaces.clone();
-            for namespace in namespaces {
-                Self::request_resource_watch(
-                    cluster,
-                    api_resource,
-                    Some(namespace),
-                    commands_to_send,
-                );
-            }
+        let discovered_namespaces = cluster
+            .namespaces
+            .values()
+            .map(|namespace| namespace.name.clone())
+            .collect::<HashSet<_>>();
+        let all_namespaces = api_resource.namespaced
+            && !api_resource.is_helm_releases()
+            && !discovered_namespaces.is_empty()
+            && cluster.selected_namespaces == discovered_namespaces;
+        let desired = if all_namespaces || !api_resource.namespaced {
+            HashSet::from([None])
         } else {
-            Self::request_resource_watch(cluster, api_resource, None, commands_to_send);
+            cluster
+                .selected_namespaces
+                .iter()
+                .cloned()
+                .map(Some)
+                .collect()
+        };
+        let active = cluster
+            .active_watchers
+            .iter()
+            .filter(|(resource, _)| resource == api_resource)
+            .map(|(_, namespace)| namespace.clone())
+            .collect::<HashSet<_>>();
+
+        if active != desired {
+            let had_active_sources = !active.is_empty();
+            cluster
+                .active_watchers
+                .retain(|(resource, _)| resource != api_resource);
+            if had_active_sources {
+                cluster
+                    .resource_cache
+                    .retain(|(resource, _), _| resource != api_resource);
+            }
+            let sources = if !api_resource.namespaced {
+                (!cluster
+                    .resource_cache
+                    .get(&(api_resource.clone(), None))
+                    .is_some_and(|watch| watch.is_synced))
+                .then_some(crate::worker::ResourceWatchSource::Cluster)
+                .into_iter()
+                .collect()
+            } else if all_namespaces {
+                vec![crate::worker::ResourceWatchSource::AllNamespaces(
+                    discovered_namespaces.into_iter().collect(),
+                )]
+            } else {
+                desired
+                    .iter()
+                    .filter_map(|namespace| namespace.clone())
+                    .filter(|namespace| {
+                        !cluster
+                            .resource_cache
+                            .get(&(api_resource.clone(), Some(namespace.clone())))
+                            .is_some_and(|watch| watch.is_synced)
+                    })
+                    .map(crate::worker::ResourceWatchSource::Namespace)
+                    .collect()
+            };
+            cluster.active_watchers.extend(sources.iter().map(|source| {
+                let namespace = match source {
+                    crate::worker::ResourceWatchSource::Namespace(namespace) => {
+                        Some(namespace.clone())
+                    }
+                    crate::worker::ResourceWatchSource::AllNamespaces(_)
+                    | crate::worker::ResourceWatchSource::Cluster => None,
+                };
+                (api_resource.clone(), namespace)
+            }));
+            if had_active_sources || !sources.is_empty() {
+                commands_to_send.push(Box::new(crate::worker::ReconcileResourceWatches {
+                    cluster_key: cluster.cluster_key,
+                    api_resource: api_resource.clone(),
+                    sources,
+                }));
+            }
         }
         Self::reconcile_pod_metrics(cluster, commands_to_send);
         Self::reconcile_node_metrics(cluster, commands_to_send);
+    }
+
+    fn reconcile_after_namespace_change(
+        cluster: &mut ClusterState,
+        commands_to_send: &mut Vec<WorkerCommandBox>,
+    ) {
+        let Some(api_resource) = cluster.selected_api_resource.clone() else {
+            return;
+        };
+        // An all-namespaces watcher filters using the discovered namespace set
+        // captured when it started. Refresh it whenever that set changes.
+        if api_resource.namespaced && !api_resource.is_helm_releases() {
+            cluster
+                .active_watchers
+                .remove(&(api_resource.clone(), None));
+        }
+        Self::request_selected_resource_watches(cluster, &api_resource, commands_to_send);
     }
 
     fn reconcile_pod_metrics(
@@ -1684,26 +1765,6 @@ impl UiState {
                 cluster_key: cluster.cluster_key,
             }));
         }
-    }
-
-    fn request_resource_watch(
-        cluster: &mut ClusterState,
-        api_resource: &ApiResource,
-        namespace: Option<String>,
-        commands_to_send: &mut Vec<WorkerCommandBox>,
-    ) {
-        let key = (api_resource.clone(), namespace.clone());
-        let watch = cluster.resource_cache.entry(key.clone()).or_default();
-        if watch.is_synced || cluster.active_watchers.contains(&key) {
-            return;
-        }
-        watch.error = None;
-        cluster.active_watchers.insert(key);
-        commands_to_send.push(Box::new(crate::worker::StartResourceWatch {
-            cluster_key: cluster.cluster_key,
-            api_resource: api_resource.clone(),
-            namespace,
-        }));
     }
 
     pub(super) fn settle_bulk_delete_target(
@@ -1781,6 +1842,17 @@ impl UiState {
                 let watch = cluster.helm_release_cache.entry(namespace).or_default();
                 watch.is_synced = true;
                 watch.backend_errors.insert("Helm storage", error);
+                return;
+            }
+            if api_resource.namespaced && namespace.is_none() {
+                for namespace in cluster.selected_namespaces.clone() {
+                    let watch = cluster
+                        .resource_cache
+                        .entry((api_resource.clone(), Some(namespace)))
+                        .or_default();
+                    watch.is_synced = false;
+                    watch.error = Some(error.clone());
+                }
                 return;
             }
             let watch = cluster.resource_cache.entry(key).or_default();
@@ -1937,7 +2009,7 @@ impl WorkerResult for crate::worker::ManagedClusterDiscoveryFailed {
 }
 
 impl WorkerResult for crate::worker::KubernetesNamespacesAdded {
-    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+    fn apply(self, ui: &mut UiState, commands: &mut Vec<WorkerCommandBox>) {
         let crate::worker::KubernetesNamespacesAdded {
             cluster_key,
             namespace,
@@ -1946,12 +2018,13 @@ impl WorkerResult for crate::worker::KubernetesNamespacesAdded {
             cluster
                 .namespaces
                 .insert(SortedName::new(&namespace.name), namespace);
+            UiState::reconcile_after_namespace_change(cluster, commands);
         }
     }
 }
 
 impl WorkerResult for crate::worker::KubernetesNamespacesDeleted {
-    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+    fn apply(self, ui: &mut UiState, commands: &mut Vec<WorkerCommandBox>) {
         let crate::worker::KubernetesNamespacesDeleted {
             cluster_key,
             namespace_name,
@@ -1959,6 +2032,7 @@ impl WorkerResult for crate::worker::KubernetesNamespacesDeleted {
         if let Some(cluster) = ui.clusters.get_mut(&cluster_key) {
             cluster.namespaces.remove(&SortedName::new(&namespace_name));
             cluster.selected_namespaces.remove(&namespace_name);
+            UiState::reconcile_after_namespace_change(cluster, commands);
         }
         if let Some(context_name) = ui
             .clusters
@@ -2948,10 +3022,13 @@ mod tests {
             command
                 .as_ref()
                 .as_any()
-                .downcast_ref::<StartResourceWatch>()
+                .downcast_ref::<ReconcileResourceWatches>()
                 .is_some_and(|command| {
                     command.api_resource.is_helm_releases()
-                        && command.namespace.as_deref() == Some("apps")
+                        && matches!(
+                            command.sources.as_slice(),
+                            [ResourceWatchSource::Namespace(namespace)] if namespace == "apps"
+                        )
                 })
         }));
     }

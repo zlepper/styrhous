@@ -5,8 +5,9 @@ use crate::cluster_connection_manager::{
     ResourceYamlValidationRequest, add_aks_cluster, add_tailscale_cluster, apply_resource_yaml,
     delete_resource, discover_managed_clusters, force_delete_resource, get_resource_scale,
     get_resource_schema, get_resource_yaml, reload_kubeconfig, restart_deployment, run_cron_job,
-    start_cluster_connection, start_resource_watcher, update_resource_data, update_resource_scale,
-    validate_resource_yaml, watch_node_metrics, watch_pod_metrics_namespace, watch_resource_detail,
+    start_all_namespaces_resource_watcher, start_cluster_connection, start_resource_watcher,
+    update_resource_data, update_resource_scale, validate_resource_yaml, watch_node_metrics,
+    watch_pod_metrics_namespace, watch_resource_detail,
 };
 use crate::helm_release::HelmRelease;
 use crate::helpers::ResultExt;
@@ -20,10 +21,10 @@ use crate::resource_table::CustomResourceColumn;
 use anyhow::Error;
 use async_trait::async_trait;
 use std::any::Any;
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::{Mutex, Semaphore, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tracing::info;
 
@@ -51,6 +52,12 @@ pub(crate) trait WorkerCommand: Send + std::fmt::Debug + 'static {
     fn serializes_session_lifecycle(&self) -> bool {
         false
     }
+
+    /// Commands carrying a cluster key are routed to that cluster's isolated
+    /// runtime. Commands without one execute in the router runtime.
+    fn cluster_key(&self) -> Option<i32> {
+        None
+    }
 }
 
 /// The channel-only, object-safe adapter for concrete commands.
@@ -58,6 +65,7 @@ pub(crate) trait WorkerCommand: Send + std::fmt::Debug + 'static {
 pub(crate) trait ErasedWorkerCommand: AsAny + Send + std::fmt::Debug {
     async fn execute_boxed(self: Box<Self>, state: &WorkerState) -> Option<WorkerResultBox>;
     fn serializes_session_lifecycle(&self) -> bool;
+    fn cluster_key(&self) -> Option<i32>;
 }
 
 #[async_trait]
@@ -68,6 +76,10 @@ impl<C: WorkerCommand> ErasedWorkerCommand for C {
 
     fn serializes_session_lifecycle(&self) -> bool {
         WorkerCommand::serializes_session_lifecycle(self)
+    }
+
+    fn cluster_key(&self) -> Option<i32> {
+        WorkerCommand::cluster_key(self)
     }
 }
 
@@ -178,12 +190,13 @@ impl Worker {
 
             let state = Arc::new(WorkerState {
                 results: result_sender,
-                connections: Mutex::new(HashMap::new()),
-                resource_watches: Mutex::new(HashMap::new()),
-                detail_watches: Mutex::new(HashMap::new()),
-                pod_metrics_watches: Mutex::new(HashMap::new()),
-                node_metrics_watches: Mutex::new(HashMap::new()),
-                log_streams: Mutex::new(HashMap::new()),
+                connections: Arc::new(Mutex::new(HashMap::new())),
+                resource_watches: Arc::new(Mutex::new(ResourceWatchRegistry::default())),
+                detail_watches: Arc::new(Mutex::new(HashMap::new())),
+                pod_metrics_watches: Arc::new(Mutex::new(HashMap::new())),
+                node_metrics_watches: Arc::new(Mutex::new(HashMap::new())),
+                log_streams: Arc::new(Mutex::new(HashMap::new())),
+                watch_initialization_slots: Arc::new(Mutex::new(HashMap::new())),
                 log_store_appender: self.log_store_appender.clone(),
             });
 
@@ -331,11 +344,21 @@ pub(crate) struct ConnectToCluster {
     pub(crate) cluster: String,
     pub(crate) cluster_key: i32,
 }
+/// Replace every source used for one resource type as a single worker-side
+/// operation. This makes a namespace-scope change immediately supersede any
+/// queued initializations from the previous scope.
 #[derive(Debug)]
-pub(crate) struct StartResourceWatch {
+pub(crate) struct ReconcileResourceWatches {
     pub(crate) cluster_key: i32,
     pub(crate) api_resource: ApiResource,
-    pub(crate) namespace: Option<String>,
+    pub(crate) sources: Vec<ResourceWatchSource>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum ResourceWatchSource {
+    Namespace(String),
+    AllNamespaces(BTreeSet<String>),
+    Cluster,
 }
 #[derive(Debug)]
 pub(crate) struct StartResourceDetailWatch {
@@ -604,7 +627,7 @@ pub(crate) struct KubernetesResourceWatchStarted {
     pub(crate) api_resource: ApiResource,
     pub(crate) namespace: Option<String>,
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct KubernetesResourceWatchFailed {
     pub(crate) cluster_key: i32,
     pub(crate) api_resource: ApiResource,
@@ -1053,55 +1076,147 @@ impl WorkerCommand for ConnectToCluster {
     fn serializes_session_lifecycle(&self) -> bool {
         true
     }
+
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
+    }
 }
 
 #[async_trait]
-impl WorkerCommand for StartResourceWatch {
-    type Output = Result<KubernetesResourceWatchStarted, KubernetesResourceWatchFailed>;
+impl WorkerCommand for ReconcileResourceWatches {
+    type Output = Result<NoResult, WorkerError>;
 
     async fn execute(self, state: &WorkerState) -> Self::Output {
-        let failure = KubernetesResourceWatchFailed {
-            cluster_key: self.cluster_key,
-            api_resource: self.api_resource.clone(),
-            namespace: self.namespace.clone(),
-            error: String::new(),
-        };
-        let client = match state.client_for_cluster(self.cluster_key).await {
-            Ok(client) => client,
-            Err(error) => {
-                return Err(KubernetesResourceWatchFailed {
-                    error: format!("{error:#?}"),
-                    ..failure
-                });
-            }
-        };
-        let key = ResourceScope {
-            cluster_key: self.cluster_key,
-            api_resource: self.api_resource.clone(),
-            namespace: self.namespace.clone(),
-        };
-        match start_resource_watcher(
-            self.cluster_key,
-            client,
-            self.api_resource,
-            self.namespace,
-            state.results.clone(),
-        )
-        .await
-        {
-            Ok((result, task)) => {
-                state.replace_resource_watch(key, task).await;
-                Ok(result)
-            }
-            Err(error) => Err(KubernetesResourceWatchFailed {
-                error: format!("{error:#?}"),
-                ..failure
-            }),
+        let generation = state
+            .replace_resource_watch_sources(self.cluster_key, &self.api_resource)
+            .await;
+        let cluster_key = self.cluster_key;
+        let session = state.resource_watch_session(cluster_key).await;
+        for source in self.sources {
+            let state = Arc::new(state.clone());
+            let api_resource = self.api_resource.clone();
+            tokio::spawn(async move {
+                start_reconciled_resource_watch(
+                    state,
+                    cluster_key,
+                    generation,
+                    session,
+                    api_resource,
+                    source,
+                )
+                .await;
+            });
         }
+        Ok(NoResult)
     }
 
-    fn serializes_session_lifecycle(&self) -> bool {
-        true
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
+    }
+}
+
+async fn start_reconciled_resource_watch(
+    state: Arc<WorkerState>,
+    cluster_key: i32,
+    generation: u64,
+    session: u64,
+    api_resource: ApiResource,
+    source: ResourceWatchSource,
+) {
+    let (namespace, watched_namespaces) = match source {
+        ResourceWatchSource::Namespace(namespace) => (Some(namespace), None),
+        ResourceWatchSource::AllNamespaces(namespaces) => (None, Some(namespaces)),
+        ResourceWatchSource::Cluster => (None, None),
+    };
+    if !state
+        .resource_watch_generation_is_current(cluster_key, &api_resource, generation, session)
+        .await
+    {
+        return;
+    }
+    let failure = |error| KubernetesResourceWatchFailed {
+        cluster_key,
+        api_resource: api_resource.clone(),
+        namespace: namespace.clone(),
+        error,
+    };
+    let client = match state.client_for_cluster(cluster_key).await {
+        Ok(client) => client,
+        Err(error) => {
+            let _ = state.results.send(failure(format!("{error:#?}"))).await;
+            return;
+        }
+    };
+    let initialization_slot = match state
+        .watch_initialization_slot(cluster_key)
+        .await
+        .acquire_owned()
+        .await
+    {
+        Ok(slot) => slot,
+        Err(error) => {
+            let _ = state
+                .results
+                .send(failure(format!(
+                    "Unable to acquire watch initialization slot: {error}"
+                )))
+                .await;
+            return;
+        }
+    };
+    if !state
+        .resource_watch_generation_is_current(cluster_key, &api_resource, generation, session)
+        .await
+    {
+        return;
+    }
+    let (initialized_sender, initialized_receiver) = oneshot::channel();
+    let started = if let Some(namespaces) = watched_namespaces {
+        start_all_namespaces_resource_watcher(
+            cluster_key,
+            client,
+            api_resource.clone(),
+            namespaces,
+            state.results.clone(),
+            Some(initialized_sender),
+        )
+        .await
+    } else {
+        start_resource_watcher(
+            cluster_key,
+            client,
+            api_resource.clone(),
+            namespace.clone(),
+            state.results.clone(),
+            Some(initialized_sender),
+        )
+        .await
+    };
+    match started {
+        Ok((result, task)) => {
+            tokio::spawn(async move {
+                let _ = initialized_receiver.await;
+                drop(initialization_slot);
+            });
+            let key = ResourceScope {
+                cluster_key,
+                api_resource,
+                namespace,
+            };
+            if state
+                .install_resource_watch_if_current(key, generation, session, task)
+                .await
+            {
+                state
+                    .results
+                    .send(result)
+                    .await
+                    .log_if_error("Failed to send resource watch start result");
+            }
+        }
+        Err(error) => {
+            let _ = state.results.send(failure(format!("{error:#?}"))).await;
+        }
     }
 }
 
@@ -1141,8 +1256,8 @@ impl WorkerCommand for StartResourceDetailWatch {
         Ok(NoResult)
     }
 
-    fn serializes_session_lifecycle(&self) -> bool {
-        true
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
     }
 }
 
@@ -1162,8 +1277,8 @@ impl WorkerCommand for StopResourceDetailWatch {
         Ok(NoResult)
     }
 
-    fn serializes_session_lifecycle(&self) -> bool {
-        true
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
     }
 }
 
@@ -1191,8 +1306,8 @@ impl WorkerCommand for StartPodMetricsWatch {
         Ok(NoResult)
     }
 
-    fn serializes_session_lifecycle(&self) -> bool {
-        true
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
     }
 }
 
@@ -1207,8 +1322,8 @@ impl WorkerCommand for StopPodMetricsWatch {
         Ok(NoResult)
     }
 
-    fn serializes_session_lifecycle(&self) -> bool {
-        true
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
     }
 }
 
@@ -1235,8 +1350,8 @@ impl WorkerCommand for StartNodeMetricsWatch {
         Ok(NoResult)
     }
 
-    fn serializes_session_lifecycle(&self) -> bool {
-        true
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
     }
 }
 
@@ -1251,8 +1366,8 @@ impl WorkerCommand for StopNodeMetricsWatch {
         Ok(NoResult)
     }
 
-    fn serializes_session_lifecycle(&self) -> bool {
-        true
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
     }
 }
 
@@ -1282,6 +1397,10 @@ impl WorkerCommand for GetResourceYaml {
             }),
         }
     }
+
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
+    }
 }
 
 #[async_trait]
@@ -1304,6 +1423,10 @@ impl WorkerCommand for LoadResourceSchema {
                 error: format!("{error:#?}"),
             }),
         }
+    }
+
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
     }
 }
 
@@ -1341,6 +1464,10 @@ impl WorkerCommand for DeleteResource {
             }),
         }
     }
+
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
+    }
 }
 
 #[async_trait]
@@ -1369,6 +1496,10 @@ impl WorkerCommand for ForceDeleteResource {
             }),
         }
     }
+
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
+    }
 }
 
 #[async_trait]
@@ -1390,6 +1521,10 @@ impl WorkerCommand for RestartDeployment {
             }),
         }
     }
+
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
+    }
 }
 
 #[async_trait]
@@ -1410,6 +1545,10 @@ impl WorkerCommand for RunCronJob {
                 error: format!("{error:#?}"),
             }),
         }
+    }
+
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
     }
 }
 
@@ -1438,6 +1577,10 @@ impl WorkerCommand for GetResourceScale {
             }),
         }
     }
+
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
+    }
 }
 
 #[async_trait]
@@ -1465,6 +1608,10 @@ impl WorkerCommand for UpdateResourceScale {
                 error: format!("{error:#?}"),
             }),
         }
+    }
+
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
     }
 }
 
@@ -1501,6 +1648,10 @@ impl WorkerCommand for ApplyResourceYaml {
                 },
             )),
         }
+    }
+
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
     }
 }
 
@@ -1542,6 +1693,10 @@ impl WorkerCommand for ValidateResourceYaml {
             )),
         }
     }
+
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
+    }
 }
 
 #[async_trait]
@@ -1578,6 +1733,10 @@ impl WorkerCommand for UpdateResourceData {
                 ..failure
             }),
         }
+    }
+
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
     }
 }
 
@@ -1625,8 +1784,8 @@ impl WorkerCommand for StartPodLogStream {
         })
     }
 
-    fn serializes_session_lifecycle(&self) -> bool {
-        true
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
     }
 }
 
@@ -1648,8 +1807,8 @@ impl WorkerCommand for StopPodLogStream {
         })
     }
 
-    fn serializes_session_lifecycle(&self) -> bool {
-        true
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
     }
 }
 
@@ -1703,29 +1862,64 @@ pub struct ResourceApiErrorCause {
 }
 
 /// Shared state accessible from spawned async tasks
+type SharedTaskRegistry<Key> = Arc<Mutex<HashMap<Key, JoinHandle<()>>>>;
+
+#[derive(Clone)]
 pub(crate) struct WorkerState {
     results: WorkerResultSender,
     /// Connected clusters and their root watcher tasks. This stays entirely on the
     /// worker side so UI state can never determine a Kubernetes task's lifetime.
-    connections: Mutex<HashMap<i32, ClusterConnection>>,
+    connections: Arc<Mutex<HashMap<i32, ClusterConnection>>>,
     /// Resource watches are keyed by their complete scope and are aborted before
     /// replacement and whenever their cluster session is torn down.
-    resource_watches: Mutex<HashMap<ResourceScope, JoinHandle<()>>>,
+    resource_watches: Arc<Mutex<ResourceWatchRegistry>>,
     /// Detail watches remain active while their visit is retained in an
     /// inspector's history.
-    detail_watches: Mutex<HashMap<(i32, u64), JoinHandle<()>>>,
+    detail_watches: SharedTaskRegistry<(i32, u64)>,
     /// Namespace-scoped Metrics API pollers used only while Pods are visible.
-    pod_metrics_watches: Mutex<HashMap<(i32, String), JoinHandle<()>>>,
+    pod_metrics_watches: SharedTaskRegistry<(i32, String)>,
     /// Cluster-scoped Metrics API pollers used only while Nodes are visible.
-    node_metrics_watches: Mutex<HashMap<i32, JoinHandle<()>>>,
+    node_metrics_watches: SharedTaskRegistry<i32>,
     /// Native log windows each own one cancellable follow stream.
-    log_streams: Mutex<HashMap<(i32, u64), JoinHandle<()>>>,
+    log_streams: SharedTaskRegistry<(i32, u64)>,
+    /// Each connected cluster gets its own bounded pool for initial list/watch
+    /// synchronization. A synchronized watch does not retain a permit.
+    watch_initialization_slots: Arc<Mutex<HashMap<i32, Arc<Semaphore>>>>,
     /// The bounded, disk-backed ingress for pod logs. A Kubernetes stream
     /// awaits this directly rather than routing log data through the UI.
     log_store_appender: Option<LogStoreAppender>,
 }
 
+#[derive(Default)]
+struct ResourceWatchRegistry {
+    watches: HashMap<ResourceScope, JoinHandle<()>>,
+    generations: HashMap<(i32, ApiResource), u64>,
+    sessions: HashMap<i32, u64>,
+}
+
 impl WorkerState {
+    async fn register_cluster_runtime(&self, cluster_key: i32) {
+        self.resource_watches
+            .lock()
+            .await
+            .sessions
+            .entry(cluster_key)
+            .or_insert(1);
+        self.watch_initialization_slots
+            .lock()
+            .await
+            .entry(cluster_key)
+            .or_insert_with(|| Arc::new(Semaphore::new(16)));
+    }
+
+    async fn watch_initialization_slot(&self, cluster_key: i32) -> Arc<Semaphore> {
+        self.watch_initialization_slots
+            .lock()
+            .await
+            .entry(cluster_key)
+            .or_insert_with(|| Arc::new(Semaphore::new(16)))
+            .clone()
+    }
     async fn client_for_cluster(&self, cluster_key: i32) -> anyhow::Result<kube::Client> {
         self.connections
             .lock()
@@ -1737,8 +1931,7 @@ impl WorkerState {
 
     async fn stop_cluster(&self, cluster_key: i32) {
         self.connections.lock().await.remove(&cluster_key);
-        self.abort_resource_watches(|scope| scope.cluster_key == cluster_key)
-            .await;
+        self.invalidate_cluster_resource_watches(cluster_key).await;
         self.abort_detail_watches(|(watch_cluster_key, _)| *watch_cluster_key == cluster_key)
             .await;
         self.abort_pod_metrics_watches(|(watch_cluster_key, _)| *watch_cluster_key == cluster_key)
@@ -1747,38 +1940,153 @@ impl WorkerState {
             .await;
         self.abort_log_streams(|(watch_cluster_key, _)| *watch_cluster_key == cluster_key)
             .await;
+        self.watch_initialization_slots
+            .lock()
+            .await
+            .remove(&cluster_key);
     }
 
     async fn stop_all_clusters(&self) {
         self.connections.lock().await.clear();
-        self.abort_resource_watches(|_| true).await;
+        self.invalidate_all_resource_watches().await;
         self.abort_detail_watches(|_| true).await;
         self.abort_pod_metrics_watches(|_| true).await;
         self.abort_node_metrics_watches(|_| true).await;
         self.abort_log_streams(|_| true).await;
+        self.watch_initialization_slots.lock().await.clear();
     }
 
+    #[cfg(test)]
     async fn replace_resource_watch(&self, key: ResourceScope, task: JoinHandle<()>) {
-        let previous = self.resource_watches.lock().await.insert(key, task);
+        let previous = self.resource_watches.lock().await.watches.insert(key, task);
         if let Some(previous) = previous {
             abort_task(previous).await;
         }
     }
 
-    async fn abort_resource_watches(&self, matches: impl Fn(&ResourceScope) -> bool) {
-        let mut watches = self.resource_watches.lock().await;
-        let keys = watches
+    /// Advance a resource's generation and return all currently active tasks
+    /// for it. Starts from an earlier generation check this value immediately
+    /// before installing their watcher, so queued starts cannot resurrect an
+    /// obsolete namespace scope.
+    async fn replace_resource_watch_sources(
+        &self,
+        cluster_key: i32,
+        api_resource: &ApiResource,
+    ) -> u64 {
+        let mut registry = self.resource_watches.lock().await;
+        registry.sessions.entry(cluster_key).or_insert(1);
+        let generation = {
+            let generation = registry
+                .generations
+                .entry((cluster_key, api_resource.clone()))
+                .and_modify(|generation| *generation += 1)
+                .or_insert(1);
+            *generation
+        };
+        let keys = registry
+            .watches
             .keys()
-            .filter(|key| matches(key))
+            .filter(|scope| scope.cluster_key == cluster_key && scope.api_resource == *api_resource)
             .cloned()
             .collect::<Vec<_>>();
         let tasks = keys
             .into_iter()
-            .filter_map(|key| watches.remove(&key))
+            .filter_map(|key| registry.watches.remove(&key))
             .collect::<Vec<_>>();
-        drop(watches);
+        drop(registry);
         for task in tasks {
             abort_task(task).await;
+        }
+        generation
+    }
+
+    async fn install_resource_watch_if_current(
+        &self,
+        key: ResourceScope,
+        generation: u64,
+        session: u64,
+        task: JoinHandle<()>,
+    ) -> bool {
+        let mut registry = self.resource_watches.lock().await;
+        if registry.sessions.get(&key.cluster_key).copied() != Some(session)
+            || registry
+                .generations
+                .get(&(key.cluster_key, key.api_resource.clone()))
+                .copied()
+                != Some(generation)
+        {
+            drop(registry);
+            abort_task(task).await;
+            return false;
+        }
+        let previous = registry.watches.insert(key, task);
+        drop(registry);
+        if let Some(previous) = previous {
+            abort_task(previous).await;
+        }
+        true
+    }
+
+    async fn resource_watch_generation_is_current(
+        &self,
+        cluster_key: i32,
+        api_resource: &ApiResource,
+        generation: u64,
+        session: u64,
+    ) -> bool {
+        let registry = self.resource_watches.lock().await;
+        registry.sessions.get(&cluster_key).copied() == Some(session)
+            && registry
+                .generations
+                .get(&(cluster_key, api_resource.clone()))
+                .copied()
+                == Some(generation)
+    }
+
+    async fn resource_watch_session(&self, cluster_key: i32) -> u64 {
+        *self
+            .resource_watches
+            .lock()
+            .await
+            .sessions
+            .entry(cluster_key)
+            .or_insert(1)
+    }
+
+    async fn invalidate_cluster_resource_watches(&self, cluster_key: i32) {
+        let mut registry = self.resource_watches.lock().await;
+        *registry.sessions.entry(cluster_key).or_insert(1) += 1;
+        registry
+            .generations
+            .retain(|(key, _), _| *key != cluster_key);
+        let keys = registry
+            .watches
+            .keys()
+            .filter(|scope| scope.cluster_key == cluster_key)
+            .cloned()
+            .collect::<Vec<_>>();
+        let tasks = keys
+            .into_iter()
+            .filter_map(|key| registry.watches.remove(&key))
+            .collect::<Vec<_>>();
+        drop(registry);
+        for task in tasks {
+            abort_task(task).await;
+        }
+    }
+
+    async fn invalidate_all_resource_watches(&self) {
+        let cluster_keys = {
+            let registry = self.resource_watches.lock().await;
+            registry
+                .sessions
+                .keys()
+                .chain(registry.watches.keys().map(|scope| &scope.cluster_key))
+                .copied()
+                .collect::<std::collections::HashSet<_>>()
+        };
+        for cluster_key in cluster_keys {
+            self.invalidate_cluster_resource_watches(cluster_key).await;
         }
     }
 
@@ -1877,6 +2185,16 @@ struct WorkerRuntime {
     state: Arc<WorkerState>,
 }
 
+enum ClusterRuntimeMessage {
+    Command(WorkerCommandBox),
+    Shutdown(oneshot::Sender<()>),
+}
+
+struct ClusterRuntimeHandle {
+    sender: mpsc::UnboundedSender<ClusterRuntimeMessage>,
+    thread: std::thread::JoinHandle<()>,
+}
+
 impl WorkerRuntime {
     fn run(mut self) {
         let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -1885,17 +2203,113 @@ impl WorkerRuntime {
             .expect("Failed to build tokio runtime");
 
         info!("Worker thread running");
+        let mut clusters = HashMap::<i32, ClusterRuntimeHandle>::new();
         while let Some(command) = self.receiver.blocking_recv() {
-            // Only session/watch control operations need linearization. Regular
-            // Kubernetes reads and mutations run independently so a slow API
-            // call cannot prevent a close, reconnect, or reload from running.
-            if command.serializes_session_lifecycle() {
+            if command.as_ref().as_any().is::<LoadClusters>() {
+                shutdown_cluster_runtimes(&runtime, &self.state, &mut clusters);
                 runtime.block_on(dispatch_command(command, self.state.clone()));
+            } else if let Some(cluster_key) = command.cluster_key() {
+                let handle = clusters.entry(cluster_key).or_insert_with(|| {
+                    ClusterRuntimeHandle::start(cluster_key, self.state.clone())
+                });
+                if handle
+                    .sender
+                    .send(ClusterRuntimeMessage::Command(command))
+                    .is_err()
+                {
+                    tracing::error!(cluster_key, "Cluster worker command channel closed");
+                }
             } else {
                 let state = self.state.clone();
                 runtime.spawn(dispatch_command(command, state));
             }
         }
+        shutdown_cluster_runtimes(&runtime, &self.state, &mut clusters);
+    }
+}
+
+impl ClusterRuntimeHandle {
+    fn start(cluster_key: i32, state: Arc<WorkerState>) -> Self {
+        let (sender, receiver) = mpsc::unbounded_channel();
+        let thread = std::thread::spawn(move || {
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .expect("Failed to build cluster worker runtime");
+            runtime.block_on(async { state.register_cluster_runtime(cluster_key).await });
+            ClusterWorkerRuntime {
+                cluster_key,
+                receiver,
+                state,
+            }
+            .run(runtime);
+        });
+        Self { sender, thread }
+    }
+}
+
+struct ClusterWorkerRuntime {
+    cluster_key: i32,
+    receiver: mpsc::UnboundedReceiver<ClusterRuntimeMessage>,
+    state: Arc<WorkerState>,
+}
+
+impl ClusterWorkerRuntime {
+    fn run(mut self, runtime: tokio::runtime::Runtime) {
+        let mut in_flight = Vec::<JoinHandle<()>>::new();
+        while let Some(message) = self.receiver.blocking_recv() {
+            match message {
+                ClusterRuntimeMessage::Command(command)
+                    if command.serializes_session_lifecycle() =>
+                {
+                    drain_commands(&runtime, &mut in_flight);
+                    runtime.block_on(dispatch_command(command, self.state.clone()));
+                }
+                ClusterRuntimeMessage::Command(command) => {
+                    in_flight.retain(|task| !task.is_finished());
+                    let state = self.state.clone();
+                    in_flight.push(runtime.spawn(dispatch_command(command, state)));
+                }
+                ClusterRuntimeMessage::Shutdown(done) => {
+                    drain_commands(&runtime, &mut in_flight);
+                    runtime.block_on(self.state.stop_cluster(self.cluster_key));
+                    let _ = done.send(());
+                    return;
+                }
+            }
+        }
+        drain_commands(&runtime, &mut in_flight);
+        runtime.block_on(self.state.stop_cluster(self.cluster_key));
+    }
+}
+
+fn drain_commands(runtime: &tokio::runtime::Runtime, tasks: &mut Vec<JoinHandle<()>>) {
+    let pending = std::mem::take(tasks);
+    runtime.block_on(async {
+        for task in pending {
+            let _ = task.await;
+        }
+    });
+}
+
+fn shutdown_cluster_runtimes(
+    runtime: &tokio::runtime::Runtime,
+    state: &Arc<WorkerState>,
+    clusters: &mut HashMap<i32, ClusterRuntimeHandle>,
+) {
+    let handles = std::mem::take(clusters);
+    for (cluster_key, handle) in handles {
+        let (done_sender, done_receiver) = oneshot::channel();
+        if handle
+            .sender
+            .send(ClusterRuntimeMessage::Shutdown(done_sender))
+            .is_ok()
+        {
+            let _ = runtime.block_on(done_receiver);
+        } else {
+            runtime.block_on(state.stop_cluster(cluster_key));
+        }
+        let _ = handle.thread.join();
     }
 }
 
@@ -1936,12 +2350,13 @@ mod tests {
         let (sender, _receiver) = mpsc::channel(1);
         WorkerState {
             results: WorkerResultSender::new(sender, None),
-            connections: Mutex::new(HashMap::new()),
-            resource_watches: Mutex::new(HashMap::new()),
-            detail_watches: Mutex::new(HashMap::new()),
-            pod_metrics_watches: Mutex::new(HashMap::new()),
-            node_metrics_watches: Mutex::new(HashMap::new()),
-            log_streams: Mutex::new(HashMap::new()),
+            connections: Arc::new(Mutex::new(HashMap::new())),
+            resource_watches: Arc::new(Mutex::new(ResourceWatchRegistry::default())),
+            detail_watches: Arc::new(Mutex::new(HashMap::new())),
+            pod_metrics_watches: Arc::new(Mutex::new(HashMap::new())),
+            node_metrics_watches: Arc::new(Mutex::new(HashMap::new())),
+            log_streams: Arc::new(Mutex::new(HashMap::new())),
+            watch_initialization_slots: Arc::new(Mutex::new(HashMap::new())),
             log_store_appender: None,
         }
     }
@@ -2076,12 +2491,13 @@ mod tests {
                 .expect("channel starts empty");
             let state = Arc::new(WorkerState {
                 results: WorkerResultSender::new(result_channel_sender, None),
-                connections: Mutex::new(HashMap::new()),
-                resource_watches: Mutex::new(HashMap::new()),
-                detail_watches: Mutex::new(HashMap::new()),
-                pod_metrics_watches: Mutex::new(HashMap::new()),
-                node_metrics_watches: Mutex::new(HashMap::new()),
-                log_streams: Mutex::new(HashMap::new()),
+                connections: Arc::new(Mutex::new(HashMap::new())),
+                resource_watches: Arc::new(Mutex::new(ResourceWatchRegistry::default())),
+                detail_watches: Arc::new(Mutex::new(HashMap::new())),
+                pod_metrics_watches: Arc::new(Mutex::new(HashMap::new())),
+                node_metrics_watches: Arc::new(Mutex::new(HashMap::new())),
+                log_streams: Arc::new(Mutex::new(HashMap::new())),
+                watch_initialization_slots: Arc::new(Mutex::new(HashMap::new())),
                 log_store_appender: None,
             });
 
@@ -2275,6 +2691,51 @@ mod tests {
     }
 
     #[test]
+    fn reconciliation_or_cluster_teardown_prevents_a_queued_start_from_installing() {
+        let runtime = tokio::runtime::Runtime::new().expect("runtime initializes");
+        runtime.block_on(async {
+            let state = worker_state();
+            let resource = pod_resource();
+            let obsolete_generation = state.replace_resource_watch_sources(1, &resource).await;
+            let current_generation = state.replace_resource_watch_sources(1, &resource).await;
+            let session = state.resource_watch_session(1).await;
+            let aborted = Arc::new(AtomicUsize::new(0));
+
+            assert!(
+                !state
+                    .install_resource_watch_if_current(
+                        ResourceScope {
+                            cluster_key: 1,
+                            api_resource: resource,
+                            namespace: Some("default".to_owned()),
+                        },
+                        obsolete_generation,
+                        session,
+                        tokio::spawn(AbortProbe(aborted.clone())),
+                    )
+                    .await
+            );
+            tokio::task::yield_now().await;
+
+            assert_eq!(current_generation, obsolete_generation + 1);
+            assert_eq!(aborted.load(Ordering::Relaxed), 1);
+            assert!(state.resource_watches.lock().await.watches.is_empty());
+
+            state.invalidate_cluster_resource_watches(1).await;
+            assert!(
+                !state
+                    .resource_watch_generation_is_current(
+                        1,
+                        &pod_resource(),
+                        current_generation,
+                        session
+                    )
+                    .await
+            );
+        });
+    }
+
+    #[test]
     fn replacing_a_pod_metrics_watch_aborts_the_previous_task() {
         let runtime = tokio::runtime::Runtime::new().expect("runtime initializes");
         runtime.block_on(async {
@@ -2362,7 +2823,7 @@ mod tests {
             assert_eq!(metrics_aborted.load(Ordering::Relaxed), 1);
             assert_eq!(node_metrics_aborted.load(Ordering::Relaxed), 1);
             assert_eq!(log_aborted.load(Ordering::Relaxed), 1);
-            assert!(state.resource_watches.lock().await.is_empty());
+            assert!(state.resource_watches.lock().await.watches.is_empty());
             assert!(state.detail_watches.lock().await.is_empty());
             assert!(state.pod_metrics_watches.lock().await.is_empty());
             assert!(state.node_metrics_watches.lock().await.is_empty());
@@ -2440,6 +2901,7 @@ mod tests {
                     .resource_watches
                     .lock()
                     .await
+                    .watches
                     .contains_key(&ResourceScope {
                         cluster_key: 2,
                         api_resource: pod_resource(),
@@ -2499,15 +2961,24 @@ mod tests {
     }
 
     #[test]
-    fn session_control_commands_are_serialized_while_api_requests_are_not() {
+    fn cluster_lifecycle_commands_are_serialized_and_watch_reconciliation_is_scoped() {
         let load_clusters: WorkerCommandBox = Box::new(LoadClusters);
         assert!(load_clusters.serializes_session_lifecycle());
+        assert_eq!(load_clusters.cluster_key(), None);
         let stop_logs = StopPodLogStream {
             cluster_key: 1,
             log_window_id: 1,
         };
         let stop_logs: WorkerCommandBox = Box::new(stop_logs);
-        assert!(stop_logs.serializes_session_lifecycle());
+        assert!(!stop_logs.serializes_session_lifecycle());
+        assert_eq!(stop_logs.cluster_key(), Some(1));
+        let reconcile: WorkerCommandBox = Box::new(ReconcileResourceWatches {
+            cluster_key: 1,
+            api_resource: pod_resource(),
+            sources: vec![ResourceWatchSource::Namespace("default".to_owned())],
+        });
+        assert!(!reconcile.serializes_session_lifecycle());
+        assert_eq!(reconcile.cluster_key(), Some(1));
         let get_yaml = GetResourceYaml {
             editor_id: 1,
             cluster_key: 1,
@@ -2517,5 +2988,28 @@ mod tests {
         };
         let get_yaml: WorkerCommandBox = Box::new(get_yaml);
         assert!(!get_yaml.serializes_session_lifecycle());
+        assert_eq!(get_yaml.cluster_key(), Some(1));
+    }
+
+    #[test]
+    fn watch_initialization_slots_are_limited_per_cluster() {
+        let runtime = tokio::runtime::Runtime::new().expect("runtime initializes");
+        runtime.block_on(async {
+            let state = worker_state();
+            let first = state.watch_initialization_slot(1).await;
+            let second = state.watch_initialization_slot(2).await;
+            let permits = (0..16)
+                .map(|_| {
+                    first
+                        .clone()
+                        .try_acquire_owned()
+                        .expect("slot is available")
+                })
+                .collect::<Vec<_>>();
+            assert!(first.try_acquire().is_err());
+            assert!(second.try_acquire().is_ok());
+            drop(permits);
+            assert!(first.try_acquire().is_ok());
+        });
     }
 }

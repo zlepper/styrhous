@@ -290,7 +290,7 @@ fn type_text<L: TerminalLauncher>(
 }
 
 #[test]
-fn namespace_selector_replaces_toggles_and_selects_all_without_stopping_watches() {
+fn namespace_selector_reconciles_watch_sources_when_selection_changes() {
     let pods = fixture_api_resource("", "Pod", "pods");
     let mut cluster = fixture_cluster(1, "dev");
     cluster.connection = ClusterConnectionState::Connected;
@@ -400,21 +400,21 @@ fn namespace_selector_replaces_toggles_and_selects_all_without_stopping_watches(
         HashSet::from(["default".to_owned()])
     );
     assert!(
-        cluster
+        !cluster
             .active_watchers
             .contains(&(pods.clone(), Some("kube-system".to_owned())))
     );
     assert!(
-        cluster
+        !cluster
             .active_watchers
             .contains(&(pods.clone(), Some("monitoring".to_owned())))
     );
     assert_eq!(
         commands
             .iter()
-            .filter(|command| command_is::<StartResourceWatch>(command).is_some())
+            .filter(|command| command_is::<ReconcileResourceWatches>(command).is_some())
             .count(),
-        3
+        2
     );
 }
 
@@ -446,10 +446,10 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
         harness.state().worker.commands[0]
             .as_ref()
             .as_any()
-            .downcast_ref::<StartResourceWatch>()
+            .downcast_ref::<ReconcileResourceWatches>()
             .is_some_and(|command| command.cluster_key == 1
                 && command.api_resource == nodes
-                && command.namespace.is_none())
+                && matches!(command.sources.as_slice(), [ResourceWatchSource::Cluster]))
     );
     assert!(harness.state().worker.commands.iter().any(|command| {
         command
@@ -520,7 +520,7 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
             .worker
             .commands
             .iter()
-            .filter(|command| command_is::<StartResourceWatch>(command).is_some())
+            .filter(|command| command_is::<ReconcileResourceWatches>(command).is_some())
             .count(),
         1
     );
@@ -5424,7 +5424,7 @@ fn resource_navigation_selects_primary_curated_gateway_and_other_resources() {
                 command
                     .as_ref()
                     .as_any()
-                    .downcast_ref::<StartResourceWatch>()
+                    .downcast_ref::<ReconcileResourceWatches>()
                     .map(|command| command.api_resource.name.as_str())
             })
             .collect::<Vec<_>>(),
@@ -5549,11 +5549,14 @@ fn test_ui_flow() {
         command
             .as_ref()
             .as_any()
-            .downcast_ref::<StartResourceWatch>()
+            .downcast_ref::<ReconcileResourceWatches>()
             .is_some_and(|command| {
                 command.cluster_key == 1
                     && command.api_resource == pods
-                    && command.namespace.as_deref() == Some("default")
+                    && matches!(
+                        command.sources.as_slice(),
+                        [ResourceWatchSource::Namespace(namespace)] if namespace == "default"
+                    )
             })
     }));
     harness.get_by_label("Loading resources");
@@ -5594,7 +5597,7 @@ fn test_ui_flow() {
             .worker
             .commands
             .iter()
-            .filter(|command| command_is::<StartResourceWatch>(command).is_some())
+            .filter(|command| command_is::<ReconcileResourceWatches>(command).is_some())
             .count(),
         2
     );
