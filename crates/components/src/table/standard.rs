@@ -115,11 +115,7 @@ impl TailwindTable {
                     header.col(|ui| {
                         // White background for header
                         let rect = ui.max_rect();
-                        ui.painter().rect_filled(rect, 0.0, HEADER_BG);
-                        ui.painter().line_segment(
-                            [rect.left_bottom(), rect.right_bottom()],
-                            egui::Stroke::new(1.0, TABLE_BORDER),
-                        );
+                        paint_table_cell(ui, rect, HEADER_BG);
 
                         let mut label_ui = ui.new_child(
                             egui::UiBuilder::new()
@@ -156,11 +152,7 @@ impl TailwindTable {
                                 col_index,
                                 &self.columns[col_index].header,
                             ));
-                            ui.painter().rect_filled(rect, 0.0, CONTENT_BACKGROUND);
-                            ui.painter().line_segment(
-                                [rect.left_bottom(), rect.right_bottom()],
-                                egui::Stroke::new(1.0, TABLE_BORDER),
-                            );
+                            paint_table_cell(ui, rect, CONTENT_BACKGROUND);
 
                             // Add padding and render cell content
                             ui.horizontal(|ui| {

@@ -178,12 +178,16 @@ pub(super) fn show_helm_release_table(
             },
             |ui, release, column| match visible_columns[column].definition.id.as_str() {
                 "name" => {
-                    TableRowBuilder::clickable_text(
+                    let response = TableRowBuilder::clickable_text(
                         ui,
                         &release.name,
                         gray::_900,
                         format!("Inspect Helm release {}", release.name),
                     );
+                    if response.clicked() && pending.borrow().is_none() {
+                        *pending.borrow_mut() =
+                            Some((release.name.clone(), release.namespace.clone()));
+                    }
                 }
                 "namespace" => TableRowBuilder::text(ui, &release.namespace, false),
                 "chart" => TableRowBuilder::text(ui, &release.chart, false),

@@ -310,6 +310,29 @@ fn helm_releases_snapshot_shows_read_only_inventory() {
 }
 
 #[test]
+fn selecting_a_helm_release_from_the_workspace_opens_its_inspector() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    let cluster = state.clusters.get_mut(&2).unwrap();
+    cluster.selected_api_resource = Some(crate::api_resource::ApiResource::helm_releases());
+    cluster.helm_release_cache.insert(
+        "kube-system".into(),
+        HelmReleaseWatchState {
+            releases: vec![fixture_helm_release()],
+            is_synced: true,
+            backend_errors: BTreeMap::new(),
+        },
+    );
+    harness.state_mut().ui_state = state;
+
+    harness.run();
+    harness.get_by_label("Inspect Helm release demo").click();
+    harness.run();
+
+    harness.get_by_label("Select revision 2");
+}
+
+#[test]
 fn helm_release_inspector_snapshot_shows_values_warning_and_revision_details() {
     let mut harness = application_harness::<MockWorker>();
     let mut state = oracle_resource_table_state();

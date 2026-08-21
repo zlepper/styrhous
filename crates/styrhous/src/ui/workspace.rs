@@ -88,6 +88,138 @@ enum ResourceSelectionAction {
     Delete,
 }
 
+#[derive(Default)]
+struct WorkspaceEffects {
+    namespace_selection: Option<NamespaceSelection>,
+    retry_requested: bool,
+    detail_to_open: Option<ResourceDetailTarget>,
+    log_to_open: Option<PodLogTarget>,
+    yaml_to_open: Option<YamlEditorTarget>,
+    shell_request: Option<ShellRequest>,
+    column_settings_to_open: Option<super::resource_table_settings::ResourceTableSettingsTarget>,
+    helm_detail_to_open: Option<HelmReleaseDetailTarget>,
+}
+
+struct ResourceDetailTarget {
+    api_resource: ApiResource,
+    name: String,
+    namespace: Option<String>,
+    uid: String,
+}
+
+struct PodLogTarget {
+    cluster_key: i32,
+    name: String,
+    namespace: Option<String>,
+    container: crate::minimal_resource::PodLogContainer,
+}
+
+struct YamlEditorTarget {
+    cluster_key: i32,
+    api_resource: ApiResource,
+    namespace: Option<String>,
+    resource_name: String,
+}
+
+struct HelmReleaseDetailTarget {
+    name: String,
+    namespace: String,
+}
+
+impl WorkspaceEffects {
+    fn apply(
+        self,
+        ui_state: &mut UiState,
+        ctx: &egui::Context,
+        commands_to_send: &mut Vec<WorkerCommandBox>,
+        shell_requests: &mut Vec<ShellRequest>,
+    ) {
+        if let (Some(cluster_key), Some(target)) = (ui_state.selected_cluster, self.detail_to_open)
+        {
+            ui_state.open_resource_detail(
+                cluster_key,
+                target.api_resource,
+                target.name,
+                target.namespace,
+                target.uid,
+                commands_to_send,
+            );
+        }
+        if let (Some(cluster_key), Some(target)) =
+            (ui_state.selected_cluster, self.helm_detail_to_open)
+        {
+            ui_state.open_helm_release_detail(
+                cluster_key,
+                target.name,
+                target.namespace,
+                commands_to_send,
+            );
+        }
+        if let Some(target) = self.column_settings_to_open {
+            ui_state.replace_global_blade(Box::new(target), commands_to_send);
+        }
+        if let Some(target) = self.log_to_open {
+            ui_state.open_pod_log_window(
+                target.cluster_key,
+                target.name,
+                target.namespace,
+                target.container,
+                commands_to_send,
+            );
+        }
+        if let Some(target) = self.yaml_to_open {
+            ui_state.open_yaml_editor(
+                ctx,
+                target.cluster_key,
+                target.api_resource,
+                target.namespace,
+                target.resource_name,
+                commands_to_send,
+            );
+        }
+        shell_requests.extend(self.shell_request);
+        if let (Some(cluster_key), Some(selection)) =
+            (ui_state.selected_cluster, self.namespace_selection)
+        {
+            match selection {
+                NamespaceSelection::Replace(namespace) => {
+                    ui_state.replace_selected_namespaces(
+                        cluster_key,
+                        [namespace],
+                        commands_to_send,
+                    );
+                }
+                NamespaceSelection::Toggle(namespace) => {
+                    ui_state.toggle_namespace(cluster_key, namespace, commands_to_send);
+                }
+                NamespaceSelection::SelectAll => {
+                    ui_state.select_all_namespaces(cluster_key, commands_to_send);
+                }
+                NamespaceSelection::ClearAll => {
+                    ui_state.clear_selected_namespaces(cluster_key, commands_to_send);
+                }
+            }
+            if let Some(cluster) = ui_state.clusters.get_mut(&cluster_key)
+                && let Some(api_resource) = cluster.selected_api_resource.clone()
+            {
+                let visible_uids = selected_resources(cluster, Some(&api_resource))
+                    .into_iter()
+                    .map(|resource| resource.uid)
+                    .collect::<HashSet<_>>();
+                if let Some(resource_selection) = cluster.resource_selections.get_mut(&api_resource)
+                {
+                    resource_selection.retain(|uid| visible_uids.contains(uid));
+                }
+            }
+        }
+        if self.retry_requested
+            && let Some(cluster_key) = ui_state.selected_cluster
+        {
+            ui_state.retry_selected_load(cluster_key, commands_to_send);
+        }
+    }
+}
+
 pub(super) fn show(
     ui: &mut egui::Ui,
     ui_state: &mut UiState,
@@ -97,15 +229,8 @@ pub(super) fn show(
     table_preferences: &mut PersistedResourceTablePreferences,
 ) {
     let ctx = ui.ctx().clone();
-    let mut namespace_selection = None;
-    let mut retry_requested = false;
-    let mut detail_to_open = None;
-    let mut log_to_open = None;
-    let mut yaml_to_open = None;
-    let mut shell_to_open = None;
+    let mut effects = WorkspaceEffects::default();
     let mut resource_selection_action = None;
-    let mut column_settings_to_open = None;
-    let mut helm_detail_to_open = None;
     egui::CentralPanel::default()
         .frame(WorkspacePage::frame())
         .show(ui, |ui| {
@@ -144,7 +269,8 @@ pub(super) fn show(
                         return;
                     }
                     ClusterConnectionState::Failed(error) => {
-                        retry_requested = workspace_error_state(ui, "Unable to connect", error);
+                        effects.retry_requested =
+                            workspace_error_state(ui, "Unable to connect", error);
                         return;
                     }
                     ClusterConnectionState::Disconnected => {
@@ -160,7 +286,7 @@ pub(super) fn show(
 
                 match (&cluster.namespaces_load, &cluster.api_resources_load) {
                     (ClusterLoadState::Failed(error), _) | (_, ClusterLoadState::Failed(error)) => {
-                        retry_requested =
+                        effects.retry_requested =
                             workspace_error_state(ui, "Unable to load cluster data", error);
                         return;
                     }
@@ -180,13 +306,14 @@ pub(super) fn show(
                     .as_ref()
                     .is_some_and(crate::api_resource::ApiResource::is_helm_releases)
                 {
-                    helm_detail_to_open = show_helm_releases_workspace(
+                    effects.helm_detail_to_open = show_helm_releases_workspace(
                         ui,
                         cluster,
-                        &mut namespace_selection,
+                        &mut effects.namespace_selection,
                         table_preferences,
-                        &mut column_settings_to_open,
-                    );
+                        &mut effects.column_settings_to_open,
+                    )
+                    .map(|(name, namespace)| HelmReleaseDetailTarget { name, namespace });
                     return;
                 }
                 let all_resources = decorate_usage_rows(
@@ -211,7 +338,7 @@ pub(super) fn show(
                     selected_api_resource.as_ref(),
                     &all_resources,
                     &mut resource_search,
-                    &mut namespace_selection,
+                    &mut effects.namespace_selection,
                     ResourceSelectionControls {
                         selected_count: selected_resource_count,
                         actions_enabled: resource_actions_enabled,
@@ -244,7 +371,8 @@ pub(super) fn show(
                         "Select one or more namespaces to start watching resources.",
                     );
                 } else if let Some(error) = selected_watch_error(cluster, api_resource) {
-                    retry_requested = workspace_error_state(ui, "Unable to load resources", &error);
+                    effects.retry_requested =
+                        workspace_error_state(ui, "Unable to load resources", &error);
                 } else if selected_watches_are_loading(cluster, api_resource) {
                     workspace_loading_state(
                         ui,
@@ -296,7 +424,7 @@ pub(super) fn show(
                             .entry(api_resource.clone())
                             .or_default(),
                         table_preferences,
-                        &mut column_settings_to_open,
+                        &mut effects.column_settings_to_open,
                     )
                 } {
                     match action {
@@ -305,11 +433,20 @@ pub(super) fn show(
                             namespace,
                             uid,
                         } => {
-                            detail_to_open = Some((api_resource.clone(), name, namespace, uid));
+                            effects.detail_to_open = Some(ResourceDetailTarget {
+                                api_resource: api_resource.clone(),
+                                name,
+                                namespace,
+                                uid,
+                            });
                         }
                         ResourceAction::EditYaml { name, namespace } => {
-                            yaml_to_open =
-                                Some((cluster.cluster_key, api_resource.clone(), namespace, name));
+                            effects.yaml_to_open = Some(YamlEditorTarget {
+                                cluster_key: cluster.cluster_key,
+                                api_resource: api_resource.clone(),
+                                namespace,
+                                resource_name: name,
+                            });
                         }
                         ResourceAction::RequestDelete { name, namespace } => {
                             cluster.pending_delete =
@@ -354,12 +491,17 @@ pub(super) fn show(
                             namespace,
                             container,
                         } => {
-                            log_to_open = Some((cluster.cluster_key, name, namespace, container));
+                            effects.log_to_open = Some(PodLogTarget {
+                                cluster_key: cluster.cluster_key,
+                                name,
+                                namespace,
+                                container,
+                            });
                         }
                         action @ (ResourceAction::Shell { .. }
                         | ResourceAction::PodDebugShell { .. }
                         | ResourceAction::NodeShell { .. }) => {
-                            shell_to_open = action.shell_request(&cluster.name);
+                            effects.shell_request = action.shell_request(&cluster.name);
                         }
                         ResourceAction::SaveData { .. } => {
                             unreachable!("resource table actions cannot save inspector data")
@@ -370,7 +512,12 @@ pub(super) fn show(
                             namespace,
                             uid,
                         } => {
-                            detail_to_open = Some((api_resource, name, namespace, uid));
+                            effects.detail_to_open = Some(ResourceDetailTarget {
+                                api_resource,
+                                name,
+                                namespace,
+                                uid,
+                            });
                         }
                     }
                 }
@@ -405,70 +552,7 @@ pub(super) fn show(
             });
         });
 
-    if let (Some(cluster_key), Some((api_resource, name, namespace, uid))) =
-        (ui_state.selected_cluster, detail_to_open)
-    {
-        ui_state.open_resource_detail(
-            cluster_key,
-            api_resource,
-            name,
-            namespace,
-            uid,
-            commands_to_send,
-        );
-    }
-    if let (Some(cluster_key), Some((name, namespace))) =
-        (ui_state.selected_cluster, helm_detail_to_open)
-    {
-        ui_state.open_helm_release_detail(cluster_key, name, namespace, commands_to_send);
-    }
-    if let Some(target) = column_settings_to_open {
-        ui_state.replace_global_blade(Box::new(target), commands_to_send);
-    }
-    if let Some((cluster_key, name, namespace, container)) = log_to_open {
-        ui_state.open_pod_log_window(cluster_key, name, namespace, container, commands_to_send);
-    }
-    if let Some((cluster_key, api_resource, namespace, resource_name)) = yaml_to_open {
-        ui_state.open_yaml_editor(
-            &ctx,
-            cluster_key,
-            api_resource,
-            namespace,
-            resource_name,
-            commands_to_send,
-        );
-    }
-    shell_requests.extend(shell_to_open);
-    if let (Some(cluster_key), Some(selection)) = (ui_state.selected_cluster, namespace_selection) {
-        match selection {
-            NamespaceSelection::Replace(namespace) => {
-                ui_state.replace_selected_namespaces(cluster_key, [namespace], commands_to_send);
-            }
-            NamespaceSelection::Toggle(namespace) => {
-                ui_state.toggle_namespace(cluster_key, namespace, commands_to_send);
-            }
-            NamespaceSelection::SelectAll => {
-                ui_state.select_all_namespaces(cluster_key, commands_to_send);
-            }
-            NamespaceSelection::ClearAll => {
-                ui_state.clear_selected_namespaces(cluster_key, commands_to_send);
-            }
-        }
-        if let Some(cluster) = ui_state.clusters.get_mut(&cluster_key)
-            && let Some(api_resource) = cluster.selected_api_resource.clone()
-        {
-            let visible_uids = selected_resources(cluster, Some(&api_resource))
-                .into_iter()
-                .map(|resource| resource.uid)
-                .collect::<HashSet<_>>();
-            if let Some(resource_selection) = cluster.resource_selections.get_mut(&api_resource) {
-                resource_selection.retain(|uid| visible_uids.contains(uid));
-            }
-        }
-    }
-    if retry_requested && let Some(cluster_key) = ui_state.selected_cluster {
-        ui_state.retry_selected_load(cluster_key, commands_to_send);
-    }
+    effects.apply(ui_state, &ctx, commands_to_send, shell_requests);
 }
 
 mod helm;
