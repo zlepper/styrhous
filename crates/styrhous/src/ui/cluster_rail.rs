@@ -101,8 +101,8 @@ pub(super) fn show(
                                 .on_hover_text(format!("Settings\n{}", update_status.summary()))
                                 .clicked()
                             {
-                                ui_state
-                                    .open_terminal_settings(terminal_settings, commands_to_send);
+                                let _ = terminal_settings;
+                                ui_state.open_settings_home(commands_to_send);
                             }
                         },
                     );

@@ -1,5 +1,8 @@
 use super::global_blade::{GlobalBladeContent, GlobalBladeCoordinator};
 use crate::api_resource::ApiResource;
+use crate::cluster_connection_manager::{
+    AvailableAksCluster, AvailableTailscaleCluster, Cluster, ClusterDiscoveryTools,
+};
 use crate::helm_release::HelmRelease;
 use crate::log_store::LogStoreResult;
 use crate::minimal_namespace::MinimalNamespace;
@@ -51,6 +54,32 @@ pub(crate) struct UiState {
     pub(super) terminal_launch_error: Option<String>,
     pub(super) cluster_selections: PersistedClusterSelections,
     pub(super) resource_navigation_expansion: ResourceNavigationExpansion,
+    pub(super) managed_cluster_discovery: ManagedClusterDiscoveryState,
+}
+
+#[derive(Debug, Default)]
+pub(super) struct ManagedClusterDiscoveryState {
+    pub(super) tools: ClusterDiscoveryTools,
+    pub(super) aks_clusters: Vec<AvailableAksCluster>,
+    pub(super) tailscale_clusters: Vec<AvailableTailscaleCluster>,
+    pub(super) loading: bool,
+    pub(super) importing: Option<ManagedClusterImport>,
+    pub(super) error: Option<String>,
+    pub(super) azure_error: Option<String>,
+    pub(super) azure_warning: Option<String>,
+    pub(super) tailscale_error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum ManagedClusterImport {
+    Aks {
+        subscription_id: String,
+        resource_group: String,
+        cluster_name: String,
+    },
+    Tailscale {
+        host_name: String,
+    },
 }
 
 /// Key for identifying a resource watcher (API resource + optional namespace).
@@ -1038,6 +1067,13 @@ impl UiState {
         );
     }
 
+    pub(super) fn open_settings_home(&mut self, commands_to_send: &mut Vec<WorkerCommandBox>) {
+        self.replace_global_blade(
+            Box::new(super::settings::SettingsHomeBlade),
+            commands_to_send,
+        );
+    }
+
     pub(super) fn open_pod_log_window(
         &mut self,
         cluster_key: i32,
@@ -1765,76 +1801,138 @@ impl WorkerResult for crate::worker::ClusterConnectionFailed {
 impl WorkerResult for crate::worker::KubernetesClustersUpdated {
     fn apply(self, ui: &mut UiState, commands: &mut Vec<WorkerCommandBox>) {
         let crate::worker::KubernetesClustersUpdated(clusters) = self;
-        if ui.global_blades.navigator().is_some_and(|navigator| {
-            navigator
-                .entries()
-                .any(|content| content.resource_detail().is_some())
-        }) {
-            UiState::stop_discarded_blades(ui.global_blades.clear(), commands);
-        }
-        ui.clusters.clear();
-        ui.selected_cluster = None;
-        let mut current_cluster_key = None;
-        let mut remembered_cluster_key = None;
+        apply_kubernetes_clusters(ui, clusters, true, commands);
+    }
+}
+
+impl WorkerResult for crate::worker::ImportedKubernetesClusters {
+    fn apply(self, ui: &mut UiState, commands: &mut Vec<WorkerCommandBox>) {
+        let crate::worker::ImportedKubernetesClusters(clusters) = self;
         for cluster in clusters {
+            if ui
+                .clusters
+                .values()
+                .any(|existing| existing.name == cluster.name)
+            {
+                continue;
+            }
             ui.next_cluster_key += 1;
             let cluster_key = ui.next_cluster_key;
-            if cluster.is_current {
-                current_cluster_key = Some(cluster_key);
-            }
-            if ui.cluster_selections.last_selected_context.as_deref() == Some(cluster.name.as_str())
-            {
-                remembered_cluster_key = Some(cluster_key);
-            }
-            ui.clusters.insert(
-                cluster_key,
-                ClusterState {
-                    cluster_key,
-                    name: cluster.name,
-                    namespaces: BTreeMap::new(),
-                    connection: ClusterConnectionState::Disconnected,
-                    namespaces_load: ClusterLoadState::Loading,
-                    api_resources_load: ClusterLoadState::Loading,
-                    selected_namespaces: HashSet::new(),
-                    selected_api_resource: None,
-                    resource_navigation: ResourceNavigation::default(),
-                    custom_resource_columns: BTreeMap::new(),
-                    scalable_api_resources: BTreeSet::new(),
-                    resource_cache: HashMap::new(),
-                    helm_release_cache: HashMap::new(),
-                    active_watchers: HashSet::new(),
-                    pod_metrics_api_available: false,
-                    pod_metrics: HashMap::new(),
-                    active_pod_metrics: HashSet::new(),
-                    node_metrics_api_available: false,
-                    node_metrics: NodeMetricsState::default(),
-                    node_metrics_active: false,
-                    resource_searches: HashMap::new(),
-                    resource_selections: HashMap::new(),
-                    next_bulk_delete_id: 0,
-                    resource_detail_panel: None,
-                    next_detail_generation: 0,
-                    next_data_save_request_id: 0,
-                    pending_delete: None,
-                    pending_bulk_delete: None,
-                    bulk_delete_progress: None,
-                    bulk_delete_error: None,
-                    pending_force_delete: None,
-                    force_delete_error: None,
-                    pending_deployment_restart: None,
-                    deployment_restart_error: None,
-                    pending_cron_job_run: None,
-                    cron_job_run_error: None,
-                    pending_scale: None,
-                    scale_error: None,
-                },
-            );
+            ui.clusters
+                .insert(cluster_key, cluster_state(cluster_key, cluster.name));
         }
-        if let Some(cluster_key) = remembered_cluster_key.or(current_cluster_key)
-            && let Some(command) = ui.select_cluster_without_remembering(cluster_key)
-        {
-            commands.push(command);
+        commands.push(Box::new(crate::worker::LoadManagedClusterDiscovery));
+    }
+}
+
+fn apply_kubernetes_clusters(
+    ui: &mut UiState,
+    clusters: Vec<Cluster>,
+    select_cluster: bool,
+    commands: &mut Vec<WorkerCommandBox>,
+) {
+    if ui.global_blades.navigator().is_some_and(|navigator| {
+        navigator
+            .entries()
+            .any(|content| content.resource_detail().is_some())
+    }) {
+        UiState::stop_discarded_blades(ui.global_blades.clear(), commands);
+    }
+    ui.clusters.clear();
+    ui.selected_cluster = None;
+    let mut current_cluster_key = None;
+    let mut remembered_cluster_key = None;
+    for cluster in clusters {
+        ui.next_cluster_key += 1;
+        let cluster_key = ui.next_cluster_key;
+        if cluster.is_current {
+            current_cluster_key = Some(cluster_key);
         }
+        if ui.cluster_selections.last_selected_context.as_deref() == Some(cluster.name.as_str()) {
+            remembered_cluster_key = Some(cluster_key);
+        }
+        ui.clusters
+            .insert(cluster_key, cluster_state(cluster_key, cluster.name));
+    }
+    if select_cluster
+        && let Some(cluster_key) = remembered_cluster_key.or(current_cluster_key)
+        && let Some(command) = ui.select_cluster_without_remembering(cluster_key)
+    {
+        commands.push(command);
+    }
+}
+
+fn cluster_state(cluster_key: i32, name: String) -> ClusterState {
+    ClusterState {
+        cluster_key,
+        name,
+        namespaces: BTreeMap::new(),
+        connection: ClusterConnectionState::Disconnected,
+        namespaces_load: ClusterLoadState::Loading,
+        api_resources_load: ClusterLoadState::Loading,
+        selected_namespaces: HashSet::new(),
+        selected_api_resource: None,
+        resource_navigation: ResourceNavigation::default(),
+        custom_resource_columns: BTreeMap::new(),
+        scalable_api_resources: BTreeSet::new(),
+        resource_cache: HashMap::new(),
+        helm_release_cache: HashMap::new(),
+        active_watchers: HashSet::new(),
+        pod_metrics_api_available: false,
+        pod_metrics: HashMap::new(),
+        active_pod_metrics: HashSet::new(),
+        node_metrics_api_available: false,
+        node_metrics: NodeMetricsState::default(),
+        node_metrics_active: false,
+        resource_searches: HashMap::new(),
+        resource_selections: HashMap::new(),
+        next_bulk_delete_id: 0,
+        resource_detail_panel: None,
+        next_detail_generation: 0,
+        next_data_save_request_id: 0,
+        pending_delete: None,
+        pending_bulk_delete: None,
+        bulk_delete_progress: None,
+        bulk_delete_error: None,
+        pending_force_delete: None,
+        force_delete_error: None,
+        pending_deployment_restart: None,
+        deployment_restart_error: None,
+        pending_cron_job_run: None,
+        cron_job_run_error: None,
+        pending_scale: None,
+        scale_error: None,
+    }
+}
+
+impl WorkerResult for crate::worker::ManagedClusterDiscoveryUpdated {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        ui.managed_cluster_discovery.tools = self.tools;
+        ui.managed_cluster_discovery.aks_clusters = self.aks_clusters;
+        ui.managed_cluster_discovery.tailscale_clusters = self.tailscale_clusters;
+        ui.managed_cluster_discovery.azure_error = self.azure_error;
+        ui.managed_cluster_discovery.azure_warning = self.azure_warning;
+        ui.managed_cluster_discovery.tailscale_error = self.tailscale_error;
+        ui.managed_cluster_discovery.importing = None;
+        ui.managed_cluster_discovery.loading = false;
+        ui.managed_cluster_discovery.error = None;
+    }
+}
+
+impl WorkerResult for crate::worker::ManagedClusterImported {
+    fn apply(self, ui: &mut UiState, commands: &mut Vec<WorkerCommandBox>) {
+        ui.managed_cluster_discovery.importing = None;
+        ui.managed_cluster_discovery.loading = true;
+        ui.managed_cluster_discovery.error = None;
+        commands.push(Box::new(crate::worker::LoadImportedClusters));
+    }
+}
+
+impl WorkerResult for crate::worker::ManagedClusterDiscoveryFailed {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        ui.managed_cluster_discovery.loading = false;
+        ui.managed_cluster_discovery.importing = None;
+        ui.managed_cluster_discovery.error = Some(self.error);
     }
 }
 
@@ -2518,6 +2616,80 @@ mod tests {
                 .downcast_ref::<ConnectToCluster>()
                 .is_some_and(|command| command.cluster_key == 2 && command.cluster == "prod")
         ));
+    }
+
+    #[test]
+    fn managed_cluster_import_adds_kubeconfig_context_without_disrupting_a_cluster() {
+        let mut state = UiState::default();
+        let mut commands = Vec::new();
+        state.managed_cluster_discovery.importing = Some(ManagedClusterImport::Tailscale {
+            host_name: "api-proxy".into(),
+        });
+
+        ManagedClusterImported.apply(&mut state, &mut commands);
+
+        assert!(state.managed_cluster_discovery.importing.is_none());
+        assert!(state.managed_cluster_discovery.loading);
+        assert!(state.managed_cluster_discovery.error.is_none());
+        assert!(matches!(
+            commands.as_slice(),
+            [reload] if reload.as_ref().as_any().is::<LoadImportedClusters>()
+        ));
+
+        commands.clear();
+        let existing_cluster = Cluster {
+            name: "existing".into(),
+            is_current: true,
+        };
+        KubernetesClustersUpdated(vec![existing_cluster.clone()]).apply(&mut state, &mut commands);
+        commands.clear();
+        let existing_key = state
+            .selected_cluster
+            .expect("existing cluster is selected");
+        ImportedKubernetesClusters(vec![
+            existing_cluster,
+            Cluster {
+                name: "imported".into(),
+                is_current: true,
+            },
+        ])
+        .apply(&mut state, &mut commands);
+
+        assert_eq!(state.selected_cluster, Some(existing_key));
+        assert_eq!(state.clusters.len(), 2);
+        assert!(
+            state
+                .clusters
+                .values()
+                .any(|cluster| cluster.name == "imported")
+        );
+        assert!(matches!(
+            commands.as_slice(),
+            [refresh] if refresh.as_ref().as_any().is::<LoadManagedClusterDiscovery>()
+        ));
+    }
+
+    #[test]
+    fn managed_cluster_discovery_failure_clears_pending_import() {
+        let mut state = UiState::default();
+        let mut commands = Vec::new();
+        state.managed_cluster_discovery.loading = true;
+        state.managed_cluster_discovery.importing = Some(ManagedClusterImport::Tailscale {
+            host_name: "api-proxy".into(),
+        });
+
+        ManagedClusterDiscoveryFailed {
+            error: "Tailscale is not logged in".into(),
+        }
+        .apply(&mut state, &mut commands);
+
+        assert!(state.managed_cluster_discovery.importing.is_none());
+        assert_eq!(
+            state.managed_cluster_discovery.error.as_deref(),
+            Some("Tailscale is not logged in")
+        );
+        assert!(!state.managed_cluster_discovery.loading);
+        assert!(commands.is_empty());
     }
 
     #[test]

@@ -78,13 +78,31 @@ echo "RMSE:     $(metric RMSE)"
 echo "pixels above 2%: $(changed_pixels 2%)"
 echo "pixels above 5%: $(changed_pixels 5%)"
 echo "regions (MAE):"
-if [[ "$oracle" == *"inspector_details"* ]]; then
+if [[ "$oracle" == *"cluster-discovery-blade"* ]]; then
+    region_mae header 0 0 744 156
+    region_mae azure 0 156 744 468
+    region_mae warning 0 624 744 70
+    region_mae tailscale 0 694 744 314
+    echo "surface samples:"
+    sample header 400 80
+    sample azure 400 300
+    sample warning 400 650
+    sample tailscale 400 820
+elif [[ "$oracle" == *"inspector_details"* ]]; then
     region_mae properties 24 96 694 800
     region_mae detail-tables 744 96 744 800
     echo "surface samples:"
     sample canvas 20 20
     sample properties 100 200
     sample detail-tables 900 200
+elif [[ "$oracle" == *"settings-home-blade"* ]]; then
+    region_mae header 0 0 744 156
+    region_mae configuration 0 156 744 352
+    region_mae empty-canvas 0 508 744 500
+    echo "surface samples:"
+    sample header 400 80
+    sample configuration 400 280
+    sample empty-canvas 400 800
 else
     region_mae rail 0 0 68 1024
     region_mae navigation 68 0 292 1024

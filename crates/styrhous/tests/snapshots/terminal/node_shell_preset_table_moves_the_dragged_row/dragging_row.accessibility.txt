@@ -630,8 +630,8 @@ Window state=[focused] rect=<none>
                 GenericContainer rect=<none>
                   Button name="Forward" state=[disabled] rect=(x=849.0 y=35.0 width=32.0 height=32.0 center_x=865.0 center_y=51.0)
               GenericContainer rect=<none>
-                Label value="Settings" rect=(x=917.0 y=39.0 width=77.1 height=24.0 center_x=955.5 center_y=51.0)
-                  TextRun value="Settings" rect=(x=917.0 y=39.0 width=77.1 height=24.0 center_x=955.5 center_y=51.0)
+                Label value="Application settings" rect=(x=917.0 y=39.0 width=186.4 height=24.0 center_x=1010.2 center_y=51.0)
+                  TextRun value="Application settings" rect=(x=917.0 y=39.0 width=186.4 height=24.0 center_x=1010.2 center_y=51.0)
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   Button name="Close blade" rect=(x=1471.0 y=35.0 width=32.0 height=32.0 center_x=1487.0 center_y=51.0)

@@ -415,6 +415,10 @@ impl<'a> GlobalBladeRenderContext<'a> {
     pub(super) fn update_status(&self) -> &UpdateStatus {
         self.update_status
     }
+
+    pub(super) fn managed_cluster_discovery(&self) -> &super::state::ManagedClusterDiscoveryState {
+        &self.ui_state.managed_cluster_discovery
+    }
 }
 
 #[derive(Default)]

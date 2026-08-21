@@ -42,11 +42,18 @@ use tokio::time::MissedTickBehavior;
 use tracing::{info, warn};
 
 mod connection;
+mod discovery;
 mod dynamic_api;
 mod resource_data;
 mod resource_yaml;
 
-pub use connection::{Cluster, ClusterConnection, reload_kubeconfig};
+pub use connection::{
+    Cluster, ClusterConnection, kubeconfig_context_references, reload_kubeconfig,
+};
+pub use discovery::{
+    AvailableAksCluster, AvailableTailscaleCluster, ClusterDiscovery, ClusterDiscoveryTools,
+    add_aks_cluster, add_tailscale_cluster, discover_managed_clusters,
+};
 
 struct KubernetesApiInspector {
     client: kube::Client,

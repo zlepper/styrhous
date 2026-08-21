@@ -111,6 +111,16 @@ pub mod surface {
     pub fn card_radius() -> CornerRadius {
         crate::design::radius::surface()
     }
+
+    /// Background used for non-blocking warnings that need attention.
+    pub const fn warning_fill() -> Color32 {
+        Color32::from_rgb(254, 245, 234)
+    }
+
+    /// Border for non-blocking warning surfaces.
+    pub fn warning_border() -> Stroke {
+        Stroke::new(BORDER_WIDTH, Color32::from_rgb(253, 230, 138))
+    }
 }
 
 pub mod status {
@@ -120,6 +130,7 @@ pub mod status {
     pub const WARNING: Color32 = Color32::from_rgb(202, 138, 4);
     pub const DANGER: Color32 = Color32::from_rgb(185, 28, 28);
     pub const CRITICAL: Color32 = Color32::from_rgb(220, 38, 38);
+    pub const WARNING_TEXT: Color32 = Color32::from_rgb(180, 83, 9);
 }
 
 pub mod search {

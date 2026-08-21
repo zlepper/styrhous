@@ -2,7 +2,6 @@ TODO list:
 
 * test reduced permission handling
 * Resource details view
-* Connect to kubernetes cluster by discovering via the Az cli/AWS cli/Tailscale
 * Search
     * Add option for whole word matching only in search
     * Add option for case-sensitive matching in search

@@ -1,11 +1,12 @@
 use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::{
-    Cluster, ClusterConnection, ResourceDataUpdateRequest, ResourceDetailWatchRequest,
-    ResourceYamlValidationRequest, apply_resource_yaml, delete_resource, force_delete_resource,
-    get_resource_scale, get_resource_schema, get_resource_yaml, reload_kubeconfig,
-    restart_deployment, run_cron_job, start_cluster_connection, start_resource_watcher,
-    update_resource_data, update_resource_scale, validate_resource_yaml, watch_node_metrics,
-    watch_pod_metrics_namespace, watch_resource_detail,
+    AvailableAksCluster, AvailableTailscaleCluster, Cluster, ClusterConnection,
+    ClusterDiscoveryTools, ResourceDataUpdateRequest, ResourceDetailWatchRequest,
+    ResourceYamlValidationRequest, add_aks_cluster, add_tailscale_cluster, apply_resource_yaml,
+    delete_resource, discover_managed_clusters, force_delete_resource, get_resource_scale,
+    get_resource_schema, get_resource_yaml, reload_kubeconfig, restart_deployment, run_cron_job,
+    start_cluster_connection, start_resource_watcher, update_resource_data, update_resource_scale,
+    validate_resource_yaml, watch_node_metrics, watch_pod_metrics_namespace, watch_resource_detail,
 };
 use crate::helm_release::HelmRelease;
 use crate::helpers::ResultExt;
@@ -312,6 +313,20 @@ struct ResourceScope {
 #[derive(Debug)]
 pub(crate) struct LoadClusters;
 #[derive(Debug)]
+pub(crate) struct LoadImportedClusters;
+#[derive(Debug)]
+pub(crate) struct LoadManagedClusterDiscovery;
+#[derive(Debug)]
+pub(crate) struct AddAksCluster {
+    pub(crate) subscription_id: String,
+    pub(crate) resource_group: String,
+    pub(crate) cluster_name: String,
+}
+#[derive(Debug)]
+pub(crate) struct AddTailscaleCluster {
+    pub(crate) host_name: String,
+}
+#[derive(Debug)]
 pub(crate) struct ConnectToCluster {
     pub(crate) cluster: String,
     pub(crate) cluster_key: i32,
@@ -498,6 +513,23 @@ impl std::fmt::Debug for ValidateResourceYaml {
 
 #[derive(Debug)]
 pub(crate) struct KubernetesClustersUpdated(pub(crate) Vec<Cluster>);
+#[derive(Debug)]
+pub(crate) struct ImportedKubernetesClusters(pub(crate) Vec<Cluster>);
+#[derive(Debug)]
+pub(crate) struct ManagedClusterImported;
+#[derive(Debug)]
+pub(crate) struct ManagedClusterDiscoveryUpdated {
+    pub(crate) tools: ClusterDiscoveryTools,
+    pub(crate) aks_clusters: Vec<AvailableAksCluster>,
+    pub(crate) tailscale_clusters: Vec<AvailableTailscaleCluster>,
+    pub(crate) azure_error: Option<String>,
+    pub(crate) azure_warning: Option<String>,
+    pub(crate) tailscale_error: Option<String>,
+}
+#[derive(Debug)]
+pub(crate) struct ManagedClusterDiscoveryFailed {
+    pub(crate) error: String,
+}
 #[derive(Debug)]
 pub(crate) struct KubernetesNamespacesAdded {
     pub(crate) cluster_key: i32,
@@ -918,6 +950,78 @@ impl WorkerCommand for LoadClusters {
 
     fn serializes_session_lifecycle(&self) -> bool {
         true
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for LoadImportedClusters {
+    type Output = Result<ImportedKubernetesClusters, ManagedClusterDiscoveryFailed>;
+
+    async fn execute(self, _state: &WorkerState) -> Self::Output {
+        let KubernetesClustersUpdated(clusters) =
+            reload_kubeconfig()
+                .await
+                .map_err(|error| ManagedClusterDiscoveryFailed {
+                    error: format!(
+                        "Could not reload kubeconfig after importing the cluster: {error:#}"
+                    ),
+                })?;
+        Ok(ImportedKubernetesClusters(clusters))
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for LoadManagedClusterDiscovery {
+    type Output = Result<ManagedClusterDiscoveryUpdated, ManagedClusterDiscoveryFailed>;
+
+    async fn execute(self, _state: &WorkerState) -> Self::Output {
+        Ok(discover_managed_clusters().await?.into())
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for AddAksCluster {
+    type Output = Result<ManagedClusterImported, ManagedClusterDiscoveryFailed>;
+
+    async fn execute(self, _state: &WorkerState) -> Self::Output {
+        add_aks_cluster(
+            &self.subscription_id,
+            &self.resource_group,
+            &self.cluster_name,
+        )
+        .await?;
+        Ok(ManagedClusterImported)
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for AddTailscaleCluster {
+    type Output = Result<ManagedClusterImported, ManagedClusterDiscoveryFailed>;
+
+    async fn execute(self, _state: &WorkerState) -> Self::Output {
+        add_tailscale_cluster(&self.host_name).await?;
+        Ok(ManagedClusterImported)
+    }
+}
+
+impl From<crate::cluster_connection_manager::ClusterDiscovery> for ManagedClusterDiscoveryUpdated {
+    fn from(discovery: crate::cluster_connection_manager::ClusterDiscovery) -> Self {
+        Self {
+            tools: discovery.tools,
+            aks_clusters: discovery.aks_clusters,
+            tailscale_clusters: discovery.tailscale_clusters,
+            azure_error: discovery.azure_error,
+            azure_warning: discovery.azure_warning,
+            tailscale_error: discovery.tailscale_error,
+        }
+    }
+}
+
+impl From<anyhow::Error> for ManagedClusterDiscoveryFailed {
+    fn from(error: anyhow::Error) -> Self {
+        Self {
+            error: format!("{error:#}"),
+        }
     }
 }
 
