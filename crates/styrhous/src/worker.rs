@@ -296,6 +296,28 @@ pub struct MockWorker {
 }
 
 #[cfg(test)]
+impl MockWorker {
+    /// Queue a typed worker update for delivery on the next UI frame.
+    pub fn enqueue_result<R: WorkerResult>(&mut self, result: R) {
+        self.results.push_back(Box::new(result));
+    }
+
+    /// Return the latest command when it has the requested concrete type.
+    pub fn last_command<C: WorkerCommand>(&self) -> Option<&C> {
+        self.commands
+            .last()
+            .and_then(|command| command.as_ref().as_any().downcast_ref())
+    }
+
+    /// Iterate over the commands of one concrete type in their dispatch order.
+    pub fn commands_of<C: WorkerCommand>(&self) -> impl Iterator<Item = &C> {
+        self.commands
+            .iter()
+            .filter_map(|command| command.as_ref().as_any().downcast_ref())
+    }
+}
+
+#[cfg(test)]
 impl WorkerTrait for MockWorker {
     fn start(&mut self) {
         // No-op for mock
