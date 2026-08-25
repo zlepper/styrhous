@@ -7,6 +7,7 @@ const HEADER_HEIGHT: f32 = spacing::XL;
 
 pub(super) fn environment_variables(
     ui: &mut egui::Ui,
+    secret_reveal_scope: egui::Id,
     variables: &[crate::resource_detail::PodEnvironmentVariableDetail],
 ) {
     section_header(
@@ -27,7 +28,7 @@ pub(super) fn environment_variables(
             environment_variable_header(ui);
             ui.separator();
             for (index, variable) in variables.iter().enumerate() {
-                environment_variable_row(ui, variable);
+                environment_variable_row(ui, secret_reveal_scope, variable);
                 if index + 1 < variables.len() {
                     ui.separator();
                 }
@@ -53,11 +54,12 @@ pub(super) fn environment_variable_header(ui: &mut egui::Ui) {
 
 pub(super) fn environment_variable_row(
     ui: &mut egui::Ui,
+    secret_reveal_scope: egui::Id,
     variable: &crate::resource_detail::PodEnvironmentVariableDetail,
 ) {
     environment_variable_columns(ui, |ui, text_column_width| {
         environment_variable_text_cell(ui, text_column_width, &variable.name, false, ROW_HEIGHT);
-        environment_variable_value_cell(ui, text_column_width, variable);
+        environment_variable_value_cell(ui, text_column_width, secret_reveal_scope, variable);
         environment_variable_source_cell(ui, variable);
     });
 }
@@ -113,13 +115,15 @@ fn environment_variable_source_header(ui: &mut egui::Ui) {
 pub(super) fn environment_variable_value_cell(
     ui: &mut egui::Ui,
     width: f32,
+    secret_reveal_scope: egui::Id,
     variable: &crate::resource_detail::PodEnvironmentVariableDetail,
 ) {
     let secret = matches!(
         variable.source,
         crate::resource_detail::PodEnvironmentVariableSource::SecretKey { .. }
     );
-    let revealed = secret && environment_variable_secret_revealed(ui, variable);
+    let revealed =
+        secret && environment_variable_secret_revealed(ui, secret_reveal_scope, variable);
     let value = if secret && !revealed {
         "••••••"
     } else {
@@ -137,7 +141,7 @@ pub(super) fn environment_variable_value_cell(
                     if response.on_hover_text(action).clicked() {
                         ui.data_mut(|data| {
                             data.insert_temp(
-                                environment_variable_secret_id(ui, variable),
+                                environment_variable_secret_id(secret_reveal_scope, variable),
                                 !revealed,
                             )
                         });
@@ -201,19 +205,23 @@ fn environment_variable_source_icon(
 
 pub(super) fn environment_variable_secret_revealed(
     ui: &egui::Ui,
+    secret_reveal_scope: egui::Id,
     variable: &crate::resource_detail::PodEnvironmentVariableDetail,
 ) -> bool {
     ui.data(|data| {
-        data.get_temp::<bool>(environment_variable_secret_id(ui, variable))
-            .unwrap_or(false)
+        data.get_temp::<bool>(environment_variable_secret_id(
+            secret_reveal_scope,
+            variable,
+        ))
+        .unwrap_or(false)
     })
 }
 
 pub(super) fn environment_variable_secret_id(
-    _ui: &egui::Ui,
+    secret_reveal_scope: egui::Id,
     variable: &crate::resource_detail::PodEnvironmentVariableDetail,
 ) -> egui::Id {
-    egui::Id::new((
+    secret_reveal_scope.with((
         "environment-variable-secret",
         &variable.name,
         environment_variable_source_label(variable),

@@ -259,3 +259,73 @@ fn environment_variable_resolution_expands_config_map_and_secret_imports() {
         PodEnvironmentVariableSource::SecretKey { .. }
     ));
 }
+
+#[test]
+fn environment_variable_resolution_applies_kubernetes_precedence() {
+    let config_maps = BTreeMap::from([
+        (
+            "defaults".to_owned(),
+            ConfigMap {
+                data: Some(BTreeMap::from([
+                    ("LOG_LEVEL".to_owned(), "info".to_owned()),
+                    ("PORT".to_owned(), "3000".to_owned()),
+                ])),
+                ..Default::default()
+            },
+        ),
+        (
+            "overrides".to_owned(),
+            ConfigMap {
+                data: Some(BTreeMap::from([("PORT".to_owned(), "4000".to_owned())])),
+                ..Default::default()
+            },
+        ),
+    ]);
+    let variables = vec![
+        PodEnvironmentVariableDetail {
+            name: "Import ConfigMap defaults".to_owned(),
+            value: None,
+            source: PodEnvironmentVariableSource::ConfigMapImport {
+                name: "defaults".to_owned(),
+                prefix: String::new(),
+                optional: false,
+            },
+        },
+        PodEnvironmentVariableDetail {
+            name: "Import ConfigMap overrides".to_owned(),
+            value: None,
+            source: PodEnvironmentVariableSource::ConfigMapImport {
+                name: "overrides".to_owned(),
+                prefix: String::new(),
+                optional: false,
+            },
+        },
+        PodEnvironmentVariableDetail {
+            name: "URL".to_owned(),
+            value: Some("http://$(PORT)".to_owned()),
+            source: PodEnvironmentVariableSource::Literal,
+        },
+        PodEnvironmentVariableDetail {
+            name: "PORT".to_owned(),
+            value: Some("8080".to_owned()),
+            source: PodEnvironmentVariableSource::Literal,
+        },
+    ];
+
+    let resolved = resolve_environment_variables(variables, &config_maps, &BTreeMap::new());
+
+    assert_eq!(
+        resolved
+            .iter()
+            .filter(|variable| variable.name == "PORT")
+            .map(|variable| variable.value.as_deref())
+            .collect::<Vec<_>>(),
+        vec![Some("8080")]
+    );
+    assert!(resolved.iter().any(|variable| {
+        variable.name == "LOG_LEVEL" && variable.value.as_deref() == Some("info")
+    }));
+    assert!(resolved.iter().any(|variable| {
+        variable.name == "URL" && variable.value.as_deref() == Some("http://4000")
+    }));
+}
