@@ -474,6 +474,54 @@ mod tests {
     }
 
     #[test]
+    fn environment_variable_secret_reveal_state_is_scoped_to_its_ui() {
+        let first_variables = vec![crate::resource_detail::PodEnvironmentVariableDetail {
+            name: "DATABASE_PASSWORD".into(),
+            value: Some("first-secret".into()),
+            source: crate::resource_detail::PodEnvironmentVariableSource::SecretKey {
+                name: "database".into(),
+                key: "password".into(),
+                optional: false,
+            },
+        }];
+        let second_variables = vec![crate::resource_detail::PodEnvironmentVariableDetail {
+            name: "DATABASE_PASSWORD".into(),
+            value: Some("second-secret".into()),
+            source: crate::resource_detail::PodEnvironmentVariableSource::SecretKey {
+                name: "database".into(),
+                key: "password".into(),
+                optional: false,
+            },
+        }];
+        let mut harness = Harness::new_ui(move |ui| {
+            ui.push_id("first-resource", |ui| {
+                let secret_reveal_scope =
+                    ui.make_persistent_id(("environment-variable-secret-scope", "app"));
+                environment_variables(ui, secret_reveal_scope, &first_variables);
+            });
+            ui.push_id("second-resource", |ui| {
+                let secret_reveal_scope =
+                    ui.make_persistent_id(("environment-variable-secret-scope", "app"));
+                environment_variables(ui, secret_reveal_scope, &second_variables);
+            });
+        });
+        setup_egui(&mut harness);
+        harness.run();
+
+        assert!(harness.query_by_label("first-secret").is_none());
+        assert!(harness.query_by_label("second-secret").is_none());
+        harness
+            .get_all_by_label("Reveal")
+            .next()
+            .expect("the first secret should be revealable")
+            .click();
+        harness.run();
+
+        harness.get_by_label("first-secret");
+        assert!(harness.query_by_label("second-secret").is_none());
+    }
+
+    #[test]
     fn environment_variables_use_compact_source_icons_and_truncate_long_text() {
         let variables = vec![
             crate::resource_detail::PodEnvironmentVariableDetail {
@@ -542,7 +590,11 @@ mod tests {
         ];
         let mut harness = Harness::new_ui(move |ui| {
             ui.set_max_width(560.0);
-            environment_variables(ui, &variables);
+            environment_variables(
+                ui,
+                ui.make_persistent_id("test-environment-variable-scope"),
+                &variables,
+            );
         });
         setup_egui(&mut harness);
         harness.run();

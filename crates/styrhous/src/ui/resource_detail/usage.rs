@@ -114,7 +114,13 @@ pub(super) fn show_pod_detail(ui: &mut egui::Ui, pod: &PodDetail, usage: PodUsag
                 }
                 if !container.environment_variables.is_empty() {
                     ui.add_space(10.0);
-                    environment_variables(ui, &container.environment_variables);
+                    let secret_reveal_scope = ui
+                        .make_persistent_id(("environment-variable-secret-scope", &container.name));
+                    environment_variables(
+                        ui,
+                        secret_reveal_scope,
+                        &container.environment_variables,
+                    );
                 }
                 if let Some(reason) = &container.reason {
                     InspectorDetails::show_properties(

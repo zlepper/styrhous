@@ -233,13 +233,35 @@ pub(crate) async fn resolve_pod_environment_variables(
     let secrets = fetch_secrets(client, namespace, secret_names).await;
     for container in &mut pod.containers {
         let variables = std::mem::take(&mut container.environment_variables);
-        let mut variables = variables
-            .into_iter()
-            .flat_map(|variable| resolve_environment_variable(variable, &config_maps, &secrets))
-            .collect::<Vec<_>>();
-        expand_environment_variable_references(&mut variables);
-        container.environment_variables = variables;
+        container.environment_variables =
+            resolve_environment_variables(variables, &config_maps, &secrets);
     }
+}
+
+pub(crate) fn resolve_environment_variables(
+    variables: Vec<PodEnvironmentVariableDetail>,
+    config_maps: &BTreeMap<String, ConfigMap>,
+    secrets: &BTreeMap<String, Secret>,
+) -> Vec<PodEnvironmentVariableDetail> {
+    let mut variables = variables
+        .into_iter()
+        .flat_map(|variable| resolve_environment_variable(variable, config_maps, secrets))
+        .collect::<Vec<_>>();
+    expand_environment_variable_references(&mut variables);
+    retain_effective_environment_variables(variables)
+}
+
+fn retain_effective_environment_variables(
+    variables: Vec<PodEnvironmentVariableDetail>,
+) -> Vec<PodEnvironmentVariableDetail> {
+    let mut names = BTreeSet::new();
+    let mut effective = variables
+        .into_iter()
+        .rev()
+        .filter(|variable| names.insert(variable.name.clone()))
+        .collect::<Vec<_>>();
+    effective.reverse();
+    effective
 }
 
 pub(crate) async fn fetch_config_maps(
