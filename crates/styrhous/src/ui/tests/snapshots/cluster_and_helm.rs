@@ -209,7 +209,7 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
     harness.run();
     harness.get_by_label("Cluster-wide");
     harness.get_by_label("Open details for kind-control-plane");
-    harness.get_by_label("500m");
+    harness.get_by_label("0.500");
     harness.get_by_label("1Gi");
     harness.ui_harness(
         "resource_tables/cluster_scoped_resources_load_once_without_a_namespace_selection/node_metrics",

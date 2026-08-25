@@ -17,7 +17,7 @@ use crate::api_resource::ApiResource;
 use crate::helm_release::HelmRelease;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
-use crate::pod_metrics::{format_cpu, format_memory};
+use crate::pod_metrics::{format_cpu_cores, format_memory};
 use crate::resource_catalog::ResourceNavigation;
 use crate::resource_handlers::table_definition;
 use crate::resource_table::{

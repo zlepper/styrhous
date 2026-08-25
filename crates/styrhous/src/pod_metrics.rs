@@ -12,6 +12,7 @@ pub(crate) const POD_METRICS_POLL_INTERVAL: std::time::Duration =
     std::time::Duration::from_secs(15);
 /// The bounded period retained for compact inspector charts.
 pub(crate) const POD_USAGE_HISTORY_WINDOW: time::Duration = time::Duration::minutes(10);
+const NANOCORES_PER_CORE: i64 = 1_000_000_000;
 
 /// A normalized current resource-use sample. CPU is nanocores and memory is bytes so the
 /// presentation layer can sort and aggregate without depending on quantity spelling.
@@ -192,13 +193,17 @@ fn scaled_number(number: &str, multiplier: f64, original: &str) -> Result<i64> {
 }
 
 pub(crate) fn format_cpu(cpu_nanocores: i64) -> String {
-    if cpu_nanocores >= 1_000_000_000 {
-        format_decimal(cpu_nanocores as f64 / 1_000_000_000.0, "")
+    if cpu_nanocores >= NANOCORES_PER_CORE {
+        format_decimal(cpu_nanocores as f64 / NANOCORES_PER_CORE as f64, "")
     } else if cpu_nanocores >= 1_000_000 {
         format_decimal(cpu_nanocores as f64 / 1_000_000.0, "m")
     } else {
         format_decimal(cpu_nanocores as f64 / 1_000.0, "µ")
     }
+}
+
+pub(crate) fn format_cpu_cores(cpu_nanocores: i64) -> String {
+    format!("{:.3}", cpu_nanocores as f64 / NANOCORES_PER_CORE as f64)
 }
 
 pub(crate) fn format_memory(memory_bytes: i64) -> String {
@@ -247,6 +252,14 @@ mod tests {
         assert_eq!(usage.memory_bytes, 32 * 1024 * 1024 + 512 * 1024);
         assert_eq!(format_cpu(usage.cpu_nanocores), "12.5m");
         assert_eq!(format_memory(usage.memory_bytes), "32.5Mi");
+    }
+
+    #[test]
+    fn formats_cpu_cores_with_fixed_three_decimal_precision() {
+        assert_eq!(format_cpu_cores(125_000_000), "0.125");
+        assert_eq!(format_cpu_cores(1_000_000_000), "1.000");
+        assert_eq!(format_cpu_cores(12_500_000_000), "12.500");
+        assert_eq!(format_cpu_cores(999_500_000), "1.000");
     }
 
     #[test]

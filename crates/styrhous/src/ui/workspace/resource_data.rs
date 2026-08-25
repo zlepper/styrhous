@@ -73,7 +73,7 @@ pub(super) fn decorate_usage_rows(
                 resource.cells.insert(
                     CPU_COLUMN.into(),
                     CellValue::Usage {
-                        label: format_cpu(usage.cpu_nanocores),
+                        label: format_cpu_cores(usage.cpu_nanocores),
                         value: usage.cpu_nanocores,
                     },
                 );
@@ -104,7 +104,7 @@ pub(super) fn decorate_usage_rows(
             resource.cells.insert(
                 CPU_COLUMN.into(),
                 CellValue::Usage {
-                    label: format_cpu(usage.cpu_nanocores),
+                    label: format_cpu_cores(usage.cpu_nanocores),
                     value: usage.cpu_nanocores,
                 },
             );
