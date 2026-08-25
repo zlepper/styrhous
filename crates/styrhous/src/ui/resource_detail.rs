@@ -30,7 +30,7 @@ use crate::worker::{
     UpdateResourceData, WorkerCommandBox, WorkerResult,
 };
 use components::colors::{WHITE, gray, indigo};
-use components::design::{radius, spacing, status, typography};
+use components::design::{radius, spacing, status, surface, typography};
 use components::{
     ButtonSize, DetailCell, DetailColumn, DetailRow, DetailTableCell, DetailTableRow, DetailTone,
     DetailValue, InspectorDetails, MoreButton, PointingHand, TableRowBuilder, TailwindButton,
@@ -374,6 +374,10 @@ impl GlobalBladeEffect for ResourceDetailEffect {
 #[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
+    use components::test_support::{UiHarnessSnapshot, setup_egui};
+    use egui::accesskit::Role;
+    use egui_kittest::Harness;
+    use egui_kittest::kittest::Queryable;
 
     fn container(requests: PodResourceThresholds) -> PodContainerDetail {
         PodContainerDetail {
@@ -461,6 +465,132 @@ mod tests {
         assert_eq!(condition_tone("True"), DetailTone::Success);
         assert_eq!(condition_tone("False"), DetailTone::Neutral);
         assert_eq!(condition_tone("Unknown"), DetailTone::Warning);
+    }
+
+    #[test]
+    fn environment_variable_count_uses_the_singular_form() {
+        assert_eq!(environment_variable_count_label(1), "1 variable");
+        assert_eq!(environment_variable_count_label(2), "2 variables");
+    }
+
+    #[test]
+    fn environment_variables_use_compact_source_icons_and_truncate_long_text() {
+        let variables = vec![
+            crate::resource_detail::PodEnvironmentVariableDetail {
+                name: "APPLICATION_CONFIGURATION_WITH_A_LONG_NAME".into(),
+                value: Some(
+                    "https://api.example.test/v1/very/long/environment/variable/value".into(),
+                ),
+                source: crate::resource_detail::PodEnvironmentVariableSource::Literal,
+            },
+            crate::resource_detail::PodEnvironmentVariableDetail {
+                name: "CONFIGURED_API_URL".into(),
+                value: Some("https://api.example.test/v1".into()),
+                source: crate::resource_detail::PodEnvironmentVariableSource::ConfigMapKey {
+                    name: "application-configuration".into(),
+                    key: "api-url".into(),
+                    optional: false,
+                },
+            },
+            crate::resource_detail::PodEnvironmentVariableDetail {
+                name: "DATABASE_PASSWORD".into(),
+                value: Some("not-shown".into()),
+                source: crate::resource_detail::PodEnvironmentVariableSource::SecretKey {
+                    name: "application-database".into(),
+                    key: "password".into(),
+                    optional: false,
+                },
+            },
+            crate::resource_detail::PodEnvironmentVariableDetail {
+                name: "IMPORTED_CONFIGURATION".into(),
+                value: Some("loaded".into()),
+                source: crate::resource_detail::PodEnvironmentVariableSource::ConfigMapImport {
+                    name: "application-defaults".into(),
+                    prefix: "CONFIG_".into(),
+                    optional: false,
+                },
+            },
+            crate::resource_detail::PodEnvironmentVariableDetail {
+                name: "IMPORTED_SECRET".into(),
+                value: None,
+                source: crate::resource_detail::PodEnvironmentVariableSource::SecretImport {
+                    name: "application-secrets".into(),
+                    prefix: "SECRET_".into(),
+                    optional: true,
+                },
+            },
+            crate::resource_detail::PodEnvironmentVariableDetail {
+                name: "POD_NAME".into(),
+                value: Some("api-7f8c9d".into()),
+                source: crate::resource_detail::PodEnvironmentVariableSource::Field {
+                    path: "metadata.name".into(),
+                },
+            },
+            crate::resource_detail::PodEnvironmentVariableDetail {
+                name: "CPU_LIMIT".into(),
+                value: Some("500m".into()),
+                source: crate::resource_detail::PodEnvironmentVariableSource::ResourceField {
+                    resource: "limits.cpu".into(),
+                    container_name: Some("api".into()),
+                },
+            },
+            crate::resource_detail::PodEnvironmentVariableDetail {
+                name: "UNKNOWN_CONFIGURATION".into(),
+                value: None,
+                source: crate::resource_detail::PodEnvironmentVariableSource::Unspecified,
+            },
+        ];
+        let mut harness = Harness::new_ui(move |ui| {
+            ui.set_max_width(560.0);
+            environment_variables(ui, &variables);
+        });
+        setup_egui(&mut harness);
+        harness.run();
+
+        harness.get_by_label("8 variables");
+        let config_map_source = "ConfigMap application-configuration/api-url · resolved";
+        harness.get_by_role_and_label(Role::Image, config_map_source);
+        harness.get_by_role_and_label(
+            Role::Image,
+            "ConfigMap import application-defaults · resolved",
+        );
+        harness.get_by_role_and_label(
+            Role::Image,
+            "Secret import application-secrets (optional) · unavailable",
+        );
+        assert!(
+            harness
+                .query_by_label("Copy environment variable source")
+                .is_none(),
+            "source descriptions should not remain clickable copy controls"
+        );
+        harness.ui_harness(
+            "resource_detail/environment_variables_use_compact_source_icons_and_truncate_long_text/default",
+        );
+
+        harness
+            .get_by_role_and_label(Role::Image, config_map_source)
+            .hover();
+        harness.run();
+        harness.ui_harness(
+            "resource_detail/environment_variables_use_compact_source_icons_and_truncate_long_text/source_tooltip",
+        );
+
+        harness
+            .get_by_label("https://api.example.test/v1/very/long/environment/variable/value")
+            .hover();
+        harness.run();
+        harness.ui_harness(
+            "resource_detail/environment_variables_use_compact_source_icons_and_truncate_long_text/value_tooltip",
+        );
+
+        harness
+            .get_by_label("APPLICATION_CONFIGURATION_WITH_A_LONG_NAME")
+            .hover();
+        harness.run();
+        harness.ui_harness(
+            "resource_detail/environment_variables_use_compact_source_icons_and_truncate_long_text/key_tooltip",
+        );
     }
 }
 

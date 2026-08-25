@@ -203,7 +203,9 @@ fn pod_resource_detail_inspector_snapshot() {
         )
         .max_failed_pixels(100),
     );
-    harness.get_by_label("Reveal").click_accesskit();
+    harness.get_by_label("Reveal").scroll_to_me();
+    harness.run();
+    harness.get_by_label("Reveal").click();
     harness.run();
     harness.get_by_label("test-token");
 }

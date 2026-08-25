@@ -855,162 +855,147 @@ Window state=[focused] rect=<none>
                       Label value="53/UDP" rect=(x=772.0 y=1011.0 width=47.0 height=15.0 center_x=795.5 center_y=1018.5)
                         TextRun value="53/UDP" rect=(x=772.0 y=1011.0 width=47.0 height=15.0 center_x=795.5 center_y=1018.5)
                       Button name="Copy Ports" rect=(x=827.0 y=1011.0 width=14.0 height=14.0 center_x=834.0 center_y=1018.0)
-              Label value="Environment variables" rect=(x=766.0 y=1040.0 width=125.6 height=15.0 center_x=828.8 center_y=1047.5)
+              GenericContainer rect=<none>
+                Label value="Environment variables" rect=(x=766.0 y=1040.0 width=167.4 height=19.0 center_x=849.7 center_y=1049.5)
+                Label value="4 variables" rect=(x=941.4 y=1041.0 width=72.8 height=17.0 center_x=977.8 center_y=1049.5)
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Label value="Key" rect=(x=782.0 y=1078.0 width=197.3 height=15.0 center_x=880.7 center_y=1085.5)
+                    Label value="Key" rect=(x=783.0 y=1089.5 width=21.1 height=15.0 center_x=793.5 center_y=1097.0)
+                  GenericContainer rect=<none>
+                    Label value="Value" rect=(x=1068.0 y=1089.5 width=31.4 height=15.0 center_x=1083.7 center_y=1097.0)
+                  GenericContainer rect=<none>
+                    Label value="Source" rect=(x=1353.1 y=1089.5 width=64.0 height=15.0 center_x=1385.1 center_y=1097.0)
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Label value="Value" rect=(x=1001.3 y=1078.0 width=197.3 height=15.0 center_x=1100.0 center_y=1085.5)
-                GenericContainer rect=<none>
-                  GenericContainer rect=<none>
-                    Label value="Source" rect=(x=1220.7 y=1078.0 width=197.3 height=15.0 center_x=1319.4 center_y=1085.5)
-                GenericContainer rect=<none>
-                  GenericContainer rect=<none>
-                    Label value="LOG_LEVEL" rect=(x=782.0 y=1108.0 width=197.3 height=15.0 center_x=880.7 center_y=1115.5)
-                GenericContainer rect=<none>
+                    Label value="LOG_LEVEL" rect=(x=783.0 y=1129.5 width=70.4 height=15.0 center_x=818.2 center_y=1137.0)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        Label value="info" rect=(x=1001.3 y=1108.0 width=31.3 height=15.0 center_x=1017.0 center_y=1115.5)
+                        Label value="info" rect=(x=1068.0 y=1129.5 width=31.3 height=15.0 center_x=1083.7 center_y=1137.0)
+                  GenericContainer rect=<none>
+                    Image name="Literal" rect=(x=1353.1 y=1129.0 width=64.0 height=16.0 center_x=1385.1 center_y=1137.0)
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    GenericContainer rect=<none>
-                      Button name="Copy environment variable source" value="Literal" rect=(x=1220.7 y=1108.0 width=34.7 height=18.0 center_x=1238.0 center_y=1117.0)
-                GenericContainer rect=<none>
-                  GenericContainer rect=<none>
-                    Label value="KUBERNETES_SERVICE_HOST" rect=(x=782.0 y=1141.0 width=197.3 height=15.0 center_x=880.7 center_y=1148.5)
-                GenericContainer rect=<none>
+                    Label value="KUBERNETES_SERVICE_HOST" rect=(x=783.0 y=1173.5 width=180.0 height=15.0 center_x=873.0 center_y=1181.0)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        Label value="10.244.0.3" rect=(x=1001.3 y=1141.0 width=78.3 height=15.0 center_x=1040.5 center_y=1148.5)
+                        Label value="10.244.0.3" rect=(x=1068.0 y=1173.5 width=78.3 height=15.0 center_x=1107.2 center_y=1181.0)
+                  GenericContainer rect=<none>
+                    Image name="Field status.podIP · resolved" rect=(x=1353.1 y=1173.0 width=64.0 height=16.0 center_x=1385.1 center_y=1181.0)
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    GenericContainer rect=<none>
-                      Button name="Copy environment variable source" value="Field status.podIP · resolved" rect=(x=1220.7 y=1141.0 width=160.1 height=18.0 center_x=1300.8 center_y=1150.0)
-                GenericContainer rect=<none>
-                  GenericContainer rect=<none>
-                    Label value="DNS_LOG_FORMAT" rect=(x=782.0 y=1174.0 width=197.3 height=15.0 center_x=880.7 center_y=1181.5)
-                GenericContainer rect=<none>
+                    Label value="DNS_LOG_FORMAT" rect=(x=783.0 y=1217.5 width=109.6 height=15.0 center_x=837.8 center_y=1225.0)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        Label value="json" rect=(x=1001.3 y=1174.0 width=31.3 height=15.0 center_x=1017.0 center_y=1181.5)
+                        Label value="json" rect=(x=1068.0 y=1217.5 width=31.3 height=15.0 center_x=1083.7 center_y=1225.0)
+                  GenericContainer rect=<none>
+                    Image name="ConfigMap coredns-settings/log-format · resolved" rect=(x=1353.1 y=1217.0 width=64.0 height=16.0 center_x=1385.1 center_y=1225.0)
                 GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="API_TOKEN" rect=(x=783.0 y=1261.5 width=70.4 height=15.0 center_x=818.2 center_y=1269.0)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
-                      Button name="Copy environment variable source" value="ConfigMap coredns-settings/log-format · resolved" rect=(x=1220.7 y=1174.0 width=171.4 height=48.0 center_x=1306.4 center_y=1198.0)
-                      Unknown rect=(x=1220.7 y=1192.0 width=171.4 height=15.0 center_x=1306.4 center_y=1199.5)
-                      Unknown rect=(x=1220.7 y=1207.0 width=48.3 height=15.0 center_x=1244.9 center_y=1214.5)
-                GenericContainer rect=<none>
-                  GenericContainer rect=<none>
-                    Label value="API_TOKEN" rect=(x=782.0 y=1237.0 width=197.3 height=15.0 center_x=880.7 center_y=1244.5)
-                GenericContainer rect=<none>
-                  GenericContainer rect=<none>
-                    GenericContainer rect=<none>
-                      Button name="Reveal" rect=(x=1184.7 y=1237.0 width=14.0 height=18.0 center_x=1191.7 center_y=1246.0)
+                      Button name="Reveal" rect=(x=1331.1 y=1260.0 width=14.0 height=18.0 center_x=1338.1 center_y=1269.0)
                       GenericContainer rect=<none>
-                        Label value="••••••" rect=(x=1001.3 y=1237.0 width=47.0 height=15.0 center_x=1024.8 center_y=1244.5)
+                        Label value="••••••" rect=(x=1068.0 y=1261.5 width=47.0 height=15.0 center_x=1091.5 center_y=1269.0)
+                  GenericContainer rect=<none>
+                    Image name="Secret api-credentials/token · resolved" rect=(x=1353.1 y=1261.0 width=64.0 height=16.0 center_x=1385.1 center_y=1269.0)
+            GenericContainer rect=<none>
+              Label value="Volumes" rect=(x=753.0 y=1322.0 width=64.9 height=19.0 center_x=785.5 center_y=1331.5)
+            GenericContainer rect=<none>
+              Label value="⌄   config-volume" rect=(x=766.0 y=1363.0 width=119.1 height=17.0 center_x=825.5 center_y=1371.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Label value="Type" rect=(x=766.0 y=1408.0 width=28.1 height=15.0 center_x=780.0 center_y=1415.5)
+                  Label value="ConfigMap" rect=(x=766.0 y=1426.0 width=62.7 height=15.0 center_x=797.3 center_y=1433.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Label value="Source" rect=(x=991.3 y=1408.0 width=40.2 height=15.0 center_x=1011.4 center_y=1415.5)
+                  Label value="coredns" rect=(x=991.3 y=1426.0 width=46.1 height=15.0 center_x=1014.4 center_y=1433.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Label value="Read-only" rect=(x=1216.7 y=1408.0 width=58.2 height=15.0 center_x=1245.8 center_y=1415.5)
+                  Label value="false" rect=(x=1216.7 y=1426.0 width=27.2 height=15.0 center_x=1230.3 center_y=1433.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Label value="Mount path" rect=(x=766.0 y=1452.0 width=64.8 height=15.0 center_x=798.4 center_y=1459.5)
+                  Label value="/etc/coredns" rect=(x=766.0 y=1470.0 width=72.4 height=15.0 center_x=802.2 center_y=1477.5)
+            GenericContainer rect=<none>
+              Label value="⌄   kube-api-access" rect=(x=766.0 y=1526.0 width=134.9 height=17.0 center_x=833.5 center_y=1534.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Label value="Type" rect=(x=766.0 y=1571.0 width=28.1 height=15.0 center_x=780.0 center_y=1578.5)
+                  Label value="Projected" rect=(x=766.0 y=1589.0 width=54.1 height=15.0 center_x=793.0 center_y=1596.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Label value="Source" rect=(x=991.3 y=1571.0 width=40.2 height=15.0 center_x=1011.4 center_y=1578.5)
+                  Label value="kube-api-access" rect=(x=991.3 y=1589.0 width=96.2 height=15.0 center_x=1039.4 center_y=1596.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Label value="Read-only" rect=(x=1216.7 y=1571.0 width=58.2 height=15.0 center_x=1245.8 center_y=1578.5)
+                  Label value="true" rect=(x=1216.7 y=1589.0 width=22.5 height=15.0 center_x=1228.0 center_y=1596.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Label value="Mount path" rect=(x=766.0 y=1615.0 width=64.8 height=15.0 center_x=798.4 center_y=1622.5)
+                  Label value="/var/run/secrets/kubernetes.io/serviceaccount" rect=(x=766.0 y=1633.0 width=264.4 height=15.0 center_x=898.2 center_y=1640.5)
+            GenericContainer rect=<none>
+              Button name="Labels & annotations" state=[toggled=False] rect=(x=754.0 y=1681.0 width=692.1 height=40.0 center_x=1100.0 center_y=1701.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Events" rect=(x=770.0 y=1772.5 width=50.6 height=19.0 center_x=795.3 center_y=1782.0)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="Type" rect=(x=766.0 y=1826.0 width=28.1 height=15.0 center_x=780.0 center_y=1833.5)
+                  GenericContainer rect=<none>
+                    Label value="Reason" rect=(x=888.0 y=1826.0 width=42.0 height=15.0 center_x=909.0 center_y=1833.5)
+                  GenericContainer rect=<none>
+                    Label value="Message" rect=(x=1010.0 y=1826.0 width=51.6 height=15.0 center_x=1035.8 center_y=1833.5)
+                  GenericContainer rect=<none>
+                    Label value="Source" rect=(x=1238.0 y=1826.0 width=40.2 height=15.0 center_x=1258.1 center_y=1833.5)
+                  GenericContainer rect=<none>
+                    Label value="Time" rect=(x=1360.0 y=1826.0 width=28.2 height=15.0 center_x=1374.1 center_y=1833.5)
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
-                      Button name="Copy environment variable source" value="Secret api-credentials/token · resolved" rect=(x=1220.7 y=1237.0 width=170.4 height=33.0 center_x=1305.9 center_y=1253.5)
-                      Unknown rect=(x=1220.7 y=1255.0 width=48.3 height=15.0 center_x=1244.9 center_y=1262.5)
-            GenericContainer rect=<none>
-              Label value="Volumes" rect=(x=753.0 y=1314.0 width=64.9 height=19.0 center_x=785.5 center_y=1323.5)
-            GenericContainer rect=<none>
-              Label value="⌄   config-volume" rect=(x=766.0 y=1355.0 width=119.1 height=17.0 center_x=825.5 center_y=1363.5)
-              GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Label value="Type" rect=(x=766.0 y=1400.0 width=28.1 height=15.0 center_x=780.0 center_y=1407.5)
-                  Label value="ConfigMap" rect=(x=766.0 y=1418.0 width=62.7 height=15.0 center_x=797.3 center_y=1425.5)
-              GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Label value="Source" rect=(x=991.3 y=1400.0 width=40.2 height=15.0 center_x=1011.4 center_y=1407.5)
-                  Label value="coredns" rect=(x=991.3 y=1418.0 width=46.1 height=15.0 center_x=1014.4 center_y=1425.5)
-              GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Label value="Read-only" rect=(x=1216.7 y=1400.0 width=58.2 height=15.0 center_x=1245.8 center_y=1407.5)
-                  Label value="false" rect=(x=1216.7 y=1418.0 width=27.2 height=15.0 center_x=1230.3 center_y=1425.5)
-              GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Label value="Mount path" rect=(x=766.0 y=1444.0 width=64.8 height=15.0 center_x=798.4 center_y=1451.5)
-                  Label value="/etc/coredns" rect=(x=766.0 y=1462.0 width=72.4 height=15.0 center_x=802.2 center_y=1469.5)
-            GenericContainer rect=<none>
-              Label value="⌄   kube-api-access" rect=(x=766.0 y=1518.0 width=134.9 height=17.0 center_x=833.5 center_y=1526.5)
-              GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Label value="Type" rect=(x=766.0 y=1563.0 width=28.1 height=15.0 center_x=780.0 center_y=1570.5)
-                  Label value="Projected" rect=(x=766.0 y=1581.0 width=54.1 height=15.0 center_x=793.0 center_y=1588.5)
-              GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Label value="Source" rect=(x=991.3 y=1563.0 width=40.2 height=15.0 center_x=1011.4 center_y=1570.5)
-                  Label value="kube-api-access" rect=(x=991.3 y=1581.0 width=96.2 height=15.0 center_x=1039.4 center_y=1588.5)
-              GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Label value="Read-only" rect=(x=1216.7 y=1563.0 width=58.2 height=15.0 center_x=1245.8 center_y=1570.5)
-                  Label value="true" rect=(x=1216.7 y=1581.0 width=22.5 height=15.0 center_x=1228.0 center_y=1588.5)
-              GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Label value="Mount path" rect=(x=766.0 y=1607.0 width=64.8 height=15.0 center_x=798.4 center_y=1614.5)
-                  Label value="/var/run/secrets/kubernetes.io/serviceaccount" rect=(x=766.0 y=1625.0 width=264.4 height=15.0 center_x=898.2 center_y=1632.5)
-            GenericContainer rect=<none>
-              Button name="Labels & annotations" state=[toggled=False] rect=(x=754.0 y=1673.0 width=692.1 height=40.0 center_x=1100.0 center_y=1693.0)
-            GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="Events" rect=(x=770.0 y=1764.5 width=50.6 height=19.0 center_x=795.3 center_y=1774.0)
-              GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  GenericContainer rect=<none>
-                    Label value="Type" rect=(x=766.0 y=1818.0 width=28.1 height=15.0 center_x=780.0 center_y=1825.5)
-                  GenericContainer rect=<none>
-                    Label value="Reason" rect=(x=888.0 y=1818.0 width=42.0 height=15.0 center_x=909.0 center_y=1825.5)
-                  GenericContainer rect=<none>
-                    Label value="Message" rect=(x=1010.0 y=1818.0 width=51.6 height=15.0 center_x=1035.8 center_y=1825.5)
-                  GenericContainer rect=<none>
-                    Label value="Source" rect=(x=1238.0 y=1818.0 width=40.2 height=15.0 center_x=1258.1 center_y=1825.5)
-                  GenericContainer rect=<none>
-                    Label value="Time" rect=(x=1360.0 y=1818.0 width=28.2 height=15.0 center_x=1374.1 center_y=1825.5)
-                GenericContainer rect=<none>
-                  GenericContainer rect=<none>
-                    GenericContainer rect=<none>
-                      Label value="Normal" rect=(x=786.0 y=1861.0 width=41.1 height=15.0 center_x=806.5 center_y=1868.5)
+                      Label value="Normal" rect=(x=786.0 y=1869.0 width=41.1 height=15.0 center_x=806.5 center_y=1876.5)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        Label value="Started" rect=(x=893.3 y=1861.0 width=41.3 height=15.0 center_x=914.0 center_y=1868.5)
-                      Button name="Copy Reason" rect=(x=942.6 y=1861.3 width=14.0 height=14.0 center_x=949.6 center_y=1868.3)
+                        Label value="Started" rect=(x=893.3 y=1869.0 width=41.3 height=15.0 center_x=914.0 center_y=1876.5)
+                      Button name="Copy Reason" rect=(x=942.6 y=1869.3 width=14.0 height=14.0 center_x=949.6 center_y=1876.3)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        Label value="Started container coredns" rect=(x=1020.7 y=1861.0 width=147.5 height=15.0 center_x=1094.5 center_y=1868.5)
-                      Button name="Copy Message" rect=(x=1176.2 y=1861.3 width=14.0 height=14.0 center_x=1183.2 center_y=1868.3)
+                        Label value="Started container coredns" rect=(x=1020.7 y=1869.0 width=147.5 height=15.0 center_x=1094.5 center_y=1876.5)
+                      Button name="Copy Message" rect=(x=1176.2 y=1869.3 width=14.0 height=14.0 center_x=1183.2 center_y=1876.3)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        Label value="kubelet" rect=(x=1259.4 y=1861.0 width=41.8 height=15.0 center_x=1280.3 center_y=1868.5)
-                      Button name="Copy Source" rect=(x=1309.2 y=1861.3 width=14.0 height=14.0 center_x=1316.2 center_y=1868.3)
+                        Label value="kubelet" rect=(x=1259.4 y=1869.0 width=41.8 height=15.0 center_x=1280.3 center_y=1876.5)
+                      Button name="Copy Source" rect=(x=1309.2 y=1869.3 width=14.0 height=14.0 center_x=1316.2 center_y=1876.3)
                   GenericContainer rect=<none>
-                    Label value="Unknown ago" rect=(x=1386.7 y=1861.0 width=78.2 height=15.0 center_x=1425.8 center_y=1868.5)
+                    Label value="Unknown ago" rect=(x=1386.7 y=1869.0 width=78.2 height=15.0 center_x=1425.8 center_y=1876.5)
             GenericContainer rect=<none>
-              Button name="Conditions" state=[toggled=False] rect=(x=754.0 y=1926.0 width=756.1 height=40.0 center_x=1132.0 center_y=1946.0)
+              Button name="Conditions" state=[toggled=False] rect=(x=754.0 y=1934.0 width=756.1 height=40.0 center_x=1132.0 center_y=1954.0)
             GenericContainer rect=<none>
-              Button name="Owner references" state=[toggled=False] rect=(x=754.0 y=1987.0 width=756.1 height=40.0 center_x=1132.0 center_y=2007.0)
+              Button name="Owner references" state=[toggled=False] rect=(x=754.0 y=1995.0 width=756.1 height=40.0 center_x=1132.0 center_y=2015.0)
             GenericContainer rect=<none>
-              Button name="Resource configuration" state=[toggled=True] rect=(x=754.0 y=2048.0 width=756.1 height=40.0 center_x=1132.0 center_y=2068.0)
+              Button name="Resource configuration" state=[toggled=True] rect=(x=754.0 y=2056.0 width=756.1 height=40.0 center_x=1132.0 center_y=2076.0)
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Label value="Restart policy" rect=(x=766.0 y=2112.0 width=77.3 height=15.0 center_x=804.7 center_y=2119.5)
-                    Label value="Always" rect=(x=766.0 y=2130.0 width=40.7 height=15.0 center_x=786.3 center_y=2137.5)
+                    Label value="Restart policy" rect=(x=766.0 y=2120.0 width=77.3 height=15.0 center_x=804.7 center_y=2127.5)
+                    Label value="Always" rect=(x=766.0 y=2138.0 width=40.7 height=15.0 center_x=786.3 center_y=2145.5)
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Label value="Service account" rect=(x=1012.7 y=2112.0 width=92.0 height=15.0 center_x=1058.7 center_y=2119.5)
-                    Label value="coredns" rect=(x=1012.7 y=2130.0 width=46.1 height=15.0 center_x=1035.8 center_y=2137.5)
+                    Label value="Service account" rect=(x=1012.7 y=2120.0 width=92.0 height=15.0 center_x=1058.7 center_y=2127.5)
+                    Label value="coredns" rect=(x=1012.7 y=2138.0 width=46.1 height=15.0 center_x=1035.8 center_y=2145.5)
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Label value="DNS policy" rect=(x=1259.4 y=2112.0 width=62.5 height=15.0 center_x=1290.6 center_y=2119.5)
-                    Label value="ClusterFirst" rect=(x=1259.4 y=2130.0 width=65.4 height=15.0 center_x=1292.1 center_y=2137.5)
+                    Label value="DNS policy" rect=(x=1259.4 y=2120.0 width=62.5 height=15.0 center_x=1290.6 center_y=2127.5)
+                    Label value="ClusterFirst" rect=(x=1259.4 y=2138.0 width=65.4 height=15.0 center_x=1292.1 center_y=2145.5)
       ScrollBar rect=(x=1526.0 y=8.0 width=10.1 height=1008.0 center_x=1531.0 center_y=512.0)
