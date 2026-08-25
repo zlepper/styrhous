@@ -1,37 +1,53 @@
 use super::*;
 
+const SOURCE_COLUMN_WIDTH: f32 = spacing::XXL * 2.0;
+const SOURCE_ICON_SIZE: f32 = spacing::LG;
+const ROW_HEIGHT: f32 = spacing::XXL;
+const HEADER_HEIGHT: f32 = spacing::XL;
+
 pub(super) fn environment_variables(
     ui: &mut egui::Ui,
     variables: &[crate::resource_detail::PodEnvironmentVariableDetail],
 ) {
-    ui.label(
-        egui::RichText::new("Environment variables")
-            .font(typography::metadata())
-            .color(gray::_500),
+    section_header(
+        ui,
+        "Environment variables",
+        Some(environment_variable_count_label(variables.len())),
     );
-    ui.add_space(4.0);
+    ui.add_space(spacing::SM);
     egui::Frame::new()
-        .fill(gray::_100)
-        .stroke(egui::Stroke::new(1.0, gray::_200))
-        .corner_radius(radius::subtle())
+        .fill(WHITE)
+        .stroke(surface::muted_border())
+        .corner_radius(radius::surface())
         .inner_margin(egui::Margin::symmetric(
+            spacing::LG as i8,
             spacing::SM as i8,
-            (spacing::SM + 2.0) as i8,
         ))
         .show(ui, |ui| {
             environment_variable_header(ui);
-            for variable in variables {
-                ui.add_space(2.0);
+            ui.separator();
+            for (index, variable) in variables.iter().enumerate() {
                 environment_variable_row(ui, variable);
+                if index + 1 < variables.len() {
+                    ui.separator();
+                }
             }
         });
 }
 
+pub(super) fn environment_variable_count_label(count: usize) -> String {
+    if count == 1 {
+        "1 variable".to_owned()
+    } else {
+        format!("{count} variables")
+    }
+}
+
 pub(super) fn environment_variable_header(ui: &mut egui::Ui) {
-    ui.columns(3, |columns| {
-        environment_variable_cell(&mut columns[0], "Key", true);
-        environment_variable_cell(&mut columns[1], "Value", true);
-        environment_variable_cell(&mut columns[2], "Source", true);
+    environment_variable_columns(ui, |ui, text_column_width| {
+        environment_variable_text_cell(ui, text_column_width, "Key", true, HEADER_HEIGHT);
+        environment_variable_text_cell(ui, text_column_width, "Value", true, HEADER_HEIGHT);
+        environment_variable_source_header(ui);
     });
 }
 
@@ -39,35 +55,64 @@ pub(super) fn environment_variable_row(
     ui: &mut egui::Ui,
     variable: &crate::resource_detail::PodEnvironmentVariableDetail,
 ) {
-    ui.columns(3, |columns| {
-        environment_variable_cell(&mut columns[0], &variable.name, false);
-        environment_variable_value_cell(&mut columns[1], variable);
-        environment_variable_source_cell(&mut columns[2], variable);
+    environment_variable_columns(ui, |ui, text_column_width| {
+        environment_variable_text_cell(ui, text_column_width, &variable.name, false, ROW_HEIGHT);
+        environment_variable_value_cell(ui, text_column_width, variable);
+        environment_variable_source_cell(ui, variable);
     });
 }
 
-pub(super) fn environment_variable_cell(ui: &mut egui::Ui, value: &str, header: bool) {
-    let text = egui::RichText::new(value)
-        .monospace()
-        .font(typography::monospace())
-        .color(if header { gray::_600 } else { gray::_800 });
-    let text = if header { text.strong() } else { text };
-    egui::Frame::new()
-        .fill(WHITE)
-        .stroke(egui::Stroke::new(1.0, gray::_200))
-        .corner_radius(radius::subtle())
-        .inner_margin(egui::Margin::symmetric(
-            (spacing::SM - 2.0) as i8,
-            spacing::XS as i8,
-        ))
-        .show(ui, |ui| {
-            ui.set_max_width(ui.available_width());
-            ui.add(egui::Label::new(text).selectable(!header).wrap());
-        });
+fn environment_variable_columns(ui: &mut egui::Ui, add_cells: impl FnOnce(&mut egui::Ui, f32)) {
+    let gaps = ui.spacing().item_spacing.x * 2.0;
+    let text_column_width = ((ui.available_width() - SOURCE_COLUMN_WIDTH - gaps) / 2.0).max(0.0);
+    ui.horizontal(|ui| add_cells(ui, text_column_width));
+}
+
+fn environment_variable_text_cell(
+    ui: &mut egui::Ui,
+    width: f32,
+    value: &str,
+    header: bool,
+    height: f32,
+) {
+    ui.allocate_ui_with_layout(
+        egui::vec2(width, height),
+        egui::Layout::left_to_right(egui::Align::Center),
+        |ui| {
+            ui.set_min_width(ui.available_width());
+            let text = if header {
+                egui::RichText::new(value)
+                    .font(typography::metadata())
+                    .color(gray::_500)
+            } else {
+                egui::RichText::new(value)
+                    .monospace()
+                    .font(typography::monospace())
+                    .strong()
+                    .color(gray::_800)
+            };
+            ui.add(egui::Label::new(text).selectable(!header).truncate());
+        },
+    );
+}
+
+fn environment_variable_source_header(ui: &mut egui::Ui) {
+    ui.allocate_ui_with_layout(
+        egui::vec2(SOURCE_COLUMN_WIDTH, HEADER_HEIGHT),
+        egui::Layout::left_to_right(egui::Align::Center).with_main_justify(true),
+        |ui| {
+            ui.label(
+                egui::RichText::new("Source")
+                    .font(typography::metadata())
+                    .color(gray::_500),
+            );
+        },
+    );
 }
 
 pub(super) fn environment_variable_value_cell(
     ui: &mut egui::Ui,
+    width: f32,
     variable: &crate::resource_detail::PodEnvironmentVariableDetail,
 ) {
     let secret = matches!(
@@ -80,18 +125,12 @@ pub(super) fn environment_variable_value_cell(
     } else {
         variable.value.as_deref().unwrap_or("Unavailable")
     };
-    egui::Frame::new()
-        .fill(WHITE)
-        .stroke(egui::Stroke::new(1.0, gray::_200))
-        .corner_radius(radius::subtle())
-        .inner_margin(egui::Margin::symmetric(
-            (spacing::SM - 2.0) as i8,
-            spacing::XS as i8,
-        ))
-        .show(ui, |ui| {
+    ui.allocate_ui_with_layout(
+        egui::vec2(width, ROW_HEIGHT),
+        egui::Layout::left_to_right(egui::Align::Center),
+        |ui| {
             ui.set_min_width(ui.available_width());
-            ui.set_max_width(ui.available_width());
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if secret && variable.value.is_some() {
                     let action = if revealed { "Hide" } else { "Reveal" };
                     let response = components::icons::eye_button(ui, 14.0, gray::_600, action);
@@ -104,21 +143,22 @@ pub(super) fn environment_variable_value_cell(
                         });
                     }
                 }
-                ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                     ui.set_min_width(ui.available_width());
                     ui.add(
                         egui::Label::new(
                             egui::RichText::new(value)
                                 .monospace()
                                 .font(typography::monospace())
-                                .color(gray::_800),
+                                .color(gray::_700),
                         )
                         .selectable(true)
-                        .wrap(),
+                        .truncate(),
                     );
                 });
             });
-        });
+        },
+    );
 }
 
 pub(super) fn environment_variable_source_cell(
@@ -126,39 +166,37 @@ pub(super) fn environment_variable_source_cell(
     variable: &crate::resource_detail::PodEnvironmentVariableDetail,
 ) {
     let source = environment_variable_source_label(variable);
-    egui::Frame::new()
-        .fill(WHITE)
-        .stroke(egui::Stroke::new(1.0, gray::_200))
-        .corner_radius(radius::subtle())
-        .inner_margin(egui::Margin::symmetric(
-            (spacing::SM - 2.0) as i8,
-            spacing::XS as i8,
-        ))
-        .show(ui, |ui| {
-            ui.set_min_width(ui.available_width());
-            ui.set_max_width(ui.available_width());
-            ui.horizontal_wrapped(|ui| {
-                let response = ui.add(
-                    egui::Label::new(
-                        egui::RichText::new(&source)
-                            .font(typography::metadata())
-                            .color(gray::_600),
-                    )
-                    .wrap()
-                    .sense(egui::Sense::click()),
-                );
-                response.widget_info(|| {
-                    egui::WidgetInfo::labeled(
-                        egui::WidgetType::Button,
-                        response.enabled(),
-                        "Copy environment variable source",
-                    )
-                });
-                if response.clicked() {
-                    ui.ctx().copy_text(source);
-                }
-            });
-        });
+    ui.allocate_ui_with_layout(
+        egui::vec2(SOURCE_COLUMN_WIDTH, ROW_HEIGHT),
+        egui::Layout::left_to_right(egui::Align::Center).with_main_justify(true),
+        |ui| {
+            ui.add(
+                environment_variable_source_icon(variable)
+                    .fit_to_exact_size(egui::Vec2::splat(SOURCE_ICON_SIZE))
+                    .tint(gray::_600)
+                    .alt_text(&source)
+                    .sense(egui::Sense::hover()),
+            )
+            .on_hover_text(source);
+        },
+    );
+}
+
+fn environment_variable_source_icon(
+    variable: &crate::resource_detail::PodEnvironmentVariableDetail,
+) -> egui::Image<'static> {
+    use crate::resource_detail::PodEnvironmentVariableSource;
+
+    match variable.source {
+        PodEnvironmentVariableSource::Literal => components::icons::code_bracket_icon(),
+        PodEnvironmentVariableSource::ConfigMapKey { .. }
+        | PodEnvironmentVariableSource::ConfigMapImport { .. } => components::icons::folder_icon(),
+        PodEnvironmentVariableSource::SecretKey { .. }
+        | PodEnvironmentVariableSource::SecretImport { .. } => components::icons::key_icon(),
+        PodEnvironmentVariableSource::Field { .. } => components::icons::document_text_icon(),
+        PodEnvironmentVariableSource::ResourceField { .. } => components::icons::chart_bar_icon(),
+        PodEnvironmentVariableSource::Unspecified => components::icons::question_mark_circle_icon(),
+    }
 }
 
 pub(super) fn environment_variable_secret_revealed(

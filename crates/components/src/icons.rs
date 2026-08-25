@@ -99,6 +99,26 @@ pub fn document_icon() -> Image<'static> {
     Image::new(include_image!("icons/document.svg"))
 }
 
+/// Returns a code-bracket icon for literal values.
+pub fn code_bracket_icon() -> Image<'static> {
+    Image::new(include_image!("icons/code-bracket.svg"))
+}
+
+/// Returns a key icon for secret-backed values.
+pub fn key_icon() -> Image<'static> {
+    Image::new(include_image!("icons/key.svg"))
+}
+
+/// Returns a document-text icon for Kubernetes field references.
+pub fn document_text_icon() -> Image<'static> {
+    Image::new(include_image!("icons/document-text.svg"))
+}
+
+/// Returns a question-mark icon for unknown or unspecified values.
+pub fn question_mark_circle_icon() -> Image<'static> {
+    Image::new(include_image!("icons/question-mark-circle.svg"))
+}
+
 /// Returns a chart bar icon image
 pub fn chart_bar_icon() -> Image<'static> {
     Image::new(include_image!("icons/chart-bar.svg"))
