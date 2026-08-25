@@ -137,8 +137,8 @@ Window state=[focused] rect=<none>
                   GenericContainer rect=<none>
                     Unknown name="CPU, row 1" rect=(x=1037.0 y=98.0 width=80.0 height=44.0 center_x=1077.0 center_y=120.0)
                     GenericContainer rect=<none>
-                      Label value="500m" rect=(x=1053.0 y=111.5 width=38.2 height=17.0 center_x=1072.1 center_y=120.0)
-                        TextRun value="500m" rect=(x=1053.0 y=111.5 width=38.2 height=17.0 center_x=1072.1 center_y=120.0)
+                      Label value="0.500" rect=(x=1053.0 y=111.5 width=38.3 height=17.0 center_x=1072.1 center_y=120.0)
+                        TextRun value="0.500" rect=(x=1053.0 y=111.5 width=38.3 height=17.0 center_x=1072.1 center_y=120.0)
                   GenericContainer rect=<none>
                     Unknown name="Memory, row 1" rect=(x=1117.0 y=98.0 width=90.0 height=44.0 center_x=1162.0 center_y=120.0)
                     GenericContainer rect=<none>
