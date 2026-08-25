@@ -50,6 +50,8 @@ jobs:
         run: test "${GITHUB_REF_NAME#v}" = "$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | select(.name == "styrhous") | .version')"
       - name: Test updater manifest generator
         run: bash scripts/test-generate-update-manifest.sh
+      - name: Test local development icon setup
+        run: bash scripts/test-setup-local-development-icon.sh
       - name: Run workspace tests
         env:
           # Select wgpu's OpenGL backend, matching the Docker CI diagnostic command.

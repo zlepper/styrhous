@@ -137,6 +137,19 @@ jobs:
         env:
           WGPU_BACKEND: gl
         run: cargo nextest run --workspace --no-fail-fast --test-threads 1
+      - name: Test local development icon setup
+        if: matrix.run_tests
+        run: bash scripts/test-setup-local-development-icon.sh
+      - name: Verify local release Wayland application ID
+        if: matrix.run_tests
+        env:
+          STYRHOUS_RELEASE_BUILD: ""
+        run: cargo nextest run --release -p styrhous native_window_starts_wide_and_has_a_minimum_width
+      - name: Verify packaged Wayland application ID
+        if: matrix.run_tests
+        env:
+          STYRHOUS_RELEASE_BUILD: "1"
+        run: cargo nextest run --release -p styrhous native_window_starts_wide_and_has_a_minimum_width
       - name: Upload snapshot test failures
         if: failure() && matrix.run_tests
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

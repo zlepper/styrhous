@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Styrhous
+Comment=Styrhous — the Kubernetes wheelhouse
+Icon=styrhous-dev
+Exec=true
+NoDisplay=true
