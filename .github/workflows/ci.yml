@@ -76,7 +76,7 @@ jobs:
       # source revision separately so a tag on the same master commit can package it.
       - name: Restore release application binary
         id: application-binary
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ matrix.binary }}
           key: application-binary-${{ matrix.id }}-${{ github.sha }}
@@ -103,7 +103,7 @@ jobs:
         run: cargo build --release -p styrhous
       - name: Save release application binary
         if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.application-binary.outputs.cache-hit != 'true'
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ matrix.binary }}
           key: application-binary-${{ matrix.id }}-${{ github.sha }}
@@ -117,7 +117,7 @@ jobs:
       - name: Restore package-managed application binary
         if: startsWith(matrix.id, 'linux-')
         id: package-managed-application-binary
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ matrix.binary }}
           key: application-binary-package-managed-${{ matrix.id }}-${{ github.sha }}
@@ -128,7 +128,7 @@ jobs:
         run: cargo build --release -p styrhous
       - name: Save package-managed application binary
         if: github.event_name == 'push' && github.ref == 'refs/heads/master' && startsWith(matrix.id, 'linux-') && steps.package-managed-application-binary.outputs.cache-hit != 'true'
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ matrix.binary }}
           key: application-binary-package-managed-${{ matrix.id }}-${{ github.sha }}
