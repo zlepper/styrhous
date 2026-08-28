@@ -66,6 +66,31 @@ fn terminal_launch_settings_round_trip_through_eframe_storage() {
 }
 
 #[test]
+fn namespace_selector_settings_round_trip_through_app_storage() {
+    let expected = namespace_selector::NamespaceSelectorSettings {
+        fields: vec![namespace_selector::NamespaceMetadataField {
+            alias: "customer".into(),
+            source: table_preferences::MetadataColumnSource::Label,
+            key: "company.example/customer".into(),
+        }],
+        templates: vec![namespace_selector::NamespaceIdentityTemplate {
+            template: "Customer: {{customer}}".into(),
+        }],
+    };
+    let mut storage = MemoryStorage::default();
+    let mut app = MyEguiApp::<MockWorker> {
+        namespace_selector_settings: expected.clone(),
+        ..Default::default()
+    };
+
+    eframe::App::save(&mut app, &mut storage);
+
+    let mut restored = MyEguiApp::<MockWorker>::default();
+    restored.load_persisted_state(Some(&storage));
+    assert_eq!(restored.namespace_selector_settings, expected);
+}
+
+#[test]
 fn resource_table_preferences_round_trip_through_app_storage() {
     let resource = ApiResource {
         group: "core".into(),
@@ -178,7 +203,8 @@ fn dev_namespaces() -> WorkerResultBox {
         cluster_key: 1,
         namespaces: vec![MinimalNamespace {
             name: "default".into(),
-            display_name: None,
+            labels: Default::default(),
+            annotations: Default::default(),
         }],
     })
 }
@@ -328,7 +354,8 @@ fn unavailable_saved_selection_is_discarded_without_affecting_other_contexts() {
                 cluster_key: 1,
                 namespaces: vec![MinimalNamespace {
                     name: "default".into(),
-                    display_name: None,
+                    labels: Default::default(),
+                    annotations: Default::default(),
                 }],
             }),
             Box::new(KubernetesApisLoaded {

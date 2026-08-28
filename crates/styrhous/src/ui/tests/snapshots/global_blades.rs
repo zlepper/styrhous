@@ -3,6 +3,79 @@
 use super::*;
 
 #[test]
+fn namespace_selector_settings_show_templates_and_the_open_field_editor() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    state
+        .clusters
+        .get_mut(&2)
+        .expect("kind fixture exists")
+        .namespaces
+        .insert(
+            "acme-corp-a1b2c3d4".into(),
+            MinimalNamespace {
+                name: "acme-corp-a1b2c3d4".into(),
+                labels: std::collections::BTreeMap::from([(
+                    "company.example/customer".into(),
+                    "Acme Corp".into(),
+                )]),
+                annotations: std::collections::BTreeMap::from([(
+                    "company.example/environment".into(),
+                    "Production".into(),
+                )]),
+            },
+        );
+    harness.state_mut().ui_state = state;
+    harness.state_mut().namespace_selector_settings =
+        crate::ui::namespace_selector::NamespaceSelectorSettings {
+            fields: vec![
+                crate::ui::namespace_selector::NamespaceMetadataField {
+                    alias: "customer".into(),
+                    source: crate::ui::table_preferences::MetadataColumnSource::Label,
+                    key: "company.example/customer".into(),
+                },
+                crate::ui::namespace_selector::NamespaceMetadataField {
+                    alias: "environment".into(),
+                    source: crate::ui::table_preferences::MetadataColumnSource::Annotation,
+                    key: "company.example/environment".into(),
+                },
+            ],
+            templates: vec![
+                crate::ui::namespace_selector::NamespaceIdentityTemplate {
+                    template: "Customer: {{customer}} · Environment: {{environment}}".into(),
+                },
+                crate::ui::namespace_selector::NamespaceIdentityTemplate {
+                    template: "Customer: {{customer}}".into(),
+                },
+            ],
+        };
+    harness.run();
+
+    let settings_position = harness.get_by_label("Settings").rect().center();
+    primary_click(&mut harness, settings_position);
+    harness.run();
+    let namespace_settings_position = harness
+        .get_by_label(OPEN_NAMESPACE_SELECTOR_SETTINGS)
+        .rect()
+        .center();
+    primary_click(&mut harness, namespace_settings_position);
+    harness.run();
+    harness.get_by_label("Namespace selector");
+    harness.get_by_label("Customer: Acme Corp · Environment: Production");
+    harness.ui_harness(
+        "settings/namespace_selector_settings_show_templates_and_the_open_field_editor/settings",
+    );
+
+    harness.get_by_label("Edit customer field").click();
+    harness.run();
+    harness.get_by_label("Edit metadata field");
+    harness.get_by_role_and_label(egui::accesskit::Role::TextInput, "Template key");
+    harness.ui_harness(
+        "settings/namespace_selector_settings_show_templates_and_the_open_field_editor/open_field_editor",
+    );
+}
+
+#[test]
 fn settings_shows_that_application_updates_are_being_checked() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = oracle_resource_table_state();

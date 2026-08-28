@@ -66,7 +66,7 @@ impl TableColumnDefinition {
 }
 
 /// The metadata map a user-configured table column reads from.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
 pub(super) enum MetadataColumnSource {
     Label,
     Annotation,

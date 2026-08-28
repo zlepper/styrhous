@@ -112,7 +112,8 @@ pub(super) fn oracle_resource_table_state() -> UiState {
         "kube-system".into(),
         MinimalNamespace {
             name: "kube-system".into(),
-            display_name: None,
+            labels: Default::default(),
+            annotations: Default::default(),
         },
     );
     kind.selected_namespaces.insert("kube-system".into());

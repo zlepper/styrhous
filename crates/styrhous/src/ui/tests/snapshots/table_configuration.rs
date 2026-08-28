@@ -79,6 +79,13 @@ fn resource_table_custom_metadata_column_can_be_added_from_column_settings() {
         .events
         .push(egui::Event::Text("app.kubernetes.io/name".into()));
     harness.run();
+    assert_eq!(
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::TextInput, "Metadata key")
+            .value()
+            .as_deref(),
+        Some("app.kubernetes.io/name")
+    );
     let column_header = harness
         .get_by_role_and_label(egui::accesskit::Role::TextInput, "Column header")
         .rect()
@@ -90,6 +97,13 @@ fn resource_table_custom_metadata_column_can_be_added_from_column_settings() {
         .events
         .push(egui::Event::Text("Application".into()));
     harness.run();
+    assert_eq!(
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::TextInput, "Column header")
+            .value()
+            .as_deref(),
+        Some("Application")
+    );
     let add_column = harness.get_by_label("Add column").rect().center();
     primary_click(&mut harness, add_column);
     harness.run_steps(2);

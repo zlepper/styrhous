@@ -54,6 +54,8 @@ mod flows;
 const OPEN_APPLICATION_SETTINGS: &str = "Open application settings: Configure terminal launching, debug images, and application updates.";
 const OPEN_CLUSTER_DISCOVERY: &str =
     "Open cluster discovery: Find and add clusters available through Azure CLI or Tailscale.";
+const OPEN_NAMESPACE_SELECTOR_SETTINGS: &str =
+    "Open namespace selector settings: Configure namespace identities from labels and annotations.";
 
 struct YamlEditorSnapshotState {
     editor: YamlEditorWindowState,

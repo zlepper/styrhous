@@ -138,48 +138,16 @@ pub(super) fn show_custom_column_form(
             );
             ui.add_space(components::design::spacing::MD);
             if draft.editing_id.is_none() {
-                ui.horizontal(|ui| {
-                    ui.radio_value(&mut draft.source, MetadataColumnSource::Label, "Label");
-                    ui.radio_value(
-                        &mut draft.source,
-                        MetadataColumnSource::Annotation,
-                        "Annotation",
-                    );
-                });
-                ui.add_space(components::design::spacing::MD);
-                let source_keys = match draft.source {
-                    MetadataColumnSource::Label => &suggestions.labels,
-                    MetadataColumnSource::Annotation => &suggestions.annotations,
-                };
-                if !source_keys.is_empty() {
-                    let selected_text = if draft.key.is_empty() {
-                        "Choose a key found in this table".to_owned()
-                    } else {
-                        draft.key.clone()
-                    };
-                    let response = TailwindCombobox::from_label("Suggested metadata key")
-                        .placeholder("Search keys...")
-                        .search_accessibility_label("Search metadata keys")
-                        .selected_text(selected_text)
-                        .width(ui.available_width())
-                        .filter_by(|value: &String| value)
-                        .show_items(ui, source_keys, |combobox, value| {
-                            if combobox.item(value, *value == draft.key).clicked() {
-                                draft.key = value.clone();
-                                if draft.label.is_empty() {
-                                    draft.label = value.clone();
-                                }
-                            }
-                        });
-                    let _ = response;
-                    ui.add_space(components::design::spacing::SM);
-                }
-                labeled_text_edit(
+                if let Some(selected) = super::super::metadata_fields::show_metadata_key_picker(
                     ui,
-                    "Metadata key",
+                    &mut draft.source,
                     &mut draft.key,
-                    "Enter an exact metadata key",
-                );
+                    suggestions,
+                    "Choose a key found in this table",
+                ) && draft.label.is_empty()
+                {
+                    draft.label = selected;
+                }
             } else {
                 ui.label(
                     egui::RichText::new(format!(
@@ -306,8 +274,5 @@ fn labeled_text_edit(ui: &mut egui::Ui, label: &str, value: &mut String, hint: &
 }
 
 fn metadata_source_label(source: MetadataColumnSource) -> &'static str {
-    match source {
-        MetadataColumnSource::Label => "Label",
-        MetadataColumnSource::Annotation => "Annotation",
-    }
+    super::super::metadata_fields::source_label(source)
 }

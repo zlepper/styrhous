@@ -122,7 +122,8 @@ fn resource_table_snapshot_keeps_namespace_column_readable() {
         "default".into(),
         MinimalNamespace {
             name: "default".into(),
-            display_name: None,
+            labels: Default::default(),
+            annotations: Default::default(),
         },
     );
     cluster.selected_namespaces = HashSet::from(["default".into(), "kube-system".into()]);

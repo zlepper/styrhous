@@ -290,15 +290,18 @@ fn test_ui_flow() {
             namespaces: vec![
                 MinimalNamespace {
                     name: "default".into(),
-                    display_name: None,
+                    labels: Default::default(),
+                    annotations: Default::default(),
                 },
                 MinimalNamespace {
                     name: "kube-system".into(),
-                    display_name: None,
+                    labels: Default::default(),
+                    annotations: Default::default(),
                 },
                 MinimalNamespace {
                     name: "monitoring".into(),
-                    display_name: Some("Monitoring Stack".into()),
+                    labels: Default::default(),
+                    annotations: Default::default(),
                 },
             ],
         }) as WorkerResultBox);

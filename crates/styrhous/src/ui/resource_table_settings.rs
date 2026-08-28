@@ -1,19 +1,13 @@
 use super::global_blade::{GlobalBladeContent, GlobalBladeRenderContext, GlobalBladeRenderResult};
+pub(super) use super::metadata_fields::MetadataKeySuggestions;
 use super::table_preferences::{
     CustomMetadataColumn, MetadataColumnSource, PersistedResourceTablePreferences,
     ResourceTableKey, TableColumnDefinition,
 };
 use components::{
-    ButtonSize, MoreMenu, ReorderHandle, ReorderableTable, TailwindButton, TailwindCombobox,
-    TailwindTextInput,
+    ButtonSize, MoreMenu, ReorderHandle, ReorderableTable, TailwindButton, TailwindTextInput,
 };
 use std::cell::RefCell;
-
-#[derive(Debug, Clone, Default)]
-pub(super) struct MetadataKeySuggestions {
-    pub(super) labels: Vec<String>,
-    pub(super) annotations: Vec<String>,
-}
 
 #[derive(Debug, Clone)]
 pub(super) struct ResourceTableSettingsTarget {

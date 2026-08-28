@@ -6,6 +6,8 @@ mod log_state;
 #[doc(hidden)]
 pub mod log_viewer_profile;
 mod log_windows;
+mod metadata_fields;
+mod namespace_selector;
 mod persistence;
 mod resource_actions;
 mod resource_detail;
@@ -34,6 +36,7 @@ use dialogs::{
     show_deployment_restart_error, show_force_delete_confirmation, show_force_delete_error,
     show_scale_dialog, show_scale_error, show_terminal_launch_error,
 };
+use namespace_selector::NamespaceSelectorSettings;
 use state::{LogDisplayOptions, PersistedClusterSelections, ResourceNavigationExpansion, UiState};
 use table_preferences::PersistedResourceTablePreferences;
 
@@ -42,12 +45,14 @@ const LOG_DISPLAY_OPTIONS_STORAGE_KEY: &str = "log_display_options";
 const RESOURCE_NAVIGATION_EXPANSION_STORAGE_KEY: &str = "resource_navigation_expansion";
 const TERMINAL_LAUNCH_SETTINGS_STORAGE_KEY: &str = "terminal_launch_settings";
 const RESOURCE_TABLE_PREFERENCES_STORAGE_KEY: &str = "resource_table_preferences";
+const NAMESPACE_SELECTOR_SETTINGS_STORAGE_KEY: &str = "namespace_selector_settings";
 
 pub struct MyEguiApp<W: WorkerTrait = Worker, L: TerminalLauncher = SystemTerminalLauncher> {
     worker: W,
     terminal_launcher: L,
     terminal_launch_settings: TerminalLaunchSettings,
     resource_table_preferences: PersistedResourceTablePreferences,
+    namespace_selector_settings: NamespaceSelectorSettings,
     ui_state: UiState,
     log_store: LogStoreService,
     updater: crate::updater::UpdaterService,
@@ -63,6 +68,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> Default for MyEguiApp<W, L> {
             terminal_launcher: L::default(),
             terminal_launch_settings: TerminalLaunchSettings::default(),
             resource_table_preferences: PersistedResourceTablePreferences::default(),
+            namespace_selector_settings: NamespaceSelectorSettings::default(),
             ui_state: UiState::default(),
             log_store,
             updater: crate::updater::UpdaterService::default(),
@@ -95,6 +101,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
             terminal_launcher: L::default(),
             terminal_launch_settings: TerminalLaunchSettings::default(),
             resource_table_preferences: PersistedResourceTablePreferences::default(),
+            namespace_selector_settings: NamespaceSelectorSettings::default(),
             ui_state: UiState::default(),
             log_store,
             updater,
@@ -138,6 +145,14 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
                 eframe::get_value::<PersistedResourceTablePreferences>(
                     storage,
                     RESOURCE_TABLE_PREFERENCES_STORAGE_KEY,
+                )
+            })
+            .unwrap_or_default();
+        self.namespace_selector_settings = storage
+            .and_then(|storage| {
+                eframe::get_value::<NamespaceSelectorSettings>(
+                    storage,
+                    NAMESPACE_SELECTOR_SETTINGS_STORAGE_KEY,
                 )
             })
             .unwrap_or_default();
@@ -196,6 +211,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             &mut shell_requests,
             &debug_image_presets,
             &mut self.resource_table_preferences,
+            &self.namespace_selector_settings,
         );
         global_blade::show(
             &ctx,
@@ -205,6 +221,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             &debug_image_presets,
             &mut self.resource_table_preferences,
             &mut self.terminal_launch_settings,
+            &mut self.namespace_selector_settings,
             self.updater.status(),
         );
         log_windows::show(
@@ -276,6 +293,11 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             storage,
             RESOURCE_TABLE_PREFERENCES_STORAGE_KEY,
             &self.resource_table_preferences,
+        );
+        eframe::set_value(
+            storage,
+            NAMESPACE_SELECTOR_SETTINGS_STORAGE_KEY,
+            &self.namespace_selector_settings,
         );
     }
 

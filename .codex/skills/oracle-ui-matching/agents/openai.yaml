@@ -1,0 +1,3 @@
+interface:
+  display_name: "Oracle UI Matching"
+  short_description: "Match UI snapshots to design oracles"

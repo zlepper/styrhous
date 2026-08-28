@@ -13,7 +13,8 @@ fn namespace_selector_reconciles_watch_sources_when_selection_changes() {
             namespace.into(),
             MinimalNamespace {
                 name: namespace.into(),
-                display_name: None,
+                labels: Default::default(),
+                annotations: Default::default(),
             },
         );
     }
@@ -246,7 +247,8 @@ fn namespace_selector_search_snapshot_shows_active_watches() {
         "monitoring".into(),
         MinimalNamespace {
             name: "monitoring".into(),
-            display_name: Some("Monitoring".into()),
+            labels: Default::default(),
+            annotations: Default::default(),
         },
     );
     cluster.selected_namespaces = HashSet::from(["kube-system".into(), "monitoring".into()]);
@@ -275,6 +277,59 @@ fn namespace_selector_search_snapshot_shows_active_watches() {
     harness.run();
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "cluster_connection/namespace_selector_search_snapshot_shows_active_watches/namespace_selector_open_filtered_active_watches",
+    ));
+}
+
+#[test]
+fn namespace_selector_searches_configured_identity_values() {
+    let pods = fixture_api_resource("core", "Pod", "pods");
+    let mut state = oracle_resource_table_state();
+    let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
+    cluster.namespaces.insert(
+        "company-a1b2c3".into(),
+        MinimalNamespace {
+            name: "company-a1b2c3".into(),
+            labels: BTreeMap::from([("company.example/customer".into(), "Acme".into())]),
+            annotations: BTreeMap::from([(
+                "company.example/environment".into(),
+                "Production".into(),
+            )]),
+        },
+    );
+    cluster.selected_api_resource = Some(pods);
+    let mut harness = application_harness::<MockWorker>();
+    harness.seed_ui_state(state);
+    harness.state_mut().namespace_selector_settings =
+        crate::ui::namespace_selector::NamespaceSelectorSettings {
+            fields: vec![
+                crate::ui::namespace_selector::NamespaceMetadataField {
+                    alias: "customer".into(),
+                    source: crate::ui::table_preferences::MetadataColumnSource::Label,
+                    key: "company.example/customer".into(),
+                },
+                crate::ui::namespace_selector::NamespaceMetadataField {
+                    alias: "environment".into(),
+                    source: crate::ui::table_preferences::MetadataColumnSource::Annotation,
+                    key: "company.example/environment".into(),
+                },
+            ],
+            templates: vec![crate::ui::namespace_selector::NamespaceIdentityTemplate {
+                template: "Customer: {{customer}}".into(),
+            }],
+        };
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
+        .click();
+    harness.run();
+    harness
+        .input_mut()
+        .events
+        .push(egui::Event::Text("production".into()));
+    harness.run();
+
+    harness.get_by_label("Customer: Acme (company-a1b2c3)");
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "cluster_connection/namespace_selector_searches_configured_identity_values/identity_value_search",
     ));
 }
 

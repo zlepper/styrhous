@@ -8,6 +8,7 @@ pub(super) fn show_helm_releases_workspace(
     column_settings_to_open: &mut Option<
         super::super::resource_table_settings::ResourceTableSettingsTarget,
     >,
+    namespace_selector_settings: &crate::ui::namespace_selector::NamespaceSelectorSettings,
 ) -> Option<(String, String)> {
     let api_resource = crate::api_resource::ApiResource::helm_releases();
     let mut releases = cluster
@@ -55,6 +56,7 @@ pub(super) fn show_helm_releases_workspace(
             selected_count: 0,
             actions_enabled: false,
             action: &mut ignored_selection_action,
+            namespace_selector_settings,
         },
     );
     cluster.resource_searches.insert(api_resource, search);

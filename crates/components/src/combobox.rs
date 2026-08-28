@@ -4,6 +4,7 @@
 //! selection gestures. Callers continue to own their selected values.
 
 const ITEM_HEIGHT: f32 = 32.0;
+const MULTILINE_ITEM_HEIGHT: f32 = 52.0;
 const INPUT_HEIGHT: f32 = 36.0;
 const ICON_SIZE: f32 = 16.0;
 const DROPDOWN_MAX_HEIGHT: f32 = 300.0;
@@ -106,6 +107,7 @@ pub struct ComboboxUi<'a> {
     popup_id: Id,
     enter_pressed: bool,
     scroll_to_focused: bool,
+    item_height: f32,
 }
 
 impl<'a> ComboboxUi<'a> {
@@ -124,16 +126,28 @@ impl<'a> ComboboxUi<'a> {
         is_selected: bool,
         status: Option<bool>,
     ) -> ItemResponse {
-        self.item_internal(label, is_selected, status, true)
+        self.item_internal(label, None, is_selected, status, true)
+    }
+
+    /// Render an option with a secondary detail line.
+    pub fn item_with_status_detail(
+        &mut self,
+        label: impl Into<WidgetText>,
+        detail: impl AsRef<str>,
+        is_selected: bool,
+        status: Option<bool>,
+    ) -> ItemResponse {
+        self.item_internal(label, Some(detail.as_ref()), is_selected, status, true)
     }
 
     fn select_all_item(&mut self, all_selected: bool) -> ItemResponse {
-        self.item_internal("Select all", all_selected, None, false)
+        self.item_internal("Select all", None, all_selected, None, false)
     }
 
     fn item_internal(
         &mut self,
         label: impl Into<WidgetText>,
+        detail: Option<&str>,
         is_selected: bool,
         status: Option<bool>,
         close_on_replace: bool,
@@ -144,9 +158,17 @@ impl<'a> ComboboxUi<'a> {
         self.current_index += 1;
 
         let available_width = self.ui.available_width();
-        let (rect, response) = self
-            .ui
-            .allocate_exact_size(Vec2::new(available_width, ITEM_HEIGHT), Sense::click());
+        let (rect, response) = self.ui.allocate_exact_size(
+            Vec2::new(
+                available_width,
+                if detail.is_some() {
+                    MULTILINE_ITEM_HEIGHT
+                } else {
+                    self.item_height
+                },
+            ),
+            Sense::click(),
+        );
         let response = response.with_pointing_hand();
 
         if is_focused && self.scroll_to_focused {
@@ -215,11 +237,29 @@ impl<'a> ComboboxUi<'a> {
             );
             is_truncated = galley.elided;
             self.ui.painter().galley(
-                rect.left_center() + Vec2::new(text_offset, 0.0)
+                rect.left_center()
+                    + Vec2::new(text_offset, if detail.is_some() { -8.0 } else { 0.0 })
                     - Vec2::new(0.0, galley.size().y / 2.0),
-                galley,
+                galley.clone(),
                 text_color,
             );
+            if let Some(detail) = detail {
+                let detail_color = if is_focused { WHITE } else { gray::_500 };
+                let detail_galley = layout_truncated_text(
+                    self.ui,
+                    detail,
+                    typography::metadata(),
+                    detail_color,
+                    text_width,
+                );
+                is_truncated |= detail_galley.elided;
+                self.ui.painter().galley(
+                    rect.left_center() + Vec2::new(text_offset, 9.0)
+                        - Vec2::new(0.0, detail_galley.size().y / 2.0),
+                    detail_galley,
+                    detail_color,
+                );
+            }
 
             if is_selected {
                 let check_color = if is_focused { WHITE } else { indigo::_600 };
@@ -246,12 +286,16 @@ impl<'a> ComboboxUi<'a> {
             response.show_tooltip_text(&label_text);
         }
         let is_enabled = self.ui.is_enabled();
+        let accessibility_label = detail
+            .filter(|detail| *detail != label_text)
+            .map(|detail| format!("{label_text} ({detail})"))
+            .unwrap_or_else(|| label_text.clone());
         response.widget_info(|| {
             egui::WidgetInfo::selected(
                 egui::WidgetType::Checkbox,
                 is_enabled,
                 is_selected,
-                &label_text,
+                &accessibility_label,
             )
         });
 
@@ -322,6 +366,7 @@ pub struct TailwindCombobox<Filter> {
     width: Option<f32>,
     size: ComboboxSize,
     select_all: Option<bool>,
+    item_height: f32,
     filter: Filter,
 }
 

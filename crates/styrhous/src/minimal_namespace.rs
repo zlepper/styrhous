@@ -1,43 +1,20 @@
-use crate::resource_extensions::ResourceExt;
 use k8s_openapi::api::core::v1::Namespace;
-use std::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::fmt::Display;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct MinimalNamespace {
     pub name: String,
-    pub display_name: Option<String>,
-}
-
-impl Ord for MinimalNamespace {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.display_name
-            .as_ref()
-            .unwrap_or(&self.name)
-            .to_lowercase()
-            .cmp(
-                &other
-                    .display_name
-                    .as_ref()
-                    .unwrap_or(&other.name)
-                    .to_lowercase(),
-            )
-            .then_with(|| self.display_name.cmp(&other.display_name))
-            .then_with(|| self.name.cmp(&other.name))
-    }
-}
-
-impl PartialOrd for MinimalNamespace {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
+    pub labels: BTreeMap<String, String>,
+    pub annotations: BTreeMap<String, String>,
 }
 
 impl From<Namespace> for MinimalNamespace {
     fn from(value: Namespace) -> Self {
         Self {
-            display_name: value.try_get_display_name(),
             name: value.metadata.name.unwrap(),
+            labels: value.metadata.labels.unwrap_or_default(),
+            annotations: value.metadata.annotations.unwrap_or_default(),
         }
     }
 }
@@ -48,8 +25,28 @@ impl Display for MinimalNamespace {
     }
 }
 
-impl MinimalNamespace {
-    pub fn get_name_to_display(&self) -> &str {
-        self.display_name.as_ref().unwrap_or(&self.name)
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
+
+    #[test]
+    fn retains_namespace_metadata_for_local_display_configuration() {
+        let namespace = MinimalNamespace::from(Namespace {
+            metadata: ObjectMeta {
+                name: Some("company-a1b2".into()),
+                labels: Some(BTreeMap::from([("example/customer".into(), "Acme".into())])),
+                annotations: Some(BTreeMap::from([(
+                    "example/environment".into(),
+                    "prod".into(),
+                )])),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        assert_eq!(namespace.name, "company-a1b2");
+        assert_eq!(namespace.labels["example/customer"], "Acme");
+        assert_eq!(namespace.annotations["example/environment"], "prod");
     }
 }

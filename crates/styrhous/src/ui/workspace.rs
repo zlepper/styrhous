@@ -25,6 +25,7 @@ use crate::resource_table::{
     cell_sort_value, compare_sort_values,
 };
 use crate::terminal_launcher::{DebugImagePreset, ShellRequest};
+use crate::ui::namespace_selector::NamespaceSelectorSettings;
 use crate::worker::{GetResourceScale, WorkerCommandBox};
 use components::colors::{TOOLBAR_BACKGROUND, gray};
 use components::design::{spacing, typography};
@@ -65,6 +66,7 @@ struct ResourceSelectionControls<'a> {
     selected_count: usize,
     actions_enabled: bool,
     action: &'a mut Option<ResourceSelectionAction>,
+    namespace_selector_settings: &'a NamespaceSelectorSettings,
 }
 
 struct ResourceTableOptions<'a> {
@@ -229,6 +231,7 @@ pub(super) fn show(
     shell_requests: &mut Vec<ShellRequest>,
     debug_image_presets: &[DebugImagePreset],
     table_preferences: &mut PersistedResourceTablePreferences,
+    namespace_selector_settings: &NamespaceSelectorSettings,
 ) {
     let ctx = ui.ctx().clone();
     let mut effects = WorkspaceEffects::default();
@@ -314,6 +317,7 @@ pub(super) fn show(
                         &mut effects.namespace_selection,
                         table_preferences,
                         &mut effects.column_settings_to_open,
+                        namespace_selector_settings,
                     )
                     .map(|(name, namespace)| HelmReleaseDetailTarget { name, namespace });
                     return;
@@ -345,6 +349,7 @@ pub(super) fn show(
                         selected_count: selected_resource_count,
                         actions_enabled: resource_actions_enabled,
                         action: &mut resource_selection_action,
+                        namespace_selector_settings,
                     },
                 );
                 if let Some(api_resource) = &selected_api_resource {

@@ -1,5 +1,10 @@
 use super::*;
 
+struct NamespaceOption<'a> {
+    namespace: &'a MinimalNamespace,
+    presentation: crate::ui::namespace_selector::NamespacePresentation,
+}
+
 pub(super) fn show_toolbar(
     ui: &mut egui::Ui,
     cluster: &super::super::state::ClusterState,
@@ -15,15 +20,39 @@ pub(super) fn show_toolbar(
             .selected_namespaces
             .iter()
             .next()
-            .cloned()
+            .and_then(|selected| {
+                cluster
+                    .namespaces
+                    .values()
+                    .find(|namespace| namespace.name == *selected)
+            })
+            .map(|namespace| {
+                crate::ui::namespace_selector::presentation(
+                    namespace,
+                    selection_controls.namespace_selector_settings,
+                )
+                .primary
+            })
             .unwrap_or_default(),
         count => format!("{count} namespaces"),
     };
-    let namespaces: Vec<&MinimalNamespace> = cluster.namespaces.values().collect();
+    let namespaces = cluster
+        .namespaces
+        .values()
+        .map(|namespace| NamespaceOption {
+            namespace,
+            presentation: crate::ui::namespace_selector::presentation(
+                namespace,
+                selection_controls.namespace_selector_settings,
+            ),
+        })
+        .collect::<Vec<_>>();
     let all_namespaces_selected = !namespaces.is_empty()
-        && namespaces
-            .iter()
-            .all(|namespace| cluster.selected_namespaces.contains(&namespace.name));
+        && namespaces.iter().all(|namespace| {
+            cluster
+                .selected_namespaces
+                .contains(&namespace.namespace.name)
+        });
     let selected_status = if !selected_api_resource.is_some_and(|resource| resource.namespaced) {
         selected_api_resource.map(|api_resource| {
             cluster
@@ -80,28 +109,30 @@ pub(super) fn show_toolbar(
                     .selected_status(selected_status)
                     .width(230.0)
                     .compact()
+                    .multiline_items()
                     .select_all(all_namespaces_selected)
-                    .filter_by(|ns: &&MinimalNamespace| ns.get_name_to_display())
+                    .filter_by(|option: &NamespaceOption| &option.presentation.search_text)
                     .show_items(ui, &namespaces, |cb, ns| {
                         let status = selected_api_resource.map(|api_resource| {
                             cluster
                                 .active_watchers
-                                .contains(&(api_resource.clone(), Some(ns.name.clone())))
+                                .contains(&(api_resource.clone(), Some(ns.namespace.name.clone())))
                         });
                         if let Some(action) = cb
-                            .item_with_status(
-                                ns.get_name_to_display(),
-                                cluster.selected_namespaces.contains(&ns.name),
+                            .item_with_status_detail(
+                                &ns.presentation.primary,
+                                &ns.presentation.secondary,
+                                cluster.selected_namespaces.contains(&ns.namespace.name),
                                 status,
                             )
                             .selection_action()
                         {
                             *namespace_selection = Some(match action {
                                 SelectionAction::Replace => {
-                                    NamespaceSelection::Replace(ns.name.clone())
+                                    NamespaceSelection::Replace(ns.namespace.name.clone())
                                 }
                                 SelectionAction::Toggle => {
-                                    NamespaceSelection::Toggle(ns.name.clone())
+                                    NamespaceSelection::Toggle(ns.namespace.name.clone())
                                 }
                             });
                         }

@@ -11,7 +11,8 @@ fn namespace_popup_option_does_not_activate_the_overlapped_resource_button() {
             namespace.into(),
             MinimalNamespace {
                 name: namespace.into(),
-                display_name: None,
+                labels: Default::default(),
+                annotations: Default::default(),
             },
         );
     }
@@ -26,13 +27,15 @@ fn namespace_popup_option_does_not_activate_the_overlapped_resource_button() {
         .click();
     harness.run();
 
-    let namespace_option = harness.get_by_label("monitoring");
+    let namespace_option = harness.get_by_label("default");
     let overlapped_resource = harness
-        .get_by_label("Open details for coredns-66bc5c9577-z9gt9")
+        .get_by_label("Open details for coredns-66bc5c9577-ffw2s")
         .rect();
     assert!(
         namespace_option.rect().intersects(overlapped_resource),
-        "the namespace option must overlap a resource button to exercise popup input ownership"
+        "the namespace option {:?} must overlap resource button {:?} to exercise popup input ownership",
+        namespace_option.rect(),
+        overlapped_resource,
     );
 
     namespace_option.click();
@@ -40,7 +43,7 @@ fn namespace_popup_option_does_not_activate_the_overlapped_resource_button() {
 
     assert_eq!(
         harness.state().ui_state.clusters[&2].selected_namespaces,
-        HashSet::from(["monitoring".to_owned()])
+        HashSet::from(["default".to_owned()])
     );
     assert!(
         harness.state().ui_state.clusters[&2]
@@ -64,28 +67,33 @@ fn namespace_popup_filters_to_an_offscreen_option_before_pointer_click() {
     let generated_namespaces = (0..12)
         .map(|index| MinimalNamespace {
             name: format!("k8s-styrhous-fixture-{index:02}"),
-            display_name: None,
+            labels: Default::default(),
+            annotations: Default::default(),
         })
         .collect::<Vec<_>>();
     let target_namespace = "kube-system";
     let mut namespaces = vec![MinimalNamespace {
         name: "default".into(),
-        display_name: None,
+        labels: Default::default(),
+        annotations: Default::default(),
     }];
     namespaces.extend(generated_namespaces);
     namespaces.extend([
         MinimalNamespace {
             name: "kube-node-lease".into(),
-            display_name: None,
+            labels: Default::default(),
+            annotations: Default::default(),
         },
         MinimalNamespace {
             name: "kube-public".into(),
-            display_name: None,
+            labels: Default::default(),
+            annotations: Default::default(),
         },
     ]);
     namespaces.push(MinimalNamespace {
         name: target_namespace.into(),
-        display_name: None,
+        labels: Default::default(),
+        annotations: Default::default(),
     });
     let setup_state = || {
         let mut state = oracle_resource_table_state();

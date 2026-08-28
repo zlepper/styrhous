@@ -14,6 +14,7 @@ impl TailwindCombobox<NoFilter> {
             width: None,
             size: ComboboxSize::Default,
             select_all: None,
+            item_height: ITEM_HEIGHT,
             filter: NoFilter,
         }
     }
@@ -32,6 +33,7 @@ impl TailwindCombobox<NoFilter> {
             width: None,
             size: ComboboxSize::Default,
             select_all: None,
+            item_height: ITEM_HEIGHT,
             filter: NoFilter,
         }
     }
@@ -52,6 +54,7 @@ impl TailwindCombobox<NoFilter> {
             width: self.width,
             size: self.size,
             select_all: self.select_all,
+            item_height: self.item_height,
             filter: WithFilter(filter_fn),
         }
     }
@@ -111,6 +114,12 @@ impl<Filter> TailwindCombobox<Filter> {
         self.select_all = Some(all_selected);
         self
     }
+
+    /// Use taller rows when options render a secondary detail line.
+    pub fn multiline_items(mut self) -> Self {
+        self.item_height = MULTILINE_ITEM_HEIGHT;
+        self
+    }
 }
 
 impl<F> TailwindCombobox<WithFilter<F>> {
@@ -133,6 +142,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             width,
             size,
             select_all,
+            item_height,
             filter: WithFilter(filter_fn),
         } = self;
 
@@ -194,8 +204,8 @@ impl<F> TailwindCombobox<WithFilter<F>> {
         let item_count = filtered_items.len() + usize::from(select_all_visible);
         let item_spacing = ui.spacing().item_spacing.y;
         let content_height =
-            item_count as f32 * ITEM_HEIGHT + item_count.saturating_sub(1) as f32 * item_spacing;
-        let dropdown_height = content_height.clamp(ITEM_HEIGHT, DROPDOWN_MAX_HEIGHT);
+            item_count as f32 * item_height + item_count.saturating_sub(1) as f32 * item_spacing;
+        let dropdown_height = content_height.clamp(item_height, DROPDOWN_MAX_HEIGHT);
         let scroll_to_focused = keyboard.scroll_to_focused && content_height > DROPDOWN_MAX_HEIGHT;
         if item_count > 0 {
             state.focused_index = state.focused_index.min(item_count - 1);
@@ -219,6 +229,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
                             popup_id,
                             enter_pressed: keyboard.enter_pressed,
                             scroll_to_focused,
+                            item_height,
                         };
 
                         if let Some(all_selected) = select_all.filter(|_| select_all_visible)

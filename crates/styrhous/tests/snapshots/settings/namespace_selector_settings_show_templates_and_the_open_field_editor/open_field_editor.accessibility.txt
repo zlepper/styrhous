@@ -658,33 +658,113 @@ Window state=[focused] rect=<none>
                 GenericContainer rect=<none>
                   Button name="Forward" state=[disabled] rect=(x=849.0 y=35.0 width=32.0 height=32.0 center_x=865.0 center_y=51.0)
               GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Label value="Cluster discovery" rect=(x=899.0 y=42.0 width=165.2 height=24.0 center_x=981.6 center_y=54.0)
-                    TextRun value="Cluster discovery" rect=(x=899.0 y=42.0 width=165.2 height=24.0 center_x=981.6 center_y=54.0)
-                  GenericContainer rect=<none>
-                    GenericContainer rect=<none>
-                      Button name="Refresh" rect=(x=1368.0 y=45.0 width=71.0 height=18.0 center_x=1403.5 center_y=54.0)
+                Label value="Namespace selector" rect=(x=917.0 y=39.0 width=194.4 height=24.0 center_x=1014.2 center_y=51.0)
+                  TextRun value="Namespace selector" rect=(x=917.0 y=39.0 width=194.4 height=24.0 center_x=1014.2 center_y=51.0)
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   Button name="Close blade" rect=(x=1471.0 y=35.0 width=32.0 height=32.0 center_x=1487.0 center_y=51.0)
-            Label value="Find and add clusters from supported providers to your kubeconfig." rect=(x=809.0 y=96.0 width=448.0 height=17.0 center_x=1033.0 center_y=104.5)
-              TextRun value="Find and add clusters from supported providers to your kubeconfig." rect=(x=809.0 y=96.0 width=448.0 height=17.0 center_x=1033.0 center_y=104.5)
-            Label value="New clusters appear automatically. Refresh after making changes." rect=(x=809.0 y=124.0 width=437.5 height=17.0 center_x=1027.8 center_y=132.5)
-              TextRun value="New clusters appear automatically. Refresh after making changes." rect=(x=809.0 y=124.0 width=437.5 height=17.0 center_x=1027.8 center_y=132.5)
+            Label value="NAMESPACE SELECTOR" rect=(x=809.0 y=88.0 width=139.0 height=15.0 center_x=878.5 center_y=95.5)
+              TextRun value="NAMESPACE SELECTOR" rect=(x=809.0 y=88.0 width=139.0 height=15.0 center_x=878.5 center_y=95.5)
+            Label value="Create meaningful namespace identities from labels and annotations. These settings apply to every cluster on this device." rect=(x=809.0 y=110.0 width=660.9 height=34.0 center_x=1139.5 center_y=127.0)
+              TextRun value="Create meaningful namespace identities from labels and annotations. These settings apply to every " rect=(x=809.0 y=110.0 width=660.9 height=17.0 center_x=1139.5 center_y=118.5)
+              TextRun value="cluster on this device." rect=(x=809.0 y=127.0 width=145.0 height=17.0 center_x=881.5 center_y=135.5)
             GenericContainer rect=<none>
-              Image rect=(x=809.0 y=193.0 width=24.0 height=24.0 center_x=821.0 center_y=205.0)
-              Label value="Azure Kubernetes Service" rect=(x=849.0 y=195.5 width=202.3 height=19.0 center_x=950.2 center_y=205.0)
-                TextRun value="Azure Kubernetes Service" rect=(x=849.0 y=195.5 width=202.3 height=19.0 center_x=950.2 center_y=205.0)
-            Label value="Azure CLI is not installed" rect=(x=809.0 y=248.0 width=163.6 height=17.0 center_x=890.8 center_y=256.5)
-              TextRun value="Azure CLI is not installed" rect=(x=809.0 y=248.0 width=163.6 height=17.0 center_x=890.8 center_y=256.5)
-            Label value="Install Azure CLI and sign in with `az login` to discover AKS clusters." rect=(x=809.0 y=268.0 width=448.7 height=17.0 center_x=1033.4 center_y=276.5)
-              TextRun value="Install Azure CLI and sign in with `az login` to discover AKS clusters." rect=(x=809.0 y=268.0 width=448.7 height=17.0 center_x=1033.4 center_y=276.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="Metadata fields" rect=(x=809.0 y=192.0 width=116.9 height=19.0 center_x=867.5 center_y=201.5)
+                      TextRun value="Metadata fields" rect=(x=809.0 y=192.0 width=116.9 height=19.0 center_x=867.5 center_y=201.5)
+                    GenericContainer rect=<none>
+                      Button name="Add field" rect=(x=1419.6 y=192.0 width=83.4 height=28.0 center_x=1461.3 center_y=206.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        Image rect=(x=836.0 y=256.0 width=16.0 height=16.0 center_x=844.0 center_y=264.0)
+                      GenericContainer rect=<none>
+                        Label value="Label: company.example/customer" rect=(x=879.0 y=255.5 width=231.4 height=17.0 center_x=994.7 center_y=264.0)
+                          TextRun value="Label: company.example/customer" rect=(x=879.0 y=255.5 width=231.4 height=17.0 center_x=994.7 center_y=264.0)
+                        GenericContainer rect=<none>
+                          Label value="customer" rect=(x=1138.4 y=259.0 width=53.3 height=15.0 center_x=1165.1 center_y=266.5)
+                            TextRun value="customer" rect=(x=1138.4 y=259.0 width=53.3 height=15.0 center_x=1165.1 center_y=266.5)
+                      GenericContainer rect=<none>
+                        Button name="Remove customer field" rect=(x=1436.0 y=246.0 width=36.0 height=36.0 center_x=1454.0 center_y=264.0)
+                        Button name="Close customer field editor" rect=(x=1384.0 y=246.0 width=36.0 height=36.0 center_x=1402.0 center_y=264.0)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        Label value="Edit metadata field" rect=(x=827.0 y=317.0 width=141.0 height=19.0 center_x=897.5 center_y=326.5)
+                          TextRun value="Edit metadata field" rect=(x=827.0 y=317.0 width=141.0 height=19.0 center_x=897.5 center_y=326.5)
+                        GenericContainer rect=<none>
+                          Button name="Save field" rect=(x=1396.0 y=317.0 width=89.0 height=28.0 center_x=1440.5 center_y=331.0)
+                          Button name="Cancel" rect=(x=1318.1 y=317.0 width=69.9 height=28.0 center_x=1353.0 center_y=331.0)
+                      Label value="Source" rect=(x=827.0 y=357.0 width=46.8 height=17.0 center_x=850.4 center_y=365.5)
+                        TextRun value="Source" rect=(x=827.0 y=357.0 width=46.8 height=17.0 center_x=850.4 center_y=365.5)
+                      GenericContainer rect=<none>
+                        GenericContainer rect=<none>
+                          RadioButton name="Label" state=[toggled=True] rect=(x=827.0 y=378.0 width=18.0 height=18.0 center_x=836.0 center_y=387.0)
+                          Label value="Label" rect=(x=857.0 y=378.5 width=35.9 height=17.0 center_x=875.0 center_y=387.0)
+                            TextRun value="Label" rect=(x=857.0 y=378.5 width=35.9 height=17.0 center_x=875.0 center_y=387.0)
+                        GenericContainer rect=<none>
+                          RadioButton name="Annotation" state=[toggled=False] rect=(x=908.9 y=378.0 width=18.0 height=18.0 center_x=917.9 center_y=387.0)
+                          Label value="Annotation" rect=(x=938.9 y=378.5 width=71.8 height=17.0 center_x=974.8 center_y=387.0)
+                            TextRun value="Annotation" rect=(x=938.9 y=378.5 width=71.8 height=17.0 center_x=974.8 center_y=387.0)
+                      Label value="Selector" rect=(x=827.0 y=408.0 width=54.8 height=17.0 center_x=854.4 center_y=416.5)
+                        TextRun value="Selector" rect=(x=827.0 y=408.0 width=54.8 height=17.0 center_x=854.4 center_y=416.5)
+                      GenericContainer rect=<none>
+                        TextInput name="Selector" value="company.example/customer" rect=(x=827.0 y=429.0 width=658.0 height=28.0 center_x=1156.0 center_y=443.0)
+                          TextRun value="company.example/customer" rect=(x=836.0 y=434.0 width=187.6 height=17.0 center_x=929.8 center_y=442.5)
+                      Label value="Template key" rect=(x=827.0 y=465.0 width=87.9 height=17.0 center_x=870.9 center_y=473.5)
+                        TextRun value="Template key" rect=(x=827.0 y=465.0 width=87.9 height=17.0 center_x=870.9 center_y=473.5)
+                      GenericContainer rect=<none>
+                        TextInput name="Template key" value="customer" rect=(x=827.0 y=486.0 width=658.0 height=28.0 center_x=1156.0 center_y=500.0)
+                          TextRun value="customer" rect=(x=836.0 y=491.0 width=62.2 height=17.0 center_x=867.1 center_y=499.5)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        Image rect=(x=836.0 y=575.0 width=16.0 height=16.0 center_x=844.0 center_y=583.0)
+                      GenericContainer rect=<none>
+                        Label value="Annotation: company.example/environment" rect=(x=879.0 y=574.5 width=287.6 height=17.0 center_x=1022.8 center_y=583.0)
+                          TextRun value="Annotation: company.example/environment" rect=(x=879.0 y=574.5 width=287.6 height=17.0 center_x=1022.8 center_y=583.0)
+                        GenericContainer rect=<none>
+                          Label value="environment" rect=(x=1194.6 y=578.0 width=70.7 height=15.0 center_x=1229.9 center_y=585.5)
+                            TextRun value="environment" rect=(x=1194.6 y=578.0 width=70.7 height=15.0 center_x=1229.9 center_y=585.5)
+                      GenericContainer rect=<none>
+                        Button name="Remove environment field" rect=(x=1436.0 y=565.0 width=36.0 height=36.0 center_x=1454.0 center_y=583.0)
+                        Button name="Edit environment field" rect=(x=1384.0 y=565.0 width=36.0 height=36.0 center_x=1402.0 center_y=583.0)
+                  GenericContainer rect=<none>
+                    Label value="Identity templates" rect=(x=809.0 y=642.0 width=135.0 height=19.0 center_x=876.5 center_y=651.5)
+                      TextRun value="Identity templates" rect=(x=809.0 y=642.0 width=135.0 height=19.0 center_x=876.5 center_y=651.5)
+                    GenericContainer rect=<none>
+                      Button name="Add template" rect=(x=1391.0 y=642.0 width=112.0 height=28.0 center_x=1447.0 center_y=656.0)
+                  Label value="The first template with all its values available is used." rect=(x=809.0 y=681.0 width=349.8 height=17.0 center_x=983.9 center_y=689.5)
+                    TextRun value="The first template with all its values available is used." rect=(x=809.0 y=681.0 width=349.8 height=17.0 center_x=983.9 center_y=689.5)
+                  GenericContainer rect=<none>
+                    Button name="Reorder identity template 1" rect=(x=829.0 y=733.0 width=32.0 height=32.0 center_x=845.0 center_y=749.0)
+                    GenericContainer rect=<none>
+                      Image rect=(x=837.0 y=741.0 width=16.0 height=16.0 center_x=845.0 center_y=749.0)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        TextInput name="Identity template 1" value="Customer: {{customer}} · Environment: {{environment}}" rect=(x=877.0 y=735.0 width=548.0 height=28.0 center_x=1151.0 center_y=749.0)
+                          TextRun value="Customer: {{customer}} · Environment: {{environment}}" rect=(x=886.0 y=740.0 width=367.1 height=17.0 center_x=1069.5 center_y=748.5)
+                    GenericContainer rect=<none>
+                      Button name="Remove identity template 1" rect=(x=1441.0 y=731.0 width=36.0 height=36.0 center_x=1459.0 center_y=749.0)
+                    Button name="Reorder identity template 2" rect=(x=829.0 y=805.0 width=32.0 height=32.0 center_x=845.0 center_y=821.0)
+                    GenericContainer rect=<none>
+                      Image rect=(x=837.0 y=813.0 width=16.0 height=16.0 center_x=845.0 center_y=821.0)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        TextInput name="Identity template 2" value="Customer: {{customer}}" rect=(x=877.0 y=807.0 width=548.0 height=28.0 center_x=1151.0 center_y=821.0)
+                          TextRun value="Customer: {{customer}}" rect=(x=886.0 y=812.0 width=158.3 height=17.0 center_x=965.2 center_y=820.5)
+                    GenericContainer rect=<none>
+                      Button name="Remove identity template 2" rect=(x=1441.0 y=803.0 width=36.0 height=36.0 center_x=1459.0 center_y=821.0)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        Label value="Namespace name" rect=(x=886.0 y=884.5 width=119.4 height=17.0 center_x=945.7 center_y=893.0)
+                          TextRun value="Namespace name" rect=(x=886.0 y=884.5 width=119.4 height=17.0 center_x=945.7 center_y=893.0)
+                  GenericContainer rect=<none>
+                    Label value="Preview" rect=(x=826.0 y=958.0 width=60.0 height=19.0 center_x=856.0 center_y=967.5)
+                    Label value="Customer: Acme Corp · Environment: Production" rect=(x=826.0 y=992.0 width=367.5 height=19.0 center_x=1009.8 center_y=1001.5)
+                    Label value="acme-corp-a1b2c3d4" rect=(x=826.0 y=1018.0 width=144.0 height=17.0 center_x=898.0 center_y=1026.5)
+              ScrollBar rect=(x=1497.0 y=192.0 width=10.0 height=749.0 center_x=1502.0 center_y=566.5)
             GenericContainer rect=<none>
-              Image rect=(x=809.0 y=329.0 width=24.0 height=24.0 center_x=821.0 center_y=341.0)
-              Label value="Tailscale" rect=(x=849.0 y=331.5 width=68.1 height=19.0 center_x=883.0 center_y=341.0)
-                TextRun value="Tailscale" rect=(x=849.0 y=331.5 width=68.1 height=19.0 center_x=883.0 center_y=341.0)
-            Label value="Tailscale is not installed" rect=(x=809.0 y=384.0 width=156.5 height=17.0 center_x=887.2 center_y=392.5)
-              TextRun value="Tailscale is not installed" rect=(x=809.0 y=384.0 width=156.5 height=17.0 center_x=887.2 center_y=392.5)
-            Label value="Install and sign in to Tailscale to discover Kubernetes API proxies." rect=(x=809.0 y=404.0 width=432.4 height=17.0 center_x=1025.2 center_y=412.5)
-              TextRun value="Install and sign in to Tailscale to discover Kubernetes API proxies." rect=(x=809.0 y=404.0 width=432.4 height=17.0 center_x=1025.2 center_y=412.5)
-      ScrollBar rect=(x=1518.0 y=8.0 width=10.0 height=1008.0 center_x=1523.0 center_y=512.0)
+              Button name="Save changes" rect=(x=1390.1 y=961.0 width=116.9 height=33.0 center_x=1448.6 center_y=977.5)
+              Button name="Reset" rect=(x=1321.0 y=961.0 width=61.1 height=33.0 center_x=1351.6 center_y=977.5)
+      ScrollBar rect=(x=1522.0 y=8.0 width=10.0 height=1008.0 center_x=1527.0 center_y=512.0)

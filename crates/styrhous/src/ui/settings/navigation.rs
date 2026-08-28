@@ -53,6 +53,15 @@ impl GlobalBladeContent for SettingsHomeBlade {
             },
         );
         ui.add_space(spacing::XL - spacing::XS);
+        let namespace_selector = settings_destination_card(
+            ui,
+            SettingsDestination {
+                label: "Open namespace selector settings",
+                description: "Configure namespace identities from labels and annotations.",
+                icon: icons::settings_destination_application_icon(),
+            },
+        );
+        ui.add_space(spacing::XL - spacing::XS);
         let cluster_discovery = settings_destination_card(
             ui,
             SettingsDestination {
@@ -67,6 +76,13 @@ impl GlobalBladeContent for SettingsHomeBlade {
                     Box::new(TerminalSettingsBlade::new(
                         context.terminal_launch_settings().clone(),
                     )) as Box<dyn GlobalBladeContent>
+                })
+                .or_else(|| {
+                    namespace_selector.then(|| {
+                        Box::new(NamespaceSelectorSettingsBlade::new(
+                            context.namespace_selector_settings().clone(),
+                        )) as Box<dyn GlobalBladeContent>
+                    })
                 })
                 .or_else(|| {
                     cluster_discovery.then(|| {

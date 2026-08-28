@@ -199,6 +199,11 @@ pub fn trash_icon() -> Image<'static> {
     Image::new(include_image!("icons/trash.svg"))
 }
 
+/// Returns a pencil icon image for edit actions.
+pub fn pencil_icon() -> Image<'static> {
+    Image::new(include_image!("icons/pencil.svg"))
+}
+
 /// Returns a plus icon for add controls.
 pub fn plus_icon() -> Image<'static> {
     Image::new(include_image!("icons/plus.svg"))

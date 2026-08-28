@@ -5,6 +5,7 @@
 //! expose the small set of capabilities their owners need through optional
 //! hooks instead.
 
+use super::namespace_selector::NamespaceSelectorSettings;
 use super::state::{ResourceDetailHistoryEntry, UiState};
 use super::table_preferences::PersistedResourceTablePreferences;
 use crate::terminal_launcher::ShellRequest;
@@ -113,6 +114,7 @@ impl GlobalBladeCoordinator {
         debug_image_presets: &[DebugImagePreset],
         table_preferences: &mut PersistedResourceTablePreferences,
         terminal_launch_settings: &mut TerminalLaunchSettings,
+        namespace_selector_settings: &mut NamespaceSelectorSettings,
         update_status: &UpdateStatus,
     ) {
         let Some(mut navigator) = self.navigator.take() else {
@@ -140,6 +142,7 @@ impl GlobalBladeCoordinator {
                 debug_image_presets,
                 table_preferences,
                 terminal_launch_settings,
+                namespace_selector_settings,
                 update_status,
             ),
         );
@@ -198,6 +201,7 @@ pub(super) fn show(
     debug_image_presets: &[DebugImagePreset],
     table_preferences: &mut PersistedResourceTablePreferences,
     terminal_launch_settings: &mut TerminalLaunchSettings,
+    namespace_selector_settings: &mut NamespaceSelectorSettings,
     update_status: &UpdateStatus,
 ) {
     // Split borrows deliberately: the coordinator owns navigator state, while
@@ -211,6 +215,7 @@ pub(super) fn show(
         debug_image_presets,
         table_preferences,
         terminal_launch_settings,
+        namespace_selector_settings,
         update_status,
     );
     // Effects normally operate through `GlobalBladeNavigation`, but preserve
@@ -321,6 +326,7 @@ pub(super) struct GlobalBladeRenderContext<'a> {
     debug_image_presets: &'a [DebugImagePreset],
     table_preferences: &'a mut PersistedResourceTablePreferences,
     terminal_launch_settings: &'a mut TerminalLaunchSettings,
+    namespace_selector_settings: &'a mut NamespaceSelectorSettings,
     update_status: &'a UpdateStatus,
 }
 
@@ -330,6 +336,7 @@ impl<'a> GlobalBladeRenderContext<'a> {
         debug_image_presets: &'a [DebugImagePreset],
         table_preferences: &'a mut PersistedResourceTablePreferences,
         terminal_launch_settings: &'a mut TerminalLaunchSettings,
+        namespace_selector_settings: &'a mut NamespaceSelectorSettings,
         update_status: &'a UpdateStatus,
     ) -> Self {
         Self {
@@ -337,6 +344,7 @@ impl<'a> GlobalBladeRenderContext<'a> {
             debug_image_presets,
             table_preferences,
             terminal_launch_settings,
+            namespace_selector_settings,
             update_status,
         }
     }
@@ -410,6 +418,18 @@ impl<'a> GlobalBladeRenderContext<'a> {
 
     pub(super) fn terminal_launch_settings(&mut self) -> &mut TerminalLaunchSettings {
         self.terminal_launch_settings
+    }
+
+    pub(super) fn namespace_selector_settings(&mut self) -> &mut NamespaceSelectorSettings {
+        self.namespace_selector_settings
+    }
+
+    pub(super) fn namespaces(&self) -> Vec<crate::minimal_namespace::MinimalNamespace> {
+        self.ui_state
+            .clusters
+            .values()
+            .flat_map(|cluster| cluster.namespaces.values().cloned())
+            .collect()
     }
 
     pub(super) fn update_status(&self) -> &UpdateStatus {
