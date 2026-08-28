@@ -128,11 +128,11 @@ fn draw_background(painter: &egui::Painter, rect: egui::Rect, color: Color32) {
     }
 }
 
-fn render_icon(ui: &mut Ui, rect: egui::Rect, icon: Image<'_>, tint: Color32) {
+fn render_icon(ui: &mut Ui, rect: egui::Rect, icon: Image<'_>, tint: Color32, size: f32) {
     let mut icon_ui = ui.new_child(UiBuilder::new().max_rect(rect).layout(
         egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
     ));
-    icon_ui.add(icon.fit_to_exact_size(Vec2::splat(ICON_SIZE)).tint(tint));
+    icon_ui.add(icon.fit_to_exact_size(Vec2::splat(size)).tint(tint));
 }
 
 fn truncate_text(painter: &egui::Painter, text: &str, color: Color32, max_width: f32) -> String {
@@ -225,16 +225,16 @@ fn add_expandable_accessibility(response: &Response, ui: &Ui, label: &str, open:
     });
 }
 
-fn icon_rect_wide(inner_rect: egui::Rect, item_height: f32) -> egui::Rect {
+fn icon_rect_wide(inner_rect: egui::Rect, item_height: f32, size: f32) -> egui::Rect {
     let icon_x = CHEVRON_SIZE + CHEVRON_GAP;
     egui::Rect::from_min_size(
-        inner_rect.min + Vec2::new(icon_x, (item_height - ICON_SIZE) / 2.0),
-        Vec2::splat(ICON_SIZE),
+        inner_rect.min + Vec2::new(icon_x, (item_height - size) / 2.0),
+        Vec2::splat(size),
     )
 }
 
-fn icon_rect_centered(inner_rect: egui::Rect) -> egui::Rect {
-    egui::Rect::from_center_size(inner_rect.center(), Vec2::splat(ICON_SIZE))
+fn icon_rect_centered(inner_rect: egui::Rect, size: f32) -> egui::Rect {
+    egui::Rect::from_center_size(inner_rect.center(), Vec2::splat(size))
 }
 
 fn text_pos_after_icon(inner_rect: egui::Rect, item_height: f32) -> egui::Pos2 {

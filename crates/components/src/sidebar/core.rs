@@ -1,5 +1,9 @@
 use super::*;
 
+// The settings SVG has generous view-box padding. Allocate a larger image so its visible cog
+// matches the visual weight of the 21px control it replaced.
+const NARROW_FOOTER_BUTTON_ICON_SIZE: f32 = 28.0;
+
 pub(super) struct SidebarContentCore<'a> {
     pub(super) ui: &'a mut Ui,
     pub(super) id: Id,
@@ -41,8 +45,47 @@ impl<'a> SidebarContentCore<'a> {
         icon: Image<'_>,
         selected: bool,
     ) -> Response {
+        self.item_with_tooltip(text, icon, selected, None)
+    }
+
+    pub(super) fn item_with_tooltip(
+        &mut self,
+        text: impl Into<WidgetText>,
+        icon: Image<'_>,
+        selected: bool,
+        tooltip: Option<&str>,
+    ) -> Response {
+        self.show_icon_item(text, icon, selected, tooltip, false, ICON_SIZE)
+    }
+
+    pub(super) fn button_with_tooltip(
+        &mut self,
+        text: impl Into<WidgetText>,
+        icon: Image<'_>,
+        tooltip: &str,
+    ) -> Response {
+        self.show_icon_item(
+            text,
+            icon,
+            false,
+            Some(tooltip),
+            true,
+            NARROW_FOOTER_BUTTON_ICON_SIZE,
+        )
+    }
+
+    fn show_icon_item(
+        &mut self,
+        text: impl Into<WidgetText>,
+        icon: Image<'_>,
+        selected: bool,
+        tooltip: Option<&str>,
+        is_button: bool,
+        icon_size: f32,
+    ) -> Response {
         let text = text.into();
         let text_str = text.text();
+        let tooltip = tooltip.unwrap_or(text_str);
 
         let (rect, inner_rect, response) = allocate_item(self.ui, self.item_height);
         let colors = ItemColors::navigation(selected, response.hovered(), self.dark);
@@ -57,9 +100,10 @@ impl<'a> SidebarContentCore<'a> {
         if self.show_text {
             render_icon(
                 self.ui,
-                icon_rect_wide(inner_rect, self.item_height),
+                icon_rect_wide(inner_rect, self.item_height, icon_size),
                 icon,
                 colors.icon,
+                icon_size,
             );
             let text_is_truncated = render_text(
                 self.ui.painter(),
@@ -69,15 +113,27 @@ impl<'a> SidebarContentCore<'a> {
                 inner_rect.right() - text_pos_after_icon(inner_rect, self.item_height).x,
             );
             if text_is_truncated {
-                response.clone().on_hover_text(text_str);
+                response.clone().on_hover_text(tooltip);
             }
         } else {
             // For narrow mode, center icon within full rect (not inner_rect)
-            render_icon(self.ui, icon_rect_centered(rect), icon, colors.icon);
-            response.clone().on_hover_text(text_str);
+            render_icon(
+                self.ui,
+                icon_rect_centered(rect, icon_size),
+                icon,
+                colors.icon,
+                icon_size,
+            );
+            response.clone().on_hover_text(tooltip);
         }
 
-        add_selectable_accessibility(&response, self.ui, text_str, selected);
+        if is_button {
+            response.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::WidgetType::Button, self.ui.is_enabled(), text_str)
+            });
+        } else {
+            add_selectable_accessibility(&response, self.ui, text_str, selected);
+        }
         response
     }
 
@@ -173,25 +229,74 @@ pub(super) fn render_sidebar<R>(
     top_padding: f32,
     add_contents: impl FnOnce(&mut Ui) -> R,
 ) -> R {
+    render_sidebar_with_footer(
+        ui,
+        SidebarLayout {
+            width,
+            default_width,
+            background,
+            top_padding,
+        },
+        0.0,
+        add_contents,
+        |_| {},
+    )
+}
+
+pub(super) fn render_sidebar_with_footer<R>(
+    ui: &mut Ui,
+    layout: SidebarLayout,
+    footer_height: f32,
+    add_contents: impl FnOnce(&mut Ui) -> R,
+    add_footer: impl FnOnce(&mut Ui),
+) -> R {
     let rect = ui.available_rect_before_wrap();
     // Use specified width, or available width capped at default (handles being inside a SidePanel)
-    let width = width.unwrap_or_else(|| rect.width().min(default_width));
+    let width = layout
+        .width
+        .unwrap_or_else(|| rect.width().min(layout.default_width));
     let sidebar_rect = egui::Rect::from_min_size(rect.min, Vec2::new(width, rect.height()));
-    ui.painter().rect_filled(sidebar_rect, 0.0, background);
+    ui.painter()
+        .rect_filled(sidebar_rect, 0.0, layout.background);
 
     let mut child_ui = ui.new_child(
         UiBuilder::new()
-            .max_rect(sidebar_rect)
+            .max_rect(egui::Rect::from_min_max(
+                sidebar_rect.min,
+                egui::pos2(sidebar_rect.right(), sidebar_rect.bottom() - footer_height),
+            ))
             .layout(egui::Layout::top_down(egui::Align::LEFT)),
     );
 
     let scroll_id = ui.auto_id_with("sidebar-scroll");
-    crate::scroll::vertical()
+    let inner = crate::scroll::vertical()
         .id_salt(scroll_id)
         .auto_shrink(false)
         .show(&mut child_ui, |ui| {
-            ui.add_space(top_padding);
+            ui.add_space(layout.top_padding);
             add_contents(ui)
         })
-        .inner
+        .inner;
+
+    if footer_height > 0.0 {
+        let footer_rect = egui::Rect::from_min_max(
+            egui::pos2(sidebar_rect.left(), sidebar_rect.bottom() - footer_height),
+            sidebar_rect.right_bottom(),
+        );
+        let mut footer_ui = ui.new_child(
+            UiBuilder::new()
+                .max_rect(footer_rect)
+                .layout(egui::Layout::top_down(egui::Align::LEFT)),
+        );
+        add_footer(&mut footer_ui);
+    }
+
+    inner
+}
+
+pub(super) struct SidebarLayout {
+    pub(super) width: Option<f32>,
+    pub(super) default_width: f32,
+    pub(super) background: Color32,
+    pub(super) top_padding: f32,
 }

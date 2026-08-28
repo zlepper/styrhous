@@ -63,7 +63,15 @@ pub(super) fn usage_chart(
         );
         return;
     }
-    let start = time::OffsetDateTime::now_utc() - POD_USAGE_HISTORY_WINDOW;
+    // Anchor the window to the newest collected sample. Metrics update on a fixed cadence, so
+    // this prevents the plot from subtly drifting between samples while still showing its full
+    // retained history.
+    let end = samples
+        .iter()
+        .map(|(timestamp, _)| *timestamp)
+        .max()
+        .unwrap_or_else(time::OffsetDateTime::now_utc);
+    let start = end - POD_USAGE_HISTORY_WINDOW;
     let plot = egui::Rect::from_min_max(
         egui::pos2(
             rect.left() + USAGE_CHART_LEFT_INSET,

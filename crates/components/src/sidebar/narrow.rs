@@ -59,15 +59,51 @@ impl NarrowSidebar {
                 WHITE
             }),
             9.0,
-            |child_ui| {
-                child_ui.spacing_mut().item_spacing.y = 0.0;
-                let mut content = NarrowSidebarContent {
-                    core: SidebarContentCore::narrow(child_ui, self.dark),
-                };
-                add_contents(&mut content)
+            |child_ui| show_narrow_content(child_ui, self.dark, add_contents),
+        )
+    }
+
+    /// Show the sidebar with a footer anchored below its scrollable navigation items.
+    pub fn show_with_footer<R>(
+        self,
+        ui: &mut Ui,
+        add_contents: impl FnOnce(&mut NarrowSidebarContent<'_>) -> R,
+        add_footer: impl FnOnce(&mut NarrowSidebarContent<'_>),
+    ) -> R {
+        render_sidebar_with_footer(
+            ui,
+            SidebarLayout {
+                width: self.width,
+                default_width: NARROW_WIDTH,
+                background: self.background.unwrap_or(if self.dark {
+                    NAVIGATION_BACKGROUND
+                } else {
+                    WHITE
+                }),
+                top_padding: 9.0,
+            },
+            NARROW_ITEM_HEIGHT + spacing::SM,
+            |child_ui| show_narrow_content(child_ui, self.dark, add_contents),
+            |footer_ui| {
+                footer_ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
+                    ui.add_space(spacing::SM);
+                    show_narrow_content(ui, self.dark, add_footer)
+                });
             },
         )
     }
+}
+
+fn show_narrow_content<R>(
+    ui: &mut Ui,
+    dark: bool,
+    add_contents: impl FnOnce(&mut NarrowSidebarContent<'_>) -> R,
+) -> R {
+    ui.spacing_mut().item_spacing.y = 0.0;
+    let mut content = NarrowSidebarContent {
+        core: SidebarContentCore::narrow(ui, dark),
+    };
+    add_contents(&mut content)
 }
 
 /// Content builder for narrow sidebar
@@ -89,6 +125,28 @@ impl<'a> NarrowSidebarContent<'a> {
         selected: bool,
     ) -> Response {
         self.core.item(text, icon, selected)
+    }
+
+    /// Add a navigation item with caller-provided tooltip text.
+    pub fn item_with_tooltip(
+        &mut self,
+        text: impl Into<WidgetText>,
+        icon: Image<'_>,
+        tooltip: &str,
+        selected: bool,
+    ) -> Response {
+        self.core
+            .item_with_tooltip(text, icon, selected, Some(tooltip))
+    }
+
+    /// Add a button item with caller-provided tooltip text.
+    pub fn button_with_tooltip(
+        &mut self,
+        text: impl Into<WidgetText>,
+        icon: Image<'_>,
+        tooltip: &str,
+    ) -> Response {
+        self.core.button_with_tooltip(text, icon, tooltip)
     }
 
     /// Add an avatar item (initial only, text used for accessibility)

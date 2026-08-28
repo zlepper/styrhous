@@ -48,10 +48,11 @@ fn node_inspector_shows_its_spec() {
             }),
         }) as WorkerResultBox);
     // Model the Metrics API's 15-second cadence across the full retained window. Offset the
-    // series slightly into the future so all samples survive the rolling history prune while
-    // the harness renders; chart positions are clamped to the window's current edge.
+    // series one minute into the future so all samples survive the rolling history prune even
+    // while a busy parallel test run renders; chart positions are clamped to the window's
+    // current edge.
     let now = OffsetDateTime::now_utc();
-    let last_sample = now + time::Duration::seconds(10);
+    let last_sample = now + time::Duration::seconds(60);
     let first_sample = last_sample - POD_USAGE_HISTORY_WINDOW;
     for sample_index in 0_i64..=40 {
         harness

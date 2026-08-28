@@ -211,6 +211,48 @@ fn cluster_rail_shows_connection_status_marker_and_tooltip() {
 }
 
 #[test]
+fn cluster_rail_settings_item_shows_its_update_status() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness
+        .state_mut()
+        .updater
+        .set_status_for_test(UpdateStatus::Checking);
+    harness.run();
+
+    harness.get_by_label("Settings").hover();
+    harness.run();
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "cluster_connection/cluster_rail_settings_item_shows_its_update_status/settings_update_status",
+    ));
+}
+
+#[test]
+fn cluster_rail_settings_footer_stays_clear_of_overflowing_clusters() {
+    let mut harness = application_harness::<MockWorker>();
+    let clusters = (1..=24)
+        .map(|cluster_key| {
+            (
+                cluster_key,
+                fixture_cluster(cluster_key, &format!("cluster-{cluster_key}")),
+            )
+        })
+        .collect();
+    harness.state_mut().ui_state = UiState {
+        clusters,
+        next_cluster_key: 24,
+        selected_cluster: Some(1),
+        ..Default::default()
+    };
+    harness.run();
+
+    harness.get_by_label("Settings");
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "cluster_connection/cluster_rail_settings_footer_stays_clear_of_overflowing_clusters/settings_footer",
+    ));
+}
+
+#[test]
 fn delete_confirmation_can_be_cancelled_without_sending_a_command() {
     let mut cluster = fixture_cluster(1, "dev");
     cluster.selected_api_resource = Some(fixture_api_resource("", "ConfigMap", "configmaps"));

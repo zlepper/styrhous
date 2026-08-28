@@ -204,9 +204,10 @@ impl<'a> WideSidebarContent<'a> {
         // Icon
         render_icon(
             self.core.ui,
-            icon_rect_wide(inner_rect, WIDE_ITEM_HEIGHT),
+            icon_rect_wide(inner_rect, WIDE_ITEM_HEIGHT, ICON_SIZE),
             icon,
             colors.icon,
+            ICON_SIZE,
         );
 
         // Text
