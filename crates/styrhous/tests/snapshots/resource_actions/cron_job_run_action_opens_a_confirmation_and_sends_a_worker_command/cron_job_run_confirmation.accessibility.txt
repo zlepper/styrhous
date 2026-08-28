@@ -29,15 +29,14 @@ Window state=[focused] rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
+          Label value="Namespace" rect=(x=397.0 y=17.5 width=79.0 height=17.0 center_x=436.5 center_y=26.0)
+            TextRun value="Namespace" rect=(x=397.0 y=17.5 width=79.0 height=17.0 center_x=436.5 center_y=26.0)
+          ComboBox name="Namespace" rect=(x=491.0 y=10.0 width=230.0 height=32.0 center_x=606.0 center_y=26.0)
           GenericContainer rect=<none>
-            Label value="Namespace" rect=(x=397.0 y=17.5 width=79.0 height=17.0 center_x=436.5 center_y=26.0)
-              TextRun value="Namespace" rect=(x=397.0 y=17.5 width=79.0 height=17.0 center_x=436.5 center_y=26.0)
-            ComboBox name="Namespace" rect=(x=491.0 y=10.0 width=230.0 height=32.0 center_x=606.0 center_y=26.0)
-            GenericContainer rect=<none>
-              Image rect=(x=697.0 y=18.0 width=16.0 height=16.0 center_x=705.0 center_y=26.0)
+            Image rect=(x=697.0 y=18.0 width=16.0 height=16.0 center_x=705.0 center_y=26.0)
           GenericContainer rect=<none>
-            Label value="1 items" rect=(x=775.0 y=16.5 width=51.8 height=19.0 center_x=800.9 center_y=26.0)
-              TextRun value="1 items" rect=(x=775.0 y=16.5 width=51.8 height=19.0 center_x=800.9 center_y=26.0)
+            Label value="1 items" rect=(x=776.0 y=16.5 width=51.8 height=19.0 center_x=801.8 center_y=26.0)
+              TextRun value="1 items" rect=(x=776.0 y=16.5 width=51.8 height=19.0 center_x=801.8 center_y=26.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>

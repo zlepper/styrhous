@@ -3,6 +3,9 @@ use super::*;
 #[test]
 fn node_inspector_shows_its_spec() {
     let mut harness = application_harness::<MockWorker>();
+    harness
+        .ctx
+        .global_style_mut(|style| style.animation_time = 0.0);
     harness.state_mut().ui_state = oracle_resource_table_state();
     let mut commands = Vec::new();
     harness.state_mut().ui_state.open_resource_detail(

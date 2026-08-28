@@ -47,22 +47,21 @@ Window state=[focused] rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
+          Label value="Namespace" rect=(x=397.0 y=17.5 width=79.0 height=17.0 center_x=436.5 center_y=26.0)
+            TextRun value="Namespace" rect=(x=397.0 y=17.5 width=79.0 height=17.0 center_x=436.5 center_y=26.0)
+          ComboBox name="Namespace" rect=(x=491.0 y=10.0 width=230.0 height=32.0 center_x=606.0 center_y=26.0)
           GenericContainer rect=<none>
-            Label value="Namespace" rect=(x=397.0 y=17.5 width=79.0 height=17.0 center_x=436.5 center_y=26.0)
-              TextRun value="Namespace" rect=(x=397.0 y=17.5 width=79.0 height=17.0 center_x=436.5 center_y=26.0)
-            ComboBox name="Namespace" rect=(x=491.0 y=10.0 width=230.0 height=32.0 center_x=606.0 center_y=26.0)
-            GenericContainer rect=<none>
-              Image rect=(x=697.0 y=18.0 width=16.0 height=16.0 center_x=705.0 center_y=26.0)
+            Image rect=(x=697.0 y=18.0 width=16.0 height=16.0 center_x=705.0 center_y=26.0)
           GenericContainer rect=<none>
-            Label value="8 items" rect=(x=775.0 y=16.5 width=13.8 height=19.0 center_x=781.9 center_y=26.0)
+            Label value="8 items" rect=(x=776.0 y=16.5 width=13.8 height=19.0 center_x=782.9 center_y=26.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    TextInput name="Search resources" value="" rect=(x=745.0 y=13.0 width=150.0 height=26.0 center_x=820.0 center_y=26.0)
-                      TextRun value="" rect=(x=749.0 y=15.0 width=0.0 height=17.0 center_x=749.0 center_y=23.5)
-                  CheckBox name="Use regex search" state=[toggled=Mixed] rect=(x=917.0 y=16.5 width=19.1 height=19.0 center_x=926.5 center_y=26.0)
+                    TextInput name="Search resources" value="" rect=(x=746.0 y=13.0 width=150.0 height=26.0 center_x=821.0 center_y=26.0)
+                      TextRun value="" rect=(x=750.0 y=15.0 width=0.0 height=17.0 center_x=750.0 center_y=23.5)
+                  CheckBox name="Use regex search" state=[toggled=Mixed] rect=(x=918.0 y=16.5 width=19.1 height=19.0 center_x=927.5 center_y=26.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
@@ -540,4 +539,4 @@ Window state=[focused] rect=<none>
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
                         Button name="More actions for kube-scheduler-kind-control-plane" rect=(x=1622.0 y=432.0 width=36.0 height=36.0 center_x=1640.0 center_y=450.0)
-        ScrollBar rect=(x=360.0 y=1014.0 width=618.0 height=13.0 center_x=669.0 center_y=1020.5)
+        ScrollBar rect=(x=360.0 y=1014.0 width=619.0 height=13.0 center_x=669.5 center_y=1020.5)

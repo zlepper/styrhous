@@ -43,14 +43,13 @@ Window state=[focused] rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
+          Label value="Scope" rect=(x=397.0 y=17.5 width=42.1 height=17.0 center_x=418.1 center_y=26.0)
+            TextRun value="Scope" rect=(x=397.0 y=17.5 width=42.1 height=17.0 center_x=418.1 center_y=26.0)
+          Label value="Cluster-wide" rect=(x=454.1 y=17.5 width=84.6 height=17.0 center_x=496.4 center_y=26.0)
+            TextRun value="Cluster-wide" rect=(x=454.1 y=17.5 width=84.6 height=17.0 center_x=496.4 center_y=26.0)
           GenericContainer rect=<none>
-            Label value="Scope" rect=(x=397.0 y=17.5 width=42.1 height=17.0 center_x=418.1 center_y=26.0)
-              TextRun value="Scope" rect=(x=397.0 y=17.5 width=42.1 height=17.0 center_x=418.1 center_y=26.0)
-            Label value="Cluster-wide" rect=(x=454.1 y=17.5 width=84.6 height=17.0 center_x=496.4 center_y=26.0)
-              TextRun value="Cluster-wide" rect=(x=454.1 y=17.5 width=84.6 height=17.0 center_x=496.4 center_y=26.0)
-          GenericContainer rect=<none>
-            Label value="1 items" rect=(x=775.0 y=16.5 width=51.8 height=19.0 center_x=800.9 center_y=26.0)
-              TextRun value="1 items" rect=(x=775.0 y=16.5 width=51.8 height=19.0 center_x=800.9 center_y=26.0)
+            Label value="1 items" rect=(x=593.8 y=16.5 width=51.8 height=19.0 center_x=619.6 center_y=26.0)
+              TextRun value="1 items" rect=(x=593.8 y=16.5 width=51.8 height=19.0 center_x=619.6 center_y=26.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>

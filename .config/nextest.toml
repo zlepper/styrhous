@@ -11,13 +11,13 @@ capture-stdout = true
 capture-stderr = true
 
 [[profile.default.scripts]]
-filter = 'test(/ui::tests::kind_integration::/)'
+filter = 'test(/ui::tests::kind::/)'
 setup = "ensure-kind-cluster"
 
 [[profile.default.overrides]]
-filter = 'test(/ui::tests::kind_integration::/)'
+filter = 'test(/ui::tests::kind::/)'
 test-group = "kind"
 
 [[profile.default.overrides]]
-filter = 'test(/ui::tests::kind_integration::test_pod_metrics_charts_integration/)'
+filter = 'test(/ui::tests::kind::scenarios::connection_and_metrics::test_pod_metrics_charts_integration/)'
 slow-timeout = { period = "4m", terminate-after = 1, grace-period = "10s" }

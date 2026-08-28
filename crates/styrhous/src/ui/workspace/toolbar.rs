@@ -50,92 +50,87 @@ pub(super) fn show_toolbar(
     ui.add_space(TOOLBAR_VERTICAL_PADDING);
     ui.allocate_ui_with_layout(
         egui::vec2(ui.available_width(), TOOLBAR_CONTENT_HEIGHT),
-        egui::Layout::top_down(egui::Align::Min),
+        egui::Layout::left_to_right(egui::Align::Center),
         |ui| {
-            StripBuilder::new(ui)
-                .size(Size::exact(360.0))
-                .size(Size::remainder())
-                .size(Size::exact(
-                    selected_api_resource.map_or(0.0, |_| RESOURCE_SEARCH_WIDTH),
-                ))
-                .size(Size::exact(TOOLBAR_RIGHT_INSET))
-                .clip(true)
-                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                .horizontal(|mut strip| {
-                    strip.cell(|ui| {
-                        ui.add_space(37.0);
-                        if selected_api_resource.is_some_and(|resource| !resource.namespaced) {
-                            ui.label(
-                                egui::RichText::new("Scope")
-                                    .font(typography::body())
-                                    .color(gray::_700),
-                            );
-                            ui.add_space(7.0);
-                            ui.label(
-                                egui::RichText::new("Cluster-wide")
-                                    .font(typography::body())
-                                    .color(gray::_700),
-                            );
-                        } else {
-                            ui.label(
-                                egui::RichText::new("Namespace")
-                                    .font(typography::body())
-                                    .color(gray::_700),
-                            );
-                            ui.add_space(7.0);
-                            let namespace_response = TailwindCombobox::new("namespace-selector")
-                                .accessibility_label("Namespace")
-                                .placeholder("Search namespaces...")
-                                .search_accessibility_label("Search Namespace")
-                                .selected_text(selected_text)
-                                .selected_status(selected_status)
-                                .width(230.0)
-                                .compact()
-                                .select_all(all_namespaces_selected)
-                                .filter_by(|ns: &&MinimalNamespace| ns.get_name_to_display())
-                                .show_items(ui, &namespaces, |cb, ns| {
-                                    let status = selected_api_resource.map(|api_resource| {
-                                        cluster.active_watchers.contains(&(
-                                            api_resource.clone(),
-                                            Some(ns.name.clone()),
-                                        ))
-                                    });
-                                    if let Some(action) = cb
-                                        .item_with_status(
-                                            ns.get_name_to_display(),
-                                            cluster.selected_namespaces.contains(&ns.name),
-                                            status,
-                                        )
-                                        .selection_action()
-                                    {
-                                        *namespace_selection = Some(match action {
-                                            SelectionAction::Replace => {
-                                                NamespaceSelection::Replace(ns.name.clone())
-                                            }
-                                            SelectionAction::Toggle => {
-                                                NamespaceSelection::Toggle(ns.name.clone())
-                                            }
-                                        });
-                                    }
-                                });
-                            if namespace_response.select_all_clicked {
-                                *namespace_selection = Some(if all_namespaces_selected {
-                                    NamespaceSelection::ClearAll
-                                } else {
-                                    NamespaceSelection::SelectAll
-                                });
-                            }
-                            namespace_response.response.widget_info(|| {
-                                egui::WidgetInfo::labeled(
-                                    egui::WidgetType::ComboBox,
-                                    ui.is_enabled(),
-                                    "Namespace",
-                                )
+            ui.add_space(37.0);
+            if selected_api_resource.is_some_and(|resource| !resource.namespaced) {
+                ui.label(
+                    egui::RichText::new("Scope")
+                        .font(typography::body())
+                        .color(gray::_700),
+                );
+                ui.add_space(7.0);
+                ui.label(
+                    egui::RichText::new("Cluster-wide")
+                        .font(typography::body())
+                        .color(gray::_700),
+                );
+            } else {
+                ui.label(
+                    egui::RichText::new("Namespace")
+                        .font(typography::body())
+                        .color(gray::_700),
+                );
+                ui.add_space(7.0);
+                let namespace_response = TailwindCombobox::new("namespace-selector")
+                    .accessibility_label("Namespace")
+                    .placeholder("Search namespaces...")
+                    .search_accessibility_label("Search Namespace")
+                    .selected_text(selected_text)
+                    .selected_status(selected_status)
+                    .width(230.0)
+                    .compact()
+                    .select_all(all_namespaces_selected)
+                    .filter_by(|ns: &&MinimalNamespace| ns.get_name_to_display())
+                    .show_items(ui, &namespaces, |cb, ns| {
+                        let status = selected_api_resource.map(|api_resource| {
+                            cluster
+                                .active_watchers
+                                .contains(&(api_resource.clone(), Some(ns.name.clone())))
+                        });
+                        if let Some(action) = cb
+                            .item_with_status(
+                                ns.get_name_to_display(),
+                                cluster.selected_namespaces.contains(&ns.name),
+                                status,
+                            )
+                            .selection_action()
+                        {
+                            *namespace_selection = Some(match action {
+                                SelectionAction::Replace => {
+                                    NamespaceSelection::Replace(ns.name.clone())
+                                }
+                                SelectionAction::Toggle => {
+                                    NamespaceSelection::Toggle(ns.name.clone())
+                                }
                             });
                         }
                     });
-                    strip.cell(|ui| {
-                        if selected_api_resource.is_some() {
+                if namespace_response.select_all_clicked {
+                    *namespace_selection = Some(if all_namespaces_selected {
+                        NamespaceSelection::ClearAll
+                    } else {
+                        NamespaceSelection::SelectAll
+                    });
+                }
+                namespace_response.response.widget_info(|| {
+                    egui::WidgetInfo::labeled(
+                        egui::WidgetType::ComboBox,
+                        ui.is_enabled(),
+                        "Namespace",
+                    )
+                });
+            }
+
+            if selected_api_resource.is_some() {
+                StripBuilder::new(ui)
+                    .size(Size::remainder())
+                    .size(Size::exact(RESOURCE_SEARCH_WIDTH))
+                    .size(Size::exact(TOOLBAR_RIGHT_INSET))
+                    .clip(true)
+                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                    .horizontal(|mut strip| {
+                        strip.cell(|ui| {
                             ui.add_space(15.0);
                             ui.separator();
                             ui.add_space(18.0);
@@ -180,20 +175,18 @@ pub(super) fn show_toolbar(
                                         Some(ResourceSelectionAction::Delete);
                                 }
                             }
-                        }
-                    });
-                    strip.cell(|ui| {
-                        if selected_api_resource.is_some() {
+                        });
+                        strip.cell(|ui| {
                             ui.allocate_ui_with_layout(
-                                egui::vec2(RESOURCE_SEARCH_WIDTH, 36.0),
+                                egui::vec2(RESOURCE_SEARCH_WIDTH, TOOLBAR_CONTENT_HEIGHT),
                                 egui::Layout::left_to_right(egui::Align::Center),
                                 |ui| show_resource_search(ui, resource_search),
                             );
-                            filtered_resources = filter_resources(all_resources, resource_search);
-                        }
+                        });
+                        strip.empty();
                     });
-                    strip.empty();
-                });
+                filtered_resources = filter_resources(all_resources, resource_search);
+            }
         },
     );
 
