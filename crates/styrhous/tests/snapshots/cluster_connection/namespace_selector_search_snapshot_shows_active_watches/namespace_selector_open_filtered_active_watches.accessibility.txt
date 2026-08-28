@@ -667,5 +667,5 @@ Window rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
           GenericContainer rect=<none>
-            CheckBox name="kube-system" state=[toggled=True] rect=(x=498.0 y=49.0 width=216.0 height=32.0 center_x=606.0 center_y=65.0)
-            CheckBox name="Monitoring" state=[toggled=True] rect=(x=498.0 y=84.0 width=216.0 height=32.0 center_x=606.0 center_y=100.0)
+            CheckBox name="Monitoring" state=[toggled=True] rect=(x=498.0 y=49.0 width=216.0 height=32.0 center_x=606.0 center_y=65.0)
+            CheckBox name="kube-system" state=[toggled=True] rect=(x=498.0 y=84.0 width=216.0 height=32.0 center_x=606.0 center_y=100.0)

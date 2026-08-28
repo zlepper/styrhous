@@ -80,12 +80,13 @@ pub(super) fn show_resource_table(
     let mut resource_rows = resources.iter().collect::<Vec<_>>();
     if let Some(sort) = &sort_state {
         resource_rows.sort_by(|left, right| {
-            compare_resource_column(
+            compare_resource_column_with_relevance(
                 left,
                 right,
                 &sort.column_id,
                 sort.direction,
                 &metadata_columns,
+                options.fuzzy_scores,
             )
         });
     }
@@ -400,7 +401,46 @@ pub(super) fn show_resource_actions(
     });
 }
 
+#[cfg(test)]
 pub(super) fn compare_resource_column(
+    left: &MinimalResource,
+    right: &MinimalResource,
+    column_id: &str,
+    direction: components::SortDirection,
+    metadata_columns: &[super::super::table_preferences::CustomMetadataColumn],
+) -> std::cmp::Ordering {
+    compare_resource_column_with_relevance(
+        left,
+        right,
+        column_id,
+        direction,
+        metadata_columns,
+        None,
+    )
+}
+
+pub(super) fn compare_resource_column_with_relevance(
+    left: &MinimalResource,
+    right: &MinimalResource,
+    column_id: &str,
+    direction: components::SortDirection,
+    metadata_columns: &[super::super::table_preferences::CustomMetadataColumn],
+    fuzzy_scores: Option<&std::collections::HashMap<String, components::fuzzy::FuzzyMatchScore>>,
+) -> std::cmp::Ordering {
+    compare_resource_column_values(left, right, column_id, direction, metadata_columns)
+        .then_with(|| {
+            let left_score = fuzzy_scores.and_then(|scores| scores.get(&left.uid));
+            let right_score = fuzzy_scores.and_then(|scores| scores.get(&right.uid));
+            match (left_score, right_score) {
+                (Some(left_score), Some(right_score)) => right_score.cmp(left_score),
+                _ => std::cmp::Ordering::Equal,
+            }
+        })
+        .then_with(|| left.name.cmp(&right.name))
+        .then_with(|| left.uid.cmp(&right.uid))
+}
+
+fn compare_resource_column_values(
     left: &MinimalResource,
     right: &MinimalResource,
     column_id: &str,
@@ -431,10 +471,7 @@ pub(super) fn compare_resource_column(
     };
     let left_value = value(left);
     let right_value = value(right);
-    let ordering = compare_sort_values(left_value, right_value, direction);
-    ordering
-        .then_with(|| left.name.cmp(&right.name))
-        .then_with(|| left.uid.cmp(&right.uid))
+    compare_sort_values(left_value, right_value, direction)
 }
 
 pub(super) fn resource_metadata_value<'a>(

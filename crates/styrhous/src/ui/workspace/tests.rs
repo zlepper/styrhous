@@ -41,6 +41,113 @@ fn fuzzy_search_matches_normalized_resource_names() {
 }
 
 #[test]
+fn fuzzy_search_orders_resources_by_match_quality() {
+    let resources = vec![
+        resource("my-api"),
+        resource("a-p-i"),
+        resource("api-server"),
+        resource("api"),
+    ];
+    let filtered = filter_resources(
+        &resources,
+        &ResourceSearchState {
+            query: "api".into(),
+            regex_mode: false,
+        },
+    );
+
+    assert_eq!(
+        filtered
+            .resources
+            .iter()
+            .map(|resource| resource.name.as_str())
+            .collect::<Vec<_>>(),
+        ["api", "api-server", "my-api", "a-p-i"]
+    );
+}
+
+#[test]
+fn fuzzy_search_preserves_source_order_for_equal_or_empty_normalized_matches() {
+    let resources = vec![resource("z-api"), resource("a-api")];
+    let fuzzy = filter_resources(
+        &resources,
+        &ResourceSearchState {
+            query: "api".into(),
+            regex_mode: false,
+        },
+    );
+    let normalized_empty = filter_resources(
+        &resources,
+        &ResourceSearchState {
+            query: "\u{301}".into(),
+            regex_mode: false,
+        },
+    );
+    let regex = filter_resources(
+        &resources,
+        &ResourceSearchState {
+            query: "api".into(),
+            regex_mode: true,
+        },
+    );
+
+    for filtered in [&fuzzy, &normalized_empty, &regex] {
+        assert_eq!(
+            filtered
+                .resources
+                .iter()
+                .map(|resource| resource.name.as_str())
+                .collect::<Vec<_>>(),
+            ["z-api", "a-api"]
+        );
+    }
+    assert!(normalized_empty.fuzzy_scores.is_none());
+    assert!(regex.fuzzy_scores.is_none());
+}
+
+#[test]
+fn resource_column_sort_uses_fuzzy_relevance_before_name_tie_breaking() {
+    let stronger_match = resource("z-api");
+    let weaker_match = resource("a-p-i");
+    let query = components::fuzzy::normalize_for_search("api").collect::<Vec<_>>();
+    let scores = std::collections::HashMap::from([
+        (
+            stronger_match.uid.clone(),
+            components::fuzzy::fuzzy_match_score(&stronger_match.name, &query)
+                .expect("resource should match"),
+        ),
+        (
+            weaker_match.uid.clone(),
+            components::fuzzy::fuzzy_match_score(&weaker_match.name, &query)
+                .expect("resource should match"),
+        ),
+    ]);
+
+    assert_eq!(
+        compare_resource_column_with_relevance(
+            &stronger_match,
+            &weaker_match,
+            "owner",
+            components::SortDirection::Ascending,
+            &[],
+            Some(&scores),
+        ),
+        std::cmp::Ordering::Less,
+    );
+    assert_eq!(
+        compare_resource_column_with_relevance(
+            &stronger_match,
+            &weaker_match,
+            "owner",
+            components::SortDirection::Ascending,
+            &[],
+            None,
+        ),
+        std::cmp::Ordering::Greater,
+    );
+}
+
+#[test]
 fn regex_search_matches_normalized_resource_names_case_insensitively() {
     let resources = vec![resource("Café-API"), resource("worker")];
     let filtered = filter_resources(

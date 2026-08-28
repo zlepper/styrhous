@@ -22,7 +22,7 @@ use std::sync::Arc;
 use crate::PointingHand;
 use crate::colors::{SUCCESS, WHITE, gray, indigo};
 use crate::design::{radius, typography};
-use crate::fuzzy::{matches_fuzzy, normalize_for_search};
+use crate::fuzzy::{fuzzy_match_score, normalize_for_search};
 use crate::icons;
 
 fn layout_truncated_text(

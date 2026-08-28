@@ -1,5 +1,5 @@
 use crate::api_resource::ApiResource;
-use components::fuzzy::{matches_fuzzy, normalize_for_search};
+use components::fuzzy::{fuzzy_match_score, normalize_for_search};
 use k8s_openapi::serde_json::{self, Value};
 use saphyr::{LoadableYamlNode, MarkedYaml, Scalar, YamlData};
 
@@ -362,38 +362,26 @@ fn filter_suggestions(
     suggestions: Vec<CompletionSuggestion>,
     prefix: &str,
 ) -> Vec<CompletionSuggestion> {
-    let normalized_prefix: String = normalize_for_search(prefix).collect();
-    let needle = normalized_prefix.chars().collect::<Vec<_>>();
+    let needle = normalize_for_search(prefix).collect::<Vec<_>>();
 
     let mut matches = suggestions
         .into_iter()
         .enumerate()
-        .filter(|(_, suggestion)| matches_fuzzy(&suggestion.label, &needle))
+        .filter_map(|(index, suggestion)| {
+            fuzzy_match_score(&suggestion.label, &needle).map(|score| (index, score, suggestion))
+        })
         .collect::<Vec<_>>();
-    matches.sort_by_key(|(index, suggestion)| {
-        (
-            fuzzy_match_rank(&suggestion.label, &normalized_prefix),
-            suggestion.label.len(),
-            *index,
-        )
-    });
+    matches.sort_by(
+        |(left_index, left_score, _), (right_index, right_score, _)| {
+            right_score
+                .cmp(left_score)
+                .then_with(|| left_index.cmp(right_index))
+        },
+    );
     matches
         .into_iter()
-        .map(|(_, suggestion)| suggestion)
+        .map(|(_, _, suggestion)| suggestion)
         .collect()
-}
-
-fn fuzzy_match_rank(label: &str, normalized_prefix: &str) -> u8 {
-    let normalized_label: String = normalize_for_search(label).collect();
-    if normalized_label == normalized_prefix {
-        0
-    } else if normalized_label.starts_with(normalized_prefix) {
-        1
-    } else if normalized_label.contains(normalized_prefix) {
-        2
-    } else {
-        3
-    }
 }
 
 fn resolve_ref<'a>(root: &'a Value, value: &'a Value) -> Option<&'a Value> {

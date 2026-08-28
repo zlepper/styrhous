@@ -28,14 +28,14 @@ use crate::terminal_launcher::{DebugImagePreset, ShellRequest};
 use crate::worker::{GetResourceScale, WorkerCommandBox};
 use components::colors::{TOOLBAR_BACKGROUND, gray};
 use components::design::{spacing, typography};
-use components::fuzzy::{matches_fuzzy, normalize_for_search};
+use components::fuzzy::{FuzzyMatchScore, fuzzy_match_score, normalize_for_search};
 use components::{
     ButtonSize, MoreButton, SelectionAction, TableRowBuilder, TailwindButton, TailwindCombobox,
     TailwindSearchInput, TailwindTable, WorkspacePage,
 };
 use egui_extras::{Size, StripBuilder};
 use std::cell::RefCell;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 const RESOURCE_SEARCH_WIDTH: f32 = 210.0;
 const TOOLBAR_RIGHT_INSET: f32 = spacing::XL;
@@ -47,6 +47,7 @@ const RESOURCE_TABLE_SELECTION_WIDTH: f32 = 48.0;
 struct FilteredResources {
     resources: Vec<MinimalResource>,
     regex_error: Option<String>,
+    fuzzy_scores: Option<HashMap<String, FuzzyMatchScore>>,
 }
 
 enum ResourceTableRow<'a> {
@@ -74,6 +75,7 @@ struct ResourceTableOptions<'a> {
     show_namespace_column: bool,
     actions: ResourceActionAvailability,
     debug_image_presets: &'a [DebugImagePreset],
+    fuzzy_scores: Option<&'a HashMap<String, FuzzyMatchScore>>,
 }
 
 enum NamespaceSelection {
@@ -418,6 +420,7 @@ pub(super) fn show(
                                     .contains(api_resource),
                             },
                             debug_image_presets,
+                            fuzzy_scores: filtered_resources.fuzzy_scores.as_ref(),
                         },
                         resources
                             .resource_selections

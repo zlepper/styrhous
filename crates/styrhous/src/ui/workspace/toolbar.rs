@@ -215,6 +215,7 @@ pub(super) fn filter_resources(
         return FilteredResources {
             resources: all_resources.to_vec(),
             regex_error: None,
+            fuzzy_scores: None,
         };
     }
 
@@ -228,6 +229,7 @@ pub(super) fn filter_resources(
                 return FilteredResources {
                     resources: Vec::new(),
                     regex_error: Some(error.to_string()),
+                    fuzzy_scores: None,
                 };
             }
         };
@@ -241,15 +243,35 @@ pub(super) fn filter_resources(
                 .cloned()
                 .collect(),
             regex_error: None,
+            fuzzy_scores: None,
         };
     }
 
     let query: Vec<char> = normalize_for_search(&resource_search.query).collect();
+    if query.is_empty() {
+        return FilteredResources {
+            resources: all_resources.to_vec(),
+            regex_error: None,
+            fuzzy_scores: None,
+        };
+    }
+    let mut scored_resources = all_resources
+        .iter()
+        .filter_map(|resource| {
+            fuzzy_match_score(&resource.name, &query).map(|score| (score, resource))
+        })
+        .collect::<Vec<_>>();
+    scored_resources.sort_by(|(left_score, _), (right_score, _)| right_score.cmp(left_score));
     FilteredResources {
-        resources: all_resources
-            .iter()
-            .filter(|resource| matches_fuzzy(&resource.name, &query))
-            .cloned()
+        fuzzy_scores: Some(
+            scored_resources
+                .iter()
+                .map(|(score, resource)| (resource.uid.clone(), *score))
+                .collect(),
+        ),
+        resources: scored_resources
+            .into_iter()
+            .map(|(_, resource)| resource.clone())
             .collect(),
         regex_error: None,
     }

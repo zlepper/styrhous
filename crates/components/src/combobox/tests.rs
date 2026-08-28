@@ -99,6 +99,77 @@ fn test_combobox_flow() {
 }
 
 #[test]
+fn fuzzy_filter_orders_strongest_matches_first() {
+    let resources = ["my-api", "a-p-i", "api-server", "api"];
+    let selected = Rc::new(RefCell::new(None));
+    let selected_for_ui = selected.clone();
+    let mut harness = Harness::new_ui(move |ui| {
+        TailwindCombobox::from_label("Resources")
+            .placeholder("Search resources...")
+            .width(250.0)
+            .filter_by(|resource: &&str| *resource)
+            .show_items(ui, &resources, |cb, resource| {
+                if cb.item(*resource, false).clicked() {
+                    *selected_for_ui.borrow_mut() = Some(*resource);
+                }
+            });
+    });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Resources")
+        .click();
+    harness.run();
+    harness
+        .input_mut()
+        .events
+        .push(egui::Event::Text("api".into()));
+    harness.run();
+
+    let api = harness.get_by_label("api").rect();
+    let api_server = harness.get_by_label("api-server").rect();
+    let substring = harness.get_by_label("my-api").rect();
+    let subsequence = harness.get_by_label("a-p-i").rect();
+    assert!(api.top() < api_server.top());
+    assert!(api_server.top() < substring.top());
+    assert!(substring.top() < subsequence.top());
+    harness.ui_harness("comboboxes/fuzzy_filter_orders_strongest_matches_first/ranked_results");
+
+    harness.key_down(Key::Enter);
+    harness.run();
+    assert_eq!(*selected.borrow(), Some("api"));
+}
+
+#[test]
+fn fuzzy_filter_preserves_source_order_for_equally_scored_matches() {
+    let resources = ["z-api", "a-api"];
+    let mut harness = Harness::new_ui(move |ui| {
+        TailwindCombobox::from_label("Resources")
+            .placeholder("Search resources...")
+            .width(250.0)
+            .filter_by(|resource: &&str| *resource)
+            .show_items(ui, &resources, |cb, resource| {
+                cb.item(*resource, false);
+            });
+    });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Resources")
+        .click();
+    harness.run();
+    harness
+        .input_mut()
+        .events
+        .push(egui::Event::Text("api".into()));
+    harness.run();
+
+    assert!(
+        harness.get_by_label("z-api").rect().top() < harness.get_by_label("a-api").rect().top()
+    );
+}
+
+#[test]
 fn modifier_click_toggles_without_closing() {
     let people = test_people();
     let selected = Rc::new(RefCell::new(HashSet::from([1])));

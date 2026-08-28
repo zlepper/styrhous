@@ -1,5 +1,6 @@
 use super::{
-    CompletionContextKind, ResourceSchema, kubernetes_field_path_to_json_pointer, yaml_context,
+    CompletionContextKind, CompletionSuggestion, ResourceSchema, filter_suggestions,
+    kubernetes_field_path_to_json_pointer, yaml_context,
 };
 use crate::api_resource::ApiResource;
 use k8s_openapi::serde_json::json;
@@ -291,6 +292,33 @@ fn filters_and_ranks_suggestions_using_the_shared_fuzzy_matcher() {
         .map(|suggestion| suggestion.label)
         .collect::<Vec<_>>();
     assert_eq!(labels, vec!["metadata", "xmetadata"]);
+}
+
+#[test]
+fn equal_fuzzy_suggestion_scores_preserve_source_order() {
+    let suggestions = filter_suggestions(
+        vec![
+            CompletionSuggestion {
+                label: "z-api".into(),
+                type_label: None,
+                detail: None,
+            },
+            CompletionSuggestion {
+                label: "a-api".into(),
+                type_label: None,
+                detail: None,
+            },
+        ],
+        "api",
+    );
+
+    assert_eq!(
+        suggestions
+            .into_iter()
+            .map(|suggestion| suggestion.label)
+            .collect::<Vec<_>>(),
+        ["z-api", "a-api"]
+    );
 }
 
 #[test]

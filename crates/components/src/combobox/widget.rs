@@ -181,10 +181,15 @@ impl<F> TailwindCombobox<WithFilter<F>> {
         let popup_id = Popup::default_response_id(&input_response);
         state.filter_chars = normalize_for_search(&state.filter_text).collect();
 
-        let filtered_items: Vec<_> = items
+        let mut filtered_items: Vec<_> = items
             .into_iter()
-            .filter(|item| matches_fuzzy(filter_fn(item), &state.filter_chars))
+            .filter_map(|item| {
+                fuzzy_match_score(filter_fn(item), &state.filter_chars).map(|score| (score, item))
+            })
             .collect();
+        if !state.filter_chars.is_empty() {
+            filtered_items.sort_by(|(left_score, _), (right_score, _)| right_score.cmp(left_score));
+        }
         let select_all_visible = select_all.is_some() && state.filter_text.is_empty();
         let item_count = filtered_items.len() + usize::from(select_all_visible);
         let item_spacing = ui.spacing().item_spacing.y;
@@ -222,7 +227,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
                             select_all_clicked = true;
                         }
 
-                        for item in &filtered_items {
+                        for (_, item) in &filtered_items {
                             render(&mut cb, item);
                         }
                     });
