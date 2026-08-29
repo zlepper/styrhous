@@ -95,6 +95,18 @@ elif [[ "$oracle" == *"inspector_details"* ]]; then
     sample canvas 20 20
     sample properties 100 200
     sample detail-tables 900 200
+elif [[ "$oracle" == *"buttons-showcase-oracle"* ]]; then
+    region_mae header 520 52 500 110
+    region_mae matrix 128 218 1280 450
+    region_mae icons 140 735 540 150
+    region_mae rounding 800 735 550 150
+    echo "surface samples:"
+    sample canvas 20 20
+    sample card 300 300
+    sample primary 380 322
+    sample secondary 380 424
+    sample soft 380 526
+    sample danger 380 622
 elif [[ "$oracle" == *"settings-home-blade"* ]]; then
     region_mae header 0 0 744 156
     region_mae configuration 0 156 744 352

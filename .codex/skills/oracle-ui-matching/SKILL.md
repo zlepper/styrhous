@@ -1,6 +1,6 @@
 ---
 name: oracle-ui-matching
-description: Match a deterministic UI snapshot to an approved raster design oracle using image generation, ImageMagick crops and metrics, visual diffs, and accessibility snapshots. Use for pixel-conscious UI implementation work, not ordinary UI changes.
+description: Match a deterministic UI snapshot to an approved raster design oracle using image generation, Kineprism comparison reports and artifacts, and accessibility snapshots. Use for pixel-conscious UI implementation work, not ordinary UI changes.
 ---
 
 # Oracle UI Matching
@@ -32,22 +32,24 @@ and accessibility output before accepting it.
 
 For each state:
 
-1. Identify the foreground comparison region in *both* images. Use the actual
-   blade/content bounds for each image; generated and deterministic images may
-   have different absolute origins even when their canvases are identical.
-2. Crop each source independently with ImageMagick, preserving the same final
-   size and resetting page geometry. See [iteration commands](references/iteration.md).
-3. Run the repository's oracle comparison script against the two crops. Use its
-   difference and auto-level difference images to locate remaining mismatches.
-4. Correct the largest repeated mismatch, regenerate the targeted snapshot,
-   crop again, and compare again. Keep a before/after metric record.
-5. Use the repository's visual-review helper when it works in the environment;
-   otherwise inspect an oracle/snapshot side-by-side montage and the amplified
-   diff manually.
+1. Select equivalent UI content. Compare the complete screenshots when their
+   surrounding layers are relevant. For one common rectangle, use the
+   `region: { x, y, width, height }` parameter of `compare_ui_images`.
+2. When equivalent content begins at different origins, crop each source
+   independently to the same final dimensions, reset page geometry, and pass
+   those crops to `compare_ui_images`. See [iteration commands](references/iteration.md).
+3. Call `compare_ui_images` with absolute `expected_path` and `actual_path`
+   PNG paths and an ignored `target/visual-diffs/<state>` `output_dir`. Set
+   `force: true` on repeated iterations for the same state.
+4. Inspect `report.json` and all generated artifacts: annotated `expected.png`,
+   `actual.png`, and `diff.png`. Use reported changed, moved, added, removed,
+   and resized regions to locate the largest repeated mismatch.
+5. Correct that mismatch, regenerate the targeted snapshot, and compare again.
+   Keep a before/after metric record and visually inspect the report artifacts.
 
-Do not compare a crop from one image against the same absolute rectangle in the
-other unless the corresponding blade bounds have been verified. Misaligned crop
-origins produce misleadingly high error scores and hide the actual UI issue.
+Use `region` only for a rectangle that represents the same UI content in both
+sources; otherwise crop the sources independently first. See [iteration
+commands](references/iteration.md) for the input-selection examples.
 
 ## How to reduce mismatch efficiently
 
@@ -67,16 +69,22 @@ Work from shared geometry to detail. A useful order is:
    path when a fixed-height reorder table cannot contain it. Keep controls
    interactive and preserve drag behavior in the non-expanded state.
 
-Use the amplified difference image to distinguish a uniform offset (duplicated
-edges/text throughout a region) from a local styling mismatch. A single shared
-offset should be fixed at its layout primitive. Do not compensate for it with
-one-off per-label spacing.
+Use Kineprism's report artifacts and findings to distinguish a uniform offset
+from a local styling mismatch. A single shared offset should be fixed at its
+layout primitive. Do not compensate for it with one-off per-label spacing.
 
-ImageMagick's MAE commonly includes a 16-bit raw value and a normalized value
-in parentheses. Compare normalized values (multiply by 100 for a percentage)
-and direction of change between equivalent crops. Different rasterizers,
-antialiasing, or a generated oracle can prevent literal zero; use the score
-alongside visual review rather than optimizing raw MAE in isolation.
+Treat `metrics.raw.mae` as the primary fidelity target for coordinate-aligned
+inputs: lower is better. Zero is exact only when both coverage fields are 1.0
+and the canvases match; otherwise unmatched image area may be omitted from the
+score. Record it with the state and bounds, and compare the same metric over
+equivalent inputs only. For independent crops, record both source rectangles
+and their equal final dimensions. When Kineprism finds a global translation,
+record `metrics.global_aligned.mae` as diagnostic context; it explains
+displacement but must not replace the raw MAE target. Likewise, use any
+structural-alignment metric to understand residual styling differences, not to
+hide a layout regression. Different rasterizers, antialiasing, or a generated
+oracle can prevent literal zero, so use MAE alongside artifact and
+accessibility review rather than optimizing it in isolation.
 
 ## Verification and accessibility
 
@@ -102,5 +110,5 @@ alongside visual review rather than optimizing raw MAE in isolation.
 - Preserve unrelated work in a dirty worktree. Put temporary crops and diffs
   under an ignored build/output directory when possible.
 - Stop when the requested visual fidelity is reached or further changes no
-  longer improve a meaningful metric or visual defect. Report the final crop,
-  normalized metric, and tests run.
+  longer improve a meaningful metric or visual defect. Report the final scope,
+  raw MAE, relevant aligned metric (if any), report artifacts, and tests run.

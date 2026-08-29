@@ -52,8 +52,11 @@ investigate and correct the underlying failure before committing.
 
 ### UI tests
 
-When matching a UI to a design oracle, use `scripts/compare-oracle-snapshot.sh` for
-ImageMagick metrics/diffs and `scripts/review-oracle-diff.sh` for the Codex CLI visual review.
+When matching a UI to a design oracle, use Kineprism's `compare_ui_images` for the
+primary comparison report and its generated artifacts. Use
+`scripts/compare-oracle-snapshot.sh` or `scripts/review-oracle-diff.sh` only as
+supplementary ImageMagick/Codex CLI visual review tooling; do not use their metrics
+as the acceptance criterion.
 
 Whenever an accessibility snapshot changes, take a look at it, and make sure things actually line up. For example:
 * Check that things that are "together" shares the same height or are centered properly with each other
