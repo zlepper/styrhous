@@ -172,6 +172,24 @@ pub(super) fn show_target(
         }
         ui.add_space(components::design::spacing::LG);
     }
+    // Keep the active form adjacent to its trigger. Rendering it after the
+    // complete column list leaves its submission controls below the blade
+    // viewport once standard button sizing is applied.
+    let close_custom_column_form = if let Some(draft) = &mut target.custom_column_draft {
+        show_custom_column_form(
+            ui,
+            draft,
+            &target.metadata_key_suggestions,
+            preferences,
+            &target.key,
+            &mut target.columns,
+        )
+    } else {
+        false
+    };
+    if close_custom_column_form {
+        target.custom_column_draft = None;
+    }
     let width = ui.available_width();
     let moved = ReorderableTable::new(("resource-table-settings-rows", &target.key), 44.0).show(
         ui,
@@ -203,21 +221,6 @@ pub(super) fn show_target(
     }
     for column in &mut target.columns {
         column.edit_requested = false;
-    }
-    let close_custom_column_form = if let Some(draft) = &mut target.custom_column_draft {
-        show_custom_column_form(
-            ui,
-            draft,
-            &target.metadata_key_suggestions,
-            preferences,
-            &target.key,
-            &mut target.columns,
-        )
-    } else {
-        false
-    };
-    if close_custom_column_form {
-        target.custom_column_draft = None;
     }
     let definitions = target
         .columns

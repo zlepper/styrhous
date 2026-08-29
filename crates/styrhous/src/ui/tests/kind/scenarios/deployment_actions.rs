@@ -1,6 +1,7 @@
 //! Kind deployment completion and action scenarios.
 
 use super::*;
+use crate::ui::state::ValidationState;
 
 #[test]
 fn test_force_delete_resource_with_finalizer_integration() {
@@ -296,7 +297,7 @@ fn test_coredns_deployment_property_completion_integration() {
     harness.run_steps(1);
     harness.get_by_label("Edit").click_accesskit();
     harness.run_steps(1);
-    let (schema, yaml) = wait_for(
+    let (schema, yaml) = wait_for_with_diagnostic(
         &mut harness,
         |app| {
             app.ui_state
@@ -312,6 +313,29 @@ fn test_coredns_deployment_property_completion_integration() {
                         .schema
                         .clone()
                         .map(|schema| (schema, editor.edited_yaml.clone()))
+                })
+        },
+        |app| {
+            app.ui_state
+                .yaml_editors
+                .values()
+                .find(|editor| editor.resource_name == "coredns")
+                .and_then(|editor| {
+                    editor.error.as_ref().map(|error| {
+                        format!("CoreDNS YAML request failed while loading the editor: {error}")
+                    })
+                })
+                .or_else(|| {
+                    app.ui_state
+                        .yaml_editors
+                        .values()
+                        .find(|editor| editor.resource_name == "coredns")
+                        .and_then(|editor| match &editor.server_validation {
+                            ValidationState::Failed(error) => Some(format!(
+                                "CoreDNS OpenAPI schema request failed while loading the editor: {error}"
+                            )),
+                            _ => None,
+                        })
                 })
         },
         10_000,

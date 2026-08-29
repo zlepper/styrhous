@@ -3,9 +3,9 @@ Window state=[focused] rect=<none>
   GenericContainer rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
-        Button name="More actions for coredns" rect=(x=8.0 y=8.0 width=36.0 height=36.0 center_x=26.0 center_y=26.0)
-  Unknown name="More actions for coredns menu" rect=(x=8.0 y=44.0 width=202.0 height=89.0 center_x=109.0 center_y=88.5)
+        Button name="More actions for coredns" rect=(x=8.0 y=8.0 width=38.0 height=38.0 center_x=27.0 center_y=27.0)
+  Unknown name="More actions for coredns menu" rect=(x=8.0 y=46.0 width=202.0 height=89.0 center_x=109.0 center_y=90.5)
     GenericContainer rect=<none>
       GenericContainer rect=<none>
-        Button name="Edit" rect=(x=13.0 y=49.0 width=192.0 height=33.0 center_x=109.0 center_y=65.5)
-        Button name="Delete" rect=(x=13.0 y=95.0 width=192.0 height=33.0 center_x=109.0 center_y=111.5)
+        Button name="Edit" rect=(x=13.0 y=51.0 width=192.0 height=33.0 center_x=109.0 center_y=67.5)
+        Button name="Delete" rect=(x=13.0 y=97.0 width=192.0 height=33.0 center_x=109.0 center_y=113.5)

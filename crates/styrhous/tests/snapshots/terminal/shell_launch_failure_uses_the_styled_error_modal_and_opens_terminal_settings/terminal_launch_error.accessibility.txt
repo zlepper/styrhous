@@ -205,7 +205,7 @@ Window state=[focused] rect=<none>
                     Unknown name="Actions, row 1" rect=(x=1474.0 y=98.0 width=104.0 height=44.0 center_x=1526.0 center_y=120.0)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        Button name="More actions for coredns-66bc5c9577-ffw2s" rect=(x=1502.0 y=103.0 width=36.0 height=36.0 center_x=1520.0 center_y=121.0)
+                        Button name="More actions for coredns-66bc5c9577-ffw2s" rect=(x=1502.0 y=103.0 width=38.0 height=38.0 center_x=1521.0 center_y=122.0)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       CheckBox name="Select row 2" state=[toggled=False] rect=(x=376.0 y=159.0 width=16.0 height=16.0 center_x=384.0 center_y=167.0)
@@ -263,7 +263,7 @@ Window state=[focused] rect=<none>
                     Unknown name="Actions, row 2" rect=(x=1474.0 y=145.0 width=104.0 height=44.0 center_x=1526.0 center_y=167.0)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        Button name="More actions for coredns-66bc5c9577-z9gt9" rect=(x=1502.0 y=150.0 width=36.0 height=36.0 center_x=1520.0 center_y=168.0)
+                        Button name="More actions for coredns-66bc5c9577-z9gt9" rect=(x=1502.0 y=150.0 width=38.0 height=38.0 center_x=1521.0 center_y=169.0)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       CheckBox name="Select row 3" state=[toggled=False] rect=(x=376.0 y=206.0 width=16.0 height=16.0 center_x=384.0 center_y=214.0)
@@ -321,7 +321,7 @@ Window state=[focused] rect=<none>
                     Unknown name="Actions, row 3" rect=(x=1474.0 y=192.0 width=104.0 height=44.0 center_x=1526.0 center_y=214.0)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        Button name="More actions for etcd-kind-control-plane" rect=(x=1502.0 y=197.0 width=36.0 height=36.0 center_x=1520.0 center_y=215.0)
+                        Button name="More actions for etcd-kind-control-plane" rect=(x=1502.0 y=197.0 width=38.0 height=38.0 center_x=1521.0 center_y=216.0)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       CheckBox name="Select row 4" state=[toggled=False] rect=(x=376.0 y=253.0 width=16.0 height=16.0 center_x=384.0 center_y=261.0)
@@ -379,7 +379,7 @@ Window state=[focused] rect=<none>
                     Unknown name="Actions, row 4" rect=(x=1474.0 y=239.0 width=104.0 height=44.0 center_x=1526.0 center_y=261.0)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        Button name="More actions for kindnet-9qrlh" rect=(x=1502.0 y=244.0 width=36.0 height=36.0 center_x=1520.0 center_y=262.0)
+                        Button name="More actions for kindnet-9qrlh" rect=(x=1502.0 y=244.0 width=38.0 height=38.0 center_x=1521.0 center_y=263.0)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       CheckBox name="Select row 5" state=[toggled=False] rect=(x=376.0 y=300.0 width=16.0 height=16.0 center_x=384.0 center_y=308.0)
@@ -437,7 +437,7 @@ Window state=[focused] rect=<none>
                     Unknown name="Actions, row 5" rect=(x=1474.0 y=286.0 width=104.0 height=44.0 center_x=1526.0 center_y=308.0)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        Button name="More actions for kube-apiserver-kind-control-plane" rect=(x=1502.0 y=291.0 width=36.0 height=36.0 center_x=1520.0 center_y=309.0)
+                        Button name="More actions for kube-apiserver-kind-control-plane" rect=(x=1502.0 y=291.0 width=38.0 height=38.0 center_x=1521.0 center_y=310.0)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       CheckBox name="Select row 6" state=[toggled=False] rect=(x=376.0 y=347.0 width=16.0 height=16.0 center_x=384.0 center_y=355.0)
@@ -495,7 +495,7 @@ Window state=[focused] rect=<none>
                     Unknown name="Actions, row 6" rect=(x=1474.0 y=333.0 width=104.0 height=44.0 center_x=1526.0 center_y=355.0)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        Button name="More actions for kube-controller-manager-kind-control-plane" rect=(x=1502.0 y=338.0 width=36.0 height=36.0 center_x=1520.0 center_y=356.0)
+                        Button name="More actions for kube-controller-manager-kind-control-plane" rect=(x=1502.0 y=338.0 width=38.0 height=38.0 center_x=1521.0 center_y=357.0)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       CheckBox name="Select row 7" state=[toggled=False] rect=(x=376.0 y=394.0 width=16.0 height=16.0 center_x=384.0 center_y=402.0)
@@ -553,7 +553,7 @@ Window state=[focused] rect=<none>
                     Unknown name="Actions, row 7" rect=(x=1474.0 y=380.0 width=104.0 height=44.0 center_x=1526.0 center_y=402.0)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        Button name="More actions for kube-proxy-v86gd" rect=(x=1502.0 y=385.0 width=36.0 height=36.0 center_x=1520.0 center_y=403.0)
+                        Button name="More actions for kube-proxy-v86gd" rect=(x=1502.0 y=385.0 width=38.0 height=38.0 center_x=1521.0 center_y=404.0)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       CheckBox name="Select row 8" state=[toggled=False] rect=(x=376.0 y=441.0 width=16.0 height=16.0 center_x=384.0 center_y=449.0)
@@ -611,25 +611,25 @@ Window state=[focused] rect=<none>
                     Unknown name="Actions, row 8" rect=(x=1474.0 y=427.0 width=104.0 height=44.0 center_x=1526.0 center_y=449.0)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        Button name="More actions for kube-scheduler-kind-control-plane" rect=(x=1502.0 y=432.0 width=36.0 height=36.0 center_x=1520.0 center_y=450.0)
+                        Button name="More actions for kube-scheduler-kind-control-plane" rect=(x=1502.0 y=432.0 width=38.0 height=38.0 center_x=1521.0 center_y=451.0)
         ScrollBar rect=(x=360.0 y=1014.0 width=1176.0 height=13.0 center_x=948.0 center_y=1020.5)
   GenericContainer rect=<none>
     GenericContainer rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
-        Label value="SHELL" rect=(x=528.0 y=365.0 width=37.4 height=15.0 center_x=546.7 center_y=372.5)
-          TextRun value="SHELL" rect=(x=528.0 y=365.0 width=37.4 height=15.0 center_x=546.7 center_y=372.5)
-        Label value="Couldn’t open a terminal" rect=(x=528.0 y=391.0 width=283.3 height=29.0 center_x=669.7 center_y=405.5)
-          TextRun value="Couldn’t open a terminal" rect=(x=528.0 y=391.0 width=283.3 height=29.0 center_x=669.7 center_y=405.5)
-        Label value="Styrhous could not start an external terminal for this shell." rect=(x=528.0 y=435.0 width=382.3 height=17.0 center_x=719.2 center_y=443.5)
-          TextRun value="Styrhous could not start an external terminal for this shell." rect=(x=528.0 y=435.0 width=382.3 height=17.0 center_x=719.2 center_y=443.5)
+        Label value="SHELL" rect=(x=528.0 y=363.0 width=37.4 height=15.0 center_x=546.7 center_y=370.5)
+          TextRun value="SHELL" rect=(x=528.0 y=363.0 width=37.4 height=15.0 center_x=546.7 center_y=370.5)
+        Label value="Couldn’t open a terminal" rect=(x=528.0 y=389.0 width=283.3 height=29.0 center_x=669.7 center_y=403.5)
+          TextRun value="Couldn’t open a terminal" rect=(x=528.0 y=389.0 width=283.3 height=29.0 center_x=669.7 center_y=403.5)
+        Label value="Styrhous could not start an external terminal for this shell." rect=(x=528.0 y=433.0 width=382.3 height=17.0 center_x=719.2 center_y=441.5)
+          TextRun value="Styrhous could not start an external terminal for this shell." rect=(x=528.0 y=433.0 width=382.3 height=17.0 center_x=719.2 center_y=441.5)
         GenericContainer rect=<none>
-          Label value="No supported terminal launcher was found. Tried: xdg-terminal-exec (No such file or directory (os error 2))." rect=(x=541.0 y=484.0 width=430.8 height=45.0 center_x=756.4 center_y=506.5)
-            TextRun value="No supported terminal launcher was found. Tried: " rect=(x=541.0 y=484.0 width=382.8 height=15.0 center_x=732.4 center_y=491.5)
-            TextRun value="xdg-terminal-exec (No such file or directory (os error " rect=(x=541.0 y=499.0 width=430.8 height=15.0 center_x=756.4 center_y=506.5)
-            TextRun value="2))." rect=(x=541.0 y=514.0 width=30.8 height=15.0 center_x=556.4 center_y=521.5)
-        Label value="Choose a custom command in Settings to use another installed terminal." rect=(x=528.0 y=561.0 width=477.9 height=17.0 center_x=767.0 center_y=569.5)
-          TextRun value="Choose a custom command in Settings to use another installed terminal." rect=(x=528.0 y=561.0 width=477.9 height=17.0 center_x=767.0 center_y=569.5)
+          Label value="No supported terminal launcher was found. Tried: xdg-terminal-exec (No such file or directory (os error 2))." rect=(x=541.0 y=482.0 width=430.8 height=45.0 center_x=756.4 center_y=504.5)
+            TextRun value="No supported terminal launcher was found. Tried: " rect=(x=541.0 y=482.0 width=382.8 height=15.0 center_x=732.4 center_y=489.5)
+            TextRun value="xdg-terminal-exec (No such file or directory (os error " rect=(x=541.0 y=497.0 width=430.8 height=15.0 center_x=756.4 center_y=504.5)
+            TextRun value="2))." rect=(x=541.0 y=512.0 width=30.8 height=15.0 center_x=556.4 center_y=519.5)
+        Label value="Choose a custom command in Settings to use another installed terminal." rect=(x=528.0 y=559.0 width=477.9 height=17.0 center_x=767.0 center_y=567.5)
+          TextRun value="Choose a custom command in Settings to use another installed terminal." rect=(x=528.0 y=559.0 width=477.9 height=17.0 center_x=767.0 center_y=567.5)
         GenericContainer rect=<none>
-          Button name="Open settings" rect=(x=892.0 y=626.0 width=116.0 height=33.0 center_x=950.0 center_y=642.5)
-          Button name="Dismiss" rect=(x=808.7 y=626.0 width=75.3 height=33.0 center_x=846.3 center_y=642.5)
+          Button name="Open settings" rect=(x=864.0 y=624.0 width=144.0 height=38.0 center_x=936.0 center_y=643.0)
+          Button name="Dismiss" rect=(x=752.7 y=624.0 width=103.3 height=38.0 center_x=804.3 center_y=643.0)

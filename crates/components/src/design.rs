@@ -48,6 +48,33 @@ pub mod typography {
     pub fn semibold(size: f32) -> FontId {
         FontId::new(size, FontFamily::Name(INTER_SEMIBOLD.into()))
     }
+
+    /// Use Inter's semibold face after the application theme has registered it.
+    ///
+    /// Snapshot harnesses construct their first UI pass before test setup has a
+    /// chance to install the application font definitions, so they need a safe
+    /// proportional fallback for that bootstrap frame.
+    pub fn semibold_or_proportional(ctx: &egui::Context, size: f32) -> FontId {
+        let semibold_family = FontFamily::Name(INTER_SEMIBOLD.into());
+        if ctx.fonts(|fonts| fonts.definitions().families.contains_key(&semibold_family)) {
+            FontId::new(size, semibold_family)
+        } else {
+            FontId::proportional(size)
+        }
+    }
+}
+
+pub mod button {
+    use egui::Color32;
+
+    /// Solid indigo used for the button primary action treatment.
+    pub const PRIMARY: Color32 = Color32::from_rgb(61, 53, 230);
+    /// The near-white fill used by bordered secondary controls.
+    pub const SECONDARY: Color32 = Color32::from_rgb(252, 252, 253);
+    /// Low-emphasis indigo action fill.
+    pub const SOFT: Color32 = Color32::from_rgb(237, 238, 254);
+    /// Solid destructive-action fill.
+    pub const DANGER: Color32 = Color32::from_rgb(199, 24, 25);
 }
 
 pub mod spacing {

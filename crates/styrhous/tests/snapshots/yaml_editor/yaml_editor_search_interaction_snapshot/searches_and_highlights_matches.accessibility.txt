@@ -14,23 +14,23 @@ Window rect=<none>
                 TextRun value="ConfigMap · kube-system" rect=(x=165.4 y=25.0 width=171.7 height=17.0 center_x=251.2 center_y=33.5)
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
-                  Button name="Apply changes" state=[disabled] rect=(x=1380.4 y=17.0 width=122.6 height=33.0 center_x=1441.7 center_y=33.5)
-                Button name="Close" rect=(x=1310.8 y=17.0 width=61.6 height=33.0 center_x=1341.6 center_y=33.5)
+                  Button name="Apply changes" state=[disabled] rect=(x=1352.4 y=17.0 width=150.6 height=38.0 center_x=1427.7 center_y=36.0)
+                Button name="Close" rect=(x=1254.8 y=17.0 width=89.6 height=38.0 center_x=1299.6 center_y=36.0)
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        TextInput name="Search YAML" value="map" state=[focused] rect=(x=1087.8 y=22.0 width=150.0 height=26.0 center_x=1162.8 center_y=35.0)
-                          TextRun value="map" rect=(x=1091.8 y=24.0 width=28.7 height=17.0 center_x=1106.2 center_y=32.5)
-                      CheckBox name="Use regex search" state=[toggled=Mixed] rect=(x=1259.8 y=25.5 width=19.1 height=19.0 center_x=1269.3 center_y=35.0)
-                Label value="1 of 2" rect=(x=1032.5 y=27.5 width=30.3 height=15.0 center_x=1047.7 center_y=35.0)
-                  TextRun value="1 of 2" rect=(x=1032.8 y=27.5 width=30.3 height=15.0 center_x=1048.0 center_y=35.0)
+                        TextInput name="Search YAML" value="map" state=[focused] rect=(x=1031.8 y=23.0 width=150.0 height=26.0 center_x=1106.8 center_y=36.0)
+                          TextRun value="map" rect=(x=1035.8 y=25.0 width=28.7 height=17.0 center_x=1050.2 center_y=33.5)
+                      CheckBox name="Use regex search" state=[toggled=Mixed] rect=(x=1203.8 y=26.5 width=19.1 height=19.0 center_x=1213.3 center_y=36.0)
+                Label value="1 of 2" rect=(x=976.5 y=28.5 width=30.3 height=15.0 center_x=991.7 center_y=36.0)
+                  TextRun value="1 of 2" rect=(x=976.8 y=28.5 width=30.3 height=15.0 center_x=992.0 center_y=36.0)
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
-                      Button name="Previous match" rect=(x=964.5 y=21.0 width=28.0 height=28.0 center_x=978.5 center_y=35.0)
+                      Button name="Previous match" rect=(x=908.5 y=22.0 width=28.0 height=28.0 center_x=922.5 center_y=36.0)
                     GenericContainer rect=<none>
-                      Button name="Next match" rect=(x=992.5 y=21.0 width=28.0 height=28.0 center_x=1006.5 center_y=35.0)
+                      Button name="Next match" rect=(x=936.5 y=22.0 width=28.0 height=28.0 center_x=950.5 center_y=36.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>

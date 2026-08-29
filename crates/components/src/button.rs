@@ -1,10 +1,12 @@
 //! Tailwind-styled button component for egui
 
-use egui::{Button, Color32, CornerRadius, Image, Response, Shadow, Stroke, Ui, Vec2, WidgetText};
+use egui::{
+    Button, Color32, CornerRadius, Image, Response, Stroke, TextStyle, Ui, Vec2, WidgetText,
+};
 
 use crate::PointingHand;
-use crate::colors::{BLACK, WHITE, gray, indigo};
-use crate::design::{radius, spacing};
+use crate::colors::{WHITE, gray, indigo};
+use crate::design::{button, radius, typography};
 
 /// Button color variant
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -147,31 +149,22 @@ impl<'a> TailwindButton<'a> {
     /// Show the button and return the response
     pub fn show(self, ui: &mut Ui) -> Response {
         let (fill, fill_hovered, fill_active, text_color, stroke) = self.variant_colors();
-        let (text_padding, text_min_height) = self.size_metrics();
+        let (text_padding, control_height) = self.size_metrics();
         let (padding, min_size) = if matches!(&self.content, ButtonContent::Icon(_)) {
-            let button_size = self.icon_button_size();
-            // Icon-only buttons use a square hit target rather than text-button
-            // padding. The supplied icon should normally be 16×16px.
+            // Icon-only buttons share the text-button height ladder. They only
+            // differ by using that height as a square hit target around their
+            // centered 16×16px glyph.
             (
-                Vec2::splat((button_size - 16.0) / 2.0),
-                Vec2::splat(button_size),
+                Vec2::splat((control_height - 16.0) / 2.0),
+                Vec2::splat(control_height),
             )
         } else {
-            (text_padding, Vec2::new(0.0, text_min_height))
+            (text_padding, Vec2::new(0.0, control_height))
         };
         let corner_radius = self.corner_radius();
-        // The current shadow renderer is composited after the button itself.
-        // Keep icon-only secondary controls clean white until shadows can be
-        // painted on a layer below their background.
-        let shadow = if matches!(&self.content, ButtonContent::Icon(_)) {
-            Shadow::NONE
-        } else {
-            self.shadow()
-        };
 
         // Save current widget visuals
-        let saved_widgets = ui.visuals().widgets.clone();
-        let saved_button_padding = ui.spacing().button_padding;
+        let saved_style = ui.style().clone();
 
         // Apply custom visuals for all button states
         let visuals = &mut ui.visuals_mut().widgets;
@@ -199,6 +192,10 @@ impl<'a> TailwindButton<'a> {
 
         // Apply custom padding
         ui.spacing_mut().button_padding = padding;
+        let button_font = typography::semibold_or_proportional(ui.ctx(), typography::BODY_SIZE);
+        ui.style_mut()
+            .text_styles
+            .insert(TextStyle::Button, button_font);
 
         // Create and render the button
         let button = match self.content {
@@ -208,15 +205,8 @@ impl<'a> TailwindButton<'a> {
         .min_size(min_size);
         let response = ui.add(button).with_pointing_hand();
 
-        // Draw shadow behind the button (painted on layer below)
-        if shadow != Shadow::NONE {
-            let shadow_shape = shadow.as_shape(response.rect, corner_radius);
-            ui.painter().add(shadow_shape);
-        }
-
         // Restore original visuals
-        ui.visuals_mut().widgets = saved_widgets;
-        ui.spacing_mut().button_padding = saved_button_padding;
+        ui.set_style(saved_style);
 
         if let Some(label) = self.accessibility_label {
             response.widget_info(|| {
@@ -231,30 +221,30 @@ impl<'a> TailwindButton<'a> {
     fn variant_colors(&self) -> (Color32, Color32, Color32, Color32, Stroke) {
         match self.variant {
             ButtonVariant::Primary => (
-                indigo::_600, // fill
-                indigo::_700, // fill_hovered
-                indigo::_800, // fill_active
-                WHITE,        // text_color
-                Stroke::NONE, // stroke
+                button::PRIMARY, // fill
+                indigo::_700,    // fill_hovered
+                indigo::_800,    // fill_active
+                WHITE,           // text_color
+                Stroke::NONE,    // stroke
             ),
             ButtonVariant::Secondary => (
-                WHITE,                        // fill
+                button::SECONDARY,            // fill
                 gray::_50,                    // fill_hovered
                 gray::_100,                   // fill_active
                 gray::_700,                   // text_color
                 Stroke::new(1.0, gray::_300), // stroke
             ),
             ButtonVariant::Soft => (
-                indigo::_50,  // fill
+                button::SOFT, // fill
                 indigo::_100, // fill_hovered
                 indigo::_200, // fill_active
                 indigo::_600, // text_color
                 Stroke::NONE, // stroke
             ),
             ButtonVariant::Danger => (
-                crate::design::status::DANGER,
-                crate::design::status::DANGER.gamma_multiply(0.9),
-                crate::design::status::DANGER.gamma_multiply(0.8),
+                button::DANGER,
+                button::DANGER.gamma_multiply(0.9),
+                button::DANGER.gamma_multiply(0.8),
                 WHITE,
                 Stroke::NONE,
             ),
@@ -264,23 +254,11 @@ impl<'a> TailwindButton<'a> {
     /// Get size metrics for the current size
     fn size_metrics(&self) -> (Vec2, f32) {
         match self.size {
-            ButtonSize::Xs => (Vec2::new(spacing::SM, spacing::XS), 24.0),
-            ButtonSize::Sm => (Vec2::new(spacing::MD, spacing::XS), 28.0),
-            ButtonSize::Md => (Vec2::new(spacing::MD, spacing::SM), 32.0),
-            ButtonSize::Lg => (Vec2::new(spacing::LG, spacing::SM), 36.0),
-            ButtonSize::Xl => (Vec2::new(spacing::LG, spacing::MD), 44.0),
-        }
-    }
-
-    /// Square hit-target sizes for icon-only buttons, following Tailwind's
-    /// compact control rhythm rather than text-button line heights.
-    fn icon_button_size(&self) -> f32 {
-        match self.size {
-            ButtonSize::Xs => 28.0,
-            ButtonSize::Sm => 32.0,
-            ButtonSize::Md => 36.0,
-            ButtonSize::Lg => 40.0,
-            ButtonSize::Xl => 44.0,
+            ButtonSize::Xs => (Vec2::new(8.0, 7.0), 32.0),
+            ButtonSize::Sm => (Vec2::new(17.5, 8.0), 34.0),
+            ButtonSize::Md => (Vec2::new(26.0, 10.0), 38.0),
+            ButtonSize::Lg => (Vec2::new(30.5, 11.0), 40.0),
+            ButtonSize::Xl => (Vec2::new(43.0, 13.0), 44.0),
         }
     }
 
@@ -290,20 +268,6 @@ impl<'a> TailwindButton<'a> {
             ButtonRounding::Default => radius::control(),
             ButtonRounding::Rounded => radius::surface(),
             ButtonRounding::Pill => CornerRadius::same(255), // max u8 for pill shape
-        }
-    }
-
-    /// Get shadow for the current variant
-    /// Tailwind shadow-xs: box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05)
-    fn shadow(&self) -> Shadow {
-        match self.variant {
-            ButtonVariant::Secondary => Shadow {
-                offset: [0, 1], // 0 horizontal, 1px down
-                blur: 2,
-                spread: 0,
-                color: BLACK.gamma_multiply(0.05),
-            },
-            _ => Shadow::NONE,
         }
     }
 }

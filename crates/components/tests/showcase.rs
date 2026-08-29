@@ -6,13 +6,18 @@
 
 use std::collections::HashSet;
 
-use components::colors::WHITE;
-use components::icons::{calendar_icon, document_icon, folder_icon, home_icon, users_icon};
+use components::colors::{WHITE, gray};
+use components::design::{radius, surface, typography};
+use components::icons::{
+    arrow_left_icon, arrow_right_icon, calendar_icon, document_icon, ellipsis_horizontal_icon,
+    folder_icon, home_icon, pencil_icon, trash_icon, users_icon,
+};
 use components::test_support::UiHarnessSnapshot;
 use components::{
     ButtonRounding, ButtonSize, ButtonVariant, SortDirection, SortState, TableRowBuilder, Tabs,
     TailwindButton, TailwindCombobox, TailwindTable, WideSidebar,
 };
+use egui::{Align, Color32, Label, Layout, Pos2, Rect, RichText, Ui, UiBuilder, Vec2};
 use egui_kittest::{Harness, kittest::Queryable};
 
 struct Person {
@@ -70,49 +75,216 @@ fn show_people_table(ui: &mut egui::Ui, people: &[Person]) {
 
 #[test]
 fn showcase_buttons() {
-    let mut harness = Harness::new_ui(|ui| {
-        showcase_title(ui, "Buttons");
-
-        for (label, variant) in [
-            ("Primary", ButtonVariant::Primary),
-            ("Secondary", ButtonVariant::Secondary),
-            ("Soft", ButtonVariant::Soft),
-        ] {
-            ui.label(egui::RichText::new(label).strong());
-            ui.horizontal(|ui| {
-                for size in [
-                    ButtonSize::Xs,
-                    ButtonSize::Sm,
-                    ButtonSize::Md,
-                    ButtonSize::Lg,
-                    ButtonSize::Xl,
-                ] {
-                    TailwindButton::new("Button text")
-                        .variant(variant)
-                        .size(size)
-                        .show(ui);
-                }
-            });
-            ui.add_space(8.0);
-        }
-
-        ui.label(egui::RichText::new("Rounding").strong());
-        ui.horizontal(|ui| {
-            TailwindButton::primary("Default")
-                .rounded(ButtonRounding::Default)
-                .show(ui);
-            TailwindButton::primary("Rounded")
-                .rounded(ButtonRounding::Rounded)
-                .show(ui);
-            TailwindButton::primary("Pill")
-                .rounded(ButtonRounding::Pill)
-                .show(ui);
-        });
-    });
+    let mut harness = Harness::new_ui(show_buttons_showcase);
 
     apply_reference_theme(&mut harness);
     harness.run();
     harness.ui_harness("showcase/showcase_buttons/buttons");
+}
+
+const BUTTON_SHOWCASE_CARD: Rect =
+    Rect::from_min_max(Pos2::new(96.0, 188.0), Pos2::new(1438.0, 926.0));
+/// The generated oracle's matrix rasterizes one pixel right and one pixel up
+/// from egui's natural control placement. Keep that adjustment at the shared
+/// matrix boundary instead of compensating for every label and button.
+const BUTTON_SHOWCASE_CONTENT_OFFSET: Vec2 = Vec2::new(1.0, -1.0);
+const BUTTON_SHOWCASE_COLUMNS: [(ButtonSize, &str, f32); 5] = [
+    (ButtonSize::Xs, "XS", 380.0),
+    (ButtonSize::Sm, "SM", 574.0),
+    (ButtonSize::Md, "MD", 786.0),
+    (ButtonSize::Lg, "LG", 1011.0),
+    (ButtonSize::Xl, "XL", 1250.0),
+];
+
+fn show_buttons_showcase(ui: &mut Ui) {
+    ui.ctx().layer_painter(ui.layer_id()).rect_filled(
+        Rect::from_min_size(Pos2::ZERO, Vec2::new(1536.0, 1024.0)),
+        0.0,
+        Color32::from_rgb(245, 245, 247),
+    );
+
+    showcase_text(
+        ui,
+        Rect::from_min_size(Pos2::new(696.0, 62.0), Vec2::new(160.0, 52.0)),
+        RichText::new("Buttons")
+            .font(typography::semibold_or_proportional(ui.ctx(), 40.0))
+            .color(gray::_900),
+    );
+    showcase_text(
+        ui,
+        Rect::from_min_size(Pos2::new(620.0, 120.0), Vec2::new(320.0, 30.0)),
+        RichText::new("Application button styles and sizes")
+            .font(egui::FontId::proportional(18.0))
+            .color(gray::_600),
+    );
+
+    ui.painter().rect(
+        BUTTON_SHOWCASE_CARD,
+        radius::surface(),
+        Color32::from_rgb(253, 253, 253),
+        surface::control_border(),
+        egui::StrokeKind::Inside,
+    );
+
+    for (_, label, center_x) in BUTTON_SHOWCASE_COLUMNS {
+        let label_width = match label {
+            "XS" => 21.0,
+            "SM" => 24.7,
+            "MD" => 26.0,
+            "LG" => 20.5,
+            "XL" => 20.0,
+            _ => unreachable!("all showcase column labels are covered"),
+        };
+        showcase_matrix_text(
+            ui,
+            Rect::from_min_size(
+                Pos2::new(center_x - label_width / 2.0, 231.5),
+                Vec2::new(40.0, 24.0),
+            ),
+            RichText::new(label)
+                .font(typography::semibold_or_proportional(ui.ctx(), 16.0))
+                .color(gray::_950),
+        );
+    }
+
+    for (label, variant, center_y) in [
+        ("Primary", ButtonVariant::Primary, 322.0),
+        ("Secondary", ButtonVariant::Secondary, 424.0),
+        ("Soft", ButtonVariant::Soft, 526.0),
+        ("Danger", ButtonVariant::Danger, 622.0),
+    ] {
+        showcase_matrix_text(
+            ui,
+            Rect::from_center_size(Pos2::new(188.0, center_y), Vec2::new(96.0, 30.0)),
+            RichText::new(label)
+                .font(typography::semibold_or_proportional(ui.ctx(), 18.0))
+                .color(gray::_950),
+        );
+        for (size, _, center_x) in BUTTON_SHOWCASE_COLUMNS {
+            showcase_matrix_button(
+                ui,
+                button_showcase_rect(Pos2::new(center_x, center_y), size),
+                TailwindButton::new("Button text")
+                    .variant(variant)
+                    .size(size),
+            );
+        }
+    }
+
+    ui.painter()
+        .hline(140.0..=1396.0, 698.0, egui::Stroke::new(1.0, gray::_200));
+    ui.painter()
+        .vline(764.0, 735.0..=885.0, egui::Stroke::new(1.0, gray::_200));
+
+    showcase_text(
+        ui,
+        Rect::from_min_size(Pos2::new(140.0, 746.0), Vec2::new(160.0, 28.0)),
+        RichText::new("Icon buttons")
+            .font(typography::semibold_or_proportional(ui.ctx(), 18.0))
+            .color(gray::_950),
+    );
+    for (label, icon, center_x) in [
+        ("Back", arrow_left_icon(), 178.0),
+        ("Forward", arrow_right_icon(), 296.0),
+        ("Edit", pencil_icon(), 411.0),
+        ("Delete", trash_icon(), 525.0),
+        ("More actions", ellipsis_horizontal_icon(), 630.0),
+    ] {
+        showcase_button(
+            ui,
+            Rect::from_center_size(Pos2::new(center_x, 835.0), Vec2::splat(44.0)),
+            TailwindButton::icon(icon.fit_to_exact_size(Vec2::splat(16.0)).tint(gray::_800))
+                .variant(ButtonVariant::Secondary)
+                .size(ButtonSize::Xl)
+                .accessibility_label(label),
+        );
+    }
+
+    showcase_text(
+        ui,
+        Rect::from_min_size(Pos2::new(818.0, 746.0), Vec2::new(180.0, 28.0)),
+        RichText::new("Corner radius")
+            .font(typography::semibold_or_proportional(ui.ctx(), 18.0))
+            .color(gray::_950),
+    );
+    for (label, rounding, center_x) in [
+        ("Default", ButtonRounding::Default, 886.0),
+        ("Rounded", ButtonRounding::Rounded, 1076.0),
+        ("Pill", ButtonRounding::Pill, 1261.0),
+    ] {
+        showcase_button(
+            ui,
+            button_showcase_rounding_rect(Pos2::new(center_x, 838.0), label),
+            TailwindButton::primary(label)
+                .size(ButtonSize::Xl)
+                .rounded(rounding),
+        );
+    }
+}
+
+fn showcase_text(ui: &mut Ui, rect: Rect, rich_text: RichText) {
+    showcase_text_at(ui, rect, rich_text, Vec2::ZERO);
+}
+
+fn showcase_matrix_text(ui: &mut Ui, rect: Rect, rich_text: RichText) {
+    showcase_text_at(ui, rect, rich_text, BUTTON_SHOWCASE_CONTENT_OFFSET);
+}
+
+fn showcase_text_at(ui: &mut Ui, rect: Rect, rich_text: RichText, offset: Vec2) {
+    let rect = rect.translate(offset);
+    let mut text_ui = ui.new_child(
+        UiBuilder::new()
+            .max_rect(rect)
+            .layout(Layout::left_to_right(Align::Center)),
+    );
+    text_ui.add(Label::new(rich_text).extend().selectable(false));
+}
+
+fn showcase_button(ui: &mut Ui, rect: Rect, button: TailwindButton<'_>) {
+    showcase_button_at(ui, rect, button, Vec2::ZERO);
+}
+
+fn showcase_matrix_button(ui: &mut Ui, rect: Rect, button: TailwindButton<'_>) {
+    showcase_button_at(ui, rect, button, BUTTON_SHOWCASE_CONTENT_OFFSET);
+}
+
+fn showcase_button_at(ui: &mut Ui, rect: Rect, button: TailwindButton<'_>, offset: Vec2) {
+    let rect = rect.translate(offset);
+    let mut button_ui = ui.new_child(
+        UiBuilder::new()
+            .max_rect(rect)
+            .layout(Layout::left_to_right(Align::Center).with_main_align(Align::Center)),
+    );
+    button.show(&mut button_ui);
+}
+
+fn button_showcase_rect(center: Pos2, size: ButtonSize) -> Rect {
+    let dimensions = match size {
+        ButtonSize::Xs => Vec2::new(87.8, 32.0),
+        ButtonSize::Sm => Vec2::new(106.8, 34.0),
+        ButtonSize::Md => Vec2::new(123.8, 38.0),
+        ButtonSize::Lg => Vec2::new(132.8, 40.0),
+        ButtonSize::Xl => Vec2::new(157.8, 44.0),
+    };
+    // Egui snaps the odd-pixel SM and LG controls half a pixel to the right.
+    // Offset their slots so the rendered accessibility bounds remain centered
+    // under the corresponding column heading.
+    let center = if matches!(size, ButtonSize::Sm | ButtonSize::Lg) {
+        Pos2::new(center.x - 0.5, center.y)
+    } else {
+        center
+    };
+    Rect::from_center_size(center, dimensions)
+}
+
+fn button_showcase_rounding_rect(center: Pos2, label: &str) -> Rect {
+    let width = match label {
+        "Default" => 133.5,
+        "Rounded" => 145.1,
+        "Pill" => 105.1,
+        _ => unreachable!("all showcase rounding labels are covered"),
+    };
+    Rect::from_center_size(center, Vec2::new(width, 44.0))
 }
 
 #[test]

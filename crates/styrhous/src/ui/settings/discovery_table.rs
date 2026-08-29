@@ -338,7 +338,10 @@ pub(super) fn show_import_button(
     if matches!(state, DiscoveryImportState::Configured) {
         ui.add_enabled_ui(false, |ui| {
             TailwindButton::secondary("Already in kubeconfig")
-                .size(ButtonSize::Md)
+                // Discovery rows reserve a narrow fixed action column. Keep
+                // the long configured-state label within that column now that
+                // the application-wide default button is more spacious.
+                .size(ButtonSize::Xs)
                 .show(ui)
         });
     } else if ui
@@ -348,7 +351,7 @@ pub(super) fn show_import_button(
             } else {
                 "Add to kubeconfig"
             })
-            .size(ButtonSize::Md)
+            .size(ButtonSize::Xs)
             .show(ui)
             .clicked()
         })

@@ -58,9 +58,9 @@ Window state=[focused] rect=<none>
           GenericContainer rect=<none>
             Label value="2 selected" rect=(x=776.0 y=16.5 width=78.6 height=19.0 center_x=815.3 center_y=26.0)
               TextRun value="2 selected" rect=(x=776.0 y=16.5 width=78.6 height=19.0 center_x=815.3 center_y=26.0)
-            Button name="Clear selection" rect=(x=874.6 y=13.5 width=114.7 height=25.0 center_x=931.9 center_y=26.0)
+            Button name="Clear selection" rect=(x=874.6 y=10.0 width=114.7 height=32.0 center_x=931.9 center_y=26.0)
             GenericContainer rect=<none>
-              Button name="Delete selected" rect=(x=997.3 y=13.5 width=118.7 height=25.0 center_x=1056.6 center_y=26.0)
+              Button name="Delete selected" rect=(x=997.3 y=10.0 width=118.7 height=32.0 center_x=1056.6 center_y=26.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
@@ -212,7 +212,7 @@ Window state=[focused] rect=<none>
                     Unknown name="Actions, row 1" rect=(x=1474.0 y=98.0 width=104.0 height=44.0 center_x=1526.0 center_y=120.0)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        Button name="More actions for coredns-66bc5c9577-ffw2s" rect=(x=1502.0 y=103.0 width=36.0 height=36.0 center_x=1520.0 center_y=121.0)
+                        Button name="More actions for coredns-66bc5c9577-ffw2s" rect=(x=1502.0 y=103.0 width=38.0 height=38.0 center_x=1521.0 center_y=122.0)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       CheckBox name="Select row 2" state=[toggled=True] rect=(x=376.0 y=159.0 width=16.0 height=16.0 center_x=384.0 center_y=167.0)
@@ -270,7 +270,7 @@ Window state=[focused] rect=<none>
                     Unknown name="Actions, row 2" rect=(x=1474.0 y=145.0 width=104.0 height=44.0 center_x=1526.0 center_y=167.0)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        Button name="More actions for coredns-66bc5c9577-z9gt9" rect=(x=1502.0 y=150.0 width=36.0 height=36.0 center_x=1520.0 center_y=168.0)
+                        Button name="More actions for coredns-66bc5c9577-z9gt9" rect=(x=1502.0 y=150.0 width=38.0 height=38.0 center_x=1521.0 center_y=169.0)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       CheckBox name="Select row 3" state=[toggled=False] rect=(x=376.0 y=206.0 width=16.0 height=16.0 center_x=384.0 center_y=214.0)
@@ -328,7 +328,7 @@ Window state=[focused] rect=<none>
                     Unknown name="Actions, row 3" rect=(x=1474.0 y=192.0 width=104.0 height=44.0 center_x=1526.0 center_y=214.0)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        Button name="More actions for etcd-kind-control-plane" rect=(x=1502.0 y=197.0 width=36.0 height=36.0 center_x=1520.0 center_y=215.0)
+                        Button name="More actions for etcd-kind-control-plane" rect=(x=1502.0 y=197.0 width=38.0 height=38.0 center_x=1521.0 center_y=216.0)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       CheckBox name="Select row 4" state=[toggled=False] rect=(x=376.0 y=253.0 width=16.0 height=16.0 center_x=384.0 center_y=261.0)
@@ -386,7 +386,7 @@ Window state=[focused] rect=<none>
                     Unknown name="Actions, row 4" rect=(x=1474.0 y=239.0 width=104.0 height=44.0 center_x=1526.0 center_y=261.0)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        Button name="More actions for kindnet-9qrlh" rect=(x=1502.0 y=244.0 width=36.0 height=36.0 center_x=1520.0 center_y=262.0)
+                        Button name="More actions for kindnet-9qrlh" rect=(x=1502.0 y=244.0 width=38.0 height=38.0 center_x=1521.0 center_y=263.0)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       CheckBox name="Select row 5" state=[toggled=False] rect=(x=376.0 y=300.0 width=16.0 height=16.0 center_x=384.0 center_y=308.0)
@@ -444,7 +444,7 @@ Window state=[focused] rect=<none>
                     Unknown name="Actions, row 5" rect=(x=1474.0 y=286.0 width=104.0 height=44.0 center_x=1526.0 center_y=308.0)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        Button name="More actions for kube-apiserver-kind-control-plane" rect=(x=1502.0 y=291.0 width=36.0 height=36.0 center_x=1520.0 center_y=309.0)
+                        Button name="More actions for kube-apiserver-kind-control-plane" rect=(x=1502.0 y=291.0 width=38.0 height=38.0 center_x=1521.0 center_y=310.0)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       CheckBox name="Select row 6" state=[toggled=False] rect=(x=376.0 y=347.0 width=16.0 height=16.0 center_x=384.0 center_y=355.0)
@@ -502,7 +502,7 @@ Window state=[focused] rect=<none>
                     Unknown name="Actions, row 6" rect=(x=1474.0 y=333.0 width=104.0 height=44.0 center_x=1526.0 center_y=355.0)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        Button name="More actions for kube-controller-manager-kind-control-plane" rect=(x=1502.0 y=338.0 width=36.0 height=36.0 center_x=1520.0 center_y=356.0)
+                        Button name="More actions for kube-controller-manager-kind-control-plane" rect=(x=1502.0 y=338.0 width=38.0 height=38.0 center_x=1521.0 center_y=357.0)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       CheckBox name="Select row 7" state=[toggled=False] rect=(x=376.0 y=394.0 width=16.0 height=16.0 center_x=384.0 center_y=402.0)
@@ -560,7 +560,7 @@ Window state=[focused] rect=<none>
                     Unknown name="Actions, row 7" rect=(x=1474.0 y=380.0 width=104.0 height=44.0 center_x=1526.0 center_y=402.0)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        Button name="More actions for kube-proxy-v86gd" rect=(x=1502.0 y=385.0 width=36.0 height=36.0 center_x=1520.0 center_y=403.0)
+                        Button name="More actions for kube-proxy-v86gd" rect=(x=1502.0 y=385.0 width=38.0 height=38.0 center_x=1521.0 center_y=404.0)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       CheckBox name="Select row 8" state=[toggled=False] rect=(x=376.0 y=441.0 width=16.0 height=16.0 center_x=384.0 center_y=449.0)
@@ -618,32 +618,32 @@ Window state=[focused] rect=<none>
                     Unknown name="Actions, row 8" rect=(x=1474.0 y=427.0 width=104.0 height=44.0 center_x=1526.0 center_y=449.0)
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        Button name="More actions for kube-scheduler-kind-control-plane" rect=(x=1502.0 y=432.0 width=36.0 height=36.0 center_x=1520.0 center_y=450.0)
+                        Button name="More actions for kube-scheduler-kind-control-plane" rect=(x=1502.0 y=432.0 width=38.0 height=38.0 center_x=1521.0 center_y=451.0)
         ScrollBar rect=(x=360.0 y=1014.0 width=1176.0 height=13.0 center_x=948.0 center_y=1020.5)
   GenericContainer rect=<none>
     GenericContainer rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
-        Label value="DELETE RESOURCES" rect=(x=528.0 y=343.0 width=120.3 height=15.0 center_x=588.2 center_y=350.5)
-          TextRun value="DELETE RESOURCES" rect=(x=528.0 y=343.0 width=120.3 height=15.0 center_x=588.2 center_y=350.5)
-        Label value="Delete 2 resources?" rect=(x=528.0 y=369.0 width=230.6 height=29.0 center_x=643.3 center_y=383.5)
-          TextRun value="Delete 2 resources?" rect=(x=528.0 y=369.0 width=230.6 height=29.0 center_x=643.3 center_y=383.5)
-        Label value="This will permanently delete 2 selected resources." rect=(x=528.0 y=413.0 width=331.9 height=17.0 center_x=694.0 center_y=421.5)
-          TextRun value="This will permanently delete 2 selected resources." rect=(x=528.0 y=413.0 width=331.9 height=17.0 center_x=694.0 center_y=421.5)
+        Label value="DELETE RESOURCES" rect=(x=528.0 y=341.0 width=120.3 height=15.0 center_x=588.2 center_y=348.5)
+          TextRun value="DELETE RESOURCES" rect=(x=528.0 y=341.0 width=120.3 height=15.0 center_x=588.2 center_y=348.5)
+        Label value="Delete 2 resources?" rect=(x=528.0 y=367.0 width=230.6 height=29.0 center_x=643.3 center_y=381.5)
+          TextRun value="Delete 2 resources?" rect=(x=528.0 y=367.0 width=230.6 height=29.0 center_x=643.3 center_y=381.5)
+        Label value="This will permanently delete 2 selected resources." rect=(x=528.0 y=411.0 width=331.9 height=17.0 center_x=694.0 center_y=419.5)
+          TextRun value="This will permanently delete 2 selected resources." rect=(x=528.0 y=411.0 width=331.9 height=17.0 center_x=694.0 center_y=419.5)
         GenericContainer rect=<none>
-          Label value="Deletion targets" rect=(x=541.0 y=462.0 width=107.4 height=17.0 center_x=594.7 center_y=470.5)
-            TextRun value="Deletion targets" rect=(x=541.0 y=462.0 width=107.4 height=17.0 center_x=594.7 center_y=470.5)
-          Label value="Review every resource before confirming. This action cannot be undone." rect=(x=541.0 y=486.0 width=426.9 height=34.0 center_x=754.5 center_y=503.0)
-            TextRun value="Review every resource before confirming. This action cannot be " rect=(x=541.0 y=486.0 width=426.9 height=17.0 center_x=754.5 center_y=494.5)
-            TextRun value="undone." rect=(x=541.0 y=503.0 width=54.0 height=17.0 center_x=568.0 center_y=511.5)
+          Label value="Deletion targets" rect=(x=541.0 y=460.0 width=107.4 height=17.0 center_x=594.7 center_y=468.5)
+            TextRun value="Deletion targets" rect=(x=541.0 y=460.0 width=107.4 height=17.0 center_x=594.7 center_y=468.5)
+          Label value="Review every resource before confirming. This action cannot be undone." rect=(x=541.0 y=484.0 width=426.9 height=34.0 center_x=754.5 center_y=501.0)
+            TextRun value="Review every resource before confirming. This action cannot be " rect=(x=541.0 y=484.0 width=426.9 height=17.0 center_x=754.5 center_y=492.5)
+            TextRun value="undone." rect=(x=541.0 y=501.0 width=54.0 height=17.0 center_x=568.0 center_y=509.5)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="kube-system/coredns-66bc5c9577-ffw2s\nkube-system/coredns-66bc5c9577-z9gt9" rect=(x=541.0 y=531.0 width=281.8 height=30.0 center_x=681.9 center_y=546.0)
-                TextRun value="kube-system/coredns-66bc5c9577-ffw2s\n" rect=(x=541.0 y=531.0 width=281.8 height=15.0 center_x=681.9 center_y=538.5)
-                TextRun value="kube-system/coredns-66bc5c9577-z9gt9" rect=(x=541.0 y=546.0 width=281.8 height=15.0 center_x=681.9 center_y=553.5)
-        Label value="Delete will be available in 3 seconds." rect=(x=528.0 y=585.0 width=208.3 height=15.0 center_x=632.2 center_y=592.5)
-          TextRun value="Delete will be available in 3 seconds." rect=(x=528.0 y=585.0 width=208.3 height=15.0 center_x=632.2 center_y=592.5)
+              Label value="kube-system/coredns-66bc5c9577-ffw2s\nkube-system/coredns-66bc5c9577-z9gt9" rect=(x=541.0 y=529.0 width=281.8 height=30.0 center_x=681.9 center_y=544.0)
+                TextRun value="kube-system/coredns-66bc5c9577-ffw2s\n" rect=(x=541.0 y=529.0 width=281.8 height=15.0 center_x=681.9 center_y=536.5)
+                TextRun value="kube-system/coredns-66bc5c9577-z9gt9" rect=(x=541.0 y=544.0 width=281.8 height=15.0 center_x=681.9 center_y=551.5)
+        Label value="Delete will be available in 3 seconds." rect=(x=528.0 y=583.0 width=208.3 height=15.0 center_x=632.2 center_y=590.5)
+          TextRun value="Delete will be available in 3 seconds." rect=(x=528.0 y=583.0 width=208.3 height=15.0 center_x=632.2 center_y=590.5)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
-            Button name="Delete 2 resources" state=[disabled] rect=(x=859.3 y=648.0 width=148.7 height=33.0 center_x=933.7 center_y=664.5)
-          Button name="Cancel" rect=(x=781.4 y=648.0 width=69.9 height=33.0 center_x=816.4 center_y=664.5)
+            Button name="Delete 2 resources" state=[disabled] rect=(x=831.3 y=646.0 width=176.7 height=38.0 center_x=919.7 center_y=665.0)
+          Button name="Cancel" rect=(x=725.4 y=646.0 width=97.9 height=38.0 center_x=774.4 center_y=665.0)
