@@ -46,8 +46,9 @@ installer_icon = "../../assets/icons/kubernetes-dev-ui.ico"
 
 [package.metadata.packager.appimage]
 # winit loads this through dlopen, so the AppImage dependency scanner cannot
-# discover it from the executable's ELF dependencies.
-libs = ["libxkbcommon-x11.so.0"]
+# discover it from the executable's ELF dependencies. Copy it to usr/lib so
+# AppRun searches the same location on every supported architecture.
+files = { "../../target/appimage-native-libraries/libxkbcommon-x11.so.0" = "usr/lib/libxkbcommon-x11.so.0" }
 
 [package.metadata.packager.deb]
 depends = ["libxkbcommon-x11-0"]

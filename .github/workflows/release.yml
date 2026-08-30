@@ -153,6 +153,7 @@ jobs:
         timeout-minutes: 2
         env:
           STYRHOUS_DISABLE_AUTO_UPDATE: "1"
+          WGPU_BACKEND: gl
         run: |
           bundle=$(find dist -type f -name '*.AppImage' -exec realpath {} \; -quit)
           test -n "$bundle"
@@ -280,7 +281,7 @@ jobs:
 
           dmg=$(find dist -type f -name '*.dmg' -print -quit)
           test -n "$dmg"
-          hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount_point"
+          hdiutil attach "$dmg" -acceptlicense -nobrowse -readonly -mountpoint "$mount_point"
 
           app=$(find "$mount_point" -maxdepth 1 -name '*.app' -print -quit)
           test -n "$app"
@@ -481,6 +482,8 @@ jobs:
 
       - name: Smoke test Debian package startup
         timeout-minutes: 2
+        env:
+          WGPU_BACKEND: gl
         run: |
           package=$(find dist -type f -name '*.deb' -exec realpath {} \; -quit)
           test -n "$package"
