@@ -1,0 +1,35 @@
+{
+  "legalName": {
+    "title": "Full legal name",
+    "type": "string",
+    "githubKey": "name",
+    "required": true
+  },
+  "email": {
+    "title": "Email address",
+    "type": "string",
+    "githubKey": "email",
+    "required": true
+  },
+  "signingCapacity": {
+    "title": "Signing capacity",
+    "type": {
+      "enum": [
+        "I own the contribution and sign in my individual capacity.",
+        "I am authorized to bind the legal entity that owns the contribution."
+      ]
+    },
+    "required": true
+  },
+  "entityName": {
+    "title": "Legal entity name",
+    "description": "Required when signing for an employer, client, or other entity; otherwise enter Not applicable.",
+    "type": "string",
+    "required": true
+  },
+  "authority": {
+    "title": "I confirm that the capacity and ownership information above is accurate and that I have authority to make every grant in the CLA.",
+    "type": "boolean",
+    "required": true
+  }
+}

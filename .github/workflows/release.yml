@@ -9,6 +9,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_ABOUT_VERSION: "0.9.1"
   CARGO_NEXTEST_VERSION: "0.9.140"
   CARGO_PACKAGER_VERSION: "0.11.8"
   STYRHOUS_RELEASE_BUILD: "1"
@@ -27,7 +28,7 @@ jobs:
       - name: Cache pinned Cargo tools
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          shared-key: cargo-tools-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}-${{ hashFiles('rust-toolchain.toml') }}
+          shared-key: cargo-tools-${{ env.CARGO_ABOUT_VERSION }}-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}-${{ hashFiles('rust-toolchain.toml') }}
           add-rust-environment-hash-key: false
           cache-targets: false
           cache-on-failure: true
@@ -45,6 +46,12 @@ jobs:
         run: |
           [[ "$(cargo nextest --version 2>/dev/null | awk 'NR == 1 { print $2 }')" == "$CARGO_NEXTEST_VERSION" ]] || \
             cargo install cargo-nextest --version "$CARGO_NEXTEST_VERSION" --locked
+      - name: Install cargo-about
+        run: |
+          [[ "$(cargo about --version 2>/dev/null | awk 'NR == 1 { print $2 }')" == "$CARGO_ABOUT_VERSION" ]] || \
+            cargo install cargo-about --version "$CARGO_ABOUT_VERSION" --locked --features cli
+      - name: Verify third-party legal artifacts
+        run: bash scripts/generate-third-party-legal.sh --check
       - name: Verify tag and application version agree
         if: github.ref_type == 'tag'
         run: test "${GITHUB_REF_NAME#v}" = "$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | select(.name == "styrhous") | .version')"
@@ -129,7 +136,7 @@ jobs:
       - name: Cache pinned Cargo tools
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          shared-key: cargo-tools-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}-${{ hashFiles('rust-toolchain.toml') }}
+          shared-key: cargo-tools-${{ env.CARGO_ABOUT_VERSION }}-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}-${{ hashFiles('rust-toolchain.toml') }}
           add-rust-environment-hash-key: false
           cache-targets: false
           cache-on-failure: true
@@ -208,6 +215,8 @@ jobs:
             cd "$temporary_directory"
             "$bundle" --appimage-extract >/dev/null
             find squashfs-root -type f -name 'libxkbcommon-x11.so.0' -print -quit | grep -q .
+            bash "$GITHUB_WORKSPACE/scripts/verify-packaged-legal-files.sh" squashfs-root
+            bash "$GITHUB_WORKSPACE/scripts/verify-appimage-native-libraries.sh" squashfs-root
           )
           # A GUI that stays alive is expected; timeout reports that as 124.
           set +e
@@ -232,6 +241,7 @@ jobs:
           app=$(find "$mount_point" -maxdepth 1 -name '*.app' -print -quit)
           test -n "$app"
           cp -R "$app" "$temporary_directory/Styrhous.app"
+          bash scripts/verify-packaged-legal-files.sh "$temporary_directory/Styrhous.app"
           executable=$(find "$temporary_directory/Styrhous.app/Contents/MacOS" -type f -perm -u+x -print -quit)
           test -n "$executable"
           "$executable" &
@@ -252,6 +262,7 @@ jobs:
           if ($null -eq $installer) { throw 'NSIS installer was not produced' }
           $install = Start-Process -FilePath $installer.FullName -ArgumentList @('/S', "/D=$destination") -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "NSIS installer exited with $($install.ExitCode)" }
+          & scripts/Verify-PackagedLegalFiles.ps1 -PackageRoot $destination
           $application = Get-ChildItem -Path $destination -Filter '*.exe' -Recurse |
             Where-Object { $_.Name -ne 'Uninstall.exe' } |
             Select-Object -First 1
@@ -297,7 +308,7 @@ jobs:
       - name: Cache pinned Cargo tools
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          shared-key: cargo-tools-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}-${{ hashFiles('rust-toolchain.toml') }}
+          shared-key: cargo-tools-${{ env.CARGO_ABOUT_VERSION }}-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}-${{ hashFiles('rust-toolchain.toml') }}
           add-rust-environment-hash-key: false
           cache-targets: false
           cache-on-failure: true
@@ -334,6 +345,10 @@ jobs:
           package=$(find dist -type f -name '*.deb' -exec realpath {} \; -quit)
           test -n "$package"
           dpkg-deb -f "$package" Depends | grep -Fx 'libxkbcommon-x11-0'
+          temporary_directory=$(mktemp -d)
+          trap 'rm -rf "$temporary_directory"' EXIT
+          dpkg-deb --extract "$package" "$temporary_directory"
+          bash scripts/verify-packaged-legal-files.sh "$temporary_directory"
           sudo apt-get install --yes "$package"
           executable=$(dpkg -L styrhous | awk '/\/usr\/bin\// { print; exit }')
           test -n "$executable"
@@ -373,6 +388,7 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           version="${TAG#v}"
+          mapfile -d '' legal_assets < <(bash scripts/copy-release-legal-assets.sh dist)
           update_ids=(macos-x86_64 macos-aarch64 windows-x86_64 linux-x86_64 linux-aarch64)
           for update_id in "${update_ids[@]}"; do
             manifest="dist/styrhous-update-${update_id}.json"
@@ -393,6 +409,7 @@ jobs:
             -name '*.AppImage' -o -name '*.deb' -o -name '*.sig' -o \
             -name 'styrhous-update-*.json' \
           \) -print0)
+          assets+=("${legal_assets[@]}")
           test "${#assets[@]}" -gt 0
           release_args=(--verify-tag --generate-notes)
           if [[ "$TAG" == *-* ]]; then
