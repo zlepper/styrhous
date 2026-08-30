@@ -171,14 +171,29 @@ fn updates_disabled_by_value(value: &str) -> bool {
 
 #[cfg(feature = "self-updater")]
 fn updater_activation() -> (UpdateStatus, Option<&'static str>) {
-    if updates_disabled_by_environment() || cfg!(styrhous_package_managed_build) {
+    updater_activation_for(
+        updates_disabled_by_environment(),
+        cfg!(styrhous_package_managed_build),
+        cfg!(styrhous_release_build),
+        option_env!("STYRHOUS_UPDATER_PUBLIC_KEY"),
+    )
+}
+
+#[cfg(any(feature = "self-updater", test))]
+fn updater_activation_for(
+    updates_disabled: bool,
+    package_managed_build: bool,
+    release_build: bool,
+    public_key: Option<&'static str>,
+) -> (UpdateStatus, Option<&'static str>) {
+    if updates_disabled || package_managed_build {
         return (UpdateStatus::ExternallyManaged, None);
     }
-    if !cfg!(styrhous_release_build) {
+    if !release_build {
         return (UpdateStatus::LocalBuild, None);
     }
 
-    match option_env!("STYRHOUS_UPDATER_PUBLIC_KEY").filter(|key| !key.trim().is_empty()) {
+    match public_key.filter(|key| !key.trim().is_empty()) {
         Some(public_key) => (UpdateStatus::Checking, Some(public_key)),
         None => (
             UpdateStatus::Failed {

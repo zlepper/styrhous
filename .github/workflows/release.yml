@@ -9,195 +9,105 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  CARGO_ABOUT_VERSION: "0.9.1"
-  CARGO_NEXTEST_VERSION: "0.9.140"
   CARGO_PACKAGER_VERSION: "0.11.8"
   STYRHOUS_RELEASE_BUILD: "1"
   STYRHOUS_UPDATER_PUBLIC_KEY: ${{ vars.STYRHOUS_UPDATER_PUBLIC_KEY }}
 
 jobs:
-  verify:
-    if: github.ref_type == 'tag'
+  preflight:
+    name: Verify release metadata
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check out release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
           persist-credentials: false
-      - name: Cache pinned Cargo tools
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          shared-key: cargo-tools-${{ env.CARGO_ABOUT_VERSION }}-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}-${{ hashFiles('rust-toolchain.toml') }}
-          add-rust-environment-hash-key: false
-          cache-targets: false
-          cache-on-failure: true
-      - name: Cache Rust build
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          shared-key: application-linux-x86_64
-          cache-bin: false
-          cache-on-failure: true
-      - name: Install Mesa software renderer
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes libegl1 libgl1-mesa-dri
-      - name: Install cargo-nextest
-        run: |
-          [[ "$(cargo nextest --version 2>/dev/null | awk 'NR == 1 { print $2 }')" == "$CARGO_NEXTEST_VERSION" ]] || \
-            cargo install cargo-nextest --version "$CARGO_NEXTEST_VERSION" --locked
+
       - name: Install cargo-about
-        run: |
-          [[ "$(cargo about --version 2>/dev/null | awk 'NR == 1 { print $2 }')" == "$CARGO_ABOUT_VERSION" ]] || \
-            cargo install cargo-about --version "$CARGO_ABOUT_VERSION" --locked --features cli
+        uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
+        with:
+          tool: cargo-about@0.9.1
+          fallback: none
+
       - name: Verify third-party legal artifacts
         run: bash scripts/generate-third-party-legal.sh --check
-      - name: Verify tag and application version agree
-        if: github.ref_type == 'tag'
-        run: test "${GITHUB_REF_NAME#v}" = "$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | select(.name == "styrhous") | .version')"
-      - name: Test updater manifest generator
-        run: bash scripts/test-generate-update-manifest.sh
-      - name: Test local development icon setup
-        run: bash scripts/test-setup-local-development-icon.sh
-      - name: Run workspace tests
-        env:
-          # Select wgpu's OpenGL backend, matching the Docker CI diagnostic command.
-          WGPU_BACKEND: gl
-        run: cargo nextest run --workspace --no-fail-fast --test-threads 1
-      - name: Upload snapshot test failures
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: snapshot-test-failures
-          path: |
-            crates/**/tests/snapshots/**/*.diff.png
-            crates/**/tests/snapshots/**/*.new.png
-            crates/**/tests/snapshots/**/*.accessibility.new.txt
-          if-no-files-found: ignore
-          retention-days: 7
-      - name: Verify direct-release updater build
-        run: cargo nextest run -p styrhous updater_activation_matches_the_compiled_build_kind
-      - name: Verify package-managed updater build
-        env:
-          STYRHOUS_DISABLE_AUTO_UPDATE: "1"
-        run: cargo nextest run -p styrhous updater_activation_matches_the_compiled_build_kind
-      - run: cargo check -p styrhous --no-default-features
 
-  package-direct:
-    if: github.ref_type == 'tag'
-    needs: verify
+      - name: Verify tag and application version agree
+        run: |
+          version=$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | select(.name == "styrhous") | .version')
+          test "${GITHUB_REF_NAME#v}" = "$version"
+
+  package-appimage:
+    name: Build AppImage (${{ matrix.id }})
+    needs: preflight
     environment: release
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         include:
-          - id: macos-x86_64
-            target: macos
-            arch: x86_64
-            runner: macos-26-intel
-            formats: app,dmg
-            update_format: app
-            update_glob: '*.app.tar.gz'
-          - id: macos-aarch64
-            target: macos
-            arch: aarch64
-            runner: macos-26
-            formats: app,dmg
-            update_format: app
-            update_glob: '*.app.tar.gz'
-          - id: windows-x86_64
-            target: windows
-            arch: x86_64
-            runner: windows-2025
-            formats: nsis
-            update_format: nsis
-            update_glob: '*.exe'
           - id: linux-x86_64
-            target: linux
             arch: x86_64
             runner: ubuntu-24.04
-            formats: appimage
-            update_format: appimage
-            update_glob: '*.AppImage'
+
           - id: linux-aarch64
-            target: linux
             arch: aarch64
             runner: ubuntu-24.04-arm
-            formats: appimage
-            update_format: appimage
-            update_glob: '*.AppImage'
-    runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check out release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
           persist-credentials: false
-      - name: Cache pinned Cargo tools
+
+      - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          shared-key: cargo-tools-${{ env.CARGO_ABOUT_VERSION }}-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}-${{ hashFiles('rust-toolchain.toml') }}
-          add-rust-environment-hash-key: false
-          cache-targets: false
+          cache-targets: true
+          cache-bin: true
+          cache-all-crates: true
           cache-on-failure: true
-      - name: Cache Rust build
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          shared-key: application-${{ matrix.id }}
-          cache-bin: false
-          cache-on-failure: true
-      - name: Restore release application binary
-        id: application-binary
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ runner.os == 'Windows' && 'target/release/styrhous.exe' || 'target/release/styrhous' }}
-          key: application-binary-${{ matrix.id }}-${{ github.sha }}
-      - name: Verify updater signing configuration
-        shell: bash
-        run: |
-          test -n "$STYRHOUS_UPDATER_PUBLIC_KEY"
-      - name: Install cargo-packager
-        shell: bash
-        run: |
-          [[ "$(cargo packager --version 2>/dev/null | awk 'NR == 1 { print $2 }')" == "$CARGO_PACKAGER_VERSION" ]] || \
-            cargo install cargo-packager --version "$CARGO_PACKAGER_VERSION" --locked
-      - name: Build release binary
-        if: steps.application-binary.outputs.cache-hit != 'true'
-        run: cargo build --release -p styrhous
-      - name: Save release application binary
-        if: steps.application-binary.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ runner.os == 'Windows' && 'target/release/styrhous.exe' || 'target/release/styrhous' }}
-          key: application-binary-${{ matrix.id }}-${{ github.sha }}
-      - name: Install AppImage package dependency
-        if: runner.os == 'Linux'
+
+      - name: Install AppImage package dependencies
         run: bash scripts/install-appimage-package-dependencies.sh
-      - name: Package direct-download build
-        shell: bash
+
+      - name: Install cargo-packager
+        uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
+        with:
+          tool: cargo-packager@${{ env.CARGO_PACKAGER_VERSION }}
+
+      - name: Verify updater signing configuration
+        run: test -n "$STYRHOUS_UPDATER_PUBLIC_KEY"
+
+      - name: Package AppImage
         env:
           CARGO_PACKAGER_SIGN_PRIVATE_KEY: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY }}
           CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD }}
         run: |
           test -n "$CARGO_PACKAGER_SIGN_PRIVATE_KEY"
-          cargo packager --manifest-path crates/styrhous/Cargo.toml --release --formats "${{ matrix.formats }}"
+          cargo packager \
+            --manifest-path crates/styrhous/Cargo.toml \
+            --release \
+            --formats appimage
+
       - name: Generate updater manifest
-        if: runner.os != 'Windows'
-        shell: bash
         run: |
-          bundle=$(find dist -type f -name "${{ matrix.update_glob }}" -print -quit)
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/styrhous/Cargo.toml | head -1)
+          bundle=$(find dist -type f -name '*.AppImage' -print -quit)
           test -n "$bundle"
-          bash scripts/generate-update-manifest.sh "$(sed -n 's/^version = "\(.*\)"/\1/p' crates/styrhous/Cargo.toml | head -1)" "${{ matrix.target }}" "${{ matrix.arch }}" "${{ matrix.update_format }}" "$bundle" "dist/styrhous-update-${{ matrix.id }}.json"
-      - name: Generate Windows updater manifest
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          bundle=$(find dist -type f -name "${{ matrix.update_glob }}" -print -quit)
-          test -n "$bundle"
-          bash scripts/generate-update-manifest.sh "$(sed -n 's/^version = "\(.*\)"/\1/p' crates/styrhous/Cargo.toml | head -1)" "${{ matrix.target }}" "${{ matrix.arch }}" "${{ matrix.update_format }}" "$bundle" "dist/styrhous-update-${{ matrix.id }}.json"
+
+          bash scripts/generate-update-manifest.sh \
+            "$version" \
+            linux \
+            "${{ matrix.arch }}" \
+            appimage \
+            "$bundle" \
+            "dist/styrhous-update-${{ matrix.id }}.json"
+
       - name: Smoke test AppImage startup
-        if: runner.os == 'Linux'
-        shell: bash
         timeout-minutes: 2
         env:
           STYRHOUS_DISABLE_AUTO_UPDATE: "1"
@@ -205,12 +115,14 @@ jobs:
           bundle=$(find dist -type f -name '*.AppImage' -exec realpath {} \; -quit)
           test -n "$bundle"
           chmod +x "$bundle"
+
           temporary_directory=$(mktemp -d)
           host_library=$(ldconfig -p | awk '$1 == "libxkbcommon-x11.so.0" { print $NF; exit }')
           test -n "$host_library"
           disabled_library="$host_library.styrhous-smoke-disabled"
           sudo mv "$host_library" "$disabled_library"
           trap 'sudo mv "$disabled_library" "$host_library" 2>/dev/null || true; sudo ldconfig; rm -rf "$temporary_directory"' EXIT
+
           (
             cd "$temporary_directory"
             "$bundle" --appimage-extract >/dev/null
@@ -218,15 +130,87 @@ jobs:
             bash "$GITHUB_WORKSPACE/scripts/verify-packaged-legal-files.sh" squashfs-root
             bash "$GITHUB_WORKSPACE/scripts/verify-appimage-native-libraries.sh" squashfs-root
           )
-          # A GUI that stays alive is expected; timeout reports that as 124.
+
           set +e
           timeout --kill-after=5s 10s xvfb-run -a "$bundle" --appimage-extract-and-run
           status=$?
           set -e
           test "$status" -eq 124
+
+      - name: Upload AppImage package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.id }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 1
+
+  package-macos:
+    name: Build macOS package (${{ matrix.id }})
+    needs: preflight
+    environment: release
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: macos-x86_64
+            arch: x86_64
+            runner: macos-26-intel
+
+          - id: macos-aarch64
+            arch: aarch64
+            runner: macos-26
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
+          persist-credentials: false
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          cache-targets: true
+          cache-bin: true
+          cache-all-crates: true
+          cache-on-failure: true
+
+      - name: Install cargo-packager
+        uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
+        with:
+          tool: cargo-packager@${{ env.CARGO_PACKAGER_VERSION }}
+
+      - name: Verify updater signing configuration
+        run: test -n "$STYRHOUS_UPDATER_PUBLIC_KEY"
+
+      - name: Package macOS application
+        env:
+          CARGO_PACKAGER_SIGN_PRIVATE_KEY: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY }}
+          CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD }}
+        run: |
+          test -n "$CARGO_PACKAGER_SIGN_PRIVATE_KEY"
+          cargo packager \
+            --manifest-path crates/styrhous/Cargo.toml \
+            --release \
+            --formats app,dmg
+
+      - name: Generate updater manifest
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/styrhous/Cargo.toml | head -1)
+          bundle=$(find dist -type f -name '*.app.tar.gz' -print -quit)
+          test -n "$bundle"
+
+          bash scripts/generate-update-manifest.sh \
+            "$version" \
+            macos \
+            "${{ matrix.arch }}" \
+            app \
+            "$bundle" \
+            "dist/styrhous-update-${{ matrix.id }}.json"
+
       - name: Smoke test macOS DMG startup
-        if: runner.os == 'macOS'
-        shell: bash
         timeout-minutes: 2
         env:
           STYRHOUS_DISABLE_AUTO_UPDATE: "1"
@@ -235,13 +219,16 @@ jobs:
           mount_point="$temporary_directory/mount"
           mkdir "$mount_point"
           trap 'hdiutil detach "$mount_point" -quiet || true; rm -rf "$temporary_directory"' EXIT
+
           dmg=$(find dist -type f -name '*.dmg' -print -quit)
           test -n "$dmg"
           hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount_point"
+
           app=$(find "$mount_point" -maxdepth 1 -name '*.app' -print -quit)
           test -n "$app"
           cp -R "$app" "$temporary_directory/Styrhous.app"
           bash scripts/verify-packaged-legal-files.sh "$temporary_directory/Styrhous.app"
+
           executable=$(find "$temporary_directory/Styrhous.app/Contents/MacOS" -type f -perm -u+x -print -quit)
           test -n "$executable"
           "$executable" &
@@ -250,8 +237,79 @@ jobs:
           kill -0 "$process_id"
           kill "$process_id" || true
           wait "$process_id" || true
+
+      - name: Upload macOS packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.id }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 1
+
+  package-windows:
+    name: Build Windows package (${{ matrix.id }})
+    needs: preflight
+    environment: release
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      matrix:
+        include:
+          - id: windows-x86_64
+            arch: x86_64
+            runner: windows-2025
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
+          persist-credentials: false
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          cache-targets: true
+          cache-bin: true
+          cache-all-crates: true
+          cache-on-failure: true
+
+      - name: Install cargo-packager
+        uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
+        with:
+          tool: cargo-packager@${{ env.CARGO_PACKAGER_VERSION }}
+
+      - name: Verify updater signing configuration
+        shell: bash
+        run: test -n "$STYRHOUS_UPDATER_PUBLIC_KEY"
+
+      - name: Package Windows installer
+        shell: bash
+        env:
+          CARGO_PACKAGER_SIGN_PRIVATE_KEY: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY }}
+          CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD }}
+        run: |
+          test -n "$CARGO_PACKAGER_SIGN_PRIVATE_KEY"
+          cargo packager \
+            --manifest-path crates/styrhous/Cargo.toml \
+            --release \
+            --formats nsis
+
+      - name: Generate updater manifest
+        shell: bash
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/styrhous/Cargo.toml | head -1)
+          bundle=$(find dist -type f -name '*.exe' -print -quit)
+          test -n "$bundle"
+
+          bash scripts/generate-update-manifest.sh \
+            "$version" \
+            windows \
+            "${{ matrix.arch }}" \
+            nsis \
+            "$bundle" \
+            "dist/styrhous-update-${{ matrix.id }}.json"
+
       - name: Smoke test Windows NSIS install and startup
-        if: runner.os == 'Windows'
         shell: pwsh
         timeout-minutes: 2
         env:
@@ -260,23 +318,31 @@ jobs:
           $destination = Join-Path $env:RUNNER_TEMP 'styrhous-installer-smoke'
           $installer = Get-ChildItem -Path dist -Filter '*.exe' -Recurse | Select-Object -First 1
           if ($null -eq $installer) { throw 'NSIS installer was not produced' }
+
           $install = Start-Process -FilePath $installer.FullName -ArgumentList @('/S', "/D=$destination") -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "NSIS installer exited with $($install.ExitCode)" }
+
           & scripts/Verify-PackagedLegalFiles.ps1 -PackageRoot $destination
+
           $application = Get-ChildItem -Path $destination -Filter '*.exe' -Recurse |
             Where-Object { $_.Name -ne 'Uninstall.exe' } |
             Select-Object -First 1
           if ($null -eq $application) { throw 'Installed application executable was not found' }
+
           $process = Start-Process -FilePath $application.FullName -PassThru
           Start-Sleep -Seconds 5
           if ($process.HasExited) { throw "Installed application exited with $($process.ExitCode)" }
           Stop-Process -Id $process.Id -Force
+
           $uninstaller = Get-ChildItem -Path $destination -Filter 'Uninstall.exe' -Recurse | Select-Object -First 1
           if ($null -eq $uninstaller) { throw 'NSIS uninstaller was not found' }
+
           $uninstall = Start-Process -FilePath $uninstaller.FullName -ArgumentList '/S' -Wait -PassThru
           if ($uninstall.ExitCode -ne 0) { throw "NSIS uninstaller exited with $($uninstall.ExitCode)" }
           if (Test-Path $destination) { throw 'NSIS uninstaller left its destination behind' }
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+
+      - name: Upload Windows package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.id }}
           path: dist/
@@ -284,82 +350,77 @@ jobs:
           retention-days: 1
 
   package-deb:
-    if: github.ref_type == 'tag'
-    needs: verify
+    name: Build Debian package (${{ matrix.id }})
+    needs: preflight
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         include:
           - id: linux-x86_64-deb
-            cache_id: linux-x86_64
             runner: ubuntu-24.04
+
           - id: linux-aarch64-deb
-            cache_id: linux-aarch64
             runner: ubuntu-24.04-arm
-    runs-on: ${{ matrix.runner }}
     env:
       STYRHOUS_DISABLE_AUTO_UPDATE: "1"
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check out release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
           persist-credentials: false
-      - name: Cache pinned Cargo tools
+
+      - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          shared-key: cargo-tools-${{ env.CARGO_ABOUT_VERSION }}-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}-${{ hashFiles('rust-toolchain.toml') }}
-          add-rust-environment-hash-key: false
-          cache-targets: false
+          cache-targets: true
+          cache-bin: true
+          cache-all-crates: true
           cache-on-failure: true
-      - name: Cache Rust build
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - name: Install package dependencies
+        run: bash scripts/install-appimage-package-dependencies.sh
+
+      - name: Install cargo-packager
+        uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
         with:
-          shared-key: application-${{ matrix.cache_id }}
-          cache-bin: false
-          cache-on-failure: true
-      - name: Restore package-managed application binary
-        id: application-binary
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: target/release/styrhous
-          key: application-binary-package-managed-${{ matrix.cache_id }}-${{ github.sha }}
-      - shell: bash
+          tool: cargo-packager@${{ env.CARGO_PACKAGER_VERSION }}
+
+      - name: Build Debian package
         run: |
-          [[ "$(cargo packager --version 2>/dev/null | awk 'NR == 1 { print $2 }')" == "$CARGO_PACKAGER_VERSION" ]] || \
-            cargo install cargo-packager --version "$CARGO_PACKAGER_VERSION" --locked
-      - name: Build package-managed application
-        if: steps.application-binary.outputs.cache-hit != 'true'
-        run: cargo build --release -p styrhous
-      - name: Save package-managed application binary
-        if: steps.application-binary.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: target/release/styrhous
-          key: application-binary-package-managed-${{ matrix.cache_id }}-${{ github.sha }}
-      - run: cargo packager --manifest-path crates/styrhous/Cargo.toml --release --formats deb
+          cargo packager \
+            --manifest-path crates/styrhous/Cargo.toml \
+            --release \
+            --formats deb
+
       - name: Smoke test Debian package startup
-        shell: bash
         timeout-minutes: 2
         run: |
           package=$(find dist -type f -name '*.deb' -exec realpath {} \; -quit)
           test -n "$package"
           dpkg-deb -f "$package" Depends | grep -Fx 'libxkbcommon-x11-0'
+
           temporary_directory=$(mktemp -d)
           trap 'rm -rf "$temporary_directory"' EXIT
           dpkg-deb --extract "$package" "$temporary_directory"
           bash scripts/verify-packaged-legal-files.sh "$temporary_directory"
+
           sudo apt-get install --yes "$package"
           executable=$(dpkg -L styrhous | awk '/\/usr\/bin\// { print; exit }')
           test -n "$executable"
-          # A GUI that stays alive is expected; timeout reports that as 124.
+
           set +e
           timeout --kill-after=5s 10s xvfb-run -a "$executable"
           status=$?
           set -e
           test "$status" -eq 124
+
           sudo apt-get purge --yes styrhous
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+
+      - name: Upload Debian package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.id }}
           path: dist/**/*.deb
@@ -367,28 +428,36 @@ jobs:
           retention-days: 1
 
   publish:
-    if: github.ref_type == 'tag'
-    needs: [package-direct, package-deb]
+    name: Publish GitHub release
+    needs:
+      - package-appimage
+      - package-macos
+      - package-windows
+      - package-deb
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write
     steps:
-      # Give `gh` a repository remote; --verify-tag prevents creating a missing tag.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check out release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+
+      - name: Download release packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: dist
           merge-multiple: true
-      - name: Publish GitHub Release
+
+      - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
           version="${TAG#v}"
           mapfile -d '' legal_assets < <(bash scripts/copy-release-legal-assets.sh dist)
+
           update_ids=(macos-x86_64 macos-aarch64 windows-x86_64 linux-x86_64 linux-aarch64)
           for update_id in "${update_ids[@]}"; do
             manifest="dist/styrhous-update-${update_id}.json"
@@ -399,11 +468,13 @@ jobs:
               and (.signature | type == "string" and length > 0)
               and (.format | IN("app", "appimage", "nsis"))
             ' "$manifest" >/dev/null
+
             update_asset="$(jq -r '.url | split("/") | last' "$manifest")"
             mapfile -t matching_assets < <(find dist -type f -name "$update_asset" -print)
             test "${#matching_assets[@]}" -eq 1
             test -f "${matching_assets[0]}.sig"
           done
+
           mapfile -d '' assets < <(find dist -type f \( \
             -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.exe' -o \
             -name '*.AppImage' -o -name '*.deb' -o -name '*.sig' -o \
@@ -411,8 +482,10 @@ jobs:
           \) -print0)
           assets+=("${legal_assets[@]}")
           test "${#assets[@]}" -gt 0
+
           release_args=(--verify-tag --generate-notes)
           if [[ "$TAG" == *-* ]]; then
             release_args+=(--title "Preview $TAG")
           fi
+
           gh release create "$TAG" "${release_args[@]}" "${assets[@]}"

@@ -1,204 +1,89 @@
-name: Build and test
+name: Tests
 
 on:
   push:
-    branches: [master]
-  pull_request:
-    branches: [master]
+    branches: ["**"]
 
 permissions:
   contents: read
 
 env:
   CARGO_TERM_COLOR: always
-  CARGO_ABOUT_VERSION: "0.9.1"
-  CARGO_NEXTEST_VERSION: "0.9.140"
-  CARGO_PACKAGER_VERSION: "0.11.8"
-  STYRHOUS_RELEASE_BUILD: "1"
-  STYRHOUS_UPDATER_PUBLIC_KEY: ${{ vars.STYRHOUS_UPDATER_PUBLIC_KEY }}
 
 jobs:
-  build-and-test:
-    name: Build and test (${{ matrix.id }})
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - id: linux-x86_64
-            runner: ubuntu-24.04
-            formats: appimage
-            binary: target/release/styrhous
-            run_tests: true
-          - id: linux-aarch64
-            runner: ubuntu-24.04-arm
-            formats: appimage
-            binary: target/release/styrhous
-            run_tests: false
-          - id: macos-x86_64
-            runner: macos-26-intel
-            formats: app,dmg
-            binary: target/release/styrhous
-            run_tests: false
-          - id: macos-aarch64
-            runner: macos-26
-            formats: app,dmg
-            binary: target/release/styrhous
-            run_tests: false
-          - id: windows-x86_64
-            runner: windows-2025
-            formats: nsis
-            binary: target/release/styrhous.exe
-            run_tests: false
+  format:
+    name: Check formatting
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check Rust formatting
+        run: cargo fmt --check
+
+  lint:
+    name: Lint and check Rust workspace
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
           persist-credentials: false
-      # Only trusted default-branch pushes write caches. Pull requests may restore
-      # them, but cannot introduce executable content for a later release.
-      - name: Cache Cargo tools
+
+      - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          shared-key: cargo-tools-${{ env.CARGO_ABOUT_VERSION }}-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}-${{ hashFiles('rust-toolchain.toml') }}
-          add-rust-environment-hash-key: false
-          cache-targets: false
-          save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+          cache-targets: true
+          cache-bin: true
+          cache-all-crates: true
           cache-on-failure: true
-      - name: Cache application build
+
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+      - name: Check without default features
+        run: cargo check --locked -p styrhous --no-default-features
+
+  workspace-tests:
+    name: Test Rust workspace
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
+          persist-credentials: false
+
+      - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          shared-key: application-${{ matrix.id }}
-          cache-bin: false
-          save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+          cache-targets: true
+          cache-bin: true
+          cache-all-crates: true
           cache-on-failure: true
-      # rust-cache intentionally excludes binaries. Preserve this exact, trusted
-      # source revision separately so a tag on the same master commit can package it.
-      - name: Restore release application binary
-        id: application-binary
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ matrix.binary }}
-          key: application-binary-${{ matrix.id }}-${{ github.sha }}
-      - name: Install AppImage package dependency
-        if: startsWith(matrix.id, 'linux-')
-        run: bash scripts/install-appimage-package-dependencies.sh
-      - name: Install Mesa software renderer
-        if: matrix.run_tests
-        run: |
-          sudo apt-get install --yes libegl1 libgl1-mesa-dri
-      - name: Install cargo-packager
-        shell: bash
-        run: |
-          [[ "$(cargo packager --version 2>/dev/null | awk 'NR == 1 { print $2 }')" == "$CARGO_PACKAGER_VERSION" ]] || \
-            cargo install cargo-packager --version "$CARGO_PACKAGER_VERSION" --locked
+
       - name: Install cargo-nextest
-        if: matrix.run_tests
-        shell: bash
-        run: |
-          [[ "$(cargo nextest --version 2>/dev/null | awk 'NR == 1 { print $2 }')" == "$CARGO_NEXTEST_VERSION" ]] || \
-            cargo install cargo-nextest --version "$CARGO_NEXTEST_VERSION" --locked
-      - name: Install cargo-about
-        if: matrix.run_tests
-        shell: bash
-        run: |
-          [[ "$(cargo about --version 2>/dev/null | awk 'NR == 1 { print $2 }')" == "$CARGO_ABOUT_VERSION" ]] || \
-            cargo install cargo-about --version "$CARGO_ABOUT_VERSION" --locked --features cli
-      - name: Verify third-party legal artifacts
-        if: matrix.run_tests
-        run: bash scripts/generate-third-party-legal.sh --check
-      - name: Build release application
-        if: steps.application-binary.outputs.cache-hit != 'true'
-        run: cargo build --release -p styrhous
-      - name: Save release application binary
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.application-binary.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
         with:
-          path: ${{ matrix.binary }}
-          key: application-binary-${{ matrix.id }}-${{ github.sha }}
-      # This is a real package build on each release platform. It validates the
-      # packager inputs and keeps both the app and packager artifacts warm.
-      - name: Build native package
-        shell: bash
-        run: cargo packager --manifest-path crates/styrhous/Cargo.toml --release --formats "${{ matrix.formats }}"
-      - name: Verify AppImage legal resources
-        if: startsWith(matrix.id, 'linux-')
-        shell: bash
-        run: |
-          bundle=$(find dist -type f -name '*.AppImage' -exec realpath {} \; -quit)
-          test -n "$bundle"
-          chmod +x "$bundle"
-          temporary_directory=$(mktemp -d)
-          trap 'rm -rf "$temporary_directory"' EXIT
-          (
-            cd "$temporary_directory"
-            "$bundle" --appimage-extract >/dev/null
-            bash "$GITHUB_WORKSPACE/scripts/verify-packaged-legal-files.sh" squashfs-root
-            bash "$GITHUB_WORKSPACE/scripts/verify-appimage-native-libraries.sh" squashfs-root
-          )
-      - name: Verify macOS application legal resources
-        if: startsWith(matrix.id, 'macos-')
-        shell: bash
-        run: |
-          app=$(find dist -type d -name '*.app' -print -quit)
-          test -n "$app"
-          bash scripts/verify-packaged-legal-files.sh "$app"
-      - name: Verify Windows installer legal resources
-        if: startsWith(matrix.id, 'windows-')
-        shell: pwsh
-        run: |
-          $destination = Join-Path $env:RUNNER_TEMP 'styrhous-installer-legal-check'
-          $installer = Get-ChildItem -Path dist -Filter '*.exe' -Recurse | Select-Object -First 1
-          if ($null -eq $installer) { throw 'NSIS installer was not produced' }
-          $install = Start-Process -FilePath $installer.FullName -ArgumentList @('/S', "/D=$destination") -Wait -PassThru
-          if ($install.ExitCode -ne 0) { throw "NSIS installer exited with $($install.ExitCode)" }
-          & scripts/Verify-PackagedLegalFiles.ps1 -PackageRoot $destination
-          $uninstaller = Get-ChildItem -Path $destination -Filter 'Uninstall.exe' -Recurse | Select-Object -First 1
-          if ($null -eq $uninstaller) { throw 'NSIS uninstaller was not found' }
-          $uninstall = Start-Process -FilePath $uninstaller.FullName -ArgumentList '/S' -Wait -PassThru
-          if ($uninstall.ExitCode -ne 0) { throw "NSIS uninstaller exited with $($uninstall.ExitCode)" }
-          if (Test-Path $destination) { throw 'NSIS uninstaller left its destination behind' }
-      # Debian packages deliberately compile with the updater disabled. Cache that
-      # distinct binary too; it cannot share the direct-download build above.
-      - name: Restore package-managed application binary
-        if: startsWith(matrix.id, 'linux-')
-        id: package-managed-application-binary
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ matrix.binary }}
-          key: application-binary-package-managed-${{ matrix.id }}-${{ github.sha }}
-      - name: Build package-managed application
-        if: startsWith(matrix.id, 'linux-') && steps.package-managed-application-binary.outputs.cache-hit != 'true'
-        env:
-          STYRHOUS_DISABLE_AUTO_UPDATE: "1"
-        run: cargo build --release -p styrhous
-      - name: Save package-managed application binary
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && startsWith(matrix.id, 'linux-') && steps.package-managed-application-binary.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ matrix.binary }}
-          key: application-binary-package-managed-${{ matrix.id }}-${{ github.sha }}
-      - name: Run workspace tests
-        if: matrix.run_tests
+          tool: cargo-nextest@0.9.140
+          fallback: none
+
+      - name: Install Mesa software renderer
+        run: sudo apt-get install --yes libegl1 libgl1-mesa-dri
+
+      - name: Run workspace tests without Kind integrations
         env:
           WGPU_BACKEND: gl
-        run: cargo nextest run --workspace --no-fail-fast --test-threads 1
-      - name: Test local development icon setup
-        if: matrix.run_tests
-        run: bash scripts/test-setup-local-development-icon.sh
-      - name: Verify local release Wayland application ID
-        if: matrix.run_tests
-        env:
-          STYRHOUS_RELEASE_BUILD: ""
-        run: cargo nextest run --release -p styrhous native_window_starts_wide_and_has_a_minimum_width
-      - name: Verify packaged Wayland application ID
-        if: matrix.run_tests
-        env:
-          STYRHOUS_RELEASE_BUILD: "1"
-        run: cargo nextest run --release -p styrhous native_window_starts_wide_and_has_a_minimum_width
+        run: cargo nextest run --workspace --locked -E 'not test(/ui::tests::kind::/)'
+
       - name: Upload snapshot test failures
-        if: failure() && matrix.run_tests
+        if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: snapshot-test-failures
@@ -208,14 +93,82 @@ jobs:
             crates/**/tests/snapshots/**/*.accessibility.new.txt
           if-no-files-found: ignore
           retention-days: 7
-      - name: Verify direct-release updater build
-        if: matrix.run_tests
-        run: cargo nextest run -p styrhous updater_activation_matches_the_compiled_build_kind
-      - name: Verify package-managed updater build
-        if: matrix.run_tests
+
+  kind-tests:
+    name: Test Kind integrations
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
+          persist-credentials: false
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          cache-targets: true
+          cache-bin: true
+          cache-all-crates: true
+          cache-on-failure: true
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
+        with:
+          tool: cargo-nextest@0.9.140
+          fallback: none
+
+      - name: Install Mesa software renderer
+        run: sudo apt-get install --yes libegl1 libgl1-mesa-dri
+
+      - name: Run Kind-backed integration tests
         env:
-          STYRHOUS_DISABLE_AUTO_UPDATE: "1"
-        run: cargo nextest run -p styrhous updater_activation_matches_the_compiled_build_kind
-      - name: Check without the self-updater
-        if: matrix.run_tests
-        run: cargo check -p styrhous --no-default-features
+          WGPU_BACKEND: gl
+        run: cargo nextest run -p styrhous --locked -E 'test(/ui::tests::kind::/)'
+
+  doctests:
+    name: Test Rust documentation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
+          persist-credentials: false
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          cache-targets: true
+          cache-bin: true
+          cache-all-crates: true
+          cache-on-failure: true
+
+      - name: Run workspace doctests
+        run: cargo test --doc --workspace --locked
+
+  repository-checks:
+    name: Check repository artifacts and scripts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install cargo-about
+        uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
+        with:
+          tool: cargo-about@0.9.1
+          fallback: none
+
+      - name: Verify third-party legal artifacts
+        run: bash scripts/generate-third-party-legal.sh --check
+
+      - name: Test release scripts
+        run: |
+          bash scripts/test-generate-update-manifest.sh
+          bash scripts/test-setup-local-development-icon.sh
