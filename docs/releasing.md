@@ -19,13 +19,12 @@ replacement key.
 Before enabling releases, configure the `release` environment in GitHub with required reviewers
 and restrict deployments to protected `v*` tags. Environment secrets are only made available to
 the direct package jobs after that approval. The workflow intentionally uses immutable action
-commit IDs. After this workflow revision has been merged, enable **Require actions to be pinned
-to a full-length commit SHA** in **Settings → Actions → General**, then select **Allow actions
-and reusable workflows**. Allow GitHub-owned actions and whitelist only
+commit IDs. In **Settings → Actions → General**, require actions to be pinned to a full-length
+commit SHA and allow GitHub-owned actions plus only
 `Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6` and
-`taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a`, while enforcing the
-full-SHA pin requirement. Rust itself is pinned in `rust-toolchain.toml`; the workflows pin their
-Cargo tool versions at the installation step.
+`taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a`. Update that allow-list
+before pushing a workflow that introduces or changes an external action. Rust itself is pinned in
+`rust-toolchain.toml`; the workflows pin their Cargo tool versions at the installation step.
 
 Every branch push runs the Linux workspace checks. A push to trusted `master` also validates the
 native package matrix and warms each platform's ordinary Rust build/tool cache. Release jobs use
