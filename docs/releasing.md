@@ -1,6 +1,7 @@
 # Releasing Styrhous
 
-The release workflow runs when a `vX.Y.Z` tag is pushed. The tag must match the version in
+The **Desktop packages** workflow validates packages on every branch push and publishes a release
+when a `vX.Y.Z` tag is pushed. The tag must match the version in
 `crates/styrhous/Cargo.toml` exactly.
 
 Before the first release, create the updater signing key once:
@@ -26,16 +27,35 @@ commit SHA and allow GitHub-owned actions plus only
 before pushing a workflow that introduces or changes an external action. Rust itself is pinned in
 `rust-toolchain.toml`; the workflows pin their Cargo tool versions at the installation step.
 
-Every branch push runs the Linux workspace checks. A push to trusted `master` also validates the
-native package matrix and warms each platform's ordinary Rust build/tool cache. Release jobs use
-the same job identities and cache configuration, so a tag can restore compatible default-branch
-cache entries. Application executables are never cached between workflows: every release package
-is rebuilt from the tagged source before signing.
+Package validation uses a separate, disposable updater signing identity. Create an unrestricted
+`package-validation` environment without required reviewers, generate a second key with
+`cargo packager signer generate`, and store its private key and password in that environment under
+the same `CARGO_PACKAGER_SIGN_PRIVATE_KEY` and
+`CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD` secret names. Store its public key as the repository
+variable `STYRHOUS_VALIDATION_UPDATER_PUBLIC_KEY`. Never copy the production updater key into the
+validation environment. The validation key does not need an external backup and can be rotated by
+replacing the environment secrets and repository variable together.
 
-The tag workflow deliberately trusts those prior checks instead of rerunning the workspace suite.
-Before pushing a release tag, verify that both **Tests** and **Validate desktop packages** succeeded
-for the exact commit being tagged. Release-environment reviewers should confirm the same commit
-status before approving access to the updater signing key.
+Every branch push runs both the Linux workspace checks and the full native package matrix. Trusted
+repository branches sign their direct-download validation artifacts with the disposable key,
+generate updater manifests, run the release smoke tests, and retain the artifacts for one day.
+Pull requests reuse the checks attached to their branch-head commit instead of starting a second
+matrix for a synthetic pull-request merge commit. Consequently, fork-only branches are not package
+validated by this workflow. Dependabot branch pushes are unsigned because GitHub withholds secrets
+from them. Manual validation runs are signed by default and expose a `sign_artifacts` input for
+exercising the unsigned path.
+
+Release tags follow those same four platform-specific package jobs, but select the protected
+`release` environment and production updater key. The preflight job additionally verifies that the
+tag matches the application version, and a final job publishes the collected artifacts as a GitHub
+Release. The shared job identities and cache configuration allow the tag run to restore compatible
+default-branch cache entries. Every package explicitly rebuilds its application executable from
+the checked-out source before packaging or signing.
+
+The release-tag run deliberately trusts the prior workspace checks instead of rerunning them.
+Before pushing a release tag, verify that both **Tests** and **Desktop packages** succeeded for the
+exact commit being tagged. Release-environment reviewers should confirm the same commit status
+before approving access to the updater signing key.
 
 Third-party license policy, templates, and resource manifests live under `legal/`. Generated
 license HTML and corresponding source archives are intentionally not tracked. To package locally,

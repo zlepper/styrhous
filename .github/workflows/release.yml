@@ -1,8 +1,20 @@
-name: Release desktop application
+name: Desktop packages
 
 on:
   push:
+    branches: ["**"]
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      sign_artifacts:
+        description: Sign validation artifacts with the package-validation key
+        required: true
+        type: boolean
+        default: true
+
+concurrency:
+  group: desktop-packages-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ !(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) }}
 
 permissions:
   contents: read
@@ -10,16 +22,18 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   CARGO_PACKAGER_VERSION: "0.11.8"
+  PACKAGE_ARTIFACT_PREFIX: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'package' || 'validation' }}
+  SIGN_ARTIFACTS: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.actor != 'dependabot[bot]' && (github.event_name != 'workflow_dispatch' || inputs.sign_artifacts)) }}
   STYRHOUS_RELEASE_BUILD: "1"
-  STYRHOUS_UPDATER_PUBLIC_KEY: ${{ vars.STYRHOUS_UPDATER_PUBLIC_KEY }}
+  STYRHOUS_UPDATER_PUBLIC_KEY: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && vars.STYRHOUS_UPDATER_PUBLIC_KEY || vars.STYRHOUS_VALIDATION_UPDATER_PUBLIC_KEY }}
 
 jobs:
   preflight:
-    name: Verify release metadata
+    name: Prepare desktop packages
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - name: Check out release tag
+      - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
@@ -41,17 +55,18 @@ jobs:
             target/legal/THIRD_PARTY_LICENSES.html
             target/legal/THIRD_PARTY_SOURCE.tar.gz
           if-no-files-found: error
-          retention-days: 7
+          retention-days: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 7 || 1 }}
 
       - name: Verify tag and application version agree
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         run: |
           version=$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | select(.name == "styrhous") | .version')
           test "${GITHUB_REF_NAME#v}" = "$version"
 
   package-appimage:
-    name: Build AppImage (${{ matrix.id }})
+    name: Package AppImage (${{ matrix.id }})
     needs: preflight
-    environment: release
+    environment: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'release' || 'package-validation' }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:
@@ -66,17 +81,11 @@ jobs:
             arch: aarch64
             runner: ubuntu-24.04-arm
     steps:
-      - name: Check out release tag
+      - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
           persist-credentials: false
-
-      - name: Download third-party legal artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: third-party-legal
-          path: target/legal
 
       - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -85,6 +94,12 @@ jobs:
           cache-bin: true
           cache-all-crates: true
           cache-on-failure: true
+
+      - name: Download third-party legal artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: third-party-legal
+          path: target/legal
 
       - name: Install AppImage package dependencies
         run: bash scripts/install-appimage-package-dependencies.sh
@@ -97,18 +112,28 @@ jobs:
       - name: Verify updater signing configuration
         run: test -n "$STYRHOUS_UPDATER_PUBLIC_KEY"
 
+      - name: Build release application
+        run: cargo build --release --locked -p styrhous
+
       - name: Package AppImage
         env:
           CARGO_PACKAGER_SIGN_PRIVATE_KEY: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY }}
           CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD }}
         run: |
-          test -n "$CARGO_PACKAGER_SIGN_PRIVATE_KEY"
+          if [[ "$SIGN_ARTIFACTS" == "true" ]]; then
+            test -n "$CARGO_PACKAGER_SIGN_PRIVATE_KEY"
+            test -n "$CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD"
+          else
+            unset CARGO_PACKAGER_SIGN_PRIVATE_KEY
+            unset CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD
+          fi
           cargo packager \
             --manifest-path crates/styrhous/Cargo.toml \
             --release \
             --formats appimage
 
       - name: Generate updater manifest
+        if: env.SIGN_ARTIFACTS == 'true'
         run: |
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/styrhous/Cargo.toml | head -1)
           bundle=$(find dist -type f -name '*.AppImage' -print -quit)
@@ -126,6 +151,7 @@ jobs:
         timeout-minutes: 2
         env:
           STYRHOUS_DISABLE_AUTO_UPDATE: "1"
+          WGPU_BACKEND: gl
         run: |
           bundle=$(find dist -type f -name '*.AppImage' -exec realpath {} \; -quit)
           test -n "$bundle"
@@ -155,15 +181,15 @@ jobs:
       - name: Upload AppImage package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: package-${{ matrix.id }}
+          name: ${{ env.PACKAGE_ARTIFACT_PREFIX }}-${{ matrix.id }}
           path: dist/
           if-no-files-found: error
           retention-days: 1
 
   package-macos:
-    name: Build macOS package (${{ matrix.id }})
+    name: Package macOS application (${{ matrix.id }})
     needs: preflight
-    environment: release
+    environment: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'release' || 'package-validation' }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:
@@ -178,17 +204,11 @@ jobs:
             arch: aarch64
             runner: macos-26
     steps:
-      - name: Check out release tag
+      - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
           persist-credentials: false
-
-      - name: Download third-party legal artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: third-party-legal
-          path: target/legal
 
       - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -198,6 +218,12 @@ jobs:
           cache-all-crates: true
           cache-on-failure: true
 
+      - name: Download third-party legal artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: third-party-legal
+          path: target/legal
+
       - name: Install cargo-packager
         uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
         with:
@@ -206,18 +232,28 @@ jobs:
       - name: Verify updater signing configuration
         run: test -n "$STYRHOUS_UPDATER_PUBLIC_KEY"
 
+      - name: Build release application
+        run: cargo build --release --locked -p styrhous
+
       - name: Package macOS application
         env:
           CARGO_PACKAGER_SIGN_PRIVATE_KEY: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY }}
           CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD }}
         run: |
-          test -n "$CARGO_PACKAGER_SIGN_PRIVATE_KEY"
+          if [[ "$SIGN_ARTIFACTS" == "true" ]]; then
+            test -n "$CARGO_PACKAGER_SIGN_PRIVATE_KEY"
+            test -n "$CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD"
+          else
+            unset CARGO_PACKAGER_SIGN_PRIVATE_KEY
+            unset CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD
+          fi
           cargo packager \
             --manifest-path crates/styrhous/Cargo.toml \
             --release \
             --formats app,dmg
 
       - name: Generate updater manifest
+        if: env.SIGN_ARTIFACTS == 'true'
         run: |
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/styrhous/Cargo.toml | head -1)
           bundle=$(find dist -type f -name '*.app.tar.gz' -print -quit)
@@ -243,7 +279,7 @@ jobs:
 
           dmg=$(find dist -type f -name '*.dmg' -print -quit)
           test -n "$dmg"
-          hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount_point"
+          hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount_point" <<< "Y"
 
           app=$(find "$mount_point" -maxdepth 1 -name '*.app' -print -quit)
           test -n "$app"
@@ -262,15 +298,15 @@ jobs:
       - name: Upload macOS packages
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: package-${{ matrix.id }}
+          name: ${{ env.PACKAGE_ARTIFACT_PREFIX }}-${{ matrix.id }}
           path: dist/
           if-no-files-found: error
           retention-days: 1
 
   package-windows:
-    name: Build Windows package (${{ matrix.id }})
+    name: Package Windows installer (${{ matrix.id }})
     needs: preflight
-    environment: release
+    environment: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'release' || 'package-validation' }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:
@@ -280,17 +316,11 @@ jobs:
             arch: x86_64
             runner: windows-2025
     steps:
-      - name: Check out release tag
+      - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
           persist-credentials: false
-
-      - name: Download third-party legal artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: third-party-legal
-          path: target/legal
 
       - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -299,6 +329,12 @@ jobs:
           cache-bin: true
           cache-all-crates: true
           cache-on-failure: true
+
+      - name: Download third-party legal artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: third-party-legal
+          path: target/legal
 
       - name: Install cargo-packager
         uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
@@ -309,19 +345,30 @@ jobs:
         shell: bash
         run: test -n "$STYRHOUS_UPDATER_PUBLIC_KEY"
 
+      - name: Build release application
+        shell: bash
+        run: cargo build --release --locked -p styrhous
+
       - name: Package Windows installer
         shell: bash
         env:
           CARGO_PACKAGER_SIGN_PRIVATE_KEY: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY }}
           CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD }}
         run: |
-          test -n "$CARGO_PACKAGER_SIGN_PRIVATE_KEY"
+          if [[ "$SIGN_ARTIFACTS" == "true" ]]; then
+            test -n "$CARGO_PACKAGER_SIGN_PRIVATE_KEY"
+            test -n "$CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD"
+          else
+            unset CARGO_PACKAGER_SIGN_PRIVATE_KEY
+            unset CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD
+          fi
           cargo packager \
             --manifest-path crates/styrhous/Cargo.toml \
             --release \
             --formats nsis
 
       - name: Generate updater manifest
+        if: env.SIGN_ARTIFACTS == 'true'
         shell: bash
         run: |
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/styrhous/Cargo.toml | head -1)
@@ -371,13 +418,13 @@ jobs:
       - name: Upload Windows package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: package-${{ matrix.id }}
+          name: ${{ env.PACKAGE_ARTIFACT_PREFIX }}-${{ matrix.id }}
           path: dist/
           if-no-files-found: error
           retention-days: 1
 
   package-deb:
-    name: Build Debian package (${{ matrix.id }})
+    name: Package Debian application (${{ matrix.id }})
     needs: preflight
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
@@ -393,17 +440,11 @@ jobs:
     env:
       STYRHOUS_DISABLE_AUTO_UPDATE: "1"
     steps:
-      - name: Check out release tag
+      - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
           persist-credentials: false
-
-      - name: Download third-party legal artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: third-party-legal
-          path: target/legal
 
       - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -413,6 +454,12 @@ jobs:
           cache-all-crates: true
           cache-on-failure: true
 
+      - name: Download third-party legal artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: third-party-legal
+          path: target/legal
+
       - name: Install package dependencies
         run: bash scripts/install-appimage-package-dependencies.sh
 
@@ -420,6 +467,9 @@ jobs:
         uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
         with:
           tool: cargo-packager@${{ env.CARGO_PACKAGER_VERSION }}
+
+      - name: Build package-managed application
+        run: cargo build --release --locked -p styrhous
 
       - name: Build Debian package
         run: |
@@ -430,6 +480,8 @@ jobs:
 
       - name: Smoke test Debian package startup
         timeout-minutes: 2
+        env:
+          WGPU_BACKEND: gl
         run: |
           package=$(find dist -type f -name '*.deb' -exec realpath {} \; -quit)
           test -n "$package"
@@ -455,13 +507,14 @@ jobs:
       - name: Upload Debian package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: package-${{ matrix.id }}
+          name: ${{ env.PACKAGE_ARTIFACT_PREFIX }}-${{ matrix.id }}
           path: dist/**/*.deb
           if-no-files-found: error
-          retention-days: 1
+          retention-days: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 7 || 1 }}
 
   publish:
     name: Publish GitHub release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs:
       - package-appimage
       - package-macos
@@ -472,7 +525,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Check out release tag
+      - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -514,6 +567,9 @@ jobs:
             test "${#matching_assets[@]}" -eq 1
             test -f "${matching_assets[0]}.sig"
           done
+
+          mapfile -t deb_assets < <(find dist -type f -name '*.deb' -print)
+          test "${#deb_assets[@]}" -eq 2
 
           mapfile -d '' assets < <(find dist -type f \( \
             -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.exe' -o \

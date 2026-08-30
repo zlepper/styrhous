@@ -1,5 +1,5 @@
 # Third-party license policy for distributable Styrhous builds.
-# cargo-about is pinned by CI and release workflows.
+# cargo-about is pinned by the CI and desktop package workflows.
 
 accepted = [
     "MIT",
