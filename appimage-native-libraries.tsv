@@ -1,0 +1,9 @@
+# bundled library pattern	Ubuntu binary package containing its copyright file
+libxkbcommon-x11.so.*	libxkbcommon-x11-0
+libxkbcommon.so.*	libxkbcommon0
+libxcb-xkb.so.*	libxcb-xkb1
+libxcb.so.*	libxcb1
+libXau.so.*	libxau6
+libXdmcp.so.*	libxdmcp6
+libbsd.so.*	libbsd0
+libmd.so.*	libmd0

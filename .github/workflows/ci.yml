@@ -11,6 +11,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_ABOUT_VERSION: "0.9.1"
   CARGO_NEXTEST_VERSION: "0.9.140"
   CARGO_PACKAGER_VERSION: "0.11.8"
   STYRHOUS_RELEASE_BUILD: "1"
@@ -60,7 +61,7 @@ jobs:
       - name: Cache Cargo tools
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          shared-key: cargo-tools-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}-${{ hashFiles('rust-toolchain.toml') }}
+          shared-key: cargo-tools-${{ env.CARGO_ABOUT_VERSION }}-${{ env.CARGO_NEXTEST_VERSION }}-${{ env.CARGO_PACKAGER_VERSION }}-${{ hashFiles('rust-toolchain.toml') }}
           add-rust-environment-hash-key: false
           cache-targets: false
           save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
@@ -98,6 +99,15 @@ jobs:
         run: |
           [[ "$(cargo nextest --version 2>/dev/null | awk 'NR == 1 { print $2 }')" == "$CARGO_NEXTEST_VERSION" ]] || \
             cargo install cargo-nextest --version "$CARGO_NEXTEST_VERSION" --locked
+      - name: Install cargo-about
+        if: matrix.run_tests
+        shell: bash
+        run: |
+          [[ "$(cargo about --version 2>/dev/null | awk 'NR == 1 { print $2 }')" == "$CARGO_ABOUT_VERSION" ]] || \
+            cargo install cargo-about --version "$CARGO_ABOUT_VERSION" --locked --features cli
+      - name: Verify third-party legal artifacts
+        if: matrix.run_tests
+        run: bash scripts/generate-third-party-legal.sh --check
       - name: Build release application
         if: steps.application-binary.outputs.cache-hit != 'true'
         run: cargo build --release -p styrhous
@@ -112,6 +122,43 @@ jobs:
       - name: Build native package
         shell: bash
         run: cargo packager --manifest-path crates/styrhous/Cargo.toml --release --formats "${{ matrix.formats }}"
+      - name: Verify AppImage legal resources
+        if: startsWith(matrix.id, 'linux-')
+        shell: bash
+        run: |
+          bundle=$(find dist -type f -name '*.AppImage' -exec realpath {} \; -quit)
+          test -n "$bundle"
+          chmod +x "$bundle"
+          temporary_directory=$(mktemp -d)
+          trap 'rm -rf "$temporary_directory"' EXIT
+          (
+            cd "$temporary_directory"
+            "$bundle" --appimage-extract >/dev/null
+            bash "$GITHUB_WORKSPACE/scripts/verify-packaged-legal-files.sh" squashfs-root
+            bash "$GITHUB_WORKSPACE/scripts/verify-appimage-native-libraries.sh" squashfs-root
+          )
+      - name: Verify macOS application legal resources
+        if: startsWith(matrix.id, 'macos-')
+        shell: bash
+        run: |
+          app=$(find dist -type d -name '*.app' -print -quit)
+          test -n "$app"
+          bash scripts/verify-packaged-legal-files.sh "$app"
+      - name: Verify Windows installer legal resources
+        if: startsWith(matrix.id, 'windows-')
+        shell: pwsh
+        run: |
+          $destination = Join-Path $env:RUNNER_TEMP 'styrhous-installer-legal-check'
+          $installer = Get-ChildItem -Path dist -Filter '*.exe' -Recurse | Select-Object -First 1
+          if ($null -eq $installer) { throw 'NSIS installer was not produced' }
+          $install = Start-Process -FilePath $installer.FullName -ArgumentList @('/S', "/D=$destination") -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "NSIS installer exited with $($install.ExitCode)" }
+          & scripts/Verify-PackagedLegalFiles.ps1 -PackageRoot $destination
+          $uninstaller = Get-ChildItem -Path $destination -Filter 'Uninstall.exe' -Recurse | Select-Object -First 1
+          if ($null -eq $uninstaller) { throw 'NSIS uninstaller was not found' }
+          $uninstall = Start-Process -FilePath $uninstaller.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "NSIS uninstaller exited with $($uninstall.ExitCode)" }
+          if (Test-Path $destination) { throw 'NSIS uninstaller left its destination behind' }
       # Debian packages deliberately compile with the updater disabled. Cache that
       # distinct binary too; it cannot share the direct-download build above.
       - name: Restore package-managed application binary

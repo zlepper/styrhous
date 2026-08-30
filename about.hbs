@@ -1,0 +1,64 @@
+<!--
+Template derived from cargo-about's MIT OR Apache-2.0 default template.
+https://github.com/EmbarkStudios/cargo-about
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Styrhous Third-Party Licenses</title>
+    <style>
+        :root { color-scheme: light dark; }
+        body { font-family: sans-serif; line-height: 1.45; margin: 0; }
+        main { margin: 0 auto; max-width: 960px; padding: 2rem; }
+        h1, h2, h3, h4 { line-height: 1.2; }
+        .license-overview, .license-list { padding-left: 1.4rem; }
+        .used-by { margin-top: -.6rem; }
+        .license-text {
+            border: 1px solid currentColor;
+            max-height: 24rem;
+            opacity: .9;
+            overflow: auto;
+            padding: 1rem;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Styrhous Third-Party Licenses</h1>
+    <p>
+        This document lists licenses selected for Rust dependencies included in
+        distributable Styrhous builds. It does not change those licenses or the
+        Styrhous Source-Available Evaluation License.
+    </p>
+
+    <h2>License overview</h2>
+    <ul class="license-overview">
+    {{#each overview}}
+        <li><a href="#{{id}}">{{name}}</a> ({{count}})</li>
+    {{/each}}
+    </ul>
+
+    <h2>License texts</h2>
+    <ul class="license-list">
+    {{#each licenses}}
+        <li>
+        {{#if first_of_kind}}
+            <h3 id="{{id}}">{{name}}</h3>
+        {{/if}}
+            <h4 id="{{id}}-{{@index}}">{{name}}</h4>
+            <h5>Used by</h5>
+            <ul class="used-by">
+            {{#each used_by}}
+                <li><a href="{{#if crate.repository}}{{crate.repository}}{{else}}https://crates.io/crates/{{crate.name}}{{/if}}">{{crate.name}} {{crate.version}}</a></li>
+            {{/each}}
+            </ul>
+            <pre class="license-text">{{text}}</pre>
+        </li>
+    {{/each}}
+    </ul>
+</main>
+</body>
+</html>

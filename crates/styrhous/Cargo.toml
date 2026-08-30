@@ -2,6 +2,8 @@
 name = "styrhous"
 version = "0.0.1-alpha.9"
 edition = "2024"
+publish = false
+license-file = "../../LICENSE.md"
 description = "Styrhous — the Kubernetes wheelhouse"
 homepage = "https://github.com/zlepper/styrhous"
 repository = "https://github.com/zlepper/styrhous"
@@ -18,11 +20,21 @@ publisher = "Styrhous"
 description = "Styrhous — the Kubernetes wheelhouse"
 homepage = "https://github.com/zlepper/styrhous"
 category = "DeveloperTool"
+license_file = "../../LICENSE.md"
+copyright = "Copyright © 2025–2026 Rasmus Hansen. All rights reserved."
 # Generate these platform-native assets from the editable SVG with
 # scripts/generate-app-icon.sh. cargo-packager only supports SVG icons on Linux.
 icons = [
   "../../assets/icons/kubernetes-dev-ui.png",
   "../../assets/icons/kubernetes-dev-ui@2x.png",
+]
+resources = [
+  { src = "../../LICENSE.md", target = "LICENSE.md" },
+  { src = "../../THIRD_PARTY_NOTICES.md", target = "THIRD_PARTY_NOTICES.md" },
+  { src = "../../THIRD_PARTY_LICENSES.html", target = "THIRD_PARTY_LICENSES.html" },
+  { src = "../../THIRD_PARTY_SOURCE.tar.gz", target = "THIRD_PARTY_SOURCE.tar.gz" },
+  { src = "../components/assets/fonts/inter/LICENSE.txt", target = "Inter-OFL-1.1.txt" },
+  { src = "../../target/legal/appimage-native-licenses/*", target = "APPIMAGE_NATIVE_LICENSES" },
 ]
 formats = ["app", "dmg", "nsis", "appimage", "deb"]
 out_dir = "../../dist"

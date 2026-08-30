@@ -1,0 +1,2 @@
+# SPDX license identifiers that require corresponding source in binary releases.
+MPL-2.0
