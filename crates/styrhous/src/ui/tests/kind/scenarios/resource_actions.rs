@@ -74,8 +74,8 @@ fn test_cron_job_run_now_integration() {
     wait_for_resource_sync(
         &mut harness,
         cluster_key,
-        cron_jobs_resource,
-        &fixture.namespace,
+        &cron_jobs_resource,
+        Some(&fixture.namespace),
     );
     for _ in 0..3 {
         harness.run_steps(1);
@@ -85,6 +85,7 @@ fn test_cron_job_run_now_integration() {
         .click();
     wait_for_harness(
         &mut harness,
+        "the CronJob action menu to show Run now",
         |harness| {
             harness
                 .query_by_role_and_label(egui::accesskit::Role::Button, "Run now")
@@ -95,6 +96,7 @@ fn test_cron_job_run_now_integration() {
     harness.get_by_label("Run now").click();
     wait_for(
         &mut harness,
+        &format!("the Run now confirmation for CronJob {cron_job_name} to open"),
         |app| {
             app.ui_state.clusters[&cluster_key]
                 .pending_cron_job_run
@@ -106,6 +108,7 @@ fn test_cron_job_run_now_integration() {
     );
     wait_for_harness(
         &mut harness,
+        "the Run now confirmation button to become enabled",
         |harness| {
             let mut buttons =
                 harness.query_all_by_role_and_label(egui::accesskit::Role::Button, "Run now");
@@ -116,13 +119,12 @@ fn test_cron_job_run_now_integration() {
     );
     harness.get_by_label("Run now").click();
 
-    wait_for_with_diagnostic(
+    wait_for_kubernetes_with_diagnostic(
         &mut harness,
-        |_| {
-            runtime
-                .block_on(async { jobs.list(&Default::default()).await })
-                .ok()
-                .and_then(|list| {
+        &format!("a manually instantiated Job for CronJob {cron_job_name}"),
+        |remaining| {
+            kubernetes_request(runtime, remaining, jobs.list(&Default::default()))
+                .map(|list| {
                     list.items.into_iter().find(|job| {
                         job.metadata
                             .generate_name
@@ -164,7 +166,7 @@ fn test_cron_job_run_now_integration() {
                             })
                     })
                 })
-                .map(|_| ())
+                .map(|job| job.map(|_| ()))
         },
         |app| {
             app.ui_state.clusters[&cluster_key]
@@ -242,8 +244,8 @@ fn test_resource_scale_integration() {
     wait_for_resource_sync(
         &mut harness,
         cluster_key,
-        deployments_resource,
-        &fixture.namespace,
+        &deployments_resource,
+        Some(&fixture.namespace),
     );
     for _ in 0..3 {
         harness.run_steps(1);
@@ -252,14 +254,16 @@ fn test_resource_scale_integration() {
     harness.get_by_label(&actions_label).click();
     harness.run_steps(1);
     harness.get_by_label("Scale").click();
-    wait_for(
+    wait_for_with_diagnostic(
         &mut harness,
+        &format!("the scale dialog for Deployment {deployment_name} to load"),
         |app| {
             app.ui_state.clusters[&cluster_key]
                 .pending_scale
                 .as_ref()
                 .map(|_| ())
         },
+        |app| app.ui_state.clusters[&cluster_key].scale_error.clone(),
         10_000,
     );
     // Worker results are applied after the workspace render pass. Render the
@@ -268,6 +272,7 @@ fn test_resource_scale_integration() {
     harness.get_by_label("Increase desired replicas").click();
     wait_for(
         &mut harness,
+        "the scale dialog to show two desired replicas",
         |app| {
             app.ui_state.clusters[&cluster_key]
                 .pending_scale
@@ -280,6 +285,7 @@ fn test_resource_scale_integration() {
     harness.get_by_label("Update scale").click();
     wait_for_with_diagnostic(
         &mut harness,
+        &format!("the scale update for Deployment {deployment_name} to complete"),
         |app| {
             app.ui_state.clusters[&cluster_key]
                 .pending_scale
@@ -290,15 +296,19 @@ fn test_resource_scale_integration() {
         5_000,
     );
 
-    wait_for(
+    wait_for_kubernetes(
         &mut harness,
-        |_| {
-            runtime
-                .block_on(async { deployments.get(&deployment_name).await })
-                .ok()
-                .and_then(|deployment| deployment.spec.and_then(|spec| spec.replicas))
-                .filter(|replicas| *replicas == 2)
-                .map(|_| ())
+        &format!("Deployment {deployment_name} to report two replicas"),
+        |remaining| {
+            kubernetes_request(runtime, remaining, deployments.get(&deployment_name)).map(
+                |deployment| {
+                    deployment
+                        .spec
+                        .and_then(|spec| spec.replicas)
+                        .filter(|replicas| *replicas == 2)
+                        .map(|_| ())
+                },
+            )
         },
         10_000,
     );

@@ -1,7 +1,6 @@
 //! Kind deployment completion and action scenarios.
 
 use super::*;
-use crate::ui::state::ValidationState;
 
 #[test]
 fn test_force_delete_resource_with_finalizer_integration() {
@@ -46,14 +45,17 @@ fn test_force_delete_resource_with_finalizer_integration() {
     wait_for_resource_sync(
         &mut harness,
         cluster_key,
-        configmaps_resource.clone(),
-        &fixture.namespace,
+        &configmaps_resource,
+        Some(&fixture.namespace),
     );
-    wait_for(
+    wait_for_resource_watch(
         &mut harness,
-        |app| {
-            app.ui_state.clusters[&cluster_key].resource_cache
-                [&(configmaps_resource.clone(), Some(fixture.namespace.clone()))]
+        &format!("ConfigMap {resource_name} to become eligible for force deletion"),
+        cluster_key,
+        &configmaps_resource,
+        Some(&fixture.namespace),
+        |watch| {
+            watch
                 .resources
                 .values()
                 .find(|resource| resource.name == resource_name)
@@ -73,6 +75,7 @@ fn test_force_delete_resource_with_finalizer_integration() {
     harness.run_steps(1);
     wait_for(
         &mut harness,
+        "the force-delete acknowledgement delay to elapse",
         |app| {
             app.ui_state.clusters[&cluster_key]
                 .pending_force_delete
@@ -96,14 +99,15 @@ fn test_force_delete_resource_with_finalizer_integration() {
     harness.run_steps(1);
     harness.get_by_label("Remove finalizers").click_accesskit();
 
-    wait_for_with_diagnostic(
+    wait_for_kubernetes_with_diagnostic(
         &mut harness,
-        |_| {
-            runtime
-                .block_on(async { configmaps.get(&resource_name).await })
-                .err()
-                .filter(|error| matches!(error, kube::Error::Api(response) if response.code == 404))
-                .map(|_| ())
+        &format!("ConfigMap {resource_name} to be deleted from Kubernetes"),
+        |remaining| {
+            kubernetes_object_absent(kubernetes_request(
+                runtime,
+                remaining,
+                configmaps.get(&resource_name),
+            ))
         },
         |app| {
             app.ui_state.clusters[&cluster_key]
@@ -112,24 +116,18 @@ fn test_force_delete_resource_with_finalizer_integration() {
         },
         10_000,
     );
-    wait_for_with_diagnostic(
+    wait_for_resource_watch(
         &mut harness,
-        |app| {
-            (!app.ui_state.clusters[&cluster_key].resource_cache
-                [&(configmaps_resource.clone(), Some(fixture.namespace.clone()))]
+        &format!("ConfigMap {resource_name} to disappear from the resource watch"),
+        cluster_key,
+        &configmaps_resource,
+        Some(&fixture.namespace),
+        |watch| {
+            (!watch
                 .resources
                 .values()
                 .any(|resource| resource.name == resource_name))
             .then_some(())
-        },
-        |app| {
-            app.ui_state.clusters[&cluster_key].resource_cache
-                [&(configmaps_resource.clone(), Some(fixture.namespace.clone()))]
-                .error
-                .as_ref()
-                .map(|error| {
-                    format!("ConfigMap watcher failed while waiting for deletion: {error}")
-                })
         },
         10_000,
     );
@@ -202,8 +200,8 @@ fn test_deployment_match_labels_completion_integration() {
     wait_for_resource_sync(
         &mut harness,
         cluster_key,
-        deployments_resource,
-        &fixture.namespace,
+        &deployments_resource,
+        Some(&fixture.namespace),
     );
 
     let actions_label = format!("More actions for {deployment_name}");
@@ -211,26 +209,7 @@ fn test_deployment_match_labels_completion_integration() {
     harness.run_steps(1);
     harness.get_by_label("Edit").click_accesskit();
     harness.run_steps(1);
-    let (schema, yaml) = wait_for(
-        &mut harness,
-        |app| {
-            app.ui_state
-                .yaml_editors
-                .values()
-                .find(|editor| {
-                    editor.resource_name == deployment_name
-                        && !editor.loading
-                        && editor.original_yaml.is_some()
-                })
-                .and_then(|editor| {
-                    editor
-                        .schema
-                        .clone()
-                        .map(|schema| (schema, editor.edited_yaml.clone()))
-                })
-        },
-        10_000,
-    );
+    let (schema, yaml) = wait_for_yaml_editor_with_schema(&mut harness, &deployment_name, 10_000);
 
     let key_start = yaml
         .find("matchLabels")
@@ -287,8 +266,8 @@ fn test_coredns_deployment_property_completion_integration() {
     wait_for_resource_sync(
         &mut harness,
         cluster_key,
-        deployments_resource,
-        "kube-system",
+        &deployments_resource,
+        Some("kube-system"),
     );
 
     harness
@@ -297,49 +276,7 @@ fn test_coredns_deployment_property_completion_integration() {
     harness.run_steps(1);
     harness.get_by_label("Edit").click_accesskit();
     harness.run_steps(1);
-    let (schema, yaml) = wait_for_with_diagnostic(
-        &mut harness,
-        |app| {
-            app.ui_state
-                .yaml_editors
-                .values()
-                .find(|editor| {
-                    editor.resource_name == "coredns"
-                        && !editor.loading
-                        && editor.original_yaml.is_some()
-                })
-                .and_then(|editor| {
-                    editor
-                        .schema
-                        .clone()
-                        .map(|schema| (schema, editor.edited_yaml.clone()))
-                })
-        },
-        |app| {
-            app.ui_state
-                .yaml_editors
-                .values()
-                .find(|editor| editor.resource_name == "coredns")
-                .and_then(|editor| {
-                    editor.error.as_ref().map(|error| {
-                        format!("CoreDNS YAML request failed while loading the editor: {error}")
-                    })
-                })
-                .or_else(|| {
-                    app.ui_state
-                        .yaml_editors
-                        .values()
-                        .find(|editor| editor.resource_name == "coredns")
-                        .and_then(|editor| match &editor.server_validation {
-                            ValidationState::Failed(error) => Some(format!(
-                                "CoreDNS OpenAPI schema request failed while loading the editor: {error}"
-                            )),
-                            _ => None,
-                        })
-                })
-        },
-        10_000,
-    );
+    let (schema, yaml) = wait_for_yaml_editor_with_schema(&mut harness, "coredns", 10_000);
 
     let failures = yaml_mapping_key_positions(&yaml)
         .into_iter()
@@ -426,8 +363,8 @@ fn test_deployment_rollout_restart_integration() {
     wait_for_resource_sync(
         &mut harness,
         cluster_key,
-        deployments_resource,
-        &fixture.namespace,
+        &deployments_resource,
+        Some(&fixture.namespace),
     );
     for _ in 0..3 {
         harness.run_steps(1);
@@ -436,6 +373,7 @@ fn test_deployment_rollout_restart_integration() {
     harness.get_by_label(&actions_label).click();
     wait_for_harness(
         &mut harness,
+        "the Restart rollout action to appear",
         |harness| {
             harness
                 .query_by_role_and_label(egui::accesskit::Role::Button, "Restart rollout")
@@ -446,6 +384,7 @@ fn test_deployment_rollout_restart_integration() {
     harness.get_by_label("Restart rollout").click();
     wait_for(
         &mut harness,
+        "the restart rollout confirmation to open",
         |app| {
             app.ui_state.clusters[&cluster_key]
                 .pending_deployment_restart
@@ -457,6 +396,7 @@ fn test_deployment_rollout_restart_integration() {
     );
     wait_for_harness(
         &mut harness,
+        "the restart rollout confirmation delay to elapse",
         |harness| {
             let mut buttons = harness
                 .query_all_by_role_and_label(egui::accesskit::Role::Button, "Restart rollout");
@@ -467,13 +407,12 @@ fn test_deployment_rollout_restart_integration() {
     );
     harness.get_by_label("Restart rollout").click();
 
-    wait_for_with_diagnostic(
+    wait_for_kubernetes_with_diagnostic(
         &mut harness,
-        |_| {
-            runtime
-                .block_on(async { deployments.get(&deployment_name).await })
-                .ok()
-                .and_then(|deployment| {
+        &format!("Deployment {deployment_name} to receive a restart annotation"),
+        |remaining| {
+            kubernetes_request(runtime, remaining, deployments.get(&deployment_name)).map(
+                |deployment| {
                     deployment
                         .spec
                         .and_then(|spec| spec.template.metadata)
@@ -483,15 +422,16 @@ fn test_deployment_rollout_restart_integration() {
                                 .get("kubectl.kubernetes.io/restartedAt")
                                 .cloned()
                         })
-                })
-                .filter(|timestamp| {
-                    time::OffsetDateTime::parse(
-                        timestamp,
-                        &time::format_description::well_known::Rfc3339,
-                    )
-                    .is_ok()
-                })
-                .map(|_| ())
+                        .filter(|timestamp| {
+                            time::OffsetDateTime::parse(
+                                timestamp,
+                                &time::format_description::well_known::Rfc3339,
+                            )
+                            .is_ok()
+                        })
+                        .map(|_| ())
+                },
+            )
         },
         |app| {
             app.ui_state.clusters[&cluster_key]

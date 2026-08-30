@@ -40,23 +40,25 @@ fn test_secret_inspector_actions_integration() {
     support::wait_for_resource_sync(
         &mut harness,
         cluster_key,
-        secrets_resource.clone(),
-        &fixture.namespace,
+        &secrets_resource,
+        Some(&fixture.namespace),
     );
-    for _ in 0..3 {
-        harness.run_steps(1);
-    }
-    harness
-        .get_by_label(&format!("Open details for {test_secret_name}"))
-        .click();
-    harness.run_steps(1);
-    wait_for_data_editor(&mut harness, cluster_key, "password");
+    let history_entry_id = support::open_resource_detail(
+        &mut harness,
+        cluster_key,
+        &test_secret_name,
+        Some(&fixture.namespace),
+    );
+    wait_for_data_editor(&mut harness, cluster_key, history_entry_id, "password");
     harness
         .state_mut()
         .ui_state
         .global_blades
         .navigator_mut()
         .and_then(|navigator| navigator.current_mut().resource_detail_mut())
+        .filter(|entry| {
+            entry.cluster_key == cluster_key && entry.history_entry_id == history_entry_id
+        })
         .and_then(|entry| entry.data_editor.as_mut())
         .expect("Secret detail editor should be available")
         .draft_values
@@ -64,20 +66,23 @@ fn test_secret_inspector_actions_integration() {
     harness.run_steps(1);
     harness.get_by_label("Save data").click_accesskit();
     harness.run_steps(1);
-    support::wait_for(
+    support::wait_for_kubernetes_with_diagnostic(
         &mut harness,
-        |_| {
-            runtime
-                .block_on(async { secrets.get(&test_secret_name).await })
-                .ok()
-                .filter(|secret| {
-                    secret
-                        .data
-                        .as_ref()
-                        .and_then(|data| data.get("password"))
-                        .is_some_and(|value| value.0 == b"updated-secret")
-                })
-                .map(|_| ())
+        &format!("Secret {test_secret_name} to contain the saved data"),
+        |remaining| {
+            kubernetes_request(runtime, remaining, secrets.get(&test_secret_name)).map(|secret| {
+                secret
+                    .data
+                    .as_ref()
+                    .and_then(|data| data.get("password"))
+                    .is_some_and(|value| value.0 == b"updated-secret")
+                    .then_some(())
+            })
+        },
+        |app| {
+            current_resource_detail(&app.ui_state, cluster_key, history_entry_id)
+                .and_then(|entry| entry.data_editor.as_ref())
+                .and_then(|editor| editor.save_error.clone())
         },
         10_000,
     );
@@ -126,8 +131,8 @@ fn test_resource_watcher_integration() {
     wait_for_resource_sync(
         &mut harness,
         cluster_key,
-        configmaps_resource.clone(),
-        &fixture.namespace,
+        &configmaps_resource,
+        Some(&fixture.namespace),
     );
 
     let resources = &harness.state().ui_state.clusters[&cluster_key].resource_cache
@@ -193,35 +198,35 @@ fn test_pod_metrics_charts_integration() {
         )
         .await
         .expect("Failed to create metrics load Pod");
-
-        tokio::time::timeout(Duration::from_secs(60), async {
-            loop {
-                if pods
-                    .get(METRICS_LOAD_POD_NAME)
-                    .await
-                    .expect("Failed to get metrics load Pod")
-                    .status
-                    .and_then(|status| status.phase)
-                    .as_deref()
-                    == Some("Running")
-                {
-                    return;
-                }
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }
-        })
-        .await
-        .expect("Timed out waiting for metrics load Pod to start");
     });
 
     let (mut harness, cluster_key) = connected_kind_harness();
+    wait_for_kubernetes(
+        &mut harness,
+        &format!("Pod {METRICS_LOAD_POD_NAME} to enter the Running phase"),
+        |remaining| {
+            kubernetes_request(&fixture.runtime, remaining, pods.get(METRICS_LOAD_POD_NAME)).map(
+                |pod| {
+                    (pod.status.and_then(|status| status.phase).as_deref() == Some("Running"))
+                        .then_some(())
+                },
+            )
+        },
+        60_000,
+    );
     wait_for_cluster_data(&mut harness, cluster_key);
     select_namespace(&mut harness, cluster_key, &fixture.namespace);
     let pods_resource = select_resource(&mut harness, "Apps & Containers", "Pods");
-    wait_for_resource_sync(&mut harness, cluster_key, pods_resource, &fixture.namespace);
-
-    wait_for(
+    wait_for_resource_sync(
         &mut harness,
+        cluster_key,
+        &pods_resource,
+        Some(&fixture.namespace),
+    );
+
+    wait_for_with_terminal_and_timeout_diagnostic(
+        &mut harness,
+        &format!("a non-zero namespace metrics sample for Pod {METRICS_LOAD_POD_NAME}"),
         |app| {
             app.ui_state
                 .clusters
@@ -233,22 +238,42 @@ fn test_pod_metrics_charts_integration() {
                 .filter(|usage| usage.cpu_nanocores > 0 && usage.memory_bytes > 0)
                 .map(|_| ())
         },
+        |app| {
+            app.ui_state
+                .clusters
+                .get(&cluster_key)
+                .filter(|cluster| !cluster.pod_metrics_api_available)
+                .map(|_| "the cluster reported that the Pod Metrics API is unavailable".into())
+        },
+        |app| {
+            let cluster = app.ui_state.clusters.get(&cluster_key)?;
+            let Some(metrics) = cluster.pod_metrics.get(&fixture.namespace) else {
+                return Some(format!(
+                    "no metrics polling state exists for namespace {}",
+                    fixture.namespace
+                ));
+            };
+            metrics.error.clone().or_else(|| {
+                Some(format!(
+                    "{} Pod metrics samples are present, but none is a non-zero sample for {METRICS_LOAD_POD_NAME}",
+                    metrics.usages.len()
+                ))
+            })
+        },
         45_000,
     );
 
-    harness
-        .get_by_label(&format!("Open details for {METRICS_LOAD_POD_NAME}"))
-        .click();
-    let history = wait_for(
+    let history_entry_id = open_resource_detail(
         &mut harness,
+        cluster_key,
+        METRICS_LOAD_POD_NAME,
+        Some(&fixture.namespace),
+    );
+    let history = wait_for_with_terminal_and_timeout_diagnostic(
+        &mut harness,
+        &format!("two distinct inspector metrics samples for Pod {METRICS_LOAD_POD_NAME}"),
         |app| {
-            app.ui_state
-                .global_blades
-                .navigator()
-                .and_then(|navigator| navigator.current().resource_detail())
-                .filter(|entry| {
-                    entry.cluster_key == cluster_key && entry.resource_name == METRICS_LOAD_POD_NAME
-                })
+            current_resource_detail(&app.ui_state, cluster_key, history_entry_id)
                 .filter(|entry| {
                     !entry.pod_metrics_api_unavailable
                         && !entry.pod_usage_missing
@@ -262,6 +287,42 @@ fn test_pod_metrics_charts_integration() {
                     (entry.pod_usage_history.len() >= 2).then_some(entry.pod_usage_history.clone())
                 })
         },
+        |app| {
+            let Some(entry) = current_resource_detail(&app.ui_state, cluster_key, history_entry_id)
+            else {
+                return resource_detail_state(
+                    &app.ui_state,
+                    cluster_key,
+                    METRICS_LOAD_POD_NAME,
+                    Some(&fixture.namespace),
+                    Some(history_entry_id),
+                );
+            };
+            entry
+                .pod_metrics_api_unavailable
+                .then(|| "the cluster reported that the Pod Metrics API is unavailable".into())
+        },
+        |app| {
+            let Some(entry) = current_resource_detail(&app.ui_state, cluster_key, history_entry_id)
+            else {
+                return resource_detail_state(
+                    &app.ui_state,
+                    cluster_key,
+                    METRICS_LOAD_POD_NAME,
+                    Some(&fixture.namespace),
+                    Some(history_entry_id),
+                );
+            };
+            if let Some(error) = &entry.pod_usage_error {
+                return Some(format!("Pod detail metrics polling failed: {error}"));
+            }
+            Some(format!(
+                "usage present={}, usage missing={}, history samples={}",
+                entry.pod_usage.is_some(),
+                entry.pod_usage_missing,
+                entry.pod_usage_history.len()
+            ))
+        },
         45_000,
     );
     assert!(
@@ -272,17 +333,10 @@ fn test_pod_metrics_charts_integration() {
     );
 
     harness.run_steps(1);
-    let rendered_history = harness
-        .state()
-        .ui_state
-        .global_blades
-        .navigator()
-        .and_then(|navigator| navigator.current().resource_detail())
-        .filter(|entry| {
-            entry.cluster_key == cluster_key && entry.resource_name == METRICS_LOAD_POD_NAME
-        })
-        .map(|entry| entry.pod_usage_history.clone())
-        .expect("metrics load Pod inspector should remain open while rendering charts");
+    let rendered_history =
+        current_resource_detail(&harness.state().ui_state, cluster_key, history_entry_id)
+            .map(|entry| entry.pod_usage_history.clone())
+            .expect("metrics load Pod inspector should remain open while rendering charts");
     let max_cpu = rendered_history
         .iter()
         .map(|usage| usage.cpu_nanocores)

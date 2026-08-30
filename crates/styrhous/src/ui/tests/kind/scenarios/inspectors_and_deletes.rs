@@ -68,61 +68,78 @@ fn test_managed_resource_inspector_integration() {
     wait_for_resource_sync(
         &mut harness,
         cluster_key,
-        deployments_resource,
-        &fixture.namespace,
+        &deployments_resource,
+        Some(&fixture.namespace),
     );
-    harness
-        .get_by_label(&format!("Open details for {deployment_name}"))
-        .click();
-    harness.run_steps(1);
+    let history_entry_id = open_resource_detail(
+        &mut harness,
+        cluster_key,
+        &deployment_name,
+        Some(&fixture.namespace),
+    );
 
-    let start = std::time::Instant::now();
-    while start.elapsed() < std::time::Duration::from_secs(15) {
-        harness.run_steps(1);
-        if let Some(panel) = harness.state().ui_state.global_blades.navigator()
-            .and_then(|navigator| navigator.current().resource_detail())
-            && panel
-                .managed_resources
-                .iter()
-                .any(|resource| resource.api_resource.kind == "ReplicaSet")
-            && panel.managed_resources.iter().any(|resource| {
-                resource.api_resource.kind == "Pod"
-                    && panel
+    wait_for_with_diagnostic(
+        &mut harness,
+        "the Deployment inspector to load its ReplicaSet and Pod",
+        |app| {
+            current_resource_detail(&app.ui_state, cluster_key, history_entry_id)
+                .filter(|panel| {
+                    let has_replica_set = panel
                         .managed_resources
                         .iter()
-                        .any(|parent| matches!(
-                            &resource.association,
-                            crate::resource_detail::ManagedResourceAssociation::ControllerOwnerUid(owner_uid)
-                                if parent.uid == *owner_uid
-                        ))
-            })
-        {
-            let replica_set = panel
-                .managed_resources
-                .iter()
-                .find(|resource| resource.api_resource.kind == "ReplicaSet")
-                .expect("managed ReplicaSet should be present");
-            assert!(
-                replica_set.cells.contains_key(READY_COLUMN),
-                "managed ReplicaSet should include the Ready table value"
-            );
-            let pod = panel
-                .managed_resources
-                .iter()
-                .find(|resource| resource.api_resource.kind == "Pod")
-                .expect("managed Pod should be present");
-            assert!(
-                pod.cells.contains_key(STATUS_COLUMN),
-                "managed Pod should include the Status table value"
-            );
-            return;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(50));
-    }
-    let panel = harness.state().ui_state.clusters[&cluster_key]
-        .resource_detail_panel
-        .as_ref();
-    panic!("Timed out waiting for managed resources: {panel:#?}");
+                        .any(|resource| resource.api_resource.kind == "ReplicaSet");
+                    let has_pod_with_managed_parent =
+                        panel.managed_resources.iter().any(|resource| {
+                            resource.api_resource.kind == "Pod"
+                                && panel.managed_resources.iter().any(|parent| {
+                                    matches!(
+                                    &resource.association,
+                                    crate::resource_detail::ManagedResourceAssociation::ControllerOwnerUid(owner_uid)
+                                        if parent.uid == *owner_uid
+                                    )
+                                })
+                        });
+                    has_replica_set && has_pod_with_managed_parent
+                })
+                .map(|_| ())
+        },
+        |app| {
+            current_resource_detail(&app.ui_state, cluster_key, history_entry_id).and_then(
+                |panel| {
+                    panel
+                        .detail_error
+                        .as_ref()
+                        .map(|error| format!("Deployment details failed to load: {error}"))
+                        .or_else(|| {
+                            panel.managed_resources_error.as_ref().map(|error| {
+                                format!("managed Deployment resources failed to load: {error}")
+                            })
+                        })
+                },
+            )
+        },
+        15_000,
+    );
+    let panel = current_resource_detail(&harness.state().ui_state, cluster_key, history_entry_id)
+        .expect("Deployment inspector should remain open");
+    let replica_set = panel
+        .managed_resources
+        .iter()
+        .find(|resource| resource.api_resource.kind == "ReplicaSet")
+        .expect("managed ReplicaSet should be present");
+    assert!(
+        replica_set.cells.contains_key(READY_COLUMN),
+        "managed ReplicaSet should include the Ready table value"
+    );
+    let pod = panel
+        .managed_resources
+        .iter()
+        .find(|resource| resource.api_resource.kind == "Pod")
+        .expect("managed Pod should be present");
+    assert!(
+        pod.cells.contains_key(STATUS_COLUMN),
+        "managed Pod should include the Status table value"
+    );
 }
 
 /// Verifies that a Node inspector watches Pods cluster-wide and shows the Pods
@@ -161,66 +178,28 @@ fn test_node_inspector_lists_scheduled_pods_integration() {
         .await
         .expect("Failed to create integration Pod");
     });
-    let node_name = fixture.runtime.block_on(async {
-        tokio::time::timeout(std::time::Duration::from_secs(10), async {
-            loop {
-                if let Some(node_name) = pods
-                    .get(&pod_name)
-                    .await
-                    .expect("Failed to get integration Pod")
-                    .spec
-                    .and_then(|spec| spec.node_name)
-                {
-                    return node_name;
-                }
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            }
-        })
-        .await
-        .expect("Timed out waiting for Kubernetes to assign the integration Pod")
-    });
-
     let (mut harness, cluster_key) = connected_kind_harness();
-    wait_for_cluster_data(&mut harness, cluster_key);
-    harness.get_by_label("Nodes").click_accesskit();
-    wait_for(
+    let node_name = wait_for_kubernetes(
         &mut harness,
-        |app| {
-            app.ui_state.clusters[&cluster_key]
-                .resource_cache
-                .get(&(crate::resource_handlers::node::api_resource(), None))
-                .filter(|watch| watch.is_synced)
-                .map(|_| ())
+        &format!("Kubernetes to assign Pod {pod_name} to a Node"),
+        |remaining| {
+            kubernetes_request(&fixture.runtime, remaining, pods.get(&pod_name))
+                .map(|pod| pod.spec.and_then(|spec| spec.node_name))
         },
         10_000,
     );
-    let node_position = harness
-        .get_by_label(&format!("Open details for {node_name}"))
-        .rect()
-        .center();
-    harness.event(egui::Event::PointerMoved(node_position));
-    harness.event(egui::Event::PointerButton {
-        pos: node_position,
-        button: egui::PointerButton::Primary,
-        pressed: true,
-        modifiers: egui::Modifiers::default(),
-    });
-    harness.event(egui::Event::PointerButton {
-        pos: node_position,
-        button: egui::PointerButton::Primary,
-        pressed: false,
-        modifiers: egui::Modifiers::default(),
-    });
-    harness.run_steps(1);
+    wait_for_cluster_data(&mut harness, cluster_key);
+    harness.get_by_label("Nodes").click_accesskit();
+    let node_resource = crate::resource_handlers::node::api_resource();
+    wait_for_resource_sync(&mut harness, cluster_key, &node_resource, None);
+    let history_entry_id = open_resource_detail(&mut harness, cluster_key, &node_name, None);
 
-    wait_for(
+    wait_for_with_diagnostic(
         &mut harness,
+        &format!("the Node inspector to list Pod {pod_name}"),
         |app| {
-            app.ui_state
-                .global_blades
-                .navigator()
-                .and_then(|navigator| navigator.current().resource_detail())
-                .and_then(|panel| {
+            current_resource_detail(&app.ui_state, cluster_key, history_entry_id).and_then(
+                |panel| {
                     panel
                         .managed_resources
                         .iter()
@@ -229,7 +208,23 @@ fn test_node_inspector_lists_scheduled_pods_integration() {
                             resource.namespace.as_deref() == Some(&fixture.namespace)
                         })
                         .map(|_| ())
-                })
+                },
+            )
+        },
+        |app| {
+            current_resource_detail(&app.ui_state, cluster_key, history_entry_id).and_then(
+                |panel| {
+                    panel
+                        .detail_error
+                        .as_ref()
+                        .map(|error| format!("Node details failed to load: {error}"))
+                        .or_else(|| {
+                            panel.managed_resources_error.as_ref().map(|error| {
+                                format!("Pods scheduled to the Node failed to load: {error}")
+                            })
+                        })
+                },
+            )
         },
         15_000,
     );
@@ -255,8 +250,8 @@ fn test_resource_actions_integration() {
     wait_for_resource_sync(
         &mut harness,
         cluster_key,
-        configmaps_resource.clone(),
-        &fixture.namespace,
+        &configmaps_resource,
+        Some(&fixture.namespace),
     );
     assert!(
         harness.state().ui_state.clusters[&cluster_key].resource_cache
@@ -274,28 +269,13 @@ fn test_resource_actions_integration() {
     harness.run_steps(1);
     harness.get_by_label("Edit").click();
     harness.run_steps(1);
-    wait_for(
-        &mut harness,
-        |app| {
-            app.ui_state
-                .yaml_editors
-                .values()
-                .find(|editor| {
-                    editor.resource_name == test_configmap_name
-                        && !editor.loading
-                        && editor.original_yaml.is_some()
-                })
-                .map(|_| ())
-        },
-        5_000,
-    );
+    let yaml_editor_id = wait_for_yaml_editor(&mut harness, &test_configmap_name, 5_000);
 
     let yaml_editor = harness
         .state_mut()
         .ui_state
         .yaml_editors
-        .values_mut()
-        .find(|editor| editor.resource_name == test_configmap_name)
+        .get_mut(&yaml_editor_id)
         .expect("YAML editor should be open");
     yaml_editor.edited_yaml = yaml_editor
         .edited_yaml
@@ -303,23 +283,7 @@ fn test_resource_actions_integration() {
     harness.run_steps(1);
     harness.get_by_label("Apply changes").click();
     harness.run_steps(1);
-    wait_for(
-        &mut harness,
-        |app| {
-            app.ui_state
-                .yaml_editors
-                .values()
-                .find(|editor| editor.resource_name == test_configmap_name)
-                .is_some_and(|editor| {
-                    !editor.loading
-                        && editor.original_yaml.is_some()
-                        && !editor.is_modified()
-                        && !editor.saving
-                })
-                .then_some(())
-        },
-        5_000,
-    );
+    wait_for_yaml_editor_saved(&mut harness, &test_configmap_name, 5_000);
 
     let configmap = runtime.block_on(async {
         configmaps
@@ -352,6 +316,7 @@ fn test_resource_actions_integration() {
 
     wait_for(
         &mut harness,
+        "the resource-delete confirmation delay to elapse",
         |app| {
             app.ui_state.clusters[&cluster_key]
                 .pending_delete
@@ -365,23 +330,32 @@ fn test_resource_actions_integration() {
     let confirm_delete_label = format!("Delete {test_configmap_name}");
     harness.get_by_label(&confirm_delete_label).click();
     harness.run_steps(1);
-    wait_for(
+    wait_for_resource_watch(
         &mut harness,
-        |app| {
-            let resources = &app.ui_state.clusters[&cluster_key].resource_cache
-                [&(configmaps_resource.clone(), Some(fixture.namespace.clone()))]
-                .resources;
-            (!resources
+        &format!("ConfigMap {test_configmap_name} to disappear from the resource watch"),
+        cluster_key,
+        &configmaps_resource,
+        Some(&fixture.namespace),
+        |watch| {
+            (!watch
+                .resources
                 .values()
                 .any(|resource| resource.name == test_configmap_name))
             .then_some(())
         },
         10_000,
     );
-    assert!(
-        runtime
-            .block_on(async { configmaps.get(&test_configmap_name).await })
-            .is_err()
+    wait_for_kubernetes(
+        &mut harness,
+        &format!("ConfigMap {test_configmap_name} to be deleted from Kubernetes"),
+        |remaining| {
+            kubernetes_object_absent(kubernetes_request(
+                runtime,
+                remaining,
+                configmaps.get(&test_configmap_name),
+            ))
+        },
+        10_000,
     );
 }
 
@@ -421,19 +395,22 @@ fn test_bulk_resource_delete_integration() {
     wait_for_resource_sync(
         &mut harness,
         cluster_key,
-        configmaps_resource.clone(),
-        &fixture.namespace,
+        &configmaps_resource,
+        Some(&fixture.namespace),
     );
-    wait_for(
+    wait_for_resource_watch(
         &mut harness,
-        |app| {
-            let resources = &app.ui_state.clusters[&cluster_key].resource_cache
-                [&(configmaps_resource.clone(), Some(fixture.namespace.clone()))]
-                .resources;
-            (resources
+        "both ConfigMaps to appear in the resource watch",
+        cluster_key,
+        &configmaps_resource,
+        Some(&fixture.namespace),
+        |watch| {
+            (watch
+                .resources
                 .values()
                 .any(|resource| resource.name == fixture.name)
-                && resources
+                && watch
+                    .resources
                     .values()
                     .any(|resource| resource.name == second_name))
             .then_some(())
@@ -449,6 +426,7 @@ fn test_bulk_resource_delete_integration() {
     harness.run_steps(1);
     wait_for_harness(
         &mut harness,
+        "the bulk-delete confirmation delay to elapse",
         |harness| {
             harness
                 .query_by_role_and_label(egui::accesskit::Role::Button, "Delete 2 resources")
@@ -461,6 +439,7 @@ fn test_bulk_resource_delete_integration() {
     harness.run_steps(1);
     wait_for_with_diagnostic(
         &mut harness,
+        "the bulk delete to finish and clear the resource selection",
         |app| {
             let cluster = &app.ui_state.clusters[&cluster_key];
             (cluster.bulk_delete_progress.is_none()

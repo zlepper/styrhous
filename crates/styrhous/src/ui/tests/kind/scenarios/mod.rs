@@ -13,7 +13,6 @@ use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
 use kube::api::Patch;
 use kube::{Api, Client};
 use std::collections::BTreeMap;
-use std::time::Duration;
 
 const WATCHER_CONFIGMAP_NAME: &str = "resource-watcher";
 const ACTIONS_CONFIGMAP_NAME: &str = "resource-actions";
