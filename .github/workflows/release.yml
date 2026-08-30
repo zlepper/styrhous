@@ -4,8 +4,6 @@ on:
   push:
     branches: ["**"]
     tags: ["v*"]
-  pull_request:
-    branches: [master]
   workflow_dispatch:
     inputs:
       sign_artifacts:
@@ -15,7 +13,7 @@ on:
         default: true
 
 concurrency:
-  group: desktop-packages-${{ github.event.pull_request.number || github.ref }}
+  group: desktop-packages-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ !(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) }}
 
 permissions:
@@ -25,7 +23,7 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_PACKAGER_VERSION: "0.11.8"
   PACKAGE_ARTIFACT_PREFIX: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'package' || 'validation' }}
-  SIGN_ARTIFACTS: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (github.event_name != 'workflow_dispatch' || inputs.sign_artifacts)) }}
+  SIGN_ARTIFACTS: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.actor != 'dependabot[bot]' && (github.event_name != 'workflow_dispatch' || inputs.sign_artifacts)) }}
   STYRHOUS_RELEASE_BUILD: "1"
   STYRHOUS_UPDATER_PUBLIC_KEY: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && vars.STYRHOUS_UPDATER_PUBLIC_KEY || vars.STYRHOUS_VALIDATION_UPDATER_PUBLIC_KEY }}
 

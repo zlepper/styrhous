@@ -1,7 +1,7 @@
 # Releasing Styrhous
 
-The **Desktop packages** workflow validates branch and pull-request packages and publishes a
-release when a `vX.Y.Z` tag is pushed. The tag must match the version in
+The **Desktop packages** workflow validates packages on every branch push and publishes a release
+when a `vX.Y.Z` tag is pushed. The tag must match the version in
 `crates/styrhous/Cargo.toml` exactly.
 
 Before the first release, create the updater signing key once:
@@ -39,11 +39,11 @@ replacing the environment secrets and repository variable together.
 Every branch push runs both the Linux workspace checks and the full native package matrix. Trusted
 repository branches sign their direct-download validation artifacts with the disposable key,
 generate updater manifests, run the release smoke tests, and retain the artifacts for one day.
-Pull requests from forks run the same package and smoke-test matrix unsigned because GitHub does
-not expose Actions secrets to fork workflows. Internal pull requests run against the merge commit
-and use the disposable validation key; their branch pushes are validated independently as well.
-Dependabot runs are unsigned because GitHub withholds secrets from them. Manual validation runs
-are signed by default and expose a `sign_artifacts` input for exercising the unsigned path.
+Pull requests reuse the checks attached to their branch-head commit instead of starting a second
+matrix for a synthetic pull-request merge commit. Consequently, fork-only branches are not package
+validated by this workflow. Dependabot branch pushes are unsigned because GitHub withholds secrets
+from them. Manual validation runs are signed by default and expose a `sign_artifacts` input for
+exercising the unsigned path.
 
 Release tags follow those same four platform-specific package jobs, but select the protected
 `release` environment and production updater key. The preflight job additionally verifies that the
