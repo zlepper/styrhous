@@ -29,7 +29,6 @@ jobs:
         uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
         with:
           tool: cargo-about@0.9.1
-          fallback: none
 
       - name: Verify third-party legal artifacts
         run: bash scripts/generate-third-party-legal.sh --check

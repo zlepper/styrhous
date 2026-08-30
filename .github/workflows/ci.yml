@@ -72,7 +72,6 @@ jobs:
         uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
         with:
           tool: cargo-nextest@0.9.140
-          fallback: none
 
       - name: Install Mesa software renderer
         run: sudo apt-get install --yes libegl1 libgl1-mesa-dri
@@ -117,7 +116,6 @@ jobs:
         uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
         with:
           tool: cargo-nextest@0.9.140
-          fallback: none
 
       - name: Install Mesa software renderer
         run: sudo apt-get install --yes libegl1 libgl1-mesa-dri
@@ -163,7 +161,6 @@ jobs:
         uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
         with:
           tool: cargo-about@0.9.1
-          fallback: none
 
       - name: Verify third-party legal artifacts
         run: bash scripts/generate-third-party-legal.sh --check
