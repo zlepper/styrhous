@@ -12,7 +12,7 @@ script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly script_directory
 repository_root="$(cd "$script_directory/.." && pwd)"
 readonly repository_root
-readonly allowlist="$repository_root/appimage-native-libraries.tsv"
+readonly allowlist="$repository_root/legal/appimage-native-libraries.tsv"
 readonly generated_notices="$repository_root/target/legal/appimage-native-licenses"
 
 library_count=0

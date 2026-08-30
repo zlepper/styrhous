@@ -30,8 +30,18 @@ jobs:
         with:
           tool: cargo-about@0.9.1
 
-      - name: Verify third-party legal artifacts
-        run: bash scripts/generate-third-party-legal.sh --check
+      - name: Generate third-party legal artifacts
+        run: bash scripts/generate-third-party-legal.sh
+
+      - name: Upload third-party legal artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: third-party-legal
+          path: |
+            target/legal/THIRD_PARTY_LICENSES.html
+            target/legal/THIRD_PARTY_SOURCE.tar.gz
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Verify tag and application version agree
         run: |
@@ -61,6 +71,12 @@ jobs:
         with:
           lfs: true
           persist-credentials: false
+
+      - name: Download third-party legal artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: third-party-legal
+          path: target/legal
 
       - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -139,7 +155,7 @@ jobs:
       - name: Upload AppImage package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ matrix.id }}
+          name: package-${{ matrix.id }}
           path: dist/
           if-no-files-found: error
           retention-days: 1
@@ -167,6 +183,12 @@ jobs:
         with:
           lfs: true
           persist-credentials: false
+
+      - name: Download third-party legal artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: third-party-legal
+          path: target/legal
 
       - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -240,7 +262,7 @@ jobs:
       - name: Upload macOS packages
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ matrix.id }}
+          name: package-${{ matrix.id }}
           path: dist/
           if-no-files-found: error
           retention-days: 1
@@ -263,6 +285,12 @@ jobs:
         with:
           lfs: true
           persist-credentials: false
+
+      - name: Download third-party legal artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: third-party-legal
+          path: target/legal
 
       - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -343,7 +371,7 @@ jobs:
       - name: Upload Windows package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ matrix.id }}
+          name: package-${{ matrix.id }}
           path: dist/
           if-no-files-found: error
           retention-days: 1
@@ -370,6 +398,12 @@ jobs:
         with:
           lfs: true
           persist-credentials: false
+
+      - name: Download third-party legal artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: third-party-legal
+          path: target/legal
 
       - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -421,7 +455,7 @@ jobs:
       - name: Upload Debian package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ matrix.id }}
+          name: package-${{ matrix.id }}
           path: dist/**/*.deb
           if-no-files-found: error
           retention-days: 1
@@ -443,9 +477,16 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Download third-party legal artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: third-party-legal
+          path: target/legal
+
       - name: Download release packages
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
+          pattern: package-*
           path: dist
           merge-multiple: true
 

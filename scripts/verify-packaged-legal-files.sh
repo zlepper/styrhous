@@ -34,6 +34,6 @@ while IFS=$'\t' read -r repository_path packaged_filename _release_asset; do
         echo "packaged $packaged_filename does not match $repository_path" >&2
         exit 1
     fi
-done <"$repository_root/legal-resources.tsv"
+done <"$repository_root/legal/resources.tsv"
 
 echo "packaged legal resources are present"
