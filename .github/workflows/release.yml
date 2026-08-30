@@ -89,12 +89,6 @@ jobs:
           lfs: true
           persist-credentials: false
 
-      - name: Download third-party legal artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: third-party-legal
-          path: target/legal
-
       - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
@@ -102,6 +96,12 @@ jobs:
           cache-bin: true
           cache-all-crates: true
           cache-on-failure: true
+
+      - name: Download third-party legal artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: third-party-legal
+          path: target/legal
 
       - name: Install AppImage package dependencies
         run: bash scripts/install-appimage-package-dependencies.sh
@@ -212,12 +212,6 @@ jobs:
           lfs: true
           persist-credentials: false
 
-      - name: Download third-party legal artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: third-party-legal
-          path: target/legal
-
       - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
@@ -225,6 +219,12 @@ jobs:
           cache-bin: true
           cache-all-crates: true
           cache-on-failure: true
+
+      - name: Download third-party legal artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: third-party-legal
+          path: target/legal
 
       - name: Install cargo-packager
         uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
@@ -281,7 +281,7 @@ jobs:
 
           dmg=$(find dist -type f -name '*.dmg' -print -quit)
           test -n "$dmg"
-          hdiutil attach "$dmg" -acceptlicense -nobrowse -readonly -mountpoint "$mount_point"
+          hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount_point" <<< "Y"
 
           app=$(find "$mount_point" -maxdepth 1 -name '*.app' -print -quit)
           test -n "$app"
@@ -324,12 +324,6 @@ jobs:
           lfs: true
           persist-credentials: false
 
-      - name: Download third-party legal artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: third-party-legal
-          path: target/legal
-
       - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
@@ -337,6 +331,12 @@ jobs:
           cache-bin: true
           cache-all-crates: true
           cache-on-failure: true
+
+      - name: Download third-party legal artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: third-party-legal
+          path: target/legal
 
       - name: Install cargo-packager
         uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
@@ -448,12 +448,6 @@ jobs:
           lfs: true
           persist-credentials: false
 
-      - name: Download third-party legal artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: third-party-legal
-          path: target/legal
-
       - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
@@ -461,6 +455,12 @@ jobs:
           cache-bin: true
           cache-all-crates: true
           cache-on-failure: true
+
+      - name: Download third-party legal artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: third-party-legal
+          path: target/legal
 
       - name: Install package dependencies
         run: bash scripts/install-appimage-package-dependencies.sh
