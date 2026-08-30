@@ -56,7 +56,7 @@ mkdir -p "$legal_build_directory"
 # cargo-about must cover every native release target. The Debian release jobs
 # reuse their corresponding Linux target and therefore carry a -deb suffix.
 perl -e '
-    my ($target_manifest, $about_path, $package_path, $release_path) = @ARGV;
+    my ($target_manifest, $about_path, @workflow_paths) = @ARGV;
     my (%expected_ids, %expected_debian_ids, %expected_triples);
     open my $manifest, q{<}, $target_manifest or die "$target_manifest: $!\n";
     while (my $line = <$manifest>) {
@@ -85,7 +85,7 @@ perl -e '
         die "about.toml has unmanifested target $triple\n" unless $expected_triples{$triple};
     }
 
-    for my $workflow_path ($package_path, $release_path) {
+    for my $workflow_path (@workflow_paths) {
         open my $workflow, q{<}, $workflow_path or die "$workflow_path: $!\n";
         local $/;
         my $workflow_text = <$workflow>;
@@ -116,7 +116,7 @@ perl -e '
                 unless $debian_seen{$id};
         }
     }
-' "$release_targets" "$about_config" .github/workflows/package.yml .github/workflows/release.yml
+' "$release_targets" "$about_config" .github/workflows/release.yml
 
 while IFS= read -r source_license; do
     if [[ -z "$source_license" ]] || [[ "$source_license" == \#* ]]; then
