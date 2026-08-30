@@ -13,7 +13,7 @@ licenses require source availability is distributed in
 Linux AppImage builds also bundle native shared libraries needed for keyboard
 handling. Their distribution-provided copyright and license notices are in the
 packaged `APPIMAGE_NATIVE_LICENSES` directory. The build inventories every
-bundled shared library against `appimage-native-libraries.tsv`; an unreviewed
+bundled shared library against `legal/appimage-native-libraries.tsv`; an unreviewed
 library makes packaging fail.
 
 ## Inter font

@@ -32,4 +32,4 @@ while IFS=$'\t' read -r library_pattern package_name; do
     fi
 
     cp -L -- "$copyright_file" "$notice_directory/$package_name.txt"
-done <"$repository_root/appimage-native-libraries.tsv"
+done <"$repository_root/legal/appimage-native-libraries.tsv"

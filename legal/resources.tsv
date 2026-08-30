@@ -1,0 +1,6 @@
+# repository path	packaged filename	release asset
+LICENSE.md	LICENSE.md	yes
+legal/THIRD_PARTY_NOTICES.md	THIRD_PARTY_NOTICES.md	yes
+target/legal/THIRD_PARTY_LICENSES.html	THIRD_PARTY_LICENSES.html	yes
+target/legal/THIRD_PARTY_SOURCE.tar.gz	THIRD_PARTY_SOURCE.tar.gz	yes
+crates/components/assets/fonts/inter/LICENSE.txt	Inter-OFL-1.1.txt	no

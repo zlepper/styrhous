@@ -162,8 +162,8 @@ jobs:
         with:
           tool: cargo-about@0.9.1
 
-      - name: Verify third-party legal artifacts
-        run: bash scripts/generate-third-party-legal.sh --check
+      - name: Generate third-party legal artifacts
+        run: bash scripts/generate-third-party-legal.sh
 
       - name: Test release scripts
         run: |

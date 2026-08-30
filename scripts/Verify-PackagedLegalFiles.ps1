@@ -5,7 +5,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$Manifest = Join-Path $RepositoryRoot 'legal-resources.tsv'
+$Manifest = Join-Path $RepositoryRoot 'legal/resources.tsv'
 
 foreach ($Line in Get-Content $Manifest) {
     if ([string]::IsNullOrWhiteSpace($Line) -or $Line.StartsWith('#')) {

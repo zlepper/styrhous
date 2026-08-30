@@ -11,7 +11,7 @@ same UI content in both images, pass that rectangle directly to the tool:
 
 ```json
 {
-  "expected_path": "/home/rasmus/projects/kubernetes-dev-ui/docs/design/oracles/example.png",
+  "expected_path": "/home/rasmus/projects/kubernetes-dev-ui/target/oracles/example.png",
   "actual_path": "/home/rasmus/projects/kubernetes-dev-ui/crates/styrhous/tests/snapshots/example.png",
   "output_dir": "/home/rasmus/projects/kubernetes-dev-ui/target/visual-diffs/example",
   "region": { "x": 784, "y": 8, "width": 744, "height": 1010 },
@@ -29,9 +29,9 @@ x-coordinates in the oracle and deterministic snapshot. Crop each source to an
 equal-sized image first, then call `compare_ui_images` on the crops.
 
 ```bash
-mkdir -p target/oracle-crops target/visual-diffs
+mkdir -p target/oracles target/oracle-crops target/visual-diffs
 
-magick docs/design/oracles/example.png \
+magick target/oracles/example.png \
   -crop 744x1010+784+7 +repage \
   target/oracle-crops/example-oracle.png
 

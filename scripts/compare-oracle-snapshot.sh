@@ -1,19 +1,24 @@
 #!/usr/bin/env bash
-# Compare the injected resource-table fixture with the approved visual oracle.
+# Compare a deterministic UI snapshot with an approved visual oracle.
 #
 # Usage:
-#   nix-shell -p imagemagick --run ./scripts/compare-oracle-snapshot.sh
-#   ./scripts/compare-oracle-snapshot.sh [oracle.png] [snapshot.png] [output-directory]
+#   ./scripts/compare-oracle-snapshot.sh <oracle.png> <snapshot.png> [output-directory]
 
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-oracle=${1:-"$repo_root/crates/styrhous/integration_resource_table_oracle.png"}
-snapshot=${2:-"$repo_root/crates/styrhous/tests/snapshots/oracle_resource_table_injected.png"}
+
+if [[ "$#" -lt 2 ]] || [[ "$#" -gt 3 ]]; then
+    echo "usage: $0 <oracle.png> <snapshot.png> [output-directory]" >&2
+    exit 2
+fi
+
+oracle=$1
+snapshot=$2
 output_dir=${3:-"$repo_root/target/visual-diffs"}
 
 if ! command -v magick >/dev/null; then
-    echo "ImageMagick is required. Run: nix-shell -p imagemagick --run ./scripts/compare-oracle-snapshot.sh" >&2
+    echo "ImageMagick is required. Run this command inside: nix-shell -p imagemagick" >&2
     exit 127
 fi
 
@@ -43,30 +48,10 @@ amplified_difference="$output_dir/${oracle_name}-difference-autolevel.png"
 magick "$oracle" "$snapshot" -compose difference -composite -colorspace gray "$difference"
 magick "$difference" -auto-level "$amplified_difference"
 
-temporary_dir=$(mktemp -d)
-trap 'rm -rf "$temporary_dir"' EXIT
-
-region_mae() {
-    local name=$1 x=$2 y=$3 width=$4 height=$5
-    local oracle_region="$temporary_dir/${name}-oracle.png"
-    local snapshot_region="$temporary_dir/${name}-snapshot.png"
-    magick "$oracle" -crop "${width}x${height}+${x}+${y}" +repage "$oracle_region"
-    magick "$snapshot" -crop "${width}x${height}+${x}+${y}" +repage "$snapshot_region"
-    printf '  %-13s %s\n' "$name:" "$(magick compare -metric MAE "$oracle_region" "$snapshot_region" null: 2>&1 || true)"
-}
-
 changed_pixels() {
     local threshold=$1
     magick "$oracle" "$snapshot" -compose difference -composite -colorspace gray \
         -threshold "$threshold" -format '%[fx:round(mean*w*h)]' info:
-}
-
-sample() {
-    local label=$1 x=$2 y=$3
-    local oracle_color snapshot_color
-    oracle_color=$(magick "$oracle" -format "%[pixel:p{$x,$y}]" info:)
-    snapshot_color=$(magick "$snapshot" -format "%[pixel:p{$x,$y}]" info:)
-    printf '  %-13s oracle=%-20s snapshot=%s\n' "$label:" "$oracle_color" "$snapshot_color"
 }
 
 echo "oracle:   $oracle"
@@ -77,58 +62,5 @@ echo "MAE:      $(metric MAE)"
 echo "RMSE:     $(metric RMSE)"
 echo "pixels above 2%: $(changed_pixels 2%)"
 echo "pixels above 5%: $(changed_pixels 5%)"
-echo "regions (MAE):"
-if [[ "$oracle" == *"cluster-discovery-blade"* ]]; then
-    region_mae header 0 0 744 156
-    region_mae azure 0 156 744 468
-    region_mae warning 0 624 744 70
-    region_mae tailscale 0 694 744 314
-    echo "surface samples:"
-    sample header 400 80
-    sample azure 400 300
-    sample warning 400 650
-    sample tailscale 400 820
-elif [[ "$oracle" == *"inspector_details"* ]]; then
-    region_mae properties 24 96 694 800
-    region_mae detail-tables 744 96 744 800
-    echo "surface samples:"
-    sample canvas 20 20
-    sample properties 100 200
-    sample detail-tables 900 200
-elif [[ "$oracle" == *"buttons-showcase-oracle"* ]]; then
-    region_mae header 520 52 500 110
-    region_mae matrix 128 218 1280 450
-    region_mae icons 140 735 540 150
-    region_mae rounding 800 735 550 150
-    echo "surface samples:"
-    sample canvas 20 20
-    sample card 300 300
-    sample primary 380 322
-    sample secondary 380 424
-    sample soft 380 526
-    sample danger 380 622
-elif [[ "$oracle" == *"settings-home-blade"* ]]; then
-    region_mae header 0 0 744 156
-    region_mae configuration 0 156 744 352
-    region_mae empty-canvas 0 508 744 500
-    echo "surface samples:"
-    sample header 400 80
-    sample configuration 400 280
-    sample empty-canvas 400 800
-else
-    region_mae rail 0 0 68 1024
-    region_mae navigation 68 0 292 1024
-    region_mae toolbar 360 0 1176 102
-    region_mae table-header 360 102 1176 72
-    region_mae table-body 360 174 1176 670
-    echo "surface samples:"
-    sample rail 34 300
-    sample navigation-left 300 500
-    sample navigation-right 350 500
-    sample navigation-bottom 340 900
-    sample toolbar 700 20
-    sample table-header 500 130
-    sample table-body 800 900
-fi
 echo "difference: $difference"
 echo "amplified difference: $amplified_difference"

@@ -1,20 +1,26 @@
 #!/usr/bin/env bash
-# Generate the resource-table visual diff, then ask a fresh Codex CLI session
+# Generate a visual diff, then ask a fresh Codex CLI session
 # to critique the three images. The session is read-only and writes only its
 # final review to target/visual-diffs.
 #
 # Usage:
-#   nix-shell -p imagemagick --run ./scripts/review-oracle-diff.sh
+#   ./scripts/review-oracle-diff.sh <oracle.png> <snapshot.png> [output-directory]
 
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-oracle=${1:-"$repo_root/crates/styrhous/integration_resource_table_oracle.png"}
-snapshot=${2:-"$repo_root/crates/styrhous/tests/snapshots/oracle_resource_table_injected.png"}
+
+if [[ "$#" -lt 2 ]] || [[ "$#" -gt 3 ]]; then
+    echo "usage: $0 <oracle.png> <snapshot.png> [output-directory]" >&2
+    exit 2
+fi
+
+oracle=$1
+snapshot=$2
 output_dir=${3:-"$repo_root/target/visual-diffs"}
 oracle_name=$(basename "$oracle" .png)
 amplified_difference="$output_dir/${oracle_name}-difference-autolevel.png"
-report="$output_dir/codex-visual-review.md"
+report="$output_dir/${oracle_name}-codex-visual-review.md"
 
 "$repo_root/scripts/compare-oracle-snapshot.sh" "$oracle" "$snapshot" "$output_dir"
 
@@ -27,7 +33,6 @@ codex --ask-for-approval never exec \
     --ephemeral \
     --sandbox read-only \
     --cd "$repo_root" \
-    --model gpt-5.6-luna \
     --image "$oracle" \
     --image "$snapshot" \
     --image "$amplified_difference" \

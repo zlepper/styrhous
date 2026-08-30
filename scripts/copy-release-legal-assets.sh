@@ -21,4 +21,4 @@ while IFS=$'\t' read -r repository_path packaged_filename release_asset; do
 
     cp -- "$repository_root/$repository_path" "$destination_directory/$packaged_filename"
     printf '%s\0' "$destination_directory/$packaged_filename"
-done <"$repository_root/legal-resources.tsv"
+done <"$repository_root/legal/resources.tsv"

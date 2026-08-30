@@ -7,28 +7,31 @@ script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly script_directory
 repository_root="$(cd "$script_directory/.." && pwd)"
 readonly repository_root
+readonly legal_directory="$repository_root/legal"
 readonly legal_build_directory="$repository_root/target/legal"
 readonly generated_html="$legal_build_directory/THIRD_PARTY_LICENSES.html"
-readonly generated_json="$legal_build_directory/third-party-licenses.json"
 readonly generated_source="$legal_build_directory/THIRD_PARTY_SOURCE.tar.gz"
-readonly tracked_html="$repository_root/THIRD_PARTY_LICENSES.html"
-readonly tracked_source="$repository_root/THIRD_PARTY_SOURCE.tar.gz"
-readonly legal_resources="$repository_root/legal-resources.tsv"
-readonly source_license_policy="$repository_root/legal-source-licenses.txt"
-readonly release_targets="$repository_root/legal-release-targets.tsv"
+readonly about_config="$legal_directory/about.toml"
+readonly about_template="$legal_directory/about.hbs"
+readonly legal_resources="$legal_directory/resources.tsv"
+readonly source_license_policy="$legal_directory/source-licenses.txt"
+readonly release_targets="$legal_directory/release-targets.tsv"
 
 usage() {
-    echo "usage: $0 [--check|--update]" >&2
+    echo "usage: $0" >&2
 }
 
-mode="${1:---check}"
-case "$mode" in
-    --check | --update) ;;
-    *)
-        usage
-        exit 2
-        ;;
-esac
+if [[ "$#" -ne 0 ]]; then
+    usage
+    exit 2
+fi
+
+temporary_directory="$(mktemp -d)"
+readonly temporary_directory
+trap 'rm -rf -- "$temporary_directory"' EXIT
+readonly generated_json="$temporary_directory/third-party-licenses.json"
+readonly source_list="$temporary_directory/source-available-dependencies.tsv"
+readonly source_staging="$temporary_directory/corresponding-source"
 
 cd "$repository_root"
 
@@ -48,46 +51,7 @@ if [[ "$tar_version" != *"GNU tar"* ]]; then
     exit 1
 fi
 
-# Keep the machine-readable legal resource manifest synchronized with the
-# corresponding cargo-packager mappings. Other application resources are
-# outside this manifest and remain free to use files or globs.
-cargo metadata --no-deps --format-version=1 | perl -MJSON::PP -MCwd=abs_path -MFile::Basename=dirname -e '
-    my ($resource_manifest, $repository_root) = @ARGV;
-    my %expected;
-    open my $manifest, q{<}, $resource_manifest or die "$resource_manifest: $!\n";
-    while (my $line = <$manifest>) {
-        chomp $line;
-        next if $line eq q{} || $line =~ /^#/;
-        my ($repository_path, $target, $release_asset) = split /\t/, $line, -1;
-        die "invalid legal resource manifest line: $line\n"
-            unless defined $release_asset && $release_asset =~ /^(?:yes|no)$/;
-        my $source = abs_path("$repository_root/$repository_path")
-            or die "missing legal resource: $repository_path\n";
-        die "duplicate packaged legal filename: $target\n" if $expected{$target};
-        $expected{$target} = $source;
-    }
-
-    local $/;
-    my $data = decode_json(<STDIN>);
-    my ($package) = grep { $_->{name} eq q{styrhous} } @{$data->{packages}};
-    die "styrhous package metadata not found\n" unless $package;
-    my $package_directory = dirname($package->{manifest_path});
-    my %actual;
-    for my $resource (@{$package->{metadata}{packager}{resources}}) {
-        my $target = $resource->{target};
-        next unless $expected{$target};
-        my $source = abs_path("$package_directory/$resource->{src}")
-            or die "missing cargo-packager legal resource: $resource->{src}\n";
-        die "duplicate cargo-packager legal target: $target\n" if $actual{$target};
-        $actual{$target} = $source;
-    }
-
-    for my $target (sort keys %expected) {
-        die "cargo-packager is missing legal target $target\n" unless $actual{$target};
-        die "cargo-packager maps $target from the wrong source\n"
-            unless $actual{$target} eq $expected{$target};
-    }
-' "$legal_resources" "$repository_root"
+mkdir -p "$legal_build_directory"
 
 # cargo-about must cover every native release target. The Debian release jobs
 # reuse their corresponding Linux target and therefore carry a -deb suffix.
@@ -152,14 +116,14 @@ perl -e '
                 unless $debian_seen{$id};
         }
     }
-' "$release_targets" about.toml .github/workflows/package.yml .github/workflows/release.yml
+' "$release_targets" "$about_config" .github/workflows/package.yml .github/workflows/release.yml
 
 while IFS= read -r source_license; do
     if [[ -z "$source_license" ]] || [[ "$source_license" == \#* ]]; then
         continue
     fi
-    if ! grep -Fq -- "\"$source_license\"" about.toml; then
-        echo "$source_license must also be accepted in about.toml" >&2
+    if ! grep -Fq -- "\"$source_license\"" "$about_config"; then
+        echo "$source_license must also be accepted in $about_config" >&2
         exit 1
     fi
 done <"$source_license_policy"
@@ -167,9 +131,9 @@ done <"$source_license_policy"
 # Fetch the complete locked graph once, then force cargo-about to use only the
 # local immutable crate contents while resolving licenses.
 cargo fetch --locked
-mkdir -p "$legal_build_directory"
 
 cargo about generate \
+    --config "$about_config" \
     --workspace \
     --locked \
     --offline \
@@ -178,11 +142,12 @@ cargo about generate \
     --output-file "$generated_json"
 
 cargo about generate \
+    --config "$about_config" \
     --workspace \
     --locked \
     --offline \
     --fail \
-    about.hbs \
+    "$about_template" \
     --output-file "$generated_html"
 
 # License files published by crates sometimes contain CRLF endings or trailing
@@ -191,8 +156,7 @@ cargo about generate \
 perl -pi -e 's/[ \t\r]+$//' "$generated_html"
 
 # Build a deterministic corresponding-source archive for every dependency for
-# which cargo-about selected a license listed in legal-source-licenses.txt.
-readonly source_list="$legal_build_directory/source-available-dependencies.tsv"
+# which cargo-about selected a license listed in legal/source-licenses.txt.
 perl -MJSON::PP -e '
     my ($policy_path, $json_path) = @ARGV;
     my %source_licenses;
@@ -217,8 +181,6 @@ perl -MJSON::PP -e '
     }
 ' "$source_license_policy" "$generated_json" >"$source_list"
 
-readonly source_staging="$legal_build_directory/corresponding-source"
-rm -rf -- "$source_staging"
 mkdir -p "$source_staging"
 
 while IFS=$'\t' read -r crate_name crate_version manifest_path; do
@@ -248,22 +210,45 @@ tar \
     -cf - \
     -C "$source_staging" . | gzip -n >"$generated_source"
 
-if [[ "$mode" == "--update" ]]; then
-    cp -- "$generated_html" "$tracked_html"
-    cp -- "$generated_source" "$tracked_source"
-    echo "updated THIRD_PARTY_LICENSES.html and THIRD_PARTY_SOURCE.tar.gz"
-    exit 0
-fi
+# Keep the machine-readable legal resource manifest synchronized with the
+# corresponding cargo-packager mappings. This runs after generation so every
+# declared resource can be resolved and checked for existence.
+cargo metadata --no-deps --format-version=1 | perl -MJSON::PP -MCwd=abs_path -MFile::Basename=dirname -e '
+    my ($resource_manifest, $repository_root) = @ARGV;
+    my %expected;
+    open my $manifest, q{<}, $resource_manifest or die "$resource_manifest: $!\n";
+    while (my $line = <$manifest>) {
+        chomp $line;
+        next if $line eq q{} || $line =~ /^#/;
+        my ($repository_path, $target, $release_asset) = split /\t/, $line, -1;
+        die "invalid legal resource manifest line: $line\n"
+            unless defined $release_asset && $release_asset =~ /^(?:yes|no)$/;
+        my $source = abs_path("$repository_root/$repository_path")
+            or die "missing legal resource: $repository_path\n";
+        die "duplicate packaged legal filename: $target\n" if $expected{$target};
+        $expected{$target} = $source;
+    }
 
-if ! cmp --silent "$tracked_html" "$generated_html"; then
-    echo "THIRD_PARTY_LICENSES.html is stale; run $0 --update" >&2
-    diff -u "$tracked_html" "$generated_html" || true
-    exit 1
-fi
+    local $/;
+    my $data = decode_json(<STDIN>);
+    my ($package) = grep { $_->{name} eq q{styrhous} } @{$data->{packages}};
+    die "styrhous package metadata not found\n" unless $package;
+    my $package_directory = dirname($package->{manifest_path});
+    my %actual;
+    for my $resource (@{$package->{metadata}{packager}{resources}}) {
+        my $target = $resource->{target};
+        next unless $expected{$target};
+        my $source = abs_path("$package_directory/$resource->{src}")
+            or die "missing cargo-packager legal resource: $resource->{src}\n";
+        die "duplicate cargo-packager legal target: $target\n" if $actual{$target};
+        $actual{$target} = $source;
+    }
 
-if ! cmp --silent "$tracked_source" "$generated_source"; then
-    echo "THIRD_PARTY_SOURCE.tar.gz is stale; run $0 --update" >&2
-    exit 1
-fi
+    for my $target (sort keys %expected) {
+        die "cargo-packager is missing legal target $target\n" unless $actual{$target};
+        die "cargo-packager maps $target from the wrong source\n"
+            unless $actual{$target} eq $expected{$target};
+    }
+' "$legal_resources" "$repository_root"
 
-echo "third-party legal artifacts are current"
+echo "generated third-party legal artifacts in $legal_build_directory"

@@ -1,7 +1,0 @@
-TODO list:
-
-* test reduced permission handling
-* Resource details view
-* Search
-    * Add option for whole word matching only in search
-    * Add option for case-sensitive matching in search

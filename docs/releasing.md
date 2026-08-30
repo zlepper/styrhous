@@ -37,6 +37,17 @@ Before pushing a release tag, verify that both **Tests** and **Validate desktop 
 for the exact commit being tagged. Release-environment reviewers should confirm the same commit
 status before approving access to the updater signing key.
 
+Third-party license policy, templates, and resource manifests live under `legal/`. Generated
+license HTML and corresponding source archives are intentionally not tracked. To package locally,
+install `cargo-about` 0.9.1 and run:
+
+```bash
+bash scripts/generate-third-party-legal.sh
+```
+
+The command writes the package inputs to ignored `target/legal/`. CI generates them once on Linux
+and passes them to the native package jobs as short-lived workflow artifacts.
+
 The workflow publishes installers to GitHub Releases and creates a per-platform update manifest.
 Direct-download DMG, NSIS, and AppImage builds download and verify updates in the background,
 then apply them on the next launch. Debian packages are built with automatic updates disabled.

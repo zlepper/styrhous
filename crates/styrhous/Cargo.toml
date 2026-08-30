@@ -30,9 +30,9 @@ icons = [
 ]
 resources = [
   { src = "../../LICENSE.md", target = "LICENSE.md" },
-  { src = "../../THIRD_PARTY_NOTICES.md", target = "THIRD_PARTY_NOTICES.md" },
-  { src = "../../THIRD_PARTY_LICENSES.html", target = "THIRD_PARTY_LICENSES.html" },
-  { src = "../../THIRD_PARTY_SOURCE.tar.gz", target = "THIRD_PARTY_SOURCE.tar.gz" },
+  { src = "../../legal/THIRD_PARTY_NOTICES.md", target = "THIRD_PARTY_NOTICES.md" },
+  { src = "../../target/legal/THIRD_PARTY_LICENSES.html", target = "THIRD_PARTY_LICENSES.html" },
+  { src = "../../target/legal/THIRD_PARTY_SOURCE.tar.gz", target = "THIRD_PARTY_SOURCE.tar.gz" },
   { src = "../components/assets/fonts/inter/LICENSE.txt", target = "Inter-OFL-1.1.txt" },
   { src = "../../target/legal/appimage-native-licenses/*", target = "APPIMAGE_NATIVE_LICENSES" },
 ]
