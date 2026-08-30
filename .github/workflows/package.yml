@@ -1,0 +1,241 @@
+name: Validate desktop packages
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_PACKAGER_VERSION: "0.11.8"
+  STYRHOUS_RELEASE_BUILD: "1"
+  STYRHOUS_UPDATER_PUBLIC_KEY: ${{ vars.STYRHOUS_UPDATER_PUBLIC_KEY }}
+
+jobs:
+  package-appimage:
+    name: Validate AppImage (${{ matrix.id }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: linux-x86_64
+            runner: ubuntu-24.04
+
+          - id: linux-aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
+          persist-credentials: false
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          cache-targets: true
+          cache-bin: true
+          cache-all-crates: true
+          cache-on-failure: true
+
+      - name: Install AppImage package dependencies
+        run: bash scripts/install-appimage-package-dependencies.sh
+
+      - name: Install cargo-packager
+        uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
+        with:
+          tool: cargo-packager@${{ env.CARGO_PACKAGER_VERSION }}
+
+      - name: Verify updater configuration
+        run: test -n "$STYRHOUS_UPDATER_PUBLIC_KEY"
+
+      - name: Build AppImage
+        run: |
+          cargo packager \
+            --manifest-path crates/styrhous/Cargo.toml \
+            --release \
+            --formats appimage
+
+      - name: Verify AppImage resources
+        run: |
+          bundle=$(find dist -type f -name '*.AppImage' -exec realpath {} \; -quit)
+          test -n "$bundle"
+          chmod +x "$bundle"
+
+          temporary_directory=$(mktemp -d)
+          trap 'rm -rf "$temporary_directory"' EXIT
+          (
+            cd "$temporary_directory"
+            "$bundle" --appimage-extract >/dev/null
+            bash "$GITHUB_WORKSPACE/scripts/verify-packaged-legal-files.sh" squashfs-root
+            bash "$GITHUB_WORKSPACE/scripts/verify-appimage-native-libraries.sh" squashfs-root
+          )
+
+  package-macos:
+    name: Validate macOS package (${{ matrix.id }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: macos-x86_64
+            runner: macos-26-intel
+
+          - id: macos-aarch64
+            runner: macos-26
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
+          persist-credentials: false
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          cache-targets: true
+          cache-bin: true
+          cache-all-crates: true
+          cache-on-failure: true
+
+      - name: Install cargo-packager
+        uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
+        with:
+          tool: cargo-packager@${{ env.CARGO_PACKAGER_VERSION }}
+
+      - name: Verify updater configuration
+        run: test -n "$STYRHOUS_UPDATER_PUBLIC_KEY"
+
+      - name: Build macOS packages
+        run: |
+          cargo packager \
+            --manifest-path crates/styrhous/Cargo.toml \
+            --release \
+            --formats app,dmg
+
+      - name: Verify macOS application resources
+        run: |
+          app=$(find dist -type d -name '*.app' -print -quit)
+          test -n "$app"
+          bash scripts/verify-packaged-legal-files.sh "$app"
+
+  package-windows:
+    name: Validate Windows package (${{ matrix.id }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      matrix:
+        include:
+          - id: windows-x86_64
+            runner: windows-2025
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
+          persist-credentials: false
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          cache-targets: true
+          cache-bin: true
+          cache-all-crates: true
+          cache-on-failure: true
+
+      - name: Install cargo-packager
+        uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
+        with:
+          tool: cargo-packager@${{ env.CARGO_PACKAGER_VERSION }}
+
+      - name: Verify updater configuration
+        shell: bash
+        run: test -n "$STYRHOUS_UPDATER_PUBLIC_KEY"
+
+      - name: Build Windows installer
+        shell: bash
+        run: |
+          cargo packager \
+            --manifest-path crates/styrhous/Cargo.toml \
+            --release \
+            --formats nsis
+
+      - name: Verify Windows installer resources
+        shell: pwsh
+        run: |
+          $destination = Join-Path $env:RUNNER_TEMP 'styrhous-installer-legal-check'
+          $installer = Get-ChildItem -Path dist -Filter '*.exe' -Recurse | Select-Object -First 1
+          if ($null -eq $installer) { throw 'NSIS installer was not produced' }
+
+          $install = Start-Process -FilePath $installer.FullName -ArgumentList @('/S', "/D=$destination") -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "NSIS installer exited with $($install.ExitCode)" }
+
+          & scripts/Verify-PackagedLegalFiles.ps1 -PackageRoot $destination
+
+          $uninstaller = Get-ChildItem -Path $destination -Filter 'Uninstall.exe' -Recurse | Select-Object -First 1
+          if ($null -eq $uninstaller) { throw 'NSIS uninstaller was not found' }
+
+          $uninstall = Start-Process -FilePath $uninstaller.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "NSIS uninstaller exited with $($uninstall.ExitCode)" }
+          if (Test-Path $destination) { throw 'NSIS uninstaller left its destination behind' }
+
+  package-deb:
+    name: Validate Debian package (${{ matrix.id }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: linux-x86_64-deb
+            runner: ubuntu-24.04
+
+          - id: linux-aarch64-deb
+            runner: ubuntu-24.04-arm
+    env:
+      STYRHOUS_DISABLE_AUTO_UPDATE: "1"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
+          persist-credentials: false
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          cache-targets: true
+          cache-bin: true
+          cache-all-crates: true
+          cache-on-failure: true
+
+      - name: Install package dependencies
+        run: bash scripts/install-appimage-package-dependencies.sh
+
+      - name: Install cargo-packager
+        uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
+        with:
+          tool: cargo-packager@${{ env.CARGO_PACKAGER_VERSION }}
+
+      - name: Build Debian package
+        run: |
+          cargo packager \
+            --manifest-path crates/styrhous/Cargo.toml \
+            --release \
+            --formats deb
+
+      - name: Verify Debian package resources
+        run: |
+          package=$(find dist -type f -name '*.deb' -exec realpath {} \; -quit)
+          test -n "$package"
+          dpkg-deb -f "$package" Depends | grep -Fx 'libxkbcommon-x11-0'
+
+          temporary_directory=$(mktemp -d)
+          trap 'rm -rf "$temporary_directory"' EXIT
+          dpkg-deb --extract "$package" "$temporary_directory"
+          bash scripts/verify-packaged-legal-files.sh "$temporary_directory"

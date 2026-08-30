@@ -19,22 +19,23 @@ replacement key.
 Before enabling releases, configure the `release` environment in GitHub with required reviewers
 and restrict deployments to protected `v*` tags. Environment secrets are only made available to
 the direct package jobs after that approval. The workflow intentionally uses immutable action
-commit IDs. After this workflow revision has been merged, enable **Require actions to be pinned
-to a full-length commit SHA** in **Settings → Actions → General**, then select **Allow actions
-and reusable workflows**. Allow GitHub-owned actions and whitelist only
-`Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6`, while enforcing the full-SHA
-pin requirement. Rust itself is pinned in `rust-toolchain.toml`; the release workflow pins
-`cargo-nextest` and `cargo-packager` in its top-level environment.
+commit IDs. In **Settings → Actions → General**, require actions to be pinned to a full-length
+commit SHA and allow GitHub-owned actions plus only
+`Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6` and
+`taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a`. Update that allow-list
+before pushing a workflow that introduces or changes an external action. Rust itself is pinned in
+`rust-toolchain.toml`; the workflows pin their Cargo tool versions at the installation step.
 
-A push to trusted `master` primes a dedicated, version-keyed cache for those Cargo extensions on
-each release runner platform. GitHub intentionally isolates caches produced by distinct tags, but
-release tags may restore caches produced by the default branch. Keeping the extensions separate
-from the lockfile-keyed workspace build cache avoids recompiling them for every release while
-still invalidating the cache when either pinned extension version changes.
-Merge this workflow change to `master` and let its priming job complete before creating the next
-release tag; a tag created first must install the tools once because it cannot read another tag's
-cache. The same one-time compilation is expected whenever either pinned Cargo extension version
-changes.
+Every branch push runs the Linux workspace checks. A push to trusted `master` also validates the
+native package matrix and warms each platform's ordinary Rust build/tool cache. Release jobs use
+the same job identities and cache configuration, so a tag can restore compatible default-branch
+cache entries. Application executables are never cached between workflows: every release package
+is rebuilt from the tagged source before signing.
+
+The tag workflow deliberately trusts those prior checks instead of rerunning the workspace suite.
+Before pushing a release tag, verify that both **Tests** and **Validate desktop packages** succeeded
+for the exact commit being tagged. Release-environment reviewers should confirm the same commit
+status before approving access to the updater signing key.
 
 The workflow publishes installers to GitHub Releases and creates a per-platform update manifest.
 Direct-download DMG, NSIS, and AppImage builds download and verify updates in the background,
@@ -66,8 +67,8 @@ reinstalling the Rust toolchain, `cargo-nextest`, and Mesa dependencies each tim
 docker build --file scripts/Dockerfile.ci --tag styrhous-ci .
 docker run --rm --env WGPU_BACKEND=gl \
   --volume "$PWD:/workspace" styrhous-ci \
-  cargo nextest run --workspace --no-fail-fast --test-threads 1 \
-  -E 'not test(/kind_integration/)'
+  cargo nextest run --workspace --locked \
+  -E 'not test(/ui::tests::kind::/)'
 ```
 
 The Dockerfile compiles placeholder workspace targets after copying `Cargo.toml`, `Cargo.lock`,

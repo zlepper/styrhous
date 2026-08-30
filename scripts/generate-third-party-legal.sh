@@ -92,8 +92,8 @@ cargo metadata --no-deps --format-version=1 | perl -MJSON::PP -MCwd=abs_path -MF
 # cargo-about must cover every native release target. The Debian release jobs
 # reuse their corresponding Linux target and therefore carry a -deb suffix.
 perl -e '
-    my ($target_manifest, $about_path, $ci_path, $release_path) = @ARGV;
-    my (%expected_ids, %expected_triples);
+    my ($target_manifest, $about_path, $package_path, $release_path) = @ARGV;
+    my (%expected_ids, %expected_debian_ids, %expected_triples);
     open my $manifest, q{<}, $target_manifest or die "$target_manifest: $!\n";
     while (my $line = <$manifest>) {
         chomp $line;
@@ -104,6 +104,7 @@ perl -e '
         die "duplicate release target id: $id\n" if $expected_ids{$id};
         die "duplicate cargo target triple: $triple\n" if $expected_triples{$triple};
         $expected_ids{$id} = 1;
+        $expected_debian_ids{$id} = 1 if $triple =~ /-linux-/;
         $expected_triples{$triple} = 1;
     }
 
@@ -120,23 +121,38 @@ perl -e '
         die "about.toml has unmanifested target $triple\n" unless $expected_triples{$triple};
     }
 
-    for my $workflow_path ($ci_path, $release_path) {
+    for my $workflow_path ($package_path, $release_path) {
         open my $workflow, q{<}, $workflow_path or die "$workflow_path: $!\n";
         local $/;
         my $workflow_text = <$workflow>;
         my @ids = ($workflow_text =~ /^\s+- id:\s*([^\s]+)\s*$/mg);
-        my %seen;
+        my (%direct_seen, %debian_seen);
         for my $id (@ids) {
-            $id =~ s/-deb$// if $workflow_path eq $release_path;
+            my $is_debian = $id =~ s/-deb$//;
             die "$workflow_path has unmanifested release target $id\n"
                 unless $expected_ids{$id};
-            $seen{$id} = 1;
+            if ($is_debian) {
+                die "$workflow_path has unexpected Debian target $id\n"
+                    unless $expected_debian_ids{$id};
+                die "$workflow_path has duplicate Debian target $id\n"
+                    if $debian_seen{$id};
+                $debian_seen{$id} = 1;
+            } else {
+                die "$workflow_path has duplicate direct target $id\n"
+                    if $direct_seen{$id};
+                $direct_seen{$id} = 1;
+            }
         }
         for my $id (keys %expected_ids) {
-            die "$workflow_path is missing release target $id\n" unless $seen{$id};
+            die "$workflow_path is missing direct target $id\n"
+                unless $direct_seen{$id};
+        }
+        for my $id (keys %expected_debian_ids) {
+            die "$workflow_path is missing Debian target $id\n"
+                unless $debian_seen{$id};
         }
     }
-' "$release_targets" about.toml .github/workflows/ci.yml .github/workflows/release.yml
+' "$release_targets" about.toml .github/workflows/package.yml .github/workflows/release.yml
 
 while IFS= read -r source_license; do
     if [[ -z "$source_license" ]] || [[ "$source_license" == \#* ]]; then
