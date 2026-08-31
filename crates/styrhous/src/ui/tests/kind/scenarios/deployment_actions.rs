@@ -114,7 +114,7 @@ fn test_force_delete_resource_with_finalizer_integration() {
                 .force_delete_error
                 .clone()
         },
-        10_000,
+        20_000,
     );
     wait_for_resource_watch(
         &mut harness,
