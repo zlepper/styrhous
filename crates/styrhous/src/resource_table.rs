@@ -92,7 +92,15 @@ pub(crate) fn compare_sort_values(
     right: SortValue,
     direction: components::SortDirection,
 ) -> std::cmp::Ordering {
-    let ordering = match (&left, &right) {
+    compare_sort_value_refs(&left, &right, direction)
+}
+
+pub(crate) fn compare_sort_value_refs(
+    left: &SortValue,
+    right: &SortValue,
+    direction: components::SortDirection,
+) -> std::cmp::Ordering {
+    let ordering = match (left, right) {
         (SortValue::Empty, SortValue::Empty) => std::cmp::Ordering::Equal,
         (SortValue::Empty, _) => std::cmp::Ordering::Greater,
         (_, SortValue::Empty) => std::cmp::Ordering::Less,

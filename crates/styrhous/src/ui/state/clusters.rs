@@ -27,6 +27,7 @@ pub(crate) struct ClusterResourceState {
     pub(crate) scalable_api_resources: BTreeSet<ApiResource>,
     pub(crate) selected_api_resource: Option<ApiResource>,
     pub(crate) resource_cache: HashMap<ResourceWatchKey, ResourceWatchState>,
+    pub(in crate::ui) resource_table_cache: super::super::resource_table_cache::ResourceTableCache,
     pub(crate) helm_release_cache: HashMap<String, HelmReleaseWatchState>,
     pub(crate) active_watchers: HashSet<ResourceWatchKey>,
     pub(crate) pod_metrics_api_available: bool,
@@ -104,6 +105,7 @@ impl ClusterResourceState {
             scalable_api_resources: BTreeSet::new(),
             selected_api_resource: None,
             resource_cache: HashMap::new(),
+            resource_table_cache: Default::default(),
             helm_release_cache: HashMap::new(),
             active_watchers: HashSet::new(),
             pod_metrics_api_available: metrics_api_available,
@@ -156,12 +158,14 @@ impl std::ops::DerefMut for ClusterState {
 pub(crate) struct PodMetricsNamespaceState {
     pub(crate) usages: BTreeMap<String, PodUsage>,
     pub(crate) error: Option<String>,
+    pub(crate) revision: u64,
 }
 
 #[derive(Debug, Default)]
 pub(crate) struct NodeMetricsState {
     pub(crate) usages: BTreeMap<String, NodeUsage>,
     pub(crate) error: Option<String>,
+    pub(crate) revision: u64,
 }
 
 #[derive(Debug)]

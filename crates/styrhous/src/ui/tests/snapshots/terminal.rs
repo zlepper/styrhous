@@ -357,6 +357,7 @@ fn node_shell_action_launches_the_selected_context_node_and_preset() {
             )]),
             is_synced: true,
             error: None,
+            revision: 0,
         },
     );
     harness.state_mut().ui_state = state;

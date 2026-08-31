@@ -44,12 +44,16 @@ pub(super) fn show_helm_releases_workspace(
         .get(&api_resource)
         .cloned()
         .unwrap_or_default();
+    let filtered = filter_resources(&resources, &search);
     let mut ignored_selection_action = None;
-    let filtered = show_toolbar(
+    show_toolbar(
         ui,
         cluster,
         Some(&api_resource),
-        &resources,
+        ResourceCountSummary {
+            total: resources.len(),
+            visible: filtered.resources.len(),
+        },
         &mut search,
         namespace_selection,
         ResourceSelectionControls {
@@ -59,6 +63,7 @@ pub(super) fn show_helm_releases_workspace(
             namespace_selector_settings,
         },
     );
+    let filtered = filter_resources(&resources, &search);
     cluster.resource_searches.insert(api_resource, search);
     ui.add_space(TOOLBAR_VERTICAL_PADDING);
     if cluster.selected_namespaces.is_empty() {

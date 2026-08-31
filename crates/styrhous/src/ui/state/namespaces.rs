@@ -172,6 +172,7 @@ impl UiState {
                 cluster
                     .resource_cache
                     .retain(|(resource, _), _| resource != api_resource);
+                cluster.resource_table_cache.clear();
             }
             let sources = if !api_resource.namespaced {
                 (!cluster

@@ -22,6 +22,7 @@ fn pod_resource_table_shows_per_container_status_indicators() {
                 },
             )]),
             error: None,
+            ..Default::default()
         },
     );
     cluster.resource_cache.insert(
@@ -228,6 +229,7 @@ fn deployment_restart_action_opens_a_confirmation_and_sends_a_worker_command() {
             )]),
             is_synced: true,
             error: None,
+            revision: 0,
         },
     );
 
@@ -285,6 +287,7 @@ fn cron_job_run_action_opens_a_confirmation_and_sends_a_worker_command() {
             )]),
             is_synced: true,
             error: None,
+            revision: 0,
         },
     );
 

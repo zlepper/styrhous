@@ -9,11 +9,11 @@ pub(super) fn show_toolbar(
     ui: &mut egui::Ui,
     cluster: &super::super::state::ClusterState,
     selected_api_resource: Option<&crate::api_resource::ApiResource>,
-    all_resources: &[MinimalResource],
+    resource_counts: ResourceCountSummary,
     resource_search: &mut ResourceSearchState,
     namespace_selection: &mut Option<NamespaceSelection>,
     selection_controls: ResourceSelectionControls<'_>,
-) -> FilteredResources {
+) {
     let selected_text = match cluster.selected_namespaces.len() {
         0 => "Select namespaces".to_owned(),
         1 => cluster
@@ -73,8 +73,6 @@ pub(super) fn show_toolbar(
     } else {
         None
     };
-
-    let mut filtered_resources = filter_resources(all_resources, resource_search);
 
     ui.add_space(TOOLBAR_VERTICAL_PADDING);
     ui.allocate_ui_with_layout(
@@ -168,8 +166,8 @@ pub(super) fn show_toolbar(
                             if selection_controls.selected_count == 0 {
                                 ui.label(
                                     egui::RichText::new(resource_count_label(
-                                        all_resources.len(),
-                                        filtered_resources.resources.len(),
+                                        resource_counts.total,
+                                        resource_counts.visible,
                                         !resource_search.query.is_empty(),
                                     ))
                                     .font(typography::section_heading())
@@ -216,12 +214,9 @@ pub(super) fn show_toolbar(
                         });
                         strip.empty();
                     });
-                filtered_resources = filter_resources(all_resources, resource_search);
             }
         },
     );
-
-    filtered_resources
 }
 
 pub(super) fn show_resource_search(ui: &mut egui::Ui, resource_search: &mut ResourceSearchState) {
@@ -245,8 +240,6 @@ pub(super) fn filter_resources(
     if resource_search.query.is_empty() {
         return FilteredResources {
             resources: all_resources.to_vec(),
-            regex_error: None,
-            fuzzy_scores: None,
         };
     }
 
@@ -256,11 +249,9 @@ pub(super) fn filter_resources(
             .build()
         {
             Ok(regex) => regex,
-            Err(error) => {
+            Err(_) => {
                 return FilteredResources {
                     resources: Vec::new(),
-                    regex_error: Some(error.to_string()),
-                    fuzzy_scores: None,
                 };
             }
         };
@@ -273,8 +264,6 @@ pub(super) fn filter_resources(
                 })
                 .cloned()
                 .collect(),
-            regex_error: None,
-            fuzzy_scores: None,
         };
     }
 
@@ -282,8 +271,6 @@ pub(super) fn filter_resources(
     if query.is_empty() {
         return FilteredResources {
             resources: all_resources.to_vec(),
-            regex_error: None,
-            fuzzy_scores: None,
         };
     }
     let mut scored_resources = all_resources
@@ -294,17 +281,10 @@ pub(super) fn filter_resources(
         .collect::<Vec<_>>();
     scored_resources.sort_by(|(left_score, _), (right_score, _)| right_score.cmp(left_score));
     FilteredResources {
-        fuzzy_scores: Some(
-            scored_resources
-                .iter()
-                .map(|(score, resource)| (resource.uid.clone(), *score))
-                .collect(),
-        ),
         resources: scored_resources
             .into_iter()
             .map(|(_, resource)| resource.clone())
             .collect(),
-        regex_error: None,
     }
 }
 

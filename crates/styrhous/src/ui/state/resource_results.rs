@@ -9,12 +9,12 @@ impl WorkerResult for crate::worker::KubernetesResourceAdded {
             resource,
         } = self;
         if let Some(cluster) = ui.clusters.get_mut(&cluster_key) {
-            cluster
+            let watch = cluster
                 .resource_cache
                 .entry((api_resource, namespace))
-                .or_default()
-                .resources
-                .insert(resource.uid.clone(), resource);
+                .or_default();
+            watch.resources.insert(resource.uid.clone(), resource);
+            watch.revision = watch.revision.wrapping_add(1);
         }
     }
 }
@@ -50,8 +50,9 @@ impl WorkerResult for crate::worker::KubernetesResourceDeleted {
             if let Some(watch) = cluster
                 .resource_cache
                 .get_mut(&(api_resource.clone(), namespace.clone()))
+                && watch.resources.remove(&resource_uid).is_some()
             {
-                watch.resources.remove(&resource_uid);
+                watch.revision = watch.revision.wrapping_add(1);
             }
             if closes_active_blade {
                 cluster.resource_detail_panel = None;
@@ -79,6 +80,7 @@ impl WorkerResult for crate::worker::KubernetesResourcesReplaced {
                 .into_iter()
                 .map(|resource| (resource.uid.clone(), resource))
                 .collect();
+            watch.revision = watch.revision.wrapping_add(1);
             watch.is_synced = true;
             watch.error = None;
             let visible_uids = cluster

@@ -13,6 +13,10 @@ mod resource_actions;
 mod resource_detail;
 mod resource_navigation;
 mod resource_owner;
+mod resource_table_cache;
+#[cfg(any(test, feature = "benchmarks"))]
+#[doc(hidden)]
+pub mod resource_table_profile;
 mod resource_table_settings;
 mod settings;
 pub(crate) mod state;

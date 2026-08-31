@@ -103,6 +103,7 @@ pub(crate) struct ResourceWatchState {
     pub(super) resources: BTreeMap<String, MinimalResource>,
     pub(super) is_synced: bool,
     pub(super) error: Option<String>,
+    pub(super) revision: u64,
 }
 
 #[derive(Debug, Default)]

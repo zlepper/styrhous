@@ -9,6 +9,7 @@ impl WorkerResult for crate::worker::PodMetricsUpdated {
             let metrics = cluster.pod_metrics.entry(self.namespace).or_default();
             metrics.usages = self.usages;
             metrics.error = None;
+            metrics.revision = metrics.revision.wrapping_add(1);
         }
     }
 }
@@ -18,7 +19,9 @@ impl WorkerResult for crate::worker::PodMetricsWatchFailed {
             if !cluster.active_pod_metrics.contains(&self.namespace) {
                 return;
             }
-            cluster.pod_metrics.entry(self.namespace).or_default().error = Some(self.error);
+            let metrics = cluster.pod_metrics.entry(self.namespace).or_default();
+            metrics.error = Some(self.error);
+            metrics.revision = metrics.revision.wrapping_add(1);
         }
     }
 }
@@ -51,6 +54,7 @@ impl WorkerResult for crate::worker::NodeMetricsUpdated {
         {
             cluster.node_metrics.usages = self.usages;
             cluster.node_metrics.error = None;
+            cluster.node_metrics.revision = cluster.node_metrics.revision.wrapping_add(1);
         }
     }
 }
@@ -60,6 +64,7 @@ impl WorkerResult for crate::worker::NodeMetricsWatchFailed {
             && cluster.node_metrics_active
         {
             cluster.node_metrics.error = Some(self.error);
+            cluster.node_metrics.revision = cluster.node_metrics.revision.wrapping_add(1);
         }
     }
 }
