@@ -92,6 +92,11 @@ name = "log_viewer"
 harness = false
 
 [[bench]]
+name = "resource_table"
+harness = false
+required-features = ["benchmarks"]
+
+[[bench]]
 name = "yaml_editor"
 harness = false
 required-features = ["benchmarks"]

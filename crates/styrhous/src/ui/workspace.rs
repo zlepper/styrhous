@@ -1,5 +1,6 @@
 use super::resource_actions::show_resource_action_items;
 use super::resource_owner;
+use super::resource_table_cache::{PreparedResourceTable, PreparedResourceTableRow};
 use super::state::{
     BulkDeleteTarget, ClusterConnectionState, ClusterLoadState, PendingBulkDelete,
     PendingCronJobRun, PendingDelete, PendingDeploymentRestart, PendingForceDelete, ResourceAction,
@@ -17,26 +18,24 @@ use crate::api_resource::ApiResource;
 use crate::helm_release::HelmRelease;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
-use crate::pod_metrics::{format_cpu_cores, format_memory};
 use crate::resource_catalog::ResourceNavigation;
 use crate::resource_handlers::table_definition;
 use crate::resource_table::{
-    CPU_COLUMN, CellValue, CustomResourceColumn, MEMORY_COLUMN, NODE_COLUMN, SortValue,
-    cell_sort_value, compare_sort_values,
+    CellValue, CustomResourceColumn, NODE_COLUMN, SortValue, cell_sort_value,
 };
 use crate::terminal_launcher::{DebugImagePreset, ShellRequest};
 use crate::ui::namespace_selector::NamespaceSelectorSettings;
 use crate::worker::{GetResourceScale, WorkerCommandBox};
 use components::colors::{TOOLBAR_BACKGROUND, gray};
 use components::design::{spacing, typography};
-use components::fuzzy::{FuzzyMatchScore, fuzzy_match_score, normalize_for_search};
+use components::fuzzy::{fuzzy_match_score, normalize_for_search};
 use components::{
     ButtonSize, MoreButton, SelectionAction, TableRowBuilder, TailwindButton, TailwindCombobox,
     TailwindSearchInput, TailwindTable, WorkspacePage,
 };
 use egui_extras::{Size, StripBuilder};
 use std::cell::RefCell;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 
 const RESOURCE_SEARCH_WIDTH: f32 = 210.0;
 const TOOLBAR_RIGHT_INSET: f32 = spacing::XL;
@@ -47,13 +46,6 @@ const RESOURCE_TABLE_SELECTION_WIDTH: f32 = 48.0;
 
 struct FilteredResources {
     resources: Vec<MinimalResource>,
-    regex_error: Option<String>,
-    fuzzy_scores: Option<HashMap<String, FuzzyMatchScore>>,
-}
-
-enum ResourceTableRow<'a> {
-    Resource(&'a MinimalResource),
-    HiddenBySearch(usize),
 }
 
 #[derive(Clone, Copy)]
@@ -70,14 +62,24 @@ struct ResourceSelectionControls<'a> {
 }
 
 struct ResourceTableOptions<'a> {
-    custom_columns: &'a [CustomResourceColumn],
-    metadata_suggestion_resources: &'a [MinimalResource],
+    resource_cache: &'a HashMap<super::state::ResourceWatchKey, super::state::ResourceWatchState>,
+    metrics: ResourceMetrics<'a>,
     resource_navigation: &'a ResourceNavigation,
-    hidden_resource_count: usize,
-    show_namespace_column: bool,
     actions: ResourceActionAvailability,
     debug_image_presets: &'a [DebugImagePreset],
-    fuzzy_scores: Option<&'a HashMap<String, FuzzyMatchScore>>,
+}
+
+struct ResourceTableControls<'a> {
+    selection: &'a mut HashSet<String>,
+    table_preferences: &'a mut PersistedResourceTablePreferences,
+    column_settings_to_open:
+        &'a mut Option<super::resource_table_settings::ResourceTableSettingsTarget>,
+}
+
+#[derive(Clone, Copy)]
+struct ResourceCountSummary {
+    total: usize,
+    visible: usize,
 }
 
 enum NamespaceSelection {
@@ -322,11 +324,6 @@ pub(super) fn show(
                     .map(|(name, namespace)| HelmReleaseDetailTarget { name, namespace });
                     return;
                 }
-                let all_resources = decorate_usage_rows(
-                    cluster,
-                    selected_api_resource.as_ref(),
-                    selected_resources(cluster, selected_api_resource.as_ref()),
-                );
                 let selected_resource_count = selected_api_resource
                     .as_ref()
                     .and_then(|api_resource| cluster.resource_selections.get(api_resource))
@@ -338,11 +335,51 @@ pub(super) fn show(
                     .and_then(|api_resource| cluster.resource_searches.get(api_resource))
                     .cloned()
                     .unwrap_or_default();
-                let filtered_resources = show_toolbar(
+                let (table_configuration, resource_count, visible_count) =
+                    if let Some(api_resource) = &selected_api_resource {
+                        let configuration = resource_table_configuration(
+                            ui.available_width(),
+                            api_resource,
+                            cluster
+                                .custom_resource_columns
+                                .get(api_resource)
+                                .map(Vec::as_slice)
+                                .unwrap_or_default(),
+                            api_resource.namespaced && cluster.selected_namespaces.len() > 1,
+                            table_preferences,
+                        );
+                        let selected_namespaces = &cluster.selected_namespaces;
+                        let resources = &mut cluster.resources;
+                        let prepared = prepare_resource_table(
+                            &mut resources.resource_table_cache,
+                            ResourceTableData {
+                                selected_namespaces,
+                                resource_cache: &resources.resource_cache,
+                                metrics: ResourceMetrics {
+                                    pod_metrics_api_available: resources.pod_metrics_api_available,
+                                    pod_metrics: &resources.pod_metrics,
+                                    node_metrics_api_available: resources
+                                        .node_metrics_api_available,
+                                    node_metrics: &resources.node_metrics,
+                                },
+                            },
+                            api_resource,
+                            &resource_search,
+                            &configuration,
+                        );
+                        let counts = (prepared.resource_count, prepared.visible_resource_count);
+                        (Some(configuration), counts.0, counts.1)
+                    } else {
+                        (None, 0, 0)
+                    };
+                show_toolbar(
                     ui,
                     cluster,
                     selected_api_resource.as_ref(),
-                    &all_resources,
+                    ResourceCountSummary {
+                        total: resource_count,
+                        visible: visible_count,
+                    },
                     &mut resource_search,
                     &mut effects.namespace_selection,
                     ResourceSelectionControls {
@@ -371,53 +408,74 @@ pub(super) fn show(
                     );
                     return;
                 };
-                if api_resource.namespaced && cluster.selected_namespaces.is_empty() {
+                let table_configuration = table_configuration
+                    .as_ref()
+                    .expect("selected resources have a table configuration");
+                let namespace_selection_empty =
+                    api_resource.namespaced && cluster.selected_namespaces.is_empty();
+                let watch_error = selected_watch_error(cluster, api_resource);
+                let watches_are_loading = selected_watches_are_loading(cluster, api_resource);
+                let selected_namespaces = &cluster.selected_namespaces;
+                let resources = &mut cluster.resources;
+                let metrics = ResourceMetrics {
+                    pod_metrics_api_available: resources.pod_metrics_api_available,
+                    pod_metrics: &resources.pod_metrics,
+                    node_metrics_api_available: resources.node_metrics_api_available,
+                    node_metrics: &resources.node_metrics,
+                };
+                let prepared = prepare_resource_table(
+                    &mut resources.resource_table_cache,
+                    ResourceTableData {
+                        selected_namespaces,
+                        resource_cache: &resources.resource_cache,
+                        metrics,
+                    },
+                    api_resource,
+                    resources
+                        .resource_searches
+                        .get(api_resource)
+                        .expect("selected resource search was just stored"),
+                    table_configuration,
+                );
+                if namespace_selection_empty {
                     workspace_empty_state(
                         ui,
                         "Choose a namespace",
                         "Select one or more namespaces to start watching resources.",
                     );
-                } else if let Some(error) = selected_watch_error(cluster, api_resource) {
+                } else if let Some(error) = watch_error {
                     effects.retry_requested =
                         workspace_error_state(ui, "Unable to load resources", &error);
-                } else if selected_watches_are_loading(cluster, api_resource) {
+                } else if watches_are_loading {
                     workspace_loading_state(
                         ui,
                         "Loading resources",
                         "Waiting for the selected namespace resources to synchronize.",
                     );
-                } else if all_resources.is_empty() {
+                } else if prepared.resource_count == 0 {
                     workspace_empty_state(
                         ui,
                         "No resources found",
                         "This resource type has no items in the selected namespace scope.",
                     );
-                } else if let Some(error) = filtered_resources.regex_error {
-                    workspace_search_error_state(ui, &error);
-                } else if filtered_resources.resources.is_empty() {
+                } else if let Some(error) = &prepared.regex_error {
+                    workspace_search_error_state(ui, error);
+                } else if prepared.visible_resource_count == 0 {
                     workspace_empty_state(
                         ui,
                         "No matching resources",
                         "Try a different search term.",
                     );
                 } else if let Some(action) = {
-                    let resources = &mut cluster.resources;
                     show_resource_table(
                         ui,
                         api_resource,
-                        &filtered_resources.resources,
+                        prepared,
+                        table_configuration,
                         ResourceTableOptions {
-                            custom_columns: resources
-                                .custom_resource_columns
-                                .get(api_resource)
-                                .map(Vec::as_slice)
-                                .unwrap_or_default(),
-                            metadata_suggestion_resources: &all_resources,
+                            resource_cache: &resources.resource_cache,
+                            metrics,
                             resource_navigation: &resources.resource_navigation,
-                            hidden_resource_count: all_resources.len()
-                                - filtered_resources.resources.len(),
-                            show_namespace_column: api_resource.namespaced
-                                && cluster.selected_namespaces.len() > 1,
                             actions: ResourceActionAvailability {
                                 enabled: resource_actions_enabled,
                                 supports_scale: resources
@@ -425,14 +483,15 @@ pub(super) fn show(
                                     .contains(api_resource),
                             },
                             debug_image_presets,
-                            fuzzy_scores: filtered_resources.fuzzy_scores.as_ref(),
                         },
-                        resources
-                            .resource_selections
-                            .entry(api_resource.clone())
-                            .or_default(),
-                        table_preferences,
-                        &mut effects.column_settings_to_open,
+                        ResourceTableControls {
+                            selection: resources
+                                .resource_selections
+                                .entry(api_resource.clone())
+                                .or_default(),
+                            table_preferences,
+                            column_settings_to_open: &mut effects.column_settings_to_open,
+                        },
                     )
                 } {
                     match action {
@@ -457,7 +516,7 @@ pub(super) fn show(
                             });
                         }
                         ResourceAction::RequestDelete { name, namespace } => {
-                            cluster.pending_delete =
+                            resources.pending_delete =
                                 Some(PendingDelete::new(api_resource.clone(), name, namespace));
                         }
                         ResourceAction::RequestForceDelete {
@@ -466,7 +525,7 @@ pub(super) fn show(
                             namespace,
                             finalizers,
                         } => {
-                            cluster.pending_force_delete = Some(PendingForceDelete::new(
+                            resources.pending_force_delete = Some(PendingForceDelete::new(
                                 api_resource.clone(),
                                 name,
                                 uid,
@@ -475,13 +534,13 @@ pub(super) fn show(
                             ));
                         }
                         ResourceAction::RequestDeploymentRestart { name, namespace } => {
-                            cluster.pending_deployment_restart = Some(PendingDeploymentRestart {
+                            resources.pending_deployment_restart = Some(PendingDeploymentRestart {
                                 resource_name: name,
                                 namespace,
                             });
                         }
                         ResourceAction::RequestCronJobRun { name, namespace } => {
-                            cluster.pending_cron_job_run = Some(PendingCronJobRun {
+                            resources.pending_cron_job_run = Some(PendingCronJobRun {
                                 resource_name: name,
                                 namespace,
                             });
@@ -533,16 +592,19 @@ pub(super) fn show(
                 if let Some(selection_action) = resource_selection_action.take() {
                     match selection_action {
                         ResourceSelectionAction::Clear => {
-                            cluster.resource_selections.remove(api_resource);
+                            resources.resource_selections.remove(api_resource);
                         }
                         ResourceSelectionAction::Delete => {
-                            let selected_uids = cluster
+                            let selected_uids = resources
                                 .resource_selections
                                 .get(api_resource)
                                 .cloned()
                                 .unwrap_or_default();
-                            let targets = all_resources
+                            let targets = prepared
+                                .watch_keys
                                 .iter()
+                                .filter_map(|watch_key| resources.resource_cache.get(watch_key))
+                                .flat_map(|watch| watch.resources.values())
                                 .filter(|resource| selected_uids.contains(&resource.uid))
                                 .map(|resource| BulkDeleteTarget {
                                     uid: resource.uid.clone(),
@@ -551,7 +613,7 @@ pub(super) fn show(
                                 })
                                 .collect::<Vec<_>>();
                             if !targets.is_empty() {
-                                cluster.pending_bulk_delete =
+                                resources.pending_bulk_delete =
                                     Some(PendingBulkDelete::new(api_resource.clone(), targets));
                             }
                         }

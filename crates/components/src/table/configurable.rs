@@ -209,7 +209,7 @@ impl TailwindTable {
         ui: &mut Ui,
         items: &'a [T],
         selection: &mut HashSet<K>,
-        key_fn: impl Fn(&T) -> Option<K>,
+        key_fn: impl for<'item> Fn(&'item T) -> Option<&'item K>,
         sort_state: Option<&SortState>,
         mut render_header: impl FnMut(&egui::Response, &str, &str, bool),
         mut resized: impl FnMut(&str, f32),
@@ -223,14 +223,18 @@ impl TailwindTable {
             "selectable tables must call .selectable()"
         );
         let layout = ConfigurableTableLayout::new(&self, ui, CHECKBOX_COL_WIDTH);
-        let visible_keys = items.iter().filter_map(&key_fn).collect::<Vec<_>>();
-        let selected_count = visible_keys
-            .iter()
-            .filter(|key| selection.contains(*key))
-            .count();
-        let select_all_state = if visible_keys.is_empty() || selected_count == 0 {
+        let (visible_count, selected_count) = items.iter().filter_map(&key_fn).fold(
+            (0, 0),
+            |(visible_count, selected_count), key| {
+                (
+                    visible_count + 1,
+                    selected_count + usize::from(selection.contains(key)),
+                )
+            },
+        );
+        let select_all_state = if visible_count == 0 || selected_count == 0 {
             CheckboxState::Unchecked
-        } else if selected_count == visible_keys.len() {
+        } else if selected_count == visible_count {
             CheckboxState::Checked
         } else {
             CheckboxState::Indeterminate
@@ -294,8 +298,8 @@ impl TailwindTable {
                                 if response.clicked() || checkbox_pointer_clicked {
                                     toggle_visible_selection(
                                         selection,
-                                        &visible_keys,
-                                        selected_count == visible_keys.len(),
+                                        items.iter().filter_map(&key_fn),
+                                        selected_count == visible_count,
                                     );
                                 }
                             });
@@ -347,7 +351,7 @@ impl TailwindTable {
                                             if selected {
                                                 selection.remove(key);
                                             } else {
-                                                selection.insert(key.clone());
+                                                selection.insert((*key).clone());
                                             }
                                         }
                                     }
@@ -376,15 +380,18 @@ impl TailwindTable {
     }
 }
 
-fn toggle_visible_selection<K>(selection: &mut HashSet<K>, visible_keys: &[K], all_selected: bool)
-where
-    K: Eq + Hash + Clone,
+fn toggle_visible_selection<'a, K>(
+    selection: &mut HashSet<K>,
+    visible_keys: impl IntoIterator<Item = &'a K>,
+    all_selected: bool,
+) where
+    K: Eq + Hash + Clone + 'a,
 {
     if all_selected {
         for key in visible_keys {
             selection.remove(key);
         }
     } else {
-        selection.extend(visible_keys.iter().cloned());
+        selection.extend(visible_keys.into_iter().cloned());
     }
 }

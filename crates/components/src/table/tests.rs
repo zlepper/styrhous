@@ -478,11 +478,11 @@ fn configurable_table_invokes_each_row_callback_for_its_cell() {
 #[test]
 fn selectable_configurable_table_only_selects_rows_with_keys() {
     let users = test_users();
-    let selected = Rc::new(RefCell::new(HashSet::new()));
+    let selected = Rc::new(RefCell::new(HashSet::from([1, 999])));
     let selected_for_ui = selected.clone();
     let clicked_headers = Rc::new(RefCell::new(Vec::new()));
     let clicked_headers_for_ui = clicked_headers.clone();
-    let visible_users = &users[..2];
+    let visible_users = &users[..3];
     let mut harness = Harness::new_ui(move |ui| {
         TailwindTable::new("selectable-configurable-keys")
             .column("name", "Name", |column| column.initial_width(150.0))
@@ -491,7 +491,7 @@ fn selectable_configurable_table_only_selects_rows_with_keys() {
                 ui,
                 visible_users,
                 &mut selected_for_ui.borrow_mut(),
-                |user| (user.id == 1).then_some(user.id),
+                |user| (user.id <= 2).then_some(&user.id),
                 None,
                 |response, id, _, _| {
                     if response.clicked() {
@@ -511,7 +511,7 @@ fn selectable_configurable_table_only_selects_rows_with_keys() {
 
     harness.get_by_label("Select all rows").click();
     harness.run();
-    assert_eq!(*selected.borrow(), HashSet::from([1]));
+    assert_eq!(*selected.borrow(), HashSet::from([1, 2, 999]));
     assert!(clicked_headers.borrow().is_empty());
 
     let selection_header = harness.get_by_label("Selection column").rect();
@@ -522,7 +522,7 @@ fn selectable_configurable_table_only_selects_rows_with_keys() {
 
     harness.get_by_label("Select all rows").click();
     harness.run();
-    assert!(selected.borrow().is_empty());
+    assert_eq!(*selected.borrow(), HashSet::from([999]));
 }
 
 #[test]
@@ -538,7 +538,7 @@ fn selectable_configurable_table_ignores_a_press_that_started_outside_its_checkb
                 ui,
                 &users[..1],
                 &mut selected_for_ui.borrow_mut(),
-                |user| Some(user.id),
+                |user| Some(&user.id),
                 None,
                 |_, _, _, _| {},
                 |_, _| {},
