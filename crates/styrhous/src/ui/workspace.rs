@@ -1,9 +1,6 @@
 use super::resource_actions::show_resource_action_items;
 use super::resource_owner;
-use super::resource_table_cache::{
-    PreparedResourceIdentity, PreparedResourceTable, PreparedResourceTableRow, ResourceTableCache,
-    ResourceTableCacheKey,
-};
+use super::resource_table_cache::{PreparedResourceTable, PreparedResourceTableRow};
 use super::state::{
     BulkDeleteTarget, ClusterConnectionState, ClusterLoadState, PendingBulkDelete,
     PendingCronJobRun, PendingDelete, PendingDeploymentRestart, PendingForceDelete, ResourceAction,
@@ -21,26 +18,24 @@ use crate::api_resource::ApiResource;
 use crate::helm_release::HelmRelease;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
-use crate::pod_metrics::{format_cpu_cores, format_memory};
 use crate::resource_catalog::ResourceNavigation;
 use crate::resource_handlers::table_definition;
 use crate::resource_table::{
-    CPU_COLUMN, CellValue, CustomResourceColumn, MEMORY_COLUMN, NODE_COLUMN, SortValue,
-    cell_sort_value,
+    CellValue, CustomResourceColumn, NODE_COLUMN, SortValue, cell_sort_value,
 };
 use crate::terminal_launcher::{DebugImagePreset, ShellRequest};
 use crate::ui::namespace_selector::NamespaceSelectorSettings;
 use crate::worker::{GetResourceScale, WorkerCommandBox};
 use components::colors::{TOOLBAR_BACKGROUND, gray};
 use components::design::{spacing, typography};
-use components::fuzzy::{FuzzyMatchScore, fuzzy_match_score, normalize_for_search};
+use components::fuzzy::{fuzzy_match_score, normalize_for_search};
 use components::{
     ButtonSize, MoreButton, SelectionAction, TableRowBuilder, TailwindButton, TailwindCombobox,
     TailwindSearchInput, TailwindTable, WorkspacePage,
 };
 use egui_extras::{Size, StripBuilder};
 use std::cell::RefCell;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 
 const RESOURCE_SEARCH_WIDTH: f32 = 210.0;
 const TOOLBAR_RIGHT_INSET: f32 = spacing::XL;
@@ -85,21 +80,6 @@ struct ResourceTableControls<'a> {
 struct ResourceCountSummary {
     total: usize,
     visible: usize,
-}
-
-#[derive(Clone, Copy)]
-struct ResourceMetrics<'a> {
-    pod_metrics_api_available: bool,
-    pod_metrics: &'a HashMap<String, super::state::PodMetricsNamespaceState>,
-    node_metrics_api_available: bool,
-    node_metrics: &'a super::state::NodeMetricsState,
-}
-
-#[derive(Clone, Copy)]
-struct ResourceTableData<'a> {
-    selected_namespaces: &'a HashSet<String>,
-    resource_cache: &'a HashMap<super::state::ResourceWatchKey, super::state::ResourceWatchState>,
-    metrics: ResourceMetrics<'a>,
 }
 
 enum NamespaceSelection {
@@ -437,17 +417,18 @@ pub(super) fn show(
                 let watches_are_loading = selected_watches_are_loading(cluster, api_resource);
                 let selected_namespaces = &cluster.selected_namespaces;
                 let resources = &mut cluster.resources;
+                let metrics = ResourceMetrics {
+                    pod_metrics_api_available: resources.pod_metrics_api_available,
+                    pod_metrics: &resources.pod_metrics,
+                    node_metrics_api_available: resources.node_metrics_api_available,
+                    node_metrics: &resources.node_metrics,
+                };
                 let prepared = prepare_resource_table(
                     &mut resources.resource_table_cache,
                     ResourceTableData {
                         selected_namespaces,
                         resource_cache: &resources.resource_cache,
-                        metrics: ResourceMetrics {
-                            pod_metrics_api_available: resources.pod_metrics_api_available,
-                            pod_metrics: &resources.pod_metrics,
-                            node_metrics_api_available: resources.node_metrics_api_available,
-                            node_metrics: &resources.node_metrics,
-                        },
+                        metrics,
                     },
                     api_resource,
                     resources
@@ -493,12 +474,7 @@ pub(super) fn show(
                         table_configuration,
                         ResourceTableOptions {
                             resource_cache: &resources.resource_cache,
-                            metrics: ResourceMetrics {
-                                pod_metrics_api_available: resources.pod_metrics_api_available,
-                                pod_metrics: &resources.pod_metrics,
-                                node_metrics_api_available: resources.node_metrics_api_available,
-                                node_metrics: &resources.node_metrics,
-                            },
+                            metrics,
                             resource_navigation: &resources.resource_navigation,
                             actions: ResourceActionAvailability {
                                 enabled: resource_actions_enabled,
