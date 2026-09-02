@@ -40,7 +40,7 @@ jobs:
           persist-credentials: false
 
       - name: Install cargo-about
-        uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
+        uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
         with:
           tool: cargo-about@0.9.1
 
@@ -105,7 +105,7 @@ jobs:
         run: bash scripts/install-appimage-package-dependencies.sh
 
       - name: Install cargo-packager
-        uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
+        uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
         with:
           tool: cargo-packager@${{ env.CARGO_PACKAGER_VERSION }}
 
@@ -225,7 +225,7 @@ jobs:
           path: target/legal
 
       - name: Install cargo-packager
-        uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
+        uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
         with:
           tool: cargo-packager@${{ env.CARGO_PACKAGER_VERSION }}
 
@@ -337,7 +337,7 @@ jobs:
           path: target/legal
 
       - name: Install cargo-packager
-        uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
+        uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
         with:
           tool: cargo-packager@${{ env.CARGO_PACKAGER_VERSION }}
 
@@ -464,7 +464,7 @@ jobs:
         run: bash scripts/install-appimage-package-dependencies.sh
 
       - name: Install cargo-packager
-        uses: taiki-e/install-action@13608cbb45b01feb47ef444ab1a42dc41ad56f1a # v2.79.11
+        uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
         with:
           tool: cargo-packager@${{ env.CARGO_PACKAGER_VERSION }}
 
