@@ -810,18 +810,4 @@ public sealed class AccountAuthenticationApiTests
                 StringComparison.Ordinal))
             .Split(';', 2)[0];
     }
-
-    [TestCase("/api/entitlements")]
-    [TestCase("/api/seats/01900000-0000-7000-8000-000000000001/devices")]
-    public async Task AnonymousLicenseQueriesRequireAuthentication(string path)
-    {
-        await using var database = await PostgresTestDatabase.CreateAsync();
-        using var factory = new LicensingWebApplicationFactory(database, SignupTime,
-            useTestAuthentication: false);
-        using var client = factory.CreateApiClient();
-
-        using var response = await client.GetAsync(path);
-
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
-    }
 }

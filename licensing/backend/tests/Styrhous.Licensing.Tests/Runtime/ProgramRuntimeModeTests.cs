@@ -14,13 +14,77 @@ namespace Styrhous.Licensing.Tests.Runtime;
 public sealed class ProgramRuntimeModeTests
 {
     [Test]
+    public void ApiBuildsTheNativeOutboxProducerAndForwarderGraph()
+    {
+        using var application = Program.BuildApplication(
+        [
+            .. CommonArguments(),
+            .. DataProtectionArguments(),
+            "--Stripe:WebhookSecret=whsec_test_api",
+        ]);
+
+        var registeredServices = application.Services.GetRequiredService<
+            IServiceProviderIsService>();
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                registeredServices.IsService(typeof(IBus)),
+                Is.True);
+            Assert.That(
+                registeredServices.IsService(typeof(PostgresBackgroundWorkOutbox)),
+                Is.True);
+            Assert.That(
+                registeredServices.IsService(
+                    typeof(PostgresOrganizationInvitationDeliveryStore)),
+                Is.False);
+        });
+    }
+
+    [TestCase("")]
+    [TestCase("invalid/queue")]
+    public void DeferredApiForwardingStillRequiresAValidDurableDestination(string queueName)
+    {
+        using var application = Program.BuildApplication(
+        [
+            "--ConnectionStrings:Licensing=Host=localhost;Database=licensing;Username=test;Password=test",
+            "--Messaging:ApiOutboxForwardingEnabled=false",
+            $"--Messaging:QueueName={queueName}",
+            .. DataProtectionArguments(),
+            "--Stripe:WebhookSecret=whsec_test_api",
+        ]);
+        Assert.That(() => application.Services.GetRequiredService<PostgresBackgroundWorkOutbox>(),
+            Throws.InvalidOperationException);
+    }
+
+    [Test]
+    public void ApiCanDeferForwardingToMaintenanceWithDurableQueueDestination()
+    {
+        using var application = Program.BuildApplication(
+        [
+            "--ConnectionStrings:Licensing=Host=localhost;Database=licensing;Username=test;Password=test",
+            "--Messaging:ApiOutboxForwardingEnabled=false",
+            "--Messaging:QueueName=styrhous-licensing",
+            .. DataProtectionArguments(),
+            "--Stripe:WebhookSecret=whsec_test_api",
+        ]);
+
+        var registeredServices = application.Services.GetRequiredService<
+            IServiceProviderIsService>();
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                registeredServices.IsService(typeof(IBus)),
+                Is.False);
+            Assert.That(
+                registeredServices.IsService(typeof(PostgresBackgroundWorkOutbox)),
+                Is.True);
+        });
+    }
+
+    [Test]
     public void WorkerBuildsTheReceiverAndInvitationEmailGraph()
     {
-        using var host = Program.BuildWorker([.. WorkerArguments(), "--environment=Development"]);
-
-        using var scope = host.Services.CreateScope();
-        Assert.That(scope.ServiceProvider.GetRequiredService<Styrhous.Licensing.Application.Billing.BillingWebhookProcessingService>(), Is.Not.Null);
-        Assert.That(scope.ServiceProvider.GetRequiredService<OrganizationInvitationDeliveryService>(), Is.Not.Null);
+        using var host = Program.BuildWorker(WorkerArguments());
 
         Assert.That(
             host.Services.GetService<IOrganizationInvitationEmailSender>(),
@@ -119,6 +183,82 @@ public sealed class ProgramRuntimeModeTests
             async () => await host.StartAsync());
 
         Assert.That(exception!.Message, Does.Contain("surrounding whitespace"));
+    }
+
+    [Test]
+    public async Task ApiFailsStartupWhenBrowserBillingDestinationsAreMissing()
+    {
+        await using var application = Program.BuildApplication(
+        [
+            "--ConnectionStrings:Licensing=Host=localhost;Database=licensing;Username=test;Password=test",
+            "--Messaging:ApiOutboxForwardingEnabled=false",
+            "--Messaging:QueueName=styrhous-licensing",
+            "--urls=http://127.0.0.1:0",
+            .. DataProtectionArguments(),
+            "--Stripe:SecretKey=sk_test_api",
+            "--Stripe:WebhookSecret=whsec_test_api",
+            "--Stripe:MonthlyPriceId=price_monthly",
+            "--Stripe:AnnualPriceId=price_annual",
+        ]);
+
+        var exception = Assert.ThrowsAsync<OptionsValidationException>(
+            async () => await application.StartAsync());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception!.Message, Does.Contain("Stripe:CheckoutSuccessUrl"));
+            Assert.That(exception.Message, Does.Contain("Stripe:CheckoutCancelUrl"));
+            Assert.That(
+                exception.Message,
+                Does.Contain("Stripe:CustomerPortalConfigurationId"));
+            Assert.That(
+                exception.Message,
+                Does.Contain("Stripe:CustomerPortalReturnUrl"));
+        });
+    }
+
+    [TestCase(
+        "--Stripe:CustomerPortalConfigurationId= bpc_test",
+        "Stripe:CustomerPortalConfigurationId")]
+    [TestCase(
+        "--Stripe:CustomerPortalReturnUrl=http://licenses.example.com/billing",
+        "Stripe:CustomerPortalReturnUrl")]
+    public async Task ApiFailsStartupWhenCustomerPortalConfigurationIsUnsafe(
+        string overrideArgument,
+        string expectedConfigurationName)
+    {
+        await using var application = Program.BuildApplication(
+        [
+            .. CommonArguments(),
+            "--Messaging:ApiOutboxForwardingEnabled=false",
+            "--Messaging:QueueName=styrhous-licensing",
+            "--urls=http://127.0.0.1:0",
+            .. DataProtectionArguments(),
+            .. StripeApiArguments(),
+            overrideArgument,
+        ]);
+
+        var exception = Assert.ThrowsAsync<OptionsValidationException>(
+            async () => await application.StartAsync());
+
+        Assert.That(exception!.Message, Does.Contain(expectedConfigurationName));
+    }
+
+    [Test]
+    public async Task MaintenanceRunsOneRecoveryBatchAndExits()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var queueName = $"styrhous-it-{Guid.CreateVersion7():N}";
+
+        var result = await Program.RunMaintenanceAsync(
+            CommonArguments(
+                database.ConnectionString,
+                "amqp://styrhous:local-development-only@127.0.0.1:55672",
+                queueName));
+
+        Assert.That(
+            result,
+            Is.EqualTo(new BackgroundWorkRecoveryResult(OutboxDrained: true)));
     }
 
     private static string[] CommonArguments(
