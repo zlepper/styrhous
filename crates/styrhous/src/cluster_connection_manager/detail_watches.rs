@@ -1,5 +1,8 @@
 use super::*;
 
+const POD_METRICS_RESOURCE_PLURAL: &str = "pods";
+const NODE_METRICS_RESOURCE_PLURAL: &str = "nodes";
+
 pub(crate) struct ResourceDetailWatchRequest {
     pub cluster_key: i32,
     pub client: kube::Client,
@@ -311,13 +314,14 @@ async fn report_metrics_api_unavailable<R: WorkerResult>(
 
 pub(crate) fn metrics_pod_api(client: &kube::Client, namespace: &str) -> Api<DynamicObject> {
     let gvk = GroupVersionKind::gvk("metrics.k8s.io", "v1beta1", "PodMetrics");
-    let resource = kube::core::ApiResource::from_gvk_with_plural(&gvk, "pods");
+    let resource = kube::core::ApiResource::from_gvk_with_plural(&gvk, POD_METRICS_RESOURCE_PLURAL);
     Api::namespaced_with(client.clone(), namespace, &resource)
 }
 
 pub(crate) fn metrics_node_api(client: &kube::Client) -> Api<DynamicObject> {
     let gvk = GroupVersionKind::gvk("metrics.k8s.io", "v1beta1", "NodeMetrics");
-    let resource = kube::core::ApiResource::from_gvk_with_plural(&gvk, "nodes");
+    let resource =
+        kube::core::ApiResource::from_gvk_with_plural(&gvk, NODE_METRICS_RESOURCE_PLURAL);
     Api::all_with(client.clone(), &resource)
 }
 
@@ -342,7 +346,9 @@ pub(crate) async fn get_pod_metrics(
 ) -> Result<Option<PodUsage>> {
     let metrics = match metrics_pod_api(client, namespace).get(name).await {
         Ok(metrics) => metrics,
-        Err(kube::Error::Api(response)) if is_metric_sample_missing(&response, name) => {
+        Err(kube::Error::Api(response))
+            if is_metric_sample_missing(&response, POD_METRICS_RESOURCE_PLURAL, name) =>
+        {
             return Ok(None);
         }
         Err(error) => return Err(error.into()),
@@ -370,7 +376,9 @@ pub(crate) async fn get_node_metrics(
 ) -> Result<Option<NodeUsage>> {
     let metrics = match metrics_node_api(client).get(name).await {
         Ok(metrics) => metrics,
-        Err(kube::Error::Api(response)) if is_metric_sample_missing(&response, name) => {
+        Err(kube::Error::Api(response))
+            if is_metric_sample_missing(&response, NODE_METRICS_RESOURCE_PLURAL, name) =>
+        {
             return Ok(None);
         }
         Err(error) => return Err(error.into()),
@@ -379,10 +387,14 @@ pub(crate) async fn get_node_metrics(
     Ok(Some(usage))
 }
 
-pub(crate) fn is_metric_sample_missing(response: &kube::core::Status, name: &str) -> bool {
+pub(crate) fn is_metric_sample_missing(
+    response: &kube::core::Status,
+    resource_plural: &str,
+    name: &str,
+) -> bool {
     response.code == 404
         && response
             .details
             .as_ref()
-            .is_some_and(|details| details.group == "metrics.k8s.io" && details.name == name)
+            .is_some_and(|details| details.kind == resource_plural && details.name == name)
 }

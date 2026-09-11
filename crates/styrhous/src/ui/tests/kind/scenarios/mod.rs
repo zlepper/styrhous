@@ -1,4 +1,4 @@
-use super::super::super::state::ClusterConnectionState;
+use super::super::super::state::{ClusterConnectionState, CronJobRunState};
 use super::support::{self, *};
 use crate::pod_metrics::{format_cpu, format_memory};
 use crate::resource_table::{READY_COLUMN, STATUS_COLUMN};

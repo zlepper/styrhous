@@ -51,7 +51,10 @@ pub(crate) struct ClusterResourceState {
     pub(crate) pending_deployment_restart: Option<PendingDeploymentRestart>,
     pub(crate) deployment_restart_error: Option<String>,
     pub(crate) pending_cron_job_run: Option<PendingCronJobRun>,
-    pub(crate) cron_job_run_error: Option<String>,
+    pub(crate) next_cron_job_run_operation_id: u64,
+    pub(crate) cron_job_run: Option<CronJobRunState>,
+    #[cfg(test)]
+    pub(crate) observed_cron_job_run_completions: Vec<ObservedCronJobRunCompletion>,
     pub(crate) pending_scale: Option<PendingScale>,
     pub(crate) scale_error: Option<String>,
 }
@@ -129,7 +132,10 @@ impl ClusterResourceState {
             pending_deployment_restart: None,
             deployment_restart_error: None,
             pending_cron_job_run: None,
-            cron_job_run_error: None,
+            next_cron_job_run_operation_id: 0,
+            cron_job_run: None,
+            #[cfg(test)]
+            observed_cron_job_run_completions: Vec::new(),
             pending_scale: None,
             scale_error: None,
         }

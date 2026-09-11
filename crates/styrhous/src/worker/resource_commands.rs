@@ -162,15 +162,31 @@ impl WorkerCommand for RunCronJob {
 
     async fn execute(self, state: &WorkerState) -> Self::Output {
         let cluster_key = self.cluster_key;
+        let operation_id = self.operation_id;
+        let namespace = self.namespace;
+        let cron_job_name = self.resource_name;
         match state.client_for_cluster(cluster_key).await {
-            Ok(client) => run_cron_job(client, self.namespace, self.resource_name)
-                .await
-                .map_err(|error| CronJobRunFailed {
+            Ok(client) => match run_cron_job(client, &namespace, &cron_job_name).await {
+                Ok(job_name) => Ok(CronJobRunCompleted {
                     cluster_key,
+                    operation_id,
+                    namespace,
+                    cron_job_name,
+                    job_name,
+                }),
+                Err(error) => Err(CronJobRunFailed {
+                    cluster_key,
+                    operation_id,
+                    namespace,
+                    cron_job_name,
                     error: format!("{error:#?}"),
                 }),
+            },
             Err(error) => Err(CronJobRunFailed {
                 cluster_key,
+                operation_id,
+                namespace,
+                cron_job_name,
                 error: format!("{error:#?}"),
             }),
         }

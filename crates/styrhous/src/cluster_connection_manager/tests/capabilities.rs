@@ -42,9 +42,10 @@ fn missing_pod_metric_sample_is_not_an_unavailable_metrics_api() {
     let response = kube::core::Status {
         code: 404,
         details: Some(kube::core::response::StatusDetails {
-            group: "metrics.k8s.io".into(),
+            // The aggregated Metrics API can omit its group and report the plural resource.
+            group: String::new(),
             name: "api".into(),
-            kind: "PodMetrics".into(),
+            kind: "pods".into(),
             uid: String::new(),
             causes: Vec::new(),
             retry_after_seconds: 0,
@@ -52,7 +53,8 @@ fn missing_pod_metric_sample_is_not_an_unavailable_metrics_api() {
         ..Default::default()
     };
 
-    assert!(is_metric_sample_missing(&response, "api"));
+    assert!(is_metric_sample_missing(&response, "pods", "api"));
+    assert!(!is_metric_sample_missing(&response, "namespaces", "api"));
     assert!(!is_metrics_api_not_found(&anyhow::Error::new(
         kube::Error::Api(response.boxed(),)
     )));
@@ -74,8 +76,8 @@ fn missing_node_metric_sample_is_not_an_unavailable_metrics_api() {
         ..Default::default()
     };
 
-    assert!(is_metric_sample_missing(&response, "worker-a"));
-    assert!(!is_metric_sample_missing(&response, "worker-b"));
+    assert!(is_metric_sample_missing(&response, "nodes", "worker-a"));
+    assert!(!is_metric_sample_missing(&response, "nodes", "worker-b"));
     assert!(!is_metrics_api_not_found(&anyhow::Error::new(
         kube::Error::Api(response.boxed(),)
     )));

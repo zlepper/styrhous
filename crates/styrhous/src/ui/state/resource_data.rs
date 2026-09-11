@@ -112,13 +112,119 @@ impl ResourceDataEditorState {
 
     pub(crate) fn mark_saved(&mut self) {
         let (expected, updated) = self.changed_values();
+        let mut saved_values = self.server_values.clone();
         for key in expected.keys() {
             if let Some(value) = updated.get(key) {
-                self.server_values.insert(key.clone(), value.clone());
+                saved_values.insert(key.clone(), value.clone());
+            }
+        }
+        match self.pending_external_values.as_ref() {
+            Some(external_values) if external_values == &saved_values => {
+                self.server_values = saved_values;
+                self.pending_external_values = None;
+                if let Some(resource_version) = self.pending_external_resource_version.take() {
+                    self.resource_version = resource_version;
+                }
+            }
+            Some(_) => {}
+            None => {
+                self.server_values = saved_values;
+                self.pending_external_resource_version = None;
             }
         }
         self.saving = false;
         self.pending_save_request_id = None;
         self.save_error = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn completed_save_reconciles_an_early_matching_watch_update() {
+        let mut editor = saving_editor();
+        editor.accept_watched_values(
+            BTreeMap::from([
+                ("password".to_owned(), "updated".to_owned()),
+                ("preserved".to_owned(), "value".to_owned()),
+            ]),
+            "2".to_owned(),
+        );
+
+        editor.mark_saved();
+
+        assert_eq!(
+            editor.server_values,
+            BTreeMap::from([
+                ("password".to_owned(), "updated".to_owned()),
+                ("preserved".to_owned(), "value".to_owned()),
+            ])
+        );
+        assert_eq!(editor.resource_version, "2");
+        assert_eq!(editor.pending_external_values, None);
+        assert_eq!(editor.pending_external_resource_version, None);
+        assert!(!editor.saving);
+        assert_eq!(editor.pending_save_request_id, None);
+    }
+
+    #[test]
+    fn completed_save_preserves_a_divergent_external_watch_update() {
+        let mut editor = saving_editor();
+        let external_values = BTreeMap::from([
+            ("password".to_owned(), "external".to_owned()),
+            ("preserved".to_owned(), "value".to_owned()),
+        ]);
+        editor.accept_watched_values(external_values.clone(), "2".to_owned());
+
+        editor.mark_saved();
+
+        assert_eq!(
+            editor.server_values.get("password").map(String::as_str),
+            Some("original")
+        );
+        assert_eq!(
+            editor.draft_values.get("password").map(String::as_str),
+            Some("updated")
+        );
+        assert_eq!(editor.resource_version, "1");
+        assert_eq!(editor.pending_external_values, Some(external_values));
+        assert_eq!(
+            editor.pending_external_resource_version.as_deref(),
+            Some("2")
+        );
+        assert!(!editor.saving);
+        assert_eq!(editor.pending_save_request_id, None);
+
+        editor.keep_local_edits();
+
+        assert_eq!(
+            editor.server_values.get("password").map(String::as_str),
+            Some("external")
+        );
+        assert_eq!(
+            editor.draft_values.get("password").map(String::as_str),
+            Some("updated")
+        );
+        assert_eq!(editor.resource_version, "2");
+        assert_eq!(editor.pending_external_values, None);
+        assert_eq!(editor.pending_external_resource_version, None);
+    }
+
+    fn saving_editor() -> ResourceDataEditorState {
+        let mut editor = ResourceDataEditorState::new(
+            BTreeMap::from([
+                ("password".to_owned(), "original".to_owned()),
+                ("preserved".to_owned(), "value".to_owned()),
+            ]),
+            "1".to_owned(),
+        );
+        editor
+            .draft_values
+            .insert("password".to_owned(), "updated".to_owned());
+        editor.saving = true;
+        editor.pending_save_request_id = Some(7);
+        editor
     }
 }

@@ -3,9 +3,9 @@
 use super::super::MyEguiApp;
 use super::super::state::ClusterConnectionState;
 use super::super::state::{
-    BulkDeleteProgress, BulkDeleteTarget, HelmReleaseWatchState, PendingCronJobRun, PendingDelete,
-    PendingForceDelete, PodMetricsNamespaceState, ResourceWatchState, UiState, ValidationState,
-    YamlEditorWindowState,
+    BulkDeleteProgress, BulkDeleteTarget, CronJobRunState, HelmReleaseWatchState,
+    PendingCronJobRun, PendingDelete, PendingForceDelete, PodMetricsNamespaceState,
+    ResourceWatchState, UiState, ValidationState, YamlEditorWindowState,
 };
 use super::super::table_preferences::{
     PersistedResourceTablePreferences, ResourceTableKey, TableColumnDefinition,

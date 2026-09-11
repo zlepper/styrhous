@@ -27,7 +27,7 @@ fn force_delete_confirmation_requires_the_resource_name_before_removing_finalize
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "resource_actions/force_delete_confirmation_requires_the_resource_name_before_removing_finalizers/force_delete_confirmation",
     ));
-    harness.get_by_label("Remove finalizers").click_accesskit();
+    harness.get_by_label("Remove finalizers").click();
     harness.run();
     assert!(harness.state().worker.commands.is_empty());
 
@@ -41,7 +41,7 @@ fn force_delete_confirmation_requires_the_resource_name_before_removing_finalize
         .confirmation_available_at = std::time::Instant::now();
     harness.run();
     // The delay has elapsed, but a non-empty wrong acknowledgement is still rejected.
-    harness.get_by_label("Remove finalizers").click_accesskit();
+    harness.get_by_label("Remove finalizers").click();
     harness.run();
     assert!(harness.state().worker.commands.is_empty());
     harness
@@ -53,7 +53,7 @@ fn force_delete_confirmation_requires_the_resource_name_before_removing_finalize
         .expect("force deletion should still be pending")
         .acknowledgement = "important-config".into();
     harness.run();
-    harness.get_by_label("Remove finalizers").click_accesskit();
+    harness.get_by_label("Remove finalizers").click();
     harness.run();
 
     assert!(matches!(

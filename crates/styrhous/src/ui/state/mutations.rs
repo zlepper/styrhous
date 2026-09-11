@@ -134,6 +134,30 @@ pub(crate) struct PendingCronJobRun {
     pub(crate) namespace: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CronJobRunState {
+    Running {
+        operation_id: u64,
+        namespace: String,
+        cron_job_name: String,
+    },
+    Failed {
+        operation_id: u64,
+        namespace: String,
+        cron_job_name: String,
+        error: String,
+    },
+}
+
+#[cfg(test)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ObservedCronJobRunCompletion {
+    pub(crate) operation_id: u64,
+    pub(crate) namespace: String,
+    pub(crate) cron_job_name: String,
+    pub(crate) job_name: String,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct PendingScale {
     pub(crate) api_resource: ApiResource,

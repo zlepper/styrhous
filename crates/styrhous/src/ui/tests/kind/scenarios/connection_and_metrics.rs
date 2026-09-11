@@ -64,8 +64,62 @@ fn test_secret_inspector_actions_integration() {
         .draft_values
         .insert("password".to_owned(), "updated-secret".to_owned());
     harness.run_steps(1);
-    harness.get_by_label("Save data").click_accesskit();
+    harness.get_by_label("Save data").click();
     harness.run_steps(1);
+    support::wait_for_with_terminal_and_timeout_diagnostic(
+        &mut harness,
+        &format!("Secret {test_secret_name} inspector save to complete"),
+        |app| {
+            current_resource_detail(&app.ui_state, cluster_key, history_entry_id)
+                .and_then(|entry| entry.data_editor.as_ref())
+                .filter(|editor| {
+                    !editor.saving
+                        && editor.pending_save_request_id.is_none()
+                        && editor.pending_external_values.is_none()
+                        && editor.pending_external_resource_version.is_none()
+                        && editor
+                            .server_values
+                            .get("password")
+                            .is_some_and(|value| value == "updated-secret")
+                })
+                .map(|_| ())
+        },
+        |app| {
+            current_resource_detail(&app.ui_state, cluster_key, history_entry_id)
+                .and_then(|entry| entry.data_editor.as_ref())
+                .and_then(|editor| editor.save_error.clone())
+        },
+        |app| {
+            let Some(editor) =
+                current_resource_detail(&app.ui_state, cluster_key, history_entry_id)
+                    .and_then(|entry| entry.data_editor.as_ref())
+            else {
+                return resource_detail_state(
+                    &app.ui_state,
+                    cluster_key,
+                    &test_secret_name,
+                    Some(&fixture.namespace),
+                    Some(history_entry_id),
+                );
+            };
+            Some(format!(
+                "saving={}, pending request={:?}, server value updated={}, draft value updated={}, external update pending={}, external resource version pending={}",
+                editor.saving,
+                editor.pending_save_request_id,
+                editor
+                    .server_values
+                    .get("password")
+                    .is_some_and(|value| value == "updated-secret"),
+                editor
+                    .draft_values
+                    .get("password")
+                    .is_some_and(|value| value == "updated-secret"),
+                editor.pending_external_values.is_some(),
+                editor.pending_external_resource_version.is_some(),
+            ))
+        },
+        10_000,
+    );
     support::wait_for_kubernetes_with_diagnostic(
         &mut harness,
         &format!("Secret {test_secret_name} to contain the saved data"),

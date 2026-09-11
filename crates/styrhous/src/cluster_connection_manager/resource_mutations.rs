@@ -120,18 +120,18 @@ pub(crate) async fn restart_deployment(
 /// Create a one-off Job from a CronJob's current job template.
 pub(crate) async fn run_cron_job(
     client: kube::Client,
-    namespace: String,
-    resource_name: String,
-) -> Result<CronJobRunCompleted> {
-    let cron_jobs: Api<CronJob> = Api::namespaced(client.clone(), &namespace);
+    namespace: &str,
+    resource_name: &str,
+) -> Result<String> {
+    let cron_jobs: Api<CronJob> = Api::namespaced(client.clone(), namespace);
     let cron_job = cron_jobs
-        .get(&resource_name)
+        .get(resource_name)
         .await
         .with_context(|| format!("Fetching CronJob {resource_name} in {namespace}"))?;
     let job = job_from_cron_job(&cron_job)?;
 
     info!("Creating one-off Job from CronJob {resource_name} in {namespace}");
-    let jobs: Api<Job> = Api::namespaced(client, &namespace);
+    let jobs: Api<Job> = Api::namespaced(client, namespace);
     let created = jobs
         .create(&Default::default(), &job)
         .await
@@ -141,11 +141,7 @@ pub(crate) async fn run_cron_job(
         .name
         .context("Kubernetes created a Job without a name")?;
 
-    Ok(CronJobRunCompleted {
-        namespace,
-        cron_job_name: resource_name,
-        job_name,
-    })
+    Ok(job_name)
 }
 
 pub(crate) fn job_from_cron_job(cron_job: &CronJob) -> Result<Job> {

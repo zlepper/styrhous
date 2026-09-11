@@ -16,7 +16,6 @@ use crate::resource_schema::ResourceSchema;
 use crate::resource_table::{CellValue, CustomResourceColumn};
 use crate::worker::*;
 use anyhow::{Context, Result, bail};
-use futures_util::future::try_join_all;
 use futures_util::pin_mut;
 use futures_util::stream::StreamExt;
 use http::Request;
