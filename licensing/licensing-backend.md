@@ -63,7 +63,7 @@ subtree or ignored build/cache directories.
 
 - ASP.NET Core 10 and .NET 10.
 - EF Core 10 with PostgreSQL through Npgsql.
-- ASP.NET Core Identity for application users and external logins.
+- ASP.NET Core cookie and OAuth middleware with domain-owned external identities.
 - OpenIddict for the standards-based desktop device authorization flow and token lifecycle.
 - Stripe.net for Stripe integration.
 - Rebus with the Amazon SQS and RabbitMQ transports.
@@ -128,10 +128,11 @@ that touch more than one root claim them in user, organization, then billing-acc
 Provide a dedicated migration executable or deployment job. The API and worker must validate schema
 compatibility on startup but must never apply migrations implicitly.
 
-## Identity and browser authentication
+## Accounts and browser authentication
 
-Use ASP.NET Core Identity with GitHub, Google, and Microsoft external authentication. A new account
-requires a verified email from the provider and is identified by the provider's stable subject ID.
+Use ASP.NET Core OAuth handlers with GitHub, Google, and Microsoft external authentication. A new
+account requires a verified email from the provider and is identified by the provider's stable
+subject ID.
 
 Never merge accounts automatically because two providers report the same email. When an existing
 email is encountered through an unlinked provider, direct the user to sign in with an already linked
@@ -152,14 +153,14 @@ to the same authenticated browser session; both session and antiforgery cookies 
 `__Host-` cookies, and token responses are never cacheable. API authentication challenges return
 HTTP 401/403 rather than browser redirects.
 
-The host issues external-login sessions through ASP.NET Core Identity. Persist Data Protection keys
-in PostgreSQL, encrypt them with the configured certificate, and use one explicit application name
-so cookies, antiforgery tokens, and protected outbox payloads remain usable across restarts and
-processes. Require an RSA certificate and fail configuration when it is absent, invalid, or uses an
-unsupported key algorithm. Certificate rotation installs the replacement as the active encryption
-certificate while retaining every old certificate as decrypt-only until no persisted key-ring row
-or protected payload depends on it. Do not log provider tokens, invitation secrets, session tokens,
-or unnecessary personal data.
+The host issues external-login sessions through explicit ASP.NET Core cookie middleware. Persist
+Data Protection keys in PostgreSQL, encrypt them with the configured certificate, and use one
+explicit application name so cookies, antiforgery tokens, and protected outbox payloads remain
+usable across restarts and processes. Require an RSA certificate and fail configuration when it is
+absent, invalid, or uses an unsupported key algorithm. Certificate rotation installs the
+replacement as the active encryption certificate while retaining every old certificate as
+decrypt-only until no persisted key-ring row or protected payload depends on it. Do not log provider
+tokens, invitation secrets, session tokens, or unnecessary personal data.
 
 ## Trial creation
 

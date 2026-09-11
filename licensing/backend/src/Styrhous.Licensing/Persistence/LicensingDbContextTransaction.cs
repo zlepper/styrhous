@@ -1,10 +1,38 @@
 using System.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Styrhous.Licensing.Persistence;
 
 internal static class LicensingDbContextTransaction
 {
+    public static Task<T> ExecuteAsync<T>(
+        LicensingDbContext dbContext,
+        Func<IDbContextTransaction, CancellationToken, Task<T>> operation,
+        CancellationToken cancellationToken)
+    {
+        return dbContext.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            await using var transaction = await dbContext.Database
+                .BeginTransactionAsync(cancellationToken);
+            return await operation(transaction, cancellationToken);
+        });
+    }
+
+    public static Task<T> ExecuteAsync<T>(
+        LicensingDbContext dbContext,
+        IsolationLevel isolationLevel,
+        Func<IDbContextTransaction, CancellationToken, Task<T>> operation,
+        CancellationToken cancellationToken)
+    {
+        return dbContext.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            await using var transaction = await dbContext.Database
+                .BeginTransactionAsync(isolationLevel, cancellationToken);
+            return await operation(transaction, cancellationToken);
+        });
+    }
+
     public static async Task<T> ExecuteAsync<T>(
         IDbContextFactory<LicensingDbContext> contextFactory,
         IsolationLevel isolationLevel,
