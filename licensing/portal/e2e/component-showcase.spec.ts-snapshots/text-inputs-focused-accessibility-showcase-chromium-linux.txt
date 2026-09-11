@@ -1,0 +1,5 @@
+- text: Metadata key
+- textbox "Metadata key":
+  - /placeholder: Enter a metadata key
+- text: Column header
+- textbox "Column header": Application

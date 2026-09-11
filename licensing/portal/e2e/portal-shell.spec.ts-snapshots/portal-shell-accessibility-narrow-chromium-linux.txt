@@ -1,0 +1,30 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Styrhous licensing home":
+    - /url: /
+    - strong: Styrhous
+    - text: Licensing
+  - navigation "Primary navigation":
+    - list:
+      - listitem:
+        - link "Organizations":
+          - /url: /organizations
+      - listitem:
+        - link "Devices":
+          - /url: /devices
+      - listitem:
+        - link "Billing":
+          - /url: /billing
+      - listitem:
+        - link "Account":
+          - /url: /account
+- main:
+  - region "Billing":
+    - heading "Billing" [level=1]
+  - region "Sign in to review billing":
+    - heading "Sign in to review billing" [level=2]
+    - paragraph: Your Styrhous session is required to view this page.
+    - link "Sign in with GitHub":
+      - /url: /auth/sign-in/github?returnUrl=%2Fbilling
+- contentinfo: Styrhous licensing

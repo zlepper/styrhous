@@ -1,0 +1,37 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Styrhous licensing home":
+    - /url: /
+    - strong: Styrhous
+    - text: Licensing
+  - navigation "Primary navigation":
+    - list:
+      - listitem:
+        - link "Organizations":
+          - /url: /organizations
+      - listitem:
+        - link "Devices":
+          - /url: /devices
+      - listitem:
+        - link "Billing":
+          - /url: /billing
+      - listitem:
+        - link "Account":
+          - /url: /account
+- main:
+  - region "Organizations":
+    - heading "Organizations" [level=1]
+  - region "Organization controls":
+    - group:
+      - text: New organization
+      - paragraph: If this is the first organization you create and your personal trial is active, the trial moves to the organization.
+      - text: New organization
+      - textbox "New organization":
+        - /placeholder: Platform team
+      - button "Create organization"
+  - region "No organizations":
+    - paragraph: Current state
+    - heading "No organizations" [level=2]
+    - paragraph: Create an organization above to manage shared seats and members.
+- contentinfo: Styrhous licensing

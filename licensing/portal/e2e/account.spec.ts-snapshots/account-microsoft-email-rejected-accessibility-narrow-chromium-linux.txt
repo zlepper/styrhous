@@ -1,0 +1,34 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Styrhous licensing home":
+    - /url: /
+    - strong: Styrhous
+    - text: Licensing
+  - navigation "Primary navigation":
+    - list:
+      - listitem:
+        - link "Organizations":
+          - /url: /organizations
+      - listitem:
+        - link "Devices":
+          - /url: /devices
+      - listitem:
+        - link "Billing":
+          - /url: /billing
+      - listitem:
+        - link "Account":
+          - /url: /account
+- main:
+  - region "Account":
+    - heading "Account" [level=1]
+  - region "Sign in to manage your account":
+    - heading "Sign in to manage your account" [level=2]
+    - alert: Microsoft did not supply a verified email address. Please sign in with another provider.
+    - link "Sign in with GitHub":
+      - /url: /auth/sign-in/github?returnUrl=%2Faccount
+    - link "Sign in with Google":
+      - /url: /auth/sign-in/google?returnUrl=%2Faccount
+    - link "Sign in with Microsoft":
+      - /url: /auth/sign-in/microsoft?returnUrl=%2Faccount
+- contentinfo: Styrhous licensing

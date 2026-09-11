@@ -1,0 +1,47 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Styrhous licensing home":
+    - /url: /
+    - strong: Styrhous
+    - text: Licensing
+  - navigation "Primary navigation":
+    - list:
+      - listitem:
+        - link "Organizations":
+          - /url: /organizations
+      - listitem:
+        - link "Devices":
+          - /url: /devices
+      - listitem:
+        - link "Billing":
+          - /url: /billing
+      - listitem:
+        - link "Account":
+          - /url: /account
+- main:
+  - region "Billing":
+    - heading "Billing" [level=1]
+  - article "Personal plan":
+    - heading "Personal plan" [level=2]
+    - text: Active trial
+    - term: Seats in use
+    - definition: 1 / 1
+    - term: Access until
+    - definition:
+      - time: Sep 14, 2026, 10:15 AM
+    - form "Purchase Personal plan":
+      - heading "Start a subscription" [level=3]
+      - paragraph: Review the total, including tax, before confirming payment.
+      - text: Billing period
+      - combobox "Billing period for Personal plan":
+        - option "Monthly" [selected]
+        - option "Annual"
+      - paragraph: One personal seat
+      - paragraph: USD 12.00 / month · USD 12.00 per seat · before tax
+      - button "Continue to checkout"
+    - form "Manage billing for Personal plan":
+      - heading "Manage subscription" [level=3]
+      - paragraph: Payment methods, invoices, and cancellation.
+      - button "Manage billing"
+- contentinfo: Styrhous licensing

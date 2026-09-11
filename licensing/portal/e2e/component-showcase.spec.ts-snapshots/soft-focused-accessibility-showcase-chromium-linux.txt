@@ -1,0 +1,3 @@
+- paragraph: "Soft: Default vs Focused"
+- button "Default"
+- button "Focused"

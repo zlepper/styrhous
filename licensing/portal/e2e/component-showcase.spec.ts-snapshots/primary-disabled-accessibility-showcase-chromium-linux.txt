@@ -1,0 +1,3 @@
+- paragraph: "Primary: Default vs Disabled"
+- button "Default"
+- button "Disabled" [disabled]

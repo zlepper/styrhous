@@ -1,0 +1,70 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Styrhous licensing home":
+    - /url: /
+    - strong: Styrhous
+    - text: Licensing
+  - navigation "Primary navigation":
+    - list:
+      - listitem:
+        - link "Organizations":
+          - /url: /organizations
+      - listitem:
+        - link "Devices":
+          - /url: /devices
+      - listitem:
+        - link "Billing":
+          - /url: /billing
+      - listitem:
+        - link "Account":
+          - /url: /account
+- main:
+  - region "Authorize device":
+    - heading "Authorize device" [level=1]
+    - paragraph: Only approve a sign-in you started in Styrhous.
+  - region "Rasmus workstation":
+    - heading "Rasmus workstation" [level=2]
+    - paragraph: Linux · Styrhous 0.1.0
+    - text: Waiting for approval
+    - paragraph:
+      - text: "Check this code matches Styrhous:"
+      - strong:
+        - code: ABCD-EFGH
+    - group "Choose a license":
+      - text: Choose a license
+      - paragraph: Choose which license to use on this device.
+      - radio "Personal seat 0 of 3 devices active"
+      - strong: Personal seat
+      - text: 0 of 3 devices active
+      - radio "Northstar Platform 3 of 3 devices active" [checked]
+      - strong: Northstar Platform
+      - text: 3 of 3 devices active
+    - region "Make room before approving":
+      - heading "Make room before approving" [level=3]
+      - paragraph: Remove a device below or choose another license. Devices inactive for seven days can be replaced automatically.
+      - list:
+        - listitem:
+          - heading "Build host" [level=3]
+          - paragraph:
+            - text: Linux · Last seen
+            - time: Aug 31, 2026, 10:15 AM
+          - button "Remove device Build host": Remove device
+          - group: Device details
+        - listitem:
+          - heading "Travel laptop" [level=3]
+          - paragraph:
+            - text: Linux · Last seen
+            - time: Sep 1, 2026, 8:00 AM
+          - button "Remove device Travel laptop": Remove device
+          - group: Device details
+        - listitem:
+          - heading "Office workstation" [level=3]
+          - paragraph:
+            - text: Linux · Last seen
+            - time: Sep 1, 2026, 9:30 AM
+          - button "Remove device Office workstation": Remove device
+          - group: Device details
+    - button "Approve sign-in" [disabled]
+    - button "Deny sign-in"
+- contentinfo: Styrhous licensing
