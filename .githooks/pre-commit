@@ -4,6 +4,132 @@ set -euo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
-cargo fmt --check
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo nextest run --workspace
+run_rust_checks=false
+run_portal_checks=false
+run_backend_checks=false
+run_infrastructure_checks=false
+portal_dependencies_changed=false
+staged_paths_file="$(mktemp)"
+
+cleanup_staged_paths() {
+  rm -f -- "$staged_paths_file"
+}
+trap cleanup_staged_paths EXIT
+
+git diff --cached --name-only --no-renames -z >"$staged_paths_file"
+
+while IFS= read -r -d '' staged_path; do
+  case "$staged_path" in
+    assets/icons/kubernetes-dev-ui.svg | crates/components/src/icons/* | crates/components/assets/fonts/* | crates/components/tests/snapshots/buttons/test_button_interaction_states/* | crates/components/tests/snapshots/comboboxes/test_combobox_flow/closed.png | crates/components/tests/snapshots/showcase/showcase_buttons/buttons.png | crates/components/tests/snapshots/text_inputs/snapshots_empty_filled_and_focused_inputs/*)
+      run_rust_checks=true
+      run_portal_checks=true
+      ;;
+    Cargo.toml | Cargo.lock | rust-toolchain.toml | .config/nextest.toml | crates/* | assets/* | scripts/ensure-kind-cluster.sh | scripts/kind-metrics-server.yaml)
+      run_rust_checks=true
+      ;;
+    licensing/portal/*)
+      run_portal_checks=true
+      case "$staged_path" in
+        licensing/portal/package.json | licensing/portal/package-lock.json)
+          portal_dependencies_changed=true
+          ;;
+      esac
+      ;;
+    licensing/protocol-fixtures/*)
+      run_rust_checks=true
+      run_backend_checks=true
+      ;;
+    licensing/LicensingOperationalMetrics.cs | licensing/shared/* | licensing/CompilerStyle.props | licensing/.editorconfig | licensing/infrastructure/database-provisioning/* | licensing/infrastructure/Directory.Build.props | licensing/infrastructure/Directory.Packages.props)
+      run_backend_checks=true
+      run_infrastructure_checks=true
+      ;;
+    licensing/backend/check.sh)
+      run_backend_checks=true
+      ;;
+    licensing/backend/* | licensing/compose.yaml | licensing/.dockerignore)
+      run_backend_checks=true
+      ;;
+    licensing/infrastructure/check.sh)
+      run_infrastructure_checks=true
+      ;;
+    licensing/infrastructure/*)
+      run_infrastructure_checks=true
+      ;;
+    flake.nix | flake.lock)
+      run_rust_checks=true
+      run_portal_checks=true
+      run_backend_checks=true
+      run_infrastructure_checks=true
+      ;;
+    .github/workflows/licensing.yml | .github/workflows/deploy-licensing.yml | .github/workflows/preview-licensing-staging.yml | .github/workflows/run-licensing-stack.yml)
+      run_portal_checks=true
+      run_backend_checks=true
+      run_infrastructure_checks=true
+      ;;
+    .github/workflows/release.yml)
+      run_rust_checks=true
+      run_infrastructure_checks=true
+      ;;
+  esac
+done <"$staged_paths_file"
+
+cleanup_staged_paths
+trap - EXIT
+
+selected_checks=()
+$run_rust_checks && selected_checks+=("Rust desktop")
+$run_portal_checks && selected_checks+=("licensing frontend")
+$run_backend_checks && selected_checks+=("licensing backend")
+$run_infrastructure_checks && selected_checks+=("licensing infrastructure")
+
+if ((${#selected_checks[@]} == 0)); then
+  echo "Pre-commit: no application checks are required for the staged files."
+  exit 0
+fi
+
+printf 'Pre-commit checks:'
+printf ' %s' "${selected_checks[@]}"
+printf '\n'
+
+if $run_rust_checks; then
+  cargo fmt --check
+  cargo clippy --workspace --all-targets --all-features -- -D warnings
+  cargo nextest run --workspace
+fi
+
+if $run_portal_checks; then
+  (
+    cd licensing/portal
+    if $portal_dependencies_changed || [[ ! -d node_modules ]]; then
+      npm ci
+    fi
+    npm test
+  )
+fi
+
+if $run_backend_checks; then
+  docker compose --file licensing/compose.yaml up --detach postgres rabbitmq
+
+  wait_for_service() {
+    local service="$1"
+    shift
+
+    for _ in {1..30}; do
+      if docker compose --file licensing/compose.yaml exec -T "$service" "$@" >/dev/null 2>&1; then
+        return 0
+      fi
+      sleep 2
+    done
+
+    echo "Pre-commit: $service did not become ready within 60 seconds." >&2
+    return 1
+  }
+
+  wait_for_service postgres pg_isready --username=styrhous --dbname=postgres
+  wait_for_service rabbitmq rabbitmq-diagnostics --quiet ping
+  bash licensing/backend/check.sh
+fi
+
+if $run_infrastructure_checks; then
+  bash licensing/infrastructure/check.sh
+fi

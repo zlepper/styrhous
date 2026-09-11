@@ -5,6 +5,9 @@ on:
     branches: ["**"]
     paths:
       - "licensing/**"
+      - "assets/icons/kubernetes-dev-ui.svg"
+      - "crates/components/src/icons/**"
+      - "crates/components/assets/fonts/**"
       - "crates/components/tests/snapshots/buttons/test_button_interaction_states/**"
       - "crates/components/tests/snapshots/comboboxes/test_combobox_flow/closed.png"
       - "crates/components/tests/snapshots/showcase/showcase_buttons/buttons.png"
