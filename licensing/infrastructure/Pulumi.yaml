@@ -1,0 +1,3 @@
+name: styrhous-licensing
+runtime: dotnet
+description: Production AWS infrastructure for the Styrhous licensing service

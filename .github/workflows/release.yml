@@ -23,8 +23,11 @@ env:
 jobs:
   preflight:
     name: Prepare desktop packages
+    environment: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'release' || 'package-validation' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    outputs:
+      hosted_license_origin: ${{ steps.license_origin.outputs.origin }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -50,11 +53,41 @@ jobs:
           if-no-files-found: error
           retention-days: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 7 || 1 }}
 
-      - name: Verify tag and application version agree
+      - name: Resolve hosted licensing origin
+        id: license_origin
+        env:
+          STYRHOUS_HOSTED_LICENSE_ORIGIN: ${{ vars.STYRHOUS_HOSTED_LICENSE_ORIGIN }}
+        run: |
+          origin=${STYRHOUS_HOSTED_LICENSE_ORIGIN%/}
+          VERIFY_DESKTOP_ORIGIN_LIVE=false \
+            HOSTED_LICENSE_ORIGIN="$origin" \
+            bash licensing/infrastructure/verify-desktop-origin.sh
+          echo "origin=$origin" >> "$GITHUB_OUTPUT"
+
+      - name: Install Pulumi CLI
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        uses: pulumi/actions@8e5e406f4007fca908480587cb9893c07090f58d # v7.0.0
+        with:
+          pulumi-version: 3.261.0
+
+      - name: Verify tag, application version, and deployed licensing origin
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          HOSTED_LICENSE_ORIGIN: ${{ steps.license_origin.outputs.origin }}
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          PULUMI_STACK: ${{ vars.LICENSING_PRODUCTION_PULUMI_STACK }}
         run: |
           version=$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | select(.name == "styrhous") | .version')
           test "${GITHUB_REF_NAME#v}" = "$version"
+          test -n "$PULUMI_STACK"
+          pulumi -C licensing/infrastructure stack select "$PULUMI_STACK"
+          deployed_origin=$(pulumi -C licensing/infrastructure stack output HostedOrigin)
+          deployed_origin=${deployed_origin%/}
+          if [[ "$HOSTED_LICENSE_ORIGIN" != "$deployed_origin" ]]; then
+            echo "The release licensing origin does not match the deployed production stack." >&2
+            exit 1
+          fi
+          bash licensing/infrastructure/verify-desktop-origin.sh
 
   package-appimage:
     name: Package AppImage (${{ matrix.id }})
@@ -62,6 +95,8 @@ jobs:
     environment: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'release' || 'package-validation' }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
+    env:
+      STYRHOUS_HOSTED_LICENSE_ORIGIN: ${{ needs.preflight.outputs.hosted_license_origin }}
     strategy:
       fail-fast: false
       matrix:
@@ -185,6 +220,8 @@ jobs:
     environment: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'release' || 'package-validation' }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
+    env:
+      STYRHOUS_HOSTED_LICENSE_ORIGIN: ${{ needs.preflight.outputs.hosted_license_origin }}
     strategy:
       fail-fast: false
       matrix:
@@ -302,6 +339,8 @@ jobs:
     environment: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'release' || 'package-validation' }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
+    env:
+      STYRHOUS_HOSTED_LICENSE_ORIGIN: ${{ needs.preflight.outputs.hosted_license_origin }}
     strategy:
       matrix:
         include:
@@ -419,6 +458,7 @@ jobs:
   package-deb:
     name: Package Debian application (${{ matrix.id }})
     needs: preflight
+    environment: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'release' || 'package-validation' }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     strategy:
@@ -432,6 +472,7 @@ jobs:
             runner: ubuntu-24.04-arm
     env:
       STYRHOUS_DISABLE_AUTO_UPDATE: "1"
+      STYRHOUS_HOSTED_LICENSE_ORIGIN: ${{ needs.preflight.outputs.hosted_license_origin }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

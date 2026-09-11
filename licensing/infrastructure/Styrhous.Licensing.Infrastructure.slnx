@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="database-provisioning/Styrhous.Licensing.DatabaseProvisioning.csproj" />
+  <Project Path="Styrhous.Licensing.Infrastructure.csproj" />
+  <Folder Name="/tests/">
+    <Project Path="tests/Styrhous.Licensing.Infrastructure.Tests/Styrhous.Licensing.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>
