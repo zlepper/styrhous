@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Styrhous.Licensing</RootNamespace>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="AWSSDK.SecretsManager" />
+    <Compile Include="../../shared/ApplicationConfigurationLoader.cs" Link="Runtime/ApplicationConfigurationLoader.cs" />
+  </ItemGroup>
+</Project>

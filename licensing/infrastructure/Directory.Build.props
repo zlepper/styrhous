@@ -1,0 +1,13 @@
+<Project>
+  <Import Project="../CompilerStyle.props" />
+  <PropertyGroup>
+    <LangVersion>14.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <Deterministic>true</Deterministic>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestorePackagesPath>$(MSBuildThisFileDirectory).nuget/packages</RestorePackagesPath>
+  </PropertyGroup>
+</Project>

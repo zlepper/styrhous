@@ -1,0 +1,21 @@
+<Project>
+  <PropertyGroup>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <WarningsAsErrors>$(WarningsAsErrors);IDE0022;IDE0061</WarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <CompilerStyleDiagnostic Include="IDE0022;IDE0061" />
+  </ItemGroup>
+  <!-- Keep diagnostic enforcement in MSBuild, and syntax preferences in .editorconfig. -->
+  <Target Name="ConfigureCompilerStyleDiagnostics" BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <_CompilerStyleConfiguration Include="is_global = true" />
+      <_CompilerStyleConfiguration Include="global_level = 100" />
+      <_CompilerStyleConfiguration Include="@(CompilerStyleDiagnostic->'dotnet_diagnostic.%(Identity).severity = error')" />
+      <EditorConfigFiles Include="$(IntermediateOutputPath)CompilerStyle.globalconfig" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(IntermediateOutputPath)CompilerStyle.globalconfig"
+                      Lines="@(_CompilerStyleConfiguration)"
+                      Overwrite="true" WriteOnlyWhenDifferent="true" />
+  </Target>
+</Project>
