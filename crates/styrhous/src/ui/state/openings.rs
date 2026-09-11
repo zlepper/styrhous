@@ -21,6 +21,13 @@ impl UiState {
         );
     }
 
+    pub(crate) fn open_license_settings(&mut self, commands_to_send: &mut Vec<WorkerCommandBox>) {
+        self.replace_global_blade(
+            Box::new(super::super::settings::LicenseSettingsBlade::default()),
+            commands_to_send,
+        );
+    }
+
     pub(crate) fn open_pod_log_window(
         &mut self,
         cluster_key: i32,

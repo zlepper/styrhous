@@ -44,6 +44,20 @@ impl GlobalBladeContent for SettingsHomeBlade {
                 .color(gray::_500),
         );
         ui.add_space(spacing::MD);
+        let license_description = format!(
+            "{} {}",
+            context.licensing().status().summary(),
+            context.licensing().settings().server.label()
+        );
+        let license = settings_destination_card(
+            ui,
+            SettingsDestination {
+                label: "Open license and account settings",
+                description: &license_description,
+                icon: icons::settings_destination_application_icon(),
+            },
+        );
+        ui.add_space(spacing::XL - spacing::XS);
         let application_settings = settings_destination_card(
             ui,
             SettingsDestination {
@@ -76,6 +90,11 @@ impl GlobalBladeContent for SettingsHomeBlade {
                     Box::new(TerminalSettingsBlade::new(
                         context.terminal_launch_settings().clone(),
                     )) as Box<dyn GlobalBladeContent>
+                })
+                .or_else(|| {
+                    license.then(|| {
+                        Box::new(LicenseSettingsBlade::default()) as Box<dyn GlobalBladeContent>
+                    })
                 })
                 .or_else(|| {
                     namespace_selector.then(|| {

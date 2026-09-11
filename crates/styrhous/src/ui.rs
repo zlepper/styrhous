@@ -28,6 +28,7 @@ mod yaml_editor;
 #[doc(hidden)]
 pub mod yaml_editor_profile;
 
+use crate::licensing::{LicensingService, LicensingSettings};
 use crate::log_store::LogStoreService;
 use crate::terminal_launcher::{
     ShellRequest, SystemTerminalLauncher, TerminalLaunchSettings, TerminalLauncher,
@@ -50,6 +51,7 @@ const RESOURCE_NAVIGATION_EXPANSION_STORAGE_KEY: &str = "resource_navigation_exp
 const TERMINAL_LAUNCH_SETTINGS_STORAGE_KEY: &str = "terminal_launch_settings";
 const RESOURCE_TABLE_PREFERENCES_STORAGE_KEY: &str = "resource_table_preferences";
 const NAMESPACE_SELECTOR_SETTINGS_STORAGE_KEY: &str = "namespace_selector_settings";
+const LICENSING_SETTINGS_STORAGE_KEY: &str = "licensing_settings";
 
 pub struct MyEguiApp<W: WorkerTrait = Worker, L: TerminalLauncher = SystemTerminalLauncher> {
     worker: W,
@@ -60,6 +62,7 @@ pub struct MyEguiApp<W: WorkerTrait = Worker, L: TerminalLauncher = SystemTermin
     ui_state: UiState,
     log_store: LogStoreService,
     updater: crate::updater::UpdaterService,
+    licensing: LicensingService,
 }
 
 impl<W: WorkerTrait, L: TerminalLauncher> Default for MyEguiApp<W, L> {
@@ -76,6 +79,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> Default for MyEguiApp<W, L> {
             ui_state: UiState::default(),
             log_store,
             updater: crate::updater::UpdaterService::default(),
+            licensing: LicensingService::default(),
         }
     }
 }
@@ -89,7 +93,12 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
     pub(crate) fn new_for_test(cc: &eframe::CreationContext<'_>) -> Self {
         let mut updater = crate::updater::UpdaterService::default();
         updater.set_status_for_test(crate::updater::UpdateStatus::LocalBuild);
-        Self::new_with_updater(cc, updater)
+        let mut app = Self::new_with_updater(cc, updater);
+        app.licensing
+            .set_status_for_test(crate::licensing::LicenseStatus::Licensed(
+                test_commercial_lease(),
+            ));
+        app
     }
 
     fn new_with_updater(
@@ -100,6 +109,12 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
         let log_store = LogStoreService::with_repaint_context(cc.egui_ctx.clone());
         let mut worker = W::with_repaint_context(cc.egui_ctx.clone());
         worker.set_log_store_appender(log_store.appender());
+        let licensing_settings = cc
+            .storage
+            .and_then(|storage| {
+                eframe::get_value::<LicensingSettings>(storage, LICENSING_SETTINGS_STORAGE_KEY)
+            })
+            .unwrap_or_default();
         let mut app = Self {
             worker,
             terminal_launcher: L::default(),
@@ -109,6 +124,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
             ui_state: UiState::default(),
             log_store,
             updater,
+            licensing: LicensingService::start(licensing_settings, cc.egui_ctx.clone()),
         };
         app.load_persisted_state(cc.storage);
         app
@@ -171,8 +187,9 @@ fn configure_egui_context(ctx: &egui::Context) {
 }
 
 impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
-    fn logic(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.updater.poll();
+        self.licensing.poll(ctx);
         self.worker.start();
         let mut commands_to_send = self.ui_state.update(&mut self.worker);
         while let Some(result) = self.log_store.try_next_result() {
@@ -205,6 +222,13 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             &mut commands_to_send,
             &self.terminal_launch_settings,
             self.updater.status(),
+            self.licensing.status(),
+        );
+        show_license_banner(
+            ui,
+            &mut self.ui_state,
+            &mut commands_to_send,
+            &self.licensing,
         );
         let clicked_api_resource = resource_navigation::show(ui, &mut self.ui_state);
         yaml_editor::show(&ctx, &mut self.ui_state, &mut commands_to_send);
@@ -227,6 +251,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             &mut self.terminal_launch_settings,
             &mut self.namespace_selector_settings,
             self.updater.status(),
+            &mut self.licensing,
         );
         log_windows::show(
             &ctx,
@@ -303,12 +328,80 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             NAMESPACE_SELECTOR_SETTINGS_STORAGE_KEY,
             &self.namespace_selector_settings,
         );
+        eframe::set_value(
+            storage,
+            LICENSING_SETTINGS_STORAGE_KEY,
+            self.licensing.settings(),
+        );
     }
 
     fn persist_egui_memory(&self) -> bool {
         // Persist only the app settings explicitly written in `save`. Egui's complete memory
         // includes `Area` z-ordering, which can leave a stale overlay layer above a later blade.
         false
+    }
+}
+
+fn show_license_banner(
+    ui: &mut egui::Ui,
+    ui_state: &mut UiState,
+    commands_to_send: &mut Vec<crate::worker::WorkerCommandBox>,
+    licensing: &LicensingService,
+) {
+    if !licensing.status().shows_warning() {
+        return;
+    }
+    let summary = licensing.status().summary();
+    let mut open = false;
+    egui::Panel::top("license-status-banner")
+        .exact_size(40.0)
+        .frame(
+            egui::Frame::new()
+                .fill(components::design::surface::warning_fill())
+                .stroke(components::design::surface::warning_border())
+                .inner_margin(egui::Margin::symmetric(
+                    components::design::spacing::LG as i8,
+                    components::design::spacing::SM as i8,
+                )),
+        )
+        .show(ui, |ui| {
+            let response = ui
+                .horizontal_centered(|ui| {
+                    ui.label(
+                        egui::RichText::new(&summary)
+                            .font(components::design::typography::body())
+                            .color(components::design::status::WARNING_TEXT),
+                    );
+                    ui.add_space(components::design::spacing::SM);
+                    ui.link("Manage license")
+                })
+                .inner;
+            response.widget_info(|| {
+                egui::WidgetInfo::labeled(
+                    egui::WidgetType::Button,
+                    ui.is_enabled(),
+                    format!("License warning: {summary} Manage license"),
+                )
+            });
+            open = response.clicked();
+        });
+    if open {
+        ui_state.open_license_settings(commands_to_send);
+    }
+}
+
+#[cfg(test)]
+fn test_commercial_lease() -> crate::licensing::VerifiedLease {
+    crate::licensing::VerifiedLease {
+        user_id: uuid::Uuid::now_v7(),
+        seat_id: uuid::Uuid::now_v7(),
+        billing_account_id: uuid::Uuid::now_v7(),
+        installation_id: uuid::Uuid::now_v7(),
+        activation_id: uuid::Uuid::now_v7(),
+        state: "commercial".into(),
+        reason_code: "active_subscription".into(),
+        expires_at: u64::MAX,
+        refresh_after: u64::MAX,
     }
 }
 

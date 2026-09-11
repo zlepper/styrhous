@@ -8,6 +8,7 @@
 use super::namespace_selector::NamespaceSelectorSettings;
 use super::state::{ResourceDetailHistoryEntry, UiState};
 use super::table_preferences::PersistedResourceTablePreferences;
+use crate::licensing::LicensingService;
 use crate::terminal_launcher::ShellRequest;
 use crate::terminal_launcher::{DebugImagePreset, TerminalLaunchSettings};
 use crate::updater::UpdateStatus;
@@ -116,6 +117,7 @@ impl GlobalBladeCoordinator {
         terminal_launch_settings: &mut TerminalLaunchSettings,
         namespace_selector_settings: &mut NamespaceSelectorSettings,
         update_status: &UpdateStatus,
+        licensing: &mut LicensingService,
     ) {
         let Some(mut navigator) = self.navigator.take() else {
             return;
@@ -144,6 +146,7 @@ impl GlobalBladeCoordinator {
                 terminal_launch_settings,
                 namespace_selector_settings,
                 update_status,
+                licensing,
             ),
         );
 
@@ -203,6 +206,7 @@ pub(super) fn show(
     terminal_launch_settings: &mut TerminalLaunchSettings,
     namespace_selector_settings: &mut NamespaceSelectorSettings,
     update_status: &UpdateStatus,
+    licensing: &mut LicensingService,
 ) {
     // Split borrows deliberately: the coordinator owns navigator state, while
     // content gets only the narrow render services it requires.
@@ -217,6 +221,7 @@ pub(super) fn show(
         terminal_launch_settings,
         namespace_selector_settings,
         update_status,
+        licensing,
     );
     // Effects normally operate through `GlobalBladeNavigation`, but preserve
     // an explicitly requested root replacement rather than overwriting it if
@@ -328,6 +333,7 @@ pub(super) struct GlobalBladeRenderContext<'a> {
     terminal_launch_settings: &'a mut TerminalLaunchSettings,
     namespace_selector_settings: &'a mut NamespaceSelectorSettings,
     update_status: &'a UpdateStatus,
+    licensing: &'a mut LicensingService,
 }
 
 impl<'a> GlobalBladeRenderContext<'a> {
@@ -338,6 +344,7 @@ impl<'a> GlobalBladeRenderContext<'a> {
         terminal_launch_settings: &'a mut TerminalLaunchSettings,
         namespace_selector_settings: &'a mut NamespaceSelectorSettings,
         update_status: &'a UpdateStatus,
+        licensing: &'a mut LicensingService,
     ) -> Self {
         Self {
             ui_state,
@@ -346,6 +353,7 @@ impl<'a> GlobalBladeRenderContext<'a> {
             terminal_launch_settings,
             namespace_selector_settings,
             update_status,
+            licensing,
         }
     }
 
@@ -434,6 +442,10 @@ impl<'a> GlobalBladeRenderContext<'a> {
 
     pub(super) fn update_status(&self) -> &UpdateStatus {
         self.update_status
+    }
+
+    pub(super) fn licensing(&mut self) -> &mut LicensingService {
+        self.licensing
     }
 
     pub(super) fn managed_cluster_discovery(&self) -> &super::state::ManagedClusterDiscoveryState {

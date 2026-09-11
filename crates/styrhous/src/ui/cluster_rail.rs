@@ -1,4 +1,5 @@
 use super::state::{ClusterConnectionState, UiState};
+use crate::licensing::LicenseStatus;
 use crate::terminal_launcher::TerminalLaunchSettings;
 use crate::updater::UpdateStatus;
 use crate::worker::WorkerCommandBox;
@@ -13,6 +14,7 @@ pub(super) fn show(
     commands_to_send: &mut Vec<WorkerCommandBox>,
     terminal_settings: &TerminalLaunchSettings,
     update_status: &UpdateStatus,
+    license_status: &LicenseStatus,
 ) {
     let open_settings = std::cell::Cell::new(false);
     egui::Panel::left("cluster-panel")
@@ -84,9 +86,13 @@ pub(super) fn show(
                         let response = sidebar.button_with_tooltip(
                             "Settings",
                             icons::settings_icon(),
-                            &format!("Settings\n{}", update_status.summary()),
+                            &format!(
+                                "Settings\n{}\n{}",
+                                update_status.summary(),
+                                license_status.summary()
+                            ),
                         );
-                        if update_status.shows_badge() {
+                        if update_status.shows_badge() || license_status.shows_warning() {
                             let marker_center = response.rect.center() + egui::vec2(8.0, -8.0);
                             sidebar.ui_mut().painter().circle_filled(
                                 marker_center,
