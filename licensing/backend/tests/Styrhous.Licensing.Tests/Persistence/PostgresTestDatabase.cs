@@ -32,17 +32,7 @@ internal sealed class PostgresTestDatabase : IAsyncDisposable
 
     public string DatabaseName { get; }
 
-    public static Task<PostgresTestDatabase> CreateAsync()
-    {
-        return CreateAsync(initializeSchema: true);
-    }
-
-    public static Task<PostgresTestDatabase> CreateUninitializedAsync()
-    {
-        return CreateAsync(initializeSchema: false);
-    }
-
-    private static async Task<PostgresTestDatabase> CreateAsync(bool initializeSchema)
+    public static async Task<PostgresTestDatabase> CreateAsync()
     {
         var configuredConnectionString =
             Environment.GetEnvironmentVariable(ConnectionStringEnvironmentVariable)
@@ -63,11 +53,8 @@ internal sealed class PostgresTestDatabase : IAsyncDisposable
 
         try
         {
-            if (initializeSchema)
-            {
-                await using var context = database.CreateContext();
-                await context.Database.EnsureCreatedAsync();
-            }
+            await using var context = database.CreateContext();
+            await context.Database.EnsureCreatedAsync();
             return database;
         }
         catch (Exception initializationException)

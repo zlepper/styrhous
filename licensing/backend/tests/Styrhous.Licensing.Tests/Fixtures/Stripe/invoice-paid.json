@@ -1,0 +1,20 @@
+{
+  "id": "evt_fixture_invoice_paid",
+  "object": "event",
+  "api_version": "2026-08-26.dahlia",
+  "created": 1788177540,
+  "data": {
+    "object": {
+      "id": "in_fixture",
+      "object": "invoice",
+      "subscription": "sub_fixture"
+    }
+  },
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": {
+    "id": null,
+    "idempotency_key": null
+  },
+  "type": "invoice.paid"
+}
