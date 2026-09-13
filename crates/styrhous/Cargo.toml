@@ -70,6 +70,11 @@ itertools = "0.14"
 time = { version = "0.3", features = ["formatting", "parsing"] }
 serde_yaml = "0.9"
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.18", features = ["serde", "v7"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-native-roots"] }
+jsonwebtoken = { version = "11", default-features = false, features = ["rust_crypto"] }
+keyring = "4.2"
 jsonschema = "0.33"
 http = "1.4"
 saphyr = "0.0.11"

@@ -615,4 +615,4 @@ Window state=[focused] rect=<none>
         ScrollBar rect=(x=360.0 y=1014.0 width=1176.0 height=13.0 center_x=948.0 center_y=1020.5)
   GenericContainer rect=<none>
     GenericContainer rect=<none>
-      Label value="Settings\nChecking for updates…" rect=(x=7.0 y=919.0 width=154.3 height=34.0 center_x=84.1 center_y=936.0)
+      Label value="Settings\nChecking for updates…\nCommercial license active." rect=(x=7.0 y=902.0 width=177.2 height=51.0 center_x=95.6 center_y=927.5)

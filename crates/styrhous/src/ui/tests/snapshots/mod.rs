@@ -20,6 +20,7 @@ use crate::cluster_connection_manager::{
     AvailableAksCluster, AvailableTailscaleCluster, Cluster, ClusterDiscoveryTools,
 };
 use crate::helm_release::{HelmRelease, StorageDriver};
+use crate::licensing::{LicenseServer, LicenseStatus};
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::{MinimalResource, PodLogContainer};
 use crate::pod_metrics::{ContainerUsage, NodeUsage, POD_USAGE_HISTORY_WINDOW, PodUsage};

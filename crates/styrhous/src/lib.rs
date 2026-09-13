@@ -3,6 +3,7 @@ mod api_resource;
 mod cluster_connection_manager;
 mod helm_release;
 mod helpers;
+mod licensing;
 mod log_store;
 mod minimal_namespace;
 mod minimal_resource;

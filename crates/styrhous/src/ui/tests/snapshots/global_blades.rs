@@ -3,6 +3,105 @@
 use super::*;
 
 #[test]
+fn licensing_warning_opens_account_settings_without_restricting_the_application() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness
+        .state_mut()
+        .licensing
+        .switch_server(LicenseServer::Custom("http://127.0.0.1:5050".into()));
+    harness
+        .state_mut()
+        .licensing
+        .set_status_for_test(LicenseStatus::SignedOut);
+    harness.run();
+
+    harness.get_by_label("Sign in to refresh your Styrhous license.");
+    harness.get_by_label("More actions for kube-scheduler-kind-control-plane");
+    harness.ui_harness(
+        "licensing/licensing_warning_opens_account_settings_without_restricting_the_application/warning",
+    );
+
+    harness
+        .get_by_label("License warning: Sign in to refresh your Styrhous license. Manage license")
+        .click();
+    harness.run_steps(2);
+
+    harness.get_by_label("License & account");
+    harness.get_by_label("Sign in");
+    assert!(harness.query_by_label("Refresh license").is_none());
+    assert!(harness.query_by_label("Sign out").is_none());
+    assert!(harness.query_by_label("Self-hosted server").is_none());
+    harness.ui_harness(
+        "licensing/licensing_warning_opens_account_settings_without_restricting_the_application/settings",
+    );
+
+    harness.get_by_label("License device display name").click();
+    harness.run();
+    harness
+        .get_by_label("License device display name")
+        .type_text(&"x".repeat(121));
+    harness.run();
+    harness.get_by_label("Save name").click();
+    harness.run();
+    harness.get_by_label("Device name must contain 1 to 120 characters.");
+    assert!(harness.query_by_label("Self-hosted server").is_none());
+    harness.get_by_label("Advanced").click();
+    harness.run();
+    harness.get_by_label("Self-hosted server");
+}
+
+#[test]
+fn pending_renewal_keeps_account_actions_available() {
+    for reason in ["subscription_renewal_pending", "offline_lease_expired"] {
+        let mut harness = application_harness::<MockWorker>();
+        harness.state_mut().ui_state = oracle_resource_table_state();
+        harness
+            .state_mut()
+            .licensing
+            .switch_server(LicenseServer::Custom("http://127.0.0.1:5050".into()));
+        let status = LicenseStatus::Evaluation {
+            reason_code: reason.into(),
+        };
+        let warning_label = format!("License warning: {} Manage license", status.summary());
+        harness.state_mut().licensing.set_status_for_test(status);
+        harness.run();
+        harness.get_by_label(&warning_label).click();
+        harness.run_steps(2);
+        assert!(harness.query_by_label("Sign in").is_none());
+        harness.get_by_label("Refresh license");
+        harness.get_by_label("Sign out");
+        if reason == "subscription_renewal_pending" {
+            harness.ui_harness("licensing/pending_renewal_account_actions");
+        }
+        harness.get_by_label("Sign out").click();
+        harness.run_steps(2);
+        harness.get_by_label("Sign in");
+        assert!(harness.query_by_label("Sign out").is_none());
+    }
+}
+
+#[test]
+fn unconfigured_licensing_requires_a_server_before_sign_in() {
+    let mut harness = application_harness::<MockWorker>();
+    harness
+        .state_mut()
+        .licensing
+        .switch_server(LicenseServer::Custom(String::new()));
+    harness.run();
+
+    harness
+        .get_by_label("License warning: Licensing server is not configured. Manage license")
+        .click();
+    harness.run_steps(2);
+
+    harness.get_by_label("License & account");
+    assert!(harness.query_by_label("Sign in").is_none());
+    assert!(harness.query_by_label("Refresh license").is_none());
+    assert!(harness.query_by_label("Manage account").is_none());
+}
+
+#[test]
 fn namespace_selector_settings_show_templates_and_the_open_field_editor() {
     let mut harness = application_harness::<MockWorker>();
     let mut state = oracle_resource_table_state();
