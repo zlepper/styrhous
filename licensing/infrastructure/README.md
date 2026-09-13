@@ -54,8 +54,9 @@ Gateway hostname cannot bypass the same capacity ceiling.
 The `release` GitHub environment must expose `STYRHOUS_HOSTED_LICENSE_ORIGIN`,
 `LICENSING_PRODUCTION_PULUMI_STACK`, and `PULUMI_ACCESS_TOKEN`. A tagged desktop release compares
 the protected origin to the selected production stack output and verifies the live desktop contract
-before passing that exact origin to every package build. The validation environment supplies its own
-`STYRHOUS_HOSTED_LICENSE_ORIGIN` for branch packages.
+before passing that exact origin to every package build. The validation environment may supply its
+own `STYRHOUS_HOSTED_LICENSE_ORIGIN` for branch packages. When it does not, branch packages use
+the reserved `https://licensing.validation.invalid` origin; tagged releases never use that fallback.
 
 Run the complete infrastructure gate locally with:
 
