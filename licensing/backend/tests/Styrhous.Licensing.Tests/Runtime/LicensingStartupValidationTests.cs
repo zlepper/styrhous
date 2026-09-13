@@ -76,6 +76,31 @@ public sealed class LicensingStartupValidationTests
         await ValidateApiStartupAsync(application);
     }
 
+    [Test]
+    public async Task ProductionStartsAfterTheMigrateCommandCreatesTheCurrentSchema()
+    {
+        await using var database = await PostgresTestDatabase.CreateForMigrationAsync();
+        await Program.RunMigrationsAsync([
+            $"--ConnectionStrings:Licensing={database.ConnectionString}",
+        ]);
+        await using var application = CreateApplication(database, "github-client", "github-secret");
+
+        await application.StartAsync();
+        await application.StopAsync();
+    }
+
+    [Test]
+    public async Task ProductionRejectsThePendingInitialMigration()
+    {
+        await using var database = await PostgresTestDatabase.CreateForMigrationAsync();
+        await using var application = CreateApplication(database, "github-client", "github-secret");
+
+        Assert.That(
+            async () => await application.StartAsync(),
+            Throws.TypeOf<InvalidOperationException>()
+                .With.Message.Contains("pending migration"));
+    }
+
     private static readonly Type[] ApiStartupValidatorTypes =
         [typeof(BrowserAuthenticationStartupValidation), typeof(LicensingStartupValidation)];
 
@@ -85,7 +110,7 @@ public sealed class LicensingStartupValidationTests
             .Where(service => service is BrowserAuthenticationStartupValidation or LicensingStartupValidation)
             .ToArray();
         Assert.That(validators.Select(service => service.GetType()), Is.EqualTo(ApiStartupValidatorTypes));
-        foreach (var validator in validators)
+        foreach (var validator in validators.OfType<BrowserAuthenticationStartupValidation>())
         {
             await validator.StartAsync(CancellationToken.None);
         }
@@ -109,6 +134,7 @@ public sealed class LicensingStartupValidationTests
             $"--ConnectionStrings:Licensing={database.ConnectionString}",
             "--Messaging:ApiOutboxForwardingEnabled=false",
             $"--Messaging:QueueName={database.DatabaseName}",
+            "--urls=http://127.0.0.1:0",
             $"--DataProtection:Certificate={TestDataProtectionCertificate.EncodedCertificate}",
             $"--DataProtection:CertificatePassword={TestDataProtectionCertificate.Password}",
             $"--DesktopProtocol:Certificate={TestDataProtectionCertificate.EncodedDesktopCertificate}",
