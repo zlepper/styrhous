@@ -100,6 +100,4 @@ internal static class DatabaseConstraintNames
     public const string BillingWebhookProcessingState =
         "ck_billing_webhook_events_processing_state";
 
-    public const string DataProtectionKeyFriendlyName =
-        "ux_data_protection_keys_friendly_name";
 }

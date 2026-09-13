@@ -3,7 +3,6 @@ using Amazon.SimpleEmailV2;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -13,7 +12,6 @@ using Stripe;
 using Styrhous.Licensing.Application.Messaging;
 using Styrhous.Licensing.Application.Organizations;
 using Styrhous.Licensing.Application.Signups;
-using Styrhous.Licensing.Infrastructure.Identity;
 using Styrhous.Licensing.Infrastructure.Messaging;
 using Styrhous.Licensing.Persistence;
 using Styrhous.Licensing.Runtime;
@@ -126,7 +124,12 @@ public sealed class Program
 
         services.AddDbContextFactory<LicensingDbContext>((serviceProvider, options) =>
         {
-            options.UseNpgsql(connectionString);
+            options.UseNpgsql(
+                connectionString,
+                npgsql => npgsql.EnableRetryOnFailure(
+                    maxRetryCount: 2,
+                    maxRetryDelay: TimeSpan.FromSeconds(2),
+                    errorCodesToAdd: ["40001", "40P01"]));
             options.UseOpenIddict<Guid>();
             options.AddInterceptors(serviceProvider.GetServices<IInterceptor>());
         });

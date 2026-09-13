@@ -1,8 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using OpenIddict.Abstractions;
 using OpenIddict.EntityFrameworkCore.Models;
 using Styrhous.Licensing.Domain.Accounts;
@@ -13,12 +12,11 @@ using Styrhous.Licensing.Domain.Messaging;
 using Styrhous.Licensing.Domain.Organizations;
 using Styrhous.Licensing.Domain.Signups;
 using Styrhous.Licensing.Domain.Trials;
-using Styrhous.Licensing.Infrastructure.Identity;
 
 namespace Styrhous.Licensing.Persistence;
 
 public sealed class LicensingDbContext(DbContextOptions<LicensingDbContext> options)
-    : IdentityUserContext<ApplicationIdentityUser, Guid>(options)
+    : DbContext(options), IDataProtectionKeyContext
 {
     public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
 
@@ -59,15 +57,14 @@ public sealed class LicensingDbContext(DbContextOptions<LicensingDbContext> opti
 
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
-    public DbSet<DataProtectionKeyRecord> DataProtectionKeys =>
-        Set<DataProtectionKeyRecord>();
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
-    protected override void OnModelCreating(ModelBuilder builder)
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        base.OnModelCreating(builder);
-        builder.Entity<OutboxMessage>().Property(message => message.NativeOutboxEnqueued);
-        builder.Entity<BillingWebhookEvent>().Property(message => message.NativeOutboxEnqueued);
-        builder.Entity<RebusOutboxMessage>(entity =>
+        base.OnModelCreating(modelBuilder);
+        modelBuilder.Entity<OutboxMessage>().Property(message => message.NativeOutboxEnqueued);
+        modelBuilder.Entity<BillingWebhookEvent>().Property(message => message.NativeOutboxEnqueued);
+        modelBuilder.Entity<RebusOutboxMessage>(entity =>
         {
             entity.ToTable(PostgresBackgroundWorkOutbox.TableName);
             entity.HasKey(message => message.Id);
@@ -78,116 +75,25 @@ public sealed class LicensingDbContext(DbContextOptions<LicensingDbContext> opti
             entity.Property(message => message.DestinationAddress).HasMaxLength(255).IsRequired();
             entity.Property(message => message.Sent).HasDefaultValue(false);
         });
-        builder.UseOpenIddict<Guid>();
-        ConfigureIdentity(builder);
-        ConfigureOpenIddict(builder);
-        ConfigureUser(builder.Entity<UserAccount>());
-        ConfigureExternalIdentity(builder.Entity<ExternalIdentity>());
-        ConfigureVerifiedEmailClaim(builder.Entity<VerifiedEmailClaim>());
-        ConfigureBillingAccount(builder.Entity<BillingAccount>());
-        ConfigureSeat(builder.Entity<Seat>());
-        ConfigureTrial(builder.Entity<Trial>());
-        ConfigureOrganization(builder.Entity<Organization>());
-        ConfigureOrganizationMembership(builder.Entity<OrganizationMembership>());
-        ConfigureOrganizationInvitation(builder.Entity<OrganizationInvitation>());
-        ConfigureDeviceActivation(builder.Entity<DeviceActivation>());
-        ConfigureDesktopDeviceSession(builder.Entity<DesktopDeviceSession>());
-        ConfigureAuditRecord(builder.Entity<AuditRecord>());
-        ConfigureCommercialSubscription(builder.Entity<CommercialSubscription>());
-        ConfigureBillingProviderReadCursor(builder.Entity<BillingProviderReadCursor>());
-        ConfigureBillingOperation(builder.Entity<BillingOperation>());
-        ConfigureBillingWebhookEvent(builder.Entity<BillingWebhookEvent>());
-        ConfigureOutboxMessage(builder.Entity<OutboxMessage>());
-        ConfigureDataProtectionKey(builder.Entity<DataProtectionKeyRecord>());
-    }
-
-    private static void ConfigureIdentity(ModelBuilder modelBuilder)
-    {
-        var user = modelBuilder.Entity<ApplicationIdentityUser>();
-        user.ToTable("identity_users");
-        user.HasKey(identity => identity.Id).HasName("pk_identity_users");
-        ConfigureId(user.Property(identity => identity.Id));
-        user.Property(identity => identity.Id).HasColumnName("id");
-        user.Property(identity => identity.UserName).HasColumnName("user_name");
-        user.Property(identity => identity.NormalizedUserName)
-            .HasColumnName("normalized_user_name");
-        user.Property(identity => identity.Email)
-            .HasColumnName("email")
-            .HasMaxLength(VerifiedExternalIdentity.MaximumEmailLength);
-        user.Property(identity => identity.NormalizedEmail)
-            .HasColumnName("normalized_email")
-            .HasMaxLength(VerifiedExternalIdentity.MaximumEmailLength);
-        user.Property(identity => identity.EmailConfirmed)
-            .HasColumnName("email_confirmed");
-        user.Property(identity => identity.PasswordHash).HasColumnName("password_hash");
-        user.Property(identity => identity.SecurityStamp).HasColumnName("security_stamp");
-        user.Property(identity => identity.ConcurrencyStamp)
-            .HasColumnName("concurrency_stamp");
-        user.Property(identity => identity.PhoneNumber).HasColumnName("phone_number");
-        user.Property(identity => identity.PhoneNumberConfirmed)
-            .HasColumnName("phone_number_confirmed");
-        user.Property(identity => identity.TwoFactorEnabled)
-            .HasColumnName("two_factor_enabled");
-        user.Property(identity => identity.LockoutEnd).HasColumnName("lockout_end");
-        user.Property(identity => identity.LockoutEnabled)
-            .HasColumnName("lockout_enabled");
-        user.Property(identity => identity.AccessFailedCount)
-            .HasColumnName("access_failed_count");
-        user.HasIndex(identity => identity.NormalizedUserName)
-            .HasDatabaseName("ux_identity_users_normalized_user_name");
-        user.HasIndex(identity => identity.NormalizedEmail)
-            .HasDatabaseName("ix_identity_users_normalized_email");
-        user.HasOne<UserAccount>()
-            .WithOne()
-            .HasForeignKey<ApplicationIdentityUser>(identity => identity.Id)
-            .OnDelete(DeleteBehavior.Cascade)
-            .HasConstraintName("fk_identity_users_user_account_id");
-
-        var claim = modelBuilder.Entity<IdentityUserClaim<Guid>>();
-        claim.ToTable("identity_user_claims");
-        claim.HasKey(value => value.Id).HasName("pk_identity_user_claims");
-        claim.Property(value => value.Id).HasColumnName("id");
-        claim.Property(value => value.UserId).HasColumnName("user_id");
-        claim.Property(value => value.ClaimType).HasColumnName("claim_type");
-        claim.Property(value => value.ClaimValue).HasColumnName("claim_value");
-        claim.HasIndex(value => value.UserId)
-            .HasDatabaseName("ix_identity_user_claims_user_id");
-        claim.HasOne<ApplicationIdentityUser>()
-            .WithMany()
-            .HasForeignKey(value => value.UserId)
-            .OnDelete(DeleteBehavior.Cascade)
-            .HasConstraintName("fk_identity_user_claims_user_id");
-
-        var login = modelBuilder.Entity<IdentityUserLogin<Guid>>();
-        login.ToTable("identity_user_logins");
-        login.HasKey(value => new { value.LoginProvider, value.ProviderKey })
-            .HasName("pk_identity_user_logins");
-        login.Property(value => value.LoginProvider).HasColumnName("login_provider");
-        login.Property(value => value.ProviderKey).HasColumnName("provider_key");
-        login.Property(value => value.ProviderDisplayName)
-            .HasColumnName("provider_display_name");
-        login.Property(value => value.UserId).HasColumnName("user_id");
-        login.HasIndex(value => value.UserId)
-            .HasDatabaseName("ix_identity_user_logins_user_id");
-        login.HasOne<ApplicationIdentityUser>()
-            .WithMany()
-            .HasForeignKey(value => value.UserId)
-            .OnDelete(DeleteBehavior.Cascade)
-            .HasConstraintName("fk_identity_user_logins_user_id");
-
-        var token = modelBuilder.Entity<IdentityUserToken<Guid>>();
-        token.ToTable("identity_user_tokens");
-        token.HasKey(value => new { value.UserId, value.LoginProvider, value.Name })
-            .HasName("pk_identity_user_tokens");
-        token.Property(value => value.UserId).HasColumnName("user_id");
-        token.Property(value => value.LoginProvider).HasColumnName("login_provider");
-        token.Property(value => value.Name).HasColumnName("name");
-        token.Property(value => value.Value).HasColumnName("value");
-        token.HasOne<ApplicationIdentityUser>()
-            .WithMany()
-            .HasForeignKey(value => value.UserId)
-            .OnDelete(DeleteBehavior.Cascade)
-            .HasConstraintName("fk_identity_user_tokens_user_id");
+        modelBuilder.UseOpenIddict<Guid>();
+        ConfigureOpenIddict(modelBuilder);
+        ConfigureUser(modelBuilder.Entity<UserAccount>());
+        ConfigureExternalIdentity(modelBuilder.Entity<ExternalIdentity>());
+        ConfigureVerifiedEmailClaim(modelBuilder.Entity<VerifiedEmailClaim>());
+        ConfigureBillingAccount(modelBuilder.Entity<BillingAccount>());
+        ConfigureSeat(modelBuilder.Entity<Seat>());
+        ConfigureTrial(modelBuilder.Entity<Trial>());
+        ConfigureOrganization(modelBuilder.Entity<Organization>());
+        ConfigureOrganizationMembership(modelBuilder.Entity<OrganizationMembership>());
+        ConfigureOrganizationInvitation(modelBuilder.Entity<OrganizationInvitation>());
+        ConfigureDeviceActivation(modelBuilder.Entity<DeviceActivation>());
+        ConfigureDesktopDeviceSession(modelBuilder.Entity<DesktopDeviceSession>());
+        ConfigureAuditRecord(modelBuilder.Entity<AuditRecord>());
+        ConfigureCommercialSubscription(modelBuilder.Entity<CommercialSubscription>());
+        ConfigureBillingProviderReadCursor(modelBuilder.Entity<BillingProviderReadCursor>());
+        ConfigureBillingOperation(modelBuilder.Entity<BillingOperation>());
+        ConfigureBillingWebhookEvent(modelBuilder.Entity<BillingWebhookEvent>());
+        ConfigureOutboxMessage(modelBuilder.Entity<OutboxMessage>());
     }
 
     private static void ConfigureOpenIddict(ModelBuilder modelBuilder)
@@ -1122,25 +1028,6 @@ public sealed class LicensingDbContext(DbContextOptions<LicensingDbContext> opti
         builder.HasIndex(webhookEvent => new { webhookEvent.ReceivedAt, webhookEvent.Id })
             .HasFilter("processed_at IS NULL")
             .HasDatabaseName("ix_billing_webhook_events_pending_received_id");
-    }
-
-    private static void ConfigureDataProtectionKey(
-        EntityTypeBuilder<DataProtectionKeyRecord> builder)
-    {
-        builder.ToTable("data_protection_keys");
-        builder.HasKey(key => key.Id).HasName("pk_data_protection_keys");
-        ConfigureId(builder.Property(key => key.Id));
-        builder.Property(key => key.FriendlyName)
-            .HasColumnName("friendly_name")
-            .HasMaxLength(DataProtectionKeyRecord.MaximumFriendlyNameLength)
-            .IsRequired();
-        builder.Property(key => key.Xml)
-            .HasColumnName("xml")
-            .HasMaxLength(DataProtectionKeyRecord.MaximumXmlLength)
-            .IsRequired();
-        builder.HasIndex(key => key.FriendlyName)
-            .IsUnique()
-            .HasDatabaseName(DatabaseConstraintNames.DataProtectionKeyFriendlyName);
     }
 
     private static void ConfigureId(PropertyBuilder<Guid> property)
