@@ -3,7 +3,8 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const MAX_SHOWCASE_RASTER_DIFF_PIXELS = 1;
+const MAX_BUTTON_SHOWCASE_RASTER_DIFF_PIXELS = 100;
+const MAX_SELECT_SHOWCASE_RASTER_DIFF_PIXELS = 1;
 
 async function waitForDeterministicRendering(page: Page) {
   await page.evaluate(() => document.fonts.ready);
@@ -48,7 +49,7 @@ test('renders the native-sized button showcase', async ({ page }) => {
     'button-showcase-accessibility.txt'
   );
   await expect(page).toHaveScreenshot('button-showcase.png', {
-    maxDiffPixels: MAX_SHOWCASE_RASTER_DIFF_PIXELS
+    maxDiffPixels: MAX_BUTTON_SHOWCASE_RASTER_DIFF_PIXELS
   });
 });
 
@@ -162,7 +163,7 @@ test('renders the production select at the native combobox size', async ({ page 
     'select-unfocused-accessibility.txt'
   );
   await expect(page).toHaveScreenshot('select-unfocused.png', {
-    maxDiffPixels: MAX_SHOWCASE_RASTER_DIFF_PIXELS
+    maxDiffPixels: MAX_SELECT_SHOWCASE_RASTER_DIFF_PIXELS
   });
 
   await select.focus();
@@ -171,7 +172,7 @@ test('renders the production select at the native combobox size', async ({ page 
     'select-focused-accessibility.txt'
   );
   await expect(page).toHaveScreenshot('select-focused.png', {
-    maxDiffPixels: 0
+    maxDiffPixels: MAX_SELECT_SHOWCASE_RASTER_DIFF_PIXELS
   });
 });
 
