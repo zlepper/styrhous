@@ -21,6 +21,8 @@ bash -n \
   run-migration-task.sh \
   update-before-migration.sh \
   publish-portal.sh \
+  resolve-desktop-origin.sh \
   verify-desktop-origin.sh \
   aws-smoke-test.sh \
   aws-operational-smoke-test.sh
+bash tests/test-resolve-desktop-origin.sh
