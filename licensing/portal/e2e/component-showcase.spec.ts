@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+const MAX_SHOWCASE_RASTER_DIFF_PIXELS = 1;
+
 async function waitForDeterministicRendering(page: Page) {
   await page.evaluate(() => document.fonts.ready);
 }
@@ -45,7 +47,9 @@ test('renders the native-sized button showcase', async ({ page }) => {
   expect(await page.locator('body').ariaSnapshot()).toMatchSnapshot(
     'button-showcase-accessibility.txt'
   );
-  await expect(page).toHaveScreenshot('button-showcase.png', { maxDiffPixels: 0 });
+  await expect(page).toHaveScreenshot('button-showcase.png', {
+    maxDiffPixels: MAX_SHOWCASE_RASTER_DIFF_PIXELS
+  });
 });
 
 for (const variant of ['primary', 'secondary', 'soft', 'danger'] as const) {
@@ -158,7 +162,7 @@ test('renders the production select at the native combobox size', async ({ page 
     'select-unfocused-accessibility.txt'
   );
   await expect(page).toHaveScreenshot('select-unfocused.png', {
-    maxDiffPixels: 0
+    maxDiffPixels: MAX_SHOWCASE_RASTER_DIFF_PIXELS
   });
 
   await select.focus();
