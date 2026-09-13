@@ -1,4 +1,5 @@
 using System.Data.Common;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Styrhous.Licensing.Tests.Persistence;
@@ -47,8 +48,7 @@ internal sealed class OrganizationMemberRemovalSerializationFailureInterceptor
         throw new SimulatedSerializationFailureException();
     }
 
-    private sealed class SimulatedSerializationFailureException : DbException
+    private sealed class SimulatedSerializationFailureException : DbUpdateConcurrencyException
     {
-        public override string? SqlState => "40001";
     }
 }

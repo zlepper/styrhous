@@ -67,20 +67,22 @@ internal static class DevicePersistenceScenario
     {
         ArgumentNullException.ThrowIfNull(installation);
         var correlationId = Guid.CreateVersion7();
-        return EfConcurrencyRetry.ExecuteAsync(async () =>
-        {
-            await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
-            await using var transaction = await context.Database.BeginTransactionAsync(
-                IsolationLevel.Serializable, cancellationToken);
-            var result = await PostgresDeviceActivationOperation.ExecuteAsync(
-                context, userId, seatId, installation, observedAt, correlationId, cancellationToken);
-            if (result.Status == DeviceActivationStatus.Activated)
-            {
-                await context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-            }
-            return result;
-        });
+        return EfConcurrencyRetry.ExecuteAsync(() =>
+            LicensingDbContextTransaction.ExecuteAsync(
+                contextFactory,
+                IsolationLevel.Serializable,
+                async (context, token) =>
+                {
+                    var result = await PostgresDeviceActivationOperation.ExecuteAsync(
+                        context, userId, seatId, installation, observedAt, correlationId, token);
+                    if (result.Status == DeviceActivationStatus.Activated)
+                    {
+                        await context.SaveChangesAsync(token);
+                    }
+
+                    return result;
+                },
+                cancellationToken));
     }
 
     public static DesktopInstallation CreateInstallation(int number)
