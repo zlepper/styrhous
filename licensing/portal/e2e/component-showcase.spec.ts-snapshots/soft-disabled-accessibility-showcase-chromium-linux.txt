@@ -1,0 +1,3 @@
+- paragraph: "Soft: Default vs Disabled"
+- button "Default"
+- button "Disabled" [disabled]

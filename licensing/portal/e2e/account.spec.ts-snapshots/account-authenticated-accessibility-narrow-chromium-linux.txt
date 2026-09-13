@@ -1,0 +1,39 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Styrhous licensing home":
+    - /url: /
+    - strong: Styrhous
+    - text: Licensing
+  - navigation "Primary navigation":
+    - list:
+      - listitem:
+        - link "Organizations":
+          - /url: /organizations
+      - listitem:
+        - link "Devices":
+          - /url: /devices
+      - listitem:
+        - link "Billing":
+          - /url: /billing
+      - listitem:
+        - link "Account":
+          - /url: /account
+- main:
+  - region "Account":
+    - heading "Account" [level=1]
+  - region "person@example.com":
+    - heading "person@example.com" [level=2]
+    - button "Sign out"
+    - heading "Sign-in methods" [level=3]
+    - list:
+      - listitem:
+        - strong: GitHub
+        - button "Remove GitHub": Remove
+      - listitem:
+        - strong: Google
+        - button "Remove Google": Remove
+    - heading "Add a sign-in method" [level=3]
+    - link "Add Microsoft":
+      - /url: /auth/link/microsoft?returnUrl=/account
+- contentinfo: Styrhous licensing

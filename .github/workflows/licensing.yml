@@ -58,3 +58,42 @@ jobs:
           docker run --rm --network host --entrypoint dotnet
           --env STYRHOUS_APPLICATION_CONFIGURATION styrhous-licensing-ci
           database-provisioning/Styrhous.Licensing.DatabaseProvisioning.dll
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: licensing/portal
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: licensing/portal/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Check types and Svelte components
+        run: npm run check
+      - name: Run unit tests
+        run: npm run test:unit
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: Run browser tests
+        run: npm run test:e2e
+      - name: Upload browser test failures
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: licensing-portal-browser-failures
+          path: |
+            licensing/portal/playwright-report/
+            licensing/portal/test-results/
+          if-no-files-found: ignore
+          retention-days: 7

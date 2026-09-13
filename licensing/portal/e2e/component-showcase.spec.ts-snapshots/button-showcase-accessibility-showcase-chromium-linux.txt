@@ -1,0 +1,36 @@
+- heading "Buttons" [level=1]
+- paragraph: Application button styles and sizes
+- text: XS SM MD LG XL Primary
+- button "Button text"
+- button "Button text"
+- button "Button text"
+- button "Button text"
+- button "Button text"
+- text: Secondary
+- button "Button text"
+- button "Button text"
+- button "Button text"
+- button "Button text"
+- button "Button text"
+- text: Soft
+- button "Button text"
+- button "Button text"
+- button "Button text"
+- button "Button text"
+- button "Button text"
+- text: Danger
+- button "Button text"
+- button "Button text"
+- button "Button text"
+- button "Button text"
+- button "Button text"
+- heading "Icon buttons" [level=2]
+- button "Back"
+- button "Forward"
+- button "Edit"
+- button "Delete"
+- button "More actions"
+- heading "Corner radius" [level=2]
+- button "Default"
+- button "Rounded"
+- button "Pill"

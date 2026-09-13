@@ -1,0 +1,95 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Styrhous licensing home":
+    - /url: /
+    - strong: Styrhous
+    - text: Licensing
+  - navigation "Primary navigation":
+    - list:
+      - listitem:
+        - link "Organizations":
+          - /url: /organizations
+      - listitem:
+        - link "Devices":
+          - /url: /devices
+      - listitem:
+        - link "Billing":
+          - /url: /billing
+      - listitem:
+        - link "Account":
+          - /url: /account
+- main:
+  - region "Organizations":
+    - heading "Organizations" [level=1]
+  - region "Organization controls":
+    - text: Current organization
+    - combobox "Current organization":
+      - option "Northstar Platform" [selected]
+    - group: New organization
+  - region "Northstar Platform":
+    - heading "Northstar Platform" [level=2]
+    - paragraph: 3 members and invitations · Owner
+    - group: Invite people
+    - table "Organization members and invitations":
+      - caption: Organization members and invitations
+      - rowgroup:
+        - row "Person Status Role License Devices Activity Actions":
+          - columnheader "Person"
+          - columnheader "Status"
+          - columnheader "Role"
+          - columnheader "License"
+          - columnheader "Devices"
+          - columnheader "Activity"
+          - columnheader "Actions"
+      - rowgroup:
+        - row "owner@example.com You Status Active Role Owner License License for owner@example.com Assigned Device limit 3 Activity Joined Sep 1, 2026, 10:15 AM":
+          - rowheader "owner@example.com You":
+            - strong: owner@example.com
+            - text: You
+          - cell "Status Active"
+          - cell "Role Owner"
+          - cell "License License for owner@example.com Assigned":
+            - text: License License for owner@example.com
+            - combobox "License for owner@example.com":
+              - option "Assigned" [selected]
+              - option "Not assigned"
+          - cell "Device limit 3"
+          - cell "Activity Joined Sep 1, 2026, 10:15 AM":
+            - text: Activity Joined
+            - time: Sep 1, 2026, 10:15 AM
+        - row "member@example.com Status Active Role Role for member@example.com Member License License for member@example.com Not assigned Device limit No license assigned Activity Joined Sep 2, 2026, 8:30 AM More actions for member@example.com":
+          - rowheader "member@example.com":
+            - strong: member@example.com
+          - cell "Status Active"
+          - cell "Role Role for member@example.com Member":
+            - text: Role Role for member@example.com
+            - combobox "Role for member@example.com":
+              - option "Admin"
+              - option "Member" [selected]
+          - cell "License License for member@example.com Not assigned":
+            - text: License License for member@example.com
+            - combobox "License for member@example.com":
+              - option "Assigned"
+              - option "Not assigned" [selected]
+          - cell "Device limit No license assigned"
+          - cell "Activity Joined Sep 2, 2026, 8:30 AM":
+            - text: Activity Joined
+            - time: Sep 2, 2026, 8:30 AM
+          - cell "More actions for member@example.com":
+            - button "More actions for member@example.com"
+        - row "invitee@example.com Status Pending invitation Role Member License Not included Device limit No license included Activity Last sent Sep 3, 2026, 9:00 AM Expires Sep 10, 2026, 9:00 AM More actions for invitee@example.com":
+          - rowheader "invitee@example.com":
+            - strong: invitee@example.com
+          - cell "Status Pending invitation"
+          - cell "Role Member"
+          - cell "License Not included"
+          - cell "Device limit No license included"
+          - cell "Activity Last sent Sep 3, 2026, 9:00 AM Expires Sep 10, 2026, 9:00 AM":
+            - text: Activity Last sent
+            - time: Sep 3, 2026, 9:00 AM
+            - text: Expires
+            - time: Sep 10, 2026, 9:00 AM
+          - cell "More actions for invitee@example.com":
+            - button "More actions for invitee@example.com"
+- contentinfo: Styrhous licensing

@@ -1,0 +1,3 @@
+- paragraph: "Danger: Default vs Focused"
+- button "Default"
+- button "Focused"

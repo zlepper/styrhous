@@ -1,0 +1,7 @@
+- text: Assigned to
+- combobox "Assigned to":
+  - option "Search..." [selected]
+  - option "Michael Foster"
+  - option "Floyd Miles"
+  - option "Emily Selman"
+  - option "Benjamin Russel"

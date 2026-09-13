@@ -1,0 +1,3 @@
+- paragraph: "Secondary: Default vs Hovered"
+- button "Default"
+- button "Hovered"

@@ -1,0 +1,55 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Styrhous licensing home":
+    - /url: /
+    - strong: Styrhous
+    - text: Licensing
+  - navigation "Primary navigation":
+    - list:
+      - listitem:
+        - link "Organizations":
+          - /url: /organizations
+      - listitem:
+        - link "Devices":
+          - /url: /devices
+      - listitem:
+        - link "Billing":
+          - /url: /billing
+      - listitem:
+        - link "Account":
+          - /url: /account
+- main:
+  - region "Devices":
+    - heading "Devices" [level=1]
+  - region "Personal seat":
+    - heading "Personal seat" [level=2]
+    - text: Trial access is active
+    - strong: 1 / 3
+    - text: devices
+    - paragraph:
+      - text: Valid until
+      - time: Sep 14, 2026, 10:15 AM
+    - list:
+      - listitem:
+        - heading "Laptop" [level=3]
+        - paragraph:
+          - text: macOS · Last seen
+          - time: Sep 4, 2026, 7:45 AM
+        - button "Remove device Laptop": Remove device
+        - group: Device details
+  - region "Northstar Platform":
+    - heading "Northstar Platform" [level=2]
+    - text: License inactive
+    - strong: "1"
+    - text: saved devices
+    - paragraph: Assign a license to restore licensed access on these devices.
+    - list:
+      - listitem:
+        - heading "Workstation 14" [level=3]
+        - paragraph:
+          - text: Linux · Last seen
+          - time: Sep 4, 2026, 8:05 AM
+        - button "Remove device Workstation 14": Remove device
+        - group: Device details
+- contentinfo: Styrhous licensing

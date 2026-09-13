@@ -1,0 +1,3 @@
+- paragraph: "Primary: Default vs Focused"
+- button "Default"
+- button "Focused"

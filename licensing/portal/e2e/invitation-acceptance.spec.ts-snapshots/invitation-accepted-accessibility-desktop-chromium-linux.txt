@@ -1,0 +1,33 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Styrhous licensing home":
+    - /url: /
+    - strong: Styrhous
+    - text: Licensing
+  - navigation "Primary navigation":
+    - list:
+      - listitem:
+        - link "Organizations":
+          - /url: /organizations
+      - listitem:
+        - link "Devices":
+          - /url: /devices
+      - listitem:
+        - link "Billing":
+          - /url: /billing
+      - listitem:
+        - link "Account":
+          - /url: /account
+- main:
+  - region "Organization invitation":
+    - heading "Organization invitation" [level=1]
+    - paragraph: Confirm access to the organization that invited you.
+  - status "Your organization access is ready":
+    - paragraph: Invitation accepted
+    - heading "Your organization access is ready" [level=2]
+    - paragraph: You joined as Member. A license was assigned to you.
+    - link "Open organizations":
+      - /url: /organizations
+- contentinfo: Styrhous licensing
+- text: Accept invitation · Styrhous
