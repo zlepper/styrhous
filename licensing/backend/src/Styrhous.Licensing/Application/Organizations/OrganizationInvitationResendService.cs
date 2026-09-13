@@ -1,6 +1,5 @@
 using Styrhous.Licensing.Infrastructure.Organizations;
 using Styrhous.Licensing.Persistence;
-using Styrhous.Licensing.Domain.Identifiers;
 using Styrhous.Licensing.Domain.Organizations;
 
 namespace Styrhous.Licensing.Application.Organizations;
@@ -20,7 +19,7 @@ public sealed class OrganizationInvitationResendService(
 
         var secret = secretGenerator.Generate();
         var observedAt = timeProvider.GetUtcNow();
-        var correlationId = Uuid7.Create();
+        var correlationId = Guid.CreateVersion7();
         var stored = await store.ResendAsync(
             actorUserId,
             organizationId,

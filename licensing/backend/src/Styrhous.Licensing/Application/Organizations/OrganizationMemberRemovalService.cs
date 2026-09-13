@@ -1,5 +1,4 @@
 using Styrhous.Licensing.Persistence;
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Application.Organizations;
 
@@ -20,7 +19,7 @@ public sealed class OrganizationMemberRemovalService(
             organizationId,
             membershipId,
             timeProvider.GetUtcNow().ToUniversalTime(),
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             cancellationToken);
     }
 
@@ -40,7 +39,7 @@ public sealed class OrganizationMemberRemovalService(
             organizationId,
             parsedMembershipId,
             timeProvider.GetUtcNow().ToUniversalTime(),
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             cancellationToken);
     }
 

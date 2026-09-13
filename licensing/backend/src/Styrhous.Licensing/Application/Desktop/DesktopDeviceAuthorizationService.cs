@@ -1,6 +1,5 @@
 using Styrhous.Licensing.Persistence;
 using Styrhous.Licensing.Domain.Devices;
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Application.Desktop;
 
@@ -37,7 +36,7 @@ public sealed class DesktopDeviceAuthorizationService(
             authorizationId,
             installation,
             timeProvider.GetUtcNow(),
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             cancellationToken);
         return DesktopDeviceAuthorizationDecisionResult.From(activation);
     }

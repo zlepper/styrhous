@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Styrhous.Licensing.Application.Messaging;
-using Styrhous.Licensing.Domain.Identifiers;
 using Styrhous.Licensing.Domain.Messaging;
 
 namespace Styrhous.Licensing.Persistence;

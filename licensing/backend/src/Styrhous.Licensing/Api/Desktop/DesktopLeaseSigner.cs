@@ -5,7 +5,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.IdentityModel.Tokens;
 using Styrhous.Licensing.Application.Devices;
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Api.Desktop;
 
@@ -80,7 +79,7 @@ public sealed class DesktopLeaseSigner
             NotBefore: issuedAtUnix,
             ExpiresAt: expiresAtUnix,
             RefreshAfter: refreshAfterUnix,
-            JwtId: Uuid7.Create().ToString(),
+            JwtId: Guid.CreateVersion7().ToString(),
             SigningKeyId: keyId));
         var signingInput = Encoding.ASCII.GetBytes($"{header}.{payload}");
         using var rsa = certificate.GetRSAPrivateKey()

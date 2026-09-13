@@ -1,4 +1,3 @@
-using Styrhous.Licensing.Domain.Identifiers;
 using Styrhous.Licensing.Domain.Validation;
 
 namespace Styrhous.Licensing.Domain.Billing;
@@ -76,7 +75,7 @@ public sealed class BillingWebhookEvent
         }
 
         return new(
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             RequiredText.Normalize(
                 externalEventId,
                 nameof(externalEventId),

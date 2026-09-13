@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OpenIddict.Abstractions;
 using OpenIddict.EntityFrameworkCore.Models;
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Persistence;
 
@@ -85,7 +84,7 @@ internal static class DesktopSessionRevocation
             return;
         }
 
-        var authorizationConcurrencyToken = Uuid7.Create().ToString();
+        var authorizationConcurrencyToken = Guid.CreateVersion7().ToString();
         await dbContext
             .Set<OpenIddictEntityFrameworkCoreAuthorization<Guid>>()
             .Where(authorization => authorizationIds.Contains(authorization.Id))
@@ -99,7 +98,7 @@ internal static class DesktopSessionRevocation
                         authorizationConcurrencyToken),
                 cancellationToken);
 
-        var tokenConcurrencyToken = Uuid7.Create().ToString();
+        var tokenConcurrencyToken = Guid.CreateVersion7().ToString();
         await dbContext
             .Set<OpenIddictEntityFrameworkCoreToken<Guid>>()
             .Where(token => token.Authorization != null

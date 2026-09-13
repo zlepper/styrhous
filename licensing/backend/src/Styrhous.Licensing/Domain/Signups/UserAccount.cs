@@ -1,4 +1,3 @@
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Domain.Signups;
 
@@ -35,7 +34,7 @@ public sealed class UserAccount
         DateTimeOffset createdAt)
     {
         return new(
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             identity.VerifiedEmail,
             identity.NormalizedEmail,
             createdAt.ToUniversalTime());

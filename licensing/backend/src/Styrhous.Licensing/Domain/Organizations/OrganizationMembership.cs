@@ -1,4 +1,3 @@
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Domain.Organizations;
 
@@ -45,7 +44,7 @@ public sealed class OrganizationMembership
         DateTimeOffset createdAt)
     {
         return new OrganizationMembership(
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             organizationId,
             userId,
             OrganizationRole.Owner,
@@ -67,7 +66,7 @@ public sealed class OrganizationMembership
         }
 
         return new OrganizationMembership(
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             organizationId,
             userId,
             role,

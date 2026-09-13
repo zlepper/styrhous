@@ -7,7 +7,6 @@ using OpenIddict.Server.AspNetCore;
 using Styrhous.Licensing.Application.Devices;
 using Styrhous.Licensing.Application.Entitlements;
 using Styrhous.Licensing.Domain.Devices;
-using Styrhous.Licensing.Domain.Identifiers;
 using Styrhous.Licensing.Persistence;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 

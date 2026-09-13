@@ -1,4 +1,3 @@
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Domain.Billing;
 
@@ -107,7 +106,7 @@ public sealed class CommercialSubscription
         ArgumentOutOfRangeException.ThrowIfNegative(providerReadRevision);
         ValidateSnapshotKind(providerSnapshotKind);
         return new CommercialSubscription(
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             billingAccountId,
             projection,
             providerReadRevision,

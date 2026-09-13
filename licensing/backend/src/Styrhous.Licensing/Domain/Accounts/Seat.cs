@@ -1,4 +1,3 @@
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Domain.Accounts;
 
@@ -46,7 +45,7 @@ public sealed class Seat
     {
 
         return new Seat(
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             billingAccountId,
             assignedUserId,
             DefaultDeviceLimit,

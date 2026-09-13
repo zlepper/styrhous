@@ -1,4 +1,3 @@
-using Styrhous.Licensing.Domain.Identifiers;
 using Styrhous.Licensing.Domain.Validation;
 
 namespace Styrhous.Licensing.Domain.Organizations;
@@ -122,7 +121,7 @@ public sealed class OrganizationInvitation
         var (trimmedEmail, normalizedEmail) = EmailAddress.Normalize(email, nameof(email));
         var utcCreatedAt = createdAt.ToUniversalTime();
         return new OrganizationInvitation(
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             organizationId,
             createdByUserId,
             trimmedEmail,

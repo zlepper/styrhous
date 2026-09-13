@@ -7,7 +7,6 @@ using Styrhous.Licensing.Api.Antiforgery;
 using Styrhous.Licensing.Api.Authentication;
 using Styrhous.Licensing.Application.Desktop;
 using Styrhous.Licensing.Domain.Devices;
-using Styrhous.Licensing.Domain.Identifiers;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace Styrhous.Licensing.Api.Desktop;

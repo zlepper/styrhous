@@ -1,5 +1,4 @@
 using Styrhous.Licensing.Persistence;
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Application.Billing;
 
@@ -19,7 +18,7 @@ public sealed class BillingWebhookProcessingService(
     {
 
         var acquiredAt = timeProvider.GetUtcNow();
-        var leaseId = Uuid7.Create();
+        var leaseId = Guid.CreateVersion7();
         var claimResult = await processingStore.TryAcquireAsync(
             inboxEventId,
             leaseId,

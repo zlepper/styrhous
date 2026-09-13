@@ -1,4 +1,3 @@
-using Styrhous.Licensing.Domain.Identifiers;
 using Styrhous.Licensing.Domain.Validation;
 
 namespace Styrhous.Licensing.Domain.Billing;
@@ -167,7 +166,7 @@ public sealed class BillingOperation
             throw new ArgumentException("Only terminal subscriptions can be replaced.", nameof(previousSubscription));
 
         return new BillingOperation(
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             billingAccountId,
             actorUserId,
             BillingOperationKind.InitialCheckout,
@@ -211,7 +210,7 @@ public sealed class BillingOperation
         }
 
         return new BillingOperation(
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             billingAccountId,
             actorUserId,
             BillingOperationKind.SeatQuantityChange,

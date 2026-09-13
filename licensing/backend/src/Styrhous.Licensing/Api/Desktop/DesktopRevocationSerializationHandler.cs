@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore;
 using OpenIddict.Abstractions;
 using OpenIddict.Server;
-using Styrhous.Licensing.Domain.Identifiers;
 using Styrhous.Licensing.Persistence;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 using static OpenIddict.Server.OpenIddictServerEvents;

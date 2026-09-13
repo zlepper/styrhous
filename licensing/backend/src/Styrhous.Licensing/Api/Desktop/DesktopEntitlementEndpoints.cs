@@ -6,7 +6,6 @@ using OpenIddict.Validation.AspNetCore;
 using Styrhous.Licensing.Api.Devices;
 using Styrhous.Licensing.Application.Devices;
 using Styrhous.Licensing.Application.Entitlements;
-using Styrhous.Licensing.Domain.Identifiers;
 using Styrhous.Licensing.Persistence;
 
 namespace Styrhous.Licensing.Api.Desktop;

@@ -1,4 +1,3 @@
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Domain.Signups;
 
@@ -40,7 +39,7 @@ public sealed class ExternalIdentity
 
         ArgumentNullException.ThrowIfNull(identity);
         return new ExternalIdentity(
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             userId,
             identity.Provider,
             identity.Subject,
