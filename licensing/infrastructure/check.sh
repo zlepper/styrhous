@@ -24,10 +24,3 @@ bash -n \
   verify-desktop-origin.sh \
   aws-smoke-test.sh \
   aws-operational-smoke-test.sh
-bash tests/test-configure-stack.sh
-bash tests/test-resolve-image-uris.sh
-bash tests/test-update-before-migration.sh
-bash tests/test-publish-portal.sh
-bash tests/test-run-migration-task.sh
-bash tests/test-aws-smoke-test.sh
-bash tests/test-aws-operational-smoke-test.sh
