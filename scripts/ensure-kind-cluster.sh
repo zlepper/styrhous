@@ -82,8 +82,17 @@ if (( ${#test_namespaces[@]} > 0 )); then
         if [[ -n "${configmaps}" ]]; then
             mapfile -t configmap_resources <<<"${configmaps}"
             for configmap in "${configmap_resources[@]}"; do
-                kubectl --context "${context_name}" --namespace "${namespace}" \
-                    patch "${configmap}" --type=merge --patch '{"metadata":{"finalizers":[]}}'
+                if ! patch_output="$(kubectl --context "${context_name}" --namespace "${namespace}" \
+                    patch "${configmap}" --type=merge --patch '{"metadata":{"finalizers":[]}}' 2>&1)"; then
+                    if ! kubectl --context "${context_name}" --namespace "${namespace}" \
+                        get "${configmap}" >/dev/null 2>&1; then
+                        continue
+                    fi
+
+                    echo "${patch_output}" >&2
+                    exit 1
+                fi
+                echo "${patch_output}"
             done
         fi
     done

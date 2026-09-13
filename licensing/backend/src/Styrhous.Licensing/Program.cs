@@ -13,6 +13,7 @@ using OpenIddict.EntityFrameworkCore;
 using Stripe;
 using Styrhous.Licensing.Api.Antiforgery;
 using Styrhous.Licensing.Api.Authentication;
+using Styrhous.Licensing.Api.Billing;
 using Styrhous.Licensing.Api.Devices;
 using Styrhous.Licensing.Api.Desktop;
 using Styrhous.Licensing.Api.Entitlements;
@@ -143,6 +144,8 @@ public sealed class Program
         application.UseAuthorization();
         application.MapAccountAuthenticationEndpoints();
         application.MapAntiforgeryEndpoints();
+        application.MapBillingAccountEndpoints();
+        application.MapBillingWebhookEndpoints();
         application.MapDeviceEndpoints();
         application.MapEntitlementEndpoints();
         application.MapOrganizationEndpoints();
@@ -380,9 +383,18 @@ public sealed class Program
     {
         services.AddHostedService<BrowserAuthenticationStartupValidation>();
         services.AddHostedService<LicensingStartupValidation>();
+        services.AddScoped<PostgresBillingAccountListingStore>();
+        services.AddScoped<BillingAccountListingService>();
+        services.AddScoped<PostgresBillingCheckoutStore>();
+        services.AddScoped<PostgresBillingSeatQuantityStore>();
+        services.AddScoped<PostgresBillingCustomerPortalStore>();
         services.AddScoped<PostgresCommercialSubscriptionProjectionStore>();
         services.AddScoped<CommercialSubscriptionProjectionService>();
         services.AddScoped<PostgresBillingProviderReadRevisionSource>();
+        services.AddScoped<BillingCheckoutCompletionReconciler>();
+        services.AddScoped<BillingCheckoutService>();
+        services.AddScoped<BillingSeatQuantityService>();
+        services.AddScoped<BillingCustomerPortalService>();
         services.AddScoped<PostgresDeviceListingStore>();
         services.AddScoped<DeviceListingService>();
         services.AddScoped<PostgresDeviceRevocationStore>();
@@ -416,16 +428,24 @@ public sealed class Program
         services.AddScoped<OrganizationInvitationResendService>();
         services.AddScoped<PostgresOrganizationInvitationAcceptanceStore>();
         services.AddScoped<OrganizationInvitationAcceptanceService>();
+        services.AddScoped<PostgresBillingWebhookInboxStore>();
+        services.AddScoped<BillingWebhookIngestionService>();
         ConfigureStripeOptions(
             services,
             configuration,
             requireApiConfiguration: true);
         ConfigureStripeClient(services);
+        services.AddSingleton<IBillingCheckoutProvider, StripeBillingCheckoutProvider>();
+        services.AddSingleton<IBillingPriceProvider, StripeBillingPriceProvider>();
+        services.AddSingleton<
+            IBillingCustomerPortalProvider,
+            StripeBillingCustomerPortalProvider>();
         services.AddScoped<StripeCommercialSubscriptionProvider>();
         services.AddScoped<ICommercialSubscriptionProvider>(serviceProvider =>
             serviceProvider.GetRequiredService<StripeCommercialSubscriptionProvider>());
         services.AddScoped<IBillingSeatQuantityProvider>(serviceProvider =>
             serviceProvider.GetRequiredService<StripeCommercialSubscriptionProvider>());
+        services.AddSingleton<IBillingWebhookVerifier, StripeBillingWebhookVerifier>();
         services.AddSingleton<CryptographicOrganizationInvitationSecretGenerator>();
         ConfigureInvitationDeliveryProtection(services, configuration);
         services.AddSingleton(DesktopProtocolCertificateConfiguration.LoadIssuer(configuration));
