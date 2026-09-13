@@ -10,6 +10,7 @@ public sealed class PostgresUserSignupStore(
     LicensingDbContext dbContext,
     IDbContextFactory<LicensingDbContext> contextFactory)
 {
+    internal bool HasActiveTransaction => dbContext.Database.CurrentTransaction is not null;
 
     public Task<SignupResult?> FindAsync(
         VerifiedExternalIdentity identity,

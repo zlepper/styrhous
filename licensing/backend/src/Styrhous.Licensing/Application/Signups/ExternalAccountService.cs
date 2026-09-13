@@ -51,8 +51,26 @@ public sealed class ExternalAccountService(
             return;
         }
 
-        await using var operationContext = await contextFactory.CreateDbContextAsync(cancellationToken);
+        _ = await EfConcurrencyRetry.ExecuteAsync(() =>
+            LicensingDbContextTransaction.ExecuteAsync(
+                contextFactory,
+                IsolationLevel.Serializable,
+                (operationContext, token) => LinkWithinTransactionAsync(
+                    operationContext,
+                    userId,
+                    identity,
+                    token),
+                cancellationToken));
+    }
+
+    private async Task<bool> LinkWithinTransactionAsync(
+        LicensingDbContext operationContext,
+        Guid userId,
+        VerifiedExternalIdentity identity,
+        CancellationToken cancellationToken)
+    {
         await LinkCoreAsync(operationContext, userId, identity, cancellationToken);
+        return true;
     }
 
     private async Task LinkCoreAsync(
@@ -110,16 +128,26 @@ public sealed class ExternalAccountService(
             return;
         }
 
-        await EfConcurrencyRetry.ExecuteAsync(async () =>
-        {
-            await using var operationContext = await contextFactory.CreateDbContextAsync(cancellationToken);
-            await using var transaction = await operationContext.Database.BeginTransactionAsync(
+        _ = await EfConcurrencyRetry.ExecuteAsync(() =>
+            LicensingDbContextTransaction.ExecuteAsync(
+                contextFactory,
                 IsolationLevel.Serializable,
-                cancellationToken);
-            await RemoveIdentityAsync(operationContext, userId, provider, cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-            return true;
-        });
+                (operationContext, token) => RemoveWithinTransactionAsync(
+                    operationContext,
+                    userId,
+                    provider,
+                    token),
+                cancellationToken));
+    }
+
+    private static async Task<bool> RemoveWithinTransactionAsync(
+        LicensingDbContext operationContext,
+        Guid userId,
+        string provider,
+        CancellationToken cancellationToken)
+    {
+        await RemoveIdentityAsync(operationContext, userId, provider, cancellationToken);
+        return true;
     }
 
     private static async Task RemoveIdentityAsync(
