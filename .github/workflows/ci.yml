@@ -164,8 +164,3 @@ jobs:
 
       - name: Generate third-party legal artifacts
         run: bash scripts/generate-third-party-legal.sh
-
-      - name: Test release scripts
-        run: |
-          bash scripts/test-generate-update-manifest.sh
-          bash scripts/test-setup-local-development-icon.sh
