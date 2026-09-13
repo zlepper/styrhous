@@ -63,7 +63,8 @@ public sealed class DataProtectionOrganizationInvitationDeliveryProtector
         if (!Enum.TryParse<OrganizationRole>(
                 payload.Role,
                 ignoreCase: false,
-                out var role))
+                out var role)
+            || !Enum.IsDefined(role))
         {
             throw new InvalidOperationException(
                 $"Unsupported invitation delivery role: {payload.Role}.");

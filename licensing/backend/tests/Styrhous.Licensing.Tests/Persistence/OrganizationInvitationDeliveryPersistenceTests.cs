@@ -1,3 +1,5 @@
+using System.Text.Json;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -531,6 +533,57 @@ public sealed class OrganizationInvitationDeliveryPersistenceTests
                 Is.EqualTo(OutboxDiscardReason.UndeliverableProtectedPayload));
             Assert.That(persisted.ProcessingAttemptCount, Is.Zero);
             Assert.That(queuedAfter, Is.EqualTo(queuedBefore));
+        });
+    }
+
+    [Test]
+    public async Task UndefinedRoleInProtectedPayloadIsQuarantined()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var scenario = await CreateScenarioAsync(database, "delivery-undefined-role");
+        await using (var context = database.CreateContext())
+        {
+            var message = await context.OutboxMessages.SingleAsync(
+                candidate => candidate.Id == scenario.OutboxMessageId);
+            var payload = JsonSerializer.Serialize(
+                new
+                {
+                    SchemaVersion = 1,
+                    Kind = OrganizationInvitationDeliveryKind.Created.ToString(),
+                    scenario.InvitationId,
+                    scenario.OrganizationId,
+                    Email = "invitee@example.com",
+                    Role = "999",
+                    Secret = scenario.Secret.Reveal(),
+                    ExpiresAt = message.NotAfter!.Value,
+                });
+            await using var protectorFixture = CreateProtector(database);
+            var protectedPayload = protectorFixture.Services
+                .GetRequiredService<IDataProtectionProvider>()
+                .CreateProtector("Styrhous.Licensing.OrganizationInvitationDelivery")
+                .Protect(payload);
+            await context.OutboxMessages
+                .Where(candidate => candidate.Id == scenario.OutboxMessageId)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(
+                    candidate => candidate.ProtectedPayload,
+                    protectedPayload));
+        }
+
+        await using var storeFixture = CreateStore(database);
+        var result = await ClaimAsync(storeFixture.Service, scenario.OutboxMessageId);
+        await using var verificationContext = database.CreateContext();
+        var persisted = await verificationContext.OutboxMessages.AsNoTracking().SingleAsync(
+            message => message.Id == scenario.OutboxMessageId);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Status, Is.EqualTo(OrganizationInvitationDeliveryClaimStatus.Undeliverable));
+            Assert.That(persisted.ProcessingLeaseId, Is.Null);
+            Assert.That(persisted.ProcessingAttemptCount, Is.Zero);
+            Assert.That(persisted.DeliveredAt, Is.Null);
+            Assert.That(
+                persisted.DiscardReason,
+                Is.EqualTo(OutboxDiscardReason.UndeliverableProtectedPayload));
         });
     }
 

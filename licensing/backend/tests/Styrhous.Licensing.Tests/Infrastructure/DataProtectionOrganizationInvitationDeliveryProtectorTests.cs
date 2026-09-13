@@ -165,6 +165,39 @@ public sealed class DataProtectionOrganizationInvitationDeliveryProtectorTests
         });
     }
 
+    [TestCase("999")]
+    [TestCase("not-a-role")]
+    public void TryUnprotectRejectsUnsupportedInnerRoleWithoutLeakingAdapterException(
+        string role)
+    {
+        var provider = new EphemeralDataProtectionProvider();
+        var unsupportedJson = JsonSerializer.Serialize(
+            new
+            {
+                SchemaVersion = 1,
+                Kind = OrganizationInvitationDeliveryKind.Created.ToString(),
+                InvitationId = Guid.CreateVersion7(),
+                OrganizationId = Guid.CreateVersion7(),
+                Email = "invitee@example.com",
+                Role = role,
+                Secret = "secret",
+                ExpiresAt = DateTimeOffset.UtcNow.AddDays(1),
+            });
+        var protectedPayload = provider
+            .CreateProtector(
+                "Styrhous.Licensing.OrganizationInvitationDelivery")
+            .Protect(unsupportedJson);
+        var protector = CreateProtector(provider);
+
+        var result = protector.TryUnprotect(protectedPayload, out var delivery);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.False);
+            Assert.That(delivery, Is.Null);
+        });
+    }
+
     [Test]
     public void MissingCertificateConfigurationFailsBeforeDataProtectionCanStart()
     {
