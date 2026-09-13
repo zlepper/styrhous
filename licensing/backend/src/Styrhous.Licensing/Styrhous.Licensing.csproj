@@ -22,6 +22,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="../../../shared/ApplicationConfigurationLoader.cs" Link="Runtime/ApplicationConfigurationLoader.cs" />
+    <EmbeddedResource Include="Api/Desktop/desktop-v1-openapi.json" />
     <Compile Include="../../../LicensingOperationalMetrics.cs"
              Link="Operations/LicensingOperationalMetrics.cs" />
   </ItemGroup>

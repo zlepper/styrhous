@@ -20,6 +20,7 @@ using Styrhous.Licensing.Api.Entitlements;
 using Styrhous.Licensing.Api.Organizations;
 using Styrhous.Licensing.Application.Billing;
 using Styrhous.Licensing.Application.Devices;
+using Styrhous.Licensing.Application.Desktop;
 using Styrhous.Licensing.Application.Entitlements;
 using Styrhous.Licensing.Application.Messaging;
 using Styrhous.Licensing.Application.Organizations;
@@ -140,6 +141,7 @@ public sealed class Program
 
             await next(context);
         });
+        application.UseMiddleware<DesktopProtocolTransactionMiddleware>();
         application.UseAuthentication();
         application.UseAuthorization();
         application.MapAccountAuthenticationEndpoints();
@@ -147,6 +149,10 @@ public sealed class Program
         application.MapBillingAccountEndpoints();
         application.MapBillingWebhookEndpoints();
         application.MapDeviceEndpoints();
+        application.MapDesktopDeviceAuthorizationEndpoints();
+        application.MapDesktopProtocolMetadataEndpoints();
+        application.MapDesktopTokenEndpoints();
+        application.MapDesktopEntitlementEndpoints();
         application.MapEntitlementEndpoints();
         application.MapOrganizationEndpoints();
         application.MapGet("/health", () => TypedResults.Ok(new { status = "healthy" }));
@@ -401,6 +407,8 @@ public sealed class Program
         services.AddScoped<DeviceRevocationService>();
         services.AddScoped<PostgresDeviceEntitlementCheckStore>();
         services.AddScoped<DeviceEntitlementCheckService>();
+        services.AddScoped<PostgresDesktopDeviceAuthorizationStore>();
+        services.AddScoped<DesktopDeviceAuthorizationService>();
         services.AddScoped<PostgresUserSignupStore>();
         services.AddScoped<UserSignupService>();
         services.AddScoped<ExternalAccountService>();
@@ -446,9 +454,25 @@ public sealed class Program
         services.AddScoped<IBillingSeatQuantityProvider>(serviceProvider =>
             serviceProvider.GetRequiredService<StripeCommercialSubscriptionProvider>());
         services.AddSingleton<IBillingWebhookVerifier, StripeBillingWebhookVerifier>();
+        services.AddScoped<DesktopProtocolTransaction>();
+        services.AddSingleton<
+            IAuthorizationMiddlewareResultHandler,
+            DesktopAuthorizationResultHandler>();
         services.AddSingleton<CryptographicOrganizationInvitationSecretGenerator>();
         ConfigureInvitationDeliveryProtection(services, configuration);
-        services.AddSingleton(DesktopProtocolCertificateConfiguration.LoadIssuer(configuration));
+        var desktopCertificates =
+            DesktopProtocolCertificateConfiguration.LoadCertificateRing(configuration);
+        var desktopIssuer =
+            DesktopProtocolCertificateConfiguration.LoadIssuer(configuration);
+        services.AddSingleton(desktopCertificates);
+        services.AddSingleton(desktopIssuer);
+        services.AddSingleton(serviceProvider => new DesktopLeaseSigner(
+            serviceProvider.GetRequiredService<DesktopProtocolCertificateRing>(),
+            serviceProvider.GetRequiredService<Uri>()));
+        services.AddDesktopProtocol(
+            desktopIssuer,
+            desktopCertificates.Current,
+            desktopCertificates.Previous);
         ConfigureApiSecurity(services, configuration);
     }
 

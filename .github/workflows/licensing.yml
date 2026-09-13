@@ -43,3 +43,18 @@ jobs:
         run: docker compose --file ../compose.yaml up --detach --wait postgres rabbitmq
       - name: Check backend
         run: bash check.sh
+      - name: Build deployment image
+        working-directory: licensing
+        run: docker build --file backend/Dockerfile --tag styrhous-licensing-ci .
+      - name: Smoke-test migration image entrypoint
+        run: >-
+          docker run --rm --network host styrhous-licensing-ci migrate
+          "--ConnectionStrings:Licensing=Host=127.0.0.1;Port=55432;Database=postgres;Username=styrhous;Password=local-development-only;Pooling=false"
+      - name: Smoke-test infrastructure provisioning entrypoint
+        env:
+          STYRHOUS_APPLICATION_CONFIGURATION: >-
+            {"ConnectionStrings":{"Licensing":"Host=127.0.0.1;Port=55432;Database=postgres;Username=styrhous;Password=local-development-only;Pooling=false"},"DatabaseRuntimeRole":{"Username":"styrhous_ci_runtime","Password":"local-ci-runtime-only"}}
+        run: >-
+          docker run --rm --network host --entrypoint dotnet
+          --env STYRHOUS_APPLICATION_CONFIGURATION styrhous-licensing-ci
+          database-provisioning/Styrhous.Licensing.DatabaseProvisioning.dll

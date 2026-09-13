@@ -1,0 +1,25 @@
+{
+  "issuer": "https://licenses.example.com/",
+  "audience": "styrhous-desktop",
+  "installationId": "01991f2a-1111-7000-8000-000000000004",
+  "keys": {
+    "keys": [
+      {
+        "kty": "RSA",
+        "use": "sig",
+        "alg": "RS256",
+        "kid": "golden-rs256-v1",
+        "n": "ihnBIg0M5MoJHYd79K4d_ZZSTQX1wUgdWsHS6DBc190HWUZoy2O2s2K_yDFjyZjCU2iTkBtFuuHXZjMa_3V3Xu7td7A4oS2cu9F_dmVasnQZfphxl2tMhqr65JRR-lrJ-QbXd9dK9JwtLNPi0vCfEJibYjL4zN_4SaA9OaFeDtIoDm4kM7ulE_yzvQ9Xz_TGqQzOAt554la1fdPLydeQy2S31dkaAVLxOmMu1ipCG2hBk4l3RUlIGTdTVNxJe7Jxy9XvX8w131bld9fsIU4whgBHQshlWC3hDR6i1HdVYtH6zzkIwZwevp-NGTE8ktMrEsnR8uYcR1DLyBt6F9M0MQ",
+        "e": "AQAB"
+      }
+    ]
+  },
+  "lease": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImdvbGRlbi1yczI1Ni12MSJ9.eyJzY2hlbWFfdmVyc2lvbiI6MSwiaXNzIjoiaHR0cHM6Ly9saWNlbnNlcy5leGFtcGxlLmNvbS8iLCJhdWQiOiJzdHlyaG91cy1kZXNrdG9wIiwic3ViIjoiMDE5OTFmMmEtMTExMS03MDAwLTgwMDAtMDAwMDAwMDAwMDAxIiwic2VhdF9pZCI6IjAxOTkxZjJhLTExMTEtNzAwMC04MDAwLTAwMDAwMDAwMDAwMiIsImJpbGxpbmdfYWNjb3VudF9pZCI6IjAxOTkxZjJhLTExMTEtNzAwMC04MDAwLTAwMDAwMDAwMDAwMyIsImluc3RhbGxhdGlvbl9pZCI6IjAxOTkxZjJhLTExMTEtNzAwMC04MDAwLTAwMDAwMDAwMDAwNCIsImFjdGl2YXRpb25faWQiOiIwMTk5MWYyYS0xMTExLTcwMDAtODAwMC0wMDAwMDAwMDAwMDUiLCJzdGF0ZSI6ImNvbW1lcmNpYWwiLCJyZWFzb25fY29kZSI6ImFjdGl2ZV9zdWJzY3JpcHRpb24iLCJpYXQiOjIwMDAwMDAwMDAsIm5iZiI6MjAwMDAwMDAwMCwiZXhwIjoyMDAwNjA0ODAwLCJyZWZyZXNoX2FmdGVyIjoyMDAwMDg2NDAwLCJqdGkiOiIwMTk5MWYyYS0xMTExLTcwMDAtODAwMC0wMDAwMDAwMDAwMDYiLCJzaWduaW5nX2tleV9pZCI6ImdvbGRlbi1yczI1Ni12MSJ9.WRuy15kkr9unz_zrkSzNG1ZFrPljED3LlclNAakPaZrcEKnmleqpEMv1E57A1BgtgmDW44yi08FNPJXG82T3CKl7_Knh0HOYMPqF1wqwVGgXFFxebbdRTo0xnFI8zEfqhXKz0NQReHF0XUAiQU9CQ2Rc5M2Twqe2Occ98kwUbKyR7J-xm6ew34koAsYq5q6FR3OrqEFQxzjpFTNfE9Wg__HXKGT0bpH4dvtu1aFlEYilCU_vRZxyumpGFc6xnfybZsD5HpTEDC91NTBFZQgge2o8UzSJmxQWBFLyIHRb7UhJRJoroo6ntRpvP1cYcnKs4Jl-YpIcNovcdgAc_J4vEg",
+  "expected": {
+    "state": "commercial",
+    "reasonCode": "active_subscription",
+    "issuedAt": 2000000000,
+    "expiresAt": 2000604800,
+    "refreshAfter": 2000086400
+  }
+}

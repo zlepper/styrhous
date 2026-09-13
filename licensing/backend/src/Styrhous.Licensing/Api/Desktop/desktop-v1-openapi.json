@@ -1,0 +1,594 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Styrhous desktop licensing protocol",
+    "version": "1.0.0",
+    "description": "The backward-compatible licensing surface used by released Styrhous desktop applications."
+  },
+  "paths": {
+    "/desktop/v1/openapi.json": {
+      "get": {
+        "operationId": "getDesktopProtocol",
+        "responses": {
+          "200": {
+            "description": "The desktop-only OpenAPI document.",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/desktop/v1/device/authorize": {
+      "post": {
+        "operationId": "startDeviceAuthorization",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": { "$ref": "#/components/schemas/DeviceAuthorizationRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A ten-minute device authorization was created.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DeviceAuthorizationResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/OAuthError" },
+          "401": { "$ref": "#/components/responses/OAuthError" }
+        }
+      }
+    },
+    "/desktop/v1/device/verify": {
+      "get": {
+        "operationId": "openDeviceAuthorizationApproval",
+        "parameters": [
+          {
+            "name": "user_code",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "maxLength": 64 }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirects the browser to the static approval page.",
+            "headers": {
+              "Location": {
+                "required": true,
+                "schema": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/desktop/v1/device/approval": {
+      "get": {
+        "operationId": "getDeviceAuthorizationApproval",
+        "security": [{ "browserSession": [] }],
+        "parameters": [
+          {
+            "name": "user_code",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "maxLength": 64 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The pending installation and every eligible seat.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DeviceAuthorizationApproval" }
+              }
+            }
+          },
+          "401": { "description": "A browser session is required." },
+          "404": { "$ref": "#/components/responses/DeviceAuthorizationNotFound" }
+        }
+      },
+      "post": {
+        "operationId": "decideDeviceAuthorization",
+        "security": [{ "browserSession": [] }],
+        "parameters": [
+          {
+            "name": "X-CSRF-TOKEN",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": { "$ref": "#/components/schemas/DeviceAuthorizationDecision" }
+            }
+          }
+        },
+        "responses": {
+          "204": { "description": "The request was approved or denied." },
+          "400": { "description": "The request or antiforgery token was invalid." },
+          "401": { "description": "A browser session is required." },
+          "404": { "$ref": "#/components/responses/DeviceAuthorizationNotFound" },
+          "409": {
+            "description": "The selected seat cannot currently activate the device.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DeviceAuthorizationConflict" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/desktop/v1/token": {
+      "post": {
+        "operationId": "exchangeDesktopToken",
+        "description": "When renewal confirmation is pending, HTTP 503 with temporarily_unavailable leaves the submitted refresh or device credential usable. Retry with bounded backoff; this does not extend any signed lease.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": { "$ref": "#/components/schemas/DesktopTokenRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A desktop access token and optional rotating refresh token.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DesktopTokenResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/OAuthError" },
+          "401": { "$ref": "#/components/responses/OAuthError" },
+          "503": { "$ref": "#/components/responses/OAuthError" }
+        }
+      }
+    },
+    "/desktop/v1/token/revoke": {
+      "post": {
+        "operationId": "revokeDesktopToken",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": { "$ref": "#/components/schemas/DesktopTokenRevocationRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The complete desktop authorization was revoked, or the token was already unknown or revoked."
+          },
+          "401": { "$ref": "#/components/responses/OAuthError" }
+        }
+      }
+    },
+    "/desktop/v1/keys": {
+      "get": {
+        "operationId": "getDesktopLeaseKeys",
+        "responses": {
+          "200": {
+            "description": "Current and retained previous public lease-signing keys.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/JsonWebKeySet" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/desktop/v1/entitlement": {
+      "post": {
+        "operationId": "issueDesktopEntitlementLease",
+        "description": "HTTP 503 with reasonCode subscription_renewal_pending means renewal confirmation is delayed. Retain credentials and retry with bounded backoff. An existing signed lease is usable only until its exp; afterward use evaluation mode until a new lease is issued.",
+        "security": [{ "desktopAccessToken": [] }],
+        "responses": {
+          "200": {
+            "description": "A signed offline entitlement lease valid for no more than seven days.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DesktopEntitlementLease" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/DesktopError" },
+          "403": { "$ref": "#/components/responses/DesktopError" },
+          "409": { "$ref": "#/components/responses/DesktopError" },
+          "503": { "$ref": "#/components/responses/DesktopError" }
+        }
+      }
+    },
+    "/desktop/v1/devices": {
+      "get": {
+        "operationId": "listDesktopDevices",
+        "security": [{ "desktopAccessToken": [] }],
+        "responses": {
+          "200": {
+            "description": "Active installations on the token's seat.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DeviceList" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/DesktopError" },
+          "403": { "$ref": "#/components/responses/DesktopError" },
+          "404": { "$ref": "#/components/responses/DesktopError" }
+        }
+      }
+    },
+    "/desktop/v1/devices/{activationId}": {
+      "delete": {
+        "operationId": "revokeDesktopDevice",
+        "security": [{ "desktopAccessToken": [] }],
+        "parameters": [{
+          "name": "activationId",
+          "in": "path",
+          "required": true,
+          "schema": { "type": "string", "format": "uuid" }
+        }],
+        "responses": {
+          "200": {
+            "description": "The owned installation was revoked.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DeviceRevocation" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/DesktopError" },
+          "403": { "$ref": "#/components/responses/DesktopError" },
+          "404": { "$ref": "#/components/responses/DesktopError" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "browserSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-styrhous-session"
+      },
+      "desktopAccessToken": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "responses": {
+      "OAuthError": {
+        "description": "An OAuth device or token request failed.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/OAuthError" }
+          }
+        }
+      },
+      "DeviceAuthorizationNotFound": {
+        "description": "The user code is invalid, expired, denied, or already consumed.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["reasonCode"],
+              "properties": {
+                "reasonCode": { "const": "device_authorization_not_found" }
+              }
+            }
+          }
+        }
+      },
+      "DesktopError": {
+        "description": "A stable desktop protocol error.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["reasonCode"],
+              "properties": { "reasonCode": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "DeviceAuthorizationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "client_id",
+          "scope",
+          "installation_id",
+          "display_name",
+          "platform",
+          "architecture",
+          "styrhous_version"
+        ],
+        "properties": {
+          "client_id": { "const": "styrhous-desktop" },
+          "scope": { "const": "styrhous.desktop offline_access" },
+          "installation_id": { "type": "string", "format": "uuid" },
+          "display_name": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "platform": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "architecture": { "type": "string", "minLength": 1, "maxLength": 32 },
+          "styrhous_version": { "type": "string", "minLength": 1, "maxLength": 64 }
+        }
+      },
+      "DeviceAuthorizationResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "device_code",
+          "user_code",
+          "verification_uri",
+          "verification_uri_complete",
+          "expires_in",
+          "interval"
+        ],
+        "properties": {
+          "device_code": { "type": "string" },
+          "user_code": { "type": "string" },
+          "verification_uri": { "type": "string", "format": "uri" },
+          "verification_uri_complete": { "type": "string", "format": "uri" },
+          "expires_in": { "const": 600 },
+          "interval": { "const": 5 }
+        }
+      },
+      "DeviceAuthorizationInstallation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "installationId",
+          "displayName",
+          "platform",
+          "architecture",
+          "styrhousVersion"
+        ],
+        "properties": {
+          "installationId": { "type": "string", "format": "uuid" },
+          "displayName": { "type": "string" },
+          "platform": { "type": "string" },
+          "architecture": { "type": "string" },
+          "styrhousVersion": { "type": "string" }
+        }
+      },
+      "ActiveDevice": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "activationId",
+          "installationId",
+          "displayName",
+          "platform",
+          "architecture",
+          "styrhousVersion",
+          "activatedAt",
+          "lastSeenAt"
+        ],
+        "properties": {
+          "activationId": { "type": "string", "format": "uuid" },
+          "installationId": { "type": "string", "format": "uuid" },
+          "displayName": { "type": "string" },
+          "platform": { "type": "string" },
+          "architecture": { "type": "string" },
+          "styrhousVersion": { "type": "string" },
+          "activatedAt": { "type": "string", "format": "date-time" },
+          "lastSeenAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "DeviceAuthorizationSeat": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "seatId",
+          "billingAccountId",
+          "name",
+          "entitlementState",
+          "entitlementReasonCode",
+          "deviceLimit",
+          "canActivate",
+          "activeDevices"
+        ],
+        "properties": {
+          "seatId": { "type": "string", "format": "uuid" },
+          "billingAccountId": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "entitlementState": {
+            "type": "string",
+            "enum": ["trial", "commercial", "grace"]
+          },
+          "entitlementReasonCode": { "type": "string" },
+          "deviceLimit": { "type": "integer", "minimum": 1 },
+          "canActivate": { "type": "boolean" },
+          "activeDevices": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ActiveDevice" }
+          }
+        }
+      },
+      "DeviceAuthorizationApproval": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reasonCode", "installation", "eligibleSeats", "selectedSeatId"],
+        "properties": {
+          "reasonCode": { "const": "device_authorization_awaiting_approval" },
+          "installation": {
+            "$ref": "#/components/schemas/DeviceAuthorizationInstallation"
+          },
+          "eligibleSeats": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/DeviceAuthorizationSeat" }
+          },
+          "selectedSeatId": {
+            "oneOf": [
+              { "type": "string", "format": "uuid" },
+              { "type": "null" }
+            ]
+          }
+        }
+      },
+      "DeviceAuthorizationDecision": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["user_code", "decision"],
+        "properties": {
+          "user_code": { "type": "string", "maxLength": 64 },
+          "decision": { "type": "string", "enum": ["approve", "deny"] },
+          "seat_id": { "type": "string", "format": "uuid" }
+        }
+      },
+      "DeviceAuthorizationConflict": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reasonCode"],
+        "properties": {
+          "reasonCode": {
+            "type": "string",
+            "enum": [
+              "device_authorization_seat_required",
+              "device_authorization_seat_not_eligible",
+              "device_limit_reached",
+              "device_authorization_concurrent_modification"
+            ]
+          },
+          "deviceLimit": { "type": "integer", "minimum": 1 },
+          "activeDevices": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ActiveDevice" }
+          }
+        }
+      },
+      "DesktopTokenRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["grant_type", "client_id"],
+        "properties": {
+          "grant_type": {
+            "type": "string",
+            "enum": [
+              "urn:ietf:params:oauth:grant-type:device_code",
+              "refresh_token"
+            ]
+          },
+          "client_id": { "const": "styrhous-desktop" },
+          "device_code": { "type": "string" },
+          "refresh_token": { "type": "string" }
+        }
+      },
+      "DesktopTokenResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["access_token", "token_type", "expires_in"],
+        "properties": {
+          "access_token": { "type": "string" },
+          "token_type": { "const": "Bearer" },
+          "expires_in": { "type": "integer", "minimum": 1 },
+          "refresh_token": { "type": "string" },
+          "scope": { "type": "string" }
+        }
+      },
+      "DesktopTokenRevocationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["client_id", "token"],
+        "properties": {
+          "client_id": { "const": "styrhous-desktop" },
+          "token": { "type": "string" },
+          "token_type_hint": {
+            "type": "string",
+            "enum": ["refresh_token", "access_token"]
+          }
+        }
+      },
+      "JsonWebKeySet": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["keys"],
+        "properties": {
+          "keys": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kty", "use", "alg", "kid", "n", "e"],
+              "properties": {
+                "kty": { "const": "RSA" },
+                "use": { "const": "sig" },
+                "alg": { "const": "RS256" },
+                "kid": { "type": "string" },
+                "n": { "type": "string" },
+                "e": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
+      "DesktopEntitlementLease": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reasonCode", "lease", "state", "entitlementReasonCode",
+          "expiresAt", "refreshAfter"
+        ],
+        "properties": {
+          "reasonCode": { "const": "offline_lease_issued" },
+          "lease": { "type": "string" },
+          "state": { "type": "string", "enum": ["trial", "commercial", "grace"] },
+          "entitlementReasonCode": { "type": "string" },
+          "expiresAt": { "type": "string", "format": "date-time" },
+          "refreshAfter": { "type": "string", "format": "date-time" }
+        }
+      },
+      "DeviceList": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reasonCode", "seatId", "deviceLimit", "activeDevices"],
+        "properties": {
+          "reasonCode": { "type": "string" },
+          "seatId": { "type": "string", "format": "uuid" },
+          "deviceLimit": { "type": "integer", "minimum": 1 },
+          "activeDevices": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ActiveDevice" }
+          }
+        }
+      },
+      "DeviceRevocation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reasonCode", "activationId", "correlationId"],
+        "properties": {
+          "reasonCode": { "type": "string" },
+          "activationId": { "type": "string", "format": "uuid" },
+          "correlationId": { "type": "string", "format": "uuid" }
+        }
+      },
+      "OAuthError": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["error"],
+        "properties": {
+          "error": { "type": "string" },
+          "error_description": { "type": "string" },
+          "error_uri": { "type": "string", "format": "uri" }
+        }
+      }
+    }
+  }
+}
