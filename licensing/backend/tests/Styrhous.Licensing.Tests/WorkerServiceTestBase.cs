@@ -37,7 +37,7 @@ internal static class WorkerServiceTestBase
         Action<IServiceCollection>? configureServices = null, params IInterceptor[] interceptors)
     {
         return Program.BuildWorker([
-            "--environment=Production",
+            "--environment=Testing",
             "--Authentication:GitHub:ClientId=",
             "--Authentication:GitHub:ClientSecret=",
             "--Authentication:Google:ClientId=",

@@ -34,6 +34,16 @@ internal sealed class PostgresTestDatabase : IAsyncDisposable
 
     public static async Task<PostgresTestDatabase> CreateAsync()
     {
+        return await CreateAsync(createSchema: true);
+    }
+
+    public static async Task<PostgresTestDatabase> CreateForMigrationAsync()
+    {
+        return await CreateAsync(createSchema: false);
+    }
+
+    private static async Task<PostgresTestDatabase> CreateAsync(bool createSchema)
+    {
         var configuredConnectionString =
             Environment.GetEnvironmentVariable(ConnectionStringEnvironmentVariable)
             ?? DefaultConnectionString;
@@ -53,8 +63,12 @@ internal sealed class PostgresTestDatabase : IAsyncDisposable
 
         try
         {
-            await using var context = database.CreateContext();
-            await context.Database.EnsureCreatedAsync();
+            if (createSchema)
+            {
+                await using var context = database.CreateContext();
+                await context.Database.EnsureCreatedAsync();
+            }
+
             return database;
         }
         catch (Exception initializationException)
@@ -78,6 +92,26 @@ internal sealed class PostgresTestDatabase : IAsyncDisposable
     public LicensingDbContext CreateContext(params IInterceptor[] interceptors)
     {
         return new LicensingDbContext(CreateOptions(interceptors));
+    }
+
+    public async Task<IReadOnlyList<string>> GetPublicTableNamesAsync()
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+            """;
+        await using var reader = await command.ExecuteReaderAsync();
+        var tableNames = new List<string>();
+        while (await reader.ReadAsync())
+        {
+            tableNames.Add(reader.GetString(0));
+        }
+
+        return tableNames;
     }
 
     public LicensingDbContext CreateContextWithCopenhagenTimeZone()

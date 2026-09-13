@@ -11,7 +11,7 @@ internal static class MaintenanceServiceTestBase
         DateTimeOffset observedAt, string queueName) where T : notnull
     {
         var host = Program.BuildMaintenanceHost([
-            "--environment=Production",
+            "--environment=Testing",
             $"--ConnectionStrings:Licensing={database.ConnectionString}",
             "--Messaging:Transport=RabbitMq",
             $"--Messaging:QueueName={queueName}",
