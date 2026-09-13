@@ -1,4 +1,3 @@
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Domain.Trials;
 
@@ -50,7 +49,7 @@ public sealed class Trial
 
         var utcStartedAt = startedAt.ToUniversalTime();
         return new Trial(
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             originatingUserId,
             billingAccountId,
             utcStartedAt,

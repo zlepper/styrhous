@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Styrhous.Licensing.Application.Devices;
 using Styrhous.Licensing.Domain.Auditing;
 using Styrhous.Licensing.Domain.Devices;
-using Styrhous.Licensing.Domain.Identifiers;
 using Styrhous.Licensing.Persistence;
 using static Styrhous.Licensing.Tests.Persistence.DevicePersistenceScenario;
 using static Styrhous.Licensing.Tests.Persistence.LicensingPersistenceScenario;

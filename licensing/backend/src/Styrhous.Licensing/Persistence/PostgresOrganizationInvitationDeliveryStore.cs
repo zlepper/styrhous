@@ -2,7 +2,6 @@ using Styrhous.Licensing.Infrastructure.Messaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Styrhous.Licensing.Application.Messaging;
-using Styrhous.Licensing.Domain.Identifiers;
 using Styrhous.Licensing.Domain.Messaging;
 using Styrhous.Licensing.Domain.Organizations;
 

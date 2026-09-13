@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Styrhous.Licensing.Api.Antiforgery;
 using Styrhous.Licensing.Api.Authentication;
 using Styrhous.Licensing.Application.Devices;
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Api.Devices;
 

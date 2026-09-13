@@ -1,4 +1,3 @@
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Domain.Auditing;
 
@@ -83,7 +82,7 @@ public sealed class AuditRecord
     {
 
         return new AuditRecord(
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             correlationId,
             actorUserId,
             action,

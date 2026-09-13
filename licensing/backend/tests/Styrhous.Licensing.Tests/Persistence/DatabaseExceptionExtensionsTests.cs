@@ -27,4 +27,32 @@ public sealed class DatabaseExceptionExtensionsTests
                 .IsUniqueViolation(), Is.False);
         });
     }
+
+    [TestCase(PostgresErrorCodes.SerializationFailure)]
+    [TestCase(PostgresErrorCodes.DeadlockDetected)]
+    public void RecognizesDirectAndNestedRetryableDatabaseFailures(string sqlState)
+    {
+        var postgres = new PostgresException("transaction failed", "ERROR", "ERROR", sqlState);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(EfConcurrencyFailure.IsRetryable(postgres), Is.True);
+            Assert.That(
+                EfConcurrencyFailure.IsRetryable(new DbUpdateException("save failed", postgres)),
+                Is.True);
+            Assert.That(
+                EfConcurrencyFailure.IsRetryable(
+                    new InvalidOperationException(
+                        "retry limit reached",
+                        new DbUpdateException("save failed", postgres))),
+                Is.True);
+            Assert.That(
+                EfConcurrencyFailure.IsRetryable(
+                    new DbUpdateException(
+                        "other database failure",
+                        new PostgresException(
+                            "foreign key", "ERROR", "ERROR", PostgresErrorCodes.ForeignKeyViolation))),
+                Is.False);
+        });
+    }
 }

@@ -1,4 +1,3 @@
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Domain.Signups;
 
@@ -36,7 +35,7 @@ public sealed class VerifiedEmailClaim
 
         ArgumentNullException.ThrowIfNull(identity);
         return new VerifiedEmailClaim(
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             userId,
             identity.NormalizedEmail,
             createdAt.ToUniversalTime());

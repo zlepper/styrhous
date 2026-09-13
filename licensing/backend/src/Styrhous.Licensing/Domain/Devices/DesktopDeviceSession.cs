@@ -1,4 +1,3 @@
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Domain.Devices;
 
@@ -37,7 +36,7 @@ public sealed class DesktopDeviceSession
     {
 
         return new DesktopDeviceSession(
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             activationId,
             authorizationId,
             createdAt.ToUniversalTime());

@@ -1,5 +1,4 @@
 using Styrhous.Licensing.Persistence;
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Application.Organizations;
 
@@ -17,7 +16,7 @@ public sealed class OrganizationInvitationAcceptanceService(
         return store.AcceptAsync(
             actorUserId,
             invitationSecret.Hash,
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             cancellationToken);
     }
 }

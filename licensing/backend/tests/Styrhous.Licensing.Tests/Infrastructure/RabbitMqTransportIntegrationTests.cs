@@ -58,7 +58,7 @@ public sealed class RabbitMqTransportIntegrationTests
         await receiver.StartAsync();
         try
         {
-            using var factory = new LicensingWebApplicationFactory(
+            await using var factory = new LicensingWebApplicationFactory(
                 database,
                 ObservedAt,
                 rabbitMqMessaging: new RabbitMqApiMessaging(
@@ -107,7 +107,7 @@ public sealed class RabbitMqTransportIntegrationTests
         await receiver.StartAsync();
         try
         {
-            using var factory = new LicensingWebApplicationFactory(
+            await using var factory = new LicensingWebApplicationFactory(
                 database,
                 ObservedAt,
                 rabbitMqMessaging: new RabbitMqApiMessaging(
@@ -440,7 +440,7 @@ public sealed class RabbitMqTransportIntegrationTests
         DateTimeOffset? observedAt = null)
     {
         return Program.BuildWorker([
-            "--environment=Production",
+            "--environment=Testing",
             "--Authentication:GitHub:ClientId=",
             "--Authentication:GitHub:ClientSecret=",
             "--Authentication:Google:ClientId=",

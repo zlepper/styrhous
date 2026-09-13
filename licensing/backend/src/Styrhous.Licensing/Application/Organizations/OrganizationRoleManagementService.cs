@@ -1,5 +1,4 @@
 using Styrhous.Licensing.Persistence;
-using Styrhous.Licensing.Domain.Identifiers;
 using Styrhous.Licensing.Domain.Organizations;
 
 namespace Styrhous.Licensing.Application.Organizations;
@@ -86,7 +85,7 @@ public sealed class OrganizationRoleManagementService(
             membershipId,
             requestedRole,
             timeProvider.GetUtcNow().ToUniversalTime(),
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             cancellationToken);
     }
 
@@ -101,7 +100,7 @@ public sealed class OrganizationRoleManagementService(
             organizationId,
             membershipId,
             timeProvider.GetUtcNow().ToUniversalTime(),
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             cancellationToken);
     }
 

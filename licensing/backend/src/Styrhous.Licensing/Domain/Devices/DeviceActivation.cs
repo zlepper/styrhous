@@ -1,4 +1,3 @@
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Domain.Devices;
 
@@ -72,7 +71,7 @@ public sealed class DeviceActivation
 
         ArgumentNullException.ThrowIfNull(installation);
         return new DeviceActivation(
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             seatId,
             userId,
             installation,

@@ -1,5 +1,4 @@
 using Styrhous.Licensing.Persistence;
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Application.Messaging;
 
@@ -17,7 +16,7 @@ public sealed class OrganizationInvitationDeliveryService(
         CancellationToken cancellationToken = default)
     {
 
-        var leaseId = Uuid7.Create();
+        var leaseId = Guid.CreateVersion7();
         var claimResult = await deliveryStore.TryAcquireAsync(
             outboxMessageId,
             leaseId,

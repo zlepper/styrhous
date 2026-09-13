@@ -1,4 +1,3 @@
-using Styrhous.Licensing.Domain.Identifiers;
 using Styrhous.Licensing.Domain.Validation;
 
 namespace Styrhous.Licensing.Domain.Messaging;
@@ -89,7 +88,7 @@ public sealed class OutboxMessage
         }
 
         return new OutboxMessage(
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             correlationId,
             subjectId,
             RequiredText.Normalize(

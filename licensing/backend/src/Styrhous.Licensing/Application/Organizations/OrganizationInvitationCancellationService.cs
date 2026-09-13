@@ -1,5 +1,4 @@
 using Styrhous.Licensing.Persistence;
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Application.Organizations;
 
@@ -16,7 +15,7 @@ public sealed class OrganizationInvitationCancellationService(
     {
 
         var observedAt = timeProvider.GetUtcNow();
-        var correlationId = Uuid7.Create();
+        var correlationId = Guid.CreateVersion7();
         var status = await store.CancelAsync(
             actorUserId,
             organizationId,

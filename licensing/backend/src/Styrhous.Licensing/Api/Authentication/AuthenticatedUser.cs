@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Api.Authentication;
 

@@ -1,5 +1,4 @@
 using Styrhous.Licensing.Persistence;
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Application.Devices;
 
@@ -18,7 +17,7 @@ public sealed class DeviceRevocationService(
             userId,
             activationId,
             timeProvider.GetUtcNow(),
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             cancellationToken);
     }
 }

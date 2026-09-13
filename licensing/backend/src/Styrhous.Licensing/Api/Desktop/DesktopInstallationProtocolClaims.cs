@@ -1,7 +1,6 @@
 using System.Security.Claims;
 using OpenIddict.Abstractions;
 using Styrhous.Licensing.Domain.Devices;
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Api.Desktop;
 

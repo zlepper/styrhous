@@ -1,4 +1,3 @@
-using Styrhous.Licensing.Domain.Identifiers;
 using Styrhous.Licensing.Domain.Validation;
 
 namespace Styrhous.Licensing.Domain.Organizations;
@@ -51,7 +50,7 @@ public sealed class Organization
             "organization name");
 
         return new Organization(
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             billingAccountId,
             createdByUserId,
             normalizedName,

@@ -1,4 +1,3 @@
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Domain.Accounts;
 
@@ -40,7 +39,7 @@ public sealed class BillingAccount
     {
 
         return new BillingAccount(
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             BillingAccountKind.Personal,
             ownerUserId,
             createdAt.ToUniversalTime());
@@ -49,7 +48,7 @@ public sealed class BillingAccount
     public static BillingAccount CreateOrganization(DateTimeOffset createdAt)
     {
         return new(
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             BillingAccountKind.Organization,
             personalOwnerUserId: null,
             createdAt.ToUniversalTime());

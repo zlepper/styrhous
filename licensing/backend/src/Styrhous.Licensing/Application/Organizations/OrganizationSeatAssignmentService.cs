@@ -1,5 +1,4 @@
 using Styrhous.Licensing.Persistence;
-using Styrhous.Licensing.Domain.Identifiers;
 
 namespace Styrhous.Licensing.Application.Organizations;
 
@@ -24,7 +23,7 @@ public sealed class OrganizationSeatAssignmentService(
                 : null,
             assigned,
             timeProvider.GetUtcNow().ToUniversalTime(),
-            Uuid7.Create(),
+            Guid.CreateVersion7(),
             cancellationToken);
     }
 }
