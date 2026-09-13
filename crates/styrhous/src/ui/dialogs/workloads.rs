@@ -118,14 +118,23 @@ pub(crate) fn show_cron_job_run_confirmation(
             cluster.pending_cron_job_run = None;
         }
     } else if action == ConfirmationDialogAction::Confirm {
+        let Some(cluster) = ui_state.clusters.get_mut(&cluster_id) else {
+            return;
+        };
+        cluster.next_cron_job_run_operation_id += 1;
+        let operation_id = cluster.next_cron_job_run_operation_id;
+        cluster.pending_cron_job_run = None;
+        cluster.cron_job_run = Some(CronJobRunState::Running {
+            operation_id,
+            namespace: pending.namespace.clone(),
+            cron_job_name: pending.resource_name.clone(),
+        });
         commands_to_send.push(Box::new(RunCronJob {
             cluster_key,
+            operation_id,
             namespace: pending.namespace,
             resource_name: pending.resource_name,
         }));
-        if let Some(cluster) = ui_state.clusters.get_mut(&cluster_id) {
-            cluster.pending_cron_job_run = None;
-        }
     }
 }
 
@@ -133,11 +142,12 @@ pub(crate) fn show_cron_job_run_error(ctx: &egui::Context, ui_state: &mut UiStat
     let Some(cluster_id) = ui_state.selected_cluster else {
         return;
     };
-    let Some(error) = ui_state
-        .clusters
-        .get(&cluster_id)
-        .and_then(|cluster| cluster.cron_job_run_error.as_deref())
-    else {
+    let Some(error) = ui_state.clusters.get(&cluster_id).and_then(|cluster| {
+        match cluster.cron_job_run.as_ref() {
+            Some(CronJobRunState::Failed { error, .. }) => Some(error.as_str()),
+            _ => None,
+        }
+    }) else {
         return;
     };
     if matches!(
@@ -154,6 +164,6 @@ pub(crate) fn show_cron_job_run_error(ctx: &egui::Context, ui_state: &mut UiStat
         ErrorDialogAction::Dismiss
     ) && let Some(cluster) = ui_state.clusters.get_mut(&cluster_id)
     {
-        cluster.cron_job_run_error = None;
+        cluster.cron_job_run = None;
     }
 }

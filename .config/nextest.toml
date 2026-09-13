@@ -20,4 +20,4 @@ test-group = "kind"
 
 [[profile.default.overrides]]
 filter = 'test(/ui::tests::kind::scenarios::connection_and_metrics::test_pod_metrics_charts_integration/)'
-slow-timeout = { period = "4m", terminate-after = 1, grace-period = "10s" }
+slow-timeout = { period = "6m", terminate-after = 1, grace-period = "10s" }

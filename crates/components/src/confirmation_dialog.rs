@@ -159,6 +159,7 @@ impl ConfirmationDialog<'_> {
                     ui.add_space(spacing::XS);
                     ui.add(
                         egui::TextEdit::singleline(acknowledgement.value)
+                            .id_salt("acknowledgement")
                             .desired_width(f32::INFINITY)
                             .hint_text(acknowledgement.hint_text),
                     )
@@ -203,5 +204,89 @@ impl ConfirmationDialog<'_> {
         } else {
             action
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui_kittest::Harness;
+    use egui_kittest::kittest::{NodeT, Queryable};
+
+    #[derive(Default)]
+    struct DialogState {
+        visible: bool,
+        available: bool,
+        acknowledgement: String,
+    }
+
+    #[test]
+    fn acknowledgement_keeps_focus_and_text_when_countdown_disappears() {
+        let mut harness = Harness::new_ui_state(
+            |ui, state: &mut DialogState| {
+                if !state.visible {
+                    return;
+                }
+                ConfirmationDialog {
+                    id: Id::new("confirmation"),
+                    eyebrow: "REMOVE FINALIZERS",
+                    title: "Force delete resource?",
+                    message: "This removes every finalizer from the resource.",
+                    unavailable_message: (!state.available)
+                        .then_some("Remove finalizers will be available in 1 second."),
+                    cancel_label: "Cancel",
+                    confirm_label: "Remove finalizers",
+                    kind: ConfirmationDialogKind::Destructive,
+                    confirm_enabled: state.available && state.acknowledgement == "resource-name",
+                    warning: None,
+                    acknowledgement: Some(ConfirmationDialogAcknowledgement {
+                        label: "Type the resource name to acknowledge:",
+                        hint_text: "Resource name",
+                        value: &mut state.acknowledgement,
+                    }),
+                }
+                .show(ui.ctx());
+            },
+            DialogState::default(),
+        );
+        crate::test_support::setup_egui(&mut harness);
+        harness.state_mut().visible = true;
+        harness.run();
+
+        harness
+            .get_by_label("Type the resource name to acknowledge:")
+            .click();
+        harness.run();
+        assert!(
+            harness
+                .get_by_label("Type the resource name to acknowledge:")
+                .is_focused()
+        );
+        harness
+            .get_by_label("Type the resource name to acknowledge:")
+            .type_text("resource-");
+        harness.run();
+        assert_eq!(harness.state().acknowledgement, "resource-");
+
+        harness.state_mut().available = true;
+        harness.run();
+        assert!(
+            harness
+                .get_by_label("Type the resource name to acknowledge:")
+                .is_focused(),
+            "removing the countdown must preserve the acknowledgement input's focus"
+        );
+        harness
+            .get_by_label("Type the resource name to acknowledge:")
+            .type_text("name");
+        harness.run();
+
+        assert_eq!(harness.state().acknowledgement, "resource-name");
+        assert!(
+            !harness
+                .get_by_label("Remove finalizers")
+                .accesskit_node()
+                .is_disabled()
+        );
     }
 }

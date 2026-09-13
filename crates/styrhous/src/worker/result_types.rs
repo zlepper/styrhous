@@ -357,6 +357,8 @@ pub(crate) struct DeploymentRestartFailed {
 }
 #[derive(Debug)]
 pub(crate) struct CronJobRunCompleted {
+    pub(crate) cluster_key: i32,
+    pub(crate) operation_id: u64,
     pub(crate) namespace: String,
     pub(crate) cron_job_name: String,
     pub(crate) job_name: String,
@@ -364,6 +366,9 @@ pub(crate) struct CronJobRunCompleted {
 #[derive(Debug)]
 pub(crate) struct CronJobRunFailed {
     pub(crate) cluster_key: i32,
+    pub(crate) operation_id: u64,
+    pub(crate) namespace: String,
+    pub(crate) cron_job_name: String,
     pub(crate) error: String,
 }
 #[derive(Debug)]

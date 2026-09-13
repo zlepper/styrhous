@@ -67,37 +67,73 @@ fn test_force_delete_resource_with_finalizer_integration() {
 
     harness
         .get_by_label(&format!("More actions for {resource_name}"))
-        .click_accesskit();
+        .click();
     harness.run_steps(1);
     harness
         .get_by_label("Force delete (remove finalizers)")
-        .click_accesskit();
+        .click();
     harness.run_steps(1);
-    wait_for(
+    let acknowledgement_label =
+        format!("Type {resource_name} to acknowledge that you are bypassing cleanup:");
+    let mut previous_input_rect = None;
+    wait_for_harness(
         &mut harness,
-        "the force-delete acknowledgement delay to elapse",
-        |app| {
-            app.ui_state.clusters[&cluster_key]
+        "the force-delete acknowledgement input to settle after the countdown",
+        |harness| {
+            let pending = harness.state().ui_state.clusters[&cluster_key]
                 .pending_force_delete
-                .as_ref()
-                .filter(|pending| pending.confirmation_available_at <= std::time::Instant::now())
-                .map(|_| ())
+                .as_ref()?;
+            if pending.confirmation_available_at > std::time::Instant::now() {
+                return None;
+            }
+            // Removing the countdown changes the centered modal's layout. Observe
+            // stable rendered coordinates before sending a real pointer click.
+            let rect = harness
+                .query_by_role_and_label(egui::accesskit::Role::TextInput, &acknowledgement_label)?
+                .rect();
+            (previous_input_rect.replace(rect) == Some(rect)).then_some(())
         },
         5_000,
     );
     harness
-        .get_by_role_and_label(
-            egui::accesskit::Role::TextInput,
-            &format!("Type {resource_name} to acknowledge that you are bypassing cleanup:"),
-        )
+        .get_by_role_and_label(egui::accesskit::Role::TextInput, &acknowledgement_label)
         .click();
-    harness.run_steps(1);
+    wait_for_harness(
+        &mut harness,
+        "the force-delete acknowledgement input to receive pointer focus",
+        |harness| {
+            harness
+                .query_by_role_and_label(egui::accesskit::Role::TextInput, &acknowledgement_label)?
+                .is_focused()
+                .then_some(())
+        },
+        5_000,
+    );
     harness
         .input_mut()
         .events
         .push(egui::Event::Text(resource_name.clone()));
-    harness.run_steps(1);
-    harness.get_by_label("Remove finalizers").click_accesskit();
+    wait_for_harness(
+        &mut harness,
+        "the acknowledged force-delete confirmation to become enabled",
+        |harness| {
+            let button = harness.query_by_label("Remove finalizers")?;
+            (!button.accesskit_node().is_disabled()).then_some(())
+        },
+        5_000,
+    );
+    harness.get_by_label("Remove finalizers").click();
+    wait_for(
+        &mut harness,
+        "the force-delete confirmation to dispatch and close",
+        |app| {
+            app.ui_state.clusters[&cluster_key]
+                .pending_force_delete
+                .is_none()
+                .then_some(())
+        },
+        5_000,
+    );
 
     wait_for_kubernetes_with_diagnostic(
         &mut harness,

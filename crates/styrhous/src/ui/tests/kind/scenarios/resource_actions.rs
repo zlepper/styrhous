@@ -1,6 +1,87 @@
 //! Kind CronJob and resource-scale action scenarios.
 
 use super::*;
+use std::time::Duration;
+
+const CRON_JOB_RUN_TIMEOUT_MS: u64 = 10_000;
+const CRON_JOB_POLL_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+const CRON_JOB_DIAGNOSTIC_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+const EXPECTED_MANUAL_JOB_IMAGE: &str = "registry.k8s.io/pause:3.10";
+
+fn is_expected_manual_job(job: &Job, cron_job_name: &str, cron_job_uid: &str) -> bool {
+    job.metadata
+        .generate_name
+        .as_deref()
+        .is_some_and(|prefix| prefix.strip_suffix("-manual-") == Some(cron_job_name))
+        && job
+            .metadata
+            .annotations
+            .as_ref()
+            .and_then(|annotations| annotations.get("cronjob.kubernetes.io/instantiate"))
+            .is_some_and(|value| value == "manual")
+        && job
+            .metadata
+            .labels
+            .as_ref()
+            .and_then(|labels| labels.get("app"))
+            .is_some_and(|value| value == cron_job_name)
+        && job
+            .metadata
+            .owner_references
+            .as_ref()
+            .is_some_and(|owners| {
+                owners.iter().any(|owner| {
+                    owner.kind == "CronJob"
+                        && owner.name == cron_job_name
+                        && owner.uid == cron_job_uid
+                        && owner.controller == Some(true)
+                })
+            })
+        && job.spec.as_ref().is_some_and(|spec| {
+            spec.template
+                .spec
+                .as_ref()
+                .and_then(|pod_spec| pod_spec.containers.first())
+                .and_then(|container| container.image.as_deref())
+                == Some(EXPECTED_MANUAL_JOB_IMAGE)
+        })
+}
+
+fn describe_job(job: &Job) -> String {
+    let owners = job
+        .metadata
+        .owner_references
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .map(|owner| {
+            format!(
+                "{}/{} uid={} controller={:?}",
+                owner.kind, owner.name, owner.uid, owner.controller
+            )
+        })
+        .collect::<Vec<_>>();
+    let first_container = job
+        .spec
+        .as_ref()
+        .and_then(|spec| spec.template.spec.as_ref())
+        .and_then(|pod_spec| pod_spec.containers.first());
+    format!(
+        "namespace={}, name={}, uid={}, generate_name={}, annotations={:?}, labels={:?}, owners={owners:?}, first_container_name={}, first_container_image={}",
+        job.metadata.namespace.as_deref().unwrap_or("missing"),
+        job.metadata.name.as_deref().unwrap_or("missing"),
+        job.metadata.uid.as_deref().unwrap_or("missing"),
+        job.metadata.generate_name.as_deref().unwrap_or("missing"),
+        job.metadata.annotations,
+        job.metadata.labels,
+        first_container
+            .map(|container| container.name.as_str())
+            .unwrap_or("missing"),
+        first_container
+            .and_then(|container| container.image.as_deref())
+            .unwrap_or("missing"),
+    )
+}
 
 #[test]
 fn test_cron_job_run_now_integration() {
@@ -32,7 +113,7 @@ fn test_cron_job_run_now_integration() {
                                 k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
                                     labels: Some(BTreeMap::from([(
                                         "app".to_owned(),
-                                        "on-demand-report".to_owned(),
+                                        cron_job_name.clone(),
                                     )])),
                                     annotations: Some(BTreeMap::from([(
                                         "example.com/runbook".to_owned(),
@@ -47,7 +128,7 @@ fn test_cron_job_run_now_integration() {
                                         restart_policy: Some("Never".to_owned()),
                                         containers: vec![Container {
                                             name: "report".to_owned(),
-                                            image: Some("registry.k8s.io/pause:3.10".to_owned()),
+                                            image: Some(EXPECTED_MANUAL_JOB_IMAGE.to_owned()),
                                             ..Default::default()
                                         }],
                                         ..Default::default()
@@ -117,63 +198,112 @@ fn test_cron_job_run_now_integration() {
         },
         5_000,
     );
-    harness.get_by_label("Run now").click();
 
-    wait_for_kubernetes_with_diagnostic(
+    let last_job_poll_error = std::cell::RefCell::new(None::<String>);
+    let cron_job_diagnostic = |app: &crate::ui::MyEguiApp<crate::worker::Worker>| {
+        let cluster = &app.ui_state.clusters[&cluster_key];
+        let last_poll_error = last_job_poll_error
+            .borrow()
+            .clone()
+            .unwrap_or_else(|| "none".to_owned());
+        let ui_observation = format!(
+            "pending CronJob={}, run state={:?}, observed completions={:?}, last Job poll error={last_poll_error}",
+            cluster
+                .pending_cron_job_run
+                .as_ref()
+                .map(|pending| pending.resource_name.as_str())
+                .unwrap_or("none"),
+            cluster.cron_job_run,
+            cluster.observed_cron_job_run_completions,
+        );
+        let api_observation = match kubernetes_request(
+            runtime,
+            CRON_JOB_DIAGNOSTIC_REQUEST_TIMEOUT,
+            jobs.list(&Default::default()),
+        ) {
+            Ok(list) if list.items.is_empty() => "Kubernetes has no Jobs".to_owned(),
+            Ok(list) => list
+                .items
+                .iter()
+                .map(describe_job)
+                .collect::<Vec<_>>()
+                .join("; "),
+            Err(error) => error.to_string(),
+        };
+        format!("{ui_observation}; Jobs: {api_observation}")
+    };
+
+    harness.get_by_label("Run now").click();
+    harness.run_steps(1);
+    assert!(
+        harness.state().ui_state.clusters[&cluster_key]
+            .pending_cron_job_run
+            .is_none(),
+        "Run now confirmation click was not applied; {}",
+        cron_job_diagnostic(harness.state())
+    );
+    let operation_id = match &harness.state().ui_state.clusters[&cluster_key].cron_job_run {
+        Some(CronJobRunState::Running {
+            operation_id,
+            namespace,
+            cron_job_name: acknowledged_cron_job_name,
+        }) if namespace == &fixture.namespace && acknowledged_cron_job_name == &cron_job_name => {
+            *operation_id
+        }
+        _ => panic!(
+            "Run now command did not enter the expected running state; {}",
+            cron_job_diagnostic(harness.state())
+        ),
+    };
+
+    wait_for_with_terminal_and_timeout_diagnostic(
         &mut harness,
-        &format!("a manually instantiated Job for CronJob {cron_job_name}"),
-        |remaining| {
-            kubernetes_request(runtime, remaining, jobs.list(&Default::default()))
-                .map(|list| {
-                    list.items.into_iter().find(|job| {
-                        job.metadata
-                            .generate_name
-                            .as_deref()
-                            .is_some_and(|prefix| prefix == "on-demand-report-manual-")
-                            && job
-                                .metadata
-                                .annotations
-                                .as_ref()
-                                .and_then(|annotations| {
-                                    annotations.get("cronjob.kubernetes.io/instantiate")
-                                })
-                                .is_some_and(|value| value == "manual")
-                            && job
-                                .metadata
-                                .labels
-                                .as_ref()
-                                .and_then(|labels| labels.get("app"))
-                                .is_some_and(|value| value == "on-demand-report")
-                            && job
-                                .metadata
-                                .owner_references
-                                .as_ref()
-                                .is_some_and(|owners| {
-                                    owners.iter().any(|owner| {
-                                        owner.kind == "CronJob"
-                                            && owner.name == cron_job_name
-                                            && owner.uid == cron_job_uid
-                                            && owner.controller == Some(true)
-                                    })
-                                })
-                            && job.spec.as_ref().is_some_and(|spec| {
-                                spec.template
-                                    .spec
-                                    .as_ref()
-                                    .and_then(|pod_spec| pod_spec.containers.first())
-                                    .and_then(|container| container.image.as_deref())
-                                    == Some("registry.k8s.io/pause:3.10")
-                            })
-                    })
-                })
-                .map(|job| job.map(|_| ()))
-        },
+        &format!(
+            "worker acknowledgement and a manually instantiated Job for CronJob {cron_job_name}"
+        ),
         |app| {
-            app.ui_state.clusters[&cluster_key]
-                .cron_job_run_error
-                .clone()
+            let cluster = &app.ui_state.clusters[&cluster_key];
+            let acknowledged_job_name = cluster
+                .observed_cron_job_run_completions
+                .iter()
+                .find(|completion| {
+                    completion.operation_id == operation_id
+                        && completion.namespace == fixture.namespace
+                        && completion.cron_job_name == cron_job_name
+                })
+                .map(|completion| completion.job_name.as_str())?;
+            match kubernetes_request(
+                runtime,
+                CRON_JOB_POLL_REQUEST_TIMEOUT,
+                jobs.list(&Default::default()),
+            ) {
+                Ok(list) => list
+                    .items
+                    .into_iter()
+                    .find(|job| {
+                        job.metadata.name.as_deref() == Some(acknowledged_job_name)
+                            && is_expected_manual_job(job, &cron_job_name, &cron_job_uid)
+                    })
+                    .map(|_| ()),
+                Err(error) => {
+                    *last_job_poll_error.borrow_mut() = Some(error.to_string());
+                    None
+                }
+            }
         },
-        10_000,
+        |app| match app.ui_state.clusters[&cluster_key].cron_job_run.as_ref() {
+            Some(CronJobRunState::Failed {
+                operation_id: failed_operation_id,
+                error,
+                ..
+            }) if *failed_operation_id == operation_id => Some(format!(
+                "CronJob run failed: {error}; {}",
+                cron_job_diagnostic(app)
+            )),
+            _ => None,
+        },
+        |app| Some(cron_job_diagnostic(app)),
+        CRON_JOB_RUN_TIMEOUT_MS,
     );
 }
 

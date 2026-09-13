@@ -1,4 +1,6 @@
-use super::state::{BulkDeleteProgress, UiState};
+#[cfg(test)]
+use super::state::ObservedCronJobRunCompletion;
+use super::state::{BulkDeleteProgress, CronJobRunState, UiState};
 use crate::terminal_launcher::TerminalLaunchSettings;
 use crate::worker::*;
 use components::colors::{WHITE, gray};
@@ -90,18 +92,47 @@ impl WorkerResult for DeploymentRestartCompleted {
 
 impl WorkerResult for CronJobRunFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
-        if let Some(cluster) = ui.clusters.get_mut(&self.cluster_key) {
-            cluster.cron_job_run_error = Some(self.error);
+        if let Some(cluster) = ui.clusters.get_mut(&self.cluster_key)
+            && matches!(
+                cluster.cron_job_run.as_ref(),
+                Some(CronJobRunState::Running { operation_id, .. })
+                    if *operation_id == self.operation_id
+            )
+        {
+            cluster.cron_job_run = Some(CronJobRunState::Failed {
+                operation_id: self.operation_id,
+                namespace: self.namespace,
+                cron_job_name: self.cron_job_name,
+                error: self.error,
+            });
         }
     }
 }
 
 impl WorkerResult for CronJobRunCompleted {
-    fn apply(self, _ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         info!(
             "Created one-off Job {} from CronJob {} in {}",
             self.job_name, self.cron_job_name, self.namespace
         );
+        if let Some(cluster) = ui.clusters.get_mut(&self.cluster_key)
+            && matches!(
+                cluster.cron_job_run.as_ref(),
+                Some(CronJobRunState::Running { operation_id, .. })
+                    if *operation_id == self.operation_id
+            )
+        {
+            cluster.cron_job_run = None;
+            #[cfg(test)]
+            cluster
+                .observed_cron_job_run_completions
+                .push(ObservedCronJobRunCompletion {
+                    operation_id: self.operation_id,
+                    namespace: self.namespace,
+                    cron_job_name: self.cron_job_name,
+                    job_name: self.job_name,
+                });
+        }
     }
 }
 

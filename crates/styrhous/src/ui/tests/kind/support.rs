@@ -9,6 +9,8 @@ use k8s_openapi::api::core::v1::{ConfigMap, Namespace, Secret};
 use kube::api::Patch;
 use kube::{Api, Client};
 use std::collections::BTreeMap;
+use std::fs::{File, OpenOptions};
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 mod waits;
@@ -16,6 +18,47 @@ pub(super) use waits::*;
 
 const TEST_NAMESPACE_PREFIX: &str = "styrhous-it-";
 const FIXTURE_CLEANUP_TIMEOUT: Duration = Duration::from_secs(30);
+const CLUSTER_DISCOVERY_TIMEOUT_MS: u64 = 30_000;
+const KIND_DISCOVERY_LOCK_FILE: &str = "styrhous-kind-api-discovery.lock";
+
+struct KindDiscoveryLock {
+    _file: File,
+}
+
+impl KindDiscoveryLock {
+    fn acquire() -> Self {
+        Self::acquire_at(kind_discovery_lock_path())
+    }
+
+    fn acquire_at(path: impl AsRef<Path>) -> Self {
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(path.as_ref())
+            .unwrap_or_else(|error| {
+                panic!(
+                    "Failed to open Kind API discovery lock {}: {error}",
+                    path.as_ref().display()
+                )
+            });
+        file.lock().unwrap_or_else(|error| {
+            panic!(
+                "Failed to acquire Kind API discovery lock {}: {error}",
+                path.as_ref().display()
+            )
+        });
+        Self { _file: file }
+    }
+}
+
+fn kind_discovery_lock_path() -> PathBuf {
+    std::env::var_os("XDG_RUNTIME_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir)
+        .join(KIND_DISCOVERY_LOCK_FILE)
+}
 
 pub(super) struct IntegrationNamespaceFixture {
     pub(super) runtime: tokio::runtime::Runtime,
@@ -144,6 +187,10 @@ impl Drop for IntegrationNamespaceFixture {
 }
 
 pub(super) fn connected_kind_harness() -> (Harness<'static, MyEguiApp<Worker>>, i32) {
+    // Loading kubeconfig contexts can automatically connect the current context.
+    // Acquire the discovery lock before constructing or pumping the application so
+    // that automatic discovery is guarded too; the remaining scenario stays parallel.
+    let _discovery_lock = KindDiscoveryLock::acquire();
     let mut harness = application_harness::<Worker>();
     wait_for(
         &mut harness,
@@ -160,6 +207,7 @@ pub(super) fn connected_kind_harness() -> (Harness<'static, MyEguiApp<Worker>>, 
         .ui_state
         .selected_cluster
         .expect("Kind cluster should be selected after click");
+    wait_for_cluster_data(&mut harness, cluster_key);
     (harness, cluster_key)
 }
 
@@ -177,8 +225,38 @@ pub(super) fn wait_for_cluster_data(harness: &mut Harness<MyEguiApp<Worker>>, cl
         },
         |app| cluster_load_failure(&app.ui_state, cluster_key),
         |app| cluster_load_state(&app.ui_state, cluster_key),
-        10_000,
+        CLUSTER_DISCOVERY_TIMEOUT_MS,
     );
+}
+
+#[test]
+fn kind_discovery_lock_is_exclusive_and_released_with_its_guard() {
+    let path = std::env::temp_dir().join(format!(
+        "styrhous-kind-discovery-lock-test-{}-{:x}.lock",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time should be after the Unix epoch")
+            .as_nanos()
+    ));
+    let guard = KindDiscoveryLock::acquire_at(&path);
+    let competing_file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&path)
+        .expect("the competing lock file should open");
+
+    assert!(
+        competing_file.try_lock().is_err(),
+        "a second Kind discovery should not acquire the lock while the guard is alive"
+    );
+
+    drop(guard);
+    competing_file
+        .try_lock()
+        .expect("dropping the guard should release the discovery lock");
+    drop(competing_file);
+    std::fs::remove_file(&path).expect("the temporary discovery lock should be removable");
 }
 
 pub(super) fn select_namespace(

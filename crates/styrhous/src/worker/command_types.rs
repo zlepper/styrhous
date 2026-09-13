@@ -105,6 +105,7 @@ pub(crate) struct RestartDeployment {
 #[derive(Debug)]
 pub(crate) struct RunCronJob {
     pub(crate) cluster_key: i32,
+    pub(crate) operation_id: u64,
     pub(crate) namespace: String,
     pub(crate) resource_name: String,
 }

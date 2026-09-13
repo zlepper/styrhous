@@ -318,8 +318,177 @@ fn cron_job_run_action_opens_a_confirmation_and_sends_a_worker_command() {
             .last()
             .and_then(|command| command.as_ref().as_any().downcast_ref::<RunCronJob>())
             .is_some_and(|command| command.cluster_key == 2
+                && command.operation_id == 1
                 && command.namespace == "kube-system"
                 && command.resource_name == "nightly-report")
+    );
+    assert!(matches!(
+        harness.state().ui_state.clusters[&2].cron_job_run,
+        Some(CronJobRunState::Running {
+            operation_id: 1,
+            ref namespace,
+            ref cron_job_name,
+        }) if namespace == "kube-system" && cron_job_name == "nightly-report"
+    ));
+
+    harness.event(egui::Event::PointerGone);
+    harness.run();
+    harness
+        .get_by_label("More actions for nightly-report")
+        .click();
+    harness.run();
+    harness.get_by_label("Run now").click();
+    harness.run();
+    harness.event(egui::Event::PointerGone);
+    harness.run();
+    harness.get_by_label("Run now").click();
+    harness.run();
+
+    let operation_ids = harness
+        .state()
+        .worker
+        .commands
+        .iter()
+        .filter_map(|command| command.as_ref().as_any().downcast_ref::<RunCronJob>())
+        .map(|command| command.operation_id)
+        .collect::<Vec<_>>();
+    assert_eq!(operation_ids, vec![1, 2]);
+    assert!(matches!(
+        harness.state().ui_state.clusters[&2].cron_job_run,
+        Some(CronJobRunState::Running {
+            operation_id: 2,
+            ref namespace,
+            ref cron_job_name,
+        }) if namespace == "kube-system" && cron_job_name == "nightly-report"
+    ));
+
+    harness.deliver_worker_result(CronJobRunCompleted {
+        cluster_key: 2,
+        operation_id: 1,
+        namespace: "kube-system".to_owned(),
+        cron_job_name: "nightly-report".to_owned(),
+        job_name: "nightly-report-manual-stale".to_owned(),
+    });
+    assert!(matches!(
+        harness.state().ui_state.clusters[&2].cron_job_run,
+        Some(CronJobRunState::Running {
+            operation_id: 2,
+            ..
+        })
+    ));
+
+    harness.deliver_worker_result(CronJobRunCompleted {
+        cluster_key: 2,
+        operation_id: 2,
+        namespace: "kube-system".to_owned(),
+        cron_job_name: "nightly-report".to_owned(),
+        job_name: "nightly-report-manual-current".to_owned(),
+    });
+    let cluster = &harness.state().ui_state.clusters[&2];
+    assert_eq!(cluster.cron_job_run, None);
+    assert_eq!(cluster.observed_cron_job_run_completions.len(), 1);
+    let completion = &cluster.observed_cron_job_run_completions[0];
+    assert_eq!(completion.operation_id, 2);
+    assert_eq!(completion.namespace, "kube-system");
+    assert_eq!(completion.cron_job_name, "nightly-report");
+    assert_eq!(completion.job_name, "nightly-report-manual-current");
+}
+
+#[test]
+fn cron_job_run_results_ignore_stale_operations_and_record_the_current_outcome() {
+    let mut state = oracle_resource_table_state();
+    state
+        .clusters
+        .get_mut(&2)
+        .expect("kind fixture exists")
+        .cron_job_run = Some(CronJobRunState::Running {
+        operation_id: 2,
+        namespace: "kube-system".to_owned(),
+        cron_job_name: "nightly-report".to_owned(),
+    });
+    let mut harness = application_harness::<MockWorker>();
+    harness.seed_ui_state(state);
+
+    harness.deliver_worker_result(CronJobRunCompleted {
+        cluster_key: 2,
+        operation_id: 1,
+        namespace: "kube-system".to_owned(),
+        cron_job_name: "nightly-report".to_owned(),
+        job_name: "nightly-report-manual-stale".to_owned(),
+    });
+    harness.deliver_worker_result(CronJobRunFailed {
+        cluster_key: 2,
+        operation_id: 1,
+        namespace: "kube-system".to_owned(),
+        cron_job_name: "nightly-report".to_owned(),
+        error: "stale failure".to_owned(),
+    });
+
+    assert_eq!(
+        harness.state().ui_state.clusters[&2].cron_job_run,
+        Some(CronJobRunState::Running {
+            operation_id: 2,
+            namespace: "kube-system".to_owned(),
+            cron_job_name: "nightly-report".to_owned(),
+        })
+    );
+    assert!(
+        harness.state().ui_state.clusters[&2]
+            .observed_cron_job_run_completions
+            .is_empty()
+    );
+
+    harness.deliver_worker_result(CronJobRunCompleted {
+        cluster_key: 2,
+        operation_id: 2,
+        namespace: "kube-system".to_owned(),
+        cron_job_name: "nightly-report".to_owned(),
+        job_name: "nightly-report-manual-current".to_owned(),
+    });
+
+    let cluster = &harness.state().ui_state.clusters[&2];
+    assert_eq!(cluster.cron_job_run, None);
+    assert_eq!(cluster.observed_cron_job_run_completions.len(), 1);
+    let completion = &cluster.observed_cron_job_run_completions[0];
+    assert_eq!(completion.operation_id, 2);
+    assert_eq!(completion.namespace, "kube-system");
+    assert_eq!(completion.cron_job_name, "nightly-report");
+    assert_eq!(completion.job_name, "nightly-report-manual-current");
+
+    harness
+        .state_mut()
+        .ui_state
+        .clusters
+        .get_mut(&2)
+        .expect("kind fixture exists")
+        .cron_job_run = Some(CronJobRunState::Running {
+        operation_id: 3,
+        namespace: "kube-system".to_owned(),
+        cron_job_name: "nightly-report".to_owned(),
+    });
+    harness.deliver_worker_result(CronJobRunFailed {
+        cluster_key: 2,
+        operation_id: 2,
+        namespace: "kube-system".to_owned(),
+        cron_job_name: "nightly-report".to_owned(),
+        error: "late prior failure".to_owned(),
+    });
+    harness.deliver_worker_result(CronJobRunFailed {
+        cluster_key: 2,
+        operation_id: 3,
+        namespace: "kube-system".to_owned(),
+        cron_job_name: "nightly-report".to_owned(),
+        error: "current failure".to_owned(),
+    });
+
+    assert_eq!(
+        harness.state().ui_state.clusters[&2].cron_job_run,
+        Some(CronJobRunState::Failed {
+            operation_id: 3,
+            namespace: "kube-system".to_owned(),
+            cron_job_name: "nightly-report".to_owned(),
+            error: "current failure".to_owned(),
+        })
     );
 }
 
