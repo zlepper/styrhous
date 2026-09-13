@@ -22,11 +22,27 @@ public sealed class OrganizationInvitationSecret
         }
 
         _value = value;
-        Hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)))
-            .ToLowerInvariant();
+        Hash = CalculateHash(value);
+    }
+
+    private OrganizationInvitationSecret(string trustedValue, bool fromTrustedPayload)
+    {
+        _value = trustedValue;
+        Hash = CalculateHash(trustedValue);
+    }
+
+    internal static OrganizationInvitationSecret FromTrustedPayload(string value)
+    {
+        return new OrganizationInvitationSecret(value, fromTrustedPayload: true);
     }
 
     public string Hash { get; }
+
+    private static string CalculateHash(string value)
+    {
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)))
+            .ToLowerInvariant();
+    }
 
     public bool MatchesHash(string hash)
     {

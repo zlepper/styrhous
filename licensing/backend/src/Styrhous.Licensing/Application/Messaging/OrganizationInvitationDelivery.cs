@@ -1,7 +1,5 @@
 using Styrhous.Licensing.Application.Organizations;
-using Styrhous.Licensing.Domain.Identifiers;
 using Styrhous.Licensing.Domain.Organizations;
-using Styrhous.Licensing.Domain.Validation;
 
 namespace Styrhous.Licensing.Application.Messaging;
 
@@ -80,32 +78,14 @@ public sealed class OrganizationInvitationDelivery
         string secret,
         DateTimeOffset expiresAt)
     {
-        if (!Enum.IsDefined(kind))
-        {
-            throw new ArgumentOutOfRangeException(nameof(kind));
-        }
-
-        if (!EmailAddress.IsValid(email))
-        {
-            throw new ArgumentException("A valid email address is required.", nameof(email));
-        }
-
-        if (role is not OrganizationRole.Admin and not OrganizationRole.Member)
-        {
-            throw new ArgumentException(
-                "An invitation role must be Admin or Member.",
-                nameof(role));
-        }
-
-        var (trimmedEmail, _) = EmailAddress.Normalize(email, nameof(email));
         return new OrganizationInvitationDelivery(
             kind,
             invitationId,
             organizationId,
-            trimmedEmail,
+            email,
             role,
-            new OrganizationInvitationSecret(secret),
-            expiresAt.ToUniversalTime());
+            OrganizationInvitationSecret.FromTrustedPayload(secret),
+            expiresAt);
     }
 
     public override string ToString()
