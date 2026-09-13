@@ -49,13 +49,10 @@
           "Microsoft.Testing.Platform.MSBuild": "2.3.3"
         }
       },
-      "AWSSDK.SQS": {
+      "BouncyCastle.Cryptography": {
         "type": "Transitive",
-        "resolved": "4.0.0.5",
-        "contentHash": "lQoQ5eFe+mV4LhGmER5ckvld8MYi40yZgFdwaGSVw7h30C+LDXIvKaRxgyi9Ra+Ut4+7bJWDB8oLmaLtlq1hCQ==",
-        "dependencies": {
-          "AWSSDK.Core": "[4.0.0.7, 5.0.0)"
-        }
+        "resolved": "2.6.2",
+        "contentHash": "7oWOcvnntmMKNzDLsdxAYqApt+AjpRpP2CShjMfIa3umZ42UQMvH0tl1qAliYPNYO6vTdcGMqnRrCPmsfzTI1w=="
       },
       "Microsoft.ApplicationInsights": {
         "type": "Transitive",
@@ -635,6 +632,15 @@
           "Microsoft.TestPlatform.ObjectModel": "18.9.0"
         }
       },
+      "MimeKit": {
+        "type": "Transitive",
+        "resolved": "4.17.0",
+        "contentHash": "h/KXsCreJf8RpR/PSAtlbvYtZFndp9N8Wn1Bs248AL7ITyhn+AiIY5bLTvt60tbN2mu6g8KadtBNWygTji2lqg==",
+        "dependencies": {
+          "BouncyCastle.Cryptography": "2.6.2",
+          "System.Security.Cryptography.Pkcs": "10.0.0"
+        }
+      },
       "Newtonsoft.Json": {
         "type": "Transitive",
         "resolved": "13.0.4",
@@ -845,14 +851,6 @@
           "System.Threading.RateLimiting": "8.0.0"
         }
       },
-      "RabbitMQ.Client": {
-        "type": "Transitive",
-        "resolved": "7.1.2",
-        "contentHash": "y3c6ulgULScWthHw5PLM1ShHRLhxg0vCtzX/hh61gRgNecL3ZC3WoBW2HYHoXOVRqTl99Br9E7CZEytGZEsCyQ==",
-        "dependencies": {
-          "System.Threading.RateLimiting": "8.0.0"
-        }
-      },
       "Rebus": {
         "type": "Transitive",
         "resolved": "8.9.0",
@@ -910,9 +908,8 @@
       "styrhous.licensing": {
         "type": "Project",
         "dependencies": {
-          "AWSSDK.SecretsManager": "[4.0.100.11, )",
-          "AWSSDK.SimpleEmailV2": "[4.0.103.1, )",
           "AspNet.Security.OAuth.GitHub": "[10.0.0, )",
+          "MailKit": "[4.17.0, )",
           "Microsoft.AspNetCore.Authentication.Google": "[10.0.10, )",
           "Microsoft.AspNetCore.Authentication.OpenIdConnect": "[10.0.10, )",
           "Microsoft.AspNetCore.DataProtection.EntityFrameworkCore": "[10.0.10, )",
@@ -920,9 +917,7 @@
           "OpenIddict.AspNetCore": "[7.6.0, )",
           "OpenIddict.EntityFrameworkCore": "[7.6.0, )",
           "OpenIddict.Validation.AspNetCore": "[7.6.0, )",
-          "Rebus.AmazonSqs": "[8.1.0, )",
           "Rebus.PostgreSql": "[9.1.1, )",
-          "Rebus.RabbitMq": "[10.1.1, )",
           "Rebus.ServiceProvider": "[10.7.2, )",
           "Stripe.net": "[52.4.0, )"
         }
@@ -930,7 +925,6 @@
       "styrhous.licensing.databaseprovisioning": {
         "type": "Project",
         "dependencies": {
-          "AWSSDK.SecretsManager": "[4.0.100.11, )",
           "Npgsql": "[10.0.3, )"
         }
       },
@@ -940,28 +934,13 @@
         "resolved": "10.0.0",
         "contentHash": "PbOrAso/hlCS2p3YHHq94C5W/6851xyMT8ZEkAc3eGQNlsu3Siwu/D98nzCKyOKmB+KNu9MirWpmO66PmEIexQ=="
       },
-      "AWSSDK.Core": {
+      "MailKit": {
         "type": "CentralTransitive",
-        "requested": "[4.0.102.1, )",
-        "resolved": "4.0.102.1",
-        "contentHash": "vsf+/o+S/euH/wG7bO1cha+OWaHvjgvpDeGFO6l3Vcdio9GlSfXkZDD2BogMuAJ+/jDyqqSgqmYVolPKV9ie/A=="
-      },
-      "AWSSDK.SecretsManager": {
-        "type": "CentralTransitive",
-        "requested": "[4.0.100.11, )",
-        "resolved": "4.0.100.11",
-        "contentHash": "rRIcSPtDixaP/XeoyfVX8a0DQ2uFAGtgslCoNEj6ay2ISAmRP17jaK/O2Ae1scZuGNpsjI1pBQCguumsiQSJ4w==",
+        "requested": "[4.17.0, )",
+        "resolved": "4.17.0",
+        "contentHash": "1nUAVLxM9fhT/78we6/AGsCesnpn5dRNLLeRqOfr52Wnk87pzVwo5YMTMyqnmoXrYc7piGhmayiMA/OgDluIjg==",
         "dependencies": {
-          "AWSSDK.Core": "[4.0.102.1, 5.0.0)"
-        }
-      },
-      "AWSSDK.SimpleEmailV2": {
-        "type": "CentralTransitive",
-        "requested": "[4.0.103.1, )",
-        "resolved": "4.0.103.1",
-        "contentHash": "/70T+PALE7L09jY/7Mu4DkOcQEC+Neu2y3MfdglgH8/eqlJ0DNk3Hne5xl6Pl3YJHDLLP4M6YiePNqpVJJ+rEQ==",
-        "dependencies": {
-          "AWSSDK.Core": "[4.0.102.1, 5.0.0)"
+          "MimeKit": "4.17.0"
         }
       },
       "Microsoft.AspNetCore.Authentication.Google": {
@@ -1059,16 +1038,6 @@
           "OpenIddict.Validation": "7.6.0"
         }
       },
-      "Rebus.AmazonSqs": {
-        "type": "CentralTransitive",
-        "requested": "[8.1.0, )",
-        "resolved": "8.1.0",
-        "contentHash": "QP6KIigqfcKWPI8iAa/yTD+Z2gkPCCklGMr1sF+APh52h/rDOclKWRPQCXTrkykTJf/Hj4xyBsmTNA3e6KbW9A==",
-        "dependencies": {
-          "Rebus": "8.8.0",
-          "awssdk.sqs": "4.0.0.5"
-        }
-      },
       "Rebus.PostgreSql": {
         "type": "CentralTransitive",
         "requested": "[9.1.1, )",
@@ -1077,16 +1046,6 @@
         "dependencies": {
           "npgsql": "8.0.3",
           "rebus": "8.4.2"
-        }
-      },
-      "Rebus.RabbitMq": {
-        "type": "CentralTransitive",
-        "requested": "[10.1.1, )",
-        "resolved": "10.1.1",
-        "contentHash": "66pUp4hfaYWfQEDOiVcuZQnPF4XFHyJ5KCfwCm18e3Dnr936Iog48KrN8Mp8QyRQ2tiNpzdjSATQLKEZpSk11A==",
-        "dependencies": {
-          "RabbitMq.Client": "7.1.2",
-          "rebus": "8.9.0"
         }
       },
       "Rebus.ServiceProvider": {

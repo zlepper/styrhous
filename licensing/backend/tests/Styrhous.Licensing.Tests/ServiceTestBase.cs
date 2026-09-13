@@ -39,9 +39,15 @@ internal sealed class ServiceTestBase<T> : IAsyncDisposable where T : notnull
     private static ServiceTestBase<T> CreateApplicationFixture(
         PostgresTestDatabase database, DateTimeOffset observedAt,
         Action<IServiceCollection>? configureServices, bool ownsDatabase,
-        Action<IConfiguration, IServiceCollection>? configureHostServices, IInterceptor[] interceptors)
+        Action<IConfiguration, IServiceCollection>? configureHostServices,
+        string? backgroundQueueName,
+        IInterceptor[] interceptors)
     {
-        var application = new LicensingWebApplicationFactory(database, observedAt, interceptors: interceptors);
+        var application = new LicensingWebApplicationFactory(
+            database,
+            observedAt,
+            backgroundQueueName: backgroundQueueName,
+            interceptors: interceptors);
         var configuredApplication = application.WithWebHostBuilder(builder =>
         {
             builder.UseDefaultServiceProvider(options =>
@@ -128,7 +134,14 @@ internal sealed class ServiceTestBase<T> : IAsyncDisposable where T : notnull
         var database = await PostgresTestDatabase.CreateAsync();
         try
         {
-            return CreateApplicationFixture(database, observedAt, configureServices, true, configureHostServices, interceptors);
+            return CreateApplicationFixture(
+                database,
+                observedAt,
+                configureServices,
+                true,
+                configureHostServices,
+                backgroundQueueName: null,
+                interceptors: interceptors);
         }
         catch
         {
@@ -144,7 +157,32 @@ internal sealed class ServiceTestBase<T> : IAsyncDisposable where T : notnull
         Action<IConfiguration, IServiceCollection>? configureHostServices = null,
         params IInterceptor[] interceptors)
     {
-        return CreateApplicationFixture(database, observedAt, configureServices, false, configureHostServices, interceptors);
+        return CreateApplicationFixture(
+            database,
+            observedAt,
+            configureServices,
+            false,
+            configureHostServices,
+            backgroundQueueName: null,
+            interceptors);
+    }
+
+    public static ServiceTestBase<T> ForDatabaseWithBackgroundQueue(
+        PostgresTestDatabase database,
+        DateTimeOffset observedAt,
+        string backgroundQueueName,
+        Action<IServiceCollection>? configureServices = null,
+        Action<IConfiguration, IServiceCollection>? configureHostServices = null,
+        params IInterceptor[] interceptors)
+    {
+        return CreateApplicationFixture(
+            database,
+            observedAt,
+            configureServices,
+            false,
+            configureHostServices,
+            backgroundQueueName,
+            interceptors);
     }
 
     public async ValueTask DisposeAsync()

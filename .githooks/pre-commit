@@ -7,7 +7,8 @@ cd "$repo_root"
 run_rust_checks=false
 run_portal_checks=false
 run_backend_checks=false
-run_infrastructure_checks=false
+run_hook_checks=false
+run_fly_checks=false
 portal_dependencies_changed=false
 staged_paths_file="$(mktemp)"
 
@@ -39,36 +40,35 @@ while IFS= read -r -d '' staged_path; do
       run_rust_checks=true
       run_backend_checks=true
       ;;
-    licensing/LicensingOperationalMetrics.cs | licensing/shared/* | licensing/CompilerStyle.props | licensing/.editorconfig | licensing/infrastructure/database-provisioning/* | licensing/infrastructure/Directory.Build.props | licensing/infrastructure/Directory.Packages.props)
+    licensing/LicensingOperationalMetrics.cs | licensing/CompilerStyle.props | licensing/.editorconfig)
       run_backend_checks=true
-      run_infrastructure_checks=true
       ;;
     licensing/backend/check.sh)
       run_backend_checks=true
+      run_hook_checks=true
       ;;
-    licensing/backend/* | licensing/compose.yaml | licensing/.dockerignore)
+    licensing/backend/* | licensing/compose.yaml | .dockerignore)
       run_backend_checks=true
-      ;;
-    licensing/infrastructure/check.sh)
-      run_infrastructure_checks=true
-      ;;
-    licensing/infrastructure/*)
-      run_infrastructure_checks=true
       ;;
     flake.nix | flake.lock)
       run_rust_checks=true
       run_portal_checks=true
       run_backend_checks=true
-      run_infrastructure_checks=true
       ;;
-    .github/workflows/licensing.yml | .github/workflows/deploy-licensing.yml | .github/workflows/preview-licensing-staging.yml | .github/workflows/run-licensing-stack.yml)
+    .github/workflows/licensing.yml | .github/workflows/deploy-licensing.yml)
       run_portal_checks=true
       run_backend_checks=true
-      run_infrastructure_checks=true
+      run_fly_checks=true
       ;;
     .github/workflows/release.yml)
       run_rust_checks=true
-      run_infrastructure_checks=true
+      run_backend_checks=true
+      ;;
+    .githooks/pre-commit | scripts/test-pre-commit.sh)
+      run_hook_checks=true
+      ;;
+    licensing/fly.toml | licensing/fly/*)
+      run_fly_checks=true
       ;;
   esac
 done <"$staged_paths_file"
@@ -77,10 +77,11 @@ cleanup_staged_paths
 trap - EXIT
 
 selected_checks=()
+$run_hook_checks && selected_checks+=("hook")
 $run_rust_checks && selected_checks+=("Rust desktop")
 $run_portal_checks && selected_checks+=("licensing frontend")
 $run_backend_checks && selected_checks+=("licensing backend")
-$run_infrastructure_checks && selected_checks+=("licensing infrastructure")
+$run_fly_checks && selected_checks+=("Fly deployment config")
 
 if ((${#selected_checks[@]} == 0)); then
   echo "Pre-commit: no application checks are required for the staged files."
@@ -90,6 +91,10 @@ fi
 printf 'Pre-commit checks:'
 printf ' %s' "${selected_checks[@]}"
 printf '\n'
+
+if $run_hook_checks; then
+  bash scripts/test-pre-commit.sh
+fi
 
 if $run_rust_checks; then
   cargo fmt --check
@@ -108,7 +113,7 @@ if $run_portal_checks; then
 fi
 
 if $run_backend_checks; then
-  docker compose --file licensing/compose.yaml up --detach postgres rabbitmq
+  docker compose --file licensing/compose.yaml up --detach --no-recreate postgres
 
   wait_for_service() {
     local service="$1"
@@ -126,10 +131,9 @@ if $run_backend_checks; then
   }
 
   wait_for_service postgres pg_isready --username=styrhous --dbname=postgres
-  wait_for_service rabbitmq rabbitmq-diagnostics --quiet ping
   bash licensing/backend/check.sh
 fi
 
-if $run_infrastructure_checks; then
-  bash licensing/infrastructure/check.sh
+if $run_fly_checks; then
+  bash licensing/fly/check.sh
 fi

@@ -3,9 +3,6 @@ namespace Styrhous.Licensing.Runtime;
 public enum LicensingRuntimeMode
 {
     Api,
-    Worker,
-    Maintenance,
-    MaintenanceLambda,
     Migrate,
 }
 
@@ -25,13 +22,9 @@ public sealed record LicensingCommand(
         var mode = arguments[0].ToLowerInvariant() switch
         {
             "api" => LicensingRuntimeMode.Api,
-            "worker" => LicensingRuntimeMode.Worker,
-            "maintenance" => LicensingRuntimeMode.Maintenance,
-            "maintenance-lambda" => LicensingRuntimeMode.MaintenanceLambda,
             "migrate" => LicensingRuntimeMode.Migrate,
             _ => throw new ArgumentException(
-                "The first argument must be api, worker, maintenance, maintenance-lambda, "
-                    + "or migrate.",
+                "The first argument must be api or migrate.",
                 nameof(arguments)),
         };
         return new LicensingCommand(mode, arguments.Skip(1).ToArray());

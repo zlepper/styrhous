@@ -2,7 +2,7 @@ name: Licensing
 
 on:
   push:
-    branches: ["**"]
+    branches: [master]
     paths:
       - "licensing/**"
       - "assets/icons/kubernetes-dev-ui.svg"
@@ -16,8 +16,23 @@ on:
       - "flake.lock"
       - ".github/workflows/licensing.yml"
       - ".github/workflows/deploy-licensing.yml"
-      - ".github/workflows/preview-licensing-staging.yml"
-      - ".github/workflows/run-licensing-stack.yml"
+      - ".dockerignore"
+  pull_request:
+    paths:
+      - "licensing/**"
+      - "assets/icons/kubernetes-dev-ui.svg"
+      - "crates/components/src/icons/**"
+      - "crates/components/assets/fonts/**"
+      - "crates/components/tests/snapshots/buttons/test_button_interaction_states/**"
+      - "crates/components/tests/snapshots/comboboxes/test_combobox_flow/closed.png"
+      - "crates/components/tests/snapshots/showcase/showcase_buttons/buttons.png"
+      - "crates/components/tests/snapshots/text_inputs/snapshots_empty_filled_and_focused_inputs/**"
+      - "flake.nix"
+      - "flake.lock"
+      - ".github/workflows/licensing.yml"
+      - ".github/workflows/deploy-licensing.yml"
+      - ".dockerignore"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -43,42 +58,22 @@ jobs:
         with:
           global-json-file: licensing/backend/global.json
       - name: Start backend services
-        run: docker compose --file ../compose.yaml up --detach --wait postgres rabbitmq
+        run: docker compose --file ../compose.yaml up --detach --wait postgres
       - name: Check backend
         run: bash check.sh
       - name: Build deployment image
-        working-directory: licensing
-        run: docker build --file backend/Dockerfile --tag styrhous-licensing-ci .
+        working-directory: ${{ github.workspace }}
+        run: docker build --file licensing/backend/Dockerfile --tag styrhous-licensing-ci .
+      - name: Validate Fly deployment configuration
+        working-directory: ${{ github.workspace }}
+        run: bash licensing/fly/check.sh
       - name: Smoke-test migration image entrypoint
         run: >-
           docker run --rm --network host styrhous-licensing-ci migrate
           "--ConnectionStrings:Licensing=Host=127.0.0.1;Port=55432;Database=postgres;Username=styrhous;Password=local-development-only;Pooling=false"
-      - name: Smoke-test infrastructure provisioning entrypoint
-        env:
-          STYRHOUS_APPLICATION_CONFIGURATION: >-
-            {"ConnectionStrings":{"Licensing":"Host=127.0.0.1;Port=55432;Database=postgres;Username=styrhous;Password=local-development-only;Pooling=false"},"DatabaseRuntimeRole":{"Username":"styrhous_ci_runtime","Password":"local-ci-runtime-only"}}
-        run: >-
-          docker run --rm --network host --entrypoint dotnet
-          --env STYRHOUS_APPLICATION_CONFIGURATION styrhous-licensing-ci
-          database-provisioning/Styrhous.Licensing.DatabaseProvisioning.dll
-
-  infrastructure:
-    name: Infrastructure
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: licensing/infrastructure
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Set up .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          dotnet-version: 10.0.x
-      - name: Check infrastructure
-        run: bash check.sh
+      - name: Stop backend services
+        if: always()
+        run: docker compose --file ../compose.yaml down --volumes
 
   frontend:
     name: Frontend

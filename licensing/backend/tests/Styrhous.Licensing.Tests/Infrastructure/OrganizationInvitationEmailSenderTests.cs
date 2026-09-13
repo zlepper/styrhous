@@ -6,7 +6,7 @@ namespace Styrhous.Licensing.Tests.Infrastructure;
 
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
-public sealed class SesOrganizationInvitationEmailSenderTests
+public sealed class OrganizationInvitationEmailSenderTests
 {
     private static readonly DateTimeOffset ExpiresAt =
         new(2026, 9, 8, 12, 30, 0, TimeSpan.Zero);
@@ -16,7 +16,7 @@ public sealed class SesOrganizationInvitationEmailSenderTests
     {
         var deliveryId = Guid.CreateVersion7();
         var client = new RecordingEmailSubmissionClient();
-        var sender = new SesOrganizationInvitationEmailSender(
+        var sender = new OrganizationInvitationEmailSender(
             client,
             new InvitationEmailSettings(
                 "noreply@example.com",
@@ -71,11 +71,24 @@ public sealed class SesOrganizationInvitationEmailSenderTests
             Throws.ArgumentException.With.Message.Contains("HTTPS"));
     }
 
+    [TestCase(0)]
+    [TestCase(65536)]
+    public void SmtpSettingsRejectUnsafePorts(int port)
+    {
+        Assert.That(
+            () => new SmtpEmailSettings(
+                "smtp.sendgrid.net",
+                port,
+                "apikey",
+                "secret"),
+            Throws.TypeOf<ArgumentOutOfRangeException>());
+    }
+
     [Test]
     public async Task ExpiryIsRenderedInUtc()
     {
         var client = new RecordingEmailSubmissionClient();
-        var sender = new SesOrganizationInvitationEmailSender(
+        var sender = new OrganizationInvitationEmailSender(
             client,
             new InvitationEmailSettings(
                 "noreply@example.com",
@@ -98,7 +111,7 @@ public sealed class SesOrganizationInvitationEmailSenderTests
     }
 
     [Test]
-    public void AmazonRequestPreservesContentAndAddsNonSecretDeliveryTag()
+    public void SmtpMessagePreservesContentAndAddsNonSecretDeliveryHeader()
     {
         var deliveryId = Guid.CreateVersion7();
         var submission = new InvitationEmailSubmission(
@@ -109,19 +122,22 @@ public sealed class SesOrganizationInvitationEmailSenderTests
             "Text with a private link",
             "<p>HTML with a private link</p>");
 
-        var request = AmazonSesEmailSubmissionClient.CreateRequest(submission);
+        var message = SmtpEmailSubmissionClient.CreateMessage(submission);
 
         Assert.Multiple(() =>
         {
-            Assert.That(request.FromEmailAddress, Is.EqualTo(submission.FromAddress));
-            Assert.That(request.Destination.ToAddresses, Is.EqualTo(new[] { submission.ToAddress }));
-            Assert.That(request.Content.Simple.Subject.Data, Is.EqualTo(submission.Subject));
-            Assert.That(request.Content.Simple.Body.Text.Data, Is.EqualTo(submission.TextBody));
-            Assert.That(request.Content.Simple.Body.Html.Data, Is.EqualTo(submission.HtmlBody));
-            Assert.That(request.Content.Simple.Subject.Charset, Is.EqualTo("UTF-8"));
-            Assert.That(request.EmailTags, Has.Count.EqualTo(1));
-            Assert.That(request.EmailTags[0].Name, Is.EqualTo("styrhous-delivery-id"));
-            Assert.That(request.EmailTags[0].Value, Is.EqualTo(deliveryId.ToString()));
+            Assert.That(message.From.Single().ToString(), Is.EqualTo(submission.FromAddress));
+            Assert.That(message.To.Single().ToString(), Is.EqualTo(submission.ToAddress));
+            Assert.That(message.Subject, Is.EqualTo(submission.Subject));
+            Assert.That(message.Headers["X-Styrhous-Delivery-Id"], Is.EqualTo(deliveryId.ToString()));
+            Assert.That(
+                message.BodyParts.OfType<MimeKit.TextPart>()
+                    .Single(part => part.IsPlain).Text,
+                Is.EqualTo(submission.TextBody));
+            Assert.That(
+                message.BodyParts.OfType<MimeKit.TextPart>()
+                    .Single(part => part.IsHtml).Text,
+                Is.EqualTo(submission.HtmlBody));
         });
     }
 

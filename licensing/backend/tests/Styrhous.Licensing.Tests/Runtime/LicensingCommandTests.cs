@@ -33,9 +33,6 @@ public sealed class LicensingCommandTests
         });
     }
 
-    [TestCase("worker", LicensingRuntimeMode.Worker)]
-    [TestCase("maintenance", LicensingRuntimeMode.Maintenance)]
-    [TestCase("maintenance-lambda", LicensingRuntimeMode.MaintenanceLambda)]
     [TestCase("migrate", LicensingRuntimeMode.Migrate)]
     public void ExplicitModeIsRemovedBeforeHostConfiguration(
         string mode,
@@ -60,6 +57,6 @@ public sealed class LicensingCommandTests
 
         Assert.That(
             exception!.Message,
-            Does.Contain("api, worker, maintenance, maintenance-lambda, or migrate"));
+            Does.Contain("api or migrate"));
     }
 }

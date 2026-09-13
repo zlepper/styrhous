@@ -521,7 +521,7 @@ public sealed class OrganizationInvitationDeliveryPersistenceTests
         await using var verificationContext = database.CreateContext();
         var persisted = await verificationContext.OutboxMessages.AsNoTracking().SingleAsync();
         var queuedBefore = await verificationContext.Set<RebusOutboxMessage>().CountAsync();
-        await using var upgradeFixture = MaintenanceServiceTestBase.ForDatabase<NativeOutboxUpgrade>(database, ObservedAt, "test-queue");
+        await using var upgradeFixture = ServiceTestBase<NativeOutboxUpgrade>.ForDatabaseWithBackgroundQueue(database, ObservedAt, "test-queue");
         await upgradeFixture.Service.EnqueueLegacyWorkAsync(default);
         var queuedAfter = await verificationContext.Set<RebusOutboxMessage>().CountAsync();
 
@@ -607,7 +607,7 @@ public sealed class OrganizationInvitationDeliveryPersistenceTests
         var persisted = await verificationContext.OutboxMessages.AsNoTracking().SingleAsync(
             message => message.Id == scenario.OutboxMessageId);
         var queuedBefore = await verificationContext.Set<RebusOutboxMessage>().CountAsync();
-        await using var upgradeFixture = MaintenanceServiceTestBase.ForDatabase<NativeOutboxUpgrade>(database, ObservedAt, "test-queue");
+        await using var upgradeFixture = ServiceTestBase<NativeOutboxUpgrade>.ForDatabaseWithBackgroundQueue(database, ObservedAt, "test-queue");
         await upgradeFixture.Service.EnqueueLegacyWorkAsync(default);
         var queuedAfter = await verificationContext.Set<RebusOutboxMessage>().CountAsync();
         Assert.Multiple(() =>
@@ -732,7 +732,7 @@ public sealed class OrganizationInvitationDeliveryPersistenceTests
         try
         {
             await invitationReadGate.WaitUntilReachedAsync();
-            await using var upgradeFixture = MaintenanceServiceTestBase.ForDatabase<NativeOutboxUpgrade>(database, ObservedAt, "test-queue");
+            await using var upgradeFixture = ServiceTestBase<NativeOutboxUpgrade>.ForDatabaseWithBackgroundQueue(database, ObservedAt, "test-queue");
             await upgradeFixture.Service.EnqueueLegacyWorkAsync(default);
         }
         finally

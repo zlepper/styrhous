@@ -40,3 +40,30 @@ internal sealed class InvitationEmailSettings
 
     public Uri AcceptanceUrl { get; }
 }
+
+internal sealed class SmtpEmailSettings
+{
+    public SmtpEmailSettings(string host, int port, string username, string password)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(host);
+        ArgumentException.ThrowIfNullOrWhiteSpace(username);
+        ArgumentException.ThrowIfNullOrWhiteSpace(password);
+        if (port is < 1 or > 65535)
+        {
+            throw new ArgumentOutOfRangeException(nameof(port));
+        }
+
+        Host = host.Trim();
+        Port = port;
+        Username = username.Trim();
+        Password = password;
+    }
+
+    public string Host { get; }
+
+    public int Port { get; }
+
+    public string Username { get; }
+
+    public string Password { get; }
+}
