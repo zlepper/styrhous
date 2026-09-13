@@ -1,0 +1,5 @@
+**/.nuget/
+**/bin/
+**/obj/
+**/TestResults/
+.env

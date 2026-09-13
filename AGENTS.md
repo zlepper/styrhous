@@ -114,6 +114,34 @@ Use a real `Worker` only when testing the Kind integration path.
   `MinimalNamespace`, and `SortedName`); preserve their ordering/display semantics.
 - Breaking changes are permitted: this project has no external users yet.
 
+### C# and licensing
+
+- Keep licensing application and infrastructure artifacts under `licensing/`.
+- Prefer concrete dependencies. Introduce an interface for actual implementation alternatives,
+  a framework contract, or an uncontrollable external-service boundary, not speculative reuse
+  or database mocking. Test implementations alone do not justify an interface.
+- Use primary-constructor parameters directly. Keep a separate field only for a transformed
+  value or state with its own lifetime.
+- Require injected loggers. Service tests should resolve production registrations through a
+  shared `ServiceTestBase<T>` with logging and validated DI scopes. Use real PostgreSQL for
+  persistence behavior and replace only external services when necessary. Resolve services through
+  production DI even in fixture setup; keep the owning scope alive for the complete operation.
+  Test persistence operations directly where appropriate instead of adding production wrappers
+  that exist only to support tests.
+- A failed database context is not safe to reuse. Dispose it and retry the complete operation
+  with a fresh context or scope, preserving the transaction boundary. Do not call
+  `ChangeTracker.Clear()` in production; use it rarely and deliberately in tests.
+- Generate UUIDv7 identifiers internally without repeatedly validating their version. Validate
+  untrusted input shape and authorization at the relevant boundaries.
+- Prefer DataAnnotations with `Microsoft.Extensions.Validation` for request-shape validation.
+  Keep business invariants in their owning services and validate non-HTTP input at its boundary.
+- Prefer supported library capabilities over custom infrastructure, including Rebus outboxing.
+  Database-role provisioning belongs to infrastructure rather than application startup.
+- Ordinary validation workflows run on pushes. Avoid duplicate PR/manual validation runs and
+  explicit teardown of disposable hosted runners; preserve deliberate deployment triggers and
+  leave shared local test services running.
+- Follow the build-enforced C# style rules in the licensing editor and MSBuild configuration.
+
 ## Post-changes review
 Once a changeset is done, use a set of sub agents to review for each of these things:
 1. A critical code review agent. The agent should especially focus on possible bugs and edge cases. 

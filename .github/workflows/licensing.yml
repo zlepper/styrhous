@@ -1,0 +1,45 @@
+name: Licensing
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "licensing/**"
+      - "crates/components/tests/snapshots/buttons/test_button_interaction_states/**"
+      - "crates/components/tests/snapshots/comboboxes/test_combobox_flow/closed.png"
+      - "crates/components/tests/snapshots/showcase/showcase_buttons/buttons.png"
+      - "crates/components/tests/snapshots/text_inputs/snapshots_empty_filled_and_focused_inputs/**"
+      - "flake.nix"
+      - "flake.lock"
+      - ".github/workflows/licensing.yml"
+      - ".github/workflows/deploy-licensing.yml"
+      - ".github/workflows/preview-licensing-staging.yml"
+      - ".github/workflows/run-licensing-stack.yml"
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: licensing/backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: licensing/backend/global.json
+      - name: Start backend services
+        run: docker compose --file ../compose.yaml up --detach --wait postgres rabbitmq
+      - name: Check backend
+        run: bash check.sh
