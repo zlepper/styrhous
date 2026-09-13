@@ -1,0 +1,241 @@
+name: Run licensing stack
+
+on:
+  workflow_call:
+    inputs:
+      operation:
+        description: Whether to preview or deploy the configured stack.
+        required: true
+        type: string
+      environment_name:
+        description: Protected GitHub environment containing stack configuration.
+        required: true
+        type: string
+      allow_image_bootstrap:
+        description: Whether an empty stack may start with placeholder image URIs.
+        required: true
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  PULUMI_STACK: ${{ vars.LICENSING_PULUMI_STACK }}
+  AWS_REGION: ${{ vars.LICENSING_AWS_REGION }}
+  HOSTED_ORIGIN: ${{ vars.STYRHOUS_HOSTED_LICENSE_ORIGIN }}
+
+jobs:
+  deploy:
+    name: ${{ inputs.operation == 'deploy' && 'Migrate and deploy' || 'Preview real AWS resources' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    environment: ${{ inputs.environment_name }}
+    steps:
+      - name: Validate requested operation
+        env:
+          LICENSING_STACK_OPERATION: ${{ inputs.operation }}
+        run: |
+          case "$LICENSING_STACK_OPERATION" in
+            deploy | preview) ;;
+            *)
+              echo "The licensing stack operation must be deploy or preview." >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: licensing/backend/global.json
+
+      - name: Set up Node.js
+        if: inputs.operation == 'deploy'
+        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: licensing/portal/package-lock.json
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.LICENSING_AWS_ROLE_ARN }}
+          allowed-account-ids: ${{ vars.LICENSING_AWS_ACCOUNT_ID }}
+          role-session-name: licensing-${{ github.run_id }}
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@8e5e406f4007fca908480587cb9893c07090f58d # v7.0.0
+        with:
+          pulumi-version: 3.261.0
+
+      - name: Preserve deployed images or initialize the stack
+        working-directory: licensing/infrastructure
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          ALLOW_IMAGE_BOOTSTRAP: ${{ inputs.allow_image_bootstrap && 'true' || 'false' }}
+          INITIAL_IMAGE_URI: ${{ vars.LICENSING_AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/styrhous-bootstrap:unused
+        run: bash resolve-image-uris.sh
+
+      - name: Configure protected stack values
+        working-directory: licensing/infrastructure
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          DATABASE_PASSWORD: ${{ secrets.LICENSING_DATABASE_PASSWORD }}
+          DATABASE_RUNTIME_PASSWORD: ${{ secrets.LICENSING_DATABASE_RUNTIME_PASSWORD }}
+          DESKTOP_CERTIFICATE: ${{ secrets.LICENSING_DESKTOP_CERTIFICATE }}
+          DESKTOP_CERTIFICATE_PASSWORD: ${{ secrets.LICENSING_DESKTOP_CERTIFICATE_PASSWORD }}
+          DESKTOP_PREVIOUS_CERTIFICATES_JSON: ${{ secrets.LICENSING_DESKTOP_PREVIOUS_CERTIFICATES_JSON }}
+          DATA_PROTECTION_CERTIFICATE: ${{ secrets.LICENSING_DATA_PROTECTION_CERTIFICATE }}
+          DATA_PROTECTION_CERTIFICATE_PASSWORD: ${{ secrets.LICENSING_DATA_PROTECTION_CERTIFICATE_PASSWORD }}
+          DATA_PROTECTION_PREVIOUS_CERTIFICATES_JSON: ${{ secrets.LICENSING_DATA_PROTECTION_PREVIOUS_CERTIFICATES_JSON }}
+          STRIPE_SECRET_KEY: ${{ secrets.LICENSING_STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.LICENSING_STRIPE_WEBHOOK_SECRET }}
+          STRIPE_MONTHLY_PRICE_ID: ${{ vars.LICENSING_STRIPE_MONTHLY_PRICE_ID }}
+          STRIPE_ANNUAL_PRICE_ID: ${{ vars.LICENSING_STRIPE_ANNUAL_PRICE_ID }}
+          STRIPE_CUSTOMER_PORTAL_CONFIGURATION_ID: ${{ vars.LICENSING_STRIPE_CUSTOMER_PORTAL_CONFIGURATION_ID }}
+          INVITATION_FROM_ADDRESS: ${{ vars.LICENSING_INVITATION_FROM_ADDRESS }}
+          ALERT_EMAIL_ADDRESS: ${{ vars.LICENSING_ALERT_EMAIL_ADDRESS }}
+          MAXIMUM_WORKER_TASKS: ${{ vars.LICENSING_MAXIMUM_WORKER_TASKS }}
+          GITHUB_CLIENT_ID: ${{ vars.LICENSING_GITHUB_CLIENT_ID }}
+          GITHUB_CLIENT_SECRET: ${{ secrets.LICENSING_GITHUB_CLIENT_SECRET }}
+          GOOGLE_CLIENT_ID: ${{ vars.LICENSING_GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.LICENSING_GOOGLE_CLIENT_SECRET }}
+          MICROSOFT_CLIENT_ID: ${{ vars.LICENSING_MICROSOFT_CLIENT_ID }}
+          MICROSOFT_CLIENT_SECRET: ${{ secrets.LICENSING_MICROSOFT_CLIENT_SECRET }}
+          DOMAIN_NAME: ${{ vars.LICENSING_DOMAIN_NAME }}
+          HOSTED_ZONE_ID: ${{ vars.LICENSING_HOSTED_ZONE_ID }}
+          CERTIFICATE_ARN: ${{ vars.LICENSING_CERTIFICATE_ARN }}
+        run: bash configure-stack.sh
+
+      - name: Provision immutable container repositories
+        if: inputs.operation == 'deploy'
+        working-directory: licensing/infrastructure
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        run: |
+          stack_name=${PULUMI_STACK##*/}
+          pulumi up --yes \
+            --target "urn:pulumi:${stack_name}::styrhous-licensing::aws:ecr/repository:Repository::licensing-api" \
+            --target "urn:pulumi:${stack_name}::styrhous-licensing::aws:ecr/repository:Repository::licensing-worker"
+
+      - name: Build and push immutable application images
+        if: inputs.operation == 'deploy'
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        run: |
+          api_repository=$(pulumi -C licensing/infrastructure stack output ApiRepositoryUrl)
+          worker_repository=$(pulumi -C licensing/infrastructure stack output WorkerRepositoryUrl)
+          registry=${api_repository%/*}
+          aws ecr get-login-password | docker login --username AWS --password-stdin "$registry"
+          api_exists=false
+          worker_exists=false
+          if aws ecr describe-images \
+            --repository-name "${api_repository#*/}" \
+            --image-ids "imageTag=${GITHUB_SHA}" >/dev/null 2>&1; then
+            api_exists=true
+          fi
+          if aws ecr describe-images \
+            --repository-name "${worker_repository#*/}" \
+            --image-ids "imageTag=${GITHUB_SHA}" >/dev/null 2>&1; then
+            worker_exists=true
+          fi
+          if [[ "$api_exists" != true || "$worker_exists" != true ]]; then
+            docker build --file licensing/backend/Dockerfile --tag "styrhous-licensing:${GITHUB_SHA}" licensing
+          fi
+          if [[ "$api_exists" != true ]]; then
+            docker tag "styrhous-licensing:${GITHUB_SHA}" "${api_repository}:${GITHUB_SHA}"
+            docker push "${api_repository}:${GITHUB_SHA}"
+          fi
+          if [[ "$worker_exists" != true ]]; then
+            docker tag "styrhous-licensing:${GITHUB_SHA}" "${worker_repository}:${GITHUB_SHA}"
+            docker push "${worker_repository}:${GITHUB_SHA}"
+          fi
+          pulumi -C licensing/infrastructure config set apiImageUri "${api_repository}:${GITHUB_SHA}"
+          pulumi -C licensing/infrastructure config set workerImageUri "${worker_repository}:${GITHUB_SHA}"
+
+      - name: Build portal
+        if: inputs.operation == 'deploy'
+        working-directory: licensing/portal
+        run: |
+          npm ci
+          npm run build
+
+      - name: Publish CSP-protected documents before changing an existing distribution
+        if: inputs.operation == 'deploy'
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        run: bash licensing/infrastructure/publish-portal.sh --if-present
+
+      - name: Reconcile infrastructure without rolling application compute
+        if: inputs.operation == 'deploy'
+        working-directory: licensing/infrastructure
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        run: bash update-before-migration.sh
+
+      - name: Reconcile a generated CloudFront origin before migration
+        if: inputs.operation == 'deploy' && vars.LICENSING_DOMAIN_NAME == ''
+        working-directory: licensing/infrastructure
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        run: |
+          generated_origin=$(pulumi stack output HostedOrigin)
+          pulumi config set hostedOrigin "$generated_origin"
+          bash update-before-migration.sh
+
+      - name: Apply database migrations and provision runtime access
+        if: inputs.operation == 'deploy'
+        working-directory: licensing/infrastructure
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        run: |
+          bash run-migration-task.sh
+          bash run-migration-task.sh provisioning
+
+      - name: Deploy API, worker, portal hosting, and observability
+        if: inputs.operation == 'deploy'
+        working-directory: licensing/infrastructure
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        run: pulumi up --yes
+
+      - name: Publish portal and verify health
+        if: inputs.operation == 'deploy'
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        run: |
+          origin=$(pulumi -C licensing/infrastructure stack output HostedOrigin)
+          bash licensing/infrastructure/publish-portal.sh
+          curl --fail --retry 12 --retry-all-errors --retry-delay 10 "${origin}/health"
+          curl --fail --retry 12 --retry-all-errors --retry-delay 10 "${origin}/" \
+            | grep -Fiq 'http-equiv="content-security-policy"'
+          callbacks=$(pulumi -C licensing/infrastructure stack output OAuthCallbackUrls --json)
+          printf "OAuth callback URLs: \`%s\`\n" "$callbacks" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke-test the deployed AWS stack
+        if: inputs.operation == 'deploy'
+        working-directory: licensing/infrastructure
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.LICENSING_STRIPE_WEBHOOK_SECRET }}
+          OAUTH_PROVIDER: ${{ vars.LICENSING_SMOKE_OAUTH_PROVIDER }}
+        run: |
+          bash aws-smoke-test.sh
+          timeout --foreground --kill-after=30s 75m \
+            bash aws-operational-smoke-test.sh
+
+      - name: Preview staging update against AWS
+        if: inputs.operation == 'preview'
+        working-directory: licensing/infrastructure
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        run: pulumi preview --diff
