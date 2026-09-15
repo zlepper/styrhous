@@ -1,15 +1,14 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 
-// Serve the production document with CloudFront's header policy as well as its
-// generated meta policy. Testing either policy alone misses their intersection.
+// The ASP.NET Core monolith owns response headers. This test verifies the portal's
+// generated meta policy, which is the policy that protects its static document.
 for (const [path, heading] of [
   ['/account', 'Account'],
   ['/billing', 'Billing'],
   ['/devices/authorize', 'Authorize device']
 ]) {
   test(`production CSP permits startup at ${path} and blocks injected scripts`, async ({ page }) => {
-    const headers = JSON.parse(await readFile('security-headers.json', 'utf8'));
     const document = await readFile('build/index.html', 'utf8');
     let injectScript = false;
     const violations: string[] = [];
@@ -21,7 +20,7 @@ for (const [path, heading] of [
       const body = injectScript
         ? document.replace('</body>', '<script>document.documentElement.dataset.injected = "yes"</script></body>')
         : document;
-      await route.fulfill({ body, contentType: 'text/html', headers });
+      await route.fulfill({ body, contentType: 'text/html' });
     });
     await page.route('**/auth/session', (route) => route.fulfill({
       json: { authenticated: false, configuredProviders: ['github'] }

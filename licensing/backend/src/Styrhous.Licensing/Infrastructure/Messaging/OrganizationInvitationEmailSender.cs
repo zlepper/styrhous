@@ -6,11 +6,13 @@ using Styrhous.Licensing.Domain.Organizations;
 
 namespace Styrhous.Licensing.Infrastructure.Messaging;
 
-internal sealed class SesOrganizationInvitationEmailSender(
+internal sealed class OrganizationInvitationEmailSender(
     IEmailSubmissionClient client,
     InvitationEmailSettings settings)
     : IOrganizationInvitationEmailSender
 {
+    private readonly IEmailSubmissionClient _client = client;
+    private readonly InvitationEmailSettings _settings = settings;
 
     public Task SendAsync(
         Guid outboxMessageId,
@@ -19,7 +21,7 @@ internal sealed class SesOrganizationInvitationEmailSender(
     {
         ArgumentNullException.ThrowIfNull(delivery);
         var acceptanceUrl = QueryHelpers.AddQueryString(
-            settings.AcceptanceUrl.AbsoluteUri,
+            _settings.AcceptanceUrl.AbsoluteUri,
             "secret",
             delivery.Secret.Reveal());
         var role = delivery.Role == OrganizationRole.Admin
@@ -43,10 +45,10 @@ internal sealed class SesOrganizationInvitationEmailSender(
             <p><a href="{WebUtility.HtmlEncode(acceptanceUrl)}">Accept the invitation</a></p>
             <p>This invitation expires at {expiresAt}.</p>
             """;
-        return client.SendAsync(
+        return _client.SendAsync(
             new InvitationEmailSubmission(
                 outboxMessageId,
-                settings.FromAddress,
+                _settings.FromAddress,
                 delivery.Email,
                 subject,
                 textBody,

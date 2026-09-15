@@ -3,3 +3,10 @@ target
 dist
 .agents
 .codex
+**/bin
+**/obj
+**/.nuget
+**/node_modules
+**/.svelte-kit
+**/playwright-report
+**/test-results

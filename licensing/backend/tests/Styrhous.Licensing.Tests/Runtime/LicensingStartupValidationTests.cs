@@ -1,7 +1,10 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.EntityFrameworkCore;
 using Styrhous.Licensing.Tests.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Styrhous.Licensing.Application.Messaging;
+using Styrhous.Licensing.Domain.Messaging;
 using Styrhous.Licensing.Runtime;
 using Styrhous.Licensing.Tests.Persistence;
 
@@ -90,6 +93,48 @@ public sealed class LicensingStartupValidationTests
     }
 
     [Test]
+    [NonParallelizable]
+    public async Task MonolithStartupRecoversAndConsumesDurableWorkAfterEachRestart()
+    {
+        await using var database = await PostgresTestDatabase.CreateForMigrationAsync();
+        await Program.RunMigrationsAsync([
+            $"--ConnectionStrings:Licensing={database.ConnectionString}",
+        ]);
+
+        var firstWorkId = await EnqueueUnprotectedInvitationDeliveryAsync(database);
+        await using (var firstApplication = CreateApplication(
+                         database,
+                         "github-client",
+                         "github-secret"))
+        {
+            await firstApplication.StartAsync();
+            try
+            {
+                await AssertWorkWasConsumedAsync(database, firstWorkId);
+            }
+            finally
+            {
+                await firstApplication.StopAsync();
+            }
+        }
+
+        var restartedWorkId = await EnqueueUnprotectedInvitationDeliveryAsync(database);
+        await using var restartedApplication = CreateApplication(
+            database,
+            "github-client",
+            "github-secret");
+        await restartedApplication.StartAsync();
+        try
+        {
+            await AssertWorkWasConsumedAsync(database, restartedWorkId);
+        }
+        finally
+        {
+            await restartedApplication.StopAsync();
+        }
+    }
+
+    [Test]
     public async Task ProductionRejectsThePendingInitialMigration()
     {
         await using var database = await PostgresTestDatabase.CreateForMigrationAsync();
@@ -116,6 +161,43 @@ public sealed class LicensingStartupValidationTests
         }
     }
 
+    private static async Task<Guid> EnqueueUnprotectedInvitationDeliveryAsync(
+        PostgresTestDatabase database)
+    {
+        var observedAt = DateTimeOffset.UtcNow;
+        var message = OutboxMessage.Enqueue(
+            Guid.CreateVersion7(),
+            Guid.CreateVersion7(),
+            OutboxMessageTypes.OrganizationInvitationDelivery,
+            "not-a-protected-invitation-delivery",
+            observedAt,
+            observedAt.AddHours(1));
+        await using var context = database.CreateContext();
+        context.OutboxMessages.Add(message);
+        await context.SaveChangesAsync();
+        return message.Id;
+    }
+
+    private static async Task AssertWorkWasConsumedAsync(
+        PostgresTestDatabase database,
+        Guid workId)
+    {
+        for (var attempt = 0; attempt < 100; attempt++)
+        {
+            await using var context = database.CreateContext();
+            var message = await context.OutboxMessages.SingleAsync(candidate => candidate.Id == workId);
+            if (message.DiscardReason == OutboxDiscardReason.UndeliverableProtectedPayload)
+            {
+                Assert.That(message.NativeOutboxEnqueued, Is.True);
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+        }
+
+        Assert.Fail($"Background work {workId} was not consumed within 10 seconds.");
+    }
+
     private static WebApplication CreateApplication(
         PostgresTestDatabase database,
         string? clientId,
@@ -132,8 +214,8 @@ public sealed class LicensingStartupValidationTests
         return Program.BuildApplication([
             "--environment=Production",
             $"--ConnectionStrings:Licensing={database.ConnectionString}",
-            "--Messaging:ApiOutboxForwardingEnabled=false",
             $"--Messaging:QueueName={database.DatabaseName}",
+            $"--Messaging:ErrorQueueName={database.DatabaseName}-error",
             "--urls=http://127.0.0.1:0",
             $"--DataProtection:Certificate={TestDataProtectionCertificate.EncodedCertificate}",
             $"--DataProtection:CertificatePassword={TestDataProtectionCertificate.Password}",
@@ -148,7 +230,13 @@ public sealed class LicensingStartupValidationTests
             "--Stripe:CheckoutCancelUrl=https://localhost/billing?checkout=cancelled",
             "--Stripe:CustomerPortalConfigurationId=bpc_test_startup",
             "--Stripe:CustomerPortalReturnUrl=https://localhost/billing",
+            "--InvitationEmail:FromAddress=invitations@example.com",
+            "--InvitationEmail:AcceptanceUrl=https://localhost/invitations/accept",
+            "--InvitationEmail:Smtp:Host=localhost",
+            "--InvitationEmail:Smtp:Port=587",
+            "--InvitationEmail:Smtp:Username=test",
+            "--InvitationEmail:Smtp:Password=test",
             .. values.Select(pair => $"--{pair.Key}={pair.Value}"),
-        ], applicationConfiguration: null);
+        ]);
     }
 }

@@ -11,14 +11,14 @@ namespace Styrhous.Licensing.Tests.Infrastructure;
 public sealed class RebusBackgroundMessagingConfigurationTests
 {
     [Test]
-    public void SenderOnlyModeDoesNotRegisterReceiverHandlers()
+    public void MonolithRegistersSenderAndAllReceiverHandlers()
     {
         var services = new ServiceCollection();
 
         RebusBackgroundMessagingConfiguration.Add(
             services,
-            Configuration(),
-            receiveMessages: false);
+            "Host=localhost;Database=licensing;Username=styrhous;Password=test",
+            Settings());
 
         Assert.Multiple(() =>
         {
@@ -26,24 +26,6 @@ public sealed class RebusBackgroundMessagingConfigurationTests
                 services.Any(descriptor =>
                     descriptor.ServiceType == typeof(IBus)),
                 Is.True);
-            Assert.That(HasHandler<OrganizationInvitationDeliveryMessageHandler>(services), Is.False);
-            Assert.That(HasHandler<InfrastructureSmokeProbeMessageHandler>(services), Is.False);
-            Assert.That(HasHandler<BillingWebhookProcessingMessageHandler>(services), Is.False);
-        });
-    }
-
-    [Test]
-    public void ReceiverModeRegistersBothDurableWorkHandlers()
-    {
-        var services = new ServiceCollection();
-
-        RebusBackgroundMessagingConfiguration.Add(
-            services,
-            Configuration(),
-            receiveMessages: true);
-
-        Assert.Multiple(() =>
-        {
             Assert.That(HasHandler<OrganizationInvitationDeliveryMessageHandler>(services), Is.True);
             Assert.That(HasHandler<InfrastructureSmokeProbeMessageHandler>(services), Is.True);
             Assert.That(HasHandler<BillingWebhookProcessingMessageHandler>(services), Is.True);
@@ -55,16 +37,14 @@ public sealed class RebusBackgroundMessagingConfigurationTests
         return services.Any(descriptor => descriptor.ImplementationType == typeof(THandler));
     }
 
-    private static IConfiguration Configuration()
+    private static BackgroundMessagingSettings Settings()
     {
-        return new ConfigurationBuilder()
+        return BackgroundMessagingSettings.From(new ConfigurationBuilder()
             .AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {
-                    ["Messaging:Transport"] = "RabbitMq",
                     ["Messaging:QueueName"] = "styrhous-licensing",
-                    ["Messaging:RabbitMq:ConnectionString"] = "amqp://localhost",
                 })
-            .Build();
+            .Build());
     }
 }

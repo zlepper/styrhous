@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
@@ -21,6 +22,7 @@ using Styrhous.Licensing.Domain.Signups;
 using Styrhous.Licensing.Infrastructure.Billing;
 using Styrhous.Licensing.Infrastructure.DataProtection;
 using Styrhous.Licensing.Persistence;
+using Styrhous.Licensing.Runtime;
 using Styrhous.Licensing.Tests.Infrastructure;
 using Styrhous.Licensing.Tests.Persistence;
 
@@ -31,7 +33,6 @@ internal sealed class LicensingWebApplicationFactory(
     DateTimeOffset observedAt,
     bool useTestAuthentication = true,
     RequestCompletionObserver? requestCompletionObserver = null,
-    RabbitMqApiMessaging? rabbitMqMessaging = null,
     IBillingCheckoutProvider? billingCheckoutProvider = null,
     IBillingCustomerPortalProvider? billingCustomerPortalProvider = null,
     IBillingSeatQuantityProvider? billingSeatQuantityProvider = null,
@@ -39,9 +40,11 @@ internal sealed class LicensingWebApplicationFactory(
     TestCertificateRing? desktopCertificateRing = null,
     string desktopIssuer = "https://localhost/",
     TestLogCollector? logCollector = null,
+    string? webRootPath = null,
     bool useTestExternalProviders = false,
     bool configureExternalProviders = false,
     bool useScopeLessDesktopAuthentication = false,
+    string? backgroundQueueName = null,
     params IInterceptor[] interceptors)
     : WebApplicationFactory<Program>
 {
@@ -82,6 +85,10 @@ internal sealed class LicensingWebApplicationFactory(
     {
         var configurationValues = ConfigurationValues();
         builder.UseEnvironment("Testing");
+        if (webRootPath is not null)
+        {
+            builder.UseWebRoot(webRootPath);
+        }
         if (logCollector is not null)
         {
             builder.ConfigureLogging(logging => logging.AddProvider(logCollector));
@@ -97,6 +104,8 @@ internal sealed class LicensingWebApplicationFactory(
                 configuration.AddInMemoryCollection(configurationValues));
         builder.ConfigureTestServices(services =>
         {
+            services.RemoveAll<IHostedService>();
+            services.AddHostedService<LicensingStartupValidation>();
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(new FixedTimeProvider(observedAt));
             foreach (var interceptor in interceptors)
@@ -196,9 +205,15 @@ internal sealed class LicensingWebApplicationFactory(
                 "bpc_test_styrhous",
             [$"{StripeBillingOptions.SectionName}:CustomerPortalReturnUrl"] =
                 "https://localhost/billing",
-            ["Messaging:QueueName"] = rabbitMqMessaging?.QueueName ?? database.DatabaseName,
-            ["Messaging:ApiOutboxForwardingEnabled"] =
-                (rabbitMqMessaging is not null).ToString(),
+            ["Messaging:QueueName"] = backgroundQueueName ?? database.DatabaseName,
+            ["Messaging:ErrorQueueName"] =
+                $"{backgroundQueueName ?? database.DatabaseName}-error",
+            ["InvitationEmail:FromAddress"] = "invitations@example.com",
+            ["InvitationEmail:AcceptanceUrl"] = "https://localhost/invitations/accept",
+            ["InvitationEmail:Smtp:Host"] = "localhost",
+            ["InvitationEmail:Smtp:Port"] = "587",
+            ["InvitationEmail:Smtp:Username"] = "test",
+            ["InvitationEmail:Smtp:Password"] = "test",
         };
         for (var index = 0; index < _certificateRing.Previous.Count; index++)
         {
@@ -214,15 +229,6 @@ internal sealed class LicensingWebApplicationFactory(
             values[$"{DesktopProtocolCertificateConfiguration.PreviousCertificatesConfigurationKey}:"
                 + $"{index}:CertificatePassword"] =
                 TestDataProtectionCertificate.Password;
-        }
-        if (rabbitMqMessaging is not null)
-        {
-            values["Messaging:Transport"] = "RabbitMq";
-            values["Messaging:QueueName"] = rabbitMqMessaging.QueueName;
-            values["Messaging:ErrorQueueName"] =
-                $"{rabbitMqMessaging.QueueName}-error";
-            values["Messaging:RabbitMq:ConnectionString"] =
-                rabbitMqMessaging.ConnectionString;
         }
         if (configureExternalProviders)
         {
@@ -349,10 +355,6 @@ internal sealed class LicensingWebApplicationFactory(
         }
     }
 }
-
-internal sealed record RabbitMqApiMessaging(
-    string QueueName,
-    string ConnectionString);
 
 internal sealed record TestCertificateRing(
     string Current,

@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Rebus.Activation;
 using Rebus.Bus;
 using Rebus.Config;
+using Rebus.PostgreSql;
 using Rebus.Serialization.Json;
 using Styrhous.Licensing.Application.Messaging;
 using Styrhous.Licensing.Infrastructure.Messaging;
@@ -23,12 +24,12 @@ public sealed class BusyBackgroundWorkRetryTests
         bool restartWhileBusy)
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
-        var scenario = await RabbitMqTransportIntegrationTests.CreateInvitationOutboxAsync(
+        var outboxMessageId = await BackgroundWorkTestScenario.CreateInvitationOutboxAsync(
             database, "abandoned-lease");
         var clock = new MutableClock(LicensingPersistenceScenario.SignupTime.AddDays(3));
         await using (var context = database.CreateContext())
         {
-            var message = await context.OutboxMessages.SingleAsync(item => item.Id == scenario.OutboxMessageId);
+            var message = await context.OutboxMessages.SingleAsync(item => item.Id == outboxMessageId);
             Assert.That(message.TryAcquireProcessingLease(
                 Guid.CreateVersion7(), clock.GetUtcNow(), clock.GetUtcNow().AddMinutes(5)), Is.True);
             await context.SaveChangesAsync();
@@ -49,8 +50,8 @@ public sealed class BusyBackgroundWorkRetryTests
         var handled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var queueName = $"styrhous-it-{Guid.CreateVersion7():N}";
         using var activator = CreateActivator(handler, handled);
-        using var bus = StartReceiver(activator, queueName);
-        await bus.SendLocal(new OrganizationInvitationDeliveryMessage(scenario.OutboxMessageId));
+        using var bus = StartReceiver(activator, database.ConnectionString, queueName);
+        await bus.SendLocal(new OrganizationInvitationDeliveryMessage(outboxMessageId));
 
         var retried = retryReached.WaitUntilReachedAsync();
         try
@@ -76,7 +77,10 @@ public sealed class BusyBackgroundWorkRetryTests
                 "Shutdown must cancel the busy handler without acknowledging its message.");
             clock.Advance(TimeSpan.FromMinutes(6));
             using var restartedActivator = CreateActivator(handler, handled);
-            using var restarted = StartReceiver(restartedActivator, queueName);
+            using var restarted = StartReceiver(
+                restartedActivator,
+                database.ConnectionString,
+                queueName);
             await handled.Task.WaitAsync(TimeSpan.FromSeconds(10));
         }
         else
@@ -85,7 +89,7 @@ public sealed class BusyBackgroundWorkRetryTests
         }
 
         await using var verification = database.CreateContext();
-        var delivered = await verification.OutboxMessages.SingleAsync(message => message.Id == scenario.OutboxMessageId);
+        var delivered = await verification.OutboxMessages.SingleAsync(message => message.Id == outboxMessageId);
         Assert.Multiple(() =>
         {
             Assert.That(delivered.DeliveredAt, Is.EqualTo(clock.GetUtcNow()));
@@ -106,10 +110,16 @@ public sealed class BusyBackgroundWorkRetryTests
         return activator;
     }
 
-    private static IBus StartReceiver(BuiltinHandlerActivator activator, string queueName)
+    private static IBus StartReceiver(
+        BuiltinHandlerActivator activator,
+        string connectionString,
+        string queueName)
     {
         return Configure.With(activator)
-            .Transport(transport => transport.UseRabbitMq(RabbitMqTestConnection.Value, queueName))
+            .Transport(transport => transport.UsePostgreSql(
+                connectionString,
+                "RebusMessages",
+                queueName))
             .Serialization(serializer => serializer.UseSystemTextJson())
             .Start();
     }

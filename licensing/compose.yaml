@@ -16,18 +16,3 @@ services:
       - "127.0.0.1:55432:5432"
     tmpfs:
       - /var/lib/postgresql
-
-  rabbitmq:
-    image: rabbitmq:4.3.5-management-alpine@sha256:aa528cae344313db1712ad723db9a0071217bd527b5da42f928987860f8e2025
-    user: rabbitmq
-    environment:
-      RABBITMQ_DEFAULT_PASS: local-development-only
-      RABBITMQ_DEFAULT_USER: styrhous
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "--quiet", "ping"]
-      interval: 2s
-      timeout: 2s
-      retries: 30
-    ports:
-      - "127.0.0.1:55672:5672"
-      - "127.0.0.1:55673:15672"

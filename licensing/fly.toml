@@ -1,0 +1,35 @@
+app = "styrhous-licensing"
+primary_region = "ams"
+
+[build]
+  dockerfile = "licensing/backend/Dockerfile"
+
+[env]
+  ASPNETCORE_ENVIRONMENT = "Production"
+
+[deploy]
+  release_command = "dotnet Styrhous.Licensing.dll migrate"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 25
+    hard_limit = 30
+
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "15s"
+    method = "GET"
+    timeout = "5s"
+    path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"

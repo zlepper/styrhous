@@ -1,7 +1,3 @@
-using Amazon;
-using Amazon.SimpleEmailV2;
-using System.Text;
-using System.Text.Json;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
@@ -9,6 +5,7 @@ using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
+using Npgsql;
 using OpenIddict.EntityFrameworkCore;
 using Stripe;
 using Styrhous.Licensing.Api.Antiforgery;
@@ -37,8 +34,6 @@ namespace Styrhous.Licensing;
 public sealed class Program
 {
     private const string LicensingConnectionString = "Licensing";
-    private static readonly JsonSerializerOptions WebJson =
-        new(JsonSerializerDefaults.Web);
     private Program()
     {
     }
@@ -46,34 +41,13 @@ public sealed class Program
     public static async Task Main(string[] args)
     {
         var command = LicensingCommand.Parse(args);
-        var applicationConfiguration =
-            await ApplicationConfigurationLoader.LoadAsync();
         switch (command.Mode)
         {
             case LicensingRuntimeMode.Api:
-                await BuildApplication(
-                    [.. command.HostArguments],
-                    applicationConfiguration).RunAsync();
-                return;
-            case LicensingRuntimeMode.Worker:
-                await BuildWorker(
-                    [.. command.HostArguments],
-                    applicationConfiguration).RunAsync();
-                return;
-            case LicensingRuntimeMode.Maintenance:
-                await RunMaintenanceAsync(
-                    [.. command.HostArguments],
-                    applicationConfiguration);
-                return;
-            case LicensingRuntimeMode.MaintenanceLambda:
-                await BuildMaintenanceApplication(
-                    [.. command.HostArguments],
-                    applicationConfiguration).RunAsync();
+                await BuildApplication([.. command.HostArguments]).RunAsync();
                 return;
             case LicensingRuntimeMode.Migrate:
-                await RunMigrationsAsync(
-                    [.. command.HostArguments],
-                    applicationConfiguration);
+                await RunMigrationsAsync([.. command.HostArguments]);
                 return;
             default:
                 throw new ArgumentOutOfRangeException(
@@ -85,25 +59,24 @@ public sealed class Program
 
     public static WebApplication BuildApplication(string[] args)
     {
-        return BuildApplication(args, ApplicationConfigurationLoader.ReadInline());
-    }
-
-    internal static WebApplication BuildApplication(
-        string[] args,
-        string? applicationConfiguration)
-    {
         var builder = WebApplication.CreateBuilder(args);
         ConfigureStructuredLogging(builder.Logging);
-        AddApplicationConfiguration(
-            builder.Configuration,
-            applicationConfiguration);
         builder.Logging.AddFilter("OpenIddict", LogLevel.Warning);
         builder.Logging.AddFilter(
             "Microsoft.AspNetCore.Hosting.Diagnostics",
             LogLevel.Warning);
-        ConfigurePersistence(builder.Services, builder.Configuration);
+        var backgroundMessaging = BackgroundMessagingSettings.From(builder.Configuration);
+        var connectionString = ConfigurePersistence(
+            builder.Services,
+            builder.Configuration,
+            backgroundMessaging.QueueName);
         ConfigureApiServices(builder.Services, builder.Configuration);
-        ConfigureApiBackgroundMessaging(builder.Services, builder.Configuration);
+        ConfigureBackgroundWorkServices(builder.Services, builder.Configuration);
+        ConfigureInvitationEmail(builder.Services, builder.Configuration);
+        ConfigureBackgroundMessaging(
+            builder.Services,
+            connectionString,
+            backgroundMessaging);
         builder.Services.AddValidation();
         builder.Services.AddProblemDetails(options =>
         {
@@ -132,6 +105,14 @@ public sealed class Program
         application.UseHttpLogging();
         application.Use(async (context, next) =>
         {
+            context.Response.OnStarting(() =>
+            {
+                context.Response.Headers["Content-Security-Policy"] = "frame-ancestors 'none'";
+                context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+                context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+                context.Response.Headers["X-Frame-Options"] = "DENY";
+                return Task.CompletedTask;
+            });
             if (context.Request.Path.StartsWithSegments("/api")
                 || context.Request.Path.StartsWithSegments("/auth")
                 || context.Request.Path.StartsWithSegments("/desktop/v1"))
@@ -144,6 +125,9 @@ public sealed class Program
         application.UseMiddleware<DesktopProtocolTransactionMiddleware>();
         application.UseAuthentication();
         application.UseAuthorization();
+        application.UseDefaultFiles();
+        application.UseStaticFiles();
+        UsePortalFallback(application);
         application.MapAccountAuthenticationEndpoints();
         application.MapAntiforgeryEndpoints();
         application.MapBillingAccountEndpoints();
@@ -173,16 +157,9 @@ public sealed class Program
         });
     }
 
-    internal static Task RunMigrationsAsync(string[] args)
+    internal static async Task RunMigrationsAsync(string[] args)
     {
-        return RunMigrationsAsync(args, ApplicationConfigurationLoader.ReadInline());
-    }
-
-    private static async Task RunMigrationsAsync(
-        string[] args,
-        string? applicationConfiguration)
-    {
-        using var host = BuildMigrationHost(args, applicationConfiguration);
+        using var host = BuildMigrationHost(args);
         await host.StartAsync();
         try
         {
@@ -199,159 +176,16 @@ public sealed class Program
 
     internal static IHost BuildMigrationHost(string[] args)
     {
-        return BuildMigrationHost(args, ApplicationConfigurationLoader.ReadInline());
-    }
-
-    internal static IHost BuildMigrationHost(
-        string[] args,
-        string? applicationConfiguration)
-    {
         var builder = Host.CreateApplicationBuilder(args);
         ConfigureStructuredLogging(builder.Logging);
-        AddApplicationConfiguration(
-            builder.Configuration,
-            applicationConfiguration);
         ConfigurePersistence(builder.Services, builder.Configuration);
         return builder.Build();
     }
 
-    internal static IHost BuildWorker(string[] args)
-    {
-        return BuildWorker(args, ApplicationConfigurationLoader.ReadInline());
-    }
-
-    internal static IHost BuildWorker(
-        string[] args,
-        string? applicationConfiguration,
-        Action<HostApplicationBuilder>? configureBuilder = null)
-    {
-        var builder = Host.CreateApplicationBuilder(args);
-        ConfigureStructuredLogging(builder.Logging);
-        AddApplicationConfiguration(
-            builder.Configuration,
-            applicationConfiguration);
-        ConfigurePersistence(builder.Services, builder.Configuration);
-        ConfigureWorkerServices(builder.Services, builder.Configuration);
-        ConfigureInvitationEmail(builder.Services, builder.Configuration);
-        RebusBackgroundMessagingConfiguration.Add(
-            builder.Services,
-            builder.Configuration,
-            receiveMessages: true);
-        configureBuilder?.Invoke(builder);
-        return builder.Build();
-    }
-
-    internal static IHost BuildMaintenanceHost(string[] args)
-    {
-        return BuildMaintenanceHost(args, ApplicationConfigurationLoader.ReadInline());
-    }
-
-    internal static IHost BuildMaintenanceHost(
-        string[] args,
-        string? applicationConfiguration,
-        Action<HostApplicationBuilder>? configureBuilder = null)
-    {
-        var builder = Host.CreateApplicationBuilder(args);
-        ConfigureStructuredLogging(builder.Logging);
-        AddApplicationConfiguration(
-            builder.Configuration,
-            applicationConfiguration);
-        ConfigurePersistence(builder.Services, builder.Configuration);
-        ConfigureMaintenanceServices(builder.Services);
-        RebusBackgroundMessagingConfiguration.Add(
-            builder.Services,
-            builder.Configuration,
-            receiveMessages: false);
-        configureBuilder?.Invoke(builder);
-        return builder.Build();
-    }
-
-    internal static WebApplication BuildMaintenanceApplication(
-        string[] args,
-        string? applicationConfiguration,
-        Action<WebApplicationBuilder>? configureBuilder = null)
-    {
-        var builder = WebApplication.CreateBuilder(args);
-        configureBuilder?.Invoke(builder);
-        ConfigureStructuredLogging(builder.Logging);
-        AddApplicationConfiguration(
-            builder.Configuration,
-            applicationConfiguration);
-        ConfigurePersistence(builder.Services, builder.Configuration);
-        ConfigureMaintenanceServices(builder.Services);
-        RebusBackgroundMessagingConfiguration.Add(
-            builder.Services,
-            builder.Configuration,
-            receiveMessages: false);
-        var application = builder.Build();
-        application.MapPost(
-            "/internal/lambda/maintenance",
-            async (
-                HttpRequest request,
-                BackgroundWorkRecoveryService service,
-                PostgresInfrastructureSmokeProbeStore smokeProbeStore,
-                CancellationToken cancellationToken) =>
-            {
-                var smokeRequest = await ReadMaintenanceRequestAsync(
-                    request,
-                    cancellationToken);
-                InfrastructureSmokeProbeStatus? smokeProbe = null;
-                if (smokeRequest?.SmokeTestId is { } probeId)
-                {
-                    smokeProbe = await smokeProbeStore.SeedAsync(
-                        probeId,
-                        cancellationToken);
-                }
-
-                var recovery = await service.RecoverAsync(cancellationToken);
-                var statusProbeId = smokeRequest?.SmokeTestStatusId
-                    ?? smokeRequest?.SmokeTestId;
-                if (statusProbeId is { } statusId)
-                {
-                    smokeProbe = await smokeProbeStore.FindAsync(
-                        statusId,
-                        cancellationToken);
-                }
-
-                return new MaintenanceExecutionResult(
-                    recovery.OutboxDrained,
-                    smokeProbe);
-            });
-        application.MapGet(
-            "/health",
-            () => TypedResults.Ok(new { status = "healthy" }));
-        return application;
-    }
-
-    internal static Task<BackgroundWorkRecoveryResult> RunMaintenanceAsync(
-        string[] args)
-    {
-        return RunMaintenanceAsync(args, ApplicationConfigurationLoader.ReadInline());
-    }
-
-    private static async Task<BackgroundWorkRecoveryResult> RunMaintenanceAsync(
-        string[] args,
-        string? applicationConfiguration)
-    {
-        using var host = BuildMaintenanceHost(args, applicationConfiguration);
-        await host.StartAsync();
-        try
-        {
-            await using var scope = host.Services.CreateAsyncScope();
-            var lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
-            return await scope.ServiceProvider
-                .GetRequiredService<BackgroundWorkRecoveryService>()
-                .RecoverAsync(lifetime.ApplicationStopping);
-        }
-        finally
-        {
-            await host.StopAsync(CancellationToken.None);
-        }
-    }
-
-    private static void ConfigurePersistence(
+    private static string ConfigurePersistence(
         IServiceCollection services,
-        ConfigurationManager configuration)
+        ConfigurationManager configuration,
+        string? backgroundQueueName = null)
     {
         var connectionString = configuration.GetConnectionString(
             LicensingConnectionString);
@@ -361,6 +195,7 @@ public sealed class Program
                 $"ConnectionStrings:{LicensingConnectionString} is required.");
         }
 
+        connectionString = NormalizeNpgsqlConnectionString(connectionString);
         services.AddDbContextFactory<LicensingDbContext>((serviceProvider, options) =>
         {
             options.UseNpgsql(
@@ -372,9 +207,25 @@ public sealed class Program
             options.UseOpenIddict<Guid>();
             options.AddInterceptors(serviceProvider.GetServices<IInterceptor>());
         });
-        services.AddSingleton(serviceProvider => new PostgresBackgroundWorkOutbox(
-            BackgroundMessagingSettings.QueueNameFrom(configuration)));
+        if (backgroundQueueName is not null)
+        {
+            services.AddSingleton(new PostgresBackgroundWorkOutbox(backgroundQueueName));
+        }
         services.AddSingleton(TimeProvider.System);
+        return connectionString;
+    }
+
+    internal static string NormalizeNpgsqlConnectionString(string connectionString)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
+        var builder = new NpgsqlConnectionStringBuilder(connectionString)
+        {
+            MinPoolSize = 0,
+            MaxPoolSize = 30,
+            ConnectionIdleLifetime = 10,
+            ConnectionPruningInterval = 10,
+        };
+        return builder.ConnectionString;
     }
 
     internal static void ConfigureStructuredLogging(ILoggingBuilder logging)
@@ -476,14 +327,10 @@ public sealed class Program
         ConfigureApiSecurity(services, configuration);
     }
 
-    private static void ConfigureWorkerServices(
+    private static void ConfigureBackgroundWorkServices(
         IServiceCollection services,
         ConfigurationManager configuration)
     {
-        services.AddHostedService<LicensingStartupValidation>();
-        services.AddScoped<PostgresCommercialSubscriptionProjectionStore>();
-        services.AddScoped<CommercialSubscriptionProjectionService>();
-        services.AddScoped<PostgresBillingProviderReadRevisionSource>();
         services.AddScoped<PostgresBillingWebhookProcessingStore>();
         services.AddScoped<BillingWebhookProcessingService>();
         services.AddScoped<PostgresOrganizationInvitationDeliveryStore>();
@@ -499,15 +346,6 @@ public sealed class Program
         }
         services.AddSingleton(new InfrastructureSmokeProbeSettings(
             TimeSpan.FromSeconds(smokeProbeDelaySeconds)));
-        ConfigureStripeOptions(
-            services,
-            configuration,
-            requireApiConfiguration: false);
-        ConfigureStripeClient(services);
-        services.AddScoped<StripeCommercialSubscriptionProvider>();
-        services.AddScoped<ICommercialSubscriptionProvider>(serviceProvider =>
-            serviceProvider.GetRequiredService<StripeCommercialSubscriptionProvider>());
-        ConfigureInvitationDeliveryProtection(services, configuration);
     }
 
     private static void ConfigureStripeOptions(
@@ -582,41 +420,18 @@ public sealed class Program
         });
     }
 
-    private static void ConfigureApiBackgroundMessaging(
+    private static void ConfigureBackgroundMessaging(
         IServiceCollection services,
-        IConfiguration configuration)
-    {
-        if (BackgroundMessagingSettings.ApiOutboxForwardingEnabled(configuration))
-        {
-            RebusBackgroundMessagingConfiguration.Add(services, configuration, receiveMessages: false);
-        }
-    }
-
-    private static void ConfigureMaintenanceServices(IServiceCollection services)
+        string connectionString,
+        BackgroundMessagingSettings settings)
     {
         services.AddScoped<NativeOutboxUpgrade>();
         services.AddScoped<BackgroundWorkRecoveryService>();
-        services.AddScoped<PostgresInfrastructureSmokeProbeStore>();
-    }
-
-    private static async Task<MaintenanceRequest?> ReadMaintenanceRequestAsync(
-        HttpRequest request,
-        CancellationToken cancellationToken)
-    {
-        if (request.ContentLength == 0)
-        {
-            return null;
-        }
-
-        using var reader = new StreamReader(
-            request.Body,
-            Encoding.UTF8,
-            detectEncodingFromByteOrderMarks: false,
-            leaveOpen: true);
-        var body = await reader.ReadToEndAsync(cancellationToken);
-        return string.IsNullOrWhiteSpace(body)
-            ? null
-            : JsonSerializer.Deserialize<MaintenanceRequest>(body, WebJson);
+        RebusBackgroundMessagingConfiguration.Add(
+            services,
+            connectionString,
+            settings);
+        services.AddHostedService<StartupBackgroundWorkRecoveryService>();
     }
 
     private static void ConfigureInvitationDeliveryProtection(
@@ -696,40 +511,54 @@ public sealed class Program
                 ?? throw new InvalidOperationException(
                     $"{InvitationEmailSettings.SectionName}:FromAddress is required."),
             acceptanceUrl);
-        var amazonSesRegion = section["AmazonSes:Region"];
-        if (string.IsNullOrWhiteSpace(amazonSesRegion))
-        {
-            throw new InvalidOperationException(
-                $"{InvitationEmailSettings.SectionName}:AmazonSes:Region is required.");
-        }
+        var smtp = new SmtpEmailSettings(
+            section["Smtp:Host"]
+                ?? throw new InvalidOperationException(
+                    $"{InvitationEmailSettings.SectionName}:Smtp:Host is required."),
+            section.GetValue<int?>("Smtp:Port")
+                ?? throw new InvalidOperationException(
+                    $"{InvitationEmailSettings.SectionName}:Smtp:Port is required."),
+            section["Smtp:Username"]
+                ?? throw new InvalidOperationException(
+                    $"{InvitationEmailSettings.SectionName}:Smtp:Username is required."),
+            section["Smtp:Password"]
+                ?? throw new InvalidOperationException(
+                    $"{InvitationEmailSettings.SectionName}:Smtp:Password is required."));
 
         services.AddSingleton(settings);
-        services.AddSingleton<IAmazonSimpleEmailServiceV2>(
-            _ => new AmazonSimpleEmailServiceV2Client(
-                RegionEndpoint.GetBySystemName(amazonSesRegion.Trim())));
-        services.AddSingleton<IEmailSubmissionClient, AmazonSesEmailSubmissionClient>();
+        services.AddSingleton(smtp);
+        services.AddSingleton<IEmailSubmissionClient, SmtpEmailSubmissionClient>();
         services.AddSingleton<
             IOrganizationInvitationEmailSender,
-            SesOrganizationInvitationEmailSender>();
+            OrganizationInvitationEmailSender>();
     }
 
-    private static void AddApplicationConfiguration(
-        IConfigurationBuilder configuration,
-        string? json)
+    private static void UsePortalFallback(WebApplication application)
     {
-        if (string.IsNullOrWhiteSpace(json))
+        application.Use(async (context, next) =>
         {
-            return;
-        }
+            await next(context);
+            if (context.Response.HasStarted
+                || context.Response.StatusCode != StatusCodes.Status404NotFound
+                || IsBackendPath(context.Request.Path))
+            {
+                return;
+            }
 
-        configuration.AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json)));
+            var webRoot = application.Environment.WebRootPath
+                ?? throw new InvalidOperationException("The portal web root is not configured.");
+            context.Response.StatusCode = StatusCodes.Status200OK;
+            await Results.File(
+                Path.Combine(webRoot, "index.html"),
+                contentType: "text/html; charset=utf-8").ExecuteAsync(context);
+        });
     }
 
-    private sealed record MaintenanceRequest(
-        Guid? SmokeTestId,
-        Guid? SmokeTestStatusId);
-
-    private sealed record MaintenanceExecutionResult(
-        bool OutboxDrained,
-        InfrastructureSmokeProbeStatus? SmokeProbe);
+    internal static bool IsBackendPath(PathString path)
+    {
+        return path.StartsWithSegments("/api")
+            || path.StartsWithSegments("/auth")
+            || path.StartsWithSegments("/desktop")
+            || path.StartsWithSegments("/health");
+    }
 }

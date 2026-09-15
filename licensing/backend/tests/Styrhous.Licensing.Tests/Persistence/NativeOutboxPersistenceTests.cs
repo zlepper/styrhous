@@ -27,7 +27,7 @@ public sealed class NativeOutboxPersistenceTests
         BackgroundWorkKind kind, Type expectedContract, bool commit)
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
-        await using var fixture = MaintenanceServiceTestBase.ForDatabase<PostgresBackgroundWorkOutbox>(database, ObservedAt, "outbox-test");
+        await using var fixture = ServiceTestBase<PostgresBackgroundWorkOutbox>.ForDatabaseWithBackgroundQueue(database, ObservedAt, "outbox-test");
         Guid workId;
         await using (var context = database.CreateContext())
         {
@@ -91,7 +91,7 @@ public sealed class NativeOutboxPersistenceTests
     public async Task CancelledEnqueueCannotLeaveACommittedBusinessRecord()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
-        await using var fixture = MaintenanceServiceTestBase.ForDatabase<PostgresBackgroundWorkOutbox>(database, ObservedAt, "outbox-test");
+        await using var fixture = ServiceTestBase<PostgresBackgroundWorkOutbox>.ForDatabaseWithBackgroundQueue(database, ObservedAt, "outbox-test");
         await using (var context = database.CreateContext())
         {
             await using var transaction = await context.Database.BeginTransactionAsync();
@@ -124,7 +124,7 @@ public sealed class NativeOutboxPersistenceTests
             context.OutboxMessages.AddRange(pending, expired, discarded);
             await context.SaveChangesAsync();
         }
-        await using var fixture = MaintenanceServiceTestBase.ForDatabase<NativeOutboxUpgrade>(database, ObservedAt, "outbox-test");
+        await using var fixture = ServiceTestBase<NativeOutboxUpgrade>.ForDatabaseWithBackgroundQueue(database, ObservedAt, "outbox-test");
         await fixture.Service.EnqueueLegacyWorkAsync(default);
         await fixture.Service.EnqueueLegacyWorkAsync(default);
 
@@ -143,7 +143,7 @@ public sealed class NativeOutboxPersistenceTests
     public async Task StoppedForwarderLeavesWorkDurableWhenMaintenanceIsCancelled()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
-        await using var fixture = MaintenanceServiceTestBase.ForDatabase<BackgroundWorkRecoveryService>(database, ObservedAt, "outbox-test");
+        await using var fixture = ServiceTestBase<BackgroundWorkRecoveryService>.ForDatabaseWithBackgroundQueue(database, ObservedAt, "outbox-test");
         var message = PendingDelivery(ObservedAt);
         await using (var context = database.CreateContext())
         {

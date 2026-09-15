@@ -59,33 +59,26 @@ jobs:
           DESKTOP_PACKAGE_IS_TAG_RELEASE: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
           STYRHOUS_HOSTED_LICENSE_ORIGIN: ${{ vars.STYRHOUS_HOSTED_LICENSE_ORIGIN }}
         run: |
-          origin=$(bash licensing/infrastructure/resolve-desktop-origin.sh)
+          origin=${STYRHOUS_HOSTED_LICENSE_ORIGIN:-}
+          if [[ "$DESKTOP_PACKAGE_IS_TAG_RELEASE" == "true" ]]; then
+            : "${origin:?STYRHOUS_HOSTED_LICENSE_ORIGIN is required for tagged releases.}"
+          elif [[ -z "$origin" ]]; then
+            origin=https://licensing.validation.invalid
+          fi
+          origin=${origin%/}
+          VERIFY_DESKTOP_ORIGIN_LIVE=false \
+            HOSTED_LICENSE_ORIGIN="$origin" \
+            bash licensing/verify-desktop-origin.sh
           echo "origin=$origin" >> "$GITHUB_OUTPUT"
-
-      - name: Install Pulumi CLI
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-        uses: pulumi/actions@8e5e406f4007fca908480587cb9893c07090f58d # v7.0.0
-        with:
-          pulumi-version: 3.261.0
 
       - name: Verify tag, application version, and deployed licensing origin
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         env:
           HOSTED_LICENSE_ORIGIN: ${{ steps.license_origin.outputs.origin }}
-          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-          PULUMI_STACK: ${{ vars.LICENSING_PRODUCTION_PULUMI_STACK }}
         run: |
           version=$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | select(.name == "styrhous") | .version')
           test "${GITHUB_REF_NAME#v}" = "$version"
-          test -n "$PULUMI_STACK"
-          pulumi -C licensing/infrastructure stack select "$PULUMI_STACK"
-          deployed_origin=$(pulumi -C licensing/infrastructure stack output HostedOrigin)
-          deployed_origin=${deployed_origin%/}
-          if [[ "$HOSTED_LICENSE_ORIGIN" != "$deployed_origin" ]]; then
-            echo "The release licensing origin does not match the deployed production stack." >&2
-            exit 1
-          fi
-          bash licensing/infrastructure/verify-desktop-origin.sh
+          bash licensing/verify-desktop-origin.sh
 
   package-appimage:
     name: Package AppImage (${{ matrix.id }})
