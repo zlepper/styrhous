@@ -109,6 +109,10 @@ pub(super) fn show_log_window_with_scroll_state(
                 .inner_margin(egui::Margin::same(spacing::LG as i8)),
         )
         .show(ui, |ui| {
+            // Egui also applies `bar_outer_margin` while it paints floating
+            // tracks. Moving those tracks keeps the existing content bounds,
+            // virtual-scroll viewport, and panel gutter intact.
+            ui.spacing_mut().scroll.bar_outer_margin = -spacing::LG;
             let pixels_per_point = ui.pixels_per_point();
             let font_row_height =
                 ui.fonts_mut(|fonts| fonts.row_height(&egui::FontId::monospace(LOG_FONT_SIZE)));

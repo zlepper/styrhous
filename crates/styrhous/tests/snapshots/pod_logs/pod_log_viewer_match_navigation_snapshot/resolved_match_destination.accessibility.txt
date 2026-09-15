@@ -204,5 +204,5 @@ Window state=[focused] rect=<none>
                   GenericContainer rect=<none>
                     Label value="line 449" rect=(x=24.0 y=1007.0 width=67.4 height=16.0 center_x=57.7 center_y=1015.0)
                   Unknown name="Pod log line 450" rect=(x=24.0 y=1007.0 width=67.4 height=16.0 center_x=57.7 center_y=1015.0)
-            ScrollBar rect=(x=24.0 y=990.0 width=1488.0 height=10.0 center_x=768.0 center_y=995.0)
-            ScrollBar rect=(x=1502.0 y=76.0 width=10.0 height=924.0 center_x=1507.0 center_y=538.0)
+            ScrollBar rect=(x=24.0 y=1000.0 width=1488.0 height=6.0 center_x=768.0 center_y=1003.0)
+            ScrollBar rect=(x=1512.0 y=76.0 width=6.0 height=924.0 center_x=1515.0 center_y=538.0)
