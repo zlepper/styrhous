@@ -1,4 +1,5 @@
 use super::*;
+use crate::worker::PodLogStreamTarget;
 
 #[derive(Debug)]
 
@@ -42,6 +43,9 @@ pub(crate) enum ResourceAction {
         name: String,
         namespace: Option<String>,
         container: PodLogContainer,
+    },
+    ViewInterleavedLogs {
+        targets: Vec<PodLogStreamTarget>,
     },
     Shell {
         name: String,
@@ -111,6 +115,7 @@ impl ResourceAction {
             | Self::RequestScale { .. }
             | Self::SaveData { .. }
             | Self::ViewLogs { .. }
+            | Self::ViewInterleavedLogs { .. }
             | Self::NavigateDetails { .. } => None,
         }
     }

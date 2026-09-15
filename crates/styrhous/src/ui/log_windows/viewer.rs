@@ -32,23 +32,61 @@ pub(super) fn show_log_window_with_scroll_state(
                         .color(gray::_900),
                 );
                 ui.add_space(spacing::LG);
-                ui.label(
-                    egui::RichText::new(&window.pod_name)
-                        .font(typography::section_heading())
-                        .color(gray::_900),
-                );
-                ui.add_space(spacing::MD);
-                ui.label(
-                    egui::RichText::new(format!("Container: {}", window.container.name))
-                        .font(typography::body())
-                        .color(gray::_600),
-                );
+                if window.is_interleaved() {
+                    ui.label(
+                        egui::RichText::new(format!("{} sources", window.targets.len()))
+                            .font(typography::section_heading())
+                            .color(gray::_900),
+                    );
+                    ui.add_space(spacing::MD);
+                    ui.label(
+                        egui::RichText::new("Interleaved Pod logs")
+                            .font(typography::body())
+                            .color(gray::_600),
+                    );
+                } else {
+                    ui.label(
+                        egui::RichText::new(&window.pod_name)
+                            .font(typography::section_heading())
+                            .color(gray::_900),
+                    );
+                    ui.add_space(spacing::MD);
+                    ui.label(
+                        egui::RichText::new(format!("Container: {}", window.container.name))
+                            .font(typography::body())
+                            .color(gray::_600),
+                    );
+                }
                 ui.add_space(spacing::MD);
                 ui.label(
                     egui::RichText::new("●")
                         .font(typography::body())
                         .color(status_color(&window.status)),
                 );
+                if !window.source_failures.is_empty() {
+                    ui.add_space(spacing::MD);
+                    let mut failures = window
+                        .source_failures
+                        .iter()
+                        .map(|(target, error)| format!("{}: {error}", target.display_name()))
+                        .collect::<Vec<_>>();
+                    failures.sort();
+                    let failures = failures.join("\n");
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "{} source{} unavailable",
+                            window.source_failures.len(),
+                            if window.source_failures.len() == 1 {
+                                ""
+                            } else {
+                                "s"
+                            }
+                        ))
+                        .font(typography::body())
+                        .color(status::WARNING),
+                    )
+                    .on_hover_text(failures);
+                }
                 ui.label(
                     egui::RichText::new(status_label(window))
                         .font(typography::body())

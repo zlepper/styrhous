@@ -161,9 +161,23 @@ pub(crate) struct UpdateResourceData {
 pub(crate) struct StartPodLogStream {
     pub(crate) cluster_key: i32,
     pub(crate) log_window_id: u64,
+    pub(crate) targets: Vec<PodLogStreamTarget>,
+}
+
+/// One Kubernetes container contributing records to a native log window.
+/// A window can contain one target (the traditional log view) or many targets
+/// that are displayed as one interleaved timeline.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct PodLogStreamTarget {
     pub(crate) namespace: String,
     pub(crate) pod_name: String,
     pub(crate) container: String,
+}
+
+impl PodLogStreamTarget {
+    pub(crate) fn display_name(&self) -> String {
+        format!("{}/{} · {}", self.namespace, self.pod_name, self.container)
+    }
 }
 #[derive(Debug)]
 pub(crate) struct StopPodLogStream {

@@ -1,5 +1,6 @@
 use crate::log_store::{LOG_PAGE_SIZE, LogPageRow, LogStoreResult};
 use crate::minimal_resource::PodLogContainer;
+use crate::worker::PodLogStreamTarget;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::time::Instant;
@@ -28,6 +29,10 @@ pub(super) struct PodLogWindowState {
     pub(super) namespace: String,
     pub(super) pod_name: String,
     pub(super) container: PodLogContainer,
+    /// All sources represented in this window. A traditional window has one
+    /// source; an interleaved window carries all selected Pod containers.
+    pub(super) targets: Vec<PodLogStreamTarget>,
+    pub(super) source_failures: HashMap<PodLogStreamTarget, String>,
     pub(super) total_lines: usize,
     /// Older records written by the background history request but not yet
     /// merged into the logical log stream.
@@ -62,6 +67,12 @@ pub(super) struct PodLogWindowState {
     /// Make the next rendered caret visible in the horizontal scroll viewport.
     pub(super) ensure_caret_visible: bool,
     pub(super) copied_text: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct PendingInterleavedLogs {
+    pub(super) cluster_key: i32,
+    pub(super) targets: Vec<PodLogStreamTarget>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -190,12 +201,19 @@ impl PodLogWindowState {
         pod_name: String,
         container: PodLogContainer,
     ) -> Self {
+        let targets = vec![PodLogStreamTarget {
+            namespace: namespace.clone(),
+            pod_name: pod_name.clone(),
+            container: container.name.clone(),
+        }];
         Self {
             id,
             cluster_key,
             namespace,
             pod_name,
+            targets,
             container,
+            source_failures: HashMap::new(),
             total_lines: 0,
             backfill_lines: None,
             live_rows: BTreeMap::new(),
@@ -220,6 +238,32 @@ impl PodLogWindowState {
             ensure_caret_visible: false,
             copied_text: None,
         }
+    }
+
+    pub(super) fn new_interleaved(
+        id: u64,
+        cluster_key: i32,
+        targets: Vec<PodLogStreamTarget>,
+    ) -> Option<Self> {
+        let first = targets.first()?.clone();
+        let container = PodLogContainer {
+            name: first.container.clone(),
+            kind: crate::resource_table::ContainerKind::App,
+            image: None,
+        };
+        let mut window = Self::new(
+            id,
+            cluster_key,
+            first.namespace.clone(),
+            first.pod_name.clone(),
+            container,
+        );
+        window.targets = targets;
+        Some(window)
+    }
+
+    pub(super) fn is_interleaved(&self) -> bool {
+        self.targets.len() > 1
     }
 
     pub(super) fn clear_pages(&mut self) {

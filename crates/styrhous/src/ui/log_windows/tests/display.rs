@@ -1,4 +1,5 @@
 use super::*;
+use crate::worker::PodLogStreamTarget;
 
 #[test]
 fn layout_toggles_metadata_and_ansi_styling_independently() {
@@ -123,6 +124,34 @@ fn pod_log_viewer_snapshot() {
     window.search.query = "http".to_owned();
     add_match_ranges(&mut window, false);
     snapshot_window(window, "pod_logs/pod_log_viewer_snapshot/viewer");
+}
+
+#[test]
+fn interleaved_pod_log_viewer_snapshot() {
+    let api = PodLogStreamTarget {
+        namespace: "payments".to_owned(),
+        pod_name: "api-0".to_owned(),
+        container: "server".to_owned(),
+    };
+    let worker = PodLogStreamTarget {
+        namespace: "payments".to_owned(),
+        pod_name: "worker-0".to_owned(),
+        container: "worker".to_owned(),
+    };
+    let mut window = log_window(&[
+        "2026-08-08T15:22:17.143Z [payments/api-0 · server] server ready",
+        "2026-08-08T15:22:17.145Z [payments/worker-0 · worker] job accepted",
+        "[payments/api-0 · server] application-provided timestamp: 15:22:18",
+    ]);
+    window.targets = vec![api, worker.clone()];
+    window
+        .source_failures
+        .insert(worker, "container is waiting to start".to_owned());
+
+    snapshot_window(
+        window,
+        "pod_logs/interleaved_pod_log_viewer_snapshot/interleaved_viewer",
+    );
 }
 
 #[test]

@@ -191,6 +191,19 @@ pub(super) fn show_toolbar(
                                     *selection_controls.action =
                                         Some(ResourceSelectionAction::Clear);
                                 }
+                                if selection_controls.interleaved_logs_available
+                                    && ui
+                                        .add_enabled_ui(selection_controls.actions_enabled, |ui| {
+                                            TailwindButton::secondary("View interleaved logs")
+                                                .size(ButtonSize::Xs)
+                                                .show(ui)
+                                        })
+                                        .inner
+                                        .clicked()
+                                {
+                                    *selection_controls.action =
+                                        Some(ResourceSelectionAction::ViewInterleavedLogs);
+                                }
                                 let delete =
                                     TailwindButton::danger("Delete selected").size(ButtonSize::Xs);
                                 if ui

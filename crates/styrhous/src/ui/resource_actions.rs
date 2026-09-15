@@ -98,6 +98,15 @@ pub(super) fn show_resource_action_items(
         }
         containers => {
             menu.submenu("View logs", |menu: &mut MoreMenu<'_>| {
+                if menu.action("All containers (interleaved)").clicked() && pending_action.is_none()
+                {
+                    let targets = log_stream_targets(resource, containers);
+                    if !targets.is_empty() {
+                        *pending_action = Some(ResourceAction::ViewInterleavedLogs { targets });
+                        menu.close();
+                    }
+                }
+                menu.separator();
                 for container in containers {
                     let label = format!("{} — {}", container.name, container.kind.label());
                     if menu.action(label).clicked() && pending_action.is_none() {
@@ -188,6 +197,23 @@ pub(super) fn show_resource_action_items(
             finalizers: resource.finalizers().to_vec(),
         });
     }
+}
+
+pub(super) fn log_stream_targets(
+    resource: &MinimalResource,
+    containers: &[PodLogContainer],
+) -> Vec<crate::worker::PodLogStreamTarget> {
+    let Some(namespace) = resource.namespace.as_ref() else {
+        return Vec::new();
+    };
+    containers
+        .iter()
+        .map(|container| crate::worker::PodLogStreamTarget {
+            namespace: namespace.clone(),
+            pod_name: resource.name.clone(),
+            container: container.name.clone(),
+        })
+        .collect()
 }
 
 fn pod_image_presets(

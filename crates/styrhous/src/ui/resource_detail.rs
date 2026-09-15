@@ -354,6 +354,13 @@ impl GlobalBladeEffect for ResourceDetailEffect {
                 container,
                 navigation.commands_to_send(),
             ),
+            ResourceAction::ViewInterleavedLogs { targets } => {
+                context.ui_state.request_interleaved_pod_log_window(
+                    cluster_key,
+                    targets,
+                    navigation.commands_to_send(),
+                )
+            }
             action @ (ResourceAction::Shell { .. }
             | ResourceAction::PodDebugShell { .. }
             | ResourceAction::NodeShell { .. }) => {
