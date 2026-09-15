@@ -55,6 +55,107 @@ fn completed_fully_loaded_logs_do_not_oscillate_at_the_bottom() {
 }
 
 #[test]
+fn live_tail_rows_render_after_scrolling_back_to_bottom_before_page_load() {
+    let mut window = fully_loaded_log_window(LOG_PAGE_SIZE * 2);
+    window.status = PodLogStatus::Following;
+    let windows = Rc::new(RefCell::new(std::collections::BTreeMap::from([(
+        1, window,
+    )])));
+    let windows_for_ui = windows.clone();
+    let display_options = Rc::new(RefCell::new(LogDisplayOptions::default()));
+    let display_options_for_ui = display_options.clone();
+    let scroll_state = Rc::new(RefCell::new(None));
+    let scroll_state_for_ui = scroll_state.clone();
+    let log_store = LogStoreService::default();
+    let mut close_requested = false;
+    let mut harness = Harness::builder().build_ui(move |ctx| {
+        let mut windows = windows_for_ui.borrow_mut();
+        let window = windows.get_mut(&1).expect("log window exists");
+        *scroll_state_for_ui.borrow_mut() = Some(show_log_window_with_scroll_state(
+            ctx,
+            window,
+            &mut display_options_for_ui.borrow_mut(),
+            &log_store,
+            &mut close_requested,
+        ));
+    });
+    components::test_support::setup_egui(&mut harness);
+    harness.run_steps(2);
+
+    let initial_scroll = scroll_state
+        .borrow()
+        .as_ref()
+        .expect("log scroll area was rendered")
+        .state
+        .offset
+        .y;
+    let scroll_position = scroll_state
+        .borrow()
+        .as_ref()
+        .expect("log scroll area was rendered")
+        .inner_rect
+        .center();
+    harness.event(egui::Event::PointerMoved(scroll_position));
+    harness.event(egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: egui::vec2(0.0, 10_000.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: egui::Modifiers::default(),
+    });
+    harness.run_steps(2);
+    let scrolled_away_offset = scroll_state
+        .borrow()
+        .as_ref()
+        .expect("log scroll area was rendered")
+        .state
+        .offset
+        .y;
+    assert!(scrolled_away_offset < initial_scroll);
+
+    crate::ui::log_state::apply_store_result(
+        &mut windows.borrow_mut(),
+        LogStoreResult::Updated {
+            window_id: 1,
+            total_lines: LOG_PAGE_SIZE * 2 + 1,
+            completed_search: None,
+            appended_rows: vec![LogPageRow {
+                display_row: LOG_PAGE_SIZE * 2,
+                line_index: LOG_PAGE_SIZE * 2,
+                timestamp: None,
+                source: None,
+                text: "live now".to_owned(),
+                style_spans: Vec::new(),
+                match_ranges: Vec::new(),
+            }],
+            backfill_lines: None,
+        },
+    );
+    assert_eq!(
+        windows.borrow()[&1].live_rows[&(LOG_PAGE_SIZE * 2)].text,
+        "live now"
+    );
+
+    harness.event(egui::Event::PointerMoved(scroll_position));
+    harness.event(egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: egui::vec2(0.0, -10_000.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: egui::Modifiers::default(),
+    });
+    harness.run_steps(2);
+
+    assert!(
+        harness.get_by_label("live now").rect().intersects(
+            scroll_state
+                .borrow()
+                .as_ref()
+                .expect("log scroll area was rendered")
+                .inner_rect
+        )
+    );
+}
+
+#[test]
 fn displayed_line_navigation_scrolls_the_viewer_and_snapshots_the_destination() {
     let window = Rc::new(RefCell::new(fully_loaded_log_window(512)));
     let window_for_ui = window.clone();

@@ -1,6 +1,6 @@
 use super::state::{
     LogDisplayOptions, LogPageKey, LogTextPosition, LogTextSelection, PendingLogCaret,
-    PodLogStatus, PodLogWindowState, UiState, source_label_prefix,
+    PodLogStatus, PodLogWindowState, UiState,
 };
 use crate::ansi::AnsiStyleSpan;
 use crate::log_store::LogStoreService;

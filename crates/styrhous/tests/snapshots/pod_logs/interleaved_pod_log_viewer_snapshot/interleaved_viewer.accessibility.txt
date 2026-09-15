@@ -57,13 +57,13 @@ Window state=[focused] rect=<none>
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Label value="[payments/api-0 · server]     server ready" rect=(x=24.0 y=76.0 width=354.0 height=16.0 center_x=201.0 center_y=84.0)
-                  Unknown name="Pod log line 1" rect=(x=24.0 y=76.0 width=354.0 height=16.0 center_x=201.0 center_y=84.0)
+                    Label value="[api-0]     server ready" rect=(x=24.0 y=76.0 width=202.3 height=16.0 center_x=125.1 center_y=84.0)
+                  Unknown name="Pod log line 1" rect=(x=24.0 y=76.0 width=202.3 height=16.0 center_x=125.1 center_y=84.0)
                   GenericContainer rect=<none>
-                    Label value="[payments/worker-0 · worker]  job accepted" rect=(x=24.0 y=95.0 width=354.0 height=16.0 center_x=201.0 center_y=103.0)
-                  Unknown name="Pod log line 2" rect=(x=24.0 y=95.0 width=354.0 height=16.0 center_x=201.0 center_y=103.0)
+                    Label value="[worker-0]  job accepted" rect=(x=24.0 y=95.0 width=202.3 height=16.0 center_x=125.1 center_y=103.0)
+                  Unknown name="Pod log line 2" rect=(x=24.0 y=95.0 width=202.3 height=16.0 center_x=125.1 center_y=103.0)
                   GenericContainer rect=<none>
-                    Label value="[payments/api-0 · server]     application-provided timestamp: 15:22:18" rect=(x=24.0 y=114.0 width=590.0 height=16.0 center_x=319.0 center_y=122.0)
-                  Unknown name="Pod log line 3" rect=(x=24.0 y=114.0 width=590.0 height=16.0 center_x=319.0 center_y=122.0)
+                    Label value="[api-0]     application-provided timestamp: 15:22:18" rect=(x=24.0 y=114.0 width=438.3 height=16.0 center_x=243.1 center_y=122.0)
+                  Unknown name="Pod log line 3" rect=(x=24.0 y=114.0 width=438.3 height=16.0 center_x=243.1 center_y=122.0)
             ScrollBar rect=(x=24.0 y=990.0 width=1488.0 height=10.0 center_x=768.0 center_y=995.0)
             ScrollBar rect=(x=1502.0 y=76.0 width=10.0 height=924.0 center_x=1507.0 center_y=538.0)

@@ -324,7 +324,7 @@ pub(super) fn log_display_toggle_button(
 }
 
 pub(super) fn filter_is_active(window: &PodLogWindowState) -> bool {
-    window.search.filter_matches && !window.search.query.is_empty()
+    window.filter_is_active()
 }
 
 pub(super) fn displayed_line_count(window: &PodLogWindowState) -> usize {

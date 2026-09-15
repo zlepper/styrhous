@@ -1,5 +1,5 @@
 use super::*;
-use crate::ui::log_state::source_label_columns;
+use crate::ui::log_state::{source_label_columns, source_label_prefix};
 use crate::worker::PodLogStreamTarget;
 
 #[test]
@@ -111,6 +111,73 @@ fn source_labels_are_rendered_as_metadata_and_can_be_hidden() {
     );
     assert_eq!(hidden.text, "ready");
     assert_eq!(source_label_prefix(Some(short_source), 0), "");
+}
+
+#[test]
+fn source_labels_omit_redundant_namespace_and_container_details() {
+    let api = PodLogStreamTarget {
+        namespace: "payments".to_owned(),
+        pod_name: "api-0".to_owned(),
+        container: "app".to_owned(),
+    };
+    let sidecar = PodLogStreamTarget {
+        namespace: "payments".to_owned(),
+        pod_name: "api-0".to_owned(),
+        container: "sidecar".to_owned(),
+    };
+    let worker = PodLogStreamTarget {
+        namespace: "payments".to_owned(),
+        pod_name: "worker-0".to_owned(),
+        container: "worker".to_owned(),
+    };
+    let same_namespace_window =
+        PodLogWindowState::new(1, 1, vec![api.clone(), sidecar.clone(), worker.clone()])
+            .expect("test log window has sources");
+
+    assert_eq!(
+        same_namespace_window.source_label(Some(&api.display_name())),
+        Some("api-0 · app")
+    );
+    assert_eq!(
+        same_namespace_window.source_label(Some(&sidecar.display_name())),
+        Some("api-0 · sidecar")
+    );
+    assert_eq!(
+        same_namespace_window.source_label(Some(&worker.display_name())),
+        Some("worker-0")
+    );
+    assert_eq!(
+        same_namespace_window.max_source_label_columns,
+        source_label_columns("api-0 · sidecar")
+    );
+
+    let operations_api = PodLogStreamTarget {
+        namespace: "operations".to_owned(),
+        ..api.clone()
+    };
+    let multiple_namespace_window =
+        PodLogWindowState::new(1, 1, vec![api.clone(), operations_api.clone()])
+            .expect("test log window has sources");
+
+    assert_eq!(
+        multiple_namespace_window.source_label(Some(&api.display_name())),
+        Some("payments/api-0")
+    );
+    assert_eq!(
+        multiple_namespace_window.source_label(Some(&operations_api.display_name())),
+        Some("operations/api-0")
+    );
+
+    let single_source_window =
+        PodLogWindowState::new(1, 1, vec![worker.clone()]).expect("test log window has a source");
+    assert_eq!(
+        single_source_window.source_label(Some(&worker.display_name())),
+        Some("worker-0")
+    );
+    assert_eq!(
+        single_source_window.max_source_label_columns,
+        source_label_columns("worker-0")
+    );
 }
 
 #[test]
@@ -285,7 +352,7 @@ fn interleaved_pod_log_viewer_snapshot() {
     );
     assert_eq!(
         window.max_source_label_columns,
-        source_label_columns(&worker.display_name())
+        source_label_columns("worker-0")
     );
     window
         .source_failures

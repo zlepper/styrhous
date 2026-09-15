@@ -276,9 +276,7 @@ pub(super) fn show_log_window_with_scroll_state(
                             }
                         });
                     if let Some((row, max_text_columns)) = cached_row {
-                        let source_columns = window.source_prefix_columns();
-                        let source_prefix =
-                            source_label_prefix(row.source.as_deref(), source_columns);
+                        let source_prefix = window.source_prefix(row.source.as_deref());
                         let visible_source_prefix =
                             (!source_prefix.is_empty()).then_some(source_prefix.as_str());
                         let prefix = log_line_prefix(
@@ -463,8 +461,6 @@ pub(super) fn show_log_window_with_scroll_state(
                     }
                 }
             });
-            window.following_bottom = output.state.offset.y + output.inner_rect.height()
-                >= output.content_size.y - row_step;
             if let Some(row) = requested_scroll_row {
                 if display_row_is_visible(row, row_step, &output) {
                     window.search.scroll_to_display_row = None;
