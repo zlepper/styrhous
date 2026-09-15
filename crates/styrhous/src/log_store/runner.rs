@@ -69,22 +69,22 @@ pub(super) fn run_store(store_thread: StoreThread) {
                     stores.remove(&window_id);
                 }
             }
-            Command::Append { window_id, lines } => {
+            Command::Append { window_id, records } => {
                 if closed.contains(&window_id) {
                     continue;
                 }
                 let store = stores.entry(window_id).or_insert_with(LogStore::new);
-                match store.append(lines) {
+                match store.append(records) {
                     Ok(summary) => live_updates.publish_live(window_id, summary),
                     Err(error) => send_failure(&result_sender, window_id, error),
                 }
             }
-            Command::AppendBackfill { window_id, lines } => {
+            Command::AppendBackfill { window_id, records } => {
                 if closed.contains(&window_id) {
                     continue;
                 }
                 let store = stores.entry(window_id).or_insert_with(LogStore::new);
-                match store.append_backfill(lines) {
+                match store.append_backfill(records) {
                     Ok(()) => {
                         let backfill_lines = store
                             .backfill

@@ -59,6 +59,7 @@ pub(super) fn show_helm_releases_workspace(
         ResourceSelectionControls {
             selected_count: 0,
             actions_enabled: false,
+            interleaved_logs_available: false,
             action: &mut ignored_selection_action,
             namespace_selector_settings,
         },

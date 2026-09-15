@@ -99,7 +99,7 @@ async fn direct_ingestion_waits_for_spool_capacity_without_ui_draining_updates()
     // accepted eventually; a try_send data path would fail here.
     for line_index in 0..512 {
         appender
-            .append(41, vec![format!("line {line_index}")])
+            .append(41, vec![format!("line {line_index}").into()])
             .await
             .expect("direct ingestion waits instead of dropping a batch");
     }
@@ -148,7 +148,7 @@ fn page_reads_overtake_pending_append_batches() {
     append_sender
         .send(Command::Append {
             window_id: 1,
-            lines: vec!["queued append".to_owned()],
+            records: vec!["queued append".to_owned().into()],
         })
         .expect("append queue accepts the batch");
     control_sender

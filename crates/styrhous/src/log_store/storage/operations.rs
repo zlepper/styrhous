@@ -1,7 +1,7 @@
 use super::super::scan::{SearchScan, scan_records};
 use super::super::*;
 use super::core::{BackfillStore, LogRebase, LogStore, LogicalReader, SearchState};
-use super::io::{floor_char_boundary, read_u64_at};
+use super::io::{floor_char_boundary, read_u64_at, write_record};
 use crate::ansi::parse_kubernetes_log_line;
 use std::io::{Seek, SeekFrom, Write};
 use std::sync::Arc;
@@ -68,14 +68,14 @@ impl LogStore {
         })
     }
 
-    pub(crate) fn append_backfill(&mut self, lines: Vec<String>) -> anyhow::Result<()> {
+    pub(crate) fn append_backfill(&mut self, records: Vec<LogRecord>) -> anyhow::Result<()> {
         if self.backfill.is_none() {
             self.backfill = Some(BackfillStore::new()?);
         }
         self.backfill
             .as_mut()
             .expect("backfill store was initialized")
-            .append(lines)
+            .append(records)
     }
 
     pub(crate) fn logical_reader(&self) -> anyhow::Result<LogicalReader> {
@@ -127,7 +127,7 @@ impl LogStore {
             let history_start = backfill.total_lines - overlap;
             let mut matches = true;
             for offset in 0..overlap {
-                if backfill.read_line(history_start + offset)? != self.read_live_line(offset)? {
+                if backfill.read_record(history_start + offset)? != self.read_live_record(offset)? {
                     matches = false;
                     break;
                 }
@@ -141,31 +141,24 @@ impl LogStore {
         Ok(0)
     }
 
-    pub(crate) fn append(&mut self, lines: Vec<String>) -> anyhow::Result<AppendSummary> {
+    pub(crate) fn append(&mut self, records: Vec<LogRecord>) -> anyhow::Result<AppendSummary> {
         self.init_error()
             .map_err(|error| anyhow::Error::msg(error.to_owned()))?;
         let mut data = self.data()?.reopen()?;
         let mut offsets = self.offsets()?.reopen()?;
-        let mut next_offset = data.seek(SeekFrom::End(0))?;
         let first_line_index = self.visible_total_lines();
         let completed_matcher = self
             .search
             .as_ref()
             .filter(|search| search.complete)
             .map(|search| search.matcher.clone());
-        let mut line_offsets = Vec::with_capacity(lines.len());
+        let mut line_offsets = Vec::with_capacity(records.len());
         let mut matching_line_indices = Vec::new();
-        let mut appended_rows = Vec::with_capacity(lines.len());
+        let mut appended_rows = Vec::with_capacity(records.len());
 
-        for (relative_line_index, line) in lines.iter().enumerate() {
-            let bytes = line.as_bytes();
-            let length = u32::try_from(bytes.len())
-                .map_err(|_| anyhow::anyhow!("A log line exceeds 4 GiB"))?;
-            line_offsets.push(next_offset);
-            data.write_all(&length.to_le_bytes())?;
-            data.write_all(bytes)?;
-            next_offset += u64::from(length) + 4;
-            let visible_line = parse_kubernetes_log_line(line);
+        for (relative_line_index, record) in records.iter().enumerate() {
+            line_offsets.push(write_record(&mut data, record)?);
+            let visible_line = parse_kubernetes_log_line(&record.text);
             let match_ranges = completed_matcher.as_ref().map_or_else(Vec::new, |matcher| {
                 matcher
                     .find_iter(&visible_line.line.text)
@@ -182,6 +175,7 @@ impl LogStore {
                 display_row: first_line_index + relative_line_index,
                 line_index: first_line_index + relative_line_index,
                 timestamp: visible_line.timestamp,
+                source: record.source.clone(),
                 text: visible_line.line.text,
                 style_spans: visible_line.line.style_spans,
                 match_ranges,
@@ -195,7 +189,7 @@ impl LogStore {
             offsets.write_all(&offset.to_le_bytes())?;
         }
         offsets.flush()?;
-        self.total_lines += lines.len();
+        self.total_lines += records.len();
         if let Some(search) = &mut self.search
             && search.complete
             && !matching_line_indices.is_empty()
@@ -306,8 +300,8 @@ impl LogStore {
         // Any lines appended while the background scan ran are searched once
         // here before the index becomes visible.
         for line_index in scanned_lines..self.visible_total_lines() {
-            let line = self.read_line(line_index)?;
-            if matcher.is_match(&parse_kubernetes_log_line(&line).line.text) {
+            let record = self.read_record(line_index)?;
+            if matcher.is_match(&parse_kubernetes_log_line(&record.text).line.text) {
                 tail_matches.push(line_index);
             }
         }
@@ -373,7 +367,8 @@ impl LogStore {
             } else {
                 display_row
             };
-            let parsed = parse_kubernetes_log_line(&self.read_line(line_index)?);
+            let record = self.read_record(line_index)?;
+            let parsed = parse_kubernetes_log_line(&record.text);
             let match_ranges = matcher
                 .as_ref()
                 .map(|matcher| {
@@ -387,6 +382,7 @@ impl LogStore {
                 display_row,
                 line_index,
                 timestamp: parsed.timestamp,
+                source: record.source,
                 text: parsed.line.text,
                 style_spans: parsed.line.style_spans,
                 match_ranges,
@@ -461,7 +457,8 @@ impl LogStore {
             } else {
                 display_row
             };
-            let parsed = parse_kubernetes_log_line(&self.read_line(line_index)?);
+            let record = self.read_record(line_index)?;
+            let parsed = parse_kubernetes_log_line(&record.text);
             let line = parsed.line.text;
             let start = if display_row == start_row {
                 floor_char_boundary(&line, start_byte)

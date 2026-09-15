@@ -5,8 +5,8 @@ use super::state::{
 use crate::ansi::AnsiStyleSpan;
 use crate::log_store::LogStoreService;
 use crate::worker::{
-    PodLogStreamEnded, PodLogStreamFailed, PodLogStreamStarted, StopPodLogStream, WorkerCommandBox,
-    WorkerResult,
+    PodLogSourceFailed, PodLogStreamEnded, PodLogStreamFailed, PodLogStreamStarted,
+    StopPodLogStream, WorkerCommandBox, WorkerResult,
 };
 use anstyle::{Ansi256Color, AnsiColor, Color, Effects, RgbColor, Style};
 use components::colors::{SUCCESS, TABLE_BORDER, TOOLBAR_BACKGROUND, gray};
@@ -45,6 +45,23 @@ impl WorkerResult for PodLogStreamFailed {
     }
 }
 
+impl WorkerResult for PodLogSourceFailed {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(window) = ui.log_windows.get_mut(&self.log_window_id) {
+            window
+                .source_failures
+                .entry(self.target)
+                .and_modify(|existing| {
+                    if !existing.contains(&self.error) {
+                        existing.push('\n');
+                        existing.push_str(&self.error);
+                    }
+                })
+                .or_insert(self.error);
+        }
+    }
+}
+
 /// Render native, independent Pod log windows and stop both the Kubernetes
 /// stream and the independent disk store when a window is closed.
 pub(super) fn show(
@@ -64,10 +81,18 @@ pub(super) fn show(
             window.store_opened = log_store.open(id);
         }
         let viewport_id = egui::ViewportId::from_hash_of(("pod-log-window", id));
-        let title = format!(
-            "Logs · {}/{} · {}",
-            window.namespace, window.pod_name, window.container.name
-        );
+        let title = if window.has_multiple_sources() {
+            format!("Logs · {} sources", window.targets.len())
+        } else {
+            let target = window
+                .targets
+                .first()
+                .expect("log windows always contain one source");
+            format!(
+                "Logs · {}/{} · {}",
+                target.namespace, target.pod_name, target.container
+            )
+        };
         let mut close_requested = false;
         ctx.show_viewport_immediate(
             viewport_id,

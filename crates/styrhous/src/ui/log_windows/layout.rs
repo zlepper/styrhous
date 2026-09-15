@@ -59,6 +59,7 @@ pub(super) fn character_column_range(
 pub(super) fn log_line_prefix(
     line_index: usize,
     timestamp: Option<&str>,
+    source_prefix: Option<&str>,
     display_options: LogDisplayOptions,
 ) -> String {
     let mut prefix = String::new();
@@ -70,6 +71,9 @@ pub(super) fn log_line_prefix(
     {
         prefix.push_str(timestamp);
         prefix.push_str("  ");
+    }
+    if let Some(source_prefix) = source_prefix {
+        prefix.push_str(source_prefix);
     }
     prefix
 }
@@ -88,9 +92,14 @@ pub(super) fn show_loading_row(
             if display_row_is_line_index && display_options.show_line_numbers {
                 ui.add(
                     egui::Label::new(
-                        egui::RichText::new(log_line_prefix(display_row, None, display_options))
-                            .font(egui::FontId::monospace(LOG_FONT_SIZE))
-                            .color(egui::Color32::from_rgb(156, 163, 175)),
+                        egui::RichText::new(log_line_prefix(
+                            display_row,
+                            None,
+                            None,
+                            display_options,
+                        ))
+                        .font(egui::FontId::monospace(LOG_FONT_SIZE))
+                        .color(egui::Color32::from_rgb(156, 163, 175)),
                     )
                     .selectable(false),
                 );
@@ -141,6 +150,7 @@ pub(super) fn clipped_ranges(
 pub(super) fn log_line_layout_job(
     line_index: usize,
     timestamp: Option<&str>,
+    source_prefix: Option<&str>,
     line: &str,
     style_spans: &[AnsiStyleSpan],
     ranges: &[(usize, usize)],
@@ -161,7 +171,10 @@ pub(super) fn log_line_layout_job(
     if display_options.show_timestamps
         && let Some(timestamp) = timestamp
     {
-        job.append(&format!("{timestamp}  "), 0.0, number);
+        job.append(&format!("{timestamp}  "), 0.0, number.clone());
+    }
+    if let Some(source_prefix) = source_prefix {
+        job.append(source_prefix, 0.0, number);
     }
     append_log_line_text(&mut job, line, style_spans, ranges, display_options);
     job

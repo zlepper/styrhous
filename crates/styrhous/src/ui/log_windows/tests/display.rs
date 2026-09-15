@@ -1,4 +1,6 @@
 use super::*;
+use crate::ui::log_state::{source_label_columns, source_label_prefix};
+use crate::worker::PodLogStreamTarget;
 
 #[test]
 fn layout_toggles_metadata_and_ansi_styling_independently() {
@@ -6,6 +8,7 @@ fn layout_toggles_metadata_and_ansi_styling_independently() {
     let job = log_line_layout_job(
         4,
         Some("2026-08-08T15:22:17.143Z"),
+        None,
         "error",
         &[AnsiStyleSpan {
             range: (0, 5),
@@ -46,15 +49,12 @@ fn display_toggles_update_the_shared_options() {
     components::test_support::setup_egui(&mut harness);
     harness.run();
 
-    harness
-        .get_by_label("Show log line numbers")
-        .click_accesskit();
+    harness.get_by_label("Show log line numbers").click();
     harness
         .get_by_label("Show Kubernetes log timestamps")
-        .click_accesskit();
-    harness
-        .get_by_label("Render ANSI styling")
-        .click_accesskit();
+        .click();
+    harness.get_by_label("Render ANSI styling").click();
+    harness.get_by_label("Show log source labels").click();
     harness.run();
 
     assert_eq!(
@@ -65,6 +65,179 @@ fn display_toggles_update_the_shared_options() {
             render_ansi: false,
         }
     );
+    assert!(window.borrow().show_source_labels);
+}
+
+#[test]
+fn source_labels_are_rendered_as_metadata_and_can_be_hidden() {
+    let short_source = "payments/api-0 · server";
+    let long_source = "payments/worker-0 · worker";
+    let source_columns = source_label_columns(long_source);
+    let short_prefix = source_label_prefix(Some(short_source), source_columns);
+    let long_prefix = source_label_prefix(Some(long_source), source_columns);
+    let shown = log_line_layout_job(
+        0,
+        None,
+        Some(&short_prefix),
+        "ready",
+        &[],
+        &[],
+        LogDisplayOptions::default(),
+    );
+    let long = log_line_layout_job(
+        1,
+        None,
+        Some(&long_prefix),
+        "accepted",
+        &[],
+        &[],
+        LogDisplayOptions::default(),
+    );
+    let hidden = log_line_layout_job(
+        0,
+        None,
+        None,
+        "ready",
+        &[],
+        &[],
+        LogDisplayOptions::default(),
+    );
+
+    assert_eq!(shown.text, format!("{short_prefix}ready"));
+    assert_eq!(
+        shown.text.find("ready"),
+        long.text.find("accepted"),
+        "messages begin in the same column after padded source labels"
+    );
+    assert_eq!(hidden.text, "ready");
+    assert_eq!(source_label_prefix(Some(short_source), 0), "");
+}
+
+#[test]
+fn source_labels_omit_redundant_namespace_and_container_details() {
+    let api = PodLogStreamTarget {
+        namespace: "payments".to_owned(),
+        pod_name: "api-0".to_owned(),
+        container: "app".to_owned(),
+    };
+    let sidecar = PodLogStreamTarget {
+        namespace: "payments".to_owned(),
+        pod_name: "api-0".to_owned(),
+        container: "sidecar".to_owned(),
+    };
+    let worker = PodLogStreamTarget {
+        namespace: "payments".to_owned(),
+        pod_name: "worker-0".to_owned(),
+        container: "worker".to_owned(),
+    };
+    let same_namespace_window =
+        PodLogWindowState::new(1, 1, vec![api.clone(), sidecar.clone(), worker.clone()])
+            .expect("test log window has sources");
+
+    assert_eq!(
+        same_namespace_window.source_label(Some(&api.display_name())),
+        Some("api-0 · app")
+    );
+    assert_eq!(
+        same_namespace_window.source_label(Some(&sidecar.display_name())),
+        Some("api-0 · sidecar")
+    );
+    assert_eq!(
+        same_namespace_window.source_label(Some(&worker.display_name())),
+        Some("worker-0")
+    );
+    assert_eq!(
+        same_namespace_window.max_source_label_columns,
+        source_label_columns("api-0 · sidecar")
+    );
+
+    let operations_api = PodLogStreamTarget {
+        namespace: "operations".to_owned(),
+        ..api.clone()
+    };
+    let multiple_namespace_window =
+        PodLogWindowState::new(1, 1, vec![api.clone(), operations_api.clone()])
+            .expect("test log window has sources");
+
+    assert_eq!(
+        multiple_namespace_window.source_label(Some(&api.display_name())),
+        Some("payments/api-0")
+    );
+    assert_eq!(
+        multiple_namespace_window.source_label(Some(&operations_api.display_name())),
+        Some("operations/api-0")
+    );
+
+    let single_source_window =
+        PodLogWindowState::new(1, 1, vec![worker.clone()]).expect("test log window has a source");
+    assert_eq!(
+        single_source_window.source_label(Some(&worker.display_name())),
+        Some("worker-0")
+    );
+    assert_eq!(
+        single_source_window.max_source_label_columns,
+        source_label_columns("worker-0")
+    );
+}
+
+#[test]
+fn source_label_visibility_is_per_window() {
+    let targets = vec![
+        PodLogStreamTarget {
+            namespace: "payments".to_owned(),
+            pod_name: "api-0".to_owned(),
+            container: "server".to_owned(),
+        },
+        PodLogStreamTarget {
+            namespace: "payments".to_owned(),
+            pod_name: "worker-0".to_owned(),
+            container: "worker".to_owned(),
+        },
+    ];
+    let first = Rc::new(RefCell::new(
+        PodLogWindowState::new(1, 1, targets.clone()).expect("test log window has two sources"),
+    ));
+    let second = Rc::new(RefCell::new(
+        PodLogWindowState::new(2, 1, targets).expect("test log window has two sources"),
+    ));
+    let first_for_ui = first.clone();
+    let first_options = Rc::new(RefCell::new(LogDisplayOptions::default()));
+    let first_options_for_ui = first_options.clone();
+    let first_store = LogStoreService::default();
+    let mut first_close_requested = false;
+    let mut first_harness = Harness::builder().build_ui(move |ctx| {
+        show_log_window(
+            ctx,
+            &mut first_for_ui.borrow_mut(),
+            &mut first_options_for_ui.borrow_mut(),
+            &first_store,
+            &mut first_close_requested,
+        )
+    });
+    let second_for_ui = second.clone();
+    let second_options = Rc::new(RefCell::new(LogDisplayOptions::default()));
+    let second_options_for_ui = second_options.clone();
+    let second_store = LogStoreService::default();
+    let mut second_close_requested = false;
+    let mut second_harness = Harness::builder().build_ui(move |ctx| {
+        show_log_window(
+            ctx,
+            &mut second_for_ui.borrow_mut(),
+            &mut second_options_for_ui.borrow_mut(),
+            &second_store,
+            &mut second_close_requested,
+        )
+    });
+    components::test_support::setup_egui(&mut first_harness);
+    components::test_support::setup_egui(&mut second_harness);
+    first_harness.run();
+    second_harness.run();
+
+    first_harness.get_by_label("Show log source labels").click();
+    first_harness.run();
+
+    assert!(!first.borrow().show_source_labels);
+    assert!(second.borrow().show_source_labels);
 }
 
 #[test]
@@ -123,6 +296,72 @@ fn pod_log_viewer_snapshot() {
     window.search.query = "http".to_owned();
     add_match_ranges(&mut window, false);
     snapshot_window(window, "pod_logs/pod_log_viewer_snapshot/viewer");
+}
+
+#[test]
+fn interleaved_pod_log_viewer_snapshot() {
+    let api = PodLogStreamTarget {
+        namespace: "payments".to_owned(),
+        pod_name: "api-0".to_owned(),
+        container: "server".to_owned(),
+    };
+    let worker = PodLogStreamTarget {
+        namespace: "payments".to_owned(),
+        pod_name: "worker-0".to_owned(),
+        container: "worker".to_owned(),
+    };
+    let mut window = PodLogWindowState::new(1, 1, vec![api.clone(), worker.clone()])
+        .expect("test log window has two sources");
+    window.total_lines = 3;
+    window.initial_page_loaded = true;
+    window.store_opened = true;
+    window.status = PodLogStatus::Following;
+    let page_key = LogPageKey {
+        generation: 0,
+        filter_matches: false,
+        page_start: 0,
+    };
+    window.insert_page(
+        page_key,
+        [
+            ("2026-08-08T15:22:17.143Z server ready", api.display_name()),
+            (
+                "2026-08-08T15:22:17.145Z job accepted",
+                worker.display_name(),
+            ),
+            (
+                "application-provided timestamp: 15:22:18",
+                api.display_name(),
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(line_index, (text, source))| {
+            let parsed = crate::ansi::parse_kubernetes_log_line(text);
+            LogPageRow {
+                display_row: line_index,
+                line_index,
+                timestamp: parsed.timestamp,
+                source: Some(source),
+                text: parsed.line.text,
+                style_spans: parsed.line.style_spans,
+                match_ranges: Vec::new(),
+            }
+        })
+        .collect(),
+    );
+    assert_eq!(
+        window.max_source_label_columns,
+        source_label_columns("worker-0")
+    );
+    window
+        .source_failures
+        .insert(worker, "container is waiting to start".to_owned());
+
+    snapshot_window(
+        window,
+        "pod_logs/interleaved_pod_log_viewer_snapshot/interleaved_viewer",
+    );
 }
 
 #[test]
@@ -263,6 +502,7 @@ fn pod_log_viewer_loading_placeholder_snapshot() {
 fn pod_log_viewer_renders_live_tail_rows_while_disk_page_catches_up_snapshot() {
     let mut window = log_window(&[]);
     window.total_lines = 1;
+    window.initial_page_loaded = false;
     window.backfill_lines = Some(12_345);
     window.live_rows.insert(
         0,
@@ -270,11 +510,13 @@ fn pod_log_viewer_renders_live_tail_rows_while_disk_page_catches_up_snapshot() {
             display_row: 0,
             line_index: 0,
             timestamp: None,
+            source: None,
             text: "live row arrives without a placeholder".into(),
             style_spans: Vec::new(),
             match_ranges: Vec::new(),
         },
     );
+    assert!(!initial_spool_is_pending(&window));
     snapshot_window(
         window,
         "pod_logs/pod_log_viewer_renders_live_tail_rows_while_disk_page_catches_up_snapshot/live_tail_rows_while_disk_page_catches_up",

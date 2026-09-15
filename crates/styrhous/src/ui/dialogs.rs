@@ -175,11 +175,13 @@ impl WorkerResult for ResourceScaleUpdated {
 }
 
 mod deletes;
+mod logs;
 mod scale;
 mod terminal;
 mod workloads;
 
 pub(super) use deletes::*;
+pub(super) use logs::*;
 pub(super) use scale::*;
 pub(super) use terminal::*;
 pub(super) use workloads::*;

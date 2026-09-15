@@ -88,24 +88,31 @@ pub(super) fn show_resource_action_items(
         [] => {}
         [container] => {
             if menu.action("View logs").clicked() && pending_action.is_none() {
-                *pending_action = Some(ResourceAction::ViewLogs {
-                    name: resource.name.clone(),
-                    namespace: resource.namespace.clone(),
-                    container: container.clone(),
-                });
+                let targets = log_stream_targets(resource, std::slice::from_ref(container));
+                if !targets.is_empty() {
+                    *pending_action = Some(ResourceAction::ViewLogs { targets });
+                }
             }
             menu.separator();
         }
         containers => {
             menu.submenu("View logs", |menu: &mut MoreMenu<'_>| {
+                if menu.action("All containers (interleaved)").clicked() && pending_action.is_none()
+                {
+                    let targets = log_stream_targets(resource, containers);
+                    if !targets.is_empty() {
+                        *pending_action = Some(ResourceAction::ViewLogs { targets });
+                        menu.close();
+                    }
+                }
+                menu.separator();
                 for container in containers {
                     let label = format!("{} — {}", container.name, container.kind.label());
                     if menu.action(label).clicked() && pending_action.is_none() {
-                        *pending_action = Some(ResourceAction::ViewLogs {
-                            name: resource.name.clone(),
-                            namespace: resource.namespace.clone(),
-                            container: container.clone(),
-                        });
+                        let targets = log_stream_targets(resource, std::slice::from_ref(container));
+                        if !targets.is_empty() {
+                            *pending_action = Some(ResourceAction::ViewLogs { targets });
+                        }
                     }
                 }
             });
@@ -188,6 +195,23 @@ pub(super) fn show_resource_action_items(
             finalizers: resource.finalizers().to_vec(),
         });
     }
+}
+
+pub(super) fn log_stream_targets(
+    resource: &MinimalResource,
+    containers: &[PodLogContainer],
+) -> Vec<crate::worker::PodLogStreamTarget> {
+    let Some(namespace) = resource.namespace.as_ref() else {
+        return Vec::new();
+    };
+    containers
+        .iter()
+        .map(|container| crate::worker::PodLogStreamTarget {
+            namespace: namespace.clone(),
+            pod_name: resource.name.clone(),
+            container: container.name.clone(),
+        })
+        .collect()
 }
 
 fn pod_image_presets(

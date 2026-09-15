@@ -311,6 +311,7 @@ fn keyboard_caret_waits_for_an_unloaded_target_page() {
             display_row: LOG_PAGE_SIZE,
             line_index: LOG_PAGE_SIZE,
             timestamp: None,
+            source: None,
             text: "destination".to_owned(),
             style_spans: Vec::new(),
             match_ranges: Vec::new(),

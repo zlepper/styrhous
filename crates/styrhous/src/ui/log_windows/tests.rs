@@ -1,8 +1,6 @@
 use super::*;
 use crate::log_store::{LOG_PAGE_SIZE, LogPageRow, LogStoreConfig, LogStoreResult};
-use crate::minimal_resource::PodLogContainer;
-use crate::resource_table::ContainerKind;
-use crate::worker::MockWorker;
+use crate::worker::{MockWorker, PodLogStreamTarget};
 use components::test_support::UiHarnessSnapshot;
 use egui_kittest::{Harness, kittest::Queryable};
 use std::cell::RefCell;
@@ -13,14 +11,13 @@ fn log_window(lines: &[&str]) -> PodLogWindowState {
     let mut window = PodLogWindowState::new(
         1,
         1,
-        "default".to_owned(),
-        "api-0".to_owned(),
-        PodLogContainer {
-            name: "api".to_owned(),
-            kind: ContainerKind::App,
-            image: None,
-        },
-    );
+        vec![PodLogStreamTarget {
+            namespace: "default".to_owned(),
+            pod_name: "api-0".to_owned(),
+            container: "api".to_owned(),
+        }],
+    )
+    .expect("test log window has one source");
     window.total_lines = lines.len();
     window.initial_page_loaded = true;
     window.store_opened = true;
@@ -40,6 +37,7 @@ fn log_window(lines: &[&str]) -> PodLogWindowState {
                     display_row: line_index,
                     line_index,
                     timestamp: parsed.timestamp,
+                    source: None,
                     text: parsed.line.text,
                     style_spans: parsed.line.style_spans,
                     match_ranges: Vec::new(),
@@ -68,6 +66,7 @@ fn fully_loaded_log_window(line_count: usize) -> PodLogWindowState {
                     display_row: line_index,
                     line_index,
                     timestamp: None,
+                    source: None,
                     text: format!("line {line_index}"),
                     style_spans: Vec::new(),
                     match_ranges: Vec::new(),
@@ -126,6 +125,7 @@ fn show_wide_test_scroll_area(
             ui.add(
                 egui::Label::new(log_line_layout_job(
                     0,
+                    None,
                     None,
                     wide_line,
                     &[],

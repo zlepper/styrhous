@@ -76,6 +76,106 @@ fn pod_log_windows_route_each_stream_by_its_window_id() {
 }
 
 #[test]
+fn pod_log_window_routes_all_selected_sources_through_one_worker_command() {
+    let mut state = UiState::default();
+    let mut commands = Vec::new();
+    state.request_pod_log_window(
+        7,
+        vec![
+            PodLogStreamTarget {
+                namespace: "payments".into(),
+                pod_name: "api-0".into(),
+                container: "server".into(),
+            },
+            PodLogStreamTarget {
+                namespace: "payments".into(),
+                pod_name: "worker-0".into(),
+                container: "worker".into(),
+            },
+        ],
+        &mut commands,
+    );
+
+    assert_eq!(state.log_windows.len(), 1);
+    assert!(state.log_windows[&1].has_multiple_sources());
+    assert!(state.log_windows[&1].show_source_labels);
+    let command = commands[0]
+        .as_ref()
+        .as_any()
+        .downcast_ref::<StartPodLogStream>()
+        .expect("selected sources start a Pod log stream");
+    assert_eq!(command.log_window_id, 1);
+    assert_eq!(command.targets.len(), 2);
+    assert_eq!(
+        command.targets[1].display_name(),
+        "payments/worker-0 · worker"
+    );
+}
+
+#[test]
+fn pod_log_window_requires_confirmation_above_ten_sources() {
+    let mut state = UiState::default();
+    let mut commands = Vec::new();
+    state.request_pod_log_window(
+        7,
+        (0..11)
+            .map(|index| PodLogStreamTarget {
+                namespace: "payments".into(),
+                pod_name: format!("worker-{index}"),
+                container: "worker".into(),
+            })
+            .collect(),
+        &mut commands,
+    );
+
+    assert!(commands.is_empty());
+    assert!(state.log_windows.is_empty());
+    assert_eq!(
+        state
+            .pending_log_sources
+            .as_ref()
+            .map(|pending| pending.targets.len()),
+        Some(11)
+    );
+}
+
+#[test]
+fn pod_log_source_failures_are_grouped_by_source() {
+    let mut state = UiState::default();
+    let mut commands = Vec::new();
+    let target = PodLogStreamTarget {
+        namespace: "payments".into(),
+        pod_name: "api-0".into(),
+        container: "server".into(),
+    };
+    state.request_pod_log_window(7, vec![target.clone()], &mut commands);
+    assert!(!state.log_windows[&1].show_source_labels);
+
+    PodLogSourceFailed {
+        log_window_id: 1,
+        target: target.clone(),
+        error: "follow request was forbidden".into(),
+    }
+    .apply(&mut state, &mut commands);
+    PodLogSourceFailed {
+        log_window_id: 1,
+        target,
+        error: "history request was forbidden".into(),
+    }
+    .apply(&mut state, &mut commands);
+
+    assert_eq!(state.log_windows[&1].source_failures.len(), 1);
+    assert_eq!(
+        state.log_windows[&1]
+            .source_failures
+            .values()
+            .next()
+            .expect("failure is retained"),
+        "follow request was forbidden\nhistory request was forbidden"
+    );
+}
+
+#[test]
 fn cluster_reload_ignores_resource_events_from_the_retired_cluster_key() {
     let api_resource = ApiResource {
         group: "core".into(),

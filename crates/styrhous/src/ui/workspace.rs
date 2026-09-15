@@ -1,4 +1,4 @@
-use super::resource_actions::show_resource_action_items;
+use super::resource_actions::{log_stream_targets, show_resource_action_items};
 use super::resource_owner;
 use super::resource_table_cache::{PreparedResourceTable, PreparedResourceTableRow};
 use super::state::{
@@ -57,6 +57,7 @@ struct ResourceActionAvailability {
 struct ResourceSelectionControls<'a> {
     selected_count: usize,
     actions_enabled: bool,
+    interleaved_logs_available: bool,
     action: &'a mut Option<ResourceSelectionAction>,
     namespace_selector_settings: &'a NamespaceSelectorSettings,
 }
@@ -92,6 +93,7 @@ enum NamespaceSelection {
 enum ResourceSelectionAction {
     Clear,
     Delete,
+    ViewLogs,
 }
 
 #[derive(Default)]
@@ -99,7 +101,7 @@ struct WorkspaceEffects {
     namespace_selection: Option<NamespaceSelection>,
     retry_requested: bool,
     detail_to_open: Option<ResourceDetailTarget>,
-    log_to_open: Option<PodLogTarget>,
+    log_sources_to_open: Option<LogSourcesTarget>,
     yaml_to_open: Option<YamlEditorTarget>,
     shell_request: Option<ShellRequest>,
     column_settings_to_open: Option<super::resource_table_settings::ResourceTableSettingsTarget>,
@@ -113,11 +115,9 @@ struct ResourceDetailTarget {
     uid: String,
 }
 
-struct PodLogTarget {
+struct LogSourcesTarget {
     cluster_key: i32,
-    name: String,
-    namespace: Option<String>,
-    container: crate::minimal_resource::PodLogContainer,
+    targets: Vec<crate::worker::PodLogStreamTarget>,
 }
 
 struct YamlEditorTarget {
@@ -164,14 +164,8 @@ impl WorkspaceEffects {
         if let Some(target) = self.column_settings_to_open {
             ui_state.replace_global_blade(Box::new(target), commands_to_send);
         }
-        if let Some(target) = self.log_to_open {
-            ui_state.open_pod_log_window(
-                target.cluster_key,
-                target.name,
-                target.namespace,
-                target.container,
-                commands_to_send,
-            );
+        if let Some(target) = self.log_sources_to_open {
+            ui_state.request_pod_log_window(target.cluster_key, target.targets, commands_to_send);
         }
         if let Some(target) = self.yaml_to_open {
             ui_state.open_yaml_editor(
@@ -385,6 +379,9 @@ pub(super) fn show(
                     ResourceSelectionControls {
                         selected_count: selected_resource_count,
                         actions_enabled: resource_actions_enabled,
+                        interleaved_logs_available: selected_api_resource
+                            .as_ref()
+                            .is_some_and(|resource| resource.kind == "Pod"),
                         action: &mut resource_selection_action,
                         namespace_selector_settings,
                     },
@@ -553,16 +550,10 @@ pub(super) fn show(
                                 resource_name: name,
                             }));
                         }
-                        ResourceAction::ViewLogs {
-                            name,
-                            namespace,
-                            container,
-                        } => {
-                            effects.log_to_open = Some(PodLogTarget {
+                        ResourceAction::ViewLogs { targets } => {
+                            effects.log_sources_to_open = Some(LogSourcesTarget {
                                 cluster_key: cluster.cluster_key,
-                                name,
-                                namespace,
-                                container,
+                                targets,
                             });
                         }
                         action @ (ResourceAction::Shell { .. }
@@ -615,6 +606,29 @@ pub(super) fn show(
                             if !targets.is_empty() {
                                 resources.pending_bulk_delete =
                                     Some(PendingBulkDelete::new(api_resource.clone(), targets));
+                            }
+                        }
+                        ResourceSelectionAction::ViewLogs => {
+                            let selected_uids = resources
+                                .resource_selections
+                                .get(api_resource)
+                                .cloned()
+                                .unwrap_or_default();
+                            let targets = prepared
+                                .watch_keys
+                                .iter()
+                                .filter_map(|watch_key| resources.resource_cache.get(watch_key))
+                                .flat_map(|watch| watch.resources.values())
+                                .filter(|resource| selected_uids.contains(&resource.uid))
+                                .flat_map(|resource| {
+                                    log_stream_targets(resource, &resource.log_containers)
+                                })
+                                .collect::<Vec<_>>();
+                            if !targets.is_empty() {
+                                effects.log_sources_to_open = Some(LogSourcesTarget {
+                                    cluster_key: cluster.cluster_key,
+                                    targets,
+                                });
                             }
                         }
                     }

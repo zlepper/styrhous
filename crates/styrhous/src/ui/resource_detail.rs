@@ -343,15 +343,9 @@ impl GlobalBladeEffect for ResourceDetailEffect {
                     }
                 }
             }
-            ResourceAction::ViewLogs {
-                name,
-                namespace,
-                container,
-            } => context.ui_state.open_pod_log_window(
+            ResourceAction::ViewLogs { targets } => context.ui_state.request_pod_log_window(
                 cluster_key,
-                name,
-                namespace,
-                container,
+                targets,
                 navigation.commands_to_send(),
             ),
             action @ (ResourceAction::Shell { .. }

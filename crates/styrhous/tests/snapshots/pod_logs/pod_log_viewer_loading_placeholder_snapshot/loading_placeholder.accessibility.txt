@@ -36,16 +36,18 @@ Window state=[focused] rect=<none>
                       GenericContainer rect=<none>
                         Button name="Next displayed line" rect=(x=1222.0 y=21.0 width=28.0 height=28.0 center_x=1236.0 center_y=35.0)
                       GenericContainer rect=<none>
-                        CheckBox name="Filter to matching lines" state=[toggled=Mixed] rect=(x=1256.0 y=21.0 width=28.0 height=28.0 center_x=1270.0 center_y=35.0)
+                        CheckBox name="Filter to matching lines" state=[toggled=False] rect=(x=1256.0 y=21.0 width=28.0 height=28.0 center_x=1270.0 center_y=35.0)
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        CheckBox name="Show log line numbers" state=[toggled=Mixed] rect=(x=1008.0 y=21.0 width=28.0 height=28.0 center_x=1022.0 center_y=35.0)
+                        CheckBox name="Show log line numbers" state=[toggled=True] rect=(x=976.0 y=21.0 width=28.0 height=28.0 center_x=990.0 center_y=35.0)
                       GenericContainer rect=<none>
-                        CheckBox name="Show Kubernetes log timestamps" state=[toggled=Mixed] rect=(x=1042.0 y=21.0 width=28.0 height=28.0 center_x=1056.0 center_y=35.0)
+                        CheckBox name="Show Kubernetes log timestamps" state=[toggled=False] rect=(x=1010.0 y=21.0 width=28.0 height=28.0 center_x=1024.0 center_y=35.0)
                       GenericContainer rect=<none>
-                        CheckBox name="Render ANSI styling" state=[toggled=Mixed] rect=(x=1076.0 y=21.0 width=28.0 height=28.0 center_x=1090.0 center_y=35.0)
+                        CheckBox name="Render ANSI styling" state=[toggled=True] rect=(x=1044.0 y=21.0 width=28.0 height=28.0 center_x=1058.0 center_y=35.0)
+                      GenericContainer rect=<none>
+                        CheckBox name="Show log source labels" state=[toggled=False] rect=(x=1078.0 y=21.0 width=28.0 height=28.0 center_x=1092.0 center_y=35.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>

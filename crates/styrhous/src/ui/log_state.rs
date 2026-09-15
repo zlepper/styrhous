@@ -1,5 +1,5 @@
 use crate::log_store::{LOG_PAGE_SIZE, LogPageRow, LogStoreResult};
-use crate::minimal_resource::PodLogContainer;
+use crate::worker::PodLogStreamTarget;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::time::Instant;
@@ -21,13 +21,30 @@ impl Default for LogDisplayOptions {
     }
 }
 
+pub(super) fn source_label_columns(source: &str) -> usize {
+    source.chars().count() + 4
+}
+
+pub(super) fn source_label_prefix(source: Option<&str>, source_columns: usize) -> String {
+    if source_columns == 0 {
+        return String::new();
+    }
+    let mut prefix = source.map_or_else(String::new, |source| format!("[{source}]  "));
+    prefix.push_str(&" ".repeat(source_columns.saturating_sub(prefix.chars().count())));
+    prefix
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct PodLogWindowState {
     pub(super) id: u64,
     pub(super) cluster_key: i32,
-    pub(super) namespace: String,
-    pub(super) pod_name: String,
-    pub(super) container: PodLogContainer,
+    /// All Pod-container streams represented in this window.
+    pub(super) targets: Vec<PodLogStreamTarget>,
+    pub(super) show_source_labels: bool,
+    /// The compact source labels keyed by the full, stable source identity stored with each row.
+    pub(super) source_labels: HashMap<String, String>,
+    pub(super) max_source_label_columns: usize,
+    pub(super) source_failures: HashMap<PodLogStreamTarget, String>,
     pub(super) total_lines: usize,
     /// Older records written by the background history request but not yet
     /// merged into the logical log stream.
@@ -35,7 +52,6 @@ pub(super) struct PodLogWindowState {
     /// Recent tail rows sent with the store notification. These bridge the
     /// small gap between accepting a live record and serving its disk page.
     pub(super) live_rows: BTreeMap<usize, LogPageRow>,
-    pub(super) following_bottom: bool,
     pub(super) pages: HashMap<LogPageKey, LogPage>,
     pub(super) page_order: VecDeque<LogPageKey>,
     pub(super) page_cache_bytes: usize,
@@ -62,6 +78,12 @@ pub(super) struct PodLogWindowState {
     /// Make the next rendered caret visible in the horizontal scroll viewport.
     pub(super) ensure_caret_visible: bool,
     pub(super) copied_text: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct PendingLogSources {
+    pub(super) cluster_key: i32,
+    pub(super) targets: Vec<PodLogStreamTarget>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -183,23 +205,57 @@ impl LogTextSelection {
 impl PodLogWindowState {
     pub(super) const DEFAULT_PAGE_CACHE_LIMIT: usize = 128 * 1024 * 1024;
 
-    pub(super) fn new(
-        id: u64,
-        cluster_key: i32,
-        namespace: String,
-        pod_name: String,
-        container: PodLogContainer,
-    ) -> Self {
-        Self {
+    pub(super) fn new(id: u64, cluster_key: i32, targets: Vec<PodLogStreamTarget>) -> Option<Self> {
+        let show_source_labels = targets.len() > 1;
+        let all_in_same_namespace = targets.first().is_some_and(|first| {
+            targets
+                .iter()
+                .all(|target| target.namespace == first.namespace)
+        });
+        let target_count_by_pod = targets.iter().fold(HashMap::new(), |mut counts, target| {
+            *counts
+                .entry((&target.namespace, &target.pod_name))
+                .or_insert(0_usize) += 1;
+            counts
+        });
+        let source_labels = targets
+            .iter()
+            .map(|target| {
+                let source = target.display_name();
+                let pod_name = if all_in_same_namespace {
+                    target.pod_name.clone()
+                } else {
+                    format!("{}/{}", target.namespace, target.pod_name)
+                };
+                let label = if target_count_by_pod
+                    .get(&(&target.namespace, &target.pod_name))
+                    .copied()
+                    .expect("every log target has a pod count")
+                    == 1
+                {
+                    pod_name
+                } else {
+                    format!("{pod_name} · {}", target.container)
+                };
+                (source, label)
+            })
+            .collect::<HashMap<_, _>>();
+        let max_source_label_columns = source_labels
+            .values()
+            .map(|label| source_label_columns(label))
+            .max()
+            .unwrap_or_default();
+        (!targets.is_empty()).then(|| Self {
             id,
             cluster_key,
-            namespace,
-            pod_name,
-            container,
+            targets,
+            show_source_labels,
+            source_labels,
+            max_source_label_columns,
+            source_failures: HashMap::new(),
             total_lines: 0,
             backfill_lines: None,
             live_rows: BTreeMap::new(),
-            following_bottom: true,
             pages: HashMap::new(),
             page_order: VecDeque::new(),
             page_cache_bytes: 0,
@@ -219,7 +275,38 @@ impl PodLogWindowState {
             pending_caret: None,
             ensure_caret_visible: false,
             copied_text: None,
+        })
+    }
+
+    pub(super) fn has_multiple_sources(&self) -> bool {
+        self.targets.len() > 1
+    }
+
+    pub(super) fn source_prefix_columns(&self) -> usize {
+        if self.show_source_labels {
+            self.max_source_label_columns
+        } else {
+            0
         }
+    }
+
+    pub(super) fn source_prefix(&self, source: Option<&str>) -> String {
+        source_label_prefix(self.source_label(source), self.source_prefix_columns())
+    }
+
+    pub(super) fn source_label<'source>(
+        &'source self,
+        source: Option<&'source str>,
+    ) -> Option<&'source str> {
+        source.map(|source| {
+            self.source_labels
+                .get(source)
+                .map_or(source, String::as_str)
+        })
+    }
+
+    pub(super) fn filter_is_active(&self) -> bool {
+        self.search.filter_matches && !self.search.query.is_empty()
     }
 
     pub(super) fn clear_pages(&mut self) {
@@ -258,6 +345,7 @@ impl PodLogWindowState {
             .iter()
             .map(|row| {
                 row.text.len()
+                    + row.source.as_ref().map_or(0, String::len)
                     + row.style_spans.len() * std::mem::size_of::<crate::ansi::AnsiStyleSpan>()
                     + row.match_ranges.len() * 2 * std::mem::size_of::<usize>()
             })
@@ -306,7 +394,13 @@ pub(super) fn apply_store_result(
                 if let Some(backfill_lines) = backfill_lines {
                     window.backfill_lines = Some(backfill_lines);
                 }
-                if window.following_bottom && !window.search.filter_matches {
+                if let Some((generation, match_count)) = completed_search
+                    && window.search.generation == generation
+                {
+                    window.search.match_count = match_count;
+                    window.clear_pages();
+                }
+                if !window.filter_is_active() {
                     for row in appended_rows {
                         window.live_rows.insert(row.display_row, row);
                     }
@@ -318,12 +412,6 @@ pub(super) fn apply_store_result(
                             .0;
                         window.live_rows.remove(&oldest);
                     }
-                }
-                if let Some((generation, match_count)) = completed_search
-                    && window.search.generation == generation
-                {
-                    window.search.match_count = match_count;
-                    window.clear_pages();
                 }
             }
         }

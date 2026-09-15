@@ -32,23 +32,65 @@ pub(super) fn show_log_window_with_scroll_state(
                         .color(gray::_900),
                 );
                 ui.add_space(spacing::LG);
-                ui.label(
-                    egui::RichText::new(&window.pod_name)
-                        .font(typography::section_heading())
-                        .color(gray::_900),
-                );
-                ui.add_space(spacing::MD);
-                ui.label(
-                    egui::RichText::new(format!("Container: {}", window.container.name))
-                        .font(typography::body())
-                        .color(gray::_600),
-                );
+                if window.has_multiple_sources() {
+                    ui.label(
+                        egui::RichText::new(format!("{} sources", window.targets.len()))
+                            .font(typography::section_heading())
+                            .color(gray::_900),
+                    );
+                    ui.add_space(spacing::MD);
+                    ui.label(
+                        egui::RichText::new("Interleaved Pod logs")
+                            .font(typography::body())
+                            .color(gray::_600),
+                    );
+                } else {
+                    let target = window
+                        .targets
+                        .first()
+                        .expect("log windows always contain one source");
+                    ui.label(
+                        egui::RichText::new(&target.pod_name)
+                            .font(typography::section_heading())
+                            .color(gray::_900),
+                    );
+                    ui.add_space(spacing::MD);
+                    ui.label(
+                        egui::RichText::new(format!("Container: {}", target.container))
+                            .font(typography::body())
+                            .color(gray::_600),
+                    );
+                }
                 ui.add_space(spacing::MD);
                 ui.label(
                     egui::RichText::new("●")
                         .font(typography::body())
                         .color(status_color(&window.status)),
                 );
+                if !window.source_failures.is_empty() {
+                    ui.add_space(spacing::MD);
+                    let mut failures = window
+                        .source_failures
+                        .iter()
+                        .map(|(target, error)| format!("{}: {error}", target.display_name()))
+                        .collect::<Vec<_>>();
+                    failures.sort();
+                    let failures = failures.join("\n");
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "{} source{} unavailable",
+                            window.source_failures.len(),
+                            if window.source_failures.len() == 1 {
+                                ""
+                            } else {
+                                "s"
+                            }
+                        ))
+                        .font(typography::body())
+                        .color(status::WARNING),
+                    )
+                    .on_hover_text(failures);
+                }
                 ui.label(
                     egui::RichText::new(status_label(window))
                         .font(typography::body())
@@ -67,6 +109,10 @@ pub(super) fn show_log_window_with_scroll_state(
                 .inner_margin(egui::Margin::same(spacing::LG as i8)),
         )
         .show(ui, |ui| {
+            // Egui also applies `bar_outer_margin` while it paints floating
+            // tracks. Moving those tracks keeps the existing content bounds,
+            // virtual-scroll viewport, and panel gutter intact.
+            ui.spacing_mut().scroll.bar_outer_margin = -spacing::LG;
             let pixels_per_point = ui.pixels_per_point();
             let font_row_height =
                 ui.fonts_mut(|fonts| fonts.row_height(&egui::FontId::monospace(LOG_FONT_SIZE)));
@@ -234,9 +280,13 @@ pub(super) fn show_log_window_with_scroll_state(
                             }
                         });
                     if let Some((row, max_text_columns)) = cached_row {
+                        let source_prefix = window.source_prefix(row.source.as_deref());
+                        let visible_source_prefix =
+                            (!source_prefix.is_empty()).then_some(source_prefix.as_str());
                         let prefix = log_line_prefix(
                             row.line_index,
                             row.timestamp.as_deref(),
+                            visible_source_prefix,
                             *display_options,
                         );
                         let prefix_width = prefix.chars().count() as f32 * character_width;
@@ -266,6 +316,7 @@ pub(super) fn show_log_window_with_scroll_state(
                                         egui::Label::new(log_line_layout_job(
                                             row.line_index,
                                             row.timestamp.as_deref(),
+                                            visible_source_prefix,
                                             &row.text,
                                             &row.style_spans,
                                             &highlight_ranges,
@@ -414,8 +465,6 @@ pub(super) fn show_log_window_with_scroll_state(
                     }
                 }
             });
-            window.following_bottom = output.state.offset.y + output.inner_rect.height()
-                >= output.content_size.y - row_step;
             if let Some(row) = requested_scroll_row {
                 if display_row_is_visible(row, row_step, &output) {
                     window.search.scroll_to_display_row = None;

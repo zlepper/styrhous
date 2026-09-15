@@ -98,6 +98,7 @@ fn layout_highlights_only_matching_segments() {
     let job = log_line_layout_job(
         4,
         None,
+        None,
         "http http",
         &[],
         &[(0, 4), (5, 9)],
@@ -117,6 +118,7 @@ fn layout_preserves_ansi_style_while_highlighting_matches() {
         .underline();
     let job = log_line_layout_job(
         0,
+        None,
         None,
         "error",
         &[AnsiStyleSpan {

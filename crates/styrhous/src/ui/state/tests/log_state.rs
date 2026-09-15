@@ -53,7 +53,7 @@ fn ignores_stale_pages_and_evicts_pages_using_the_injected_cache_limit() {
 }
 
 #[test]
-fn live_tail_rows_bridge_disk_pages_only_while_following_bottom() {
+fn live_tail_rows_bridge_disk_pages_while_the_viewer_catches_up() {
     let mut state = UiState::default();
     let mut commands = Vec::new();
     state.open_pod_log_window(
@@ -72,6 +72,7 @@ fn live_tail_rows_bridge_disk_pages_only_while_following_bottom() {
         display_row,
         line_index: display_row,
         timestamp: None,
+        source: None,
         text: text.to_owned(),
         style_spans: Vec::new(),
         match_ranges: Vec::new(),
@@ -87,7 +88,6 @@ fn live_tail_rows_bridge_disk_pages_only_while_following_bottom() {
     assert_eq!(window.backfill_lines, Some(12_345));
     assert_eq!(window.live_rows[&0].text, "live now");
 
-    state.log_windows.get_mut(&1).unwrap().following_bottom = false;
     state.apply_log_store_result(LogStoreResult::Updated {
         window_id: 1,
         total_lines: 2,
@@ -97,7 +97,7 @@ fn live_tail_rows_bridge_disk_pages_only_while_following_bottom() {
     });
     let window = &state.log_windows[&1];
     assert_eq!(window.total_lines, 2);
-    assert!(!window.live_rows.contains_key(&1));
+    assert_eq!(window.live_rows[&1].text, "wait for disk");
 
     state.apply_log_store_result(LogStoreResult::PageLoaded {
         window_id: 1,
@@ -108,6 +108,48 @@ fn live_tail_rows_bridge_disk_pages_only_while_following_bottom() {
         rows: vec![tail_row(0, "live now"), tail_row(1, "wait for disk")],
     });
     assert!(state.log_windows[&1].live_rows.is_empty());
+}
+
+#[test]
+fn live_tail_rows_survive_a_completed_search_with_an_empty_filter_query() {
+    let mut state = UiState::default();
+    let mut commands = Vec::new();
+    state.open_pod_log_window(
+        7,
+        "api-pod".into(),
+        Some("default".into()),
+        PodLogContainer {
+            name: "api".into(),
+            kind: ContainerKind::App,
+            image: None,
+        },
+        &mut commands,
+    );
+    let window = state.log_windows.get_mut(&1).expect("log window exists");
+    window.search.filter_matches = true;
+    window.insert_page(
+        LogPageKey {
+            generation: 0,
+            filter_matches: false,
+            page_start: 0,
+        },
+        vec![test_log_row(0, "cached")],
+    );
+
+    state.apply_log_store_result(LogStoreResult::Updated {
+        window_id: 1,
+        total_lines: 2,
+        completed_search: Some((0, 0)),
+        appended_rows: vec![test_log_row(1, "live now")],
+        backfill_lines: None,
+    });
+
+    let window = &state.log_windows[&1];
+    assert!(
+        window.pages.is_empty(),
+        "completed search invalidates cached pages"
+    );
+    assert_eq!(window.live_rows[&1].text, "live now");
 }
 
 #[test]

@@ -1,4 +1,6 @@
 use super::*;
+use crate::minimal_resource::PodLogContainer;
+use crate::resource_table::ContainerKind;
 
 #[test]
 fn pod_log_viewer_rebase_keeps_scrolled_wide_text_in_place() {
@@ -132,6 +134,7 @@ fn pod_log_viewer_rebase_keeps_scrolled_wide_text_in_place() {
                         display_row,
                         line_index: display_row,
                         timestamp: None,
+                        source: None,
                         text: live_lines[live_index].clone(),
                         style_spans: Vec::new(),
                         match_ranges: Vec::new(),
@@ -179,6 +182,7 @@ fn pod_log_viewer_rebase_keeps_scrolled_wide_text_in_place() {
                         display_row,
                         line_index: display_row,
                         timestamp: None,
+                        source: None,
                         text,
                         style_spans: Vec::new(),
                         match_ranges: Vec::new(),

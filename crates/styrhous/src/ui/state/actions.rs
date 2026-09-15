@@ -1,4 +1,5 @@
 use super::*;
+use crate::worker::PodLogStreamTarget;
 
 #[derive(Debug)]
 
@@ -39,9 +40,7 @@ pub(crate) enum ResourceAction {
         updated_values: BTreeMap<String, String>,
     },
     ViewLogs {
-        name: String,
-        namespace: Option<String>,
-        container: PodLogContainer,
+        targets: Vec<PodLogStreamTarget>,
     },
     Shell {
         name: String,
