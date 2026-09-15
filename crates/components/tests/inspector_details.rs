@@ -301,3 +301,150 @@ fn inspector_details_tables_wrap_at_narrow_width() {
     harness.run();
     harness.ui_harness("inspector_details/narrow_table_layout");
 }
+
+const PULLED_MESSAGE: &str = "Successfully pulled image registry.example.com/docker.io/library/rabbitmq:4.3.2-management. Image size: 118195644 bytes.";
+const SCHEDULING_MESSAGE: &str = "0/29 nodes are available: 2 node(s) didn't match pod topology spread constraints, 2 node(s) had untolerated taint(s), 25 node(s) didn't match Pod's node affinity/selector.\nPreemption: no suitable nodes found.";
+
+fn wrapping_event_rows() -> Vec<DetailTableRow<'static>> {
+    [
+        (
+            "Normal",
+            "Started",
+            "Container started",
+            "kubelet",
+            "2s ago",
+        ),
+        ("Normal", "Pulled", PULLED_MESSAGE, "kubelet", "3s ago"),
+        (
+            "Warning",
+            "FailedScheduling",
+            SCHEDULING_MESSAGE,
+            "attachdetach-controller",
+            "1m ago",
+        ),
+    ]
+    .into_iter()
+    .map(|(kind, reason, message, source, time)| {
+        DetailTableRow::new([
+            DetailTableCell::new(DetailValue::Status {
+                text: kind.into(),
+                tone: if kind == "Warning" {
+                    DetailTone::Warning
+                } else {
+                    DetailTone::Success
+                },
+            }),
+            DetailTableCell::new(reason).copyable(),
+            DetailTableCell::new(message).copyable(),
+            DetailTableCell::new(source).copyable(),
+            DetailTableCell::new(time),
+        ])
+    })
+    .collect()
+}
+
+fn assert_event_table_layout(width: f32) {
+    let mut harness = Harness::new_ui_state(
+        move |ui, state| {
+            let table = ui.allocate_ui_with_layout(
+                egui::vec2(width, 0.0),
+                egui::Layout::top_down(egui::Align::LEFT),
+                |ui| InspectorDetails::show_table(ui, &table_columns(), &wrapping_event_rows()),
+            );
+            *state = (table.response.rect, table.inner.copied);
+        },
+        (egui::Rect::NOTHING, Vec::<String>::new()),
+    );
+    setup_egui(&mut harness);
+    harness.run();
+
+    let table = harness.state().0;
+    assert!(
+        table.width() <= width + 1.0,
+        "table grew beyond its allocated width: {table:?}, allocated {width}"
+    );
+    assert_eq!(
+        harness.get_all_by_label("Copy Source").count(),
+        3,
+        "each event must have its own source copy control, even with repeated source values"
+    );
+    for (column, values) in [
+        ("Reason", ["Started", "Pulled", "FailedScheduling"]),
+        (
+            "Message",
+            ["Container started", PULLED_MESSAGE, SCHEDULING_MESSAGE],
+        ),
+        ("Source", ["kubelet", "kubelet", "attachdetach-controller"]),
+        ("Time", ["2s ago", "3s ago", "1m ago"]),
+    ] {
+        let header = harness.get_by_label(column).rect();
+        let right = match column {
+            "Reason" => harness.get_by_label("Message").rect().left(),
+            "Message" => harness.get_by_label("Source").rect().left(),
+            "Source" => harness.get_by_label("Time").rect().left(),
+            _ => table.right(),
+        };
+        for value in values {
+            for node in harness.get_all_by_label(value) {
+                let cell = node.rect();
+                assert!(
+                    (cell.left() - header.left()).abs() <= 1.0,
+                    "{column}: {cell:?} vs {header:?}"
+                );
+                assert!(
+                    cell.right() <= right + 1.0,
+                    "{column} text exceeds its cell"
+                );
+            }
+        }
+    }
+    for (column, next_column) in [
+        ("Reason", "Message"),
+        ("Message", "Source"),
+        ("Source", "Time"),
+    ] {
+        let right = harness.get_by_label(next_column).rect().left();
+        for copy in harness.get_all_by_label(&format!("Copy {column}")) {
+            assert!(
+                copy.rect().right() <= right,
+                "{column} copy control exceeds its cell"
+            );
+        }
+    }
+    assert!(
+        harness.get_by_label(PULLED_MESSAGE).rect().height()
+            > harness.get_by_label("Container started").rect().height()
+    );
+    harness
+        .get_all_by_label("Copy Message")
+        .nth(1)
+        .unwrap()
+        .click();
+    harness.step();
+    assert_eq!(harness.state().1, [PULLED_MESSAGE]);
+}
+
+#[test]
+fn event_table_keeps_columns_aligned_and_width_bounded() {
+    assert_event_table_layout(660.0);
+}
+
+#[test]
+fn event_table_keeps_narrow_columns_aligned_and_width_bounded() {
+    assert_event_table_layout(280.0);
+}
+
+#[test]
+fn event_table_wraps_messages_without_moving_columns_snapshot() {
+    let mut harness = Harness::new_ui(|ui| {
+        ui.painter().rect_filled(ui.max_rect(), 0.0, WHITE);
+        WorkspaceCard::new().show(ui, |ui| {
+            ui.heading("Events");
+            InspectorDetails::show_table(ui, &table_columns(), &wrapping_event_rows());
+        });
+    });
+    setup_egui(&mut harness);
+    harness.set_size(egui::vec2(710.0, 480.0));
+    harness.run();
+    harness.ui_harness("inspector_details/wrapped_events");
+}

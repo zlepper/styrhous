@@ -288,7 +288,15 @@ impl InspectorDetails {
         if columns.is_empty() {
             return response;
         }
-        show_table_row(ui, columns, |ui, index| {
+        // Resolve geometry before any row can expand the parent layout.
+        let gaps = spacing::SM * columns.len().saturating_sub(1) as f32;
+        let available = (ui.available_width() - gaps).max(0.0);
+        let total_weight: f32 = columns.iter().map(|column| column.weight).sum();
+        let widths: Vec<f32> = columns
+            .iter()
+            .map(|column| available * column.weight / total_weight)
+            .collect();
+        show_table_row(ui, &widths, |ui, index| {
             ui.label(
                 RichText::new(columns[index].label.as_ref())
                     .font(typography::metadata())
@@ -299,7 +307,7 @@ impl InspectorDetails {
         ui.separator();
         for row in rows {
             ui.add_space(spacing::SM);
-            show_table_row(ui, columns, |ui, index| {
+            show_table_row(ui, &widths, |ui, index| {
                 if let Some(cell) = row.cells.get(index) {
                     let label = columns[index].label.as_ref();
                     show_value(

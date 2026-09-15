@@ -1,0 +1,119 @@
+viewport: width=710.0 height=480.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Label value="Events" rect=(x=21.0 y=21.0 width=63.2 height=24.0 center_x=52.6 center_y=33.0)
+            TextRun value="Events" rect=(x=21.0 y=21.0 width=63.2 height=24.0 center_x=52.6 center_y=33.0)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Type" rect=(x=21.0 y=48.0 width=28.1 height=15.0 center_x=35.0 center_y=55.5)
+                  TextRun value="Type" rect=(x=21.0 y=48.0 width=28.1 height=15.0 center_x=35.0 center_y=55.5)
+              GenericContainer rect=<none>
+                Label value="Reason" rect=(x=135.0 y=48.0 width=42.0 height=15.0 center_x=156.0 center_y=55.5)
+                  TextRun value="Reason" rect=(x=135.0 y=48.0 width=42.0 height=15.0 center_x=156.0 center_y=55.5)
+              GenericContainer rect=<none>
+                Label value="Message" rect=(x=249.0 y=48.0 width=51.6 height=15.0 center_x=274.8 center_y=55.5)
+                  TextRun value="Message" rect=(x=249.0 y=48.0 width=51.6 height=15.0 center_x=274.8 center_y=55.5)
+              GenericContainer rect=<none>
+                Label value="Source" rect=(x=469.0 y=48.0 width=40.2 height=15.0 center_x=489.1 center_y=55.5)
+                  TextRun value="Source" rect=(x=469.0 y=48.0 width=40.2 height=15.0 center_x=489.1 center_y=55.5)
+              GenericContainer rect=<none>
+                Label value="Time" rect=(x=583.0 y=48.0 width=28.2 height=15.0 center_x=597.1 center_y=55.5)
+                  TextRun value="Time" rect=(x=583.0 y=48.0 width=28.2 height=15.0 center_x=597.1 center_y=55.5)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Label value="Normal" rect=(x=41.0 y=91.0 width=41.1 height=15.0 center_x=61.5 center_y=98.5)
+                    TextRun value="Normal" rect=(x=41.0 y=91.0 width=41.1 height=15.0 center_x=61.5 center_y=98.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="Started" rect=(x=135.0 y=91.0 width=41.3 height=15.0 center_x=155.6 center_y=98.5)
+                      TextRun value="Started" rect=(x=135.0 y=91.0 width=41.3 height=15.0 center_x=155.6 center_y=98.5)
+                  Button name="Copy Reason" rect=(x=184.3 y=91.3 width=14.0 height=14.0 center_x=191.3 center_y=98.3)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="Container started" rect=(x=249.0 y=91.0 width=98.6 height=15.0 center_x=298.3 center_y=98.5)
+                      TextRun value="Container started" rect=(x=249.0 y=91.0 width=98.6 height=15.0 center_x=298.3 center_y=98.5)
+                  Button name="Copy Message" rect=(x=355.6 y=91.3 width=14.0 height=14.0 center_x=362.6 center_y=98.3)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="kubelet" rect=(x=469.0 y=91.0 width=41.8 height=15.0 center_x=489.9 center_y=98.5)
+                      TextRun value="kubelet" rect=(x=469.0 y=91.0 width=41.8 height=15.0 center_x=489.9 center_y=98.5)
+                  Button name="Copy Source" rect=(x=518.8 y=91.3 width=14.0 height=14.0 center_x=525.8 center_y=98.3)
+              GenericContainer rect=<none>
+                Label value="2s ago" rect=(x=583.0 y=91.0 width=38.3 height=15.0 center_x=602.2 center_y=98.5)
+                  TextRun value="2s ago" rect=(x=583.0 y=91.0 width=38.3 height=15.0 center_x=602.2 center_y=98.5)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Label value="Normal" rect=(x=41.0 y=134.0 width=41.1 height=15.0 center_x=61.5 center_y=141.5)
+                    TextRun value="Normal" rect=(x=41.0 y=134.0 width=41.1 height=15.0 center_x=61.5 center_y=141.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="Pulled" rect=(x=135.0 y=134.0 width=34.9 height=15.0 center_x=152.5 center_y=141.5)
+                      TextRun value="Pulled" rect=(x=135.0 y=134.0 width=34.9 height=15.0 center_x=152.5 center_y=141.5)
+                  Button name="Copy Reason" rect=(x=177.9 y=134.3 width=14.0 height=14.0 center_x=184.9 center_y=141.3)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="Successfully pulled image registry.example.com/docker.io/library/rabbitmq:4.3.2-management. Image size: 118195644 bytes." rect=(x=249.0 y=134.0 width=183.3 height=75.0 center_x=340.7 center_y=171.5)
+                      TextRun value="Successfully pulled image " rect=(x=249.0 y=134.0 width=151.4 height=15.0 center_x=324.7 center_y=141.5)
+                      TextRun value="registry.example.com/docker.io/" rect=(x=249.0 y=149.0 width=183.3 height=15.0 center_x=340.7 center_y=156.5)
+                      TextRun value="library/rabbitmq:4.3.2-" rect=(x=249.0 y=164.0 width=127.5 height=15.0 center_x=312.8 center_y=171.5)
+                      TextRun value="management. Image size: " rect=(x=249.0 y=179.0 width=149.4 height=15.0 center_x=323.7 center_y=186.5)
+                      TextRun value="118195644 bytes." rect=(x=249.0 y=194.0 width=97.5 height=15.0 center_x=297.7 center_y=201.5)
+                  Button name="Copy Message" rect=(x=440.3 y=134.3 width=14.0 height=14.0 center_x=447.3 center_y=141.3)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="kubelet" rect=(x=469.0 y=134.0 width=41.8 height=15.0 center_x=489.9 center_y=141.5)
+                      TextRun value="kubelet" rect=(x=469.0 y=134.0 width=41.8 height=15.0 center_x=489.9 center_y=141.5)
+                  Button name="Copy Source" rect=(x=518.8 y=134.3 width=14.0 height=14.0 center_x=525.8 center_y=141.3)
+              GenericContainer rect=<none>
+                Label value="3s ago" rect=(x=583.0 y=134.0 width=38.4 height=15.0 center_x=602.2 center_y=141.5)
+                  TextRun value="3s ago" rect=(x=583.0 y=134.0 width=38.4 height=15.0 center_x=602.2 center_y=141.5)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Label value="Warning" rect=(x=41.0 y=237.0 width=47.1 height=15.0 center_x=64.5 center_y=244.5)
+                    TextRun value="Warning" rect=(x=41.0 y=237.0 width=47.1 height=15.0 center_x=64.5 center_y=244.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="FailedScheduling" rect=(x=135.0 y=237.0 width=81.9 height=30.0 center_x=176.0 center_y=252.0)
+                      TextRun value="FailedScheduli" rect=(x=135.0 y=237.0 width=81.9 height=15.0 center_x=176.0 center_y=244.5)
+                      TextRun value="ng" rect=(x=135.0 y=252.0 width=14.4 height=15.0 center_x=142.2 center_y=259.5)
+                  Button name="Copy Reason" rect=(x=224.9 y=237.3 width=14.0 height=14.0 center_x=231.9 center_y=244.3)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="0/29 nodes are available: 2 node(s) didn't match pod topology spread constraints, 2 node(s) had untolerated taint(s), 25 node(s) didn't match Pod's node affinity/selector.\nPreemption: no suitable nodes found." rect=(x=249.0 y=237.0 width=186.4 height=120.0 center_x=342.2 center_y=297.0)
+                      TextRun value="0/29 nodes are available: 2 " rect=(x=249.0 y=237.0 width=156.4 height=15.0 center_x=327.2 center_y=244.5)
+                      TextRun value="node(s) didn't match pod " rect=(x=249.0 y=252.0 width=146.4 height=15.0 center_x=322.2 center_y=259.5)
+                      TextRun value="topology spread constraints, 2 " rect=(x=249.0 y=267.0 width=176.4 height=15.0 center_x=337.2 center_y=274.5)
+                      TextRun value="node(s) had untolerated taint(s), " rect=(x=249.0 y=282.0 width=186.4 height=15.0 center_x=342.2 center_y=289.5)
+                      TextRun value="25 node(s) didn't match Pod's " rect=(x=249.0 y=297.0 width=174.4 height=15.0 center_x=336.2 center_y=304.5)
+                      TextRun value="node affinity/selector.\n" rect=(x=249.0 y=312.0 width=122.5 height=15.0 center_x=310.2 center_y=319.5)
+                      TextRun value="Preemption: no suitable nodes " rect=(x=249.0 y=327.0 width=175.4 height=15.0 center_x=336.7 center_y=334.5)
+                      TextRun value="found." rect=(x=249.0 y=342.0 width=36.5 height=15.0 center_x=267.2 center_y=349.5)
+                  Button name="Copy Message" rect=(x=443.4 y=237.3 width=14.0 height=14.0 center_x=450.4 center_y=244.3)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="attachdetach-controller" rect=(x=469.0 y=237.0 width=79.5 height=30.0 center_x=508.8 center_y=252.0)
+                      TextRun value="attachdetach-" rect=(x=469.0 y=237.0 width=79.5 height=15.0 center_x=508.8 center_y=244.5)
+                      TextRun value="controller" rect=(x=469.0 y=252.0 width=53.5 height=15.0 center_x=495.8 center_y=259.5)
+                  Button name="Copy Source" rect=(x=556.5 y=237.3 width=14.0 height=14.0 center_x=563.5 center_y=244.3)
+              GenericContainer rect=<none>
+                Label value="1m ago" rect=(x=583.0 y=237.0 width=40.1 height=15.0 center_x=603.0 center_y=244.5)
+                  TextRun value="1m ago" rect=(x=583.0 y=237.0 width=40.1 height=15.0 center_x=603.0 center_y=244.5)

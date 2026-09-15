@@ -243,26 +243,23 @@ pub(super) fn tone_color(tone: DetailTone) -> egui::Color32 {
 
 pub(super) fn show_table_row(
     ui: &mut Ui,
-    columns: &[DetailColumn<'_>],
+    widths: &[f32],
     mut show_cell: impl FnMut(&mut Ui, usize),
 ) {
-    let gap_width = spacing::SM * (columns.len().saturating_sub(1)) as f32;
-    let total_weight: f32 = columns.iter().map(|column| column.weight).sum();
-    let available = (ui.available_width() - gap_width).max(0.0);
-    ui.horizontal_top(|ui| {
-        for (index, column) in columns.iter().enumerate() {
-            let width = available * column.weight / total_weight;
-            ui.allocate_ui_with_layout(
-                egui::vec2(width, 0.0),
-                Layout::top_down(Align::LEFT),
-                |ui| {
-                    ui.set_min_width(width);
-                    show_cell(ui, index);
-                },
-            );
-            if index + 1 != columns.len() {
-                ui.add_space(spacing::SM);
+    // Repeated values (for example, kubelet in every event) still need distinct copy IDs.
+    ui.push_id(ui.next_auto_id(), |ui| {
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = spacing::SM;
+            for (index, &width) in widths.iter().enumerate() {
+                ui.allocate_ui_with_layout(
+                    egui::vec2(width, 0.0),
+                    Layout::top_down(Align::LEFT),
+                    |ui| {
+                        ui.set_min_width(width);
+                        show_cell(ui, index);
+                    },
+                );
             }
-        }
+        });
     });
 }
