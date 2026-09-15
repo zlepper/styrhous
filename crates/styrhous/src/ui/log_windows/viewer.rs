@@ -263,33 +263,28 @@ pub(super) fn show_log_window_with_scroll_state(
                         .and_then(|page| {
                             page.rows
                                 .get(row_offset)
-                                .map(|row| (row, page.max_text_columns, page.max_source_columns))
+                                .map(|row| (row, page.max_text_columns))
                         })
                         .or_else(|| {
                             if !filter_is_active(window) {
-                                window.live_rows.get(&display_row).map(|row| {
-                                    (
-                                        row,
-                                        row.text.chars().count(),
-                                        source_label_columns(
-                                            row.source.as_deref(),
-                                            window.show_source_labels,
-                                        ),
-                                    )
-                                })
+                                window
+                                    .live_rows
+                                    .get(&display_row)
+                                    .map(|row| (row, row.text.chars().count()))
                             } else {
                                 None
                             }
                         });
-                    if let Some((row, max_text_columns, max_source_columns)) = cached_row {
-                        let visible_source = window
-                            .show_source_labels
-                            .then_some(row.source.as_deref())
-                            .flatten();
+                    if let Some((row, max_text_columns)) = cached_row {
+                        let source_columns = window.source_prefix_columns();
+                        let source_prefix =
+                            source_label_prefix(row.source.as_deref(), source_columns);
+                        let visible_source_prefix =
+                            (!source_prefix.is_empty()).then_some(source_prefix.as_str());
                         let prefix = log_line_prefix(
                             row.line_index,
                             row.timestamp.as_deref(),
-                            visible_source,
+                            visible_source_prefix,
                             *display_options,
                         );
                         let prefix_width = prefix.chars().count() as f32 * character_width;
@@ -299,18 +294,8 @@ pub(super) fn show_log_window_with_scroll_state(
                             viewport_width,
                             character_width,
                         );
-                        let source_columns =
-                            source_label_columns(row.source.as_deref(), window.show_source_labels);
-                        let additional_source_columns = if window.show_source_labels {
-                            max_source_columns.saturating_sub(source_columns)
-                        } else {
-                            0
-                        };
-                        row_content_width = Some(
-                            prefix_width
-                                + (additional_source_columns + max_text_columns) as f32
-                                    * character_width,
-                        );
+                        row_content_width =
+                            Some(prefix_width + max_text_columns as f32 * character_width);
                         let byte_range = fragment.byte_range.clone();
                         let selection_range = window.selection.and_then(|selection| {
                             selection.range_for_row(display_row, row.text.len())
@@ -329,7 +314,7 @@ pub(super) fn show_log_window_with_scroll_state(
                                         egui::Label::new(log_line_layout_job(
                                             row.line_index,
                                             row.timestamp.as_deref(),
-                                            visible_source,
+                                            visible_source_prefix,
                                             &row.text,
                                             &row.style_spans,
                                             &highlight_ranges,

@@ -29,7 +29,7 @@ use std::time::{Duration, Instant};
 
 pub(super) use super::log_state::{
     LogDisplayOptions, LogPageKey, LogTextPosition, LogTextSelection, PendingLogCaret,
-    PendingLogSources, PodLogStatus, PodLogWindowState, source_label_columns, source_label_text,
+    PendingLogSources, PodLogStatus, PodLogWindowState, source_label_prefix,
 };
 
 pub(super) use super::persistence::{

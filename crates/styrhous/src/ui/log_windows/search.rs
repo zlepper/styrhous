@@ -14,6 +14,7 @@ pub(super) fn display_row_is_visible(
 pub(super) fn initial_spool_is_pending(window: &PodLogWindowState) -> bool {
     window.total_lines > 0
         && !window.initial_page_loaded
+        && window.live_rows.is_empty()
         && !filter_is_active(window)
         && !matches!(window.status, PodLogStatus::Failed(_))
 }

@@ -21,15 +21,17 @@ impl Default for LogDisplayOptions {
     }
 }
 
-pub(super) fn source_label_columns(source: Option<&str>, show_source_labels: bool) -> usize {
-    show_source_labels
-        .then_some(source)
-        .flatten()
-        .map_or(0, |source| source.chars().count() + 4)
+pub(super) fn source_label_columns(source: &str) -> usize {
+    source.chars().count() + 4
 }
 
-pub(super) fn source_label_text(source: &str) -> String {
-    format!("[{source}]  ")
+pub(super) fn source_label_prefix(source: Option<&str>, source_columns: usize) -> String {
+    if source_columns == 0 {
+        return String::new();
+    }
+    let mut prefix = source.map_or_else(String::new, |source| format!("[{source}]  "));
+    prefix.push_str(&" ".repeat(source_columns.saturating_sub(prefix.chars().count())));
+    prefix
 }
 
 #[derive(Debug, Clone)]
@@ -39,6 +41,7 @@ pub(super) struct PodLogWindowState {
     /// All Pod-container streams represented in this window.
     pub(super) targets: Vec<PodLogStreamTarget>,
     pub(super) show_source_labels: bool,
+    pub(super) max_source_label_columns: usize,
     pub(super) source_failures: HashMap<PodLogStreamTarget, String>,
     pub(super) total_lines: usize,
     /// Older records written by the background history request but not yet
@@ -141,7 +144,6 @@ pub(super) struct LogPage {
     pub(super) rows: Vec<LogPageRow>,
     pub(super) bytes: usize,
     pub(super) max_text_columns: usize,
-    pub(super) max_source_columns: usize,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -204,11 +206,21 @@ impl PodLogWindowState {
 
     pub(super) fn new(id: u64, cluster_key: i32, targets: Vec<PodLogStreamTarget>) -> Option<Self> {
         let show_source_labels = targets.len() > 1;
+        let max_source_label_columns = if show_source_labels {
+            targets
+                .iter()
+                .map(|target| source_label_columns(&target.display_name()))
+                .max()
+                .unwrap_or_default()
+        } else {
+            0
+        };
         (!targets.is_empty()).then(|| Self {
             id,
             cluster_key,
             targets,
             show_source_labels,
+            max_source_label_columns,
             source_failures: HashMap::new(),
             total_lines: 0,
             backfill_lines: None,
@@ -238,6 +250,14 @@ impl PodLogWindowState {
 
     pub(super) fn has_multiple_sources(&self) -> bool {
         self.targets.len() > 1
+    }
+
+    pub(super) fn source_prefix_columns(&self) -> usize {
+        if self.show_source_labels {
+            self.max_source_label_columns
+        } else {
+            0
+        }
     }
 
     pub(super) fn clear_pages(&mut self) {
@@ -286,11 +306,6 @@ impl PodLogWindowState {
             .map(|row| row.text.chars().count())
             .max()
             .unwrap_or_default();
-        let max_source_columns = rows
-            .iter()
-            .map(|row| source_label_columns(row.source.as_deref(), true))
-            .max()
-            .unwrap_or_default();
         self.page_cache_bytes += bytes;
         self.pages.insert(
             key,
@@ -298,7 +313,6 @@ impl PodLogWindowState {
                 rows,
                 bytes,
                 max_text_columns,
-                max_source_columns,
             },
         );
         self.page_order.push_back(key);

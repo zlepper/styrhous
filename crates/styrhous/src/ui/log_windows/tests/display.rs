@@ -1,4 +1,5 @@
 use super::*;
+use crate::ui::log_state::source_label_columns;
 use crate::worker::PodLogStreamTarget;
 
 #[test]
@@ -69,12 +70,25 @@ fn display_toggles_update_the_shared_options() {
 
 #[test]
 fn source_labels_are_rendered_as_metadata_and_can_be_hidden() {
-    let source = "payments/api-0 · server";
+    let short_source = "payments/api-0 · server";
+    let long_source = "payments/worker-0 · worker";
+    let source_columns = source_label_columns(long_source);
+    let short_prefix = source_label_prefix(Some(short_source), source_columns);
+    let long_prefix = source_label_prefix(Some(long_source), source_columns);
     let shown = log_line_layout_job(
         0,
         None,
-        Some(source),
+        Some(&short_prefix),
         "ready",
+        &[],
+        &[],
+        LogDisplayOptions::default(),
+    );
+    let long = log_line_layout_job(
+        1,
+        None,
+        Some(&long_prefix),
+        "accepted",
         &[],
         &[],
         LogDisplayOptions::default(),
@@ -89,8 +103,14 @@ fn source_labels_are_rendered_as_metadata_and_can_be_hidden() {
         LogDisplayOptions::default(),
     );
 
-    assert_eq!(shown.text, "[payments/api-0 · server]  ready");
+    assert_eq!(shown.text, format!("{short_prefix}ready"));
+    assert_eq!(
+        shown.text.find("ready"),
+        long.text.find("accepted"),
+        "messages begin in the same column after padded source labels"
+    );
     assert_eq!(hidden.text, "ready");
+    assert_eq!(source_label_prefix(Some(short_source), 0), "");
 }
 
 #[test]
@@ -264,8 +284,8 @@ fn interleaved_pod_log_viewer_snapshot() {
         .collect(),
     );
     assert_eq!(
-        window.pages[&page_key].max_source_columns,
-        worker.display_name().chars().count() + 4
+        window.max_source_label_columns,
+        source_label_columns(&worker.display_name())
     );
     window
         .source_failures
@@ -415,6 +435,7 @@ fn pod_log_viewer_loading_placeholder_snapshot() {
 fn pod_log_viewer_renders_live_tail_rows_while_disk_page_catches_up_snapshot() {
     let mut window = log_window(&[]);
     window.total_lines = 1;
+    window.initial_page_loaded = false;
     window.backfill_lines = Some(12_345);
     window.live_rows.insert(
         0,
@@ -428,6 +449,7 @@ fn pod_log_viewer_renders_live_tail_rows_while_disk_page_catches_up_snapshot() {
             match_ranges: Vec::new(),
         },
     );
+    assert!(!initial_spool_is_pending(&window));
     snapshot_window(
         window,
         "pod_logs/pod_log_viewer_renders_live_tail_rows_while_disk_page_catches_up_snapshot/live_tail_rows_while_disk_page_catches_up",

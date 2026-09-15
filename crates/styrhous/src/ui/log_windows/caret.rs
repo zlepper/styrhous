@@ -303,13 +303,12 @@ pub(super) fn caret_horizontal_offset(
 ) -> Option<f32> {
     let focus = window.selection?.focus;
     let row = log_row_for_display_row(window, focus.display_row)?;
+    let source_columns = window.source_prefix_columns();
+    let source_prefix = source_label_prefix(row.source.as_deref(), source_columns);
     let prefix_width = log_line_prefix(
         row.line_index,
         row.timestamp.as_deref(),
-        window
-            .show_source_labels
-            .then_some(row.source.as_deref())
-            .flatten(),
+        (!source_prefix.is_empty()).then_some(source_prefix.as_str()),
         display_options,
     )
     .chars()

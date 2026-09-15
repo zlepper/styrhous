@@ -59,7 +59,7 @@ pub(super) fn character_column_range(
 pub(super) fn log_line_prefix(
     line_index: usize,
     timestamp: Option<&str>,
-    source: Option<&str>,
+    source_prefix: Option<&str>,
     display_options: LogDisplayOptions,
 ) -> String {
     let mut prefix = String::new();
@@ -72,8 +72,8 @@ pub(super) fn log_line_prefix(
         prefix.push_str(timestamp);
         prefix.push_str("  ");
     }
-    if let Some(source) = source {
-        prefix.push_str(&source_label_text(source));
+    if let Some(source_prefix) = source_prefix {
+        prefix.push_str(source_prefix);
     }
     prefix
 }
@@ -150,7 +150,7 @@ pub(super) fn clipped_ranges(
 pub(super) fn log_line_layout_job(
     line_index: usize,
     timestamp: Option<&str>,
-    source: Option<&str>,
+    source_prefix: Option<&str>,
     line: &str,
     style_spans: &[AnsiStyleSpan],
     ranges: &[(usize, usize)],
@@ -173,8 +173,8 @@ pub(super) fn log_line_layout_job(
     {
         job.append(&format!("{timestamp}  "), 0.0, number.clone());
     }
-    if let Some(source) = source {
-        job.append(&source_label_text(source), 0.0, number);
+    if let Some(source_prefix) = source_prefix {
+        job.append(source_prefix, 0.0, number);
     }
     append_log_line_text(&mut job, line, style_spans, ranges, display_options);
     job
