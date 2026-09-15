@@ -1,6 +1,89 @@
 use crate::ansi::AnsiStyleSpan;
+use std::io::{Read, Write};
 
 pub(crate) const LOG_PAGE_SIZE: usize = 256;
+
+/// One Kubernetes log record and the source that produced it.
+///
+/// Source identity stays separate from the message so rendering can show or
+/// hide it without changing search, selection, or copied text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LogRecord {
+    pub(crate) text: String,
+    pub(crate) source: Option<String>,
+}
+
+impl LogRecord {
+    pub(crate) fn from_source(text: String, source: String) -> Self {
+        Self {
+            text,
+            source: Some(source),
+        }
+    }
+}
+
+impl From<String> for LogRecord {
+    fn from(text: String) -> Self {
+        Self { text, source: None }
+    }
+}
+
+impl From<&str> for LogRecord {
+    fn from(text: &str) -> Self {
+        Self::from(text.to_owned())
+    }
+}
+
+pub(crate) fn write_log_record(writer: &mut impl Write, record: &LogRecord) -> anyhow::Result<u64> {
+    let source_length = record.source.as_ref().map_or(Ok(u32::MAX), |source| {
+        u32::try_from(source.len()).map_err(|_| anyhow::anyhow!("A log source label exceeds 4 GiB"))
+    })?;
+    if source_length == u32::MAX && record.source.is_some() {
+        anyhow::bail!("A log source label exceeds 4 GiB");
+    }
+    let text_length = u32::try_from(record.text.len())
+        .map_err(|_| anyhow::anyhow!("A log line exceeds 4 GiB"))?;
+
+    writer.write_all(&source_length.to_le_bytes())?;
+    if let Some(source) = &record.source {
+        writer.write_all(source.as_bytes())?;
+    }
+    writer.write_all(&text_length.to_le_bytes())?;
+    writer.write_all(record.text.as_bytes())?;
+
+    Ok(8 + record
+        .source
+        .as_ref()
+        .map_or(0, |_| u64::from(source_length))
+        + u64::from(text_length))
+}
+
+/// Reads a complete record, returning `None` only when the reader is already
+/// at its end before the next record begins.
+pub(crate) fn read_log_record(reader: &mut impl Read) -> anyhow::Result<Option<LogRecord>> {
+    let mut source_length = [0_u8; 4];
+    let read = reader.read(&mut source_length)?;
+    if read == 0 {
+        return Ok(None);
+    }
+    reader.read_exact(&mut source_length[read..])?;
+    let source_length = u32::from_le_bytes(source_length);
+    let source = if source_length == u32::MAX {
+        None
+    } else {
+        let mut bytes = vec![0; source_length as usize];
+        reader.read_exact(&mut bytes)?;
+        Some(String::from_utf8(bytes)?)
+    };
+    let mut text_length = [0_u8; 4];
+    reader.read_exact(&mut text_length)?;
+    let mut text = vec![0; u32::from_le_bytes(text_length) as usize];
+    reader.read_exact(&mut text)?;
+    Ok(Some(LogRecord {
+        text: String::from_utf8(text)?,
+        source,
+    }))
+}
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LogStoreConfig {
@@ -26,6 +109,7 @@ pub(crate) struct LogPageRow {
     pub(crate) display_row: usize,
     pub(crate) line_index: usize,
     pub(crate) timestamp: Option<String>,
+    pub(crate) source: Option<String>,
     pub(crate) text: String,
     pub(crate) style_spans: Vec<AnsiStyleSpan>,
     pub(crate) match_ranges: Vec<(usize, usize)>,

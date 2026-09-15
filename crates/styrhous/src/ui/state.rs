@@ -28,8 +28,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 pub(super) use super::log_state::{
-    LogDisplayOptions, LogPageKey, LogTextPosition, LogTextSelection, PendingInterleavedLogs,
-    PendingLogCaret, PodLogStatus, PodLogWindowState,
+    LogDisplayOptions, LogPageKey, LogTextPosition, LogTextSelection, PendingLogCaret,
+    PendingLogSources, PodLogStatus, PodLogWindowState, source_label_columns, source_label_text,
 };
 
 pub(super) use super::persistence::{
@@ -46,7 +46,7 @@ pub(crate) struct UiState {
     pub(super) selected_cluster: Option<i32>,
     pub(super) log_windows: BTreeMap<u64, PodLogWindowState>,
     pub(super) next_log_window_id: u64,
-    pub(super) pending_interleaved_logs: Option<PendingInterleavedLogs>,
+    pub(super) pending_log_sources: Option<PendingLogSources>,
     pub(super) yaml_editors: BTreeMap<u64, YamlEditorWindowState>,
     pub(super) next_yaml_editor_id: u64,
     pub(super) resource_schemas: HashMap<(i32, ApiResource), ResourceSchema>,

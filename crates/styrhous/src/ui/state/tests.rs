@@ -69,6 +69,7 @@ fn test_log_row(display_row: usize, text: &str) -> LogPageRow {
         display_row,
         line_index: display_row,
         timestamp: None,
+        source: None,
         text: text.to_owned(),
         style_spans: Vec::new(),
         match_ranges: Vec::new(),

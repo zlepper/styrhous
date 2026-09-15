@@ -303,9 +303,17 @@ pub(super) fn caret_horizontal_offset(
 ) -> Option<f32> {
     let focus = window.selection?.focus;
     let row = log_row_for_display_row(window, focus.display_row)?;
-    let prefix_width = log_line_prefix(row.line_index, row.timestamp.as_deref(), display_options)
-        .chars()
-        .count() as f32
+    let prefix_width = log_line_prefix(
+        row.line_index,
+        row.timestamp.as_deref(),
+        window
+            .show_source_labels
+            .then_some(row.source.as_deref())
+            .flatten(),
+        display_options,
+    )
+    .chars()
+    .count() as f32
         * character_width;
     let caret_x = prefix_width
         + character_column_at_byte(&row.text, focus.byte_offset) as f32 * character_width;

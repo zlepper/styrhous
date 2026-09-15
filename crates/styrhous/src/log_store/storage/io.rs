@@ -1,3 +1,4 @@
+use crate::log_store::{LogRecord, read_log_record, write_log_record};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 
@@ -9,22 +10,24 @@ pub(super) fn floor_char_boundary(text: &str, byte_offset: usize) -> usize {
     byte_offset
 }
 
-pub(super) fn read_line_from(
+pub(super) fn read_record_from(
     data: &mut File,
     offsets: &mut File,
     line_index: usize,
-) -> anyhow::Result<String> {
+) -> anyhow::Result<LogRecord> {
     let offset = read_u64_at(offsets, line_index)?;
-    read_line_at(data, offset)
+    read_record_at(data, offset)
 }
 
-pub(super) fn read_line_at(data: &mut File, offset: u64) -> anyhow::Result<String> {
+pub(super) fn read_record_at(data: &mut File, offset: u64) -> anyhow::Result<LogRecord> {
     data.seek(SeekFrom::Start(offset))?;
-    let mut length = [0_u8; 4];
-    data.read_exact(&mut length)?;
-    let mut bytes = vec![0; u32::from_le_bytes(length) as usize];
-    data.read_exact(&mut bytes)?;
-    String::from_utf8(bytes).map_err(anyhow::Error::from)
+    read_log_record(data)?.ok_or_else(|| anyhow::anyhow!("Missing log record in store"))
+}
+
+pub(super) fn write_record(file: &mut File, record: &LogRecord) -> anyhow::Result<u64> {
+    let offset = file.seek(SeekFrom::End(0))?;
+    write_log_record(file, record)?;
+    Ok(offset)
 }
 
 pub(super) fn read_u64_at(file: &mut File, index: usize) -> anyhow::Result<u64> {

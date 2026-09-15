@@ -29,10 +29,10 @@ pub(super) fn scan_records(search_scan: SearchScan) {
         if cancellation.load(Ordering::Relaxed) {
             return;
         }
-        let Ok(line) = reader.read_line(scanned_lines) else {
+        let Ok(record) = reader.read_record(scanned_lines) else {
             return;
         };
-        if matcher.is_match(&parse_kubernetes_log_line(&line).line.text) {
+        if matcher.is_match(&parse_kubernetes_log_line(&record.text).line.text) {
             match_lines.push(scanned_lines);
         }
         scanned_lines += 1;

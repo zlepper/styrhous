@@ -48,6 +48,7 @@ fn pod_log_viewer_filter_active_snapshot() {
                         .rows[line_index]
                         .timestamp
                         .clone(),
+                    source: None,
                     style_spans,
                     match_ranges: regex::Regex::new("(?i)http")
                         .expect("valid test matcher")

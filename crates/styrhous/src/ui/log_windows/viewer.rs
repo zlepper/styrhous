@@ -32,7 +32,7 @@ pub(super) fn show_log_window_with_scroll_state(
                         .color(gray::_900),
                 );
                 ui.add_space(spacing::LG);
-                if window.is_interleaved() {
+                if window.has_multiple_sources() {
                     ui.label(
                         egui::RichText::new(format!("{} sources", window.targets.len()))
                             .font(typography::section_heading())
@@ -45,14 +45,18 @@ pub(super) fn show_log_window_with_scroll_state(
                             .color(gray::_600),
                     );
                 } else {
+                    let target = window
+                        .targets
+                        .first()
+                        .expect("log windows always contain one source");
                     ui.label(
-                        egui::RichText::new(&window.pod_name)
+                        egui::RichText::new(&target.pod_name)
                             .font(typography::section_heading())
                             .color(gray::_900),
                     );
                     ui.add_space(spacing::MD);
                     ui.label(
-                        egui::RichText::new(format!("Container: {}", window.container.name))
+                        egui::RichText::new(format!("Container: {}", target.container))
                             .font(typography::body())
                             .color(gray::_600),
                     );
@@ -259,22 +263,33 @@ pub(super) fn show_log_window_with_scroll_state(
                         .and_then(|page| {
                             page.rows
                                 .get(row_offset)
-                                .map(|row| (row, page.max_text_columns))
+                                .map(|row| (row, page.max_text_columns, page.max_source_columns))
                         })
                         .or_else(|| {
                             if !filter_is_active(window) {
-                                window
-                                    .live_rows
-                                    .get(&display_row)
-                                    .map(|row| (row, row.text.chars().count()))
+                                window.live_rows.get(&display_row).map(|row| {
+                                    (
+                                        row,
+                                        row.text.chars().count(),
+                                        source_label_columns(
+                                            row.source.as_deref(),
+                                            window.show_source_labels,
+                                        ),
+                                    )
+                                })
                             } else {
                                 None
                             }
                         });
-                    if let Some((row, max_text_columns)) = cached_row {
+                    if let Some((row, max_text_columns, max_source_columns)) = cached_row {
+                        let visible_source = window
+                            .show_source_labels
+                            .then_some(row.source.as_deref())
+                            .flatten();
                         let prefix = log_line_prefix(
                             row.line_index,
                             row.timestamp.as_deref(),
+                            visible_source,
                             *display_options,
                         );
                         let prefix_width = prefix.chars().count() as f32 * character_width;
@@ -284,8 +299,18 @@ pub(super) fn show_log_window_with_scroll_state(
                             viewport_width,
                             character_width,
                         );
-                        row_content_width =
-                            Some(prefix_width + max_text_columns as f32 * character_width);
+                        let source_columns =
+                            source_label_columns(row.source.as_deref(), window.show_source_labels);
+                        let additional_source_columns = if window.show_source_labels {
+                            max_source_columns.saturating_sub(source_columns)
+                        } else {
+                            0
+                        };
+                        row_content_width = Some(
+                            prefix_width
+                                + (additional_source_columns + max_text_columns) as f32
+                                    * character_width,
+                        );
                         let byte_range = fragment.byte_range.clone();
                         let selection_range = window.selection.and_then(|selection| {
                             selection.range_for_row(display_row, row.text.len())
@@ -304,6 +329,7 @@ pub(super) fn show_log_window_with_scroll_state(
                                         egui::Label::new(log_line_layout_job(
                                             row.line_index,
                                             row.timestamp.as_deref(),
+                                            visible_source,
                                             &row.text,
                                             &row.style_spans,
                                             &highlight_ranges,

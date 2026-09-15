@@ -1,5 +1,5 @@
 use super::super::*;
-use super::io::read_line_from;
+use super::io::{read_record_from, write_record};
 use std::fs::File;
 use std::io::{Seek, SeekFrom, Write};
 use tempfile::NamedTempFile;
@@ -37,22 +37,22 @@ pub(crate) struct LogicalReader {
 }
 
 impl LogicalReader {
-    pub(crate) fn read_line(&mut self, line_index: usize) -> anyhow::Result<String> {
+    pub(crate) fn read_record(&mut self, line_index: usize) -> anyhow::Result<LogRecord> {
         if let Some(rebase) = self.rebase {
             if line_index < rebase.history_lines {
                 let (data, offsets) = self
                     .backfill
                     .as_mut()
                     .expect("rebased reader retains a history segment");
-                return read_line_from(data, offsets, line_index);
+                return read_record_from(data, offsets, line_index);
             }
-            return read_line_from(
+            return read_record_from(
                 &mut self.live_data,
                 &mut self.live_offsets,
                 line_index - rebase.history_lines + rebase.live_start,
             );
         }
-        read_line_from(&mut self.live_data, &mut self.live_offsets, line_index)
+        read_record_from(&mut self.live_data, &mut self.live_offsets, line_index)
     }
 }
 
@@ -80,20 +80,13 @@ impl BackfillStore {
         })
     }
 
-    pub(crate) fn append(&mut self, lines: Vec<String>) -> anyhow::Result<()> {
-        let appended_lines = lines.len();
+    pub(crate) fn append(&mut self, records: Vec<LogRecord>) -> anyhow::Result<()> {
+        let appended_lines = records.len();
         let mut data = self.data.reopen()?;
         let mut offsets = self.offsets.reopen()?;
-        let mut next_offset = data.seek(SeekFrom::End(0))?;
-        let mut line_offsets = Vec::with_capacity(lines.len());
-        for line in lines {
-            let bytes = line.as_bytes();
-            let length = u32::try_from(bytes.len())
-                .map_err(|_| anyhow::anyhow!("A log line exceeds 4 GiB"))?;
-            line_offsets.push(next_offset);
-            data.write_all(&length.to_le_bytes())?;
-            data.write_all(bytes)?;
-            next_offset += u64::from(length) + 4;
+        let mut line_offsets = Vec::with_capacity(records.len());
+        for record in records {
+            line_offsets.push(write_record(&mut data, &record)?);
         }
         data.flush()?;
         offsets.seek(SeekFrom::End(0))?;
@@ -105,9 +98,9 @@ impl BackfillStore {
         Ok(())
     }
 
-    pub(crate) fn read_line(&self, line_index: usize) -> anyhow::Result<String> {
+    pub(crate) fn read_record(&self, line_index: usize) -> anyhow::Result<LogRecord> {
         let mut data = self.data.reopen()?;
         let mut offsets = self.offsets.reopen()?;
-        read_line_from(&mut data, &mut offsets, line_index)
+        read_record_from(&mut data, &mut offsets, line_index)
     }
 }

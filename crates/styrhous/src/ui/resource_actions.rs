@@ -88,11 +88,10 @@ pub(super) fn show_resource_action_items(
         [] => {}
         [container] => {
             if menu.action("View logs").clicked() && pending_action.is_none() {
-                *pending_action = Some(ResourceAction::ViewLogs {
-                    name: resource.name.clone(),
-                    namespace: resource.namespace.clone(),
-                    container: container.clone(),
-                });
+                let targets = log_stream_targets(resource, std::slice::from_ref(container));
+                if !targets.is_empty() {
+                    *pending_action = Some(ResourceAction::ViewLogs { targets });
+                }
             }
             menu.separator();
         }
@@ -102,7 +101,7 @@ pub(super) fn show_resource_action_items(
                 {
                     let targets = log_stream_targets(resource, containers);
                     if !targets.is_empty() {
-                        *pending_action = Some(ResourceAction::ViewInterleavedLogs { targets });
+                        *pending_action = Some(ResourceAction::ViewLogs { targets });
                         menu.close();
                     }
                 }
@@ -110,11 +109,10 @@ pub(super) fn show_resource_action_items(
                 for container in containers {
                     let label = format!("{} — {}", container.name, container.kind.label());
                     if menu.action(label).clicked() && pending_action.is_none() {
-                        *pending_action = Some(ResourceAction::ViewLogs {
-                            name: resource.name.clone(),
-                            namespace: resource.namespace.clone(),
-                            container: container.clone(),
-                        });
+                        let targets = log_stream_targets(resource, std::slice::from_ref(container));
+                        if !targets.is_empty() {
+                            *pending_action = Some(ResourceAction::ViewLogs { targets });
+                        }
                     }
                 }
             });

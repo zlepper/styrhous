@@ -209,6 +209,69 @@ fn search_includes_lines_appended_while_the_initial_scan_runs() {
 }
 
 #[test]
+fn source_metadata_is_available_to_pages_but_excluded_from_search_and_copy() {
+    let service = LogStoreService::default();
+    service.open(72);
+    assert!(service.append_records(
+        72,
+        vec![LogRecord::from_source(
+            "2026-08-10T12:34:56Z ready".to_owned(),
+            "payments/api-0 · server".to_owned(),
+        )],
+    ));
+    let _ = wait_for(&service, |result| {
+        matches!(result, LogStoreResult::Updated { window_id: 72, .. })
+    });
+
+    assert!(service.load_page(72, 0, false, 0));
+    let LogStoreResult::PageLoaded { rows, .. } = wait_for(&service, |result| {
+        matches!(result, LogStoreResult::PageLoaded { window_id: 72, .. })
+    }) else {
+        unreachable!()
+    };
+    assert_eq!(rows[0].source.as_deref(), Some("payments/api-0 · server"));
+    assert_eq!(rows[0].text, "ready");
+
+    assert!(service.search(72, 1, "ready".into(), false));
+    let LogStoreResult::SearchCompleted { match_count, .. } = wait_for(&service, |result| {
+        matches!(
+            result,
+            LogStoreResult::SearchCompleted {
+                window_id: 72,
+                generation: 1,
+                ..
+            }
+        )
+    }) else {
+        unreachable!()
+    };
+    assert_eq!(match_count, 1);
+
+    assert!(service.search(72, 2, "payments".into(), false));
+    let LogStoreResult::SearchCompleted { match_count, .. } = wait_for(&service, |result| {
+        matches!(
+            result,
+            LogStoreResult::SearchCompleted {
+                window_id: 72,
+                generation: 2,
+                ..
+            }
+        )
+    }) else {
+        unreachable!()
+    };
+    assert_eq!(match_count, 0);
+
+    assert!(service.copy(72, 1, 1, false, 0, 0, 0, "ready".len()));
+    let LogStoreResult::Copied { text, .. } = wait_for(&service, |result| {
+        matches!(result, LogStoreResult::Copied { window_id: 72, .. })
+    }) else {
+        unreachable!()
+    };
+    assert_eq!(text, "ready");
+}
+
+#[test]
 fn temporary_files_are_removed_when_a_store_is_dropped() {
     let store = LogStore::new();
     let data_path = store

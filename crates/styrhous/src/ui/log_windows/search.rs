@@ -163,7 +163,7 @@ pub(super) fn show_log_search_controls(
     ui.add_space(spacing::SM);
     let display_controls = ui
         .allocate_ui_with_layout(
-            egui::vec2(96.0, 34.0),
+            egui::vec2(128.0, 34.0),
             egui::Layout::left_to_right(egui::Align::Center),
             |ui| {
                 egui::Frame::new()
@@ -194,7 +194,14 @@ pub(super) fn show_log_search_controls(
                                 display_options.render_ansi,
                                 "Render ANSI styling",
                             );
-                            (line_numbers, timestamps, ansi)
+                            ui.separator();
+                            let source_labels = log_display_toggle_button(
+                                ui,
+                                icons::document_text_icon(),
+                                window.show_source_labels,
+                                "Show log source labels",
+                            );
+                            (line_numbers, timestamps, ansi, source_labels)
                         })
                         .inner
                     })
@@ -228,6 +235,9 @@ pub(super) fn show_log_search_controls(
     }
     if display_controls.2 {
         display_options.render_ansi = !display_options.render_ansi;
+    }
+    if display_controls.3 {
+        window.show_source_labels = !window.show_source_labels;
     }
     sync_search(ctx, window, log_store);
 }
@@ -295,7 +305,7 @@ pub(super) fn log_display_toggle_button(
         )
         .with_pointing_hand();
     response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Checkbox, ui.is_enabled(), label)
+        egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), active, label)
     });
     if active {
         let center = response.rect.right_bottom() - egui::vec2(3.5, 3.5);

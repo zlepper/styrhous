@@ -29,53 +29,18 @@ impl UiState {
         );
     }
 
-    pub(crate) fn open_pod_log_window(
-        &mut self,
-        cluster_key: i32,
-        pod_name: String,
-        namespace: Option<String>,
-        container: PodLogContainer,
-        commands_to_send: &mut Vec<WorkerCommandBox>,
-    ) {
-        let Some(namespace) = namespace else {
-            return;
-        };
-        self.next_log_window_id += 1;
-        let log_window_id = self.next_log_window_id;
-        self.log_windows.insert(
-            log_window_id,
-            PodLogWindowState::new(
-                log_window_id,
-                cluster_key,
-                namespace.clone(),
-                pod_name.clone(),
-                container.clone(),
-            ),
-        );
-        commands_to_send.push(Box::new(crate::worker::StartPodLogStream {
-            cluster_key,
-            log_window_id,
-            targets: vec![PodLogStreamTarget {
-                namespace,
-                pod_name,
-                container: container.name,
-            }],
-        }));
-    }
-
-    pub(crate) fn open_interleaved_pod_log_window(
+    pub(crate) fn open_log_window(
         &mut self,
         cluster_key: i32,
         targets: Vec<PodLogStreamTarget>,
         commands_to_send: &mut Vec<WorkerCommandBox>,
     ) {
-        let Some(_) = targets.first() else {
+        if targets.is_empty() {
             return;
-        };
+        }
         self.next_log_window_id += 1;
         let log_window_id = self.next_log_window_id;
-        let Some(window) =
-            PodLogWindowState::new_interleaved(log_window_id, cluster_key, targets.clone())
+        let Some(window) = PodLogWindowState::new(log_window_id, cluster_key, targets.clone())
         else {
             return;
         };
@@ -87,7 +52,7 @@ impl UiState {
         }));
     }
 
-    pub(crate) fn request_interleaved_pod_log_window(
+    pub(crate) fn request_pod_log_window(
         &mut self,
         cluster_key: i32,
         mut targets: Vec<PodLogStreamTarget>,
@@ -102,13 +67,36 @@ impl UiState {
         });
         targets.dedup();
         if targets.len() > 10 {
-            self.pending_interleaved_logs = Some(PendingInterleavedLogs {
+            self.pending_log_sources = Some(PendingLogSources {
                 cluster_key,
                 targets,
             });
         } else {
-            self.open_interleaved_pod_log_window(cluster_key, targets, commands_to_send);
+            self.open_log_window(cluster_key, targets, commands_to_send);
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn open_pod_log_window(
+        &mut self,
+        cluster_key: i32,
+        pod_name: String,
+        namespace: Option<String>,
+        container: PodLogContainer,
+        commands_to_send: &mut Vec<WorkerCommandBox>,
+    ) {
+        let Some(namespace) = namespace else {
+            return;
+        };
+        self.request_pod_log_window(
+            cluster_key,
+            vec![PodLogStreamTarget {
+                namespace,
+                pod_name,
+                container: container.name,
+            }],
+            commands_to_send,
+        );
     }
 
     pub(crate) fn open_yaml_editor(

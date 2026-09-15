@@ -76,10 +76,10 @@ fn pod_log_windows_route_each_stream_by_its_window_id() {
 }
 
 #[test]
-fn interleaved_log_window_routes_all_selected_sources_through_one_worker_command() {
+fn pod_log_window_routes_all_selected_sources_through_one_worker_command() {
     let mut state = UiState::default();
     let mut commands = Vec::new();
-    state.request_interleaved_pod_log_window(
+    state.request_pod_log_window(
         7,
         vec![
             PodLogStreamTarget {
@@ -97,12 +97,13 @@ fn interleaved_log_window_routes_all_selected_sources_through_one_worker_command
     );
 
     assert_eq!(state.log_windows.len(), 1);
-    assert!(state.log_windows[&1].is_interleaved());
+    assert!(state.log_windows[&1].has_multiple_sources());
+    assert!(state.log_windows[&1].show_source_labels);
     let command = commands[0]
         .as_ref()
         .as_any()
         .downcast_ref::<StartPodLogStream>()
-        .expect("interleaved logs start a Pod log stream");
+        .expect("selected sources start a Pod log stream");
     assert_eq!(command.log_window_id, 1);
     assert_eq!(command.targets.len(), 2);
     assert_eq!(
@@ -112,10 +113,10 @@ fn interleaved_log_window_routes_all_selected_sources_through_one_worker_command
 }
 
 #[test]
-fn interleaved_log_window_requires_confirmation_above_ten_sources() {
+fn pod_log_window_requires_confirmation_above_ten_sources() {
     let mut state = UiState::default();
     let mut commands = Vec::new();
-    state.request_interleaved_pod_log_window(
+    state.request_pod_log_window(
         7,
         (0..11)
             .map(|index| PodLogStreamTarget {
@@ -131,7 +132,7 @@ fn interleaved_log_window_requires_confirmation_above_ten_sources() {
     assert!(state.log_windows.is_empty());
     assert_eq!(
         state
-            .pending_interleaved_logs
+            .pending_log_sources
             .as_ref()
             .map(|pending| pending.targets.len()),
         Some(11)
@@ -139,7 +140,7 @@ fn interleaved_log_window_requires_confirmation_above_ten_sources() {
 }
 
 #[test]
-fn interleaved_log_source_failures_are_grouped_by_source() {
+fn pod_log_source_failures_are_grouped_by_source() {
     let mut state = UiState::default();
     let mut commands = Vec::new();
     let target = PodLogStreamTarget {
@@ -147,7 +148,8 @@ fn interleaved_log_source_failures_are_grouped_by_source() {
         pod_name: "api-0".into(),
         container: "server".into(),
     };
-    state.request_interleaved_pod_log_window(7, vec![target.clone()], &mut commands);
+    state.request_pod_log_window(7, vec![target.clone()], &mut commands);
+    assert!(!state.log_windows[&1].show_source_labels);
 
     PodLogSourceFailed {
         log_window_id: 1,

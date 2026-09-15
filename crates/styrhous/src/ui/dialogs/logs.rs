@@ -1,11 +1,11 @@
 use super::*;
 
-pub(crate) fn show_interleaved_log_confirmation(
+pub(crate) fn show_log_source_confirmation(
     ctx: &egui::Context,
     ui_state: &mut UiState,
     commands_to_send: &mut Vec<WorkerCommandBox>,
 ) {
-    let Some(pending) = ui_state.pending_interleaved_logs.clone() else {
+    let Some(pending) = ui_state.pending_log_sources.clone() else {
         return;
     };
     let source_count = pending.targets.len();
@@ -26,8 +26,8 @@ pub(crate) fn show_interleaved_log_confirmation(
         "This will open {source_count} concurrent log streams across {pod_count} selected Pods."
     );
     match (ConfirmationDialog {
-        id: egui::Id::new("interleaved-pod-log-confirmation"),
-        eyebrow: "INTERLEAVED LOGS",
+        id: egui::Id::new("pod-log-source-confirmation"),
+        eyebrow: "LOG SOURCES",
         title: &title,
         message: &message,
         unavailable_message: None,
@@ -45,14 +45,10 @@ pub(crate) fn show_interleaved_log_confirmation(
     .show(ctx)
     {
         ConfirmationDialogAction::Confirm => {
-            ui_state.pending_interleaved_logs = None;
-            ui_state.open_interleaved_pod_log_window(
-                pending.cluster_key,
-                pending.targets,
-                commands_to_send,
-            );
+            ui_state.pending_log_sources = None;
+            ui_state.open_log_window(pending.cluster_key, pending.targets, commands_to_send);
         }
-        ConfirmationDialogAction::Cancel => ui_state.pending_interleaved_logs = None,
+        ConfirmationDialogAction::Cancel => ui_state.pending_log_sources = None,
         ConfirmationDialogAction::None => {}
     }
 }

@@ -7,8 +7,7 @@
 use super::log_windows::show_log_window;
 use super::state::{LogDisplayOptions, LogPageKey, PodLogStatus, PodLogWindowState};
 use crate::log_store::{LOG_PAGE_SIZE, LogStoreConfig, LogStoreResult, LogStoreService};
-use crate::minimal_resource::PodLogContainer;
-use crate::resource_table::ContainerKind;
+use crate::worker::PodLogStreamTarget;
 use std::time::{Duration, Instant};
 
 const DEFAULT_TOTAL_LINES: usize = 100_000;
@@ -204,14 +203,13 @@ fn empty_log_window(total_lines: usize) -> PodLogWindowState {
     let mut window = PodLogWindowState::new(
         1,
         1,
-        "default".to_owned(),
-        "profiled-pod".to_owned(),
-        PodLogContainer {
-            name: "api".to_owned(),
-            kind: ContainerKind::App,
-            image: None,
-        },
-    );
+        vec![PodLogStreamTarget {
+            namespace: "default".to_owned(),
+            pod_name: "profiled-pod".to_owned(),
+            container: "api".to_owned(),
+        }],
+    )
+    .expect("profile log window has one source");
     window.total_lines = total_lines;
     window.initial_page_loaded = true;
     window.store_opened = true;

@@ -17,11 +17,11 @@ enum Command {
     },
     Append {
         window_id: u64,
-        lines: Vec<String>,
+        records: Vec<LogRecord>,
     },
     AppendBackfill {
         window_id: u64,
-        lines: Vec<String>,
+        records: Vec<LogRecord>,
     },
     CompleteBackfill {
         window_id: u64,
@@ -94,38 +94,42 @@ pub(crate) struct LogStoreAppender {
 }
 
 impl LogStoreAppender {
-    pub(crate) async fn append(&self, window_id: u64, lines: Vec<String>) -> anyhow::Result<()> {
-        if lines.is_empty() {
+    pub(crate) async fn append(
+        &self,
+        window_id: u64,
+        records: Vec<LogRecord>,
+    ) -> anyhow::Result<()> {
+        if records.is_empty() {
             return Ok(());
         }
         let commands = self.live_commands.clone();
         tokio::task::spawn_blocking(move || {
             commands
-                .send(Command::Append { window_id, lines })
+                .send(Command::Append { window_id, records })
                 .map_err(|_| anyhow::anyhow!("Log storage stopped before the stream finished"))
         })
         .await
         .map_err(|error| anyhow::anyhow!("Log storage task failed: {error}"))?
     }
 
-    fn try_append(&self, window_id: u64, lines: Vec<String>) -> bool {
+    fn try_append(&self, window_id: u64, records: Vec<LogRecord>) -> bool {
         self.live_commands
-            .try_send(Command::Append { window_id, lines })
+            .try_send(Command::Append { window_id, records })
             .is_ok()
     }
 
     pub(crate) async fn append_backfill(
         &self,
         window_id: u64,
-        lines: Vec<String>,
+        records: Vec<LogRecord>,
     ) -> anyhow::Result<()> {
-        if lines.is_empty() {
+        if records.is_empty() {
             return Ok(());
         }
         let commands = self.backfill_commands.clone();
         tokio::task::spawn_blocking(move || {
             commands
-                .send(Command::AppendBackfill { window_id, lines })
+                .send(Command::AppendBackfill { window_id, records })
                 .map_err(|_| anyhow::anyhow!("Log storage stopped before backfill finished"))
         })
         .await
@@ -349,8 +353,17 @@ impl LogStoreService {
     }
 
     pub(crate) fn append(&self, window_id: u64, lines: Vec<String>) -> bool {
-        if !lines.is_empty() {
-            self.appender.try_append(window_id, lines)
+        self.try_append_records(window_id, lines.into_iter().map(LogRecord::from).collect())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn append_records(&self, window_id: u64, records: Vec<LogRecord>) -> bool {
+        self.try_append_records(window_id, records)
+    }
+
+    fn try_append_records(&self, window_id: u64, records: Vec<LogRecord>) -> bool {
+        if !records.is_empty() {
+            self.appender.try_append(window_id, records)
         } else {
             true
         }

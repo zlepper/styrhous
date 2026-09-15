@@ -40,11 +40,6 @@ pub(crate) enum ResourceAction {
         updated_values: BTreeMap<String, String>,
     },
     ViewLogs {
-        name: String,
-        namespace: Option<String>,
-        container: PodLogContainer,
-    },
-    ViewInterleavedLogs {
         targets: Vec<PodLogStreamTarget>,
     },
     Shell {
@@ -115,7 +110,6 @@ impl ResourceAction {
             | Self::RequestScale { .. }
             | Self::SaveData { .. }
             | Self::ViewLogs { .. }
-            | Self::ViewInterleavedLogs { .. }
             | Self::NavigateDetails { .. } => None,
         }
     }

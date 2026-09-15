@@ -93,7 +93,7 @@ enum NamespaceSelection {
 enum ResourceSelectionAction {
     Clear,
     Delete,
-    ViewInterleavedLogs,
+    ViewLogs,
 }
 
 #[derive(Default)]
@@ -101,8 +101,7 @@ struct WorkspaceEffects {
     namespace_selection: Option<NamespaceSelection>,
     retry_requested: bool,
     detail_to_open: Option<ResourceDetailTarget>,
-    log_to_open: Option<PodLogTarget>,
-    interleaved_logs_to_open: Option<InterleavedPodLogTarget>,
+    log_sources_to_open: Option<LogSourcesTarget>,
     yaml_to_open: Option<YamlEditorTarget>,
     shell_request: Option<ShellRequest>,
     column_settings_to_open: Option<super::resource_table_settings::ResourceTableSettingsTarget>,
@@ -116,14 +115,7 @@ struct ResourceDetailTarget {
     uid: String,
 }
 
-struct PodLogTarget {
-    cluster_key: i32,
-    name: String,
-    namespace: Option<String>,
-    container: crate::minimal_resource::PodLogContainer,
-}
-
-struct InterleavedPodLogTarget {
+struct LogSourcesTarget {
     cluster_key: i32,
     targets: Vec<crate::worker::PodLogStreamTarget>,
 }
@@ -172,21 +164,8 @@ impl WorkspaceEffects {
         if let Some(target) = self.column_settings_to_open {
             ui_state.replace_global_blade(Box::new(target), commands_to_send);
         }
-        if let Some(target) = self.log_to_open {
-            ui_state.open_pod_log_window(
-                target.cluster_key,
-                target.name,
-                target.namespace,
-                target.container,
-                commands_to_send,
-            );
-        }
-        if let Some(target) = self.interleaved_logs_to_open {
-            ui_state.request_interleaved_pod_log_window(
-                target.cluster_key,
-                target.targets,
-                commands_to_send,
-            );
+        if let Some(target) = self.log_sources_to_open {
+            ui_state.request_pod_log_window(target.cluster_key, target.targets, commands_to_send);
         }
         if let Some(target) = self.yaml_to_open {
             ui_state.open_yaml_editor(
@@ -571,20 +550,8 @@ pub(super) fn show(
                                 resource_name: name,
                             }));
                         }
-                        ResourceAction::ViewLogs {
-                            name,
-                            namespace,
-                            container,
-                        } => {
-                            effects.log_to_open = Some(PodLogTarget {
-                                cluster_key: cluster.cluster_key,
-                                name,
-                                namespace,
-                                container,
-                            });
-                        }
-                        ResourceAction::ViewInterleavedLogs { targets } => {
-                            effects.interleaved_logs_to_open = Some(InterleavedPodLogTarget {
+                        ResourceAction::ViewLogs { targets } => {
+                            effects.log_sources_to_open = Some(LogSourcesTarget {
                                 cluster_key: cluster.cluster_key,
                                 targets,
                             });
@@ -641,7 +608,7 @@ pub(super) fn show(
                                     Some(PendingBulkDelete::new(api_resource.clone(), targets));
                             }
                         }
-                        ResourceSelectionAction::ViewInterleavedLogs => {
+                        ResourceSelectionAction::ViewLogs => {
                             let selected_uids = resources
                                 .resource_selections
                                 .get(api_resource)
@@ -658,7 +625,7 @@ pub(super) fn show(
                                 })
                                 .collect::<Vec<_>>();
                             if !targets.is_empty() {
-                                effects.interleaved_logs_to_open = Some(InterleavedPodLogTarget {
+                                effects.log_sources_to_open = Some(LogSourcesTarget {
                                     cluster_key: cluster.cluster_key,
                                     targets,
                                 });

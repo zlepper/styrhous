@@ -5,13 +5,13 @@ use super::{
     WorkerResultSender,
 };
 use crate::helpers::ResultExt;
-use crate::log_store::LogStoreAppender;
+use crate::log_store::{LogRecord, LogStoreAppender, read_log_record, write_log_record};
 use futures_util::{AsyncBufReadExt, StreamExt, TryStreamExt};
 use k8s_openapi::api::core::v1::Pod;
 use kube::api::{Api, LogParams};
 use std::cmp::Ordering as CmpOrdering;
 use std::collections::BinaryHeap;
-use std::io::{BufReader, ErrorKind, Read, Seek, SeekFrom, Write};
+use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
@@ -21,29 +21,22 @@ use tokio::sync::Mutex;
 use tokio::time::Instant;
 
 #[derive(Clone)]
-enum IngestAppender {
-    Direct(LogStoreAppender),
-    Interleaved(Arc<InterleavedAppender>),
-}
-
-#[derive(Clone)]
 struct StreamTargetContext {
     log_window_id: u64,
-    ingest: IngestAppender,
+    ingest: Arc<LogTimelineAppender>,
     completed_backfills: Arc<AtomicUsize>,
     target_count: usize,
-    source_labels: bool,
     sender: WorkerResultSender,
 }
 
-struct InterleavedAppender {
+struct LogTimelineAppender {
     appender: LogStoreAppender,
     log_window_id: u64,
     live: Mutex<Vec<PendingLiveLine>>,
-    history: std::sync::Mutex<Vec<InterleavedHistorySource>>,
+    history: std::sync::Mutex<Vec<LogHistorySource>>,
 }
 
-impl InterleavedAppender {
+impl LogTimelineAppender {
     fn new(
         appender: LogStoreAppender,
         log_window_id: u64,
@@ -55,7 +48,7 @@ impl InterleavedAppender {
             live: Mutex::new(Vec::new()),
             history: std::sync::Mutex::new(
                 (0..source_count)
-                    .map(|_| InterleavedHistorySource::new())
+                    .map(|_| LogHistorySource::new())
                     .collect::<anyhow::Result<_>>()?,
             ),
         })
@@ -64,7 +57,7 @@ impl InterleavedAppender {
     async fn append(
         &self,
         source_index: usize,
-        lines: Vec<String>,
+        records: Vec<LogRecord>,
         backfill: bool,
     ) -> anyhow::Result<()> {
         if backfill {
@@ -75,47 +68,49 @@ impl InterleavedAppender {
             let mut history = self
                 .history
                 .lock()
-                .map_err(|_| anyhow::anyhow!("Interleaved log history lock was poisoned"))?;
+                .map_err(|_| anyhow::anyhow!("Log timeline history lock was poisoned"))?;
             return history
                 .get_mut(source_index)
-                .ok_or_else(|| anyhow::anyhow!("Unknown interleaved log source"))?
+                .ok_or_else(|| anyhow::anyhow!("Unknown log timeline source"))?
                 .history
-                .append(lines);
+                .append(records);
         }
 
         let received_at = Instant::now();
-        self.live.lock().await.extend(
-            lines
-                .into_iter()
-                .map(|line| PendingLiveLine { line, received_at }),
-        );
+        self.live
+            .lock()
+            .await
+            .extend(records.into_iter().map(|record| PendingLiveLine {
+                record,
+                received_at,
+            }));
         // A follow stream has no cross-source watermark: a silent source can
         // always still deliver an older record. Retaining records briefly
         // gives concurrently arriving sources a shared ordering window while
         // ensuring a quiet source cannot stall the live viewer indefinitely.
-        tokio::time::sleep(INTERLEAVE_WINDOW).await;
+        tokio::time::sleep(LIVE_ORDERING_WINDOW).await;
         self.flush_live().await
     }
 
     async fn flush_live(&self) -> anyhow::Result<()> {
-        let cutoff = Instant::now() - INTERLEAVE_WINDOW;
+        let cutoff = Instant::now() - LIVE_ORDERING_WINDOW;
         let mut pending = self.live.lock().await;
-        let mut lines = Vec::new();
+        let mut records = Vec::new();
         let mut retained = Vec::with_capacity(pending.len());
         for pending_line in std::mem::take(&mut *pending) {
             if pending_line.received_at <= cutoff {
-                lines.push(pending_line.line);
+                records.push(pending_line.record);
             } else {
                 retained.push(pending_line);
             }
         }
         *pending = retained;
         drop(pending);
-        if lines.is_empty() {
+        if records.is_empty() {
             return Ok(());
         }
-        lines.sort_by(|left, right| log_timestamp_order(left, right));
-        self.appender.append(self.log_window_id, lines).await
+        records.sort_by(log_timestamp_order);
+        self.appender.append(self.log_window_id, records).await
     }
 
     async fn complete_backfill(&self) -> anyhow::Result<()> {
@@ -123,16 +118,21 @@ impl InterleavedAppender {
             &mut *self
                 .history
                 .lock()
-                .map_err(|_| anyhow::anyhow!("Interleaved log history lock was poisoned"))?,
+                .map_err(|_| anyhow::anyhow!("Log timeline history lock was poisoned"))?,
         );
         merge_history_spools(&self.appender, self.log_window_id, sources).await
     }
 
-    fn capture_live_prefix(&self, source_index: usize, line: &str) -> anyhow::Result<()> {
+    async fn finish_backfill(&self) -> anyhow::Result<()> {
+        self.complete_backfill().await?;
+        self.appender.complete_backfill(self.log_window_id).await
+    }
+
+    fn capture_live_prefix(&self, source_index: usize, record: &LogRecord) -> anyhow::Result<()> {
         let mut history = self
             .history
             .lock()
-            .map_err(|_| anyhow::anyhow!("Interleaved log history lock was poisoned"))?;
+            .map_err(|_| anyhow::anyhow!("Log timeline history lock was poisoned"))?;
         // The per-source spools move into the disk merge after all histories
         // finish. Follow streams intentionally continue afterwards, but no
         // longer need boundary capture.
@@ -141,11 +141,9 @@ impl InterleavedAppender {
         }
         let source = history
             .get_mut(source_index)
-            .ok_or_else(|| anyhow::anyhow!("Unknown interleaved log source"))?;
+            .ok_or_else(|| anyhow::anyhow!("Unknown log timeline source"))?;
         if !source.backfill_complete {
-            source
-                .live_prefix
-                .append(std::iter::once(line.to_owned()))?;
+            source.live_prefix.append(std::iter::once(record.clone()))?;
         }
         Ok(())
     }
@@ -154,20 +152,20 @@ impl InterleavedAppender {
         let mut history = self
             .history
             .lock()
-            .map_err(|_| anyhow::anyhow!("Interleaved log history lock was poisoned"))?;
+            .map_err(|_| anyhow::anyhow!("Log timeline history lock was poisoned"))?;
         history
             .get_mut(source_index)
-            .ok_or_else(|| anyhow::anyhow!("Unknown interleaved log source"))?
+            .ok_or_else(|| anyhow::anyhow!("Unknown log timeline source"))?
             .backfill_complete = true;
         Ok(())
     }
 }
 
-const INTERLEAVE_WINDOW: Duration = Duration::from_millis(100);
+const LIVE_ORDERING_WINDOW: Duration = Duration::from_millis(100);
 const HISTORY_MERGE_BATCH_SIZE: usize = 512;
 
 struct PendingLiveLine {
-    line: String,
+    record: LogRecord,
     received_at: Instant,
 }
 
@@ -177,13 +175,13 @@ struct HistorySpool {
     total_lines: usize,
 }
 
-struct InterleavedHistorySource {
+struct LogHistorySource {
     history: HistorySpool,
     live_prefix: HistorySpool,
     backfill_complete: bool,
 }
 
-impl InterleavedHistorySource {
+impl LogHistorySource {
     fn new() -> anyhow::Result<Self> {
         Ok(Self {
             history: HistorySpool::new()?,
@@ -202,18 +200,13 @@ impl HistorySpool {
         })
     }
 
-    fn append(&mut self, lines: impl IntoIterator<Item = String>) -> anyhow::Result<()> {
+    fn append(&mut self, records: impl IntoIterator<Item = LogRecord>) -> anyhow::Result<()> {
         let data = self.data.as_file_mut();
         let offsets = self.offsets.as_file_mut();
         let mut next_offset = data.seek(SeekFrom::End(0))?;
-        for line in lines {
-            let bytes = line.as_bytes();
-            let length = u32::try_from(bytes.len())
-                .map_err(|_| anyhow::anyhow!("A log line exceeds 4 GiB"))?;
+        for record in records {
             offsets.write_all(&next_offset.to_le_bytes())?;
-            data.write_all(&length.to_le_bytes())?;
-            data.write_all(bytes)?;
-            next_offset += u64::from(length) + 4;
+            next_offset += write_log_record(data, &record)?;
             self.total_lines += 1;
         }
         data.flush()?;
@@ -234,7 +227,7 @@ impl HistorySpool {
             let history_start = self.total_lines - overlap;
             let mut matches = true;
             for offset in 0..overlap {
-                if self.read_line(history_start + offset)? != live_prefix.read_line(offset)? {
+                if self.read_record(history_start + offset)? != live_prefix.read_record(offset)? {
                     matches = false;
                     break;
                 }
@@ -246,7 +239,7 @@ impl HistorySpool {
         Ok(0)
     }
 
-    fn read_line(&self, line_index: usize) -> anyhow::Result<String> {
+    fn read_record(&self, line_index: usize) -> anyhow::Result<LogRecord> {
         let mut offsets = self.offsets.reopen()?;
         offsets.seek(SeekFrom::Start(
             (line_index * std::mem::size_of::<u64>()) as u64,
@@ -255,7 +248,7 @@ impl HistorySpool {
         offsets.read_exact(&mut offset)?;
         let mut data = self.data.reopen()?;
         data.seek(SeekFrom::Start(u64::from_le_bytes(offset)))?;
-        read_spooled_record(&mut BufReader::new(data))?
+        read_log_record(&mut BufReader::new(data))?
             .ok_or_else(|| anyhow::anyhow!("Missing log record in history spool"))
     }
 }
@@ -266,14 +259,14 @@ struct HistoryReader {
 }
 
 struct HistoryMergeEntry {
-    line: String,
+    record: LogRecord,
     source_index: usize,
 }
 
 impl Ord for HistoryMergeEntry {
     fn cmp(&self, other: &Self) -> CmpOrdering {
         // BinaryHeap is a max heap, so reverse the chronological comparison.
-        log_timestamp_order(&other.line, &self.line)
+        log_timestamp_order(&other.record, &self.record)
             .then_with(|| other.source_index.cmp(&self.source_index))
     }
 }
@@ -286,7 +279,7 @@ impl PartialOrd for HistoryMergeEntry {
 
 impl PartialEq for HistoryMergeEntry {
     fn eq(&self, other: &Self) -> bool {
-        self.source_index == other.source_index && self.line == other.line
+        self.source_index == other.source_index && self.record == other.record
     }
 }
 
@@ -295,7 +288,7 @@ impl Eq for HistoryMergeEntry {}
 async fn merge_history_spools(
     appender: &LogStoreAppender,
     log_window_id: u64,
-    sources: Vec<InterleavedHistorySource>,
+    sources: Vec<LogHistorySource>,
 ) -> anyhow::Result<()> {
     let mut readers = sources
         .into_iter()
@@ -309,14 +302,17 @@ async fn merge_history_spools(
         .collect::<anyhow::Result<Vec<_>>>()?;
     let mut pending = BinaryHeap::new();
     for (source_index, reader) in readers.iter_mut().enumerate() {
-        if let Some(line) = read_spooled_line(reader)? {
-            pending.push(HistoryMergeEntry { line, source_index });
+        if let Some(record) = read_next_spooled_record(reader)? {
+            pending.push(HistoryMergeEntry {
+                record,
+                source_index,
+            });
         }
     }
 
     let mut batch = Vec::with_capacity(HISTORY_MERGE_BATCH_SIZE);
-    while let Some(line) = next_history_merge_line(&mut readers, &mut pending)? {
-        batch.push(line);
+    while let Some(record) = next_history_merge_record(&mut readers, &mut pending)? {
+        batch.push(record);
         if batch.len() == HISTORY_MERGE_BATCH_SIZE {
             appender
                 .append_backfill(log_window_id, std::mem::take(&mut batch))
@@ -329,90 +325,37 @@ async fn merge_history_spools(
     Ok(())
 }
 
-fn next_history_merge_line(
+fn next_history_merge_record(
     readers: &mut [HistoryReader],
     pending: &mut BinaryHeap<HistoryMergeEntry>,
-) -> anyhow::Result<Option<String>> {
-    let Some(HistoryMergeEntry { line, source_index }) = pending.pop() else {
+) -> anyhow::Result<Option<LogRecord>> {
+    let Some(HistoryMergeEntry {
+        record,
+        source_index,
+    }) = pending.pop()
+    else {
         return Ok(None);
     };
-    if let Some(next_line) = read_spooled_line(&mut readers[source_index])? {
+    if let Some(next_record) = read_next_spooled_record(&mut readers[source_index])? {
         pending.push(HistoryMergeEntry {
-            line: next_line,
+            record: next_record,
             source_index,
         });
     }
-    Ok(Some(line))
+    Ok(Some(record))
 }
 
-fn read_spooled_line(reader: &mut HistoryReader) -> anyhow::Result<Option<String>> {
+fn read_next_spooled_record(reader: &mut HistoryReader) -> anyhow::Result<Option<LogRecord>> {
     if reader.remaining == 0 {
         return Ok(None);
     }
     reader.remaining -= 1;
-    read_spooled_record(&mut reader.data)
+    read_log_record(&mut reader.data)
 }
 
-fn read_spooled_record(reader: &mut BufReader<std::fs::File>) -> anyhow::Result<Option<String>> {
-    let mut length = [0; 4];
-    match reader.read_exact(&mut length) {
-        Ok(()) => {}
-        Err(error) if error.kind() == ErrorKind::UnexpectedEof => return Ok(None),
-        Err(error) => return Err(error.into()),
-    }
-    let mut bytes = vec![0; u32::from_le_bytes(length) as usize];
-    reader.read_exact(&mut bytes)?;
-    Ok(Some(String::from_utf8(bytes)?))
-}
-
-impl IngestAppender {
-    fn observe_live_line(&self, source_index: usize, line: &str) -> anyhow::Result<()> {
-        if let Self::Interleaved(appender) = self {
-            appender.capture_live_prefix(source_index, line)?;
-        }
-        Ok(())
-    }
-
-    async fn append(
-        &self,
-        log_window_id: u64,
-        source_index: usize,
-        lines: Vec<String>,
-        backfill: bool,
-    ) -> anyhow::Result<()> {
-        match self {
-            Self::Direct(appender) => {
-                if backfill {
-                    appender.append_backfill(log_window_id, lines).await
-                } else {
-                    appender.append(log_window_id, lines).await
-                }
-            }
-            Self::Interleaved(appender) => appender.append(source_index, lines, backfill).await,
-        }
-    }
-
-    async fn complete_backfill(&self, log_window_id: u64) -> anyhow::Result<()> {
-        if let Self::Interleaved(appender) = self {
-            appender.complete_backfill().await?;
-        }
-        match self {
-            Self::Direct(appender) => appender.complete_backfill(log_window_id).await,
-            Self::Interleaved(appender) => appender.appender.complete_backfill(log_window_id).await,
-        }
-    }
-
-    fn complete_source_backfill(&self, source_index: usize) -> anyhow::Result<()> {
-        if let Self::Interleaved(appender) = self {
-            appender.complete_source_backfill(source_index)?;
-        }
-        Ok(())
-    }
-}
-
-fn log_timestamp_order(left: &str, right: &str) -> std::cmp::Ordering {
-    let timestamp = |line: &str| {
-        crate::ansi::parse_kubernetes_log_line(line)
+fn log_timestamp_order(left: &LogRecord, right: &LogRecord) -> std::cmp::Ordering {
+    let timestamp = |record: &LogRecord| {
+        crate::ansi::parse_kubernetes_log_line(&record.text)
             .timestamp
             .and_then(|timestamp| OffsetDateTime::parse(&timestamp, &Rfc3339).ok())
     };
@@ -421,21 +364,11 @@ fn log_timestamp_order(left: &str, right: &str) -> std::cmp::Ordering {
     match (left_timestamp, right_timestamp) {
         (Some(left_timestamp), Some(right_timestamp)) => left_timestamp
             .cmp(&right_timestamp)
-            .then_with(|| log_source_label(left).cmp(log_source_label(right))),
+            .then_with(|| left.source.cmp(&right.source)),
         (None, None) => std::cmp::Ordering::Equal,
         (Some(_), None) => std::cmp::Ordering::Less,
         (None, Some(_)) => std::cmp::Ordering::Greater,
     }
-}
-
-fn log_source_label(line: &str) -> &str {
-    line.split_once(' ')
-        .map(|(_, message)| message)
-        .unwrap_or(line)
-        .strip_prefix('[')
-        .and_then(|message| message.split_once(']'))
-        .map(|(label, _)| label)
-        .unwrap_or_default()
 }
 
 pub(super) async fn stream(
@@ -446,23 +379,18 @@ pub(super) async fn stream(
     sender: WorkerResultSender,
 ) {
     let target_count = targets.len();
-    let source_labels = target_count > 1;
-    let ingest = if source_labels {
-        match InterleavedAppender::new(log_store_appender, log_window_id, target_count) {
-            Ok(appender) => IngestAppender::Interleaved(Arc::new(appender)),
-            Err(error) => {
-                sender
-                    .send(PodLogStreamFailed {
-                        log_window_id,
-                        error: format!("Could not initialize interleaved log storage: {error:#}"),
-                    })
-                    .await
-                    .log_if_error("Failed to send Pod log stream failure");
-                return;
-            }
+    let ingest = match LogTimelineAppender::new(log_store_appender, log_window_id, target_count) {
+        Ok(appender) => Arc::new(appender),
+        Err(error) => {
+            sender
+                .send(PodLogStreamFailed {
+                    log_window_id,
+                    error: format!("Could not initialize log timeline storage: {error:#}"),
+                })
+                .await
+                .log_if_error("Failed to send Pod log stream failure");
+            return;
         }
-    } else {
-        IngestAppender::Direct(log_store_appender)
     };
     let completed_backfills = Arc::new(AtomicUsize::new(0));
     let context = StreamTargetContext {
@@ -470,7 +398,6 @@ pub(super) async fn stream(
         ingest,
         completed_backfills,
         target_count,
-        source_labels,
         sender: sender.clone(),
     };
     let results = futures_util::stream::iter(targets)
@@ -515,7 +442,6 @@ async fn stream_target(
     let live_sender = context.sender.clone();
     let live_ingest = context.ingest.clone();
     let log_window_id = context.log_window_id;
-    let source_labels = context.source_labels;
     let live = async move {
         match tail_pods
             .log_stream(
@@ -523,7 +449,7 @@ async fn stream_target(
                 &LogParams {
                     container: Some(live_target.container.clone()),
                     follow: true,
-                    tail_lines: Some(if source_labels { 0 } else { 1_000 }),
+                    tail_lines: Some(0),
                     timestamps: true,
                     ..LogParams::default()
                 },
@@ -531,16 +457,8 @@ async fn stream_target(
             .await
         {
             Ok(stream) => {
-                let result = append_stream(
-                    stream,
-                    live_ingest,
-                    log_window_id,
-                    false,
-                    &live_target,
-                    source_labels,
-                    source_index,
-                )
-                .await;
+                let result =
+                    append_stream(stream, live_ingest, false, &live_target, source_index).await;
                 if let Err(error) = &result {
                     send_source_failure(&live_sender, log_window_id, &live_target, error).await;
                 }
@@ -570,10 +488,8 @@ async fn stream_target(
             append_stream(
                 stream,
                 backfill_ingest.clone(),
-                log_window_id,
                 true,
                 &backfill_target,
-                source_labels,
                 source_index,
             )
             .await
@@ -588,7 +504,7 @@ async fn stream_target(
             failed = true;
         }
         if completed_backfills.fetch_add(1, Ordering::AcqRel) + 1 == target_count
-            && let Err(error) = backfill_ingest.complete_backfill(log_window_id).await
+            && let Err(error) = backfill_ingest.finish_backfill().await
         {
             send_source_failure(&backfill_sender, log_window_id, &backfill_target, &error).await;
             failed = true;
@@ -620,129 +536,122 @@ async fn send_source_failure(
 
 async fn append_stream(
     stream: impl futures_util::AsyncBufRead + Unpin,
-    ingest: IngestAppender,
-    log_window_id: u64,
+    ingest: Arc<LogTimelineAppender>,
     backfill: bool,
     target: &PodLogStreamTarget,
-    source_labels: bool,
     source_index: usize,
 ) -> anyhow::Result<()> {
     let mut lines = stream.lines();
     let mut batch = Vec::new();
+    let source = target.display_name();
     let mut flush = tokio::time::interval(Duration::from_millis(100));
     flush.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         tokio::select! {
             line = lines.try_next() => {
-                let Some(line) = line? else { break };
-                let line = if source_labels {
-                    label_line(&line, target)
-                } else {
-                    line
+                let line = match line {
+                    Ok(Some(line)) => line,
+                    Ok(None) => break,
+                    Err(error) => {
+                        if !batch.is_empty() {
+                            append_batch(&ingest, source_index, std::mem::take(&mut batch), backfill).await?;
+                        }
+                        return Err(error.into());
+                    }
                 };
+                let record = LogRecord::from_source(line, source.clone());
                 if !backfill {
-                    ingest.observe_live_line(source_index, &line)?;
+                    ingest.capture_live_prefix(source_index, &record)?;
                 }
-                batch.push(line);
+                batch.push(record);
                 if batch.len() >= 64 {
-                    append_batch(&ingest, log_window_id, source_index, std::mem::take(&mut batch), backfill).await?;
+                    append_batch(&ingest, source_index, std::mem::take(&mut batch), backfill).await?;
                 }
             }
             _ = flush.tick(), if !batch.is_empty() => {
-                append_batch(&ingest, log_window_id, source_index, std::mem::take(&mut batch), backfill).await?;
+                append_batch(&ingest, source_index, std::mem::take(&mut batch), backfill).await?;
             }
         }
     }
     if !batch.is_empty() {
-        append_batch(&ingest, log_window_id, source_index, batch, backfill).await?;
+        append_batch(&ingest, source_index, batch, backfill).await?;
     }
     Ok(())
 }
 
-fn label_line(line: &str, target: &PodLogStreamTarget) -> String {
-    let label = target.display_name();
-    if crate::ansi::parse_kubernetes_log_line(line)
-        .timestamp
-        .is_some()
-        && let Some((timestamp, message)) = line.split_once(' ')
-    {
-        format!("{timestamp} [{label}] {message}")
-    } else {
-        format!("[{label}] {line}")
-    }
-}
-
 async fn append_batch(
-    appender: &IngestAppender,
-    log_window_id: u64,
+    appender: &LogTimelineAppender,
     source_index: usize,
-    lines: Vec<String>,
+    records: Vec<LogRecord>,
     backfill: bool,
 ) -> anyhow::Result<()> {
-    appender
-        .append(log_window_id, source_index, lines, backfill)
-        .await
+    appender.append(source_index, records, backfill).await
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::log_store::LogStoreService;
+    use crate::log_store::{LogStoreResult, LogStoreService};
 
-    #[test]
-    fn labels_timestamped_and_plain_records_with_their_source() {
-        let target = PodLogStreamTarget {
-            namespace: "payments".into(),
-            pod_name: "api-0".into(),
-            container: "server".into(),
-        };
+    fn wait_for_store_result(
+        service: &LogStoreService,
+        matches: impl Fn(&LogStoreResult) -> bool,
+    ) -> LogStoreResult {
+        let start = std::time::Instant::now();
+        loop {
+            if let Some(result) = service.try_next_result()
+                && matches(&result)
+            {
+                return result;
+            }
+            assert!(
+                start.elapsed() < Duration::from_secs(2),
+                "timed out waiting for log-store result"
+            );
+            std::thread::yield_now();
+        }
+    }
 
-        assert_eq!(
-            label_line("2026-09-14T09:00:00Z ready", &target),
-            "2026-09-14T09:00:00Z [payments/api-0 · server] ready"
-        );
-        assert_eq!(
-            label_line("plain output", &target),
-            "[payments/api-0 · server] plain output"
-        );
+    fn record(text: &str, source: &str) -> LogRecord {
+        LogRecord::from_source(text.to_owned(), source.to_owned())
     }
 
     #[test]
     fn timestamp_order_uses_source_label_as_a_stable_tiebreaker() {
-        let mut lines = vec![
-            "2026-09-14T09:00:02Z [payments/worker-0 · worker] later".to_owned(),
-            "2026-09-14T09:00:01Z [payments/worker-0 · worker] first".to_owned(),
-            "2026-09-14T09:00:01Z [payments/api-0 · server] first".to_owned(),
-            "no runtime timestamp".to_owned(),
+        let mut records = vec![
+            record("2026-09-14T09:00:02Z later", "payments/worker-0 · worker"),
+            record("2026-09-14T09:00:01Z first", "payments/worker-0 · worker"),
+            record("2026-09-14T09:00:01Z first", "payments/api-0 · server"),
+            record("no runtime timestamp", "payments/api-0 · server"),
         ];
 
-        lines.sort_by(|left, right| log_timestamp_order(left, right));
+        records.sort_by(log_timestamp_order);
 
         assert_eq!(
-            lines,
+            records,
             [
-                "2026-09-14T09:00:01Z [payments/api-0 · server] first",
-                "2026-09-14T09:00:01Z [payments/worker-0 · worker] first",
-                "2026-09-14T09:00:02Z [payments/worker-0 · worker] later",
-                "no runtime timestamp",
+                record("2026-09-14T09:00:01Z first", "payments/api-0 · server"),
+                record("2026-09-14T09:00:01Z first", "payments/worker-0 · worker"),
+                record("2026-09-14T09:00:02Z later", "payments/worker-0 · worker"),
+                record("no runtime timestamp", "payments/api-0 · server"),
             ]
         );
     }
 
     #[test]
     fn timestamp_order_parses_fractional_rfc3339_timestamps() {
-        let mut lines = vec![
-            "2026-09-14T09:00:00.1Z [payments/api-0 · server] later".to_owned(),
-            "2026-09-14T09:00:00Z [payments/worker-0 · worker] earlier".to_owned(),
+        let mut records = vec![
+            record("2026-09-14T09:00:00.1Z later", "payments/api-0 · server"),
+            record("2026-09-14T09:00:00Z earlier", "payments/worker-0 · worker"),
         ];
 
-        lines.sort_by(|left, right| log_timestamp_order(left, right));
+        records.sort_by(log_timestamp_order);
 
         assert_eq!(
-            lines,
+            records,
             [
-                "2026-09-14T09:00:00Z [payments/worker-0 · worker] earlier",
-                "2026-09-14T09:00:00.1Z [payments/api-0 · server] later",
+                record("2026-09-14T09:00:00Z earlier", "payments/worker-0 · worker"),
+                record("2026-09-14T09:00:00.1Z later", "payments/api-0 · server"),
             ]
         );
     }
@@ -751,21 +660,27 @@ mod tests {
     fn history_spool_persists_length_delimited_log_records() -> anyhow::Result<()> {
         let mut spool = HistorySpool::new()?;
         spool.append(vec![
-            "2026-09-14T09:00:00Z first line".to_owned(),
-            "second\nline remains one record".to_owned(),
+            record("2026-09-14T09:00:00Z first line", "payments/api-0 · server"),
+            record("second\nline remains one record", "payments/api-0 · server"),
         ])?;
 
         let spool_lines = spool.total_lines;
         let mut reader = spool.into_reader(spool_lines)?;
         assert_eq!(
-            read_spooled_line(&mut reader)?,
-            Some("2026-09-14T09:00:00Z first line".to_owned())
+            read_next_spooled_record(&mut reader)?,
+            Some(record(
+                "2026-09-14T09:00:00Z first line",
+                "payments/api-0 · server"
+            ))
         );
         assert_eq!(
-            read_spooled_line(&mut reader)?,
-            Some("second\nline remains one record".to_owned())
+            read_next_spooled_record(&mut reader)?,
+            Some(record(
+                "second\nline remains one record",
+                "payments/api-0 · server"
+            ))
         );
-        assert_eq!(read_spooled_line(&mut reader)?, None);
+        assert_eq!(read_next_spooled_record(&mut reader)?, None);
         Ok(())
     }
 
@@ -773,13 +688,19 @@ mod tests {
     fn history_spools_merge_chronologically_without_loading_them_all() -> anyhow::Result<()> {
         let mut api = HistorySpool::new()?;
         api.append(vec![
-            "2026-09-14T09:00:01Z [payments/api-0 · server] api first".to_owned(),
-            "2026-09-14T09:00:03Z [payments/api-0 · server] api third".to_owned(),
+            record("2026-09-14T09:00:01Z api first", "payments/api-0 · server"),
+            record("2026-09-14T09:00:03Z api third", "payments/api-0 · server"),
         ])?;
         let mut worker = HistorySpool::new()?;
         worker.append(vec![
-            "2026-09-14T09:00:02Z [payments/worker-0 · worker] worker second".to_owned(),
-            "2026-09-14T09:00:04Z [payments/worker-0 · worker] worker fourth".to_owned(),
+            record(
+                "2026-09-14T09:00:02Z worker second",
+                "payments/worker-0 · worker",
+            ),
+            record(
+                "2026-09-14T09:00:04Z worker fourth",
+                "payments/worker-0 · worker",
+            ),
         ])?;
 
         let api_lines = api.total_lines;
@@ -791,22 +712,28 @@ mod tests {
         let mut pending = BinaryHeap::new();
         for (source_index, reader) in readers.iter_mut().enumerate() {
             pending.push(HistoryMergeEntry {
-                line: read_spooled_line(reader)?.expect("source has a first line"),
+                record: read_next_spooled_record(reader)?.expect("source has a first line"),
                 source_index,
             });
         }
 
         let mut merged = Vec::new();
-        while let Some(line) = next_history_merge_line(&mut readers, &mut pending)? {
-            merged.push(line);
+        while let Some(record) = next_history_merge_record(&mut readers, &mut pending)? {
+            merged.push(record);
         }
         assert_eq!(
             merged,
             [
-                "2026-09-14T09:00:01Z [payments/api-0 · server] api first",
-                "2026-09-14T09:00:02Z [payments/worker-0 · worker] worker second",
-                "2026-09-14T09:00:03Z [payments/api-0 · server] api third",
-                "2026-09-14T09:00:04Z [payments/worker-0 · worker] worker fourth",
+                record("2026-09-14T09:00:01Z api first", "payments/api-0 · server"),
+                record(
+                    "2026-09-14T09:00:02Z worker second",
+                    "payments/worker-0 · worker"
+                ),
+                record("2026-09-14T09:00:03Z api third", "payments/api-0 · server"),
+                record(
+                    "2026-09-14T09:00:04Z worker fourth",
+                    "payments/worker-0 · worker"
+                ),
             ]
         );
         Ok(())
@@ -816,15 +743,27 @@ mod tests {
     fn history_overlap_only_removes_a_source_boundary_suffix() -> anyhow::Result<()> {
         let mut history = HistorySpool::new()?;
         history.append(vec![
-            "2026-09-14T09:00:00Z [payments/api-0 · server] before".to_owned(),
-            "2026-09-14T09:00:01Z [payments/api-0 · server] overlap one".to_owned(),
-            "2026-09-14T09:00:02Z [payments/api-0 · server] overlap two".to_owned(),
+            record("2026-09-14T09:00:00Z before", "payments/api-0 · server"),
+            record(
+                "2026-09-14T09:00:01Z overlap one",
+                "payments/api-0 · server",
+            ),
+            record(
+                "2026-09-14T09:00:02Z overlap two",
+                "payments/api-0 · server",
+            ),
         ])?;
         let mut live = HistorySpool::new()?;
         live.append(vec![
-            "2026-09-14T09:00:01Z [payments/api-0 · server] overlap one".to_owned(),
-            "2026-09-14T09:00:02Z [payments/api-0 · server] overlap two".to_owned(),
-            "2026-09-14T09:00:03Z [payments/api-0 · server] after".to_owned(),
+            record(
+                "2026-09-14T09:00:01Z overlap one",
+                "payments/api-0 · server",
+            ),
+            record(
+                "2026-09-14T09:00:02Z overlap two",
+                "payments/api-0 · server",
+            ),
+            record("2026-09-14T09:00:03Z after", "payments/api-0 · server"),
         ])?;
 
         assert_eq!(history.overlap_with_live_prefix(&live)?, 2);
@@ -834,14 +773,86 @@ mod tests {
     #[test]
     fn live_lines_continue_after_history_spools_move_into_the_merge() -> anyhow::Result<()> {
         let service = LogStoreService::default();
-        let appender = InterleavedAppender::new(service.appender(), 1, 1)?;
+        let appender = LogTimelineAppender::new(service.appender(), 1, 1)?;
         appender
             .history
             .lock()
             .expect("history lock is available")
             .clear();
 
-        appender.capture_live_prefix(0, "2026-09-14T09:00:00Z late live line")?;
+        appender.capture_live_prefix(
+            0,
+            &record(
+                "2026-09-14T09:00:00Z late live line",
+                "payments/api-0 · server",
+            ),
+        )?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn one_source_stream_flushes_before_an_error_and_rebases_history() -> anyhow::Result<()> {
+        let service = LogStoreService::default();
+        assert!(service.open(1));
+        let ingest = Arc::new(LogTimelineAppender::new(service.appender(), 1, 1)?);
+        let target = PodLogStreamTarget {
+            namespace: "payments".to_owned(),
+            pod_name: "api-0".to_owned(),
+            container: "server".to_owned(),
+        };
+        let live_line = "2026-09-14T09:00:01Z live";
+        let mut live_bytes = live_line.as_bytes().to_vec();
+        live_bytes.extend_from_slice(b"\n\xff");
+        let live_stream = futures_util::io::Cursor::new(live_bytes);
+
+        assert!(
+            append_stream(live_stream, ingest.clone(), false, &target, 0)
+                .await
+                .is_err()
+        );
+        let LogStoreResult::Updated { appended_rows, .. } =
+            wait_for_store_result(&service, |result| {
+                matches!(result, LogStoreResult::Updated { window_id: 1, .. })
+            })
+        else {
+            unreachable!()
+        };
+        assert_eq!(appended_rows[0].text, "live");
+        assert_eq!(
+            appended_rows[0].source.as_deref(),
+            Some("payments/api-0 · server")
+        );
+
+        ingest
+            .append(
+                0,
+                vec![
+                    record("2026-09-14T09:00:00Z history", "payments/api-0 · server"),
+                    record(live_line, "payments/api-0 · server"),
+                ],
+                true,
+            )
+            .await?;
+        ingest.complete_source_backfill(0)?;
+        ingest.finish_backfill().await?;
+        let _ = wait_for_store_result(&service, |result| {
+            matches!(result, LogStoreResult::Rebased { window_id: 1, .. })
+        });
+
+        assert!(service.load_page(1, 0, false, 0));
+        let LogStoreResult::PageLoaded { rows, .. } = wait_for_store_result(&service, |result| {
+            matches!(result, LogStoreResult::PageLoaded { window_id: 1, .. })
+        }) else {
+            unreachable!()
+        };
+        assert_eq!(
+            rows.iter().map(|row| row.text.as_str()).collect::<Vec<_>>(),
+            ["history", "live"]
+        );
+        assert!(
+            rows.iter()
+                .all(|row| { row.source.as_deref() == Some("payments/api-0 · server") })
+        );
         Ok(())
     }
 }

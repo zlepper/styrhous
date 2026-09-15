@@ -1,6 +1,6 @@
 use super::state::{
     LogDisplayOptions, LogPageKey, LogTextPosition, LogTextSelection, PendingLogCaret,
-    PodLogStatus, PodLogWindowState, UiState,
+    PodLogStatus, PodLogWindowState, UiState, source_label_columns, source_label_text,
 };
 use crate::ansi::AnsiStyleSpan;
 use crate::log_store::LogStoreService;
@@ -81,12 +81,16 @@ pub(super) fn show(
             window.store_opened = log_store.open(id);
         }
         let viewport_id = egui::ViewportId::from_hash_of(("pod-log-window", id));
-        let title = if window.is_interleaved() {
+        let title = if window.has_multiple_sources() {
             format!("Logs · {} sources", window.targets.len())
         } else {
+            let target = window
+                .targets
+                .first()
+                .expect("log windows always contain one source");
             format!(
                 "Logs · {}/{} · {}",
-                window.namespace, window.pod_name, window.container.name
+                target.namespace, target.pod_name, target.container
             )
         };
         let mut close_requested = false;

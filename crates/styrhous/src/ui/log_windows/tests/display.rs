@@ -7,6 +7,7 @@ fn layout_toggles_metadata_and_ansi_styling_independently() {
     let job = log_line_layout_job(
         4,
         Some("2026-08-08T15:22:17.143Z"),
+        None,
         "error",
         &[AnsiStyleSpan {
             range: (0, 5),
@@ -47,15 +48,12 @@ fn display_toggles_update_the_shared_options() {
     components::test_support::setup_egui(&mut harness);
     harness.run();
 
-    harness
-        .get_by_label("Show log line numbers")
-        .click_accesskit();
+    harness.get_by_label("Show log line numbers").click();
     harness
         .get_by_label("Show Kubernetes log timestamps")
-        .click_accesskit();
-    harness
-        .get_by_label("Render ANSI styling")
-        .click_accesskit();
+        .click();
+    harness.get_by_label("Render ANSI styling").click();
+    harness.get_by_label("Show log source labels").click();
     harness.run();
 
     assert_eq!(
@@ -66,6 +64,93 @@ fn display_toggles_update_the_shared_options() {
             render_ansi: false,
         }
     );
+    assert!(window.borrow().show_source_labels);
+}
+
+#[test]
+fn source_labels_are_rendered_as_metadata_and_can_be_hidden() {
+    let source = "payments/api-0 · server";
+    let shown = log_line_layout_job(
+        0,
+        None,
+        Some(source),
+        "ready",
+        &[],
+        &[],
+        LogDisplayOptions::default(),
+    );
+    let hidden = log_line_layout_job(
+        0,
+        None,
+        None,
+        "ready",
+        &[],
+        &[],
+        LogDisplayOptions::default(),
+    );
+
+    assert_eq!(shown.text, "[payments/api-0 · server]  ready");
+    assert_eq!(hidden.text, "ready");
+}
+
+#[test]
+fn source_label_visibility_is_per_window() {
+    let targets = vec![
+        PodLogStreamTarget {
+            namespace: "payments".to_owned(),
+            pod_name: "api-0".to_owned(),
+            container: "server".to_owned(),
+        },
+        PodLogStreamTarget {
+            namespace: "payments".to_owned(),
+            pod_name: "worker-0".to_owned(),
+            container: "worker".to_owned(),
+        },
+    ];
+    let first = Rc::new(RefCell::new(
+        PodLogWindowState::new(1, 1, targets.clone()).expect("test log window has two sources"),
+    ));
+    let second = Rc::new(RefCell::new(
+        PodLogWindowState::new(2, 1, targets).expect("test log window has two sources"),
+    ));
+    let first_for_ui = first.clone();
+    let first_options = Rc::new(RefCell::new(LogDisplayOptions::default()));
+    let first_options_for_ui = first_options.clone();
+    let first_store = LogStoreService::default();
+    let mut first_close_requested = false;
+    let mut first_harness = Harness::builder().build_ui(move |ctx| {
+        show_log_window(
+            ctx,
+            &mut first_for_ui.borrow_mut(),
+            &mut first_options_for_ui.borrow_mut(),
+            &first_store,
+            &mut first_close_requested,
+        )
+    });
+    let second_for_ui = second.clone();
+    let second_options = Rc::new(RefCell::new(LogDisplayOptions::default()));
+    let second_options_for_ui = second_options.clone();
+    let second_store = LogStoreService::default();
+    let mut second_close_requested = false;
+    let mut second_harness = Harness::builder().build_ui(move |ctx| {
+        show_log_window(
+            ctx,
+            &mut second_for_ui.borrow_mut(),
+            &mut second_options_for_ui.borrow_mut(),
+            &second_store,
+            &mut second_close_requested,
+        )
+    });
+    components::test_support::setup_egui(&mut first_harness);
+    components::test_support::setup_egui(&mut second_harness);
+    first_harness.run();
+    second_harness.run();
+
+    first_harness.get_by_label("Show log source labels").click();
+    first_harness.run();
+
+    assert!(!first.borrow().show_source_labels);
+    assert!(second.borrow().show_source_labels);
 }
 
 #[test]
@@ -138,12 +223,50 @@ fn interleaved_pod_log_viewer_snapshot() {
         pod_name: "worker-0".to_owned(),
         container: "worker".to_owned(),
     };
-    let mut window = log_window(&[
-        "2026-08-08T15:22:17.143Z [payments/api-0 · server] server ready",
-        "2026-08-08T15:22:17.145Z [payments/worker-0 · worker] job accepted",
-        "[payments/api-0 · server] application-provided timestamp: 15:22:18",
-    ]);
-    window.targets = vec![api, worker.clone()];
+    let mut window = PodLogWindowState::new(1, 1, vec![api.clone(), worker.clone()])
+        .expect("test log window has two sources");
+    window.total_lines = 3;
+    window.initial_page_loaded = true;
+    window.store_opened = true;
+    window.status = PodLogStatus::Following;
+    let page_key = LogPageKey {
+        generation: 0,
+        filter_matches: false,
+        page_start: 0,
+    };
+    window.insert_page(
+        page_key,
+        [
+            ("2026-08-08T15:22:17.143Z server ready", api.display_name()),
+            (
+                "2026-08-08T15:22:17.145Z job accepted",
+                worker.display_name(),
+            ),
+            (
+                "application-provided timestamp: 15:22:18",
+                api.display_name(),
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(line_index, (text, source))| {
+            let parsed = crate::ansi::parse_kubernetes_log_line(text);
+            LogPageRow {
+                display_row: line_index,
+                line_index,
+                timestamp: parsed.timestamp,
+                source: Some(source),
+                text: parsed.line.text,
+                style_spans: parsed.line.style_spans,
+                match_ranges: Vec::new(),
+            }
+        })
+        .collect(),
+    );
+    assert_eq!(
+        window.pages[&page_key].max_source_columns,
+        worker.display_name().chars().count() + 4
+    );
     window
         .source_failures
         .insert(worker, "container is waiting to start".to_owned());
@@ -299,6 +422,7 @@ fn pod_log_viewer_renders_live_tail_rows_while_disk_page_catches_up_snapshot() {
             display_row: 0,
             line_index: 0,
             timestamp: None,
+            source: None,
             text: "live row arrives without a placeholder".into(),
             style_spans: Vec::new(),
             match_ranges: Vec::new(),

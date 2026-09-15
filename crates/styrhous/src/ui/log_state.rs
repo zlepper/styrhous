@@ -1,5 +1,4 @@
 use crate::log_store::{LOG_PAGE_SIZE, LogPageRow, LogStoreResult};
-use crate::minimal_resource::PodLogContainer;
 use crate::worker::PodLogStreamTarget;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
@@ -22,16 +21,24 @@ impl Default for LogDisplayOptions {
     }
 }
 
+pub(super) fn source_label_columns(source: Option<&str>, show_source_labels: bool) -> usize {
+    show_source_labels
+        .then_some(source)
+        .flatten()
+        .map_or(0, |source| source.chars().count() + 4)
+}
+
+pub(super) fn source_label_text(source: &str) -> String {
+    format!("[{source}]  ")
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct PodLogWindowState {
     pub(super) id: u64,
     pub(super) cluster_key: i32,
-    pub(super) namespace: String,
-    pub(super) pod_name: String,
-    pub(super) container: PodLogContainer,
-    /// All sources represented in this window. A traditional window has one
-    /// source; an interleaved window carries all selected Pod containers.
+    /// All Pod-container streams represented in this window.
     pub(super) targets: Vec<PodLogStreamTarget>,
+    pub(super) show_source_labels: bool,
     pub(super) source_failures: HashMap<PodLogStreamTarget, String>,
     pub(super) total_lines: usize,
     /// Older records written by the background history request but not yet
@@ -70,7 +77,7 @@ pub(super) struct PodLogWindowState {
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct PendingInterleavedLogs {
+pub(super) struct PendingLogSources {
     pub(super) cluster_key: i32,
     pub(super) targets: Vec<PodLogStreamTarget>,
 }
@@ -134,6 +141,7 @@ pub(super) struct LogPage {
     pub(super) rows: Vec<LogPageRow>,
     pub(super) bytes: usize,
     pub(super) max_text_columns: usize,
+    pub(super) max_source_columns: usize,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -194,25 +202,13 @@ impl LogTextSelection {
 impl PodLogWindowState {
     pub(super) const DEFAULT_PAGE_CACHE_LIMIT: usize = 128 * 1024 * 1024;
 
-    pub(super) fn new(
-        id: u64,
-        cluster_key: i32,
-        namespace: String,
-        pod_name: String,
-        container: PodLogContainer,
-    ) -> Self {
-        let targets = vec![PodLogStreamTarget {
-            namespace: namespace.clone(),
-            pod_name: pod_name.clone(),
-            container: container.name.clone(),
-        }];
-        Self {
+    pub(super) fn new(id: u64, cluster_key: i32, targets: Vec<PodLogStreamTarget>) -> Option<Self> {
+        let show_source_labels = targets.len() > 1;
+        (!targets.is_empty()).then(|| Self {
             id,
             cluster_key,
-            namespace,
-            pod_name,
             targets,
-            container,
+            show_source_labels,
             source_failures: HashMap::new(),
             total_lines: 0,
             backfill_lines: None,
@@ -237,32 +233,10 @@ impl PodLogWindowState {
             pending_caret: None,
             ensure_caret_visible: false,
             copied_text: None,
-        }
+        })
     }
 
-    pub(super) fn new_interleaved(
-        id: u64,
-        cluster_key: i32,
-        targets: Vec<PodLogStreamTarget>,
-    ) -> Option<Self> {
-        let first = targets.first()?.clone();
-        let container = PodLogContainer {
-            name: first.container.clone(),
-            kind: crate::resource_table::ContainerKind::App,
-            image: None,
-        };
-        let mut window = Self::new(
-            id,
-            cluster_key,
-            first.namespace.clone(),
-            first.pod_name.clone(),
-            container,
-        );
-        window.targets = targets;
-        Some(window)
-    }
-
-    pub(super) fn is_interleaved(&self) -> bool {
+    pub(super) fn has_multiple_sources(&self) -> bool {
         self.targets.len() > 1
     }
 
@@ -302,6 +276,7 @@ impl PodLogWindowState {
             .iter()
             .map(|row| {
                 row.text.len()
+                    + row.source.as_ref().map_or(0, String::len)
                     + row.style_spans.len() * std::mem::size_of::<crate::ansi::AnsiStyleSpan>()
                     + row.match_ranges.len() * 2 * std::mem::size_of::<usize>()
             })
@@ -311,6 +286,11 @@ impl PodLogWindowState {
             .map(|row| row.text.chars().count())
             .max()
             .unwrap_or_default();
+        let max_source_columns = rows
+            .iter()
+            .map(|row| source_label_columns(row.source.as_deref(), true))
+            .max()
+            .unwrap_or_default();
         self.page_cache_bytes += bytes;
         self.pages.insert(
             key,
@@ -318,6 +298,7 @@ impl PodLogWindowState {
                 rows,
                 bytes,
                 max_text_columns,
+                max_source_columns,
             },
         );
         self.page_order.push_back(key);

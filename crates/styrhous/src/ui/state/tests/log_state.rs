@@ -72,6 +72,7 @@ fn live_tail_rows_bridge_disk_pages_only_while_following_bottom() {
         display_row,
         line_index: display_row,
         timestamp: None,
+        source: None,
         text: text.to_owned(),
         style_spans: Vec::new(),
         match_ranges: Vec::new(),

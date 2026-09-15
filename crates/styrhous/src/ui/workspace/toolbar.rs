@@ -202,7 +202,7 @@ pub(super) fn show_toolbar(
                                         .clicked()
                                 {
                                     *selection_controls.action =
-                                        Some(ResourceSelectionAction::ViewInterleavedLogs);
+                                        Some(ResourceSelectionAction::ViewLogs);
                                 }
                                 let delete =
                                     TailwindButton::danger("Delete selected").size(ButtonSize::Xs);
