@@ -23,12 +23,15 @@ fn force_delete_confirmation_requires_the_resource_name_before_removing_finalize
         ..Default::default()
     };
 
-    harness.run();
+    // The confirmation has a deliberate three-second repaint deadline. Draw
+    // the four opening frames captured by this snapshot instead of asking the
+    // harness to settle past that future timer.
+    harness.run_steps(4);
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "resource_actions/force_delete_confirmation_requires_the_resource_name_before_removing_finalizers/force_delete_confirmation",
     ));
     harness.get_by_label("Remove finalizers").click();
-    harness.run();
+    harness.step();
     assert!(harness.state().worker.commands.is_empty());
 
     harness
