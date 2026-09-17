@@ -172,6 +172,7 @@ pub(crate) struct PodLogStreamTarget {
     pub(crate) namespace: String,
     pub(crate) pod_name: String,
     pub(crate) container: String,
+    pub(crate) kind: ContainerKind,
 }
 
 impl PodLogStreamTarget {

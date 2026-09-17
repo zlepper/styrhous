@@ -15,8 +15,8 @@ impl WorkerCommand for StartPodLogStream {
                 error: "No Pod log targets were selected".to_owned(),
             });
         }
-        let client = state
-            .client_for_cluster(self.cluster_key)
+        let (log_client, status_client) = state
+            .clients_for_log_stream(self.cluster_key)
             .await
             .map_err(failure)?;
         let log_store_appender =
@@ -37,7 +37,8 @@ impl WorkerCommand for StartPodLogStream {
             .replace_after_abort(key, move || {
                 tokio::spawn(pod_logs::stream(
                     self.log_window_id,
-                    client,
+                    log_client,
+                    status_client,
                     self.targets,
                     log_store_appender,
                     event_sender,

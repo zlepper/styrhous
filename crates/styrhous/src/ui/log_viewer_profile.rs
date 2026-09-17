@@ -207,6 +207,7 @@ fn empty_log_window(total_lines: usize) -> PodLogWindowState {
             namespace: "default".to_owned(),
             pod_name: "profiled-pod".to_owned(),
             container: "api".to_owned(),
+            kind: crate::resource_table::ContainerKind::App,
         }],
     )
     .expect("profile log window has one source");

@@ -45,6 +45,8 @@ pub(super) fn status_label(window: &PodLogWindowState) -> String {
         format!("Searching… {} matches", window.search.match_count)
     } else if initial_spool_is_pending(window) {
         format!("Spooling… {} lines", window.total_lines)
+    } else if all_sources_are_reconnecting(window) {
+        "Reconnecting…".to_owned()
     } else {
         match &window.status {
             PodLogStatus::Connecting => "Connecting…".to_owned(),
@@ -68,11 +70,18 @@ pub(super) fn compact_line_count(lines: usize) -> String {
     }
 }
 
-pub(super) fn status_color(status: &PodLogStatus) -> egui::Color32 {
-    match status {
+pub(super) fn status_color(window: &PodLogWindowState) -> egui::Color32 {
+    if all_sources_are_reconnecting(window) {
+        return status::WARNING;
+    }
+    match &window.status {
         PodLogStatus::Connecting => gray::_400,
         PodLogStatus::Following => SUCCESS,
         PodLogStatus::Finished => gray::_400,
         PodLogStatus::Failed(_) => status::DANGER,
     }
+}
+
+pub(super) fn all_sources_are_reconnecting(window: &PodLogWindowState) -> bool {
+    !window.targets.is_empty() && window.source_reconnects.len() == window.targets.len()
 }

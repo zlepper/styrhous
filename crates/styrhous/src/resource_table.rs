@@ -134,7 +134,7 @@ pub(crate) struct ContainerIndicator {
     pub(crate) tone: StatusTone,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub(crate) enum ContainerKind {
     Init,
     App,

@@ -47,6 +47,8 @@ mod dynamic_api;
 mod resource_data;
 mod resource_yaml;
 
+#[cfg(test)]
+pub(crate) use connection::log_stream_config;
 pub use connection::{
     Cluster, ClusterConnection, kubeconfig_context_references, reload_kubeconfig,
 };
