@@ -81,6 +81,9 @@ pub(super) fn handle_log_keyboard(
             modifiers,
             ctx.input(|input| input.time),
         ) {
+            if window.tail.release() {
+                ctx.request_repaint();
+            }
             ctx.input_mut(|input| {
                 input.consume_key(modifiers, key);
             });

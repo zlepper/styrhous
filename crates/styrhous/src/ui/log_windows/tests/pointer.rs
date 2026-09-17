@@ -93,6 +93,10 @@ fn focused_log_caret_moves_between_rows_in_the_ui() {
     harness.step();
 
     assert_eq!(caret_focus(&window.borrow()).display_row, 1);
+    assert!(
+        !window.borrow().tail.is_following(),
+        "moving a focused caret must immediately release tail following"
+    );
 }
 
 #[test]

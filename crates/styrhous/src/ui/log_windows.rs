@@ -16,6 +16,9 @@ use std::time::{Duration, Instant};
 
 const LOG_FONT_SIZE: f32 = 14.0;
 const HORIZONTAL_OVERSCAN_POINTS: f32 = 120.0;
+/// Scroll offsets are rasterized, so use one logical point when comparing the
+/// rendered offset with the calculated end position.
+const TAIL_BOTTOM_TOLERANCE_POINTS: f32 = 1.0;
 
 impl WorkerResult for PodLogStreamStarted {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {

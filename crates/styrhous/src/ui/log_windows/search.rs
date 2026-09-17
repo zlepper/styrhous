@@ -164,7 +164,7 @@ pub(super) fn show_log_search_controls(
     ui.add_space(spacing::SM);
     let display_controls = ui
         .allocate_ui_with_layout(
-            egui::vec2(128.0, 34.0),
+            egui::vec2(160.0, 34.0),
             egui::Layout::left_to_right(egui::Align::Center),
             |ui| {
                 egui::Frame::new()
@@ -202,7 +202,14 @@ pub(super) fn show_log_search_controls(
                                 window.show_source_labels,
                                 "Show log source labels",
                             );
-                            (line_numbers, timestamps, ansi, source_labels)
+                            ui.separator();
+                            let tail_lock = log_display_toggle_button(
+                                ui,
+                                icons::arrow_down_icon(),
+                                window.tail.is_following(),
+                                "Lock to bottom",
+                            );
+                            (line_numbers, timestamps, ansi, source_labels, tail_lock)
                         })
                         .inner
                     })
@@ -210,17 +217,24 @@ pub(super) fn show_log_search_controls(
             },
         )
         .inner;
+    let mut navigated = false;
     if navigation.1 {
-        advance_log_match(window, log_store, false);
+        navigated |= advance_log_match(window, log_store, false);
     }
     if navigation.2 {
-        advance_log_match(window, log_store, true);
+        navigated |= advance_log_match(window, log_store, true);
     }
     if navigation.0 {
-        advance_log_line(window, false);
+        navigated |= advance_log_line(window, false);
     }
     if navigation.3 {
-        advance_log_line(window, true);
+        navigated |= advance_log_line(window, true);
+    }
+    if navigated && window.tail.release() {
+        // The active indicator was rendered before the navigation click was
+        // handled. Keep it truthful even when the requested row was already
+        // visible and no physical scroll was needed.
+        ctx.request_repaint();
     }
     if navigation.4 {
         window.search.filter_matches = !window.search.filter_matches;
@@ -239,6 +253,16 @@ pub(super) fn show_log_search_controls(
     }
     if display_controls.3 {
         window.show_source_labels = !window.show_source_labels;
+    }
+    if display_controls.4 {
+        if window.tail.toggle() {
+            window.search.scroll_to_display_row = None;
+            window.search.rebase_scroll_row_delta = None;
+        }
+        // The active indicator was rendered before the click was handled.
+        // Repaint immediately so it reflects the new state even if no more
+        // log records arrive this frame.
+        ctx.request_repaint();
     }
     sync_search(ctx, window, log_store);
 }

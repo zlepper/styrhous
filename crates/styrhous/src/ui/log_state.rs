@@ -72,6 +72,8 @@ pub(super) struct PodLogWindowState {
     pub(super) store_opened: bool,
     pub(super) status: PodLogStatus,
     pub(super) close_requested: bool,
+    /// Per-window state for following the newest displayed log row.
+    pub(super) tail: TailFollowState,
     pub(super) search: LogSearchState,
     pub(super) horizontal_content_width: f32,
     pub(super) selection: Option<LogTextSelection>,
@@ -83,6 +85,126 @@ pub(super) struct PodLogWindowState {
     /// Make the next rendered caret visible in the horizontal scroll viewport.
     pub(super) ensure_caret_visible: bool,
     pub(super) copied_text: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct TailScrollFrame {
+    maximum_offset: f32,
+    vertical_offset: f32,
+}
+
+/// State for following a log viewport's moving tail.
+///
+/// It belongs to the window rather than shared display preferences, because
+/// each log window has its own viewport and current tail position.
+#[derive(Debug, Clone)]
+pub(super) struct TailFollowState {
+    following: bool,
+    scroll_requested: bool,
+    was_at_bottom: bool,
+    previous_frame: Option<TailScrollFrame>,
+    rejoin_maximum_offset: Option<f32>,
+}
+
+impl Default for TailFollowState {
+    fn default() -> Self {
+        Self {
+            following: true,
+            // An opened window must attach to the tail even before egui has
+            // measured its initial scroll area.
+            scroll_requested: true,
+            was_at_bottom: true,
+            previous_frame: None,
+            rejoin_maximum_offset: None,
+        }
+    }
+}
+
+impl TailFollowState {
+    pub(super) fn is_following(&self) -> bool {
+        self.following
+    }
+
+    pub(super) fn scroll_requested(&self) -> bool {
+        self.scroll_requested
+    }
+
+    /// Flips manual following and returns its new state.
+    pub(super) fn toggle(&mut self) -> bool {
+        self.following = !self.following;
+        self.scroll_requested = self.following;
+        if self.following {
+            self.rejoin_maximum_offset = None;
+        }
+        self.following
+    }
+
+    /// Stops following for an explicit inspection action and returns whether
+    /// the visible toggle state changed.
+    pub(super) fn release(&mut self) -> bool {
+        let was_following = self.following;
+        self.following = false;
+        self.scroll_requested = false;
+        self.rejoin_maximum_offset = None;
+        was_following
+    }
+
+    /// Records one rendered viewport and returns whether the visible toggle
+    /// state changed.
+    pub(super) fn observe_scroll(
+        &mut self,
+        maximum_offset: f32,
+        vertical_offset: f32,
+        may_attach_to_near_tail: bool,
+        bottom_tolerance: f32,
+    ) -> bool {
+        let at_bottom = (maximum_offset - vertical_offset).max(0.0) <= bottom_tolerance;
+        let scrolled_down = may_attach_to_near_tail
+            && self
+                .previous_frame
+                .is_some_and(|previous| vertical_offset > previous.vertical_offset);
+
+        let will_detach = self.following && !at_bottom && !self.scroll_requested;
+        if !may_attach_to_near_tail {
+            // Search, caret, and explicit tail requests move the viewport
+            // without a user scroll. Do not let a later wheel event mistake
+            // that jump for returning to the tail from before live rows
+            // arrived.
+            self.rejoin_maximum_offset = None;
+        } else if (!self.following || will_detach)
+            && let Some(previous) = self.previous_frame
+            && maximum_offset > previous.maximum_offset + bottom_tolerance
+        {
+            self.rejoin_maximum_offset
+                .get_or_insert(previous.maximum_offset);
+        }
+
+        let reached_previous_tail = self
+            .rejoin_maximum_offset
+            .is_some_and(|rejoin_maximum| vertical_offset >= rejoin_maximum - bottom_tolerance);
+        let was_following = self.following;
+
+        if self.following && !at_bottom && !self.scroll_requested {
+            self.following = false;
+        }
+        if (at_bottom && !self.was_at_bottom && scrolled_down)
+            || (scrolled_down && reached_previous_tail)
+        {
+            self.following = true;
+            self.scroll_requested = !at_bottom;
+            self.rejoin_maximum_offset = None;
+        }
+        if at_bottom {
+            self.scroll_requested = false;
+        }
+        self.was_at_bottom = at_bottom;
+        self.previous_frame = Some(TailScrollFrame {
+            maximum_offset,
+            vertical_offset,
+        });
+
+        self.following != was_following
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -274,6 +396,7 @@ impl PodLogWindowState {
             store_opened: false,
             status: PodLogStatus::Connecting,
             close_requested: false,
+            tail: TailFollowState::default(),
             search: LogSearchState::default(),
             horizontal_content_width: 0.0,
             selection: None,

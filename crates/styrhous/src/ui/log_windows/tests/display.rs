@@ -55,6 +55,7 @@ fn display_toggles_update_the_shared_options() {
         .click();
     harness.get_by_label("Render ANSI styling").click();
     harness.get_by_label("Show log source labels").click();
+    harness.get_by_label("Lock to bottom").click();
     harness.run();
 
     assert_eq!(
@@ -66,6 +67,18 @@ fn display_toggles_update_the_shared_options() {
         }
     );
     assert!(window.borrow().show_source_labels);
+    assert!(!window.borrow().tail.is_following());
+
+    harness.get_by_label("Lock to bottom").click();
+    harness.run();
+    assert!(window.borrow().tail.is_following());
+
+    harness.get_by_label("Previous matching line").click();
+    harness.run();
+    assert!(
+        window.borrow().tail.is_following(),
+        "an unavailable match navigation must not release tail following"
+    );
 }
 
 #[test]

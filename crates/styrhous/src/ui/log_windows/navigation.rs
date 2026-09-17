@@ -4,9 +4,9 @@ pub(super) fn advance_log_match(
     window: &mut PodLogWindowState,
     log_store: &LogStoreService,
     forward: bool,
-) {
+) -> bool {
     if window.search.match_count == 0 {
-        return;
+        return false;
     }
     let current = window.search.active_match.unwrap_or_else(|| {
         if forward {
@@ -22,12 +22,13 @@ pub(super) fn advance_log_match(
     };
     window.search.active_match = Some(next);
     let _ = log_store.resolve_match(window.id, window.search.generation, next);
+    true
 }
 
-pub(super) fn advance_log_line(window: &mut PodLogWindowState, forward: bool) {
+pub(super) fn advance_log_line(window: &mut PodLogWindowState, forward: bool) -> bool {
     let count = displayed_line_count(window);
     if count == 0 {
-        return;
+        return false;
     }
     let current = window.search.active_display_row;
     let next = match (current, forward) {
@@ -38,6 +39,7 @@ pub(super) fn advance_log_line(window: &mut PodLogWindowState, forward: bool) {
     };
     window.search.active_display_row = Some(next);
     window.search.scroll_to_display_row = Some(next);
+    true
 }
 
 pub(super) fn status_label(window: &PodLogWindowState) -> String {

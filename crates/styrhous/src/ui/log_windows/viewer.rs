@@ -204,6 +204,10 @@ pub(super) fn show_log_window_with_scroll_state(
             // clamped while the area is still measuring or loading its target
             // page, which made the toolbar arrows appear to do nothing.
             let requested_scroll_row = window.search.scroll_to_display_row;
+            let tail_scroll_row = window
+                .tail
+                .scroll_requested()
+                .then_some(display_count.saturating_sub(1));
             let requested_offset = requested_scroll_row
                 .map(|row| {
                     let requested_vertical_offset = window
@@ -214,6 +218,9 @@ pub(super) fn show_log_window_with_scroll_state(
                             vertical_offset + delta as f32 * row_step
                         });
                     egui::vec2(horizontal_offset, requested_vertical_offset)
+                })
+                .or_else(|| {
+                    tail_scroll_row.map(|row| egui::vec2(horizontal_offset, row as f32 * row_step))
                 })
                 .or(caret_scroll_offset);
             let mut scroll_area = components::scroll::both()
@@ -227,7 +234,9 @@ pub(super) fn show_log_window_with_scroll_state(
                 // A focused text caret is an explicit request to inspect the
                 // current records. Do not let new tail records carry it out
                 // of view between keyboard frames.
-                .stick_to_bottom(requested_offset.is_none() && !caret_has_focus);
+                .stick_to_bottom(
+                    window.tail.is_following() && requested_offset.is_none() && !caret_has_focus,
+                );
             if let Some(offset) = requested_offset {
                 scroll_area = scroll_area.scroll_offset(offset);
             }
@@ -431,6 +440,9 @@ pub(super) fn show_log_window_with_scroll_state(
                                 character_column_at_byte(text, position.byte_offset)
                             }));
                         window.ensure_caret_visible = false;
+                        if window.tail.release() {
+                            ctx.request_repaint();
+                        }
                     }
                     if let Some((text, byte_range, response_rect, text_left)) = caret_paint {
                         paint_log_caret(
@@ -459,9 +471,27 @@ pub(super) fn show_log_window_with_scroll_state(
                     ctx.request_repaint();
                 }
             }
+            update_tail_follow_state(&ctx, window, &output, requested_offset.is_none());
             output
         })
         .inner
+}
+
+pub(super) fn update_tail_follow_state(
+    ctx: &egui::Context,
+    window: &mut PodLogWindowState,
+    output: &egui::scroll_area::ScrollAreaOutput<()>,
+    may_attach_to_near_tail: bool,
+) {
+    let maximum_offset = (output.content_size.y - output.inner_rect.height()).max(0.0);
+    if window.tail.observe_scroll(
+        maximum_offset,
+        output.state.offset.y,
+        may_attach_to_near_tail,
+        TAIL_BOTTOM_TOLERANCE_POINTS,
+    ) {
+        ctx.request_repaint();
+    }
 }
 
 fn show_source_issue(

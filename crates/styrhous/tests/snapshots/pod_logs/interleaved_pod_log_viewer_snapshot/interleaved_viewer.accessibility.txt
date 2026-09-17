@@ -43,13 +43,15 @@ Window state=[focused] rect=<none>
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        CheckBox name="Show log line numbers" state=[toggled=False] rect=(x=976.0 y=21.0 width=28.0 height=28.0 center_x=990.0 center_y=35.0)
+                        CheckBox name="Show log line numbers" state=[toggled=False] rect=(x=944.0 y=21.0 width=28.0 height=28.0 center_x=958.0 center_y=35.0)
                       GenericContainer rect=<none>
-                        CheckBox name="Show Kubernetes log timestamps" state=[toggled=False] rect=(x=1010.0 y=21.0 width=28.0 height=28.0 center_x=1024.0 center_y=35.0)
+                        CheckBox name="Show Kubernetes log timestamps" state=[toggled=False] rect=(x=978.0 y=21.0 width=28.0 height=28.0 center_x=992.0 center_y=35.0)
                       GenericContainer rect=<none>
-                        CheckBox name="Render ANSI styling" state=[toggled=True] rect=(x=1044.0 y=21.0 width=28.0 height=28.0 center_x=1058.0 center_y=35.0)
+                        CheckBox name="Render ANSI styling" state=[toggled=True] rect=(x=1012.0 y=21.0 width=28.0 height=28.0 center_x=1026.0 center_y=35.0)
                       GenericContainer rect=<none>
-                        CheckBox name="Show log source labels" state=[toggled=True] rect=(x=1078.0 y=21.0 width=28.0 height=28.0 center_x=1092.0 center_y=35.0)
+                        CheckBox name="Show log source labels" state=[toggled=True] rect=(x=1046.0 y=21.0 width=28.0 height=28.0 center_x=1060.0 center_y=35.0)
+                      GenericContainer rect=<none>
+                        CheckBox name="Lock to bottom" state=[toggled=True] rect=(x=1080.0 y=21.0 width=28.0 height=28.0 center_x=1094.0 center_y=35.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             Unknown name="Pod log text" rect=(x=24.0 y=76.0 width=1488.0 height=924.0 center_x=768.0 center_y=538.0)
