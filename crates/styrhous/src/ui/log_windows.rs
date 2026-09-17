@@ -5,8 +5,8 @@ use super::state::{
 use crate::ansi::AnsiStyleSpan;
 use crate::log_store::LogStoreService;
 use crate::worker::{
-    PodLogSourceFailed, PodLogStreamEnded, PodLogStreamFailed, PodLogStreamStarted,
-    StopPodLogStream, WorkerCommandBox, WorkerResult,
+    PodLogSourceFailed, PodLogSourceReconnecting, PodLogSourceRecovered, PodLogStreamEnded,
+    PodLogStreamFailed, PodLogStreamStarted, StopPodLogStream, WorkerCommandBox, WorkerResult,
 };
 use anstyle::{Ansi256Color, AnsiColor, Color, Effects, RgbColor, Style};
 use components::colors::{SUCCESS, TABLE_BORDER, TOOLBAR_BACKGROUND, gray};
@@ -33,6 +33,7 @@ impl WorkerResult for PodLogStreamEnded {
             && !matches!(window.status, PodLogStatus::Failed(_))
         {
             window.status = PodLogStatus::Finished;
+            window.source_reconnects.clear();
         }
     }
 }
@@ -41,6 +42,7 @@ impl WorkerResult for PodLogStreamFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         if let Some(window) = ui.log_windows.get_mut(&self.log_window_id) {
             window.status = PodLogStatus::Failed(self.error);
+            window.source_reconnects.clear();
         }
     }
 }
@@ -48,6 +50,7 @@ impl WorkerResult for PodLogStreamFailed {
 impl WorkerResult for PodLogSourceFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         if let Some(window) = ui.log_windows.get_mut(&self.log_window_id) {
+            window.source_reconnects.remove(&self.target);
             window
                 .source_failures
                 .entry(self.target)
@@ -58,6 +61,22 @@ impl WorkerResult for PodLogSourceFailed {
                     }
                 })
                 .or_insert(self.error);
+        }
+    }
+}
+
+impl WorkerResult for PodLogSourceReconnecting {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(window) = ui.log_windows.get_mut(&self.log_window_id) {
+            window.source_reconnects.insert(self.target, self.error);
+        }
+    }
+}
+
+impl WorkerResult for PodLogSourceRecovered {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(window) = ui.log_windows.get_mut(&self.log_window_id) {
+            window.source_reconnects.remove(&self.target);
         }
     }
 }

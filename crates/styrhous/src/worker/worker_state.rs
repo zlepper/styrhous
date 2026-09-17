@@ -88,6 +88,18 @@ impl WorkerState {
             .ok_or_else(|| anyhow::anyhow!("No client found for cluster_key {cluster_key}"))
     }
 
+    pub(super) async fn clients_for_log_stream(
+        &self,
+        cluster_key: i32,
+    ) -> anyhow::Result<(kube::Client, kube::Client)> {
+        self.connections
+            .lock()
+            .await
+            .get(&cluster_key)
+            .map(|connection| (connection.log_client(), connection.client()))
+            .ok_or_else(|| anyhow::anyhow!("No client found for cluster_key {cluster_key}"))
+    }
+
     pub(super) async fn stop_cluster(&self, cluster_key: i32) {
         self.connections.lock().await.remove(&cluster_key);
         self.invalidate_cluster_resource_watches(cluster_key).await;

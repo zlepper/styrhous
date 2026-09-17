@@ -86,11 +86,13 @@ fn pod_log_window_routes_all_selected_sources_through_one_worker_command() {
                 namespace: "payments".into(),
                 pod_name: "api-0".into(),
                 container: "server".into(),
+                kind: ContainerKind::App,
             },
             PodLogStreamTarget {
                 namespace: "payments".into(),
                 pod_name: "worker-0".into(),
                 container: "worker".into(),
+                kind: ContainerKind::App,
             },
         ],
         &mut commands,
@@ -123,6 +125,7 @@ fn pod_log_window_requires_confirmation_above_ten_sources() {
                 namespace: "payments".into(),
                 pod_name: format!("worker-{index}"),
                 container: "worker".into(),
+                kind: ContainerKind::App,
             })
             .collect(),
         &mut commands,
@@ -147,6 +150,7 @@ fn pod_log_source_failures_are_grouped_by_source() {
         namespace: "payments".into(),
         pod_name: "api-0".into(),
         container: "server".into(),
+        kind: ContainerKind::App,
     };
     state.request_pod_log_window(7, vec![target.clone()], &mut commands);
     assert!(!state.log_windows[&1].show_source_labels);
@@ -173,6 +177,65 @@ fn pod_log_source_failures_are_grouped_by_source() {
             .expect("failure is retained"),
         "follow request was forbidden\nhistory request was forbidden"
     );
+}
+
+#[test]
+fn pod_log_reconnecting_state_is_cleared_when_the_source_recovers() {
+    let mut state = UiState::default();
+    let mut commands = Vec::new();
+    let target = PodLogStreamTarget {
+        namespace: "payments".into(),
+        pod_name: "api-0".into(),
+        container: "server".into(),
+        kind: ContainerKind::App,
+    };
+    state.request_pod_log_window(7, vec![target.clone()], &mut commands);
+
+    PodLogSourceReconnecting {
+        log_window_id: 1,
+        target: target.clone(),
+        error: "connection reset".into(),
+    }
+    .apply(&mut state, &mut commands);
+    assert_eq!(
+        state.log_windows[&1].source_reconnects.get(&target),
+        Some(&"connection reset".to_owned())
+    );
+
+    PodLogSourceRecovered {
+        log_window_id: 1,
+        target: target.clone(),
+    }
+    .apply(&mut state, &mut commands);
+    assert!(
+        !state.log_windows[&1]
+            .source_reconnects
+            .contains_key(&target)
+    );
+}
+
+#[test]
+fn pod_log_finished_state_clears_reconnecting_sources() {
+    let mut state = UiState::default();
+    let mut commands = Vec::new();
+    let target = PodLogStreamTarget {
+        namespace: "payments".into(),
+        pod_name: "api-0".into(),
+        container: "server".into(),
+        kind: ContainerKind::App,
+    };
+    state.request_pod_log_window(7, vec![target.clone()], &mut commands);
+    state
+        .log_windows
+        .get_mut(&1)
+        .expect("log window exists")
+        .source_reconnects
+        .insert(target, "container is restarting".into());
+
+    PodLogStreamEnded { log_window_id: 1 }.apply(&mut state, &mut commands);
+
+    assert!(state.log_windows[&1].source_reconnects.is_empty());
+    assert_eq!(state.log_windows[&1].status, PodLogStatus::Finished);
 }
 
 #[test]

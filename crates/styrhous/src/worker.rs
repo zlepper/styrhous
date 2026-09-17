@@ -17,7 +17,7 @@ use crate::minimal_resource::MinimalResource;
 use crate::pod_metrics::{NodeUsage, PodUsage};
 use crate::resource_detail::{ManagedResource, ResourceDetail, ResourceEvent};
 use crate::resource_schema::ResourceSchema;
-use crate::resource_table::CustomResourceColumn;
+use crate::resource_table::{ContainerKind, CustomResourceColumn};
 use anyhow::Error;
 use async_trait::async_trait;
 use std::any::Any;

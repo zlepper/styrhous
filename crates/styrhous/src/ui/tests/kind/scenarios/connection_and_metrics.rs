@@ -1,6 +1,102 @@
 //! Kind connection, watch, secret, and metrics scenarios.
 
 use super::*;
+use crate::cluster_connection_manager::log_stream_config;
+use futures_util::{AsyncBufReadExt, TryStreamExt};
+use kube::api::LogParams;
+use std::time::Duration;
+
+#[test]
+fn test_pod_log_follow_survives_an_idle_gap() {
+    const POD_NAME: &str = "idle-log-source";
+    let fixture = IntegrationNamespaceFixture::create("idle-pod-log", "anchor", "unused");
+    fixture.runtime.block_on(async {
+        let config = kube::Config::infer()
+            .await
+            .expect("Failed to load the Kind client config");
+        let status_client = Client::try_from(config.clone())
+            .expect("Failed to create the Kubernetes client");
+        let mut short_timeout_config = config;
+        short_timeout_config.read_timeout = Some(Duration::from_millis(100));
+        let log_client = Client::try_from(log_stream_config(&short_timeout_config))
+            .expect("Failed to create the Kubernetes log client");
+        let pods: Api<Pod> = Api::namespaced(status_client, &fixture.namespace);
+        pods.create(
+            &Default::default(),
+            &Pod {
+                metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                    name: Some(POD_NAME.to_owned()),
+                    namespace: Some(fixture.namespace.clone()),
+                    ..Default::default()
+                },
+                spec: Some(PodSpec {
+                    containers: vec![Container {
+                        name: "logger".to_owned(),
+                        image: Some(
+                            "docker.io/library/busybox@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0"
+                                .to_owned(),
+                        ),
+                        command: Some(vec!["sh".to_owned(), "-c".to_owned()]),
+                        args: Some(vec![
+                            "echo before-idle; sleep 5; echo after-idle; sleep 30".to_owned(),
+                        ]),
+                        ..Default::default()
+                    }],
+                    restart_policy: Some("Never".to_owned()),
+                    termination_grace_period_seconds: Some(0),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("Failed to create the idle log Pod");
+
+        tokio::time::timeout(Duration::from_secs(30), async {
+            loop {
+                let pod = pods.get(POD_NAME).await.expect("Failed to read the log Pod");
+                if pod.status.and_then(|status| status.phase).as_deref() == Some("Running") {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        })
+        .await
+        .expect("The idle log Pod did not start");
+
+        let log_pods: Api<Pod> = Api::namespaced(log_client, &fixture.namespace);
+        let stream = log_pods
+            .log_stream(
+                POD_NAME,
+                &LogParams {
+                    container: Some("logger".to_owned()),
+                    follow: true,
+                    ..LogParams::default()
+                },
+            )
+            .await
+            .expect("Failed to follow the idle log Pod");
+        let mut lines = stream.lines();
+        let first = tokio::time::timeout(Duration::from_secs(10), lines.try_next())
+            .await
+            .expect("Timed out waiting for the first log line")
+            .expect("Failed to read the first log line")
+            .expect("The log stream ended before the first line");
+        assert_eq!(first, "before-idle");
+
+        let idle_started = std::time::Instant::now();
+        let second = tokio::time::timeout(Duration::from_secs(10), lines.try_next())
+            .await
+            .expect("Timed out waiting for the post-idle log line")
+            .expect("Failed to read the post-idle log line")
+            .expect("The log stream ended during the idle gap");
+        assert_eq!(second, "after-idle");
+        assert!(
+            idle_started.elapsed() > Duration::from_millis(100),
+            "the fixture must stay idle longer than the ordinary read timeout"
+        );
+    });
+}
 
 #[test]
 fn test_secret_inspector_actions_integration() {

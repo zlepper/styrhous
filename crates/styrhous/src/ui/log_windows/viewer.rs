@@ -65,37 +65,21 @@ pub(super) fn show_log_window_with_scroll_state(
                 ui.label(
                     egui::RichText::new("●")
                         .font(typography::body())
-                        .color(status_color(&window.status)),
+                        .color(status_color(window)),
                 );
-                if !window.source_failures.is_empty() {
-                    ui.add_space(spacing::MD);
-                    let mut failures = window
-                        .source_failures
-                        .iter()
-                        .map(|(target, error)| format!("{}: {error}", target.display_name()))
-                        .collect::<Vec<_>>();
-                    failures.sort();
-                    let failures = failures.join("\n");
-                    ui.label(
-                        egui::RichText::new(format!(
-                            "{} source{} unavailable",
-                            window.source_failures.len(),
-                            if window.source_failures.len() == 1 {
-                                ""
-                            } else {
-                                "s"
-                            }
-                        ))
-                        .font(typography::body())
-                        .color(status::WARNING),
-                    )
-                    .on_hover_text(failures);
+                let all_sources_reconnecting = all_sources_are_reconnecting(window);
+                if !all_sources_reconnecting {
+                    show_source_issue(ui, &window.source_reconnects, "reconnecting");
                 }
-                ui.label(
+                show_source_issue(ui, &window.source_failures, "unavailable");
+                let status = ui.label(
                     egui::RichText::new(status_label(window))
                         .font(typography::body())
                         .color(gray::_600),
                 );
+                if all_sources_reconnecting {
+                    status.on_hover_text(source_issue_details(&window.source_reconnects));
+                }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     show_log_search_controls(&ctx, ui, window, display_options, log_store)
                 });
@@ -478,4 +462,36 @@ pub(super) fn show_log_window_with_scroll_state(
             output
         })
         .inner
+}
+
+fn show_source_issue(
+    ui: &mut egui::Ui,
+    issues: &std::collections::HashMap<crate::worker::PodLogStreamTarget, String>,
+    state: &str,
+) {
+    if issues.is_empty() {
+        return;
+    }
+    ui.add_space(spacing::MD);
+    ui.label(
+        egui::RichText::new(format!(
+            "{} source{} {state}",
+            issues.len(),
+            if issues.len() == 1 { "" } else { "s" }
+        ))
+        .font(typography::body())
+        .color(status::WARNING),
+    )
+    .on_hover_text(source_issue_details(issues));
+}
+
+fn source_issue_details(
+    issues: &std::collections::HashMap<crate::worker::PodLogStreamTarget, String>,
+) -> String {
+    let mut details = issues
+        .iter()
+        .map(|(target, error)| format!("{}: {error}", target.display_name()))
+        .collect::<Vec<_>>();
+    details.sort();
+    details.join("\n")
 }

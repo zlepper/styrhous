@@ -1,6 +1,40 @@
 use super::*;
 
 #[test]
+fn dirty_filtered_page_stays_renderable_while_a_refresh_is_requested() {
+    let mut window = log_window(&[]);
+    window.search.query = "error".to_owned();
+    window.search.filter_matches = true;
+    window.search.match_count = 1;
+    let key = LogPageKey {
+        generation: 0,
+        filter_matches: true,
+        page_start: 0,
+    };
+    window.insert_page(
+        key,
+        vec![LogPageRow {
+            display_row: 0,
+            line_index: 0,
+            timestamp: None,
+            source: None,
+            text: "cached error".to_owned(),
+            style_spans: Vec::new(),
+            match_ranges: vec![(7, 12)],
+        }],
+    );
+    window.pages_needing_refresh.insert(key);
+    let log_store = LogStoreService::default();
+    assert!(log_store.open(window.id));
+
+    request_page_for_display_row(&mut window, &log_store, 0);
+
+    assert_eq!(window.pages[&key].rows[0].text, "cached error");
+    assert!(window.pending_pages.contains(&key));
+    assert!(window.pages_needing_refresh.contains(&key));
+}
+
+#[test]
 fn pod_log_viewer_filter_active_snapshot() {
     let mut window = log_window(&[
         "2026-08-08T15:22:17.143Z  INFO  server: listening on 0.0.0.0:8080",

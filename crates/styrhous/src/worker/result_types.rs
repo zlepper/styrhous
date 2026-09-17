@@ -321,6 +321,17 @@ pub(crate) struct PodLogSourceFailed {
     pub(crate) target: PodLogStreamTarget,
     pub(crate) error: String,
 }
+#[derive(Debug)]
+pub(crate) struct PodLogSourceReconnecting {
+    pub(crate) log_window_id: u64,
+    pub(crate) target: PodLogStreamTarget,
+    pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct PodLogSourceRecovered {
+    pub(crate) log_window_id: u64,
+    pub(crate) target: PodLogStreamTarget,
+}
 
 #[derive(Debug)]
 pub(crate) struct WorkerError {

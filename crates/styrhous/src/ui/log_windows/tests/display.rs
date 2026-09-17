@@ -119,16 +119,19 @@ fn source_labels_omit_redundant_namespace_and_container_details() {
         namespace: "payments".to_owned(),
         pod_name: "api-0".to_owned(),
         container: "app".to_owned(),
+        kind: ContainerKind::App,
     };
     let sidecar = PodLogStreamTarget {
         namespace: "payments".to_owned(),
         pod_name: "api-0".to_owned(),
         container: "sidecar".to_owned(),
+        kind: ContainerKind::App,
     };
     let worker = PodLogStreamTarget {
         namespace: "payments".to_owned(),
         pod_name: "worker-0".to_owned(),
         container: "worker".to_owned(),
+        kind: ContainerKind::App,
     };
     let same_namespace_window =
         PodLogWindowState::new(1, 1, vec![api.clone(), sidecar.clone(), worker.clone()])
@@ -187,11 +190,13 @@ fn source_label_visibility_is_per_window() {
             namespace: "payments".to_owned(),
             pod_name: "api-0".to_owned(),
             container: "server".to_owned(),
+            kind: ContainerKind::App,
         },
         PodLogStreamTarget {
             namespace: "payments".to_owned(),
             pod_name: "worker-0".to_owned(),
             container: "worker".to_owned(),
+            kind: ContainerKind::App,
         },
     ];
     let first = Rc::new(RefCell::new(
@@ -304,11 +309,13 @@ fn interleaved_pod_log_viewer_snapshot() {
         namespace: "payments".to_owned(),
         pod_name: "api-0".to_owned(),
         container: "server".to_owned(),
+        kind: ContainerKind::App,
     };
     let worker = PodLogStreamTarget {
         namespace: "payments".to_owned(),
         pod_name: "worker-0".to_owned(),
         container: "worker".to_owned(),
+        kind: ContainerKind::App,
     };
     let mut window = PodLogWindowState::new(1, 1, vec![api.clone(), worker.clone()])
         .expect("test log window has two sources");
@@ -361,6 +368,23 @@ fn interleaved_pod_log_viewer_snapshot() {
     snapshot_window(
         window,
         "pod_logs/interleaved_pod_log_viewer_snapshot/interleaved_viewer",
+    );
+}
+
+#[test]
+fn pod_log_reconnecting_source_snapshot() {
+    let mut window = log_window(&[
+        "2026-08-08T15:22:17.143Z server ready",
+        "2026-08-08T15:22:18.004Z waiting for requests",
+    ]);
+    let target = window.targets[0].clone();
+    window
+        .source_reconnects
+        .insert(target, "connection reset by peer".to_owned());
+
+    snapshot_window(
+        window,
+        "pod_logs/reconnecting_pod_log_viewer_snapshot/reconnecting_viewer",
     );
 }
 
@@ -557,4 +581,15 @@ fn status_label_compacts_history_spool_progress() {
     assert_eq!(status_label(&window), "Following · backfill 12.3k");
     window.backfill_lines = Some(1_250_000);
     assert_eq!(status_label(&window), "Following · backfill 1.2M");
+}
+
+#[test]
+fn status_label_and_color_reflect_when_every_source_is_reconnecting() {
+    let mut window = log_window(&[]);
+    window
+        .source_reconnects
+        .insert(window.targets[0].clone(), "connection reset".into());
+
+    assert_eq!(status_label(&window), "Reconnecting…");
+    assert_eq!(status_color(&window), status::WARNING);
 }

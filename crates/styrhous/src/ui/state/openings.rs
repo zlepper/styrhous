@@ -94,6 +94,7 @@ impl UiState {
                 namespace,
                 pod_name,
                 container: container.name,
+                kind: container.kind,
             }],
             commands_to_send,
         );

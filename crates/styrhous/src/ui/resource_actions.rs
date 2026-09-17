@@ -210,6 +210,7 @@ pub(super) fn log_stream_targets(
             namespace: namespace.clone(),
             pod_name: resource.name.clone(),
             container: container.name.clone(),
+            kind: container.kind,
         })
         .collect()
 }

@@ -44,6 +44,7 @@ pub fn kubeconfig_context_references() -> Result<Vec<String>> {
 
 pub struct ClusterConnection {
     client: kube::Client,
+    log_client: kube::Client,
     join_handles: Vec<JoinHandle<()>>,
     cluster_key: i32,
 }
@@ -62,6 +63,12 @@ impl ClusterConnection {
         self.client.clone()
     }
 
+    /// Get the client whose reads may remain idle for the lifetime of a Pod
+    /// log follow request.
+    pub fn log_client(&self) -> kube::Client {
+        self.log_client.clone()
+    }
+
     pub async fn new(
         cluster_key: i32,
         context_name: &str,
@@ -73,8 +80,11 @@ impl ClusterConnection {
         })
         .await
         .with_context(|| "Error creating Kubernetes config")?;
+        let log_config = log_stream_config(&config);
         let client =
             kube::Client::try_from(config).with_context(|| "Error creating Kubernetes client")?;
+        let log_client = kube::Client::try_from(log_config)
+            .with_context(|| "Error creating Kubernetes log client")?;
 
         let namespaces_handle = tokio::spawn(
             KubernetesNamespaceWatcher {
@@ -92,10 +102,17 @@ impl ClusterConnection {
 
         Ok(Self {
             client,
+            log_client,
             join_handles: vec![namespaces_handle, api_resources_handle],
             cluster_key,
         })
     }
+}
+
+pub(crate) fn log_stream_config(config: &kube::Config) -> kube::Config {
+    let mut config = config.clone();
+    config.read_timeout = None;
+    config
 }
 
 impl Drop for ClusterConnection {
@@ -145,5 +162,31 @@ async fn load_api_resources(
                 .await
                 .log_if_error("Failed to send custom resource schemas");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn log_stream_config_disables_only_the_read_timeout() {
+        let mut config = kube::Config::new(
+            "https://kubernetes.example"
+                .parse()
+                .expect("test cluster URL is valid"),
+        );
+        config.connect_timeout = Some(Duration::from_secs(7));
+        config.read_timeout = Some(Duration::from_millis(50));
+        config.write_timeout = Some(Duration::from_secs(9));
+
+        let log_config = log_stream_config(&config);
+
+        assert_eq!(config.read_timeout, Some(Duration::from_millis(50)));
+        assert_eq!(log_config.read_timeout, None);
+        assert_eq!(log_config.connect_timeout, config.connect_timeout);
+        assert_eq!(log_config.write_timeout, config.write_timeout);
+        assert_eq!(log_config.cluster_url, config.cluster_url);
     }
 }

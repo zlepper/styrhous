@@ -45,6 +45,7 @@ pub(super) struct PodLogWindowState {
     pub(super) source_labels: HashMap<String, String>,
     pub(super) max_source_label_columns: usize,
     pub(super) source_failures: HashMap<PodLogStreamTarget, String>,
+    pub(super) source_reconnects: HashMap<PodLogStreamTarget, String>,
     pub(super) total_lines: usize,
     /// Older records written by the background history request but not yet
     /// merged into the logical log stream.
@@ -58,6 +59,10 @@ pub(super) struct PodLogWindowState {
     pub(super) page_cache_limit: usize,
     pub(super) page_size: usize,
     pub(super) pending_pages: HashSet<LogPageKey>,
+    /// Cached pages that remain renderable while a fresher copy is requested.
+    /// Live search only changes the final partial filtered page; retaining that
+    /// page avoids replacing the whole viewport with loading placeholders.
+    pub(super) pages_needing_refresh: HashSet<LogPageKey>,
     /// The viewer keeps its initial surface quiet until a disk-backed page is
     /// available, rather than rendering a moving viewport of placeholders.
     pub(super) initial_page_loaded: bool,
@@ -253,6 +258,7 @@ impl PodLogWindowState {
             source_labels,
             max_source_label_columns,
             source_failures: HashMap::new(),
+            source_reconnects: HashMap::new(),
             total_lines: 0,
             backfill_lines: None,
             live_rows: BTreeMap::new(),
@@ -262,6 +268,7 @@ impl PodLogWindowState {
             page_cache_limit: Self::DEFAULT_PAGE_CACHE_LIMIT,
             page_size: LOG_PAGE_SIZE,
             pending_pages: HashSet::new(),
+            pages_needing_refresh: HashSet::new(),
             initial_page_loaded: false,
             visible_top_display_row: 0,
             store_opened: false,
@@ -314,6 +321,7 @@ impl PodLogWindowState {
         self.page_order.clear();
         self.page_cache_bytes = 0;
         self.pending_pages.clear();
+        self.pages_needing_refresh.clear();
         self.live_rows.clear();
         self.horizontal_content_width = 0.0;
         self.set_selection(None);
@@ -331,6 +339,7 @@ impl PodLogWindowState {
 
     pub(super) fn insert_page(&mut self, key: LogPageKey, rows: Vec<LogPageRow>) {
         self.pending_pages.remove(&key);
+        self.pages_needing_refresh.remove(&key);
         if !key.filter_matches && !rows.is_empty() {
             self.initial_page_loaded = true;
             let page_end = key.page_start.saturating_add(rows.len());
@@ -373,7 +382,25 @@ impl PodLogWindowState {
             if let Some(page) = self.pages.remove(&oldest) {
                 self.page_cache_bytes = self.page_cache_bytes.saturating_sub(page.bytes);
             }
+            self.pages_needing_refresh.remove(&oldest);
         }
+    }
+
+    fn update_search_match_count(&mut self, match_count: usize) {
+        let previous_match_count = self.search.match_count;
+        if match_count > previous_match_count
+            && (previous_match_count == 0 || !previous_match_count.is_multiple_of(self.page_size))
+        {
+            let key = LogPageKey {
+                generation: self.search.generation,
+                filter_matches: true,
+                page_start: previous_match_count / self.page_size * self.page_size,
+            };
+            if self.pages.contains_key(&key) {
+                self.pages_needing_refresh.insert(key);
+            }
+        }
+        self.search.match_count = match_count;
     }
 }
 
@@ -397,8 +424,7 @@ pub(super) fn apply_store_result(
                 if let Some((generation, match_count)) = completed_search
                     && window.search.generation == generation
                 {
-                    window.search.match_count = match_count;
-                    window.clear_pages();
+                    window.update_search_match_count(match_count);
                 }
                 if !window.filter_is_active() {
                     for row in appended_rows {
@@ -460,9 +486,8 @@ pub(super) fn apply_store_result(
             {
                 window.total_lines = total_lines;
                 window.search.scanned_lines = scanned_lines;
-                window.search.match_count = match_count;
+                window.update_search_match_count(match_count);
                 window.search.search_complete = false;
-                window.clear_pages();
             }
         }
         LogStoreResult::SearchCompleted {
@@ -474,9 +499,8 @@ pub(super) fn apply_store_result(
                 && window.search.generation == generation
             {
                 window.search.scanned_lines = window.total_lines;
-                window.search.match_count = match_count;
+                window.update_search_match_count(match_count);
                 window.search.search_complete = true;
-                window.clear_pages();
             }
         }
         LogStoreResult::PageLoaded {
@@ -494,12 +518,17 @@ pub(super) fn apply_store_result(
                     page_start,
                 };
                 if generation == window.search.generation {
+                    let current_match_count = window.search.match_count;
+                    let filtered_page_is_stale = filter_matches && total_rows < current_match_count;
                     if filter_matches {
-                        window.search.match_count = total_rows;
+                        window.search.match_count = current_match_count.max(total_rows);
                     } else {
                         window.total_lines = total_rows;
                     }
                     window.insert_page(key, rows);
+                    if filtered_page_is_stale {
+                        window.pages_needing_refresh.insert(key);
+                    }
                 }
             }
         }

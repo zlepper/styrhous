@@ -62,7 +62,7 @@ pub(super) fn request_page_for_display_row(
         filter_matches: filter_is_active(window),
         page_start,
     };
-    if !window.pages.contains_key(&key)
+    if (!window.pages.contains_key(&key) || window.pages_needing_refresh.contains(&key))
         && window.pending_pages.insert(key)
         && !log_store.load_page(
             window.id,

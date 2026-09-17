@@ -37,6 +37,18 @@ fn ignores_stale_pages_and_evicts_pages_using_the_injected_cache_limit() {
             total_rows: 2,
             rows: vec![test_log_row(page_start, &"x".repeat(64))],
         });
+        if page_start == 0 {
+            state
+                .log_windows
+                .get_mut(&1)
+                .expect("log window exists")
+                .pages_needing_refresh
+                .insert(LogPageKey {
+                    generation: 0,
+                    filter_matches: false,
+                    page_start: 0,
+                });
+        }
     }
 
     let window = &state.log_windows[&1];
@@ -50,6 +62,7 @@ fn ignores_stale_pages_and_evicts_pages_using_the_injected_cache_limit() {
         filter_matches: false,
         page_start: 1,
     }));
+    assert!(window.pages_needing_refresh.is_empty());
 }
 
 #[test]
@@ -146,10 +159,188 @@ fn live_tail_rows_survive_a_completed_search_with_an_empty_filter_query() {
 
     let window = &state.log_windows[&1];
     assert!(
-        window.pages.is_empty(),
-        "completed search invalidates cached pages"
+        !window.pages.is_empty(),
+        "live search updates keep cached pages renderable"
     );
     assert_eq!(window.live_rows[&1].text, "live now");
+}
+
+#[test]
+fn live_search_updates_preserve_cached_pages_and_refresh_only_the_filtered_tail() {
+    let mut state = UiState::default();
+    let mut commands = Vec::new();
+    state.open_pod_log_window(
+        7,
+        "api-pod".into(),
+        Some("default".into()),
+        PodLogContainer {
+            name: "api".into(),
+            kind: ContainerKind::App,
+            image: None,
+        },
+        &mut commands,
+    );
+    let window = state.log_windows.get_mut(&1).expect("log window exists");
+    window.search.query = "error".into();
+    window.search.generation = 4;
+    window.search.match_count = 2;
+    window.search.search_complete = true;
+    let unfiltered_key = LogPageKey {
+        generation: 4,
+        filter_matches: false,
+        page_start: 0,
+    };
+    let filtered_key = LogPageKey {
+        generation: 4,
+        filter_matches: true,
+        page_start: 0,
+    };
+    window.insert_page(unfiltered_key, vec![test_log_row(0, "cached line")]);
+    window.insert_page(filtered_key, vec![test_log_row(0, "cached match")]);
+
+    let mut appended = test_log_row(1, "new error");
+    appended.match_ranges = vec![(4, 9)];
+    state.apply_log_store_result(LogStoreResult::Updated {
+        window_id: 1,
+        total_lines: 2,
+        completed_search: Some((4, 3)),
+        appended_rows: vec![appended],
+        backfill_lines: None,
+    });
+
+    let window = &state.log_windows[&1];
+    assert!(window.pages.contains_key(&unfiltered_key));
+    assert!(window.pages.contains_key(&filtered_key));
+    assert_eq!(window.search.match_count, 3);
+    assert!(window.pages_needing_refresh.contains(&filtered_key));
+    assert!(!window.pages_needing_refresh.contains(&unfiltered_key));
+    assert_eq!(window.live_rows[&1].text, "new error");
+}
+
+#[test]
+fn first_live_search_match_refreshes_a_cached_empty_page() {
+    let mut state = UiState::default();
+    let mut commands = Vec::new();
+    state.open_pod_log_window(
+        7,
+        "api-pod".into(),
+        Some("default".into()),
+        PodLogContainer {
+            name: "api".into(),
+            kind: ContainerKind::App,
+            image: None,
+        },
+        &mut commands,
+    );
+    let window = state.log_windows.get_mut(&1).expect("log window exists");
+    window.search.query = "error".into();
+    window.search.generation = 5;
+    window.search.match_count = 0;
+    let filtered_key = LogPageKey {
+        generation: 5,
+        filter_matches: true,
+        page_start: 0,
+    };
+    window.insert_page(filtered_key, Vec::new());
+
+    state.apply_log_store_result(LogStoreResult::Updated {
+        window_id: 1,
+        total_lines: 1,
+        completed_search: Some((5, 1)),
+        appended_rows: vec![test_log_row(0, "first error")],
+        backfill_lines: None,
+    });
+
+    let window = &state.log_windows[&1];
+    assert!(window.pages.contains_key(&filtered_key));
+    assert!(window.pages_needing_refresh.contains(&filtered_key));
+    assert_eq!(window.search.match_count, 1);
+}
+
+#[test]
+fn stale_filtered_page_result_remains_refreshable_after_more_matches_arrive() {
+    let mut state = UiState::default();
+    let mut commands = Vec::new();
+    state.open_pod_log_window(
+        7,
+        "api-pod".into(),
+        Some("default".into()),
+        PodLogContainer {
+            name: "api".into(),
+            kind: ContainerKind::App,
+            image: None,
+        },
+        &mut commands,
+    );
+    let window = state.log_windows.get_mut(&1).expect("log window exists");
+    window.search.query = "error".into();
+    window.search.filter_matches = true;
+    window.search.generation = 6;
+    window.search.match_count = 3;
+    let filtered_key = LogPageKey {
+        generation: 6,
+        filter_matches: true,
+        page_start: 0,
+    };
+    window.pages_needing_refresh.insert(filtered_key);
+
+    state.apply_log_store_result(LogStoreResult::PageLoaded {
+        window_id: 1,
+        generation: 6,
+        filter_matches: true,
+        page_start: 0,
+        total_rows: 2,
+        rows: vec![
+            test_log_row(0, "first error"),
+            test_log_row(1, "second error"),
+        ],
+    });
+
+    let window = &state.log_windows[&1];
+    assert_eq!(window.search.match_count, 3);
+    assert!(window.pages.contains_key(&filtered_key));
+    assert!(window.pages_needing_refresh.contains(&filtered_key));
+}
+
+#[test]
+fn search_progress_keeps_renderable_pages_while_match_counts_grow() {
+    let mut state = UiState::default();
+    let mut commands = Vec::new();
+    state.open_pod_log_window(
+        7,
+        "api-pod".into(),
+        Some("default".into()),
+        PodLogContainer {
+            name: "api".into(),
+            kind: ContainerKind::App,
+            image: None,
+        },
+        &mut commands,
+    );
+    let window = state.log_windows.get_mut(&1).expect("log window exists");
+    window.search.query = "error".into();
+    window.search.generation = 3;
+    window.search.match_count = 2;
+    window.search.search_complete = false;
+    let filtered_key = LogPageKey {
+        generation: 3,
+        filter_matches: true,
+        page_start: 0,
+    };
+    window.insert_page(filtered_key, vec![test_log_row(0, "cached match")]);
+
+    state.apply_log_store_result(LogStoreResult::SearchProgress {
+        window_id: 1,
+        generation: 3,
+        scanned_lines: 10,
+        total_lines: 20,
+        match_count: 4,
+    });
+
+    let window = &state.log_windows[&1];
+    assert!(window.pages.contains_key(&filtered_key));
+    assert!(window.pages_needing_refresh.contains(&filtered_key));
+    assert_eq!(window.search.match_count, 4);
 }
 
 #[test]
@@ -192,14 +383,15 @@ fn log_store_reducer_applies_only_current_async_results() {
         generation: 3,
         match_count: 5,
     });
+    let selection_generation = state.log_windows[&1].selection_generation;
     state.apply_log_store_result(LogStoreResult::Copied {
         window_id: 1,
-        selection_generation: 3,
+        selection_generation: selection_generation.wrapping_sub(1),
         text: "stale copy".into(),
     });
     state.apply_log_store_result(LogStoreResult::Copied {
         window_id: 1,
-        selection_generation: 4,
+        selection_generation,
         text: "current copy".into(),
     });
 

@@ -1,5 +1,6 @@
 use super::*;
 use crate::log_store::{LOG_PAGE_SIZE, LogPageRow, LogStoreConfig, LogStoreResult};
+use crate::resource_table::ContainerKind;
 use crate::worker::{MockWorker, PodLogStreamTarget};
 use components::test_support::UiHarnessSnapshot;
 use egui_kittest::{Harness, kittest::Queryable};
@@ -15,6 +16,7 @@ fn log_window(lines: &[&str]) -> PodLogWindowState {
             namespace: "default".to_owned(),
             pod_name: "api-0".to_owned(),
             container: "api".to_owned(),
+            kind: ContainerKind::App,
         }],
     )
     .expect("test log window has one source");
