@@ -43,8 +43,8 @@ Window state=[focused] rect=<none>
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Alert name="The Kubernetes API rejected this resource" value="The Kubernetes API rejected this resource" rect=(x=41.0 y=85.0 width=279.4 height=17.0 center_x=180.7 center_y=93.5)
-                TextRun value="The Kubernetes API rejected this resource" rect=(x=41.0 y=85.0 width=279.4 height=17.0 center_x=180.7 center_y=93.5)
+              Alert name="This resource changed on the cluster. Discard your edits and reopen the editor before applying changes." value="This resource changed on the cluster. Discard your edits and reopen the editor before applying changes." rect=(x=41.0 y=85.0 width=691.9 height=17.0 center_x=387.0 center_y=93.5)
+                TextRun value="This resource changed on the cluster. Discard your edits and reopen the editor before applying changes." rect=(x=41.0 y=85.0 width=691.9 height=17.0 center_x=387.0 center_y=93.5)
             GenericContainer rect=<none>
               GenericContainer rect=<none>
                 GenericContainer rect=<none>

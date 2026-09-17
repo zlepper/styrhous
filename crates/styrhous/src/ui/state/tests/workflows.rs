@@ -369,6 +369,8 @@ fn yaml_editors_are_deduplicated_and_route_results_by_editor_id() {
                 namespace: Some("default".into()),
                 resource_name: "other-settings".into(),
                 yaml: "kind: ConfigMap\nmetadata:\n  name: other-settings".into(),
+                resource_version: "2".into(),
+                resource_uid: "uid-2".into(),
             }) as WorkerResultBox,
             Box::new(ResourceYamlFetched {
                 editor_id: 1,
@@ -377,6 +379,8 @@ fn yaml_editors_are_deduplicated_and_route_results_by_editor_id() {
                 namespace: Some("default".into()),
                 resource_name: "settings".into(),
                 yaml: "kind: ConfigMap\nmetadata:\n  name: settings".into(),
+                resource_version: "1".into(),
+                resource_uid: "uid-1".into(),
             }) as WorkerResultBox,
         ]),
         commands: Vec::new(),

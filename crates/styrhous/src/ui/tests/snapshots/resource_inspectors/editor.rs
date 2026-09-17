@@ -269,6 +269,8 @@ fn deployment_editor_completes_match_labels_in_a_selector() {
             namespace: Some("kube-system".into()),
             resource_name: "coredns".into(),
             yaml: original_yaml.into(),
+            resource_version: "1".into(),
+            resource_uid: "uid-1".into(),
         }) as WorkerResultBox,
         Box::new(ResourceSchemaLoaded {
             editor_id,

@@ -76,7 +76,10 @@ pub(super) fn maybe_request_server_validation(
             api_resource: editor.api_resource.clone(),
             namespace: editor.namespace.clone(),
             resource_name: editor.resource_name.clone(),
+            original_yaml: editor.original_yaml.clone().unwrap_or_default(),
             yaml: editor.edited_yaml.clone(),
+            resource_version: editor.resource_version.clone(),
+            resource_uid: editor.resource_uid.clone(),
         }));
     }
 }
@@ -198,7 +201,10 @@ pub(super) fn apply_editor(
         api_resource: editor.api_resource.clone(),
         namespace: editor.namespace.clone(),
         resource_name: editor.resource_name.clone(),
+        original_yaml: editor.original_yaml.clone().unwrap_or_default(),
         yaml: editor.edited_yaml.clone(),
+        resource_version: editor.resource_version.clone(),
+        resource_uid: editor.resource_uid.clone(),
     }));
 }
 

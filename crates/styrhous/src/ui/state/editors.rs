@@ -9,6 +9,10 @@ pub(crate) struct YamlEditorWindowState {
     pub(crate) namespace: Option<String>,
     pub(crate) resource_name: String,
     pub(crate) original_yaml: Option<String>,
+    /// The version associated with `original_yaml`, kept out of the editable document.
+    pub(crate) resource_version: String,
+    /// The immutable identity associated with `original_yaml`, kept out of the editable document.
+    pub(crate) resource_uid: String,
     pub(crate) edited_yaml: String,
     pub(crate) loading: bool,
     pub(crate) saving: bool,
@@ -136,6 +140,9 @@ pub(crate) fn diagnostics_from_api_error(
 }
 
 pub(crate) fn api_error_message(error: &ResourceApiError) -> String {
+    if error.status_code == 409 {
+        return "This resource changed on the cluster. Discard your edits and reopen the editor before applying changes.".into();
+    }
     if !error.message.is_empty() {
         error.message.clone()
     } else {

@@ -48,6 +48,8 @@ impl YamlEditorProfile {
                 namespace: Some("benchmark".to_owned()),
                 resource_name: "large-deployment".to_owned(),
                 original_yaml: Some(yaml.clone()),
+                resource_version: "1".to_owned(),
+                resource_uid: "uid-1".to_owned(),
                 edited_yaml: yaml,
                 loading: false,
                 saving: false,

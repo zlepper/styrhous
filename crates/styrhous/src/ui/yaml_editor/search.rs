@@ -206,11 +206,15 @@ pub(super) fn error_strip(ui: &mut egui::Ui, error: &str) {
         ))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
-            ui.label(
+            let response = ui.label(
                 egui::RichText::new(error)
                     .font(typography::body())
                     .color(egui::Color32::from_rgb(254, 202, 202)),
             );
+            ui.ctx().accesskit_node_builder(response.id, |builder| {
+                builder.set_role(egui::accesskit::Role::Alert);
+                builder.set_label(error);
+            });
         });
     ui.add_space(spacing::SM);
 }

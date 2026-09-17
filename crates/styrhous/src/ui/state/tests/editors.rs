@@ -12,6 +12,7 @@ fn api_status_causes_become_editor_diagnostics_for_validation_and_apply() {
     };
     let yaml = "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: api\nspec:\n  template:\n    spec:\n      containers:\n        - name: api\n          image: invalid";
     let api_error = ResourceApiError {
+        status_code: 422,
         message: "Deployment.apps \"api\" is invalid".into(),
         causes: vec![crate::worker::ResourceApiErrorCause {
             field: "spec.template.spec.containers[0].image".into(),
@@ -38,6 +39,8 @@ fn api_status_causes_become_editor_diagnostics_for_validation_and_apply() {
                 namespace: Some("default".into()),
                 resource_name: "api".into(),
                 yaml: yaml.into(),
+                resource_version: "1".into(),
+                resource_uid: "uid-1".into(),
             }) as WorkerResultBox,
             Box::new(ResourceYamlValidationFailed {
                 editor_id: 1,
@@ -77,5 +80,19 @@ fn api_status_causes_become_editor_diagnostics_for_validation_and_apply() {
     assert_eq!(
         editor.diagnostics[0].message,
         "spec.template.spec.containers[0].image: Invalid value: \"invalid\""
+    );
+}
+
+#[test]
+fn conflict_errors_explain_how_to_recover_without_discarding_edits_automatically() {
+    let error = ResourceApiError {
+        status_code: 409,
+        message: "the object has been modified".into(),
+        causes: Vec::new(),
+    };
+
+    assert_eq!(
+        api_error_message(&error),
+        "This resource changed on the cluster. Discard your edits and reopen the editor before applying changes."
     );
 }

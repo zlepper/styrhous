@@ -7,15 +7,18 @@ impl WorkerCommand for ApplyResourceYaml {
     async fn execute(self, state: &WorkerState) -> Self::Output {
         let editor_id = self.editor_id;
         match state.client_for_cluster(self.cluster_key).await {
-            Ok(client) => match apply_resource_yaml(
+            Ok(client) => match apply_resource_yaml(ResourceYamlApplyRequest {
                 editor_id,
-                self.cluster_key,
+                cluster_key: self.cluster_key,
                 client,
-                self.api_resource,
-                self.namespace,
-                self.resource_name,
-                self.yaml,
-            )
+                api_resource: self.api_resource,
+                namespace: self.namespace,
+                resource_name: self.resource_name,
+                original_yaml: self.original_yaml,
+                yaml: self.yaml,
+                resource_version: self.resource_version,
+                resource_uid: self.resource_uid,
+            })
             .await
             {
                 Ok(result) => result.map_err(ResourceYamlApplyFailure::Api),
@@ -56,7 +59,10 @@ impl WorkerCommand for ValidateResourceYaml {
                 api_resource: self.api_resource,
                 namespace: self.namespace,
                 resource_name: self.resource_name,
+                original_yaml: self.original_yaml,
                 yaml: self.yaml,
+                resource_version: self.resource_version,
+                resource_uid: self.resource_uid,
             })
             .await
             {

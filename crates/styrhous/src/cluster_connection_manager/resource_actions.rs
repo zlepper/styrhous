@@ -109,9 +109,7 @@ pub(crate) async fn get_resource_yaml(
     let api = dynamic_api::create(&client, &api_resource, namespace.as_deref()).await?;
     let mut obj = api.get(&resource_name).await?;
 
-    resource_yaml::strip_server_managed_metadata(&mut obj);
-
-    let yaml = serde_yaml::to_string(&obj)?;
+    let (yaml, resource_version, resource_uid) = resource_yaml::editor_yaml(&mut obj)?;
 
     Ok(ResourceYamlFetched {
         editor_id,
@@ -120,6 +118,8 @@ pub(crate) async fn get_resource_yaml(
         namespace,
         resource_name,
         yaml,
+        resource_version,
+        resource_uid,
     })
 }
 
@@ -170,10 +170,13 @@ pub(crate) struct ResourceYamlValidationRequest {
     pub api_resource: ApiResource,
     pub namespace: Option<String>,
     pub resource_name: String,
+    pub original_yaml: String,
     pub yaml: String,
+    pub resource_version: String,
+    pub resource_uid: String,
 }
 
-/// Validate the same server-side apply request used by Save without persisting a change.
+/// Validate the same full-resource replacement request used by Save without persisting a change.
 pub(crate) async fn validate_resource_yaml(
     request: ResourceYamlValidationRequest,
 ) -> Result<Result<ResourceYamlValidated, ResourceYamlValidationFailed>> {
@@ -185,18 +188,40 @@ pub(crate) async fn validate_resource_yaml(
         api_resource,
         namespace,
         resource_name,
+        original_yaml,
         yaml,
+        resource_version,
+        resource_uid,
     } = request;
-    let mut obj: DynamicObject = serde_yaml::from_str(&yaml)?;
-    resource_yaml::strip_server_managed_metadata(&mut obj);
 
     let api = dynamic_api::create(&client, &api_resource, namespace.as_deref()).await?;
-    let params = kube::api::PatchParams::apply("styrhous")
-        .force()
-        .validation(kube::api::ValidationDirective::Strict)
-        .dry_run();
-    match api
-        .patch(&resource_name, &params, &kube::api::Patch::Apply(&obj))
+    let mut current = api.get(&resource_name).await?;
+    let obj = match resource_yaml::prepare_editor_replacement(
+        &original_yaml,
+        &yaml,
+        &resource_version,
+        &resource_uid,
+        &mut current,
+    )? {
+        resource_yaml::ReplacementPreparation::Ready(obj) => obj,
+        resource_yaml::ReplacementPreparation::Conflict => {
+            return Ok(Err(ResourceYamlValidationFailed {
+                editor_id,
+                revision,
+                cluster_key,
+                api_resource,
+                namespace,
+                resource_name,
+                error: resource_version_conflict_error(),
+            }));
+        }
+    };
+    match client
+        .request::<DynamicObject>(strict_dry_run_replace_request(
+            api.resource_url(),
+            &resource_name,
+            &obj,
+        )?)
         .await
     {
         Ok(_) => Ok(Ok(ResourceYamlValidated {
@@ -217,5 +242,51 @@ pub(crate) async fn validate_resource_yaml(
             error: resource_api_error(&status),
         })),
         Err(error) => Err(error.into()),
+    }
+}
+
+fn strict_dry_run_replace_request(
+    resource_url: &str,
+    resource_name: &str,
+    object: &DynamicObject,
+) -> Result<Request<Vec<u8>>> {
+    Request::put(format!(
+        "{resource_url}/{resource_name}?dryRun=All&fieldValidation=Strict"
+    ))
+    .header(http::header::CONTENT_TYPE, "application/json")
+    .body(k8s_openapi::serde_json::to_vec(object)?)
+    .map_err(Into::into)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strict_dry_run_replacement_uses_the_resource_update_endpoint() {
+        let object: DynamicObject =
+            k8s_openapi::serde_json::from_value(k8s_openapi::serde_json::json!({
+                "apiVersion": "apps/v1",
+                "kind": "Deployment",
+                "metadata": { "name": "api" }
+            }))
+            .unwrap();
+
+        let request = strict_dry_run_replace_request(
+            "/apis/apps/v1/namespaces/default/deployments",
+            "api",
+            &object,
+        )
+        .unwrap();
+
+        assert_eq!(request.method(), http::Method::PUT);
+        assert_eq!(
+            request.uri(),
+            "/apis/apps/v1/namespaces/default/deployments/api?dryRun=All&fieldValidation=Strict"
+        );
+        assert_eq!(
+            request.headers().get(http::header::CONTENT_TYPE).unwrap(),
+            "application/json"
+        );
     }
 }

@@ -221,6 +221,8 @@ pub(crate) struct ResourceYamlFetched {
     pub(crate) namespace: Option<String>,
     pub(crate) resource_name: String,
     pub(crate) yaml: String,
+    pub(crate) resource_version: String,
+    pub(crate) resource_uid: String,
 }
 #[derive(Debug)]
 pub(crate) struct ResourceSchemaLoaded {
@@ -268,6 +270,9 @@ pub(crate) struct ResourceApplyCompleted {
     pub(crate) api_resource: ApiResource,
     pub(crate) namespace: Option<String>,
     pub(crate) resource_name: String,
+    pub(crate) yaml: String,
+    pub(crate) resource_version: String,
+    pub(crate) resource_uid: String,
 }
 #[derive(Debug)]
 pub(crate) struct ResourceApplyFailed {

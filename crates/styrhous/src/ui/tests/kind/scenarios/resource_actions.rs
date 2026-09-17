@@ -8,6 +8,40 @@ const CRON_JOB_POLL_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
 const CRON_JOB_DIAGNOSTIC_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 const EXPECTED_MANUAL_JOB_IMAGE: &str = "registry.k8s.io/pause:3.10";
 
+fn yaml_mapping_value_mut<'a>(
+    value: &'a mut serde_yaml::Value,
+    key: &str,
+) -> &'a mut serde_yaml::Value {
+    value
+        .as_mapping_mut()
+        .and_then(|mapping| mapping.get_mut(serde_yaml::Value::String(key.into())))
+        .unwrap_or_else(|| panic!("edited YAML should contain {key}"))
+}
+
+fn remove_cpu_limit_from_yaml(yaml: &str) -> String {
+    let mut value: serde_yaml::Value = serde_yaml::from_str(yaml).expect("editor YAML is valid");
+    let pod_spec = yaml_mapping_value_mut(
+        yaml_mapping_value_mut(yaml_mapping_value_mut(&mut value, "spec"), "template"),
+        "spec",
+    );
+    let container = pod_spec
+        .as_mapping_mut()
+        .and_then(|mapping| mapping.get_mut(serde_yaml::Value::String("containers".into())))
+        .and_then(serde_yaml::Value::as_sequence_mut)
+        .and_then(|containers| containers.first_mut())
+        .expect("edited Deployment YAML should contain a container");
+    let limits = yaml_mapping_value_mut(yaml_mapping_value_mut(container, "resources"), "limits")
+        .as_mapping_mut()
+        .expect("container limits should be a mapping");
+    assert!(
+        limits
+            .remove(serde_yaml::Value::String("cpu".into()))
+            .is_some(),
+        "fixture should contain a CPU limit"
+    );
+    serde_yaml::to_string(&value).expect("edited Deployment YAML serializes")
+}
+
 fn is_expected_manual_job(job: &Job, cron_job_name: &str, cron_job_uid: &str) -> bool {
     job.metadata
         .generate_name
@@ -442,4 +476,120 @@ fn test_resource_scale_integration() {
         },
         10_000,
     );
+}
+
+#[test]
+fn test_yaml_editor_removes_an_externally_owned_cpu_limit_integration() {
+    let fixture = IntegrationNamespaceFixture::create("yaml-remove-cpu-limit", "anchor", "unused");
+    let deployment_name = "cpu-limited-deployment".to_owned();
+    let runtime = &fixture.runtime;
+    let client = runtime.block_on(async {
+        Client::try_default()
+            .await
+            .expect("Failed to create Kubernetes client")
+    });
+    let deployments: Api<Deployment> = Api::namespaced(client, &fixture.namespace);
+    runtime.block_on(async {
+        deployments
+            .patch(
+                &deployment_name,
+                &kube::api::PatchParams::apply("external-fixture"),
+                &Patch::Apply(&Deployment {
+                    metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                        name: Some(deployment_name.clone()),
+                        namespace: Some(fixture.namespace.clone()),
+                        ..Default::default()
+                    },
+                    spec: Some(DeploymentSpec {
+                        replicas: Some(1),
+                        selector: LabelSelector {
+                            match_labels: Some(BTreeMap::from([(
+                                "app".to_owned(),
+                                deployment_name.clone(),
+                            )])),
+                            ..Default::default()
+                        },
+                        template: PodTemplateSpec {
+                            metadata: Some(
+                                k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                                    labels: Some(BTreeMap::from([(
+                                        "app".to_owned(),
+                                        deployment_name.clone(),
+                                    )])),
+                                    ..Default::default()
+                                },
+                            ),
+                            spec: Some(PodSpec {
+                                containers: vec![Container {
+                                    name: "pause".to_owned(),
+                                    image: Some("registry.k8s.io/pause:3.10".to_owned()),
+                                    resources: Some(ResourceRequirements {
+                                        limits: Some(BTreeMap::from([
+                                            ("cpu".to_owned(), Quantity("100m".to_owned())),
+                                            ("memory".to_owned(), Quantity("64Mi".to_owned())),
+                                        ])),
+                                        ..Default::default()
+                                    }),
+                                    ..Default::default()
+                                }],
+                                ..Default::default()
+                            }),
+                        },
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }),
+            )
+            .await
+            .expect("Failed to create externally managed Deployment");
+    });
+
+    let (mut harness, cluster_key) = connected_kind_harness();
+    wait_for_cluster_data(&mut harness, cluster_key);
+    select_namespace(&mut harness, cluster_key, &fixture.namespace);
+    let deployments_resource = select_resource(&mut harness, "Apps & Containers", "Deployments");
+    wait_for_resource_sync(
+        &mut harness,
+        cluster_key,
+        &deployments_resource,
+        Some(&fixture.namespace),
+    );
+    for _ in 0..3 {
+        harness.run_steps(1);
+    }
+    harness
+        .get_by_label(&format!("More actions for {deployment_name}"))
+        .click();
+    harness.run_steps(1);
+    harness.get_by_label("Edit").click();
+    harness.run_steps(1);
+    let editor_id = wait_for_yaml_editor(&mut harness, &deployment_name, 5_000);
+    let editor = harness
+        .state_mut()
+        .ui_state
+        .yaml_editors
+        .get_mut(&editor_id)
+        .expect("YAML editor should be open");
+    editor.edited_yaml = remove_cpu_limit_from_yaml(&editor.edited_yaml);
+
+    harness.run_steps(1);
+    harness.get_by_label("Apply changes").click();
+    harness.run_steps(1);
+    wait_for_yaml_editor_saved(&mut harness, &deployment_name, 5_000);
+
+    let deployment = runtime.block_on(async {
+        deployments
+            .get(&deployment_name)
+            .await
+            .expect("Deployment should remain available")
+    });
+    let limits = deployment
+        .spec
+        .and_then(|spec| spec.template.spec)
+        .and_then(|spec| spec.containers.into_iter().next())
+        .and_then(|container| container.resources)
+        .and_then(|resources| resources.limits)
+        .expect("Deployment container should retain its limits map");
+    assert!(!limits.contains_key("cpu"));
+    assert_eq!(limits.get("memory"), Some(&Quantity("64Mi".to_owned())));
 }

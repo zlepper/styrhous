@@ -82,12 +82,16 @@ impl WorkerResult for ResourceYamlFetched {
             namespace,
             resource_name,
             yaml,
+            resource_version,
+            resource_uid,
         } = self;
         if let Some(editor) = ui.yaml_editors.get_mut(&editor_id)
             && editor.resource_matches(cluster_key, &api_resource, &namespace, &resource_name)
         {
             editor.original_yaml = Some(yaml.clone());
             editor.edited_yaml = yaml;
+            editor.resource_version = resource_version;
+            editor.resource_uid = resource_uid;
             editor.loading = false;
             editor.error = None;
         }
@@ -165,13 +169,20 @@ impl WorkerResult for ResourceApplyCompleted {
             api_resource,
             namespace,
             resource_name,
+            yaml,
+            resource_version,
+            resource_uid,
         } = self;
         if let Some(editor) = ui.yaml_editors.get_mut(&editor_id)
             && editor.resource_matches(cluster_key, &api_resource, &namespace, &resource_name)
         {
-            editor.original_yaml = Some(editor.edited_yaml.clone());
+            editor.original_yaml = Some(yaml.clone());
+            editor.edited_yaml = yaml;
+            editor.resource_version = resource_version;
+            editor.resource_uid = resource_uid;
             editor.saving = false;
             editor.error = None;
+            refresh_local_validation(editor);
         }
     }
 }

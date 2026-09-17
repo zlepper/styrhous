@@ -131,6 +131,8 @@ impl UiState {
                 namespace: namespace.clone(),
                 resource_name: resource_name.clone(),
                 original_yaml: None,
+                resource_version: String::new(),
+                resource_uid: String::new(),
                 edited_yaml: String::new(),
                 loading: true,
                 saving: false,

@@ -2,12 +2,12 @@ use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::{
     AvailableAksCluster, AvailableTailscaleCluster, Cluster, ClusterConnection,
     ClusterDiscoveryTools, ResourceDataUpdateRequest, ResourceDetailWatchRequest,
-    ResourceYamlValidationRequest, add_aks_cluster, add_tailscale_cluster, apply_resource_yaml,
-    delete_resource, discover_managed_clusters, force_delete_resource, get_resource_scale,
-    get_resource_schema, get_resource_yaml, reload_kubeconfig, restart_deployment, run_cron_job,
-    start_all_namespaces_resource_watcher, start_cluster_connection, start_resource_watcher,
-    update_resource_data, update_resource_scale, validate_resource_yaml, watch_node_metrics,
-    watch_pod_metrics_namespace, watch_resource_detail,
+    ResourceYamlApplyRequest, ResourceYamlValidationRequest, add_aks_cluster,
+    add_tailscale_cluster, apply_resource_yaml, delete_resource, discover_managed_clusters,
+    force_delete_resource, get_resource_scale, get_resource_schema, get_resource_yaml,
+    reload_kubeconfig, restart_deployment, run_cron_job, start_all_namespaces_resource_watcher,
+    start_cluster_connection, start_resource_watcher, update_resource_data, update_resource_scale,
+    validate_resource_yaml, watch_node_metrics, watch_pod_metrics_namespace, watch_resource_detail,
 };
 use crate::helm_release::HelmRelease;
 use crate::helpers::ResultExt;

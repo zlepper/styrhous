@@ -42,6 +42,7 @@ impl WorkerResultSender {
 /// Kubernetes API status information retained for YAML editor feedback.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResourceApiError {
+    pub status_code: u16,
     pub message: String,
     pub causes: Vec<ResourceApiErrorCause>,
 }

@@ -130,7 +130,10 @@ pub(crate) struct ApplyResourceYaml {
     pub(crate) api_resource: ApiResource,
     pub(crate) namespace: Option<String>,
     pub(crate) resource_name: String,
+    pub(crate) original_yaml: String,
     pub(crate) yaml: String,
+    pub(crate) resource_version: String,
+    pub(crate) resource_uid: String,
 }
 #[derive(Debug)]
 pub(crate) struct LoadResourceSchema {
@@ -145,7 +148,10 @@ pub(crate) struct ValidateResourceYaml {
     pub(crate) api_resource: ApiResource,
     pub(crate) namespace: Option<String>,
     pub(crate) resource_name: String,
+    pub(crate) original_yaml: String,
     pub(crate) yaml: String,
+    pub(crate) resource_version: String,
+    pub(crate) resource_uid: String,
 }
 #[derive(Debug)]
 pub(crate) struct UpdateResourceData {

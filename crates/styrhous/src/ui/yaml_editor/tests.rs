@@ -32,6 +32,8 @@ fn editor(yaml: &str) -> YamlEditorWindowState {
         namespace: Some("kube-system".into()),
         resource_name: "settings".into(),
         original_yaml: Some(yaml.into()),
+        resource_version: "1".into(),
+        resource_uid: "uid-1".into(),
         edited_yaml: yaml.into(),
         loading: false,
         saving: false,

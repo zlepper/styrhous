@@ -187,16 +187,35 @@ pub(crate) fn job_from_cron_job(cron_job: &CronJob) -> Result<Job> {
     })
 }
 
-/// Apply (replace) a resource from YAML
+pub(crate) struct ResourceYamlApplyRequest {
+    pub editor_id: u64,
+    pub cluster_key: i32,
+    pub client: kube::Client,
+    pub api_resource: ApiResource,
+    pub namespace: Option<String>,
+    pub resource_name: String,
+    pub original_yaml: String,
+    pub yaml: String,
+    pub resource_version: String,
+    pub resource_uid: String,
+}
+
+/// Replace a resource from YAML.
 pub(crate) async fn apply_resource_yaml(
-    editor_id: u64,
-    cluster_key: i32,
-    client: kube::Client,
-    api_resource: ApiResource,
-    namespace: Option<String>,
-    resource_name: String,
-    yaml: String,
+    request: ResourceYamlApplyRequest,
 ) -> Result<Result<ResourceApplyCompleted, ResourceApplyFailed>> {
+    let ResourceYamlApplyRequest {
+        editor_id,
+        cluster_key,
+        client,
+        api_resource,
+        namespace,
+        resource_name,
+        original_yaml,
+        yaml,
+        resource_version,
+        resource_uid,
+    } = request;
     info!(
         "Applying YAML for {}/{} {} in {}",
         api_resource.group,
@@ -205,29 +224,45 @@ pub(crate) async fn apply_resource_yaml(
         namespace.as_deref().unwrap_or("cluster-wide scope")
     );
 
-    let mut obj: DynamicObject = serde_yaml::from_str(&yaml)?;
-
-    resource_yaml::strip_server_managed_metadata(&mut obj);
-
     let api = dynamic_api::create(&client, &api_resource, namespace.as_deref()).await?;
+    let mut current = api.get(&resource_name).await?;
+    let obj = match resource_yaml::prepare_editor_replacement(
+        &original_yaml,
+        &yaml,
+        &resource_version,
+        &resource_uid,
+        &mut current,
+    )? {
+        resource_yaml::ReplacementPreparation::Ready(obj) => obj,
+        resource_yaml::ReplacementPreparation::Conflict => {
+            return Ok(Err(ResourceApplyFailed {
+                editor_id,
+                cluster_key,
+                api_resource,
+                namespace,
+                resource_name,
+                error: resource_version_conflict_error(),
+            }));
+        }
+    };
 
-    // Use server-side apply with force to take ownership of fields
-    let patch_params = kube::api::PatchParams::apply("styrhous").force();
     match api
-        .patch(
-            &resource_name,
-            &patch_params,
-            &kube::api::Patch::Apply(&obj),
-        )
+        .replace(&resource_name, &kube::api::PostParams::default(), &obj)
         .await
     {
-        Ok(_) => Ok(Ok(ResourceApplyCompleted {
-            editor_id,
-            cluster_key,
-            api_resource,
-            namespace,
-            resource_name,
-        })),
+        Ok(mut updated) => {
+            let (yaml, resource_version, resource_uid) = resource_yaml::editor_yaml(&mut updated)?;
+            Ok(Ok(ResourceApplyCompleted {
+                editor_id,
+                cluster_key,
+                api_resource,
+                namespace,
+                resource_name,
+                yaml,
+                resource_version,
+                resource_uid,
+            }))
+        }
         Err(kube::Error::Api(status)) => Ok(Err(ResourceApplyFailed {
             editor_id,
             cluster_key,

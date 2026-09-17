@@ -27,7 +27,10 @@ fn yaml_commands_omit_document_text_from_debug_output() {
         api_resource: pod_resource(),
         namespace: Some("default".to_owned()),
         resource_name: "credentials".to_owned(),
+        original_yaml: secret_yaml.clone(),
         yaml: secret_yaml.clone(),
+        resource_version: "42".to_owned(),
+        resource_uid: "uid-1".to_owned(),
     };
     let validation = ValidateResourceYaml {
         editor_id: 9,
@@ -36,7 +39,10 @@ fn yaml_commands_omit_document_text_from_debug_output() {
         api_resource: pod_resource(),
         namespace: Some("default".to_owned()),
         resource_name: "credentials".to_owned(),
+        original_yaml: secret_yaml.clone(),
         yaml: secret_yaml,
+        resource_version: "42".to_owned(),
+        resource_uid: "uid-1".to_owned(),
     };
     assert!(!format!("{apply:?}{validation:?}").contains("definitely-secret"));
 }
