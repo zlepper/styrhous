@@ -45,18 +45,21 @@ pub(crate) struct ClusterResourceState {
     pub(crate) pending_delete: Option<PendingDelete>,
     pub(crate) pending_bulk_delete: Option<PendingBulkDelete>,
     pub(crate) bulk_delete_progress: Option<BulkDeleteProgress>,
-    pub(crate) bulk_delete_error: Option<String>,
     pub(crate) pending_force_delete: Option<PendingForceDelete>,
-    pub(crate) force_delete_error: Option<String>,
     pub(crate) pending_deployment_restart: Option<PendingDeploymentRestart>,
-    pub(crate) deployment_restart_error: Option<String>,
     pub(crate) pending_cron_job_run: Option<PendingCronJobRun>,
     pub(crate) next_cron_job_run_operation_id: u64,
-    pub(crate) cron_job_run: Option<CronJobRunState>,
-    #[cfg(test)]
-    pub(crate) observed_cron_job_run_completions: Vec<ObservedCronJobRunCompletion>,
+    /// Every submitted CronJob run remains tracked until its own terminal
+    /// result arrives. A single slot would let a second run hide an earlier
+    /// failure (GitHub issue #30).
+    pub(crate) cron_job_runs_in_flight: BTreeSet<u64>,
     pub(crate) pending_scale: Option<PendingScale>,
-    pub(crate) scale_error: Option<String>,
+    /// Outcomes are intentionally session-scoped: rebuilding this resource
+    /// state on reconnect drops entries from the previous cluster session.
+    pub(crate) operation_history: Vec<OperationHistoryEntry>,
+    /// Brief feedback for newly recorded outcomes. This is reset with the
+    /// resource session so a previous connection cannot surface a stale toast.
+    pub(crate) transient_operation_toasts: Vec<TransientOperationToast>,
 }
 
 impl ClusterState {
@@ -126,18 +129,14 @@ impl ClusterResourceState {
             pending_delete: None,
             pending_bulk_delete: None,
             bulk_delete_progress: None,
-            bulk_delete_error: None,
             pending_force_delete: None,
-            force_delete_error: None,
             pending_deployment_restart: None,
-            deployment_restart_error: None,
             pending_cron_job_run: None,
             next_cron_job_run_operation_id: 0,
-            cron_job_run: None,
-            #[cfg(test)]
-            observed_cron_job_run_completions: Vec::new(),
+            cron_job_runs_in_flight: BTreeSet::new(),
             pending_scale: None,
-            scale_error: None,
+            operation_history: Vec::new(),
+            transient_operation_toasts: Vec::new(),
         }
     }
 

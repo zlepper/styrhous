@@ -1,6 +1,7 @@
 //! Kind deployment completion and action scenarios.
 
 use super::*;
+use crate::ui::state::OperationOutcome;
 
 #[test]
 fn test_force_delete_resource_with_finalizer_integration() {
@@ -147,8 +148,11 @@ fn test_force_delete_resource_with_finalizer_integration() {
         },
         |app| {
             app.ui_state.clusters[&cluster_key]
-                .force_delete_error
-                .clone()
+                .operation_history
+                .iter()
+                .rev()
+                .find(|entry| entry.outcome == OperationOutcome::Failure)
+                .and_then(|entry| entry.details.clone())
         },
         20_000,
     );
@@ -471,8 +475,11 @@ fn test_deployment_rollout_restart_integration() {
         },
         |app| {
             app.ui_state.clusters[&cluster_key]
-                .deployment_restart_error
-                .clone()
+                .operation_history
+                .iter()
+                .rev()
+                .find(|entry| entry.outcome == OperationOutcome::Failure)
+                .and_then(|entry| entry.details.clone())
         },
         10_000,
     );

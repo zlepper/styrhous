@@ -96,3 +96,61 @@ fn conflict_errors_explain_how_to_recover_without_discarding_edits_automatically
         "This resource changed on the cluster. Discard your edits and reopen the editor before applying changes."
     );
 }
+
+#[test]
+fn secret_mutation_failures_redact_notification_details() {
+    let secret = ApiResource {
+        group: "core".into(),
+        version: "v1".into(),
+        kind: "Secret".into(),
+        name: "secrets".into(),
+        namespaced: true,
+    };
+    let mut state = UiState::default();
+    let mut cluster = ClusterState::for_test(7, "dev");
+    cluster.connection = ClusterConnectionState::Connected;
+    state.clusters.insert(7, cluster);
+    let mut commands = Vec::new();
+
+    ResourceApplyFailed {
+        editor_id: 1,
+        cluster_key: 7,
+        api_resource: secret.clone(),
+        namespace: Some("default".into()),
+        resource_name: "credentials".into(),
+        error: ResourceApiError {
+            status_code: 403,
+            message: "sentinel-apply-secret-value".into(),
+            causes: Vec::new(),
+        },
+    }
+    .apply(&mut state, &mut commands);
+    ResourceDataUpdateFailed {
+        cluster_key: 7,
+        history_entry_id: 99,
+        request_id: 1,
+        api_resource: secret,
+        namespace: "default".into(),
+        resource_name: "credentials".into(),
+        error: "sentinel-data-secret-value".into(),
+    }
+    .apply(&mut state, &mut commands);
+
+    let details = state.clusters[&7]
+        .operation_history
+        .iter()
+        .filter_map(|entry| entry.details.as_deref())
+        .collect::<Vec<_>>();
+    assert_eq!(details.len(), 2);
+    assert!(
+        details
+            .iter()
+            .all(|detail| detail.contains("Details are hidden"))
+    );
+    assert!(
+        details
+            .iter()
+            .all(|detail| !detail.contains("sentinel-apply-secret-value")
+                && !detail.contains("sentinel-data-secret-value"))
+    );
+}

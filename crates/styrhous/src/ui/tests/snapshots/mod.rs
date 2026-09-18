@@ -3,9 +3,9 @@
 use super::super::MyEguiApp;
 use super::super::state::ClusterConnectionState;
 use super::super::state::{
-    BulkDeleteProgress, BulkDeleteTarget, CronJobRunState, HelmReleaseWatchState,
-    PendingCronJobRun, PendingDelete, PendingForceDelete, PodMetricsNamespaceState,
-    ResourceWatchState, UiState, ValidationState, YamlEditorWindowState,
+    BulkDeleteProgress, BulkDeleteTarget, HelmReleaseWatchState, PendingCronJobRun, PendingDelete,
+    PendingForceDelete, PodMetricsNamespaceState, ResourceWatchState, UiState, ValidationState,
+    YamlEditorWindowState,
 };
 use super::super::table_preferences::{
     PersistedResourceTablePreferences, ResourceTableKey, TableColumnDefinition,
@@ -47,7 +47,7 @@ use egui::text::{CCursor, CCursorRange};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use k8s_openapi::serde_json::json;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use time::OffsetDateTime;
 
 mod flows;

@@ -154,8 +154,10 @@ pub mod status {
     use egui::Color32;
 
     pub const SUCCESS: Color32 = Color32::from_rgb(14, 150, 30);
+    pub const SUCCESS_SOFT: Color32 = Color32::from_rgb(236, 253, 245);
     pub const WARNING: Color32 = Color32::from_rgb(202, 138, 4);
     pub const DANGER: Color32 = Color32::from_rgb(185, 28, 28);
+    pub const DANGER_SOFT: Color32 = Color32::from_rgb(254, 242, 242);
     pub const CRITICAL: Color32 = Color32::from_rgb(220, 38, 38);
     pub const WARNING_TEXT: Color32 = Color32::from_rgb(180, 83, 9);
 }

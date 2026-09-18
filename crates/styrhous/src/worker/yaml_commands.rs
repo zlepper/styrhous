@@ -6,6 +6,14 @@ impl WorkerCommand for ApplyResourceYaml {
 
     async fn execute(self, state: &WorkerState) -> Self::Output {
         let editor_id = self.editor_id;
+        let command_failure = ResourceYamlApplyCommandFailed {
+            editor_id,
+            cluster_key: self.cluster_key,
+            api_resource: self.api_resource.clone(),
+            namespace: self.namespace.clone(),
+            resource_name: self.resource_name.clone(),
+            error: String::new(),
+        };
         match state.client_for_cluster(self.cluster_key).await {
             Ok(client) => match apply_resource_yaml(ResourceYamlApplyRequest {
                 editor_id,
@@ -24,15 +32,15 @@ impl WorkerCommand for ApplyResourceYaml {
                 Ok(result) => result.map_err(ResourceYamlApplyFailure::Api),
                 Err(error) => Err(ResourceYamlApplyFailure::Command(
                     ResourceYamlApplyCommandFailed {
-                        editor_id,
                         error: format!("{error:#?}"),
+                        ..command_failure
                     },
                 )),
             },
             Err(error) => Err(ResourceYamlApplyFailure::Command(
                 ResourceYamlApplyCommandFailed {
-                    editor_id,
                     error: format!("{error:#?}"),
+                    ..command_failure
                 },
             )),
         }
@@ -99,6 +107,9 @@ impl WorkerCommand for UpdateResourceData {
             cluster_key: self.cluster_key,
             history_entry_id: self.history_entry_id,
             request_id: self.request_id,
+            api_resource: self.api_resource.clone(),
+            namespace: self.namespace.clone(),
+            resource_name: self.resource_name.clone(),
             error: String::new(),
         };
         match state.client_for_cluster(self.cluster_key).await {

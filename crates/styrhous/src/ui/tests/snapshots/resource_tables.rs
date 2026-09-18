@@ -322,14 +322,10 @@ fn cron_job_run_action_opens_a_confirmation_and_sends_a_worker_command() {
                 && command.namespace == "kube-system"
                 && command.resource_name == "nightly-report")
     );
-    assert!(matches!(
-        harness.state().ui_state.clusters[&2].cron_job_run,
-        Some(CronJobRunState::Running {
-            operation_id: 1,
-            ref namespace,
-            ref cron_job_name,
-        }) if namespace == "kube-system" && cron_job_name == "nightly-report"
-    ));
+    assert_eq!(
+        harness.state().ui_state.clusters[&2].cron_job_runs_in_flight,
+        BTreeSet::from([1])
+    );
 
     harness.event(egui::Event::PointerGone);
     harness.run();
@@ -353,14 +349,10 @@ fn cron_job_run_action_opens_a_confirmation_and_sends_a_worker_command() {
         .map(|command| command.operation_id)
         .collect::<Vec<_>>();
     assert_eq!(operation_ids, vec![1, 2]);
-    assert!(matches!(
-        harness.state().ui_state.clusters[&2].cron_job_run,
-        Some(CronJobRunState::Running {
-            operation_id: 2,
-            ref namespace,
-            ref cron_job_name,
-        }) if namespace == "kube-system" && cron_job_name == "nightly-report"
-    ));
+    assert_eq!(
+        harness.state().ui_state.clusters[&2].cron_job_runs_in_flight,
+        BTreeSet::from([1, 2])
+    );
 
     harness.deliver_worker_result(CronJobRunCompleted {
         cluster_key: 2,
@@ -369,13 +361,10 @@ fn cron_job_run_action_opens_a_confirmation_and_sends_a_worker_command() {
         cron_job_name: "nightly-report".to_owned(),
         job_name: "nightly-report-manual-stale".to_owned(),
     });
-    assert!(matches!(
-        harness.state().ui_state.clusters[&2].cron_job_run,
-        Some(CronJobRunState::Running {
-            operation_id: 2,
-            ..
-        })
-    ));
+    assert_eq!(
+        harness.state().ui_state.clusters[&2].cron_job_runs_in_flight,
+        BTreeSet::from([2])
+    );
 
     harness.deliver_worker_result(CronJobRunCompleted {
         cluster_key: 2,
@@ -385,57 +374,39 @@ fn cron_job_run_action_opens_a_confirmation_and_sends_a_worker_command() {
         job_name: "nightly-report-manual-current".to_owned(),
     });
     let cluster = &harness.state().ui_state.clusters[&2];
-    assert_eq!(cluster.cron_job_run, None);
-    assert_eq!(cluster.observed_cron_job_run_completions.len(), 1);
-    let completion = &cluster.observed_cron_job_run_completions[0];
-    assert_eq!(completion.operation_id, 2);
-    assert_eq!(completion.namespace, "kube-system");
-    assert_eq!(completion.cron_job_name, "nightly-report");
-    assert_eq!(completion.job_name, "nightly-report-manual-current");
+    assert!(cluster.cron_job_runs_in_flight.is_empty());
+    assert_eq!(cluster.operation_history.len(), 2);
+    assert!(
+        cluster
+            .operation_history
+            .iter()
+            .all(|entry| entry.title == "CronJob started")
+    );
 }
 
 #[test]
-fn cron_job_run_results_ignore_stale_operations_and_record_the_current_outcome() {
+fn cron_job_run_results_record_each_concurrent_operation_outcome() {
     let mut state = oracle_resource_table_state();
     state
         .clusters
         .get_mut(&2)
         .expect("kind fixture exists")
-        .cron_job_run = Some(CronJobRunState::Running {
-        operation_id: 2,
-        namespace: "kube-system".to_owned(),
-        cron_job_name: "nightly-report".to_owned(),
-    });
+        .cron_job_runs_in_flight
+        .extend([1, 2]);
     let mut harness = application_harness::<MockWorker>();
     harness.seed_ui_state(state);
 
-    harness.deliver_worker_result(CronJobRunCompleted {
-        cluster_key: 2,
-        operation_id: 1,
-        namespace: "kube-system".to_owned(),
-        cron_job_name: "nightly-report".to_owned(),
-        job_name: "nightly-report-manual-stale".to_owned(),
-    });
     harness.deliver_worker_result(CronJobRunFailed {
         cluster_key: 2,
         operation_id: 1,
         namespace: "kube-system".to_owned(),
         cron_job_name: "nightly-report".to_owned(),
-        error: "stale failure".to_owned(),
+        error: "first failure".to_owned(),
     });
 
     assert_eq!(
-        harness.state().ui_state.clusters[&2].cron_job_run,
-        Some(CronJobRunState::Running {
-            operation_id: 2,
-            namespace: "kube-system".to_owned(),
-            cron_job_name: "nightly-report".to_owned(),
-        })
-    );
-    assert!(
-        harness.state().ui_state.clusters[&2]
-            .observed_cron_job_run_completions
-            .is_empty()
+        harness.state().ui_state.clusters[&2].cron_job_runs_in_flight,
+        BTreeSet::from([2])
     );
 
     harness.deliver_worker_result(CronJobRunCompleted {
@@ -447,13 +418,37 @@ fn cron_job_run_results_ignore_stale_operations_and_record_the_current_outcome()
     });
 
     let cluster = &harness.state().ui_state.clusters[&2];
-    assert_eq!(cluster.cron_job_run, None);
-    assert_eq!(cluster.observed_cron_job_run_completions.len(), 1);
-    let completion = &cluster.observed_cron_job_run_completions[0];
-    assert_eq!(completion.operation_id, 2);
-    assert_eq!(completion.namespace, "kube-system");
-    assert_eq!(completion.cron_job_name, "nightly-report");
-    assert_eq!(completion.job_name, "nightly-report-manual-current");
+    assert!(cluster.cron_job_runs_in_flight.is_empty());
+    assert_eq!(
+        cluster
+            .operation_history
+            .iter()
+            .map(|entry| entry.title.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Couldn’t run CronJob", "CronJob started"]
+    );
+
+    harness.deliver_worker_result(CronJobRunCompleted {
+        cluster_key: 2,
+        operation_id: 2,
+        namespace: "kube-system".to_owned(),
+        cron_job_name: "nightly-report".to_owned(),
+        job_name: "duplicate-result".to_owned(),
+    });
+    harness.deliver_worker_result(CronJobRunFailed {
+        cluster_key: 2,
+        operation_id: 99,
+        namespace: "kube-system".to_owned(),
+        cron_job_name: "nightly-report".to_owned(),
+        error: "unknown result".to_owned(),
+    });
+    assert_eq!(
+        harness.state().ui_state.clusters[&2]
+            .operation_history
+            .len(),
+        2,
+        "duplicate and untracked terminal results must be ignored"
+    );
 
     harness
         .state_mut()
@@ -461,34 +456,33 @@ fn cron_job_run_results_ignore_stale_operations_and_record_the_current_outcome()
         .clusters
         .get_mut(&2)
         .expect("kind fixture exists")
-        .cron_job_run = Some(CronJobRunState::Running {
-        operation_id: 3,
+        .cron_job_runs_in_flight
+        .extend([3, 4]);
+    harness.deliver_worker_result(CronJobRunFailed {
+        cluster_key: 2,
+        operation_id: 4,
         namespace: "kube-system".to_owned(),
         cron_job_name: "nightly-report".to_owned(),
+        error: "second failure".to_owned(),
     });
     harness.deliver_worker_result(CronJobRunFailed {
         cluster_key: 2,
-        operation_id: 2,
-        namespace: "kube-system".to_owned(),
-        cron_job_name: "nightly-report".to_owned(),
-        error: "late prior failure".to_owned(),
-    });
-    harness.deliver_worker_result(CronJobRunFailed {
-        cluster_key: 2,
         operation_id: 3,
         namespace: "kube-system".to_owned(),
         cron_job_name: "nightly-report".to_owned(),
-        error: "current failure".to_owned(),
+        error: "third failure".to_owned(),
     });
 
+    let cluster = &harness.state().ui_state.clusters[&2];
+    assert!(cluster.cron_job_runs_in_flight.is_empty());
+    assert_eq!(cluster.operation_history.len(), 4);
     assert_eq!(
-        harness.state().ui_state.clusters[&2].cron_job_run,
-        Some(CronJobRunState::Failed {
-            operation_id: 3,
-            namespace: "kube-system".to_owned(),
-            cron_job_name: "nightly-report".to_owned(),
-            error: "current failure".to_owned(),
-        })
+        cluster
+            .operation_history
+            .iter()
+            .filter(|entry| entry.title == "Couldn’t run CronJob")
+            .count(),
+        3
     );
 }
 

@@ -185,6 +185,7 @@ fn bulk_delete_keeps_failed_resources_selected_and_reports_them_together() {
         namespace: Some("default".into()),
     };
     let mut cluster = fixture_cluster(1, "dev");
+    cluster.connection = ClusterConnectionState::Connected;
     cluster.resource_selections.insert(
         api_resource.clone(),
         HashSet::from([failed.uid.clone(), succeeded.uid.clone()]),
@@ -242,18 +243,71 @@ fn bulk_delete_keeps_failed_resources_selected_and_reports_them_together() {
         }) as WorkerResultBox);
 
     harness.run();
-    harness.get_by_label("Some resources could not be deleted");
     assert_eq!(
         harness.state().ui_state.clusters[&1].resource_selections[&api_resource],
         HashSet::from([failed.uid])
     );
-    harness.get_by_label("Dismiss").click_accesskit();
-    harness.run();
-    assert!(
-        harness.state().ui_state.clusters[&1]
-            .bulk_delete_error
-            .is_none()
+    let history = &harness.state().ui_state.clusters[&1].operation_history;
+    let summaries = history
+        .iter()
+        .filter(|entry| entry.title == "Bulk delete completed with 1 failure")
+        .collect::<Vec<_>>();
+    assert_eq!(summaries.len(), 1);
+    assert_eq!(summaries[0].target, "2 Pods");
+    assert_eq!(
+        summaries[0].details.as_deref(),
+        Some("default/failed-pod: forbidden")
     );
+}
+
+#[test]
+fn bulk_delete_success_reports_one_summary_after_every_target_settles() {
+    let api_resource = fixture_api_resource("core", "Pod", "pods");
+    let first = BulkDeleteTarget {
+        uid: "first-uid".into(),
+        name: "first-pod".into(),
+        namespace: Some("default".into()),
+    };
+    let second = BulkDeleteTarget {
+        uid: "second-uid".into(),
+        name: "second-pod".into(),
+        namespace: Some("default".into()),
+    };
+    let mut cluster = fixture_cluster(1, "dev");
+    cluster.connection = ClusterConnectionState::Connected;
+    cluster.bulk_delete_progress = Some(BulkDeleteProgress::new(
+        42,
+        api_resource.clone(),
+        vec![first.clone(), second.clone()],
+    ));
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = UiState {
+        clusters: HashMap::from([(1, cluster)]),
+        next_cluster_key: 1,
+        selected_cluster: Some(1),
+        ..Default::default()
+    };
+    for target in [first, second] {
+        harness
+            .state_mut()
+            .worker
+            .results
+            .push_back(Box::new(ResourceDeleteCompleted {
+                cluster_key: 1,
+                api_resource: api_resource.clone(),
+                namespace: target.namespace,
+                resource_name: target.name,
+                bulk_delete_id: Some(42),
+            }) as WorkerResultBox);
+    }
+
+    harness.run();
+
+    let history = &harness.state().ui_state.clusters[&1].operation_history;
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].title, "Deleted 2 Pods");
+    assert_eq!(history[0].target, "2 Pods");
+    assert!(history[0].details.is_none());
 }
 
 #[test]

@@ -261,6 +261,8 @@ pub(crate) struct ResourceDeleteCompleted {
 #[derive(Debug)]
 pub(crate) struct ResourceForceDeleteCompleted {
     pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
     pub(crate) resource_name: String,
 }
 #[derive(Debug)]
@@ -285,6 +287,7 @@ pub(crate) struct ResourceApplyFailed {
 }
 #[derive(Debug)]
 pub(crate) struct DeploymentRestartCompleted {
+    pub(crate) cluster_key: i32,
     pub(crate) namespace: String,
     pub(crate) resource_name: String,
 }
@@ -299,13 +302,19 @@ pub(crate) struct ResourceScaleFetched {
 #[derive(Debug)]
 pub(crate) struct ResourceScaleUpdated {
     pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
     pub(crate) resource_name: String,
+    pub(crate) replicas: i32,
 }
 #[derive(Debug)]
 pub(crate) struct ResourceDataUpdateCompleted {
     pub(crate) cluster_key: i32,
     pub(crate) history_entry_id: u64,
     pub(crate) request_id: u64,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: String,
+    pub(crate) resource_name: String,
 }
 #[derive(Debug)]
 pub(crate) struct PodLogStreamStarted {
@@ -370,11 +379,16 @@ pub(crate) struct ResourceDeleteFailed {
 #[derive(Debug)]
 pub(crate) struct ResourceForceDeleteFailed {
     pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) resource_name: String,
     pub(crate) error: String,
 }
 #[derive(Debug)]
 pub(crate) struct DeploymentRestartFailed {
     pub(crate) cluster_key: i32,
+    pub(crate) namespace: String,
+    pub(crate) resource_name: String,
     pub(crate) error: String,
 }
 #[derive(Debug)]
@@ -394,13 +408,28 @@ pub(crate) struct CronJobRunFailed {
     pub(crate) error: String,
 }
 #[derive(Debug)]
-pub(crate) struct ResourceScaleFailed {
+pub(crate) struct ResourceScaleFetchFailed {
     pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) resource_name: String,
+    pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceScaleUpdateFailed {
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) resource_name: String,
     pub(crate) error: String,
 }
 #[derive(Debug)]
 pub(crate) struct ResourceYamlApplyCommandFailed {
     pub(crate) editor_id: u64,
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) resource_name: String,
     pub(crate) error: String,
 }
 #[derive(Debug)]
@@ -444,6 +473,9 @@ pub(crate) struct ResourceDataUpdateFailed {
     pub(crate) cluster_key: i32,
     pub(crate) history_entry_id: u64,
     pub(crate) request_id: u64,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: String,
+    pub(crate) resource_name: String,
     pub(crate) error: String,
 }
 

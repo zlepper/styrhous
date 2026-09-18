@@ -5,8 +5,8 @@ use super::global_blade::{
 use super::resource_actions::show_resource_action_items;
 use super::resource_owner;
 use super::state::{
-    PendingCronJobRun, PendingDelete, PendingDeploymentRestart, PendingForceDelete, ResourceAction,
-    ResourceDetailHistoryEntry, UiState,
+    OperationOutcome, PendingCronJobRun, PendingDelete, PendingDeploymentRestart,
+    PendingForceDelete, ResourceAction, ResourceDetailHistoryEntry, UiState,
 };
 use super::table_preferences::{ResourceTableKey, TableColumnDefinition};
 use super::widgets::show_resource_cell;
@@ -53,15 +53,32 @@ const USAGE_CHART_REFERENCE_OPACITY: f32 = 0.8;
 
 impl WorkerResult for ResourceDataUpdateFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let ResourceDataUpdateFailed {
+            cluster_key,
+            history_entry_id,
+            request_id,
+            api_resource,
+            namespace,
+            resource_name,
+            error,
+        } = self;
+        let details = ui.record_resource_operation_failure(
+            cluster_key,
+            &api_resource,
+            format!("Couldn’t save {} data", api_resource.kind),
+            Some(&namespace),
+            resource_name,
+            error,
+        );
         if let Some(editor) = ui
-            .resource_detail_entry_mut(self.history_entry_id)
-            .filter(|entry| entry.cluster_key == self.cluster_key)
+            .resource_detail_entry_mut(history_entry_id)
+            .filter(|entry| entry.cluster_key == cluster_key)
             .and_then(|entry| entry.data_editor.as_mut())
-            && editor.pending_save_request_id == Some(self.request_id)
+            && editor.pending_save_request_id == Some(request_id)
         {
             editor.saving = false;
             editor.pending_save_request_id = None;
-            editor.save_error = Some(self.error);
+            editor.save_error = Some(details);
         }
     }
 }
@@ -72,7 +89,18 @@ impl WorkerResult for ResourceDataUpdateCompleted {
             cluster_key,
             history_entry_id,
             request_id,
+            api_resource,
+            namespace,
+            resource_name,
         } = self;
+        ui.record_operation_outcome(
+            cluster_key,
+            OperationOutcome::Success,
+            format!("Saved {} data", api_resource.kind),
+            Some(&namespace),
+            resource_name,
+            None,
+        );
         if let Some(editor) = ui
             .resource_detail_entry_mut(history_entry_id)
             .filter(|entry| entry.cluster_key == cluster_key)

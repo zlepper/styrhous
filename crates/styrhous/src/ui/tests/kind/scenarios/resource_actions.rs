@@ -1,6 +1,7 @@
 //! Kind CronJob and resource-scale action scenarios.
 
 use super::*;
+use crate::ui::state::OperationOutcome;
 use std::time::Duration;
 
 const CRON_JOB_RUN_TIMEOUT_MS: u64 = 10_000;
@@ -241,14 +242,14 @@ fn test_cron_job_run_now_integration() {
             .clone()
             .unwrap_or_else(|| "none".to_owned());
         let ui_observation = format!(
-            "pending CronJob={}, run state={:?}, observed completions={:?}, last Job poll error={last_poll_error}",
+            "pending CronJob={}, in-flight runs={:?}, operation history={:?}, last Job poll error={last_poll_error}",
             cluster
                 .pending_cron_job_run
                 .as_ref()
                 .map(|pending| pending.resource_name.as_str())
                 .unwrap_or("none"),
-            cluster.cron_job_run,
-            cluster.observed_cron_job_run_completions,
+            cluster.cron_job_runs_in_flight,
+            cluster.operation_history,
         );
         let api_observation = match kubernetes_request(
             runtime,
@@ -276,19 +277,15 @@ fn test_cron_job_run_now_integration() {
         "Run now confirmation click was not applied; {}",
         cron_job_diagnostic(harness.state())
     );
-    let operation_id = match &harness.state().ui_state.clusters[&cluster_key].cron_job_run {
-        Some(CronJobRunState::Running {
-            operation_id,
-            namespace,
-            cron_job_name: acknowledged_cron_job_name,
-        }) if namespace == &fixture.namespace && acknowledged_cron_job_name == &cron_job_name => {
-            *operation_id
-        }
-        _ => panic!(
-            "Run now command did not enter the expected running state; {}",
-            cron_job_diagnostic(harness.state())
-        ),
-    };
+    let operation_id =
+        harness.state().ui_state.clusters[&cluster_key].next_cron_job_run_operation_id;
+    assert!(
+        harness.state().ui_state.clusters[&cluster_key]
+            .cron_job_runs_in_flight
+            .contains(&operation_id),
+        "Run now command did not enter the expected running state; {}",
+        cron_job_diagnostic(harness.state())
+    );
 
     wait_for_with_terminal_and_timeout_diagnostic(
         &mut harness,
@@ -298,14 +295,14 @@ fn test_cron_job_run_now_integration() {
         |app| {
             let cluster = &app.ui_state.clusters[&cluster_key];
             let acknowledged_job_name = cluster
-                .observed_cron_job_run_completions
+                .operation_history
                 .iter()
-                .find(|completion| {
-                    completion.operation_id == operation_id
-                        && completion.namespace == fixture.namespace
-                        && completion.cron_job_name == cron_job_name
+                .find(|entry| {
+                    entry.title == "CronJob started"
+                        && entry.target == format!("{} • {}", cron_job_name, fixture.namespace)
                 })
-                .map(|completion| completion.job_name.as_str())?;
+                .and_then(|entry| entry.details.as_deref())
+                .and_then(|details| details.strip_prefix("Created Job "))?;
             match kubernetes_request(
                 runtime,
                 CRON_JOB_POLL_REQUEST_TIMEOUT,
@@ -325,16 +322,14 @@ fn test_cron_job_run_now_integration() {
                 }
             }
         },
-        |app| match app.ui_state.clusters[&cluster_key].cron_job_run.as_ref() {
-            Some(CronJobRunState::Failed {
-                operation_id: failed_operation_id,
-                error,
-                ..
-            }) if *failed_operation_id == operation_id => Some(format!(
-                "CronJob run failed: {error}; {}",
-                cron_job_diagnostic(app)
-            )),
-            _ => None,
+        |app| {
+            app.ui_state.clusters[&cluster_key]
+                .operation_history
+                .iter()
+                .rev()
+                .find(|entry| entry.title == "Couldn’t run CronJob")
+                .and_then(|entry| entry.details.as_ref())
+                .map(|error| format!("CronJob run failed: {error}; {}", cron_job_diagnostic(app)))
         },
         |app| Some(cron_job_diagnostic(app)),
         CRON_JOB_RUN_TIMEOUT_MS,
@@ -427,7 +422,14 @@ fn test_resource_scale_integration() {
                 .as_ref()
                 .map(|_| ())
         },
-        |app| app.ui_state.clusters[&cluster_key].scale_error.clone(),
+        |app| {
+            app.ui_state.clusters[&cluster_key]
+                .operation_history
+                .iter()
+                .rev()
+                .find(|entry| entry.outcome == OperationOutcome::Failure)
+                .and_then(|entry| entry.details.clone())
+        },
         10_000,
     );
     // Worker results are applied after the workspace render pass. Render the
@@ -456,7 +458,14 @@ fn test_resource_scale_integration() {
                 .is_none()
                 .then_some(())
         },
-        |app| app.ui_state.clusters[&cluster_key].scale_error.clone(),
+        |app| {
+            app.ui_state.clusters[&cluster_key]
+                .operation_history
+                .iter()
+                .rev()
+                .find(|entry| entry.outcome == OperationOutcome::Failure)
+                .and_then(|entry| entry.details.clone())
+        },
         5_000,
     );
 

@@ -6,6 +6,7 @@ pub struct NarrowSidebar {
     width: Option<f32>,
     dark: bool,
     background: Option<Color32>,
+    footer_items: usize,
 }
 
 impl Default for NarrowSidebar {
@@ -21,6 +22,7 @@ impl NarrowSidebar {
             width: None,
             dark: false,
             background: None,
+            footer_items: 1,
         }
     }
 
@@ -40,6 +42,13 @@ impl NarrowSidebar {
     pub fn dark_background(mut self, background: Color32) -> Self {
         self.dark = true;
         self.background = Some(background);
+        self
+    }
+
+    /// Reserve room for the number of icon-only items rendered in the footer.
+    /// The default keeps the original single-item footer geometry.
+    pub fn footer_items(mut self, footer_items: usize) -> Self {
+        self.footer_items = footer_items;
         self
     }
 
@@ -82,13 +91,11 @@ impl NarrowSidebar {
                 }),
                 top_padding: 9.0,
             },
-            NARROW_ITEM_HEIGHT + spacing::SM,
+            NARROW_ITEM_HEIGHT * self.footer_items as f32 + spacing::SM,
             |child_ui| show_narrow_content(child_ui, self.dark, add_contents),
             |footer_ui| {
-                footer_ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
-                    ui.add_space(spacing::SM);
-                    show_narrow_content(ui, self.dark, add_footer)
-                });
+                show_narrow_content(footer_ui, self.dark, add_footer);
+                footer_ui.add_space(spacing::SM);
             },
         )
     }

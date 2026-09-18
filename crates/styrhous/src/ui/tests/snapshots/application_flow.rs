@@ -97,7 +97,7 @@ fn force_delete_is_available_from_a_deleting_resource_inspector() {
 }
 
 #[test]
-fn force_delete_failure_is_shown_and_can_be_dismissed() {
+fn force_delete_failure_is_recorded_in_operation_history() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = oracle_resource_table_state();
     harness
@@ -106,19 +106,19 @@ fn force_delete_failure_is_shown_and_can_be_dismissed() {
         .results
         .push_back(Box::new(ResourceForceDeleteFailed {
             cluster_key: 2,
+            api_resource: fixture_api_resource("core", "ConfigMap", "configmaps"),
+            namespace: Some("kube-system".into()),
+            resource_name: "settings".into(),
             error: "Resource was replaced while awaiting confirmation".into(),
         }) as WorkerResultBox);
 
     harness.run();
-    harness.get_by_label("Couldn’t remove finalizers");
-    harness.get_by_label("Dismiss").click_accesskit();
-    harness.run();
-
-    assert!(
-        harness.state().ui_state.clusters[&2]
-            .force_delete_error
-            .is_none()
-    );
+    let entry = harness.state().ui_state.clusters[&2]
+        .operation_history
+        .last()
+        .expect("force deletion failure is recorded");
+    assert_eq!(entry.title, "Couldn’t remove finalizers from ConfigMap");
+    assert_eq!(entry.target, "settings • kube-system");
 }
 
 #[test]

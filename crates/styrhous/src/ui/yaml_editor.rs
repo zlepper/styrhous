@@ -1,6 +1,7 @@
 use super::state::{
-    UiState, ValidationState, YamlEditorHighlightCache, YamlEditorHighlightCacheKey,
-    YamlEditorWindowState, api_error_message, diagnostics_from_api_error, set_editor_diagnostics,
+    OperationOutcome, UiState, ValidationState, YamlEditorHighlightCache,
+    YamlEditorHighlightCacheKey, YamlEditorWindowState, api_error_message,
+    diagnostics_from_api_error, set_editor_diagnostics,
 };
 use crate::resource_schema::{
     CompletionContext, CompletionContextKind, SourceRange, YamlDiagnostic,
@@ -56,9 +57,25 @@ impl WorkerResult for ResourceSchemaLoadFailed {
 
 impl WorkerResult for ResourceYamlApplyCommandFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
-        if let Some(editor) = ui.yaml_editors.get_mut(&self.editor_id) {
+        let ResourceYamlApplyCommandFailed {
+            editor_id,
+            cluster_key,
+            api_resource,
+            namespace,
+            resource_name,
+            error,
+        } = self;
+        let details = ui.record_resource_operation_failure(
+            cluster_key,
+            &api_resource,
+            format!("Couldn’t apply {}", api_resource.kind),
+            namespace.as_deref(),
+            resource_name,
+            error,
+        );
+        if let Some(editor) = ui.yaml_editors.get_mut(&editor_id) {
             editor.saving = false;
-            editor.error = Some(self.error);
+            editor.error = Some(details);
         }
     }
 }
@@ -173,6 +190,14 @@ impl WorkerResult for ResourceApplyCompleted {
             resource_version,
             resource_uid,
         } = self;
+        ui.record_operation_outcome(
+            cluster_key,
+            OperationOutcome::Success,
+            format!("Applied {}", api_resource.kind),
+            namespace.as_deref(),
+            resource_name.clone(),
+            None,
+        );
         if let Some(editor) = ui.yaml_editors.get_mut(&editor_id)
             && editor.resource_matches(cluster_key, &api_resource, &namespace, &resource_name)
         {
@@ -197,11 +222,19 @@ impl WorkerResult for ResourceApplyFailed {
             resource_name,
             error,
         } = self;
+        let details = ui.record_resource_operation_failure(
+            cluster_key,
+            &api_resource,
+            format!("Couldn’t apply {}", api_resource.kind),
+            namespace.as_deref(),
+            resource_name.clone(),
+            api_error_message(&error),
+        );
         if let Some(editor) = ui.yaml_editors.get_mut(&editor_id)
             && editor.resource_matches(cluster_key, &api_resource, &namespace, &resource_name)
         {
             editor.saving = false;
-            editor.error = Some(api_error_message(&error));
+            editor.error = Some(details);
             let diagnostics = diagnostics_from_api_error(&error, &editor.edited_yaml);
             set_editor_diagnostics(editor, diagnostics);
         }

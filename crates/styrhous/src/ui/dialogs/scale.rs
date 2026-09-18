@@ -214,32 +214,3 @@ fn show_scale_stepper_button(ui: &mut egui::Ui, glyph: &str, label: &str, enable
     });
     response.on_hover_text(label).clicked()
 }
-
-pub(crate) fn show_scale_error(ctx: &egui::Context, ui_state: &mut UiState) {
-    let Some(cluster_id) = ui_state.selected_cluster else {
-        return;
-    };
-    let Some(error) = ui_state
-        .clusters
-        .get(&cluster_id)
-        .and_then(|cluster| cluster.scale_error.as_deref())
-    else {
-        return;
-    };
-    if matches!(
-        (ErrorDialog {
-            id: egui::Id::new("resource-scale-error"),
-            eyebrow: "SCALE",
-            title: "Couldn’t update scale",
-            message: "Styrhous could not read or update this resource’s scale.",
-            details: Some(error),
-            recovery: Some("Check the resource’s current state and your Kubernetes permissions."),
-            primary_action_label: None,
-        })
-        .show(ctx),
-        ErrorDialogAction::Dismiss
-    ) && let Some(cluster) = ui_state.clusters.get_mut(&cluster_id)
-    {
-        cluster.scale_error = None;
-    }
-}

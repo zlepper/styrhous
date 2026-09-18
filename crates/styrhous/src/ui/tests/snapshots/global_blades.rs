@@ -1,6 +1,115 @@
 //! Global-blade ownership and settings scenarios.
 
 use super::*;
+use crate::ui::state::OperationOutcome;
+
+#[test]
+fn notification_history_blade_shows_session_outcomes_and_marks_them_read() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    state.record_operation_outcome(
+        2,
+        OperationOutcome::Success,
+        "Deployment scaled to 4 replicas",
+        Some("kube-system"),
+        "coredns",
+        None,
+    );
+    state.record_operation_outcome(
+        2,
+        OperationOutcome::Failure,
+        "Bulk delete completed with 1 failure",
+        None,
+        "3 Pods",
+        Some("2 deleted, 1 failed".into()),
+    );
+    state.record_operation_outcome(
+        2,
+        OperationOutcome::Success,
+        "CronJob started",
+        Some("kube-system"),
+        "nightly-report",
+        Some("Created Job nightly-report-manual-x7k2p".into()),
+    );
+    state.record_operation_outcome(
+        2,
+        OperationOutcome::Failure,
+        "Couldn’t run CronJob",
+        Some("kube-system"),
+        "nightly-report",
+        Some("Forbidden: cannot create jobs".into()),
+    );
+    harness.state_mut().ui_state = state;
+    harness.run();
+
+    assert_eq!(harness.state().ui_state.unread_operation_count(), 4);
+    assert_eq!(
+        harness.state().ui_state.clusters[&2]
+            .transient_operation_toasts
+            .len(),
+        4
+    );
+    harness.ui_harness("notifications/notification_history_unread_badge");
+    let notifications_position = harness.get_by_label("Notifications").rect().center();
+    primary_click(&mut harness, notifications_position);
+    harness.run_steps(2);
+
+    harness.get_by_label("Recent resource operation outcomes from this session.");
+    harness.get_by_label("Couldn’t run CronJob");
+    assert_eq!(harness.state().ui_state.unread_operation_count(), 0);
+    assert!(
+        harness
+            .state()
+            .ui_state
+            .clusters
+            .values()
+            .all(|cluster| cluster.transient_operation_toasts.is_empty())
+    );
+    harness.ui_harness(
+        "notifications/notification_history_blade_shows_session_outcomes_and_marks_them_read",
+    );
+}
+
+#[test]
+fn notification_history_includes_every_cluster_and_marks_all_entries_read() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    state.clusters.get_mut(&1).unwrap().connection = ClusterConnectionState::Connected;
+    state.record_operation_outcome(
+        1,
+        OperationOutcome::Success,
+        "Deleted Pod",
+        Some("default"),
+        "api",
+        None,
+    );
+    state.record_operation_outcome(
+        2,
+        OperationOutcome::Failure,
+        "Couldn’t scale Deployment",
+        Some("kube-system"),
+        "coredns",
+        Some("Forbidden".into()),
+    );
+    harness.state_mut().ui_state = state;
+    harness.run();
+    assert_eq!(harness.state().ui_state.unread_operation_count(), 2);
+
+    let notifications_position = harness.get_by_label("Notifications").rect().center();
+    primary_click(&mut harness, notifications_position);
+    harness.run_steps(2);
+
+    let entries = harness.state().ui_state.operation_history_entries();
+    assert_eq!(entries.len(), 2);
+    assert_eq!(
+        entries
+            .iter()
+            .map(|entry| entry.cluster_name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["kind-kind", "dev"]
+    );
+    assert_eq!(harness.state().ui_state.unread_operation_count(), 0);
+}
 
 #[test]
 fn licensing_warning_opens_account_settings_without_restricting_the_application() {

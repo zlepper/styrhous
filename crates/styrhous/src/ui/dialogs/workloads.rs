@@ -50,35 +50,6 @@ pub(crate) fn show_deployment_restart_confirmation(
     }
 }
 
-pub(crate) fn show_deployment_restart_error(ctx: &egui::Context, ui_state: &mut UiState) {
-    let Some(cluster_id) = ui_state.selected_cluster else {
-        return;
-    };
-    let Some(error) = ui_state
-        .clusters
-        .get(&cluster_id)
-        .and_then(|cluster| cluster.deployment_restart_error.as_deref())
-    else {
-        return;
-    };
-    if matches!(
-        (ErrorDialog {
-            id: egui::Id::new("deployment-restart-error"),
-            eyebrow: "DEPLOYMENT",
-            title: "Couldn’t restart rollout",
-            message: "Styrhous could not request a rolling restart for this Deployment.",
-            details: Some(error),
-            recovery: Some("Check your Kubernetes permissions and the Deployment’s current state."),
-            primary_action_label: None,
-        })
-        .show(ctx),
-        ErrorDialogAction::Dismiss
-    ) && let Some(cluster) = ui_state.clusters.get_mut(&cluster_id)
-    {
-        cluster.deployment_restart_error = None;
-    }
-}
-
 pub(crate) fn show_cron_job_run_confirmation(
     ctx: &egui::Context,
     ui_state: &mut UiState,
@@ -124,46 +95,12 @@ pub(crate) fn show_cron_job_run_confirmation(
         cluster.next_cron_job_run_operation_id += 1;
         let operation_id = cluster.next_cron_job_run_operation_id;
         cluster.pending_cron_job_run = None;
-        cluster.cron_job_run = Some(CronJobRunState::Running {
-            operation_id,
-            namespace: pending.namespace.clone(),
-            cron_job_name: pending.resource_name.clone(),
-        });
+        cluster.cron_job_runs_in_flight.insert(operation_id);
         commands_to_send.push(Box::new(RunCronJob {
             cluster_key,
             operation_id,
             namespace: pending.namespace,
             resource_name: pending.resource_name,
         }));
-    }
-}
-
-pub(crate) fn show_cron_job_run_error(ctx: &egui::Context, ui_state: &mut UiState) {
-    let Some(cluster_id) = ui_state.selected_cluster else {
-        return;
-    };
-    let Some(error) = ui_state.clusters.get(&cluster_id).and_then(|cluster| {
-        match cluster.cron_job_run.as_ref() {
-            Some(CronJobRunState::Failed { error, .. }) => Some(error.as_str()),
-            _ => None,
-        }
-    }) else {
-        return;
-    };
-    if matches!(
-        (ErrorDialog {
-            id: egui::Id::new("run-cron-job-error"),
-            eyebrow: "CRONJOB",
-            title: "Couldn’t run CronJob",
-            message: "Styrhous could not create a Job from this CronJob.",
-            details: Some(error),
-            recovery: Some("Check your Kubernetes permissions and the CronJob’s current state."),
-            primary_action_label: None,
-        })
-        .show(ctx),
-        ErrorDialogAction::Dismiss
-    ) && let Some(cluster) = ui_state.clusters.get_mut(&cluster_id)
-    {
-        cluster.cron_job_run = None;
     }
 }

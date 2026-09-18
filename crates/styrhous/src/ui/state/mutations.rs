@@ -37,15 +37,18 @@ impl PendingBulkDelete {
 pub(crate) struct BulkDeleteProgress {
     pub(crate) id: u64,
     pub(crate) api_resource: ApiResource,
+    pub(crate) target_count: usize,
     pub(crate) remaining_targets: HashSet<BulkDeleteTarget>,
     pub(crate) failures: Vec<(BulkDeleteTarget, String)>,
 }
 
 impl BulkDeleteProgress {
     pub(crate) fn new(id: u64, api_resource: ApiResource, targets: Vec<BulkDeleteTarget>) -> Self {
+        let target_count = targets.len();
         Self {
             id,
             api_resource,
+            target_count,
             remaining_targets: targets.into_iter().collect(),
             failures: Vec::new(),
         }
@@ -134,28 +137,37 @@ pub(crate) struct PendingCronJobRun {
     pub(crate) namespace: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum CronJobRunState {
-    Running {
-        operation_id: u64,
-        namespace: String,
-        cron_job_name: String,
-    },
-    Failed {
-        operation_id: u64,
-        namespace: String,
-        cron_job_name: String,
-        error: String,
-    },
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum OperationOutcome {
+    Success,
+    Failure,
 }
 
-#[cfg(test)]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ObservedCronJobRunCompletion {
-    pub(crate) operation_id: u64,
-    pub(crate) namespace: String,
-    pub(crate) cron_job_name: String,
-    pub(crate) job_name: String,
+#[derive(Debug, Clone)]
+pub(crate) struct OperationHistoryEntry {
+    pub(crate) outcome: OperationOutcome,
+    pub(crate) title: String,
+    pub(crate) target: String,
+    pub(crate) details: Option<String>,
+    pub(crate) occurred_at: Instant,
+    pub(crate) sequence: u64,
+    pub(crate) unread: bool,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct TransientOperationToast {
+    pub(crate) outcome: OperationOutcome,
+    pub(crate) title: String,
+    pub(crate) target: String,
+    pub(crate) sequence: u64,
+    pub(crate) expires_at: Instant,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct BulkDeleteOutcome {
+    pub(crate) api_resource: ApiResource,
+    pub(crate) target_count: usize,
+    pub(crate) failures: Vec<(BulkDeleteTarget, String)>,
 }
 
 #[derive(Debug, Clone)]

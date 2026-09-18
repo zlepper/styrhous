@@ -3,10 +3,12 @@ use crate::licensing::LicenseStatus;
 use crate::terminal_launcher::TerminalLaunchSettings;
 use crate::updater::UpdateStatus;
 use crate::worker::WorkerCommandBox;
-use components::colors::{CLUSTER_RAIL_BACKGROUND, gray};
-use components::design::status;
+use components::colors::{CLUSTER_RAIL_BACKGROUND, gray, indigo};
+use components::design::{status, typography};
 use components::{NarrowSidebar, icons};
 use tracing::info;
+
+const CLUSTER_RAIL_FOOTER_ITEMS: usize = 2;
 
 pub(super) fn show(
     ui: &mut egui::Ui,
@@ -17,6 +19,8 @@ pub(super) fn show(
     license_status: &LicenseStatus,
 ) {
     let open_settings = std::cell::Cell::new(false);
+    let open_notifications = std::cell::Cell::new(false);
+    let unread_count = ui_state.unread_operation_count();
     egui::Panel::left("cluster-panel")
         .exact_size(68.0)
         .resizable(false)
@@ -25,6 +29,7 @@ pub(super) fn show(
         .show(ui, |ui| {
             NarrowSidebar::new()
                 .dark_background(CLUSTER_RAIL_BACKGROUND)
+                .footer_items(CLUSTER_RAIL_FOOTER_ITEMS)
                 .show_with_footer(
                     ui,
                     |sidebar| {
@@ -83,6 +88,32 @@ pub(super) fn show(
                         }
                     },
                     |sidebar| {
+                        let notifications = sidebar.button_with_tooltip(
+                            "Notifications",
+                            icons::bell_icon(),
+                            if unread_count == 0 {
+                                "Notifications".to_owned()
+                            } else {
+                                format!("Notifications\n{unread_count} unread")
+                            }
+                            .as_str(),
+                        );
+                        if unread_count > 0 {
+                            let center = notifications.rect.center() + egui::vec2(9.0, -9.0);
+                            let sidebar_ui = sidebar.ui_mut();
+                            let font = typography::semibold_or_proportional(sidebar_ui.ctx(), 10.0);
+                            let painter = sidebar_ui.painter();
+                            painter.circle_filled(center, 8.0, indigo::_500);
+                            painter.text(
+                                center,
+                                egui::Align2::CENTER_CENTER,
+                                unread_badge_text(unread_count),
+                                font,
+                                components::colors::WHITE,
+                            );
+                        }
+                        open_notifications.set(notifications.clicked());
+
                         let response = sidebar.button_with_tooltip(
                             "Settings",
                             icons::settings_icon(),
@@ -104,8 +135,31 @@ pub(super) fn show(
                     },
                 );
         });
+    if open_notifications.get() {
+        ui_state.open_notification_history(commands_to_send);
+    }
     if open_settings.get() {
         let _ = terminal_settings;
         ui_state.open_settings_home(commands_to_send);
+    }
+}
+
+fn unread_badge_text(unread_count: usize) -> String {
+    if unread_count > 9 {
+        "9+".to_owned()
+    } else {
+        unread_count.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::unread_badge_text;
+
+    #[test]
+    fn unread_badge_uses_a_plus_suffix_for_counts_above_nine() {
+        assert_eq!(unread_badge_text(0), "0");
+        assert_eq!(unread_badge_text(9), "9");
+        assert_eq!(unread_badge_text(10), "9+");
     }
 }

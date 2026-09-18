@@ -214,6 +214,11 @@ pub fn settings_icon() -> Image<'static> {
     Image::new(include_image!("icons/settings.svg"))
 }
 
+/// Returns a bell icon for the session operation history.
+pub fn bell_icon() -> Image<'static> {
+    Image::new(include_image!("icons/bell.svg"))
+}
+
 /// Returns the bundled Microsoft Azure brand mark for Azure provider surfaces.
 pub fn azure_icon() -> Image<'static> {
     Image::new(include_image!("icons/azure.svg"))

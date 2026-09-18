@@ -82,12 +82,15 @@ pub(crate) async fn force_delete_resource(
     .await?;
     Ok(ResourceForceDeleteCompleted {
         cluster_key,
+        api_resource,
+        namespace,
         resource_name,
     })
 }
 
 /// Trigger a Deployment rollout the same way `kubectl rollout restart` does.
 pub(crate) async fn restart_deployment(
+    cluster_key: i32,
     client: kube::Client,
     namespace: String,
     resource_name: String,
@@ -112,6 +115,7 @@ pub(crate) async fn restart_deployment(
     .await?;
 
     Ok(DeploymentRestartCompleted {
+        cluster_key,
         namespace,
         resource_name,
     })
@@ -372,5 +376,8 @@ pub(crate) async fn update_resource_data(
         cluster_key,
         history_entry_id,
         request_id,
+        api_resource,
+        namespace,
+        resource_name,
     })
 }

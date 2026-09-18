@@ -55,6 +55,7 @@ pub(crate) struct UiState {
     pub(super) terminal_launch_error: Option<String>,
     pub(super) cluster_selections: PersistedClusterSelections,
     pub(super) resource_navigation_expansion: ResourceNavigationExpansion,
+    pub(super) next_operation_toast_sequence: u64,
     pub(super) managed_cluster_discovery: ManagedClusterDiscoveryState,
 }
 
@@ -133,6 +134,7 @@ mod blades;
 mod clusters;
 mod editors;
 mod mutations;
+mod notifications;
 mod resource_data;
 
 pub(super) use actions::*;
@@ -140,6 +142,7 @@ pub(super) use blades::*;
 pub(super) use clusters::*;
 pub(super) use editors::*;
 pub(super) use mutations::*;
+pub(super) use notifications::*;
 pub(super) use resource_data::*;
 
 mod cluster_operations;

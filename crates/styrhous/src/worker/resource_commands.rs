@@ -105,6 +105,13 @@ impl WorkerCommand for ForceDeleteResource {
 
     async fn execute(self, state: &WorkerState) -> Self::Output {
         let cluster_key = self.cluster_key;
+        let failure = ResourceForceDeleteFailed {
+            cluster_key,
+            api_resource: self.api_resource.clone(),
+            namespace: self.namespace.clone(),
+            resource_name: self.resource_name.clone(),
+            error: String::new(),
+        };
         match state.client_for_cluster(cluster_key).await {
             Ok(client) => force_delete_resource(
                 cluster_key,
@@ -118,10 +125,11 @@ impl WorkerCommand for ForceDeleteResource {
             .map_err(|error| ResourceForceDeleteFailed {
                 cluster_key,
                 error: format!("{error:#?}"),
+                ..failure
             }),
             Err(error) => Err(ResourceForceDeleteFailed {
-                cluster_key,
                 error: format!("{error:#?}"),
+                ..failure
             }),
         }
     }
@@ -137,16 +145,24 @@ impl WorkerCommand for RestartDeployment {
 
     async fn execute(self, state: &WorkerState) -> Self::Output {
         let cluster_key = self.cluster_key;
+        let failure = DeploymentRestartFailed {
+            cluster_key,
+            namespace: self.namespace.clone(),
+            resource_name: self.resource_name.clone(),
+            error: String::new(),
+        };
         match state.client_for_cluster(cluster_key).await {
-            Ok(client) => restart_deployment(client, self.namespace, self.resource_name)
-                .await
-                .map_err(|error| DeploymentRestartFailed {
-                    cluster_key,
-                    error: format!("{error:#?}"),
-                }),
+            Ok(client) => {
+                restart_deployment(cluster_key, client, self.namespace, self.resource_name)
+                    .await
+                    .map_err(|error| DeploymentRestartFailed {
+                        error: format!("{error:#?}"),
+                        ..failure
+                    })
+            }
             Err(error) => Err(DeploymentRestartFailed {
-                cluster_key,
                 error: format!("{error:#?}"),
+                ..failure
             }),
         }
     }
@@ -199,10 +215,17 @@ impl WorkerCommand for RunCronJob {
 
 #[async_trait]
 impl WorkerCommand for GetResourceScale {
-    type Output = Result<ResourceScaleFetched, ResourceScaleFailed>;
+    type Output = Result<ResourceScaleFetched, ResourceScaleFetchFailed>;
 
     async fn execute(self, state: &WorkerState) -> Self::Output {
         let cluster_key = self.cluster_key;
+        let failure = ResourceScaleFetchFailed {
+            cluster_key,
+            api_resource: self.api_resource.clone(),
+            namespace: self.namespace.clone(),
+            resource_name: self.resource_name.clone(),
+            error: String::new(),
+        };
         match state.client_for_cluster(cluster_key).await {
             Ok(client) => get_resource_scale(
                 cluster_key,
@@ -212,13 +235,13 @@ impl WorkerCommand for GetResourceScale {
                 self.resource_name,
             )
             .await
-            .map_err(|error| ResourceScaleFailed {
-                cluster_key,
+            .map_err(|error| ResourceScaleFetchFailed {
                 error: format!("{error:#?}"),
+                ..failure
             }),
-            Err(error) => Err(ResourceScaleFailed {
-                cluster_key,
+            Err(error) => Err(ResourceScaleFetchFailed {
                 error: format!("{error:#?}"),
+                ..failure
             }),
         }
     }
@@ -230,10 +253,17 @@ impl WorkerCommand for GetResourceScale {
 
 #[async_trait]
 impl WorkerCommand for UpdateResourceScale {
-    type Output = Result<ResourceScaleUpdated, ResourceScaleFailed>;
+    type Output = Result<ResourceScaleUpdated, ResourceScaleUpdateFailed>;
 
     async fn execute(self, state: &WorkerState) -> Self::Output {
         let cluster_key = self.cluster_key;
+        let failure = ResourceScaleUpdateFailed {
+            cluster_key,
+            api_resource: self.api_resource.clone(),
+            namespace: self.namespace.clone(),
+            resource_name: self.resource_name.clone(),
+            error: String::new(),
+        };
         match state.client_for_cluster(cluster_key).await {
             Ok(client) => update_resource_scale(
                 cluster_key,
@@ -244,13 +274,13 @@ impl WorkerCommand for UpdateResourceScale {
                 self.replicas,
             )
             .await
-            .map_err(|error| ResourceScaleFailed {
-                cluster_key,
+            .map_err(|error| ResourceScaleUpdateFailed {
                 error: format!("{error:#?}"),
+                ..failure
             }),
-            Err(error) => Err(ResourceScaleFailed {
-                cluster_key,
+            Err(error) => Err(ResourceScaleUpdateFailed {
                 error: format!("{error:#?}"),
+                ..failure
             }),
         }
     }

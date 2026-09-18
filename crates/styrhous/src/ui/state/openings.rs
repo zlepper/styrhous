@@ -22,6 +22,18 @@ impl UiState {
         );
     }
 
+    pub(crate) fn open_notification_history(
+        &mut self,
+        commands_to_send: &mut Vec<WorkerCommandBox>,
+    ) {
+        self.mark_operation_history_read();
+        self.clear_operation_toasts();
+        self.replace_global_blade(
+            Box::new(super::super::notification_history::NotificationHistoryBlade),
+            commands_to_send,
+        );
+    }
+
     pub(crate) fn open_license_settings(&mut self, commands_to_send: &mut Vec<WorkerCommandBox>) {
         self.replace_global_blade(
             Box::new(super::super::settings::LicenseSettingsBlade::default()),

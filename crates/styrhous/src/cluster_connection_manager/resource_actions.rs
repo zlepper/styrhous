@@ -85,7 +85,10 @@ pub(crate) async fn update_resource_scale(
 
     Ok(ResourceScaleUpdated {
         cluster_key,
+        api_resource,
+        namespace,
         resource_name,
+        replicas,
     })
 }
 

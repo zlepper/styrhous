@@ -440,6 +440,12 @@ impl<'a> GlobalBladeRenderContext<'a> {
             .collect()
     }
 
+    pub(super) fn operation_history_entries(
+        &self,
+    ) -> Vec<super::state::OperationHistoryDisplayEntry> {
+        self.ui_state.operation_history_entries()
+    }
+
     pub(super) fn update_status(&self) -> &UpdateStatus {
         self.update_status
     }

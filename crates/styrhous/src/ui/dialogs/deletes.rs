@@ -155,37 +155,6 @@ pub(crate) fn show_bulk_delete_confirmation(
     }
 }
 
-pub(crate) fn show_bulk_delete_error(ctx: &egui::Context, ui_state: &mut UiState) {
-    let Some(cluster_id) = ui_state.selected_cluster else {
-        return;
-    };
-    let Some(error) = ui_state
-        .clusters
-        .get(&cluster_id)
-        .and_then(|cluster| cluster.bulk_delete_error.as_deref())
-    else {
-        return;
-    };
-    if matches!(
-        (ErrorDialog {
-            id: egui::Id::new("bulk-delete-resources-error"),
-            eyebrow: "DELETE RESOURCES",
-            title: "Some resources could not be deleted",
-            message: "The remaining selected resources were not deleted.",
-            details: Some(error),
-            recovery: Some(
-                "Check the resource state and your Kubernetes permissions, then try again."
-            ),
-            primary_action_label: None,
-        })
-        .show(ctx),
-        ErrorDialogAction::Dismiss
-    ) && let Some(cluster) = ui_state.clusters.get_mut(&cluster_id)
-    {
-        cluster.bulk_delete_error = None;
-    }
-}
-
 pub(crate) fn show_force_delete_confirmation(
     ctx: &egui::Context,
     ui_state: &mut UiState,
@@ -269,36 +238,5 @@ pub(crate) fn show_force_delete_confirmation(
         if let Some(cluster) = ui_state.clusters.get_mut(&cluster_id) {
             cluster.pending_force_delete = None;
         }
-    }
-}
-
-pub(crate) fn show_force_delete_error(ctx: &egui::Context, ui_state: &mut UiState) {
-    let Some(cluster_id) = ui_state.selected_cluster else {
-        return;
-    };
-    let Some(error) = ui_state
-        .clusters
-        .get(&cluster_id)
-        .and_then(|cluster| cluster.force_delete_error.as_deref())
-    else {
-        return;
-    };
-    if matches!(
-        (ErrorDialog {
-            id: egui::Id::new("force-delete-resource-error"),
-            eyebrow: "REMOVE FINALIZERS",
-            title: "Couldn’t remove finalizers",
-            message: "Styrhous could not remove the finalizers from this resource.",
-            details: Some(error),
-            recovery: Some(
-                "Check the resource’s current deletion state and your Kubernetes permissions."
-            ),
-            primary_action_label: None,
-        })
-        .show(ctx),
-        ErrorDialogAction::Dismiss
-    ) && let Some(cluster) = ui_state.clusters.get_mut(&cluster_id)
-    {
-        cluster.force_delete_error = None;
     }
 }

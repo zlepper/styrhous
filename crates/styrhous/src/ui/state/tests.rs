@@ -62,6 +62,7 @@ mod cluster_selection;
 mod editors;
 mod log_state;
 mod metrics;
+mod notifications;
 mod workflows;
 
 fn test_log_row(display_row: usize, text: &str) -> LogPageRow {

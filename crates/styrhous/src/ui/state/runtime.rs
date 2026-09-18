@@ -9,19 +9,13 @@ impl UiState {
         resource_name: &str,
         namespace: &Option<String>,
         failure: Option<String>,
-    ) {
-        let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
-            return;
-        };
-        let Some(progress) = cluster.resources.bulk_delete_progress.as_mut() else {
-            return;
-        };
+    ) -> Option<BulkDeleteOutcome> {
+        let cluster = self.clusters.get_mut(&cluster_key)?;
+        let progress = cluster.resources.bulk_delete_progress.as_mut()?;
         if bulk_delete_id != Some(progress.id) {
-            return;
+            return None;
         }
-        let Some(target) = progress.target_for(api_resource, resource_name, namespace) else {
-            return;
-        };
+        let target = progress.target_for(api_resource, resource_name, namespace)?;
 
         let api_resource = progress.api_resource.clone();
         progress.remaining_targets.remove(&target);
@@ -33,20 +27,17 @@ impl UiState {
         }
 
         if !progress.remaining_targets.is_empty() {
-            return;
+            return None;
         }
 
         let failures = std::mem::take(&mut progress.failures);
+        let outcome = BulkDeleteOutcome {
+            api_resource: progress.api_resource.clone(),
+            target_count: progress.target_count,
+            failures,
+        };
         cluster.resources.bulk_delete_progress = None;
-        if failures.is_empty() {
-            return;
-        }
-        let details = failures
-            .iter()
-            .map(|(target, error)| format!("{}: {error}", target.display_name()))
-            .collect::<Vec<_>>()
-            .join("\n");
-        cluster.bulk_delete_error = Some(details);
+        Some(outcome)
     }
 }
 

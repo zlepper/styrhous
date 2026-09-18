@@ -63,6 +63,15 @@ fn reconnect_reset_clears_connection_derived_resource_state() {
         confirmation_available_at: Instant::now(),
     });
     cluster.next_bulk_delete_id = 3;
+    cluster.operation_history.push(OperationHistoryEntry {
+        outcome: OperationOutcome::Success,
+        title: "Deleted Pod".into(),
+        target: "api • default".into(),
+        details: None,
+        occurred_at: Instant::now(),
+        sequence: 0,
+        unread: true,
+    });
 
     cluster.reset_for_connection();
 
@@ -82,6 +91,50 @@ fn reconnect_reset_clears_connection_derived_resource_state() {
     assert_eq!(cluster.next_detail_generation, 0);
     assert!(cluster.pending_delete.is_none());
     assert_eq!(cluster.next_bulk_delete_id, 0);
+    assert!(cluster.operation_history.is_empty());
+}
+
+#[test]
+fn reconnect_discards_mutation_results_from_the_previous_session() {
+    let api_resource = ApiResource {
+        group: "core".into(),
+        version: "v1".into(),
+        kind: "ConfigMap".into(),
+        name: "configmaps".into(),
+        namespaced: true,
+    };
+    let mut state = UiState::default();
+    let mut cluster = ClusterState::for_test(7, "dev");
+    cluster.connection = ClusterConnectionState::Connected;
+    state.clusters.insert(7, cluster);
+    state.record_operation_outcome(
+        7,
+        OperationOutcome::Success,
+        "Saved ConfigMap data",
+        Some("default"),
+        "settings",
+        None,
+    );
+    assert_eq!(state.unread_operation_count(), 1);
+    assert_eq!(state.clusters[&7].transient_operation_toasts.len(), 1);
+
+    state.clusters.get_mut(&7).unwrap().connection = ClusterConnectionState::Disconnected;
+    assert!(state.select_cluster(7).is_some());
+    assert!(state.clusters[&7].operation_history.is_empty());
+    assert!(state.clusters[&7].transient_operation_toasts.is_empty());
+
+    ResourceDeleteCompleted {
+        cluster_key: 7,
+        api_resource,
+        namespace: Some("default".into()),
+        resource_name: "settings".into(),
+        bulk_delete_id: None,
+    }
+    .apply(&mut state, &mut Vec::new());
+
+    assert!(state.clusters[&7].operation_history.is_empty());
+    assert!(state.clusters[&7].transient_operation_toasts.is_empty());
+    assert_eq!(state.unread_operation_count(), 0);
 }
 
 #[test]
