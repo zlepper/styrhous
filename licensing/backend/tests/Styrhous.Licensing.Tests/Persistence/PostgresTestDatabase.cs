@@ -55,11 +55,12 @@ internal sealed class PostgresTestDatabase : IAsyncDisposable
         var databaseName = $"licensing_test_{Guid.CreateVersion7():N}";
         var database = new PostgresTestDatabase(adminConnection.ConnectionString, databaseName);
 
-        await using var connection = await OpenAdminConnectionAsync(database._adminConnectionString);
-
-        await using var command = connection.CreateCommand();
-        command.CommandText = $"CREATE DATABASE \"{databaseName}\"";
-        await command.ExecuteNonQueryAsync();
+        await using (var connection = await OpenAdminConnectionAsync(database._adminConnectionString))
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"CREATE DATABASE \"{databaseName}\"";
+            await command.ExecuteNonQueryAsync();
+        }
 
         try
         {

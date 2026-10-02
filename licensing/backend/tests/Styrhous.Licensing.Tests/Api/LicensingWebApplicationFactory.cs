@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Collections.Concurrent;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -107,7 +108,10 @@ internal sealed class LicensingWebApplicationFactory(
             services.RemoveAll<IHostedService>();
             services.AddHostedService<LicensingStartupValidation>();
             services.RemoveAll<TimeProvider>();
-            services.AddSingleton<TimeProvider>(new FixedTimeProvider(observedAt));
+            var timeProvider = new FixedTimeProvider(observedAt);
+            services.AddSingleton<TimeProvider>(timeProvider);
+            services.PostConfigureAll<CookieAuthenticationOptions>(options =>
+                options.TimeProvider = timeProvider);
             foreach (var interceptor in interceptors)
             {
                 services.AddSingleton(interceptor);
