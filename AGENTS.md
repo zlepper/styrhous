@@ -50,6 +50,13 @@ intentional same-layer collision with `HarnessSnapshotOptions::check_illegal_ove
 Never bypass pre-commit hooks (including with `git commit --no-verify`). If a hook fails,
 investigate and correct the underlying failure before committing.
 
+### GitHub CLI from sandboxed agents
+
+Request command approval escalation for authenticated `gh` commands and GitHub SSH
+operations. The sandbox can report a valid keyring login as an invalid token or an
+unreachable API. Retry with escalation before asking for reauthentication; never
+print credentials or token values.
+
 ### UI tests
 
 When matching a UI to a design oracle, use Kineprism's `compare_ui_images` for the

@@ -1,18 +1,24 @@
 {
-  description = "Styrhous development environment";
+  description = "Styrhous desktop application and development environment";
 
   inputs.nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
 
   outputs =
-    { nixpkgs, ... }:
+    { self, nixpkgs, ... }:
     let
-      system = "x86_64-linux";
-      pkgs = import nixpkgs {
+      linuxSystems = [
+        "x86_64-linux"
+        "aarch64-linux"
+      ];
+      forAllLinuxSystems = nixpkgs.lib.genAttrs linuxSystems;
+      pkgsBySystem = forAllLinuxSystems (system: import nixpkgs {
         inherit system;
         config.allowUnfree = true;
-      };
+      });
+      system = "x86_64-linux";
+      pkgs = pkgsBySystem.${system};
       playwrightBrowsers = pkgs.playwright-driver.browsers;
-      runtimeLibraries = with pkgs; [
+      runtimeLibrariesFor = pkgs: with pkgs; [
         libGL
         libx11
         libxcb
@@ -24,8 +30,31 @@
         vulkan-loader
         wayland
       ];
+      runtimeLibraries = runtimeLibrariesFor pkgs;
     in
     {
+      packages = forAllLinuxSystems (
+        system:
+        let
+          systemPkgs = pkgsBySystem.${system};
+          styrhous = systemPkgs.callPackage ./nix/package.nix {
+            runtimeLibraries = runtimeLibrariesFor systemPkgs;
+          };
+        in
+        {
+          inherit styrhous;
+          default = styrhous;
+        }
+      );
+
+      apps = forAllLinuxSystems (system: {
+        default = {
+          type = "app";
+          program = "${self.packages.${system}.default}/bin/styrhous";
+          meta.description = "Launch Styrhous";
+        };
+      });
+
       devShells.${system}.default = pkgs.mkShell {
         packages =
           (with pkgs; [

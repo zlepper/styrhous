@@ -9,9 +9,12 @@ using static Styrhous.Licensing.Tests.Persistence.LicensingPersistenceScenario;
 namespace Styrhous.Licensing.Tests.Api;
 
 [TestFixture]
+[FixtureLifeCycle(LifeCycle.InstancePerTestCase)]
 [Parallelizable(ParallelScope.All)]
 public sealed class AccountAuthenticationApiTests
 {
+    // The HTTP client's cookie jar uses wall-clock time even when the server uses a fake clock.
+    private DateTimeOffset AuthenticationTime { get; } = TimeProvider.System.GetUtcNow();
     private static readonly string?[] GitHubAndGoogle = ["github", "google"];
     private static readonly string?[] GitHubOnly = ["github"];
 
@@ -21,7 +24,7 @@ public sealed class AccountAuthenticationApiTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         using var factory = new LicensingWebApplicationFactory(
             database,
-            SignupTime,
+            AuthenticationTime,
             useTestAuthentication: false,
             desktopIssuer: "https://licenses.example.com/",
             configureExternalProviders: true);
@@ -49,7 +52,7 @@ public sealed class AccountAuthenticationApiTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         using var factory = new LicensingWebApplicationFactory(
             database,
-            SignupTime,
+            AuthenticationTime,
             useTestAuthentication: false,
             useTestExternalProviders: true);
         using var client = factory.CreateApiClient();
@@ -91,13 +94,13 @@ public sealed class AccountAuthenticationApiTests
         var barrier = new DatabaseCommandBarrier(participantCount: 2);
         using var firstFactory = new LicensingWebApplicationFactory(
             database,
-            SignupTime,
+            AuthenticationTime,
             useTestAuthentication: false,
             useTestExternalProviders: true,
             interceptors: [new SignupPreflightBarrierInterceptor(barrier)]);
         using var secondFactory = new LicensingWebApplicationFactory(
             database,
-            SignupTime,
+            AuthenticationTime,
             useTestAuthentication: false,
             useTestExternalProviders: true,
             interceptors: [new SignupPreflightBarrierInterceptor(barrier)]);
@@ -139,7 +142,7 @@ public sealed class AccountAuthenticationApiTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         using var factory = new LicensingWebApplicationFactory(
             database,
-            SignupTime,
+            AuthenticationTime,
             useTestAuthentication: false,
             useTestExternalProviders: true);
         using var client = factory.CreateApiClient();
@@ -178,7 +181,7 @@ public sealed class AccountAuthenticationApiTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         using var factory = new LicensingWebApplicationFactory(
             database,
-            SignupTime,
+            AuthenticationTime,
             useTestAuthentication: false,
             useTestExternalProviders: true);
         using var client = factory.CreateApiClient();
@@ -206,7 +209,7 @@ public sealed class AccountAuthenticationApiTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         using var factory = new LicensingWebApplicationFactory(
             database,
-            SignupTime,
+            AuthenticationTime,
             useTestAuthentication: false,
             useTestExternalProviders: true);
         using var client = factory.CreateApiClient();
@@ -232,7 +235,7 @@ public sealed class AccountAuthenticationApiTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         using var factory = new LicensingWebApplicationFactory(
             database,
-            SignupTime,
+            AuthenticationTime,
             useTestAuthentication: false,
             useTestExternalProviders: true);
         using var client = factory.CreateApiClient();
@@ -262,7 +265,7 @@ public sealed class AccountAuthenticationApiTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         using var factory = new LicensingWebApplicationFactory(
             database,
-            SignupTime,
+            AuthenticationTime,
             useTestAuthentication: false,
             useTestExternalProviders: true);
         using var client = factory.CreateApiClient();
@@ -288,7 +291,7 @@ public sealed class AccountAuthenticationApiTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         using var factory = new LicensingWebApplicationFactory(
             database,
-            SignupTime,
+            AuthenticationTime,
             useTestAuthentication: false,
             useTestExternalProviders: true);
         using var client = factory.CreateApiClient();
@@ -314,7 +317,7 @@ public sealed class AccountAuthenticationApiTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         using var factory = new LicensingWebApplicationFactory(
             database,
-            SignupTime,
+            AuthenticationTime,
             useTestAuthentication: false,
             useTestExternalProviders: true);
         using var client = factory.CreateApiClient();
@@ -343,7 +346,7 @@ public sealed class AccountAuthenticationApiTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         using var factory = new LicensingWebApplicationFactory(
             database,
-            SignupTime,
+            AuthenticationTime,
             useTestAuthentication: false,
             useTestExternalProviders: true);
         using var firstClient = factory.CreateApiClient();
@@ -378,7 +381,7 @@ public sealed class AccountAuthenticationApiTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         using var factory = new LicensingWebApplicationFactory(
             database,
-            SignupTime,
+            AuthenticationTime,
             useTestAuthentication: false,
             configureExternalProviders: true);
         using var client = factory.CreateApiClient();
@@ -413,7 +416,7 @@ public sealed class AccountAuthenticationApiTests
         var interceptor = new ConcurrencyFailureInterceptor(attempt => attempt == 1);
         using var factory = new LicensingWebApplicationFactory(
             database,
-            SignupTime,
+            AuthenticationTime,
             useTestAuthentication: false,
             useTestExternalProviders: true,
             interceptors: [interceptor]);
@@ -440,7 +443,7 @@ public sealed class AccountAuthenticationApiTests
         var interceptor = new ConcurrencyFailureInterceptor(_ => true);
         using var factory = new LicensingWebApplicationFactory(
             database,
-            SignupTime,
+            AuthenticationTime,
             useTestAuthentication: false,
             useTestExternalProviders: true,
             interceptors: [interceptor]);
@@ -469,7 +472,7 @@ public sealed class AccountAuthenticationApiTests
             attempt => attempt >= firstFailureAttempt);
         using var factory = new LicensingWebApplicationFactory(
             database,
-            SignupTime,
+            AuthenticationTime,
             useTestAuthentication: false,
             useTestExternalProviders: true,
             interceptors: [interceptor]);
@@ -504,7 +507,7 @@ public sealed class AccountAuthenticationApiTests
             attempt => attempt >= firstFailureAttempt);
         using var factory = new LicensingWebApplicationFactory(
             database,
-            SignupTime,
+            AuthenticationTime,
             useTestAuthentication: false,
             useTestExternalProviders: true,
             interceptors: [interceptor]);
@@ -554,7 +557,7 @@ public sealed class AccountAuthenticationApiTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         using var factory = new LicensingWebApplicationFactory(
             database,
-            SignupTime,
+            AuthenticationTime,
             useTestAuthentication: false,
             useTestExternalProviders: true);
         using var client = factory.CreateApiClient();
@@ -611,7 +614,7 @@ public sealed class AccountAuthenticationApiTests
         string sessionCookie;
         using (var signInFactory = new LicensingWebApplicationFactory(
             database,
-            SignupTime,
+            AuthenticationTime,
             useTestAuthentication: false,
             useTestExternalProviders: true))
         using (var signInClient = signInFactory.CreateApiClient())
@@ -623,7 +626,7 @@ public sealed class AccountAuthenticationApiTests
 
         using var expiredFactory = new LicensingWebApplicationFactory(
             database,
-            SignupTime.AddMinutes(11),
+            AuthenticationTime.AddMinutes(11),
             useTestAuthentication: false,
             useTestExternalProviders: true);
         using var expiredClient = expiredFactory.CreateApiClient();
@@ -646,7 +649,7 @@ public sealed class AccountAuthenticationApiTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         using var factory = new LicensingWebApplicationFactory(
             database,
-            SignupTime,
+            AuthenticationTime,
             useTestAuthentication: false,
             useTestExternalProviders: true);
         using var client = factory.CreateApiClient();
@@ -679,7 +682,7 @@ public sealed class AccountAuthenticationApiTests
     public async Task AnonymousSessionAndProviderDiscoveryAreStableWithoutConfiguredProviders()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
-        using var factory = new LicensingWebApplicationFactory(database, SignupTime);
+        using var factory = new LicensingWebApplicationFactory(database, AuthenticationTime);
         using var client = factory.CreateApiClient();
 
         using var providersResponse = await client.GetAsync("/auth/providers");
@@ -715,7 +718,7 @@ public sealed class AccountAuthenticationApiTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         using var factory = new LicensingWebApplicationFactory(
             database,
-            SignupTime,
+            AuthenticationTime,
             useTestAuthentication: false,
             useTestExternalProviders: true);
         using var client = factory.CreateApiClient();
@@ -737,7 +740,7 @@ public sealed class AccountAuthenticationApiTests
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var signup = await SignUpAsync(database, "sign-out-user", "sign-out@example.com");
-        using var factory = new LicensingWebApplicationFactory(database, SignupTime);
+        using var factory = new LicensingWebApplicationFactory(database, AuthenticationTime);
         using var client = factory.CreateApiClient(signup.UserId);
 
         using var response = await client.PostAsync("/auth/sign-out", content: null);
@@ -750,7 +753,7 @@ public sealed class AccountAuthenticationApiTests
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var signup = await SignUpAsync(database, "session-user", "session@example.com");
-        using var factory = new LicensingWebApplicationFactory(database, SignupTime.AddMinutes(1));
+        using var factory = new LicensingWebApplicationFactory(database, AuthenticationTime.AddMinutes(1));
         using var client = factory.CreateApiClient(signup.UserId);
 
         using var sessionResponse = await client.GetAsync("/auth/session");
