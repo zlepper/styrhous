@@ -6,11 +6,11 @@
   makeDesktopItem,
   makeWrapper,
   runtimeLibraries,
-  rustPackages_1_97,
+  rustPlatform,
   hostedLicenseOrigin ? null,
 }:
 
-rustPackages_1_97.rustPlatform.buildRustPackage {
+rustPlatform.buildRustPackage {
   pname = "styrhous";
   version = (builtins.fromTOML (builtins.readFile ../crates/styrhous/Cargo.toml)).package.version;
 
