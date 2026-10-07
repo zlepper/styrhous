@@ -23,7 +23,9 @@ env:
 jobs:
   preflight:
     name: Prepare desktop packages
-    environment: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'release' || 'package-validation' }}
+    environment:
+      name: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'release' || 'package-validation' }}
+      deployment: false
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     outputs:
@@ -83,7 +85,9 @@ jobs:
   package-appimage:
     name: Package AppImage (${{ matrix.id }})
     needs: preflight
-    environment: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'release' || 'package-validation' }}
+    environment:
+      name: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'release' || 'package-validation' }}
+      deployment: false
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     env:
@@ -208,7 +212,9 @@ jobs:
   package-macos:
     name: Package macOS application (${{ matrix.id }})
     needs: preflight
-    environment: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'release' || 'package-validation' }}
+    environment:
+      name: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'release' || 'package-validation' }}
+      deployment: false
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     env:
@@ -327,7 +333,9 @@ jobs:
   package-windows:
     name: Package Windows installer (${{ matrix.id }})
     needs: preflight
-    environment: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'release' || 'package-validation' }}
+    environment:
+      name: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'release' || 'package-validation' }}
+      deployment: false
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     env:
@@ -449,7 +457,9 @@ jobs:
   package-deb:
     name: Package Debian application (${{ matrix.id }})
     needs: preflight
-    environment: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'release' || 'package-validation' }}
+    environment:
+      name: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'release' || 'package-validation' }}
+      deployment: false
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     strategy:
