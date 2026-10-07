@@ -7,7 +7,7 @@
     createPortalApi,
     portalErrorMessage,
     type AuthenticationProvider
-  } from '$lib/api';
+  } from '#lib/api.js';
 
   let {
     title = 'Sign in to Styrhous',
@@ -23,7 +23,7 @@
     authenticationFailureMessage(page.url.searchParams.get('authenticationError'))
   );
   const returnUrl = $derived.by(() => {
-    const search = new URLSearchParams(page.url.searchParams);
+    const search = new URLSearchParams(page.url.search);
     search.delete('authenticationError');
     const query = search.toString();
     return `${page.url.pathname}${query ? `?${query}` : ''}`;

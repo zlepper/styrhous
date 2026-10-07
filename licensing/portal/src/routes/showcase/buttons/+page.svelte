@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { buttonVariants } from '$lib/buttonStyles';
+  import { buttonVariants } from '#lib/buttonStyles.js';
   import arrowLeftIcon from '../../../../../../crates/components/src/icons/arrow-left.svg?url&no-inline';
   import arrowRightIcon from '../../../../../../crates/components/src/icons/arrow-right.svg?url&no-inline';
   import ellipsisIcon from '../../../../../../crates/components/src/icons/ellipsis-horizontal.svg?url&no-inline';

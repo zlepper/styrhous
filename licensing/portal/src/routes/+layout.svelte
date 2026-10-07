@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { applicationIcon } from '$lib/branding';
-  import { isCurrentPortalRoute, portalNavigation } from '$lib/navigation';
+  import { applicationIcon } from '#lib/branding.js';
+  import { isCurrentPortalRoute, portalNavigation } from '#lib/navigation.js';
   import '../app.css';
 
   let { children } = $props();

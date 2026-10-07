@@ -30,4 +30,3 @@
     - link "Open organizations":
       - /url: /organizations
 - contentinfo: Styrhous licensing
-- text: Accept invitation · Styrhous

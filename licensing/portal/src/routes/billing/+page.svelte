@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
-  import SignInPanel from '$lib/components/SignInPanel.svelte';
+  import SignInPanel from '#lib/components/SignInPanel.svelte';
   import {
     billingCheckoutErrorDetails,
     billingSeatQuantityErrorDetails,
@@ -11,9 +11,9 @@
     type BillingAccount,
     type BillingCadence,
     type BillingPrice
-  } from '$lib/api';
-  import SelectControl from '$lib/components/SelectControl.svelte';
-  import { formatUtcDateTime } from '$lib/date';
+  } from '#lib/api.js';
+  import SelectControl from '#lib/components/SelectControl.svelte';
+  import { formatUtcDateTime } from '#lib/date.js';
 
   const api = createPortalApi();
 

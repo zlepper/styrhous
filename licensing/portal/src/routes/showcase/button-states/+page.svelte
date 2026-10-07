@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { buttonVariants, resolveButtonVariant } from '$lib/buttonStyles';
+  import { buttonVariants, resolveButtonVariant } from '#lib/buttonStyles.js';
   import '../showcase.css';
 
   const variantName = $derived(resolveButtonVariant(page.url.searchParams.get('variant')));
