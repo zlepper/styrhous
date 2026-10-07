@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { ActiveDevice } from '$lib/api';
-  import { formatUtcDateTime } from '$lib/date';
+  import type { ActiveDevice } from '#lib/api.js';
+  import { formatUtcDateTime } from '#lib/date.js';
 
   let { device, disabled = false, busy = false, onrevoke }:
     { device: ActiveDevice; disabled?: boolean; busy?: boolean;

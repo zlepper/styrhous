@@ -1,5 +1,5 @@
 <script>
-  import SelectControl from '$lib/components/SelectControl.svelte';
+  import SelectControl from '#lib/components/SelectControl.svelte';
   import '../showcase.css';
 </script>
 

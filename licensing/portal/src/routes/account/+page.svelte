@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { onMount } from 'svelte';
-  import SignInPanel from '$lib/components/SignInPanel.svelte';
+  import SignInPanel from '#lib/components/SignInPanel.svelte';
   import {
     authenticationFailureMessage,
     authenticationProviderLabel,
@@ -10,7 +10,7 @@
     portalErrorMessage,
     type AuthenticationProvider,
     type AuthenticationSession
-  } from '$lib/api';
+  } from '#lib/api.js';
 
   const api = createPortalApi();
   let session = $state<AuthenticationSession | null>(null);

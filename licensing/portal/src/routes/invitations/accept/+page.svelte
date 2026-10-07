@@ -7,8 +7,8 @@
     PortalAuthenticationRequiredError,
     portalErrorMessage,
     type OrganizationInvitationAcceptance
-  } from '$lib/api';
-  import SignInPanel from '$lib/components/SignInPanel.svelte';
+  } from '#lib/api.js';
+  import SignInPanel from '#lib/components/SignInPanel.svelte';
 
   const api = createPortalApi();
   let loading = $state(true);
@@ -43,7 +43,7 @@
   }
 
   function removeSecretFromAddress() {
-    const url = new URL(page.url);
+    const url = new URL(page.url.href);
     url.searchParams.delete('secret');
     replaceState(`${url.pathname}${url.search}${url.hash}`, page.state);
   }

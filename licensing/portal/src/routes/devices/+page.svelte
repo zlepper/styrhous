@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import DeviceRow from '$lib/components/DeviceRow.svelte';
-  import SignInPanel from '$lib/components/SignInPanel.svelte';
+  import DeviceRow from '#lib/components/DeviceRow.svelte';
+  import SignInPanel from '#lib/components/SignInPanel.svelte';
   import {
     createPortalApi,
     PortalAuthenticationRequiredError,
@@ -10,8 +10,8 @@
     type DeviceList,
     type OrganizationSummary,
     type SeatEntitlement
-  } from '$lib/api';
-  import { formatUtcDateTime } from '$lib/date';
+  } from '#lib/api.js';
+  import { formatUtcDateTime } from '#lib/date.js';
 
   type SeatWorkspace = Readonly<{
     entitlement: SeatEntitlement;

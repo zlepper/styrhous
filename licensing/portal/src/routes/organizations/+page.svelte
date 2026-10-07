@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import SignInPanel from '$lib/components/SignInPanel.svelte';
+  import SignInPanel from '#lib/components/SignInPanel.svelte';
   import {
     createPortalApi,
     PortalApiError,
@@ -10,10 +10,10 @@
     type OrganizationMember,
     type OrganizationRole,
     type OrganizationSummary
-  } from '$lib/api';
-  import ActionMenu from '$lib/components/ActionMenu.svelte';
-  import SelectControl from '$lib/components/SelectControl.svelte';
-  import { formatUtcDateTime } from '$lib/date';
+  } from '#lib/api.js';
+  import ActionMenu from '#lib/components/ActionMenu.svelte';
+  import SelectControl from '#lib/components/SelectControl.svelte';
+  import { formatUtcDateTime } from '#lib/date.js';
 
   const api = createPortalApi();
 

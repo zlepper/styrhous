@@ -1,8 +1,8 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { tick } from 'svelte';
-  import DeviceRow from '$lib/components/DeviceRow.svelte';
-  import SignInPanel from '$lib/components/SignInPanel.svelte';
+  import DeviceRow from '#lib/components/DeviceRow.svelte';
+  import SignInPanel from '#lib/components/SignInPanel.svelte';
   import {
     createPortalApi,
     PortalAuthenticationRequiredError,
@@ -10,7 +10,7 @@
     type ActiveDevice,
     type DeviceAuthorizationApproval,
     type DeviceAuthorizationSeat
-  } from '$lib/api';
+  } from '#lib/api.js';
 
   const api = createPortalApi();
   const userCode = $derived(page.url.searchParams.get('user_code')?.trim() ?? '');
