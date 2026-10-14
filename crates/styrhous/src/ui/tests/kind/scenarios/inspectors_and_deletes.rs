@@ -169,6 +169,17 @@ fn test_node_inspector_lists_scheduled_pods_integration() {
                     containers: vec![Container {
                         name: "pause".to_owned(),
                         image: Some("registry.k8s.io/pause:3.10".to_owned()),
+                        resources: Some(ResourceRequirements {
+                            requests: Some(BTreeMap::from([
+                                ("cpu".to_owned(), Quantity("25m".to_owned())),
+                                ("memory".to_owned(), Quantity("32Mi".to_owned())),
+                            ])),
+                            limits: Some(BTreeMap::from([
+                                ("cpu".to_owned(), Quantity("50m".to_owned())),
+                                ("memory".to_owned(), Quantity("64Mi".to_owned())),
+                            ])),
+                            ..Default::default()
+                        }),
                         ..Default::default()
                     }],
                     ..Default::default()
@@ -207,6 +218,25 @@ fn test_node_inspector_lists_scheduled_pods_integration() {
                         .find(|resource| resource.name == pod_name)
                         .filter(|resource| {
                             resource.namespace.as_deref() == Some(&fixture.namespace)
+                        })
+                        .and(panel.node_pod_resources.as_ref())
+                        .filter(|totals| {
+                            totals
+                                .requests
+                                .cpu_nanocores
+                                .is_some_and(|value| value >= 25_000_000)
+                                && totals
+                                    .requests
+                                    .memory_bytes
+                                    .is_some_and(|value| value >= 32 * 1024 * 1024)
+                                && totals
+                                    .configured_limits
+                                    .cpu_nanocores
+                                    .is_some_and(|value| value >= 50_000_000)
+                                && totals
+                                    .configured_limits
+                                    .memory_bytes
+                                    .is_some_and(|value| value >= 64 * 1024 * 1024)
                         })
                         .map(|_| ())
                 },

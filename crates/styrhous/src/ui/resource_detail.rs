@@ -16,8 +16,9 @@ use crate::pod_metrics::{
 };
 use crate::resource_catalog::ResourceNavigation;
 use crate::resource_detail::{
-    ConfigMapDetail, DiagnosticDetail, ManagedResource, NodeDetail, PodContainerDetail, PodDetail,
-    PodResourceThresholds, ResourceDetail, ResourceDetailPayload, ResourceEvent, SecretDetail,
+    ConfigMapDetail, DiagnosticDetail, ManagedResource, NodeDetail, NodePodResources,
+    PodContainerDetail, PodDetail, PodResourceThresholds, ResourceDetail, ResourceDetailPayload,
+    ResourceEvent, SecretDetail,
 };
 use crate::resource_handlers::table_definition;
 use crate::resource_table::{
@@ -133,6 +134,8 @@ struct NodeUsageDisplay<'a> {
     history: &'a [NodeUsage],
     metrics_api_unavailable: bool,
     error: Option<&'a str>,
+    pod_resources: Option<&'a NodePodResources>,
+    pod_resources_error: Option<&'a str>,
 }
 
 impl GlobalBladeContent for ResourceDetailHistoryEntry {
@@ -190,6 +193,7 @@ impl GlobalBladeContent for ResourceDetailHistoryEntry {
             self.events_error.as_deref(),
             &self.managed_resources,
             self.managed_resources_error.as_deref(),
+            self.node_pod_resources.as_ref(),
             self.pod_usage.as_ref(),
             &self.pod_usage_history,
             self.pod_usage_missing,
@@ -444,6 +448,32 @@ mod tests {
         assert_eq!(
             sum_resource_quantities([Some(i64::MAX), Some(1)].into_iter()),
             None
+        );
+    }
+
+    #[test]
+    fn node_remaining_capacity_reports_overcommit_and_missing_allocatable() {
+        assert_eq!(
+            misc::format_remaining(
+                Some(2_000_000_000),
+                Some(500_000_000),
+                format_cpu,
+                "Loading…"
+            ),
+            "1.5"
+        );
+        assert_eq!(
+            misc::format_remaining(
+                Some(1_000_000_000),
+                Some(1_250_000_000),
+                format_cpu,
+                "Loading…"
+            ),
+            "Overcommitted by 250m"
+        );
+        assert_eq!(
+            misc::format_remaining(None, Some(1), format_cpu, "Loading…"),
+            "Not reported"
         );
     }
 
