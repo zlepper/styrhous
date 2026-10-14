@@ -1,5 +1,6 @@
 use super::discovery_table::{
     DiscoveryRow, DiscoveryRowStatus, ManagedDiscoveryEffect, discovery_count,
+    discovery_tag_summary,
 };
 use super::*;
 
@@ -21,6 +22,16 @@ pub(super) enum ManagedDiscoveryAction {
     AddTailscale {
         host_name: String,
     },
+    ScanEks {
+        account_id: String,
+        profile: AwsProfile,
+    },
+    AddEks {
+        account_id: String,
+        region: String,
+        name: String,
+        profile: AwsProfile,
+    },
 }
 
 impl GlobalBladeContent for ManagedClusterDiscoveryBlade {
@@ -40,9 +51,13 @@ impl GlobalBladeContent for ManagedClusterDiscoveryBlade {
             );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
-                    .add_enabled_ui(!discovery.loading && discovery.importing.is_none(), |ui| {
-                        discovery_refresh_button(ui).clicked()
-                    })
+                    .add_enabled_ui(
+                        !discovery.loading
+                            && !discovery.aws.account_loading
+                            && !discovery.aws.scan_loading
+                            && discovery.importing.is_none(),
+                        |ui| discovery_refresh_button(ui).clicked(),
+                    )
                     .inner
                 {
                     self.pending_action = Some(ManagedDiscoveryAction::Refresh);
@@ -92,6 +107,10 @@ impl GlobalBladeContent for ManagedClusterDiscoveryBlade {
         ui.add_space(spacing::SM);
         ui.separator();
         ui.add_space(spacing::XL);
+        self.show_aws(ui, discovery);
+        ui.add_space(spacing::SM);
+        ui.separator();
+        ui.add_space(spacing::XL);
         self.show_tailscale(ui, discovery);
         GlobalBladeRenderResult::default()
     }
@@ -119,6 +138,186 @@ pub(super) fn discovery_refresh_button(ui: &mut egui::Ui) -> egui::Response {
 }
 
 impl ManagedClusterDiscoveryBlade {
+    fn show_aws(
+        &mut self,
+        ui: &mut egui::Ui,
+        discovery: &super::super::state::ManagedClusterDiscoveryState,
+    ) {
+        let aws = &discovery.aws;
+        show_provider_heading(
+            ui,
+            egui::Image::new(egui::include_image!("aws.svg")),
+            "Amazon Elastic Kubernetes Service",
+            aws.selected_account_id.as_ref().and_then(|_| {
+                discovery_count(
+                    aws.scan_loading,
+                    aws.cli_installed,
+                    aws.scan_error.as_ref(),
+                    aws.clusters.len(),
+                )
+            }),
+        );
+        ui.add_space(spacing::XL + spacing::XS);
+        if aws.account_loading {
+            show_discovery_loading(ui, "Resolving AWS CLI accounts…");
+        } else if !aws.cli_installed {
+            show_unavailable_tool(
+                ui,
+                "AWS CLI",
+                "Install AWS CLI and configure a profile to discover EKS clusters.",
+            );
+        } else if let Some(error) = &aws.account_error {
+            show_discovery_error(ui, error);
+        } else {
+            ui.label(
+                egui::RichText::new("Choose an account and profile to scan for EKS clusters.")
+                    .font(typography::body())
+                    .color(gray::_600),
+            );
+            ui.add_space(spacing::MD);
+            for account in &aws.accounts {
+                ui.label(
+                    egui::RichText::new(format!("AWS account {}", account.id))
+                        .font(typography::semibold(typography::BODY_SIZE))
+                        .color(gray::_900),
+                );
+                for profile in &account.profiles {
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(ui.available_width(), AWS_PROFILE_ROW_HEIGHT),
+                        egui::Layout::left_to_right(egui::Align::Center),
+                        |ui| {
+                            ui.label(
+                                egui::RichText::new(profile.label())
+                                    .font(typography::body())
+                                    .color(gray::_600),
+                            );
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    let scanning_this = aws.scan_loading
+                                        && aws.selected_account_id.as_deref() == Some(&account.id)
+                                        && aws.selected_profile.as_ref() == Some(profile);
+                                    if ui
+                                        .add_enabled_ui(
+                                            !discovery.loading
+                                                && !aws.scan_loading
+                                                && discovery.importing.is_none(),
+                                            |ui| {
+                                                TailwindButton::secondary(if scanning_this {
+                                                    "Scanning…"
+                                                } else {
+                                                    "Scan clusters"
+                                                })
+                                                .size(ButtonSize::Xs)
+                                                .accessibility_label(format!(
+                                                    "Scan clusters in account {} with profile {}",
+                                                    account.id,
+                                                    profile.label()
+                                                ))
+                                                .show(ui)
+                                                .clicked()
+                                            },
+                                        )
+                                        .inner
+                                    {
+                                        self.pending_action =
+                                            Some(ManagedDiscoveryAction::ScanEks {
+                                                account_id: account.id.clone(),
+                                                profile: profile.clone(),
+                                            });
+                                    }
+                                },
+                            );
+                        },
+                    );
+                }
+                ui.add_space(spacing::SM);
+            }
+            if let Some(error) = &aws.import_error {
+                show_discovery_error(ui, error);
+            }
+            if aws.scan_loading {
+                show_discovery_loading(ui, "Checking enabled Regions for EKS clusters…");
+            } else if let Some(error) = &aws.scan_error {
+                show_discovery_error(ui, error);
+            } else if let (Some(account_id), Some(profile)) =
+                (&aws.selected_account_id, &aws.selected_profile)
+            {
+                ui.add_space(spacing::SM);
+                ui.label(
+                    egui::RichText::new(format!(
+                        "Results for account {account_id} · {}",
+                        profile.label()
+                    ))
+                    .font(typography::semibold(typography::BODY_SIZE))
+                    .color(gray::_900),
+                );
+                ui.add_space(spacing::MD);
+                if aws.clusters.is_empty() {
+                    show_empty_discovery(ui, "No EKS clusters were found in enabled Regions.");
+                } else {
+                    show_discovery_headers(
+                        ui,
+                        "Cluster name",
+                        "Account · profile",
+                        "Region",
+                        "Action",
+                        true,
+                    );
+                    for cluster in &aws.clusters {
+                        self.show_eks_row(ui, cluster, discovery);
+                    }
+                }
+            }
+        }
+        if let Some(warning) = &aws.account_warning {
+            ui.add_space(spacing::SM);
+            show_discovery_warning(ui, warning);
+        }
+        if let Some(warning) = &aws.scan_warning {
+            ui.add_space(spacing::SM);
+            show_discovery_warning(ui, warning);
+        }
+    }
+
+    fn show_eks_row(
+        &mut self,
+        ui: &mut egui::Ui,
+        cluster: &AvailableEksCluster,
+        discovery: &super::super::state::ManagedClusterDiscoveryState,
+    ) {
+        let import = ManagedClusterImport::Eks {
+            account_id: cluster.account_id.clone(),
+            region: cluster.region.clone(),
+            name: cluster.name.clone(),
+            profile: cluster.profile.clone(),
+        };
+        let metadata = format!("{} · {}", cluster.account_id, cluster.profile.label());
+        let tags = discovery_tag_summary(&cluster.tags);
+        DiscoveryRow {
+            name: &cluster.name,
+            metadata: &metadata,
+            tags: tags.as_deref(),
+            detail: &cluster.region,
+            status: DiscoveryRowStatus::Eks,
+            stack_metadata: true,
+            height: DISCOVERY_ROW_HEIGHT,
+            import_state: discovery_import_state(
+                cluster.configured,
+                discovery.importing.as_ref() == Some(&import),
+                discovery.importing.is_some() || discovery.loading,
+            ),
+        }
+        .show(ui, || {
+            self.pending_action = Some(ManagedDiscoveryAction::AddEks {
+                account_id: cluster.account_id.clone(),
+                region: cluster.region.clone(),
+                name: cluster.name.clone(),
+                profile: cluster.profile.clone(),
+            });
+        });
+    }
+
     fn show_azure(
         &mut self,
         ui: &mut egui::Ui,
@@ -229,9 +428,11 @@ impl ManagedClusterDiscoveryBlade {
             "{} · {} · {}",
             cluster.tenant_name, cluster.subscription_name, cluster.resource_group
         );
+        let tags = discovery_tag_summary(&cluster.tags);
         DiscoveryRow {
             name: &cluster.name,
             metadata: &metadata,
+            tags: tags.as_deref(),
             detail: &cluster.location,
             status: DiscoveryRowStatus::Aks,
             stack_metadata: true,
@@ -264,6 +465,7 @@ impl ManagedClusterDiscoveryBlade {
         DiscoveryRow {
             name: &cluster.host_name,
             metadata: &cluster.dns_name,
+            tags: None,
             detail: status_text,
             status: DiscoveryRowStatus::Tailscale {
                 online: cluster.online,

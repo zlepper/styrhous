@@ -80,6 +80,17 @@ fn settings_home_navigates_to_cluster_discovery_and_shows_candidates() {
         .state_mut()
         .worker
         .results
+        .push_back(Box::new(AwsAccountsUpdated {
+            request_id: 1,
+            cli_installed: false,
+            accounts: Vec::new(),
+            warning: None,
+            error: None,
+        }) as WorkerResultBox);
+    harness
+        .state_mut()
+        .worker
+        .results
         .push_back(Box::new(ManagedClusterDiscoveryUpdated {
             tools: ClusterDiscoveryTools {
                 azure_cli: true,
@@ -90,7 +101,10 @@ fn settings_home_navigates_to_cluster_discovery_and_shows_candidates() {
                     name: "payments-prod".into(),
                     location: "westeurope".into(),
                     resource_group: "platform".into(),
-                    tags: BTreeMap::new(),
+                    tags: BTreeMap::from([
+                        ("environment".into(), "production".into()),
+                        ("team".into(), "payments".into()),
+                    ]),
                     subscription_id: "development-platform".into(),
                     subscription_name: "Platform Engineering".into(),
                     tenant_name: "Acme Development".into(),
@@ -172,6 +186,7 @@ fn settings_home_navigates_to_cluster_discovery_and_shows_candidates() {
 
     assert_eq!(harness.get_all_by_label("Add to kubeconfig").count(), 6);
     assert_eq!(harness.get_all_by_label("Already in kubeconfig").count(), 2);
+    harness.get_by_label("Tags: environment=production · team=payments");
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "settings/settings_home_navigates_to_cluster_discovery_and_shows_candidates/cluster_discovery",
     ));
@@ -213,6 +228,17 @@ fn cluster_discovery_shows_install_guidance_when_cli_tools_are_unavailable() {
         .state_mut()
         .worker
         .results
+        .push_back(Box::new(AwsAccountsUpdated {
+            request_id: 1,
+            cli_installed: false,
+            accounts: Vec::new(),
+            warning: None,
+            error: None,
+        }) as WorkerResultBox);
+    harness
+        .state_mut()
+        .worker
+        .results
         .push_back(Box::new(ManagedClusterDiscoveryUpdated {
             tools: ClusterDiscoveryTools {
                 azure_cli: false,
@@ -229,10 +255,215 @@ fn cluster_discovery_shows_install_guidance_when_cli_tools_are_unavailable() {
     harness.get_by_label("Azure CLI is not installed");
     harness.get_by_label("Install Azure CLI and sign in with `az login` to discover AKS clusters.");
     harness.get_by_label("Tailscale is not installed");
+    harness.get_by_label("AWS CLI is not installed");
     harness.get_by_label("Install and sign in to Tailscale to discover Kubernetes API proxies.");
     assert_eq!(harness.query_all_by_label("Add to kubeconfig").count(), 0);
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "settings/cluster_discovery_shows_install_guidance_when_cli_tools_are_unavailable/cli_tools_unavailable",
+    ));
+}
+
+#[test]
+fn aws_account_must_be_selected_before_eks_scan_and_can_import_cluster() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness.run();
+
+    open_settings(&mut harness);
+    open_cluster_discovery(&mut harness);
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(Box::new(AwsAccountsUpdated {
+            request_id: 1,
+            cli_installed: true,
+            accounts: vec![AwsAccount {
+                id: "222222222222".into(),
+                partition: "aws".into(),
+                profiles: vec![
+                    AwsProfile::Named("development".into()),
+                    AwsProfile::Named("production".into()),
+                ],
+            }],
+            warning: None,
+            error: None,
+        }) as WorkerResultBox);
+    harness.run_steps(2);
+
+    let premature_scan = harness
+        .get_by_label("Scan clusters in account 222222222222 with profile production")
+        .rect()
+        .center();
+    primary_click(&mut harness, premature_scan);
+    harness.run_steps(2);
+    assert!(
+        harness
+            .state()
+            .worker
+            .commands
+            .iter()
+            .all(|command| !command.as_ref().as_any().is::<ScanEksClusters>())
+    );
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(Box::new(ManagedClusterDiscoveryUpdated {
+            tools: ClusterDiscoveryTools::default(),
+            aks_clusters: Vec::new(),
+            tailscale_clusters: Vec::new(),
+            azure_error: None,
+            azure_warning: None,
+            tailscale_error: None,
+        }) as WorkerResultBox);
+    harness.run_steps(2);
+
+    harness.get_by_label("Scan clusters in account 222222222222 with profile development");
+    harness.get_by_label("Scan clusters in account 222222222222 with profile production");
+    harness
+        .input_mut()
+        .events
+        .push(egui::Event::PointerMoved(egui::pos2(-100.0, -100.0)));
+    harness.run_steps(2);
+    assert_eq!(harness.query_all_by_label("Add to kubeconfig").count(), 0);
+    assert!(
+        harness
+            .state()
+            .worker
+            .commands
+            .iter()
+            .all(|command| !command.as_ref().as_any().is::<ScanEksClusters>())
+    );
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "settings/aws_account_must_be_selected_before_eks_scan_and_can_import_cluster/account_picker",
+    ));
+
+    let scan_position = harness
+        .get_by_label("Scan clusters in account 222222222222 with profile production")
+        .rect()
+        .center();
+    primary_click(&mut harness, scan_position);
+    harness.run_steps(2);
+    let command = harness
+        .state()
+        .worker
+        .commands
+        .iter()
+        .find_map(command_is::<ScanEksClusters>)
+        .expect("clicking the selected profile starts its EKS scan");
+    assert_eq!(command.account_id, "222222222222");
+    assert_eq!(command.profile, AwsProfile::Named("production".into()));
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(Box::new(EksClustersUpdated {
+            request_id: 2,
+            account_id: "222222222222".into(),
+            profile: AwsProfile::Named("production".into()),
+            clusters: vec![AvailableEksCluster {
+                name: "payments".into(),
+                region: "eu-west-1".into(),
+                account_id: "222222222222".into(),
+                partition: "aws".into(),
+                profile: AwsProfile::Named("production".into()),
+                tags: BTreeMap::from([
+                    ("environment".into(), "production".into()),
+                    ("team".into(), "payments".into()),
+                ]),
+                configured: false,
+            }],
+            warning: None,
+        }) as WorkerResultBox);
+    harness.run_steps(2);
+    harness.get_by_label("Tags: environment=production · team=payments");
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "settings/aws_account_must_be_selected_before_eks_scan_and_can_import_cluster/eks_results",
+    ));
+
+    let add_position = harness.get_by_label("Add to kubeconfig").rect().center();
+    primary_click(&mut harness, add_position);
+    harness.run_steps(2);
+    let command = harness
+        .state()
+        .worker
+        .commands
+        .iter()
+        .find_map(command_is::<AddEksCluster>)
+        .expect("adding EKS emits the selected account, Region, and profile");
+    assert_eq!(command.account_id, "222222222222");
+    assert_eq!(command.region, "eu-west-1");
+    assert_eq!(command.name, "payments");
+    assert_eq!(command.profile, AwsProfile::Named("production".into()));
+    assert_eq!(command.request_id, 2);
+    harness.get_by_label("Adding…");
+    let adding_position = harness.get_by_label("Adding…").rect().center();
+    primary_click(&mut harness, adding_position);
+    harness.run_steps(2);
+    assert_eq!(
+        harness
+            .state()
+            .worker
+            .commands
+            .iter()
+            .filter(|command| command.as_ref().as_any().is::<AddEksCluster>())
+            .count(),
+        1
+    );
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "settings/aws_account_must_be_selected_before_eks_scan_and_can_import_cluster/importing",
+    ));
+
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(Box::new(EksImportFailed {
+            request_id: 2,
+            error: "Could not update kubeconfig".into(),
+        }) as WorkerResultBox);
+    harness.run_steps(2);
+    harness.get_by_label("Could not update kubeconfig");
+    harness.get_by_label("Add to kubeconfig");
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "settings/aws_account_must_be_selected_before_eks_scan_and_can_import_cluster/import_failed",
+    ));
+
+    let retry_position = harness.get_by_label("Add to kubeconfig").rect().center();
+    primary_click(&mut harness, retry_position);
+    harness.run_steps(2);
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(Box::new(ManagedClusterImported) as WorkerResultBox);
+    harness.run_steps(2);
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(Box::new(ImportedKubernetesClusters(vec![Cluster {
+            name: "arn:aws:eks:eu-west-1:222222222222:cluster/payments".into(),
+            is_current: false,
+        }])) as WorkerResultBox);
+    harness.run_steps(2);
+    harness.get_by_label("Already in kubeconfig");
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(Box::new(ManagedClusterDiscoveryUpdated {
+            tools: ClusterDiscoveryTools::default(),
+            aks_clusters: Vec::new(),
+            tailscale_clusters: Vec::new(),
+            azure_error: None,
+            azure_warning: None,
+            tailscale_error: None,
+        }) as WorkerResultBox);
+    harness.run_steps(2);
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "settings/aws_account_must_be_selected_before_eks_scan_and_can_import_cluster/imported",
     ));
 }
 

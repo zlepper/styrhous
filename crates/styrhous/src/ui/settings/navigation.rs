@@ -80,7 +80,7 @@ impl GlobalBladeContent for SettingsHomeBlade {
             ui,
             SettingsDestination {
                 label: "Open cluster discovery",
-                description: "Find and add clusters available through Azure CLI or Tailscale.",
+                description: "Find and add clusters available through Azure CLI, AWS CLI, or Tailscale.",
                 icon: icons::settings_destination_discovery_icon(),
             },
         );

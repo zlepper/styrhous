@@ -241,6 +241,129 @@ fn managed_cluster_discovery_failure_clears_pending_import() {
 }
 
 #[test]
+fn aws_discovery_ignores_results_from_superseded_requests() {
+    let mut state = UiState::default();
+    let mut commands = Vec::new();
+    let profile = AwsProfile::Named("production".into());
+    let account = AwsAccount {
+        id: "222222222222".into(),
+        partition: "aws".into(),
+        profiles: vec![profile.clone()],
+    };
+
+    state.managed_cluster_discovery.aws.clear_scan();
+    state.managed_cluster_discovery.aws.account_loading = true;
+    let first_request = state.managed_cluster_discovery.aws.request_id;
+    state.managed_cluster_discovery.aws.clear_scan();
+    state.managed_cluster_discovery.aws.account_loading = true;
+    let latest_request = state.managed_cluster_discovery.aws.request_id;
+    AwsAccountsUpdated {
+        request_id: first_request,
+        cli_installed: true,
+        accounts: vec![account.clone()],
+        warning: None,
+        error: None,
+    }
+    .apply(&mut state, &mut commands);
+    assert!(state.managed_cluster_discovery.aws.accounts.is_empty());
+
+    AwsAccountsUpdated {
+        request_id: latest_request,
+        cli_installed: true,
+        accounts: vec![account],
+        warning: None,
+        error: None,
+    }
+    .apply(&mut state, &mut commands);
+    assert_eq!(state.managed_cluster_discovery.aws.accounts.len(), 1);
+
+    state
+        .managed_cluster_discovery
+        .aws
+        .begin_scan("222222222222".into(), profile.clone());
+    let scan_request = state.managed_cluster_discovery.aws.request_id;
+    let cluster = AvailableEksCluster {
+        name: "payments".into(),
+        region: "eu-west-1".into(),
+        account_id: "222222222222".into(),
+        partition: "aws".into(),
+        profile: profile.clone(),
+        tags: BTreeMap::new(),
+        configured: false,
+    };
+    state.managed_cluster_discovery.aws.clear_scan();
+    state.managed_cluster_discovery.aws.account_loading = true;
+    EksClustersUpdated {
+        request_id: scan_request,
+        account_id: "222222222222".into(),
+        profile: profile.clone(),
+        clusters: vec![cluster.clone()],
+        warning: None,
+    }
+    .apply(&mut state, &mut commands);
+    EksDiscoveryFailed {
+        request_id: scan_request,
+        error: "stale scan failure".into(),
+    }
+    .apply(&mut state, &mut commands);
+    assert!(state.managed_cluster_discovery.aws.clusters.is_empty());
+    assert!(state.managed_cluster_discovery.aws.scan_error.is_none());
+
+    state
+        .managed_cluster_discovery
+        .aws
+        .begin_scan("222222222222".into(), profile.clone());
+    let latest_scan = state.managed_cluster_discovery.aws.request_id;
+    EksClustersUpdated {
+        request_id: latest_scan,
+        account_id: "222222222222".into(),
+        profile,
+        clusters: vec![cluster],
+        warning: None,
+    }
+    .apply(&mut state, &mut commands);
+    assert_eq!(state.managed_cluster_discovery.aws.clusters.len(), 1);
+    assert!(!state.managed_cluster_discovery.aws.scan_loading);
+}
+
+#[test]
+fn late_provider_refresh_keeps_eks_import_active_and_stale_failure_is_ignored() {
+    let mut state = UiState::default();
+    let mut commands = Vec::new();
+    state.managed_cluster_discovery.aws.request_id = 2;
+    state.managed_cluster_discovery.importing = Some(ManagedClusterImport::Eks {
+        account_id: "222222222222".into(),
+        region: "eu-west-1".into(),
+        name: "payments".into(),
+        profile: AwsProfile::Named("production".into()),
+    });
+    state.managed_cluster_discovery.loading = true;
+
+    ManagedClusterDiscoveryUpdated {
+        tools: ClusterDiscoveryTools::default(),
+        aks_clusters: Vec::new(),
+        tailscale_clusters: Vec::new(),
+        azure_error: None,
+        azure_warning: None,
+        tailscale_error: None,
+    }
+    .apply(&mut state, &mut commands);
+    assert!(matches!(
+        state.managed_cluster_discovery.importing.as_ref(),
+        Some(ManagedClusterImport::Eks { .. })
+    ));
+
+    state.managed_cluster_discovery.aws.clear_scan();
+    EksImportFailed {
+        request_id: 2,
+        error: "stale failure".into(),
+    }
+    .apply(&mut state, &mut commands);
+    assert!(state.managed_cluster_discovery.aws.import_error.is_none());
+    assert!(state.managed_cluster_discovery.importing.is_none());
+}
+
+#[test]
 fn missing_remembered_context_falls_back_without_overwriting_the_preference() {
     let mut state = UiState::default();
     state.cluster_selections.last_selected_context = Some("temporarily-missing".to_owned());

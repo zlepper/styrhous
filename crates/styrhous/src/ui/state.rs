@@ -1,7 +1,8 @@
 use super::global_blade::{GlobalBladeContent, GlobalBladeCoordinator};
 use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::{
-    AvailableAksCluster, AvailableTailscaleCluster, Cluster, ClusterDiscoveryTools,
+    AvailableAksCluster, AvailableEksCluster, AvailableTailscaleCluster, AwsAccount, AwsProfile,
+    Cluster, ClusterDiscoveryTools,
 };
 use crate::helm_release::HelmRelease;
 use crate::log_store::LogStoreResult;
@@ -70,6 +71,44 @@ pub(super) struct ManagedClusterDiscoveryState {
     pub(super) azure_error: Option<String>,
     pub(super) azure_warning: Option<String>,
     pub(super) tailscale_error: Option<String>,
+    pub(super) aws: AwsDiscoveryState,
+}
+
+#[derive(Debug, Default)]
+pub(super) struct AwsDiscoveryState {
+    pub(super) request_id: u64,
+    pub(super) cli_installed: bool,
+    pub(super) accounts: Vec<AwsAccount>,
+    pub(super) account_loading: bool,
+    pub(super) account_warning: Option<String>,
+    pub(super) account_error: Option<String>,
+    pub(super) selected_account_id: Option<String>,
+    pub(super) selected_profile: Option<AwsProfile>,
+    pub(super) scan_loading: bool,
+    pub(super) clusters: Vec<AvailableEksCluster>,
+    pub(super) scan_warning: Option<String>,
+    pub(super) scan_error: Option<String>,
+    pub(super) import_error: Option<String>,
+}
+
+impl AwsDiscoveryState {
+    pub(super) fn clear_scan(&mut self) {
+        self.request_id += 1;
+        self.selected_account_id = None;
+        self.selected_profile = None;
+        self.scan_loading = false;
+        self.clusters.clear();
+        self.scan_warning = None;
+        self.scan_error = None;
+        self.import_error = None;
+    }
+
+    pub(super) fn begin_scan(&mut self, account_id: String, profile: AwsProfile) {
+        self.clear_scan();
+        self.selected_account_id = Some(account_id);
+        self.selected_profile = Some(profile);
+        self.scan_loading = true;
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -81,6 +120,12 @@ pub(super) enum ManagedClusterImport {
     },
     Tailscale {
         host_name: String,
+    },
+    Eks {
+        account_id: String,
+        region: String,
+        name: String,
+        profile: AwsProfile,
     },
 }
 

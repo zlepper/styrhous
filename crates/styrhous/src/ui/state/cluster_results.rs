@@ -18,6 +18,13 @@ impl WorkerResult for crate::worker::KubernetesClustersUpdated {
 impl WorkerResult for crate::worker::ImportedKubernetesClusters {
     fn apply(self, ui: &mut UiState, commands: &mut Vec<WorkerCommandBox>) {
         let crate::worker::ImportedKubernetesClusters(clusters) = self;
+        let context_names = clusters
+            .iter()
+            .map(|cluster| cluster.name.as_str())
+            .collect::<std::collections::HashSet<_>>();
+        for cluster in &mut ui.managed_cluster_discovery.aws.clusters {
+            cluster.configured |= context_names.contains(cluster.arn().as_str());
+        }
         for cluster in clusters {
             if ui
                 .clusters
@@ -32,6 +39,64 @@ impl WorkerResult for crate::worker::ImportedKubernetesClusters {
                 .insert(cluster_key, cluster_state(cluster_key, cluster.name));
         }
         commands.push(Box::new(crate::worker::LoadManagedClusterDiscovery));
+    }
+}
+
+impl WorkerResult for crate::worker::AwsAccountsUpdated {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let aws = &mut ui.managed_cluster_discovery.aws;
+        if self.request_id != aws.request_id || !aws.account_loading {
+            return;
+        }
+        aws.cli_installed = self.cli_installed;
+        aws.accounts = self.accounts;
+        aws.account_warning = self.warning;
+        aws.account_error = self.error;
+        aws.account_loading = false;
+        // Refresh already cleared the previous scan when it was requested.
+    }
+}
+
+impl WorkerResult for crate::worker::EksClustersUpdated {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let aws = &mut ui.managed_cluster_discovery.aws;
+        if self.request_id != aws.request_id
+            || !aws.scan_loading
+            || aws.selected_account_id.as_deref() != Some(&self.account_id)
+            || aws.selected_profile.as_ref() != Some(&self.profile)
+        {
+            return;
+        }
+        aws.clusters = self.clusters;
+        aws.scan_warning = self.warning;
+        aws.scan_error = None;
+        aws.scan_loading = false;
+    }
+}
+
+impl WorkerResult for crate::worker::EksDiscoveryFailed {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let aws = &mut ui.managed_cluster_discovery.aws;
+        if self.request_id != aws.request_id || !aws.scan_loading {
+            return;
+        }
+        aws.scan_loading = false;
+        aws.scan_error = Some(self.error);
+    }
+}
+
+impl WorkerResult for crate::worker::EksImportFailed {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if !matches!(
+            ui.managed_cluster_discovery.importing.as_ref(),
+            Some(ManagedClusterImport::Eks { .. })
+        ) {
+            return;
+        }
+        if self.request_id == ui.managed_cluster_discovery.aws.request_id {
+            ui.managed_cluster_discovery.aws.import_error = Some(self.error);
+        }
+        ui.managed_cluster_discovery.importing = None;
     }
 }
 
@@ -84,7 +149,6 @@ impl WorkerResult for crate::worker::ManagedClusterDiscoveryUpdated {
         ui.managed_cluster_discovery.azure_error = self.azure_error;
         ui.managed_cluster_discovery.azure_warning = self.azure_warning;
         ui.managed_cluster_discovery.tailscale_error = self.tailscale_error;
-        ui.managed_cluster_discovery.importing = None;
         ui.managed_cluster_discovery.loading = false;
         ui.managed_cluster_discovery.error = None;
     }

@@ -3,10 +3,15 @@ use super::global_blade::{
     GlobalBladeRenderContext, GlobalBladeRenderResult,
 };
 use super::state::ManagedClusterImport;
-use crate::cluster_connection_manager::{AvailableAksCluster, AvailableTailscaleCluster};
+use crate::cluster_connection_manager::{
+    AvailableAksCluster, AvailableEksCluster, AvailableTailscaleCluster, AwsProfile,
+};
 use crate::terminal_launcher::{DebugImagePreset, DebugProfile, TerminalLaunchSettings};
 use crate::updater::UpdateStatus;
-use crate::worker::{AddAksCluster, AddTailscaleCluster, LoadManagedClusterDiscovery};
+use crate::worker::{
+    AddAksCluster, AddEksCluster, AddTailscaleCluster, LoadAwsAccounts,
+    LoadManagedClusterDiscovery, ScanEksClusters,
+};
 use components::colors::{
     CONTENT_BACKGROUND, TABLE_BORDER, TABLE_HEADER_BACKGROUND, WHITE, gray, indigo,
 };
@@ -26,7 +31,9 @@ const DEBUG_IMAGE_NAME_COLUMN_WIDTH: f32 = 170.0;
 const DEBUG_IMAGE_PROFILE_COLUMN_WIDTH: f32 = 170.0;
 const DEBUG_IMAGE_ACTIONS_COLUMN_WIDTH: f32 = 52.0;
 const DISCOVERY_ROW_HEIGHT: f32 = 70.0;
+const DISCOVERY_TAGS_EXTRA_HEIGHT: f32 = 18.0;
 const DISCOVERY_COMPACT_ROW_HEIGHT: f32 = 54.0;
+const AWS_PROFILE_ROW_HEIGHT: f32 = 32.0;
 const DISCOVERY_NAME_COLUMN_WIDTH: f32 = 148.0;
 const DISCOVERY_METADATA_COLUMN_WIDTH: f32 = 292.0;
 const DISCOVERY_LOCATION_COLUMN_WIDTH: f32 = 94.0;

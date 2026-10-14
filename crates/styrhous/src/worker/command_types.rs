@@ -7,6 +7,16 @@ pub(crate) struct LoadImportedClusters;
 #[derive(Debug)]
 pub(crate) struct LoadManagedClusterDiscovery;
 #[derive(Debug)]
+pub(crate) struct LoadAwsAccounts {
+    pub(crate) request_id: u64,
+}
+#[derive(Debug)]
+pub(crate) struct ScanEksClusters {
+    pub(crate) request_id: u64,
+    pub(crate) account_id: String,
+    pub(crate) profile: AwsProfile,
+}
+#[derive(Debug)]
 pub(crate) struct AddAksCluster {
     pub(crate) subscription_id: String,
     pub(crate) resource_group: String,
@@ -15,6 +25,14 @@ pub(crate) struct AddAksCluster {
 #[derive(Debug)]
 pub(crate) struct AddTailscaleCluster {
     pub(crate) host_name: String,
+}
+#[derive(Debug)]
+pub(crate) struct AddEksCluster {
+    pub(crate) request_id: u64,
+    pub(crate) account_id: String,
+    pub(crate) region: String,
+    pub(crate) name: String,
+    pub(crate) profile: AwsProfile,
 }
 #[derive(Debug)]
 pub(crate) struct ConnectToCluster {

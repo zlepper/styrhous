@@ -17,7 +17,8 @@ use super::fixtures::{
 };
 use super::harness::{MockUiHarnessExt, command_is};
 use crate::cluster_connection_manager::{
-    AvailableAksCluster, AvailableTailscaleCluster, Cluster, ClusterDiscoveryTools,
+    AvailableAksCluster, AvailableEksCluster, AvailableTailscaleCluster, AwsAccount, AwsProfile,
+    Cluster, ClusterDiscoveryTools,
 };
 use crate::helm_release::{HelmRelease, StorageDriver};
 use crate::licensing::{LicenseServer, LicenseStatus};
@@ -53,8 +54,7 @@ use time::OffsetDateTime;
 mod flows;
 
 const OPEN_APPLICATION_SETTINGS: &str = "Open application settings: Configure terminal launching, debug images, and application updates.";
-const OPEN_CLUSTER_DISCOVERY: &str =
-    "Open cluster discovery: Find and add clusters available through Azure CLI or Tailscale.";
+const OPEN_CLUSTER_DISCOVERY: &str = "Open cluster discovery: Find and add clusters available through Azure CLI, AWS CLI, or Tailscale.";
 const OPEN_NAMESPACE_SELECTOR_SETTINGS: &str =
     "Open namespace selector settings: Configure namespace identities from labels and annotations.";
 

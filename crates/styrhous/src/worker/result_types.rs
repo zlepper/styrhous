@@ -7,6 +7,32 @@ pub(crate) struct ImportedKubernetesClusters(pub(crate) Vec<Cluster>);
 #[derive(Debug)]
 pub(crate) struct ManagedClusterImported;
 #[derive(Debug)]
+pub(crate) struct AwsAccountsUpdated {
+    pub(crate) request_id: u64,
+    pub(crate) cli_installed: bool,
+    pub(crate) accounts: Vec<AwsAccount>,
+    pub(crate) warning: Option<String>,
+    pub(crate) error: Option<String>,
+}
+#[derive(Debug)]
+pub(crate) struct EksClustersUpdated {
+    pub(crate) request_id: u64,
+    pub(crate) account_id: String,
+    pub(crate) profile: AwsProfile,
+    pub(crate) clusters: Vec<AvailableEksCluster>,
+    pub(crate) warning: Option<String>,
+}
+#[derive(Debug)]
+pub(crate) struct EksDiscoveryFailed {
+    pub(crate) request_id: u64,
+    pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct EksImportFailed {
+    pub(crate) request_id: u64,
+    pub(crate) error: String,
+}
+#[derive(Debug)]
 pub(crate) struct ManagedClusterDiscoveryUpdated {
     pub(crate) tools: ClusterDiscoveryTools,
     pub(crate) aks_clusters: Vec<AvailableAksCluster>,

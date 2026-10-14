@@ -65,7 +65,7 @@ async fn azure_discovery_keeps_accessible_subscriptions_when_another_is_denied()
                     r#"[{"tenantId":"development-tenant","displayName":"Acme Development","defaultDomain":"development.example"},{"tenantId":"production-tenant","displayName":"Acme Production","defaultDomain":"production.example"}]"#,
                 ),
                 ["aks", "list", "--subscription", "available-id", ..] => successful_json(
-                    r#"[{"name":"available-cluster","location":"westeurope","resourceGroup":"platform","tags":null}]"#,
+                    r#"[{"name":"available-cluster","location":"westeurope","resourceGroup":"platform","tags":{"environment":"production","team":"payments"}}]"#,
                 ),
                 ["aks", "list", "--subscription", "blocked-id", ..] => Ok(CliOutput {
                     stdout: Vec::new(),
@@ -83,6 +83,7 @@ async fn azure_discovery_keeps_accessible_subscriptions_when_another_is_denied()
     assert_eq!(discovery.clusters.len(), 1);
     assert_eq!(discovery.clusters[0].name, "available-cluster");
     assert_eq!(discovery.clusters[0].tenant_name, "Acme Development");
+    assert_eq!(discovery.clusters[0].tags["team"], "payments");
     assert_eq!(
         discovery.warning.as_deref(),
         Some("Could not inspect 1 subscription. Refresh discovery to retry.")

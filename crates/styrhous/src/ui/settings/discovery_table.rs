@@ -1,5 +1,23 @@
 use super::discovery::ManagedDiscoveryAction;
 use super::*;
+use std::collections::BTreeMap;
+
+pub(super) fn discovery_tag_summary(tags: &BTreeMap<String, String>) -> Option<String> {
+    if tags.is_empty() {
+        return None;
+    }
+
+    let mut summary = String::from("Tags: ");
+    for (index, (key, value)) in tags.iter().enumerate() {
+        if index > 0 {
+            summary.push_str(" · ");
+        }
+        summary.push_str(key);
+        summary.push('=');
+        summary.push_str(value);
+    }
+    Some(summary)
+}
 
 pub(super) fn discovery_count(
     loading: bool,
@@ -114,6 +132,7 @@ pub(super) fn discovery_fixed_column(
 #[derive(Clone, Copy)]
 pub(super) enum DiscoveryRowStatus {
     Aks,
+    Eks,
     Tailscale { online: bool },
 }
 
@@ -129,6 +148,7 @@ pub(super) enum DiscoveryImportState {
 pub(super) struct DiscoveryRow<'a> {
     pub(super) name: &'a str,
     pub(super) metadata: &'a str,
+    pub(super) tags: Option<&'a str>,
     pub(super) detail: &'a str,
     pub(super) status: DiscoveryRowStatus,
     pub(super) stack_metadata: bool,
@@ -138,8 +158,15 @@ pub(super) struct DiscoveryRow<'a> {
 
 impl DiscoveryRow<'_> {
     pub(super) fn show(self, ui: &mut egui::Ui, on_click: impl FnOnce()) {
+        let has_tag_line = self.stack_metadata && self.tags.is_some();
+        let row_height = self.height
+            + if has_tag_line {
+                DISCOVERY_TAGS_EXTRA_HEIGHT
+            } else {
+                0.0
+            };
         let (rect, _) = ui.allocate_exact_size(
-            egui::vec2(ui.available_width(), self.height),
+            egui::vec2(ui.available_width(), row_height),
             egui::Sense::hover(),
         );
         let mut row = ui.new_child(
@@ -152,7 +179,7 @@ impl DiscoveryRow<'_> {
             discovery_fixed_column(
                 &mut row,
                 DISCOVERY_NAME_COLUMN_WIDTH + DISCOVERY_METADATA_COLUMN_WIDTH,
-                self.height,
+                row_height,
                 egui::Layout::left_to_right(egui::Align::Center),
                 |ui| {
                     if let Some(color) = self.dot_color() {
@@ -160,7 +187,7 @@ impl DiscoveryRow<'_> {
                         ui.add_space(spacing::SM);
                     }
                     ui.allocate_ui_with_layout(
-                        egui::vec2(ui.available_width(), self.height),
+                        egui::vec2(ui.available_width(), row_height),
                         egui::Layout::top_down(egui::Align::Min),
                         |ui| {
                             ui.add_space((self.height - 40.0) / 2.0);
@@ -176,6 +203,9 @@ impl DiscoveryRow<'_> {
                                 typography::metadata(),
                                 gray::_600,
                             );
+                            if let Some(tags) = self.tags {
+                                show_truncated_label(ui, tags, typography::metadata(), gray::_600);
+                            }
                         },
                     );
                 },
@@ -184,7 +214,7 @@ impl DiscoveryRow<'_> {
             discovery_fixed_column(
                 &mut row,
                 DISCOVERY_NAME_COLUMN_WIDTH,
-                self.height,
+                row_height,
                 egui::Layout::left_to_right(egui::Align::Center),
                 |ui| {
                     if let Some(color) = self.dot_color() {
@@ -197,7 +227,7 @@ impl DiscoveryRow<'_> {
             discovery_fixed_column(
                 &mut row,
                 DISCOVERY_METADATA_COLUMN_WIDTH,
-                self.height,
+                row_height,
                 egui::Layout::left_to_right(egui::Align::Center),
                 |ui| {
                     show_truncated_label(ui, self.metadata, typography::metadata(), gray::_600);
@@ -207,7 +237,7 @@ impl DiscoveryRow<'_> {
         discovery_fixed_column(
             &mut row,
             DISCOVERY_LOCATION_COLUMN_WIDTH,
-            self.height,
+            row_height,
             egui::Layout::left_to_right(egui::Align::Center),
             |ui| {
                 show_truncated_label(ui, self.detail, typography::metadata(), self.detail_color());
@@ -216,7 +246,7 @@ impl DiscoveryRow<'_> {
         discovery_fixed_column(
             &mut row,
             DISCOVERY_ACTION_COLUMN_WIDTH,
-            self.height,
+            row_height,
             egui::Layout::right_to_left(egui::Align::Center),
             |ui| show_import_button(ui, self.import_state, on_click),
         );
@@ -226,7 +256,7 @@ impl DiscoveryRow<'_> {
 
     fn dot_color(self) -> Option<egui::Color32> {
         match self.status {
-            DiscoveryRowStatus::Aks => Some(status::SUCCESS),
+            DiscoveryRowStatus::Aks | DiscoveryRowStatus::Eks => Some(status::SUCCESS),
             DiscoveryRowStatus::Tailscale { online: true } => Some(status::SUCCESS),
             DiscoveryRowStatus::Tailscale { online: false } => Some(gray::_400),
         }
@@ -234,7 +264,7 @@ impl DiscoveryRow<'_> {
 
     fn detail_color(self) -> egui::Color32 {
         match self.status {
-            DiscoveryRowStatus::Aks => gray::_600,
+            DiscoveryRowStatus::Aks | DiscoveryRowStatus::Eks => gray::_600,
             DiscoveryRowStatus::Tailscale { online: true } => status::SUCCESS,
             DiscoveryRowStatus::Tailscale { online: false } => gray::_500,
         }
@@ -263,8 +293,7 @@ pub(super) fn show_truncated_label(
     font: egui::FontId,
     color: egui::Color32,
 ) {
-    ui.add(egui::Label::new(egui::RichText::new(text).font(font).color(color)).truncate())
-        .on_hover_text(text);
+    ui.add(egui::Label::new(egui::RichText::new(text).font(font).color(color)).truncate());
 }
 
 pub(super) fn show_discovery_loading(ui: &mut egui::Ui, message: &str) {
@@ -345,7 +374,7 @@ pub(super) fn show_import_button(
                 .show(ui)
         });
     } else if ui
-        .add_enabled_ui(!matches!(state, DiscoveryImportState::Disabled), |ui| {
+        .add_enabled_ui(matches!(state, DiscoveryImportState::Ready), |ui| {
             TailwindButton::primary(if matches!(state, DiscoveryImportState::Importing) {
                 "Adding…"
             } else {
@@ -375,9 +404,31 @@ impl GlobalBladeEffect for ManagedDiscoveryEffect {
         match self.0 {
             ManagedDiscoveryAction::Refresh => {
                 discovery.loading = true;
+                discovery.aws.account_loading = true;
+                discovery.aws.clear_scan();
                 navigation
                     .commands_to_send()
                     .push(Box::new(LoadManagedClusterDiscovery));
+                navigation
+                    .commands_to_send()
+                    .push(Box::new(LoadAwsAccounts {
+                        request_id: discovery.aws.request_id,
+                    }));
+            }
+            ManagedDiscoveryAction::ScanEks {
+                account_id,
+                profile,
+            } => {
+                discovery
+                    .aws
+                    .begin_scan(account_id.clone(), profile.clone());
+                navigation
+                    .commands_to_send()
+                    .push(Box::new(ScanEksClusters {
+                        request_id: discovery.aws.request_id,
+                        account_id,
+                        profile,
+                    }));
             }
             ManagedDiscoveryAction::AddAks {
                 subscription_id,
@@ -402,6 +453,27 @@ impl GlobalBladeEffect for ManagedDiscoveryEffect {
                 navigation
                     .commands_to_send()
                     .push(Box::new(AddTailscaleCluster { host_name }));
+            }
+            ManagedDiscoveryAction::AddEks {
+                account_id,
+                region,
+                name,
+                profile,
+            } => {
+                discovery.aws.import_error = None;
+                discovery.importing = Some(ManagedClusterImport::Eks {
+                    account_id: account_id.clone(),
+                    region: region.clone(),
+                    name: name.clone(),
+                    profile: profile.clone(),
+                });
+                navigation.commands_to_send().push(Box::new(AddEksCluster {
+                    request_id: discovery.aws.request_id,
+                    account_id,
+                    region,
+                    name,
+                    profile,
+                }));
             }
         }
     }
