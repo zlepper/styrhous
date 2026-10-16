@@ -8,6 +8,12 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::Duration;
 use tokio::process::Command;
 
+mod aws;
+pub use aws::{
+    AvailableEksCluster, AwsAccount, AwsProfile, add_eks_cluster, discover_aws_accounts,
+    discover_eks_clusters,
+};
+
 const TAILSCALE_K8S_OPERATOR_TAG: &str = "tag:k8s-operator";
 const MAX_STDERR_LENGTH: usize = 2_000;
 const MAX_AKS_DISCOVERY_CONCURRENCY: usize = 8;
@@ -67,7 +73,14 @@ struct SystemCliRunner;
 #[async_trait::async_trait]
 impl CliRunner for SystemCliRunner {
     async fn run(&self, program: &str, args: &[String]) -> Result<CliOutput> {
-        let output = tokio::time::timeout(CLI_TIMEOUT, Command::new(program).args(args).output())
+        let mut command = Command::new(program);
+        command.args(args).kill_on_drop(true);
+        if program == "aws" {
+            command
+                .env("AWS_PAGER", "")
+                .env("AWS_CLI_AUTO_PROMPT", "off");
+        }
+        let output = tokio::time::timeout(CLI_TIMEOUT, command.output())
             .await
             .with_context(|| {
                 format!(

@@ -53,8 +53,9 @@ pub use connection::{
     Cluster, ClusterConnection, kubeconfig_context_references, reload_kubeconfig,
 };
 pub use discovery::{
-    AvailableAksCluster, AvailableTailscaleCluster, ClusterDiscovery, ClusterDiscoveryTools,
-    add_aks_cluster, add_tailscale_cluster, discover_managed_clusters,
+    AvailableAksCluster, AvailableEksCluster, AvailableTailscaleCluster, AwsAccount, AwsProfile,
+    ClusterDiscovery, ClusterDiscoveryTools, add_aks_cluster, add_eks_cluster,
+    add_tailscale_cluster, discover_aws_accounts, discover_eks_clusters, discover_managed_clusters,
 };
 
 mod api_inspection;

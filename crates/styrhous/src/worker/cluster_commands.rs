@@ -43,6 +43,43 @@ impl WorkerCommand for LoadManagedClusterDiscovery {
 }
 
 #[async_trait]
+impl WorkerCommand for LoadAwsAccounts {
+    type Output = AwsAccountsUpdated;
+
+    async fn execute(self, _state: &WorkerState) -> Self::Output {
+        let discovery = discover_aws_accounts().await;
+        AwsAccountsUpdated {
+            request_id: self.request_id,
+            cli_installed: discovery.cli_installed,
+            accounts: discovery.accounts,
+            warning: discovery.warning,
+            error: discovery.error,
+        }
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for ScanEksClusters {
+    type Output = Result<EksClustersUpdated, EksDiscoveryFailed>;
+
+    async fn execute(self, _state: &WorkerState) -> Self::Output {
+        let discovery = discover_eks_clusters(&self.account_id, &self.profile)
+            .await
+            .map_err(|error| EksDiscoveryFailed {
+                request_id: self.request_id,
+                error: format!("{error:#}"),
+            })?;
+        Ok(EksClustersUpdated {
+            request_id: self.request_id,
+            account_id: discovery.account_id,
+            profile: discovery.profile,
+            clusters: discovery.clusters,
+            warning: discovery.warning,
+        })
+    }
+}
+
+#[async_trait]
 impl WorkerCommand for AddAksCluster {
     type Output = Result<ManagedClusterImported, ManagedClusterDiscoveryFailed>;
 
@@ -63,6 +100,21 @@ impl WorkerCommand for AddTailscaleCluster {
 
     async fn execute(self, _state: &WorkerState) -> Self::Output {
         add_tailscale_cluster(&self.host_name).await?;
+        Ok(ManagedClusterImported)
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for AddEksCluster {
+    type Output = Result<ManagedClusterImported, EksImportFailed>;
+
+    async fn execute(self, _state: &WorkerState) -> Self::Output {
+        add_eks_cluster(&self.account_id, &self.region, &self.name, &self.profile)
+            .await
+            .map_err(|error| EksImportFailed {
+                request_id: self.request_id,
+                error: format!("{error:#}"),
+            })?;
         Ok(ManagedClusterImported)
     }
 }
