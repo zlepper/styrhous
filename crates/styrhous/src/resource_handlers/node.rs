@@ -3,15 +3,14 @@ use crate::cluster_connection_manager::{
     ResourceWatcher, TypedWatcherContext, api_resource_for, cluster_typed_watcher,
 };
 use crate::minimal_resource::{MinimalResource, from_kubernetes_resource};
-use crate::pod_metrics::{parse_cpu_nanocores, parse_memory_bytes};
-use crate::resource_detail::{NodeDetail, PodResourceThresholds, ResourceDetailPayload};
+use crate::pod_metrics::{MissingResourceQuantity, resource_thresholds};
+use crate::resource_detail::{NodeDetail, ResourceDetailPayload};
 use crate::resource_handlers::{matches_cluster_api_resource, matches_cluster_resource};
 use crate::resource_table::{
     CPU_COLUMN, CellValue, MEMORY_COLUMN, ROLES_COLUMN, ResourceTableDefinition, STATUS_COLUMN,
     VERSION_COLUMN, column, status_tone,
 };
 use k8s_openapi::api::core::v1::Node;
-use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
 use std::collections::BTreeMap;
 
 pub(crate) fn watcher(context: TypedWatcherContext) -> Option<Box<dyn ResourceWatcher>> {
@@ -63,20 +62,9 @@ pub(crate) fn detail_payload(object: &kube::api::DynamicObject) -> Option<Resour
             node.status
                 .as_ref()
                 .and_then(|status| status.allocatable.as_ref()),
+            MissingResourceQuantity::Unavailable,
         ),
     }))
-}
-
-fn resource_thresholds(resources: Option<&BTreeMap<String, Quantity>>) -> PodResourceThresholds {
-    let parse = |name: &str, parser: fn(&str) -> anyhow::Result<i64>| {
-        resources
-            .and_then(|resources| resources.get(name))
-            .and_then(|quantity| parser(&quantity.0).ok())
-    };
-    PodResourceThresholds {
-        cpu_nanocores: parse("cpu", parse_cpu_nanocores),
-        memory_bytes: parse("memory", parse_memory_bytes),
-    }
 }
 
 fn extract(resource: &Node) -> MinimalResource {
@@ -130,7 +118,9 @@ fn extract(resource: &Node) -> MinimalResource {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::resource_detail::PodResourceThresholds;
     use k8s_openapi::api::core::v1::{NodeSpec, Taint};
+    use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
     use kube::Resource;
 
     #[test]
@@ -174,10 +164,13 @@ mod tests {
 
     #[test]
     fn allocatable_thresholds_normalize_available_cpu_and_memory() {
-        let thresholds = resource_thresholds(Some(&BTreeMap::from([
-            ("cpu".to_owned(), Quantity("2".to_owned())),
-            ("memory".to_owned(), Quantity("4Gi".to_owned())),
-        ])));
+        let thresholds = resource_thresholds(
+            Some(&BTreeMap::from([
+                ("cpu".to_owned(), Quantity("2".to_owned())),
+                ("memory".to_owned(), Quantity("4Gi".to_owned())),
+            ])),
+            MissingResourceQuantity::Unavailable,
+        );
         assert_eq!(
             thresholds,
             PodResourceThresholds {
@@ -186,10 +179,13 @@ mod tests {
             }
         );
 
-        let thresholds = resource_thresholds(Some(&BTreeMap::from([
-            ("cpu".to_owned(), Quantity("invalid".to_owned())),
-            ("memory".to_owned(), Quantity("128Mi".to_owned())),
-        ])));
+        let thresholds = resource_thresholds(
+            Some(&BTreeMap::from([
+                ("cpu".to_owned(), Quantity("invalid".to_owned())),
+                ("memory".to_owned(), Quantity("128Mi".to_owned())),
+            ])),
+            MissingResourceQuantity::Unavailable,
+        );
         assert_eq!(thresholds.cpu_nanocores, None);
         assert_eq!(thresholds.memory_bytes, Some(128 * 1024 * 1024));
     }

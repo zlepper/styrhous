@@ -3,7 +3,9 @@ use crate::cluster_connection_manager::{
     ResourceWatcher, TypedWatcherContext, namespaced_typed_watcher,
 };
 use crate::minimal_resource::{MinimalResource, PodLogContainer, from_kubernetes_resource};
-use crate::pod_metrics::{parse_cpu_nanocores, parse_memory_bytes};
+use crate::pod_metrics::{
+    MissingResourceQuantity, resource_thresholds as parse_resource_thresholds,
+};
 use crate::resource_detail::{
     PodConditionDetail, PodContainerDetail, PodDetail, PodEnvironmentVariableDetail,
     PodEnvironmentVariableSource, PodResourceThresholds, PodVolumeDetail, ResourceDetailPayload,
@@ -100,15 +102,7 @@ mod detail_payload;
 pub(crate) use detail_payload::detail_payload;
 
 fn resource_thresholds(resources: Option<&BTreeMap<String, Quantity>>) -> PodResourceThresholds {
-    let quantity = |name| {
-        resources
-            .and_then(|resources| resources.get(name))
-            .map(|value| &value.0)
-    };
-    PodResourceThresholds {
-        cpu_nanocores: quantity("cpu").and_then(|value| parse_cpu_nanocores(value).ok()),
-        memory_bytes: quantity("memory").and_then(|value| parse_memory_bytes(value).ok()),
-    }
+    parse_resource_thresholds(resources, MissingResourceQuantity::Unavailable)
 }
 
 fn pod_log_containers(pod: &Pod) -> Vec<PodLogContainer> {

@@ -188,6 +188,16 @@ pub(crate) struct PodResourceThresholds {
     pub(crate) memory_bytes: Option<i64>,
 }
 
+/// Requests and configured limits for the nonterminal Pods assigned to a Node.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) struct NodePodResources {
+    pub(crate) requests: PodResourceThresholds,
+    pub(crate) configured_limits: PodResourceThresholds,
+    pub(crate) pod_count: usize,
+    pub(crate) pods_without_cpu_limit: usize,
+    pub(crate) pods_without_memory_limit: usize,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct PodEnvironmentVariableDetail {
     pub(crate) name: String,

@@ -33,6 +33,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .push_back(Box::new(ManagedResourcesReplaced {
             cluster_key: 2,
             history_entry_id: 1,
+            node_pod_resources: None,
             resources: vec![
                 ManagedResource {
                     api_resource: replica_set.clone(),
@@ -149,6 +150,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .push_back(Box::new(ManagedResourcesReplaced {
             cluster_key: 2,
             history_entry_id: 2,
+            node_pod_resources: None,
             resources: vec![ManagedResource {
                 api_resource: pod.clone(),
                 name: "api-7b948f-pod".into(),

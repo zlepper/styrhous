@@ -69,7 +69,40 @@ fn node_inspector_shows_its_spec() {
                 },
             }) as WorkerResultBox);
     }
-    harness.run_steps(42);
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(Box::new(ManagedResourcesReplaced {
+            cluster_key: 2,
+            history_entry_id: 1,
+            resources: ["api", "logging"]
+                .into_iter()
+                .map(|name| ManagedResource {
+                    api_resource: fixture_api_resource("core", "Pod", "pods"),
+                    name: name.into(),
+                    namespace: Some("monitoring".into()),
+                    uid: format!("{name}-uid"),
+                    association: ManagedResourceAssociation::NodeName("kind-control-plane".into()),
+                    creation_timestamp: None,
+                    cells: BTreeMap::new(),
+                })
+                .collect(),
+            node_pod_resources: Some(NodePodResources {
+                requests: PodResourceThresholds {
+                    cpu_nanocores: Some(500_000_000),
+                    memory_bytes: Some(1024 * 1024 * 1024),
+                },
+                configured_limits: PodResourceThresholds {
+                    cpu_nanocores: Some(1_000_000_000),
+                    memory_bytes: Some(2 * 1024 * 1024 * 1024),
+                },
+                pod_count: 2,
+                pods_without_cpu_limit: 1,
+                pods_without_memory_limit: 0,
+            }),
+        }) as WorkerResultBox);
+    harness.run_steps(43);
     let usage_history = &harness
         .state_mut()
         .ui_state
@@ -99,7 +132,11 @@ fn node_inspector_shows_its_spec() {
     harness.get_by_label("10.244.0.0/24");
     harness.get_by_label("node-role.kubernetes.io/control-plane:NoSchedule");
     harness.get_by_label("Resource usage");
-    harness.get_by_label("500m");
+    assert_eq!(harness.get_all_by_label("500m").count(), 2);
+    harness.get_by_label("Pod reservations");
+    harness.get_by_label("CPU remaining");
+    harness.get_by_label("Memory configured limits");
+    harness.get_by_label("1 pod without a CPU limit; usage can exceed the configured total.");
     harness.get_by_label(
         "Node CPU usage chart; usage history available; 10-minute history; scale from 0 to 2; Allocatable 2",
     );
@@ -117,8 +154,60 @@ fn node_inspector_shows_its_spec() {
     harness.run();
     harness.get_by_label("Metrics API unavailable");
     harness.get_by_label("CPU allocatable");
+    harness.get_by_label("CPU requests");
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "resource_inspectors/node_inspector_shows_its_spec/node_usage_unavailable",
+    ));
+
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(Box::new(ManagedResourcesWatchFailed {
+            cluster_key: 2,
+            history_entry_id: 1,
+            error: "Pod watch interrupted".into(),
+        }) as WorkerResultBox);
+    harness.run();
+    harness.get_by_label("Unable to load pod reservations");
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "resource_inspectors/node_inspector_shows_its_spec/pod_reservations_unavailable",
+    ));
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(Box::new(ManagedResourcesReplaced {
+            cluster_key: 2,
+            history_entry_id: 1,
+            resources: vec![ManagedResource {
+                api_resource: fixture_api_resource("core", "Pod", "pods"),
+                name: "api".into(),
+                namespace: Some("monitoring".into()),
+                uid: "api-uid".into(),
+                association: ManagedResourceAssociation::NodeName("kind-control-plane".into()),
+                creation_timestamp: None,
+                cells: BTreeMap::new(),
+            }],
+            node_pod_resources: Some(NodePodResources {
+                requests: PodResourceThresholds {
+                    cpu_nanocores: Some(2_500_000_000),
+                    memory_bytes: Some(5 * 1024 * 1024 * 1024),
+                },
+                configured_limits: PodResourceThresholds {
+                    cpu_nanocores: Some(3_000_000_000),
+                    memory_bytes: Some(6 * 1024 * 1024 * 1024),
+                },
+                pod_count: 1,
+                pods_without_cpu_limit: 0,
+                pods_without_memory_limit: 0,
+            }),
+        }) as WorkerResultBox);
+    harness.run();
+    harness.get_by_label("Overcommitted by 500m");
+    harness.get_by_label("Overcommitted by 1Gi");
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "resource_inspectors/node_inspector_shows_its_spec/overcommitted_pod_reservations",
     ));
 }
 
@@ -158,6 +247,7 @@ fn node_inspector_shell_action_launches_the_selected_preset() {
             }),
         }) as WorkerResultBox);
     harness.run_steps(2);
+    harness.get_by_label("Loading pods on this node…");
 
     let more_actions_position = harness
         .get_by_label("More actions for kind-control-plane")
@@ -228,6 +318,19 @@ fn node_inspector_lists_cross_namespace_pods_in_the_shared_pod_table() {
         Box::new(ManagedResourcesReplaced {
             cluster_key: 2,
             history_entry_id: 1,
+            node_pod_resources: Some(NodePodResources {
+                requests: PodResourceThresholds {
+                    cpu_nanocores: Some(100_000_000),
+                    memory_bytes: Some(128 * 1024 * 1024),
+                },
+                configured_limits: PodResourceThresholds {
+                    cpu_nanocores: Some(200_000_000),
+                    memory_bytes: Some(256 * 1024 * 1024),
+                },
+                pod_count: 1,
+                pods_without_cpu_limit: 0,
+                pods_without_memory_limit: 0,
+            }),
             resources: vec![ManagedResource {
                 api_resource: fixture_api_resource("core", "Pod", "pods"),
                 name: "api".into(),

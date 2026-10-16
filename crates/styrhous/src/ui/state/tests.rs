@@ -44,6 +44,7 @@ fn pod_detail_history_entry() -> ResourceDetailHistoryEntry {
         events_error: None,
         managed_resources: Vec::new(),
         managed_resources_error: None,
+        node_pod_resources: None,
         pod_usage: None,
         pod_usage_history: Vec::new(),
         pod_usage_missing: false,

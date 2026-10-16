@@ -129,6 +129,7 @@ pub(crate) struct ManagedResourcesReplaced {
     pub(crate) cluster_key: i32,
     pub(crate) history_entry_id: u64,
     pub(crate) resources: Vec<ManagedResource>,
+    pub(crate) node_pod_resources: Option<crate::resource_detail::NodePodResources>,
 }
 #[derive(Debug)]
 pub(crate) struct ManagedResourcesWatchFailed {

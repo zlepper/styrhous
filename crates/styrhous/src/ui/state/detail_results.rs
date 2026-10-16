@@ -159,12 +159,14 @@ impl WorkerResult for crate::worker::ManagedResourcesReplaced {
             cluster_key,
             history_entry_id,
             resources,
+            node_pod_resources,
         } = self;
         if let Some(entry) = ui
             .resource_detail_entry_mut(history_entry_id)
             .filter(|entry| entry.cluster_key == cluster_key)
         {
             entry.managed_resources = resources;
+            entry.node_pod_resources = node_pod_resources;
             entry.managed_resources_error = None;
         }
     }
@@ -181,6 +183,7 @@ impl WorkerResult for crate::worker::ManagedResourcesWatchFailed {
             .filter(|entry| entry.cluster_key == cluster_key)
         {
             entry.managed_resources_error = Some(error);
+            entry.node_pod_resources = None;
         }
     }
 }

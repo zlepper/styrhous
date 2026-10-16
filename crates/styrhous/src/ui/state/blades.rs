@@ -21,6 +21,7 @@ pub(crate) struct ResourceDetailHistoryEntry {
     pub(crate) events_error: Option<String>,
     pub(crate) managed_resources: Vec<ManagedResource>,
     pub(crate) managed_resources_error: Option<String>,
+    pub(crate) node_pod_resources: Option<crate::resource_detail::NodePodResources>,
     /// Latest sample and short rolling history are intentionally local to this inspector visit.
     pub(crate) pod_usage: Option<PodUsage>,
     pub(crate) pod_usage_history: Vec<PodUsage>,

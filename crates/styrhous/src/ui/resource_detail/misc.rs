@@ -76,10 +76,7 @@ pub(super) fn show_metrics_api_unavailable(
     );
 }
 
-pub(super) fn show_node_metrics_api_unavailable(
-    ui: &mut egui::Ui,
-    allocatable: PodResourceThresholds,
-) {
+pub(super) fn show_node_metrics_api_unavailable(ui: &mut egui::Ui) {
     ui.label(
         egui::RichText::new("Metrics API unavailable")
             .font(typography::body())
@@ -90,26 +87,147 @@ pub(super) fn show_node_metrics_api_unavailable(
             .font(typography::metadata())
             .color(gray::_500),
     );
+}
+
+pub(super) fn show_node_pod_resources(
+    ui: &mut egui::Ui,
+    allocatable: PodResourceThresholds,
+    pod_resources: Option<&NodePodResources>,
+    error: Option<&str>,
+) {
+    let unavailable = if error.is_some() || pod_resources.is_some() {
+        "Unavailable"
+    } else {
+        "Loading…"
+    };
+    let cpu_requests = pod_resources.and_then(|resources| resources.requests.cpu_nanocores);
+    let memory_requests = pod_resources.and_then(|resources| resources.requests.memory_bytes);
+    let cpu_limits = pod_resources.and_then(|resources| resources.configured_limits.cpu_nanocores);
+    let memory_limits =
+        pod_resources.and_then(|resources| resources.configured_limits.memory_bytes);
+    ui.label(
+        egui::RichText::new("Pod reservations")
+            .font(typography::body())
+            .strong()
+            .color(gray::_800),
+    );
+    ui.label(
+        egui::RichText::new(match pod_resources {
+            Some(resources) => format!(
+                "{} active pod{} on this node",
+                resources.pod_count,
+                if resources.pod_count == 1 { "" } else { "s" }
+            ),
+            None if error.is_some() => "Unable to load pod reservations".to_owned(),
+            None => "Loading pods on this node…".to_owned(),
+        })
+        .font(typography::metadata())
+        .color(gray::_500),
+    );
     ui.add_space(8.0);
     InspectorDetails::show_properties(
         ui,
-        &[DetailRow::new([
-            DetailCell::new(
-                "CPU allocatable",
-                allocatable
-                    .cpu_nanocores
-                    .map(format_cpu)
-                    .unwrap_or_else(|| "Not reported".into()),
-            ),
-            DetailCell::new(
-                "Memory allocatable",
-                allocatable
-                    .memory_bytes
-                    .map(format_memory)
-                    .unwrap_or_else(|| "Not reported".into()),
-            ),
-        ])],
+        &[
+            DetailRow::new([
+                DetailCell::new(
+                    "CPU allocatable",
+                    allocatable
+                        .cpu_nanocores
+                        .map(format_cpu)
+                        .unwrap_or_else(|| "Not reported".into()),
+                ),
+                DetailCell::new(
+                    "Memory allocatable",
+                    allocatable
+                        .memory_bytes
+                        .map(format_memory)
+                        .unwrap_or_else(|| "Not reported".into()),
+                ),
+            ]),
+            DetailRow::new([
+                DetailCell::new(
+                    "CPU requests",
+                    cpu_requests
+                        .map(format_cpu)
+                        .unwrap_or_else(|| unavailable.into()),
+                ),
+                DetailCell::new(
+                    "Memory requests",
+                    memory_requests
+                        .map(format_memory)
+                        .unwrap_or_else(|| unavailable.into()),
+                ),
+            ]),
+            DetailRow::new([
+                DetailCell::new(
+                    "CPU remaining",
+                    format_remaining(
+                        allocatable.cpu_nanocores,
+                        cpu_requests,
+                        format_cpu,
+                        unavailable,
+                    ),
+                ),
+                DetailCell::new(
+                    "Memory remaining",
+                    format_remaining(
+                        allocatable.memory_bytes,
+                        memory_requests,
+                        format_memory,
+                        unavailable,
+                    ),
+                ),
+            ]),
+            DetailRow::new([
+                DetailCell::new(
+                    "CPU configured limits",
+                    cpu_limits
+                        .map(format_cpu)
+                        .unwrap_or_else(|| unavailable.into()),
+                ),
+                DetailCell::new(
+                    "Memory configured limits",
+                    memory_limits
+                        .map(format_memory)
+                        .unwrap_or_else(|| unavailable.into()),
+                ),
+            ]),
+        ],
     );
+    if let Some(resources) = pod_resources {
+        for (name, count) in [
+            ("CPU", resources.pods_without_cpu_limit),
+            ("memory", resources.pods_without_memory_limit),
+        ] {
+            if count > 0 {
+                ui.label(
+                    egui::RichText::new(format!(
+                        "{count} pod{} without a {name} limit; usage can exceed the configured total.",
+                        if count == 1 { "" } else { "s" }
+                    ))
+                    .font(typography::metadata())
+                    .color(gray::_500),
+                );
+            }
+        }
+    }
+}
+
+pub(super) fn format_remaining(
+    allocatable: Option<i64>,
+    requests: Option<i64>,
+    format: impl Fn(i64) -> String,
+    unavailable: &str,
+) -> String {
+    match (allocatable, requests) {
+        (None, _) => "Not reported".into(),
+        (_, None) => unavailable.into(),
+        (Some(allocatable), Some(requests)) => match allocatable.checked_sub(requests) {
+            Some(remaining) if remaining < 0 => format!("Overcommitted by {}", format(-remaining)),
+            Some(remaining) => format(remaining),
+            None => "Unavailable".into(),
+        },
+    }
 }
 
 pub(super) fn chip_row(ui: &mut egui::Ui, label: &str, values: &[String]) {

@@ -250,21 +250,31 @@ pub(super) fn show_node_usage(
     section_header(ui, "Resource usage", None);
     WorkspaceCard::new().show(ui, |ui| {
         if usage.metrics_api_unavailable {
-            show_node_metrics_api_unavailable(ui, allocatable);
+            show_node_metrics_api_unavailable(ui);
+        } else {
+            show_usage_value_grid(
+                ui,
+                displayed_usage_values(
+                    usage
+                        .usage
+                        .map(|usage| (usage.cpu_nanocores, usage.memory_bytes)),
+                    usage.error,
+                ),
+            );
+        }
+        ui.add_space(10.0);
+        show_node_pod_resources(
+            ui,
+            allocatable,
+            usage.pod_resources,
+            usage.pod_resources_error,
+        );
+        if usage.metrics_api_unavailable {
             return;
         }
         let cpu_references = usage_references(allocatable.cpu_nanocores, None, ["Allocatable", ""]);
         let memory_references =
             usage_references(allocatable.memory_bytes, None, ["Allocatable", ""]);
-        show_usage_value_grid(
-            ui,
-            displayed_usage_values(
-                usage
-                    .usage
-                    .map(|usage| (usage.cpu_nanocores, usage.memory_bytes)),
-                usage.error,
-            ),
-        );
         if !usage.history.is_empty()
             || has_usage_references(&cpu_references)
             || has_usage_references(&memory_references)

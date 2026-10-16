@@ -26,10 +26,10 @@ use crate::minimal_resource::{MinimalResource, PodLogContainer};
 use crate::pod_metrics::{ContainerUsage, NodeUsage, POD_USAGE_HISTORY_WINDOW, PodUsage};
 use crate::resource_catalog::build_resource_navigation;
 use crate::resource_detail::{
-    ConfigMapDetail, ManagedResource, ManagedResourceAssociation, NodeDetail, PodConditionDetail,
-    PodContainerDetail, PodDetail, PodEnvironmentVariableDetail, PodEnvironmentVariableSource,
-    PodResourceThresholds, PodVolumeDetail, ResourceDetail, ResourceDetailPayload, ResourceEvent,
-    ResourceOwner, SecretDataDetail, SecretDetail,
+    ConfigMapDetail, ManagedResource, ManagedResourceAssociation, NodeDetail, NodePodResources,
+    PodConditionDetail, PodContainerDetail, PodDetail, PodEnvironmentVariableDetail,
+    PodEnvironmentVariableSource, PodResourceThresholds, PodVolumeDetail, ResourceDetail,
+    ResourceDetailPayload, ResourceEvent, ResourceOwner, SecretDataDetail, SecretDetail,
 };
 use crate::resource_schema::ResourceSchema;
 use crate::resource_table::{

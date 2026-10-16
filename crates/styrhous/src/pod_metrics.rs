@@ -1,6 +1,8 @@
 //! Kubernetes Metrics API data and resource-quantity handling.
 
+use crate::resource_detail::PodResourceThresholds;
 use anyhow::{Result, anyhow};
+use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
 use k8s_openapi::serde_json;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -13,6 +15,32 @@ pub(crate) const POD_METRICS_POLL_INTERVAL: std::time::Duration =
 /// The bounded period retained for compact inspector charts.
 pub(crate) const POD_USAGE_HISTORY_WINDOW: time::Duration = time::Duration::minutes(10);
 const NANOCORES_PER_CORE: i64 = 1_000_000_000;
+
+pub(crate) enum MissingResourceQuantity {
+    Unavailable,
+    Zero,
+}
+
+pub(crate) fn resource_thresholds(
+    resources: Option<&BTreeMap<String, Quantity>>,
+    missing: MissingResourceQuantity,
+) -> PodResourceThresholds {
+    let parse = |name: &str, parser: fn(&str) -> Result<i64>| {
+        resources
+            .and_then(|resources| resources.get(name))
+            .map_or_else(
+                || match missing {
+                    MissingResourceQuantity::Unavailable => None,
+                    MissingResourceQuantity::Zero => Some(0),
+                },
+                |quantity| parser(&quantity.0).ok(),
+            )
+    };
+    PodResourceThresholds {
+        cpu_nanocores: parse("cpu", parse_cpu_nanocores),
+        memory_bytes: parse("memory", parse_memory_bytes),
+    }
+}
 
 /// A normalized current resource-use sample. CPU is nanocores and memory is bytes so the
 /// presentation layer can sort and aggregate without depending on quantity spelling.
