@@ -61,6 +61,7 @@ impl UiState {
             cluster_key,
             log_window_id,
             targets,
+            instance: crate::worker::PodLogInstance::Current,
         }));
     }
 

@@ -186,6 +186,14 @@ pub(crate) struct StartPodLogStream {
     pub(crate) cluster_key: i32,
     pub(crate) log_window_id: u64,
     pub(crate) targets: Vec<PodLogStreamTarget>,
+    pub(crate) instance: PodLogInstance,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PodLogInstance {
+    #[default]
+    Current,
+    Previous,
 }
 
 /// One Kubernetes container contributing records to a native log window.

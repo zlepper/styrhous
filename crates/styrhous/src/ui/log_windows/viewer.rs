@@ -14,7 +14,7 @@ pub(super) fn show_log_window_with_scroll_state(
     }
     request_copy(&ctx, window, log_store);
     egui::Panel::top("pod-log-header")
-        .exact_size(52.0)
+        .exact_size(90.0)
         .frame(
             egui::Frame::new()
                 .fill(TOOLBAR_BACKGROUND)
@@ -25,64 +25,95 @@ pub(super) fn show_log_window_with_scroll_state(
                 )),
         )
         .show(ui, |ui| {
-            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                ui.label(
-                    egui::RichText::new("Logs")
-                        .font(typography::section_heading())
-                        .color(gray::_900),
+            ui.vertical(|ui| {
+                let header_width = ui.available_width();
+                ui.allocate_ui_with_layout(
+                    egui::vec2(header_width, 36.0),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        ui.label(
+                            egui::RichText::new("Logs")
+                                .font(typography::section_heading())
+                                .color(gray::_900),
+                        );
+                        ui.add_space(spacing::LG);
+                        if window.has_multiple_sources() {
+                            ui.label(
+                                egui::RichText::new(format!("{} sources", window.targets.len()))
+                                    .font(typography::section_heading())
+                                    .color(gray::_900),
+                            );
+                            ui.add_space(spacing::MD);
+                            ui.label(
+                                egui::RichText::new("Interleaved Pod logs")
+                                    .font(typography::body())
+                                    .color(gray::_600),
+                            );
+                        } else {
+                            let target = window
+                                .targets
+                                .first()
+                                .expect("log windows always contain one source");
+                            ui.label(
+                                egui::RichText::new(&target.pod_name)
+                                    .font(typography::section_heading())
+                                    .color(gray::_900),
+                            );
+                            ui.add_space(spacing::MD);
+                            ui.label(
+                                egui::RichText::new(format!("Container: {}", target.container))
+                                    .font(typography::body())
+                                    .color(gray::_600),
+                            );
+                        }
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            show_log_search_controls(&ctx, ui, window, display_options, log_store)
+                        });
+                    },
                 );
-                ui.add_space(spacing::LG);
-                if window.has_multiple_sources() {
-                    ui.label(
-                        egui::RichText::new(format!("{} sources", window.targets.len()))
-                            .font(typography::section_heading())
-                            .color(gray::_900),
-                    );
-                    ui.add_space(spacing::MD);
-                    ui.label(
-                        egui::RichText::new("Interleaved Pod logs")
-                            .font(typography::body())
-                            .color(gray::_600),
-                    );
-                } else {
-                    let target = window
-                        .targets
-                        .first()
-                        .expect("log windows always contain one source");
-                    ui.label(
-                        egui::RichText::new(&target.pod_name)
-                            .font(typography::section_heading())
-                            .color(gray::_900),
-                    );
-                    ui.add_space(spacing::MD);
-                    ui.label(
-                        egui::RichText::new(format!("Container: {}", target.container))
-                            .font(typography::body())
-                            .color(gray::_600),
-                    );
-                }
-                ui.add_space(spacing::MD);
-                ui.label(
-                    egui::RichText::new("●")
-                        .font(typography::body())
-                        .color(status_color(window)),
+                ui.add_space(spacing::SM);
+                ui.allocate_ui_with_layout(
+                    egui::vec2(header_width, 28.0),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        ui.label(
+                            egui::RichText::new("Container start")
+                                .font(typography::body())
+                                .color(gray::_600),
+                        );
+                        ui.add_space(spacing::SM);
+                        for (instance, label) in [
+                            (PodLogInstance::Current, "Current"),
+                            (PodLogInstance::Previous, "Previous"),
+                        ] {
+                            if ui
+                                .add(egui::Button::new(label).selected(window.instance == instance))
+                                .clicked()
+                            {
+                                window.requested_instance = Some(instance);
+                            }
+                        }
+                        ui.add_space(spacing::LG);
+                        ui.label(
+                            egui::RichText::new("●")
+                                .font(typography::body())
+                                .color(status_color(window)),
+                        );
+                        let all_sources_reconnecting = all_sources_are_reconnecting(window);
+                        if !all_sources_reconnecting {
+                            show_source_issue(ui, &window.source_reconnects, "reconnecting");
+                        }
+                        show_source_issue(ui, &window.source_failures, "unavailable");
+                        let status = ui.label(
+                            egui::RichText::new(status_label(window))
+                                .font(typography::body())
+                                .color(gray::_600),
+                        );
+                        if all_sources_reconnecting {
+                            status.on_hover_text(source_issue_details(&window.source_reconnects));
+                        }
+                    },
                 );
-                let all_sources_reconnecting = all_sources_are_reconnecting(window);
-                if !all_sources_reconnecting {
-                    show_source_issue(ui, &window.source_reconnects, "reconnecting");
-                }
-                show_source_issue(ui, &window.source_failures, "unavailable");
-                let status = ui.label(
-                    egui::RichText::new(status_label(window))
-                        .font(typography::body())
-                        .color(gray::_600),
-                );
-                if all_sources_reconnecting {
-                    status.on_hover_text(source_issue_details(&window.source_reconnects));
-                }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    show_log_search_controls(&ctx, ui, window, display_options, log_store)
-                });
             });
         });
 

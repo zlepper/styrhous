@@ -52,9 +52,18 @@ pub(super) fn status_label(window: &PodLogWindowState) -> String {
     } else {
         match &window.status {
             PodLogStatus::Connecting => "Connecting…".to_owned(),
+            PodLogStatus::Loading => "Loading previous logs…".to_owned(),
             PodLogStatus::Following => "Following".to_owned(),
-            PodLogStatus::Finished => "Stream finished".to_owned(),
-            PodLogStatus::Failed(error) => format!("Stream failed: {error}"),
+            PodLogStatus::Finished => match window.instance {
+                crate::worker::PodLogInstance::Current => "Stream finished".to_owned(),
+                crate::worker::PodLogInstance::Previous => "Previous logs loaded".to_owned(),
+            },
+            PodLogStatus::Failed(error) => match window.instance {
+                crate::worker::PodLogInstance::Current => format!("Stream failed: {error}"),
+                crate::worker::PodLogInstance::Previous => {
+                    format!("Previous logs unavailable: {error}")
+                }
+            },
         }
     };
     if let Some(backfill_lines) = window.backfill_lines {
@@ -77,7 +86,7 @@ pub(super) fn status_color(window: &PodLogWindowState) -> egui::Color32 {
         return status::WARNING;
     }
     match &window.status {
-        PodLogStatus::Connecting => gray::_400,
+        PodLogStatus::Connecting | PodLogStatus::Loading => gray::_400,
         PodLogStatus::Following => SUCCESS,
         PodLogStatus::Finished => gray::_400,
         PodLogStatus::Failed(_) => status::DANGER,

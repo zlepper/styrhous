@@ -5,8 +5,9 @@ use super::state::{
 use crate::ansi::AnsiStyleSpan;
 use crate::log_store::LogStoreService;
 use crate::worker::{
-    PodLogSourceFailed, PodLogSourceReconnecting, PodLogSourceRecovered, PodLogStreamEnded,
-    PodLogStreamFailed, PodLogStreamStarted, StopPodLogStream, WorkerCommandBox, WorkerResult,
+    PodLogInstance, PodLogSourceFailed, PodLogSourceReconnecting, PodLogSourceRecovered,
+    PodLogStreamEnded, PodLogStreamFailed, PodLogStreamStarted, StartPodLogStream,
+    StopPodLogStream, WorkerCommandBox, WorkerResult,
 };
 use anstyle::{Ansi256Color, AnsiColor, Color, Effects, RgbColor, Style};
 use components::colors::{SUCCESS, TABLE_BORDER, TOOLBAR_BACKGROUND, gray};
@@ -25,7 +26,10 @@ impl WorkerResult for PodLogStreamStarted {
         if let Some(window) = ui.log_windows.get_mut(&self.log_window_id)
             && matches!(window.status, PodLogStatus::Connecting)
         {
-            window.status = PodLogStatus::Following;
+            window.status = match window.instance {
+                PodLogInstance::Current => PodLogStatus::Following,
+                PodLogInstance::Previous => PodLogStatus::Loading,
+            };
         }
     }
 }
@@ -102,8 +106,8 @@ pub(super) fn show(
         if !window.store_opened {
             window.store_opened = log_store.open(id);
         }
-        let viewport_id = egui::ViewportId::from_hash_of(("pod-log-window", id));
-        let title = if window.has_multiple_sources() {
+        let viewport_id = egui::ViewportId::from_hash_of(("pod-log-window", window.viewport_id));
+        let mut title = if window.has_multiple_sources() {
             format!("Logs · {} sources", window.targets.len())
         } else {
             let target = window
@@ -115,6 +119,9 @@ pub(super) fn show(
                 target.namespace, target.pod_name, target.container
             )
         };
+        if window.instance == PodLogInstance::Previous {
+            title.push_str(" · Previous");
+        }
         let mut close_requested = false;
         ctx.show_viewport_immediate(
             viewport_id,
@@ -150,6 +157,67 @@ pub(super) fn show(
             cluster_key,
             log_window_id: id,
         }));
+    }
+
+    let switches = ui_state
+        .log_windows
+        .values_mut()
+        .filter_map(|window| {
+            window
+                .requested_instance
+                .take()
+                .map(|instance| (window.id, instance))
+        })
+        .collect::<Vec<_>>();
+    for (id, instance) in switches {
+        ui_state.switch_log_window_instance(id, instance, log_store, commands_to_send);
+        ctx.request_repaint();
+    }
+}
+
+impl UiState {
+    fn switch_log_window_instance(
+        &mut self,
+        id: u64,
+        instance: PodLogInstance,
+        log_store: &LogStoreService,
+        commands_to_send: &mut Vec<WorkerCommandBox>,
+    ) {
+        let Some(old) = self.log_windows.remove(&id) else {
+            return;
+        };
+        if old.instance == instance {
+            self.log_windows.insert(id, old);
+            return;
+        }
+
+        self.next_log_window_id += 1;
+        let new_id = self.next_log_window_id;
+        let mut replacement = PodLogWindowState::new(new_id, old.cluster_key, old.targets.clone())
+            .expect("an existing log window has at least one target");
+        replacement.viewport_id = old.viewport_id;
+        replacement.instance = instance;
+        replacement.show_source_labels = old.show_source_labels;
+        replacement.search.query = old.search.query;
+        replacement.search.regex_mode = old.search.regex_mode;
+        replacement.search.filter_matches = old.search.filter_matches;
+        if !replacement.search.query.is_empty() {
+            replacement.search.search_deadline = Some(Instant::now());
+            replacement.search.search_complete = false;
+        }
+
+        log_store.close(id);
+        commands_to_send.push(Box::new(StopPodLogStream {
+            cluster_key: old.cluster_key,
+            log_window_id: id,
+        }));
+        commands_to_send.push(Box::new(StartPodLogStream {
+            cluster_key: old.cluster_key,
+            log_window_id: new_id,
+            targets: old.targets,
+            instance,
+        }));
+        self.log_windows.insert(new_id, replacement);
     }
 }
 

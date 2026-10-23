@@ -58,7 +58,16 @@ fn cluster_lifecycle_commands_are_serialized_and_watch_reconciliation_is_scoped(
     };
     let stop_logs: WorkerCommandBox = Box::new(stop_logs);
     assert!(!stop_logs.serializes_session_lifecycle());
+    assert!(stop_logs.dispatch_in_order());
     assert_eq!(stop_logs.cluster_key(), Some(1));
+    let start_logs: WorkerCommandBox = Box::new(StartPodLogStream {
+        cluster_key: 1,
+        log_window_id: 2,
+        targets: vec![],
+        instance: PodLogInstance::Previous,
+    });
+    assert!(start_logs.dispatch_in_order());
+    assert_eq!(start_logs.cluster_key(), Some(1));
     let reconcile: WorkerCommandBox = Box::new(ReconcileResourceWatches {
         cluster_key: 1,
         api_resource: pod_resource(),

@@ -89,6 +89,12 @@ impl ClusterWorkerRuntime {
                     drain_commands(&runtime, &mut in_flight);
                     runtime.block_on(dispatch_command(command, self.state.clone()));
                 }
+                ClusterRuntimeMessage::Command(command) if command.dispatch_in_order() => {
+                    // A stop may be queued while its start is still connecting.
+                    // Dispatch these in channel order so that stop cannot run
+                    // before start registers the cancellable stream task.
+                    runtime.block_on(dispatch_command(command, self.state.clone()));
+                }
                 ClusterRuntimeMessage::Command(command) => {
                     in_flight.retain(|task| !task.is_finished());
                     let state = self.state.clone();
@@ -144,5 +150,93 @@ pub(super) async fn dispatch_command(command: WorkerCommandBox, state: Arc<Worke
             .send_box(result)
             .await
             .log_if_error("Failed to send worker result");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[derive(Debug)]
+    enum LogLifecycleAction {
+        Start(u64),
+        Stop(u64),
+        Inspect(oneshot::Sender<(bool, bool)>),
+    }
+
+    #[derive(Debug)]
+    struct LogLifecycleProbe(LogLifecycleAction);
+
+    #[async_trait]
+    impl WorkerCommand for LogLifecycleProbe {
+        type Output = Result<NoResult, PodLogStreamFailed>;
+
+        async fn execute(self, state: &WorkerState) -> Self::Output {
+            match self.0 {
+                LogLifecycleAction::Start(id) => {
+                    // Reproduce a start that is still connecting when its stop is queued.
+                    tokio::time::sleep(Duration::from_millis(30)).await;
+                    state
+                        .log_streams
+                        .replace_after_abort((1, id), || tokio::spawn(std::future::pending()))
+                        .await;
+                }
+                LogLifecycleAction::Stop(id) => {
+                    state.log_streams.abort(&(1, id)).await;
+                }
+                LogLifecycleAction::Inspect(sender) => {
+                    let _ = sender.send((
+                        state.log_streams.contains_key(&(1, 1)).await,
+                        state.log_streams.contains_key(&(1, 2)).await,
+                    ));
+                }
+            }
+            Ok(NoResult)
+        }
+
+        fn cluster_key(&self) -> Option<i32> {
+            Some(1)
+        }
+
+        fn dispatch_in_order(&self) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn ordered_log_commands_stop_a_connecting_session_before_starting_the_next() {
+        let state = Arc::new(super::super::tests::worker_state());
+        let handle = ClusterRuntimeHandle::start(1, state);
+        let (result_sender, result_receiver) = oneshot::channel();
+        for action in [
+            LogLifecycleAction::Start(1),
+            LogLifecycleAction::Stop(1),
+            LogLifecycleAction::Start(2),
+            LogLifecycleAction::Inspect(result_sender),
+        ] {
+            handle
+                .sender
+                .send(ClusterRuntimeMessage::Command(Box::new(LogLifecycleProbe(
+                    action,
+                ))))
+                .expect("cluster runtime accepts command");
+        }
+        let runtime = tokio::runtime::Runtime::new().expect("test runtime starts");
+        let (old_exists, new_exists) = runtime
+            .block_on(async { tokio::time::timeout(Duration::from_secs(5), result_receiver).await })
+            .expect("ordered commands finish")
+            .expect("inspection is sent");
+        assert!(!old_exists);
+        assert!(new_exists);
+        let (done_sender, done_receiver) = oneshot::channel();
+        handle
+            .sender
+            .send(ClusterRuntimeMessage::Shutdown(done_sender))
+            .expect("cluster runtime accepts shutdown");
+        runtime
+            .block_on(done_receiver)
+            .expect("cluster runtime shuts down");
+        handle.thread.join().expect("cluster thread joins");
     }
 }
