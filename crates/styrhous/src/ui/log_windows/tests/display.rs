@@ -317,6 +317,30 @@ fn pod_log_viewer_snapshot() {
 }
 
 #[test]
+fn previous_pod_log_viewer_snapshot() {
+    let mut window = log_window(&["2026-08-08T15:22:17.143Z previous crash"]);
+    window.instance = PodLogInstance::Previous;
+    window.status = PodLogStatus::Finished;
+    snapshot_window(
+        window,
+        "pod_logs/previous_pod_log_viewer_snapshot/previous_viewer",
+    );
+}
+
+#[test]
+fn unavailable_previous_pod_log_viewer_snapshot() {
+    let mut window = log_window(&[]);
+    window.instance = PodLogInstance::Previous;
+    window.status = PodLogStatus::Failed(
+        "No selected container has retained logs from its previous start".into(),
+    );
+    snapshot_window(
+        window,
+        "pod_logs/unavailable_previous_pod_log_viewer_snapshot/previous_unavailable",
+    );
+}
+
+#[test]
 fn interleaved_pod_log_viewer_snapshot() {
     let api = PodLogStreamTarget {
         namespace: "payments".to_owned(),

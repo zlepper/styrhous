@@ -1,8 +1,8 @@
 //! Pod-log stream ingestion, including concurrent tail and history backfill.
 
 use super::{
-    PodLogSourceFailed, PodLogSourceReconnecting, PodLogSourceRecovered, PodLogStreamEnded,
-    PodLogStreamFailed, PodLogStreamTarget, WorkerResultSender,
+    PodLogInstance, PodLogSourceFailed, PodLogSourceReconnecting, PodLogSourceRecovered,
+    PodLogStreamEnded, PodLogStreamFailed, PodLogStreamTarget, WorkerResultSender,
 };
 use crate::helpers::ResultExt;
 use crate::log_store::{LogRecord, LogStoreAppender, read_log_record, write_log_record};
@@ -628,6 +628,7 @@ pub(super) async fn stream(
     log_client: kube::Client,
     status_client: kube::Client,
     targets: Vec<PodLogStreamTarget>,
+    instance: PodLogInstance,
     log_store_appender: LogStoreAppender,
     sender: WorkerResultSender,
 ) {
@@ -653,19 +654,26 @@ pub(super) async fn stream(
         target_count,
         sender: sender.clone(),
     };
-    let target_results =
-        futures_util::stream::iter(targets)
-            .enumerate()
-            .map(|(source_index, target)| {
-                let log_client = log_client.clone();
-                let status_client = status_client.clone();
-                let context = context.clone();
-                async move {
-                    stream_target(log_client, status_client, target, source_index, context).await
-                }
-            })
-            .buffer_unordered(target_count.max(1))
-            .collect::<Vec<_>>();
+    let target_results = futures_util::stream::iter(targets)
+        .enumerate()
+        .map(|(source_index, target)| {
+            let log_client = log_client.clone();
+            let status_client = status_client.clone();
+            let context = context.clone();
+            async move {
+                stream_target(
+                    log_client,
+                    status_client,
+                    target,
+                    instance,
+                    source_index,
+                    context,
+                )
+                .await
+            }
+        })
+        .buffer_unordered(target_count.max(1))
+        .collect::<Vec<_>>();
     tokio::pin!(target_results);
     let mut live_flush = tokio::time::interval(LIVE_FLUSH_INTERVAL);
     live_flush.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -703,7 +711,14 @@ pub(super) async fn stream(
         sender
             .send(PodLogStreamFailed {
                 log_window_id,
-                error: "None of the selected Pod log streams could be opened".to_owned(),
+                error: match instance {
+                    PodLogInstance::Current => {
+                        "None of the selected Pod log streams could be opened".to_owned()
+                    }
+                    PodLogInstance::Previous => {
+                        "None of the selected previous Pod logs could be loaded".to_owned()
+                    }
+                },
             })
             .await
             .log_if_error("Failed to send Pod log stream failure");
@@ -719,6 +734,7 @@ async fn stream_target(
     log_client: kube::Client,
     status_client: kube::Client,
     target: PodLogStreamTarget,
+    instance: PodLogInstance,
     source_index: usize,
     context: StreamTargetContext,
 ) -> bool {
@@ -729,15 +745,21 @@ async fn stream_target(
     let backfill_pods = status_pods.clone();
     let backfill_ingest = context.ingest.clone();
     let log_window_id = context.log_window_id;
-    let live = LiveLogFollower {
+    let follower = LiveLogFollower {
         log_pods,
         status_pods,
         target: target.clone(),
         source_index,
         resume: resume.clone(),
         context: context.clone(),
-    }
-    .follow();
+    };
+    let live = async move {
+        if instance == PodLogInstance::Previous {
+            false
+        } else {
+            follower.follow().await
+        }
+    };
     let backfill_sender = context.sender;
     let backfill_resume = resume;
     let completed_backfills = context.completed_backfills;
@@ -749,6 +771,7 @@ async fn stream_target(
                     &backfill_target.pod_name,
                     &LogParams {
                         container: Some(backfill_target.container.clone()),
+                        previous: instance == PodLogInstance::Previous,
                         timestamps: true,
                         ..LogParams::default()
                     },
@@ -787,7 +810,11 @@ async fn stream_target(
     // A source remains useful when either its historical response or its
     // follow stream succeeded. Source-level failures are already surfaced in
     // the viewer without hiding usable records behind a global failure state.
-    live_result && backfill_result
+    if instance == PodLogInstance::Previous {
+        backfill_result
+    } else {
+        live_result && backfill_result
+    }
 }
 
 impl LiveLogFollower {
@@ -1122,6 +1149,23 @@ mod tests {
         content_type: &str,
         body: &str,
     ) -> std::io::Result<String> {
+        serve_scripted_http_response_with_status(listener, "200 OK", content_type, body).await
+    }
+
+    async fn serve_scripted_http_response_with_status(
+        listener: &tokio::net::TcpListener,
+        status: &str,
+        content_type: &str,
+        body: &str,
+    ) -> std::io::Result<String> {
+        let (mut socket, request) = receive_scripted_http_request(listener).await?;
+        send_scripted_http_response(&mut socket, status, content_type, body).await?;
+        Ok(request)
+    }
+
+    async fn receive_scripted_http_request(
+        listener: &tokio::net::TcpListener,
+    ) -> std::io::Result<(tokio::net::TcpStream, String)> {
         let (mut socket, _) = listener.accept().await?;
         let mut request = Vec::new();
         let mut buffer = [0_u8; 1_024];
@@ -1135,13 +1179,213 @@ mod tests {
                 break;
             }
         }
+        Ok((socket, String::from_utf8_lossy(&request).into_owned()))
+    }
+
+    async fn send_scripted_http_response(
+        socket: &mut tokio::net::TcpStream,
+        status: &str,
+        content_type: &str,
+        body: &str,
+    ) -> std::io::Result<()> {
         let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
             body.len()
         );
         socket.write_all(response.as_bytes()).await?;
         socket.shutdown().await?;
-        Ok(String::from_utf8_lossy(&request).into_owned())
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn previous_logs_are_finite_and_keep_available_sources() -> anyhow::Result<()> {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+        let address = listener.local_addr()?;
+        let server = tokio::spawn(async move {
+            let mut requests = Vec::new();
+            for _ in 0..2 {
+                // The requests are concurrent, so respond according to the selected container.
+                let (mut socket, request) = receive_scripted_http_request(&listener).await?;
+                let (status, content_type, body) = if request.contains("container=worker") {
+                    (
+                        "400 Bad Request",
+                        "application/json",
+                        r#"{"kind":"Status","apiVersion":"v1","status":"Failure","message":"previous terminated container not found","reason":"BadRequest","code":400}"#,
+                    )
+                } else {
+                    (
+                        "200 OK",
+                        "text/plain",
+                        "2026-09-14T09:00:00Z previous crash\n",
+                    )
+                };
+                send_scripted_http_response(&mut socket, status, content_type, body).await?;
+                requests.push(request);
+            }
+            Ok::<_, std::io::Error>(requests)
+        });
+
+        let config = kube::Config::new(format!("http://{address}").parse()?);
+        let client = kube::Client::try_from(config)?;
+        let service = LogStoreService::default();
+        assert!(service.open(1));
+        let (result_sender, mut result_receiver) = tokio::sync::mpsc::channel(8);
+        let targets = ["server", "worker"]
+            .into_iter()
+            .map(|container| PodLogStreamTarget {
+                namespace: "payments".into(),
+                pod_name: "api-0".into(),
+                container: container.into(),
+                kind: ContainerKind::App,
+            })
+            .collect();
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            stream(
+                1,
+                client.clone(),
+                client,
+                targets,
+                PodLogInstance::Previous,
+                service.appender(),
+                WorkerResultSender::new(result_sender, None),
+            ),
+        )
+        .await?;
+
+        let requests = server.await??;
+        assert_eq!(requests.len(), 2);
+        assert!(
+            requests
+                .iter()
+                .all(|request| request.contains("previous=true"))
+        );
+        assert!(
+            requests
+                .iter()
+                .all(|request| !request.contains("follow=true"))
+        );
+        assert!(
+            requests
+                .iter()
+                .all(|request| request.contains("timestamps=true"))
+        );
+        assert!(
+            requests
+                .iter()
+                .all(|request| request.contains("/pods/api-0/log?"))
+        );
+        let results = std::iter::from_fn(|| result_receiver.try_recv().ok()).collect::<Vec<_>>();
+        assert!(
+            results
+                .iter()
+                .any(|result| result.as_ref().as_any().is::<PodLogStreamEnded>())
+        );
+        assert!(
+            results
+                .iter()
+                .any(|result| result.as_ref().as_any().is::<PodLogSourceFailed>())
+        );
+        assert!(
+            !results
+                .iter()
+                .any(|result| result.as_ref().as_any().is::<PodLogStreamFailed>())
+        );
+
+        let _ = wait_for_store_result(&service, |result| {
+            matches!(result, LogStoreResult::Rebased { window_id: 1, .. })
+        });
+        assert!(service.load_page(1, 0, false, 0));
+        let LogStoreResult::PageLoaded { rows, .. } = wait_for_store_result(&service, |result| {
+            matches!(result, LogStoreResult::PageLoaded { window_id: 1, .. })
+        }) else {
+            unreachable!()
+        };
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].text, "previous crash");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn unavailable_previous_logs_report_a_finished_failure() -> anyhow::Result<()> {
+        for (status, body, source_error) in [
+            (
+                "400 Bad Request",
+                r#"{"kind":"Status","apiVersion":"v1","status":"Failure","message":"previous terminated container not found","reason":"BadRequest","code":400}"#,
+                "previous terminated container not found",
+            ),
+            (
+                "403 Forbidden",
+                r#"{"kind":"Status","apiVersion":"v1","status":"Failure","message":"logs access denied","reason":"Forbidden","code":403}"#,
+                "logs access denied",
+            ),
+        ] {
+            assert_previous_log_request_failure(status, body, source_error).await?;
+        }
+        Ok(())
+    }
+
+    async fn assert_previous_log_request_failure(
+        status: &'static str,
+        body: &'static str,
+        source_error: &str,
+    ) -> anyhow::Result<()> {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+        let address = listener.local_addr()?;
+        let server = tokio::spawn(async move {
+            serve_scripted_http_response_with_status(&listener, status, "application/json", body)
+                .await
+        });
+        let config = kube::Config::new(format!("http://{address}").parse()?);
+        let client = kube::Client::try_from(config)?;
+        let service = LogStoreService::default();
+        assert!(service.open(1));
+        let (result_sender, mut result_receiver) = tokio::sync::mpsc::channel(8);
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            stream(
+                1,
+                client.clone(),
+                client,
+                vec![PodLogStreamTarget {
+                    namespace: "payments".into(),
+                    pod_name: "api-0".into(),
+                    container: "server".into(),
+                    kind: ContainerKind::App,
+                }],
+                PodLogInstance::Previous,
+                service.appender(),
+                WorkerResultSender::new(result_sender, None),
+            ),
+        )
+        .await?;
+        let request = server.await??;
+        assert!(request.contains("previous=true"));
+        let results = std::iter::from_fn(|| result_receiver.try_recv().ok()).collect::<Vec<_>>();
+        let source_failure = results
+            .iter()
+            .find_map(|result| {
+                result
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<PodLogSourceFailed>()
+            })
+            .expect("source failure is reported");
+        assert!(source_failure.error.contains(source_error));
+        let stream_failure = results
+            .iter()
+            .find_map(|result| {
+                result
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<PodLogStreamFailed>()
+            })
+            .expect("stream failure is reported");
+        assert_eq!(
+            stream_failure.error,
+            "None of the selected previous Pod logs could be loaded"
+        );
+        Ok(())
     }
 
     #[test]

@@ -54,6 +54,11 @@ pub(crate) trait WorkerCommand: Send + std::fmt::Debug + 'static {
         false
     }
 
+    /// Run this command in cluster channel order without waiting for unrelated work.
+    fn dispatch_in_order(&self) -> bool {
+        false
+    }
+
     /// Commands carrying a cluster key are routed to that cluster's isolated
     /// runtime. Commands without one execute in the router runtime.
     fn cluster_key(&self) -> Option<i32> {
@@ -66,6 +71,7 @@ pub(crate) trait WorkerCommand: Send + std::fmt::Debug + 'static {
 pub(crate) trait ErasedWorkerCommand: AsAny + Send + std::fmt::Debug {
     async fn execute_boxed(self: Box<Self>, state: &WorkerState) -> Option<WorkerResultBox>;
     fn serializes_session_lifecycle(&self) -> bool;
+    fn dispatch_in_order(&self) -> bool;
     fn cluster_key(&self) -> Option<i32>;
 }
 
@@ -77,6 +83,10 @@ impl<C: WorkerCommand> ErasedWorkerCommand for C {
 
     fn serializes_session_lifecycle(&self) -> bool {
         WorkerCommand::serializes_session_lifecycle(self)
+    }
+
+    fn dispatch_in_order(&self) -> bool {
+        WorkerCommand::dispatch_in_order(self)
     }
 
     fn cluster_key(&self) -> Option<i32> {

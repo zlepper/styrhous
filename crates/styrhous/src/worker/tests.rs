@@ -19,7 +19,7 @@ impl Drop for AbortProbe {
     }
 }
 
-fn worker_state() -> WorkerState {
+pub(super) fn worker_state() -> WorkerState {
     let (sender, _receiver) = mpsc::channel(1);
     WorkerState {
         results: WorkerResultSender::new(sender, None),

@@ -1,5 +1,5 @@
 use crate::log_store::{LOG_PAGE_SIZE, LogPageRow, LogStoreResult};
-use crate::worker::PodLogStreamTarget;
+use crate::worker::{PodLogInstance, PodLogStreamTarget};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::time::Instant;
@@ -36,8 +36,13 @@ pub(super) fn source_label_prefix(source: Option<&str>, source_columns: usize) -
 
 #[derive(Debug, Clone)]
 pub(super) struct PodLogWindowState {
+    /// Unique stream/store ID. A mode switch replaces it to isolate late results.
     pub(super) id: u64,
+    /// Stable native viewport ID, retained across mode switches.
+    pub(super) viewport_id: u64,
     pub(super) cluster_key: i32,
+    pub(super) instance: PodLogInstance,
+    pub(super) requested_instance: Option<PodLogInstance>,
     /// All Pod-container streams represented in this window.
     pub(super) targets: Vec<PodLogStreamTarget>,
     pub(super) show_source_labels: bool,
@@ -216,6 +221,7 @@ pub(super) struct PendingLogSources {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(super) enum PodLogStatus {
     Connecting,
+    Loading,
     Following,
     Finished,
     Failed(String),
@@ -374,7 +380,10 @@ impl PodLogWindowState {
             .unwrap_or_default();
         (!targets.is_empty()).then(|| Self {
             id,
+            viewport_id: id,
             cluster_key,
+            instance: PodLogInstance::Current,
+            requested_instance: None,
             targets,
             show_source_labels,
             source_labels,

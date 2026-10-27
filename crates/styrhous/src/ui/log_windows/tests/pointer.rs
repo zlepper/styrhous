@@ -410,7 +410,7 @@ fn clicking_a_horizontally_scrolled_log_row_uses_the_original_text_column() {
     });
     components::test_support::setup_egui(&mut harness);
     harness.run_steps(2);
-    harness.event(egui::Event::PointerMoved(egui::pos2(400.0, 100.0)));
+    harness.event(egui::Event::PointerMoved(viewport.borrow().center()));
     harness.step();
     harness.event(egui::Event::MouseWheel {
         unit: egui::MouseWheelUnit::Point,

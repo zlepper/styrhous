@@ -40,6 +40,7 @@ impl WorkerCommand for StartPodLogStream {
                     log_client,
                     status_client,
                     self.targets,
+                    self.instance,
                     log_store_appender,
                     event_sender,
                 ))
@@ -52,6 +53,10 @@ impl WorkerCommand for StartPodLogStream {
 
     fn cluster_key(&self) -> Option<i32> {
         Some(self.cluster_key)
+    }
+
+    fn dispatch_in_order(&self) -> bool {
+        true
     }
 }
 
@@ -71,5 +76,9 @@ impl WorkerCommand for StopPodLogStream {
 
     fn cluster_key(&self) -> Option<i32> {
         Some(self.cluster_key)
+    }
+
+    fn dispatch_in_order(&self) -> bool {
+        true
     }
 }
