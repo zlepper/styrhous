@@ -717,7 +717,6 @@ Window state=[focused] rect=<none>
                   TextRun value="No events recorded." rect=(x=822.0 y=630.4 width=134.5 height=17.0 center_x=889.3 center_y=638.9)
             GenericContainer rect=<none>
               Button name="Owner references" state=[toggled=False] rect=(x=810.0 y=680.4 width=692.0 height=40.0 center_x=1156.0 center_y=700.4)
-      ScrollBar rect=(x=1518.0 y=8.0 width=10.0 height=1008.0 center_x=1523.0 center_y=512.0)
   Unknown name="More actions for settings menu" rect=(x=1237.0 y=71.0 width=202.0 height=89.0 center_x=1338.0 center_y=115.5)
     GenericContainer rect=<none>
       GenericContainer rect=<none>

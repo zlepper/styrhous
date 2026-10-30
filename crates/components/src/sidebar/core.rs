@@ -171,13 +171,7 @@ impl<'a> SidebarContentCore<'a> {
             let avatar_x = CHEVRON_SIZE + CHEVRON_GAP;
             let avatar_center =
                 inner_rect.min + Vec2::new(avatar_x + ICON_SIZE / 2.0, self.item_height / 2.0);
-            render_avatar(
-                self.ui.painter(),
-                avatar_center,
-                initial,
-                self.dark,
-                ICON_SIZE,
-            );
+            paint_avatar(self.ui, avatar_center, initial, self.dark, ICON_SIZE);
             let text_is_truncated = render_text(
                 self.ui.painter(),
                 text_pos_after_icon(inner_rect, self.item_height),
@@ -190,8 +184,8 @@ impl<'a> SidebarContentCore<'a> {
             }
         } else {
             // For narrow mode, center avatar within full rect (not inner_rect)
-            render_avatar(
-                self.ui.painter(),
+            paint_avatar(
+                self.ui,
                 rect.center(),
                 initial,
                 self.dark,
@@ -299,4 +293,10 @@ pub(super) struct SidebarLayout {
     pub(super) default_width: f32,
     pub(super) background: Color32,
     pub(super) top_padding: f32,
+}
+
+fn paint_avatar(ui: &Ui, center: egui::Pos2, text: &str, dark: bool, size: f32) {
+    let avatar = crate::TextAvatar::new(text).size(size);
+    let avatar = if dark { avatar.dark() } else { avatar };
+    avatar.paint(ui, center);
 }

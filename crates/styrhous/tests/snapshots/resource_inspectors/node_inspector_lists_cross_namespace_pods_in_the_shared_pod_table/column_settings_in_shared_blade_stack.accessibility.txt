@@ -871,14 +871,14 @@ Window state=[focused] rect=<none>
                         GenericContainer rect=<none>
                           Label value="15m" rect=(x=1487.0 y=898.1 width=26.2 height=17.0 center_x=1500.1 center_y=906.6)
                             TextRun value="15m" rect=(x=1487.0 y=898.1 width=26.2 height=17.0 center_x=1500.1 center_y=906.6)
-            ScrollBar rect=(x=809.0 y=983.0 width=694.1 height=10.0 center_x=1156.0 center_y=988.0)
+            ScrollBar rect=(x=809.0 y=981.0 width=694.1 height=10.0 center_x=1156.0 center_y=986.0)
             GenericContainer rect=<none>
               GenericContainer rect=<none>
-                Label value="Events" rect=(x=826.0 y=1023.5 width=50.6 height=19.0 center_x=851.3 center_y=1033.0)
+                Label value="Events" rect=(x=826.0 y=1021.5 width=50.6 height=19.0 center_x=851.3 center_y=1031.0)
               GenericContainer rect=<none>
-                Label value="No events recorded." rect=(x=822.0 y=1077.0 width=134.5 height=17.0 center_x=889.3 center_y=1085.5)
+                Label value="No events recorded." rect=(x=822.0 y=1075.0 width=134.5 height=17.0 center_x=889.3 center_y=1083.5)
             GenericContainer rect=<none>
-              Button name="Owner references" state=[toggled=False] rect=(x=810.0 y=1127.0 width=692.1 height=40.0 center_x=1156.0 center_y=1147.0)
+              Button name="Owner references" state=[toggled=False] rect=(x=810.0 y=1125.0 width=692.1 height=40.0 center_x=1156.0 center_y=1145.0)
       ScrollBar rect=(x=1518.1 y=8.0 width=10.0 height=1008.0 center_x=1523.1 center_y=512.0)
   GenericContainer rect=<none>
     Unknown name="Dismiss blade" rect=(x=0.0 y=0.0 width=784.0 height=1024.0 center_x=392.0 center_y=512.0)
@@ -948,4 +948,3 @@ Window state=[focused] rect=<none>
               CheckBox name="Age" state=[toggled=True] rect=(x=863.0 y=381.0 width=16.0 height=16.0 center_x=871.0 center_y=389.0)
               Label value="Age" rect=(x=899.0 y=380.5 width=26.4 height=17.0 center_x=912.2 center_y=389.0)
                 TextRun value="Age" rect=(x=899.0 y=380.5 width=26.4 height=17.0 center_x=912.2 center_y=389.0)
-      ScrollBar rect=(x=1518.0 y=8.0 width=10.0 height=1008.0 center_x=1523.0 center_y=512.0)

@@ -514,6 +514,7 @@ fn refreshing_clusters_discards_open_inspectors_and_stops_their_watches() {
     KubernetesClustersUpdated(vec![Cluster {
         name: "refreshed".into(),
         is_current: true,
+        presentation: Default::default(),
     }])
     .apply(&mut state, &mut commands);
 

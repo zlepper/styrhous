@@ -1,7 +1,5 @@
 use super::*;
-use std::io::Write;
 use std::path::{Path, PathBuf};
-use tempfile::NamedTempFile;
 
 const MAX_AWS_CONCURRENCY: usize = 4;
 
@@ -484,63 +482,14 @@ fn pin_profile_in_kubeconfig(yaml: &str, arn: &str, profile: &str) -> Result<Str
 }
 
 fn writable_kubeconfig_path() -> Result<PathBuf> {
-    let home = || {
-        std::env::var_os("HOME")
-            .or_else(|| std::env::var_os("USERPROFILE"))
-            .map(PathBuf::from)
-            .context("Could not find the home directory for kubeconfig")
-    };
-    let path = match std::env::var_os("KUBECONFIG")
-        .and_then(|paths| std::env::split_paths(&paths).find(|path| !path.as_os_str().is_empty()))
-    {
-        Some(path) => path,
-        None => home()?.join(".kube/config"),
-    };
-    let path = if let Ok(suffix) = path.strip_prefix("~") {
-        home()?.join(suffix)
-    } else {
-        path
-    };
-    let path = if path.is_absolute() {
-        path
-    } else {
-        std::env::current_dir()?.join(path)
-    };
-    // Replacing the path atomically must not replace a user's kubeconfig symlink.
-    match std::fs::symlink_metadata(&path) {
-        Ok(_) => path
-            .canonicalize()
-            .context("Could not resolve kubeconfig path"),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(path),
-        Err(error) => Err(error).context("Could not inspect kubeconfig path"),
-    }
+    let path = super::super::kubeconfig::kubeconfig_paths()?
+        .into_iter()
+        .next()
+        .context("Could not find a writable kubeconfig path")?;
+    super::super::kubeconfig::resolve_kubeconfig_path(&path)
 }
 
-fn write_kubeconfig_atomically(path: &Path, bytes: &[u8]) -> Result<()> {
-    let parent = path
-        .parent()
-        .context("Kubeconfig path has no parent directory")?;
-    std::fs::create_dir_all(parent)
-        .with_context(|| format!("Could not create {}", parent.display()))?;
-    let mut temporary =
-        NamedTempFile::new_in(parent).context("Could not create temporary kubeconfig")?;
-    if let Ok(metadata) = std::fs::metadata(path) {
-        temporary
-            .as_file()
-            .set_permissions(metadata.permissions())?;
-    }
-    temporary
-        .write_all(bytes)
-        .context("Could not write kubeconfig")?;
-    temporary
-        .as_file()
-        .sync_all()
-        .context("Could not sync kubeconfig")?;
-    temporary
-        .persist(path)
-        .with_context(|| format!("Could not save {}", path.display()))?;
-    Ok(())
-}
+use super::super::kubeconfig::write_kubeconfig_atomically;
 
 #[cfg(test)]
 mod tests;

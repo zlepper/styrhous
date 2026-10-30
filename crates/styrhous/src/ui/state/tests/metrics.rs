@@ -85,6 +85,7 @@ fn pod_metrics_watches_follow_pod_selection_and_namespace_scope() {
     KubernetesClustersUpdated(vec![Cluster {
         name: "kind".to_owned(),
         is_current: true,
+        presentation: Default::default(),
     }])
     .apply(&mut state, &mut commands);
     state
@@ -144,6 +145,7 @@ fn helm_release_selection_watches_each_selected_namespace() {
     KubernetesClustersUpdated(vec![Cluster {
         name: "kind".to_owned(),
         is_current: true,
+        presentation: Default::default(),
     }])
     .apply(&mut state, &mut commands);
     state
@@ -177,6 +179,7 @@ fn helm_release_watch_start_failure_unblocks_the_namespace_with_an_error() {
     KubernetesClustersUpdated(vec![Cluster {
         name: "kind".to_owned(),
         is_current: true,
+        presentation: Default::default(),
     }])
     .apply(&mut state, &mut commands);
 
@@ -217,6 +220,7 @@ fn node_metrics_watch_follows_node_selection_and_stops_independently() {
     KubernetesClustersUpdated(vec![Cluster {
         name: "kind".to_owned(),
         is_current: true,
+        presentation: Default::default(),
     }])
     .apply(&mut state, &mut commands);
     state
@@ -257,6 +261,7 @@ fn unavailable_metrics_api_from_discovery_does_not_start_metrics_watches() {
     KubernetesClustersUpdated(vec![Cluster {
         name: "kind".to_owned(),
         is_current: true,
+        presentation: Default::default(),
     }])
     .apply(&mut state, &mut commands);
 
@@ -299,6 +304,7 @@ fn unavailable_metrics_api_stops_namespace_watches_and_marks_pod_details() {
     KubernetesClustersUpdated(vec![Cluster {
         name: "kind".to_owned(),
         is_current: true,
+        presentation: Default::default(),
     }])
     .apply(&mut state, &mut commands);
     let cluster = state.clusters.get_mut(&1).unwrap();
@@ -336,6 +342,7 @@ fn unavailable_node_metrics_do_not_disable_pod_metrics() {
     KubernetesClustersUpdated(vec![Cluster {
         name: "kind".to_owned(),
         is_current: true,
+        presentation: Default::default(),
     }])
     .apply(&mut state, &mut commands);
     let cluster = state.clusters.get_mut(&1).unwrap();

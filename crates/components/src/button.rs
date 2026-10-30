@@ -71,6 +71,7 @@ pub struct TailwindButton<'a> {
 
 enum ButtonContent<'a> {
     Text(WidgetText),
+    ImageAndText(Image<'a>, WidgetText),
     Icon(Image<'a>),
 }
 
@@ -86,6 +87,13 @@ impl<'a> TailwindButton<'a> {
             rounding: ButtonRounding::Default,
             accessibility_label: None,
         }
+    }
+
+    /// Create a button with a leading icon and a text label.
+    pub fn image_and_text(image: Image<'a>, text: impl Into<WidgetText>) -> Self {
+        let mut button = Self::new("");
+        button.content = ButtonContent::ImageAndText(image, text.into());
+        button
     }
 
     /// Create an icon-only button.
@@ -201,6 +209,9 @@ impl<'a> TailwindButton<'a> {
         let button = match self.content {
             ButtonContent::Text(text) => Button::new(text),
             ButtonContent::Icon(icon) => Button::image(icon),
+            ButtonContent::ImageAndText(icon, text) => {
+                Button::image_and_text(icon.fit_to_exact_size(egui::Vec2::splat(16.0)), text)
+            }
         }
         .min_size(min_size);
         let response = ui.add(button).with_pointing_hand();

@@ -44,6 +44,7 @@ use tracing::{info, warn};
 mod connection;
 mod discovery;
 mod dynamic_api;
+pub(crate) mod kubeconfig;
 mod resource_data;
 mod resource_yaml;
 

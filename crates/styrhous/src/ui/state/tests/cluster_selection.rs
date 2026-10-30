@@ -8,10 +8,12 @@ fn selecting_context_remembers_the_latest_user_selection() {
         Cluster {
             name: "dev".to_owned(),
             is_current: false,
+            presentation: Default::default(),
         },
         Cluster {
             name: "prod".to_owned(),
             is_current: false,
+            presentation: Default::default(),
         },
     ])
     .apply(&mut state, &mut commands);
@@ -147,10 +149,12 @@ fn remembered_context_is_preferred_over_current_context_at_startup() {
         Cluster {
             name: "dev".to_owned(),
             is_current: true,
+            presentation: Default::default(),
         },
         Cluster {
             name: "prod".to_owned(),
             is_current: false,
+            presentation: Default::default(),
         },
     ])
     .apply(&mut state, &mut commands);
@@ -188,6 +192,7 @@ fn managed_cluster_import_adds_kubeconfig_context_without_disrupting_a_cluster()
     let existing_cluster = Cluster {
         name: "existing".into(),
         is_current: true,
+        presentation: Default::default(),
     };
     KubernetesClustersUpdated(vec![existing_cluster.clone()]).apply(&mut state, &mut commands);
     commands.clear();
@@ -199,6 +204,7 @@ fn managed_cluster_import_adds_kubeconfig_context_without_disrupting_a_cluster()
         Cluster {
             name: "imported".into(),
             is_current: true,
+            presentation: Default::default(),
         },
     ])
     .apply(&mut state, &mut commands);
@@ -372,6 +378,7 @@ fn missing_remembered_context_falls_back_without_overwriting_the_preference() {
     KubernetesClustersUpdated(vec![Cluster {
         name: "dev".to_owned(),
         is_current: true,
+        presentation: Default::default(),
     }])
     .apply(&mut state, &mut commands);
 
@@ -415,6 +422,7 @@ fn missing_remembered_context_without_a_current_context_leaves_selection_manual(
     KubernetesClustersUpdated(vec![Cluster {
         name: "dev".to_owned(),
         is_current: false,
+        presentation: Default::default(),
     }])
     .apply(&mut state, &mut commands);
 

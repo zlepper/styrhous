@@ -36,7 +36,7 @@ impl WorkerResult for crate::worker::ImportedKubernetesClusters {
             ui.next_cluster_key += 1;
             let cluster_key = ui.next_cluster_key;
             ui.clusters
-                .insert(cluster_key, cluster_state(cluster_key, cluster.name));
+                .insert(cluster_key, cluster_state(cluster_key, cluster));
         }
         commands.push(Box::new(crate::worker::LoadManagedClusterDiscovery));
     }
@@ -127,7 +127,7 @@ fn apply_kubernetes_clusters(
             remembered_cluster_key = Some(cluster_key);
         }
         ui.clusters
-            .insert(cluster_key, cluster_state(cluster_key, cluster.name));
+            .insert(cluster_key, cluster_state(cluster_key, cluster));
     }
     if select_cluster
         && let Some(cluster_key) = remembered_cluster_key.or(current_cluster_key)
@@ -137,8 +137,10 @@ fn apply_kubernetes_clusters(
     }
 }
 
-fn cluster_state(cluster_key: i32, name: String) -> ClusterState {
-    ClusterState::new(cluster_key, name)
+fn cluster_state(cluster_key: i32, cluster: Cluster) -> ClusterState {
+    let mut state = ClusterState::new(cluster_key, cluster.name);
+    state.presentation = cluster.presentation;
+    state
 }
 
 impl WorkerResult for crate::worker::ManagedClusterDiscoveryUpdated {
@@ -310,6 +312,33 @@ impl WorkerResult for crate::worker::KubernetesClusterConnectionCreated {
         let crate::worker::KubernetesClusterConnectionCreated { cluster_key } = self;
         if let Some(cluster) = ui.clusters.get_mut(&cluster_key) {
             cluster.connection = ClusterConnectionState::Connected;
+        }
+    }
+}
+
+impl WorkerResult for crate::worker::ContextPresentationSaved {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(save) = ui.context_presentation_saves.get_mut(&self.context_name)
+            && save.request_id == self.request_id
+        {
+            save.result = Some(Ok(()));
+            for cluster in ui
+                .clusters
+                .values_mut()
+                .filter(|cluster| cluster.name == self.context_name)
+            {
+                cluster.presentation = self.presentation.clone();
+            }
+        }
+    }
+}
+
+impl WorkerResult for crate::worker::ContextPresentationSaveFailed {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(save) = ui.context_presentation_saves.get_mut(&self.context_name)
+            && save.request_id == self.request_id
+        {
+            save.result = Some(Err(self.error));
         }
     }
 }

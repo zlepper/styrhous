@@ -39,10 +39,11 @@ const DISCOVERY_METADATA_COLUMN_WIDTH: f32 = 292.0;
 const DISCOVERY_LOCATION_COLUMN_WIDTH: f32 = 94.0;
 const DISCOVERY_ACTION_COLUMN_WIDTH: f32 = 161.0;
 const DISCOVERY_HEADER_TITLE_OFFSET: f32 = 18.0;
-const SETTINGS_DESTINATION_CONTENT_HEIGHT: f32 = 140.0;
-const SETTINGS_DESTINATION_ICON_TILE_SIZE: f32 = 84.0;
+const SETTINGS_DESTINATION_CONTENT_HEIGHT: f32 = 102.0;
+const SETTINGS_DESTINATION_ICON_TILE_SIZE: f32 = 64.0;
 const SETTINGS_DESTINATION_CHEVRON_SIZE: f32 = 24.0;
 
+mod contexts;
 mod debug_images;
 mod destinations;
 mod discovery;
@@ -53,6 +54,7 @@ mod navigation;
 mod templates;
 mod terminal;
 
+use contexts::ContextsSettingsBlade;
 use debug_images::*;
 pub(super) use discovery::ManagedClusterDiscoveryBlade;
 use discovery_table::*;

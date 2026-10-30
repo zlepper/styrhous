@@ -1,4 +1,36 @@
 use super::*;
+use crate::cluster_connection_manager::kubeconfig::{
+    KUBECONFIG_WRITE_LOCK, save_context_presentation,
+};
+
+#[async_trait]
+impl WorkerCommand for SaveContextPresentation {
+    type Output = Result<ContextPresentationSaved, ContextPresentationSaveFailed>;
+
+    async fn execute(self, _state: &WorkerState) -> Self::Output {
+        let _guard = KUBECONFIG_WRITE_LOCK.lock().await;
+        let result = self
+            .presentation
+            .normalized()
+            .map_err(anyhow::Error::msg)
+            .and_then(|presentation| {
+                save_context_presentation(&self.context_name, &presentation)?;
+                Ok(presentation)
+            });
+        match result {
+            Ok(presentation) => Ok(ContextPresentationSaved {
+                request_id: self.request_id,
+                context_name: self.context_name,
+                presentation,
+            }),
+            Err(error) => Err(ContextPresentationSaveFailed {
+                request_id: self.request_id,
+                context_name: self.context_name,
+                error: format!("{error:#}"),
+            }),
+        }
+    }
+}
 
 #[async_trait]
 impl WorkerCommand for LoadClusters {
@@ -84,6 +116,7 @@ impl WorkerCommand for AddAksCluster {
     type Output = Result<ManagedClusterImported, ManagedClusterDiscoveryFailed>;
 
     async fn execute(self, _state: &WorkerState) -> Self::Output {
+        let _guard = KUBECONFIG_WRITE_LOCK.lock().await;
         add_aks_cluster(
             &self.subscription_id,
             &self.resource_group,
@@ -99,6 +132,7 @@ impl WorkerCommand for AddTailscaleCluster {
     type Output = Result<ManagedClusterImported, ManagedClusterDiscoveryFailed>;
 
     async fn execute(self, _state: &WorkerState) -> Self::Output {
+        let _guard = KUBECONFIG_WRITE_LOCK.lock().await;
         add_tailscale_cluster(&self.host_name).await?;
         Ok(ManagedClusterImported)
     }
@@ -109,6 +143,7 @@ impl WorkerCommand for AddEksCluster {
     type Output = Result<ManagedClusterImported, EksImportFailed>;
 
     async fn execute(self, _state: &WorkerState) -> Self::Output {
+        let _guard = KUBECONFIG_WRITE_LOCK.lock().await;
         add_eks_cluster(&self.account_id, &self.region, &self.name, &self.profile)
             .await
             .map_err(|error| EksImportFailed {

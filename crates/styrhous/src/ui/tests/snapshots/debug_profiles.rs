@@ -11,6 +11,7 @@ fn refreshing_clusters_preserves_a_non_resource_global_blade() {
     KubernetesClustersUpdated(vec![Cluster {
         name: "refreshed".into(),
         is_current: true,
+        presentation: Default::default(),
     }])
     .apply(&mut state, &mut commands);
 

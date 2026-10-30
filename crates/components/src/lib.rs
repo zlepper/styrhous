@@ -20,6 +20,7 @@
 //!     .show(ui);
 //! ```
 
+pub mod avatar;
 pub mod blade;
 pub mod button;
 pub mod colors;
@@ -45,6 +46,7 @@ pub mod textarea;
 pub mod theme;
 pub mod workspace;
 
+pub use avatar::TextAvatar;
 pub use blade::{
     BLADE_WIDTH, BladeLayer, BladeNavigator, BladeResponse, BladeStack, BladeTransition,
 };

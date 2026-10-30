@@ -181,28 +181,6 @@ fn render_text(
     rendered_text != text
 }
 
-fn render_avatar(
-    painter: &egui::Painter,
-    center: egui::Pos2,
-    initial: &str,
-    dark: bool,
-    size: f32,
-) {
-    let (fill, text) = if dark {
-        (gray::_700, gray::_100)
-    } else {
-        (gray::_200, gray::_600)
-    };
-    painter.circle_filled(center, size / 2.0, fill);
-    painter.text(
-        center,
-        egui::Align2::CENTER_CENTER,
-        initial,
-        typography::body(),
-        text,
-    );
-}
-
 fn add_selectable_accessibility(response: &Response, ui: &Ui, label: &str, selected: bool) {
     response.widget_info(|| {
         egui::WidgetInfo::selected(
