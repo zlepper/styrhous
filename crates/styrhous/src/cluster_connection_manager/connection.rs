@@ -8,10 +8,11 @@ use kube::config::{KubeConfigOptions, Kubeconfig};
 use std::fmt::Debug;
 use tokio::task::JoinHandle;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Cluster {
     pub name: String,
     pub is_current: bool,
+    pub presentation: crate::context_presentation::ContextPresentation,
 }
 
 pub async fn reload_kubeconfig() -> Result<KubernetesClustersUpdated> {
@@ -22,6 +23,22 @@ pub async fn reload_kubeconfig() -> Result<KubernetesClustersUpdated> {
         .into_iter()
         .map(|named_context| Cluster {
             is_current: current_context.as_deref() == Some(named_context.name.as_str()),
+            presentation: named_context
+                .context
+                .as_ref()
+                .and_then(|context| context.extensions.as_ref())
+                .and_then(|extensions| {
+                    extensions.iter().find(|extension| {
+                        extension.name
+                            == crate::context_presentation::CONTEXT_PRESENTATION_EXTENSION
+                    })
+                })
+                .map(|extension| {
+                    crate::context_presentation::ContextPresentation::from_extension(
+                        &extension.extension,
+                    )
+                })
+                .unwrap_or_default(),
             name: named_context.name,
         })
         .collect();

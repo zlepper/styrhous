@@ -767,8 +767,8 @@ Window state=[focused] rect=<none>
                       GenericContainer rect=<none>
                         Button name="Remove Netshoot" rect=(x=1475.0 y=982.0 width=34.0 height=34.0 center_x=1492.0 center_y=999.0)
                   Button name="Add debug image" rect=(x=793.0 y=1020.0 width=34.0 height=34.0 center_x=810.0 center_y=1037.0)
-              ScrollBar rect=(x=1501.0 y=204.0 width=10.0 height=737.0 center_x=1506.0 center_y=572.5)
+              ScrollBar rect=(x=1501.0 y=204.0 width=10.0 height=735.0 center_x=1506.0 center_y=571.5)
             GenericContainer rect=<none>
-              Button name="Save changes" rect=(x=1366.1 y=961.0 width=144.9 height=38.0 center_x=1438.6 center_y=980.0)
-              Button name="Reset" rect=(x=1269.0 y=961.0 width=89.1 height=38.0 center_x=1313.6 center_y=980.0)
+              Button name="Save changes" rect=(x=1366.1 y=959.0 width=144.9 height=38.0 center_x=1438.6 center_y=978.0)
+              Button name="Reset" rect=(x=1269.0 y=959.0 width=89.1 height=38.0 center_x=1313.6 center_y=978.0)
       ScrollBar rect=(x=1526.0 y=8.0 width=10.0 height=1008.0 center_x=1531.0 center_y=512.0)

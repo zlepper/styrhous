@@ -4,6 +4,7 @@ use super::*;
 
 pub(crate) struct ClusterState {
     pub(crate) name: String,
+    pub(crate) presentation: crate::context_presentation::ContextPresentation,
     pub(crate) cluster_key: i32,
     pub(crate) namespaces: BTreeMap<SortedName, MinimalNamespace>,
     pub(crate) connection: ClusterConnectionState,
@@ -66,6 +67,7 @@ impl ClusterState {
     pub(crate) fn new(cluster_key: i32, name: String) -> Self {
         Self {
             name,
+            presentation: Default::default(),
             cluster_key,
             namespaces: BTreeMap::new(),
             connection: ClusterConnectionState::Disconnected,

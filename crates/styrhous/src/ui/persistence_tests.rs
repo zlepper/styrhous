@@ -195,6 +195,7 @@ fn current_dev_cluster() -> WorkerResultBox {
     Box::new(KubernetesClustersUpdated(vec![Cluster {
         name: "dev".into(),
         is_current: true,
+        presentation: Default::default(),
     }]))
 }
 

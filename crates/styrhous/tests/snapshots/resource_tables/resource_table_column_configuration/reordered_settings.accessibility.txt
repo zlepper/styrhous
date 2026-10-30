@@ -675,4 +675,3 @@ Window state=[focused] rect=<none>
               CheckBox name="Actions" state=[toggled=True] rect=(x=863.0 y=669.0 width=16.0 height=16.0 center_x=871.0 center_y=677.0)
               Label value="Actions" rect=(x=899.0 y=668.5 width=49.7 height=17.0 center_x=923.8 center_y=677.0)
                 TextRun value="Actions" rect=(x=899.0 y=668.5 width=49.7 height=17.0 center_x=923.8 center_y=677.0)
-      ScrollBar rect=(x=1518.0 y=8.0 width=10.0 height=1008.0 center_x=1523.0 center_y=512.0)

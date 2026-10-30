@@ -1,4 +1,7 @@
-use super::destinations::{SettingsDestination, settings_destination_card};
+use super::destinations::{
+    SettingsDestination, settings_destination_card, settings_destination_divider,
+    settings_destination_group,
+};
 use super::terminal::{
     show_debug_image_presets, show_settings_introduction, show_terminal_launcher,
     show_update_status,
@@ -31,65 +34,107 @@ impl GlobalBladeContent for SettingsHomeBlade {
         context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
         ui.label(
-            egui::RichText::new("Manage application preferences and add Kubernetes contexts.")
+            egui::RichText::new("Manage your workspace and application preferences.")
                 .font(typography::body())
                 .color(gray::_600),
         );
         ui.add_space(spacing::XL);
         ui.separator();
         ui.add_space(spacing::XL + spacing::XS);
-        ui.label(
-            egui::RichText::new("CONFIGURATION")
-                .font(typography::semibold(typography::BODY_SIZE))
-                .color(gray::_500),
+        let context_count = context.contexts().len();
+        let count = format!(
+            "{context_count} context{}",
+            if context_count == 1 { "" } else { "s" }
         );
-        ui.add_space(spacing::MD);
+        let mut contexts = false;
+        let mut namespace_selector = false;
+        let mut cluster_discovery = false;
+        let mut application_settings = false;
+        let mut license = false;
+        let licensing = context.licensing();
         let license_description = format!(
-            "{} {}",
-            context.licensing().status().summary(),
-            context.licensing().settings().server.label()
+            "Manage your license and account. {}",
+            licensing.settings().server.label()
         );
-        let license = settings_destination_card(
-            ui,
-            SettingsDestination {
-                label: "Open license and account settings",
-                description: &license_description,
-                icon: icons::settings_destination_application_icon(),
-            },
-        );
-        ui.add_space(spacing::XL - spacing::XS);
-        let application_settings = settings_destination_card(
-            ui,
-            SettingsDestination {
-                label: "Open application settings",
-                description: "Configure terminal launching, debug images, and application updates.",
-                icon: icons::settings_destination_application_icon(),
-            },
-        );
-        ui.add_space(spacing::XL - spacing::XS);
-        let namespace_selector = settings_destination_card(
-            ui,
-            SettingsDestination {
-                label: "Open namespace selector settings",
-                description: "Configure namespace identities from labels and annotations.",
-                icon: icons::settings_destination_application_icon(),
-            },
-        );
-        ui.add_space(spacing::XL - spacing::XS);
-        let cluster_discovery = settings_destination_card(
-            ui,
-            SettingsDestination {
-                label: "Open cluster discovery",
-                description: "Find and add clusters available through Azure CLI, AWS CLI, or Tailscale.",
-                icon: icons::settings_destination_discovery_icon(),
-            },
-        );
+        let license_status = match licensing.status() {
+            crate::licensing::LicenseStatus::Licensed(_) => "Active",
+            crate::licensing::LicenseStatus::Offline(_) => "Offline",
+            crate::licensing::LicenseStatus::Checking => "Checking…",
+            crate::licensing::LicenseStatus::AwaitingApproval(_) => "Pending",
+            _ => "Needs attention",
+        };
+        components::scroll::vertical()
+            .id_salt("settings-destinations")
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                settings_destination_group(ui, "KUBERNETES", |ui| {
+                    contexts = settings_destination_card(
+                        ui,
+                        SettingsDestination {
+                            title: "Contexts",
+                            label: "Open context settings",
+                            description: "Customize display names and selector badges.",
+                            icon: icons::settings_destination_contexts_icon(),
+                            detail: &count,
+                        },
+                    );
+                    settings_destination_divider(ui);
+                    namespace_selector = settings_destination_card(
+                        ui,
+                        SettingsDestination {
+                            title: "Namespace selector",
+                            label: "Open namespace selector settings",
+                            description: "Choose how namespaces are displayed.",
+                            icon: icons::settings_destination_namespace_icon(),
+                            detail: "",
+                        },
+                    );
+                    settings_destination_divider(ui);
+                    cluster_discovery = settings_destination_card(
+                        ui,
+                        SettingsDestination {
+                            title: "Cluster discovery",
+                            label: "Open cluster discovery",
+                            description: "Find and add clusters from your cloud accounts.",
+                            icon: icons::settings_destination_discovery_icon(),
+                            detail: "",
+                        },
+                    );
+                });
+                ui.add_space(spacing::XXL + spacing::SM);
+                settings_destination_group(ui, "APPLICATION", |ui| {
+                    application_settings = settings_destination_card(
+                        ui,
+                        SettingsDestination {
+                            title: "Application preferences",
+                            label: "Open application settings",
+                            description: "Terminal, debug images, and updates.",
+                            icon: icons::settings_destination_application_icon(),
+                            detail: "",
+                        },
+                    );
+                    settings_destination_divider(ui);
+                    license = settings_destination_card(
+                        ui,
+                        SettingsDestination {
+                            title: "License & account",
+                            label: "Open license and account settings",
+                            description: &license_description,
+                            icon: icons::settings_destination_account_icon(),
+                            detail: license_status,
+                        },
+                    );
+                });
+            });
         GlobalBladeRenderResult {
-            next_content: application_settings
-                .then(|| {
-                    Box::new(TerminalSettingsBlade::new(
-                        context.terminal_launch_settings().clone(),
-                    )) as Box<dyn GlobalBladeContent>
+            next_content: contexts
+                .then(|| Box::new(ContextsSettingsBlade) as Box<dyn GlobalBladeContent>)
+                .or_else(|| {
+                    application_settings.then(|| {
+                        Box::new(TerminalSettingsBlade::new(
+                            context.terminal_launch_settings().clone(),
+                        )) as Box<dyn GlobalBladeContent>
+                    })
                 })
                 .or_else(|| {
                     license.then(|| {

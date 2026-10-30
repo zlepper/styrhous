@@ -432,6 +432,24 @@ impl<'a> GlobalBladeRenderContext<'a> {
         self.namespace_selector_settings
     }
 
+    pub(super) fn contexts(
+        &self,
+    ) -> Vec<(&str, &crate::context_presentation::ContextPresentation)> {
+        let mut clusters: Vec<_> = self.ui_state.clusters.values().collect();
+        clusters.sort_unstable_by_key(|cluster| cluster.cluster_key);
+        clusters
+            .into_iter()
+            .map(|cluster| (cluster.name.as_str(), &cluster.presentation))
+            .collect()
+    }
+
+    pub(super) fn context_presentation_save(
+        &self,
+        name: &str,
+    ) -> Option<&super::state::ContextPresentationSave> {
+        self.ui_state.context_presentation_saves.get(name)
+    }
+
     pub(super) fn namespaces(&self) -> Vec<crate::minimal_namespace::MinimalNamespace> {
         self.ui_state
             .clusters
@@ -495,6 +513,10 @@ pub(super) struct GlobalBladeNavigation<'a> {
 impl GlobalBladeNavigation<'_> {
     pub(super) fn push(&mut self, content: Box<dyn GlobalBladeContent>) {
         UiState::stop_discarded_blades(self.navigator.push(content), self.commands_to_send);
+    }
+
+    pub(super) fn go_back(&mut self) {
+        self.navigator.go_back();
     }
 
     pub(super) fn current_mut(&mut self) -> &mut dyn GlobalBladeContent {
