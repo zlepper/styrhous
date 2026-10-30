@@ -337,3 +337,18 @@ fn decorate_icon_button(ui: &Ui, response: Response, label: &str) -> Response {
     });
     response
 }
+
+/// Context identity tile for the Settings overview.
+pub fn settings_destination_contexts_icon() -> Image<'static> {
+    Image::new(include_image!("icons/settings-destination-contexts.svg"))
+}
+
+/// Namespace presentation tile for the Settings overview.
+pub fn settings_destination_namespace_icon() -> Image<'static> {
+    Image::new(include_image!("icons/settings-destination-namespace.svg"))
+}
+
+/// Account tile for the Settings overview.
+pub fn settings_destination_account_icon() -> Image<'static> {
+    Image::new(include_image!("icons/settings-destination-account.svg"))
+}

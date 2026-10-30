@@ -8,7 +8,7 @@ use components::design::typography;
 pub(super) fn show(ui: &mut egui::Ui, ui_state: &mut UiState) -> Option<ApiResource> {
     let selected_cluster_id = ui_state.selected_cluster?;
     let cluster = ui_state.clusters.get(&selected_cluster_id)?;
-    let cluster_name = cluster.name.clone();
+    let cluster_name = cluster.presentation.display_name(&cluster.name).to_owned();
     let resource_navigation = cluster.resource_navigation.clone();
     let selected_api_resource = cluster.selected_api_resource.clone();
     let mut clicked_api_resource = None;

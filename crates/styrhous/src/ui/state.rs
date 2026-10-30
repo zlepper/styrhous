@@ -58,6 +58,14 @@ pub(crate) struct UiState {
     pub(super) resource_navigation_expansion: ResourceNavigationExpansion,
     pub(super) next_operation_toast_sequence: u64,
     pub(super) managed_cluster_discovery: ManagedClusterDiscoveryState,
+    pub(super) context_presentation_saves: HashMap<String, ContextPresentationSave>,
+}
+
+#[derive(Debug)]
+pub(super) struct ContextPresentationSave {
+    pub(super) request_id: uuid::Uuid,
+    pub(super) presentation: crate::context_presentation::ContextPresentation,
+    pub(super) result: Option<Result<(), String>>,
 }
 
 #[derive(Debug, Default)]

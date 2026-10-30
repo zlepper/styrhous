@@ -12,8 +12,8 @@ fn force_delete_confirmation_requires_the_resource_name_before_removing_finalize
         resource_uid: "important-config-uid".into(),
         namespace: Some("default".into()),
         finalizers: vec!["example.com/cleanup".into()],
-        acknowledgement: "wrong-name".into(),
-        confirmation_available_at: std::time::Instant::now() + std::time::Duration::from_secs(3),
+        acknowledgement: "important-config".into(),
+        confirmation_available_at: std::time::Instant::now() + std::time::Duration::from_secs(3600),
     });
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = UiState {
@@ -23,26 +23,26 @@ fn force_delete_confirmation_requires_the_resource_name_before_removing_finalize
         ..Default::default()
     };
 
-    // The confirmation has a deliberate three-second repaint deadline. Draw
-    // the four opening frames captured by this snapshot instead of asking the
-    // harness to settle past that future timer.
+    // A correct acknowledgement must still respect the confirmation delay.
     harness.run_steps(4);
-    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
-        "resource_actions/force_delete_confirmation_requires_the_resource_name_before_removing_finalizers/force_delete_confirmation",
-    ));
     harness.get_by_label("Remove finalizers").click();
     harness.step();
     assert!(harness.state().worker.commands.is_empty());
 
-    harness
+    let pending = harness
         .state_mut()
         .ui_state
         .clusters
         .get_mut(&1)
         .and_then(|cluster| cluster.pending_force_delete.as_mut())
-        .expect("force deletion should still be pending")
-        .confirmation_available_at = std::time::Instant::now();
+        .expect("force deletion should still be pending");
+    pending.confirmation_available_at = std::time::Instant::now();
+    pending.acknowledgement = "wrong-name".into();
     harness.run();
+    // Snapshot the stable state after the wall-clock countdown has elapsed.
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "resource_actions/force_delete_confirmation_requires_the_resource_name_before_removing_finalizers/force_delete_confirmation",
+    ));
     // The delay has elapsed, but a non-empty wrong acknowledgement is still rejected.
     harness.get_by_label("Remove finalizers").click();
     harness.run();
@@ -257,10 +257,12 @@ fn test_ui_flow() {
             Cluster {
                 name: "dev".into(),
                 is_current: true,
+                presentation: Default::default(),
             },
             Cluster {
                 name: "prod".into(),
                 is_current: false,
+                presentation: Default::default(),
             },
         ])) as WorkerResultBox);
     harness.run_steps(1);

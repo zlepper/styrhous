@@ -51,12 +51,15 @@ use k8s_openapi::serde_json::json;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use time::OffsetDateTime;
 
+mod context_settings;
 mod flows;
 
-const OPEN_APPLICATION_SETTINGS: &str = "Open application settings: Configure terminal launching, debug images, and application updates.";
-const OPEN_CLUSTER_DISCOVERY: &str = "Open cluster discovery: Find and add clusters available through Azure CLI, AWS CLI, or Tailscale.";
+const OPEN_APPLICATION_SETTINGS: &str =
+    "Open application settings: Terminal, debug images, and updates.";
+const OPEN_CLUSTER_DISCOVERY: &str =
+    "Open cluster discovery: Find and add clusters from your cloud accounts.";
 const OPEN_NAMESPACE_SELECTOR_SETTINGS: &str =
-    "Open namespace selector settings: Configure namespace identities from labels and annotations.";
+    "Open namespace selector settings: Choose how namespaces are displayed.";
 
 struct YamlEditorSnapshotState {
     editor: YamlEditorWindowState,

@@ -39,15 +39,10 @@ pub(super) fn show(
                             let Some(cluster) = ui_state.clusters.get(&cluster_key) else {
                                 continue;
                             };
-                            let initial = cluster
-                                .name
-                                .chars()
-                                .next()
-                                .unwrap_or('?')
-                                .to_uppercase()
-                                .to_string();
+                            let initial = cluster.presentation.badge(&cluster.name);
                             let selected = ui_state.selected_cluster == Some(cluster_key);
-                            let cluster_name = cluster.name.clone();
+                            let cluster_name =
+                                cluster.presentation.display_name(&cluster.name).to_owned();
                             let (status_label, status_color) = match &cluster.connection {
                                 ClusterConnectionState::Connected => ("Connected", status::SUCCESS),
                                 ClusterConnectionState::Connecting => {
@@ -60,10 +55,19 @@ pub(super) fn show(
                                     ("Disconnected", gray::_500)
                                 }
                             };
-                            let tooltip = format!("{cluster_name} — {status_label}");
+                            let tooltip = if cluster_name == cluster.name {
+                                format!("{cluster_name} — {status_label}")
+                            } else {
+                                format!("{cluster_name}\n{} — {status_label}", cluster.name)
+                            };
 
+                            let accessible_name = if cluster_name == cluster.name {
+                                cluster_name.clone()
+                            } else {
+                                format!("{cluster_name} ({})", cluster.name)
+                            };
                             let response = sidebar.avatar_item_with_tooltip(
-                                &cluster_name,
+                                &accessible_name,
                                 &initial,
                                 &tooltip,
                                 selected,

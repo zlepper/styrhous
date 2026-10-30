@@ -633,15 +633,21 @@ Window state=[focused] rect=<none>
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   Button name="Close background blade" rect=(x=1469.0 y=34.0 width=34.0 height=34.0 center_x=1486.0 center_y=51.0)
-            Label value="Manage application preferences and add Kubernetes contexts." rect=(x=809.0 y=88.0 width=415.5 height=17.0 center_x=1016.7 center_y=96.5)
-              TextRun value="Manage application preferences and add Kubernetes contexts." rect=(x=809.0 y=88.0 width=415.5 height=17.0 center_x=1016.7 center_y=96.5)
-            Label value="CONFIGURATION" rect=(x=809.0 y=169.0 width=117.2 height=17.0 center_x=867.6 center_y=177.5)
-              TextRun value="CONFIGURATION" rect=(x=809.0 y=169.0 width=117.2 height=17.0 center_x=867.6 center_y=177.5)
-            Button name="Open license and account settings: Commercial license active. Hosted Styrhous service" rect=(x=809.0 y=201.0 width=694.0 height=140.0 center_x=1156.0 center_y=271.0)
-            Button name="Open application settings: Configure terminal launching, debug images, and application updates." rect=(x=809.0 y=364.0 width=694.0 height=140.0 center_x=1156.0 center_y=434.0)
-            Button name="Open namespace selector settings: Configure namespace identities from labels and annotations." rect=(x=809.0 y=527.0 width=694.0 height=140.0 center_x=1156.0 center_y=597.0)
-            Button name="Open cluster discovery: Find and add clusters available through Azure CLI, AWS CLI, or Tailscale." rect=(x=809.0 y=690.0 width=694.0 height=140.0 center_x=1156.0 center_y=760.0)
-      ScrollBar rect=(x=1518.0 y=8.0 width=10.0 height=1008.0 center_x=1523.0 center_y=512.0)
+            Label value="Manage your workspace and application preferences." rect=(x=809.0 y=88.0 width=356.4 height=17.0 center_x=987.2 center_y=96.5)
+              TextRun value="Manage your workspace and application preferences." rect=(x=809.0 y=88.0 width=356.4 height=17.0 center_x=987.2 center_y=96.5)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="KUBERNETES" rect=(x=809.0 y=169.0 width=92.9 height=17.0 center_x=855.5 center_y=177.5)
+                  TextRun value="KUBERNETES" rect=(x=809.0 y=169.0 width=92.9 height=17.0 center_x=855.5 center_y=177.5)
+                GenericContainer rect=<none>
+                  Button name="Open context settings: Customize display names and selector badges. (3 contexts)" rect=(x=810.0 y=202.0 width=692.0 height=102.0 center_x=1156.0 center_y=253.0)
+                  Button name="Open namespace selector settings: Choose how namespaces are displayed." rect=(x=810.0 y=304.0 width=692.0 height=102.0 center_x=1156.0 center_y=355.0)
+                  Button name="Open cluster discovery: Find and add clusters from your cloud accounts." rect=(x=810.0 y=406.0 width=692.0 height=102.0 center_x=1156.0 center_y=457.0)
+                Label value="APPLICATION" rect=(x=809.0 y=552.0 width=93.5 height=17.0 center_x=855.7 center_y=560.5)
+                  TextRun value="APPLICATION" rect=(x=809.0 y=552.0 width=93.5 height=17.0 center_x=855.7 center_y=560.5)
+                GenericContainer rect=<none>
+                  Button name="Open application settings: Terminal, debug images, and updates." rect=(x=810.0 y=585.0 width=692.0 height=102.0 center_x=1156.0 center_y=636.0)
+                  Button name="Open license and account settings: Manage your license and account. Hosted Styrhous service (Active)" rect=(x=810.0 y=687.0 width=692.0 height=102.0 center_x=1156.0 center_y=738.0)
   GenericContainer rect=<none>
     Unknown name="Dismiss blade" rect=(x=0.0 y=0.0 width=784.0 height=1024.0 center_x=392.0 center_y=512.0)
     Button name="Go back one blade" rect=(x=536.0 y=58.4 width=248.0 height=907.2 center_x=660.0 center_y=512.0)

@@ -52,13 +52,11 @@ Window state=[focused] rect=<none>
             GenericContainer rect=<none>
               Label value="• example.com/cleanup" rect=(x=541.0 y=514.0 width=164.4 height=15.0 center_x=623.2 center_y=521.5)
                 TextRun value="• example.com/cleanup" rect=(x=541.0 y=514.0 width=164.4 height=15.0 center_x=623.2 center_y=521.5)
-        Label value="Remove finalizers will be available in 3 seconds." rect=(x=528.0 y=553.0 width=272.1 height=15.0 center_x=664.1 center_y=560.5)
-          TextRun value="Remove finalizers will be available in 3 seconds." rect=(x=528.0 y=553.0 width=272.1 height=15.0 center_x=664.1 center_y=560.5)
-        Label value="Type important-config to acknowledge that you are bypassing cleanup:" rect=(x=528.0 y=587.0 width=404.5 height=15.0 center_x=730.3 center_y=594.5)
-          TextRun value="Type important-config to acknowledge that you are bypassing cleanup:" rect=(x=528.0 y=587.0 width=404.5 height=15.0 center_x=730.3 center_y=594.5)
-        TextInput name="Type important-config to acknowledge that you are bypassing cleanup:" value="wrong-name" rect=(x=528.0 y=609.0 width=480.0 height=21.0 center_x=768.0 center_y=619.5)
-          TextRun value="wrong-name" rect=(x=532.0 y=611.0 width=84.8 height=17.0 center_x=574.4 center_y=619.5)
+        Label value="Type important-config to acknowledge that you are bypassing cleanup:" rect=(x=528.0 y=561.0 width=404.5 height=15.0 center_x=730.3 center_y=568.5)
+          TextRun value="Type important-config to acknowledge that you are bypassing cleanup:" rect=(x=528.0 y=561.0 width=404.5 height=15.0 center_x=730.3 center_y=568.5)
+        TextInput name="Type important-config to acknowledge that you are bypassing cleanup:" value="wrong-name" rect=(x=528.0 y=583.0 width=480.0 height=21.0 center_x=768.0 center_y=593.5)
+          TextRun value="wrong-name" rect=(x=532.0 y=585.0 width=84.8 height=17.0 center_x=574.4 center_y=593.5)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
-            Button name="Remove finalizers" state=[disabled] rect=(x=839.1 y=678.0 width=168.9 height=38.0 center_x=923.6 center_y=697.0)
-          Button name="Cancel" rect=(x=733.2 y=678.0 width=97.9 height=38.0 center_x=782.2 center_y=697.0)
+            Button name="Remove finalizers" state=[disabled] rect=(x=839.1 y=665.0 width=168.9 height=38.0 center_x=923.6 center_y=684.0)
+          Button name="Cancel" rect=(x=733.2 y=665.0 width=97.9 height=38.0 center_x=782.2 center_y=684.0)

@@ -18,6 +18,7 @@ fn no_current_context_leaves_cluster_selection_manual() {
     harness.deliver_worker_result(KubernetesClustersUpdated(vec![Cluster {
         name: "dev".into(),
         is_current: false,
+        presentation: Default::default(),
     }]));
 
     assert_eq!(harness.state().ui_state.selected_cluster, None);

@@ -446,6 +446,7 @@ fn aws_account_must_be_selected_before_eks_scan_and_can_import_cluster() {
         .push_back(Box::new(ImportedKubernetesClusters(vec![Cluster {
             name: "arn:aws:eks:eu-west-1:222222222222:cluster/payments".into(),
             is_current: false,
+            presentation: Default::default(),
         }])) as WorkerResultBox);
     harness.run_steps(2);
     harness.get_by_label("Already in kubeconfig");

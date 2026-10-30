@@ -133,7 +133,7 @@ pub(super) fn show_layer<R>(
                     .max_height(height(viewport))
                     .show(ui, |ui| {
                         ui.set_width(WIDTH);
-                        egui::Frame::new()
+                        let frame = egui::Frame::new()
                             .fill(WHITE)
                             .stroke(egui::Stroke::new(FRAME_STROKE_WIDTH, gray::_200))
                             .shadow(egui::Shadow {
@@ -142,12 +142,15 @@ pub(super) fn show_layer<R>(
                                 spread: 0,
                                 color: Color32::BLACK.gamma_multiply(0.12),
                             })
-                            .inner_margin(egui::Margin::same(PADDING))
+                            .inner_margin(egui::Margin::same(PADDING));
+                        let content_height =
+                            (height(viewport) - frame.total_margin().sum().y).max(0.0);
+                        frame
                             .show(ui, |ui| {
                                 // The frame owns the content geometry, so callers can
                                 // draw their body without managing parent widths.
                                 ui.set_width(CONTENT_WIDTH);
-                                ui.set_min_height(height(viewport) - f32::from(PADDING) * 2.0);
+                                ui.set_min_height(content_height);
                                 add(ui)
                             })
                             .inner
