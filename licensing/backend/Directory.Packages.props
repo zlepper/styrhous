@@ -24,5 +24,8 @@
     <PackageVersion Include="Rebus.PostgreSql" Version="9.1.1" />
     <PackageVersion Include="Rebus.ServiceProvider" Version="10.7.2" />
     <PackageVersion Include="Stripe.net" Version="52.4.0" />
+    <!-- Keep existing transitive cryptography dependencies on their security fixes. -->
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
+    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.13" />
   </ItemGroup>
 </Project>

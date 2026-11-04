@@ -59,7 +59,7 @@ fn settings_blade_shows_invalid_custom_template_after_save() {
         Some("The launcher template must contain exactly one {command} placeholder.")
     );
     harness.get_by_label("Command template needs attention");
-    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+    harness.ui_harness(HarnessSnapshotOptions::new(
         "terminal/settings_blade_shows_invalid_custom_template_after_save/settings_terminal_launcher_invalid",
     ));
 }
@@ -71,7 +71,7 @@ fn settings_home_navigates_to_cluster_discovery_and_shows_candidates() {
     harness.run();
 
     open_settings(&mut harness);
-    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+    harness.ui_harness(HarnessSnapshotOptions::new(
         "settings/settings_home_navigates_to_cluster_discovery_and_shows_candidates/settings_home",
     ));
 
@@ -187,7 +187,7 @@ fn settings_home_navigates_to_cluster_discovery_and_shows_candidates() {
     assert_eq!(harness.get_all_by_label("Add to kubeconfig").count(), 6);
     assert_eq!(harness.get_all_by_label("Already in kubeconfig").count(), 2);
     harness.get_by_label("Tags: environment=production · team=payments");
-    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+    harness.ui_harness(HarnessSnapshotOptions::new(
         "settings/settings_home_navigates_to_cluster_discovery_and_shows_candidates/cluster_discovery",
     ));
 
@@ -201,7 +201,7 @@ fn settings_home_navigates_to_cluster_discovery_and_shows_candidates() {
     harness.run_steps(2);
     assert_eq!(harness.get_all_by_label("Adding…").count(), 1);
     assert_eq!(harness.get_all_by_label("Add to kubeconfig").count(), 5);
-    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+    harness.ui_harness(HarnessSnapshotOptions::new(
         "settings/settings_home_navigates_to_cluster_discovery_and_shows_candidates/importing_candidate",
     ));
     let command = harness
@@ -258,7 +258,7 @@ fn cluster_discovery_shows_install_guidance_when_cli_tools_are_unavailable() {
     harness.get_by_label("AWS CLI is not installed");
     harness.get_by_label("Install and sign in to Tailscale to discover Kubernetes API proxies.");
     assert_eq!(harness.query_all_by_label("Add to kubeconfig").count(), 0);
-    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+    harness.ui_harness(HarnessSnapshotOptions::new(
         "settings/cluster_discovery_shows_install_guidance_when_cli_tools_are_unavailable/cli_tools_unavailable",
     ));
 }
@@ -335,7 +335,7 @@ fn aws_account_must_be_selected_before_eks_scan_and_can_import_cluster() {
             .iter()
             .all(|command| !command.as_ref().as_any().is::<ScanEksClusters>())
     );
-    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+    harness.ui_harness(HarnessSnapshotOptions::new(
         "settings/aws_account_must_be_selected_before_eks_scan_and_can_import_cluster/account_picker",
     ));
 
@@ -378,7 +378,7 @@ fn aws_account_must_be_selected_before_eks_scan_and_can_import_cluster() {
         }) as WorkerResultBox);
     harness.run_steps(2);
     harness.get_by_label("Tags: environment=production · team=payments");
-    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+    harness.ui_harness(HarnessSnapshotOptions::new(
         "settings/aws_account_must_be_selected_before_eks_scan_and_can_import_cluster/eks_results",
     ));
 
@@ -411,7 +411,7 @@ fn aws_account_must_be_selected_before_eks_scan_and_can_import_cluster() {
             .count(),
         1
     );
-    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+    harness.ui_harness(HarnessSnapshotOptions::new(
         "settings/aws_account_must_be_selected_before_eks_scan_and_can_import_cluster/importing",
     ));
 
@@ -426,7 +426,7 @@ fn aws_account_must_be_selected_before_eks_scan_and_can_import_cluster() {
     harness.run_steps(2);
     harness.get_by_label("Could not update kubeconfig");
     harness.get_by_label("Add to kubeconfig");
-    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+    harness.ui_harness(HarnessSnapshotOptions::new(
         "settings/aws_account_must_be_selected_before_eks_scan_and_can_import_cluster/import_failed",
     ));
 
@@ -463,7 +463,7 @@ fn aws_account_must_be_selected_before_eks_scan_and_can_import_cluster() {
             tailscale_error: None,
         }) as WorkerResultBox);
     harness.run_steps(2);
-    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+    harness.ui_harness(HarnessSnapshotOptions::new(
         "settings/aws_account_must_be_selected_before_eks_scan_and_can_import_cluster/imported",
     ));
 }
