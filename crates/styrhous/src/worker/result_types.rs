@@ -1,4 +1,19 @@
+use crate::context_presentation::ContextPresentation;
+
 use super::*;
+
+#[derive(Debug)]
+pub(crate) struct ContextPresentationSaved {
+    pub(crate) request_id: uuid::Uuid,
+    pub(crate) context_name: String,
+    pub(crate) presentation: ContextPresentation,
+}
+#[derive(Debug)]
+pub(crate) struct ContextPresentationSaveFailed {
+    pub(crate) request_id: uuid::Uuid,
+    pub(crate) context_name: String,
+    pub(crate) error: String,
+}
 
 #[derive(Debug)]
 pub(crate) struct KubernetesClustersUpdated(pub(crate) Vec<Cluster>);

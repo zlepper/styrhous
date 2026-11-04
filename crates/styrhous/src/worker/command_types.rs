@@ -1,4 +1,13 @@
+use crate::context_presentation::ContextPresentation;
+
 use super::*;
+
+#[derive(Debug)]
+pub(crate) struct SaveContextPresentation {
+    pub(crate) request_id: uuid::Uuid,
+    pub(crate) context_name: String,
+    pub(crate) presentation: ContextPresentation,
+}
 
 #[derive(Debug)]
 pub(crate) struct LoadClusters;

@@ -275,3 +275,39 @@ fn body_receives_the_fixed_blade_content_width() {
 
     assert_eq!(*observed_width.borrow(), Some(CONTENT_WIDTH));
 }
+
+#[test]
+fn blade_scrolls_only_when_its_content_overflows() {
+    let mut navigator = BladeNavigator::new(TestBlade {
+        id: 1,
+        title: "First",
+    });
+    navigator.clear_transition();
+    let mut harness = Harness::new_ui(move |ui| {
+        BladeStack::new("blade-scroll-overflow").show_with_title(
+            ui.ctx(),
+            &mut navigator,
+            |blade| blade.title.to_owned(),
+            |ui, _, _| {
+                ui.label("Short content");
+            },
+        );
+    });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+    assert_eq!(
+        harness
+            .query_all_by_role(egui::accesskit::Role::ScrollBar)
+            .count(),
+        0
+    );
+
+    harness.set_size(egui::vec2(800.0, 100.0));
+    harness.run();
+    assert_eq!(
+        harness
+            .query_all_by_role(egui::accesskit::Role::ScrollBar)
+            .count(),
+        1
+    );
+}

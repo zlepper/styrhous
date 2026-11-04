@@ -480,7 +480,7 @@ fn settings_button_opens_the_terminal_launcher_blade() {
 
     harness.get_by_label("Terminal launcher");
     harness.get_by_label("Save changes");
-    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+    harness.ui_harness(HarnessSnapshotOptions::new(
         "terminal/settings_button_opens_the_terminal_launcher_blade/settings_terminal_launcher",
     ));
 }
