@@ -317,7 +317,7 @@ public sealed class OrganizationInvitationListingApiTests
         try
         {
             cancellation.Cancel();
-            Assert.ThrowsAsync<TaskCanceledException>(async () => await responseTask);
+            await Assert.ThrowsAsync<TaskCanceledException>(async () => await responseTask);
             await queryGateInterceptor.WaitUntilCancellationObservedAsync();
             await completionObserver.WaitUntilCompletedAsync();
         }

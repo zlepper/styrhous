@@ -754,7 +754,7 @@ public sealed class OrganizationInvitationResendPersistenceTests
         var baselineAuditCount = await context.AuditRecords.CountAsync();
 
         await using var serviceFixture16 = CreateResendService(database, SignupTime.AddDays(3), new ThrowAfterSaveInterceptor());
-        Assert.ThrowsAsync<SimulatedPostSaveException>(
+        await Assert.ThrowsAsync<SimulatedPostSaveException>(
             async () => await serviceFixture16.Service.ResendAsync(
                 owner.UserId,
                 organization.OrganizationId,
@@ -782,7 +782,7 @@ public sealed class OrganizationInvitationResendPersistenceTests
         await using var context = database.CreateContext();
 
         await using var serviceFixture17 = CreateResendService(database, SignupTime);
-        Assert.ThrowsAsync<UserNotFoundException>(
+        await Assert.ThrowsAsync<UserNotFoundException>(
             async () => await serviceFixture17.Service.ResendAsync(
                 Guid.CreateVersion7(),
                 Guid.CreateVersion7(),

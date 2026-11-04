@@ -312,7 +312,7 @@ public sealed class OrganizationInvitationListingPersistenceTests
             database, SignupTime);
         var service = serviceTest.Service;
 
-        Assert.ThrowsAsync<UserNotFoundException>(
+        await Assert.ThrowsAsync<UserNotFoundException>(
             async () => await service.ListAsync(
                 Guid.CreateVersion7(),
                 Guid.CreateVersion7()));

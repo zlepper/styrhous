@@ -158,7 +158,7 @@ public sealed class BillingCheckoutServiceTests
         await using var checkoutTest5 = CreateTest(database, provider, CheckoutTime);
         var service = checkoutTest5.Service;
 
-        Assert.ThrowsAsync<TaskCanceledException>(
+        await Assert.ThrowsAsync<TaskCanceledException>(
             async () => await service.CreateSessionAsync(
                 signup.UserId,
                 signup.PersonalBillingAccountId,
@@ -423,7 +423,7 @@ public sealed class BillingCheckoutServiceTests
         await using (var context = database.CreateContext())
         {
             await using var checkoutTest12 = CreateTest(database, provider, CheckoutTime);
-            Assert.ThrowsAsync<OperationCanceledException>(
+            await Assert.ThrowsAsync<OperationCanceledException>(
                 async () => await checkoutTest12.Service
                     .CreateSessionAsync(
                         signup.UserId,

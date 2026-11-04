@@ -531,7 +531,7 @@ public sealed class CommercialSubscriptionProjectionPersistenceTests
 
         await using var projectionTest2 = ServiceTestBase<CommercialSubscriptionProjectionService>.ForDatabase(
             database, SignupTime, interceptors: [new ThrowAfterSaveInterceptor()]);
-        Assert.ThrowsAsync<SimulatedPostSaveException>(
+        await Assert.ThrowsAsync<SimulatedPostSaveException>(
             async () => await projectionTest2.Service.ApplyAsync(
                 signup.PersonalBillingAccountId,
                 CreateProjection(
@@ -568,7 +568,7 @@ public sealed class CommercialSubscriptionProjectionPersistenceTests
         try
         {
             cancellation.Cancel();
-            Assert.ThrowsAsync<TaskCanceledException>(async () => await projectionTask);
+            await Assert.ThrowsAsync<TaskCanceledException>(async () => await projectionTask);
             await interceptor.WaitUntilCancellationObservedAsync();
         }
         finally
@@ -606,7 +606,7 @@ public sealed class CommercialSubscriptionProjectionPersistenceTests
         try
         {
             cancellation.Cancel();
-            Assert.ThrowsAsync<TaskCanceledException>(async () => await projectionTask);
+            await Assert.ThrowsAsync<TaskCanceledException>(async () => await projectionTask);
         }
         finally
         {

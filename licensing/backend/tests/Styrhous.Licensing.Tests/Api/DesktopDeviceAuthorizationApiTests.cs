@@ -2196,6 +2196,7 @@ public sealed class DesktopDeviceAuthorizationApiTests
     }
 
     [TestCase(null)]
+    [TestCase("")]
     [TestCase("unknown-desktop")]
     public async Task TokenEndpointsRejectAMissingOrUnknownDesktopClient(string? clientId)
     {
@@ -2214,6 +2215,12 @@ public sealed class DesktopDeviceAuthorizationApiTests
         using var deviceBody = JsonDocument.Parse(
             await deviceResponse.Content.ReadAsStringAsync());
 
+        using var validDeviceResponse = await PollDeviceTokenAsync(
+            client,
+            authorization.DeviceCode);
+        using var validDeviceBody = JsonDocument.Parse(
+            await validDeviceResponse.Content.ReadAsStringAsync());
+
         var tokens = await AuthorizeAndIssueTokensAsync(
             client,
             signup.SeatId,
@@ -2230,6 +2237,10 @@ public sealed class DesktopDeviceAuthorizationApiTests
             Assert.That(
                 deviceBody.RootElement.GetProperty("error").GetString(),
                 Is.EqualTo("invalid_client"));
+            Assert.That(validDeviceResponse.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+            Assert.That(
+                validDeviceBody.RootElement.GetProperty("error").GetString(),
+                Is.EqualTo("authorization_pending"));
             Assert.That(refreshResponse.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
             Assert.That(
                 refreshBody.RootElement.GetProperty("error").GetString(),
@@ -2238,6 +2249,25 @@ public sealed class DesktopDeviceAuthorizationApiTests
 
         using var validRefresh = await RefreshAsync(client, tokens.RefreshToken);
         Assert.That(validRefresh.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase(ClientId)]
+    public async Task DeviceTokenRequestsWithoutADeviceCodeRemainInvalidRequests(string? clientId)
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        using var factory = new LicensingWebApplicationFactory(database, SignupTime.AddDays(1));
+        using var client = factory.CreateApiClient();
+
+        using var response = await PollDeviceTokenAsync(client, string.Empty, clientId);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+            Assert.That(body.RootElement.GetProperty("error").GetString(), Is.EqualTo("invalid_request"));
+        });
     }
 
     [Test]

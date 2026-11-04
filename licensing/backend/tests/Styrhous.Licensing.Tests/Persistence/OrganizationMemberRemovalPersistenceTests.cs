@@ -994,7 +994,7 @@ public sealed class OrganizationMemberRemovalPersistenceTests
 
         await using var removalTest = ServiceTestBase<OrganizationMemberRemovalService>.ForDatabase(
             database, SignupTime.AddDays(3), interceptors: [new ThrowAfterSaveInterceptor()]);
-        Assert.ThrowsAsync<SimulatedPostSaveException>(
+        await Assert.ThrowsAsync<SimulatedPostSaveException>(
             async () => await removalTest.Service.RemoveAsync(
                 owner.UserId,
                 organization.OrganizationId,
@@ -1025,7 +1025,7 @@ public sealed class OrganizationMemberRemovalPersistenceTests
 
         await using var removalTest = ServiceTestBase<OrganizationMemberRemovalService>.ForDatabase(
             database, SignupTime);
-        Assert.ThrowsAsync<UserNotFoundException>(
+        await Assert.ThrowsAsync<UserNotFoundException>(
             async () => await removalTest.Service.RemoveAsync(
                 Guid.CreateVersion7(),
                 Guid.CreateVersion7(),

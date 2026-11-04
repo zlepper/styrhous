@@ -381,7 +381,7 @@ public sealed class DeviceActivationPersistenceTests
         var signup = await SignUpAsync(database);
         var factory = database.CreateContextFactory(new ThrowAfterSaveInterceptor());
 
-        Assert.ThrowsAsync<SimulatedPostSaveException>(
+        await Assert.ThrowsAsync<SimulatedPostSaveException>(
             async () => await DevicePersistenceScenario.ActivateAsync(factory, SignupTime,
                 signup.UserId,
                 signup.SeatId,
@@ -402,7 +402,7 @@ public sealed class DeviceActivationPersistenceTests
         await ActivateAsync(database, signup, 3, SignupTime.AddDays(1));
         var factory = database.CreateContextFactory(new ThrowAfterSaveInterceptor());
 
-        Assert.ThrowsAsync<SimulatedPostSaveException>(
+        await Assert.ThrowsAsync<SimulatedPostSaveException>(
             async () => await DevicePersistenceScenario.ActivateAsync(factory, SignupTime.AddDays(8),
                 signup.UserId,
                 signup.SeatId,
@@ -570,7 +570,7 @@ public sealed class DeviceActivationPersistenceTests
         var signup = await SignUpAsync(database);
         await using var context = database.CreateContext();
 
-        var exception = Assert.ThrowsAsync<Npgsql.PostgresException>(
+        var exception = await Assert.ThrowsAsync<Npgsql.PostgresException>(
             async () => await context.Seats
                 .Where(seat => seat.Id == signup.SeatId)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(
@@ -624,7 +624,7 @@ public sealed class DeviceActivationPersistenceTests
         await ActivateAsync(database, signup, installation, SignupTime);
         await using var context = database.CreateContext();
 
-        var exception = Assert.ThrowsAsync<DbUpdateException>(
+        var exception = await Assert.ThrowsAsync<DbUpdateException>(
             async () => await InsertDeviceActivationAsync(
                 context,
                 signup.SeatId,
@@ -645,7 +645,7 @@ public sealed class DeviceActivationPersistenceTests
         var otherUser = await SignUpAsync(database, "database-other", "other@example.com");
         await using var context = database.CreateContext();
 
-        var exception = Assert.ThrowsAsync<DbUpdateException>(
+        var exception = await Assert.ThrowsAsync<DbUpdateException>(
             async () => await InsertDeviceActivationAsync(
                 context,
                 owner.SeatId,
@@ -667,7 +667,7 @@ public sealed class DeviceActivationPersistenceTests
         var result = await ActivateAsync(database, signup, 1, SignupTime);
         await using var context = database.CreateContext();
 
-        var exception = Assert.ThrowsAsync<Npgsql.PostgresException>(
+        var exception = await Assert.ThrowsAsync<Npgsql.PostgresException>(
             async () =>
             {
                 if (onlySetReason)
@@ -701,7 +701,7 @@ public sealed class DeviceActivationPersistenceTests
         var result = await ActivateAsync(database, signup, 1, SignupTime);
         await using var context = database.CreateContext();
 
-        var exception = Assert.ThrowsAsync<Npgsql.PostgresException>(
+        var exception = await Assert.ThrowsAsync<Npgsql.PostgresException>(
             async () => await context.DeviceActivations
                 .Where(activation => activation.Id == result.ActivationId)
                 .ExecuteUpdateAsync(setters => setters
@@ -724,7 +724,7 @@ public sealed class DeviceActivationPersistenceTests
         var result = await ActivateAsync(database, signup, 1, SignupTime);
         await using var context = database.CreateContext();
 
-        var exception = Assert.ThrowsAsync<Npgsql.PostgresException>(
+        var exception = await Assert.ThrowsAsync<Npgsql.PostgresException>(
             async () => await context.DeviceActivations
                 .Where(activation => activation.Id == result.ActivationId)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(

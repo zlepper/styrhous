@@ -1699,7 +1699,7 @@ public sealed class BillingSeatQuantityPersistenceTests
                 database, ChangeTime, configureServices: services => { services.RemoveAll<IBillingSeatQuantityProvider>(); services.AddSingleton<IBillingSeatQuantityProvider>(provider); }, interceptors: [
             new ThrowAfterSaveInterceptor()]);
             var service = billingTest.Service;
-            Assert.ThrowsAsync<SimulatedPostSaveException>(
+            await Assert.ThrowsAsync<SimulatedPostSaveException>(
                 async () => await service.ChangeAsync(
                     owner.UserId,
                     organization.BillingAccountId,

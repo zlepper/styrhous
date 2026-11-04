@@ -330,7 +330,7 @@ public sealed class EntitlementApiTests
         try
         {
             cancellation.Cancel();
-            Assert.ThrowsAsync<TaskCanceledException>(async () => await responseTask);
+            await Assert.ThrowsAsync<TaskCanceledException>(async () => await responseTask);
             await queryGateInterceptor.WaitUntilCancellationObservedAsync();
             await requestCompletionObserver.WaitUntilCompletedAsync();
         }
@@ -388,7 +388,7 @@ public sealed class EntitlementApiTests
         try
         {
             cancellation.Cancel();
-            Assert.ThrowsAsync<TaskCanceledException>(async () => await responseTask);
+            await Assert.ThrowsAsync<TaskCanceledException>(async () => await responseTask);
             await queryGateInterceptor.WaitUntilCancellationObservedAsync();
             await requestCompletionObserver.WaitUntilCompletedAsync();
         }

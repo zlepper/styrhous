@@ -123,7 +123,7 @@ public sealed class DeviceRevocationPersistenceTests
             database, SignupTime.AddDays(1), interceptors: [new ThrowAfterSaveInterceptor()]);
         var service = revocationTest.Service;
 
-        Assert.ThrowsAsync<SimulatedPostSaveException>(
+        await Assert.ThrowsAsync<SimulatedPostSaveException>(
             async () => await service.RevokeAsync(
                 signup.UserId,
                 activation.ActivationId!.Value));

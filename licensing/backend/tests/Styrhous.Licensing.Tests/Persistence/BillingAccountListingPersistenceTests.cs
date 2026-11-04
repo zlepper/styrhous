@@ -333,7 +333,7 @@ public sealed class BillingAccountListingPersistenceTests
 
         await using var listingTest = ServiceTestBase<BillingAccountListingService>.ForDatabase(
             database, SignupTime.AddDays(3));
-        Assert.ThrowsAsync<UserNotFoundException>(
+        await Assert.ThrowsAsync<UserNotFoundException>(
             async () => await listingTest.Service.ListForUserAsync(Guid.CreateVersion7()));
     }
 

@@ -45,25 +45,25 @@ public sealed class StripeBillingPriceProviderTests
     [TestCase("tiered", "month", true)]
     [TestCase("per_unit", "week", true)]
     [TestCase("per_unit", "month", false)]
-    public void RejectsPricesThatCannotBeRepresentedAsARecurringSeatAmount(string scheme, string interval, bool active)
+    public async Task RejectsPricesThatCannotBeRepresentedAsARecurringSeatAmount(string scheme, string interval, bool active)
     {
         var provider = CreateProvider(new PriceHttpClient("usd", 1200, scheme, interval, active));
-        Assert.ThrowsAsync<BillingPricesUnavailableException>(() => provider.ListAsync(CancellationToken.None));
+        await Assert.ThrowsAsync<BillingPricesUnavailableException>(() => provider.ListAsync(CancellationToken.None));
     }
 
     [Test]
-    public void ReportsProviderFailureWithoutReturningPartialPrices()
+    public async Task ReportsProviderFailureWithoutReturningPartialPrices()
     {
         var provider = CreateProvider(new PriceHttpClient("usd", 1200, status: HttpStatusCode.ServiceUnavailable));
-        Assert.ThrowsAsync<BillingPricesUnavailableException>(() => provider.ListAsync(CancellationToken.None));
+        await Assert.ThrowsAsync<BillingPricesUnavailableException>(() => provider.ListAsync(CancellationToken.None));
     }
 
     [Test]
-    public void PreservesCallerCancellation()
+    public async Task PreservesCallerCancellation()
     {
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
-        Assert.ThrowsAsync<OperationCanceledException>(() =>
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
             CreateProvider(new PriceHttpClient("usd", 1200)).ListAsync(cancellation.Token));
     }
 

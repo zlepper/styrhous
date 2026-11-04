@@ -274,7 +274,7 @@ public sealed class OrganizationMemberListingPersistenceTests
             database, SignupTime);
         var service = serviceTest.Service;
 
-        Assert.ThrowsAsync<Styrhous.Licensing.Application.Accounts.UserNotFoundException>(
+        await Assert.ThrowsAsync<Styrhous.Licensing.Application.Accounts.UserNotFoundException>(
             async () => await service.ListAsync(
                 Guid.CreateVersion7(),
                 Guid.CreateVersion7()));
@@ -312,7 +312,7 @@ public sealed class OrganizationMemberListingPersistenceTests
             database, SignupTime.AddDays(3));
         var service = serviceTest.Service;
 
-        var exception = Assert.ThrowsAsync<InvalidOperationException>(
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             async () => await service.ListAsync(
                 owner.UserId,
                 organization.OrganizationId));

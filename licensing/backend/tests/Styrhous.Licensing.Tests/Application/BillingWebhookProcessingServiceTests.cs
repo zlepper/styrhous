@@ -67,7 +67,7 @@ public sealed class BillingWebhookProcessingServiceTests
         };
         await using var test = await CreateAsync(provider);
         var id = await ReceiveAsync(test);
-        var exception = Assert.ThrowsAsync<InvalidOperationException>(async () => await test.Service.ProcessAsync(id));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () => await test.Service.ProcessAsync(id));
         if (!missingAccount)
         {
             Assert.That(exception, Is.SameAs(failure));
@@ -110,7 +110,7 @@ public sealed class BillingWebhookProcessingServiceTests
             ProviderSnapshotKind = CommercialSubscriptionSnapshotKind.Observation,
         };
         var id = await ReceiveAsync(test);
-        var exception = Assert.ThrowsAsync<InvalidOperationException>(async () => await test.Service.ProcessAsync(id));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () => await test.Service.ProcessAsync(id));
         Assert.That(exception!.Message, Does.Contain("resolved again"));
         await using var context = test.Database.CreateContext();
         var stored = await context.BillingWebhookEvents.SingleAsync();
@@ -133,7 +133,7 @@ public sealed class BillingWebhookProcessingServiceTests
             await context.BillingWebhookEvents.Where(item => item.Id == id)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.ProcessingLeaseId, newOwner));
         };
-        var exception = Assert.ThrowsAsync<InvalidOperationException>(async () => await test.Service.ProcessAsync(id));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () => await test.Service.ProcessAsync(id));
         Assert.That(exception!.Message, Does.Contain("lease was lost"));
         await using var verification = test.Database.CreateContext();
         Assert.That((await verification.BillingWebhookEvents.SingleAsync()).ProcessingLeaseId, Is.EqualTo(newOwner));
@@ -150,7 +150,7 @@ public sealed class BillingWebhookProcessingServiceTests
         {
             await test.Database.DisposeAsync();
         };
-        var exception = Assert.ThrowsAsync<AggregateException>(async () => await test.Service.ProcessAsync(id));
+        var exception = await Assert.ThrowsAsync<AggregateException>(async () => await test.Service.ProcessAsync(id));
         Assert.That(exception!.InnerExceptions[0], Is.SameAs(failure));
         Assert.That(exception.InnerExceptions, Has.Count.EqualTo(2));
     }

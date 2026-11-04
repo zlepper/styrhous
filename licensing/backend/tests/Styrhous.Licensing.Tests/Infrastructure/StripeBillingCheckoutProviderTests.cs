@@ -125,7 +125,7 @@ public sealed class StripeBillingCheckoutProviderTests
     }
 
     [Test]
-    public void ProviderFailureIsMappedWithoutLeakingResponseBody()
+    public async Task ProviderFailureIsMappedWithoutLeakingResponseBody()
     {
         const string sensitiveProviderBody = "provider response must not leak";
         var provider = CreateProvider(
@@ -133,7 +133,7 @@ public sealed class StripeBillingCheckoutProviderTests
                 HttpStatusCode.ServiceUnavailable,
                 sensitiveProviderBody));
 
-        var exception = Assert.ThrowsAsync<BillingCheckoutProviderUnavailableException>(
+        var exception = await Assert.ThrowsAsync<BillingCheckoutProviderUnavailableException>(
             async () => await provider.CreateSessionAsync(
                 new BillingCheckoutProviderRequest(
                     Guid.CreateVersion7(),
@@ -147,7 +147,7 @@ public sealed class StripeBillingCheckoutProviderTests
     }
 
     [Test]
-    public void DefiniteExpiredRequestRejectionIsDistinguishedFromAnOutage()
+    public async Task DefiniteExpiredRequestRejectionIsDistinguishedFromAnOutage()
     {
         var provider = CreateProvider(
             new RecordingStripeHttpClient(
@@ -162,7 +162,7 @@ public sealed class StripeBillingCheckoutProviderTests
                 }
                 """));
 
-        Assert.ThrowsAsync<BillingCheckoutProviderSessionCreationRejectedException>(
+        await Assert.ThrowsAsync<BillingCheckoutProviderSessionCreationRejectedException>(
             async () => await provider.CreateSessionAsync(
                 new BillingCheckoutProviderRequest(
                     Guid.CreateVersion7(),
@@ -215,7 +215,7 @@ public sealed class StripeBillingCheckoutProviderTests
     [TestCase("cs_different", "open")]
     [TestCase("cs_status", "unexpected")]
     [TestCase("cs_status", "complete")]
-    public void MalformedAuthoritativeCheckoutSessionStatusFailsClosed(
+    public async Task MalformedAuthoritativeCheckoutSessionStatusFailsClosed(
         string returnedSessionId,
         string returnedStatus)
     {
@@ -230,7 +230,7 @@ public sealed class StripeBillingCheckoutProviderTests
                 }
                 """));
 
-        Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<InvalidOperationException>(
             async () => await provider.GetSessionStateAsync(
                 "cs_status",
                 CancellationToken.None));
@@ -291,14 +291,14 @@ public sealed class StripeBillingCheckoutProviderTests
     }
 
     [Test]
-    public void CallerCancellationIsPropagated()
+    public async Task CallerCancellationIsPropagated()
     {
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         var provider = CreateProvider(
             new RecordingStripeHttpClient(HttpStatusCode.OK, "{}"));
 
-        Assert.ThrowsAsync<OperationCanceledException>(
+        await Assert.ThrowsAsync<OperationCanceledException>(
             async () => await provider.CreateSessionAsync(
                 new BillingCheckoutProviderRequest(
                     Guid.CreateVersion7(),
