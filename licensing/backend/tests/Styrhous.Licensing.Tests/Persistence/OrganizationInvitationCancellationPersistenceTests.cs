@@ -563,7 +563,7 @@ public sealed class OrganizationInvitationCancellationPersistenceTests
         var baselineAuditCount = await context.AuditRecords.CountAsync();
 
         await using var serviceFixture11 = CreateCancellationService(database, SignupTime.AddDays(3), new ThrowAfterSaveInterceptor());
-        Assert.ThrowsAsync<SimulatedPostSaveException>(
+        await Assert.ThrowsAsync<SimulatedPostSaveException>(
             async () => await serviceFixture11.Service
                 .CancelAsync(
                     owner.UserId,
@@ -590,7 +590,7 @@ public sealed class OrganizationInvitationCancellationPersistenceTests
         await using var context = database.CreateContext();
 
         await using var serviceFixture12 = CreateCancellationService(database, SignupTime);
-        Assert.ThrowsAsync<UserNotFoundException>(
+        await Assert.ThrowsAsync<UserNotFoundException>(
             async () => await serviceFixture12.Service.CancelAsync(
                 Guid.CreateVersion7(),
                 Guid.CreateVersion7(),

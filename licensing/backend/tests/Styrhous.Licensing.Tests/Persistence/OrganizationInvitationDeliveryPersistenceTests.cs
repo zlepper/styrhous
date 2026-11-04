@@ -819,7 +819,7 @@ public sealed class OrganizationInvitationDeliveryPersistenceTests
             _ => throw new ArgumentOutOfRangeException(nameof(invalidState)),
         };
 
-        var exception = Assert.ThrowsAsync<PostgresException>(invalidUpdate);
+        var exception = await Assert.ThrowsAsync<PostgresException>(invalidUpdate);
         var expectedConstraint = invalidState switch
         {
             InvalidOutboxState.PartialLease

@@ -295,14 +295,14 @@ public sealed class StripeBillingCustomerPortalProviderTests : IDisposable
     }
 
     [Test]
-    public void PermanentStripeRejectionIsNotReportedAsATemporaryOutage()
+    public async Task PermanentStripeRejectionIsNotReportedAsATemporaryOutage()
     {
         var provider = CreateProvider(
             new RecordingStripeHttpClient(
                 HttpStatusCode.BadRequest,
                 "provider response must not leak"));
 
-        var exception = Assert.ThrowsAsync<InvalidOperationException>(
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             async () => await provider.CreateSessionAsync(
                 "cus_portal",
                 CancellationToken.None));

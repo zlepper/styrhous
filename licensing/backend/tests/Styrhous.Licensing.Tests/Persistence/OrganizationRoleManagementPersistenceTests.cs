@@ -445,7 +445,7 @@ public sealed class OrganizationRoleManagementPersistenceTests
 
         await using var roleTest = ServiceTestBase<OrganizationRoleManagementService>.ForDatabase(
             database, SignupTime.AddDays(2), interceptors: [new ThrowAfterSaveInterceptor()]);
-        Assert.ThrowsAsync<SimulatedPostSaveException>(
+        await Assert.ThrowsAsync<SimulatedPostSaveException>(
             async () => await roleTest.Service
                 .TransferOwnershipAsync(
                     owner.UserId,
@@ -490,7 +490,7 @@ public sealed class OrganizationRoleManagementPersistenceTests
 
         await using var roleTest = ServiceTestBase<OrganizationRoleManagementService>.ForDatabase(
             database, SignupTime.AddDays(2), interceptors: [new ThrowAfterSaveInterceptor()]);
-        Assert.ThrowsAsync<SimulatedPostSaveException>(
+        await Assert.ThrowsAsync<SimulatedPostSaveException>(
             async () => await roleTest.Service.ChangeRoleAsync(
                 owner.UserId,
                 organization.OrganizationId,

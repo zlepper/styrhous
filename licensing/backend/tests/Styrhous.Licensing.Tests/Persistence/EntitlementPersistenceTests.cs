@@ -291,7 +291,7 @@ public sealed class EntitlementPersistenceTests
         await SignUpAsync(database);
         await using var context = database.CreateContext();
 
-        var exception = Assert.ThrowsAsync<Npgsql.PostgresException>(
+        var exception = await Assert.ThrowsAsync<Npgsql.PostgresException>(
             async () => await context.Trials.ExecuteUpdateAsync(
                 setters => setters.SetProperty(
                     trial => trial.EndsAt,
@@ -345,7 +345,7 @@ public sealed class EntitlementPersistenceTests
             _ => throw new ArgumentOutOfRangeException(nameof(mutation)),
         };
 
-        var exception = Assert.ThrowsAsync<Npgsql.PostgresException>(invalidUpdate);
+        var exception = await Assert.ThrowsAsync<Npgsql.PostgresException>(invalidUpdate);
 
         Assert.That(
             exception!.ConstraintName,
@@ -394,7 +394,7 @@ public sealed class EntitlementPersistenceTests
             _ => throw new ArgumentOutOfRangeException(nameof(field)),
         };
 
-        var exception = Assert.ThrowsAsync<Npgsql.PostgresException>(clearIdentifier);
+        var exception = await Assert.ThrowsAsync<Npgsql.PostgresException>(clearIdentifier);
 
         Assert.That(exception!.SqlState, Is.EqualTo(Npgsql.PostgresErrorCodes.NotNullViolation));
     }
@@ -433,7 +433,7 @@ public sealed class EntitlementPersistenceTests
             _ => throw new ArgumentOutOfRangeException(nameof(field)),
         };
 
-        var exception = Assert.ThrowsAsync<Npgsql.PostgresException>(
+        var exception = await Assert.ThrowsAsync<Npgsql.PostgresException>(
             async () => await update());
 
         Assert.That(
@@ -451,7 +451,7 @@ public sealed class EntitlementPersistenceTests
         await context.SaveChangesAsync();
         var unknownBillingAccountId = Guid.CreateVersion7();
 
-        var exception = Assert.ThrowsAsync<Npgsql.PostgresException>(
+        var exception = await Assert.ThrowsAsync<Npgsql.PostgresException>(
             async () => await context.CommercialSubscriptions.ExecuteUpdateAsync(
                 setters => setters.SetProperty(
                     subscription => subscription.BillingAccountId,
@@ -498,7 +498,7 @@ public sealed class EntitlementPersistenceTests
                     SignupTime.AddMonths(1),
                     SignupTime)));
 
-        var exception = Assert.ThrowsAsync<DbUpdateException>(
+        var exception = await Assert.ThrowsAsync<DbUpdateException>(
             async () => await context.SaveChangesAsync());
 
         Assert.That(
@@ -550,7 +550,7 @@ public sealed class EntitlementPersistenceTests
                     SignupTime.AddMonths(1),
                     SignupTime)));
 
-        var exception = Assert.ThrowsAsync<DbUpdateException>(
+        var exception = await Assert.ThrowsAsync<DbUpdateException>(
             async () => await context.SaveChangesAsync());
 
         Assert.That(
@@ -642,7 +642,7 @@ public sealed class EntitlementPersistenceTests
             Is.True);
 
         await newerContext.SaveChangesAsync();
-        Assert.ThrowsAsync<DbUpdateConcurrencyException>(
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(
             async () => await olderContext.SaveChangesAsync());
 
         await using var verificationContext = database.CreateContext();
@@ -663,7 +663,7 @@ public sealed class EntitlementPersistenceTests
 
         await using var entitlementTest = ServiceTestBase<EntitlementResolutionService>.ForDatabase(
             database, SignupTime);
-        Assert.ThrowsAsync<UserNotFoundException>(
+        await Assert.ThrowsAsync<UserNotFoundException>(
             async () => await entitlementTest.Service
                 .ListForUserAsync(Guid.CreateVersion7()));
     }
@@ -675,7 +675,7 @@ public sealed class EntitlementPersistenceTests
 
         await using var entitlementTest = ServiceTestBase<EntitlementResolutionService>.ForDatabase(
             database, SignupTime);
-        Assert.ThrowsAsync<UserNotFoundException>(
+        await Assert.ThrowsAsync<UserNotFoundException>(
             async () => await entitlementTest.Service
                 .ListForUserAsync(Guid.Empty));
     }

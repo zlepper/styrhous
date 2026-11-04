@@ -422,7 +422,7 @@ public sealed class OrganizationInvitationAcceptancePersistenceTests
             "invitee@example.com");
         await using var context = database.CreateContext();
 
-        var exception = Assert.ThrowsAsync<PostgresException>(
+        var exception = await Assert.ThrowsAsync<PostgresException>(
             async () => await context.OrganizationInvitations
                 .Where(candidate => candidate.Id == invitation.InvitationId)
                 .ExecuteUpdateAsync(setters => setters
@@ -811,7 +811,7 @@ public sealed class OrganizationInvitationAcceptancePersistenceTests
         var baselineAuditCount = await context.AuditRecords.CountAsync();
 
         await using var serviceFixture14 = CreateAcceptanceService(database, SignupTime.AddDays(3), new ThrowAfterSaveInterceptor());
-        Assert.ThrowsAsync<SimulatedPostSaveException>(
+        await Assert.ThrowsAsync<SimulatedPostSaveException>(
             async () => await serviceFixture14.Service.AcceptAsync(
                 invitee.UserId,
                 invitation.Secret.Reveal()));
@@ -842,7 +842,7 @@ public sealed class OrganizationInvitationAcceptancePersistenceTests
         await using var context = database.CreateContext();
 
         await using var serviceFixture15 = CreateAcceptanceService(database, SignupTime);
-        Assert.ThrowsAsync<UserNotFoundException>(
+        await Assert.ThrowsAsync<UserNotFoundException>(
             async () => await serviceFixture15.Service.AcceptAsync(
                 Guid.CreateVersion7(),
                 "unknown-secret"));
@@ -860,7 +860,7 @@ public sealed class OrganizationInvitationAcceptancePersistenceTests
         await using var serviceTest = ServiceTestBase<OrganizationInvitationAcceptanceService>.ForDatabase(
             database, SignupTime);
 
-        Assert.ThrowsAsync<ArgumentException>(
+        await Assert.ThrowsAsync<ArgumentException>(
             async () => await serviceTest.Service.AcceptAsync(
                 Guid.CreateVersion7(),
                 new string('a', OrganizationInvitationSecret.MaximumLength + 1)));

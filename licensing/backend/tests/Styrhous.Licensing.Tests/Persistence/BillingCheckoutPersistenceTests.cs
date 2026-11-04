@@ -875,7 +875,7 @@ public sealed class BillingCheckoutPersistenceTests
         await using (var failingContext = database.CreateContext(
             new ThrowAfterSaveInterceptor()))
         {
-            Assert.ThrowsAsync<SimulatedPostSaveException>(
+            await Assert.ThrowsAsync<SimulatedPostSaveException>(
                 async () => await new PostgresBillingCheckoutStore(failingContext.CreateContextFactory())
                     .ApplySubscriptionAndCompleteProviderSessionAsync(
                         operationId,

@@ -170,12 +170,12 @@ public sealed class SignupPersistenceTests
 
         await using var signupTest3 = ServiceTestBase<UserSignupService>.ForDatabase(
             database, SignupTime);
-        Assert.ThrowsAsync<AccountLinkRequiredException>(
+        await Assert.ThrowsAsync<AccountLinkRequiredException>(
             async () => await signupTest3.Service.SignUpAsync(
                 VerifiedExternalIdentity.Create("google", "old-email", "old@example.com")));
         await using var signupTest4 = ServiceTestBase<UserSignupService>.ForDatabase(
             database, SignupTime);
-        Assert.ThrowsAsync<AccountLinkRequiredException>(
+        await Assert.ThrowsAsync<AccountLinkRequiredException>(
             async () => await signupTest4.Service.SignUpAsync(
                 VerifiedExternalIdentity.Create("google", "new-email", "new@example.com")));
         await AssertSingleRegistrationAsync(database, verifiedEmailClaimCount: 2);
@@ -357,7 +357,7 @@ public sealed class SignupPersistenceTests
         await service.SignUpAsync(
             VerifiedExternalIdentity.Create("github", "github-subject", "Person@Example.com"));
 
-        Assert.ThrowsAsync<AccountLinkRequiredException>(
+        await Assert.ThrowsAsync<AccountLinkRequiredException>(
             async () => await service.SignUpAsync(
                 VerifiedExternalIdentity.Create("google", "google-subject", "person@example.com")));
 
@@ -377,7 +377,7 @@ public sealed class SignupPersistenceTests
         await service.SignUpAsync(
             VerifiedExternalIdentity.Create("github", "second-subject", "second@example.com"));
 
-        Assert.ThrowsAsync<AccountLinkRequiredException>(
+        await Assert.ThrowsAsync<AccountLinkRequiredException>(
             async () => await service.SignUpAsync(
                 VerifiedExternalIdentity.Create(
                     "github",
@@ -433,7 +433,7 @@ public sealed class SignupPersistenceTests
         var accountCount = await context.BillingAccounts.CountAsync();
 
         context.BillingAccounts.Add(BillingAccount.CreatePersonal(signup.UserId, SignupTime));
-        var exception = Assert.ThrowsAsync<DbUpdateException>(
+        var exception = await Assert.ThrowsAsync<DbUpdateException>(
             async () => await context.SaveChangesAsync());
 
         Assert.Multiple(() =>
@@ -512,7 +512,7 @@ public sealed class SignupPersistenceTests
                 organization.Id,
                 SignupTime.AddDays(1)));
 
-        var exception = Assert.ThrowsAsync<DbUpdateException>(
+        var exception = await Assert.ThrowsAsync<DbUpdateException>(
             async () => await context.SaveChangesAsync());
 
         Assert.That(exception!.InnerException, Is.TypeOf<PostgresException>());
@@ -535,7 +535,7 @@ public sealed class SignupPersistenceTests
         var second = await signupTest2.Service.SignUpAsync(
             VerifiedExternalIdentity.Create("github", "second-user", "second@example.com"));
 
-        var exception = Assert.ThrowsAsync<PostgresException>(
+        var exception = await Assert.ThrowsAsync<PostgresException>(
             async () => await TransferTrialForTestAsync(
                 context,
                 second.TrialId,
@@ -593,7 +593,7 @@ public sealed class SignupPersistenceTests
             await context.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
             {
                 await using var transaction = await context.Database.BeginTransactionAsync();
-                Assert.ThrowsAsync<DbUpdateConcurrencyException>(async () =>
+                await Assert.ThrowsAsync<DbUpdateConcurrencyException>(async () =>
                     await signupTest2.Service.SignUpAsync(
                         VerifiedExternalIdentity.Create(
                             "github",

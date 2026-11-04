@@ -88,7 +88,7 @@ public sealed class OrganizationInvitationDeliveryServiceTests
             await context.OutboxMessages.Where(item => item.Id == id)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.ProcessingLeaseId, newOwner), token);
         };
-        var exception = Assert.ThrowsAsync<InvalidOperationException>(async () => await test.Service.DeliverAsync(id));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () => await test.Service.DeliverAsync(id));
         Assert.That(exception!.Message, Does.Contain("lease was lost"));
         await using var verification = test.Database.CreateContext();
         Assert.That((await verification.OutboxMessages.SingleAsync(item => item.Id == id)).ProcessingLeaseId,
@@ -107,7 +107,7 @@ public sealed class OrganizationInvitationDeliveryServiceTests
             await test.Database.DisposeAsync();
             throw failure;
         };
-        var exception = Assert.ThrowsAsync<AggregateException>(async () => await test.Service.DeliverAsync(id));
+        var exception = await Assert.ThrowsAsync<AggregateException>(async () => await test.Service.DeliverAsync(id));
         Assert.That(exception!.InnerExceptions[0], Is.SameAs(failure));
         Assert.That(exception.InnerExceptions, Has.Count.EqualTo(2));
     }

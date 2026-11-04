@@ -445,7 +445,7 @@ public sealed class OrganizationApiTests
         try
         {
             cancellation.Cancel();
-            Assert.ThrowsAsync<TaskCanceledException>(async () => await responseTask);
+            await Assert.ThrowsAsync<TaskCanceledException>(async () => await responseTask);
         }
         finally
         {

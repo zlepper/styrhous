@@ -553,7 +553,7 @@ public sealed class OrganizationInvitationPersistenceTests
         var baselineAuditCount = await context.AuditRecords.CountAsync();
 
         await using var serviceFixture16 = CreateService(database, SignupTime.AddDays(2), new ThrowAfterSaveInterceptor());
-        Assert.ThrowsAsync<SimulatedPostSaveException>(
+        await Assert.ThrowsAsync<SimulatedPostSaveException>(
             async () => await serviceFixture16.Service.CreateAsync(
                 owner.UserId,
                 organization.OrganizationId,
@@ -603,7 +603,7 @@ public sealed class OrganizationInvitationPersistenceTests
             firstInvitation.Secret.Hash,
             SignupTime.AddDays(2),
             assignProductSeat: false));
-        var exception = Assert.ThrowsAsync<DbUpdateException>(
+        var exception = await Assert.ThrowsAsync<DbUpdateException>(
             async () => await collisionContext.SaveChangesAsync());
 
         Assert.That(exception!.InnerException, Is.TypeOf<PostgresException>());
@@ -633,7 +633,7 @@ public sealed class OrganizationInvitationPersistenceTests
             OrganizationRole.Member);
         var success = RequireSuccess(created);
 
-        var exception = Assert.ThrowsAsync<PostgresException>(
+        var exception = await Assert.ThrowsAsync<PostgresException>(
             async () => await context.OrganizationInvitations
                 .Where(invitation => invitation.Id == success.InvitationId)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(
@@ -664,7 +664,7 @@ public sealed class OrganizationInvitationPersistenceTests
                 "invitee@example.com",
                 OrganizationRole.Member));
 
-        var exception = Assert.ThrowsAsync<PostgresException>(
+        var exception = await Assert.ThrowsAsync<PostgresException>(
             async () => await context.OrganizationInvitations
                 .Where(invitation => invitation.Id == created.InvitationId)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(
@@ -695,7 +695,7 @@ public sealed class OrganizationInvitationPersistenceTests
                 "invitee@example.com",
                 OrganizationRole.Member));
 
-        var exception = Assert.ThrowsAsync<PostgresException>(
+        var exception = await Assert.ThrowsAsync<PostgresException>(
             async () => await context.OrganizationInvitations
                 .Where(invitation => invitation.Id == created.InvitationId)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(
@@ -727,7 +727,7 @@ public sealed class OrganizationInvitationPersistenceTests
                 OrganizationRole.Admin,
                 assignProductSeat: false));
 
-        var exception = Assert.ThrowsAsync<PostgresException>(
+        var exception = await Assert.ThrowsAsync<PostgresException>(
             async () => await context.OrganizationInvitations
                 .Where(invitation => invitation.Id == created.InvitationId)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(
@@ -758,7 +758,7 @@ public sealed class OrganizationInvitationPersistenceTests
                 "invitee@example.com",
                 OrganizationRole.Member));
 
-        var exception = Assert.ThrowsAsync<PostgresException>(
+        var exception = await Assert.ThrowsAsync<PostgresException>(
             async () => await context.OrganizationInvitations
                 .Where(invitation => invitation.Id == created.InvitationId)
                 .ExecuteUpdateAsync(setters => setters
@@ -804,7 +804,7 @@ public sealed class OrganizationInvitationPersistenceTests
         await using var context = database.CreateContextWithCopenhagenTimeZone();
         context.OrganizationInvitations.Add(invitation);
 
-        Assert.DoesNotThrowAsync(async () => await context.SaveChangesAsync());
+        await Assert.DoesNotThrowAsync(async () => await context.SaveChangesAsync());
 
         await using var verificationContext = database.CreateContext();
         var persisted = await verificationContext.OrganizationInvitations.SingleAsync();
@@ -830,7 +830,7 @@ public sealed class OrganizationInvitationPersistenceTests
             organization.OrganizationId,
             "invitee@example.com");
 
-        var exception = Assert.ThrowsAsync<PostgresException>(
+        var exception = await Assert.ThrowsAsync<PostgresException>(
             async () => await context.OrganizationInvitations
                 .Where(candidate => candidate.Id == invitation.InvitationId)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(
@@ -877,23 +877,23 @@ public sealed class OrganizationInvitationPersistenceTests
         PostgresException acceptanceException;
         await using (var acceptanceContext = database.CreateContext())
         {
-            acceptanceException = Assert.ThrowsAsync<PostgresException>(
+            acceptanceException = (await Assert.ThrowsAsync<PostgresException>(
                 async () => await acceptanceContext.OrganizationInvitations
                     .Where(invitation => invitation.Id == accepted.InvitationId)
                     .ExecuteUpdateAsync(setters => setters
                         .SetProperty(invitation => invitation.AcceptedAt, terminalAt)
-                        .SetProperty(invitation => invitation.AcceptedByUserId, owner.UserId)))!;
+                        .SetProperty(invitation => invitation.AcceptedByUserId, owner.UserId))))!;
         }
 
         PostgresException cancellationException;
         await using (var cancellationContext = database.CreateContext())
         {
-            cancellationException = Assert.ThrowsAsync<PostgresException>(
+            cancellationException = (await Assert.ThrowsAsync<PostgresException>(
                 async () => await cancellationContext.OrganizationInvitations
                     .Where(invitation => invitation.Id == cancelled.InvitationId)
                     .ExecuteUpdateAsync(setters => setters.SetProperty(
                         invitation => invitation.CancelledAt,
-                        terminalAt)))!;
+                        terminalAt))))!;
         }
 
         Assert.Multiple(() =>
@@ -927,7 +927,7 @@ public sealed class OrganizationInvitationPersistenceTests
                 OrganizationRole.Member));
 
         var terminalTime = SignupTime.AddDays(3);
-        var exception = Assert.ThrowsAsync<PostgresException>(
+        var exception = await Assert.ThrowsAsync<PostgresException>(
             async () => await context.OrganizationInvitations
                 .Where(invitation => invitation.Id == created.InvitationId)
                 .ExecuteUpdateAsync(setters => setters
@@ -959,7 +959,7 @@ public sealed class OrganizationInvitationPersistenceTests
                 "invitee@example.com",
                 OrganizationRole.Member));
 
-        var exception = Assert.ThrowsAsync<PostgresException>(
+        var exception = await Assert.ThrowsAsync<PostgresException>(
             async () => await context.OrganizationInvitations
                 .Where(invitation => invitation.Id == created.InvitationId)
                 .ExecuteUpdateAsync(setters => setters
@@ -990,7 +990,7 @@ public sealed class OrganizationInvitationPersistenceTests
                 "invitee@example.com",
                 OrganizationRole.Member));
 
-        var exception = Assert.ThrowsAsync<PostgresException>(
+        var exception = await Assert.ThrowsAsync<PostgresException>(
             async () => await context.OrganizationInvitations
                 .Where(invitation => invitation.Id == created.InvitationId)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(
@@ -1021,7 +1021,7 @@ public sealed class OrganizationInvitationPersistenceTests
                 "invitee@example.com",
                 OrganizationRole.Member));
 
-        var exception = Assert.ThrowsAsync<PostgresException>(
+        var exception = await Assert.ThrowsAsync<PostgresException>(
             async () => await context.OrganizationInvitations
                 .Where(invitation => invitation.Id == created.InvitationId)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(
@@ -1040,7 +1040,7 @@ public sealed class OrganizationInvitationPersistenceTests
         await using var context = database.CreateContext();
 
         await using var serviceFixture26 = CreateService(database, SignupTime);
-        Assert.ThrowsAsync<UserNotFoundException>(
+        await Assert.ThrowsAsync<UserNotFoundException>(
             async () => await serviceFixture26.Service.CreateAsync(
                 Guid.CreateVersion7(),
                 Guid.CreateVersion7(),

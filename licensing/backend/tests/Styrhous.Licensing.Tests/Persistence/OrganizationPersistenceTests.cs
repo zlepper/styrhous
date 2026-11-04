@@ -260,7 +260,7 @@ public sealed class OrganizationPersistenceTests
 
         await using var organizationTest = ServiceTestBase<OrganizationCreationService>.ForDatabase(
             database, SignupTime.AddDays(1), interceptors: [new ThrowAfterSaveInterceptor()]);
-        Assert.ThrowsAsync<SimulatedPostSaveException>(
+        await Assert.ThrowsAsync<SimulatedPostSaveException>(
             async () => await organizationTest.Service
                 .CreateAsync(signup.UserId, "Rolled Back Organization"));
 
@@ -302,7 +302,7 @@ public sealed class OrganizationPersistenceTests
             "Duplicate",
             SignupTime));
 
-        var exception = Assert.ThrowsAsync<DbUpdateException>(
+        var exception = await Assert.ThrowsAsync<DbUpdateException>(
             async () => await context.SaveChangesAsync());
 
         Assert.That(exception!.InnerException, Is.TypeOf<PostgresException>());
@@ -327,7 +327,7 @@ public sealed class OrganizationPersistenceTests
             personalOwnerUserId;
         context.BillingAccounts.Add(account);
 
-        var exception = Assert.ThrowsAsync<DbUpdateException>(
+        var exception = await Assert.ThrowsAsync<DbUpdateException>(
             async () => await context.SaveChangesAsync());
 
         Assert.That(exception!.InnerException, Is.TypeOf<PostgresException>());
@@ -347,7 +347,7 @@ public sealed class OrganizationPersistenceTests
         var created = await organizationTest.Service
             .CreateAsync(signup.UserId, "Existing Organization");
 
-        var exception = Assert.ThrowsAsync<DbUpdateException>(
+        var exception = await Assert.ThrowsAsync<DbUpdateException>(
             async () => await InsertMembershipAsync(
                 context,
                 created.OrganizationId,
@@ -372,7 +372,7 @@ public sealed class OrganizationPersistenceTests
         var created = await organizationTest.Service
             .CreateAsync(owner.UserId, "Existing Organization");
 
-        var exception = Assert.ThrowsAsync<DbUpdateException>(
+        var exception = await Assert.ThrowsAsync<DbUpdateException>(
             async () => await InsertMembershipAsync(
                 context,
                 created.OrganizationId,
@@ -393,7 +393,7 @@ public sealed class OrganizationPersistenceTests
 
         await using var organizationTest = ServiceTestBase<OrganizationCreationService>.ForDatabase(
             database, SignupTime);
-        Assert.ThrowsAsync<UserNotFoundException>(
+        await Assert.ThrowsAsync<UserNotFoundException>(
             async () => await organizationTest.Service
                 .CreateAsync(Guid.CreateVersion7(), "Orphan Organization"));
 

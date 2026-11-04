@@ -60,6 +60,12 @@ public static class DesktopProtocolConfiguration
                         .AddSigningCertificate(certificate);
                 }
 
+                options.AddEventHandler<ValidateTokenRequestContext>(builder =>
+                {
+                    builder.SetOrder(
+                            OpenIddictServerHandlers.Exchange.ValidateClientIdParameter.Descriptor.Order - 500)
+                        .UseInlineHandler(ValidateDesktopTokenClientAsync);
+                });
                 options.AddEventHandler<ValidateDeviceAuthorizationRequestContext>(builder =>
                 {
                     builder.UseInlineHandler(ValidateDeviceAuthorizationRequestAsync);
@@ -100,6 +106,24 @@ public static class DesktopProtocolConfiguration
                 options.UseLocalServer();
                 options.UseAspNetCore();
             });
+    }
+
+    private static ValueTask ValidateDesktopTokenClientAsync(
+        ValidateTokenRequestContext context)
+    {
+        // Preserve the desktop protocol's invalid_client response before OpenIddict's
+        // device grant parameter validation rejects the request as invalid_request.
+        if (context.Request.IsDeviceCodeGrantType()
+            && !string.IsNullOrEmpty(context.Request.DeviceCode)
+            && string.IsNullOrEmpty(context.Request.ClientId)
+            && string.IsNullOrEmpty(context.Request.ClientAssertion))
+        {
+            context.Reject(
+                Errors.InvalidClient,
+                "The desktop client identifier is required.");
+        }
+
+        return ValueTask.CompletedTask;
     }
 
     private static ValueTask ValidateDeviceAuthorizationRequestAsync(

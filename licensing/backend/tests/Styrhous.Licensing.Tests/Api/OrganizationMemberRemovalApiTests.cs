@@ -502,7 +502,7 @@ public sealed class OrganizationMemberRemovalApiTests
         try
         {
             cancellation.Cancel();
-            Assert.ThrowsAsync<TaskCanceledException>(async () => await responseTask);
+            await Assert.ThrowsAsync<TaskCanceledException>(async () => await responseTask);
         }
         finally
         {

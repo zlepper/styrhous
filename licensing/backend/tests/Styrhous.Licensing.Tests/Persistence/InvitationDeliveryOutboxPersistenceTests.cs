@@ -240,7 +240,7 @@ public sealed class InvitationDeliveryOutboxPersistenceTests
             SignupTime.AddDays(2),
             interceptors: [new ThrowAfterSaveInterceptor()]);
 
-        Assert.ThrowsAsync<SimulatedPostSaveException>(
+        await Assert.ThrowsAsync<SimulatedPostSaveException>(
             async () => await serviceTest.Service.CreateAsync(
                     owner.UserId,
                     organization.OrganizationId,
@@ -278,7 +278,7 @@ public sealed class InvitationDeliveryOutboxPersistenceTests
             database,
             SignupTime.AddDays(3),
             interceptors: [new ThrowAfterSaveInterceptor()]);
-        Assert.ThrowsAsync<SimulatedPostSaveException>(
+        await Assert.ThrowsAsync<SimulatedPostSaveException>(
             async () => await resendTest.Service.ResendAsync(
                     owner.UserId,
                     organization.OrganizationId,
@@ -469,7 +469,7 @@ public sealed class InvitationDeliveryOutboxPersistenceTests
             _ => throw new ArgumentOutOfRangeException(nameof(mutation)),
         };
 
-        var exception = Assert.ThrowsAsync<PostgresException>(invalidUpdate);
+        var exception = await Assert.ThrowsAsync<PostgresException>(invalidUpdate);
 
         Assert.That(exception!.ConstraintName, Is.EqualTo("ck_outbox_messages_lifecycle"));
     }

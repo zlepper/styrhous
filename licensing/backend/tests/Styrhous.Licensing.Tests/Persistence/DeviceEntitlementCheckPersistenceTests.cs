@@ -362,7 +362,7 @@ public sealed class DeviceEntitlementCheckPersistenceTests
 
         await using var checkTest = ServiceTestBase<DeviceEntitlementCheckService>.ForDatabase(
             database, SignupTime.AddHours(1), interceptors: [new ThrowAfterSaveInterceptor()]);
-        Assert.ThrowsAsync<SimulatedPostSaveException>(
+        await Assert.ThrowsAsync<SimulatedPostSaveException>(
             async () => await checkTest.Service
                 .CheckAsync(signup.UserId, activation.ActivationId!.Value));
 
