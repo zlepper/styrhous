@@ -305,7 +305,7 @@ fn settings_shows_that_application_updates_are_being_checked() {
 
     harness.get_by_label("Application updates");
     harness.get_by_label("Checking for updates…");
-    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+    harness.ui_harness(HarnessSnapshotOptions::new(
         "updater/settings_shows_that_application_updates_are_being_checked/checking",
     ));
 }
@@ -334,7 +334,7 @@ fn settings_shows_a_staged_application_update() {
 
     harness.get_by_label("Application updates");
     harness.get_by_label("Version 0.2.0 is ready and will be installed on the next launch.");
-    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+    harness.ui_harness(HarnessSnapshotOptions::new(
         "updater/settings_shows_a_staged_application_update/staged_update",
     ));
 }
