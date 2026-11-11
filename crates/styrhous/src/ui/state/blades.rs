@@ -155,6 +155,55 @@ impl UiState {
         }
     }
 
+    /// Once the metrics APIs are served again, open inspectors that were started without
+    /// them restart their watches, as opening them now would.
+    pub(crate) fn restore_metrics_in_resource_detail_blades(
+        &mut self,
+        cluster_key: i32,
+        pod_metrics: bool,
+        node_metrics: bool,
+        commands_to_send: &mut Vec<WorkerCommandBox>,
+    ) {
+        if !pod_metrics && !node_metrics {
+            return;
+        }
+        let Some(cluster) = self.clusters.get(&cluster_key) else {
+            return;
+        };
+        let pod_metrics_api_available = cluster.pod_metrics_api_available;
+        let node_metrics_api_available = cluster.node_metrics_api_available;
+        let Some(navigator) = self.global_blades.navigator_mut() else {
+            return;
+        };
+        for entry in navigator
+            .entries_mut()
+            .filter_map(|entry| entry.resource_detail_mut())
+            .filter(|entry| entry.cluster_key == cluster_key)
+        {
+            let restore_pod = pod_metrics && entry.pod_metrics_api_unavailable;
+            let restore_node = node_metrics
+                && entry.node_metrics_api_unavailable
+                && entry.api_resource.group == "core"
+                && entry.api_resource.kind == "Node";
+            if !restore_pod && !restore_node {
+                continue;
+            }
+            entry.pod_metrics_api_unavailable &= !restore_pod;
+            entry.node_metrics_api_unavailable &= !restore_node;
+            stop_resource_detail_watches(cluster_key, [entry.history_entry_id], commands_to_send);
+            commands_to_send.push(Box::new(crate::worker::StartResourceDetailWatch {
+                cluster_key,
+                history_entry_id: entry.history_entry_id,
+                api_resource: entry.api_resource.clone(),
+                namespace: entry.namespace.clone(),
+                resource_name: entry.resource_name.clone(),
+                resource_uid: entry.resource_uid.clone(),
+                pod_metrics_api_available,
+                node_metrics_api_available,
+            }));
+        }
+    }
+
     pub(in crate::ui) fn stop_discarded_blades(
         discarded: impl IntoIterator<Item = Box<dyn GlobalBladeContent>>,
         commands_to_send: &mut Vec<WorkerCommandBox>,

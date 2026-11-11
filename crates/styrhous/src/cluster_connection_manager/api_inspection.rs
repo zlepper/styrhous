@@ -37,6 +37,8 @@ pub(crate) struct ApiInspection {
     pub(crate) api_resources: Vec<ApiResource>,
     pub(crate) scalable_api_resources: BTreeSet<ApiResource>,
     pub(crate) failed_api_groups: Vec<FailedApiGroup>,
+    /// What is needed to fetch the groups in `failed_api_groups` again.
+    pub(crate) retry_targets: Vec<ApiGroupTarget>,
     pub(crate) pod_metrics_api_available: bool,
     pub(crate) node_metrics_api_available: bool,
     pub(crate) custom_resource_columns: BTreeMap<ApiResource, Vec<CustomResourceColumn>>,
@@ -44,19 +46,46 @@ pub(crate) struct ApiInspection {
 }
 
 pub(crate) struct DiscoveredApiResources {
-    api_resources: Vec<ApiResource>,
-    scalable_api_resources: BTreeSet<ApiResource>,
+    pub(super) api_resources: Vec<ApiResource>,
+    pub(super) scalable_api_resources: BTreeSet<ApiResource>,
+}
+
+/// One API group to discover: its name and the versions whose resources are listed.
+/// `group_version` labels it the way failures are reported (its first version).
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct ApiGroupTarget {
+    pub(crate) group_version: String,
+    pub(crate) group_name: String,
+    pub(crate) versions: Vec<GroupVersionForDiscovery>,
+}
+
+impl ApiGroupTarget {
+    fn from_group(api_group: APIGroup) -> Self {
+        let versions = api_group
+            .preferred_version
+            .clone()
+            .map(|v| vec![v])
+            .unwrap_or_else(|| api_group.versions.clone());
+        let group_version = versions
+            .first()
+            .map_or_else(|| api_group.name.clone(), |v| v.group_version.clone());
+        Self {
+            group_version,
+            group_name: api_group.name,
+            versions,
+        }
+    }
 }
 
 impl KubernetesApiInspector {
-    async fn get_api_resources_for_group_versions(
+    pub(super) async fn get_api_resources_for_group_versions(
         &self,
-        api_group: APIGroup,
-        versions: Vec<GroupVersionForDiscovery>,
+        target: &ApiGroupTarget,
     ) -> Result<DiscoveredApiResources> {
-        let api_group_name = api_group.name;
+        let api_group_name = &target.group_name;
+        let versions = &target.versions;
         let mut resource_lists = Vec::with_capacity(versions.len());
-        for version in &versions {
+        for version in versions {
             resource_lists.push(
                 self.client
                     .list_api_group_resources(&version.group_version)
@@ -172,22 +201,18 @@ impl KubernetesApiInspector {
         .await?;
 
         let client = self.client.clone();
-        let tasks = api_groups.groups.into_iter().map(move |api_group| {
-            let versions = api_group
-                .preferred_version
-                .clone()
-                .map(|v| vec![v])
-                .unwrap_or_else(|| api_group.versions.clone());
-            let label = versions
-                .first()
-                .map_or_else(|| api_group.name.clone(), |v| v.group_version.clone());
+        let targets = api_groups
+            .groups
+            .into_iter()
+            .map(ApiGroupTarget::from_group)
+            .collect::<Vec<_>>();
+        let tasks = targets.iter().cloned().map(|target| {
             let inspector = KubernetesApiInspector {
                 client: client.clone(),
             };
-
-            (label, async move {
+            (target.group_version.clone(), async move {
                 inspector
-                    .get_api_resources_for_group_versions(api_group, versions)
+                    .get_api_resources_for_group_versions(&target)
                     .await
             })
         });
@@ -202,6 +227,14 @@ impl KubernetesApiInspector {
             groups_deadline,
         )
         .await;
+        let retry_targets = targets
+            .into_iter()
+            .filter(|target| {
+                failed_api_groups
+                    .iter()
+                    .any(|failure| failure.group_version == target.group_version)
+            })
+            .collect();
         for failure in &failed_api_groups {
             tracing::warn!(
                 group_version = %failure.group_version,
@@ -241,6 +274,7 @@ impl KubernetesApiInspector {
             api_resources: discovered_resources.api_resources,
             scalable_api_resources: discovered_resources.scalable_api_resources,
             failed_api_groups,
+            retry_targets,
             pod_metrics_api_available,
             node_metrics_api_available,
             custom_resource_columns,
@@ -248,17 +282,34 @@ impl KubernetesApiInspector {
         })
     }
 
-    async fn custom_resource_metadata(
+    pub(super) async fn custom_resource_metadata(
         &self,
     ) -> (
         BTreeMap<ApiResource, Vec<CustomResourceColumn>>,
         BTreeMap<ApiResource, ResourceSchema>,
     ) {
+        // Access to CRDs is commonly restricted. Dynamic resources still work without
+        // their optional columns, so do not fail API discovery in that case.
+        self.try_custom_resource_metadata()
+            .await
+            .unwrap_or_default()
+    }
+
+    /// Like `custom_resource_metadata`, but reports a failure that may be transient. Missing
+    /// permission is not transient and yields no metadata.
+    pub(super) async fn try_custom_resource_metadata(
+        &self,
+    ) -> Result<(
+        BTreeMap<ApiResource, Vec<CustomResourceColumn>>,
+        BTreeMap<ApiResource, ResourceSchema>,
+    )> {
         let crds = Api::<CustomResourceDefinition>::all(self.client.clone());
-        let Ok(crds) = crds.list(&Default::default()).await else {
-            // Access to CRDs is commonly restricted. Dynamic resources still work without
-            // their optional columns, so do not fail API discovery in that case.
-            return (BTreeMap::new(), BTreeMap::new());
+        let crds = match crds.list(&Default::default()).await {
+            Ok(crds) => crds,
+            Err(kube::Error::Api(status)) if matches!(status.code, 401 | 403) => {
+                return Ok(Default::default());
+            }
+            Err(error) => return Err(error.into()),
         };
 
         let mut columns_by_resource = BTreeMap::new();
@@ -299,7 +350,7 @@ impl KubernetesApiInspector {
                 }
             }
         }
-        (columns_by_resource, schemas_by_resource)
+        Ok((columns_by_resource, schemas_by_resource))
     }
 
     pub(crate) async fn custom_resource_columns(
@@ -642,6 +693,12 @@ mod tests {
 
     enum ScriptedReply {
         Json(&'static str, &'static str),
+        /// Answers 503 until `failures` requests have been served, then the body.
+        FailsFirst {
+            failures: usize,
+            served: AtomicUsize,
+            body: &'static str,
+        },
         Hang,
     }
 
@@ -710,6 +767,20 @@ mod tests {
                         .to_owned();
                     let (status, body) = match replies.iter().find(|(route, _)| *route == path) {
                         Some((_, ScriptedReply::Json(status, body))) => (*status, *body),
+                        Some((
+                            _,
+                            ScriptedReply::FailsFirst {
+                                failures,
+                                served,
+                                body,
+                            },
+                        )) => {
+                            if served.fetch_add(1, Ordering::SeqCst) < *failures {
+                                ("503 Service Unavailable", API_FAILURE)
+                            } else {
+                                ("200 OK", *body)
+                            }
+                        }
                         Some((_, ScriptedReply::Hang)) => {
                             std::future::pending::<()>().await;
                             return;
@@ -861,5 +932,73 @@ mod tests {
         assert_eq!(inspection.failed_api_groups.len(), 1);
         assert!(inspection.custom_resource_columns.is_empty());
         assert!(inspection.resource_schemas.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_group_that_fails_discovery_recovers_through_the_background_retry() {
+        use super::super::api_group_retry::retry_cluster_api_groups;
+
+        let replies = with_reply(
+            healthy_replies(),
+            "/apis/metrics.k8s.io/v1beta1",
+            ScriptedReply::FailsFirst {
+                failures: 2,
+                served: AtomicUsize::new(0),
+                body: leak(resource_list(
+                    "metrics.k8s.io/v1beta1",
+                    &[("pods", "PodMetrics"), ("nodes", "NodeMetrics")],
+                )),
+            },
+        );
+        let (client, _server) = scripted_api_server(replies).await;
+        let inspection = (KubernetesApiInspector {
+            client: client.clone(),
+        })
+        .inspect_api()
+        .await
+        .expect("discovery tolerates the failing group");
+        assert_eq!(inspection.retry_targets.len(), 1);
+        assert!(!inspection.pod_metrics_api_available);
+
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(8);
+        tokio::time::timeout(
+            Duration::from_secs(10),
+            retry_cluster_api_groups(
+                3,
+                client,
+                WorkerResultSender::new(sender, None),
+                inspection.retry_targets,
+                std::iter::repeat(Duration::from_millis(2)),
+            ),
+        )
+        .await
+        .expect("the retry should finish once the group answers");
+
+        let mut results = Vec::new();
+        while let Ok(result) = receiver.try_recv() {
+            results.push(result);
+        }
+        let debug = results
+            .iter()
+            .map(|result| format!("{result:?}"))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            debug.len(),
+            1,
+            "one recovery and no CRD metadata: {debug:?}"
+        );
+        assert!(
+            debug[0].contains("KubernetesApiGroupsRecovered"),
+            "{debug:?}"
+        );
+        assert!(debug[0].contains("metrics.k8s.io/v1beta1"), "{debug:?}");
+        assert!(
+            debug[0].contains("pod_metrics_api_available: true"),
+            "{debug:?}"
+        );
+        assert!(
+            debug[0].contains("node_metrics_api_available: true"),
+            "{debug:?}"
+        );
     }
 }

@@ -111,6 +111,7 @@ impl UiState {
         &mut self,
         cluster_key: i32,
         api_resources: &[ApiResource],
+        failed_group_versions: &[String],
     ) -> Option<ApiResource> {
         let context_name = self
             .clusters
@@ -131,6 +132,17 @@ impl UiState {
                     .cloned()
             }
         });
+
+        // A resource in a group that failed discovery may simply not be known yet; keep
+        // the saved selection so it can be restored once the group recovers.
+        let in_failed_group = saved_resource.is_some_and(|saved| {
+            failed_group_versions
+                .iter()
+                .any(|group_version| group_version.split('/').next() == Some(saved.group.as_str()))
+        });
+        if in_failed_group && api_resource.is_none() {
+            return None;
+        }
 
         if saved_resource.is_some() && api_resource.is_none() {
             if let Some(selection) = self.cluster_selections.selections.get_mut(&context_name) {

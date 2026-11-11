@@ -111,6 +111,8 @@ impl ClusterConnection {
             }
             .watch_namespaces(),
         );
+        // The same task retries groups that failed discovery after reporting the initial
+        // result, so it lives and dies with the connection like the namespace watcher.
         let api_resources_handle = tokio::spawn(load_api_resources(
             cluster_key,
             client.clone(),
@@ -145,7 +147,12 @@ async fn load_api_resources(
     client: kube::Client,
     event_output: WorkerResultSender,
 ) {
-    match (KubernetesApiInspector { client }).inspect_api().await {
+    let inspection = (KubernetesApiInspector {
+        client: client.clone(),
+    })
+    .inspect_api()
+    .await;
+    match inspection {
         Err(error) => event_output
             .send(KubernetesApisLoadFailed {
                 cluster_key,
@@ -179,6 +186,15 @@ async fn load_api_resources(
                 })
                 .await
                 .log_if_error("Failed to send custom resource schemas");
+            if !inspection.retry_targets.is_empty() {
+                super::retry_failed_api_groups_for_cluster(
+                    cluster_key,
+                    client,
+                    event_output,
+                    inspection.retry_targets,
+                )
+                .await;
+            }
         }
     }
 }
@@ -186,6 +202,7 @@ async fn load_api_resources(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cluster_connection_manager::{ApiGroupTarget, retry_failed_api_groups};
     use std::time::Duration;
 
     #[test]
@@ -206,5 +223,44 @@ mod tests {
         assert_eq!(log_config.connect_timeout, config.connect_timeout);
         assert_eq!(log_config.write_timeout, config.write_timeout);
         assert_eq!(log_config.cluster_url, config.cluster_url);
+    }
+
+    #[tokio::test]
+    async fn dropping_the_connection_stops_the_api_group_retry_task() {
+        let (alive, retry_stopped) = tokio::sync::oneshot::channel::<()>();
+        let retry = tokio::spawn(async move {
+            let _alive = alive;
+            retry_failed_api_groups(
+                std::iter::repeat(Duration::from_millis(5)),
+                tokio::time::sleep,
+                |_| async { anyhow::bail!("still failing") },
+                |_| async { Some(true) },
+                vec![ApiGroupTarget {
+                    group_version: "metrics.k8s.io/v1beta1".to_owned(),
+                    group_name: "metrics.k8s.io".to_owned(),
+                    versions: Vec::new(),
+                }],
+            )
+            .await;
+        });
+        let config = kube::Config::new(
+            "https://kubernetes.example"
+                .parse()
+                .expect("test cluster URL is valid"),
+        );
+        let connection = ClusterConnection {
+            client: kube::Client::try_from(config.clone()).expect("client"),
+            log_client: kube::Client::try_from(config).expect("log client"),
+            join_handles: vec![retry],
+            cluster_key: 1,
+        };
+        tokio::time::sleep(Duration::from_millis(30)).await;
+
+        drop(connection);
+
+        tokio::time::timeout(Duration::from_secs(2), retry_stopped)
+            .await
+            .expect("the retry loop should be aborted with its connection")
+            .expect_err("the loop's state is dropped without ever signalling");
     }
 }
