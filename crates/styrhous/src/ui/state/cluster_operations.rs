@@ -1,52 +1,60 @@
 use super::*;
 
 impl UiState {
-    pub(crate) fn select_cluster(&mut self, cluster_key: i32) -> Option<WorkerCommandBox> {
-        self.select_cluster_inner(cluster_key, true)
+    pub(crate) fn select_cluster(
+        &mut self,
+        cluster_key: i32,
+        commands_to_send: &mut Vec<WorkerCommandBox>,
+    ) {
+        self.select_cluster_inner(cluster_key, true, commands_to_send);
     }
 
     pub(crate) fn select_cluster_without_remembering(
         &mut self,
         cluster_key: i32,
-    ) -> Option<WorkerCommandBox> {
-        self.select_cluster_inner(cluster_key, false)
+        commands_to_send: &mut Vec<WorkerCommandBox>,
+    ) {
+        self.select_cluster_inner(cluster_key, false, commands_to_send);
     }
 
-    pub(crate) fn select_cluster_inner(
+    fn select_cluster_inner(
         &mut self,
         cluster_key: i32,
         remember_selection: bool,
-    ) -> Option<WorkerCommandBox> {
+        commands_to_send: &mut Vec<WorkerCommandBox>,
+    ) {
         self.selected_cluster = Some(cluster_key);
 
-        let context_name = self.clusters.get(&cluster_key)?.name.clone();
+        let Some(cluster) = self.clusters.get(&cluster_key) else {
+            return;
+        };
         if remember_selection {
-            self.cluster_selections.last_selected_context = Some(context_name);
+            self.cluster_selections.last_selected_context = Some(cluster.name.clone());
         }
-        if self
-            .clusters
-            .get(&cluster_key)
-            .is_some_and(|cluster| cluster.resource_detail_panel.is_some())
-        {
-            // `ConnectToCluster` tears down every worker watch for this session.
-            // Drop the matching UI history now so a cancelled inspector cannot
-            // remain above the reconnected workspace.
-            let _ = self.global_blades.clear();
-        }
-        let cluster = self.clusters.get_mut(&cluster_key)?;
+        // Re-selecting a live connection must leave its inspector and watches alone.
         if matches!(
             &cluster.connection,
             ClusterConnectionState::Connected | ClusterConnectionState::Connecting
         ) {
-            return None;
+            return;
         }
-
+        if cluster.resource_detail_panel.is_some() {
+            // `ConnectToCluster` tears down every worker watch for this session.
+            // Drop the matching UI history now so a cancelled inspector cannot
+            // remain above the reconnected workspace, and stop its watches so
+            // the UI and worker agree about what is still running.
+            self.discard_resource_detail_blades(commands_to_send);
+        }
+        let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
+            return;
+        };
         cluster.reset_for_connection();
 
-        Some(Box::new(crate::worker::ConnectToCluster {
+        tracing::info!("Connecting to cluster '{}'", cluster.name);
+        commands_to_send.push(Box::new(crate::worker::ConnectToCluster {
             cluster: cluster.name.clone(),
             cluster_key,
-        }))
+        }));
     }
 
     pub(crate) fn select_api_resource(

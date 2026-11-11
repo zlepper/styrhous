@@ -18,14 +18,24 @@ fn selecting_context_remembers_the_latest_user_selection() {
     ])
     .apply(&mut state, &mut commands);
 
-    assert!(state.select_cluster(1).is_some());
+    state.select_cluster(1, &mut commands);
+    assert!(
+        commands
+            .last()
+            .is_some_and(|command| command.as_ref().as_any().is::<ConnectToCluster>())
+    );
+    commands.clear();
     assert_eq!(
         state.cluster_selections.last_selected_context.as_deref(),
         Some("dev")
     );
 
     state.clusters.get_mut(&2).unwrap().connection = ClusterConnectionState::Connected;
-    assert!(state.select_cluster(2).is_none());
+    state.select_cluster(2, &mut commands);
+    assert!(
+        commands.is_empty(),
+        "a connected cluster is not reconnected"
+    );
     assert_eq!(
         state.cluster_selections.last_selected_context.as_deref(),
         Some("prod")
@@ -121,7 +131,9 @@ fn reconnect_discards_mutation_results_from_the_previous_session() {
     assert_eq!(state.clusters[&7].transient_operation_toasts.len(), 1);
 
     state.clusters.get_mut(&7).unwrap().connection = ClusterConnectionState::Disconnected;
-    assert!(state.select_cluster(7).is_some());
+    let mut commands = Vec::new();
+    state.select_cluster(7, &mut commands);
+    assert_eq!(commands.len(), 1);
     assert!(state.clusters[&7].operation_history.is_empty());
     assert!(state.clusters[&7].transient_operation_toasts.is_empty());
 
@@ -432,4 +444,106 @@ fn missing_remembered_context_without_a_current_context_leaves_selection_manual(
         state.cluster_selections.last_selected_context.as_deref(),
         Some("temporarily-missing")
     );
+}
+
+#[test]
+fn reconnecting_a_cluster_stops_its_inspector_watches() {
+    let mut state = UiState::default();
+    let mut commands = Vec::new();
+    let mut cluster = ClusterState::for_test(7, "dev");
+    cluster.connection = ClusterConnectionState::Failed("unreachable".into());
+    state.clusters.insert(7, cluster);
+    state.open_resource_detail(
+        7,
+        ApiResource::helm_releases(),
+        "demo".into(),
+        Some("default".into()),
+        "demo-uid".into(),
+        &mut commands,
+    );
+    commands.clear();
+
+    state.select_cluster(7, &mut commands);
+
+    assert!(state.global_blades.navigator().is_none());
+    assert!(state.clusters[&7].resource_detail_panel.is_none());
+    assert!(commands.iter().any(|command| {
+        command
+            .as_ref()
+            .as_any()
+            .downcast_ref::<StopResourceDetailWatch>()
+            .is_some_and(|command| command.cluster_key == 7 && command.history_entry_id == 1)
+    }));
+    assert!(
+        commands
+            .last()
+            .is_some_and(|command| command.as_ref().as_any().is::<ConnectToCluster>())
+    );
+}
+
+#[test]
+fn reselecting_a_connected_cluster_keeps_its_inspector_and_watches() {
+    let mut state = UiState::default();
+    let mut commands = Vec::new();
+    let mut cluster = ClusterState::for_test(7, "dev");
+    cluster.connection = ClusterConnectionState::Connected;
+    state.clusters.insert(7, cluster);
+    state.open_resource_detail(
+        7,
+        ApiResource::helm_releases(),
+        "demo".into(),
+        Some("default".into()),
+        "demo-uid".into(),
+        &mut commands,
+    );
+    commands.clear();
+
+    state.select_cluster(7, &mut commands);
+
+    assert!(state.global_blades.navigator().is_some());
+    assert!(state.clusters[&7].resource_detail_panel.is_some());
+    assert!(commands.is_empty());
+}
+
+#[test]
+fn retrying_a_failed_cluster_with_an_inspector_stops_its_watches_before_reconnecting() {
+    let mut state = UiState::default();
+    let mut commands = Vec::new();
+    let mut cluster = ClusterState::for_test(7, "dev");
+    cluster.connection = ClusterConnectionState::Failed("unreachable".into());
+    state.clusters.insert(7, cluster);
+    state.open_resource_detail(
+        7,
+        ApiResource::helm_releases(),
+        "demo".into(),
+        Some("default".into()),
+        "demo-uid".into(),
+        &mut commands,
+    );
+    commands.clear();
+
+    state.retry_selected_load(7, &mut commands);
+
+    assert!(state.global_blades.navigator().is_none());
+    let stop = commands
+        .iter()
+        .position(|command| command.as_ref().as_any().is::<StopResourceDetailWatch>())
+        .expect("the inspector watches are stopped");
+    let connect = commands
+        .iter()
+        .position(|command| command.as_ref().as_any().is::<ConnectToCluster>())
+        .expect("the cluster reconnects");
+    assert!(stop < connect);
+}
+
+#[test]
+fn reconnecting_a_cluster_without_an_inspector_sends_only_the_connect_command() {
+    let mut state = UiState::default();
+    let mut commands = Vec::new();
+    state.clusters.insert(7, ClusterState::for_test(7, "dev"));
+
+    state.select_cluster(7, &mut commands);
+
+    assert_eq!(commands.len(), 1);
+    assert!(commands[0].as_ref().as_any().is::<ConnectToCluster>());
 }
