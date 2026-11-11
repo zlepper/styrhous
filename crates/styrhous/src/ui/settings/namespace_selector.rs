@@ -187,12 +187,13 @@ fn show_fields(ui: &mut egui::Ui, blade: &mut NamespaceSelectorSettingsBlade) {
     let mut remove = None;
     let mut edit = None;
     let mut close_editor = false;
-    let table_width = ui.available_width();
     egui::Frame::new()
         .fill(WHITE)
         .stroke(surface::muted_border())
         .corner_radius(radius::surface())
         .show(ui, |ui| {
+            // Measured inside the frame so its stroke is already excluded.
+            let table_width = ui.available_width();
             let original_item_spacing = ui.spacing().item_spacing;
             ui.spacing_mut().item_spacing.y = 0.0;
             if blade.editing_field.is_some() {
@@ -434,13 +435,14 @@ fn show_templates(ui: &mut egui::Ui, settings: &mut NamespaceSelectorSettings) {
     );
     ui.add_space(spacing::SM);
     let mut remove = None;
-    let table_width = ui.available_width();
     ui.add_space(3.0);
     egui::Frame::new()
         .fill(WHITE)
         .stroke(surface::muted_border())
         .corner_radius(radius::surface())
         .show(ui, |ui| {
+            // Measured inside the frame so its stroke is already excluded.
+            let table_width = ui.available_width();
             let original_item_spacing = ui.spacing().item_spacing;
             ui.spacing_mut().item_spacing.y = 0.0;
             let reordered = ReorderableTable::new("namespace-identity-templates", 72.0).show(
@@ -547,14 +549,13 @@ fn show_preview(
     settings: &NamespaceSelectorSettings,
 ) {
     let display = presentation(namespace, settings);
-    let preview_width = ui.available_width();
     egui::Frame::new()
         .fill(WHITE)
         .stroke(egui::Stroke::new(1.0, indigo::_200))
         .corner_radius(radius::surface())
         .inner_margin(egui::Margin::same(spacing::LG as i8))
         .show(ui, |ui| {
-            ui.set_min_width(preview_width - spacing::LG * 2.0);
+            ui.set_min_width(ui.available_width());
             ui.set_min_height(96.0);
             ui.label(
                 egui::RichText::new("Preview")

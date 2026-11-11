@@ -30,11 +30,6 @@ impl BladeStack {
         }
     }
 
-    /// The fixed outer width used for every blade layer and its content frame.
-    pub const fn width(&self) -> f32 {
-        WIDTH
-    }
-
     pub fn seed_transition<T>(&self, ctx: &egui::Context, navigator: &mut BladeNavigator<T>) {
         navigator.seed_transition(ctx);
     }
@@ -170,7 +165,7 @@ impl BladeStack {
         let active_blade_transform = match transition {
             Some((BladeTransition::Opening | BladeTransition::Forward, value)) => Transform {
                 position: active_transform(viewport).position
-                    + egui::vec2((1.0 - value) * WIDTH, 0.0),
+                    + egui::vec2((1.0 - value) * blade_width(viewport), 0.0),
                 scale: 1.0,
             },
             Some((BladeTransition::Back, value)) => interpolate(
@@ -183,10 +178,7 @@ impl BladeStack {
             }
             None => active_transform(viewport),
         };
-        let active_rect = Rect::from_min_size(
-            active_blade_transform.position,
-            egui::vec2(WIDTH, height(viewport)) * active_blade_transform.scale,
-        );
+        let active_rect = transformed_rect(viewport, active_blade_transform);
         let active_content_id = self.content_id(history_len);
         let active_area_id = self.layer_id(history_len);
         let popup_was_open = egui::Popup::is_any_open(ctx);

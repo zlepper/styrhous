@@ -113,6 +113,7 @@ pub(super) fn show_layer<R>(
     add: impl FnOnce(&mut Ui) -> R,
 ) -> R {
     let origin = active_transform(viewport).position;
+    let width = blade_width(viewport);
     let visual = egui::emath::TSTransform::new(
         transform.position.to_vec2() - origin.to_vec2() * transform.scale,
         transform.scale,
@@ -120,10 +121,14 @@ pub(super) fn show_layer<R>(
     egui::Area::new(id)
         .order(Order::Foreground)
         .fixed_pos(origin)
+        // Blade positions are computed explicitly. egui's constraint would shift
+        // the area when it is wider than the room to the right of `origin`,
+        // desynchronising the visual transform and history hit targets.
+        .constrain(false)
         .fade_in(false)
         .interactable(interactable)
         .show(ctx, |ui| {
-            ui.set_width(WIDTH);
+            ui.set_width(width);
             ui.set_height(height(viewport));
             ui.with_visual_transform(visual, |ui| {
                 crate::scroll::vertical()
@@ -132,7 +137,7 @@ pub(super) fn show_layer<R>(
                     .min_scrolled_height(height(viewport))
                     .max_height(height(viewport))
                     .show(ui, |ui| {
-                        ui.set_width(WIDTH);
+                        ui.set_width(width);
                         let frame = egui::Frame::new()
                             .fill(WHITE)
                             .stroke(egui::Stroke::new(FRAME_STROKE_WIDTH, gray::_200))
@@ -143,15 +148,16 @@ pub(super) fn show_layer<R>(
                                 color: Color32::BLACK.gamma_multiply(0.12),
                             })
                             .inner_margin(egui::Margin::same(PADDING));
+                        let content_width = content_width(width);
                         let content_height =
                             (height(viewport) - frame.total_margin().sum().y).max(0.0);
                         frame
                             .show(ui, |ui| {
                                 // The frame owns the content geometry, so callers can
                                 // draw their body without managing parent widths.
-                                ui.set_width(CONTENT_WIDTH);
+                                ui.set_width(content_width);
                                 ui.set_min_height(content_height);
-                                add(ui)
+                                show_clipped_body(ui, content_width, add)
                             })
                             .inner
                     })
@@ -160,6 +166,25 @@ pub(super) fn show_layer<R>(
             .inner
         })
         .inner
+}
+
+/// Lay the body out in a fixed-width column and clip it to the blade.
+///
+/// Rows that cannot wrap may extend past the column, but only the column's
+/// width is allocated in the frame, so they never resize the blade.
+fn show_clipped_body<R>(ui: &mut Ui, content_width: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let origin = ui.cursor().min;
+    let column = Rect::from_min_size(origin, egui::vec2(content_width, ui.available_height()));
+    let mut body = ui.new_child(egui::UiBuilder::new().max_rect(column));
+    let padding = f32::from(PADDING) + FRAME_STROKE_WIDTH;
+    let clip = Rect::from_x_y_ranges(
+        (origin.x - padding)..=(origin.x + content_width + padding),
+        f32::NEG_INFINITY..=f32::INFINITY,
+    );
+    body.set_clip_rect(body.clip_rect().intersect(clip));
+    let result = add(&mut body);
+    ui.allocate_space(egui::vec2(content_width, body.min_rect().height()));
+    result
 }
 
 /// Keep clipped history layers visible to egui without painting their contents.
@@ -172,6 +197,8 @@ pub(super) fn retain_hidden_layer(ctx: &egui::Context, id: Id, viewport: Rect) {
     egui::Area::new(id)
         .order(Order::Foreground)
         .fixed_pos(egui::pos2(viewport.right() + INSET, viewport.top() + INSET))
+        // Without this egui would pull the off-screen area back into view.
+        .constrain(false)
         .fade_in(false)
         .interactable(false)
         .show(ctx, |ui| {

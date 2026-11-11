@@ -124,7 +124,7 @@ pub(super) fn show_command_template_input(
             spacing::SM as i8,
         ))
         .show(ui, |ui| {
-            let full_width = ui.available_width() + spacing::XL;
+            let full_width = ui.available_width();
             ui.set_min_width(full_width);
             ui.add_sized(
                 egui::vec2(full_width, 20.0),

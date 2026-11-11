@@ -245,11 +245,6 @@ fn closing_is_idempotent() {
 }
 
 #[test]
-fn exposes_the_shared_blade_width() {
-    assert_eq!(BladeStack::new("blade-width").width(), BLADE_WIDTH);
-}
-
-#[test]
 fn body_receives_the_fixed_blade_content_width() {
     let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
         id: 1,
@@ -273,7 +268,7 @@ fn body_receives_the_fixed_blade_content_width() {
     crate::test_support::setup_egui(&mut harness);
     harness.run();
 
-    assert_eq!(*observed_width.borrow(), Some(CONTENT_WIDTH));
+    assert_eq!(*observed_width.borrow(), Some(content_width(WIDTH)));
 }
 
 #[test]

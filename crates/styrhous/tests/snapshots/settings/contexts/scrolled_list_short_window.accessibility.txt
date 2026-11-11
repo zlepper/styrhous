@@ -603,31 +603,32 @@ Window state=[focused] rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
-                  Button name="Back in background blade" state=[disabled] rect=(x=473.0 y=34.0 width=34.0 height=34.0 center_x=490.0 center_y=51.0)
+                  GenericContainer rect=<none>
+                    Button name="Back in background blade" state=[disabled] rect=(x=473.0 y=34.0 width=34.0 height=34.0 center_x=490.0 center_y=51.0)
+                  GenericContainer rect=<none>
+                    Button name="Forward in background blade" rect=(x=515.0 y=34.0 width=34.0 height=34.0 center_x=532.0 center_y=51.0)
                 GenericContainer rect=<none>
-                  Button name="Forward in background blade" rect=(x=515.0 y=34.0 width=34.0 height=34.0 center_x=532.0 center_y=51.0)
+                  Label value="Settings" rect=(x=581.0 y=39.0 width=77.1 height=24.0 center_x=619.5 center_y=51.0)
+                    TextRun value="Settings" rect=(x=581.0 y=39.0 width=77.1 height=24.0 center_x=619.5 center_y=51.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Button name="Close background blade" rect=(x=1133.0 y=34.0 width=34.0 height=34.0 center_x=1150.0 center_y=51.0)
+              Label value="Manage your workspace and application preferences." rect=(x=473.0 y=88.0 width=356.4 height=17.0 center_x=651.2 center_y=96.5)
+                TextRun value="Manage your workspace and application preferences." rect=(x=473.0 y=88.0 width=356.4 height=17.0 center_x=651.2 center_y=96.5)
               GenericContainer rect=<none>
-                Label value="Settings" rect=(x=581.0 y=39.0 width=77.1 height=24.0 center_x=619.5 center_y=51.0)
-                  TextRun value="Settings" rect=(x=581.0 y=39.0 width=77.1 height=24.0 center_x=619.5 center_y=51.0)
-              GenericContainer rect=<none>
                 GenericContainer rect=<none>
-                  Button name="Close background blade" rect=(x=1133.0 y=34.0 width=34.0 height=34.0 center_x=1150.0 center_y=51.0)
-            Label value="Manage your workspace and application preferences." rect=(x=473.0 y=88.0 width=356.4 height=17.0 center_x=651.2 center_y=96.5)
-              TextRun value="Manage your workspace and application preferences." rect=(x=473.0 y=88.0 width=356.4 height=17.0 center_x=651.2 center_y=96.5)
-            GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="KUBERNETES" rect=(x=473.0 y=169.0 width=92.9 height=17.0 center_x=519.5 center_y=177.5)
-                  TextRun value="KUBERNETES" rect=(x=473.0 y=169.0 width=92.9 height=17.0 center_x=519.5 center_y=177.5)
-                GenericContainer rect=<none>
-                  Button name="Open context settings: Customize display names and selector badges. (10 contexts)" rect=(x=474.0 y=202.0 width=692.0 height=102.0 center_x=820.0 center_y=253.0)
-                  Button name="Open namespace selector settings: Choose how namespaces are displayed." rect=(x=474.0 y=304.0 width=692.0 height=102.0 center_x=820.0 center_y=355.0)
-                  Button name="Open cluster discovery: Find and add clusters from your cloud accounts." rect=(x=474.0 y=406.0 width=692.0 height=102.0 center_x=820.0 center_y=457.0)
-                Label value="APPLICATION" rect=(x=473.0 y=552.0 width=93.5 height=17.0 center_x=519.7 center_y=560.5)
-                  TextRun value="APPLICATION" rect=(x=473.0 y=552.0 width=93.5 height=17.0 center_x=519.7 center_y=560.5)
-                GenericContainer rect=<none>
-                  Button name="Open application settings: Terminal, debug images, and updates." rect=(x=474.0 y=585.0 width=692.0 height=102.0 center_x=820.0 center_y=636.0)
-                  Button name="Open license and account settings: Manage your license and account. Hosted Styrhous service (Active)" rect=(x=474.0 y=687.0 width=692.0 height=102.0 center_x=820.0 center_y=738.0)
-            ScrollBar rect=(x=1157.0 y=169.0 width=10.0 height=598.0 center_x=1162.0 center_y=468.0)
+                  Label value="KUBERNETES" rect=(x=473.0 y=169.0 width=92.9 height=17.0 center_x=519.5 center_y=177.5)
+                    TextRun value="KUBERNETES" rect=(x=473.0 y=169.0 width=92.9 height=17.0 center_x=519.5 center_y=177.5)
+                  GenericContainer rect=<none>
+                    Button name="Open context settings: Customize display names and selector badges. (10 contexts)" rect=(x=474.0 y=202.0 width=692.0 height=102.0 center_x=820.0 center_y=253.0)
+                    Button name="Open namespace selector settings: Choose how namespaces are displayed." rect=(x=474.0 y=304.0 width=692.0 height=102.0 center_x=820.0 center_y=355.0)
+                    Button name="Open cluster discovery: Find and add clusters from your cloud accounts." rect=(x=474.0 y=406.0 width=692.0 height=102.0 center_x=820.0 center_y=457.0)
+                  Label value="APPLICATION" rect=(x=473.0 y=552.0 width=93.5 height=17.0 center_x=519.7 center_y=560.5)
+                    TextRun value="APPLICATION" rect=(x=473.0 y=552.0 width=93.5 height=17.0 center_x=519.7 center_y=560.5)
+                  GenericContainer rect=<none>
+                    Button name="Open application settings: Terminal, debug images, and updates." rect=(x=474.0 y=585.0 width=692.0 height=102.0 center_x=820.0 center_y=636.0)
+                    Button name="Open license and account settings: Manage your license and account. Hosted Styrhous service (Active)" rect=(x=474.0 y=687.0 width=692.0 height=102.0 center_x=820.0 center_y=738.0)
+              ScrollBar rect=(x=1157.0 y=169.0 width=10.0 height=598.0 center_x=1162.0 center_y=468.0)
   GenericContainer rect=<none>
     Unknown name="Dismiss blade" rect=(x=0.0 y=0.0 width=448.0 height=800.0 center_x=224.0 center_y=400.0)
     Button name="Go back one blade" rect=(x=200.0 y=47.2 width=248.0 height=705.6 center_x=324.0 center_y=400.0)
@@ -643,117 +644,118 @@ Window state=[focused] rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
-                  Button name="Back" rect=(x=473.0 y=34.0 width=34.0 height=34.0 center_x=490.0 center_y=51.0)
+                  GenericContainer rect=<none>
+                    Button name="Back" rect=(x=473.0 y=34.0 width=34.0 height=34.0 center_x=490.0 center_y=51.0)
+                  GenericContainer rect=<none>
+                    Button name="Forward" state=[disabled] rect=(x=515.0 y=34.0 width=34.0 height=34.0 center_x=532.0 center_y=51.0)
                 GenericContainer rect=<none>
-                  Button name="Forward" state=[disabled] rect=(x=515.0 y=34.0 width=34.0 height=34.0 center_x=532.0 center_y=51.0)
-              GenericContainer rect=<none>
-                Label value="Contexts" rect=(x=581.0 y=39.0 width=84.2 height=24.0 center_x=623.1 center_y=51.0)
-                  TextRun value="Contexts" rect=(x=581.0 y=39.0 width=84.2 height=24.0 center_x=623.1 center_y=51.0)
-              GenericContainer rect=<none>
+                  Label value="Contexts" rect=(x=581.0 y=39.0 width=84.2 height=24.0 center_x=623.1 center_y=51.0)
+                    TextRun value="Contexts" rect=(x=581.0 y=39.0 width=84.2 height=24.0 center_x=623.1 center_y=51.0)
                 GenericContainer rect=<none>
-                  Button name="Close blade" rect=(x=1133.0 y=34.0 width=34.0 height=34.0 center_x=1150.0 center_y=51.0)
-            Label value="Give each context a familiar name and badge." rect=(x=473.0 y=88.0 width=302.5 height=17.0 center_x=624.2 center_y=96.5)
-              TextRun value="Give each context a familiar name and badge." rect=(x=473.0 y=88.0 width=302.5 height=17.0 center_x=624.2 center_y=96.5)
-            GenericContainer rect=<none>
-              Label value="Your contexts" rect=(x=473.0 y=169.0 width=106.9 height=19.0 center_x=526.5 center_y=178.5)
-                TextRun value="Your contexts" rect=(x=473.0 y=169.0 width=106.9 height=19.0 center_x=526.5 center_y=178.5)
+                  GenericContainer rect=<none>
+                    Button name="Close blade" rect=(x=1133.0 y=34.0 width=34.0 height=34.0 center_x=1150.0 center_y=51.0)
+              Label value="Give each context a familiar name and badge." rect=(x=473.0 y=88.0 width=302.5 height=17.0 center_x=624.2 center_y=96.5)
+                TextRun value="Give each context a familiar name and badge." rect=(x=473.0 y=88.0 width=302.5 height=17.0 center_x=624.2 center_y=96.5)
               GenericContainer rect=<none>
-                Label value="10 contexts" rect=(x=1092.6 y=170.0 width=74.4 height=17.0 center_x=1129.8 center_y=178.5)
-                  TextRun value="10 contexts" rect=(x=1093.0 y=170.0 width=74.4 height=17.0 center_x=1130.2 center_y=178.5)
-            GenericContainer rect=<none>
+                Label value="Your contexts" rect=(x=473.0 y=169.0 width=106.9 height=19.0 center_x=526.5 center_y=178.5)
+                  TextRun value="Your contexts" rect=(x=473.0 y=169.0 width=106.9 height=19.0 center_x=526.5 center_y=178.5)
+                GenericContainer rect=<none>
+                  Label value="10 contexts" rect=(x=1092.6 y=170.0 width=74.4 height=17.0 center_x=1129.8 center_y=178.5)
+                    TextRun value="10 contexts" rect=(x=1093.0 y=170.0 width=74.4 height=17.0 center_x=1130.2 center_y=178.5)
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
-                        Label value="CP" rect=(x=498.0 y=-404.0 width=60.0 height=60.0 center_x=528.0 center_y=-374.0)
                         GenericContainer rect=<none>
-                          Label value="Cloudstorage Prod" rect=(x=582.0 y=-396.0 width=144.5 height=19.0 center_x=654.2 center_y=-386.5)
-                          Label value="cloudstorage-production-eu" rect=(x=582.0 y=-373.0 width=203.5 height=15.0 center_x=683.8 center_y=-365.5)
-                        GenericContainer rect=<none>
-                          Button name="Edit context cloudstorage-production-eu" rect=(x=1045.0 y=-393.0 width=97.0 height=38.0 center_x=1093.5 center_y=-374.0)
-                    GenericContainer rect=<none>
+                          Label value="CP" rect=(x=498.0 y=-404.0 width=60.0 height=60.0 center_x=528.0 center_y=-374.0)
+                          GenericContainer rect=<none>
+                            Label value="Cloudstorage Prod" rect=(x=582.0 y=-396.0 width=144.5 height=19.0 center_x=654.2 center_y=-386.5)
+                            Label value="cloudstorage-production-eu" rect=(x=582.0 y=-373.0 width=203.5 height=15.0 center_x=683.8 center_y=-365.5)
+                          GenericContainer rect=<none>
+                            Button name="Edit context cloudstorage-production-eu" rect=(x=1045.0 y=-393.0 width=97.0 height=38.0 center_x=1093.5 center_y=-374.0)
                       GenericContainer rect=<none>
-                        Label value="CS" rect=(x=498.0 y=-292.0 width=60.0 height=60.0 center_x=528.0 center_y=-262.0)
                         GenericContainer rect=<none>
-                          Label value="Cloudstorage Stage" rect=(x=582.0 y=-284.0 width=153.2 height=19.0 center_x=658.6 center_y=-274.5)
-                          Label value="cloudstorage-staging-eu" rect=(x=582.0 y=-261.0 width=180.0 height=15.0 center_x=672.0 center_y=-253.5)
-                        GenericContainer rect=<none>
-                          Button name="Edit context cloudstorage-staging-eu" rect=(x=1045.0 y=-281.0 width=97.0 height=38.0 center_x=1093.5 center_y=-262.0)
-                    GenericContainer rect=<none>
+                          Label value="CS" rect=(x=498.0 y=-292.0 width=60.0 height=60.0 center_x=528.0 center_y=-262.0)
+                          GenericContainer rect=<none>
+                            Label value="Cloudstorage Stage" rect=(x=582.0 y=-284.0 width=153.2 height=19.0 center_x=658.6 center_y=-274.5)
+                            Label value="cloudstorage-staging-eu" rect=(x=582.0 y=-261.0 width=180.0 height=15.0 center_x=672.0 center_y=-253.5)
+                          GenericContainer rect=<none>
+                            Button name="Edit context cloudstorage-staging-eu" rect=(x=1045.0 y=-281.0 width=97.0 height=38.0 center_x=1093.5 center_y=-262.0)
                       GenericContainer rect=<none>
-                        Label value="CL" rect=(x=498.0 y=-180.0 width=60.0 height=60.0 center_x=528.0 center_y=-150.0)
                         GenericContainer rect=<none>
-                          Label value="Cloudstorage Local" rect=(x=582.0 y=-172.0 width=150.1 height=19.0 center_x=657.0 center_y=-162.5)
-                          Label value="cloudstorage-local-dev" rect=(x=582.0 y=-149.0 width=172.2 height=15.0 center_x=668.1 center_y=-141.5)
-                        GenericContainer rect=<none>
-                          Button name="Edit context cloudstorage-local-dev" rect=(x=1045.0 y=-169.0 width=97.0 height=38.0 center_x=1093.5 center_y=-150.0)
-                    GenericContainer rect=<none>
+                          Label value="CL" rect=(x=498.0 y=-180.0 width=60.0 height=60.0 center_x=528.0 center_y=-150.0)
+                          GenericContainer rect=<none>
+                            Label value="Cloudstorage Local" rect=(x=582.0 y=-172.0 width=150.1 height=19.0 center_x=657.0 center_y=-162.5)
+                            Label value="cloudstorage-local-dev" rect=(x=582.0 y=-149.0 width=172.2 height=15.0 center_x=668.1 center_y=-141.5)
+                          GenericContainer rect=<none>
+                            Button name="Edit context cloudstorage-local-dev" rect=(x=1045.0 y=-169.0 width=97.0 height=38.0 center_x=1093.5 center_y=-150.0)
                       GenericContainer rect=<none>
-                        Label value="PP" rect=(x=498.0 y=-68.0 width=60.0 height=60.0 center_x=528.0 center_y=-38.0)
                         GenericContainer rect=<none>
-                          Label value="Platform Prod" rect=(x=582.0 y=-60.0 width=105.4 height=19.0 center_x=634.7 center_y=-50.5)
-                          Label value="platform-production-eu" rect=(x=582.0 y=-37.0 width=172.2 height=15.0 center_x=668.1 center_y=-29.5)
-                        GenericContainer rect=<none>
-                          Button name="Edit context platform-production-eu" rect=(x=1045.0 y=-57.0 width=97.0 height=38.0 center_x=1093.5 center_y=-38.0)
-                    GenericContainer rect=<none>
+                          Label value="PP" rect=(x=498.0 y=-68.0 width=60.0 height=60.0 center_x=528.0 center_y=-38.0)
+                          GenericContainer rect=<none>
+                            Label value="Platform Prod" rect=(x=582.0 y=-60.0 width=105.4 height=19.0 center_x=634.7 center_y=-50.5)
+                            Label value="platform-production-eu" rect=(x=582.0 y=-37.0 width=172.2 height=15.0 center_x=668.1 center_y=-29.5)
+                          GenericContainer rect=<none>
+                            Button name="Edit context platform-production-eu" rect=(x=1045.0 y=-57.0 width=97.0 height=38.0 center_x=1093.5 center_y=-38.0)
                       GenericContainer rect=<none>
-                        Label value="PS" rect=(x=498.0 y=44.0 width=60.0 height=60.0 center_x=528.0 center_y=74.0)
                         GenericContainer rect=<none>
-                          Label value="Platform Stage" rect=(x=582.0 y=52.0 width=114.2 height=19.0 center_x=639.1 center_y=61.5)
-                          Label value="platform-staging-eu" rect=(x=582.0 y=75.0 width=148.7 height=15.0 center_x=656.4 center_y=82.5)
-                        GenericContainer rect=<none>
-                          Button name="Edit context platform-staging-eu" rect=(x=1045.0 y=55.0 width=97.0 height=38.0 center_x=1093.5 center_y=74.0)
-                    GenericContainer rect=<none>
+                          Label value="PS" rect=(x=498.0 y=44.0 width=60.0 height=60.0 center_x=528.0 center_y=74.0)
+                          GenericContainer rect=<none>
+                            Label value="Platform Stage" rect=(x=582.0 y=52.0 width=114.2 height=19.0 center_x=639.1 center_y=61.5)
+                            Label value="platform-staging-eu" rect=(x=582.0 y=75.0 width=148.7 height=15.0 center_x=656.4 center_y=82.5)
+                          GenericContainer rect=<none>
+                            Button name="Edit context platform-staging-eu" rect=(x=1045.0 y=55.0 width=97.0 height=38.0 center_x=1093.5 center_y=74.0)
                       GenericContainer rect=<none>
-                        Label value="AP" rect=(x=498.0 y=156.0 width=60.0 height=60.0 center_x=528.0 center_y=186.0)
                         GenericContainer rect=<none>
-                          Label value="Analytics Prod" rect=(x=582.0 y=164.0 width=112.7 height=19.0 center_x=638.3 center_y=173.5)
-                          Label value="analytics-production-eu" rect=(x=582.0 y=187.0 width=180.0 height=15.0 center_x=672.0 center_y=194.5)
-                        GenericContainer rect=<none>
-                          Button name="Edit context analytics-production-eu" rect=(x=1045.0 y=167.0 width=97.0 height=38.0 center_x=1093.5 center_y=186.0)
-                    GenericContainer rect=<none>
+                          Label value="AP" rect=(x=498.0 y=156.0 width=60.0 height=60.0 center_x=528.0 center_y=186.0)
+                          GenericContainer rect=<none>
+                            Label value="Analytics Prod" rect=(x=582.0 y=164.0 width=112.7 height=19.0 center_x=638.3 center_y=173.5)
+                            Label value="analytics-production-eu" rect=(x=582.0 y=187.0 width=180.0 height=15.0 center_x=672.0 center_y=194.5)
+                          GenericContainer rect=<none>
+                            Button name="Edit context analytics-production-eu" rect=(x=1045.0 y=167.0 width=97.0 height=38.0 center_x=1093.5 center_y=186.0)
                       GenericContainer rect=<none>
-                        Label value="AD" rect=(x=498.0 y=268.0 width=60.0 height=60.0 center_x=528.0 center_y=298.0)
                         GenericContainer rect=<none>
-                          Label value="Analytics Dev" rect=(x=582.0 y=276.0 width=106.7 height=19.0 center_x=635.4 center_y=285.5)
-                            TextRun value="Analytics Dev" rect=(x=582.0 y=276.0 width=106.7 height=19.0 center_x=635.4 center_y=285.5)
-                          Label value="analytics-development-eu" rect=(x=582.0 y=299.0 width=187.8 height=15.0 center_x=675.9 center_y=306.5)
-                            TextRun value="analytics-development-eu" rect=(x=582.0 y=299.0 width=187.8 height=15.0 center_x=675.9 center_y=306.5)
-                        GenericContainer rect=<none>
-                          Button name="Edit context analytics-development-eu" rect=(x=1045.0 y=279.0 width=97.0 height=38.0 center_x=1093.5 center_y=298.0)
-                    GenericContainer rect=<none>
+                          Label value="AD" rect=(x=498.0 y=268.0 width=60.0 height=60.0 center_x=528.0 center_y=298.0)
+                          GenericContainer rect=<none>
+                            Label value="Analytics Dev" rect=(x=582.0 y=276.0 width=106.7 height=19.0 center_x=635.4 center_y=285.5)
+                              TextRun value="Analytics Dev" rect=(x=582.0 y=276.0 width=106.7 height=19.0 center_x=635.4 center_y=285.5)
+                            Label value="analytics-development-eu" rect=(x=582.0 y=299.0 width=187.8 height=15.0 center_x=675.9 center_y=306.5)
+                              TextRun value="analytics-development-eu" rect=(x=582.0 y=299.0 width=187.8 height=15.0 center_x=675.9 center_y=306.5)
+                          GenericContainer rect=<none>
+                            Button name="Edit context analytics-development-eu" rect=(x=1045.0 y=279.0 width=97.0 height=38.0 center_x=1093.5 center_y=298.0)
                       GenericContainer rect=<none>
-                        Label value="SA" rect=(x=498.0 y=380.0 width=60.0 height=60.0 center_x=528.0 center_y=410.0)
                         GenericContainer rect=<none>
-                          Label value="Sandbox" rect=(x=582.0 y=388.0 width=67.9 height=19.0 center_x=615.9 center_y=397.5)
-                            TextRun value="Sandbox" rect=(x=582.0 y=388.0 width=67.9 height=19.0 center_x=615.9 center_y=397.5)
-                          Label value="sandbox" rect=(x=582.0 y=411.0 width=54.8 height=15.0 center_x=609.4 center_y=418.5)
-                            TextRun value="sandbox" rect=(x=582.0 y=411.0 width=54.8 height=15.0 center_x=609.4 center_y=418.5)
-                        GenericContainer rect=<none>
-                          Button name="Edit context sandbox" rect=(x=1045.0 y=391.0 width=97.0 height=38.0 center_x=1093.5 center_y=410.0)
-                    GenericContainer rect=<none>
+                          Label value="SA" rect=(x=498.0 y=380.0 width=60.0 height=60.0 center_x=528.0 center_y=410.0)
+                          GenericContainer rect=<none>
+                            Label value="Sandbox" rect=(x=582.0 y=388.0 width=67.9 height=19.0 center_x=615.9 center_y=397.5)
+                              TextRun value="Sandbox" rect=(x=582.0 y=388.0 width=67.9 height=19.0 center_x=615.9 center_y=397.5)
+                            Label value="sandbox" rect=(x=582.0 y=411.0 width=54.8 height=15.0 center_x=609.4 center_y=418.5)
+                              TextRun value="sandbox" rect=(x=582.0 y=411.0 width=54.8 height=15.0 center_x=609.4 center_y=418.5)
+                          GenericContainer rect=<none>
+                            Button name="Edit context sandbox" rect=(x=1045.0 y=391.0 width=97.0 height=38.0 center_x=1093.5 center_y=410.0)
                       GenericContainer rect=<none>
-                        Label value="KK" rect=(x=498.0 y=492.0 width=60.0 height=60.0 center_x=528.0 center_y=522.0)
                         GenericContainer rect=<none>
-                          Label value="kind-kind" rect=(x=582.0 y=500.0 width=73.6 height=19.0 center_x=618.8 center_y=509.5)
-                            TextRun value="kind-kind" rect=(x=582.0 y=500.0 width=73.6 height=19.0 center_x=618.8 center_y=509.5)
-                          Label value="kind-kind" rect=(x=582.0 y=523.0 width=70.4 height=15.0 center_x=617.2 center_y=530.5)
-                            TextRun value="kind-kind" rect=(x=582.0 y=523.0 width=70.4 height=15.0 center_x=617.2 center_y=530.5)
-                        GenericContainer rect=<none>
-                          Button name="Edit context kind-kind" rect=(x=1045.0 y=503.0 width=97.0 height=38.0 center_x=1093.5 center_y=522.0)
-                    GenericContainer rect=<none>
+                          Label value="KK" rect=(x=498.0 y=492.0 width=60.0 height=60.0 center_x=528.0 center_y=522.0)
+                          GenericContainer rect=<none>
+                            Label value="kind-kind" rect=(x=582.0 y=500.0 width=73.6 height=19.0 center_x=618.8 center_y=509.5)
+                              TextRun value="kind-kind" rect=(x=582.0 y=500.0 width=73.6 height=19.0 center_x=618.8 center_y=509.5)
+                            Label value="kind-kind" rect=(x=582.0 y=523.0 width=70.4 height=15.0 center_x=617.2 center_y=530.5)
+                              TextRun value="kind-kind" rect=(x=582.0 y=523.0 width=70.4 height=15.0 center_x=617.2 center_y=530.5)
+                          GenericContainer rect=<none>
+                            Button name="Edit context kind-kind" rect=(x=1045.0 y=503.0 width=97.0 height=38.0 center_x=1093.5 center_y=522.0)
                       GenericContainer rect=<none>
-                        Label value="DD" rect=(x=498.0 y=604.0 width=60.0 height=60.0 center_x=528.0 center_y=634.0)
                         GenericContainer rect=<none>
-                          Label value="Docker Desktop" rect=(x=582.0 y=612.0 width=123.3 height=19.0 center_x=643.7 center_y=621.5)
-                            TextRun value="Docker Desktop" rect=(x=582.0 y=612.0 width=123.3 height=19.0 center_x=643.7 center_y=621.5)
-                          Label value="docker-desktop" rect=(x=582.0 y=635.0 width=109.6 height=15.0 center_x=636.8 center_y=642.5)
-                            TextRun value="docker-desktop" rect=(x=582.0 y=635.0 width=109.6 height=15.0 center_x=636.8 center_y=642.5)
-                        GenericContainer rect=<none>
-                          Button name="Edit context docker-desktop" rect=(x=1045.0 y=615.0 width=97.0 height=38.0 center_x=1093.5 center_y=634.0)
-              ScrollBar rect=(x=1157.0 y=215.0 width=10.0 height=476.0 center_x=1162.0 center_y=453.0)
-            Label value="Badges use the first two words of the display name." rect=(x=473.0 y=718.0 width=342.8 height=17.0 center_x=644.4 center_y=726.5)
-              TextRun value="Badges use the first two words of the display name." rect=(x=473.0 y=718.0 width=342.8 height=17.0 center_x=644.4 center_y=726.5)
-            Label value="Set a custom badge to make a context easier to recognize." rect=(x=473.0 y=738.0 width=388.2 height=17.0 center_x=667.1 center_y=746.5)
-              TextRun value="Set a custom badge to make a context easier to recognize." rect=(x=473.0 y=738.0 width=388.2 height=17.0 center_x=667.1 center_y=746.5)
+                          Label value="DD" rect=(x=498.0 y=604.0 width=60.0 height=60.0 center_x=528.0 center_y=634.0)
+                          GenericContainer rect=<none>
+                            Label value="Docker Desktop" rect=(x=582.0 y=612.0 width=123.3 height=19.0 center_x=643.7 center_y=621.5)
+                              TextRun value="Docker Desktop" rect=(x=582.0 y=612.0 width=123.3 height=19.0 center_x=643.7 center_y=621.5)
+                            Label value="docker-desktop" rect=(x=582.0 y=635.0 width=109.6 height=15.0 center_x=636.8 center_y=642.5)
+                              TextRun value="docker-desktop" rect=(x=582.0 y=635.0 width=109.6 height=15.0 center_x=636.8 center_y=642.5)
+                          GenericContainer rect=<none>
+                            Button name="Edit context docker-desktop" rect=(x=1045.0 y=615.0 width=97.0 height=38.0 center_x=1093.5 center_y=634.0)
+                ScrollBar rect=(x=1157.0 y=215.0 width=10.0 height=476.0 center_x=1162.0 center_y=453.0)
+              Label value="Badges use the first two words of the display name." rect=(x=473.0 y=718.0 width=342.8 height=17.0 center_x=644.4 center_y=726.5)
+                TextRun value="Badges use the first two words of the display name." rect=(x=473.0 y=718.0 width=342.8 height=17.0 center_x=644.4 center_y=726.5)
+              Label value="Set a custom badge to make a context easier to recognize." rect=(x=473.0 y=738.0 width=388.2 height=17.0 center_x=667.1 center_y=746.5)
+                TextRun value="Set a custom badge to make a context easier to recognize." rect=(x=473.0 y=738.0 width=388.2 height=17.0 center_x=667.1 center_y=746.5)
