@@ -15,6 +15,36 @@ pub(super) struct HelmReleaseDetailBlade {
     namespace: String,
     selected_revision: i64,
     pending_navigation: Option<ManifestNavigation>,
+    parsed_manifest: Option<ParsedManifest>,
+}
+
+/// Manifest inventory of one revision, so the YAML is not re-parsed every frame.
+#[derive(Debug)]
+struct ParsedManifest {
+    revision: i64,
+    manifest: String,
+    resources: Vec<ManifestResource>,
+}
+
+impl ParsedManifest {
+    fn resources_for<'a>(
+        cache: &'a mut Option<Self>,
+        release: &HelmRelease,
+    ) -> &'a [ManifestResource] {
+        let stale = cache.as_ref().is_none_or(|parsed| {
+            parsed.revision != release.revision || parsed.manifest != release.manifest
+        });
+        if stale {
+            *cache = Some(Self {
+                revision: release.revision,
+                manifest: release.manifest.clone(),
+                resources: manifest_resources(&release.manifest, &release.namespace),
+            });
+        }
+        cache
+            .as_ref()
+            .map_or(&[], |parsed| parsed.resources.as_slice())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -33,6 +63,7 @@ impl HelmReleaseDetailBlade {
             namespace,
             selected_revision: 0,
             pending_navigation: None,
+            parsed_manifest: None,
         }
     }
 
@@ -156,10 +187,10 @@ impl GlobalBladeContent for HelmReleaseDetailBlade {
         let values = release.values_yaml();
         show_values_disclosure(ui, &values);
         ui.add_space(spacing::MD);
-        let resources = manifest_resources(&release.manifest, &release.namespace);
+        let resources = ParsedManifest::resources_for(&mut self.parsed_manifest, &release);
         show_manifest_resources(
             ui,
-            &resources,
+            resources,
             release.id(),
             &mut self.pending_navigation,
             self.cluster_key,
