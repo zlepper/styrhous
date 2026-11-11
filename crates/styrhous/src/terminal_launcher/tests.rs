@@ -293,3 +293,127 @@ fn linux_automatic_launcher_starts_with_xdg_when_terminal_environment_is_missing
 
     assert_eq!(plans[0].program, "xdg-terminal-exec");
 }
+
+/// Runs `script` in `/bin/sh` and splits stdout on NUL; the script must print its
+/// arguments with `printf '%s\0' ...` so they can be compared exactly.
+#[cfg(unix)]
+fn run_in_posix_shell(script: &str) -> Vec<String> {
+    let output = std::process::Command::new("/bin/sh")
+        .args(["-c", script])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "sh failed for {script:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let mut fields: Vec<String> = output
+        .stdout
+        .split(|byte| *byte == 0)
+        .map(|field| String::from_utf8(field.to_vec()).unwrap())
+        .collect();
+    assert_eq!(fields.pop().as_deref(), Some(""));
+    fields
+}
+
+#[cfg(unix)]
+#[test]
+fn posix_shell_command_round_trips_awkward_arguments_through_sh() {
+    let arguments: Vec<String> = [
+        "plain",
+        "with space",
+        "bob's-cluster",
+        "'",
+        "''",
+        "trailing'",
+        "'leading",
+        "$HOME",
+        "`echo hi`",
+        "$(echo hi)",
+        "say \"hi\"",
+        "back\\slash",
+        "back\\'slash",
+        "new\nline",
+        "semi; echo nope",
+        "",
+    ]
+    .map(String::from)
+    .to_vec();
+
+    let command = shell_command(&arguments, ShellDialect::Posix);
+
+    assert_eq!(
+        run_in_posix_shell(&format!("printf '%s\\0' {command}")),
+        arguments
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn custom_template_does_not_execute_commands_embedded_in_a_context_name() {
+    let directory = tempfile::tempdir().unwrap();
+    let pwned = directory.path().join("pwned");
+    let context = format!("x' ; touch '{}' ; '", pwned.display());
+    let request = ShellRequest::Pod {
+        kube_context: context.clone(),
+        namespace: "default".into(),
+        pod_name: "api".into(),
+        container: "server".into(),
+    };
+
+    let plan = custom_template_plan("printf '%s\\0' {command}", &kubectl_arguments(&request));
+
+    assert_eq!(plan.program, "/bin/sh");
+    assert_eq!(
+        run_in_posix_shell(&plan.args[1]),
+        kubectl_arguments(&request)
+    );
+    assert!(!pwned.exists());
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn linux_terminal_environment_launcher_keeps_quotes_in_arguments_intact() {
+    let request = ShellRequest::Pod {
+        kube_context: "bob's-cluster".into(),
+        namespace: "default".into(),
+        pod_name: "api".into(),
+        container: "server".into(),
+    };
+    let kubectl = kubectl_arguments(&request);
+
+    let plans = linux_launch_plans(&request, &kubectl, Some("printf '%s\\0'"));
+
+    let script = plans[0].args[1].replacen("exec ", "", 1);
+    let mut expected = vec!["-e".to_string()];
+    expected.extend(kubectl);
+    assert_eq!(run_in_posix_shell(&script), expected);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn linux_xfce4_terminal_command_keeps_quotes_in_arguments_intact() {
+    let request = ShellRequest::Pod {
+        kube_context: "bob's-cluster".into(),
+        namespace: "default".into(),
+        pod_name: "api".into(),
+        container: "server".into(),
+    };
+    let kubectl = kubectl_arguments(&request);
+
+    let plans = linux_launch_plans(&request, &kubectl, None);
+
+    let plan = plans
+        .iter()
+        .find(|plan| plan.program == "xfce4-terminal")
+        .unwrap();
+    let command = plan
+        .args
+        .iter()
+        .find_map(|argument| argument.strip_prefix("--command="))
+        .unwrap();
+    assert_eq!(
+        run_in_posix_shell(&format!("printf '%s\\0' {command}")),
+        kubectl
+    );
+}
