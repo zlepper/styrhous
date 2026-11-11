@@ -58,6 +58,8 @@ pub(crate) enum CellValue {
     },
     ContainerIndicators(Vec<ContainerIndicator>),
     List(Vec<String>),
+    /// Metrics could not be read. Displays as text but sorts last like `Empty`.
+    Unavailable,
     Empty,
 }
 
@@ -83,7 +85,7 @@ pub(crate) fn cell_sort_value(value: &CellValue) -> SortValue {
                 .join(","),
         ),
         CellValue::List(values) => SortValue::Text(values.join(",")),
-        CellValue::Empty => SortValue::Empty,
+        CellValue::Unavailable | CellValue::Empty => SortValue::Empty,
     }
 }
 
@@ -106,8 +108,8 @@ pub(crate) fn compare_sort_value_refs(
         (_, SortValue::Empty) => std::cmp::Ordering::Less,
         (SortValue::Number(left), SortValue::Number(right)) => left.cmp(right),
         (SortValue::Text(left), SortValue::Text(right)) => left.cmp(right),
-        (SortValue::Number(left), SortValue::Text(right)) => left.to_string().cmp(right),
-        (SortValue::Text(left), SortValue::Number(right)) => left.cmp(&right.to_string()),
+        (SortValue::Number(_), SortValue::Text(_)) => std::cmp::Ordering::Less,
+        (SortValue::Text(_), SortValue::Number(_)) => std::cmp::Ordering::Greater,
     };
     if direction == components::SortDirection::Descending
         && !matches!(left, SortValue::Empty)
@@ -237,5 +239,73 @@ mod tests {
             ),
             std::cmp::Ordering::Less,
         );
+    }
+
+    fn mixed_sort_values() -> Vec<SortValue> {
+        vec![
+            SortValue::Number(9),
+            SortValue::Number(10),
+            SortValue::Number(-3),
+            SortValue::Text("5".to_owned()),
+            SortValue::Text("Unavailable".to_owned()),
+            SortValue::Text(String::new()),
+            SortValue::Empty,
+        ]
+    }
+
+    #[test]
+    fn mixed_columns_sort_numbers_before_text_with_empty_last() {
+        for direction in [
+            components::SortDirection::Ascending,
+            components::SortDirection::Descending,
+        ] {
+            let mut values = vec![
+                SortValue::Text("5".to_owned()),
+                SortValue::Empty,
+                SortValue::Number(10),
+                SortValue::Text("Unavailable".to_owned()),
+                SortValue::Number(9),
+            ];
+            values.sort_by(|left, right| compare_sort_value_refs(left, right, direction));
+
+            let mut expected = vec![
+                SortValue::Number(9),
+                SortValue::Number(10),
+                SortValue::Text("5".to_owned()),
+                SortValue::Text("Unavailable".to_owned()),
+            ];
+            if direction == components::SortDirection::Descending {
+                expected.reverse();
+            }
+            expected.push(SortValue::Empty);
+            assert_eq!(values, expected, "{direction:?}");
+        }
+    }
+
+    #[test]
+    fn sort_value_comparison_is_a_total_order() {
+        use std::cmp::Ordering;
+        let values = mixed_sort_values();
+        for direction in [
+            components::SortDirection::Ascending,
+            components::SortDirection::Descending,
+        ] {
+            let cmp = |a: &SortValue, b: &SortValue| compare_sort_value_refs(a, b, direction);
+            for a in &values {
+                assert_eq!(cmp(a, a), Ordering::Equal);
+                for b in &values {
+                    assert_eq!(cmp(a, b), cmp(b, a).reverse(), "{a:?} vs {b:?}");
+                    for c in &values {
+                        if cmp(a, b) != Ordering::Greater && cmp(b, c) != Ordering::Greater {
+                            assert_ne!(
+                                cmp(a, c),
+                                Ordering::Greater,
+                                "{a:?} <= {b:?} <= {c:?} in {direction:?}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
     }
 }

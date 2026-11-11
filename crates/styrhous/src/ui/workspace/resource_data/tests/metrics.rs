@@ -1,4 +1,5 @@
 use super::*;
+use crate::resource_table::MEMORY_COLUMN;
 
 #[test]
 fn pod_metric_results_invalidate_cpu_sort_and_update_cells() {
@@ -110,7 +111,7 @@ fn pod_metric_results_invalidate_cpu_sort_and_update_cells() {
             table_data(failed_cluster).metrics,
             &pod,
         ),
-        Some(CellValue::Text("Unavailable".to_owned()))
+        Some(CellValue::Unavailable)
     );
 }
 
@@ -231,6 +232,85 @@ fn node_metric_results_and_api_unavailable_refresh_cpu_sort_and_cells() {
             table_data(unavailable_cluster).metrics,
             &node,
         ),
-        Some(CellValue::Text("Unavailable".to_owned()))
+        Some(CellValue::Unavailable)
     );
+}
+
+#[test]
+fn unavailable_usage_sorts_after_available_usage_in_both_directions() {
+    use crate::worker::WorkerResult as _;
+
+    let pod = api_resource("Pod", "pods", true);
+    let pod_in = |name: &str, namespace: &str| MinimalResource {
+        namespace: Some(namespace.to_owned()),
+        ..table_resource(name)
+    };
+    let mut cluster = cluster_with_resources(
+        &pod,
+        [
+            pod_in("broken-a", "broken"),
+            pod_in("heavy", "default"),
+            pod_in("light", "default"),
+            pod_in("broken-b", "broken"),
+            pod_in("medium", "default"),
+        ],
+    );
+    cluster.active_pod_metrics.insert("default".to_owned());
+    cluster.active_pod_metrics.insert("broken".to_owned());
+    let mut ui_state = UiState {
+        clusters: HashMap::from([(1, cluster)]),
+        selected_cluster: Some(1),
+        ..Default::default()
+    };
+    crate::worker::PodMetricsUpdated {
+        cluster_key: 1,
+        namespace: "default".to_owned(),
+        usages: BTreeMap::from([
+            ("heavy".to_owned(), pod_usage(30)),
+            ("light".to_owned(), pod_usage(10)),
+            ("medium".to_owned(), pod_usage(20)),
+        ]),
+    }
+    .apply(&mut ui_state, &mut Vec::new());
+    crate::worker::PodMetricsWatchFailed {
+        cluster_key: 1,
+        namespace: "broken".to_owned(),
+        error: "metrics watch failed".to_owned(),
+    }
+    .apply(&mut ui_state, &mut Vec::new());
+
+    let search = ResourceSearchState::default();
+    for column in [CPU_COLUMN, MEMORY_COLUMN] {
+        for (direction, expected) in [
+            (
+                components::SortDirection::Ascending,
+                ["light", "medium", "heavy"],
+            ),
+            (
+                components::SortDirection::Descending,
+                ["heavy", "medium", "light"],
+            ),
+        ] {
+            let mut configuration = resource_table_configuration(
+                1_280.0,
+                &pod,
+                &[],
+                false,
+                &mut PersistedResourceTablePreferences::default(),
+            );
+            configuration.sort_state = Some(components::SortState::new(column, direction));
+            let names = prepared_names(
+                &mut ResourceTableCache::default(),
+                &ui_state.clusters[&1],
+                &pod,
+                &search,
+                &configuration,
+            );
+
+            assert_eq!(names[..3], expected, "{column} {direction:?}");
+            let mut unavailable = names[3..].to_vec();
+            unavailable.sort();
+            assert_eq!(unavailable, ["broken-a", "broken-b"]);
+        }
+    }
 }
