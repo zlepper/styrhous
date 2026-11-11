@@ -26,6 +26,7 @@ pub(crate) enum ShellRequest {
 }
 
 impl ShellRequest {
+    #[cfg(target_os = "linux")]
     fn title_target(&self) -> &str {
         match self {
             Self::Pod { pod_name, .. } | Self::PodDebug { pod_name, .. } => pod_name,
@@ -450,6 +451,7 @@ fn cmd_exe_plan(rendered: &str) -> LaunchPlan {
 
 #[derive(Clone, Copy)]
 enum ShellDialect {
+    #[cfg_attr(windows, allow(dead_code))]
     Posix,
     #[cfg_attr(not(windows), allow(dead_code))]
     Windows,

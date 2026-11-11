@@ -595,7 +595,7 @@ mod windows_cmd_round_trip {
             output,
             [
                 r#""first""#.to_string(),
-                format!("{helper_debug}"),
+                helper_debug,
                 r#""a&b""#.to_string(),
                 format!("{:?}", r"c\"),
             ]
