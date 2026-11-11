@@ -55,6 +55,7 @@ pub(super) fn show_resource_cell(ui: &mut egui::Ui, cell: Option<&CellValue>) {
         CellValue::Status { label, tone } => resource_status(ui, label, *tone),
         CellValue::ContainerIndicators(indicators) => container_indicators(ui, indicators),
         CellValue::List(values) => TableRowBuilder::text(ui, &values.join(", "), false),
+        CellValue::Unavailable => TableRowBuilder::text(ui, "Unavailable", false),
         CellValue::Empty => TableRowBuilder::text(ui, "-", false),
     }
 }

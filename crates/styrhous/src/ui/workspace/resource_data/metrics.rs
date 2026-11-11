@@ -15,7 +15,7 @@ pub(in crate::ui::workspace) fn resolved_resource_cell(
     let is_cpu = column_id == CPU_COLUMN;
     if api_resource.group == "core" && api_resource.kind == "Node" {
         if !metrics.node_metrics_api_available || metrics.node_metrics.error.is_some() {
-            return Some(CellValue::Text("Unavailable".into()));
+            return Some(CellValue::Unavailable);
         }
         return metrics
             .node_metrics
@@ -31,7 +31,7 @@ pub(in crate::ui::workspace) fn resolved_resource_cell(
     if !metrics.pod_metrics_api_available
         || namespace_metrics.is_some_and(|metrics| metrics.error.is_some())
     {
-        return Some(CellValue::Text("Unavailable".into()));
+        return Some(CellValue::Unavailable);
     }
     namespace_metrics
         .and_then(|metrics| metrics.usages.get(&resource.name))
