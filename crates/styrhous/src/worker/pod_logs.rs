@@ -6,7 +6,7 @@ use super::{
 };
 use crate::helpers::ResultExt;
 use crate::log_store::{LogRecord, LogStoreAppender, read_log_record, write_log_record};
-use futures_util::{AsyncBufReadExt, StreamExt, TryStreamExt};
+use futures_util::{AsyncBufReadExt, StreamExt};
 use k8s_openapi::api::core::v1::Pod;
 use kube::api::{Api, LogParams};
 use kube::runtime::utils::Backoff;
@@ -1038,7 +1038,7 @@ async fn send_source_recovered(
 }
 
 async fn append_stream(
-    stream: impl futures_util::AsyncBufRead + Unpin,
+    mut stream: impl futures_util::AsyncBufRead + Unpin,
     ingest: Arc<LogTimelineAppender>,
     backfill: bool,
     target: &PodLogStreamTarget,
@@ -1046,17 +1046,18 @@ async fn append_stream(
     resume: Arc<StdMutex<FollowResumeState>>,
     mut replay_filter: Option<ReplayFilter>,
 ) -> Result<(), AppendStreamError> {
-    let mut lines = stream.lines();
+    let mut line_bytes = Vec::new();
     let mut batch = Vec::new();
     let source = target.display_name();
     let mut flush = tokio::time::interval(Duration::from_millis(100));
     flush.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         tokio::select! {
-            line = lines.try_next() => {
-                let line = match line {
-                    Ok(Some(line)) => line,
-                    Ok(None) => break,
+            read = stream.read_until(b'\n', &mut line_bytes) => {
+                // `read_until` keeps partial lines in `line_bytes` if the select drops it.
+                let line = match read {
+                    Ok(_) if line_bytes.is_empty() => break,
+                    Ok(_) => decode_log_line(std::mem::take(&mut line_bytes)),
                     Err(error) => {
                         if !batch.is_empty() {
                             append_batch(&ingest, source_index, std::mem::take(&mut batch), backfill)
@@ -1105,6 +1106,18 @@ async fn append_stream(
     Ok(())
 }
 
+/// Strips the line terminator and decodes lossily so invalid UTF-8 never aborts the stream.
+fn decode_log_line(mut bytes: Vec<u8>) -> String {
+    if bytes.last() == Some(&b'\n') {
+        bytes.pop();
+        if bytes.last() == Some(&b'\r') {
+            bytes.pop();
+        }
+    }
+    String::from_utf8(bytes)
+        .unwrap_or_else(|error| String::from_utf8_lossy(error.as_bytes()).into_owned())
+}
+
 async fn append_batch(
     appender: &LogTimelineAppender,
     source_index: usize,
@@ -1119,7 +1132,20 @@ mod tests {
     use super::*;
     use crate::log_store::{LogStoreResult, LogStoreService};
     use crate::resource_table::ContainerKind;
+    use crate::worker::WorkerResultBox;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    struct FailingReader;
+
+    impl futures_util::AsyncRead for FailingReader {
+        fn poll_read(
+            self: std::pin::Pin<&mut Self>,
+            _: &mut std::task::Context<'_>,
+            _: &mut [u8],
+        ) -> std::task::Poll<std::io::Result<usize>> {
+            std::task::Poll::Ready(Err(std::io::Error::other("connection reset")))
+        }
+    }
 
     fn wait_for_store_result(
         service: &LogStoreService,
@@ -1147,7 +1173,7 @@ mod tests {
     async fn serve_scripted_http_response(
         listener: &tokio::net::TcpListener,
         content_type: &str,
-        body: &str,
+        body: impl AsRef<[u8]>,
     ) -> std::io::Result<String> {
         serve_scripted_http_response_with_status(listener, "200 OK", content_type, body).await
     }
@@ -1156,7 +1182,7 @@ mod tests {
         listener: &tokio::net::TcpListener,
         status: &str,
         content_type: &str,
-        body: &str,
+        body: impl AsRef<[u8]>,
     ) -> std::io::Result<String> {
         let (mut socket, request) = receive_scripted_http_request(listener).await?;
         send_scripted_http_response(&mut socket, status, content_type, body).await?;
@@ -1186,13 +1212,15 @@ mod tests {
         socket: &mut tokio::net::TcpStream,
         status: &str,
         content_type: &str,
-        body: &str,
+        body: impl AsRef<[u8]>,
     ) -> std::io::Result<()> {
-        let response = format!(
-            "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        let body = body.as_ref();
+        let head = format!(
+            "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
             body.len()
         );
-        socket.write_all(response.as_bytes()).await?;
+        socket.write_all(head.as_bytes()).await?;
+        socket.write_all(body).await?;
         socket.shutdown().await?;
         Ok(())
     }
@@ -1532,24 +1560,7 @@ mod tests {
             }
         })
         .to_string();
-        let terminal_pod = serde_json::json!({
-            "apiVersion": "v1",
-            "kind": "Pod",
-            "metadata": { "name": "api-0", "namespace": "payments" },
-            "spec": {
-                "restartPolicy": "Never",
-                "containers": [{ "name": "server", "image": "example" }]
-            },
-            "status": {
-                "phase": "Succeeded",
-                "containerStatuses": [{
-                    "name": "server", "image": "example", "imageID": "example",
-                    "ready": false, "restartCount": 0,
-                    "state": { "terminated": { "exitCode": 0 } }
-                }]
-            }
-        })
-        .to_string();
+        let terminal_pod = terminal_pod_json();
         let server = tokio::spawn(async move {
             let mut requests = Vec::new();
             for (content_type, body) in [
@@ -1583,25 +1594,7 @@ mod tests {
         assert!(service.open(1));
         let ingest = Arc::new(LogTimelineAppender::new(service.appender(), 1, 1)?);
         let (result_sender, mut result_receiver) = tokio::sync::mpsc::channel(8);
-        let follower = LiveLogFollower {
-            log_pods: Api::namespaced(client.clone(), "payments"),
-            status_pods: Api::namespaced(client, "payments"),
-            target: PodLogStreamTarget {
-                namespace: "payments".into(),
-                pod_name: "api-0".into(),
-                container: "server".into(),
-                kind: ContainerKind::App,
-            },
-            source_index: 0,
-            resume: Arc::new(StdMutex::new(FollowResumeState::new())),
-            context: StreamTargetContext {
-                log_window_id: 1,
-                ingest: ingest.clone(),
-                completed_backfills: Arc::new(AtomicUsize::new(0)),
-                target_count: 1,
-                sender: WorkerResultSender::new(result_sender, None),
-            },
-        };
+        let follower = scripted_follower(client, ingest.clone(), result_sender);
 
         assert!(
             !tokio::time::timeout(Duration::from_secs(5), follower.follow())
@@ -2016,6 +2009,254 @@ mod tests {
         Ok(())
     }
 
+    fn terminal_pod_json() -> String {
+        serde_json::json!({
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": { "name": "api-0", "namespace": "payments" },
+            "spec": {
+                "restartPolicy": "Never",
+                "containers": [{ "name": "server", "image": "example" }]
+            },
+            "status": {
+                "phase": "Succeeded",
+                "containerStatuses": [{
+                    "name": "server", "image": "example", "imageID": "example",
+                    "ready": false, "restartCount": 0,
+                    "state": { "terminated": { "exitCode": 0 } }
+                }]
+            }
+        })
+        .to_string()
+    }
+
+    fn scripted_follower(
+        client: kube::Client,
+        ingest: Arc<LogTimelineAppender>,
+        result_sender: tokio::sync::mpsc::Sender<WorkerResultBox>,
+    ) -> LiveLogFollower {
+        LiveLogFollower {
+            log_pods: Api::namespaced(client.clone(), "payments"),
+            status_pods: Api::namespaced(client, "payments"),
+            target: PodLogStreamTarget {
+                namespace: "payments".into(),
+                pod_name: "api-0".into(),
+                container: "server".into(),
+                kind: ContainerKind::App,
+            },
+            source_index: 0,
+            resume: Arc::new(StdMutex::new(FollowResumeState::new())),
+            context: StreamTargetContext {
+                log_window_id: 1,
+                ingest,
+                completed_backfills: Arc::new(AtomicUsize::new(0)),
+                target_count: 1,
+                sender: WorkerResultSender::new(result_sender, None),
+            },
+        }
+    }
+
+    fn api_target() -> PodLogStreamTarget {
+        PodLogStreamTarget {
+            namespace: "payments".to_owned(),
+            pod_name: "api-0".to_owned(),
+            container: "server".to_owned(),
+            kind: ContainerKind::App,
+        }
+    }
+
+    /// Delivers each received chunk as a separate read, then EOF when the sender is dropped.
+    struct ChunkedReader(tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>);
+
+    impl futures_util::AsyncRead for ChunkedReader {
+        fn poll_read(
+            mut self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+            buf: &mut [u8],
+        ) -> std::task::Poll<std::io::Result<usize>> {
+            self.0.poll_recv(cx).map(|chunk| {
+                Ok(chunk.map_or(0, |chunk| {
+                    buf[..chunk.len()].copy_from_slice(&chunk);
+                    chunk.len()
+                }))
+            })
+        }
+    }
+
+    fn window_rows(service: &LogStoreService) -> Vec<String> {
+        assert!(service.load_page(1, 0, false, 0));
+        let LogStoreResult::PageLoaded { rows, .. } = wait_for_store_result(service, |result| {
+            matches!(result, LogStoreResult::PageLoaded { window_id: 1, .. })
+        }) else {
+            unreachable!()
+        };
+        rows.into_iter().map(|row| row.text).collect()
+    }
+
+    #[tokio::test]
+    async fn non_utf8_lines_are_decoded_lossily_and_streaming_continues() -> anyhow::Result<()> {
+        let expected = ["ok", "", "\u{fffd}\u{fffd}", "after", "last"];
+        let input = b"ok\n\n\xff\xfe\r\nafter\r\nlast".to_vec();
+
+        for backfill in [false, true] {
+            let service = LogStoreService::default();
+            assert!(service.open(1));
+            let ingest = Arc::new(LogTimelineAppender::new(service.appender(), 1, 1)?);
+
+            append_stream(
+                futures_util::io::Cursor::new(input.clone()),
+                ingest.clone(),
+                backfill,
+                &api_target(),
+                0,
+                Arc::new(StdMutex::new(FollowResumeState::new())),
+                None,
+            )
+            .await?;
+
+            if backfill {
+                ingest.complete_source_backfill(0)?;
+                ingest.finish_backfill().await?;
+                let _ = wait_for_store_result(&service, |result| {
+                    matches!(result, LogStoreResult::Rebased { window_id: 1, .. })
+                });
+                assert_eq!(window_rows(&service), expected);
+            } else {
+                ingest.flush_all_live().await?;
+                let LogStoreResult::Updated { appended_rows, .. } =
+                    wait_for_store_result(&service, |result| {
+                        matches!(result, LogStoreResult::Updated { window_id: 1, .. })
+                    })
+                else {
+                    unreachable!()
+                };
+                assert_eq!(
+                    appended_rows
+                        .iter()
+                        .map(|row| row.text.as_str())
+                        .collect::<Vec<_>>(),
+                    expected
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn partial_lines_survive_flush_ticks_between_reads() -> anyhow::Result<()> {
+        let service = LogStoreService::default();
+        assert!(service.open(1));
+        let ingest = Arc::new(LogTimelineAppender::new(service.appender(), 1, 1)?);
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let stream = tokio::spawn({
+            let ingest = ingest.clone();
+            async move {
+                append_stream(
+                    futures_util::io::BufReader::new(ChunkedReader(receiver)),
+                    ingest,
+                    false,
+                    &api_target(),
+                    0,
+                    Arc::new(StdMutex::new(FollowResumeState::new())),
+                    None,
+                )
+                .await
+            }
+        });
+
+        // Each pause outlasts the 100ms flush tick, which interrupts the pending read.
+        for chunk in [
+            &b"a\nhel"[..],
+            b"lo\nworld",
+            b"\xe2\x82",
+            b"\xac\n",
+            b"tail",
+        ] {
+            sender.send(chunk.to_vec())?;
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
+        drop(sender);
+        stream.await??;
+        ingest.flush_all_live().await?;
+
+        let mut rows = Vec::new();
+        while rows.len() < 4 {
+            let LogStoreResult::Updated { appended_rows, .. } =
+                wait_for_store_result(&service, |result| {
+                    matches!(result, LogStoreResult::Updated { window_id: 1, .. })
+                })
+            else {
+                unreachable!()
+            };
+            rows.extend(appended_rows.into_iter().map(|row| row.text));
+        }
+        assert_eq!(rows, ["a", "hello", "world\u{20ac}", "tail"]);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn live_follow_reads_past_a_non_utf8_line_without_reconnecting() -> anyhow::Result<()> {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+        let address = listener.local_addr()?;
+        let server = tokio::spawn(async move {
+            let mut requests = Vec::new();
+            for (content_type, body) in [
+                (
+                    "text/plain",
+                    b"2026-09-14T09:00:00Z a\n2026-09-14T09:00:01Z \xff\xfe\n2026-09-14T09:00:02Z after\n".to_vec(),
+                ),
+                ("application/json", terminal_pod_json().into_bytes()),
+            ] {
+                requests.push(
+                    serve_scripted_http_response(&listener, content_type, body)
+                        .await
+                        .expect("scripted Kubernetes response succeeds"),
+                );
+            }
+            requests
+        });
+
+        let config = kube::Config::new(format!("http://{address}").parse()?);
+        let client = kube::Client::try_from(config)?;
+        let service = LogStoreService::default();
+        assert!(service.open(1));
+        let ingest = Arc::new(LogTimelineAppender::new(service.appender(), 1, 1)?);
+        let (result_sender, mut result_receiver) = tokio::sync::mpsc::channel(8);
+        let follower = scripted_follower(client, ingest.clone(), result_sender);
+
+        assert!(
+            !tokio::time::timeout(Duration::from_secs(5), follower.follow())
+                .await
+                .expect("the follower stops after a single read")
+        );
+        ingest.flush_all_live().await?;
+        let LogStoreResult::Updated { appended_rows, .. } =
+            wait_for_store_result(&service, |result| {
+                matches!(result, LogStoreResult::Updated { window_id: 1, .. })
+            })
+        else {
+            unreachable!()
+        };
+        assert_eq!(
+            appended_rows
+                .iter()
+                .map(|row| row.text.as_str())
+                .collect::<Vec<_>>(),
+            ["a", "\u{fffd}\u{fffd}", "after"]
+        );
+
+        let events = std::iter::from_fn(|| result_receiver.try_recv().ok()).collect::<Vec<_>>();
+        assert!(
+            !events
+                .iter()
+                .any(|event| event.as_ref().as_any().is::<PodLogSourceReconnecting>())
+        );
+        let requests = server.await?;
+        assert_eq!(requests.len(), 2);
+        assert!(requests[0].contains("/log"));
+        Ok(())
+    }
+
     #[tokio::test]
     async fn one_source_stream_flushes_before_an_error_and_rebases_history() -> anyhow::Result<()> {
         let service = LogStoreService::default();
@@ -2028,9 +2269,10 @@ mod tests {
             kind: ContainerKind::App,
         };
         let live_line = "2026-09-14T09:00:01Z live";
-        let mut live_bytes = live_line.as_bytes().to_vec();
-        live_bytes.extend_from_slice(b"\n\xff");
-        let live_stream = futures_util::io::Cursor::new(live_bytes);
+        let live_stream = futures_util::AsyncReadExt::chain(
+            futures_util::io::Cursor::new(format!("{live_line}\n").into_bytes()),
+            futures_util::io::BufReader::new(FailingReader),
+        );
 
         assert!(
             append_stream(
