@@ -159,7 +159,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
 
         let width = width.unwrap_or(DEFAULT_WIDTH);
         let is_open = state.was_open;
-        let keyboard = Self::handle_keyboard(ui, &mut state, is_open);
+        let keyboard = Self::handle_keyboard(ui, is_open);
         let input_response = Self::render_input(
             ui,
             &mut state,
@@ -189,12 +189,6 @@ impl<F> TailwindCombobox<WithFilter<F>> {
         });
 
         let popup_id = Popup::default_response_id(&input_response);
-        // Filtering re-ranks the rows (and toggles the Select all row), so a
-        // retained index would point at an unrelated item. Restart from the
-        // first row, exactly as when the popup is freshly opened.
-        if input_response.changed() {
-            state.focused_index = 0;
-        }
         state.filter_chars = normalize_for_search(&state.filter_text).collect();
 
         let mut filtered_items: Vec<_> = items
@@ -213,9 +207,41 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             item_count as f32 * item_height + item_count.saturating_sub(1) as f32 * item_spacing;
         let dropdown_height = content_height.clamp(item_height, DROPDOWN_MAX_HEIGHT);
         let scroll_to_focused = keyboard.scroll_to_focused && content_height > DROPDOWN_MAX_HEIGHT;
-        if item_count > 0 {
-            state.focused_index = state.focused_index.min(item_count - 1);
+        let first_item_row = usize::from(select_all_visible);
+        let row_of = |row: &PinnedRow| match row {
+            PinnedRow::SelectAll => select_all_visible.then_some(0),
+            PinnedRow::Item(text) => filtered_items
+                .iter()
+                .position(|(_, item)| filter_fn(item) == text)
+                .map(|position| position + first_item_row),
+        };
+        // Filtering re-ranks the rows (and toggles the Select all row), so the
+        // index from the previous frame may point at an unrelated item. Follow
+        // an explicitly chosen row by identity; otherwise, or once it no longer
+        // matches, restart from the top row like a freshly opened popup.
+        let followed_row = state.pinned_row.as_ref().and_then(row_of);
+        if followed_row.is_none() {
+            state.pinned_row = None;
         }
+        let mut focused_index = followed_row.unwrap_or(if input_response.changed() {
+            0
+        } else {
+            state.focused_index
+        });
+        if item_count > 0 {
+            focused_index = focused_index
+                .saturating_add_signed(keyboard.move_focus_by)
+                .min(item_count - 1);
+            if keyboard.move_focus_by != 0 {
+                state.pinned_row = Some(if select_all_visible && focused_index == 0 {
+                    PinnedRow::SelectAll
+                } else {
+                    let (_, item) = &filtered_items[focused_index - first_item_row];
+                    PinnedRow::Item(filter_fn(item).to_owned())
+                });
+            }
+        }
+        state.focused_index = focused_index;
 
         let mut select_all_clicked = false;
         let popup_label = format!("{accessibility_label} options");
@@ -264,6 +290,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             state.filter_text.clear();
             state.filter_chars.clear();
             state.focused_index = 0;
+            state.pinned_row = None;
         }
         state.was_open = is_open_after;
         ui.ctx()
@@ -388,7 +415,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
         response | text_response
     }
 
-    fn handle_keyboard(ui: &mut Ui, state: &mut ComboboxState, is_open: bool) -> KeyboardInput {
+    fn handle_keyboard(ui: &mut Ui, is_open: bool) -> KeyboardInput {
         if !is_open {
             return KeyboardInput::default();
         }
@@ -396,11 +423,11 @@ impl<F> TailwindCombobox<WithFilter<F>> {
         let mut keyboard = KeyboardInput::default();
         ui.input_mut(|input| {
             if input.consume_key(Modifiers::NONE, Key::ArrowDown) {
-                state.focused_index = state.focused_index.saturating_add(1);
+                keyboard.move_focus_by += 1;
                 keyboard.scroll_to_focused = true;
             }
             if input.consume_key(Modifiers::NONE, Key::ArrowUp) {
-                state.focused_index = state.focused_index.saturating_sub(1);
+                keyboard.move_focus_by -= 1;
                 keyboard.scroll_to_focused = true;
             }
             if input.consume_key(Modifiers::NONE, Key::Enter) {

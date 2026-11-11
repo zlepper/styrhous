@@ -582,19 +582,18 @@ impl RankedComboboxHarness {
 }
 
 #[test]
-fn typing_a_filter_resets_focus_to_the_best_match() {
+fn typing_without_arrowing_keeps_the_best_match_highlighted() {
     let mut combobox = RankedComboboxHarness::open(false);
-    combobox.press(Key::ArrowDown, 5);
-    combobox.type_text("pod");
+    combobox.type_text("po");
+    combobox.type_text("d");
     combobox.press(Key::Enter, 1);
 
     assert_eq!(*combobox.selected.borrow(), Some("pod"));
 }
 
 #[test]
-fn typing_a_filter_resets_focus_to_the_best_match_with_select_all() {
+fn typing_without_arrowing_keeps_the_best_match_highlighted_with_select_all() {
     let mut combobox = RankedComboboxHarness::open(true);
-    combobox.press(Key::ArrowDown, 5);
     combobox.type_text("pod");
     combobox.press(Key::Enter, 1);
 
@@ -603,21 +602,69 @@ fn typing_a_filter_resets_focus_to_the_best_match_with_select_all() {
 }
 
 #[test]
-fn extending_a_filter_resets_focus_again() {
+fn arrowed_item_stays_highlighted_when_the_filter_reranks_it() {
     let mut combobox = RankedComboboxHarness::open(false);
+    // pod-f is the sixth row unfiltered, but "pod" ranks the exact match first.
+    combobox.press(Key::ArrowDown, 5);
+    combobox.type_text("pod");
+    combobox.press(Key::Enter, 1);
+
+    assert_eq!(*combobox.selected.borrow(), Some("pod-f"));
+}
+
+#[test]
+fn arrowed_item_stays_highlighted_when_the_filter_is_extended_again() {
+    let mut combobox = RankedComboboxHarness::open(true);
+    combobox.press(Key::ArrowDown, 6);
     combobox.type_text("po");
-    combobox.press(Key::ArrowDown, 3);
     combobox.type_text("d");
     combobox.press(Key::Enter, 1);
 
+    assert_eq!(*combobox.selected.borrow(), Some("pod-f"));
+    assert!(!*combobox.select_all_activated.borrow());
+}
+
+#[test]
+fn arrowed_item_is_followed_when_the_select_all_row_reappears() {
+    let mut combobox = RankedComboboxHarness::open(true);
+    combobox.type_text("pod");
+    combobox.press(Key::ArrowDown, 3);
+    combobox.press(Key::Backspace, 3);
+    combobox.press(Key::Enter, 1);
+
+    assert!(!*combobox.select_all_activated.borrow());
+    assert_eq!(*combobox.selected.borrow(), Some("pod-c"));
+}
+
+#[test]
+fn highlight_returns_to_the_best_match_when_the_arrowed_item_disappears() {
+    let mut combobox = RankedComboboxHarness::open(false);
+    combobox.press(Key::ArrowDown, 5);
+    // pod-f cannot match "pod-a", so the highlight falls back to the top row.
+    combobox.type_text("pod-a");
+    // pod-f matches again, but it is no longer explicitly chosen, so the
+    // highlight stays on the best match instead of jumping back to it.
+    combobox.press(Key::Backspace, 2);
+    combobox.press(Key::Enter, 1);
     assert_eq!(*combobox.selected.borrow(), Some("pod"));
 }
 
 #[test]
-fn clearing_the_filter_resets_focus_to_select_all() {
+fn select_all_row_resets_to_the_best_match_once_typing_hides_it() {
+    let mut combobox = RankedComboboxHarness::open(true);
+    combobox.press(Key::ArrowDown, 1);
+    combobox.press(Key::ArrowUp, 1);
+    combobox.type_text("pod");
+    combobox.press(Key::Enter, 1);
+
+    assert_eq!(*combobox.selected.borrow(), Some("pod"));
+    assert!(!*combobox.select_all_activated.borrow());
+}
+
+#[test]
+fn clearing_the_filter_without_arrowing_returns_to_select_all() {
     let mut combobox = RankedComboboxHarness::open(true);
     combobox.type_text("pod");
-    combobox.press(Key::ArrowDown, 3);
     combobox.press(Key::Backspace, 3);
     combobox.press(Key::Enter, 1);
 
@@ -628,6 +675,20 @@ fn clearing_the_filter_resets_focus_to_select_all() {
 #[test]
 fn filter_and_enter_in_the_same_frame_select_the_best_match() {
     let mut combobox = RankedComboboxHarness::open(false);
+    combobox
+        .harness
+        .input_mut()
+        .events
+        .push(egui::Event::Text("pod".into()));
+    combobox.harness.key_down(Key::Enter);
+    combobox.harness.run();
+
+    assert_eq!(*combobox.selected.borrow(), Some("pod"));
+}
+
+#[test]
+fn filter_and_enter_in_the_same_frame_select_the_arrowed_item() {
+    let mut combobox = RankedComboboxHarness::open(false);
     combobox.press(Key::ArrowDown, 5);
     combobox
         .harness
@@ -636,6 +697,22 @@ fn filter_and_enter_in_the_same_frame_select_the_best_match() {
         .push(egui::Event::Text("pod".into()));
     combobox.harness.key_down(Key::Enter);
     combobox.harness.run();
+
+    assert_eq!(*combobox.selected.borrow(), Some("pod-f"));
+}
+
+#[test]
+fn closing_the_popup_forgets_the_arrowed_item() {
+    let mut combobox = RankedComboboxHarness::open(false);
+    combobox.press(Key::ArrowDown, 4);
+    combobox.press(Key::Escape, 1);
+    combobox
+        .harness
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Resources")
+        .click();
+    combobox.harness.run();
+    combobox.type_text("pod");
+    combobox.press(Key::Enter, 1);
 
     assert_eq!(*combobox.selected.borrow(), Some("pod"));
 }
