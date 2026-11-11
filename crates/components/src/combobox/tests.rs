@@ -515,3 +515,142 @@ fn dropdown_with_two_hundred_items_is_capped_to_a_scrollable_height() {
     harness.run();
     harness.ui_harness("comboboxes/dropdown_with_two_hundred_items_is_capped_to_a_scrollable_height/two_hundred_items");
 }
+
+const RANKED_RESOURCES: [&str; 8] = [
+    "pod-a", "pod-b", "pod-c", "pod-d", "pod-e", "pod-f", "pod-g", "pod",
+];
+
+/// Opens a combobox over [`RANKED_RESOURCES`] and records the last selected
+/// resource and whether the Select all row was activated.
+struct RankedComboboxHarness {
+    harness: Harness<'static>,
+    selected: Rc<RefCell<Option<&'static str>>>,
+    select_all_activated: Rc<RefCell<bool>>,
+}
+
+impl RankedComboboxHarness {
+    fn open(with_select_all: bool) -> Self {
+        let selected = Rc::new(RefCell::new(None));
+        let select_all_activated = Rc::new(RefCell::new(false));
+        let selected_for_ui = selected.clone();
+        let select_all_for_ui = select_all_activated.clone();
+        let mut harness = Harness::new_ui(move |ui| {
+            let mut combobox = TailwindCombobox::from_label("Resources").width(250.0);
+            if with_select_all {
+                combobox = combobox.select_all(false);
+            }
+            let response = combobox.filter_by(|resource: &&str| *resource).show_items(
+                ui,
+                &RANKED_RESOURCES,
+                |cb, resource| {
+                    if cb.item(*resource, false).clicked() {
+                        *selected_for_ui.borrow_mut() = Some(*resource);
+                    }
+                },
+            );
+            if response.select_all_clicked {
+                *select_all_for_ui.borrow_mut() = true;
+            }
+        });
+        crate::test_support::setup_egui(&mut harness);
+        harness.run();
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Resources")
+            .click();
+        harness.run();
+        Self {
+            harness,
+            selected,
+            select_all_activated,
+        }
+    }
+
+    fn press(&mut self, key: Key, times: usize) {
+        for _ in 0..times {
+            self.harness.key_down(key);
+            self.harness.run();
+        }
+    }
+
+    fn type_text(&mut self, text: &str) {
+        self.harness
+            .input_mut()
+            .events
+            .push(egui::Event::Text(text.into()));
+        self.harness.run();
+    }
+}
+
+#[test]
+fn typing_a_filter_resets_focus_to_the_best_match() {
+    let mut combobox = RankedComboboxHarness::open(false);
+    combobox.press(Key::ArrowDown, 5);
+    combobox.type_text("pod");
+    combobox.press(Key::Enter, 1);
+
+    assert_eq!(*combobox.selected.borrow(), Some("pod"));
+}
+
+#[test]
+fn typing_a_filter_resets_focus_to_the_best_match_with_select_all() {
+    let mut combobox = RankedComboboxHarness::open(true);
+    combobox.press(Key::ArrowDown, 5);
+    combobox.type_text("pod");
+    combobox.press(Key::Enter, 1);
+
+    assert_eq!(*combobox.selected.borrow(), Some("pod"));
+    assert!(!*combobox.select_all_activated.borrow());
+}
+
+#[test]
+fn extending_a_filter_resets_focus_again() {
+    let mut combobox = RankedComboboxHarness::open(false);
+    combobox.type_text("po");
+    combobox.press(Key::ArrowDown, 3);
+    combobox.type_text("d");
+    combobox.press(Key::Enter, 1);
+
+    assert_eq!(*combobox.selected.borrow(), Some("pod"));
+}
+
+#[test]
+fn clearing_the_filter_resets_focus_to_select_all() {
+    let mut combobox = RankedComboboxHarness::open(true);
+    combobox.type_text("pod");
+    combobox.press(Key::ArrowDown, 3);
+    combobox.press(Key::Backspace, 3);
+    combobox.press(Key::Enter, 1);
+
+    assert!(*combobox.select_all_activated.borrow());
+    assert_eq!(*combobox.selected.borrow(), None);
+}
+
+#[test]
+fn filter_and_enter_in_the_same_frame_select_the_best_match() {
+    let mut combobox = RankedComboboxHarness::open(false);
+    combobox.press(Key::ArrowDown, 5);
+    combobox
+        .harness
+        .input_mut()
+        .events
+        .push(egui::Event::Text("pod".into()));
+    combobox.harness.key_down(Key::Enter);
+    combobox.harness.run();
+
+    assert_eq!(*combobox.selected.borrow(), Some("pod"));
+}
+
+#[test]
+fn reopening_the_popup_starts_from_the_first_row() {
+    let mut combobox = RankedComboboxHarness::open(false);
+    combobox.press(Key::ArrowDown, 4);
+    combobox.press(Key::Escape, 1);
+    combobox
+        .harness
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Resources")
+        .click();
+    combobox.harness.run();
+    combobox.press(Key::Enter, 1);
+
+    assert_eq!(*combobox.selected.borrow(), Some("pod-a"));
+}

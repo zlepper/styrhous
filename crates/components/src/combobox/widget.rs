@@ -189,6 +189,12 @@ impl<F> TailwindCombobox<WithFilter<F>> {
         });
 
         let popup_id = Popup::default_response_id(&input_response);
+        // Filtering re-ranks the rows (and toggles the Select all row), so a
+        // retained index would point at an unrelated item. Restart from the
+        // first row, exactly as when the popup is freshly opened.
+        if input_response.changed() {
+            state.focused_index = 0;
+        }
         state.filter_chars = normalize_for_search(&state.filter_text).collect();
 
         let mut filtered_items: Vec<_> = items
