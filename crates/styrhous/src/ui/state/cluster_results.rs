@@ -251,22 +251,96 @@ impl WorkerResult for crate::worker::KubernetesNamespacesRecovered {
     }
 }
 
+/// API groups named in a toast before the rest are summarised as "and N more".
+const NAMED_API_GROUPS: usize = 3;
+
+struct FailedApiGroupsSummary {
+    title: String,
+    target: String,
+    details: String,
+}
+
+fn api_groups_label(count: usize) -> String {
+    match count {
+        1 => "1 API group".to_owned(),
+        _ => format!("{count} API groups"),
+    }
+}
+
+/// The first few group versions, with the remainder counted.
+fn name_api_groups<'a>(group_versions: impl ExactSizeIterator<Item = &'a str>) -> String {
+    use std::fmt::Write;
+
+    let count = group_versions.len();
+    let mut names = group_versions
+        .take(NAMED_API_GROUPS)
+        .collect::<Vec<_>>()
+        .join(", ");
+    if count > NAMED_API_GROUPS {
+        write!(names, " and {} more", count - NAMED_API_GROUPS)
+            .expect("writing to a String cannot fail");
+    }
+    names
+}
+
+fn describe_failed_api_groups(
+    failed_api_groups: &[crate::worker::FailedApiGroup],
+) -> FailedApiGroupsSummary {
+    let details = failed_api_groups
+        .iter()
+        .map(|group| format!("{}: {}", group.group_version, group.error))
+        .collect::<Vec<_>>()
+        .join("\n");
+    FailedApiGroupsSummary {
+        title: format!(
+            "{} could not be loaded",
+            api_groups_label(failed_api_groups.len())
+        ),
+        target: name_api_groups(
+            failed_api_groups
+                .iter()
+                .map(|group| group.group_version.as_str()),
+        ),
+        details,
+    }
+}
+
 impl WorkerResult for crate::worker::KubernetesApisLoaded {
-    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+    fn apply(self, ui: &mut UiState, commands: &mut Vec<WorkerCommandBox>) {
         let crate::worker::KubernetesApisLoaded {
             cluster_key,
             api_resources,
             scalable_api_resources,
+            failed_api_groups,
             pod_metrics_api_available,
             node_metrics_api_available,
         } = self;
-        let restored_api_resource = ui.restored_api_resource(cluster_key, &api_resources);
+        let failed_group_versions = failed_api_groups
+            .iter()
+            .map(|group| group.group_version.clone())
+            .collect::<Vec<_>>();
+        let restored_api_resource =
+            ui.restored_api_resource(cluster_key, &api_resources, &failed_group_versions);
         if let Some(cluster) = ui.clusters.get_mut(&cluster_key) {
-            cluster.resource_navigation = build_resource_navigation(api_resources);
+            cluster.set_discovered_api_resources(api_resources);
             cluster.scalable_api_resources = scalable_api_resources;
             cluster.pod_metrics_api_available = pod_metrics_api_available;
             cluster.node_metrics_api_available = node_metrics_api_available;
             cluster.api_resources_load = ClusterLoadState::Ready;
+        }
+        if !failed_api_groups.is_empty() {
+            let summary = describe_failed_api_groups(&failed_api_groups);
+            ui.push_operation_outcome(
+                cluster_key,
+                OperationOutcome::Failure,
+                summary.title,
+                None,
+                summary.target,
+                Some(format!(
+                    "{}\n\nStyrhous keeps retrying these groups in the background.",
+                    summary.details
+                )),
+            );
         }
         if !pod_metrics_api_available {
             ui.mark_pod_metrics_api_unavailable(cluster_key);
@@ -275,8 +349,87 @@ impl WorkerResult for crate::worker::KubernetesApisLoaded {
             ui.mark_node_metrics_api_unavailable(cluster_key);
         }
         if let Some(api_resource) = restored_api_resource {
-            ui.select_api_resource(cluster_key, api_resource, _commands);
+            ui.select_api_resource(cluster_key, api_resource, commands);
         }
+    }
+}
+
+impl WorkerResult for crate::worker::KubernetesApiGroupsRecovered {
+    fn apply(self, ui: &mut UiState, commands: &mut Vec<WorkerCommandBox>) {
+        let crate::worker::KubernetesApiGroupsRecovered {
+            cluster_key,
+            group_versions,
+            api_resources,
+            scalable_api_resources,
+            still_failing_group_versions,
+            pod_metrics_api_available,
+            node_metrics_api_available,
+        } = self;
+        let Some(cluster) = ui.clusters.get_mut(&cluster_key) else {
+            return;
+        };
+        // A result that outlives its session, or arrives while the session has no
+        // discovery to merge into, is dropped.
+        if !matches!(cluster.api_resources_load, ClusterLoadState::Ready) {
+            return;
+        }
+        let known = cluster
+            .discovered_api_resources
+            .iter()
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let mut discovered = std::mem::take(&mut cluster.discovered_api_resources);
+        discovered.extend(
+            api_resources
+                .into_iter()
+                .filter(|resource| !known.contains(resource)),
+        );
+        cluster.set_discovered_api_resources(discovered);
+        cluster
+            .scalable_api_resources
+            .extend(scalable_api_resources);
+
+        let restore_pod_metrics = pod_metrics_api_available && !cluster.pod_metrics_api_available;
+        let restore_node_metrics =
+            node_metrics_api_available && !cluster.node_metrics_api_available;
+        if restore_pod_metrics {
+            cluster.pod_metrics_api_available = true;
+            UiState::reconcile_pod_metrics(cluster, commands);
+        }
+        if restore_node_metrics {
+            cluster.node_metrics_api_available = true;
+            UiState::reconcile_node_metrics(cluster, commands);
+        }
+        let selection_unset = cluster.selected_api_resource.is_none();
+        let discovered = cluster.discovered_api_resources.clone();
+        ui.restore_metrics_in_resource_detail_blades(
+            cluster_key,
+            restore_pod_metrics,
+            restore_node_metrics,
+            commands,
+        );
+        if selection_unset
+            && let Some(api_resource) =
+                ui.restored_api_resource(cluster_key, &discovered, &still_failing_group_versions)
+        {
+            ui.select_api_resource(cluster_key, api_resource, commands);
+        }
+
+        let mut details = format!("Loaded: {}", group_versions.join(", "));
+        if !still_failing_group_versions.is_empty() {
+            details.push_str(&format!(
+                "\nStill retrying: {}",
+                still_failing_group_versions.join(", ")
+            ));
+        }
+        ui.push_operation_outcome(
+            cluster_key,
+            OperationOutcome::Success,
+            format!("{} loaded", api_groups_label(group_versions.len())),
+            None,
+            name_api_groups(group_versions.iter().map(String::as_str)),
+            Some(details),
+        );
     }
 }
 
@@ -353,6 +506,48 @@ impl WorkerResult for crate::worker::ContextPresentationSaveFailed {
             && save.request_id == self.request_id
         {
             save.result = Some(Err(self.error));
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn failed_groups(count: usize) -> Vec<crate::worker::FailedApiGroup> {
+        (1..=count)
+            .map(|index| crate::worker::FailedApiGroup {
+                group_version: format!("g{index}/v1"),
+                error: format!("error {index}"),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn failed_api_group_summary_names_at_most_three_groups_but_details_list_all() {
+        for (count, title, target) in [
+            (1, "1 API group could not be loaded", "g1/v1"),
+            (3, "3 API groups could not be loaded", "g1/v1, g2/v1, g3/v1"),
+            (
+                4,
+                "4 API groups could not be loaded",
+                "g1/v1, g2/v1, g3/v1 and 1 more",
+            ),
+            (
+                5,
+                "5 API groups could not be loaded",
+                "g1/v1, g2/v1, g3/v1 and 2 more",
+            ),
+        ] {
+            let summary = describe_failed_api_groups(&failed_groups(count));
+
+            assert_eq!(summary.title, title);
+            assert_eq!(summary.target, target);
+            let expected_details = (1..=count)
+                .map(|index| format!("g{index}/v1: error {index}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            assert_eq!(summary.details, expected_details);
         }
     }
 }

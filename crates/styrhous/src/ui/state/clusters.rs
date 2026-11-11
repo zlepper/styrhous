@@ -26,6 +26,9 @@ pub(crate) struct ClusterState {
 /// the ownership boundary visible.
 #[derive(Debug)]
 pub(crate) struct ClusterResourceState {
+    /// Every discovered API resource, in discovery order, so recovered API groups can be
+    /// merged in and the navigation rebuilt without disturbing the selection.
+    pub(crate) discovered_api_resources: Vec<ApiResource>,
     pub(crate) resource_navigation: ResourceNavigation,
     pub(crate) custom_resource_columns: BTreeMap<ApiResource, Vec<CustomResourceColumn>>,
     pub(crate) scalable_api_resources: BTreeSet<ApiResource>,
@@ -111,8 +114,16 @@ impl ClusterState {
 }
 
 impl ClusterResourceState {
+    /// Replaces the discovered resources and rebuilds the navigation from them. The
+    /// selection is kept as is.
+    pub(crate) fn set_discovered_api_resources(&mut self, api_resources: Vec<ApiResource>) {
+        self.resource_navigation = build_resource_navigation(api_resources.clone());
+        self.discovered_api_resources = api_resources;
+    }
+
     fn new(metrics_api_available: bool) -> Self {
         Self {
+            discovered_api_resources: Vec::new(),
             resource_navigation: ResourceNavigation::default(),
             custom_resource_columns: BTreeMap::new(),
             scalable_api_resources: BTreeSet::new(),

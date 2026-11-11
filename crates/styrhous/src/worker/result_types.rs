@@ -81,6 +81,11 @@ pub(crate) struct KubernetesNamespacesReconnecting {
     pub(crate) cluster_key: i32,
     pub(crate) error: String,
 }
+#[derive(Debug, Clone)]
+pub(crate) struct FailedApiGroup {
+    pub(crate) group_version: String,
+    pub(crate) error: String,
+}
 #[derive(Debug)]
 pub(crate) struct KubernetesNamespacesRecovered {
     pub(crate) cluster_key: i32,
@@ -90,6 +95,20 @@ pub(crate) struct KubernetesApisLoaded {
     pub(crate) cluster_key: i32,
     pub(crate) api_resources: Vec<ApiResource>,
     pub(crate) scalable_api_resources: std::collections::BTreeSet<ApiResource>,
+    pub(crate) failed_api_groups: Vec<FailedApiGroup>,
+    pub(crate) pod_metrics_api_available: bool,
+    pub(crate) node_metrics_api_available: bool,
+}
+/// API groups that failed the initial discovery and have since answered a background retry.
+#[derive(Debug)]
+pub(crate) struct KubernetesApiGroupsRecovered {
+    pub(crate) cluster_key: i32,
+    pub(crate) group_versions: Vec<String>,
+    pub(crate) api_resources: Vec<ApiResource>,
+    pub(crate) scalable_api_resources: std::collections::BTreeSet<ApiResource>,
+    /// Group versions that are still failing and being retried.
+    pub(crate) still_failing_group_versions: Vec<String>,
+    /// Whether the recovered groups provide the metrics APIs.
     pub(crate) pod_metrics_api_available: bool,
     pub(crate) node_metrics_api_available: bool,
 }

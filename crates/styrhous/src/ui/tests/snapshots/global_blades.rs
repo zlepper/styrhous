@@ -71,6 +71,133 @@ fn notification_history_blade_shows_session_outcomes_and_marks_them_read() {
 }
 
 #[test]
+fn partial_api_discovery_shows_a_toast_naming_the_failed_groups() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness.run();
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(Box::new(KubernetesApisLoaded {
+            cluster_key: 2,
+            api_resources: vec![fixture_api_resource("apps", "Deployment", "deployments")],
+            scalable_api_resources: Default::default(),
+            failed_api_groups: vec![
+                FailedApiGroup {
+                    group_version: "metrics.k8s.io/v1beta1".into(),
+                    error: "the server is currently unable to handle the request".into(),
+                },
+                FailedApiGroup {
+                    group_version: "custom.metrics.k8s.io/v1beta1".into(),
+                    error: "timed out waiting for the API server to respond".into(),
+                },
+            ],
+            pod_metrics_api_available: false,
+            node_metrics_api_available: false,
+        }) as WorkerResultBox);
+    harness.run();
+
+    harness.get_by_label("2 API groups could not be loaded");
+    harness.ui_harness("notifications/partial_api_discovery_toast");
+}
+
+/// Applies the queued results, then keeps their toasts from expiring on a slow machine.
+fn run_with_pinned_toasts(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) {
+    harness.step();
+    for cluster in harness.state_mut().ui_state.clusters.values_mut() {
+        for toast in &mut cluster.transient_operation_toasts {
+            toast.expires_at = std::time::Instant::now() + std::time::Duration::from_secs(3600);
+        }
+    }
+    harness.run();
+}
+
+#[test]
+fn recovered_api_groups_appear_in_the_sidebar_with_a_success_toast() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness.run();
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(Box::new(KubernetesApisLoaded {
+            cluster_key: 2,
+            api_resources: vec![fixture_api_resource("apps", "Deployment", "deployments")],
+            scalable_api_resources: Default::default(),
+            failed_api_groups: vec![FailedApiGroup {
+                group_version: "batch/v1".into(),
+                error: "the server is currently unable to handle the request".into(),
+            }],
+            pod_metrics_api_available: false,
+            node_metrics_api_available: false,
+        }) as WorkerResultBox);
+    run_with_pinned_toasts(&mut harness);
+    harness.get_by_label("Apps & Containers").click();
+    harness.run();
+    harness.get_by_label("1 API group could not be loaded");
+    assert!(harness.query_by_label("Jobs").is_none());
+    harness.ui_harness("notifications/api_group_recovery_before");
+
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(Box::new(KubernetesApiGroupsRecovered {
+            cluster_key: 2,
+            group_versions: vec!["batch/v1".into()],
+            api_resources: vec![fixture_api_resource("batch", "Job", "jobs")],
+            scalable_api_resources: Default::default(),
+            still_failing_group_versions: Vec::new(),
+            pod_metrics_api_available: false,
+            node_metrics_api_available: false,
+        }) as WorkerResultBox);
+    run_with_pinned_toasts(&mut harness);
+    // The bottom-anchored toast stack is positioned from the previous frame's size.
+    harness.step();
+
+    harness.get_by_label("1 API group loaded");
+    harness.get_by_label("Jobs");
+    harness.ui_harness("notifications/api_group_recovery_after");
+}
+
+#[test]
+fn partial_api_discovery_toast_summarises_many_failed_groups() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness.run();
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(Box::new(KubernetesApisLoaded {
+            cluster_key: 2,
+            api_resources: vec![fixture_api_resource("apps", "Deployment", "deployments")],
+            scalable_api_resources: Default::default(),
+            failed_api_groups: [
+                "metrics.k8s.io/v1beta1",
+                "custom.metrics.k8s.io/v1beta1",
+                "external.metrics.k8s.io/v1beta1",
+                "webhook.example.com/v1",
+                "stuck.example.com/v1",
+            ]
+            .into_iter()
+            .map(|group_version| FailedApiGroup {
+                group_version: group_version.into(),
+                error: "the server is currently unable to handle the request".into(),
+            })
+            .collect(),
+            pod_metrics_api_available: false,
+            node_metrics_api_available: false,
+        }) as WorkerResultBox);
+    harness.run();
+
+    harness.get_by_label("5 API groups could not be loaded");
+    harness.ui_harness("notifications/partial_api_discovery_toast_many_groups");
+}
+
+#[test]
 fn notification_history_includes_every_cluster_and_marks_all_entries_read() {
     let mut harness = application_harness::<MockWorker>();
     let mut state = oracle_resource_table_state();

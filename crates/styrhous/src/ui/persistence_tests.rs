@@ -215,6 +215,7 @@ fn dev_api_resources() -> WorkerResultBox {
         cluster_key: 1,
         api_resources: vec![api_resource("apps", "v1", "Deployment", "deployments")],
         scalable_api_resources: Default::default(),
+        failed_api_groups: Vec::new(),
         pod_metrics_api_available: false,
         node_metrics_api_available: false,
     })
@@ -363,6 +364,7 @@ fn unavailable_saved_selection_is_discarded_without_affecting_other_contexts() {
                 cluster_key: 1,
                 api_resources: vec![api_resource("apps", "v1", "Service", "services")],
                 scalable_api_resources: Default::default(),
+                failed_api_groups: Vec::new(),
                 pod_metrics_api_available: false,
                 node_metrics_api_available: false,
             }),
@@ -402,6 +404,7 @@ fn selection_changes_update_only_their_contexts_persisted_entry() {
                 cluster_key: 1,
                 api_resources: vec![api_resource("apps", "v1", "Deployment", "deployments")],
                 scalable_api_resources: Default::default(),
+                failed_api_groups: Vec::new(),
                 pod_metrics_api_available: false,
                 node_metrics_api_available: false,
             }),

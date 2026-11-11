@@ -59,6 +59,7 @@ pub use discovery::{
     add_tailscale_cluster, discover_aws_accounts, discover_eks_clusters, discover_managed_clusters,
 };
 
+mod api_group_retry;
 mod api_inspection;
 mod detail_watches;
 mod extraction;
@@ -73,6 +74,7 @@ mod watcher_orchestration;
 mod watcher_scopes;
 mod watcher_types;
 
+pub(crate) use api_group_retry::*;
 pub(crate) use api_inspection::*;
 pub(crate) use detail_watches::*;
 pub(crate) use extraction::*;

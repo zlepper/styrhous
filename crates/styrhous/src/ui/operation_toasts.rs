@@ -49,22 +49,43 @@ fn toast_card(ui: &mut egui::Ui, toast: &TransientOperationToast) {
         .show(ui, |ui| {
             ui.set_min_width(TOAST_WIDTH - 2.0 * spacing::LG);
             ui.set_min_height(TOAST_CONTENT_MIN_HEIGHT);
-            ui.horizontal(|ui| {
-                show_status_tile(ui, toast.outcome, TOAST_STATUS_TILE_SIZE);
-                ui.add_space(spacing::MD);
-                ui.vertical(|ui| {
-                    ui.label(
-                        egui::RichText::new(&toast.title)
-                            .font(typography::semibold(typography::BODY_SIZE))
-                            .color(gray::_900),
-                    );
-                    ui.add_space(2.0);
-                    ui.label(
-                        egui::RichText::new(&toast.target)
-                            .font(typography::metadata())
-                            .color(gray::_500),
-                    );
-                });
+            ui.horizontal_top(|ui| {
+                let row_origin = ui.cursor().min;
+                let item_spacing = ui.spacing().item_spacing.x;
+                ui.add_space(TOAST_STATUS_TILE_SIZE + spacing::MD + item_spacing);
+                let text_rect = ui
+                    .scope_builder(
+                        egui::UiBuilder::new().layout(
+                            egui::Layout::top_down(egui::Align::LEFT)
+                                .with_main_align(egui::Align::Center),
+                        ),
+                        |ui| {
+                            ui.set_min_height(TOAST_STATUS_TILE_SIZE);
+                            ui.label(
+                                egui::RichText::new(&toast.title)
+                                    .font(typography::semibold(typography::BODY_SIZE))
+                                    .color(gray::_900),
+                            );
+                            ui.add_space(2.0);
+                            ui.label(
+                                egui::RichText::new(&toast.target)
+                                    .font(typography::metadata())
+                                    .color(gray::_500),
+                            );
+                        },
+                    )
+                    .response
+                    .rect;
+                // The tile is centred against the (possibly wrapped) text block.
+                let tile_rect = egui::Rect::from_min_size(
+                    egui::pos2(
+                        row_origin.x,
+                        text_rect.center().y - TOAST_STATUS_TILE_SIZE / 2.0,
+                    ),
+                    egui::Vec2::splat(TOAST_STATUS_TILE_SIZE),
+                );
+                let mut tile_ui = ui.new_child(egui::UiBuilder::new().max_rect(tile_rect));
+                show_status_tile(&mut tile_ui, toast.outcome, TOAST_STATUS_TILE_SIZE);
             });
         });
 }

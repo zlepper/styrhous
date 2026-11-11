@@ -296,6 +296,12 @@ fn test_resource_watcher_integration() {
     );
 }
 
+/// metrics-server scrapes every 15s and the application polls every 15s, unsynchronised,
+/// so a fresh Pod's first sample takes one scrape plus up to one poll (observed 15s or
+/// 30s). Allow two more cycles for scrape slippage on a loaded cluster; 45s was exactly
+/// the worst case of scrape, a second scrape for the CPU rate, and poll alignment.
+const METRICS_SAMPLE_TIMEOUT_MS: u64 = 90_000;
+
 /// Verifies that the namespace and detail metrics watches consume real Metrics API samples and
 /// render a history instead of leaving a Pod's usage charts in the collecting state.
 
@@ -410,7 +416,7 @@ fn test_pod_metrics_charts_integration() {
                 ))
             })
         },
-        45_000,
+        METRICS_SAMPLE_TIMEOUT_MS,
     );
 
     let history_entry_id = open_resource_detail(
@@ -473,7 +479,7 @@ fn test_pod_metrics_charts_integration() {
                 entry.pod_usage_history.len()
             ))
         },
-        45_000,
+        METRICS_SAMPLE_TIMEOUT_MS,
     );
     assert!(
         history

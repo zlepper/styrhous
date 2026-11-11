@@ -19,12 +19,33 @@ impl UiState {
         if !matches!(cluster.connection, ClusterConnectionState::Connected) {
             return;
         }
+        self.push_operation_outcome(
+            cluster_key,
+            outcome,
+            title,
+            namespace,
+            resource_name,
+            details,
+        );
+    }
+
+    /// Records an outcome without requiring the connection handshake to have
+    /// completed, for results produced by the session's own background tasks
+    /// (which can arrive before `KubernetesClusterConnectionCreated`).
+    pub(crate) fn push_operation_outcome(
+        &mut self,
+        cluster_key: i32,
+        outcome: OperationOutcome,
+        title: impl Into<String>,
+        namespace: Option<&str>,
+        resource_name: impl Into<String>,
+        details: Option<String>,
+    ) {
+        let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
+            return;
+        };
         let sequence = self.next_operation_toast_sequence;
         self.next_operation_toast_sequence += 1;
-        let cluster = self
-            .clusters
-            .get_mut(&cluster_key)
-            .expect("cluster connection was just verified");
         let resource_name = resource_name.into();
         let target = namespace.map_or(resource_name.clone(), |namespace| {
             format!("{resource_name} • {namespace}")
