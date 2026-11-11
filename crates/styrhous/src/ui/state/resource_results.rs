@@ -18,6 +18,7 @@ impl WorkerResult for crate::worker::KubernetesResourceAdded {
         }
     }
 }
+
 impl WorkerResult for crate::worker::KubernetesResourceDeleted {
     fn apply(self, ui: &mut UiState, commands: &mut Vec<WorkerCommandBox>) {
         let crate::worker::KubernetesResourceDeleted {
@@ -63,6 +64,7 @@ impl WorkerResult for crate::worker::KubernetesResourceDeleted {
         }
     }
 }
+
 impl WorkerResult for crate::worker::KubernetesResourcesReplaced {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         let crate::worker::KubernetesResourcesReplaced {
@@ -101,6 +103,7 @@ impl WorkerResult for crate::worker::KubernetesResourcesReplaced {
         }
     }
 }
+
 impl WorkerResult for crate::worker::HelmReleasesReplaced {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         if let Some(cluster) = ui.clusters.get_mut(&self.cluster_key) {
@@ -113,6 +116,7 @@ impl WorkerResult for crate::worker::HelmReleasesReplaced {
         }
     }
 }
+
 impl WorkerResult for crate::worker::HelmReleaseBackendFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         if let Some(cluster) = ui.clusters.get_mut(&self.cluster_key) {
@@ -125,6 +129,7 @@ impl WorkerResult for crate::worker::HelmReleaseBackendFailed {
         }
     }
 }
+
 impl WorkerResult for crate::worker::KubernetesResourceWatchStarted {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         let crate::worker::KubernetesResourceWatchStarted {
@@ -144,6 +149,7 @@ impl WorkerResult for crate::worker::KubernetesResourceWatchStarted {
         }
     }
 }
+
 impl WorkerResult for crate::worker::KubernetesResourceWatchFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         let crate::worker::KubernetesResourceWatchFailed {
@@ -153,5 +159,40 @@ impl WorkerResult for crate::worker::KubernetesResourceWatchFailed {
             error,
         } = self;
         ui.resource_watch_failed(cluster_key, api_resource, namespace, error);
+    }
+}
+
+impl WorkerResult for crate::worker::KubernetesResourceWatchReconnecting {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let crate::worker::KubernetesResourceWatchReconnecting {
+            cluster_key,
+            api_resource,
+            namespace,
+            error,
+        } = self;
+        ui.set_resource_watch_error(cluster_key, api_resource, namespace, Some(error));
+    }
+}
+
+impl WorkerResult for crate::worker::KubernetesResourceWatchRecovered {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let crate::worker::KubernetesResourceWatchRecovered {
+            cluster_key,
+            api_resource,
+            namespace,
+        } = self;
+        ui.set_resource_watch_error(cluster_key, api_resource, namespace, None);
+    }
+}
+
+impl WorkerResult for crate::worker::HelmReleaseBackendRecovered {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(watch) = ui
+            .clusters
+            .get_mut(&self.cluster_key)
+            .and_then(|cluster| cluster.helm_release_cache.get_mut(&self.namespace))
+        {
+            watch.backend_errors.remove(self.backend);
+        }
     }
 }

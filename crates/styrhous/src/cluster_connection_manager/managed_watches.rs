@@ -93,6 +93,7 @@ pub(crate) async fn watch_managed_resources(request: ManagedResourceWatchRequest
     drop(updates_sender);
 
     let mut by_type = BTreeMap::<ApiResource, Vec<ManagedResource>>::new();
+    let mut degraded = BTreeSet::<ApiResource>::new();
     while let Some(update) = updates_receiver.recv().await {
         match update {
             ManagedResourceUpdate::Replaced {
@@ -131,14 +132,28 @@ pub(crate) async fn watch_managed_resources(request: ManagedResourceWatchRequest
             ManagedResourceUpdate::Failed {
                 api_resource,
                 error,
-            } => event_sender
-                .send(ManagedResourcesWatchFailed {
-                    cluster_key,
-                    history_entry_id,
-                    error: format!("Unable to watch {}: {error}", api_resource.display_name()),
-                })
-                .await
-                .log_if_error("Failed to send managed resource watch failure"),
+            } => {
+                degraded.insert(api_resource.clone());
+                event_sender
+                    .send(ManagedResourcesWatchFailed {
+                        cluster_key,
+                        history_entry_id,
+                        error: format!("Unable to watch {}: {error}", api_resource.display_name()),
+                    })
+                    .await
+                    .log_if_error("Failed to send managed resource watch failure");
+            }
+            ManagedResourceUpdate::Recovered { api_resource } => {
+                if degraded.remove(&api_resource) && degraded.is_empty() {
+                    event_sender
+                        .send(ManagedResourcesWatchRecovered {
+                            cluster_key,
+                            history_entry_id,
+                        })
+                        .await
+                        .log_if_error("Failed to send managed resource watch recovery");
+                }
+            }
         }
     }
     while tasks.join_next().await.is_some() {}
@@ -176,6 +191,9 @@ pub(crate) enum ManagedResourceUpdate {
         api_resource: ApiResource,
         error: String,
     },
+    Recovered {
+        api_resource: ApiResource,
+    },
 }
 
 pub(crate) async fn watch_managed_type<T>(
@@ -191,40 +209,102 @@ pub(crate) async fn watch_managed_type<T>(
         + Send
         + 'static,
 {
-    let api_resource = api_resource_for::<T>();
     let api = Api::<T>::namespaced(client, &namespace);
-    let stream = watcher(api, watcher_config());
+    consume_managed_type_stream(
+        resilient_watcher(api, watcher_config()),
+        &sender,
+        extract,
+        RetryTracker::new(),
+    )
+    .await;
+}
+
+pub(crate) async fn consume_managed_type_stream<T, E>(
+    stream: impl futures_util::Stream<Item = std::result::Result<Event<T>, E>>,
+    sender: &tokio::sync::mpsc::UnboundedSender<ManagedResourceUpdate>,
+    extract: fn(&T) -> MinimalResource,
+    mut retry: RetryTracker,
+) where
+    T: Resource<DynamicType = (), Scope = NamespaceResourceScope> + Debug,
+    E: Debug,
+{
+    let api_resource = api_resource_for::<T>();
     pin_mut!(stream);
     let mut resources = BTreeMap::new();
     while let Some(event) = stream.next().await {
+        let transition = retry.observe(&event, "Managed resource");
         let event = match event {
             Ok(event) => event,
             Err(error) => {
-                let _ = sender.send(ManagedResourceUpdate::Failed {
-                    api_resource,
-                    error: format!("{error:#?}"),
-                });
-                return;
+                report_managed_transition(
+                    transition,
+                    sender,
+                    &api_resource,
+                    Some(format!("{error:#?}")),
+                );
+                continue;
             }
         };
-        match event {
-            Event::Init => resources.clear(),
-            Event::InitApply(resource) | Event::Apply(resource) => {
-                if let Some(resource) = managed_resource_from_typed(&resource, extract) {
-                    resources.insert(resource.uid.clone(), resource);
-                }
+        report_managed_transition(transition, sender, &api_resource, None);
+        let publish = match event {
+            Event::Init => {
+                resources.clear();
+                false
+            }
+            Event::InitApply(resource) => {
+                insert_managed_resource(&mut resources, &resource, extract);
+                false
+            }
+            Event::Apply(resource) => {
+                insert_managed_resource(&mut resources, &resource, extract);
+                true
             }
             Event::Delete(resource) => {
                 resources.remove(&get_resource_uid(&resource));
+                true
             }
-            Event::InitDone => {}
+            Event::InitDone => true,
+        };
+        if publish {
+            let _ = sender.send(ManagedResourceUpdate::Replaced {
+                api_resource: api_resource.clone(),
+                resources: resources.values().cloned().collect(),
+                node_pod_resources: None,
+            });
         }
-        let _ = sender.send(ManagedResourceUpdate::Replaced {
-            api_resource: api_resource.clone(),
-            resources: resources.values().cloned().collect(),
-            node_pod_resources: None,
-        });
     }
+}
+
+fn insert_managed_resource<T>(
+    resources: &mut BTreeMap<String, ManagedResource>,
+    resource: &T,
+    extract: fn(&T) -> MinimalResource,
+) where
+    T: Resource<DynamicType = (), Scope = NamespaceResourceScope>,
+{
+    if let Some(resource) = managed_resource_from_typed(resource, extract) {
+        resources.insert(resource.uid.clone(), resource);
+    }
+}
+
+/// Forward a streak transition from a managed watcher to the aggregator.
+fn report_managed_transition(
+    transition: RetryTransition,
+    sender: &tokio::sync::mpsc::UnboundedSender<ManagedResourceUpdate>,
+    api_resource: &ApiResource,
+    error: Option<String>,
+) {
+    let update = match (transition, error) {
+        (RetryTransition::Degraded, Some(error)) => ManagedResourceUpdate::Failed {
+            api_resource: api_resource.clone(),
+            error,
+        },
+        (RetryTransition::Recovered, _) => ManagedResourceUpdate::Recovered {
+            api_resource: api_resource.clone(),
+        },
+        _ => return,
+    };
+    let _ = sender.send(update);
 }
 
 pub(crate) async fn watch_pods_on_node(
@@ -232,29 +312,50 @@ pub(crate) async fn watch_pods_on_node(
     node_name: String,
     sender: tokio::sync::mpsc::UnboundedSender<ManagedResourceUpdate>,
 ) {
-    let api_resource = api_resource_for::<Pod>();
     let api = Api::<Pod>::all(client);
     let config = watcher_config().fields(&format!("spec.nodeName={node_name}"));
-    let stream = watcher(api, config);
+    consume_node_pod_stream(
+        resilient_watcher(api, config),
+        node_name,
+        &sender,
+        RetryTracker::new(),
+    )
+    .await;
+}
+
+pub(crate) async fn consume_node_pod_stream<E: Debug>(
+    stream: impl futures_util::Stream<Item = std::result::Result<Event<Pod>, E>>,
+    node_name: String,
+    sender: &tokio::sync::mpsc::UnboundedSender<ManagedResourceUpdate>,
+    mut retry: RetryTracker,
+) {
+    let api_resource = api_resource_for::<Pod>();
     pin_mut!(stream);
     let mut state = NodePodWatchState::new(node_name);
     while let Some(event) = stream.next().await {
+        let transition = retry.observe(&event, "Managed resource");
         let event = match event {
             Ok(event) => event,
             Err(error) => {
-                let _ = sender.send(ManagedResourceUpdate::Failed {
-                    api_resource,
-                    error: format!("{error:#?}"),
-                });
-                return;
+                report_managed_transition(
+                    transition,
+                    sender,
+                    &api_resource,
+                    Some(format!("{error:#?}")),
+                );
+                continue;
             }
         };
+        report_managed_transition(transition, sender, &api_resource, None);
+        let publish = !matches!(event, Event::Init | Event::InitApply(_));
         state.apply(event);
-        let _ = sender.send(ManagedResourceUpdate::Replaced {
-            api_resource: api_resource.clone(),
-            resources: state.managed_resources(),
-            node_pod_resources: state.totals(),
-        });
+        if publish {
+            let _ = sender.send(ManagedResourceUpdate::Replaced {
+                api_resource: api_resource.clone(),
+                resources: state.managed_resources(),
+                node_pod_resources: state.totals(),
+            });
+        }
     }
 }
 

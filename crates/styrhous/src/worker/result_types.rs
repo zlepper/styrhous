@@ -75,10 +75,15 @@ pub(crate) struct KubernetesNamespacesReplaced {
     pub(crate) cluster_key: i32,
     pub(crate) namespaces: Vec<MinimalNamespace>,
 }
+/// A namespace watcher has been retrying past the grace period.
 #[derive(Debug)]
-pub(crate) struct KubernetesNamespacesLoadFailed {
+pub(crate) struct KubernetesNamespacesReconnecting {
     pub(crate) cluster_key: i32,
     pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct KubernetesNamespacesRecovered {
+    pub(crate) cluster_key: i32,
 }
 #[derive(Debug)]
 pub(crate) struct KubernetesApisLoaded {
@@ -141,6 +146,21 @@ pub(crate) struct KubernetesResourceWatchFailed {
     pub(crate) namespace: Option<String>,
     pub(crate) error: String,
 }
+/// A resource watcher has been retrying past the grace period. Unlike
+/// `KubernetesResourceWatchFailed`, the watcher is still running.
+#[derive(Debug, Clone)]
+pub(crate) struct KubernetesResourceWatchReconnecting {
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+    pub(crate) error: String,
+}
+#[derive(Debug, Clone)]
+pub(crate) struct KubernetesResourceWatchRecovered {
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) namespace: Option<String>,
+}
 #[derive(Debug)]
 pub(crate) struct HelmReleasesReplaced {
     pub(crate) cluster_key: i32,
@@ -153,6 +173,12 @@ pub(crate) struct HelmReleaseBackendFailed {
     pub(crate) namespace: String,
     pub(crate) backend: &'static str,
     pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct HelmReleaseBackendRecovered {
+    pub(crate) cluster_key: i32,
+    pub(crate) namespace: String,
+    pub(crate) backend: &'static str,
 }
 #[derive(Debug)]
 pub(crate) struct ResourceDetailUpdated {
@@ -179,17 +205,34 @@ pub(crate) struct ManagedResourcesWatchFailed {
     pub(crate) error: String,
 }
 #[derive(Debug)]
+pub(crate) struct ManagedResourcesWatchRecovered {
+    pub(crate) cluster_key: i32,
+    pub(crate) history_entry_id: u64,
+}
+#[derive(Debug)]
 pub(crate) struct ResourceEventsReplaced {
     pub(crate) cluster_key: i32,
     pub(crate) history_entry_id: u64,
     pub(crate) events: Vec<ResourceEvent>,
 }
+/// Which of a resource detail's watches a result refers to.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) enum DetailStream {
+    Object,
+    Events,
+}
 #[derive(Debug)]
 pub(crate) struct ResourceDetailWatchFailed {
     pub(crate) cluster_key: i32,
     pub(crate) history_entry_id: u64,
-    pub(crate) events: bool,
+    pub(crate) stream: DetailStream,
     pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct ResourceDetailWatchRecovered {
+    pub(crate) cluster_key: i32,
+    pub(crate) history_entry_id: u64,
+    pub(crate) stream: DetailStream,
 }
 #[derive(Debug)]
 pub(crate) struct PodMetricsUpdated {

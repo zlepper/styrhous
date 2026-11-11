@@ -49,3 +49,4 @@ mod connection_and_metrics;
 mod deployment_actions;
 mod inspectors_and_deletes;
 mod resource_actions;
+mod watcher_recovery;

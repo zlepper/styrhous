@@ -177,6 +177,14 @@ fn node_inspector_shows_its_spec() {
         .state_mut()
         .worker
         .results
+        .push_back(Box::new(ManagedResourcesWatchRecovered {
+            cluster_key: 2,
+            history_entry_id: 1,
+        }) as WorkerResultBox);
+    harness
+        .state_mut()
+        .worker
+        .results
         .push_back(Box::new(ManagedResourcesReplaced {
             cluster_key: 2,
             history_entry_id: 1,

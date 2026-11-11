@@ -138,86 +138,184 @@ pub(crate) async fn watch_helm_releases(
     client: kube::Client,
     namespace: String,
     event_sender: WorkerResultSender,
-    mut initialized: Option<oneshot::Sender<()>>,
+    initialized: Option<oneshot::Sender<()>>,
 ) {
     let secrets = Api::<Secret>::namespaced(client.clone(), &namespace);
     let config_maps = Api::<ConfigMap>::namespaced(client, &namespace);
-    let secret_stream = watcher(secrets, watcher_config().labels("owner=helm")).boxed();
-    let config_map_stream = watcher(config_maps, watcher_config().labels("owner=helm")).boxed();
-    futures_util::pin_mut!(secret_stream);
-    futures_util::pin_mut!(config_map_stream);
-    let mut records = BTreeMap::<String, HelmRelease>::new();
-    let mut secrets_active = true;
-    let mut config_maps_active = true;
-    let mut secrets_synced = false;
-    let mut config_maps_synced = false;
+    consume_helm_streams(
+        resilient_watcher(secrets, watcher_config().labels("owner=helm")),
+        resilient_watcher(config_maps, watcher_config().labels("owner=helm")),
+        &HelmWatchContext {
+            cluster_key,
+            namespace,
+            event_sender,
+        },
+        initialized,
+        [RetryTracker::new(), RetryTracker::new()],
+    )
+    .await;
+}
 
-    while secrets_active || config_maps_active {
+pub(crate) struct HelmWatchContext {
+    pub(crate) cluster_key: i32,
+    pub(crate) namespace: String,
+    pub(crate) event_sender: WorkerResultSender,
+}
+
+/// Per storage backend (Secrets, ConfigMaps) bookkeeping for the merged list.
+struct HelmBackend {
+    name: &'static str,
+    active: bool,
+    /// The backend has completed (or given up on) its first list, so it no
+    /// longer holds back the merged release list.
+    synced: bool,
+    retry: RetryTracker,
+    /// Storage keys seen during a relist in progress. Existing records stay
+    /// visible until `InitDone` prunes the ones that were not seen again.
+    listing: Option<BTreeSet<String>>,
+}
+
+impl HelmBackend {
+    fn new(name: &'static str, retry: RetryTracker) -> Self {
+        Self {
+            name,
+            active: true,
+            synced: false,
+            retry,
+            listing: None,
+        }
+    }
+}
+
+struct HelmWatchState<'a> {
+    context: &'a HelmWatchContext,
+    records: BTreeMap<String, HelmRelease>,
+    initialized: Option<oneshot::Sender<()>>,
+    backends: [HelmBackend; 2],
+}
+
+impl HelmWatchState<'_> {
+    async fn send_releases(&self) {
+        send_helm_releases(
+            &self.context.event_sender,
+            self.context.cluster_key,
+            &self.context.namespace,
+            &self.records,
+        )
+        .await;
+    }
+
+    async fn handle<T, E: Debug>(
+        &mut self,
+        index: usize,
+        item: Option<std::result::Result<Event<T>, E>>,
+        apply: impl FnOnce(
+            Event<T>,
+            &mut BTreeMap<String, HelmRelease>,
+            &mut Option<BTreeSet<String>>,
+        ) -> bool,
+    ) {
+        let other_synced = self.backends[1 - index].synced;
+        let backend = &mut self.backends[index];
+        match item {
+            Some(item) => {
+                let transition = backend.retry.observe(&item, backend.name);
+                let name = backend.name;
+                match item {
+                    Ok(event) => {
+                        if transition == RetryTransition::Recovered {
+                            self.context
+                                .event_sender
+                                .send(HelmReleaseBackendRecovered {
+                                    cluster_key: self.context.cluster_key,
+                                    namespace: self.context.namespace.clone(),
+                                    backend: name,
+                                })
+                                .await
+                                .log_if_error("Failed to send Helm backend recovery");
+                        }
+                        let backend = &mut self.backends[index];
+                        backend.synced |= matches!(&event, Event::InitDone);
+                        let changed = apply(event, &mut self.records, &mut backend.listing);
+                        if self.backends.iter().all(|backend| backend.synced) {
+                            let initial_sync_completed = self.initialized.take().is_some();
+                            if changed || initial_sync_completed {
+                                self.send_releases().await;
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        if transition == RetryTransition::Degraded {
+                            self.context
+                                .event_sender
+                                .send(HelmReleaseBackendFailed {
+                                    cluster_key: self.context.cluster_key,
+                                    namespace: self.context.namespace.clone(),
+                                    backend: name,
+                                    error: format!("{error:#?}"),
+                                })
+                                .await
+                                .log_if_error("Failed to send Helm backend error");
+                        }
+                        // Startup must not stay blocked on a backend that cannot
+                        // list, even if the failure turns out to be a short blip.
+                        let _ = self.initialized.take();
+                        // Publishing is separate: a backend that merely hiccuped
+                        // is still expected to deliver its list, so only one that
+                        // has been failing past the grace period stops holding
+                        // back the other backend's releases.
+                        if transition == RetryTransition::Degraded {
+                            let newly_synced =
+                                !std::mem::replace(&mut self.backends[index].synced, true);
+                            if newly_synced && other_synced {
+                                self.send_releases().await;
+                            }
+                        }
+                    }
+                }
+            }
+            None => {
+                backend.active = false;
+                backend.synced = true;
+                if other_synced {
+                    let _ = self.initialized.take();
+                    self.send_releases().await;
+                }
+            }
+        }
+    }
+}
+
+/// Merge the Secret and ConfigMap storage backends into one release list. A
+/// backend that keeps failing is reported after the grace period, but both
+/// streams keep running so the backend recovers on its own.
+pub(crate) async fn consume_helm_streams<SE: Debug, CE: Debug>(
+    secret_stream: impl futures_util::Stream<Item = std::result::Result<Event<Secret>, SE>>,
+    config_map_stream: impl futures_util::Stream<Item = std::result::Result<Event<ConfigMap>, CE>>,
+    context: &HelmWatchContext,
+    initialized: Option<oneshot::Sender<()>>,
+    [secret_retry, config_map_retry]: [RetryTracker; 2],
+) {
+    pin_mut!(secret_stream);
+    pin_mut!(config_map_stream);
+    let mut state = HelmWatchState {
+        context,
+        records: BTreeMap::new(),
+        initialized,
+        backends: [
+            HelmBackend::new("Secrets", secret_retry),
+            HelmBackend::new("ConfigMaps", config_map_retry),
+        ],
+    };
+
+    while state.backends.iter().any(|backend| backend.active) {
         tokio::select! {
-            event = secret_stream.next(), if secrets_active => match event {
-                Some(Ok(event)) => {
-                    secrets_synced |= matches!(&event, Event::InitDone);
-                    let changed = apply_helm_secret_event(event, &mut records);
-                    if changed && secrets_synced && config_maps_synced {
-                        send_helm_releases(&event_sender, cluster_key, &namespace, &records).await;
-                    }
-                    if secrets_synced && config_maps_synced {
-                        let initial_sync_completed = initialized.take().is_some();
-                        if initial_sync_completed && !changed {
-                            send_helm_releases(&event_sender, cluster_key, &namespace, &records).await;
-                        }
-                    }
-                }
-                Some(Err(error)) => {
-                    secrets_active = false;
-                    secrets_synced = true;
-                    event_sender.send(HelmReleaseBackendFailed { cluster_key, namespace: namespace.clone(), backend: "Secrets", error: format!("{error:#}") }).await.log_if_error("Failed to send Helm Secrets error");
-                    if config_maps_synced {
-                        let _ = initialized.take();
-                        send_helm_releases(&event_sender, cluster_key, &namespace, &records).await;
-                    }
-                }
-                None => {
-                    secrets_active = false;
-                    secrets_synced = true;
-                    if config_maps_synced {
-                        let _ = initialized.take();
-                        send_helm_releases(&event_sender, cluster_key, &namespace, &records).await;
-                    }
-                },
-            },
-            event = config_map_stream.next(), if config_maps_active => match event {
-                Some(Ok(event)) => {
-                    config_maps_synced |= matches!(&event, Event::InitDone);
-                    let changed = apply_helm_config_map_event(event, &mut records);
-                    if changed && secrets_synced && config_maps_synced {
-                        send_helm_releases(&event_sender, cluster_key, &namespace, &records).await;
-                    }
-                    if secrets_synced && config_maps_synced {
-                        let initial_sync_completed = initialized.take().is_some();
-                        if initial_sync_completed && !changed {
-                            send_helm_releases(&event_sender, cluster_key, &namespace, &records).await;
-                        }
-                    }
-                }
-                Some(Err(error)) => {
-                    config_maps_active = false;
-                    config_maps_synced = true;
-                    event_sender.send(HelmReleaseBackendFailed { cluster_key, namespace: namespace.clone(), backend: "ConfigMaps", error: format!("{error:#}") }).await.log_if_error("Failed to send Helm ConfigMaps error");
-                    if secrets_synced {
-                        let _ = initialized.take();
-                        send_helm_releases(&event_sender, cluster_key, &namespace, &records).await;
-                    }
-                }
-                None => {
-                    config_maps_active = false;
-                    config_maps_synced = true;
-                    if secrets_synced {
-                        let _ = initialized.take();
-                        send_helm_releases(&event_sender, cluster_key, &namespace, &records).await;
-                    }
-                },
-            },
+            item = secret_stream.next(), if state.backends[0].active => {
+                state.handle(0, item, apply_helm_secret_event).await;
+            }
+            item = config_map_stream.next(), if state.backends[1].active => {
+                state.handle(1, item, apply_helm_config_map_event).await;
+            }
         }
     }
 }
@@ -261,46 +359,79 @@ pub(crate) fn helm_storage_key(prefix: &str, name: &str) -> String {
     format!("{prefix}/{name}")
 }
 
+/// Apply one watch event to a backend's records and report whether the merged
+/// release list should be republished. Relist events only stage: records stay
+/// visible until `InitDone` removes the ones the relist did not return.
+fn apply_helm_event<T>(
+    event: Event<T>,
+    records: &mut BTreeMap<String, HelmRelease>,
+    listing: &mut Option<BTreeSet<String>>,
+    prefix: &str,
+    storage_key: impl Fn(&T) -> String,
+    upsert: impl Fn(T, &mut BTreeMap<String, HelmRelease>) -> bool,
+) -> bool {
+    match event {
+        Event::Apply(object) => upsert(object, records),
+        Event::Delete(object) => records.remove(&storage_key(&object)).is_some(),
+        Event::Init => {
+            *listing = Some(BTreeSet::new());
+            false
+        }
+        Event::InitApply(object) => {
+            if let Some(seen) = listing {
+                seen.insert(storage_key(&object));
+            }
+            upsert(object, records);
+            false
+        }
+        Event::InitDone => {
+            if let Some(seen) = listing.take() {
+                let prefix = format!("{prefix}/");
+                records.retain(|key, _| !key.starts_with(&prefix) || seen.contains(key));
+            }
+            true
+        }
+    }
+}
+
 pub(crate) fn apply_helm_secret_event(
     event: Event<Secret>,
     records: &mut BTreeMap<String, HelmRelease>,
+    listing: &mut Option<BTreeSet<String>>,
 ) -> bool {
-    match event {
-        Event::Apply(secret) => upsert_helm_secret(secret, records),
-        Event::Delete(secret) => records
-            .remove(&helm_storage_key(
+    apply_helm_event(
+        event,
+        records,
+        listing,
+        "secret",
+        |secret| {
+            helm_storage_key(
                 "secret",
                 secret.metadata.name.as_deref().unwrap_or_default(),
-            ))
-            .is_some(),
-        Event::Init => {
-            records.retain(|key, _| !key.starts_with("secret/"));
-            false
-        }
-        Event::InitApply(secret) => upsert_helm_secret(secret, records),
-        Event::InitDone => true,
-    }
+            )
+        },
+        upsert_helm_secret,
+    )
 }
 
 pub(crate) fn apply_helm_config_map_event(
     event: Event<ConfigMap>,
     records: &mut BTreeMap<String, HelmRelease>,
+    listing: &mut Option<BTreeSet<String>>,
 ) -> bool {
-    match event {
-        Event::Apply(config_map) => upsert_helm_config_map(config_map, records),
-        Event::Delete(config_map) => records
-            .remove(&helm_storage_key(
+    apply_helm_event(
+        event,
+        records,
+        listing,
+        "configmap",
+        |config_map| {
+            helm_storage_key(
                 "configmap",
                 config_map.metadata.name.as_deref().unwrap_or_default(),
-            ))
-            .is_some(),
-        Event::Init => {
-            records.retain(|key, _| !key.starts_with("configmap/"));
-            false
-        }
-        Event::InitApply(config_map) => upsert_helm_config_map(config_map, records),
-        Event::InitDone => true,
-    }
+            )
+        },
+        upsert_helm_config_map,
+    )
 }
 
 pub(crate) fn upsert_helm_secret(

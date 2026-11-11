@@ -21,12 +21,12 @@ const FIXTURE_CLEANUP_TIMEOUT: Duration = Duration::from_secs(30);
 const CLUSTER_DISCOVERY_TIMEOUT_MS: u64 = 30_000;
 const KIND_DISCOVERY_LOCK_FILE: &str = "styrhous-kind-api-discovery.lock";
 
-struct KindDiscoveryLock {
+pub(super) struct KindDiscoveryLock {
     _file: File,
 }
 
 impl KindDiscoveryLock {
-    fn acquire() -> Self {
+    pub(super) fn acquire() -> Self {
         Self::acquire_at(kind_discovery_lock_path())
     }
 

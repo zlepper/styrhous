@@ -9,6 +9,9 @@ pub(crate) struct ClusterState {
     pub(crate) namespaces: BTreeMap<SortedName, MinimalNamespace>,
     pub(crate) connection: ClusterConnectionState,
     pub(crate) namespaces_load: ClusterLoadState,
+    /// Set while the namespace watcher has been retrying past the grace
+    /// period; the last known namespaces stay usable meanwhile.
+    pub(crate) namespaces_reconnecting: Option<String>,
     pub(crate) api_resources_load: ClusterLoadState,
     pub(crate) selected_namespaces: HashSet<String>,
     pub(crate) resources: ClusterResourceState,
@@ -72,6 +75,7 @@ impl ClusterState {
             namespaces: BTreeMap::new(),
             connection: ClusterConnectionState::Disconnected,
             namespaces_load: ClusterLoadState::Loading,
+            namespaces_reconnecting: None,
             api_resources_load: ClusterLoadState::Loading,
             selected_namespaces: HashSet::new(),
             resources: ClusterResourceState::new(false),
@@ -84,6 +88,7 @@ impl ClusterState {
     pub(crate) fn reset_for_connection(&mut self) {
         self.connection = ClusterConnectionState::Connecting;
         self.namespaces_load = ClusterLoadState::Loading;
+        self.namespaces_reconnecting = None;
         self.api_resources_load = ClusterLoadState::Loading;
         self.namespaces.clear();
         self.selected_namespaces.clear();

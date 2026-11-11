@@ -61,31 +61,82 @@ impl UiState {
         namespace: Option<String>,
         error: String,
     ) {
-        if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
-            let key = (api_resource.clone(), namespace.clone());
-            cluster.active_watchers.remove(&key);
-            if api_resource.is_helm_releases()
-                && let Some(namespace) = namespace
-            {
-                let watch = cluster.helm_release_cache.entry(namespace).or_default();
-                watch.is_synced = true;
-                watch.backend_errors.insert("Helm storage", error);
-                return;
-            }
-            if api_resource.namespaced && namespace.is_none() {
-                for namespace in cluster.selected_namespaces.clone() {
-                    let watch = cluster
-                        .resource_cache
-                        .entry((api_resource.clone(), Some(namespace)))
-                        .or_default();
-                    watch.is_synced = false;
-                    watch.error = Some(error.clone());
-                }
-                return;
-            }
+        let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
+            return;
+        };
+        cluster
+            .active_watchers
+            .remove(&(api_resource.clone(), namespace.clone()));
+        if api_resource.is_helm_releases()
+            && let Some(namespace) = namespace
+        {
+            let watch = cluster.helm_release_cache.entry(namespace).or_default();
+            watch.is_synced = true;
+            watch.backend_errors.insert("Helm storage", error);
+            return;
+        }
+        for key in cluster.watch_keys_for(&api_resource, namespace) {
             let watch = cluster.resource_cache.entry(key).or_default();
             watch.is_synced = false;
-            watch.error = Some(error);
+            watch.error = Some(error.clone());
+        }
+    }
+
+    /// A running watcher has been retrying past the grace period (`Some`) or has
+    /// recovered (`None`). Rows, `is_synced` and the active watcher are left
+    /// alone. A late message for a watcher that is no longer active is a no-op,
+    /// so it can neither create cache entries nor flag a replaced watcher.
+    pub(crate) fn set_resource_watch_error(
+        &mut self,
+        cluster_key: i32,
+        api_resource: ApiResource,
+        namespace: Option<String>,
+        error: Option<String>,
+    ) {
+        let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
+            return;
+        };
+        if !cluster
+            .active_watchers
+            .contains(&(api_resource.clone(), namespace.clone()))
+        {
+            return;
+        }
+        for key in cluster.watch_keys_for(&api_resource, namespace) {
+            match &error {
+                // A watcher still listing for the first time has no entry yet.
+                Some(_) => cluster
+                    .resource_cache
+                    .entry(key)
+                    .or_default()
+                    .error
+                    .clone_from(&error),
+                None => {
+                    if let Some(watch) = cluster.resource_cache.get_mut(&key) {
+                        watch.error = None;
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl ClusterState {
+    /// The cache keys a watcher's result applies to. A namespaced resource
+    /// watched across namespaces reports without a namespace and covers every
+    /// selected one.
+    fn watch_keys_for(
+        &self,
+        api_resource: &ApiResource,
+        namespace: Option<String>,
+    ) -> Vec<ResourceWatchKey> {
+        if api_resource.namespaced && namespace.is_none() {
+            self.selected_namespaces
+                .iter()
+                .map(|namespace| (api_resource.clone(), Some(namespace.clone())))
+                .collect()
+        } else {
+            vec![(api_resource.clone(), namespace)]
         }
     }
 }

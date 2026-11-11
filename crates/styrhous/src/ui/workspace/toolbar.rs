@@ -217,6 +217,17 @@ pub(super) fn show_toolbar(
                                         Some(ResourceSelectionAction::Delete);
                                 }
                             }
+                            // Trailing, so toggling it never shifts the controls
+                            // before it.
+                            if let Some(error) = &cluster.namespaces_reconnecting {
+                                ui.add_space(spacing::MD);
+                                ui.label(
+                                    egui::RichText::new("Reconnecting...")
+                                        .font(typography::metadata())
+                                        .color(components::design::status::WARNING_TEXT),
+                                )
+                                .on_hover_text(format!("Namespace updates are paused: {error}"));
+                            }
                         });
                         strip.cell(|ui| {
                             ui.allocate_ui_with_layout(
