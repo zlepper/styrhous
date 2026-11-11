@@ -433,6 +433,10 @@ fn windows_quote_applies_msvc_then_cmd_escaping() {
         ("100%", r#"^"100^%^""#),
         ("%PATH%", r#"^"^%PATH^%^""#),
         ("%%", r#"^"^%^%^""#),
+        (r"\", r#"^"\\^""#),
+        (r"\\", r#"^"\\\\^""#),
+        (r"\\\", r#"^"\\\\\\^""#),
+        (r#"""#, r#"^"\^"^""#),
         ("a^b", r#"^"a^^b^""#),
         ("a&b", r#"^"a^&b^""#),
         ("a|b", r#"^"a^|b^""#),
@@ -456,8 +460,33 @@ fn windows_command_line_joins_quoted_arguments_inside_one_outer_quote_pair() {
     assert_eq!(plan.program, "cmd.exe");
     assert_eq!(
         plan.args,
-        ["/d", "/s", "/c", r#""wt.exe ^"kubectl^" ^"team dev^"""#]
+        [
+            "/d",
+            "/v:off",
+            "/s",
+            "/c",
+            r#""wt.exe ^"kubectl^" ^"team dev^"""#
+        ]
     );
+}
+
+#[test]
+fn start_templates_render_the_command_after_an_empty_title() {
+    let command = shell_command(
+        &["kubectl".to_string(), "a&b".to_string()],
+        ShellDialect::Windows,
+    );
+    let plan = cmd_exe_plan(&format!(r#"start "" /wait {command}"#));
+    assert_eq!(plan.args[4], r#""start "" /wait ^"kubectl^" ^"a^&b^"""#);
+}
+
+#[test]
+fn line_breaks_in_arguments_are_rejected_for_cmd_exe() {
+    assert!(reject_line_breaks(&["a b".into(), "tab\t".into()]).is_ok());
+    for bad in ["one\ntwo", "one\rtwo"] {
+        let error = reject_line_breaks(&["kubectl".into(), bad.into()]).unwrap_err();
+        assert!(error.contains("line break"), "{error}");
+    }
 }
 
 #[cfg(windows)]
@@ -503,6 +532,9 @@ mod windows_cmd_round_trip {
         r"C:\dir\",
         r"C:\dir with space\",
         r"a\b\c",
+        r"\",
+        r"\\",
+        r"\\\",
         r#"a\"b"#,
         r#"a\\"b"#,
         "100%",
@@ -528,6 +560,29 @@ mod windows_cmd_round_trip {
             .map(|argument| format!("{argument:?}"))
             .collect();
         assert_eq!(run_through_cmd("{command}", TRICKY), expected);
+    }
+
+    #[test]
+    fn template_content_after_the_command_is_run_by_cmd_exe() {
+        let output = run_through_cmd("{command} & echo done", &["a&b", r"c\"]);
+        assert_eq!(
+            output,
+            [
+                format!("{:?}", "a&b"),
+                format!("{:?}", r"c\"),
+                "done".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn long_arguments_with_escaped_characters_round_trip() {
+        let long = r#"a&b%c^d"e\f|g<h>i (j)!k "#.repeat(130);
+        assert!(long.len() > 3000);
+        assert_eq!(
+            run_through_cmd("{command}", &[&long]),
+            [format!("{long:?}")]
+        );
     }
 
     #[test]

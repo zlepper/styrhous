@@ -219,6 +219,9 @@ impl LaunchPlan {
         settings.validate()?;
         let kubectl = kubectl_arguments(request);
         if let Some(template) = &settings.custom_template {
+            if cfg!(windows) {
+                reject_line_breaks(&kubectl)?;
+            }
             return Ok(vec![custom_template_plan(template, &kubectl)]);
         }
 
@@ -411,6 +414,20 @@ fn custom_template_plan(template: &str, kubectl: &[String]) -> LaunchPlan {
     }
 }
 
+/// A cmd.exe command line ends at the first line break, so such values cannot be passed on.
+fn reject_line_breaks(arguments: &[String]) -> Result<(), String> {
+    match arguments
+        .iter()
+        .find(|argument| argument.contains(['\r', '\n']))
+    {
+        Some(argument) => Err(format!(
+            "Unable to start the custom terminal: {argument:?} contains a line break, \
+             which cmd.exe cannot receive."
+        )),
+        None => Ok(()),
+    }
+}
+
 const CMD_PROGRAM: &str = "cmd.exe";
 
 /// Wraps the whole line in one extra pair of quotes so that `/s` strips exactly those and leaves
@@ -423,6 +440,7 @@ fn cmd_exe_plan(rendered: &str) -> LaunchPlan {
         program: CMD_PROGRAM.into(),
         args: vec![
             "/d".into(),
+            "/v:off".into(),
             "/s".into(),
             "/c".into(),
             format!("\"{rendered}\""),
@@ -460,10 +478,12 @@ fn shell_command(arguments: &[String], dialect: ShellDialect) -> String {
 ///    for `%VAR%`: the caret sits inside the would-be variable name, so cmd does not expand it
 ///    (`%%` is only an escape in batch files, and `%` cannot be protected by double quotes).
 ///
-/// This is the scheme from "Everyone quotes command line arguments the wrong way" and the
-/// Rust standard library's batch-file guidance. Arguments containing line breaks cannot be
-/// represented on a cmd command line and are not supported. In a custom template the
-/// `{command}` placeholder must therefore stay outside any quotes of its own.
+/// The MSVC layer follows Colascione's "Everyone quotes command line arguments the wrong way",
+/// which also describes caret-escaping metacharacters for cmd.exe; the BatBadBut write-up
+/// explains why cmd.exe needs its own escaping on top of MSVC quoting. (Rust's standard library
+/// takes a different route for batch files: it quotes and rejects what it cannot make safe.)
+/// Arguments with line breaks are rejected by `reject_line_breaks`. In a custom template the
+/// `{command}` placeholder must stay outside any quotes of its own.
 #[cfg_attr(not(windows), allow(dead_code))]
 fn windows_quote(argument: &str) -> String {
     let mut quoted = String::with_capacity(argument.len() + 2);

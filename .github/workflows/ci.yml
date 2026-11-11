@@ -149,6 +149,10 @@ jobs:
         with:
           tool: cargo-nextest@0.9.140
 
+      - name: Run Clippy
+        shell: bash
+        run: cargo clippy -p styrhous --all-targets --locked -- -D warnings
+
       - name: Run terminal launcher and updater tests
         shell: bash
         run: cargo nextest run -p styrhous --locked -E 'test(/^(terminal_launcher|updater)::/)'

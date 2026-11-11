@@ -165,7 +165,7 @@ pub(super) fn template_guidance() -> egui::text::LayoutJob {
         },
     );
     guidance.append(
-        " as the placeholder.\nIt is replaced with the complete kubectl shell command.",
+        " as the placeholder.\nIt is replaced with the complete, already quoted kubectl shell command,\nso do not wrap it in quotes.",
         0.0,
         text,
     );
