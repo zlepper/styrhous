@@ -5,7 +5,7 @@
 //! would otherwise obscure the scenario being exercised.
 
 use super::super::MyEguiApp;
-use super::super::state::UiState;
+use super::super::state::{ClusterState, UiState};
 use crate::terminal_launcher::TerminalLauncher;
 use crate::worker::{MockWorker, WorkerCommand, WorkerCommandBox, WorkerResult};
 use egui_kittest::Harness;
@@ -16,6 +16,9 @@ pub(super) trait MockUiHarnessExt {
 
     /// Deliver one worker result and render the frame that consumes it.
     fn deliver_worker_result<R: WorkerResult>(&mut self, result: R);
+
+    /// The UI state of one cluster; panics if it does not exist.
+    fn cluster(&self, cluster_key: i32) -> &ClusterState;
 }
 
 impl<L: TerminalLauncher> MockUiHarnessExt for Harness<'_, MyEguiApp<MockWorker, L>> {
@@ -27,6 +30,10 @@ impl<L: TerminalLauncher> MockUiHarnessExt for Harness<'_, MyEguiApp<MockWorker,
     fn deliver_worker_result<R: WorkerResult>(&mut self, result: R) {
         self.state_mut().worker.enqueue_result(result);
         self.run();
+    }
+
+    fn cluster(&self, cluster_key: i32) -> &ClusterState {
+        &self.state().ui_state.clusters[&cluster_key]
     }
 }
 

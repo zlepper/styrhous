@@ -78,9 +78,6 @@ impl WorkerResult for ResourceDeleteCompleted {
                 None,
             );
         }
-        if let Some(cluster) = ui.clusters.get_mut(&cluster_key) {
-            cluster.pending_delete = None;
-        }
     }
 }
 
@@ -121,9 +118,6 @@ impl WorkerResult for ResourceForceDeleteCompleted {
             resource_name,
             None,
         );
-        if let Some(cluster) = ui.clusters.get_mut(&cluster_key) {
-            cluster.pending_force_delete = None;
-        }
     }
 }
 
@@ -199,6 +193,7 @@ impl WorkerResult for CronJobRunCompleted {
 
 impl WorkerResult for ResourceScaleFetchFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        ui.settle_scale_lookup(self.cluster_key, self.request_id);
         ui.record_resource_operation_failure(
             self.cluster_key,
             &self.api_resource,
@@ -218,8 +213,11 @@ impl WorkerResult for ResourceScaleFetched {
             namespace,
             resource_name,
             replicas,
+            request_id,
         } = self;
-        if let Some(cluster) = ui.clusters.get_mut(&cluster_key) {
+        if ui.settle_scale_lookup(cluster_key, request_id)
+            && let Some(cluster) = ui.clusters.get_mut(&cluster_key)
+        {
             cluster.pending_scale = Some(super::state::PendingScale {
                 api_resource,
                 resource_name,
@@ -245,9 +243,6 @@ impl WorkerResult for ResourceScaleUpdated {
             self.resource_name,
             None,
         );
-        if let Some(cluster) = ui.clusters.get_mut(&self.cluster_key) {
-            cluster.pending_scale = None;
-        }
     }
 }
 

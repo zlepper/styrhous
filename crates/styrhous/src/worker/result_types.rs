@@ -398,6 +398,7 @@ pub(crate) struct DeploymentRestartCompleted {
 #[derive(Debug)]
 pub(crate) struct ResourceScaleFetched {
     pub(crate) cluster_key: i32,
+    pub(crate) request_id: u64,
     pub(crate) api_resource: ApiResource,
     pub(crate) namespace: Option<String>,
     pub(crate) resource_name: String,
@@ -514,6 +515,7 @@ pub(crate) struct CronJobRunFailed {
 #[derive(Debug)]
 pub(crate) struct ResourceScaleFetchFailed {
     pub(crate) cluster_key: i32,
+    pub(crate) request_id: u64,
     pub(crate) api_resource: ApiResource,
     pub(crate) namespace: Option<String>,
     pub(crate) resource_name: String,

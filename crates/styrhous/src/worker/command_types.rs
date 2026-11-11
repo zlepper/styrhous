@@ -139,6 +139,7 @@ pub(crate) struct RunCronJob {
 #[derive(Debug)]
 pub(crate) struct GetResourceScale {
     pub(crate) cluster_key: i32,
+    pub(crate) request_id: u64,
     pub(crate) api_resource: ApiResource,
     pub(crate) namespace: Option<String>,
     pub(crate) resource_name: String,

@@ -375,4 +375,8 @@ fn delete_confirmation_waits_before_enabling_the_destructive_action() {
         [command] if command.as_ref().as_any().downcast_ref::<DeleteResource>()
             .is_some_and(|command| command.resource_name == "important-config")
     ));
+    assert!(
+        harness.cluster(1).pending_delete.is_none(),
+        "confirming closes the dialog immediately, so completions never need to"
+    );
 }

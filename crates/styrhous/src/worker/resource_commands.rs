@@ -219,8 +219,10 @@ impl WorkerCommand for GetResourceScale {
 
     async fn execute(self, state: &WorkerState) -> Self::Output {
         let cluster_key = self.cluster_key;
+        let request_id = self.request_id;
         let failure = ResourceScaleFetchFailed {
             cluster_key,
+            request_id,
             api_resource: self.api_resource.clone(),
             namespace: self.namespace.clone(),
             resource_name: self.resource_name.clone(),
@@ -229,6 +231,7 @@ impl WorkerCommand for GetResourceScale {
         match state.client_for_cluster(cluster_key).await {
             Ok(client) => get_resource_scale(
                 cluster_key,
+                request_id,
                 client,
                 self.api_resource,
                 self.namespace,

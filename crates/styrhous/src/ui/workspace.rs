@@ -25,7 +25,7 @@ use crate::resource_table::{
 };
 use crate::terminal_launcher::{DebugImagePreset, ShellRequest};
 use crate::ui::namespace_selector::NamespaceSelectorSettings;
-use crate::worker::{GetResourceScale, WorkerCommandBox};
+use crate::worker::WorkerCommandBox;
 use components::colors::{TOOLBAR_BACKGROUND, gray};
 use components::design::{spacing, typography};
 use components::fuzzy::{fuzzy_match_score, normalize_for_search};
@@ -106,6 +106,7 @@ struct WorkspaceEffects {
     shell_request: Option<ShellRequest>,
     column_settings_to_open: Option<super::resource_table_settings::ResourceTableSettingsTarget>,
     helm_detail_to_open: Option<HelmReleaseDetailTarget>,
+    scale_to_request: Option<ScaleTarget>,
 }
 
 struct ResourceDetailTarget {
@@ -113,6 +114,12 @@ struct ResourceDetailTarget {
     name: String,
     namespace: Option<String>,
     uid: String,
+}
+
+struct ScaleTarget {
+    api_resource: ApiResource,
+    name: String,
+    namespace: Option<String>,
 }
 
 struct LogSourcesTarget {
@@ -176,6 +183,17 @@ impl WorkspaceEffects {
                 target.resource_name,
                 commands_to_send,
             );
+        }
+        if let (Some(cluster_key), Some(target)) =
+            (ui_state.selected_cluster, self.scale_to_request)
+        {
+            let command = ui_state.request_resource_scale(
+                cluster_key,
+                target.api_resource,
+                target.namespace,
+                target.name,
+            );
+            commands_to_send.push(Box::new(command));
         }
         shell_requests.extend(self.shell_request);
         if let (Some(cluster_key), Some(selection)) =
@@ -543,12 +561,11 @@ pub(super) fn show(
                             });
                         }
                         ResourceAction::RequestScale { name, namespace } => {
-                            commands_to_send.push(Box::new(GetResourceScale {
-                                cluster_key: cluster.cluster_key,
+                            effects.scale_to_request = Some(ScaleTarget {
                                 api_resource: api_resource.clone(),
+                                name,
                                 namespace,
-                                resource_name: name,
-                            }));
+                            });
                         }
                         ResourceAction::ViewLogs { targets } => {
                             effects.log_sources_to_open = Some(LogSourcesTarget {
