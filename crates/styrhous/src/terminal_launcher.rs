@@ -411,7 +411,7 @@ fn shell_command(arguments: &[String], dialect: ShellDialect) -> String {
     arguments
         .iter()
         .map(|argument| match dialect {
-            ShellDialect::Posix => format!("'{}'", argument.replace('\'', "'\\\"'\\\"'")),
+            ShellDialect::Posix => format!("'{}'", argument.replace('\'', r"'\''")),
             #[cfg(windows)]
             ShellDialect::Windows => windows_quote(argument),
         })
