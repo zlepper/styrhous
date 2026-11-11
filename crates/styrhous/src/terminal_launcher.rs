@@ -26,6 +26,7 @@ pub(crate) enum ShellRequest {
 }
 
 impl ShellRequest {
+    #[cfg(target_os = "linux")]
     fn title_target(&self) -> &str {
         match self {
             Self::Pod { pod_name, .. } | Self::PodDebug { pod_name, .. } => pod_name,
@@ -175,7 +176,7 @@ impl TerminalLauncher for SystemTerminalLauncher {
         let mut unavailable = Vec::new();
 
         for plan in plans {
-            match Command::new(&plan.program).args(&plan.args).spawn() {
+            match plan.command().spawn() {
                 Ok(_) => return Ok(()),
                 Err(error) if error.kind() == ErrorKind::NotFound => {
                     unavailable.push(format!("{} ({error})", plan.program));
@@ -198,6 +199,20 @@ struct LaunchPlan {
 }
 
 impl LaunchPlan {
+    fn command(&self) -> Command {
+        let mut command = Command::new(&self.program);
+        #[cfg(windows)]
+        if self.program == CMD_PROGRAM {
+            use std::os::windows::process::CommandExt;
+            for arg in &self.args {
+                command.raw_arg(arg);
+            }
+            return command;
+        }
+        command.args(&self.args);
+        command
+    }
+
     fn for_current_platform(
         request: &ShellRequest,
         settings: &TerminalLaunchSettings,
@@ -205,6 +220,9 @@ impl LaunchPlan {
         settings.validate()?;
         let kubectl = kubectl_arguments(request);
         if let Some(template) = &settings.custom_template {
+            if cfg!(windows) {
+                reject_line_breaks(&kubectl)?;
+            }
             return Ok(vec![custom_template_plan(template, &kubectl)]);
         }
 
@@ -386,10 +404,7 @@ fn custom_template_plan(template: &str, kubectl: &[String]) -> LaunchPlan {
 
     #[cfg(windows)]
     {
-        LaunchPlan {
-            program: "cmd.exe".into(),
-            args: vec!["/d".into(), "/s".into(), "/c".into(), rendered],
-        }
+        cmd_exe_plan(&rendered)
     }
     #[cfg(not(windows))]
     {
@@ -400,10 +415,45 @@ fn custom_template_plan(template: &str, kubectl: &[String]) -> LaunchPlan {
     }
 }
 
+/// A cmd.exe command line ends at the first line break, so such values cannot be passed on.
+fn reject_line_breaks(arguments: &[String]) -> Result<(), String> {
+    match arguments
+        .iter()
+        .find(|argument| argument.contains(['\r', '\n']))
+    {
+        Some(argument) => Err(format!(
+            "Unable to start the custom terminal: {argument:?} contains a line break, \
+             which cmd.exe cannot receive."
+        )),
+        None => Ok(()),
+    }
+}
+
+const CMD_PROGRAM: &str = "cmd.exe";
+
+/// Wraps the whole line in one extra pair of quotes so that `/s` strips exactly those and leaves
+/// the rendered line untouched. The plan must be spawned with raw arguments (see
+/// [`LaunchPlan::command`]) because `cmd.exe` does not follow the MSVC quoting rules Rust's
+/// `Command` would otherwise apply to it.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn cmd_exe_plan(rendered: &str) -> LaunchPlan {
+    LaunchPlan {
+        program: CMD_PROGRAM.into(),
+        args: vec![
+            "/d".into(),
+            "/v:off".into(),
+            "/s".into(),
+            "/c".into(),
+            format!("\"{rendered}\""),
+        ],
+    }
+}
+
 #[derive(Clone, Copy)]
 enum ShellDialect {
+    #[cfg_attr(windows, allow(dead_code))]
     Posix,
-    #[cfg(windows)]
+    #[cfg_attr(not(windows), allow(dead_code))]
     Windows,
 }
 
@@ -412,16 +462,61 @@ fn shell_command(arguments: &[String], dialect: ShellDialect) -> String {
         .iter()
         .map(|argument| match dialect {
             ShellDialect::Posix => format!("'{}'", argument.replace('\'', r"'\''")),
-            #[cfg(windows)]
             ShellDialect::Windows => windows_quote(argument),
         })
         .collect::<Vec<_>>()
         .join(" ")
 }
 
-#[cfg(windows)]
+/// Quotes one argument for a `cmd.exe /c` command line whose program then parses its arguments
+/// with the MSVC rules (`CommandLineToArgvW`).
+///
+/// Two parsers see the text, so two layers are applied:
+/// 1. MSVC quoting: wrap in `"`, escape `"` as `\"`, and double every backslash run that
+///    precedes a `"` (including the closing one).
+/// 2. cmd.exe quoting: caret-escape every cmd metacharacter, including all `"`. cmd therefore
+///    never enters its own quote mode, so `& | < > ^ ( )` stay literal wherever they appear,
+///    and cmd removes the carets before starting the program. Escaping `%` this way also works
+///    for `%VAR%`: the caret sits inside the would-be variable name, so cmd does not expand it
+///    (`%%` is only an escape in batch files, and `%` cannot be protected by double quotes).
+///
+/// The MSVC layer follows Colascione's "Everyone quotes command line arguments the wrong way",
+/// which also describes caret-escaping metacharacters for cmd.exe; the BatBadBut write-up
+/// explains why cmd.exe needs its own escaping on top of MSVC quoting. (Rust's standard library
+/// takes a different route for batch files: it quotes and rejects what it cannot make safe.)
+/// Arguments with line breaks are rejected by `reject_line_breaks`. In a custom template the
+/// `{command}` placeholder must stay outside any quotes of its own.
+#[cfg_attr(not(windows), allow(dead_code))]
 fn windows_quote(argument: &str) -> String {
-    format!("\"{}\"", argument.replace('"', "\\\"").replace('%', "%%"))
+    let mut quoted = String::with_capacity(argument.len() + 2);
+    quoted.push('"');
+    let mut backslashes = 0;
+    for character in argument.chars() {
+        match character {
+            '\\' => backslashes += 1,
+            '"' => {
+                quoted.extend(std::iter::repeat_n('\\', backslashes * 2 + 1));
+                quoted.push('"');
+                backslashes = 0;
+            }
+            other => {
+                quoted.extend(std::iter::repeat_n('\\', backslashes));
+                quoted.push(other);
+                backslashes = 0;
+            }
+        }
+    }
+    quoted.extend(std::iter::repeat_n('\\', backslashes * 2));
+    quoted.push('"');
+
+    let mut escaped = String::with_capacity(quoted.len() * 2);
+    for character in quoted.chars() {
+        if "^&|<>()%!\"".contains(character) {
+            escaped.push('^');
+        }
+        escaped.push(character);
+    }
+    escaped
 }
 
 #[cfg(test)]

@@ -417,3 +417,188 @@ fn linux_xfce4_terminal_command_keeps_quotes_in_arguments_intact() {
         kubectl
     );
 }
+
+#[test]
+fn windows_quote_applies_msvc_then_cmd_escaping() {
+    let cases = [
+        ("plain", r#"^"plain^""#),
+        ("", r#"^"^""#),
+        ("two words", r#"^"two words^""#),
+        (r#"say "hi""#, r#"^"say \^"hi\^"^""#),
+        (r"C:\dir\", r#"^"C:\dir\\^""#),
+        (r"C:\dir with space\", r#"^"C:\dir with space\\^""#),
+        (r"a\b\c", r#"^"a\b\c^""#),
+        (r#"a\"b"#, r#"^"a\\\^"b^""#),
+        (r#"a\\"b"#, r#"^"a\\\\\^"b^""#),
+        ("100%", r#"^"100^%^""#),
+        ("%PATH%", r#"^"^%PATH^%^""#),
+        ("%%", r#"^"^%^%^""#),
+        (r"\", r#"^"\\^""#),
+        (r"\\", r#"^"\\\\^""#),
+        (r"\\\", r#"^"\\\\\\^""#),
+        (r#"""#, r#"^"\^"^""#),
+        ("a^b", r#"^"a^^b^""#),
+        ("a&b", r#"^"a^&b^""#),
+        ("a|b", r#"^"a^|b^""#),
+        ("a<b>c", r#"^"a^<b^>c^""#),
+        ("(a)!", r#"^"^(a^)^!^""#),
+    ];
+    for (argument, expected) in cases {
+        assert_eq!(windows_quote(argument), expected, "quoting {argument:?}");
+    }
+}
+
+#[test]
+fn windows_command_line_joins_quoted_arguments_inside_one_outer_quote_pair() {
+    let command = shell_command(
+        &["kubectl".to_string(), "team dev".to_string()],
+        ShellDialect::Windows,
+    );
+    assert_eq!(command, r#"^"kubectl^" ^"team dev^""#);
+
+    let plan = cmd_exe_plan(&format!("wt.exe {command}"));
+    assert_eq!(plan.program, "cmd.exe");
+    assert_eq!(
+        plan.args,
+        [
+            "/d",
+            "/v:off",
+            "/s",
+            "/c",
+            r#""wt.exe ^"kubectl^" ^"team dev^"""#
+        ]
+    );
+}
+
+#[test]
+fn start_templates_render_the_command_after_an_empty_title() {
+    let command = shell_command(
+        &["kubectl".to_string(), "a&b".to_string()],
+        ShellDialect::Windows,
+    );
+    let plan = cmd_exe_plan(&format!(r#"start "" /wait {command}"#));
+    assert_eq!(plan.args[4], r#""start "" /wait ^"kubectl^" ^"a^&b^"""#);
+}
+
+#[test]
+fn line_breaks_in_arguments_are_rejected_for_cmd_exe() {
+    assert!(reject_line_breaks(&["a b".into(), "tab\t".into()]).is_ok());
+    for bad in ["one\ntwo", "one\rtwo"] {
+        let error = reject_line_breaks(&["kubectl".into(), bad.into()]).unwrap_err();
+        assert!(error.contains("line break"), "{error}");
+    }
+}
+
+#[cfg(windows)]
+mod windows_cmd_round_trip {
+    use super::*;
+
+    fn print_argv_helper() -> String {
+        let deps = std::env::current_exe().expect("test executable path");
+        let examples = deps
+            .parent()
+            .and_then(std::path::Path::parent)
+            .expect("target profile directory")
+            .join("examples")
+            .join("print_argv.exe");
+        assert!(examples.exists(), "missing helper {}", examples.display());
+        examples.to_string_lossy().into_owned()
+    }
+
+    fn run_through_cmd(template: &str, arguments: &[&str]) -> Vec<String> {
+        let mut kubectl = vec![print_argv_helper()];
+        kubectl.extend(arguments.iter().map(|argument| argument.to_string()));
+        let plan = custom_template_plan(template, &kubectl);
+        assert_eq!(plan.program, "cmd.exe");
+        let output = plan.command().output().expect("cmd.exe starts");
+        assert!(
+            output.status.success(),
+            "cmd.exe failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout)
+            .expect("utf-8 output")
+            .lines()
+            .map(str::to_owned)
+            .collect()
+    }
+
+    const TRICKY: &[&str] = &[
+        "plain",
+        "",
+        "two words",
+        r#"say "hi""#,
+        r#"""#,
+        r"C:\dir\",
+        r"C:\dir with space\",
+        r"a\b\c",
+        r"\",
+        r"\\",
+        r"\\\",
+        r#"a\"b"#,
+        r#"a\\"b"#,
+        "100%",
+        "%PATH%",
+        "%%",
+        "%UNDEFINED_VARIABLE_FOR_TEST%",
+        "a^b",
+        "^",
+        "a&b&echo injected",
+        "a|b",
+        "a<b>c",
+        "(a)!",
+        "!PATH!",
+        "tab\there",
+        "unicode \u{e5}\u{4e16}",
+        "--flag=\"quoted value\"",
+    ];
+
+    #[test]
+    fn arguments_round_trip_exactly_through_cmd_exe() {
+        let expected: Vec<String> = TRICKY
+            .iter()
+            .map(|argument| format!("{argument:?}"))
+            .collect();
+        assert_eq!(run_through_cmd("{command}", TRICKY), expected);
+    }
+
+    #[test]
+    fn template_content_after_the_command_is_run_by_cmd_exe() {
+        let output = run_through_cmd("{command} & echo done", &["a&b", r"c\"]);
+        assert_eq!(
+            output,
+            [
+                format!("{:?}", "a&b"),
+                format!("{:?}", r"c\"),
+                "done".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn long_arguments_with_escaped_characters_round_trip() {
+        let long = r#"a&b%c^d"e\f|g<h>i (j)!k "#.repeat(130);
+        assert!(long.len() > 3000);
+        assert_eq!(
+            run_through_cmd("{command}", &[&long]),
+            [format!("{long:?}")]
+        );
+    }
+
+    #[test]
+    fn arguments_round_trip_when_the_template_has_its_own_quoted_program() {
+        let helper = print_argv_helper();
+        let template = format!(r#""{helper}" first {{command}}"#);
+        let output = run_through_cmd(&template, &["a&b", r"c\"]);
+        let helper_debug = format!("{helper:?}");
+        assert_eq!(
+            output,
+            [
+                r#""first""#.to_string(),
+                helper_debug,
+                r#""a&b""#.to_string(),
+                format!("{:?}", r"c\"),
+            ]
+        );
+    }
+}

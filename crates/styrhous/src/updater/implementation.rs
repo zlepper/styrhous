@@ -59,6 +59,7 @@ fn download_latest_update_inner(
 }
 
 pub(super) fn apply_staged_update(public_key: &'static str) -> Result<()> {
+    #[cfg_attr(windows, allow(unused_mut))]
     let Some(mut pending) = read_pending_update()? else {
         return Ok(());
     };
@@ -83,9 +84,9 @@ pub(super) fn apply_staged_update(public_key: &'static str) -> Result<()> {
         // NSIS exits this process immediately after spawning its installer, so the pending
         // marker must be gone before calling install or every future launch would rerun it.
         remove_if_exists(&state_path_in(&cache_directory()?))?;
-        return update
+        update
             .install(package)
-            .context("could not install staged update");
+            .context("could not install staged update")
     }
 
     #[cfg(not(windows))]
@@ -203,6 +204,7 @@ fn read_pending_update_in(directory: &Path) -> Result<Option<PendingUpdate>> {
     }
 }
 
+#[cfg(not(windows))]
 fn write_pending_update(pending: &PendingUpdate) -> Result<()> {
     write_pending_update_in(&cache_directory()?, pending)
 }
@@ -357,11 +359,11 @@ fn macos_application_bundle_path(executable: &Path) -> Result<PathBuf> {
 fn trusted_update_format() -> UpdateFormat {
     #[cfg(windows)]
     {
-        return UpdateFormat::Nsis;
+        UpdateFormat::Nsis
     }
     #[cfg(target_os = "macos")]
     {
-        return UpdateFormat::App;
+        UpdateFormat::App
     }
     #[cfg(not(any(windows, target_os = "macos")))]
     UpdateFormat::AppImage
