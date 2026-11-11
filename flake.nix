@@ -59,7 +59,6 @@
         packages =
           (with pkgs; [
             cargo-nextest
-            codex
             dotnet-sdk_10
             gh
             imagemagick
