@@ -144,8 +144,10 @@ pub(super) fn yaml_node_at_path<'a>(
 pub(super) fn source_range_from_node(source: &str, node: &MarkedYaml<'_>) -> Option<SourceRange> {
     let start =
         character_index_at_saphyr_location(source, node.span.start.line(), node.span.start.col())?;
-    let end =
-        character_index_at_saphyr_location(source, node.span.end.line(), node.span.end.col())?;
+    // A block collection at the end of the document ends on the empty line after its final
+    // newline, which `lines()` does not yield.
+    let end = character_index_at_saphyr_location(source, node.span.end.line(), node.span.end.col())
+        .unwrap_or_else(|| source.chars().count());
     Some(SourceRange {
         start,
         end: end.max(start + 1).min(source.chars().count()),
