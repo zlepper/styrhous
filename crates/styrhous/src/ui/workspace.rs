@@ -24,6 +24,7 @@ use crate::resource_table::{
     CellValue, CustomResourceColumn, NODE_COLUMN, SortValue, cell_sort_value,
 };
 use crate::terminal_launcher::{DebugImagePreset, ShellRequest};
+use crate::ui::global_blade::resource_detail_entry_ids;
 use crate::ui::namespace_selector::NamespaceSelectorSettings;
 use crate::worker::WorkerCommandBox;
 use components::colors::{TOOLBAR_BACKGROUND, gray};
@@ -184,17 +185,6 @@ impl WorkspaceEffects {
                 commands_to_send,
             );
         }
-        if let (Some(cluster_key), Some(target)) =
-            (ui_state.selected_cluster, self.scale_to_request)
-        {
-            let command = ui_state.request_resource_scale(
-                cluster_key,
-                target.api_resource,
-                target.namespace,
-                target.name,
-            );
-            commands_to_send.push(Box::new(command));
-        }
         shell_requests.extend(self.shell_request);
         if let (Some(cluster_key), Some(selection)) =
             (ui_state.selected_cluster, self.namespace_selection)
@@ -234,6 +224,20 @@ impl WorkspaceEffects {
             && let Some(cluster_key) = ui_state.selected_cluster
         {
             ui_state.retry_selected_load(cluster_key, commands_to_send);
+        }
+        // Last, so the lookup records the view as it is after this frame.
+        if let (Some(cluster_key), Some(target)) =
+            (ui_state.selected_cluster, self.scale_to_request)
+        {
+            let inspector_ids = resource_detail_entry_ids(ui_state.global_blades.navigator());
+            let command = ui_state.request_resource_scale(
+                inspector_ids,
+                cluster_key,
+                target.api_resource,
+                target.namespace,
+                target.name,
+            );
+            commands_to_send.push(Box::new(command));
         }
     }
 }

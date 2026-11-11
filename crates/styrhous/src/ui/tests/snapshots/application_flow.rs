@@ -553,6 +553,7 @@ fn request_scale(harness: &mut Harness<'static, MyEguiApp<MockWorker>>, name: &s
         .state_mut()
         .ui_state
         .request_resource_scale(
+            Vec::new(),
             1,
             fixture_api_resource("apps", "Deployment", "deployments"),
             Some("default".into()),
@@ -719,4 +720,82 @@ fn connected_cluster() -> crate::ui::state::ClusterState {
     let mut cluster = fixture_cluster(1, "dev");
     cluster.connection = ClusterConnectionState::Connected;
     cluster
+}
+
+fn harness_with_scalable_inspector() -> Harness<'static, MyEguiApp<MockWorker>> {
+    let config_maps = fixture_api_resource("core", "ConfigMap", "configmaps");
+    let mut state = oracle_resource_table_state();
+    state
+        .clusters
+        .get_mut(&2)
+        .expect("kind fixture exists")
+        .scalable_api_resources
+        .insert(config_maps.clone());
+    let mut harness = application_harness_with_state(state);
+    open_typed_detail(
+        &mut harness,
+        config_maps,
+        config_map_detail(BTreeMap::new()),
+    );
+    harness
+}
+
+fn click_scale_in_inspector(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) -> u64 {
+    harness.get_by_label("More actions for settings").click();
+    harness.run();
+    harness.get_by_label("Scale").click();
+    harness.run();
+    harness
+        .state()
+        .worker
+        .last_command::<GetResourceScale>()
+        .expect("the inspector action requests the current scale")
+        .request_id
+}
+
+fn inspector_scale_fetched(request_id: u64) -> ResourceScaleFetched {
+    ResourceScaleFetched {
+        cluster_key: 2,
+        request_id,
+        api_resource: fixture_api_resource("core", "ConfigMap", "configmaps"),
+        namespace: Some("kube-system".into()),
+        resource_name: "settings".into(),
+        replicas: 3,
+    }
+}
+
+#[test]
+fn scale_requested_from_the_inspector_opens_the_scale_dialog() {
+    let mut harness = harness_with_scalable_inspector();
+    let request_id = click_scale_in_inspector(&mut harness);
+
+    harness.deliver_worker_result(inspector_scale_fetched(request_id));
+
+    harness.get_by_label("Scale settings");
+    assert!(harness.cluster(2).pending_scale.is_some());
+}
+
+#[test]
+fn scale_reply_after_the_inspector_was_swapped_does_not_open_the_dialog() {
+    let mut harness = harness_with_scalable_inspector();
+    let request_id = click_scale_in_inspector(&mut harness);
+
+    let mut commands = Vec::new();
+    harness.state_mut().ui_state.open_resource_detail(
+        2,
+        fixture_api_resource("core", "ConfigMap", "configmaps"),
+        "other".into(),
+        Some("kube-system".into()),
+        "other-uid".into(),
+        &mut commands,
+    );
+    harness.run_steps(2);
+    harness
+        .state_mut()
+        .worker
+        .enqueue_result(inspector_scale_fetched(request_id));
+    // The swapped-in inspector is still loading, so the frame never settles.
+    harness.run_steps(2);
+
+    assert!(harness.cluster(2).pending_scale.is_none());
 }

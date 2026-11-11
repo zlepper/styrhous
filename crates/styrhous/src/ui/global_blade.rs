@@ -526,4 +526,20 @@ impl GlobalBladeNavigation<'_> {
     pub(super) fn commands_to_send(&mut self) -> &mut Vec<WorkerCommandBox> {
         self.commands_to_send
     }
+
+    pub(super) fn resource_detail_entry_ids(&self) -> Vec<u64> {
+        resource_detail_entry_ids(Some(self.navigator))
+    }
+}
+
+/// History ids of every open resource inspector, oldest first.
+pub(super) fn resource_detail_entry_ids(
+    navigator: Option<&BladeNavigator<Box<dyn GlobalBladeContent>>>,
+) -> Vec<u64> {
+    navigator
+        .into_iter()
+        .flat_map(|navigator| navigator.entries())
+        .filter_map(|content| content.resource_detail())
+        .map(|entry| entry.history_entry_id)
+        .collect()
 }

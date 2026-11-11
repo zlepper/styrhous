@@ -323,7 +323,9 @@ impl GlobalBladeEffect for ResourceDetailEffect {
                 }
             }
             ResourceAction::RequestScale { name, namespace } => {
+                let inspector_ids = navigation.resource_detail_entry_ids();
                 let command = context.ui_state.request_resource_scale(
+                    inspector_ids,
                     cluster_key,
                     api_resource,
                     namespace,

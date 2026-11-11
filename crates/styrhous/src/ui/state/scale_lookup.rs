@@ -1,4 +1,5 @@
 use super::*;
+use crate::ui::global_blade::resource_detail_entry_ids;
 use crate::worker::GetResourceScale;
 
 /// The part of the view a scale lookup was requested from. A reply is only
@@ -9,7 +10,7 @@ struct ScaleLookupView {
     selected_cluster: Option<i32>,
     selected_api_resource: Option<ApiResource>,
     selected_namespaces: HashSet<String>,
-    resource_detail_open: bool,
+    resource_detail_entry_ids: Vec<u64>,
 }
 
 #[derive(Debug)]
@@ -20,7 +21,11 @@ pub(crate) struct AwaitedScaleLookup {
 }
 
 impl UiState {
-    fn current_scale_lookup_view(&self, cluster_key: i32) -> ScaleLookupView {
+    fn scale_lookup_view(
+        &self,
+        cluster_key: i32,
+        resource_detail_entry_ids: Vec<u64>,
+    ) -> ScaleLookupView {
         let cluster = self.clusters.get(&cluster_key);
         ScaleLookupView {
             selected_cluster: self.selected_cluster,
@@ -29,18 +34,26 @@ impl UiState {
             selected_namespaces: cluster
                 .map(|cluster| cluster.selected_namespaces.clone())
                 .unwrap_or_default(),
-            resource_detail_open: self.global_blades.navigator().is_some_and(|navigator| {
-                navigator
-                    .entries()
-                    .any(|entry| entry.resource_detail().is_some())
-            }),
+            resource_detail_entry_ids,
         }
+    }
+
+    fn current_scale_lookup_view(&self, cluster_key: i32) -> ScaleLookupView {
+        self.scale_lookup_view(
+            cluster_key,
+            resource_detail_entry_ids(self.global_blades.navigator()),
+        )
     }
 
     /// The only way to build a [`GetResourceScale`]: it registers the lookup as
     /// the single one allowed to open the scale dialog, superseding any earlier one.
+    ///
+    /// Callers that run while the blade coordinator is moved out of `self` (the
+    /// inspector effects) must pass the inspectors they are operating on, since
+    /// `self.global_blades` is empty then.
     pub(crate) fn request_resource_scale(
         &mut self,
+        resource_detail_entry_ids: Vec<u64>,
         cluster_key: i32,
         api_resource: ApiResource,
         namespace: Option<String>,
@@ -51,7 +64,7 @@ impl UiState {
         self.awaited_scale_lookup = Some(AwaitedScaleLookup {
             request_id,
             cluster_key,
-            view: self.current_scale_lookup_view(cluster_key),
+            view: self.scale_lookup_view(cluster_key, resource_detail_entry_ids),
         });
         GetResourceScale {
             cluster_key,
