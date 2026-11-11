@@ -10,4 +10,5 @@ use k8s_openapi::apimachinery::pkg::apis::meta::v1::{APIResource, ObjectMeta, Ow
 mod capabilities;
 mod extractors;
 mod helm_and_jobs;
+mod watch_recovery;
 mod watches;

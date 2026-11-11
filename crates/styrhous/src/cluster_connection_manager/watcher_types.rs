@@ -79,7 +79,7 @@ impl DynamicKubernetesResourceWatcher {
         };
 
         run_resource_watch(
-            watcher(api, watcher_config()),
+            resilient_watcher(api, watcher_config()),
             ResourceWatchContext {
                 event_sender,
                 cluster_key,
@@ -90,6 +90,7 @@ impl DynamicKubernetesResourceWatcher {
             |item| extract_minimal_resource(item, &custom_columns),
             |item| item.metadata.namespace.as_deref(),
             get_resource_uid,
+            RetryTracker::new(),
         )
         .await;
     }
@@ -153,7 +154,7 @@ where
             }
         };
         run_resource_watch(
-            watcher(api, watcher_config()),
+            resilient_watcher(api, watcher_config()),
             ResourceWatchContext {
                 event_sender,
                 cluster_key,
@@ -164,6 +165,7 @@ where
             extract,
             |item| item.meta().namespace.as_deref(),
             get_resource_uid,
+            RetryTracker::new(),
         )
         .await;
     }
@@ -254,7 +256,7 @@ where
         }
 
         run_resource_watch(
-            watcher(Api::<T>::all(client), watcher_config()),
+            resilient_watcher(Api::<T>::all(client), watcher_config()),
             ResourceWatchContext {
                 event_sender,
                 cluster_key,
@@ -265,6 +267,7 @@ where
             extract,
             |item| item.meta().namespace.as_deref(),
             get_resource_uid,
+            RetryTracker::new(),
         )
         .await;
     }

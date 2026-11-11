@@ -82,6 +82,7 @@ fn resource_watch_runner_batches_filters_and_routes_events() {
             resource,
             |item| item.namespace,
             |item| item.uid.to_owned(),
+            RetryTracker::new(),
         )
         .await;
 
@@ -131,45 +132,6 @@ fn resource_watch_runner_batches_filters_and_routes_events() {
                 .downcast_ref::<KubernetesResourceDeleted>()
                 .is_some_and(|result| result.namespace.as_deref() == Some("apps")
                     && result.resource_uid == "apps-1")
-        );
-    });
-}
-
-#[test]
-fn resource_watch_runner_reports_the_source_scope_on_failure() {
-    let runtime = tokio::runtime::Runtime::new().expect("runtime initializes");
-    runtime.block_on(async {
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
-        let (initialized, initialized_receiver) = oneshot::channel();
-        run_resource_watch(
-            futures_util::stream::iter(vec![Err::<Event<()>, _>("connection lost")]),
-            ResourceWatchContext {
-                event_sender: WorkerResultSender::new(sender, None),
-                cluster_key: 9,
-                api_resource: ApiResource::helm_releases(),
-                scope: ResourceWatchScope::Single(Some("apps".to_owned())),
-            },
-            Some(initialized),
-            |_| unreachable!("the failed stream has no resource"),
-            |_| unreachable!("the failed stream has no resource"),
-            |_| unreachable!("the failed stream has no resource"),
-        )
-        .await;
-
-        assert!(initialized_receiver.await.is_err());
-        assert!(
-            receiver
-                .recv()
-                .await
-                .expect("watch failure result")
-                .as_ref()
-                .as_any()
-                .downcast_ref::<KubernetesResourceWatchFailed>()
-                .is_some_and(|result| {
-                    result.cluster_key == 9
-                        && result.namespace.as_deref() == Some("apps")
-                        && result.error.contains("connection lost")
-                })
         );
     });
 }

@@ -30,32 +30,72 @@ pub(crate) async fn watch_detail_object(
     let api = match dynamic_api::create(&client, &api_resource, namespace.as_deref()).await {
         Ok(api) => api,
         Err(error) => {
-            send_detail_error(&event_sender, cluster_key, history_entry_id, false, error).await;
+            send_detail_error(
+                &event_sender,
+                cluster_key,
+                history_entry_id,
+                DetailStream::Object,
+                error,
+            )
+            .await;
             return;
         }
     };
     let config = watcher_config().fields(&format!("metadata.name={resource_name}"));
-    let stream = watcher(api, config);
+    consume_detail_object_stream(
+        resilient_watcher(api, config),
+        |object| resource_detail_from_dynamic(&client, api_resource.clone(), object),
+        cluster_key,
+        history_entry_id,
+        &event_sender,
+        RetryTracker::new(),
+    )
+    .await;
+}
+
+pub(crate) async fn consume_detail_object_stream<E: Debug, F: Future<Output = ResourceDetail>>(
+    stream: impl futures_util::Stream<Item = std::result::Result<Event<DynamicObject>, E>>,
+    to_detail: impl Fn(DynamicObject) -> F,
+    cluster_key: i32,
+    history_entry_id: u64,
+    event_sender: &WorkerResultSender,
+    mut retry: RetryTracker,
+) {
     pin_mut!(stream);
     let mut found_during_initial_list = false;
     while let Some(event) = stream.next().await {
+        let transition = retry.observe(&event, "Resource detail");
         let event = match event {
             Ok(event) => event,
             Err(error) => {
-                send_detail_error(&event_sender, cluster_key, history_entry_id, false, error).await;
-                return;
+                if transition == RetryTransition::Degraded {
+                    send_detail_error(
+                        event_sender,
+                        cluster_key,
+                        history_entry_id,
+                        DetailStream::Object,
+                        error,
+                    )
+                    .await;
+                }
+                continue;
             }
         };
+        send_detail_recovery(
+            transition,
+            event_sender,
+            cluster_key,
+            history_entry_id,
+            DetailStream::Object,
+        )
+        .await;
         match event {
             Event::Apply(object) => {
                 event_sender
                     .send(ResourceDetailUpdated {
                         cluster_key,
                         history_entry_id,
-                        detail: Box::new(
-                            resource_detail_from_dynamic(&client, api_resource.clone(), object)
-                                .await,
-                        ),
+                        detail: Box::new(to_detail(object).await),
                     })
                     .await
                     .log_if_error("Failed to send resource detail update");
@@ -66,10 +106,7 @@ pub(crate) async fn watch_detail_object(
                     .send(ResourceDetailUpdated {
                         cluster_key,
                         history_entry_id,
-                        detail: Box::new(
-                            resource_detail_from_dynamic(&client, api_resource.clone(), object)
-                                .await,
-                        ),
+                        detail: Box::new(to_detail(object).await),
                     })
                     .await
                     .log_if_error("Failed to send resource detail update");
@@ -107,31 +144,100 @@ pub(crate) async fn watch_detail_events(
         None => Api::all(client),
     };
     let config = watcher_config().fields(&format!("involvedObject.uid={resource_uid}"));
-    let stream = watcher(api, config);
+    consume_detail_events_stream(
+        resilient_watcher(api, config),
+        cluster_key,
+        history_entry_id,
+        &event_sender,
+        RetryTracker::new(),
+    )
+    .await;
+}
+
+pub(crate) async fn consume_detail_events_stream<E: Debug>(
+    stream: impl futures_util::Stream<Item = std::result::Result<Event<KubernetesEvent>, E>>,
+    cluster_key: i32,
+    history_entry_id: u64,
+    event_sender: &WorkerResultSender,
+    mut retry: RetryTracker,
+) {
     pin_mut!(stream);
     let mut events = BTreeMap::new();
     while let Some(event) = stream.next().await {
+        let transition = retry.observe(&event, "Resource events");
         let event = match event {
             Ok(event) => event,
             Err(error) => {
-                send_detail_error(&event_sender, cluster_key, history_entry_id, true, error).await;
-                return;
+                if transition == RetryTransition::Degraded {
+                    send_detail_error(
+                        event_sender,
+                        cluster_key,
+                        history_entry_id,
+                        DetailStream::Events,
+                        error,
+                    )
+                    .await;
+                }
+                continue;
             }
         };
-        match event {
-            Event::Init => events.clear(),
-            Event::InitApply(event) | Event::Apply(event) => {
+        send_detail_recovery(
+            transition,
+            event_sender,
+            cluster_key,
+            history_entry_id,
+            DetailStream::Events,
+        )
+        .await;
+        // Init and InitApply only stage a relist; publishing them would show an
+        // empty or partial event list until InitDone.
+        let publish = match event {
+            Event::Init => {
+                events.clear();
+                false
+            }
+            Event::InitApply(event) => {
                 events.insert(
                     get_resource_uid(&event),
                     resource_event_from_kubernetes(event),
                 );
+                false
+            }
+            Event::Apply(event) => {
+                events.insert(
+                    get_resource_uid(&event),
+                    resource_event_from_kubernetes(event),
+                );
+                true
             }
             Event::Delete(event) => {
                 events.remove(&get_resource_uid(&event));
+                true
             }
-            Event::InitDone => {}
+            Event::InitDone => true,
+        };
+        if publish {
+            send_detail_events(event_sender, cluster_key, history_entry_id, &events).await;
         }
-        send_detail_events(&event_sender, cluster_key, history_entry_id, &events).await;
+    }
+}
+
+async fn send_detail_recovery(
+    transition: RetryTransition,
+    event_sender: &WorkerResultSender,
+    cluster_key: i32,
+    history_entry_id: u64,
+    stream: DetailStream,
+) {
+    if transition == RetryTransition::Recovered {
+        event_sender
+            .send(ResourceDetailWatchRecovered {
+                cluster_key,
+                history_entry_id,
+                stream,
+            })
+            .await
+            .log_if_error("Failed to send resource detail watch recovery");
     }
 }
 
@@ -157,14 +263,14 @@ pub(crate) async fn send_detail_error(
     event_sender: &WorkerResultSender,
     cluster_key: i32,
     history_entry_id: u64,
-    events: bool,
+    stream: DetailStream,
     error: impl std::fmt::Debug,
 ) {
     event_sender
         .send(ResourceDetailWatchFailed {
             cluster_key,
             history_entry_id,
-            events,
+            stream,
             error: format!("{error:#?}"),
         })
         .await

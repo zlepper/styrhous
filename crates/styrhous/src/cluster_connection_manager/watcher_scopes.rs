@@ -84,6 +84,8 @@ impl ResourceWatchScope {
 /// Execute the common list/watch lifecycle for dynamic and typed resources.
 /// Constructors remain responsible for selecting the Kubernetes API and
 /// validating its scope; this runner owns filtering, buffering, and UI events.
+/// Stream errors are retried by the (backed-off) stream itself; the runner only
+/// reports a streak that outlasts the retry grace period.
 pub(crate) async fn run_resource_watch<T, E, S>(
     stream: S,
     context: ResourceWatchContext,
@@ -91,6 +93,7 @@ pub(crate) async fn run_resource_watch<T, E, S>(
     extract: impl Fn(&T) -> MinimalResource,
     resource_namespace: impl for<'a> Fn(&'a T) -> Option<&'a str>,
     resource_uid: impl Fn(&T) -> String,
+    mut retry: RetryTracker,
 ) where
     S: futures_util::Stream<Item = std::result::Result<Event<T>, E>>,
     E: Debug,
@@ -99,23 +102,38 @@ pub(crate) async fn run_resource_watch<T, E, S>(
     pin_mut!(stream);
 
     while let Some(event) = stream.next().await {
+        let transition = retry.observe(&event, "Resource");
         let event = match event {
             Ok(event) => event,
             Err(error) => {
-                warn!("Resource watcher error: {error:?}");
-                context
-                    .event_sender
-                    .send(KubernetesResourceWatchFailed {
-                        cluster_key: context.cluster_key,
-                        api_resource: context.api_resource.clone(),
-                        namespace: context.scope.source_namespace(),
-                        error: format!("{error:#?}"),
-                    })
-                    .await
-                    .log_if_error("Failed to send resource watcher error");
-                return;
+                // Startup must not stay blocked on a watcher that cannot list.
+                drop(initialized.take());
+                if transition == RetryTransition::Degraded {
+                    context
+                        .event_sender
+                        .send(KubernetesResourceWatchReconnecting {
+                            cluster_key: context.cluster_key,
+                            api_resource: context.api_resource.clone(),
+                            namespace: context.scope.source_namespace(),
+                            error: format!("{error:#?}"),
+                        })
+                        .await
+                        .log_if_error("Failed to send resource watcher reconnecting");
+                }
+                continue;
             }
         };
+        if transition == RetryTransition::Recovered {
+            context
+                .event_sender
+                .send(KubernetesResourceWatchRecovered {
+                    cluster_key: context.cluster_key,
+                    api_resource: context.api_resource.clone(),
+                    namespace: context.scope.source_namespace(),
+                })
+                .await
+                .log_if_error("Failed to send resource watcher recovery");
+        }
 
         match event {
             Event::Apply(item) => {

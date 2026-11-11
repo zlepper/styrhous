@@ -281,6 +281,40 @@ fn namespace_selector_search_snapshot_shows_active_watches() {
 }
 
 #[test]
+fn namespace_selector_shows_a_reconnecting_indicator_only_while_the_watcher_is_degraded() {
+    let pods = fixture_api_resource("core", "Pod", "pods");
+    let mut state = oracle_resource_table_state();
+    let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
+    cluster.selected_api_resource = Some(pods);
+    let mut harness = application_harness::<MockWorker>();
+    harness.seed_ui_state(state);
+    harness.run();
+    assert!(harness.query_by_label("Reconnecting...").is_none());
+
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(Box::new(KubernetesNamespacesReconnecting {
+            cluster_key: 2,
+            error: "connection lost".into(),
+        }) as WorkerResultBox);
+    harness.run();
+    assert!(harness.query_by_label("Reconnecting...").is_some());
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "cluster_connection/namespace_selector_reconnecting_indicator/namespace_selector_reconnecting",
+    ));
+
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(Box::new(KubernetesNamespacesRecovered { cluster_key: 2 }) as WorkerResultBox);
+    harness.run();
+    assert!(harness.query_by_label("Reconnecting...").is_none());
+}
+
+#[test]
 fn namespace_selector_searches_configured_identity_values() {
     let pods = fixture_api_resource("core", "Pod", "pods");
     let mut state = oracle_resource_table_state();

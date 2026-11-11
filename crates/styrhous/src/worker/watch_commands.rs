@@ -146,7 +146,7 @@ impl WorkerCommand for StartResourceDetailWatch {
         let failure = |error| ResourceDetailWatchFailed {
             cluster_key: self.cluster_key,
             history_entry_id: self.history_entry_id,
-            events: false,
+            stream: DetailStream::Object,
             error: format!("{error:#?}"),
         };
         let client = state

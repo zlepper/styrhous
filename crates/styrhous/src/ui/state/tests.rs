@@ -64,6 +64,7 @@ mod editors;
 mod log_state;
 mod metrics;
 mod notifications;
+mod watch_recovery;
 mod workflows;
 
 fn test_log_row(display_row: usize, text: &str) -> LogPageRow {

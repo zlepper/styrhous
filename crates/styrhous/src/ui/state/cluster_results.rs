@@ -223,16 +223,30 @@ impl WorkerResult for crate::worker::KubernetesNamespacesReplaced {
                 .map(|namespace| (SortedName::new(&namespace.name), namespace))
                 .collect();
             cluster.namespaces_load = ClusterLoadState::Ready;
+            cluster.namespaces_reconnecting = None;
         }
         ui.restore_selected_namespaces(cluster_key, _commands);
     }
 }
 
-impl WorkerResult for crate::worker::KubernetesNamespacesLoadFailed {
+impl WorkerResult for crate::worker::KubernetesNamespacesReconnecting {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
-        let crate::worker::KubernetesNamespacesLoadFailed { cluster_key, error } = self;
+        let crate::worker::KubernetesNamespacesReconnecting { cluster_key, error } = self;
         if let Some(cluster) = ui.clusters.get_mut(&cluster_key) {
-            cluster.namespaces_load = ClusterLoadState::Failed(error);
+            if matches!(cluster.namespaces_load, ClusterLoadState::Ready) {
+                cluster.namespaces_reconnecting = Some(error);
+            } else {
+                // Nothing usable to keep on screen yet, so surface the failure.
+                cluster.namespaces_load = ClusterLoadState::Failed(error);
+            }
+        }
+    }
+}
+
+impl WorkerResult for crate::worker::KubernetesNamespacesRecovered {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(cluster) = ui.clusters.get_mut(&self.cluster_key) {
+            cluster.namespaces_reconnecting = None;
         }
     }
 }

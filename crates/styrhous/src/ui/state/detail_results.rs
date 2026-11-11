@@ -1,4 +1,5 @@
 use super::*;
+use crate::worker::DetailStream;
 
 impl WorkerResult for crate::worker::ResourceDetailPodUsageUpdated {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
@@ -10,6 +11,7 @@ impl WorkerResult for crate::worker::ResourceDetailPodUsageUpdated {
         }
     }
 }
+
 impl WorkerResult for crate::worker::ResourceDetailNodeUsageUpdated {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         if let Some(entry) = ui
@@ -20,6 +22,7 @@ impl WorkerResult for crate::worker::ResourceDetailNodeUsageUpdated {
         }
     }
 }
+
 impl WorkerResult for crate::worker::ResourceDetailNodeUsageFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         if let Some(entry) = ui
@@ -31,6 +34,7 @@ impl WorkerResult for crate::worker::ResourceDetailNodeUsageFailed {
         }
     }
 }
+
 impl WorkerResult for crate::worker::ResourceDetailNodeUsageMissing {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         if let Some(entry) = ui
@@ -43,6 +47,7 @@ impl WorkerResult for crate::worker::ResourceDetailNodeUsageMissing {
         }
     }
 }
+
 impl WorkerResult for crate::worker::ResourceDetailPodUsageFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         if let Some(entry) = ui
@@ -54,6 +59,7 @@ impl WorkerResult for crate::worker::ResourceDetailPodUsageFailed {
         }
     }
 }
+
 impl WorkerResult for crate::worker::ResourceDetailPodUsageMissing {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         if let Some(entry) = ui
@@ -67,6 +73,7 @@ impl WorkerResult for crate::worker::ResourceDetailPodUsageMissing {
         }
     }
 }
+
 impl WorkerResult for crate::worker::ResourceDetailUpdated {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         let crate::worker::ResourceDetailUpdated {
@@ -84,6 +91,7 @@ impl WorkerResult for crate::worker::ResourceDetailUpdated {
         }
     }
 }
+
 impl WorkerResult for crate::worker::ResourceEventsReplaced {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         let crate::worker::ResourceEventsReplaced {
@@ -100,26 +108,27 @@ impl WorkerResult for crate::worker::ResourceEventsReplaced {
         }
     }
 }
+
 impl WorkerResult for crate::worker::ResourceDetailWatchFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         let crate::worker::ResourceDetailWatchFailed {
             cluster_key,
             history_entry_id,
-            events,
+            stream,
             error,
         } = self;
         if let Some(entry) = ui
             .resource_detail_entry_mut(history_entry_id)
             .filter(|entry| entry.cluster_key == cluster_key)
         {
-            if events {
-                entry.events_error = Some(error);
-            } else {
-                entry.detail_error = Some(error);
+            match stream {
+                DetailStream::Events => entry.events_error = Some(error),
+                DetailStream::Object => entry.detail_error = Some(error),
             }
         }
     }
 }
+
 impl WorkerResult for crate::worker::ResourceDetailDeleted {
     fn apply(self, ui: &mut UiState, commands: &mut Vec<WorkerCommandBox>) {
         let crate::worker::ResourceDetailDeleted {
@@ -153,6 +162,7 @@ impl WorkerResult for crate::worker::ResourceDetailDeleted {
         }
     }
 }
+
 impl WorkerResult for crate::worker::ManagedResourcesReplaced {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         let crate::worker::ManagedResourcesReplaced {
@@ -167,10 +177,10 @@ impl WorkerResult for crate::worker::ManagedResourcesReplaced {
         {
             entry.managed_resources = resources;
             entry.node_pod_resources = node_pod_resources;
-            entry.managed_resources_error = None;
         }
     }
 }
+
 impl WorkerResult for crate::worker::ManagedResourcesWatchFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         let crate::worker::ManagedResourcesWatchFailed {
@@ -218,5 +228,35 @@ fn sync_resource_data_editor(
             ))
         }
         (_, None) => *data_editor = None,
+    }
+}
+
+impl WorkerResult for crate::worker::ResourceDetailWatchRecovered {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let crate::worker::ResourceDetailWatchRecovered {
+            cluster_key,
+            history_entry_id,
+            stream,
+        } = self;
+        if let Some(entry) = ui
+            .resource_detail_entry_mut(history_entry_id)
+            .filter(|entry| entry.cluster_key == cluster_key)
+        {
+            match stream {
+                DetailStream::Events => entry.events_error = None,
+                DetailStream::Object => entry.detail_error = None,
+            }
+        }
+    }
+}
+
+impl WorkerResult for crate::worker::ManagedResourcesWatchRecovered {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        if let Some(entry) = ui
+            .resource_detail_entry_mut(self.history_entry_id)
+            .filter(|entry| entry.cluster_key == self.cluster_key)
+        {
+            entry.managed_resources_error = None;
+        }
     }
 }

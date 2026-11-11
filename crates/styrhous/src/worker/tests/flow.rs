@@ -243,9 +243,9 @@ fn failed_worker_local_commands_emit_their_typed_failure() {
             .map(|failure| (
                 failure.cluster_key,
                 failure.history_entry_id,
-                failure.events
+                failure.stream
             )),
-        Some((7, 8, false))
+        Some((7, 8, DetailStream::Object))
     );
 }
 
