@@ -206,28 +206,32 @@ impl<F> TailwindCombobox<WithFilter<F>> {
         let content_height =
             item_count as f32 * item_height + item_count.saturating_sub(1) as f32 * item_spacing;
         let dropdown_height = content_height.clamp(item_height, DROPDOWN_MAX_HEIGHT);
-        let scroll_to_focused = keyboard.scroll_to_focused && content_height > DROPDOWN_MAX_HEIGHT;
         let first_item_row = usize::from(select_all_visible);
         let row_of = |row: &PinnedRow| match row {
             PinnedRow::SelectAll => select_all_visible.then_some(0),
-            PinnedRow::Item(text) => filtered_items
+            PinnedRow::Item { text, occurrence } => filtered_items
                 .iter()
-                .position(|(_, item)| filter_fn(item) == text)
-                .map(|position| position + first_item_row),
+                .enumerate()
+                .filter(|(_, (_, item))| filter_fn(item) == text)
+                .nth(*occurrence)
+                .map(|(position, _)| position + first_item_row),
         };
         // Filtering re-ranks the rows (and toggles the Select all row), so the
         // index from the previous frame may point at an unrelated item. Follow
-        // an explicitly chosen row by identity; otherwise, or once it no longer
-        // matches, restart from the top row like a freshly opened popup.
-        let followed_row = state.pinned_row.as_ref().and_then(row_of);
-        if followed_row.is_none() {
-            state.pinned_row = None;
-        }
-        let mut focused_index = followed_row.unwrap_or(if input_response.changed() {
-            0
-        } else {
-            state.focused_index
-        });
+        // an explicitly chosen row by identity; once it no longer exists, or
+        // when there is no explicit choice and the filter was edited, restart
+        // from the top row like a freshly opened popup.
+        let previous_index = state.focused_index;
+        let mut focused_index = match state.pinned_row.as_ref().map(row_of) {
+            Some(Some(row)) => row,
+            Some(None) => {
+                state.pinned_row = None;
+                0
+            }
+            None if input_response.changed() => 0,
+            None => previous_index,
+        };
+        let followed_to_new_index = state.pinned_row.is_some() && focused_index != previous_index;
         if item_count > 0 {
             focused_index = focused_index
                 .saturating_add_signed(keyboard.move_focus_by)
@@ -236,12 +240,22 @@ impl<F> TailwindCombobox<WithFilter<F>> {
                 state.pinned_row = Some(if select_all_visible && focused_index == 0 {
                     PinnedRow::SelectAll
                 } else {
-                    let (_, item) = &filtered_items[focused_index - first_item_row];
-                    PinnedRow::Item(filter_fn(item).to_owned())
+                    let position = focused_index - first_item_row;
+                    let text = filter_fn(filtered_items[position].1);
+                    let occurrence = filtered_items[..position]
+                        .iter()
+                        .filter(|(_, item)| filter_fn(item) == text)
+                        .count();
+                    PinnedRow::Item {
+                        text: text.to_owned(),
+                        occurrence,
+                    }
                 });
             }
         }
         state.focused_index = focused_index;
+        let scroll_to_focused = (keyboard.scroll_to_focused || followed_to_new_index)
+            && content_height > DROPDOWN_MAX_HEIGHT;
 
         let mut select_all_clicked = false;
         let popup_label = format!("{accessibility_label} options");

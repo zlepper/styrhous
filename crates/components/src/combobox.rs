@@ -56,8 +56,13 @@ struct ComboboxState {
 #[derive(Clone, PartialEq, Eq)]
 enum PinnedRow {
     SelectAll,
-    /// The text the item is filtered by.
-    Item(String),
+    /// The `occurrence`-th (zero-based) item, in display order, whose filter
+    /// text is `text`. Items may share filter text, so the text alone would
+    /// pin the first duplicate and trap keyboard navigation on it.
+    Item {
+        text: String,
+        occurrence: usize,
+    },
 }
 
 #[derive(Default)]

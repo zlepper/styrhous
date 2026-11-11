@@ -524,12 +524,19 @@ const RANKED_RESOURCES: [&str; 8] = [
 /// resource and whether the Select all row was activated.
 struct RankedComboboxHarness {
     harness: Harness<'static>,
+    items: Rc<RefCell<Vec<&'static str>>>,
     selected: Rc<RefCell<Option<&'static str>>>,
     select_all_activated: Rc<RefCell<bool>>,
 }
 
 impl RankedComboboxHarness {
     fn open(with_select_all: bool) -> Self {
+        Self::open_with(RANKED_RESOURCES.to_vec(), with_select_all)
+    }
+
+    fn open_with(items: Vec<&'static str>, with_select_all: bool) -> Self {
+        let items = Rc::new(RefCell::new(items));
+        let items_for_ui = items.clone();
         let selected = Rc::new(RefCell::new(None));
         let select_all_activated = Rc::new(RefCell::new(false));
         let selected_for_ui = selected.clone();
@@ -539,9 +546,10 @@ impl RankedComboboxHarness {
             if with_select_all {
                 combobox = combobox.select_all(false);
             }
+            let items = items_for_ui.borrow();
             let response = combobox.filter_by(|resource: &&str| *resource).show_items(
                 ui,
-                &RANKED_RESOURCES,
+                items.iter(),
                 |cb, resource| {
                     if cb.item(*resource, false).clicked() {
                         *selected_for_ui.borrow_mut() = Some(*resource);
@@ -560,6 +568,7 @@ impl RankedComboboxHarness {
         harness.run();
         Self {
             harness,
+            items,
             selected,
             select_all_activated,
         }
@@ -570,6 +579,11 @@ impl RankedComboboxHarness {
             self.harness.key_down(key);
             self.harness.run();
         }
+    }
+
+    fn set_items(&mut self, items: Vec<&'static str>) {
+        *self.items.borrow_mut() = items;
+        self.harness.run();
     }
 
     fn type_text(&mut self, text: &str) {
@@ -729,5 +743,133 @@ fn reopening_the_popup_starts_from_the_first_row() {
     combobox.harness.run();
     combobox.press(Key::Enter, 1);
 
+    assert_eq!(*combobox.selected.borrow(), Some("pod-a"));
+}
+
+#[test]
+fn arrowing_through_duplicate_filter_texts_visits_every_row() {
+    let items = vec!["a", "dup", "dup", "c"];
+    let mut combobox = RankedComboboxHarness::open_with(items.clone(), false);
+    combobox.press(Key::ArrowDown, 2);
+    combobox.press(Key::Enter, 1);
+    assert_eq!(*combobox.selected.borrow(), Some("dup"));
+
+    let mut combobox = RankedComboboxHarness::open_with(items.clone(), false);
+    combobox.press(Key::ArrowDown, 3);
+    combobox.press(Key::Enter, 1);
+    assert_eq!(*combobox.selected.borrow(), Some("c"));
+
+    // The second duplicate is still the highlighted one after re-filtering.
+    let mut combobox = RankedComboboxHarness::open_with(items, false);
+    combobox.press(Key::ArrowDown, 2);
+    combobox.type_text("d");
+    combobox.press(Key::ArrowDown, 1);
+    combobox.press(Key::Enter, 1);
+    assert_eq!(*combobox.selected.borrow(), Some("dup"));
+}
+
+#[test]
+fn removing_the_arrowed_item_from_the_caller_resets_to_the_top_row() {
+    let mut combobox = RankedComboboxHarness::open(false);
+    combobox.press(Key::ArrowDown, 3);
+    combobox.set_items(vec!["pod-a", "pod-b", "pod-c", "pod-e"]);
+    combobox.press(Key::Enter, 1);
+
+    assert_eq!(*combobox.selected.borrow(), Some("pod-a"));
+}
+
+#[test]
+fn inserting_before_the_arrowed_item_in_the_caller_keeps_it_highlighted() {
+    let mut combobox = RankedComboboxHarness::open(false);
+    combobox.press(Key::ArrowDown, 2);
+    combobox.set_items(vec!["new", "pod-a", "pod-b", "pod-c", "pod-d"]);
+    combobox.press(Key::Enter, 1);
+
+    assert_eq!(*combobox.selected.borrow(), Some("pod-c"));
+}
+
+#[test]
+fn shrinking_the_list_below_the_highlighted_index_clamps_it() {
+    let mut combobox = RankedComboboxHarness::open(false);
+    combobox.press(Key::ArrowDown, 5);
+    combobox.set_items(vec!["only-a", "only-b"]);
+    combobox.press(Key::Enter, 1);
+    assert_eq!(*combobox.selected.borrow(), Some("only-a"));
+
+    // A focus that was never explicitly chosen is clamped to the last row.
+    let mut combobox = RankedComboboxHarness::open(false);
+    combobox.set_items(vec![]);
+    combobox.press(Key::ArrowDown, 1);
+    combobox.set_items(vec!["only-a", "only-b"]);
+    combobox.press(Key::Enter, 1);
+    assert!(combobox.selected.borrow().is_some());
+}
+
+#[test]
+fn hovering_a_row_does_not_change_the_highlight_when_typing() {
+    let mut combobox = RankedComboboxHarness::open(false);
+    let hovered = combobox.harness.get_by_label("pod-d").rect().center();
+    combobox.harness.event(egui::Event::PointerMoved(hovered));
+    combobox.harness.run();
+    combobox.type_text("pod");
+    combobox.press(Key::Enter, 1);
+    assert_eq!(*combobox.selected.borrow(), Some("pod"));
+
+    let mut combobox = RankedComboboxHarness::open(false);
+    combobox.press(Key::ArrowDown, 2);
+    let hovered = combobox.harness.get_by_label("pod-d").rect().center();
+    combobox.harness.event(egui::Event::PointerMoved(hovered));
+    combobox.harness.run();
+    combobox.type_text("pod");
+    combobox.press(Key::Enter, 1);
+    assert_eq!(*combobox.selected.borrow(), Some("pod-c"));
+}
+
+#[test]
+fn ctrl_click_keeps_the_popup_open_and_the_arrowed_item_highlighted() {
+    let mut combobox = RankedComboboxHarness::open(false);
+    combobox.press(Key::ArrowDown, 2);
+    let target = combobox.harness.get_by_label("pod-a").rect().center();
+    let modifiers = egui::Modifiers {
+        ctrl: true,
+        ..Default::default()
+    };
+    combobox
+        .harness
+        .event(egui::Event::ModifiersChanged(modifiers));
+    combobox.harness.event(egui::Event::PointerMoved(target));
+    for pressed in [true, false] {
+        combobox.harness.event(egui::Event::PointerButton {
+            pos: target,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers,
+        });
+    }
+    combobox.harness.run();
+    combobox
+        .harness
+        .event(egui::Event::ModifiersChanged(egui::Modifiers::default()));
+    combobox.harness.run();
+    assert_eq!(*combobox.selected.borrow(), Some("pod-a"));
+
+    combobox.type_text("pod");
+    combobox.press(Key::Enter, 1);
+    assert_eq!(*combobox.selected.borrow(), Some("pod-c"));
+}
+
+#[test]
+fn arrowing_past_either_end_then_refiltering_keeps_the_end_row() {
+    let mut combobox = RankedComboboxHarness::open_with(vec!["x-1", "x-2", "x-3"], false);
+    combobox.press(Key::ArrowDown, 20);
+    combobox.type_text("x");
+    combobox.press(Key::Enter, 1);
+    assert_eq!(*combobox.selected.borrow(), Some("x-3"));
+
+    let mut combobox = RankedComboboxHarness::open(false);
+    combobox.press(Key::ArrowDown, 2);
+    combobox.press(Key::ArrowUp, 20);
+    combobox.type_text("pod");
+    combobox.press(Key::Enter, 1);
     assert_eq!(*combobox.selected.borrow(), Some("pod-a"));
 }
