@@ -327,6 +327,7 @@ fn test_ui_flow() {
                 fixture_api_resource("networking.k8s.io", "Ingress", "ingresses"),
             ],
             scalable_api_resources: Default::default(),
+            failed_api_groups: Vec::new(),
             pod_metrics_api_available: true,
             node_metrics_api_available: true,
         }) as WorkerResultBox);

@@ -623,6 +623,7 @@ Window state=[focused] rect=<none>
             TextRun value="Bulk delete completed with 1 failure" rect=(x=1227.0 y=741.0 width=238.4 height=17.0 center_x=1346.2 center_y=749.5)
           Label value="3 Pods" rect=(x=1227.0 y=763.0 width=39.2 height=15.0 center_x=1246.6 center_y=770.5)
             TextRun value="3 Pods" rect=(x=1227.0 y=763.0 width=39.2 height=15.0 center_x=1246.6 center_y=770.5)
+        GenericContainer rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
@@ -630,6 +631,7 @@ Window state=[focused] rect=<none>
             TextRun value="CronJob started" rect=(x=1227.0 y=838.0 width=109.9 height=17.0 center_x=1282.0 center_y=846.5)
           Label value="nightly-report • kube-system" rect=(x=1227.0 y=860.0 width=165.4 height=15.0 center_x=1309.7 center_y=867.5)
             TextRun value="nightly-report • kube-system" rect=(x=1227.0 y=860.0 width=165.4 height=15.0 center_x=1309.7 center_y=867.5)
+        GenericContainer rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
@@ -637,3 +639,4 @@ Window state=[focused] rect=<none>
             TextRun value="Couldn’t run CronJob" rect=(x=1227.0 y=935.0 width=145.0 height=17.0 center_x=1299.5 center_y=943.5)
           Label value="nightly-report • kube-system" rect=(x=1227.0 y=957.0 width=165.4 height=15.0 center_x=1309.7 center_y=964.5)
             TextRun value="nightly-report • kube-system" rect=(x=1227.0 y=957.0 width=165.4 height=15.0 center_x=1309.7 center_y=964.5)
+        GenericContainer rect=<none>

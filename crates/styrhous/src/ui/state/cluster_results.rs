@@ -251,12 +251,54 @@ impl WorkerResult for crate::worker::KubernetesNamespacesRecovered {
     }
 }
 
+/// Failed API groups named in the toast before the rest are summarised as "and N more".
+const NAMED_FAILED_API_GROUPS: usize = 3;
+
+struct FailedApiGroupsSummary {
+    title: String,
+    target: String,
+    details: String,
+}
+
+fn describe_failed_api_groups(
+    failed_api_groups: &[crate::worker::FailedApiGroup],
+) -> FailedApiGroupsSummary {
+    use std::fmt::Write;
+
+    let count = failed_api_groups.len();
+    let title = match count {
+        1 => "1 API group could not be loaded".to_owned(),
+        _ => format!("{count} API groups could not be loaded"),
+    };
+    let mut target = failed_api_groups
+        .iter()
+        .take(NAMED_FAILED_API_GROUPS)
+        .map(|group| group.group_version.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    if count > NAMED_FAILED_API_GROUPS {
+        write!(target, " and {} more", count - NAMED_FAILED_API_GROUPS)
+            .expect("writing to a String cannot fail");
+    }
+    let details = failed_api_groups
+        .iter()
+        .map(|group| format!("{}: {}", group.group_version, group.error))
+        .collect::<Vec<_>>()
+        .join("\n");
+    FailedApiGroupsSummary {
+        title,
+        target,
+        details,
+    }
+}
+
 impl WorkerResult for crate::worker::KubernetesApisLoaded {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         let crate::worker::KubernetesApisLoaded {
             cluster_key,
             api_resources,
             scalable_api_resources,
+            failed_api_groups,
             pod_metrics_api_available,
             node_metrics_api_available,
         } = self;
@@ -267,6 +309,17 @@ impl WorkerResult for crate::worker::KubernetesApisLoaded {
             cluster.pod_metrics_api_available = pod_metrics_api_available;
             cluster.node_metrics_api_available = node_metrics_api_available;
             cluster.api_resources_load = ClusterLoadState::Ready;
+        }
+        if !failed_api_groups.is_empty() {
+            let summary = describe_failed_api_groups(&failed_api_groups);
+            ui.push_operation_outcome(
+                cluster_key,
+                OperationOutcome::Failure,
+                summary.title,
+                None,
+                summary.target,
+                Some(summary.details),
+            );
         }
         if !pod_metrics_api_available {
             ui.mark_pod_metrics_api_unavailable(cluster_key);
@@ -353,6 +406,48 @@ impl WorkerResult for crate::worker::ContextPresentationSaveFailed {
             && save.request_id == self.request_id
         {
             save.result = Some(Err(self.error));
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn failed_groups(count: usize) -> Vec<crate::worker::FailedApiGroup> {
+        (1..=count)
+            .map(|index| crate::worker::FailedApiGroup {
+                group_version: format!("g{index}/v1"),
+                error: format!("error {index}"),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn failed_api_group_summary_names_at_most_three_groups_but_details_list_all() {
+        for (count, title, target) in [
+            (1, "1 API group could not be loaded", "g1/v1"),
+            (3, "3 API groups could not be loaded", "g1/v1, g2/v1, g3/v1"),
+            (
+                4,
+                "4 API groups could not be loaded",
+                "g1/v1, g2/v1, g3/v1 and 1 more",
+            ),
+            (
+                5,
+                "5 API groups could not be loaded",
+                "g1/v1, g2/v1, g3/v1 and 2 more",
+            ),
+        ] {
+            let summary = describe_failed_api_groups(&failed_groups(count));
+
+            assert_eq!(summary.title, title);
+            assert_eq!(summary.target, target);
+            let expected_details = (1..=count)
+                .map(|index| format!("g{index}/v1: error {index}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            assert_eq!(summary.details, expected_details);
         }
     }
 }

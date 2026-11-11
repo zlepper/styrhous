@@ -159,6 +159,7 @@ async fn load_api_resources(
                     cluster_key,
                     api_resources: inspection.api_resources,
                     scalable_api_resources: inspection.scalable_api_resources,
+                    failed_api_groups: inspection.failed_api_groups,
                     pod_metrics_api_available: inspection.pod_metrics_api_available,
                     node_metrics_api_available: inspection.node_metrics_api_available,
                 })

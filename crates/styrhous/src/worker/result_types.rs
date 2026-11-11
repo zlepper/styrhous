@@ -81,6 +81,11 @@ pub(crate) struct KubernetesNamespacesReconnecting {
     pub(crate) cluster_key: i32,
     pub(crate) error: String,
 }
+#[derive(Debug, Clone)]
+pub(crate) struct FailedApiGroup {
+    pub(crate) group_version: String,
+    pub(crate) error: String,
+}
 #[derive(Debug)]
 pub(crate) struct KubernetesNamespacesRecovered {
     pub(crate) cluster_key: i32,
@@ -90,6 +95,7 @@ pub(crate) struct KubernetesApisLoaded {
     pub(crate) cluster_key: i32,
     pub(crate) api_resources: Vec<ApiResource>,
     pub(crate) scalable_api_resources: std::collections::BTreeSet<ApiResource>,
+    pub(crate) failed_api_groups: Vec<FailedApiGroup>,
     pub(crate) pod_metrics_api_available: bool,
     pub(crate) node_metrics_api_available: bool,
 }
