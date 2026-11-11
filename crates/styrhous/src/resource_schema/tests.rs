@@ -67,6 +67,37 @@ fn local_validation_preserves_the_exact_invalid_scalar_range() {
 }
 
 #[test]
+fn null_mapping_values_are_validated_as_unset_fields() {
+    let schema = ResourceSchema::new(json!({
+        "type": "object",
+        "properties": {
+            "args": {"type": "array", "items": {"type": "string"}},
+            "metadata": {"type": "object", "required": ["name"], "properties": {"name": {"type": "string"}}},
+            "status": {"type": "object", "properties": {"conditions": {
+                "type": "array",
+                "items": {"type": "object", "properties": {"lastProbeTime": {"type": "string"}}}
+            }}}
+        }
+    }));
+
+    // A live Pod serializes zero condition probe times as `null`.
+    let server_yaml = "metadata:\n  name: api\nstatus:\n  conditions:\n  - lastProbeTime: null\n    type: Ready\n  - lastProbeTime: null\n    type: PodScheduled\n";
+    assert_eq!(
+        schema.validate_yaml(server_yaml).expect("YAML parses"),
+        Vec::new()
+    );
+
+    let invalid_yaml = "args:\n- run\n- null\nmetadata:\n  name: null\n";
+    let errors = schema.validate_yaml(invalid_yaml).expect("YAML parses");
+    let mut located = errors
+        .iter()
+        .map(|error| (error.path.as_str(), error.line))
+        .collect::<Vec<_>>();
+    located.sort_unstable();
+    assert_eq!(located, [("/args/1", Some(3)), ("/metadata", Some(5))]);
+}
+
+#[test]
 fn validates_a_schema_root_referenced_from_openapi_components() {
     let resource = ApiResource {
         group: "apps".into(),

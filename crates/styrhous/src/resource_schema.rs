@@ -193,8 +193,9 @@ impl ResourceSchema {
                 .map(|location| format!("{} at {}:{}", error, location.line(), location.column()))
                 .unwrap_or_else(|| error.to_string())
         })?;
-        let value = serde_json::to_value(yaml_value)
+        let mut value = serde_json::to_value(yaml_value)
             .map_err(|error| format!("YAML must use string mapping keys: {error}"))?;
+        remove_null_fields(&mut value);
         let validator = jsonschema::validator_for(&self.root)
             .map_err(|error| format!("Unable to compile the Kubernetes schema: {error}"))?;
         Ok(validator
@@ -292,6 +293,21 @@ impl ResourceSchema {
             schema = schema.get("properties")?.get(segment)?;
         }
         resolve_ref(&self.root, schema)
+    }
+}
+
+/// The API server decodes an explicit `null` mapping value as an unset field, and serializes
+/// zero values such as `PodCondition.lastProbeTime` that way, although the OpenAPI schema does
+/// not declare them nullable. Array items are kept: the server never emits them, and removing one
+/// would shift the indices used to locate later diagnostics.
+fn remove_null_fields(value: &mut Value) {
+    match value {
+        Value::Object(fields) => {
+            fields.retain(|_, field| !field.is_null());
+            fields.values_mut().for_each(remove_null_fields);
+        }
+        Value::Array(items) => items.iter_mut().for_each(remove_null_fields),
+        _ => {}
     }
 }
 
