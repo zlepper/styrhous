@@ -154,47 +154,44 @@ pub(super) fn show_additional_sections(
         } else {
             for owner in &detail.owners {
                 let label = owner.label();
-                let copy_value = format!("{}/{} {}", owner.api_version, owner.kind, owner.name);
-                ui.horizontal(|ui| {
-                    if let Some(action) = resource_owner::navigation_action(
-                        resource_navigation,
-                        owner,
-                        detail.namespace.as_deref(),
-                    ) {
-                        let response = ui.add(
+                if let Some(action) = resource_owner::navigation_action(
+                    resource_navigation,
+                    owner,
+                    detail.namespace.as_deref(),
+                ) {
+                    let response = ui
+                        .add(
                             egui::Label::new(
                                 egui::RichText::new(&label)
                                     .font(typography::metadata())
                                     .color(indigo::_600),
                             )
+                            .truncate()
                             .sense(egui::Sense::click()),
-                        );
-                        response.clone().with_pointing_hand().widget_info(|| {
-                            egui::WidgetInfo::labeled(
-                                egui::WidgetType::Button,
-                                response.enabled(),
-                                format!("Open details for {label}"),
-                            )
-                        });
-                        if response.clicked() {
-                            resource_owner::queue_navigation_action(pending_action, action);
-                        }
-                    } else {
-                        ui.label(
+                        )
+                        .on_hover_text(&label)
+                        .with_pointing_hand();
+                    response.widget_info(|| {
+                        egui::WidgetInfo::labeled(
+                            egui::WidgetType::Button,
+                            response.enabled(),
+                            format!("Open details for {label}"),
+                        )
+                    });
+                    if response.clicked() {
+                        resource_owner::queue_navigation_action(pending_action, action);
+                    }
+                } else {
+                    ui.add(
+                        egui::Label::new(
                             egui::RichText::new(&label)
                                 .font(typography::metadata())
                                 .color(gray::_900),
                         )
-                        .on_hover_text(resource_owner::unavailable_tooltip(owner));
-                    }
-                    if TailwindButton::secondary(format!("Copy owner {label}"))
-                        .size(ButtonSize::Sm)
-                        .show(ui)
-                        .clicked()
-                    {
-                        ui.ctx().copy_text(copy_value);
-                    }
-                });
+                        .truncate(),
+                    )
+                    .on_hover_text(resource_owner::unavailable_tooltip(owner));
+                }
             }
         }
     });
