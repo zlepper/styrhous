@@ -117,9 +117,7 @@ impl UiState {
                 || matches!(&cluster.api_resources_load, ClusterLoadState::Failed(_))
         });
         if retry_connection {
-            if let Some(command) = self.select_cluster_without_remembering(cluster_key) {
-                commands_to_send.push(command);
-            }
+            self.select_cluster_without_remembering(cluster_key, commands_to_send);
             return;
         }
 

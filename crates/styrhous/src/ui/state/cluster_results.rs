@@ -106,13 +106,7 @@ fn apply_kubernetes_clusters(
     select_cluster: bool,
     commands: &mut Vec<WorkerCommandBox>,
 ) {
-    if ui.global_blades.navigator().is_some_and(|navigator| {
-        navigator
-            .entries()
-            .any(|content| content.resource_detail().is_some())
-    }) {
-        UiState::stop_discarded_blades(ui.global_blades.clear(), commands);
-    }
+    ui.discard_resource_detail_blades(commands);
     ui.clusters.clear();
     ui.selected_cluster = None;
     let mut current_cluster_key = None;
@@ -129,11 +123,8 @@ fn apply_kubernetes_clusters(
         ui.clusters
             .insert(cluster_key, cluster_state(cluster_key, cluster));
     }
-    if select_cluster
-        && let Some(cluster_key) = remembered_cluster_key.or(current_cluster_key)
-        && let Some(command) = ui.select_cluster_without_remembering(cluster_key)
-    {
-        commands.push(command);
+    if select_cluster && let Some(cluster_key) = remembered_cluster_key.or(current_cluster_key) {
+        ui.select_cluster_without_remembering(cluster_key, commands);
     }
 }
 

@@ -651,3 +651,55 @@ fn refreshing_clusters_discards_open_inspectors_and_stops_their_watches() {
             .is_some_and(|command| command.cluster_key == 2 && command.history_entry_id == 1)
     }));
 }
+
+#[test]
+fn clicking_the_selected_cluster_rail_button_dismisses_inspector_without_reconnecting() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    let mut commands = Vec::new();
+    state.open_resource_detail(
+        2,
+        fixture_api_resource("apps", "Deployment", "deployments"),
+        "api".into(),
+        Some("kube-system".into()),
+        "deployment-uid".into(),
+        &mut commands,
+    );
+    harness.state_mut().ui_state = state;
+    harness.state_mut().worker.commands.append(&mut commands);
+    harness
+        .ctx
+        .global_style_mut(|style| style.animation_time = 1.0);
+    harness.run_steps(2);
+    let commands_before = harness.state().worker.commands.len();
+
+    let cluster_position = harness
+        .get_by_role_and_label(egui::accesskit::Role::Button, "kind-kind")
+        .rect()
+        .center();
+    primary_click(&mut harness, cluster_position);
+    harness
+        .ctx
+        .global_style_mut(|style| style.animation_time = 0.0);
+    harness.run_steps(4);
+
+    let state = &harness.state().ui_state;
+    assert!(state.global_blades.navigator().is_none());
+    assert!(state.clusters[&2].resource_detail_panel.is_none());
+    let new_commands = &harness.state().worker.commands[commands_before..];
+    assert_eq!(
+        new_commands
+            .iter()
+            .filter(|command| command_is::<StopResourceDetailWatch>(command)
+                .is_some_and(|command| command.cluster_key == 2 && command.history_entry_id == 1))
+            .count(),
+        1,
+        "the inspector's watches must be stopped exactly once"
+    );
+    assert!(
+        new_commands
+            .iter()
+            .all(|command| command_is::<ConnectToCluster>(command).is_none()),
+        "re-selecting a connected cluster must not reconnect it"
+    );
+}

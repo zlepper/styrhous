@@ -200,15 +200,6 @@ impl UiState {
         &mut self,
         commands_to_send: &mut Vec<WorkerCommandBox>,
     ) {
-        for cluster in self.clusters.values_mut() {
-            cluster.resource_detail_panel = None;
-        }
-        if self.global_blades.navigator().is_some_and(|navigator| {
-            navigator
-                .entries()
-                .any(|entry| entry.resource_detail().is_some())
-        }) {
-            Self::stop_discarded_blades(self.global_blades.clear(), commands_to_send);
-        }
+        self.discard_resource_detail_blades(commands_to_send);
     }
 }
