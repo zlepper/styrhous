@@ -275,6 +275,13 @@ fn debug_image_preset_profile_menu_stays_within_the_settings_blade() {
     harness.state_mut().ui_state = state;
     harness.run();
 
+    harness
+        .get_by_role_and_label(
+            egui::accesskit::Role::ComboBox,
+            "Debug image 1 debug profile",
+        )
+        .scroll_to_me();
+    harness.run();
     let profile_position = harness
         .get_by_role_and_label(
             egui::accesskit::Role::ComboBox,

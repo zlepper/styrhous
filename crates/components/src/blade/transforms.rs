@@ -26,11 +26,19 @@ pub(super) fn progress<T>(ctx: &egui::Context, navigator: &BladeNavigator<T>) ->
     egui::emath::easing::cubic_in_out(linear_progress)
 }
 pub(super) fn height(viewport: Rect) -> f32 {
-    viewport.height() - INSET * 2.0
+    (viewport.height() - INSET * 2.0).max(0.0)
+}
+/// The width every blade is drawn at: [`WIDTH`], or less when the viewport
+/// cannot fit a full blade plus its [`INSET`] on both sides.
+pub(super) fn blade_width(viewport: Rect) -> f32 {
+    WIDTH.min((viewport.width() - INSET * 2.0).max(0.0))
 }
 pub(super) fn active_transform(viewport: Rect) -> Transform {
     Transform {
-        position: egui::pos2(viewport.right() - WIDTH - INSET, viewport.top() + INSET),
+        position: egui::pos2(
+            viewport.right() - blade_width(viewport) - INSET,
+            viewport.top() + INSET,
+        ),
         scale: 1.0,
     }
 }
@@ -40,7 +48,8 @@ pub(super) fn history_transform(viewport: Rect, index: usize) -> Transform {
     let h = height(viewport);
     Transform {
         position: egui::pos2(
-            active_transform(viewport).position.x - WIDTH * HISTORY_X_TRANSLATIONS[depth],
+            active_transform(viewport).position.x
+                - blade_width(viewport) * HISTORY_X_TRANSLATIONS[depth],
             viewport.top() + INSET + (h - h * scale) / 2.0,
         ),
         scale,
@@ -99,7 +108,7 @@ pub(super) fn interpolate(from: Transform, to: Transform, value: f32) -> Transfo
 pub(super) fn transformed_rect(viewport: Rect, transform: Transform) -> Rect {
     Rect::from_min_size(
         transform.position,
-        egui::vec2(WIDTH, height(viewport)) * transform.scale,
+        egui::vec2(blade_width(viewport), height(viewport)) * transform.scale,
     )
 }
 pub(super) fn history_navigation_label(steps: usize) -> String {

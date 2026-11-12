@@ -238,7 +238,7 @@ fn shared_header_controls_navigate_and_close_the_active_blade() {
     let close = harness.get_by_label("Close blade").rect();
     assert_eq!(
         close.right() - back.left(),
-        CONTENT_WIDTH,
+        content_width(WIDTH),
         "back: {back:?}, close: {close:?}"
     );
 

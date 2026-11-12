@@ -28,6 +28,7 @@ fn render_test_blade(ui: &mut Ui, blade: &mut TestBlade, layer: BladeLayer) {
 }
 
 mod history;
+mod layout;
 mod mouse;
 mod navigation;
 mod snapshots;

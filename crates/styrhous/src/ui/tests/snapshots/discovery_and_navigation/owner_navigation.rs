@@ -74,6 +74,54 @@ fn owner_reference_card_lists_every_owner_and_navigates_resolved_links() {
 }
 
 #[test]
+fn owner_reference_with_a_very_long_name_does_not_widen_the_inspector_blade() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    let pod = fixture_api_resource("core", "Pod", "pods");
+    open_typed_detail(
+        &mut harness,
+        pod.clone(),
+        ResourceDetail {
+            api_resource: pod,
+            name: "api-pod".into(),
+            namespace: Some("kube-system".into()),
+            uid: "pod-uid".into(),
+            resource_version: "1".into(),
+            is_deleting: false,
+            finalizers: Vec::new(),
+            creation_timestamp: None,
+            owners: vec![ResourceOwner {
+                api_version: "apps/v1".into(),
+                kind: "Deployment".into(),
+                name: "a-deployment-with-an-extraordinarily-long-name-".repeat(3)
+                    + "that-cannot-possibly-fit-within-the-inspector-blade",
+                uid: "deployment-uid".into(),
+                controller: true,
+            }],
+            labels: BTreeMap::new(),
+            annotations: BTreeMap::new(),
+            payload: ResourceDetailPayload::Generic,
+        },
+    );
+
+    harness.get_by_label("Owner references").click_accesskit();
+    harness.run();
+    harness.run();
+
+    let viewport = harness.ctx.content_rect();
+    let blade_left = viewport.right() - components::BLADE_WIDTH - 8.0;
+    let close = harness.get_by_label("Close blade").rect();
+    assert_eq!(
+        close.right(),
+        blade_left + components::BLADE_WIDTH - 1.0 - 24.0,
+        "the inspector must keep its fixed width and position"
+    );
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "resource_inspectors/owner_reference_with_a_very_long_name_does_not_widen_the_inspector_blade/long_owner",
+    ));
+}
+
+#[test]
 fn clicking_a_pod_node_in_the_inspector_navigates_to_the_node_inspector() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = oracle_resource_table_state();

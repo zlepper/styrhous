@@ -630,77 +630,78 @@ Window state=[focused] rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
-                  Button name="Back" state=[disabled] rect=(x=809.0 y=34.0 width=34.0 height=34.0 center_x=826.0 center_y=51.0)
+                  GenericContainer rect=<none>
+                    Button name="Back" state=[disabled] rect=(x=809.0 y=34.0 width=34.0 height=34.0 center_x=826.0 center_y=51.0)
+                  GenericContainer rect=<none>
+                    Button name="Forward" state=[disabled] rect=(x=851.0 y=34.0 width=34.0 height=34.0 center_x=868.0 center_y=51.0)
                 GenericContainer rect=<none>
-                  Button name="Forward" state=[disabled] rect=(x=851.0 y=34.0 width=34.0 height=34.0 center_x=868.0 center_y=51.0)
-              GenericContainer rect=<none>
-                Label value="Notifications" rect=(x=917.0 y=39.0 width=119.3 height=24.0 center_x=976.7 center_y=51.0)
-                  TextRun value="Notifications" rect=(x=917.0 y=39.0 width=119.3 height=24.0 center_x=976.7 center_y=51.0)
-              GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Button name="Close blade" rect=(x=1469.0 y=34.0 width=34.0 height=34.0 center_x=1486.0 center_y=51.0)
-            Label value="Recent resource operation outcomes from this session." rect=(x=809.0 y=88.0 width=365.2 height=17.0 center_x=991.6 center_y=96.5)
-              TextRun value="Recent resource operation outcomes from this session." rect=(x=809.0 y=88.0 width=365.2 height=17.0 center_x=991.6 center_y=96.5)
-            Label value="TODAY" rect=(x=809.0 y=165.0 width=48.2 height=17.0 center_x=833.1 center_y=173.5)
-              TextRun value="TODAY" rect=(x=809.0 y=165.0 width=48.2 height=17.0 center_x=833.1 center_y=173.5)
-            GenericContainer rect=<none>
-              GenericContainer rect=<none>
+                  Label value="Notifications" rect=(x=917.0 y=39.0 width=119.3 height=24.0 center_x=976.7 center_y=51.0)
+                    TextRun value="Notifications" rect=(x=917.0 y=39.0 width=119.3 height=24.0 center_x=976.7 center_y=51.0)
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    GenericContainer rect=<none>
-                      Label value="Couldn’t run CronJob" rect=(x=906.0 y=222.5 width=145.0 height=17.0 center_x=978.5 center_y=231.0)
-                        TextRun value="Couldn’t run CronJob" rect=(x=906.0 y=222.5 width=145.0 height=17.0 center_x=978.5 center_y=231.0)
-                  GenericContainer rect=<none>
-                    Label value="kind-kind · Just now" rect=(x=1371.0 y=223.5 width=115.0 height=15.0 center_x=1428.5 center_y=231.0)
-                      TextRun value="kind-kind · Just now" rect=(x=1371.0 y=223.5 width=114.8 height=15.0 center_x=1428.4 center_y=231.0)
-                  GenericContainer rect=<none>
-                    Label value="nightly-report • kube-system" rect=(x=906.0 y=244.5 width=165.4 height=15.0 center_x=988.7 center_y=252.0)
-                      TextRun value="nightly-report • kube-system" rect=(x=906.0 y=244.5 width=165.4 height=15.0 center_x=988.7 center_y=252.0)
-                  GenericContainer rect=<none>
-                    Label value="Forbidden: cannot create jobs" rect=(x=906.0 y=266.5 width=169.8 height=15.0 center_x=990.9 center_y=274.0)
-                      TextRun value="Forbidden: cannot create jobs" rect=(x=906.0 y=266.5 width=169.8 height=15.0 center_x=990.9 center_y=274.0)
-            GenericContainer rect=<none>
+                    Button name="Close blade" rect=(x=1469.0 y=34.0 width=34.0 height=34.0 center_x=1486.0 center_y=51.0)
+              Label value="Recent resource operation outcomes from this session." rect=(x=809.0 y=88.0 width=365.2 height=17.0 center_x=991.6 center_y=96.5)
+                TextRun value="Recent resource operation outcomes from this session." rect=(x=809.0 y=88.0 width=365.2 height=17.0 center_x=991.6 center_y=96.5)
+              Label value="TODAY" rect=(x=809.0 y=165.0 width=48.2 height=17.0 center_x=833.1 center_y=173.5)
+                TextRun value="TODAY" rect=(x=809.0 y=165.0 width=48.2 height=17.0 center_x=833.1 center_y=173.5)
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
-                      Label value="CronJob started" rect=(x=906.0 y=349.5 width=109.9 height=17.0 center_x=961.0 center_y=358.0)
-                        TextRun value="CronJob started" rect=(x=906.0 y=349.5 width=109.9 height=17.0 center_x=961.0 center_y=358.0)
-                  GenericContainer rect=<none>
-                    Label value="kind-kind · Just now" rect=(x=1371.0 y=350.5 width=115.0 height=15.0 center_x=1428.5 center_y=358.0)
-                      TextRun value="kind-kind · Just now" rect=(x=1371.0 y=350.5 width=114.8 height=15.0 center_x=1428.4 center_y=358.0)
-                  GenericContainer rect=<none>
-                    Label value="nightly-report • kube-system" rect=(x=906.0 y=371.5 width=165.4 height=15.0 center_x=988.7 center_y=379.0)
-                      TextRun value="nightly-report • kube-system" rect=(x=906.0 y=371.5 width=165.4 height=15.0 center_x=988.7 center_y=379.0)
-                  GenericContainer rect=<none>
-                    Label value="Created Job nightly-report-manual-x7k2p" rect=(x=906.0 y=393.5 width=237.1 height=15.0 center_x=1024.5 center_y=401.0)
-                      TextRun value="Created Job nightly-report-manual-x7k2p" rect=(x=906.0 y=393.5 width=237.1 height=15.0 center_x=1024.5 center_y=401.0)
-            GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        Label value="Couldn’t run CronJob" rect=(x=906.0 y=222.5 width=145.0 height=17.0 center_x=978.5 center_y=231.0)
+                          TextRun value="Couldn’t run CronJob" rect=(x=906.0 y=222.5 width=145.0 height=17.0 center_x=978.5 center_y=231.0)
+                    GenericContainer rect=<none>
+                      Label value="kind-kind · Just now" rect=(x=1371.0 y=223.5 width=115.0 height=15.0 center_x=1428.5 center_y=231.0)
+                        TextRun value="kind-kind · Just now" rect=(x=1371.0 y=223.5 width=114.8 height=15.0 center_x=1428.4 center_y=231.0)
+                    GenericContainer rect=<none>
+                      Label value="nightly-report • kube-system" rect=(x=906.0 y=244.5 width=165.4 height=15.0 center_x=988.7 center_y=252.0)
+                        TextRun value="nightly-report • kube-system" rect=(x=906.0 y=244.5 width=165.4 height=15.0 center_x=988.7 center_y=252.0)
+                    GenericContainer rect=<none>
+                      Label value="Forbidden: cannot create jobs" rect=(x=906.0 y=266.5 width=169.8 height=15.0 center_x=990.9 center_y=274.0)
+                        TextRun value="Forbidden: cannot create jobs" rect=(x=906.0 y=266.5 width=169.8 height=15.0 center_x=990.9 center_y=274.0)
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
-                      Label value="Bulk delete completed with 1 failure" rect=(x=906.0 y=476.5 width=238.4 height=17.0 center_x=1025.2 center_y=485.0)
-                        TextRun value="Bulk delete completed with 1 failure" rect=(x=906.0 y=476.5 width=238.4 height=17.0 center_x=1025.2 center_y=485.0)
-                  GenericContainer rect=<none>
-                    Label value="kind-kind · Just now" rect=(x=1371.0 y=477.5 width=115.0 height=15.0 center_x=1428.5 center_y=485.0)
-                      TextRun value="kind-kind · Just now" rect=(x=1371.0 y=477.5 width=114.8 height=15.0 center_x=1428.4 center_y=485.0)
-                  GenericContainer rect=<none>
-                    Label value="3 Pods" rect=(x=906.0 y=498.5 width=39.2 height=15.0 center_x=925.6 center_y=506.0)
-                      TextRun value="3 Pods" rect=(x=906.0 y=498.5 width=39.2 height=15.0 center_x=925.6 center_y=506.0)
-                  GenericContainer rect=<none>
-                    Label value="2 deleted, 1 failed" rect=(x=906.0 y=520.5 width=99.3 height=15.0 center_x=955.7 center_y=528.0)
-                      TextRun value="2 deleted, 1 failed" rect=(x=906.0 y=520.5 width=99.3 height=15.0 center_x=955.7 center_y=528.0)
-            GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        Label value="CronJob started" rect=(x=906.0 y=349.5 width=109.9 height=17.0 center_x=961.0 center_y=358.0)
+                          TextRun value="CronJob started" rect=(x=906.0 y=349.5 width=109.9 height=17.0 center_x=961.0 center_y=358.0)
+                    GenericContainer rect=<none>
+                      Label value="kind-kind · Just now" rect=(x=1371.0 y=350.5 width=115.0 height=15.0 center_x=1428.5 center_y=358.0)
+                        TextRun value="kind-kind · Just now" rect=(x=1371.0 y=350.5 width=114.8 height=15.0 center_x=1428.4 center_y=358.0)
+                    GenericContainer rect=<none>
+                      Label value="nightly-report • kube-system" rect=(x=906.0 y=371.5 width=165.4 height=15.0 center_x=988.7 center_y=379.0)
+                        TextRun value="nightly-report • kube-system" rect=(x=906.0 y=371.5 width=165.4 height=15.0 center_x=988.7 center_y=379.0)
+                    GenericContainer rect=<none>
+                      Label value="Created Job nightly-report-manual-x7k2p" rect=(x=906.0 y=393.5 width=237.1 height=15.0 center_x=1024.5 center_y=401.0)
+                        TextRun value="Created Job nightly-report-manual-x7k2p" rect=(x=906.0 y=393.5 width=237.1 height=15.0 center_x=1024.5 center_y=401.0)
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
-                      Label value="Deployment scaled to 4 replicas" rect=(x=906.0 y=614.5 width=216.8 height=17.0 center_x=1014.4 center_y=623.0)
-                        TextRun value="Deployment scaled to 4 replicas" rect=(x=906.0 y=614.5 width=216.8 height=17.0 center_x=1014.4 center_y=623.0)
+                      GenericContainer rect=<none>
+                        Label value="Bulk delete completed with 1 failure" rect=(x=906.0 y=476.5 width=238.4 height=17.0 center_x=1025.2 center_y=485.0)
+                          TextRun value="Bulk delete completed with 1 failure" rect=(x=906.0 y=476.5 width=238.4 height=17.0 center_x=1025.2 center_y=485.0)
+                    GenericContainer rect=<none>
+                      Label value="kind-kind · Just now" rect=(x=1371.0 y=477.5 width=115.0 height=15.0 center_x=1428.5 center_y=485.0)
+                        TextRun value="kind-kind · Just now" rect=(x=1371.0 y=477.5 width=114.8 height=15.0 center_x=1428.4 center_y=485.0)
+                    GenericContainer rect=<none>
+                      Label value="3 Pods" rect=(x=906.0 y=498.5 width=39.2 height=15.0 center_x=925.6 center_y=506.0)
+                        TextRun value="3 Pods" rect=(x=906.0 y=498.5 width=39.2 height=15.0 center_x=925.6 center_y=506.0)
+                    GenericContainer rect=<none>
+                      Label value="2 deleted, 1 failed" rect=(x=906.0 y=520.5 width=99.3 height=15.0 center_x=955.7 center_y=528.0)
+                        TextRun value="2 deleted, 1 failed" rect=(x=906.0 y=520.5 width=99.3 height=15.0 center_x=955.7 center_y=528.0)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Label value="kind-kind · Just now" rect=(x=1371.0 y=615.5 width=115.0 height=15.0 center_x=1428.5 center_y=623.0)
-                      TextRun value="kind-kind · Just now" rect=(x=1371.0 y=615.5 width=114.8 height=15.0 center_x=1428.4 center_y=623.0)
-                  GenericContainer rect=<none>
-                    Label value="coredns • kube-system" rect=(x=906.0 y=636.5 width=133.9 height=15.0 center_x=973.0 center_y=644.0)
-                      TextRun value="coredns • kube-system" rect=(x=906.0 y=636.5 width=133.9 height=15.0 center_x=973.0 center_y=644.0)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        Label value="Deployment scaled to 4 replicas" rect=(x=906.0 y=614.5 width=216.8 height=17.0 center_x=1014.4 center_y=623.0)
+                          TextRun value="Deployment scaled to 4 replicas" rect=(x=906.0 y=614.5 width=216.8 height=17.0 center_x=1014.4 center_y=623.0)
+                    GenericContainer rect=<none>
+                      Label value="kind-kind · Just now" rect=(x=1371.0 y=615.5 width=115.0 height=15.0 center_x=1428.5 center_y=623.0)
+                        TextRun value="kind-kind · Just now" rect=(x=1371.0 y=615.5 width=114.8 height=15.0 center_x=1428.4 center_y=623.0)
+                    GenericContainer rect=<none>
+                      Label value="coredns • kube-system" rect=(x=906.0 y=636.5 width=133.9 height=15.0 center_x=973.0 center_y=644.0)
+                        TextRun value="coredns • kube-system" rect=(x=906.0 y=636.5 width=133.9 height=15.0 center_x=973.0 center_y=644.0)

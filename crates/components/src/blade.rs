@@ -13,7 +13,11 @@ const WIDTH: f32 = BLADE_WIDTH;
 const INSET: f32 = 8.0;
 const PADDING: i8 = spacing::XL as i8;
 const FRAME_STROKE_WIDTH: f32 = 1.0;
-const CONTENT_WIDTH: f32 = WIDTH - spacing::XL * 2.0 - FRAME_STROKE_WIDTH * 2.0;
+
+/// The width available to a blade's body inside its padding and frame stroke.
+const fn content_width(blade_width: f32) -> f32 {
+    (blade_width - spacing::XL * 2.0 - FRAME_STROKE_WIDTH * 2.0).max(0.0)
+}
 const TRANSITION_DURATION: f32 = 0.25;
 const HISTORY_SCALES: [f32; 2] = [0.9, 0.8];
 /// Horizontal recession is proportional to the scale of every earlier blade,
