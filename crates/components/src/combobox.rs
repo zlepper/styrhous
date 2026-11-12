@@ -45,7 +45,24 @@ struct ComboboxState {
     /// Pre-computed normalized filter chars for efficient matching.
     filter_chars: Vec<char>,
     focused_index: usize,
+    /// The row the user explicitly moved the highlight to with the arrow keys.
+    /// While set, the highlight follows this row through filtering and
+    /// re-ranking; while unset, it stays on the top row.
+    pinned_row: Option<PinnedRow>,
     was_open: bool,
+}
+
+/// Identity of a row that survives filtering and re-ranking, unlike its index.
+#[derive(Clone, PartialEq, Eq)]
+enum PinnedRow {
+    SelectAll,
+    /// The `occurrence`-th (zero-based) item, in display order, whose filter
+    /// text is `text`. Items may share filter text, so the text alone would
+    /// pin the first duplicate and trap keyboard navigation on it.
+    Item {
+        text: String,
+        occurrence: usize,
+    },
 }
 
 #[derive(Default)]
@@ -53,6 +70,8 @@ struct KeyboardInput {
     enter_pressed: bool,
     close_requested: bool,
     scroll_to_focused: bool,
+    /// Net arrow-key movement requested this frame (down is positive).
+    move_focus_by: isize,
 }
 
 /// The intent produced when a user activates an option.

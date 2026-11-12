@@ -159,7 +159,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
 
         let width = width.unwrap_or(DEFAULT_WIDTH);
         let is_open = state.was_open;
-        let keyboard = Self::handle_keyboard(ui, &mut state, is_open);
+        let keyboard = Self::handle_keyboard(ui, is_open);
         let input_response = Self::render_input(
             ui,
             &mut state,
@@ -206,10 +206,56 @@ impl<F> TailwindCombobox<WithFilter<F>> {
         let content_height =
             item_count as f32 * item_height + item_count.saturating_sub(1) as f32 * item_spacing;
         let dropdown_height = content_height.clamp(item_height, DROPDOWN_MAX_HEIGHT);
-        let scroll_to_focused = keyboard.scroll_to_focused && content_height > DROPDOWN_MAX_HEIGHT;
+        let first_item_row = usize::from(select_all_visible);
+        let row_of = |row: &PinnedRow| match row {
+            PinnedRow::SelectAll => select_all_visible.then_some(0),
+            PinnedRow::Item { text, occurrence } => filtered_items
+                .iter()
+                .enumerate()
+                .filter(|(_, (_, item))| filter_fn(item) == text)
+                .nth(*occurrence)
+                .map(|(position, _)| position + first_item_row),
+        };
+        // Filtering re-ranks the rows (and toggles the Select all row), so the
+        // index from the previous frame may point at an unrelated item. Follow
+        // an explicitly chosen row by identity; once it no longer exists, or
+        // when there is no explicit choice and the filter was edited, restart
+        // from the top row like a freshly opened popup.
+        let previous_index = state.focused_index;
+        let mut focused_index = match state.pinned_row.as_ref().map(row_of) {
+            Some(Some(row)) => row,
+            Some(None) => {
+                state.pinned_row = None;
+                0
+            }
+            None if input_response.changed() => 0,
+            None => previous_index,
+        };
+        let followed_to_new_index = state.pinned_row.is_some() && focused_index != previous_index;
         if item_count > 0 {
-            state.focused_index = state.focused_index.min(item_count - 1);
+            focused_index = focused_index
+                .saturating_add_signed(keyboard.move_focus_by)
+                .min(item_count - 1);
+            if keyboard.move_focus_by != 0 {
+                state.pinned_row = Some(if select_all_visible && focused_index == 0 {
+                    PinnedRow::SelectAll
+                } else {
+                    let position = focused_index - first_item_row;
+                    let text = filter_fn(filtered_items[position].1);
+                    let occurrence = filtered_items[..position]
+                        .iter()
+                        .filter(|(_, item)| filter_fn(item) == text)
+                        .count();
+                    PinnedRow::Item {
+                        text: text.to_owned(),
+                        occurrence,
+                    }
+                });
+            }
         }
+        state.focused_index = focused_index;
+        let scroll_to_focused = (keyboard.scroll_to_focused || followed_to_new_index)
+            && content_height > DROPDOWN_MAX_HEIGHT;
 
         let mut select_all_clicked = false;
         let popup_label = format!("{accessibility_label} options");
@@ -258,6 +304,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             state.filter_text.clear();
             state.filter_chars.clear();
             state.focused_index = 0;
+            state.pinned_row = None;
         }
         state.was_open = is_open_after;
         ui.ctx()
@@ -382,7 +429,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
         response | text_response
     }
 
-    fn handle_keyboard(ui: &mut Ui, state: &mut ComboboxState, is_open: bool) -> KeyboardInput {
+    fn handle_keyboard(ui: &mut Ui, is_open: bool) -> KeyboardInput {
         if !is_open {
             return KeyboardInput::default();
         }
@@ -390,11 +437,11 @@ impl<F> TailwindCombobox<WithFilter<F>> {
         let mut keyboard = KeyboardInput::default();
         ui.input_mut(|input| {
             if input.consume_key(Modifiers::NONE, Key::ArrowDown) {
-                state.focused_index = state.focused_index.saturating_add(1);
+                keyboard.move_focus_by += 1;
                 keyboard.scroll_to_focused = true;
             }
             if input.consume_key(Modifiers::NONE, Key::ArrowUp) {
-                state.focused_index = state.focused_index.saturating_sub(1);
+                keyboard.move_focus_by -= 1;
                 keyboard.scroll_to_focused = true;
             }
             if input.consume_key(Modifiers::NONE, Key::Enter) {
