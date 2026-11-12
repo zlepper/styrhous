@@ -873,3 +873,38 @@ fn arrowing_past_either_end_then_refiltering_keeps_the_end_row() {
     combobox.press(Key::Enter, 1);
     assert_eq!(*combobox.selected.borrow(), Some("pod-a"));
 }
+
+#[test]
+fn dropdown_shows_every_item_when_placed_in_a_ui_without_item_spacing() {
+    let namespaces = ["system", "staging", "sandbox", "services", "default"];
+    let mut harness = Harness::new_ui(move |ui| {
+        // Table rows lay out their cells without vertical item spacing, but the popup keeps the
+        // default spacing between its items.
+        ui.spacing_mut().item_spacing.y = 0.0;
+        TailwindCombobox::from_label("Namespaces")
+            .placeholder("Search namespaces...")
+            .width(250.0)
+            .filter_by(|namespace: &&str| *namespace)
+            .show_items(ui, &namespaces, |cb, namespace| {
+                cb.item(*namespace, false);
+            });
+    });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespaces")
+        .click();
+    harness.run();
+
+    let popup = harness.get_by_label("Namespaces options").rect();
+    for namespace in namespaces {
+        let item = harness.get_by_label(namespace).rect();
+        assert!(
+            popup.contains_rect(item),
+            "{namespace} at {item:?} must be fully visible in the dropdown at {popup:?}"
+        );
+    }
+    harness.ui_harness(
+        "comboboxes/dropdown_shows_every_item_when_placed_in_a_ui_without_item_spacing/five_items",
+    );
+}

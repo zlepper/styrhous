@@ -202,7 +202,9 @@ impl<F> TailwindCombobox<WithFilter<F>> {
         }
         let select_all_visible = select_all.is_some() && state.filter_text.is_empty();
         let item_count = filtered_items.len() + usize::from(select_all_visible);
-        let item_spacing = ui.spacing().item_spacing.y;
+        // The popup's Ui starts from the global style, not from the Ui hosting the combobox
+        // (a table row, for instance, has no vertical item spacing).
+        let item_spacing = ui.ctx().global_style().spacing.item_spacing.y;
         let content_height =
             item_count as f32 * item_height + item_count.saturating_sub(1) as f32 * item_spacing;
         let dropdown_height = content_height.clamp(item_height, DROPDOWN_MAX_HEIGHT);
