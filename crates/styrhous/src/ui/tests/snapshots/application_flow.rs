@@ -64,6 +64,10 @@ fn force_delete_confirmation_requires_the_resource_name_before_removing_finalize
         [command] if command.as_ref().as_any().downcast_ref::<ForceDeleteResource>()
             .is_some_and(|command| command.resource_name == "important-config")
     ));
+    assert!(
+        harness.cluster(1).pending_force_delete.is_none(),
+        "confirming closes the dialog immediately, so completions never need to"
+    );
 }
 
 #[test]
@@ -397,4 +401,401 @@ fn test_ui_flow() {
             .count(),
         2
     );
+}
+
+fn pending_delete_for(name: &str) -> PendingDelete {
+    PendingDelete {
+        api_resource: fixture_api_resource("", "ConfigMap", "configmaps"),
+        resource_name: name.into(),
+        namespace: Some("default".into()),
+        confirmation_available_at: std::time::Instant::now(),
+    }
+}
+
+fn config_map_delete_completed(name: &str, bulk_delete_id: Option<u64>) -> ResourceDeleteCompleted {
+    ResourceDeleteCompleted {
+        cluster_key: 1,
+        api_resource: fixture_api_resource("", "ConfigMap", "configmaps"),
+        namespace: Some("default".into()),
+        resource_name: name.into(),
+        bulk_delete_id,
+    }
+}
+
+#[test]
+fn delete_completion_keeps_the_confirmation_opened_from_a_row_action() {
+    let deployment = fixture_api_resource("apps", "Deployment", "deployments");
+    let mut state = oracle_resource_table_state();
+    let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
+    cluster.selected_api_resource = Some(deployment.clone());
+    cluster.resource_cache.insert(
+        (deployment.clone(), Some("kube-system".to_owned())),
+        ResourceWatchState {
+            resources: ["alpha", "bravo"]
+                .into_iter()
+                .map(|name| {
+                    (
+                        format!("{name}-uid"),
+                        MinimalResource {
+                            uid: format!("{name}-uid"),
+                            name: name.to_owned(),
+                            namespace: Some("kube-system".to_owned()),
+                            creation_timestamp: None,
+                            controller_owner: None,
+                            labels: Default::default(),
+                            annotations: Default::default(),
+                            cells: BTreeMap::new(),
+                            log_containers: Vec::new(),
+                        },
+                    )
+                })
+                .collect(),
+            is_synced: true,
+            ..Default::default()
+        },
+    );
+    let mut harness = application_harness_with_state(state);
+
+    harness.get_by_label("More actions for bravo").click();
+    harness.run();
+    harness.get_by_label("Delete").click();
+    harness.run();
+    harness.get_by_label("Delete bravo");
+
+    harness.deliver_worker_result(ResourceDeleteCompleted {
+        cluster_key: 2,
+        api_resource: deployment,
+        namespace: Some("kube-system".into()),
+        resource_name: "alpha".into(),
+        bulk_delete_id: None,
+    });
+
+    harness.get_by_label("Delete bravo");
+    assert!(harness.cluster(2).pending_delete.is_some());
+}
+
+#[test]
+fn delete_completion_for_another_resource_keeps_the_open_delete_confirmation() {
+    let mut cluster = fixture_cluster(1, "dev");
+    cluster.pending_delete = Some(pending_delete_for("resource-b"));
+    let mut harness = application_harness_with_cluster(cluster);
+
+    harness.deliver_worker_result(config_map_delete_completed("resource-a", None));
+
+    assert!(harness.cluster(1).pending_delete.is_some());
+    harness.get_by_label("Delete resource-b");
+}
+
+#[test]
+fn bulk_delete_completion_keeps_the_open_delete_confirmation() {
+    let target = BulkDeleteTarget {
+        uid: "a-uid".into(),
+        name: "resource-a".into(),
+        namespace: Some("default".into()),
+    };
+    let mut cluster = fixture_cluster(1, "dev");
+    cluster.pending_delete = Some(pending_delete_for("resource-b"));
+    cluster.bulk_delete_progress = Some(BulkDeleteProgress::new(
+        7,
+        fixture_api_resource("", "ConfigMap", "configmaps"),
+        vec![target],
+    ));
+    let mut harness = application_harness_with_cluster(cluster);
+
+    harness.deliver_worker_result(config_map_delete_completed("resource-a", Some(7)));
+
+    assert!(harness.cluster(1).pending_delete.is_some());
+    harness.get_by_label("Delete resource-b");
+}
+
+#[test]
+fn force_delete_completion_for_another_resource_keeps_the_open_confirmation() {
+    let mut cluster = fixture_cluster(1, "dev");
+    cluster.pending_force_delete = Some(PendingForceDelete {
+        api_resource: fixture_api_resource("", "ConfigMap", "configmaps"),
+        resource_name: "resource-b".into(),
+        resource_uid: "b-uid".into(),
+        namespace: Some("default".into()),
+        finalizers: vec!["example.com/cleanup".into()],
+        acknowledgement: "resource-".into(),
+        confirmation_available_at: std::time::Instant::now(),
+    });
+    let mut harness = application_harness_with_cluster(cluster);
+
+    harness.deliver_worker_result(ResourceForceDeleteCompleted {
+        cluster_key: 1,
+        api_resource: fixture_api_resource("", "ConfigMap", "configmaps"),
+        namespace: Some("default".into()),
+        resource_name: "resource-a".into(),
+    });
+
+    let pending = harness
+        .cluster(1)
+        .pending_force_delete
+        .as_ref()
+        .expect("resource-b's confirmation must stay open");
+    assert_eq!(pending.acknowledgement, "resource-");
+    harness.get_by_label("Remove finalizers");
+}
+
+fn pending_scale_for(name: &str, desired: &str) -> crate::ui::state::PendingScale {
+    crate::ui::state::PendingScale {
+        api_resource: fixture_api_resource("apps", "Deployment", "deployments"),
+        resource_name: name.into(),
+        namespace: Some("default".into()),
+        current_replicas: 2,
+        desired_replicas: desired.into(),
+    }
+}
+
+fn request_scale(harness: &mut Harness<'static, MyEguiApp<MockWorker>>, name: &str) -> u64 {
+    harness
+        .state_mut()
+        .ui_state
+        .request_resource_scale(
+            Vec::new(),
+            1,
+            fixture_api_resource("apps", "Deployment", "deployments"),
+            Some("default".into()),
+            name.into(),
+        )
+        .request_id
+}
+
+fn scale_fetched(name: &str, request_id: u64, replicas: i32) -> ResourceScaleFetched {
+    ResourceScaleFetched {
+        cluster_key: 1,
+        request_id,
+        api_resource: fixture_api_resource("apps", "Deployment", "deployments"),
+        namespace: Some("default".into()),
+        resource_name: name.into(),
+        replicas,
+    }
+}
+
+fn scale_fetch_failed(name: &str, request_id: u64) -> ResourceScaleFetchFailed {
+    ResourceScaleFetchFailed {
+        cluster_key: 1,
+        request_id,
+        api_resource: fixture_api_resource("apps", "Deployment", "deployments"),
+        namespace: Some("default".into()),
+        resource_name: name.into(),
+        error: "boom".into(),
+    }
+}
+
+#[test]
+fn scale_update_for_another_resource_keeps_the_scale_dialog_the_user_is_editing() {
+    let mut cluster = fixture_cluster(1, "dev");
+    cluster.pending_scale = Some(pending_scale_for("resource-b", "7"));
+    let mut harness = application_harness_with_cluster(cluster);
+
+    harness.deliver_worker_result(ResourceScaleUpdated {
+        cluster_key: 1,
+        api_resource: fixture_api_resource("apps", "Deployment", "deployments"),
+        namespace: Some("default".into()),
+        resource_name: "resource-a".into(),
+        replicas: 3,
+    });
+
+    let pending = harness
+        .cluster(1)
+        .pending_scale
+        .as_ref()
+        .expect("resource-b's scale dialog must stay open");
+    assert_eq!(pending.resource_name, "resource-b");
+    assert_eq!(pending.desired_replicas, "7");
+    harness.get_by_label("Scale resource-b");
+}
+
+#[test]
+fn late_scale_fetch_does_not_replace_the_open_scale_dialog() {
+    let mut cluster = fixture_cluster(1, "dev");
+    cluster.pending_scale = Some(pending_scale_for("resource-b", "7"));
+    let mut harness = application_harness_with_cluster(cluster);
+
+    harness.deliver_worker_result(scale_fetched("resource-a", 1, 3));
+
+    let pending = harness
+        .cluster(1)
+        .pending_scale
+        .as_ref()
+        .expect("resource-b's scale dialog must stay open");
+    assert_eq!(pending.resource_name, "resource-b");
+    assert_eq!(pending.desired_replicas, "7");
+    harness.get_by_label("Scale resource-b");
+}
+
+#[test]
+fn only_the_latest_scale_fetch_opens_the_scale_dialog() {
+    let mut harness = application_harness_with_cluster(fixture_cluster(1, "dev"));
+    let first = request_scale(&mut harness, "resource-a");
+    let second = request_scale(&mut harness, "resource-b");
+    assert_ne!(first, second);
+
+    harness.deliver_worker_result(scale_fetched("resource-a", first, 3));
+    assert!(harness.cluster(1).pending_scale.is_none());
+
+    harness.deliver_worker_result(scale_fetched("resource-b", second, 5));
+    harness.get_by_label("Scale resource-b");
+    assert_eq!(
+        harness
+            .cluster(1)
+            .pending_scale
+            .as_ref()
+            .map(|pending| pending.desired_replicas.as_str()),
+        Some("5")
+    );
+
+    harness.deliver_worker_result(scale_fetched("resource-b", second, 9));
+    assert_eq!(
+        harness
+            .cluster(1)
+            .pending_scale
+            .as_ref()
+            .map(|pending| pending.desired_replicas.as_str()),
+        Some("5"),
+        "a duplicate reply must not reset what the user is editing"
+    );
+}
+
+#[test]
+fn scale_fetch_arriving_after_navigation_does_not_open_the_dialog() {
+    type Navigate = fn(&mut UiState);
+    let navigations: [(&str, Navigate); 3] = [
+        ("namespace change", |ui| {
+            ui.clusters
+                .get_mut(&1)
+                .unwrap()
+                .selected_namespaces
+                .insert("other".into());
+        }),
+        ("resource type change", |ui| {
+            ui.clusters.get_mut(&1).unwrap().selected_api_resource =
+                Some(fixture_api_resource("", "Pod", "pods"));
+        }),
+        ("cluster switch", |ui| {
+            ui.clusters.insert(2, fixture_cluster(2, "staging"));
+            ui.selected_cluster = Some(2);
+        }),
+    ];
+    for (label, navigate) in navigations {
+        let mut harness = application_harness_with_cluster(fixture_cluster(1, "dev"));
+        let request_id = request_scale(&mut harness, "resource-a");
+        navigate(&mut harness.state_mut().ui_state);
+        harness.run();
+
+        harness.deliver_worker_result(scale_fetched("resource-a", request_id, 3));
+
+        assert!(
+            harness.cluster(1).pending_scale.is_none(),
+            "a late scale reply after a {label} must not open the dialog"
+        );
+    }
+}
+
+#[test]
+fn scale_fetch_failures_are_recorded_and_only_the_awaited_one_cancels_the_lookup() {
+    let mut harness = application_harness_with_cluster(connected_cluster());
+    let stale = request_scale(&mut harness, "resource-a");
+    let awaited = request_scale(&mut harness, "resource-b");
+
+    harness.deliver_worker_result(scale_fetch_failed("resource-a", stale));
+    assert_eq!(harness.cluster(1).operation_history.len(), 1);
+    harness.deliver_worker_result(scale_fetched("resource-b", awaited, 4));
+    harness.get_by_label("Scale resource-b");
+
+    let mut harness = application_harness_with_cluster(connected_cluster());
+    let awaited = request_scale(&mut harness, "resource-b");
+    harness.deliver_worker_result(scale_fetch_failed("resource-b", awaited));
+    assert_eq!(harness.cluster(1).operation_history.len(), 1);
+    harness.deliver_worker_result(scale_fetched("resource-b", awaited, 4));
+    assert!(
+        harness.cluster(1).pending_scale.is_none(),
+        "a reply for a failed lookup must not open the dialog"
+    );
+}
+
+fn connected_cluster() -> crate::ui::state::ClusterState {
+    let mut cluster = fixture_cluster(1, "dev");
+    cluster.connection = ClusterConnectionState::Connected;
+    cluster
+}
+
+fn harness_with_scalable_inspector() -> Harness<'static, MyEguiApp<MockWorker>> {
+    let config_maps = fixture_api_resource("core", "ConfigMap", "configmaps");
+    let mut state = oracle_resource_table_state();
+    state
+        .clusters
+        .get_mut(&2)
+        .expect("kind fixture exists")
+        .scalable_api_resources
+        .insert(config_maps.clone());
+    let mut harness = application_harness_with_state(state);
+    open_typed_detail(
+        &mut harness,
+        config_maps,
+        config_map_detail(BTreeMap::new()),
+    );
+    harness
+}
+
+fn click_scale_in_inspector(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) -> u64 {
+    harness.get_by_label("More actions for settings").click();
+    harness.run();
+    harness.get_by_label("Scale").click();
+    harness.run();
+    harness
+        .state()
+        .worker
+        .last_command::<GetResourceScale>()
+        .expect("the inspector action requests the current scale")
+        .request_id
+}
+
+fn inspector_scale_fetched(request_id: u64) -> ResourceScaleFetched {
+    ResourceScaleFetched {
+        cluster_key: 2,
+        request_id,
+        api_resource: fixture_api_resource("core", "ConfigMap", "configmaps"),
+        namespace: Some("kube-system".into()),
+        resource_name: "settings".into(),
+        replicas: 3,
+    }
+}
+
+#[test]
+fn scale_requested_from_the_inspector_opens_the_scale_dialog() {
+    let mut harness = harness_with_scalable_inspector();
+    let request_id = click_scale_in_inspector(&mut harness);
+
+    harness.deliver_worker_result(inspector_scale_fetched(request_id));
+
+    harness.get_by_label("Scale settings");
+    assert!(harness.cluster(2).pending_scale.is_some());
+}
+
+#[test]
+fn scale_reply_after_the_inspector_was_swapped_does_not_open_the_dialog() {
+    let mut harness = harness_with_scalable_inspector();
+    let request_id = click_scale_in_inspector(&mut harness);
+
+    let mut commands = Vec::new();
+    harness.state_mut().ui_state.open_resource_detail(
+        2,
+        fixture_api_resource("core", "ConfigMap", "configmaps"),
+        "other".into(),
+        Some("kube-system".into()),
+        "other-uid".into(),
+        &mut commands,
+    );
+    harness.run_steps(2);
+    harness
+        .state_mut()
+        .worker
+        .enqueue_result(inspector_scale_fetched(request_id));
+    // The swapped-in inspector is still loading, so the frame never settles.
+    harness.run_steps(2);
+
+    assert!(harness.cluster(2).pending_scale.is_none());
 }

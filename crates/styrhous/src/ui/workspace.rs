@@ -24,8 +24,9 @@ use crate::resource_table::{
     CellValue, CustomResourceColumn, NODE_COLUMN, SortValue, cell_sort_value,
 };
 use crate::terminal_launcher::{DebugImagePreset, ShellRequest};
+use crate::ui::global_blade::resource_detail_entry_ids;
 use crate::ui::namespace_selector::NamespaceSelectorSettings;
-use crate::worker::{GetResourceScale, WorkerCommandBox};
+use crate::worker::WorkerCommandBox;
 use components::colors::{TOOLBAR_BACKGROUND, gray};
 use components::design::{spacing, typography};
 use components::fuzzy::{fuzzy_match_score, normalize_for_search};
@@ -106,6 +107,7 @@ struct WorkspaceEffects {
     shell_request: Option<ShellRequest>,
     column_settings_to_open: Option<super::resource_table_settings::ResourceTableSettingsTarget>,
     helm_detail_to_open: Option<HelmReleaseDetailTarget>,
+    scale_to_request: Option<ScaleTarget>,
 }
 
 struct ResourceDetailTarget {
@@ -113,6 +115,12 @@ struct ResourceDetailTarget {
     name: String,
     namespace: Option<String>,
     uid: String,
+}
+
+struct ScaleTarget {
+    api_resource: ApiResource,
+    name: String,
+    namespace: Option<String>,
 }
 
 struct LogSourcesTarget {
@@ -216,6 +224,20 @@ impl WorkspaceEffects {
             && let Some(cluster_key) = ui_state.selected_cluster
         {
             ui_state.retry_selected_load(cluster_key, commands_to_send);
+        }
+        // Last, so the lookup records the view as it is after this frame.
+        if let (Some(cluster_key), Some(target)) =
+            (ui_state.selected_cluster, self.scale_to_request)
+        {
+            let inspector_ids = resource_detail_entry_ids(ui_state.global_blades.navigator());
+            let command = ui_state.request_resource_scale(
+                inspector_ids,
+                cluster_key,
+                target.api_resource,
+                target.namespace,
+                target.name,
+            );
+            commands_to_send.push(Box::new(command));
         }
     }
 }
@@ -543,12 +565,11 @@ pub(super) fn show(
                             });
                         }
                         ResourceAction::RequestScale { name, namespace } => {
-                            commands_to_send.push(Box::new(GetResourceScale {
-                                cluster_key: cluster.cluster_key,
+                            effects.scale_to_request = Some(ScaleTarget {
                                 api_resource: api_resource.clone(),
+                                name,
                                 namespace,
-                                resource_name: name,
-                            }));
+                            });
                         }
                         ResourceAction::ViewLogs { targets } => {
                             effects.log_sources_to_open = Some(LogSourcesTarget {

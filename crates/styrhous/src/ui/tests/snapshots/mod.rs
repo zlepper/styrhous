@@ -11,9 +11,9 @@ use super::super::table_preferences::{
     PersistedResourceTablePreferences, ResourceTableKey, TableColumnDefinition,
 };
 use super::fixtures::{
-    application_harness, application_harness_with_state, application_harness_with_terminal,
-    fixture_api_resource, fixture_cluster, fixture_cluster_scoped_api_resource,
-    oracle_resource_table_state,
+    application_harness, application_harness_with_cluster, application_harness_with_state,
+    application_harness_with_terminal, fixture_api_resource, fixture_cluster,
+    fixture_cluster_scoped_api_resource, oracle_resource_table_state,
 };
 use super::harness::{MockUiHarnessExt, command_is};
 use crate::cluster_connection_manager::{

@@ -25,6 +25,18 @@ pub(super) fn application_harness_with_state(
     harness
 }
 
+/// Application harness with `cluster` (key 1) as the only, selected cluster.
+pub(super) fn application_harness_with_cluster(
+    cluster: ClusterState,
+) -> Harness<'static, MyEguiApp<crate::worker::MockWorker>> {
+    application_harness_with_state(UiState {
+        clusters: HashMap::from([(1, cluster)]),
+        next_cluster_key: 1,
+        selected_cluster: Some(1),
+        ..Default::default()
+    })
+}
+
 pub(super) fn application_harness_with_terminal<
     W: WorkerTrait + 'static,
     L: TerminalLauncher + 'static,

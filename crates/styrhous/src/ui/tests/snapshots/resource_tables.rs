@@ -570,7 +570,14 @@ fn scalable_resource_action_fetches_and_updates_the_scale() {
                 && command.resource_name == "coredns")
     );
 
+    let request_id = harness
+        .state()
+        .worker
+        .last_command::<GetResourceScale>()
+        .expect("opening the scale dialog requests the current scale")
+        .request_id;
     harness.deliver_worker_result(ResourceScaleFetched {
+        request_id,
         cluster_key: 2,
         api_resource: deployment.clone(),
         namespace: Some("kube-system".into()),
@@ -607,5 +614,11 @@ fn scalable_resource_action_fetches_and_updates_the_scale() {
                 && command.namespace.as_deref() == Some("kube-system")
                 && command.resource_name == "coredns"
                 && command.replicas == 4)
+    );
+    assert!(
+        harness.state().ui_state.clusters[&2]
+            .pending_scale
+            .is_none(),
+        "confirming closes the dialog immediately, so completions never need to"
     );
 }

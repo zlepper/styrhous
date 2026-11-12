@@ -42,6 +42,7 @@ pub(crate) fn supports_scale_subresource(
 /// Fetch the desired replica count through a dynamically discovered Scale subresource.
 pub(crate) async fn get_resource_scale(
     cluster_key: i32,
+    request_id: u64,
     client: kube::Client,
     api_resource: ApiResource,
     namespace: Option<String>,
@@ -57,6 +58,7 @@ pub(crate) async fn get_resource_scale(
 
     Ok(ResourceScaleFetched {
         cluster_key,
+        request_id,
         api_resource,
         namespace,
         resource_name,

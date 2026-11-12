@@ -27,8 +27,8 @@ use crate::resource_table::{
 };
 use crate::terminal_launcher::DebugImagePreset;
 use crate::worker::{
-    GetResourceScale, ResourceDataUpdate, ResourceDataUpdateCompleted, ResourceDataUpdateFailed,
-    UpdateResourceData, WorkerCommandBox, WorkerResult,
+    ResourceDataUpdate, ResourceDataUpdateCompleted, ResourceDataUpdateFailed, UpdateResourceData,
+    WorkerCommandBox, WorkerResult,
 };
 use components::colors::{WHITE, gray, indigo};
 use components::design::{radius, spacing, status, surface, typography};
@@ -323,16 +323,15 @@ impl GlobalBladeEffect for ResourceDetailEffect {
                 }
             }
             ResourceAction::RequestScale { name, namespace } => {
-                if let Some(cluster) = context.ui_state.clusters.get(&cluster_key) {
-                    navigation
-                        .commands_to_send()
-                        .push(Box::new(GetResourceScale {
-                            cluster_key: cluster.cluster_key,
-                            api_resource,
-                            namespace,
-                            resource_name: name,
-                        }));
-                }
+                let inspector_ids = navigation.resource_detail_entry_ids();
+                let command = context.ui_state.request_resource_scale(
+                    inspector_ids,
+                    cluster_key,
+                    api_resource,
+                    namespace,
+                    name,
+                );
+                navigation.commands_to_send().push(Box::new(command));
             }
             ResourceAction::SaveData {
                 expected_values,

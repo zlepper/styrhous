@@ -57,6 +57,8 @@ pub(crate) struct UiState {
     pub(super) cluster_selections: PersistedClusterSelections,
     pub(super) resource_navigation_expansion: ResourceNavigationExpansion,
     pub(super) next_operation_toast_sequence: u64,
+    pub(super) next_scale_request_id: u64,
+    pub(super) awaited_scale_lookup: Option<AwaitedScaleLookup>,
     pub(super) managed_cluster_discovery: ManagedClusterDiscoveryState,
     pub(super) context_presentation_saves: HashMap<String, ContextPresentationSave>,
 }
@@ -197,6 +199,7 @@ pub(super) use editors::*;
 pub(super) use mutations::*;
 pub(super) use notifications::*;
 pub(super) use resource_data::*;
+pub(super) use scale_lookup::AwaitedScaleLookup;
 
 mod cluster_operations;
 mod cluster_results;
@@ -208,6 +211,7 @@ mod openings;
 mod preferences;
 mod resource_results;
 mod runtime;
+mod scale_lookup;
 
 #[cfg(test)]
 mod tests;
