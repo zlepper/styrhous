@@ -32,6 +32,15 @@ export type OrganizationInvitation = Readonly<{
   createdAt: string;
   lastSentAt: string;
   expiresAt: string;
+  emailDelivered: boolean;
+}>;
+
+export type OrganizationInvitationDelivery = Readonly<{
+  reasonCode: 'invitation_created' | 'invitation_resent';
+  invitationId: string;
+  correlationId: string;
+  expiresAt: string;
+  emailDelivered: boolean;
 }>;
 
 export type OrganizationCreation = Readonly<{
@@ -167,6 +176,7 @@ export type BillingCadence = 'monthly' | 'annual';
 
 export type BillingPrice = Readonly<{
   cadence: BillingCadence;
+  /** In the currency's minor unit, as Stripe reports it (900 = EUR 9.00). */
   unitAmount: number;
   currency: string;
   taxIncluded: boolean | null;
@@ -194,7 +204,6 @@ const authenticationFailureMessages: Readonly<Record<string, string>> = {
     'That sign-in belongs to another Styrhous account. Sign in first, then link the provider from Account.',
   verified_email_mismatch: 'The provider email does not match this Styrhous account.',
   provider_already_linked: 'That provider is already linked to a Styrhous account.',
-  concurrent_modification: 'The account changed during authentication. Review it and try again.',
   provider_authentication_failed: 'The identity provider could not complete authentication.'
 };
 
@@ -221,7 +230,6 @@ export type AuthenticationSession = Readonly<{
 
 export type BillingCheckoutSession = Readonly<{
   reasonCode: 'checkout_session_created';
-  billingOperationId: string;
   redirectUrl: string;
 }>;
 
@@ -230,11 +238,17 @@ export type BillingCustomerPortalSession = Readonly<{
   redirectUrl: string;
 }>;
 
-export type BillingSeatQuantityChange = Readonly<{
-  reasonCode: 'seat_quantity_changed';
-  billingOperationId: string;
-  seatQuantity: number;
-}>;
+export type BillingSeatQuantityChange =
+  | Readonly<{
+      reasonCode: 'seat_quantity_changed';
+      seatQuantity: number;
+    }>
+  | Readonly<{
+      /** Stripe applies an increase only once its prorated invoice is paid. */
+      reasonCode: 'seat_quantity_pending_payment';
+      seatQuantity: number;
+      paymentUrl: string | null;
+    }>;
 
 type OrganizationListResponse = Readonly<{
   reasonCode: string;
@@ -262,20 +276,12 @@ type BillingAccountListResponse = Readonly<{
   accounts: readonly BillingAccount[];
 }>;
 
-type AntiforgeryTokenResponse = Readonly<{
-  requestToken: string;
-}>;
-
 type ApiErrorPayload = Readonly<{
   reasonCode?: unknown;
   title?: unknown;
   errors?: unknown;
-  billingOperationId?: unknown;
   requiredSeatQuantity?: unknown;
-  cadence?: unknown;
   seatQuantity?: unknown;
-  previousSeatQuantity?: unknown;
-  expiresAt?: unknown;
 }>;
 
 export class PortalAuthenticationRequiredError extends Error {
@@ -307,15 +313,10 @@ export class PortalApiError extends Error {
   }
 }
 
-export type PortalApi = ReturnType<typeof createPortalApi>;
-
 export function createPortalApi(fetcher: typeof fetch = globalThis.fetch) {
-  async function send(path: string, init?: RequestInit, mutating = false): Promise<Response> {
+  async function send(path: string, init?: RequestInit): Promise<Response> {
     const headers = new Headers(init?.headers);
     headers.set('Accept', 'application/json');
-    if (mutating) {
-      headers.set('X-CSRF-TOKEN', await getAntiforgeryToken());
-    }
 
     const response = await fetcher(path, {
       ...init,
@@ -333,13 +334,11 @@ export function createPortalApi(fetcher: typeof fetch = globalThis.fetch) {
     return response;
   }
 
-  async function request<T>(path: string, init?: RequestInit, mutating = false): Promise<T> {
-    const response = await send(path, init, mutating);
-    return (await response.json()) as T;
-  }
-
-  async function getAntiforgeryToken(): Promise<string> {
-    return (await request<AntiforgeryTokenResponse>('/api/antiforgery')).requestToken;
+  async function request<T>(path: string, init?: RequestInit): Promise<T> {
+    const response = await send(path, init);
+    // Some mutations (for example device approval) answer 204 No Content.
+    const text = await response.text();
+    return (text ? JSON.parse(text) : undefined) as T;
   }
 
   function mutation<T>(
@@ -355,33 +354,12 @@ export function createPortalApi(fetcher: typeof fetch = globalThis.fetch) {
       serializedBody = JSON.stringify(body);
     }
 
-    return request<T>(
-      path,
-      {
-        method,
-        headers,
-        body: serializedBody,
-        signal
-      },
-      true
-    );
-  }
-
-  async function formMutation(
-    path: string,
-    fields: Readonly<Record<string, string>>,
-    signal?: AbortSignal
-  ): Promise<void> {
-    await send(
-      path,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams(fields).toString(),
-        signal
-      },
-      true
-    );
+    return request<T>(path, {
+      method,
+      headers,
+      body: serializedBody,
+      signal
+    });
   }
 
   return {
@@ -402,7 +380,7 @@ export function createPortalApi(fetcher: typeof fetch = globalThis.fetch) {
     },
 
     async signOut(): Promise<void> {
-      await send('/auth/sign-out', { method: 'POST' }, true);
+      await send('/auth/sign-out', { method: 'POST' });
     },
 
     async listOrganizations(): Promise<readonly OrganizationSummary[]> {
@@ -472,8 +450,8 @@ export function createPortalApi(fetcher: typeof fetch = globalThis.fetch) {
       email: string,
       role: Exclude<OrganizationRole, 'owner'>,
       assignProductSeat: boolean
-    ) {
-      return mutation(
+    ): Promise<OrganizationInvitationDelivery> {
+      return mutation<OrganizationInvitationDelivery>(
         `/api/organizations/${encodeURIComponent(organizationId)}/invitations`,
         'POST',
         { email, role, assignProductSeat }
@@ -495,8 +473,11 @@ export function createPortalApi(fetcher: typeof fetch = globalThis.fetch) {
       );
     },
 
-    resendInvitation(organizationId: string, invitationId: string) {
-      return mutation(
+    resendInvitation(
+      organizationId: string,
+      invitationId: string
+    ): Promise<OrganizationInvitationDelivery> {
+      return mutation<OrganizationInvitationDelivery>(
         `/api/organizations/${encodeURIComponent(organizationId)}/invitations/${encodeURIComponent(invitationId)}/resend`,
         'POST'
       );
@@ -517,13 +498,12 @@ export function createPortalApi(fetcher: typeof fetch = globalThis.fetch) {
     createCheckoutSession(
       billingAccountId: string,
       cadence: BillingCadence,
-      seatQuantity: number,
-      billingOperationId: string | null = null
+      seatQuantity: number
     ): Promise<BillingCheckoutSession> {
       return mutation<BillingCheckoutSession>(
         `/api/billing-accounts/${encodeURIComponent(billingAccountId)}/checkout-sessions`,
         'POST',
-        { cadence, seatQuantity, billingOperationId }
+        { cadence, seatQuantity }
       );
     },
 
@@ -542,13 +522,12 @@ export function createPortalApi(fetcher: typeof fetch = globalThis.fetch) {
     changeSeatQuantity(
       billingAccountId: string,
       seatQuantity: number,
-      billingOperationId: string | null = null,
       signal?: AbortSignal
     ): Promise<BillingSeatQuantityChange> {
       return mutation<BillingSeatQuantityChange>(
         `/api/billing-accounts/${encodeURIComponent(billingAccountId)}/seat-quantity`,
         'PATCH',
-        { seatQuantity, billingOperationId },
+        { seatQuantity },
         signal
       );
     },
@@ -565,10 +544,7 @@ export function createPortalApi(fetcher: typeof fetch = globalThis.fetch) {
       userCode: string,
       signal?: AbortSignal
     ): Promise<DeviceAuthorizationApproval> {
-      return request<DeviceAuthorizationApproval>(
-        `/desktop/v1/device/approval?user_code=${encodeURIComponent(userCode)}`,
-        { signal }
-      );
+      return request<DeviceAuthorizationApproval>(deviceAuthorizationPath(userCode), { signal });
     },
 
     approveDeviceAuthorization(
@@ -576,21 +552,22 @@ export function createPortalApi(fetcher: typeof fetch = globalThis.fetch) {
       seatId: string,
       signal?: AbortSignal
     ): Promise<void> {
-      return formMutation(
-        '/desktop/v1/device/approval',
-        { user_code: userCode, decision: 'approve', seat_id: seatId },
+      return mutation<void>(
+        deviceAuthorizationPath(userCode),
+        'POST',
+        { decision: 'approve', seatId },
         signal
       );
     },
 
     denyDeviceAuthorization(userCode: string, signal?: AbortSignal): Promise<void> {
-      return formMutation(
-        '/desktop/v1/device/approval',
-        { user_code: userCode, decision: 'deny' },
-        signal
-      );
+      return mutation<void>(deviceAuthorizationPath(userCode), 'POST', { decision: 'deny' }, signal);
     }
   };
+}
+
+function deviceAuthorizationPath(userCode: string): string {
+  return `/api/device-authorizations/${encodeURIComponent(userCode)}`;
 }
 
 export function portalErrorMessage(error: unknown): string {
@@ -634,45 +611,17 @@ async function toApiError(response: Response): Promise<PortalApiError> {
   );
 }
 
-export type BillingCheckoutErrorDetails = Readonly<{
-  billingOperationId: string | null;
+export type BillingErrorDetails = Readonly<{
   requiredSeatQuantity: number | null;
-  cadence: BillingCadence | null;
   seatQuantity: number | null;
-  expiresAt: string | null;
 }>;
 
-export type BillingSeatQuantityErrorDetails = Readonly<{
-  billingOperationId: string | null;
-  previousSeatQuantity: number | null;
-  seatQuantity: number | null;
-  requiredSeatQuantity: number | null;
-}>;
-
-export function billingSeatQuantityErrorDetails(
-  error: PortalApiError
-): BillingSeatQuantityErrorDetails {
+/** Seat quantities attached to checkout and seat-change rejections. */
+export function billingErrorDetails(error: PortalApiError): BillingErrorDetails {
   const details = error.details;
   return {
-    billingOperationId:
-      typeof details.billingOperationId === 'string' ? details.billingOperationId : null,
-    previousSeatQuantity: positiveSafeInteger(details.previousSeatQuantity),
-    seatQuantity: positiveSafeInteger(details.seatQuantity),
-    requiredSeatQuantity: positiveSafeInteger(details.requiredSeatQuantity)
-  };
-}
-
-export function billingCheckoutErrorDetails(error: PortalApiError): BillingCheckoutErrorDetails {
-  const details = error.details;
-  return {
-    billingOperationId:
-      typeof details.billingOperationId === 'string' ? details.billingOperationId : null,
     requiredSeatQuantity: positiveSafeInteger(details.requiredSeatQuantity),
-    cadence: details.cadence === 'monthly' || details.cadence === 'annual'
-      ? details.cadence
-      : null,
-    seatQuantity: positiveSafeInteger(details.seatQuantity),
-    expiresAt: typeof details.expiresAt === 'string' ? details.expiresAt : null
+    seatQuantity: positiveSafeInteger(details.seatQuantity)
   };
 }
 
@@ -752,9 +701,12 @@ function parseValidationErrors(value: unknown): Readonly<Record<string, readonly
 }
 
 function reasonCodeMessage(error: PortalApiError): string {
-  const checkoutDetails = billingCheckoutErrorDetails(error);
+  const checkoutDetails = billingErrorDetails(error);
   const messages: Readonly<Record<string, string>> = {
     organization_not_found: 'That organization is no longer available.',
+    billing_account_not_found: 'That billing account is no longer available.',
+    cross_origin_request_rejected:
+      'The request was rejected because it did not come from the Styrhous portal. Reload and try again.',
     organization_member_not_found: 'That organization member is no longer available.',
     invitation_not_found: 'That invitation is no longer available.',
     invitation_email_mismatch: 'Sign in with the email address that received this invitation.',
@@ -775,33 +727,22 @@ function reasonCodeMessage(error: PortalApiError): string {
         : 'Choose enough seats to cover product seats in use and seat-bearing invitations.',
     subscription_already_exists: 'This account already has a subscription to manage.',
     subscription_not_found: 'This account does not have a subscription to manage.',
-    billing_operation_not_found: 'That billing attempt can no longer be retried.',
     checkout_operation_in_progress:
-      'A recent checkout is still active. Continue that attempt before changing its cadence or seats.',
-    checkout_operation_capacity_changed:
-      'The active Checkout no longer covers product seats in use and seat-bearing invitations. Wait for it to expire before starting a replacement.',
+      'Another checkout was just started for this account. Reload and try again.',
     checkout_provider_unavailable: 'Checkout is temporarily unavailable. Try again.',
     customer_portal_provider_unavailable:
       'Billing management is temporarily unavailable. Try again.',
     seat_quantity_unchanged: 'The subscription already has that seat quantity.',
     subscription_inactive:
       'This subscription is not active enough to change its seat quantity.',
-    seat_quantity_operation_in_progress:
-      'A seat change is already pending. Continue that exact change before starting another.',
     subscription_quantity_changed:
       'The seat count changed. Review the updated subscription before trying again.',
     seat_quantity_provider_unavailable:
       'The seat change could not be completed. Retry the same change.',
-    seat_quantity_reconciliation_required:
-      'This seat change may already have completed. Check again later or contact support; another update will not be submitted automatically.',
-    invitation_cancellation_superseded: 'The invitation changed before it could be cancelled.',
-    invitation_resend_superseded: 'A newer invitation email has already been sent.',
     seat_not_found: 'That seat is no longer available.',
     device_not_active: 'That desktop device is no longer active.',
     device_authorization_not_found:
       'That desktop authorization is invalid or has expired. Start again from Styrhous.',
-    device_authorization_invalid_request:
-      'That desktop approval request is invalid. Reload it and try again.',
     device_authorization_seat_required: 'Choose the seat that should own this desktop device.',
     device_authorization_seat_not_eligible:
       'That seat is no longer eligible. Choose another seat or review your licensing status.',
@@ -811,8 +752,7 @@ function reasonCodeMessage(error: PortalApiError): string {
       'This seat has no stale device to replace. Revoke an active device before approving this one.',
     recent_authentication_required: 'Sign in again to change your sign-in methods.',
     provider_not_linked: 'That sign-in provider is no longer linked to this account.',
-    last_provider_required: 'Keep at least one sign-in method connected to this account.',
-    concurrent_modification: 'The account changed while you were editing it. Review it and try again.'
+    last_provider_required: 'Keep at least one sign-in method connected to this account.'
   };
   return messages[error.reasonCode ?? '']
     ?? 'The licensing service rejected this request. Review and try again.';

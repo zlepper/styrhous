@@ -1,5 +1,3 @@
-**/.nuget/
-**/bin/
-**/obj/
-**/TestResults/
 .env
+.dev.vars
+.wrangler/

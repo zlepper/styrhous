@@ -1,0 +1,25 @@
+{
+  "issuer": "https://licenses.example.com/",
+  "audience": "styrhous-desktop",
+  "installationId": "01991f2a-1111-7000-8000-000000000004",
+  "keys": {
+    "keys": [
+      {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": "VO6Sie4zzIeXnOtLO6E12-FcOKvfDzNbzAf5MlRyC24",
+        "use": "sig",
+        "alg": "EdDSA",
+        "kid": "duhA6v3d04xixeYyNq2faCe3nXM9HMmp_wTCG3apjBE"
+      }
+    ]
+  },
+  "lease": "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCIsImtpZCI6ImR1aEE2djNkMDR4aXhlWXlOcTJmYUNlM25YTTlITW1wX3dUQ0czYXBqQkUifQ.eyJzY2hlbWFfdmVyc2lvbiI6Miwic2VhdF9pZCI6IjAxOTkxZjJhLTExMTEtNzAwMC04MDAwLTAwMDAwMDAwMDAwMiIsImJpbGxpbmdfYWNjb3VudF9pZCI6IjAxOTkxZjJhLTExMTEtNzAwMC04MDAwLTAwMDAwMDAwMDAwMyIsImluc3RhbGxhdGlvbl9pZCI6IjAxOTkxZjJhLTExMTEtNzAwMC04MDAwLTAwMDAwMDAwMDAwNCIsImFjdGl2YXRpb25faWQiOiIwMTk5MWYyYS0xMTExLTcwMDAtODAwMC0wMDAwMDAwMDAwMDUiLCJzdGF0ZSI6ImNvbW1lcmNpYWwiLCJyZWFzb25fY29kZSI6ImFjdGl2ZV9zdWJzY3JpcHRpb24iLCJ2YWxpZF9mcm9tIjoiMjAzMy0wNS0wMVQwMDowMDowMC4wMDBaIiwidmFsaWRfdW50aWwiOiIyMDMzLTA3LTAxVDAwOjAwOjAwLjAwMFoiLCJyZWZyZXNoX2FmdGVyIjoyMDAwMDg2NDAwLCJzaWduaW5nX2tleV9pZCI6ImR1aEE2djNkMDR4aXhlWXlOcTJmYUNlM25YTTlITW1wX3dUQ0czYXBqQkUiLCJpc3MiOiJodHRwczovL2xpY2Vuc2VzLmV4YW1wbGUuY29tLyIsImF1ZCI6InN0eXJob3VzLWRlc2t0b3AiLCJzdWIiOiIwMTk5MWYyYS0xMTExLTcwMDAtODAwMC0wMDAwMDAwMDAwMDEiLCJpYXQiOjIwMDAwMDAwMDAsIm5iZiI6MjAwMDAwMDAwMCwiZXhwIjoyMDAwNjA0ODAwLCJqdGkiOiIwMTk5MWYyYS0xMTExLTcwMDAtODAwMC0wMDAwMDAwMDAwMDYifQ.5-lNvtjmk5P5_S8nGQ6pHUNFVR-BD-UuLmDzY-A4GzmOra1i164myJeiUHJxlv-EZSW_a3H-LMVdO8ZHQexKBg",
+  "expected": {
+    "state": "commercial",
+    "reasonCode": "active_subscription",
+    "issuedAt": 2000000000,
+    "expiresAt": 2000604800,
+    "refreshAfter": 2000086400
+  }
+}

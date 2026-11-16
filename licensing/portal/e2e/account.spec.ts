@@ -112,9 +112,6 @@ test('falls back to sign-in when an account mutation finds an expired session', 
   await page.route('**/auth/providers', (route) =>
     route.fulfill({ json: { providers: ['github', 'google'] } })
   );
-  await page.route('**/api/antiforgery', (route) =>
-    route.fulfill({ json: { requestToken: 'expired-session-token' } })
-  );
   await page.route('**/auth/providers/google', (route) =>
     route.fulfill({ status: 401 })
   );
@@ -193,9 +190,6 @@ test('manages linked providers and signs out through protected account mutations
     authenticated = false;
     await route.fulfill({ status: 204 });
   });
-  await page.route('**/api/antiforgery', (route) =>
-    route.fulfill({ json: { requestToken: 'account-csrf-token' } })
-  );
 
   await page.goto('/account');
   await expect(page.getByRole('heading', { level: 2, name: 'person@example.com' })).toBeVisible();
@@ -220,6 +214,4 @@ test('manages linked providers and signs out through protected account mutations
 
   expect(mutations).toHaveLength(2);
   expect(mutations.map((request) => request.method())).toEqual(['DELETE', 'POST']);
-  expect(mutations.every((request) => request.headers()['x-csrf-token'] === 'account-csrf-token'))
-    .toBe(true);
 });

@@ -198,15 +198,18 @@ fn show_account_actions(
 ) {
     if let LicenseStatus::AwaitingApproval(authorization) = status {
         ui.label("Enter this code in your browser:");
+        ui.add_space(spacing::XS);
         ui.label(
             egui::RichText::new(&authorization.user_code)
-                .font(typography::monospace())
-                .strong(),
+                .font(egui::FontId::monospace(typography::PAGE_TITLE_SIZE))
+                .color(gray::_900),
         );
+        ui.add_space(spacing::XS);
         ui.label(format!(
             "This request expires in {} minutes.",
             authorization.expires_in / 60
         ));
+        ui.add_space(spacing::LG);
         ui.horizontal(|ui| {
             if TailwindButton::new("Open approval page").show(ui).clicked() {
                 ui.ctx().open_url(egui::OpenUrl::new_tab(
@@ -220,31 +223,36 @@ fn show_account_actions(
                 context.licensing().sign_out();
             }
         });
-        ui.label(format!(
-            "Approval server: {}",
-            authorization.verification_uri
-        ));
+        ui.add_space(spacing::SM);
+        ui.label(
+            egui::RichText::new(format!(
+                "Approval server: {}",
+                authorization.verification_uri
+            ))
+            .font(typography::metadata())
+            .color(gray::_500),
+        );
         return;
     }
 
     ui.horizontal_wrapped(|ui| {
+        // Evaluation means signed in without entitlement, so it offers a refresh, not sign-in.
         if matches!(
             status,
-            LicenseStatus::SignedOut
-                | LicenseStatus::Evaluation { .. }
-                | LicenseStatus::Failed { .. }
-        ) && !status.is_waiting_for_refresh()
-            && TailwindButton::new("Sign in").show(ui).clicked()
+            LicenseStatus::SignedOut | LicenseStatus::Failed { .. }
+        ) && TailwindButton::new("Sign in").show(ui).clicked()
         {
             context.licensing().sign_in();
         }
-        if (matches!(
+        if matches!(
             status,
-            LicenseStatus::Licensed(_) | LicenseStatus::Offline(_) | LicenseStatus::Failed { .. }
-        ) || status.is_waiting_for_refresh())
-            && TailwindButton::secondary("Refresh license")
-                .show(ui)
-                .clicked()
+            LicenseStatus::Licensed(_)
+                | LicenseStatus::Offline(_)
+                | LicenseStatus::Evaluation { .. }
+                | LicenseStatus::Failed { .. }
+        ) && TailwindButton::secondary("Refresh license")
+            .show(ui)
+            .clicked()
         {
             context.licensing().refresh();
         }
@@ -255,14 +263,14 @@ fn show_account_actions(
         {
             ui.ctx().open_url(egui::OpenUrl::new_tab(url));
         }
-        if (matches!(
+        if matches!(
             status,
             LicenseStatus::Checking
                 | LicenseStatus::Licensed(_)
                 | LicenseStatus::Offline(_)
+                | LicenseStatus::Evaluation { .. }
                 | LicenseStatus::Failed { .. }
-        ) || status.is_waiting_for_refresh())
-            && TailwindButton::danger("Sign out").show(ui).clicked()
+        ) && TailwindButton::danger("Sign out").show(ui).clicked()
         {
             context.licensing().sign_out();
         }

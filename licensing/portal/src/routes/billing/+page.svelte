@@ -2,15 +2,15 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import SignInPanel from '#lib/components/SignInPanel.svelte';
   import {
-    billingCheckoutErrorDetails,
-    billingSeatQuantityErrorDetails,
+    billingErrorDetails,
     createPortalApi,
     PortalApiError,
     PortalAuthenticationRequiredError,
     portalErrorMessage,
     type BillingAccount,
     type BillingCadence,
-    type BillingPrice
+    type BillingPrice,
+    type BillingSeatQuantityChange
   } from '#lib/api.js';
   import SelectControl from '#lib/components/SelectControl.svelte';
   import { formatUtcDateTime } from '#lib/date.js';
@@ -28,15 +28,12 @@
   let seatQuantityDrafts = $state<Record<string, SeatQuantityDraft>>({});
   let customerPortalStates = $state<Record<string, CustomerPortalState>>({});
   let checkoutReturnMessage = $state<CheckoutReturnMessage | null>(null);
-  const checkoutBlockTimers = new Set<ReturnType<typeof setTimeout>>();
   const billingRequestControllers = new Set<AbortController>();
   let pageActive = true;
 
   type CheckoutDraft = {
     cadence: BillingCadence;
     seatQuantity: number;
-    billingOperationId: string | null;
-    blockedUntil: string | null;
     pending: boolean;
     error: string | null;
   };
@@ -53,10 +50,10 @@
 
   type SeatQuantityDraft = {
     seatQuantity: number;
-    billingOperationId: string | null;
     pending: boolean;
     error: string | null;
     success: string | null;
+    paymentUrl: string | null;
   };
 
   onMount(() => {
@@ -80,13 +77,14 @@
     const price = prices.find((candidate) => candidate.cadence === draft.cadence);
     if (!price) return loadingPrices ? 'Loading price…' : 'Price available at checkout.';
     const formatter = new Intl.NumberFormat('en', { style: 'currency', currency: price.currency, currencyDisplay: 'code' });
+    // Stripe amounts are in the currency's minor unit (cents for EUR, whole yen for JPY).
+    const unitAmount = price.unitAmount / 10 ** (formatter.resolvedOptions().maximumFractionDigits ?? 2);
     const period = draft.cadence === 'monthly' ? 'month' : 'year';
-    return `${formatter.format(price.unitAmount * draft.seatQuantity)} / ${period} · ${formatter.format(price.unitAmount)} per seat · ${price.taxIncluded === null ? 'tax confirmed at checkout' : price.taxIncluded ? 'tax included' : 'before tax'}`;
+    return `${formatter.format(unitAmount * draft.seatQuantity)} / ${period} · ${formatter.format(unitAmount)} per seat · ${price.taxIncluded === null ? 'tax confirmed at checkout' : price.taxIncluded ? 'tax included' : 'before tax'}`;
   }
 
   onDestroy(() => {
     pageActive = false;
-    for (const timer of checkoutBlockTimers) clearTimeout(timer);
     for (const controller of billingRequestControllers) controller.abort();
     billingRequestControllers.clear();
   });
@@ -197,20 +195,35 @@
     return {
       cadence: 'monthly',
       seatQuantity: account.accountKind === 'personal' ? 1 : Math.max(1, account.assignedSeatCount),
-      billingOperationId: null,
-      blockedUntil: null,
       pending: false,
       error: null
     };
   }
 
+  const clearedSeatFeedback = { error: null, success: null, paymentUrl: null } as const;
+
   function createSeatQuantityDraft(account: BillingAccount): SeatQuantityDraft {
     return {
       seatQuantity: account.subscription?.seatQuantity ?? 1,
-      billingOperationId: null,
       pending: false,
-      error: null,
-      success: null
+      ...clearedSeatFeedback
+    };
+  }
+
+  /** The confirmation for a seat change, given the quantity the server now reports. */
+  function seatChangeFeedback(result: BillingSeatQuantityChange, authoritativeQuantity: number) {
+    if (result.reasonCode === 'seat_quantity_pending_payment') {
+      const paymentUrl = result.paymentUrl?.startsWith('https://') ? result.paymentUrl : null;
+      return {
+        success: `Payment for ${result.seatQuantity} seats is pending. The seats are added once it is paid${paymentUrl ? '.' : ' from Manage billing.'}`,
+        paymentUrl
+      };
+    }
+    return {
+      success: authoritativeQuantity === result.seatQuantity
+        ? `Purchased seats changed to ${result.seatQuantity}.`
+        : null,
+      paymentUrl: null
     };
   }
 
@@ -221,33 +234,23 @@
     if (!existing) return createSeatQuantityDraft(account);
 
     existing.seatQuantity = account.subscription?.seatQuantity ?? 1;
-    existing.billingOperationId = null;
-    existing.error = null;
-    existing.success = null;
+    Object.assign(existing, clearedSeatFeedback);
     return existing;
   }
 
   function updateCadence(draft: CheckoutDraft, cadence: BillingCadence) {
     draft.cadence = cadence;
-    resetCheckoutAttempt(draft);
+    draft.error = null;
   }
 
   function updateSeatQuantity(draft: CheckoutDraft, value: string) {
     draft.seatQuantity = Number(value);
-    resetCheckoutAttempt(draft);
-  }
-
-  function resetCheckoutAttempt(draft: CheckoutDraft) {
-    draft.billingOperationId = null;
-    draft.blockedUntil = null;
     draft.error = null;
   }
 
   function updateSubscriptionSeatQuantity(draft: SeatQuantityDraft, value: string) {
     draft.seatQuantity = Number(value);
-    draft.billingOperationId = null;
-    draft.error = null;
-    draft.success = null;
+    Object.assign(draft, clearedSeatFeedback);
   }
 
   async function changeSubscriptionSeatQuantity(
@@ -259,13 +262,11 @@
     const controller = new AbortController();
     billingRequestControllers.add(controller);
     draft.pending = true;
-    draft.error = null;
-    draft.success = null;
+    Object.assign(draft, clearedSeatFeedback);
     try {
       const result = await api.changeSeatQuantity(
         account.billingAccountId,
         draft.seatQuantity,
-        draft.billingOperationId,
         controller.signal
       );
       if (!pageActive || controller.signal.aborted) return;
@@ -276,14 +277,13 @@
         (candidate) => candidate.billingAccountId === account.billingAccountId
       )?.subscription?.seatQuantity;
       if (authoritativeQuantity !== undefined) {
-        const refreshedDraft = seatQuantityDrafts[account.billingAccountId];
-        draft.seatQuantity = authoritativeQuantity;
-        draft.success = authoritativeQuantity === result.seatQuantity
-          ? `Purchased seats changed to ${result.seatQuantity}.`
-          : null;
-        if (refreshedDraft && refreshedDraft !== draft) {
-          refreshedDraft.seatQuantity = draft.seatQuantity;
-          refreshedDraft.success = draft.success;
+        const update = {
+          seatQuantity: authoritativeQuantity,
+          ...seatChangeFeedback(result, authoritativeQuantity)
+        };
+        // A reload can replace the account's draft; keep both in step.
+        for (const target of new Set([draft, seatQuantityDrafts[account.billingAccountId]])) {
+          if (target) Object.assign(target, update);
         }
       }
     } catch (error) {
@@ -294,21 +294,10 @@
       }
 
       if (error instanceof PortalApiError) {
-        const details = billingSeatQuantityErrorDetails(error);
+        const details = billingErrorDetails(error);
         if (details.requiredSeatQuantity
           && details.requiredSeatQuantity > draft.seatQuantity) {
           draft.seatQuantity = details.requiredSeatQuantity;
-        }
-        if (error.reasonCode === 'seat_quantity_operation_in_progress'
-          && details.billingOperationId
-          && details.seatQuantity) {
-          draft.billingOperationId = details.billingOperationId;
-          draft.seatQuantity = details.seatQuantity;
-        } else if (error.reasonCode === 'seat_quantity_provider_unavailable'
-          || error.reasonCode === 'seat_quantity_reconciliation_required') {
-          draft.billingOperationId = details.billingOperationId;
-        } else {
-          draft.billingOperationId = null;
         }
 
         if (error.reasonCode === 'subscription_quantity_changed'
@@ -344,11 +333,7 @@
   }
 
   async function startCheckout(account: BillingAccount, draft: CheckoutDraft) {
-    if (draft.blockedUntil && Date.parse(draft.blockedUntil) <= Date.now()) {
-      draft.blockedUntil = null;
-      draft.error = null;
-    }
-    if (draft.pending || draft.blockedUntil) return;
+    if (draft.pending) return;
 
     draft.pending = true;
     draft.error = null;
@@ -356,8 +341,7 @@
       const session = await api.createCheckoutSession(
         account.billingAccountId,
         draft.cadence,
-        draft.seatQuantity,
-        draft.billingOperationId
+        draft.seatQuantity
       );
       window.location.assign(session.redirectUrl);
     } catch (error) {
@@ -367,58 +351,17 @@
       }
 
       if (error instanceof PortalApiError) {
-        const details = billingCheckoutErrorDetails(error);
+        const details = billingErrorDetails(error);
         if (details.requiredSeatQuantity && details.requiredSeatQuantity > draft.seatQuantity) {
           draft.seatQuantity = details.requiredSeatQuantity;
         }
-        if (
-          error.reasonCode === 'checkout_operation_in_progress'
-          && details.billingOperationId
-          && details.cadence
-          && details.seatQuantity
-        ) {
-          draft.cadence = details.cadence;
-          draft.seatQuantity = details.seatQuantity;
-          draft.billingOperationId = details.billingOperationId;
-        } else if (error.reasonCode === 'checkout_operation_capacity_changed') {
-          draft.billingOperationId = null;
-          blockCheckoutUntil(draft, details.expiresAt);
-        } else {
-          draft.billingOperationId = error.reasonCode === 'checkout_provider_unavailable'
-            ? details.billingOperationId
-            : null;
-        }
       }
-      draft.error = error instanceof PortalApiError
-        && error.reasonCode === 'checkout_operation_capacity_changed'
-        && billingCheckoutErrorDetails(error).expiresAt
-          ? `This checkout has too few seats for your members and invitations. Start a new checkout after ${formatUtcDateTime(billingCheckoutErrorDetails(error).expiresAt!)}.`
-          : portalErrorMessage(error);
+      draft.error = portalErrorMessage(error);
       await tick();
       document.getElementById(checkoutErrorId(account))?.focus();
     } finally {
       draft.pending = false;
     }
-  }
-
-  function blockCheckoutUntil(draft: CheckoutDraft, expiresAt: string | null) {
-    draft.blockedUntil = expiresAt;
-    if (!expiresAt) return;
-
-    const remainingMilliseconds = Date.parse(expiresAt) - Date.now();
-    if (remainingMilliseconds <= 0) {
-      draft.blockedUntil = null;
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      checkoutBlockTimers.delete(timer);
-      if (draft.blockedUntil === expiresAt) {
-        draft.blockedUntil = null;
-        draft.error = null;
-      }
-    }, remainingMilliseconds);
-    checkoutBlockTimers.add(timer);
   }
 
   function checkoutErrorId(account: BillingAccount) {
@@ -612,7 +555,7 @@
                   <select
                     id={`checkout-cadence-${account.billingAccountId}`}
                     aria-label={`Billing period for ${accountName(account)}`}
-                    disabled={draft.pending || draft.blockedUntil !== null}
+                    disabled={draft.pending}
                     value={draft.cadence}
                     onchange={(event) => updateCadence(
                       draft,
@@ -634,7 +577,7 @@
                     min={Math.max(1, account.assignedSeatCount)}
                     step="1"
                     required
-                    disabled={draft.pending || draft.blockedUntil !== null}
+                    disabled={draft.pending}
                     value={draft.seatQuantity}
                     oninput={(event) => updateSeatQuantity(draft, event.currentTarget.value)}
                   />
@@ -658,17 +601,9 @@
             <button
               class="primary-button"
               type="submit"
-              aria-disabled={draft.pending || draft.blockedUntil !== null}
+              aria-disabled={draft.pending}
             >
-              {#if draft.pending}
-                Opening checkout…
-              {:else if draft.blockedUntil}
-                Wait for current Checkout to expire
-              {:else if draft.billingOperationId}
-                Try checkout again
-              {:else}
-                Continue to checkout
-              {/if}
+              {draft.pending ? 'Opening checkout…' : 'Continue to checkout'}
             </button>
           </form>
         {/if}
@@ -733,6 +668,11 @@
                     role="status"
                   >{seatQuantityDraft.success}</p>
                 {/if}
+                {#if seatQuantityDraft.paymentUrl}
+                  <a class="secondary-action action-link" href={seatQuantityDraft.paymentUrl}>
+                    Complete payment
+                  </a>
+                {/if}
                 <span class="visually-hidden" aria-live="polite">
                   {seatQuantityDraft.pending
                     ? `Changing purchased seats for ${accountName(account)}`
@@ -743,11 +683,7 @@
                   type="submit"
                   aria-disabled={seatQuantityDraft.pending}
                 >
-                  {seatQuantityDraft.pending
-                    ? 'Updating seats…'
-                    : seatQuantityDraft.billingOperationId
-                      ? 'Retry seat change'
-                      : 'Update purchased seats'}
+                  {seatQuantityDraft.pending ? 'Updating seats…' : 'Update purchased seats'}
                 </button>
               </form>
             {/if}

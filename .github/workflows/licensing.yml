@@ -15,8 +15,6 @@ on:
       - "flake.nix"
       - "flake.lock"
       - ".github/workflows/licensing.yml"
-      - ".github/workflows/deploy-licensing.yml"
-      - ".dockerignore"
   pull_request:
     paths:
       - "licensing/**"
@@ -30,50 +28,41 @@ on:
       - "flake.nix"
       - "flake.lock"
       - ".github/workflows/licensing.yml"
-      - ".github/workflows/deploy-licensing.yml"
-      - ".dockerignore"
   workflow_dispatch:
 
 permissions:
   contents: read
 
-env:
-  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-  DOTNET_NOLOGO: "1"
-
+# Deployment happens through Cloudflare Workers Builds; this workflow only validates.
 jobs:
-  backend:
-    name: Backend
+  worker:
+    name: Worker
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
       run:
-        working-directory: licensing/backend
+        working-directory: licensing/worker
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          lfs: true
           persist-credentials: false
-      - name: Set up .NET
-        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          global-json-file: licensing/backend/global.json
-      - name: Start backend services
-        run: docker compose --file ../compose.yaml up --detach --wait postgres
-      - name: Check backend
-        run: bash check.sh
-      - name: Build deployment image
-        working-directory: ${{ github.workspace }}
-        run: docker build --file licensing/backend/Dockerfile --tag styrhous-licensing-ci .
-      - name: Validate Fly deployment configuration
-        working-directory: ${{ github.workspace }}
-        run: bash licensing/fly/check.sh
-      - name: Smoke-test migration image entrypoint
-        run: >-
-          docker run --rm --network host styrhous-licensing-ci migrate
-          "--ConnectionStrings:Licensing=Host=127.0.0.1;Port=55432;Database=postgres;Username=styrhous;Password=local-development-only;Pooling=false"
-      - name: Stop backend services
-        if: always()
-        run: docker compose --file ../compose.yaml down --volumes
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            licensing/worker/package-lock.json
+            licensing/portal/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Check types and generated bindings
+        run: npm run check
+      - name: Run Worker tests
+        run: npm test
+      - name: Build the deployable Worker and portal
+        run: npm run build
 
   frontend:
     name: Frontend

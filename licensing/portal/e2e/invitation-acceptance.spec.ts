@@ -10,10 +10,6 @@ test('accepts an emailed invitation and clears its secret from browser history',
   await page.route('**/api/**', async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
-    if (path === '/api/antiforgery') {
-      await route.fulfill({ json: { requestToken: 'invitation-csrf-token' } });
-      return;
-    }
     if (path === '/api/invitations/accept' && request.method() === 'POST') {
       acceptanceRequest = request;
       await route.fulfill({
@@ -42,7 +38,6 @@ test('accepts an emailed invitation and clears its secret from browser history',
   await expect(page).toHaveURL('/invitations/accept');
   expect(acceptanceRequest).not.toBeNull();
   expect(acceptanceRequest!.postDataJSON()).toEqual({ secret: invitationSecret });
-  expect(acceptanceRequest!.headers()['x-csrf-token']).toBe('invitation-csrf-token');
   await expect.soft(page).toHaveScreenshot('invitation-accepted.png', { fullPage: true });
   expect.soft(await page.locator('body').ariaSnapshot()).toMatchSnapshot(
     'invitation-accepted-accessibility.txt'
@@ -57,10 +52,6 @@ test('accepts an emailed invitation and clears its secret from browser history',
 test('preserves the invitation secret across sign-in', async ({ page }) => {
   await page.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
-    if (path === '/api/antiforgery') {
-      await route.fulfill({ json: { requestToken: 'invitation-csrf-token' } });
-      return;
-    }
     await route.fulfill({ status: 401 });
   });
   await page.route('**/auth/providers', async (route) => {
@@ -84,10 +75,6 @@ test('retries acceptance after the browser session is restored', async ({ page }
   let acceptanceAttempts = 0;
   await page.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
-    if (path === '/api/antiforgery') {
-      await route.fulfill({ json: { requestToken: 'invitation-csrf-token' } });
-      return;
-    }
     acceptanceAttempts += 1;
     if (acceptanceAttempts === 1) {
       await route.fulfill({ status: 401 });
@@ -118,10 +105,6 @@ test('retries acceptance after the browser session is restored', async ({ page }
 test('fails a rejected invitation closed and clears its secret', async ({ page }) => {
   await page.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
-    if (path === '/api/antiforgery') {
-      await route.fulfill({ json: { requestToken: 'invitation-csrf-token' } });
-      return;
-    }
     await route.fulfill({ status: 404, json: { reasonCode: 'invitation_not_found' } });
   });
 

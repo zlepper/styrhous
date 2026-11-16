@@ -23,23 +23,10 @@ if [[ "${VERIFY_DESKTOP_ORIGIN_LIVE:-true}" == "false" ]]; then
   exit 0
 fi
 
-temporary_root=$(mktemp -d)
-cleanup() {
-  rm -rf -- "$temporary_root"
-}
-trap cleanup EXIT
-
-curl --fail --retry 12 --retry-all-errors --retry-delay 10 \
-  "$origin/desktop/v1/openapi.json" >"$temporary_root/openapi.json"
-jq -e '
-  .openapi == "3.1.0"
-  and (.paths["/desktop/v1/device/authorize"].post != null)
-  and (.paths["/desktop/v1/keys"].get != null)
-' "$temporary_root/openapi.json" >/dev/null
-
-curl --fail --retry 12 --retry-all-errors --retry-delay 10 \
-  "$origin/desktop/v1/keys" >"$temporary_root/keys.json"
-jq -e '.keys | type == "array" and length > 0' \
-  "$temporary_root/keys.json" >/dev/null
+keys=$(curl --fail --silent --show-error --retry 12 --retry-all-errors --retry-delay 10 \
+  "$origin/desktop/v2/keys")
+jq -e '.keys | type == "array" and length > 0
+  and all(.[]; .kty == "OKP" and .crv == "Ed25519" and .alg == "EdDSA" and .use == "sig")' \
+  <<<"$keys" >/dev/null
 
 echo "Desktop licensing origin verification passed."

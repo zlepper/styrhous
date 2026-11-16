@@ -1,0 +1,38 @@
+{
+  "name": "@styrhous/licensing-worker",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.17.0"
+  },
+  "scripts": {
+    "build:portal": "npm ci --prefix ../portal && npm run build --prefix ../portal",
+    "build": "npm run build:portal && vite build",
+    "dev": "npm run build:portal && vite dev",
+    "deploy": "wrangler d1 migrations apply licensing --remote && wrangler deploy",
+    "check": "wrangler types --strict-vars=false --check && tsc --noEmit",
+    "types": "wrangler types --strict-vars=false",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "lease-key": "node scripts/generate-lease-key.mjs"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "0.9.1",
+    "arctic": "3.7.0",
+    "drizzle-orm": "0.45.4",
+    "hono": "4.13.19",
+    "jose": "6.2.17",
+    "stripe": "23.1.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.69.1",
+    "@cloudflare/vitest-plugin": "1.8.3",
+    "drizzle-kit": "0.31.11",
+    "typescript": "6.0.3",
+    "vite": "8.2.2",
+    "vitest": "4.1.11",
+    "wrangler": "4.163.0"
+  }
+}

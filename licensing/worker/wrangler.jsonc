@@ -1,0 +1,37 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "styrhous-licensing",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  // The Worker routes every request and serves the portal through the ASSETS binding.
+  "assets": {
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "licensing",
+      "database_id": "7186ed32-2a1e-4871-a2e0-a60e69871b38",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "send_email": [{ "name": "EMAIL" }],
+  "secrets": {
+    "required": ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "LEASE_SIGNING_KEY"]
+  },
+  "routes": [{ "pattern": "styrhous.app", "custom_domain": true }],
+  "workers_dev": false,
+  "preview_urls": false,
+  "triggers": { "crons": ["17 3 * * *"] },
+  "vars": {
+    "PUBLIC_ORIGIN": "https://styrhous.app",
+    "INVITATION_FROM_ADDRESS": "noreply@styrhous.app",
+    "STRIPE_MONTHLY_PRICE_ID": "price_1UcUicBGrUjUgTU9vYiRU7t4",
+    "STRIPE_ANNUAL_PRICE_ID": "price_1UcUicBGrUjUgTU9zACjK2HQ",
+    "STRIPE_PORTAL_CONFIGURATION_ID": "bpc_1UcUinBGrUjUgTU9pjGaMqKM"
+  }
+}

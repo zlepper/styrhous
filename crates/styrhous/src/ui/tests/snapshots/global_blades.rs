@@ -288,33 +288,168 @@ fn licensing_warning_opens_account_settings_without_restricting_the_application(
 }
 
 #[test]
-fn pending_renewal_keeps_account_actions_available() {
-    for reason in ["subscription_renewal_pending", "offline_lease_expired"] {
-        let mut harness = application_harness::<MockWorker>();
-        harness.state_mut().ui_state = oracle_resource_table_state();
-        harness
-            .state_mut()
-            .licensing
-            .switch_server(LicenseServer::Custom("http://127.0.0.1:5050".into()));
-        let status = LicenseStatus::Evaluation {
+fn evaluation_keeps_account_actions_available() {
+    for reason in ["trial_expired", "offline_lease_expired"] {
+        let mut harness = licensing_harness(LicenseStatus::Evaluation {
             reason_code: reason.into(),
-        };
-        let warning_label = format!("License warning: {} Manage license", status.summary());
-        harness.state_mut().licensing.set_status_for_test(status);
-        harness.run();
-        harness.get_by_label(&warning_label).click();
-        harness.run_steps(2);
+        });
+        open_license_settings_from_warning(&mut harness);
         assert!(harness.query_by_label("Sign in").is_none());
         harness.get_by_label("Refresh license");
         harness.get_by_label("Sign out");
-        if reason == "subscription_renewal_pending" {
-            harness.ui_harness("licensing/pending_renewal_account_actions");
+        if reason == "trial_expired" {
+            harness.ui_harness("licensing/evaluation_account_actions");
         }
         harness.get_by_label("Sign out").click();
         harness.run_steps(2);
         harness.get_by_label("Sign in");
         assert!(harness.query_by_label("Sign out").is_none());
     }
+}
+
+const OPEN_LICENSE_SETTINGS: &str = "Open license and account settings: Manage your license and account. Custom compatible server (Active)";
+
+/// A lease far in the future, so snapshot text never depends on the current time.
+fn fixed_lease(state: &str, reason_code: &str) -> VerifiedLease {
+    VerifiedLease {
+        user_id: uuid::Uuid::from_u128(1),
+        seat_id: uuid::Uuid::from_u128(2),
+        billing_account_id: uuid::Uuid::from_u128(3),
+        installation_id: uuid::Uuid::from_u128(4),
+        activation_id: uuid::Uuid::from_u128(5),
+        state: state.into(),
+        reason_code: reason_code.into(),
+        expires_at: 4_102_444_800,
+        refresh_after: 4_102_358_400,
+    }
+}
+
+fn licensing_harness(status: LicenseStatus) -> Harness<'static, MyEguiApp<MockWorker>> {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness
+        .state_mut()
+        .licensing
+        .switch_server(LicenseServer::Custom("http://127.0.0.1:5050".into()));
+    harness.state_mut().licensing.set_status_for_test(status);
+    harness.run();
+    harness
+}
+
+fn open_license_settings_from_warning(harness: &mut Harness<MyEguiApp<MockWorker>>) {
+    let summary = harness.state().licensing.status().summary();
+    harness
+        .get_by_label(&format!("License warning: {summary} Manage license"))
+        .click();
+    harness.run_steps(2);
+    harness.get_by_label("License & account");
+}
+
+#[test]
+fn licensed_commercial_account_actions_show_license_details() {
+    let mut harness = licensing_harness(LicenseStatus::Licensed(fixed_lease(
+        "commercial",
+        "active_subscription",
+    )));
+    assert!(
+        harness
+            .query_by_label("License warning: Commercial license active. Manage license")
+            .is_none()
+    );
+
+    open_settings(&mut harness);
+    let license_position = harness.get_by_label(OPEN_LICENSE_SETTINGS).rect().center();
+    primary_click(&mut harness, license_position);
+    harness.run_steps(2);
+
+    harness.get_by_label("Commercial license active.");
+    harness.get_by_label("Available offline until: 2100-01-01T00:00:00Z");
+    assert!(harness.query_by_label("Sign in").is_none());
+    harness.get_by_label("Refresh license");
+    harness.get_by_label("Manage account");
+    harness.get_by_label("Sign out");
+    harness.get_by_label("Advanced").click();
+    harness.run();
+    harness.get_by_label("License details: commercial (active_subscription)");
+    harness.ui_harness("licensing/licensed_commercial_account_actions");
+}
+
+#[test]
+fn offline_lease_account_actions_warn_about_session_only_credentials() {
+    let mut harness =
+        licensing_harness(LicenseStatus::Offline(fixed_lease("trial", "trial_active")));
+    harness
+        .state_mut()
+        .licensing
+        .set_keychain_warning_for_test(true);
+    harness.run();
+    open_license_settings_from_warning(&mut harness);
+
+    // The summary appears in both the warning bar and the blade.
+    assert_eq!(
+        harness
+            .get_all_by_label(
+                "Licensing service is unreachable; offline trial lease is valid until 2100-01-01T00:00:00Z."
+            )
+            .count(),
+        2
+    );
+    harness.get_by_label(
+        "Secure credential storage is unavailable. This sign-in lasts only for this session.",
+    );
+    assert!(harness.query_by_label("Sign in").is_none());
+    harness.get_by_label("Refresh license");
+    harness.get_by_label("Sign out");
+    harness.ui_harness("licensing/offline_lease_account_actions");
+}
+
+#[test]
+fn failed_check_offers_every_account_action() {
+    let mut harness = licensing_harness(LicenseStatus::Failed {
+        message: "the licensing service is unreachable".into(),
+    });
+    open_license_settings_from_warning(&mut harness);
+
+    for action in ["Sign in", "Refresh license", "Manage account", "Sign out"] {
+        harness.get_by_label(action);
+    }
+    harness.ui_harness("licensing/failed_check_account_actions");
+}
+
+#[test]
+fn awaiting_approval_shows_the_code_and_can_be_cancelled() {
+    let mut harness = licensing_harness(LicenseStatus::AwaitingApproval(DeviceAuthorization {
+        user_code: "BCDF-GHJK".into(),
+        verification_uri: "http://127.0.0.1:5050/devices/authorize".into(),
+        verification_uri_complete: "http://127.0.0.1:5050/devices/authorize?user_code=BCDF-GHJK"
+            .into(),
+        expires_in: 600,
+    }));
+    open_license_settings_from_warning(&mut harness);
+
+    harness.get_by_label("BCDF-GHJK");
+    harness.get_by_label("This request expires in 10 minutes.");
+    harness.get_by_label("Open approval page");
+    harness.get_by_label("Copy code");
+    harness.get_by_label("Approval server: http://127.0.0.1:5050/devices/authorize");
+    assert!(harness.query_by_label("Sign in").is_none());
+    harness.ui_harness("licensing/awaiting_approval_account_actions");
+
+    harness.get_by_label("Cancel sign-in").click();
+    harness.run_steps(2);
+    harness.get_by_label("Sign in");
+    assert!(harness.query_by_label("Cancel sign-in").is_none());
+}
+
+#[test]
+fn checking_offers_only_account_management_and_sign_out() {
+    let mut harness = licensing_harness(LicenseStatus::Checking);
+    open_license_settings_from_warning(&mut harness);
+
+    harness.get_by_label("Manage account");
+    harness.get_by_label("Sign out");
+    assert!(harness.query_by_label("Sign in").is_none());
+    assert!(harness.query_by_label("Refresh license").is_none());
 }
 
 #[test]

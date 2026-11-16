@@ -59,14 +59,12 @@
         packages =
           (with pkgs; [
             cargo-nextest
-            dotnet-sdk_10
             gh
             imagemagick
             jetbrains.rust-rover
             kind
             kubectl
             nodejs_22
-            pulumi
           ])
           ++ runtimeLibraries;
 

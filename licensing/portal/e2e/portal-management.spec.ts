@@ -116,9 +116,6 @@ test('manages an organization roster and invitation through the authenticated AP
   );
 
   expect(mutationRequests).toHaveLength(3);
-  for (const request of mutationRequests) {
-    expect(request.headers()['x-csrf-token']).toBe('portal-csrf-token');
-  }
 
   state.rejectMutations = true;
   await page.getByLabel('Role for member@example.com').selectOption('member');
@@ -308,7 +305,6 @@ test('creates an organization, reports a trial transfer, and switches workspaces
   await expect(organizationSeatRow(page, 'member@example.com')).toHaveCount(0);
 
   expect(mutationRequests).toHaveLength(1);
-  expect(mutationRequests[0].headers()['x-csrf-token']).toBe('portal-csrf-token');
 });
 
 test('confirms and applies invitation and member removal actions', async ({ page }) => {
@@ -346,9 +342,6 @@ test('confirms and applies invitation and member removal actions', async ({ page
   await expect(organizationSeatRow(page, 'member@example.com')).toHaveCount(0);
 
   expect(mutationRequests).toHaveLength(3);
-  for (const request of mutationRequests) {
-    expect(request.headers()['x-csrf-token']).toBe('portal-csrf-token');
-  }
 });
 
 test("transfers ownership and refreshes the current user's capabilities", async ({ page }) => {
@@ -370,6 +363,49 @@ test("transfers ownership and refreshes the current user's capabilities", async 
     currentUserActions.getByRole('button', { name: 'Leave Northstar Platform' })
   ).toBeVisible();
   expect(mutationRequests).toHaveLength(1);
+});
+
+test('reports an undelivered invitation email and lets the admin resend it', async ({ page }) => {
+  const mutationRequests: Request[] = [];
+  const state = await installOrganizationApi(page, mutationRequests);
+  state.invitationEmailFails = true;
+
+  await page.goto('/organizations');
+  await openDisclosure(page, 'Invite people');
+  await page.getByLabel('Email address').fill('unreachable@example.com');
+  await page.getByRole('button', { name: 'Send invitation', exact: true }).click();
+
+  const status = page.getByRole('status').filter({ hasText: 'unreachable@example.com' });
+  await expect(status).toHaveText(
+    'The invitation for unreachable@example.com was created, but the email could not be sent. Use Resend to try again.'
+  );
+  await expect(status).toHaveClass(/notice-message/);
+  await expect(organizationSeatRow(page, 'unreachable@example.com')).toContainText('Email not sent');
+
+  const resend = async () => {
+    const actions = await openOrganizationSeatActions(page, 'unreachable@example.com');
+    await actions
+      .getByRole('button', { name: 'Resend invitation to unreachable@example.com' })
+      .click();
+  };
+  await resend();
+  const failedResend = page
+    .getByRole('status')
+    .filter({ hasText: 'The invitation email to unreachable@example.com could not be sent.' });
+  await expect(failedResend).toHaveText(
+    'The invitation email to unreachable@example.com could not be sent. Try Resend again later.'
+  );
+  await expect(failedResend).toHaveClass(/notice-message/);
+  await expect(organizationSeatRow(page, 'unreachable@example.com')).toContainText('Email not sent');
+
+  state.invitationEmailFails = false;
+  await resend();
+  await expect(
+    page.getByText('A fresh invitation was sent to unreachable@example.com.')
+  ).toBeVisible();
+  await expect(organizationSeatRow(page, 'unreachable@example.com')).toContainText(
+    'Pending invitation'
+  );
 });
 
 test('associates a general invitation API error with its form', async ({ page }) => {
@@ -498,7 +534,6 @@ test('shows every seat and revokes an active desktop device', async ({ page }) =
   await expect(page.getByRole('heading', { level: 3, name: 'Workstation 14' })).toHaveCount(0);
 
   expect(mutationRequests).toHaveLength(1);
-  expect(mutationRequests[0].headers()['x-csrf-token']).toBe('portal-csrf-token');
 });
 
 test('keeps a device visible when revocation is rejected', async ({ page }) => {
@@ -619,7 +654,7 @@ test('keeps checkout available when price discovery is unavailable', async ({ pa
   await expect(purchase.getByRole('button', { name: 'Continue to checkout' })).toBeEnabled();
 });
 
-test('opens Stripe billing management with antiforgery and no browser-owned inputs', async ({
+test('opens Stripe billing management with no browser-owned inputs', async ({
   page
 }) => {
   const state = await installBillingApi(page);
@@ -631,9 +666,6 @@ test('opens Stripe billing management with antiforgery and no browser-owned inpu
   await expect(page).toHaveURL('https://billing.stripe.test/session');
 
   expect(state.customerPortalRequests).toHaveLength(1);
-  expect(state.customerPortalRequests[0].headers()['x-csrf-token']).toBe(
-    'portal-csrf-token'
-  );
   expect(state.customerPortalRequests[0].postData()).toBeNull();
 });
 
@@ -648,11 +680,61 @@ test('changes organization seats and reloads the authoritative account state', a
   await expect(account.getByRole('status')).toHaveText('Purchased seats changed to 9.');
   await expect(account.getByLabel('Purchased seats for Growth Studio')).toHaveValue('9');
   expect(state.seatQuantityRequests).toHaveLength(1);
-  expect(state.seatQuantityRequests[0].headers()['x-csrf-token']).toBe('portal-csrf-token');
-  expect(state.seatQuantityRequests[0].postDataJSON()).toEqual({
-    seatQuantity: 9,
-    billingOperationId: null
-  });
+  expect(state.seatQuantityRequests[0].postDataJSON()).toEqual({ seatQuantity: 9 });
+});
+
+test('keeps current seats and links to payment while a seat increase awaits payment', async ({ page }) => {
+  const state = await installBillingApi(page);
+  state.pendingNextSeatQuantity = { paymentUrl: 'https://invoice.stripe.test/pay' };
+
+  await page.goto('/billing');
+  const account = page.getByRole('article', { name: 'Growth Studio' });
+  await account.getByLabel('Purchased seats for Growth Studio').fill('9');
+  await account.getByRole('button', { name: 'Update purchased seats' }).click();
+
+  await expect(account.getByRole('status')).toHaveText(
+    'Payment for 9 seats is pending. The seats are added once it is paid.'
+  );
+  await expect(account.getByLabel('Purchased seats for Growth Studio')).toHaveValue('6');
+  await expect(account.getByText('5 / 6', { exact: true })).toBeVisible();
+  await expect(account.getByRole('link', { name: 'Complete payment' }))
+    .toHaveAttribute('href', 'https://invoice.stripe.test/pay');
+
+  await account.getByLabel('Purchased seats for Growth Studio').fill('8');
+  await expect(account.getByRole('link', { name: 'Complete payment' })).toHaveCount(0);
+});
+
+test('points to billing management when a pending seat increase has no payment link', async ({ page }) => {
+  const state = await installBillingApi(page);
+  state.pendingNextSeatQuantity = { paymentUrl: null };
+
+  await page.goto('/billing');
+  const account = page.getByRole('article', { name: 'Growth Studio' });
+  await account.getByLabel('Purchased seats for Growth Studio').fill('9');
+  await account.getByRole('button', { name: 'Update purchased seats' }).click();
+
+  await expect(account.getByRole('status')).toHaveText(
+    'Payment for 9 seats is pending. The seats are added once it is paid from Manage billing.'
+  );
+  await expect(account.getByRole('link', { name: 'Complete payment' })).toHaveCount(0);
+  await expect(account.getByLabel('Purchased seats for Growth Studio')).toHaveValue('6');
+});
+
+test('replaces a pending payment notice once a later seat change succeeds', async ({ page }) => {
+  const state = await installBillingApi(page);
+  state.pendingNextSeatQuantity = { paymentUrl: 'https://invoice.stripe.test/pay' };
+
+  await page.goto('/billing');
+  const account = page.getByRole('article', { name: 'Growth Studio' });
+  await account.getByLabel('Purchased seats for Growth Studio').fill('9');
+  await account.getByRole('button', { name: 'Update purchased seats' }).click();
+  await expect(account.getByRole('link', { name: 'Complete payment' })).toBeVisible();
+
+  await account.getByLabel('Purchased seats for Growth Studio').fill('7');
+  await account.getByRole('button', { name: 'Update purchased seats' }).click();
+
+  await expect(account.getByRole('status')).toHaveText('Purchased seats changed to 7.');
+  await expect(account.getByRole('link', { name: 'Complete payment' })).toHaveCount(0);
 });
 
 test('keeps a newer authoritative quantity after a successful seat response', async ({ page }) => {
@@ -673,7 +755,7 @@ test('keeps a newer authoritative quantity after a successful seat response', as
   await expect(account.getByText('5 / 7', { exact: true })).toBeVisible();
 });
 
-test('retries a seat provider failure with the same durable operation', async ({ page }) => {
+test('lets the owner retry a seat change after a provider failure', async ({ page }) => {
   const state = await installBillingApi(page);
   state.failNextSeatQuantity = true;
 
@@ -685,70 +767,11 @@ test('retries a seat provider failure with the same durable operation', async ({
     'The seat change could not be completed. Retry the same change.'
   );
   await expect(account.getByRole('alert')).toBeFocused();
-  await account.getByRole('button', { name: 'Retry seat change' }).click();
+  await account.getByRole('button', { name: 'Update purchased seats' }).click();
 
   await expect(account.getByRole('status')).toHaveText('Purchased seats changed to 8.');
   expect(state.seatQuantityRequests).toHaveLength(2);
-  expect(state.seatQuantityRequests[0].postDataJSON()).toMatchObject({
-    billingOperationId: null
-  });
-  expect(state.seatQuantityRequests[1].postDataJSON()).toMatchObject({
-    billingOperationId: '0191a8f0-1111-7000-8000-000000000062'
-  });
-});
-
-test('retains the original seat operation when replay requires reconciliation', async ({ page }) => {
-  const state = await installBillingApi(page);
-  state.failNextSeatQuantity = true;
-  state.requireSeatQuantityReconciliation = true;
-
-  await page.goto('/billing');
-  const account = page.getByRole('article', { name: 'Growth Studio' });
-  await account.getByLabel('Purchased seats for Growth Studio').fill('8');
-  await account.getByRole('button', { name: 'Update purchased seats' }).click();
-  await expect(account.getByRole('alert')).toHaveText(
-    'The seat change could not be completed. Retry the same change.'
-  );
-
-  await account.getByRole('button', { name: 'Retry seat change' }).click();
-  await expect(account.getByRole('alert')).toHaveText(
-    'This seat change may already have completed. Check again later or contact support; another update will not be submitted automatically.'
-  );
-  await expect(account.getByRole('button', { name: 'Retry seat change' })).toBeVisible();
-
-  await account.getByRole('button', { name: 'Retry seat change' }).click();
-  await expect(account.getByRole('alert')).toHaveText(
-    'This seat change may already have completed. Check again later or contact support; another update will not be submitted automatically.'
-  );
-  expect(state.seatQuantityRequests).toHaveLength(3);
-  expect(state.seatQuantityRequests[1].postDataJSON()).toMatchObject({
-    billingOperationId: '0191a8f0-1111-7000-8000-000000000062'
-  });
-  expect(state.seatQuantityRequests[2].postDataJSON()).toMatchObject({
-    billingOperationId: '0191a8f0-1111-7000-8000-000000000062'
-  });
-});
-
-test('recovers a changed seat draft onto the one live operation', async ({ page }) => {
-  const state = await installBillingApi(page);
-  state.failNextSeatQuantity = true;
-  state.returnLiveSeatQuantityOperation = true;
-
-  await page.goto('/billing');
-  const account = page.getByRole('article', { name: 'Growth Studio' });
-  const input = account.getByLabel('Purchased seats for Growth Studio');
-  await input.fill('8');
-  await account.getByRole('button', { name: 'Update purchased seats' }).click();
-  await input.fill('10');
-  await account.getByRole('button', { name: 'Update purchased seats' }).click();
-
-  await expect(account.getByRole('alert')).toHaveText(
-    'A seat change is already pending. Continue that exact change before starting another.'
-  );
-  await expect(input).toHaveValue('8');
-  await account.getByRole('button', { name: 'Retry seat change' }).click();
-  await expect(account.getByRole('status')).toHaveText('Purchased seats changed to 8.');
-  expect(state.seatQuantityRequests).toHaveLength(3);
+  expect(state.seatQuantityRequests[1].postDataJSON()).toEqual({ seatQuantity: 8 });
 });
 
 test('prevents duplicate seat updates while Stripe is responding', async ({ page }) => {
@@ -1022,15 +1045,13 @@ test('starts annual Checkout with the selected organization quantity', async ({ 
   await expect(page).toHaveURL('https://checkout.stripe.test/session');
 
   expect(state.checkoutRequests).toHaveLength(1);
-  expect(state.checkoutRequests[0].headers()['x-csrf-token']).toBe('portal-csrf-token');
   expect(state.checkoutRequests[0].postDataJSON()).toEqual({
     cadence: 'annual',
-    seatQuantity: 12,
-    billingOperationId: null
+    seatQuantity: 12
   });
 });
 
-test('retries a provider failure with the same durable Checkout operation', async ({ page }) => {
+test('lets the user retry Checkout after a provider failure', async ({ page }) => {
   const state = await installBillingApi(page);
   state.failNextCheckout = true;
 
@@ -1039,15 +1060,13 @@ test('retries a provider failure with the same durable Checkout operation', asyn
   await expect(page.getByRole('alert')).toHaveText(
     'Checkout is temporarily unavailable. Try again.'
   );
-  await page.getByRole('button', { name: 'Try checkout again' }).click();
+  await page.getByRole('button', { name: 'Continue to checkout' }).click();
   await expect(page).toHaveURL('https://checkout.stripe.test/session');
 
   expect(state.checkoutRequests).toHaveLength(2);
-  expect(state.checkoutRequests[0].postDataJSON()).toMatchObject({
-    billingOperationId: null
-  });
-  expect(state.checkoutRequests[1].postDataJSON()).toMatchObject({
-    billingOperationId: '0191a8f0-1111-7000-8000-000000000047'
+  expect(state.checkoutRequests[1].postDataJSON()).toEqual({
+    cadence: 'monthly',
+    seatQuantity: 4
   });
 });
 
@@ -1070,65 +1089,6 @@ test('prevents duplicate submission while checkout is opening', async ({ page })
   await expect(page).toHaveURL('https://checkout.stripe.test/session');
 });
 
-test('recovers a changed draft onto the one live Checkout operation', async ({ page }) => {
-  const state = await installBillingApi(page);
-  state.failNextCheckout = true;
-  state.returnLiveOperationForChangedDraft = true;
-
-  await page.goto('/billing');
-  await page.getByRole('button', { name: 'Continue to checkout' }).click();
-  await page.getByLabel('Billing period for Release Cooperative').selectOption('annual');
-  await page.getByLabel('Seats for Release Cooperative').fill('12');
-  await page.getByRole('button', { name: 'Continue to checkout' }).click();
-
-  await expect(page.getByRole('alert')).toHaveText(
-    'A recent checkout is still active. Continue that attempt before changing its cadence or seats.'
-  );
-  await expect(page.getByLabel('Billing period for Release Cooperative')).toHaveValue('monthly');
-  await expect(page.getByLabel('Seats for Release Cooperative')).toHaveValue('4');
-  await page.getByRole('button', { name: 'Try checkout again' }).click();
-  await expect(page).toHaveURL('https://checkout.stripe.test/session');
-
-  expect(state.checkoutRequests).toHaveLength(3);
-  expect(state.checkoutRequests[1].postDataJSON()).toMatchObject({
-    cadence: 'annual',
-    seatQuantity: 12,
-    billingOperationId: null
-  });
-  expect(state.checkoutRequests[2].postDataJSON()).toMatchObject({
-    cadence: 'monthly',
-    seatQuantity: 4,
-    billingOperationId: '0191a8f0-1111-7000-8000-000000000047'
-  });
-});
-
-test('blocks replacement until an undersized live Checkout expires', async ({ page }) => {
-  const state = await installBillingApi(page);
-  state.failNextCheckout = true;
-  state.returnCapacityChangedForRetry = true;
-  state.capacityChangedExpiresAt = new Date(Date.now() + 1_500).toISOString();
-
-  await page.goto('/billing');
-  await page.getByRole('button', { name: 'Continue to checkout' }).click();
-  await page.getByRole('button', { name: 'Try checkout again' }).click();
-
-  await expect(page.getByRole('alert')).toContainText(
-    'This checkout has too few seats for your members and invitations.'
-  );
-  await expect(page.getByLabel('Seats for Release Cooperative')).toHaveValue('6');
-  await expect(page.getByRole('button', { name: 'Wait for current Checkout to expire' }))
-    .toHaveAttribute('aria-disabled', 'true');
-  expect(state.checkoutRequests).toHaveLength(2);
-
-  const replacementButton = page.getByRole('button', {
-    name: 'Continue to checkout'
-  });
-  await expect(replacementButton).toHaveAttribute('aria-disabled', 'false');
-  await replacementButton.click();
-  await expect(page).toHaveURL('https://checkout.stripe.test/session');
-  expect(state.checkoutRequests).toHaveLength(3);
-});
-
 test('starts fixed one-seat Checkout for a personal billing account', async ({ page }) => {
   const state = await installBillingApi(page);
   state.showPurchasablePersonalOnly = true;
@@ -1141,8 +1101,7 @@ test('starts fixed one-seat Checkout for a personal billing account', async ({ p
   expect(state.checkoutRequests).toHaveLength(1);
   expect(state.checkoutRequests[0].postDataJSON()).toEqual({
     cadence: 'monthly',
-    seatQuantity: 1,
-    billingOperationId: null
+    seatQuantity: 1
   });
 });
 
@@ -1292,7 +1251,8 @@ async function installOrganizationApi(
       assignProductSeat: false,
       createdAt: '2026-09-03T09:00:00Z',
       lastSentAt: '2026-09-03T09:00:00Z',
-      expiresAt: '2026-09-10T09:00:00Z'
+      expiresAt: '2026-09-10T09:00:00Z',
+      emailDelivered: true
     }
   ];
   const createdMembers = [
@@ -1317,9 +1277,11 @@ async function installOrganizationApi(
     rejectReads: boolean;
     readGate: Promise<void> | null;
     mutationGate: Promise<void> | null;
+    invitationEmailFails: boolean;
   } = {
     members,
     invitations,
+    invitationEmailFails: false,
     rejectMutations: false,
     rejectReasonCode: null,
     validationErrors: null,
@@ -1332,10 +1294,6 @@ async function installOrganizationApi(
     const request = route.request();
     const url = new URL(request.url());
     const path = url.pathname;
-    if (path === '/api/antiforgery') {
-      await route.fulfill({ json: { requestToken: 'portal-csrf-token' } });
-      return;
-    }
     if (state.rejectReads && request.method() === 'GET') {
       await route.fulfill({ status: 401 });
       return;
@@ -1403,13 +1361,17 @@ async function installOrganizationApi(
       const invitation = invitations.find(
         (candidate) => candidate.invitationId === invitationMatch[1]
       );
-      if (invitation) invitation.lastSentAt = '2026-09-04T12:00:00Z';
+      if (invitation) {
+        invitation.lastSentAt = '2026-09-04T12:00:00Z';
+        invitation.emailDelivered = !state.invitationEmailFails;
+      }
       await route.fulfill({
         json: {
           reasonCode: 'invitation_resent',
           invitationId: invitationMatch[1],
           correlationId: '0191a8f0-1111-7000-8000-000000000032',
-          lastSentAt: '2026-09-04T12:00:00Z'
+          expiresAt: '2026-09-11T12:00:00Z',
+          emailDelivered: !state.invitationEmailFails
         }
       });
       return;
@@ -1498,7 +1460,8 @@ async function installOrganizationApi(
         assignProductSeat: body.assignProductSeat,
         createdAt: '2026-09-04T11:00:00Z',
         lastSentAt: '2026-09-04T11:00:00Z',
-        expiresAt: '2026-09-11T11:00:00Z'
+        expiresAt: '2026-09-11T11:00:00Z',
+        emailDelivered: !state.invitationEmailFails
       });
       await route.fulfill({
         status: 201,
@@ -1506,7 +1469,8 @@ async function installOrganizationApi(
           reasonCode: 'invitation_created',
           invitationId: '0191a8f0-1111-7000-8000-000000000015',
           correlationId: '0191a8f0-1111-7000-8000-000000000016',
-          expiresAt: '2026-09-11T11:00:00Z'
+          expiresAt: '2026-09-11T11:00:00Z',
+          emailDelivered: !state.invitationEmailFails
         }
       });
       return;
@@ -1649,10 +1613,6 @@ async function installDeviceApi(page: Page, mutationRequests: Request[]) {
   await page.route('**/api/**', async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
-    if (path === '/api/antiforgery') {
-      await route.fulfill({ json: { requestToken: 'portal-csrf-token' } });
-      return;
-    }
     if (state.rejectReads && request.method() === 'GET') {
       await route.fulfill({ status: 401 });
       return;
@@ -1735,8 +1695,8 @@ async function installDeviceApi(page: Page, mutationRequests: Request[]) {
 
 async function installBillingApi(page: Page) {
   await page.route('**/api/billing-prices', route => route.fulfill({ json: { prices: [
-    { cadence: 'monthly', unitAmount: 12, currency: 'USD', taxIncluded: false },
-    { cadence: 'annual', unitAmount: 120, currency: 'USD', taxIncluded: false }
+    { cadence: 'monthly', unitAmount: 1200, currency: 'USD', taxIncluded: false },
+    { cadence: 'annual', unitAmount: 12000, currency: 'USD', taxIncluded: false }
   ] } }));
   const state: {
     rejectReads: boolean;
@@ -1754,20 +1714,15 @@ async function installBillingApi(page: Page) {
     customerPortalGate: Promise<void> | null;
     failNextCustomerPortal: boolean;
     rejectNextCustomerPortalAuthentication: boolean;
-    returnLiveOperationForChangedDraft: boolean;
-    returnCapacityChangedForRetry: boolean;
-    capacityChangedExpiresAt: string;
     requiredSeatQuantity: number | null;
     seatQuantityRequests: Request[];
     seatQuantityGate: Promise<void> | null;
     failNextSeatQuantity: boolean;
-    requireSeatQuantityReconciliation: boolean;
-    returnLiveSeatQuantityOperation: boolean;
     currentSeatQuantity: number;
-    pendingSeatQuantity: number | null;
     rejectNextSeatQuantityAuthentication: boolean;
     supersedeNextSeatQuantityWith: number | null;
     projectAfterSeatChangeTo: number | null;
+    pendingNextSeatQuantity: { paymentUrl: string | null } | null;
     billingAccountReads: number;
   } = {
     rejectReads: false,
@@ -1785,20 +1740,15 @@ async function installBillingApi(page: Page) {
     customerPortalGate: null,
     failNextCustomerPortal: false,
     rejectNextCustomerPortalAuthentication: false,
-    returnLiveOperationForChangedDraft: false,
-    returnCapacityChangedForRetry: false,
-    capacityChangedExpiresAt: '2026-09-01T10:50:00Z',
     requiredSeatQuantity: null,
     seatQuantityRequests: [],
     seatQuantityGate: null,
     failNextSeatQuantity: false,
-    requireSeatQuantityReconciliation: false,
-    returnLiveSeatQuantityOperation: false,
     currentSeatQuantity: 6,
-    pendingSeatQuantity: null,
     rejectNextSeatQuantityAuthentication: false,
     supersedeNextSeatQuantityWith: null,
     projectAfterSeatChangeTo: null,
+    pendingNextSeatQuantity: null,
     billingAccountReads: 0
   };
   const accounts = [
@@ -1988,17 +1938,12 @@ async function installBillingApi(page: Page) {
     });
   });
 
-  await page.route('**/api/antiforgery', async (route) => {
-    await route.fulfill({ json: { requestToken: 'portal-csrf-token' } });
-  });
-
   await page.route('**/api/billing-accounts/*/checkout-sessions', async (route) => {
     const request = route.request();
     state.checkoutRequests.push(request);
     const body = request.postDataJSON() as {
       cadence: 'monthly' | 'annual';
       seatQuantity: number;
-      billingOperationId: string | null;
     };
     if (state.checkoutGate) await state.checkoutGate;
     if (state.requiredSeatQuantity && body.seatQuantity < state.requiredSeatQuantity) {
@@ -2016,42 +1961,7 @@ async function installBillingApi(page: Page) {
       state.failNextCheckout = false;
       await route.fulfill({
         status: 503,
-        json: {
-          reasonCode: 'checkout_provider_unavailable',
-          billingOperationId: '0191a8f0-1111-7000-8000-000000000047'
-        }
-      });
-      return;
-    }
-
-    if (state.returnLiveOperationForChangedDraft && body.billingOperationId === null) {
-      state.returnLiveOperationForChangedDraft = false;
-      await route.fulfill({
-        status: 409,
-        json: {
-          reasonCode: 'checkout_operation_in_progress',
-          billingOperationId: '0191a8f0-1111-7000-8000-000000000047',
-          cadence: 'monthly',
-          seatQuantity: 4,
-          expiresAt: '2026-09-01T10:50:00Z'
-        }
-      });
-      return;
-    }
-
-
-    if (state.returnCapacityChangedForRetry && body.billingOperationId !== null) {
-      state.returnCapacityChangedForRetry = false;
-      await route.fulfill({
-        status: 409,
-        json: {
-          reasonCode: 'checkout_operation_capacity_changed',
-          billingOperationId: '0191a8f0-1111-7000-8000-000000000047',
-          cadence: 'monthly',
-          seatQuantity: 4,
-          requiredSeatQuantity: 6,
-          expiresAt: state.capacityChangedExpiresAt
-        }
+        json: { reasonCode: 'checkout_provider_unavailable' }
       });
       return;
     }
@@ -2059,8 +1969,6 @@ async function installBillingApi(page: Page) {
     await route.fulfill({
       json: {
         reasonCode: 'checkout_session_created',
-        billingOperationId:
-          body.billingOperationId ?? '0191a8f0-1111-7000-8000-000000000047',
         redirectUrl: 'https://checkout.stripe.test/session'
       }
     });
@@ -2095,10 +2003,7 @@ async function installBillingApi(page: Page) {
   await page.route('**/api/billing-accounts/*/seat-quantity', async (route) => {
     const request = route.request();
     state.seatQuantityRequests.push(request);
-    const body = request.postDataJSON() as {
-      seatQuantity: number;
-      billingOperationId: string | null;
-    };
+    const body = request.postDataJSON() as { seatQuantity: number };
     if (state.seatQuantityGate) await state.seatQuantityGate;
     if (state.rejectNextSeatQuantityAuthentication) {
       state.rejectNextSeatQuantityAuthentication = false;
@@ -2131,41 +2036,21 @@ async function installBillingApi(page: Page) {
     }
     if (state.failNextSeatQuantity) {
       state.failNextSeatQuantity = false;
-      state.pendingSeatQuantity = body.seatQuantity;
       await route.fulfill({
         status: 503,
-        json: {
-          reasonCode: 'seat_quantity_provider_unavailable',
-          billingOperationId: '0191a8f0-1111-7000-8000-000000000062',
-          previousSeatQuantity: state.currentSeatQuantity,
-          seatQuantity: body.seatQuantity
-        }
+        json: { reasonCode: 'seat_quantity_provider_unavailable' }
       });
       return;
     }
 
-    if (state.requireSeatQuantityReconciliation) {
+    if (state.pendingNextSeatQuantity) {
+      const { paymentUrl } = state.pendingNextSeatQuantity;
+      state.pendingNextSeatQuantity = null;
       await route.fulfill({
-        status: 409,
         json: {
-          reasonCode: 'seat_quantity_reconciliation_required',
-          billingOperationId: '0191a8f0-1111-7000-8000-000000000062',
-          previousSeatQuantity: state.currentSeatQuantity,
-          seatQuantity: body.seatQuantity
-        }
-      });
-      return;
-    }
-
-    if (state.returnLiveSeatQuantityOperation && body.billingOperationId === null) {
-      state.returnLiveSeatQuantityOperation = false;
-      await route.fulfill({
-        status: 409,
-        json: {
-          reasonCode: 'seat_quantity_operation_in_progress',
-          billingOperationId: '0191a8f0-1111-7000-8000-000000000062',
-          previousSeatQuantity: state.currentSeatQuantity,
-          seatQuantity: state.pendingSeatQuantity
+          reasonCode: 'seat_quantity_pending_payment',
+          seatQuantity: body.seatQuantity,
+          paymentUrl
         }
       });
       return;
@@ -2173,14 +2058,8 @@ async function installBillingApi(page: Page) {
 
     state.currentSeatQuantity = state.projectAfterSeatChangeTo ?? body.seatQuantity;
     state.projectAfterSeatChangeTo = null;
-    state.pendingSeatQuantity = null;
     await route.fulfill({
-      json: {
-        reasonCode: 'seat_quantity_changed',
-        billingOperationId:
-          body.billingOperationId ?? '0191a8f0-1111-7000-8000-000000000062',
-        seatQuantity: body.seatQuantity
-      }
+      json: { reasonCode: 'seat_quantity_changed', seatQuantity: body.seatQuantity }
     });
   });
 

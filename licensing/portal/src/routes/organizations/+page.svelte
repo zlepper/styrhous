@@ -31,6 +31,7 @@
   let pageError = $state<string | null>(null);
   let actionError = $state<string | null>(null);
   let actionStatus = $state<string | null>(null);
+  let actionStatusTone = $state<'success' | 'notice'>('success');
   let failedAction = $state<string | null>(null);
   let invalidField = $state<'organization-name' | 'invitation-email' | null>(null);
   let busyAction = $state<string | null>(null);
@@ -116,6 +117,7 @@
   async function selectOrganization() {
     actionError = null;
     actionStatus = null;
+    actionStatusTone = 'success';
     failedAction = null;
     invalidField = null;
     if (selectedOrganizationId) await loadOrganizationWorkspace(selectedOrganizationId);
@@ -210,7 +212,7 @@
     if (!email) return;
 
     await runAction('create-invitation', async () => {
-      await api.createInvitation(
+      const delivery = await api.createInvitation(
         organizationId,
         email,
         invitationRole,
@@ -219,7 +221,11 @@
       invitationEmail = '';
       invitationProductSeat = true;
       await loadOrganizationWorkspace(organizationId);
-      actionStatus = `Invitation sent to ${email}.`;
+      reportInvitationDelivery(
+        delivery.emailDelivered,
+        `Invitation sent to ${email}.`,
+        `The invitation for ${email} was created, but the email could not be sent. Use Resend to try again.`
+      );
     });
   }
 
@@ -227,10 +233,19 @@
     if (!selectedOrganization) return;
     const organizationId = selectedOrganization.organizationId;
     await runAction(`resend-${invitation.invitationId}`, async () => {
-      await api.resendInvitation(organizationId, invitation.invitationId);
+      const delivery = await api.resendInvitation(organizationId, invitation.invitationId);
       await loadOrganizationWorkspace(organizationId);
-      actionStatus = `A fresh invitation was sent to ${invitation.email}.`;
+      reportInvitationDelivery(
+        delivery.emailDelivered,
+        `A fresh invitation was sent to ${invitation.email}.`,
+        `The invitation email to ${invitation.email} could not be sent. Try Resend again later.`
+      );
     });
+  }
+
+  function reportInvitationDelivery(delivered: boolean, sent: string, notSent: string) {
+    actionStatus = delivered ? sent : notSent;
+    actionStatusTone = delivered ? 'success' : 'notice';
   }
 
   async function cancelInvitation(invitation: OrganizationInvitation) {
@@ -394,7 +409,13 @@
 
   <div class="message-stack" aria-live="polite">
     {#if actionStatus}
-      <p bind:this={actionStatusElement} class="success-message" role="status" tabindex="-1">
+      <p
+        bind:this={actionStatusElement}
+        class:success-message={actionStatusTone === 'success'}
+        class:notice-message={actionStatusTone === 'notice'}
+        role="status"
+        tabindex="-1"
+      >
         {actionStatus}
       </p>
     {/if}
@@ -648,7 +669,13 @@
               {#each invitations as invitation (invitation.invitationId)}
                 <tr>
                   <th role="rowheader" scope="row"><strong>{invitation.email}</strong></th>
-                  <td role="cell" data-label="Status"><span class="state-badge">Pending invitation</span></td>
+                  <td role="cell" data-label="Status">
+                    {#if invitation.emailDelivered}
+                      <span class="state-badge">Pending invitation</span>
+                    {:else}
+                      <span class="state-badge warning">Email not sent</span>
+                    {/if}
+                  </td>
                   <td role="cell" data-label="Role">{titleCase(invitation.role)}</td>
                   <td role="cell" data-label="License">
                     <span class:eligible={invitation.assignProductSeat} class="state-badge">

@@ -8,13 +8,17 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
-const CLIENT_ID: &str = "styrhous-desktop";
-const SCOPE: &str = "styrhous.desktop offline_access";
 const LEASE_AUDIENCE: &str = "styrhous-desktop";
 const KEYRING_SERVICE: &str = "io.github.zlepper.styrhous.licensing";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
 const MAX_RETRY_DELAY: Duration = Duration::from_secs(15 * 60);
 const MAX_LEASE_LIFETIME: Duration = Duration::from_secs(7 * 24 * 60 * 60);
+/// How often a signed-in installation without entitlement checks for a new license.
+const EVALUATION_RECHECK_DELAY: Duration = Duration::from_secs(60 * 60);
+const LEASE_SCHEMA_VERSION: u8 = 2;
+/// How far ahead of the local clock a freshly issued lease may start, absorbing clock drift.
+const CLOCK_SKEW_LEEWAY: Duration = Duration::from_secs(5 * 60);
+const OFFLINE_LEASE_EXPIRED: &str = "offline_lease_expired";
 const HOSTED_ORIGIN: Option<&str> = option_env!("STYRHOUS_HOSTED_LICENSE_ORIGIN");
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -91,11 +95,6 @@ pub(crate) enum LicenseStatus {
 }
 
 impl LicenseStatus {
-    pub(crate) fn is_waiting_for_refresh(&self) -> bool {
-        matches!(self, Self::Evaluation { reason_code }
-            if matches!(reason_code.as_str(), SUBSCRIPTION_RENEWAL_PENDING | OFFLINE_LEASE_EXPIRED))
-    }
-
     pub(crate) fn shows_warning(&self) -> bool {
         !matches!(self, Self::Licensed(lease) if lease.state == "commercial")
     }
@@ -273,9 +272,11 @@ impl LicensingService {
             };
             match event {
                 LicenseEvent::Checking => {
-                    // Keep the lease deadline and retained-session controls
-                    // visible while a background request is in flight.
-                    if self.status.lease().is_none() && !self.status.is_waiting_for_refresh() {
+                    // Keep the lease deadline and signed-in controls visible
+                    // while a background request is in flight.
+                    if self.status.lease().is_none()
+                        && !matches!(self.status, LicenseStatus::Evaluation { .. })
+                    {
                         self.status = LicenseStatus::Checking;
                     }
                 }
@@ -409,6 +410,11 @@ impl LicensingService {
         self.results = None;
         self.status = status;
     }
+
+    #[cfg(test)]
+    pub(crate) fn set_keychain_warning_for_test(&mut self, keychain_warning: bool) {
+        self.keychain_warning = keychain_warning;
+    }
 }
 
 #[derive(Debug)]
@@ -466,7 +472,7 @@ async fn run_worker(
     events: Sender<LicenseEventMessage>,
     repaint: egui::Context,
 ) {
-    let mut session_refresh_token = None;
+    let mut session_token = None;
     let mut retry_delay = None;
     let mut retry_operation_generation = 0;
     let mut pending_command = None;
@@ -496,7 +502,7 @@ async fn run_worker(
             } => {
                 revoke_and_delete_session(
                     settings.server.origin().ok().flatten(),
-                    session_refresh_token.take(),
+                    session_token.take(),
                     &events,
                     &repaint,
                     operation_generation,
@@ -520,7 +526,7 @@ async fn run_worker(
             } => {
                 revoke_and_delete_session(
                     settings.server.origin().ok().flatten(),
-                    session_refresh_token.take(),
+                    session_token.take(),
                     &events,
                     &repaint,
                     operation_generation,
@@ -550,7 +556,7 @@ async fn run_worker(
                 match run_until_command(
                     refresh(
                         &mut settings,
-                        &mut session_refresh_token,
+                        &mut session_token,
                         &events,
                         &repaint,
                         operation_generation,
@@ -574,7 +580,7 @@ async fn run_worker(
                                 refresh_failure_event(&settings, error, unix_now()),
                             );
                         }
-                        retry_delay = refresh_retry_delay(&settings, &result, retry_delay);
+                        retry_delay = next_check_delay(&settings, &result, retry_delay, unix_now());
                         retry_operation_generation = operation_generation;
                     }
                     LicenseAttemptOutcome::Interrupted {
@@ -603,7 +609,7 @@ async fn run_worker(
                 match run_until_command(
                     sign_in(
                         &mut settings,
-                        &mut session_refresh_token,
+                        &mut session_token,
                         &events,
                         &repaint,
                         operation_generation,
@@ -619,20 +625,19 @@ async fn run_worker(
                         if let Some(display_name) = display_name {
                             settings.display_name = display_name;
                         }
-                        retry_delay = match result {
-                            Ok(()) => scheduled_refresh_delay(&settings),
-                            Err(error) => {
-                                send_event(
-                                    &events,
-                                    &repaint,
-                                    operation_generation,
-                                    refresh_failure_event(&settings, &error, unix_now()),
-                                );
-                                error
-                                    .is::<SubscriptionRenewalPending>()
-                                    .then(|| next_retry_delay(None))
-                            }
-                        };
+                        if let Err(error) = &result {
+                            send_event(
+                                &events,
+                                &repaint,
+                                operation_generation,
+                                refresh_failure_event(&settings, error, unix_now()),
+                            );
+                        }
+                        // A failed sign-in waits for the user to try again.
+                        retry_delay = result
+                            .is_ok()
+                            .then(|| next_check_delay(&settings, &result, None, unix_now()))
+                            .flatten();
                         retry_operation_generation = operation_generation;
                     }
                     LicenseAttemptOutcome::Interrupted {
@@ -653,7 +658,7 @@ async fn run_worker(
 
 async fn revoke_and_delete_session(
     origin: Option<Url>,
-    session_refresh_token: Option<String>,
+    session_token: Option<String>,
     events: &Sender<LicenseEventMessage>,
     repaint: &egui::Context,
     operation_generation: u64,
@@ -661,26 +666,56 @@ async fn revoke_and_delete_session(
     let Some(origin) = origin else {
         return;
     };
-    let credentials = KeyringCredentialStore;
-    let refresh_token = session_refresh_token.or_else(|| credentials.load(&origin).ok().flatten());
-    if let Some(refresh_token) = refresh_token
-        && let Ok(transport) = HttpLicenseTransport::new(origin.clone())
-    {
-        let _ = transport.revoke(&refresh_token).await;
+    let events = EventTarget {
+        events,
+        repaint,
+        operation_generation,
+    };
+    match HttpLicenseTransport::new(origin.clone()) {
+        Ok(transport) => {
+            let runtime = LicenseRuntime {
+                origin,
+                transport: &transport,
+                credentials: &KeyringCredentialStore,
+                clock: &SystemUnixClock,
+                events,
+            };
+            revoke_and_delete_session_with(session_token, &runtime).await;
+        }
+        Err(_) => forget_credential(&KeyringCredentialStore, &origin, events),
     }
-    if credentials.delete(&origin).is_err() {
-        send_event(
-            events,
-            repaint,
-            operation_generation,
-            LicenseEvent::KeychainUnavailable,
-        );
+}
+
+/// Revokes the installation on the server (best effort) and forgets its local credential.
+async fn revoke_and_delete_session_with<T: LicenseTransport, C: CredentialStore>(
+    session_token: Option<String>,
+    runtime: &LicenseRuntime<'_, T, C, impl UnixClock>,
+) {
+    let token = session_token.or_else(|| runtime.credentials.load(&runtime.origin).ok().flatten());
+    if let Some(token) = token {
+        let _ = runtime.transport.sign_out(&token).await;
     }
+    forget_credential(runtime.credentials, &runtime.origin, runtime.events);
+}
+
+fn forget_credential(credentials: &impl CredentialStore, origin: &Url, events: EventTarget<'_>) {
+    if credentials.delete(origin).is_err() {
+        events.send(LicenseEvent::KeychainUnavailable);
+    }
+}
+
+/// Where a successful license check left this installation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SessionState {
+    Licensed,
+    /// Signed in without entitlement; the app periodically checks again.
+    Evaluation,
+    SignedOut,
 }
 
 enum LicenseAttemptOutcome {
     Completed {
-        result: Result<()>,
+        result: Result<SessionState>,
         display_name: Option<String>,
     },
     Interrupted {
@@ -691,7 +726,7 @@ enum LicenseAttemptOutcome {
 }
 
 async fn run_until_command(
-    attempt: impl Future<Output = Result<()>>,
+    attempt: impl Future<Output = Result<SessionState>>,
     commands: &Receiver<LicenseCommand>,
 ) -> LicenseAttemptOutcome {
     tokio::pin!(attempt);
@@ -724,11 +759,11 @@ async fn run_until_command(
 
 async fn refresh(
     settings: &mut LicensingSettings,
-    session_refresh_token: &mut Option<String>,
+    session_token: &mut Option<String>,
     events: &Sender<LicenseEventMessage>,
     repaint: &egui::Context,
     operation_generation: u64,
-) -> Result<()> {
+) -> Result<SessionState> {
     let origin = settings
         .server
         .origin()?
@@ -747,69 +782,42 @@ async fn refresh(
             operation_generation,
         },
     };
-    refresh_with(settings, session_refresh_token, &runtime).await
+    refresh_with(settings, session_token, &runtime).await
 }
 
 async fn refresh_with<T: LicenseTransport, C: CredentialStore>(
     settings: &mut LicensingSettings,
-    session_refresh_token: &mut Option<String>,
+    session_token: &mut Option<String>,
     runtime: &LicenseRuntime<'_, T, C, impl UnixClock>,
-) -> Result<()> {
-    let refresh_token = match session_refresh_token.clone() {
-        Some(token) => token,
-        None => match runtime.credentials.load(&runtime.origin) {
-            Ok(Some(token)) => token,
-            Ok(None) => {
-                if cached_lease_at(settings, runtime.clock.now()).is_some() {
-                    bail!("no refresh credential is available for the cached offline lease");
-                } else {
-                    runtime.events.send(LicenseEvent::SignedOut {
-                        suppress_auto_refresh: false,
-                    });
-                    return Ok(());
-                }
-            }
-            Err(_) => {
-                runtime.events.send(LicenseEvent::KeychainUnavailable);
-                if cached_lease_at(settings, runtime.clock.now()).is_some() {
-                    bail!("the refresh credential could not be read for the cached offline lease");
-                } else {
-                    runtime.events.send(LicenseEvent::SignedOut {
-                        suppress_auto_refresh: false,
-                    });
-                    return Ok(());
-                }
-            }
-        },
+) -> Result<SessionState> {
+    let token = session_token.clone().or_else(|| {
+        runtime
+            .credentials
+            .load(&runtime.origin)
+            .inspect_err(|_| runtime.events.send(LicenseEvent::KeychainUnavailable))
+            .ok()
+            .flatten()
+    });
+    let Some(token) = token else {
+        // Keep a still-valid offline lease rather than signing out over a missing credential.
+        if cached_lease_at(settings, runtime.clock.now()).is_some() {
+            bail!("no installation credential is available for the cached offline lease");
+        }
+        runtime.events.send(LicenseEvent::SignedOut {
+            suppress_auto_refresh: false,
+        });
+        return Ok(SessionState::SignedOut);
     };
-    match runtime.transport.refresh(&refresh_token).await? {
-        TokenExchange::Granted(tokens) => {
-            persist_and_request_lease(settings, tokens, session_refresh_token, runtime).await
-        }
-        TokenExchange::Pending(_) => bail!("the refresh token response was incomplete"),
-        TokenExchange::Denied(error) if error == "invalid_grant" => {
-            if runtime.credentials.delete(&runtime.origin).is_err() {
-                runtime.events.send(LicenseEvent::KeychainUnavailable);
-            }
-            *session_refresh_token = None;
-            settings.clear_account();
-            runtime.events.send(LicenseEvent::SignedOut {
-                suppress_auto_refresh: false,
-            });
-            Ok(())
-        }
-        TokenExchange::RenewalPending => Err(SubscriptionRenewalPending.into()),
-        TokenExchange::Denied(error) => bail!("license refresh was denied: {error}"),
-    }
+    request_lease(settings, &token, session_token, runtime).await
 }
 
 async fn sign_in(
     settings: &mut LicensingSettings,
-    session_refresh_token: &mut Option<String>,
+    session_token: &mut Option<String>,
     events: &Sender<LicenseEventMessage>,
     repaint: &egui::Context,
     operation_generation: u64,
-) -> Result<()> {
+) -> Result<SessionState> {
     let origin = settings
         .server
         .origin()?
@@ -827,14 +835,14 @@ async fn sign_in(
             operation_generation,
         },
     };
-    sign_in_with(settings, session_refresh_token, &runtime).await
+    sign_in_with(settings, session_token, &runtime).await
 }
 
 async fn sign_in_with<T: LicenseTransport, C: CredentialStore>(
     settings: &mut LicensingSettings,
-    session_refresh_token: &mut Option<String>,
+    session_token: &mut Option<String>,
     runtime: &LicenseRuntime<'_, T, C, impl UnixClock>,
-) -> Result<()> {
+) -> Result<SessionState> {
     let authorization = runtime.transport.start_authorization(settings).await?;
     let verification_uri =
         Url::parse(&authorization.verification_uri).context("the verification URL is invalid")?;
@@ -853,52 +861,65 @@ async fn sign_in_with<T: LicenseTransport, C: CredentialStore>(
             verification_uri_complete: authorization.verification_uri_complete.clone(),
             expires_in: authorization.expires_in,
         }));
-    let started = std::time::Instant::now();
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(authorization.expires_in);
     let mut interval = Duration::from_secs(authorization.interval.max(1));
     loop {
-        if started.elapsed() >= Duration::from_secs(authorization.expires_in) {
+        if tokio::time::Instant::now() >= deadline {
             bail!("the device authorization expired");
         }
         tokio::time::sleep(interval).await;
-        match runtime.transport.poll(&authorization.device_code).await? {
-            TokenExchange::Granted(tokens) => {
-                if tokens.refresh_token.is_none() {
-                    bail!("the device authorization did not issue a refresh credential");
-                }
-                return persist_and_request_lease(settings, tokens, session_refresh_token, runtime)
+        let exchange = match runtime.transport.poll(&authorization.device_code).await {
+            Ok(exchange) => exchange,
+            Err(error) => {
+                // A transient failure must not discard an approval the user may be giving now.
+                tracing::warn!(error = %error, "device authorization poll failed; retrying");
+                continue;
+            }
+        };
+        match exchange {
+            TokenExchange::Granted(token) => {
+                store_installation_token(&token.installation_token, session_token, runtime);
+                return request_lease(settings, &token.installation_token, session_token, runtime)
                     .await;
             }
             TokenExchange::Pending(error) if error == "slow_down" => {
                 interval += Duration::from_secs(5);
             }
             TokenExchange::Pending(_) => {}
-            TokenExchange::RenewalPending => interval = next_retry_delay(Some(interval)),
             TokenExchange::Denied(error) => bail!("device authorization was denied: {error}"),
         }
     }
 }
 
-async fn persist_and_request_lease<T, C>(
-    settings: &mut LicensingSettings,
-    tokens: TokenResponse,
-    session_refresh_token: &mut Option<String>,
+/// Keeps the installation token in the OS keychain, or only in memory when it is unavailable.
+fn store_installation_token<T, C>(
+    token: &str,
+    session_token: &mut Option<String>,
     runtime: &LicenseRuntime<'_, T, C, impl UnixClock>,
-) -> Result<()>
+) where
+    C: CredentialStore,
+{
+    match runtime.credentials.save(&runtime.origin, token) {
+        Ok(()) => *session_token = None,
+        Err(_) => {
+            let _ = runtime.credentials.delete(&runtime.origin);
+            *session_token = Some(token.into());
+            runtime.events.send(LicenseEvent::KeychainUnavailable);
+        }
+    }
+}
+
+async fn request_lease<T, C>(
+    settings: &mut LicensingSettings,
+    token: &str,
+    session_token: &mut Option<String>,
+    runtime: &LicenseRuntime<'_, T, C, impl UnixClock>,
+) -> Result<SessionState>
 where
     T: LicenseTransport,
     C: CredentialStore,
 {
-    if let Some(refresh_token) = tokens.refresh_token {
-        match runtime.credentials.save(&runtime.origin, &refresh_token) {
-            Ok(()) => *session_refresh_token = None,
-            Err(_) => {
-                let _ = runtime.credentials.delete(&runtime.origin);
-                *session_refresh_token = Some(refresh_token);
-                runtime.events.send(LicenseEvent::KeychainUnavailable);
-            }
-        }
-    }
-    match runtime.transport.entitlement(&tokens.access_token).await? {
+    match runtime.transport.entitlement(token).await? {
         EntitlementExchange::Issued(response) => {
             let keys = runtime.transport.keys().await?;
             let checked_at = runtime.clock.now();
@@ -923,30 +944,26 @@ where
                 keys,
                 checked_at,
             });
+            Ok(SessionState::Licensed)
         }
         EntitlementExchange::Ineligible(reason_code) => {
-            if runtime.credentials.delete(&runtime.origin).is_err() {
-                runtime.events.send(LicenseEvent::KeychainUnavailable);
-            }
-            *session_refresh_token = None;
+            // The installation stays signed in so a later purchase is picked up automatically.
             settings.clear_account();
             runtime
                 .events
                 .send(LicenseEvent::Evaluation { reason_code });
+            Ok(SessionState::Evaluation)
         }
         EntitlementExchange::Unauthorized => {
-            if runtime.credentials.delete(&runtime.origin).is_err() {
-                runtime.events.send(LicenseEvent::KeychainUnavailable);
-            }
-            *session_refresh_token = None;
+            forget_credential(runtime.credentials, &runtime.origin, runtime.events);
+            *session_token = None;
             settings.clear_account();
             runtime.events.send(LicenseEvent::SignedOut {
                 suppress_auto_refresh: false,
             });
+            Ok(SessionState::SignedOut)
         }
-        EntitlementExchange::RenewalPending => return Err(SubscriptionRenewalPending.into()),
     }
-    Ok(())
 }
 
 #[derive(Clone, Copy)]
@@ -1024,15 +1041,14 @@ trait LicenseTransport {
     async fn start_authorization(&self, settings: &LicensingSettings)
     -> Result<DeviceCodeResponse>;
     async fn poll(&self, device_code: &str) -> Result<TokenExchange>;
-    async fn refresh(&self, refresh_token: &str) -> Result<TokenExchange>;
-    async fn entitlement(&self, access_token: &str) -> Result<EntitlementExchange>;
+    async fn entitlement(&self, installation_token: &str) -> Result<EntitlementExchange>;
     async fn keys(&self) -> Result<JsonWebKeySet>;
-    async fn revoke(&self, refresh_token: &str) -> Result<()>;
+    async fn sign_out(&self, installation_token: &str) -> Result<()>;
 }
 
 trait CredentialStore {
     fn load(&self, origin: &Url) -> Result<Option<String>>;
-    fn save(&self, origin: &Url, refresh_token: &str) -> Result<()>;
+    fn save(&self, origin: &Url, installation_token: &str) -> Result<()>;
     fn delete(&self, origin: &Url) -> Result<()>;
 }
 
@@ -1048,8 +1064,8 @@ impl CredentialStore for KeyringCredentialStore {
         }
     }
 
-    fn save(&self, origin: &Url, refresh_token: &str) -> Result<()> {
-        keyring::Entry::new(KEYRING_SERVICE, origin.as_str())?.set_password(refresh_token)?;
+    fn save(&self, origin: &Url, installation_token: &str) -> Result<()> {
+        keyring::Entry::new(KEYRING_SERVICE, origin.as_str())?.set_password(installation_token)?;
         Ok(())
     }
 
@@ -1089,35 +1105,6 @@ impl HttpLicenseTransport {
             .join(path)
             .with_context(|| format!("invalid licensing endpoint {path}"))
     }
-
-    async fn token_exchange(&self, form: &[(&str, &str)]) -> Result<TokenExchange> {
-        let response = self
-            .client
-            .post(self.endpoint("desktop/v1/token")?)
-            .form(form)
-            .send()
-            .await
-            .context("could not reach the licensing token service")?;
-        let status = response.status();
-        let body = response
-            .bytes()
-            .await
-            .context("could not read the licensing token response")?;
-        if status.is_success() {
-            return Ok(TokenExchange::Granted(
-                serde_json::from_slice(&body).context("invalid licensing token response")?,
-            ));
-        }
-        let error: OAuthError =
-            serde_json::from_slice(&body).context("invalid licensing token error response")?;
-        if status == StatusCode::SERVICE_UNAVAILABLE && error.error == "temporarily_unavailable" {
-            Ok(TokenExchange::RenewalPending)
-        } else if matches!(error.error.as_str(), "authorization_pending" | "slow_down") {
-            Ok(TokenExchange::Pending(error.error))
-        } else {
-            Ok(TokenExchange::Denied(error.error))
-        }
-    }
 }
 
 #[async_trait]
@@ -1129,10 +1116,8 @@ impl LicenseTransport for HttpLicenseTransport {
         let installation_id = settings.installation_id.to_string();
         let response = self
             .client
-            .post(self.endpoint("desktop/v1/device/authorize")?)
+            .post(self.endpoint("desktop/v2/device/authorize")?)
             .form(&[
-                ("client_id", CLIENT_ID),
-                ("scope", SCOPE),
                 ("installation_id", installation_id.as_str()),
                 ("display_name", settings.display_name.as_str()),
                 ("platform", std::env::consts::OS),
@@ -1149,28 +1134,37 @@ impl LicenseTransport for HttpLicenseTransport {
     }
 
     async fn poll(&self, device_code: &str) -> Result<TokenExchange> {
-        self.token_exchange(&[
-            ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
-            ("client_id", CLIENT_ID),
-            ("device_code", device_code),
-        ])
-        .await
-    }
-
-    async fn refresh(&self, refresh_token: &str) -> Result<TokenExchange> {
-        self.token_exchange(&[
-            ("grant_type", "refresh_token"),
-            ("client_id", CLIENT_ID),
-            ("refresh_token", refresh_token),
-        ])
-        .await
-    }
-
-    async fn entitlement(&self, access_token: &str) -> Result<EntitlementExchange> {
         let response = self
             .client
-            .post(self.endpoint("desktop/v1/entitlement")?)
-            .bearer_auth(access_token)
+            .post(self.endpoint("desktop/v2/token")?)
+            .form(&[("device_code", device_code)])
+            .send()
+            .await
+            .context("could not reach the licensing token service")?;
+        let status = response.status();
+        let body = response
+            .bytes()
+            .await
+            .context("could not read the licensing token response")?;
+        if status.is_success() {
+            return Ok(TokenExchange::Granted(
+                serde_json::from_slice(&body).context("invalid licensing token response")?,
+            ));
+        }
+        let error: OAuthError =
+            serde_json::from_slice(&body).context("invalid licensing token error response")?;
+        if matches!(error.error.as_str(), "authorization_pending" | "slow_down") {
+            Ok(TokenExchange::Pending(error.error))
+        } else {
+            Ok(TokenExchange::Denied(error.error))
+        }
+    }
+
+    async fn entitlement(&self, installation_token: &str) -> Result<EntitlementExchange> {
+        let response = self
+            .client
+            .post(self.endpoint("desktop/v2/entitlement")?)
+            .bearer_auth(installation_token)
             .send()
             .await
             .context("could not refresh the entitlement lease")?;
@@ -1183,26 +1177,15 @@ impl LicenseTransport for HttpLicenseTransport {
                     .context("invalid entitlement lease response")?,
             ));
         }
-        if status == StatusCode::SERVICE_UNAVAILABLE {
-            let error: DesktopError = response
-                .json()
-                .await
-                .context("invalid entitlement error response")?;
-            if error.reason_code == SUBSCRIPTION_RENEWAL_PENDING {
-                return Ok(EntitlementExchange::RenewalPending);
-            }
-            bail!("the entitlement service is temporarily unavailable");
+        if status == StatusCode::UNAUTHORIZED {
+            return Ok(EntitlementExchange::Unauthorized);
         }
-        if matches!(status, StatusCode::FORBIDDEN | StatusCode::UNAUTHORIZED) {
+        if status == StatusCode::FORBIDDEN {
             let error: DesktopError = response
                 .json()
                 .await
                 .context("invalid entitlement error response")?;
-            return Ok(if status == StatusCode::UNAUTHORIZED {
-                EntitlementExchange::Unauthorized
-            } else {
-                EntitlementExchange::Ineligible(error.reason_code)
-            });
+            return Ok(EntitlementExchange::Ineligible(error.reason_code));
         }
         Err(response
             .error_for_status()
@@ -1212,7 +1195,7 @@ impl LicenseTransport for HttpLicenseTransport {
 
     async fn keys(&self) -> Result<JsonWebKeySet> {
         self.client
-            .get(self.endpoint("desktop/v1/keys")?)
+            .get(self.endpoint("desktop/v2/keys")?)
             .send()
             .await?
             .error_for_status()?
@@ -1221,14 +1204,10 @@ impl LicenseTransport for HttpLicenseTransport {
             .context("invalid licensing key set")
     }
 
-    async fn revoke(&self, refresh_token: &str) -> Result<()> {
+    async fn sign_out(&self, installation_token: &str) -> Result<()> {
         self.client
-            .post(self.endpoint("desktop/v1/token/revoke")?)
-            .form(&[
-                ("client_id", CLIENT_ID),
-                ("token", refresh_token),
-                ("token_type_hint", "refresh_token"),
-            ])
+            .post(self.endpoint("desktop/v2/sign-out")?)
+            .bearer_auth(installation_token)
             .send()
             .await?
             .error_for_status()?;
@@ -1246,17 +1225,16 @@ struct DeviceCodeResponse {
     interval: u64,
 }
 
+/// Intentionally not `Debug`: it carries the installation credential.
 #[derive(Deserialize)]
 struct TokenResponse {
-    access_token: String,
-    refresh_token: Option<String>,
+    installation_token: String,
 }
 
 enum TokenExchange {
     Granted(TokenResponse),
     Pending(String),
     Denied(String),
-    RenewalPending,
 }
 
 #[derive(Deserialize)]
@@ -1274,22 +1252,7 @@ enum EntitlementExchange {
     Issued(EntitlementResponse),
     Ineligible(String),
     Unauthorized,
-    RenewalPending,
 }
-
-const SUBSCRIPTION_RENEWAL_PENDING: &str = "subscription_renewal_pending";
-const OFFLINE_LEASE_EXPIRED: &str = "offline_lease_expired";
-
-#[derive(Debug)]
-struct SubscriptionRenewalPending;
-
-impl std::fmt::Display for SubscriptionRenewalPending {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("subscription renewal is awaiting confirmation")
-    }
-}
-
-impl std::error::Error for SubscriptionRenewalPending {}
 
 fn refresh_failure_event(
     settings: &LicensingSettings,
@@ -1300,10 +1263,6 @@ fn refresh_failure_event(
         LicenseEvent::Offline {
             lease,
             message: error.to_string(),
-        }
-    } else if error.is::<SubscriptionRenewalPending>() {
-        LicenseEvent::Evaluation {
-            reason_code: SUBSCRIPTION_RENEWAL_PENDING.into(),
         }
     } else {
         LicenseEvent::Failed(error.to_string())
@@ -1321,15 +1280,16 @@ pub(crate) struct JsonWebKeySet {
     keys: Vec<JsonWebKey>,
 }
 
+/// An Ed25519 lease verification key (RFC 8037).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct JsonWebKey {
     kty: String,
+    crv: String,
     #[serde(rename = "use")]
     usage: String,
     alg: String,
     kid: String,
-    n: String,
-    e: String,
+    x: String,
 }
 
 #[derive(Deserialize)]
@@ -1360,7 +1320,7 @@ fn validate_lease_at(
     observed_at: u64,
 ) -> Result<VerifiedLease> {
     let header = decode_header(token).context("the cached lease header is invalid")?;
-    if header.alg != Algorithm::RS256 {
+    if header.alg != Algorithm::EdDSA {
         bail!("the lease uses an unsupported signature algorithm");
     }
     let key_id = header
@@ -1371,10 +1331,10 @@ fn validate_lease_at(
         .iter()
         .find(|key| key.kid == key_id)
         .ok_or_else(|| anyhow!("the lease signing key is not trusted"))?;
-    if key.kty != "RSA" || key.usage != "sig" || key.alg != "RS256" {
+    if key.kty != "OKP" || key.crv != "Ed25519" || key.usage != "sig" || key.alg != "EdDSA" {
         bail!("the lease signing key has incompatible metadata");
     }
-    let mut validation = Validation::new(Algorithm::RS256);
+    let mut validation = Validation::new(Algorithm::EdDSA);
     validation.set_audience(&[LEASE_AUDIENCE]);
     validation.set_issuer(&[origin.as_str()]);
     validation.validate_exp = false;
@@ -1383,21 +1343,21 @@ fn validate_lease_at(
     validation.set_required_spec_claims(&["exp", "iat", "nbf", "jti", "aud", "iss", "sub"]);
     let data = decode::<LeaseClaims>(
         token,
-        &DecodingKey::from_rsa_components(&key.n, &key.e)?,
+        &DecodingKey::from_ed_components(&key.x)?,
         &validation,
     )
     .context("the lease signature or registered claims are invalid")?;
     let claims = data.claims;
     let lease_lifetime = claims.exp.checked_sub(claims.iat);
     let valid_jwt_id = Uuid::parse_str(&claims.jti).is_ok();
-    if claims.schema_version != 1
+    if claims.schema_version != LEASE_SCHEMA_VERSION
         || claims.iss != origin.as_str()
         || claims.aud != LEASE_AUDIENCE
         || claims.installation_id != installation_id
         || claims.signing_key_id != key_id
         || !matches!(claims.state.as_str(), "trial" | "commercial" | "grace")
         || claims.iat > claims.nbf
-        || claims.nbf > observed_at
+        || claims.nbf > observed_at.saturating_add(CLOCK_SKEW_LEEWAY.as_secs())
         || claims.exp <= observed_at
         || lease_lifetime.is_none_or(|seconds| seconds > MAX_LEASE_LIFETIME.as_secs())
         || claims.refresh_after < claims.iat
@@ -1459,15 +1419,19 @@ fn unix_now() -> u64 {
         .as_secs()
 }
 
-fn refresh_retry_delay(
+/// When to check the license next: back off after failures, follow the lease's refresh
+/// time, recheck evaluation periodically, and stay idle while signed out.
+fn next_check_delay(
     settings: &LicensingSettings,
-    result: &Result<()>,
+    result: &Result<SessionState>,
     previous: Option<Duration>,
+    now: u64,
 ) -> Option<Duration> {
-    if result.is_err() {
-        Some(next_retry_delay(previous))
-    } else {
-        scheduled_refresh_delay(settings)
+    match result {
+        Err(_) => Some(next_retry_delay(previous)),
+        Ok(SessionState::Licensed) => scheduled_refresh_delay(settings, now),
+        Ok(SessionState::Evaluation) => Some(EVALUATION_RECHECK_DELAY),
+        Ok(SessionState::SignedOut) => None,
     }
 }
 
@@ -1477,10 +1441,10 @@ fn next_retry_delay(previous: Option<Duration>) -> Duration {
         .unwrap_or(Duration::from_secs(30))
 }
 
-fn scheduled_refresh_delay(settings: &LicensingSettings) -> Option<Duration> {
-    let lease = cached_lease(settings)?;
+fn scheduled_refresh_delay(settings: &LicensingSettings, now: u64) -> Option<Duration> {
+    let lease = cached_lease_at(settings, now)?;
     Some(Duration::from_secs(
-        lease.refresh_after.saturating_sub(unix_now()).max(1),
+        lease.refresh_after.saturating_sub(now).max(1),
     ))
 }
 
@@ -1514,6 +1478,23 @@ mod tests {
         refresh_after: u64,
     }
 
+    fn golden() -> GoldenLease {
+        serde_json::from_str(include_str!(
+            "../../../licensing/protocol-fixtures/offline-lease-v2.json"
+        ))
+        .unwrap()
+    }
+
+    fn settings_for(golden: &GoldenLease, cached_lease: bool) -> LicensingSettings {
+        LicensingSettings {
+            server: LicenseServer::Custom(golden.issuer.clone()),
+            installation_id: golden.installation_id,
+            lease: cached_lease.then(|| golden.lease.clone()),
+            keys: cached_lease.then(|| golden.keys.clone()),
+            ..Default::default()
+        }
+    }
+
     struct FixedUnixClock(u64);
 
     impl UnixClock for FixedUnixClock {
@@ -1522,13 +1503,104 @@ mod tests {
         }
     }
 
+    /// The wiring shared by every worker scenario; events are collected in `received`.
+    struct Harness<T> {
+        origin: Url,
+        transport: T,
+        credentials: FakeCredentialStore,
+        clock: FixedUnixClock,
+        events: Sender<LicenseEventMessage>,
+        received: Receiver<LicenseEventMessage>,
+        repaint: egui::Context,
+    }
+
+    impl<T: LicenseTransport> Harness<T> {
+        fn new(golden: &GoldenLease, transport: T, credentials: FakeCredentialStore) -> Self {
+            let (events, received) = std::sync::mpsc::channel();
+            Self {
+                origin: Url::parse(&golden.issuer).unwrap(),
+                transport,
+                credentials,
+                clock: FixedUnixClock(golden.expected.issued_at),
+                events,
+                received,
+                repaint: egui::Context::default(),
+            }
+        }
+
+        fn runtime(&self) -> LicenseRuntime<'_, T, FakeCredentialStore, FixedUnixClock> {
+            LicenseRuntime {
+                origin: self.origin.clone(),
+                transport: &self.transport,
+                credentials: &self.credentials,
+                clock: &self.clock,
+                events: EventTarget {
+                    events: &self.events,
+                    repaint: &self.repaint,
+                    operation_generation: 1,
+                },
+            }
+        }
+
+        fn next_event(&self) -> LicenseEvent {
+            self.received.recv().unwrap().event
+        }
+
+        fn assert_no_more_events(&self) {
+            assert!(self.received.try_recv().is_err());
+        }
+    }
+
+    enum EntitlementOutcome {
+        Issued,
+        Ineligible(&'static str),
+        Unauthorized,
+    }
+
     struct FakeTransport {
         lease: String,
         keys: JsonWebKeySet,
-        deny_refresh: bool,
-        ineligible_reason: Option<String>,
-        unauthorized_entitlement: bool,
-        refresh_tokens: Mutex<Vec<String>>,
+        entitlement: EntitlementOutcome,
+        authorization: Option<DeviceCodeResponse>,
+        poll_results: Mutex<Vec<Result<TokenExchange>>>,
+        polls: Mutex<usize>,
+        entitlement_tokens: Mutex<Vec<String>>,
+        signed_out_tokens: Mutex<Vec<String>>,
+        sign_out_fails: bool,
+    }
+
+    impl FakeTransport {
+        fn new(golden: &GoldenLease, entitlement: EntitlementOutcome) -> Self {
+            Self {
+                lease: golden.lease.clone(),
+                keys: golden.keys.clone(),
+                entitlement,
+                authorization: None,
+                poll_results: Mutex::new(Vec::new()),
+                polls: Mutex::new(0),
+                entitlement_tokens: Mutex::new(Vec::new()),
+                signed_out_tokens: Mutex::new(Vec::new()),
+                sign_out_fails: false,
+            }
+        }
+
+        /// A device flow that is approved on the first poll.
+        fn approving(golden: &GoldenLease) -> Self {
+            Self::approving_with(golden, EntitlementOutcome::Issued)
+        }
+
+        fn approving_with(golden: &GoldenLease, entitlement: EntitlementOutcome) -> Self {
+            let origin = Url::parse(&golden.issuer).unwrap();
+            Self {
+                authorization: Some(device_authorization(&origin)),
+                poll_results: Mutex::new(vec![Ok(granted())]),
+                ..Self::new(golden, entitlement)
+            }
+        }
+
+        fn polls(&self) -> usize {
+            *self.polls.lock().unwrap()
+        }
     }
 
     #[async_trait]
@@ -1537,148 +1609,53 @@ mod tests {
             &self,
             _settings: &LicensingSettings,
         ) -> Result<DeviceCodeResponse> {
-            bail!("device authorization is not used by this scenario")
+            self.authorization
+                .clone()
+                .ok_or_else(|| anyhow!("device authorization is not used by this scenario"))
         }
 
-        async fn poll(&self, _device_code: &str) -> Result<TokenExchange> {
-            bail!("device polling is not used by this scenario")
+        async fn poll(&self, device_code: &str) -> Result<TokenExchange> {
+            assert_eq!(device_code, "device-code");
+            *self.polls.lock().unwrap() += 1;
+            let mut results = self.poll_results.lock().unwrap();
+            if results.is_empty() {
+                bail!("the test device flow has no more poll results");
+            }
+            results.remove(0)
         }
 
-        async fn refresh(&self, refresh_token: &str) -> Result<TokenExchange> {
-            self.refresh_tokens
+        async fn entitlement(&self, installation_token: &str) -> Result<EntitlementExchange> {
+            self.entitlement_tokens
                 .lock()
                 .unwrap()
-                .push(refresh_token.into());
-            if self.deny_refresh {
-                Ok(TokenExchange::Denied("invalid_grant".into()))
-            } else {
-                Ok(TokenExchange::Granted(TokenResponse {
-                    access_token: "short-lived-access-token".into(),
-                    refresh_token: Some("rotated-refresh-token".into()),
-                }))
-            }
-        }
-
-        async fn entitlement(&self, access_token: &str) -> Result<EntitlementExchange> {
-            assert_eq!(access_token, "short-lived-access-token");
-            Ok(if self.unauthorized_entitlement {
-                EntitlementExchange::Unauthorized
-            } else {
-                match &self.ineligible_reason {
-                    Some(reason_code) => EntitlementExchange::Ineligible(reason_code.clone()),
-                    None => EntitlementExchange::Issued(EntitlementResponse {
-                        lease: self.lease.clone(),
-                    }),
+                .push(installation_token.into());
+            Ok(match self.entitlement {
+                EntitlementOutcome::Issued => EntitlementExchange::Issued(EntitlementResponse {
+                    lease: self.lease.clone(),
+                }),
+                EntitlementOutcome::Ineligible(reason_code) => {
+                    EntitlementExchange::Ineligible(reason_code.into())
                 }
+                EntitlementOutcome::Unauthorized => EntitlementExchange::Unauthorized,
             })
         }
 
         async fn keys(&self) -> Result<JsonWebKeySet> {
             assert!(
-                self.ineligible_reason.is_none() && !self.unauthorized_entitlement,
+                matches!(self.entitlement, EntitlementOutcome::Issued),
                 "signing keys must not be requested after entitlement rejection"
             );
             Ok(self.keys.clone())
         }
 
-        async fn revoke(&self, _refresh_token: &str) -> Result<()> {
-            Ok(())
-        }
-    }
-
-    struct RenewalTransport {
-        inner: FakeTransport,
-        pending: Mutex<bool>,
-        at_token: bool,
-    }
-
-    #[async_trait]
-    impl LicenseTransport for RenewalTransport {
-        async fn start_authorization(
-            &self,
-            settings: &LicensingSettings,
-        ) -> Result<DeviceCodeResponse> {
-            self.inner.start_authorization(settings).await
-        }
-
-        async fn poll(&self, device_code: &str) -> Result<TokenExchange> {
-            self.inner.poll(device_code).await
-        }
-
-        async fn refresh(&self, refresh_token: &str) -> Result<TokenExchange> {
-            if *self.pending.lock().unwrap() && self.at_token {
-                self.inner
-                    .refresh_tokens
-                    .lock()
-                    .unwrap()
-                    .push(refresh_token.into());
-                Ok(TokenExchange::RenewalPending)
-            } else {
-                self.inner.refresh(refresh_token).await
-            }
-        }
-
-        async fn entitlement(&self, access_token: &str) -> Result<EntitlementExchange> {
-            if *self.pending.lock().unwrap() && !self.at_token {
-                Ok(EntitlementExchange::RenewalPending)
-            } else {
-                self.inner.entitlement(access_token).await
-            }
-        }
-
-        async fn keys(&self) -> Result<JsonWebKeySet> {
-            self.inner.keys().await
-        }
-
-        async fn revoke(&self, refresh_token: &str) -> Result<()> {
-            self.inner.revoke(refresh_token).await
-        }
-    }
-
-    struct DeviceFlowTransport {
-        authorization: DeviceCodeResponse,
-        tokens: Mutex<Option<TokenResponse>>,
-        lease: String,
-        keys: JsonWebKeySet,
-        polls: Mutex<usize>,
-    }
-
-    #[async_trait]
-    impl LicenseTransport for DeviceFlowTransport {
-        async fn start_authorization(
-            &self,
-            _settings: &LicensingSettings,
-        ) -> Result<DeviceCodeResponse> {
-            Ok(self.authorization.clone())
-        }
-
-        async fn poll(&self, device_code: &str) -> Result<TokenExchange> {
-            assert_eq!(device_code, self.authorization.device_code);
-            *self.polls.lock().unwrap() += 1;
-            self.tokens
+        async fn sign_out(&self, installation_token: &str) -> Result<()> {
+            self.signed_out_tokens
                 .lock()
                 .unwrap()
-                .take()
-                .map(TokenExchange::Granted)
-                .ok_or_else(|| anyhow!("the test token was already consumed"))
-        }
-
-        async fn refresh(&self, _refresh_token: &str) -> Result<TokenExchange> {
-            bail!("refresh is not used by this scenario")
-        }
-
-        async fn entitlement(&self, access_token: &str) -> Result<EntitlementExchange> {
-            assert_eq!(access_token, "short-lived-access-token");
-            Ok(EntitlementExchange::Issued(EntitlementResponse {
-                lease: self.lease.clone(),
-            }))
-        }
-
-        async fn keys(&self) -> Result<JsonWebKeySet> {
-            Ok(self.keys.clone())
-        }
-
-        async fn revoke(&self, _refresh_token: &str) -> Result<()> {
+                .push(installation_token.into());
+            if self.sign_out_fails {
+                bail!("the test licensing service is unreachable");
+            }
             Ok(())
         }
     }
@@ -1692,6 +1669,15 @@ mod tests {
         delete_fails: bool,
     }
 
+    impl FakeCredentialStore {
+        fn holding(token: &str) -> Self {
+            Self {
+                token: Mutex::new(Some(token.into())),
+                ..Default::default()
+            }
+        }
+    }
+
     impl CredentialStore for FakeCredentialStore {
         fn load(&self, _origin: &Url) -> Result<Option<String>> {
             if self.load_fails {
@@ -1700,11 +1686,11 @@ mod tests {
             Ok(self.token.lock().unwrap().clone())
         }
 
-        fn save(&self, _origin: &Url, refresh_token: &str) -> Result<()> {
+        fn save(&self, _origin: &Url, installation_token: &str) -> Result<()> {
             if self.save_fails {
                 bail!("the test keychain is unavailable");
             }
-            *self.token.lock().unwrap() = Some(refresh_token.into());
+            *self.token.lock().unwrap() = Some(installation_token.into());
             Ok(())
         }
 
@@ -1718,6 +1704,40 @@ mod tests {
         }
     }
 
+    fn granted() -> TokenExchange {
+        TokenExchange::Granted(TokenResponse {
+            installation_token: "installation-token".into(),
+        })
+    }
+
+    fn device_authorization(origin: &Url) -> DeviceCodeResponse {
+        DeviceCodeResponse {
+            device_code: "device-code".into(),
+            user_code: "BCDF-GHJK".into(),
+            verification_uri: origin.join("devices/authorize").unwrap().to_string(),
+            verification_uri_complete: origin
+                .join("devices/authorize?user_code=BCDF-GHJK")
+                .unwrap()
+                .to_string(),
+            expires_in: 60,
+            interval: 1,
+        }
+    }
+
+    fn test_lease(installation_id: Uuid) -> VerifiedLease {
+        VerifiedLease {
+            user_id: Uuid::now_v7(),
+            seat_id: Uuid::now_v7(),
+            billing_account_id: Uuid::now_v7(),
+            installation_id,
+            activation_id: Uuid::now_v7(),
+            state: "commercial".into(),
+            reason_code: "active_subscription".into(),
+            expires_at: unix_now() + 300,
+            refresh_after: unix_now() + 100,
+        }
+    }
+
     #[test]
     fn custom_server_requires_a_safe_origin() {
         assert!(validate_origin("https://licenses.example.com").is_ok());
@@ -1728,41 +1748,74 @@ mod tests {
     }
 
     #[test]
-    fn token_response_debug_cannot_expose_credentials() {
-        fn assert_not_debug<T>() {
-            assert!(!std::any::type_name::<T>().is_empty());
-        }
-        assert_not_debug::<TokenResponse>();
-    }
-
-    #[test]
-    fn settings_never_serialize_refresh_tokens() {
+    fn settings_never_serialize_installation_credentials() {
         let serialized = serde_json::to_string(&LicensingSettings::default()).unwrap();
-        assert!(!serialized.contains("refresh_token"));
-        assert!(!serialized.contains("access_token"));
+        assert!(!serialized.contains("token"));
     }
 
     #[test]
     fn commercial_online_status_is_the_only_status_without_a_warning() {
-        let lease = VerifiedLease {
-            user_id: Uuid::now_v7(),
-            seat_id: Uuid::now_v7(),
-            billing_account_id: Uuid::now_v7(),
-            installation_id: Uuid::now_v7(),
-            activation_id: Uuid::now_v7(),
-            state: "commercial".into(),
-            reason_code: "active_subscription".into(),
-            expires_at: unix_now() + 300,
-            refresh_after: unix_now() + 100,
-        };
+        let lease = test_lease(Uuid::now_v7());
         assert!(!LicenseStatus::Licensed(lease.clone()).shows_warning());
         assert!(LicenseStatus::Offline(lease).shows_warning());
         assert!(LicenseStatus::SignedOut.shows_warning());
     }
 
     #[test]
-    fn retry_delay_is_bounded_to_fifteen_minutes() {
-        assert_eq!(MAX_RETRY_DELAY, Duration::from_secs(900));
+    fn check_scheduling_follows_the_session_state() {
+        let golden = golden();
+        let settings = settings_for(&golden, false);
+        assert_eq!(
+            next_check_delay(&settings, &Ok(SessionState::Evaluation), None, 0),
+            Some(EVALUATION_RECHECK_DELAY)
+        );
+        assert_eq!(
+            next_check_delay(&settings, &Ok(SessionState::SignedOut), None, 0),
+            None
+        );
+        let mut delay = None;
+        for _ in 0..32 {
+            delay = next_check_delay(&settings, &Err(anyhow!("offline")), delay, 0);
+            assert!(delay.unwrap() <= MAX_RETRY_DELAY);
+        }
+        assert_eq!(delay, Some(MAX_RETRY_DELAY));
+    }
+
+    #[test]
+    fn licensed_checks_follow_the_lease_refresh_time() {
+        let golden = golden();
+        let licensed = Ok(SessionState::Licensed);
+        let issued_at = golden.expected.issued_at;
+        assert_eq!(
+            next_check_delay(&settings_for(&golden, true), &licensed, None, issued_at),
+            Some(Duration::from_secs(
+                golden.expected.refresh_after - issued_at
+            ))
+        );
+        assert_eq!(
+            next_check_delay(
+                &settings_for(&golden, true),
+                &licensed,
+                None,
+                golden.expected.refresh_after + 10
+            ),
+            Some(Duration::from_secs(1)),
+            "an overdue refresh is scheduled promptly"
+        );
+        assert_eq!(
+            next_check_delay(&settings_for(&golden, false), &licensed, None, issued_at),
+            None
+        );
+        assert_eq!(
+            next_check_delay(
+                &settings_for(&golden, true),
+                &licensed,
+                None,
+                golden.expected.expires_at
+            ),
+            None,
+            "an expired lease schedules nothing"
+        );
     }
 
     #[tokio::test]
@@ -1779,7 +1832,7 @@ mod tests {
 
         let outcome = tokio::time::timeout(
             Duration::from_secs(1),
-            run_until_command(std::future::pending::<Result<()>>(), &received),
+            run_until_command(std::future::pending::<Result<SessionState>>(), &received),
         )
         .await
         .expect("the in-flight request should be interrupted");
@@ -1807,17 +1860,7 @@ mod tests {
             .send(LicenseEventMessage {
                 operation_generation: service.operation_generation - 1,
                 event: LicenseEvent::Licensed {
-                    lease: VerifiedLease {
-                        user_id: Uuid::now_v7(),
-                        seat_id: Uuid::now_v7(),
-                        billing_account_id: Uuid::now_v7(),
-                        installation_id: service.settings.installation_id,
-                        activation_id: Uuid::now_v7(),
-                        state: "commercial".into(),
-                        reason_code: "active_subscription".into(),
-                        expires_at: unix_now() + 300,
-                        refresh_after: unix_now() + 100,
-                    },
+                    lease: test_lease(service.settings.installation_id),
                     encoded_lease: "stale-lease".into(),
                     keys: JsonWebKeySet { keys: Vec::new() },
                     checked_at: unix_now(),
@@ -1835,15 +1878,16 @@ mod tests {
 
     #[test]
     fn validates_the_shared_backend_offline_lease_contract() {
-        let golden: GoldenLease = serde_json::from_str(include_str!(
-            "../../../licensing/protocol-fixtures/offline-lease-v1.json"
-        ))
-        .unwrap();
+        let golden = golden();
         assert_eq!(golden.audience, LEASE_AUDIENCE);
-        let lease = validate_lease_at(
+        let origin = Url::parse(&golden.issuer).unwrap();
+        let validate = |lease: &str, keys: &JsonWebKeySet, origin: &Url, installation_id, at| {
+            validate_lease_at(lease, keys, origin, installation_id, at)
+        };
+        let lease = validate(
             &golden.lease,
             &golden.keys,
-            &Url::parse(&golden.issuer).unwrap(),
+            &origin,
             golden.installation_id,
             golden.expected.issued_at,
         )
@@ -1856,58 +1900,73 @@ mod tests {
             lease.expires_at - golden.expected.issued_at,
             MAX_LEASE_LIFETIME.as_secs()
         );
+
+        let issued_at = golden.expected.issued_at;
+        let leeway = CLOCK_SKEW_LEEWAY.as_secs();
+        for (local_clock, accepted) in [
+            (issued_at - 60, true),
+            (issued_at - leeway, true),
+            (issued_at - leeway - 1, false),
+        ] {
+            assert_eq!(
+                validate(
+                    &golden.lease,
+                    &golden.keys,
+                    &origin,
+                    golden.installation_id,
+                    local_clock
+                )
+                .is_ok(),
+                accepted,
+                "a lease issued {}s ahead of the local clock",
+                issued_at - local_clock
+            );
+        }
         assert!(
-            validate_lease_at(
+            validate(
                 &golden.lease,
                 &golden.keys,
-                &Url::parse(&golden.issuer).unwrap(),
+                &origin,
                 golden.installation_id,
-                golden.expected.issued_at - 1,
+                golden.expected.expires_at
             )
             .is_err()
         );
         assert!(
-            validate_lease_at(
+            validate(
                 &golden.lease,
                 &golden.keys,
-                &Url::parse(&golden.issuer).unwrap(),
-                golden.installation_id,
-                golden.expected.expires_at,
-            )
-            .is_err()
-        );
-        assert!(
-            validate_lease_at(
-                &golden.lease,
-                &golden.keys,
-                &Url::parse(&golden.issuer).unwrap(),
+                &origin,
                 Uuid::now_v7(),
-                golden.expected.issued_at,
+                issued_at
             )
             .is_err()
         );
+        let other_origin = Url::parse("https://other.example.com/").unwrap();
         assert!(
-            validate_lease_at(
+            validate(
                 &golden.lease,
                 &golden.keys,
-                &Url::parse("https://other.example.com/").unwrap(),
+                &other_origin,
                 golden.installation_id,
-                golden.expected.issued_at,
+                issued_at
             )
             .is_err()
         );
+
         let mut incompatible_keys = golden.keys.clone();
-        incompatible_keys.keys[0].alg = "RS512".into();
+        incompatible_keys.keys[0].alg = "RS256".into();
         assert!(
-            validate_lease_at(
+            validate(
                 &golden.lease,
                 &incompatible_keys,
-                &Url::parse(&golden.issuer).unwrap(),
+                &origin,
                 golden.installation_id,
-                golden.expected.issued_at,
+                issued_at
             )
             .is_err()
         );
+
         let mut tampered_lease = golden.lease.clone();
         let signature_start = tampered_lease
             .rfind('.')
@@ -1920,12 +1979,12 @@ mod tests {
         };
         tampered_lease.replace_range(signature_start..=signature_start, replacement);
         assert!(
-            validate_lease_at(
+            validate(
                 &tampered_lease,
                 &golden.keys,
-                &Url::parse(&golden.issuer).unwrap(),
+                &origin,
                 golden.installation_id,
-                golden.expected.issued_at,
+                issued_at
             )
             .is_err()
         );
@@ -1970,297 +2029,314 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn device_sign_in_persists_refresh_credentials_and_a_verified_lease() {
-        let golden: GoldenLease = serde_json::from_str(include_str!(
-            "../../../licensing/protocol-fixtures/offline-lease-v1.json"
-        ))
-        .unwrap();
-        let origin = Url::parse(&golden.issuer).unwrap();
-        let transport = DeviceFlowTransport {
-            authorization: device_authorization(&origin),
-            tokens: Mutex::new(Some(TokenResponse {
-                access_token: "short-lived-access-token".into(),
-                refresh_token: Some("device-refresh-token".into()),
-            })),
-            lease: golden.lease,
-            keys: golden.keys,
-            polls: Mutex::new(0),
-        };
-        let credentials = FakeCredentialStore::default();
-        let mut settings = LicensingSettings {
-            server: LicenseServer::Custom(origin.to_string()),
-            installation_id: golden.installation_id,
-            ..Default::default()
-        };
+    async fn device_sign_in_persists_the_installation_token_and_a_verified_lease() {
+        let golden = golden();
+        let harness = Harness::new(
+            &golden,
+            FakeTransport::approving(&golden),
+            FakeCredentialStore::default(),
+        );
+        let mut settings = settings_for(&golden, false);
         let mut session_token = None;
-        let (events, received) = std::sync::mpsc::channel();
-        let clock = FixedUnixClock(golden.expected.issued_at);
-        let repaint = egui::Context::default();
-        let runtime = LicenseRuntime {
-            origin,
-            transport: &transport,
-            credentials: &credentials,
-            clock: &clock,
-            events: EventTarget {
-                events: &events,
-                repaint: &repaint,
-                operation_generation: 1,
-            },
-        };
 
-        sign_in_with(&mut settings, &mut session_token, &runtime)
+        let state = sign_in_with(&mut settings, &mut session_token, &harness.runtime())
             .await
             .unwrap();
 
-        assert_eq!(*transport.polls.lock().unwrap(), 1);
+        assert_eq!(state, SessionState::Licensed);
+        assert_eq!(*harness.transport.polls.lock().unwrap(), 1);
         assert_eq!(
-            credentials.token.lock().unwrap().as_deref(),
-            Some("device-refresh-token")
+            harness.credentials.token.lock().unwrap().as_deref(),
+            Some("installation-token")
+        );
+        assert_eq!(
+            *harness.transport.entitlement_tokens.lock().unwrap(),
+            vec!["installation-token"]
         );
         assert!(session_token.is_none());
         assert!(settings.lease.is_some());
         assert!(matches!(
-            received.recv().unwrap().event,
+            harness.next_event(),
             LicenseEvent::AwaitingApproval(_)
         ));
         assert!(matches!(
-            received.recv().unwrap().event,
+            harness.next_event(),
             LicenseEvent::Licensed { .. }
         ));
     }
 
     #[tokio::test]
-    async fn device_sign_in_rejects_cross_origin_verification_urls_before_polling() {
-        let golden: GoldenLease = serde_json::from_str(include_str!(
-            "../../../licensing/protocol-fixtures/offline-lease-v1.json"
-        ))
-        .unwrap();
-        let origin = Url::parse(&golden.issuer).unwrap();
-        let mut authorization = device_authorization(&origin);
-        authorization.verification_uri_complete =
-            "https://attacker.example/authorize?user_code=ABCD-EFGH".into();
-        let transport = DeviceFlowTransport {
-            authorization,
-            tokens: Mutex::new(Some(TokenResponse {
-                access_token: "short-lived-access-token".into(),
-                refresh_token: Some("device-refresh-token".into()),
-            })),
-            lease: golden.lease,
-            keys: golden.keys,
-            polls: Mutex::new(0),
-        };
-        let credentials = FakeCredentialStore::default();
-        let mut settings = LicensingSettings {
-            server: LicenseServer::Custom(origin.to_string()),
-            installation_id: golden.installation_id,
-            ..Default::default()
-        };
-        let mut session_token = None;
-        let (events, received) = std::sync::mpsc::channel();
-        let clock = FixedUnixClock(golden.expected.issued_at);
-        let repaint = egui::Context::default();
-        let runtime = LicenseRuntime {
-            origin,
-            transport: &transport,
-            credentials: &credentials,
-            clock: &clock,
-            events: EventTarget {
-                events: &events,
-                repaint: &repaint,
-                operation_generation: 1,
-            },
-        };
+    async fn device_sign_in_keeps_polling_while_approval_is_pending() {
+        let golden = golden();
+        let transport = FakeTransport::approving(&golden);
+        transport.poll_results.lock().unwrap().insert(
+            0,
+            Ok(TokenExchange::Pending("authorization_pending".into())),
+        );
+        let harness = Harness::new(&golden, transport, FakeCredentialStore::default());
+        let mut settings = settings_for(&golden, false);
 
-        let error = sign_in_with(&mut settings, &mut session_token, &runtime)
+        sign_in_with(&mut settings, &mut None, &harness.runtime())
+            .await
+            .unwrap();
+
+        assert_eq!(*harness.transport.polls.lock().unwrap(), 2);
+    }
+
+    #[tokio::test]
+    async fn device_sign_in_reports_a_denied_authorization() {
+        let golden = golden();
+        let transport = FakeTransport::approving(&golden);
+        *transport.poll_results.lock().unwrap() =
+            vec![Ok(TokenExchange::Denied("access_denied".into()))];
+        let harness = Harness::new(&golden, transport, FakeCredentialStore::default());
+
+        let error = sign_in_with(
+            &mut settings_for(&golden, false),
+            &mut None,
+            &harness.runtime(),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(error.to_string().contains("access_denied"));
+        assert!(harness.credentials.token.lock().unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn device_sign_in_rejects_cross_origin_verification_urls_before_polling() {
+        let golden = golden();
+        let mut transport = FakeTransport::approving(&golden);
+        transport
+            .authorization
+            .as_mut()
+            .unwrap()
+            .verification_uri_complete =
+            "https://attacker.example/authorize?user_code=BCDF-GHJK".into();
+        let harness = Harness::new(&golden, transport, FakeCredentialStore::default());
+        let mut settings = settings_for(&golden, false);
+
+        let error = sign_in_with(&mut settings, &mut None, &harness.runtime())
             .await
             .unwrap_err();
 
         assert!(error.to_string().contains("cross-origin verification URL"));
-        assert_eq!(*transport.polls.lock().unwrap(), 0);
-        assert!(received.try_recv().is_err());
-        assert!(credentials.token.lock().unwrap().is_none());
+        assert_eq!(*harness.transport.polls.lock().unwrap(), 0);
+        harness.assert_no_more_events();
+        assert!(harness.credentials.token.lock().unwrap().is_none());
         assert!(settings.lease.is_none());
     }
 
     #[tokio::test]
-    async fn device_sign_in_rejects_a_response_without_refresh_credentials() {
-        let golden: GoldenLease = serde_json::from_str(include_str!(
-            "../../../licensing/protocol-fixtures/offline-lease-v1.json"
-        ))
-        .unwrap();
-        let origin = Url::parse(&golden.issuer).unwrap();
-        let transport = DeviceFlowTransport {
-            authorization: device_authorization(&origin),
-            tokens: Mutex::new(Some(TokenResponse {
-                access_token: "short-lived-access-token".into(),
-                refresh_token: None,
-            })),
-            lease: golden.lease,
-            keys: golden.keys,
-            polls: Mutex::new(0),
-        };
-        let credentials = FakeCredentialStore::default();
-        let mut settings = LicensingSettings {
-            server: LicenseServer::Custom(origin.to_string()),
-            installation_id: golden.installation_id,
-            ..Default::default()
-        };
-        let mut session_token = None;
-        let (events, received) = std::sync::mpsc::channel();
-        let clock = FixedUnixClock(golden.expected.issued_at);
-        let repaint = egui::Context::default();
-        let runtime = LicenseRuntime {
-            origin,
-            transport: &transport,
-            credentials: &credentials,
-            clock: &clock,
-            events: EventTarget {
-                events: &events,
-                repaint: &repaint,
-                operation_generation: 1,
+    async fn unavailable_keychain_keeps_the_new_installation_token_in_memory() {
+        let golden = golden();
+        let harness = Harness::new(
+            &golden,
+            FakeTransport::approving(&golden),
+            FakeCredentialStore {
+                save_fails: true,
+                ..Default::default()
             },
-        };
-
-        let error = sign_in_with(&mut settings, &mut session_token, &runtime)
-            .await
-            .unwrap_err();
-
-        assert!(
-            error
-                .to_string()
-                .contains("did not issue a refresh credential")
         );
-        assert_eq!(*transport.polls.lock().unwrap(), 1);
-        assert!(credentials.token.lock().unwrap().is_none());
-        assert!(settings.lease.is_none());
+        let mut settings = settings_for(&golden, false);
+        let mut session_token = None;
+
+        sign_in_with(&mut settings, &mut session_token, &harness.runtime())
+            .await
+            .unwrap();
+        assert_eq!(session_token.as_deref(), Some("installation-token"));
         assert!(matches!(
-            received.recv().unwrap().event,
+            harness.next_event(),
             LicenseEvent::AwaitingApproval(_)
         ));
-        assert!(received.try_recv().is_err());
-    }
+        assert!(matches!(
+            harness.next_event(),
+            LicenseEvent::KeychainUnavailable
+        ));
+        assert!(matches!(
+            harness.next_event(),
+            LicenseEvent::Licensed { .. }
+        ));
 
-    fn device_authorization(origin: &Url) -> DeviceCodeResponse {
-        DeviceCodeResponse {
-            device_code: "device-code".into(),
-            user_code: "ABCD-EFGH".into(),
-            verification_uri: origin.join("devices/authorize").unwrap().to_string(),
-            verification_uri_complete: origin
-                .join("devices/authorize?user_code=ABCD-EFGH")
+        refresh_with(&mut settings, &mut session_token, &harness.runtime())
+            .await
+            .unwrap();
+        assert_eq!(
+            harness
+                .transport
+                .entitlement_tokens
+                .lock()
                 .unwrap()
-                .to_string(),
-            expires_in: 60,
-            interval: 1,
-        }
+                .last()
+                .unwrap(),
+            "installation-token"
+        );
     }
 
     #[tokio::test]
-    async fn pending_renewal_retains_credentials_and_recovers_without_signing_in() {
-        for at_token in [true, false] {
-            let golden: GoldenLease = serde_json::from_str(include_str!(
-                "../../../licensing/protocol-fixtures/offline-lease-v1.json"
-            ))
-            .unwrap();
-            let origin = Url::parse(&golden.issuer).unwrap();
-            let transport = RenewalTransport {
-                inner: FakeTransport {
-                    lease: golden.lease.clone(),
-                    keys: golden.keys.clone(),
-                    deny_refresh: false,
-                    ineligible_reason: None,
-                    unauthorized_entitlement: false,
-                    refresh_tokens: Mutex::new(Vec::new()),
-                },
-                pending: Mutex::new(true),
-                at_token,
-            };
-            let credentials = FakeCredentialStore {
-                token: Mutex::new(Some("initial-refresh-token".into())),
-                ..Default::default()
-            };
-            let mut settings = LicensingSettings {
-                server: LicenseServer::Custom(origin.to_string()),
-                installation_id: golden.installation_id,
-                lease: Some(golden.lease.clone()),
-                keys: Some(golden.keys),
-                ..Default::default()
-            };
-            let mut session_token = None;
-            let (events, received) = std::sync::mpsc::channel();
-            let clock = FixedUnixClock(golden.expected.issued_at);
-            let repaint = egui::Context::default();
-            let runtime = LicenseRuntime {
-                origin,
-                transport: &transport,
-                credentials: &credentials,
-                clock: &clock,
-                events: EventTarget {
-                    events: &events,
-                    repaint: &repaint,
-                    operation_generation: 1,
-                },
-            };
-            let retained_token = if at_token {
-                "initial-refresh-token"
-            } else {
-                "rotated-refresh-token"
-            };
-            for _ in 0..2 {
-                let error = refresh_with(&mut settings, &mut session_token, &runtime)
-                    .await
-                    .unwrap_err();
-                assert!(error.is::<SubscriptionRenewalPending>());
-                assert_eq!(
-                    credentials.token.lock().unwrap().as_deref(),
-                    Some(retained_token)
-                );
-                assert!(!*credentials.deleted.lock().unwrap());
-                assert_eq!(settings.lease.as_deref(), Some(golden.lease.as_str()));
-                assert!(received.try_recv().is_err());
-            }
+    async fn refresh_requests_a_lease_with_the_keychain_token() {
+        let golden = golden();
+        let harness = Harness::new(
+            &golden,
+            FakeTransport::new(&golden, EntitlementOutcome::Issued),
+            FakeCredentialStore::holding("stored-token"),
+        );
+        let mut settings = settings_for(&golden, false);
 
-            *transport.pending.lock().unwrap() = false;
-            refresh_with(&mut settings, &mut session_token, &runtime)
+        let state = refresh_with(&mut settings, &mut None, &harness.runtime())
+            .await
+            .unwrap();
+
+        assert_eq!(state, SessionState::Licensed);
+        assert_eq!(
+            *harness.transport.entitlement_tokens.lock().unwrap(),
+            vec!["stored-token"]
+        );
+        assert!(settings.lease.is_some());
+        assert!(settings.keys.is_some());
+        assert!(matches!(
+            harness.next_event(),
+            LicenseEvent::Licensed { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn refresh_without_a_credential_signs_out() {
+        let golden = golden();
+        let harness = Harness::new(
+            &golden,
+            FakeTransport::new(&golden, EntitlementOutcome::Issued),
+            FakeCredentialStore::default(),
+        );
+
+        let state = refresh_with(
+            &mut settings_for(&golden, false),
+            &mut None,
+            &harness.runtime(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(state, SessionState::SignedOut);
+        assert!(matches!(
+            harness.next_event(),
+            LicenseEvent::SignedOut {
+                suppress_auto_refresh: false
+            }
+        ));
+        assert!(
+            harness
+                .transport
+                .entitlement_tokens
+                .lock()
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[tokio::test]
+    async fn unavailable_keychain_preserves_a_valid_cached_offline_lease() {
+        let golden = golden();
+        let harness = Harness::new(
+            &golden,
+            FakeTransport::new(&golden, EntitlementOutcome::Issued),
+            FakeCredentialStore {
+                load_fails: true,
+                ..Default::default()
+            },
+        );
+        let mut settings = settings_for(&golden, true);
+
+        let result = refresh_with(&mut settings, &mut None, &harness.runtime()).await;
+
+        assert!(result.is_err());
+        assert!(settings.lease.is_some());
+        assert!(settings.keys.is_some());
+        assert!(matches!(
+            harness.next_event(),
+            LicenseEvent::KeychainUnavailable
+        ));
+        harness.assert_no_more_events();
+    }
+
+    #[tokio::test]
+    async fn ineligible_entitlement_enters_evaluation_but_stays_signed_in() {
+        let golden = golden();
+        let harness = Harness::new(
+            &golden,
+            FakeTransport::new(&golden, EntitlementOutcome::Ineligible("trial_expired")),
+            FakeCredentialStore::holding("stored-token"),
+        );
+        let mut settings = settings_for(&golden, true);
+
+        let state = refresh_with(&mut settings, &mut None, &harness.runtime())
+            .await
+            .unwrap();
+
+        assert_eq!(state, SessionState::Evaluation);
+        assert!(!*harness.credentials.deleted.lock().unwrap());
+        assert_eq!(
+            harness.credentials.token.lock().unwrap().as_deref(),
+            Some("stored-token")
+        );
+        assert!(settings.lease.is_none());
+        assert!(settings.keys.is_none());
+        assert!(matches!(
+            harness.next_event(),
+            LicenseEvent::Evaluation { reason_code } if reason_code == "trial_expired"
+        ));
+        harness.assert_no_more_events();
+    }
+
+    #[tokio::test]
+    async fn revoked_installation_token_signs_out_and_forgets_the_credential() {
+        for delete_fails in [false, true] {
+            let golden = golden();
+            let harness = Harness::new(
+                &golden,
+                FakeTransport::new(&golden, EntitlementOutcome::Unauthorized),
+                FakeCredentialStore {
+                    delete_fails,
+                    ..FakeCredentialStore::holding("revoked-token")
+                },
+            );
+            let mut settings = settings_for(&golden, true);
+            let mut session_token = Some("revoked-token".to_string());
+
+            let state = refresh_with(&mut settings, &mut session_token, &harness.runtime())
                 .await
                 .unwrap();
-            assert_eq!(
-                transport
-                    .inner
-                    .refresh_tokens
-                    .lock()
-                    .unwrap()
-                    .last()
-                    .unwrap(),
-                retained_token
-            );
+
+            assert_eq!(state, SessionState::SignedOut);
+            assert!(session_token.is_none());
+            assert_eq!(*harness.credentials.deleted.lock().unwrap(), !delete_fails);
+            assert!(settings.lease.is_none());
+            assert!(settings.keys.is_none());
+            if delete_fails {
+                assert!(matches!(
+                    harness.next_event(),
+                    LicenseEvent::KeychainUnavailable
+                ));
+            }
             assert!(matches!(
-                received.recv().unwrap().event,
-                LicenseEvent::Licensed { .. }
+                harness.next_event(),
+                LicenseEvent::SignedOut {
+                    suppress_auto_refresh: false
+                }
             ));
-            assert!(!*credentials.deleted.lock().unwrap());
         }
     }
 
     #[test]
     fn offline_status_expires_without_waiting_for_a_network_response() {
-        let golden: GoldenLease = serde_json::from_str(include_str!(
-            "../../../licensing/protocol-fixtures/offline-lease-v1.json"
-        ))
-        .unwrap();
-        let settings = LicensingSettings {
-            server: LicenseServer::Custom(golden.issuer),
-            installation_id: golden.installation_id,
-            lease: Some(golden.lease),
-            keys: Some(golden.keys),
-            ..Default::default()
-        };
+        let golden = golden();
         let (events, received) = std::sync::mpsc::channel();
         let mut service = LicensingService {
-            settings,
+            settings: settings_for(&golden, true),
             results: Some(received),
             ..Default::default()
         };
-        let error: anyhow::Error = SubscriptionRenewalPending.into();
+        let error = anyhow!("the licensing service is unreachable");
         events
             .send(LicenseEventMessage {
                 operation_generation: 0,
@@ -2272,7 +2348,10 @@ mod tests {
             })
             .unwrap();
         service.poll_at(golden.expected.expires_at - 1);
-        assert!(service.status().lease().is_some());
+        assert!(
+            matches!(service.status(), LicenseStatus::Offline(lease) if lease.expires_at == golden.expected.expires_at)
+        );
+
         events
             .send(LicenseEventMessage {
                 operation_generation: 0,
@@ -2280,14 +2359,18 @@ mod tests {
             })
             .unwrap();
         service.poll_at(golden.expected.expires_at);
-        assert!(service.status().lease().is_none());
-        assert!(service.status().is_waiting_for_refresh());
+        assert_eq!(
+            service.status(),
+            &LicenseStatus::Evaluation {
+                reason_code: OFFLINE_LEASE_EXPIRED.into()
+            }
+        );
         assert!(!service.settings.signed_out);
         assert!(service.settings.lease.is_none());
-        assert_eq!(
-            refresh_retry_delay(&service.settings, &Err(error), Some(MAX_RETRY_DELAY)),
-            Some(MAX_RETRY_DELAY)
-        );
+        assert!(matches!(
+            refresh_failure_event(&service.settings, &error, golden.expected.expires_at),
+            LicenseEvent::Failed(_)
+        ));
         service.sign_out();
         assert!(service.settings.signed_out);
         assert_eq!(service.status(), &LicenseStatus::SignedOut);
@@ -2296,7 +2379,7 @@ mod tests {
     async fn license_http_response(
         status: u16,
         body: &'static str,
-    ) -> (HttpLicenseTransport, tokio::task::JoinHandle<()>) {
+    ) -> (HttpLicenseTransport, tokio::task::JoinHandle<String>) {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let origin = Url::parse(&format!("http://{}/", listener.local_addr().unwrap())).unwrap();
@@ -2317,417 +2400,456 @@ mod tests {
                 stream.read_exact(&mut request_body).await.unwrap();
                 let response = format!("HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
                 stream.write_all(response.as_bytes()).await.unwrap();
-            }).await.unwrap();
+                headers + &String::from_utf8(request_body).unwrap()
+            }).await.unwrap()
         });
         (HttpLicenseTransport::new(origin).unwrap(), server)
     }
 
     #[tokio::test]
-    async fn http_transport_distinguishes_retryable_renewal_from_permanent_rejection() {
-        let (transport, server) =
-            license_http_response(503, r#"{"error":"temporarily_unavailable"}"#).await;
-        assert!(matches!(
-            transport.refresh("refresh-credential").await.unwrap(),
-            TokenExchange::RenewalPending
-        ));
-        server.await.unwrap();
-        let (transport, server) = license_http_response(400, r#"{"error":"invalid_grant"}"#).await;
+    async fn http_transport_maps_protocol_responses() {
+        let (transport, server) = license_http_response(400, r#"{"error":"slow_down"}"#).await;
         assert!(
-            matches!(transport.refresh("refresh-credential").await.unwrap(), TokenExchange::Denied(reason) if reason == "invalid_grant")
+            matches!(transport.poll("device-code").await.unwrap(), TokenExchange::Pending(error) if error == "slow_down")
         );
         server.await.unwrap();
+
+        let (transport, server) = license_http_response(400, r#"{"error":"expired_token"}"#).await;
+        assert!(
+            matches!(transport.poll("device-code").await.unwrap(), TokenExchange::Denied(error) if error == "expired_token")
+        );
+        server.await.unwrap();
+
         let (transport, server) =
-            license_http_response(503, r#"{"reasonCode":"subscription_renewal_pending"}"#).await;
+            license_http_response(200, r#"{"installation_token":"token"}"#).await;
+        assert!(
+            matches!(transport.poll("device-code").await.unwrap(), TokenExchange::Granted(token) if token.installation_token == "token")
+        );
+        server.await.unwrap();
+
+        let (transport, server) =
+            license_http_response(401, r#"{"reasonCode":"invalid_installation_token"}"#).await;
         assert!(matches!(
-            transport.entitlement("access-credential").await.unwrap(),
-            EntitlementExchange::RenewalPending
+            transport.entitlement("token").await.unwrap(),
+            EntitlementExchange::Unauthorized
         ));
         server.await.unwrap();
+
+        let (transport, server) =
+            license_http_response(403, r#"{"reasonCode":"trial_expired"}"#).await;
+        assert!(
+            matches!(transport.entitlement("token").await.unwrap(), EntitlementExchange::Ineligible(reason) if reason == "trial_expired")
+        );
+        server.await.unwrap();
+
         let (transport, server) =
             license_http_response(503, r#"{"reasonCode":"unavailable"}"#).await;
-        assert!(transport.entitlement("access-credential").await.is_err());
+        assert!(transport.entitlement("token").await.is_err());
         server.await.unwrap();
+
+        let (transport, server) = license_http_response(403, "not json").await;
+        assert!(transport.entitlement("token").await.is_err());
+        server.await.unwrap();
+
+        let (transport, server) = license_http_response(200, "{").await;
+        assert!(transport.entitlement("token").await.is_err());
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn http_transport_sends_installation_metadata_and_bearer_credentials() {
+        let (transport, server) = license_http_response(
+            200,
+            r#"{"device_code":"d","user_code":"BCDF-GHJK","verification_uri":"http://127.0.0.1/devices/authorize","verification_uri_complete":"http://127.0.0.1/devices/authorize?user_code=BCDF-GHJK","expires_in":600,"interval":5}"#,
+        )
+        .await;
+        let settings = LicensingSettings {
+            display_name: "Work laptop".into(),
+            ..Default::default()
+        };
+        transport.start_authorization(&settings).await.unwrap();
+        let request = server.await.unwrap();
+        assert!(request.starts_with("POST /desktop/v2/device/authorize "));
+        assert_eq!(
+            request.split("\r\n\r\n").nth(1).unwrap(),
+            format!(
+                "installation_id={}&display_name=Work+laptop&platform={}&architecture={}&styrhous_version={}",
+                settings.installation_id,
+                std::env::consts::OS,
+                std::env::consts::ARCH,
+                env!("CARGO_PKG_VERSION"),
+            )
+        );
+
+        let (transport, server) = license_http_response(204, "").await;
+        transport.sign_out("installation-token").await.unwrap();
+        let request = server.await.unwrap();
+        assert!(request.starts_with("POST /desktop/v2/sign-out "));
+        assert!(
+            request
+                .lines()
+                .any(|line| line.eq_ignore_ascii_case("authorization: Bearer installation-token"))
+        );
+    }
+
+    #[tokio::test]
+    async fn device_sign_in_without_entitlement_stays_signed_in_for_evaluation() {
+        let golden = golden();
+        let harness = Harness::new(
+            &golden,
+            FakeTransport::approving_with(&golden, EntitlementOutcome::Ineligible("trial_expired")),
+            FakeCredentialStore::default(),
+        );
+        let mut settings = settings_for(&golden, false);
+
+        let state = sign_in_with(&mut settings, &mut None, &harness.runtime())
+            .await
+            .unwrap();
+
+        assert_eq!(state, SessionState::Evaluation);
+        assert_eq!(
+            harness.credentials.token.lock().unwrap().as_deref(),
+            Some("installation-token")
+        );
+        assert!(matches!(
+            harness.next_event(),
+            LicenseEvent::AwaitingApproval(_)
+        ));
+        assert!(matches!(
+            harness.next_event(),
+            LicenseEvent::Evaluation { reason_code } if reason_code == "trial_expired"
+        ));
+        harness.assert_no_more_events();
+    }
+
+    #[tokio::test]
+    async fn device_sign_in_with_a_revoked_token_signs_out_and_forgets_it() {
+        let golden = golden();
+        let harness = Harness::new(
+            &golden,
+            FakeTransport::approving_with(&golden, EntitlementOutcome::Unauthorized),
+            FakeCredentialStore::default(),
+        );
+        let mut session_token = None;
+
+        let state = sign_in_with(
+            &mut settings_for(&golden, false),
+            &mut session_token,
+            &harness.runtime(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(state, SessionState::SignedOut);
+        assert!(session_token.is_none());
+        assert!(*harness.credentials.deleted.lock().unwrap());
+        assert!(harness.credentials.token.lock().unwrap().is_none());
+        assert!(matches!(
+            harness.next_event(),
+            LicenseEvent::AwaitingApproval(_)
+        ));
+        assert!(matches!(
+            harness.next_event(),
+            LicenseEvent::SignedOut {
+                suppress_auto_refresh: false
+            }
+        ));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn device_sign_in_retries_transient_poll_failures_until_approval() {
+        let golden = golden();
+        let transport = FakeTransport::approving(&golden);
+        transport
+            .poll_results
+            .lock()
+            .unwrap()
+            .insert(0, Err(anyhow!("connection reset")));
+        let harness = Harness::new(&golden, transport, FakeCredentialStore::default());
+
+        let state = sign_in_with(
+            &mut settings_for(&golden, false),
+            &mut None,
+            &harness.runtime(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(state, SessionState::Licensed);
+        assert_eq!(harness.transport.polls(), 2);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn device_sign_in_gives_up_when_the_authorization_expires() {
+        let golden = golden();
+        let transport = FakeTransport::approving(&golden);
+        // Every poll fails; the loop must stop at the authorization's expiry, not spin forever.
+        transport.poll_results.lock().unwrap().clear();
+        let harness = Harness::new(&golden, transport, FakeCredentialStore::default());
+
+        let error = sign_in_with(
+            &mut settings_for(&golden, false),
+            &mut None,
+            &harness.runtime(),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(error.to_string().contains("expired"));
+        assert_eq!(harness.transport.polls(), 60);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn device_sign_in_rejects_an_already_expired_authorization_without_polling() {
+        let golden = golden();
+        let mut transport = FakeTransport::approving(&golden);
+        transport.authorization.as_mut().unwrap().expires_in = 0;
+        let harness = Harness::new(&golden, transport, FakeCredentialStore::default());
+
+        let error = sign_in_with(
+            &mut settings_for(&golden, false),
+            &mut None,
+            &harness.runtime(),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(error.to_string().contains("expired"));
+        assert_eq!(harness.transport.polls(), 0);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn device_sign_in_slows_down_when_asked() {
+        let golden = golden();
+        let transport = FakeTransport::approving(&golden);
+        transport
+            .poll_results
+            .lock()
+            .unwrap()
+            .insert(0, Ok(TokenExchange::Pending("slow_down".into())));
+        let harness = Harness::new(&golden, transport, FakeCredentialStore::default());
+        let started = tokio::time::Instant::now();
+
+        sign_in_with(
+            &mut settings_for(&golden, false),
+            &mut None,
+            &harness.runtime(),
+        )
+        .await
+        .unwrap();
+
+        // One 1s interval, then the interval grows by 5s per RFC 8628.
+        assert_eq!(started.elapsed(), Duration::from_secs(1 + 6));
+        assert_eq!(harness.transport.polls(), 2);
+    }
+
+    #[tokio::test]
+    async fn a_lease_for_another_installation_is_rejected_and_forgotten() {
+        let golden = golden();
+        let harness = Harness::new(
+            &golden,
+            FakeTransport::new(&golden, EntitlementOutcome::Issued),
+            FakeCredentialStore::holding("stored-token"),
+        );
+        let mut settings = LicensingSettings {
+            installation_id: Uuid::now_v7(),
+            ..settings_for(&golden, true)
+        };
+
+        let result = refresh_with(&mut settings, &mut None, &harness.runtime()).await;
+
+        assert!(result.is_err());
+        assert!(settings.lease.is_none());
+        assert!(settings.keys.is_none());
+        assert!(matches!(
+            harness.next_event(),
+            LicenseEvent::ClearCachedLease
+        ));
+        harness.assert_no_more_events();
     }
 
     #[test]
-    fn pending_renewal_never_extends_the_signed_lease_expiry() {
-        let golden: GoldenLease = serde_json::from_str(include_str!(
-            "../../../licensing/protocol-fixtures/offline-lease-v1.json"
-        ))
-        .unwrap();
-        let settings = LicensingSettings {
-            server: LicenseServer::Custom(golden.issuer),
-            installation_id: golden.installation_id,
-            lease: Some(golden.lease),
-            keys: Some(golden.keys),
-            ..Default::default()
+    fn leases_verify_against_any_listed_key_with_a_matching_identifier() {
+        let golden = golden();
+        let origin = Url::parse(&golden.issuer).unwrap();
+        let current = golden.keys.keys[0].clone();
+        let rotated = JsonWebKey {
+            kid: "rotated-key".into(),
+            ..current.clone()
         };
-        let error = SubscriptionRenewalPending.into();
-        assert!(
-            matches!(refresh_failure_event(&settings, &error, golden.expected.expires_at - 1),
-            LicenseEvent::Offline { lease, .. } if lease.expires_at == golden.expected.expires_at)
-        );
-        assert!(
-            matches!(refresh_failure_event(&settings, &error, golden.expected.expires_at),
-            LicenseEvent::Evaluation { reason_code } if reason_code == SUBSCRIPTION_RENEWAL_PENDING)
-        );
-        let mut delay = next_retry_delay(None);
-        assert!(!delay.is_zero());
-        for _ in 0..32 {
-            delay = next_retry_delay(Some(delay));
-            assert!(delay <= MAX_RETRY_DELAY);
+        let verify = |keys: Vec<JsonWebKey>| {
+            validate_lease_at(
+                &golden.lease,
+                &JsonWebKeySet { keys },
+                &origin,
+                golden.installation_id,
+                golden.expected.issued_at,
+            )
+        };
+
+        assert!(verify(vec![rotated.clone(), current]).is_ok());
+        let error = verify(vec![rotated]).unwrap_err();
+        assert!(error.to_string().contains("not trusted"));
+    }
+
+    #[tokio::test]
+    async fn signing_out_revokes_the_installation_and_forgets_its_credential() {
+        let golden = golden();
+        for (session_token, sign_out_fails, delete_fails) in [
+            (None, false, false),
+            (Some("memory-token"), false, false),
+            (None, true, false),
+            (None, false, true),
+        ] {
+            let harness = Harness::new(
+                &golden,
+                FakeTransport {
+                    sign_out_fails,
+                    ..FakeTransport::new(&golden, EntitlementOutcome::Issued)
+                },
+                FakeCredentialStore {
+                    delete_fails,
+                    ..FakeCredentialStore::holding("stored-token")
+                },
+            );
+
+            revoke_and_delete_session_with(session_token.map(String::from), &harness.runtime())
+                .await;
+
+            assert_eq!(
+                *harness.transport.signed_out_tokens.lock().unwrap(),
+                vec![session_token.unwrap_or("stored-token")]
+            );
+            assert_eq!(*harness.credentials.deleted.lock().unwrap(), !delete_fails);
+            if delete_fails {
+                assert!(matches!(
+                    harness.next_event(),
+                    LicenseEvent::KeychainUnavailable
+                ));
+            }
+            harness.assert_no_more_events();
         }
-        assert_eq!(delay, MAX_RETRY_DELAY);
     }
 
-    #[tokio::test]
-    async fn refresh_rotates_the_keychain_token_and_persists_a_verified_lease() {
-        let golden: GoldenLease = serde_json::from_str(include_str!(
-            "../../../licensing/protocol-fixtures/offline-lease-v1.json"
-        ))
-        .unwrap();
-        let origin = Url::parse(&golden.issuer).unwrap();
-        let transport = FakeTransport {
-            lease: golden.lease,
-            keys: golden.keys,
-            deny_refresh: false,
-            ineligible_reason: None,
-            unauthorized_entitlement: false,
-            refresh_tokens: Mutex::new(Vec::new()),
+    #[test]
+    fn service_applies_worker_events_to_its_status() {
+        let golden = golden();
+        let lease = test_lease(golden.installation_id);
+        let evaluation = LicenseStatus::Evaluation {
+            reason_code: "trial_expired".into(),
         };
-        let credentials = FakeCredentialStore {
-            token: Mutex::new(Some("initial-refresh-token".into())),
-            ..Default::default()
+        let failed = LicenseStatus::Failed {
+            message: "offline".into(),
         };
-        let mut settings = LicensingSettings {
-            server: LicenseServer::Custom(origin.to_string()),
-            installation_id: golden.installation_id,
-            ..Default::default()
-        };
-        let mut session_token = None;
+        let cases: Vec<(LicenseStatus, LicenseEvent, LicenseStatus)> = vec![
+            // A check in flight keeps signed-in states and their controls.
+            (
+                LicenseStatus::Licensed(lease.clone()),
+                LicenseEvent::Checking,
+                LicenseStatus::Licensed(lease.clone()),
+            ),
+            (
+                LicenseStatus::Offline(lease.clone()),
+                LicenseEvent::Checking,
+                LicenseStatus::Offline(lease.clone()),
+            ),
+            (
+                evaluation.clone(),
+                LicenseEvent::Checking,
+                evaluation.clone(),
+            ),
+            (
+                LicenseStatus::SignedOut,
+                LicenseEvent::Checking,
+                LicenseStatus::Checking,
+            ),
+            (
+                failed.clone(),
+                LicenseEvent::Checking,
+                LicenseStatus::Checking,
+            ),
+            (
+                LicenseStatus::Licensed(lease.clone()),
+                LicenseEvent::Evaluation {
+                    reason_code: "trial_expired".into(),
+                },
+                evaluation.clone(),
+            ),
+            (
+                LicenseStatus::Checking,
+                LicenseEvent::Failed("offline".into()),
+                failed.clone(),
+            ),
+            (
+                LicenseStatus::Licensed(lease.clone()),
+                LicenseEvent::SignedOut {
+                    suppress_auto_refresh: false,
+                },
+                LicenseStatus::SignedOut,
+            ),
+        ];
+        for (initial, event, expected) in cases {
+            let description = format!("{initial:?} + {event:?}");
+            // Evaluation and sign-out forget the cached lease; other events keep it.
+            let forgets_lease = matches!(
+                event,
+                LicenseEvent::Evaluation { .. } | LicenseEvent::SignedOut { .. }
+            );
+            let (events, received) = std::sync::mpsc::channel();
+            let mut service = LicensingService {
+                settings: settings_for(&golden, true),
+                status: initial,
+                results: Some(received),
+                ..Default::default()
+            };
+            events
+                .send(LicenseEventMessage {
+                    operation_generation: 0,
+                    event,
+                })
+                .unwrap();
+            service.poll_events();
+            assert_eq!(service.status, expected, "{description}");
+            assert_eq!(
+                service.settings.lease.is_none(),
+                forgets_lease,
+                "{description}"
+            );
+            assert!(!service.settings.signed_out, "{description}");
+        }
+
         let (events, received) = std::sync::mpsc::channel();
-        let clock = FixedUnixClock(golden.expected.issued_at);
-        let repaint = egui::Context::default();
-        let runtime = LicenseRuntime {
-            origin,
-            transport: &transport,
-            credentials: &credentials,
-            clock: &clock,
-            events: EventTarget {
-                events: &events,
-                repaint: &repaint,
-                operation_generation: 1,
+        let mut service = LicensingService {
+            settings: LicensingSettings {
+                server: LicenseServer::Custom("not a server".into()),
+                ..Default::default()
             },
-        };
-
-        refresh_with(&mut settings, &mut session_token, &runtime)
-            .await
-            .unwrap();
-
-        assert_eq!(
-            *transport.refresh_tokens.lock().unwrap(),
-            vec!["initial-refresh-token"]
-        );
-        assert_eq!(
-            credentials.token.lock().unwrap().as_deref(),
-            Some("rotated-refresh-token")
-        );
-        assert!(settings.lease.is_some());
-        assert!(settings.keys.is_some());
-        assert!(matches!(
-            received.recv().unwrap().event,
-            LicenseEvent::Licensed { .. }
-        ));
-    }
-
-    #[tokio::test]
-    async fn unavailable_keychain_preserves_a_valid_cached_offline_lease() {
-        let golden: GoldenLease = serde_json::from_str(include_str!(
-            "../../../licensing/protocol-fixtures/offline-lease-v1.json"
-        ))
-        .unwrap();
-        let origin = Url::parse(&golden.issuer).unwrap();
-        let transport = FakeTransport {
-            lease: golden.lease.clone(),
-            keys: golden.keys.clone(),
-            deny_refresh: false,
-            ineligible_reason: None,
-            unauthorized_entitlement: false,
-            refresh_tokens: Mutex::new(Vec::new()),
-        };
-        let credentials = FakeCredentialStore {
-            load_fails: true,
+            results: Some(received),
             ..Default::default()
         };
-        let mut settings = LicensingSettings {
-            server: LicenseServer::Custom(origin.to_string()),
-            installation_id: golden.installation_id,
-            lease: Some(golden.lease),
-            keys: Some(golden.keys),
-            ..Default::default()
-        };
-        let mut session_token = None;
-        let (events, received) = std::sync::mpsc::channel();
-        let clock = FixedUnixClock(golden.expected.issued_at);
-        let repaint = egui::Context::default();
-        let runtime = LicenseRuntime {
-            origin,
-            transport: &transport,
-            credentials: &credentials,
-            clock: &clock,
-            events: EventTarget {
-                events: &events,
-                repaint: &repaint,
-                operation_generation: 1,
-            },
-        };
-
-        let result = refresh_with(&mut settings, &mut session_token, &runtime).await;
-
-        assert!(result.is_err());
-        assert!(settings.lease.is_some());
-        assert!(settings.keys.is_some());
-        assert!(matches!(
-            received.recv().unwrap().event,
-            LicenseEvent::KeychainUnavailable
-        ));
-        assert!(received.try_recv().is_err());
-    }
-
-    #[tokio::test]
-    async fn failed_keychain_rotation_uses_only_the_new_in_memory_token() {
-        let golden: GoldenLease = serde_json::from_str(include_str!(
-            "../../../licensing/protocol-fixtures/offline-lease-v1.json"
-        ))
-        .unwrap();
-        let origin = Url::parse(&golden.issuer).unwrap();
-        let transport = FakeTransport {
-            lease: golden.lease,
-            keys: golden.keys,
-            deny_refresh: false,
-            ineligible_reason: None,
-            unauthorized_entitlement: false,
-            refresh_tokens: Mutex::new(Vec::new()),
-        };
-        let credentials = FakeCredentialStore {
-            token: Mutex::new(Some("initial-refresh-token".into())),
-            save_fails: true,
-            ..Default::default()
-        };
-        let mut settings = LicensingSettings {
-            server: LicenseServer::Custom(origin.to_string()),
-            installation_id: golden.installation_id,
-            ..Default::default()
-        };
-        let mut session_token = None;
-        let (events, received) = std::sync::mpsc::channel();
-        let clock = FixedUnixClock(golden.expected.issued_at);
-        let repaint = egui::Context::default();
-        let runtime = LicenseRuntime {
-            origin,
-            transport: &transport,
-            credentials: &credentials,
-            clock: &clock,
-            events: EventTarget {
-                events: &events,
-                repaint: &repaint,
-                operation_generation: 1,
-            },
-        };
-
-        refresh_with(&mut settings, &mut session_token, &runtime)
-            .await
-            .unwrap();
-
-        assert_eq!(session_token.as_deref(), Some("rotated-refresh-token"));
-        assert!(credentials.token.lock().unwrap().is_none());
-        assert!(matches!(
-            received.recv().unwrap().event,
-            LicenseEvent::KeychainUnavailable
-        ));
-        assert!(matches!(
-            received.recv().unwrap().event,
-            LicenseEvent::Licensed { .. }
-        ));
-    }
-
-    #[tokio::test]
-    async fn ineligible_entitlement_enters_evaluation_without_fetching_signing_keys() {
-        let golden: GoldenLease = serde_json::from_str(include_str!(
-            "../../../licensing/protocol-fixtures/offline-lease-v1.json"
-        ))
-        .unwrap();
-        let origin = Url::parse(&golden.issuer).unwrap();
-        let transport = FakeTransport {
-            lease: golden.lease.clone(),
-            keys: golden.keys.clone(),
-            deny_refresh: false,
-            ineligible_reason: Some("no_valid_entitlement".into()),
-            unauthorized_entitlement: false,
-            refresh_tokens: Mutex::new(Vec::new()),
-        };
-        let credentials = FakeCredentialStore {
-            token: Mutex::new(Some("initial-refresh-token".into())),
-            ..Default::default()
-        };
-        let mut settings = LicensingSettings {
-            server: LicenseServer::Custom(origin.to_string()),
-            installation_id: golden.installation_id,
-            lease: Some(golden.lease),
-            keys: Some(golden.keys),
-            ..Default::default()
-        };
-        let mut session_token = None;
-        let (events, received) = std::sync::mpsc::channel();
-        let clock = FixedUnixClock(golden.expected.issued_at);
-        let repaint = egui::Context::default();
-        let runtime = LicenseRuntime {
-            origin,
-            transport: &transport,
-            credentials: &credentials,
-            clock: &clock,
-            events: EventTarget {
-                events: &events,
-                repaint: &repaint,
-                operation_generation: 1,
-            },
-        };
-
-        refresh_with(&mut settings, &mut session_token, &runtime)
-            .await
-            .unwrap();
-
-        assert!(*credentials.deleted.lock().unwrap());
-        assert!(session_token.is_none());
-        assert!(settings.lease.is_none());
-        assert!(settings.keys.is_none());
-        assert!(matches!(
-            received.recv().unwrap().event,
-            LicenseEvent::Evaluation { reason_code }
-                if reason_code == "no_valid_entitlement"
-        ));
-        assert!(received.try_recv().is_err());
-    }
-
-    #[tokio::test]
-    async fn unauthorized_entitlement_signs_out_instead_of_reporting_evaluation_mode() {
-        let golden: GoldenLease = serde_json::from_str(include_str!(
-            "../../../licensing/protocol-fixtures/offline-lease-v1.json"
-        ))
-        .unwrap();
-        let origin = Url::parse(&golden.issuer).unwrap();
-        let transport = FakeTransport {
-            lease: golden.lease.clone(),
-            keys: golden.keys.clone(),
-            deny_refresh: false,
-            ineligible_reason: None,
-            unauthorized_entitlement: true,
-            refresh_tokens: Mutex::new(Vec::new()),
-        };
-        let credentials = FakeCredentialStore {
-            token: Mutex::new(Some("initial-refresh-token".into())),
-            ..Default::default()
-        };
-        let mut settings = LicensingSettings {
-            server: LicenseServer::Custom(origin.to_string()),
-            installation_id: golden.installation_id,
-            lease: Some(golden.lease),
-            keys: Some(golden.keys),
-            ..Default::default()
-        };
-        let mut session_token = None;
-        let (events, received) = std::sync::mpsc::channel();
-        let clock = FixedUnixClock(golden.expected.issued_at);
-        let repaint = egui::Context::default();
-        let runtime = LicenseRuntime {
-            origin,
-            transport: &transport,
-            credentials: &credentials,
-            clock: &clock,
-            events: EventTarget {
-                events: &events,
-                repaint: &repaint,
-                operation_generation: 1,
-            },
-        };
-
-        refresh_with(&mut settings, &mut session_token, &runtime)
-            .await
-            .unwrap();
-
-        assert!(*credentials.deleted.lock().unwrap());
-        assert!(session_token.is_none());
-        assert!(settings.lease.is_none());
-        assert!(settings.keys.is_none());
-        assert!(matches!(
-            received.recv().unwrap().event,
+        for event in [
+            LicenseEvent::KeychainUnavailable,
             LicenseEvent::SignedOut {
-                suppress_auto_refresh: false
-            }
-        ));
-        assert!(received.try_recv().is_err());
-    }
-
-    #[tokio::test]
-    async fn invalid_grant_clears_the_lease_even_when_credential_deletion_fails() {
-        let golden: GoldenLease = serde_json::from_str(include_str!(
-            "../../../licensing/protocol-fixtures/offline-lease-v1.json"
-        ))
-        .unwrap();
-        let origin = Url::parse(&golden.issuer).unwrap();
-        let transport = FakeTransport {
-            lease: golden.lease.clone(),
-            keys: golden.keys.clone(),
-            deny_refresh: true,
-            ineligible_reason: None,
-            unauthorized_entitlement: false,
-            refresh_tokens: Mutex::new(Vec::new()),
-        };
-        let credentials = FakeCredentialStore {
-            token: Mutex::new(Some("expired-refresh-token".into())),
-            delete_fails: true,
-            ..Default::default()
-        };
-        let mut settings = LicensingSettings {
-            server: LicenseServer::Custom(origin.to_string()),
-            installation_id: golden.installation_id,
-            lease: Some(golden.lease),
-            keys: Some(golden.keys),
-            last_check_unix: Some(unix_now()),
-            ..Default::default()
-        };
-        let mut session_token = None;
-        let (events, received) = std::sync::mpsc::channel();
-        let clock = FixedUnixClock(golden.expected.issued_at);
-        let repaint = egui::Context::default();
-        let runtime = LicenseRuntime {
-            origin,
-            transport: &transport,
-            credentials: &credentials,
-            clock: &clock,
-            events: EventTarget {
-                events: &events,
-                repaint: &repaint,
-                operation_generation: 1,
+                suppress_auto_refresh: true,
             },
-        };
+        ] {
+            events
+                .send(LicenseEventMessage {
+                    operation_generation: 0,
+                    event,
+                })
+                .unwrap();
+        }
+        service.poll_events();
+        assert!(service.keychain_warning());
+        assert!(service.settings.signed_out);
+        assert_eq!(service.status, LicenseStatus::Unconfigured);
 
-        refresh_with(&mut settings, &mut session_token, &runtime)
-            .await
-            .unwrap();
-
-        assert!(!*credentials.deleted.lock().unwrap());
-        assert!(settings.lease.is_none());
-        assert!(settings.keys.is_none());
+        drop(events);
+        service.poll_events();
         assert!(matches!(
-            received.recv().unwrap().event,
-            LicenseEvent::KeychainUnavailable
-        ));
-        assert!(matches!(
-            received.recv().unwrap().event,
-            LicenseEvent::SignedOut {
-                suppress_auto_refresh: false
-            }
+            &service.status,
+            LicenseStatus::Failed { message } if message.contains("background service stopped")
         ));
     }
 }

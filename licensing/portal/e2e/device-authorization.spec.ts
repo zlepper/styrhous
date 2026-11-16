@@ -47,10 +47,13 @@ test('reviews capacity, revokes a device, and approves the selected seat', async
   await expect(page.getByText('Waiting for approval', { exact: true })).toHaveCount(0);
 
   expect(state.approvalRequests).toHaveLength(1);
-  expect(state.approvalRequests[0].postData()).toBe(
-    `user_code=${userCode}&decision=approve&seat_id=${organizationSeatId}`
+  expect(new URL(state.approvalRequests[0].url()).pathname).toBe(
+    `/api/device-authorizations/${userCode}`
   );
-  expect(state.approvalRequests[0].headers()['x-csrf-token']).toBe('approval-csrf-token');
+  expect(state.approvalRequests[0].postDataJSON()).toEqual({
+    decision: 'approve',
+    seatId: organizationSeatId
+  });
   expect(state.revocationRequests).toHaveLength(1);
 });
 
@@ -62,7 +65,10 @@ test('approves the sole license without asking for a selection', async ({ page }
   await page.getByRole('button', { name: 'Approve sign-in' }).click();
   await expect(page.getByText(/Rasmus workstation is approved/)).toBeFocused();
   await expect(page.getByText('Waiting for approval', { exact: true })).toHaveCount(0);
-  expect(state.approvalRequests[0].postData()).toContain(`seat_id=${personalSeatId}`);
+  expect(state.approvalRequests[0].postDataJSON()).toEqual({
+    decision: 'approve',
+    seatId: personalSeatId
+  });
 });
 
 test('denies the pending desktop without requiring a seat selection', async ({ page }) => {
@@ -74,9 +80,7 @@ test('denies the pending desktop without requiring a seat selection', async ({ p
   await expect(page.getByText(/authorization was denied/)).toBeFocused();
   await expect(page.getByText('Waiting for approval', { exact: true })).toHaveCount(0);
   expect(state.approvalRequests).toHaveLength(1);
-  expect(state.approvalRequests[0].postData()).toBe(
-    `user_code=${userCode}&decision=deny`
-  );
+  expect(state.approvalRequests[0].postDataJSON()).toEqual({ decision: 'deny' });
 });
 
 test('explains a missing user code without calling the backend', async ({ page }) => {
@@ -94,7 +98,7 @@ test('explains a missing user code without calling the backend', async ({ page }
 test('recovers after the user signs in and retries the pending code', async ({ page }) => {
   const state = await installDeviceAuthorizationApi(page);
   let requireAuthentication = true;
-  await page.route('**/desktop/v1/device/approval**', async (route) => {
+  await page.route('**/api/device-authorizations/**', async (route) => {
     if (route.request().method() === 'GET' && requireAuthentication) {
       requireAuthentication = false;
       await route.fulfill({ status: 401 });
@@ -115,7 +119,7 @@ test('recovers after the user signs in and retries the pending code', async ({ p
 
 test('clears authentication state when navigation removes the user code', async ({ page }) => {
   await installDeviceAuthorizationApi(page);
-  await page.route('**/desktop/v1/device/approval**', async (route) => {
+  await page.route('**/api/device-authorizations/**', async (route) => {
     if (route.request().method() === 'GET') {
       await route.fulfill({ status: 401 });
       return;
@@ -144,7 +148,7 @@ test('clears authentication state when navigation removes the user code', async 
 
 test('shows an expired-code state without exposing an approval form', async ({ page }) => {
   await installDeviceAuthorizationApi(page);
-  await page.route('**/desktop/v1/device/approval**', async (route) => {
+  await page.route('**/api/device-authorizations/**', async (route) => {
     if (route.request().method() === 'GET') {
       await route.fulfill({
         status: 404,
@@ -168,7 +172,7 @@ test('shows an expired-code state without exposing an approval form', async ({ p
 test('reloads the authoritative approval after a decision conflict', async ({ page }) => {
   const state = await installDeviceAuthorizationApi(page);
   let rejectDecision = true;
-  await page.route('**/desktop/v1/device/approval', async (route) => {
+  await page.route('**/api/device-authorizations/**', async (route) => {
     if (route.request().method() === 'POST' && rejectDecision) {
       rejectDecision = false;
       await route.fulfill({
@@ -229,7 +233,7 @@ test('loads a new device code after client-side navigation', async ({ page }) =>
 test('ignores a delayed approval after navigation changes the device code', async ({ page }) => {
   await installDeviceAuthorizationApi(page);
   const delayed = deferredResponse();
-  await page.route('**/desktop/v1/device/approval', async (route) => {
+  await page.route('**/api/device-authorizations/**', async (route) => {
     if (route.request().method() === 'POST') {
       delayed.started();
       await delayed.release;
@@ -259,7 +263,7 @@ test('ignores a delayed approval after navigation changes the device code', asyn
 test('ignores a delayed denial after navigation changes the device code', async ({ page }) => {
   await installDeviceAuthorizationApi(page);
   const delayed = deferredResponse();
-  await page.route('**/desktop/v1/device/approval', async (route) => {
+  await page.route('**/api/device-authorizations/**', async (route) => {
     if (route.request().method() === 'POST') {
       delayed.started();
       await delayed.release;
@@ -339,15 +343,13 @@ async function installDeviceAuthorizationApi(page: Page, personalOnly = false) {
     ]
   };
 
-  await page.route('**/api/antiforgery', async (route) => {
-    await route.fulfill({ json: { requestToken: 'approval-csrf-token' } });
-  });
-
-  await page.route('**/desktop/v1/device/approval**', async (route) => {
+  await page.route('**/api/device-authorizations/**', async (route) => {
     const request = route.request();
     if (request.method() === 'GET') {
       state.approvalReads += 1;
-      state.approvalReadCodes.push(new URL(request.url()).searchParams.get('user_code') ?? '');
+      state.approvalReadCodes.push(
+        decodeURIComponent(new URL(request.url()).pathname.split('/').at(-1) ?? '')
+      );
       await route.fulfill({
         json: {
           reasonCode: 'device_authorization_awaiting_approval',
