@@ -81,6 +81,9 @@ Production runs at `https://styrhous.app`. Setup happens once, in this order:
      `https://github.com/zlepper/styrhous/blob/master/legal/PRIVACY_POLICY.md`.
    - Create a customer portal configuration that allows payment-method updates and cancellation,
      but not quantity changes; seat changes go through the portal so seat capacity is enforced.
+     Renewals charge the card stored on the subscription, not the customer's default card. Under
+     Managed Payments the API cannot change it, so customers change it with the edit button next
+     to the card shown on the subscription in the customer portal.
    - Leave Smart Retries and failed-payment emails enabled under *Billing → Revenue recovery*.
    - Set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` as secrets, and the monthly/annual price
      ids and customer portal configuration id as `vars`.
@@ -98,6 +101,9 @@ Production runs at `https://styrhous.app`. Setup happens once, in this order:
    - non-production branch builds disabled
    - If the build token lacks D1 edit permission, replace it with one that has *D1 Edit* and
      *Workers Scripts Edit*.
+   - If the repository is missing from the list, the Cloudflare GitHub App installation may be
+     linked to another Cloudflare account. Open *Configure* for it on GitHub and save a change to
+     link it to this account.
 
 8. **Rate limiting** (follow-up): `POST /desktop/v2/device/authorize` and `GET /auth/sign-in/*`
    create rows without authentication, and only the daily cron removes them. Add a Cloudflare
