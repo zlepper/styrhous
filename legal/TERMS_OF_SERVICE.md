@@ -7,9 +7,13 @@ These terms govern Styrhous subscriptions and the licensing service at
 [CVR NUMBER], Denmark ("we", "us"). If you accept them on behalf of an organization, you confirm you
 are authorized to bind it, and "you" means that organization.
 
-These terms are the commercial license referred to in section 6 of the
-[Styrhous Source-Available Evaluation License](../LICENSE.md). Without an active
-subscription or trial, the Evaluation License alone governs your use of Styrhous.
+These terms are the commercial license referred to in section 7 of the
+[Styrhous Source-Available License](../LICENSE.md). Individuals, education,
+non-commercial open source projects, and organizations with fewer than 250
+people and less than EUR 10,000,000 in annual revenue can use Styrhous for free
+under section 4 of that license and do not need a subscription. Without an
+active subscription or trial, the Source-Available License alone governs your
+use of Styrhous.
 
 ## 1. Accounts
 
@@ -52,7 +56,7 @@ including production use. Each seat is for one named person, who may activate
 Styrhous on up to the number of devices shown in the licensing service (3 by
 default). You may not share, resell, or sublicense seats, or work around license
 checks. Everything else, including the source code, remains governed by the
-Evaluation License.
+Source-Available License.
 
 ## 5. Your clusters and data
 
