@@ -1,5 +1,6 @@
 //! Serializable UI choices that outlive a transient cluster connection.
 
+use super::state::SelectedNamespaces;
 use crate::api_resource::ApiResource;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -24,7 +25,7 @@ pub(super) struct ResourceNavigationExpansion {
 #[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub(super) struct PersistedClusterSelection {
     #[serde(default)]
-    pub(super) selected_namespaces: BTreeSet<String>,
+    pub(super) selected_namespaces: SelectedNamespaces,
     #[serde(default)]
     pub(super) selected_api_resource: Option<PersistedApiResource>,
 }

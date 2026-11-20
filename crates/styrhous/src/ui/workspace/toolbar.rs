@@ -14,10 +14,10 @@ pub(super) fn show_toolbar(
     namespace_selection: &mut Option<NamespaceSelection>,
     selection_controls: ResourceSelectionControls<'_>,
 ) {
-    let selected_text = match cluster.selected_namespaces.len() {
+    let selected_namespaces = cluster.namespace_scope();
+    let selected_text = match selected_namespaces.len() {
         0 => "Select namespaces".to_owned(),
-        1 => cluster
-            .selected_namespaces
+        1 => selected_namespaces
             .iter()
             .next()
             .and_then(|selected| {
@@ -47,28 +47,20 @@ pub(super) fn show_toolbar(
             ),
         })
         .collect::<Vec<_>>();
-    let all_namespaces_selected = !namespaces.is_empty()
-        && namespaces.iter().all(|namespace| {
-            cluster
-                .selected_namespaces
-                .contains(&namespace.namespace.name)
-        });
+    let all_namespaces_selected = selected_namespaces.covers_all_discovered();
     let selected_status = if !selected_api_resource.is_some_and(|resource| resource.namespaced) {
         selected_api_resource.map(|api_resource| {
             cluster
                 .active_watchers
                 .contains(&(api_resource.clone(), None))
         })
-    } else if cluster.selected_namespaces.len() == 1 {
+    } else if selected_namespaces.len() == 1 {
         selected_api_resource.map(|api_resource| {
-            let namespace = cluster
-                .selected_namespaces
+            let namespace = selected_namespaces
                 .iter()
                 .next()
                 .expect("selection length was checked");
-            cluster
-                .active_watchers
-                .contains(&(api_resource.clone(), Some(namespace.clone())))
+            cluster.is_namespace_watched(api_resource, namespace)
         })
     } else {
         None
@@ -112,15 +104,13 @@ pub(super) fn show_toolbar(
                     .filter_by(|option: &NamespaceOption| &option.presentation.search_text)
                     .show_items(ui, &namespaces, |cb, ns| {
                         let status = selected_api_resource.map(|api_resource| {
-                            cluster
-                                .active_watchers
-                                .contains(&(api_resource.clone(), Some(ns.namespace.name.clone())))
+                            cluster.is_namespace_watched(api_resource, &ns.namespace.name)
                         });
                         if let Some(action) = cb
                             .item_with_status_detail(
                                 &ns.presentation.primary,
                                 &ns.presentation.secondary,
-                                cluster.selected_namespaces.contains(&ns.namespace.name),
+                                selected_namespaces.contains(&ns.namespace.name),
                                 status,
                             )
                             .selection_action()

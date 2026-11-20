@@ -12,7 +12,7 @@ pub(super) fn show_helm_releases_workspace(
 ) -> Option<(String, String)> {
     let api_resource = crate::api_resource::ApiResource::helm_releases();
     let mut releases = cluster
-        .selected_namespaces
+        .namespace_scope()
         .iter()
         .filter_map(|namespace| cluster.helm_release_cache.get(namespace))
         .flat_map(|watch| watch.releases.iter().cloned())
@@ -67,7 +67,8 @@ pub(super) fn show_helm_releases_workspace(
     let filtered = filter_resources(&resources, &search);
     cluster.resource_searches.insert(api_resource, search);
     ui.add_space(TOOLBAR_VERTICAL_PADDING);
-    if cluster.selected_namespaces.is_empty() {
+    let selected_namespaces = cluster.namespace_scope();
+    if selected_namespaces.is_empty() {
         workspace_empty_state(
             ui,
             "Choose a namespace",
@@ -75,12 +76,11 @@ pub(super) fn show_helm_releases_workspace(
         );
         return None;
     }
-    let selected_watches = cluster
-        .selected_namespaces
+    let selected_watches = selected_namespaces
         .iter()
         .filter_map(|namespace| cluster.helm_release_cache.get(namespace))
         .collect::<Vec<_>>();
-    if selected_watches.len() != cluster.selected_namespaces.len()
+    if selected_watches.len() != selected_namespaces.len()
         || selected_watches.iter().any(|watch| !watch.is_synced)
     {
         workspace_loading_state(

@@ -3,7 +3,8 @@ use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::Cluster;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::worker::*;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+use state::SelectedNamespaces;
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
 #[derive(Default)]
 struct MemoryStorage(HashMap<String, String>);
@@ -169,7 +170,7 @@ fn saved_selections() -> PersistedClusterSelections {
         selections: BTreeMap::from([(
             "dev".into(),
             state::PersistedClusterSelection {
-                selected_namespaces: BTreeSet::from(["default".into(), "obsolete".into()]),
+                selected_namespaces: SelectedNamespaces::from(["default", "obsolete"]),
                 selected_api_resource: Some(state::PersistedApiResource {
                     group: "apps".into(),
                     name: "deployments".into(),
@@ -240,6 +241,66 @@ fn cluster_selections_round_trip_through_app_storage_without_shared_state() {
 }
 
 #[test]
+fn all_namespaces_selection_round_trips_through_app_storage() {
+    let mut expected = saved_selections();
+    expected
+        .selections
+        .get_mut("dev")
+        .unwrap()
+        .selected_namespaces = SelectedNamespaces::All;
+    let mut storage = MemoryStorage::default();
+    let mut app = MyEguiApp::<MockWorker>::default();
+    app.ui_state.cluster_selections = expected.clone();
+
+    eframe::App::save(&mut app, &mut storage);
+
+    let mut restored = MyEguiApp::<MockWorker>::default();
+    restored.load_persisted_state(Some(&storage));
+
+    assert_eq!(restored.ui_state.cluster_selections, expected);
+}
+
+#[test]
+fn saved_all_namespaces_selection_includes_namespaces_created_while_closed() {
+    let mut selections = saved_selections();
+    selections
+        .selections
+        .get_mut("dev")
+        .unwrap()
+        .selected_namespaces = SelectedNamespaces::All;
+    let mut ui_state = UiState {
+        cluster_selections: selections,
+        ..Default::default()
+    };
+
+    let commands = apply_results(
+        &mut ui_state,
+        [
+            current_dev_cluster(),
+            Box::new(KubernetesNamespacesReplaced {
+                cluster_key: 1,
+                namespaces: ["default", "created-later"]
+                    .map(MinimalNamespace::named)
+                    .into(),
+            }),
+            dev_api_resources(),
+        ],
+    );
+
+    assert_eq!(
+        ui_state.clusters[&1].selected_namespaces,
+        SelectedNamespaces::All
+    );
+    assert!(
+        commands_of::<ReconcileResourceWatches>(&commands).any(|command| matches!(
+            command.sources.as_slice(),
+            [ResourceWatchSource::AllNamespaces(namespaces)]
+                if namespaces == &BTreeSet::from(["created-later".into(), "default".into()])
+        ))
+    );
+}
+
+#[test]
 fn legacy_cluster_selections_without_a_selected_context_remain_loadable() {
     #[derive(serde::Serialize)]
     struct LegacyPersistedClusterSelections {
@@ -298,7 +359,7 @@ fn saved_selection_restores_when_discovery_results_arrive_in_either_order() {
         let cluster = &ui_state.clusters[&1];
         assert_eq!(
             cluster.selected_namespaces,
-            HashSet::from(["default".into()])
+            SelectedNamespaces::from(["default"])
         );
         assert_eq!(
             cluster
@@ -332,11 +393,11 @@ fn unavailable_saved_selection_is_discarded_without_affecting_other_contexts() {
         .selections
         .get_mut("dev")
         .unwrap()
-        .selected_namespaces = BTreeSet::from(["obsolete".into()]);
+        .selected_namespaces = SelectedNamespaces::from(["obsolete"]);
     selections.selections.insert(
         "prod".into(),
         state::PersistedClusterSelection {
-            selected_namespaces: BTreeSet::from(["production".into()]),
+            selected_namespaces: SelectedNamespaces::from(["production"]),
             selected_api_resource: Some(state::PersistedApiResource {
                 group: "core".into(),
                 name: "pods".into(),
@@ -371,7 +432,7 @@ fn unavailable_saved_selection_is_discarded_without_affecting_other_contexts() {
         ],
     );
 
-    assert!(ui_state.clusters[&1].selected_namespaces.is_empty());
+    assert!(ui_state.clusters[&1].namespace_scope().is_empty());
     assert!(ui_state.clusters[&1].selected_api_resource.is_none());
     assert!(!ui_state.cluster_selections.selections.contains_key("dev"));
     assert!(ui_state.cluster_selections.selections.contains_key("prod"));
@@ -384,7 +445,7 @@ fn selection_changes_update_only_their_contexts_persisted_entry() {
             selections: BTreeMap::from([(
                 "prod".into(),
                 state::PersistedClusterSelection {
-                    selected_namespaces: BTreeSet::from(["production".into()]),
+                    selected_namespaces: SelectedNamespaces::from(["production"]),
                     selected_api_resource: Some(state::PersistedApiResource {
                         group: "core".into(),
                         name: "pods".into(),
@@ -418,7 +479,7 @@ fn selection_changes_update_only_their_contexts_persisted_entry() {
 
     assert_eq!(
         ui_state.cluster_selections.selections["dev"].selected_namespaces,
-        BTreeSet::from(["default".into()])
+        SelectedNamespaces::from(["default"])
     );
     assert_eq!(
         ui_state.cluster_selections.selections["dev"]
@@ -429,6 +490,6 @@ fn selection_changes_update_only_their_contexts_persisted_entry() {
     );
     assert_eq!(
         ui_state.cluster_selections.selections["prod"].selected_namespaces,
-        BTreeSet::from(["production".into()])
+        SelectedNamespaces::from(["production"])
     );
 }
