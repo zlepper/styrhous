@@ -7,7 +7,8 @@ use crate::pod_metrics::format_cpu_cores;
 use crate::resource_table::{CPU_COLUMN, CellValue};
 use crate::ui::resource_table_cache::{PreparedResourceTableRow, ResourceTableCache};
 use crate::ui::state::{
-    ClusterState, PodMetricsNamespaceState, ResourceSearchState, ResourceWatchState, UiState,
+    ClusterState, NamespaceScope, PodMetricsNamespaceState, ResourceSearchState,
+    ResourceWatchState, SelectedNamespaces, UiState,
 };
 use crate::ui::table_preferences::{MetadataColumnSource, PersistedResourceTablePreferences};
 use crate::ui::workspace::resource_table::{
@@ -27,7 +28,7 @@ fn api_resource(kind: &str, name: &str, namespaced: bool) -> crate::api_resource
 
 fn table_data(cluster: &ClusterState) -> ResourceTableData<'_> {
     ResourceTableData {
-        selected_namespaces: &cluster.selected_namespaces,
+        selected_namespaces: cluster.namespace_scope(),
         resource_cache: &cluster.resource_cache,
         metrics: ResourceMetrics {
             pod_metrics_api_available: cluster.pod_metrics_api_available,
@@ -57,7 +58,7 @@ fn cluster_with_resources(
     resources: impl IntoIterator<Item = MinimalResource>,
 ) -> ClusterState {
     let mut cluster = ClusterState::for_test(1, "test");
-    cluster.selected_namespaces.insert("default".to_owned());
+    cluster.selected_namespaces = SelectedNamespaces::from(["default"]);
     cluster.resource_cache.insert(
         (api_resource.clone(), Some("default".to_owned())),
         ResourceWatchState {

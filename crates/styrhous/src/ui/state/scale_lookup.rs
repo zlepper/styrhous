@@ -9,7 +9,7 @@ use crate::worker::GetResourceScale;
 struct ScaleLookupView {
     selected_cluster: Option<i32>,
     selected_api_resource: Option<ApiResource>,
-    selected_namespaces: HashSet<String>,
+    selected_namespaces: SelectedNamespaces,
     resource_detail_entry_ids: Vec<u64>,
 }
 

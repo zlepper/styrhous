@@ -46,7 +46,7 @@ fn selecting_context_remembers_the_latest_user_selection() {
 fn reconnect_reset_clears_connection_derived_resource_state() {
     let mut cluster = ClusterState::new(7, "dev".to_owned());
     let resource = ApiResource::helm_releases();
-    cluster.selected_namespaces.insert("default".to_owned());
+    cluster.selected_namespaces = SelectedNamespaces::from(["default"]);
     cluster.selected_api_resource = Some(resource.clone());
     cluster.active_watchers.insert((resource.clone(), None));
     cluster.resource_cache.insert(
@@ -91,7 +91,7 @@ fn reconnect_reset_clears_connection_derived_resource_state() {
         cluster.connection,
         ClusterConnectionState::Connecting
     ));
-    assert!(cluster.selected_namespaces.is_empty());
+    assert!(cluster.namespace_scope().is_empty());
     assert!(cluster.selected_api_resource.is_none());
     assert!(cluster.active_watchers.is_empty());
     assert!(cluster.resource_cache.is_empty());

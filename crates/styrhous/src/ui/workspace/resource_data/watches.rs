@@ -1,7 +1,6 @@
 use crate::api_resource::ApiResource;
 use crate::minimal_resource::MinimalResource;
-use crate::ui::state::ClusterState;
-use std::collections::HashSet;
+use crate::ui::state::{ClusterState, NamespaceScope};
 
 pub(in crate::ui::workspace) fn selected_watch_error(
     cluster: &ClusterState,
@@ -55,11 +54,11 @@ fn resource_watch_namespaces(
     cluster: &ClusterState,
     api_resource: &ApiResource,
 ) -> Vec<Option<String>> {
-    resource_watch_namespaces_for(&cluster.selected_namespaces, api_resource)
+    resource_watch_namespaces_for(cluster.namespace_scope(), api_resource)
 }
 
 pub(super) fn resource_watch_namespaces_for(
-    selected_namespaces: &HashSet<String>,
+    selected_namespaces: NamespaceScope<'_>,
     api_resource: &ApiResource,
 ) -> Vec<Option<String>> {
     if api_resource.namespaced {

@@ -131,7 +131,7 @@ impl ClusterState {
         namespace: Option<String>,
     ) -> Vec<ResourceWatchKey> {
         if api_resource.namespaced && namespace.is_none() {
-            self.selected_namespaces
+            self.namespace_scope()
                 .iter()
                 .map(|namespace| (api_resource.clone(), Some(namespace.clone())))
                 .collect()

@@ -9,6 +9,29 @@ use crate::resource_table::ContainerKind;
 use crate::worker::*;
 use std::collections::VecDeque;
 
+fn pods() -> ApiResource {
+    ApiResource {
+        group: "core".to_owned(),
+        version: "v1".to_owned(),
+        kind: "Pod".to_owned(),
+        name: "pods".to_owned(),
+        namespaced: true,
+    }
+}
+
+/// A state with the current "kind" context as cluster 1.
+fn connected_state() -> UiState {
+    let mut state = UiState::default();
+    let mut commands = Vec::new();
+    KubernetesClustersUpdated(vec![Cluster {
+        name: "kind".to_owned(),
+        is_current: true,
+        presentation: Default::default(),
+    }])
+    .apply(&mut state, &mut commands);
+    state
+}
+
 fn pod_usage(timestamp: time::OffsetDateTime, cpu_nanocores: i64) -> PodUsage {
     PodUsage {
         timestamp,
@@ -28,13 +51,7 @@ fn pod_detail_history_entry() -> ResourceDetailHistoryEntry {
     ResourceDetailHistoryEntry {
         history_entry_id: 1,
         cluster_key: 1,
-        api_resource: ApiResource {
-            group: "core".to_owned(),
-            version: "v1".to_owned(),
-            kind: "Pod".to_owned(),
-            name: "pods".to_owned(),
-            namespaced: true,
-        },
+        api_resource: pods(),
         namespace: Some("default".to_owned()),
         resource_name: "api".to_owned(),
         resource_uid: "uid".to_owned(),
@@ -59,6 +76,7 @@ fn pod_detail_history_entry() -> ResourceDetailHistoryEntry {
     }
 }
 
+mod all_namespaces;
 mod cluster_selection;
 mod editors;
 mod log_state;

@@ -191,6 +191,7 @@ mod editors;
 mod mutations;
 mod notifications;
 mod resource_data;
+mod selected_namespaces;
 
 pub(super) use actions::*;
 pub(super) use blades::*;
@@ -200,6 +201,7 @@ pub(super) use mutations::*;
 pub(super) use notifications::*;
 pub(super) use resource_data::*;
 pub(super) use scale_lookup::AwaitedScaleLookup;
+pub(crate) use selected_namespaces::{NamespaceScope, SelectedNamespaces};
 
 mod cluster_operations;
 mod cluster_results;

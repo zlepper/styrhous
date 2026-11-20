@@ -19,6 +19,18 @@ impl From<Namespace> for MinimalNamespace {
     }
 }
 
+#[cfg(test)]
+impl MinimalNamespace {
+    /// A namespace without labels or annotations.
+    pub(crate) fn named(name: &str) -> Self {
+        Self {
+            name: name.to_owned(),
+            labels: BTreeMap::new(),
+            annotations: BTreeMap::new(),
+        }
+    }
+}
+
 impl Display for MinimalNamespace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Display::fmt(&self.name, f)

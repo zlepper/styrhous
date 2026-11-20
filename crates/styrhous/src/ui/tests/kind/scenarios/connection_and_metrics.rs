@@ -273,7 +273,7 @@ fn test_resource_watcher_integration() {
     select_namespace(&mut harness, cluster_key, &fixture.namespace);
     assert!(
         harness.state().ui_state.clusters[&cluster_key]
-            .selected_namespaces
+            .namespace_scope()
             .contains(&fixture.namespace)
     );
 
