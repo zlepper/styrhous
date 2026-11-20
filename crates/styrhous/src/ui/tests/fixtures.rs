@@ -1,5 +1,7 @@
 use super::super::MyEguiApp;
-use super::super::state::{ClusterConnectionState, ClusterState, ResourceWatchState, UiState};
+use super::super::state::{
+    ClusterConnectionState, ClusterState, ResourceWatchState, SelectedNamespaces, UiState,
+};
 use crate::api_resource::ApiResource;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
@@ -128,7 +130,7 @@ pub(super) fn oracle_resource_table_state() -> UiState {
             annotations: Default::default(),
         },
     );
-    kind.selected_namespaces.insert("kube-system".into());
+    kind.selected_namespaces = SelectedNamespaces::from(["kube-system"]);
     kind.selected_api_resource = Some(pods.clone());
     let mut discovered_resources = core_resources;
     discovered_resources.extend([

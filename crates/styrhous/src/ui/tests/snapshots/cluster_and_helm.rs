@@ -31,7 +31,7 @@ fn namespace_selector_reconciles_watch_sources_when_selection_changes() {
     select_namespace(&mut harness, "default");
     assert_eq!(
         harness.state().ui_state.clusters[&1].selected_namespaces,
-        HashSet::from(["default".to_owned()])
+        SelectedNamespaces::from(["default"])
     );
 
     harness
@@ -61,14 +61,14 @@ fn namespace_selector_reconciles_watch_sources_when_selection_changes() {
     harness.event(egui::Event::ModifiersChanged(egui::Modifiers::default()));
     assert_eq!(
         harness.state().ui_state.clusters[&1].selected_namespaces,
-        HashSet::from(["default".to_owned(), "kube-system".to_owned()])
+        SelectedNamespaces::from(["default", "kube-system"])
     );
 
     harness.get_by_label("default").click();
     harness.run();
     assert_eq!(
         harness.state().ui_state.clusters[&1].selected_namespaces,
-        HashSet::from(["default".to_owned()])
+        SelectedNamespaces::from(["default"])
     );
 
     harness
@@ -80,18 +80,14 @@ fn namespace_selector_reconciles_watch_sources_when_selection_changes() {
     harness.run();
     assert_eq!(
         harness.state().ui_state.clusters[&1].selected_namespaces,
-        HashSet::from([
-            "default".to_owned(),
-            "kube-system".to_owned(),
-            "monitoring".to_owned(),
-        ])
+        SelectedNamespaces::All
     );
 
     harness.get_by_label("Select all").click();
     harness.run();
     assert!(
         harness.state().ui_state.clusters[&1]
-            .selected_namespaces
+            .namespace_scope()
             .is_empty()
     );
 
@@ -111,7 +107,7 @@ fn namespace_selector_reconciles_watch_sources_when_selection_changes() {
     let cluster = &harness.state().ui_state.clusters[&1];
     assert_eq!(
         cluster.selected_namespaces,
-        HashSet::from(["default".to_owned()])
+        SelectedNamespaces::from(["default"])
     );
     assert!(
         !cluster
@@ -130,6 +126,81 @@ fn namespace_selector_reconciles_watch_sources_when_selection_changes() {
             .count(),
         2
     );
+}
+
+#[test]
+fn select_all_namespaces_includes_namespaces_created_afterwards() {
+    let pods = fixture_api_resource("", "Pod", "pods");
+    let mut cluster = fixture_cluster(1, "dev");
+    cluster.connection = ClusterConnectionState::Connected;
+    cluster.selected_api_resource = Some(pods.clone());
+    for namespace in ["default", "kube-system"] {
+        cluster
+            .namespaces
+            .insert(namespace.into(), MinimalNamespace::named(namespace));
+    }
+    let list_pods = |namespace: &str| KubernetesResourcesReplaced {
+        cluster_key: 1,
+        api_resource: pods.clone(),
+        namespace: Some(namespace.into()),
+        resources: Vec::new(),
+    };
+    let mut harness = application_harness::<MockWorker>();
+    harness.seed_ui_state(UiState {
+        clusters: HashMap::from([(1, cluster)]),
+        next_cluster_key: 1,
+        selected_cluster: Some(1),
+        ..Default::default()
+    });
+
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
+        .click();
+    harness.run();
+    harness.get_by_label("Select all").click();
+    // Loading watches show a spinner, which keeps repainting until they list.
+    harness.run_steps(2);
+    let worker = &mut harness.state_mut().worker;
+    worker.enqueue_result(list_pods("default"));
+    worker.enqueue_result(list_pods("kube-system"));
+    harness.run_steps(2);
+    harness.state_mut().worker.commands.clear();
+
+    harness
+        .state_mut()
+        .worker
+        .enqueue_result(KubernetesNamespacesAdded {
+            cluster_key: 1,
+            namespace: MinimalNamespace::named("monitoring"),
+        });
+    harness.run_steps(2);
+
+    assert_eq!(
+        harness.cluster(1).selected_namespaces,
+        SelectedNamespaces::All
+    );
+    let worker = &harness.state().worker;
+    assert!(
+        worker
+            .commands_of::<ReconcileResourceWatches>()
+            .any(|command| matches!(
+                command.sources.as_slice(),
+                [ResourceWatchSource::AllNamespaces(namespaces)]
+                    if namespaces.contains("monitoring")
+            ))
+    );
+    for namespace in ["Select all", "default", "kube-system", "monitoring"] {
+        assert_eq!(
+            harness.get_by_label(namespace).accesskit_node().toggled(),
+            Some(egui::accesskit::Toggled::True),
+            "{namespace} must be shown as selected"
+        );
+    }
+
+    harness.deliver_worker_result(list_pods("monitoring"));
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "cluster_connection/select_all_namespaces_includes_namespaces_created_afterwards/namespace_selector_all_namespaces_after_creation",
+    ));
 }
 
 #[test]
@@ -152,7 +223,7 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
 
     assert!(
         harness.state().ui_state.clusters[&1]
-            .selected_namespaces
+            .namespace_scope()
             .is_empty()
     );
     assert_eq!(harness.state().worker.commands.len(), 2);
@@ -217,7 +288,7 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
     );
 
     let cluster = harness.state_mut().ui_state.clusters.get_mut(&1).unwrap();
-    cluster.selected_namespaces = HashSet::from(["default".into(), "kube-system".into()]);
+    cluster.selected_namespaces = SelectedNamespaces::from(["default", "kube-system"]);
     harness.run();
     assert_eq!(
         harness.state().ui_state.clusters[&1]
@@ -251,7 +322,7 @@ fn namespace_selector_search_snapshot_shows_active_watches() {
             annotations: Default::default(),
         },
     );
-    cluster.selected_namespaces = HashSet::from(["kube-system".into(), "monitoring".into()]);
+    cluster.selected_namespaces = SelectedNamespaces::from(["kube-system", "monitoring"]);
     cluster.resource_cache.insert(
         (pods.clone(), Some("monitoring".into())),
         ResourceWatchState {

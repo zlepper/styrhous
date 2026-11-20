@@ -320,7 +320,7 @@ pub(super) fn select_namespace(
             app.ui_state
                 .clusters
                 .get(&cluster_key)
-                .filter(|cluster| cluster.selected_namespaces.contains(&namespace))
+                .filter(|cluster| cluster.namespace_scope().contains(&namespace))
                 .map(|_| ())
         },
         10_000,

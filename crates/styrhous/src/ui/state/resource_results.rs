@@ -92,7 +92,7 @@ impl WorkerResult for crate::worker::KubernetesResourcesReplaced {
                     cached_resource == &api_resource
                         && (!api_resource.namespaced
                             || cached_namespace.as_ref().is_some_and(|namespace| {
-                                cluster.selected_namespaces.contains(namespace)
+                                cluster.namespace_scope().contains(namespace)
                             }))
                 })
                 .flat_map(|(_, watch)| watch.resources.keys().cloned())

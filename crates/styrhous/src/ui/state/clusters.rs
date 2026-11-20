@@ -13,7 +13,7 @@ pub(crate) struct ClusterState {
     /// period; the last known namespaces stay usable meanwhile.
     pub(crate) namespaces_reconnecting: Option<String>,
     pub(crate) api_resources_load: ClusterLoadState,
-    pub(crate) selected_namespaces: HashSet<String>,
+    pub(crate) selected_namespaces: SelectedNamespaces,
     pub(crate) resources: ClusterResourceState,
 }
 
@@ -37,6 +37,9 @@ pub(crate) struct ClusterResourceState {
     pub(in crate::ui) resource_table_cache: super::super::resource_table_cache::ResourceTableCache,
     pub(crate) helm_release_cache: HashMap<String, HelmReleaseWatchState>,
     pub(crate) active_watchers: HashSet<ResourceWatchKey>,
+    /// The namespaces each active all-namespaces watcher was started for. It
+    /// filters events by this set, so it is restarted only when the set changes.
+    pub(crate) all_namespaces_watch_scopes: HashMap<ApiResource, BTreeSet<String>>,
     pub(crate) pod_metrics_api_available: bool,
     pub(crate) pod_metrics: HashMap<String, PodMetricsNamespaceState>,
     pub(crate) active_pod_metrics: HashSet<String>,
@@ -80,9 +83,26 @@ impl ClusterState {
             namespaces_load: ClusterLoadState::Loading,
             namespaces_reconnecting: None,
             api_resources_load: ClusterLoadState::Loading,
-            selected_namespaces: HashSet::new(),
+            selected_namespaces: SelectedNamespaces::default(),
             resources: ClusterResourceState::new(false),
         }
+    }
+
+    /// The selected namespaces resolved against the discovered ones.
+    pub(crate) fn namespace_scope(&self) -> NamespaceScope<'_> {
+        NamespaceScope::new(&self.selected_namespaces, &self.namespaces)
+    }
+
+    /// Whether a running watcher covers `namespace`, either on its own or as
+    /// part of an all-namespaces watcher.
+    pub(crate) fn is_namespace_watched(&self, api_resource: &ApiResource, namespace: &str) -> bool {
+        self.active_watchers
+            .contains(&(api_resource.clone(), Some(namespace.to_owned())))
+            || (self.active_watchers.contains(&(api_resource.clone(), None))
+                && self
+                    .all_namespaces_watch_scopes
+                    .get(api_resource)
+                    .is_some_and(|scope| scope.contains(namespace)))
     }
 
     /// Clear state derived from a previous connection before opening a new
@@ -94,7 +114,7 @@ impl ClusterState {
         self.namespaces_reconnecting = None;
         self.api_resources_load = ClusterLoadState::Loading;
         self.namespaces.clear();
-        self.selected_namespaces.clear();
+        self.selected_namespaces = SelectedNamespaces::default();
         self.resources.reset_for_connection();
     }
 
@@ -132,6 +152,7 @@ impl ClusterResourceState {
             resource_table_cache: Default::default(),
             helm_release_cache: HashMap::new(),
             active_watchers: HashSet::new(),
+            all_namespaces_watch_scopes: HashMap::new(),
             pod_metrics_api_available: metrics_api_available,
             pod_metrics: HashMap::new(),
             active_pod_metrics: HashSet::new(),

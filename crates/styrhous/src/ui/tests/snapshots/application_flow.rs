@@ -128,7 +128,7 @@ fn force_delete_failure_is_recorded_in_operation_history() {
 #[test]
 fn resource_navigation_selects_primary_curated_gateway_and_other_resources() {
     let mut cluster = fixture_cluster(1, "dev");
-    cluster.selected_namespaces.insert("default".into());
+    cluster.selected_namespaces = SelectedNamespaces::from(["default"]);
     cluster.resource_navigation = build_resource_navigation(vec![
         fixture_api_resource("core", "Node", "nodes"),
         fixture_api_resource("core", "Namespace", "namespaces"),
@@ -664,11 +664,8 @@ fn scale_fetch_arriving_after_navigation_does_not_open_the_dialog() {
     type Navigate = fn(&mut UiState);
     let navigations: [(&str, Navigate); 3] = [
         ("namespace change", |ui| {
-            ui.clusters
-                .get_mut(&1)
-                .unwrap()
-                .selected_namespaces
-                .insert("other".into());
+            ui.clusters.get_mut(&1).unwrap().selected_namespaces =
+                SelectedNamespaces::from(["other"]);
         }),
         ("resource type change", |ui| {
             ui.clusters.get_mut(&1).unwrap().selected_api_resource =
