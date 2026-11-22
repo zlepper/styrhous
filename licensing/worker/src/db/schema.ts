@@ -134,7 +134,6 @@ export const trials = sqliteTable(
     billingAccountId: text('billing_account_id').notNull().references(() => billingAccounts.id),
     startedAt: text('started_at').notNull(),
     endsAt: text('ends_at').notNull(),
-    transferredAt: text('transferred_at'),
     terminatedAt: text('terminated_at')
   },
   (table) => [

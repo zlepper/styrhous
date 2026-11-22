@@ -4,8 +4,12 @@ The Styrhous desktop app talks to its licensing server over `/desktop/v2`. The s
 (`https://host`, no path) is also the expected lease issuer, so every URL below is relative to
 that origin. Responses are JSON and never cached.
 
-Licensing is honor-based: without a valid lease the app shows evaluation status, but it never
-disables features.
+Licensing is honor-based and never disables features. Most users qualify for free use, so the app
+treats being signed out or signed in without a lease as normal. It warns only about problems with
+a commercial seat: a revoked installation, a grace lease, a commercial lease that expired offline,
+or an expired, inactive, or over-capacity subscription. A failed check also warns, unless the
+service's last answer was that the installation has no license. A denied or expired sign-in
+returns quietly to the signed-out state.
 
 ## Sign-in (RFC 8628 device authorization)
 
@@ -64,8 +68,8 @@ membership, or replaced as a stale device.
 | Response | Client behaviour |
 |---|---|
 | `200 {"lease", "state", "entitlementReasonCode", "expiresAt", "refreshAfter"}` | Fetch `/keys`, verify the lease, and cache both. |
-| `401 {"reasonCode":"invalid_installation_token"}` | Forget the token; signed out. |
-| `403 {"reasonCode":"<entitlement reason>"}` | Evaluation mode. Stay signed in and check again later. |
+| `401 {"reasonCode":"invalid_installation_token"}` | Forget the token and report the installation as revoked. |
+| `403 {"reasonCode":"<entitlement reason>"}` | No license. Stay signed in and check again later. Warn only for `subscription_expired`, `subscription_inactive`, and `subscription_seat_capacity_exceeded`. |
 
 ### `GET /desktop/v2/keys`
 

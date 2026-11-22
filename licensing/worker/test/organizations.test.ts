@@ -20,20 +20,52 @@ async function expireOrganizationTrial(billingAccountId: string) {
 }
 
 describe('organizations', () => {
-  it('transfers the personal trial to the first organization only', async () => {
-    const { browser } = await signedInBrowser(upstream, 'founder@example.com');
+  it("starts a trial with the user's first organization only", async () => {
+    const { browser, userId } = await signedInBrowser(upstream, 'founder@example.com');
     const first = await browser.json('/api/organizations', 'POST', { name: '  First  ' });
-    expect(first.body).toMatchObject({ trialWasTransferred: true });
+    expect(first.body).toMatchObject({ trialStarted: true });
     const second = await browser.json('/api/organizations', 'POST', { name: 'Second' });
-    expect(second.body).toMatchObject({ trialWasTransferred: false });
+    expect(second.body).toMatchObject({ trialStarted: false });
 
     const organizations = await browser.json<{ organizations: { name: string; role: string }[] }>('/api/organizations');
     expect(organizations.body.organizations.map((organization) => [organization.name, organization.role])).toEqual([
       ['First', 'owner'],
       ['Second', 'owner']
     ]);
-    const transfers = "SELECT count(*) AS total FROM audit_records WHERE action = 'trial_transferred' AND actor_user_id = ?";
-    expect(await countRows(transfers, (await browser.json('/auth/session')).body.userId)).toBe(1);
+    const trialsOf = 'SELECT count(*) AS total FROM trials WHERE billing_account_id = ?';
+    expect(await countRows(trialsOf, first.body.billingAccountId)).toBe(1);
+    expect(await countRows(trialsOf, second.body.billingAccountId)).toBe(0);
+    const starts = "SELECT count(*) AS total FROM audit_records WHERE action = 'trial_started' AND actor_user_id = ?";
+    expect(await countRows(starts, userId)).toBe(1);
+
+    const entitlements = await browser.json<{ entitlements: Record<string, unknown>[] }>('/api/entitlements');
+    expect(
+      entitlements.body.entitlements.map((entitlement) => [entitlement.billingAccountId, entitlement.reasonCode])
+    ).toEqual(
+      expect.arrayContaining([
+        [first.body.billingAccountId, 'active_trial'],
+        [second.body.billingAccountId, 'no_valid_entitlement']
+      ])
+    );
+  });
+
+  it('starts only one trial when a user creates two organizations at once', async () => {
+    const { browser, userId } = await signedInBrowser(upstream, 'racing-founder@example.com');
+    const results = await Promise.all(
+      ['Alpha', 'Beta'].map((name) =>
+        browser.json<{ billingAccountId: string; trialStarted: boolean }>('/api/organizations', 'POST', { name })
+      )
+    );
+
+    expect(results.map((result) => result.status)).toEqual([201, 201]);
+    const started = results.filter((result) => result.body.trialStarted);
+    expect(started).toHaveLength(1);
+    const trialAccount = await env.DB.prepare('SELECT billing_account_id AS id FROM trials WHERE originating_user_id = ?')
+      .bind(userId)
+      .all<{ id: string }>();
+    expect(trialAccount.results.map((row) => row.id)).toEqual([started[0]!.body.billingAccountId]);
+    const starts = "SELECT count(*) AS total FROM audit_records WHERE action = 'trial_started' AND actor_user_id = ?";
+    expect(await countRows(starts, userId)).toBe(1);
   });
 
   it('validates the organization name', async () => {
@@ -172,7 +204,7 @@ describe('seat capacity', () => {
   it('lets exactly one of two concurrent requests take the last seat', async () => {
     const owner = await signedInBrowser(upstream, 'capacity-owner@example.com');
     const organization = await createOrganization(owner.browser);
-    // The transferred trial provides five seats; the owner holds one.
+    // The organization's trial provides five seats; the owner holds one.
     const members = [];
     for (const index of [1, 2, 3, 4, 5]) {
       members.push(
@@ -319,6 +351,21 @@ describe('invitations', () => {
         reasonCode: 'already_member'
       });
     }
+  });
+
+  it('still starts a trial for a member who later creates their own organization', async () => {
+    const owner = await signedInBrowser(upstream, 'trial-host@example.com');
+    const hosting = await createOrganization(owner.browser, 'Hosting');
+    const member = await addMember(upstream, owner.browser, hosting, 'trial-guest@example.com');
+
+    const own = await member.browser.json('/api/organizations', 'POST', { name: 'Guest Labs' });
+    expect(own.body).toMatchObject({ trialStarted: true });
+
+    const trialOf = 'SELECT originating_user_id AS id FROM trials WHERE billing_account_id = ?';
+    const trialOwner = async (billingAccountId: string) =>
+      (await env.DB.prepare(trialOf).bind(billingAccountId).first<{ id: string }>())?.id;
+    expect(await trialOwner(hosting.billingAccountId)).toBe(owner.userId);
+    expect(await trialOwner(own.body.billingAccountId)).toBe(member.userId);
   });
 
   it('accepts an invitation only once when it is accepted twice at once', async () => {

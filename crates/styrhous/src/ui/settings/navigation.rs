@@ -56,13 +56,7 @@ impl GlobalBladeContent for SettingsHomeBlade {
             "Manage your license and account. {}",
             licensing.settings().server.label()
         );
-        let license_status = match licensing.status() {
-            crate::licensing::LicenseStatus::Licensed(_) => "Active",
-            crate::licensing::LicenseStatus::Offline(_) => "Offline",
-            crate::licensing::LicenseStatus::Checking => "Checking…",
-            crate::licensing::LicenseStatus::AwaitingApproval(_) => "Pending",
-            _ => "Needs attention",
-        };
+        let license_status = licensing.status().short_label();
         components::scroll::vertical()
             .id_salt("settings-destinations")
             .auto_shrink([false, false])

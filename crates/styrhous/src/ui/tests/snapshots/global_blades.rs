@@ -1,6 +1,7 @@
 //! Global-blade ownership and settings scenarios.
 
 use super::*;
+use crate::licensing::{FREE_USE_NOTE, FREE_USE_SIGN_IN_NOTE};
 use crate::ui::state::OperationOutcome;
 
 #[test]
@@ -240,33 +241,20 @@ fn notification_history_includes_every_cluster_and_marks_all_entries_read() {
 
 #[test]
 fn licensing_warning_opens_account_settings_without_restricting_the_application() {
-    let mut harness = application_harness::<MockWorker>();
-    harness.state_mut().ui_state = oracle_resource_table_state();
-    harness
-        .state_mut()
-        .licensing
-        .switch_server(LicenseServer::Custom("http://127.0.0.1:5050".into()));
-    harness
-        .state_mut()
-        .licensing
-        .set_status_for_test(LicenseStatus::SignedOut);
-    harness.run();
+    let mut harness = licensing_harness(LicenseStatus::Revoked);
 
-    harness.get_by_label("Sign in to refresh your Styrhous license.");
+    harness.get_by_label("This device's license was revoked.");
     harness.get_by_label("More actions for kube-scheduler-kind-control-plane");
     harness.ui_harness(
         "licensing/licensing_warning_opens_account_settings_without_restricting_the_application/warning",
     );
 
-    harness
-        .get_by_label("License warning: Sign in to refresh your Styrhous license. Manage license")
-        .click();
-    harness.run_steps(2);
+    open_license_settings(&mut harness, LicenseEntry::Warning);
 
-    harness.get_by_label("License & account");
+    harness.get_by_label(FREE_USE_SIGN_IN_NOTE);
     harness.get_by_label("Sign in");
+    harness.get_by_label("Sign out");
     assert!(harness.query_by_label("Refresh license").is_none());
-    assert!(harness.query_by_label("Sign out").is_none());
     assert!(harness.query_by_label("Self-hosted server").is_none());
     harness.ui_harness(
         "licensing/licensing_warning_opens_account_settings_without_restricting_the_application/settings",
@@ -285,20 +273,65 @@ fn licensing_warning_opens_account_settings_without_restricting_the_application(
     harness.get_by_label("Advanced").click();
     harness.run();
     harness.get_by_label("Self-hosted server");
+
+    // Signing out dismisses the warning and returns to quiet free use.
+    harness.get_by_label("Sign out").click();
+    harness.run();
+    harness.get_by_label("Not signed in.");
+    assert!(harness.query_by_label_contains(LICENSE_WARNING).is_none());
 }
 
 #[test]
-fn evaluation_keeps_account_actions_available() {
-    for reason in ["trial_expired", "offline_lease_expired"] {
+fn signed_out_free_use_shows_no_warning() {
+    let mut harness = licensing_harness(LicenseStatus::SignedOut);
+
+    open_license_settings(
+        &mut harness,
+        LicenseEntry::Settings {
+            card_detail: "Not signed in",
+        },
+    );
+
+    harness.get_by_label("Not signed in.");
+    harness.get_by_label(FREE_USE_SIGN_IN_NOTE);
+    harness.get_by_label("Sign in");
+    harness.get_by_label("Manage account");
+    assert!(harness.query_by_label("Refresh license").is_none());
+    assert!(harness.query_by_label("Sign out").is_none());
+    harness.ui_harness("licensing/signed_out_free_use_account_settings");
+}
+
+#[test]
+fn signed_in_without_entitlement_keeps_account_actions_available() {
+    // Users without a subscription most likely qualify for free use, so only problems with a
+    // commercial subscription raise the warning.
+    for (reason, entry) in [
+        (
+            "trial_expired",
+            LicenseEntry::Settings {
+                card_detail: "No subscription",
+            },
+        ),
+        (
+            "no_valid_entitlement",
+            LicenseEntry::Settings {
+                card_detail: "No subscription",
+            },
+        ),
+        ("offline_lease_expired", LicenseEntry::Warning),
+        ("subscription_expired", LicenseEntry::Warning),
+    ] {
         let mut harness = licensing_harness(LicenseStatus::Evaluation {
             reason_code: reason.into(),
         });
-        open_license_settings_from_warning(&mut harness);
+        open_license_settings(&mut harness, entry);
+        harness.get_by_label(FREE_USE_NOTE);
         assert!(harness.query_by_label("Sign in").is_none());
         harness.get_by_label("Refresh license");
         harness.get_by_label("Sign out");
         if reason == "trial_expired" {
-            harness.ui_harness("licensing/evaluation_account_actions");
+            harness.get_by_label("Your organization's trial has ended.");
+            harness.ui_harness("licensing/trial_ended_account_actions");
         }
         harness.get_by_label("Sign out").click();
         harness.run_steps(2);
@@ -307,7 +340,36 @@ fn evaluation_keeps_account_actions_available() {
     }
 }
 
-const OPEN_LICENSE_SETTINGS: &str = "Open license and account settings: Manage your license and account. Custom compatible server (Active)";
+/// The start of the warning banner's accessibility label.
+const LICENSE_WARNING: &str = "License warning:";
+
+/// How a test reaches the license blade. A status that warns must be reachable from the warning
+/// banner; any other status must show no banner and is opened from the settings home, whose
+/// license card shows `card_detail`.
+enum LicenseEntry {
+    Warning,
+    Settings { card_detail: &'static str },
+}
+
+fn open_license_settings(harness: &mut Harness<MyEguiApp<MockWorker>>, entry: LicenseEntry) {
+    match entry {
+        LicenseEntry::Warning => harness.get_by_label_contains(LICENSE_WARNING).click(),
+        LicenseEntry::Settings { card_detail } => {
+            assert!(
+                harness.query_by_label_contains(LICENSE_WARNING).is_none(),
+                "unexpected license warning"
+            );
+            open_settings(harness);
+            let card = format!(
+                "Open license and account settings: Manage your license and account. Custom compatible server ({card_detail})"
+            );
+            let license_position = harness.get_by_label(&card).rect().center();
+            primary_click(harness, license_position);
+        }
+    }
+    harness.run();
+    harness.get_by_label("License device display name");
+}
 
 /// A lease far in the future, so snapshot text never depends on the current time.
 fn fixed_lease(state: &str, reason_code: &str) -> VerifiedLease {
@@ -336,33 +398,21 @@ fn licensing_harness(status: LicenseStatus) -> Harness<'static, MyEguiApp<MockWo
     harness
 }
 
-fn open_license_settings_from_warning(harness: &mut Harness<MyEguiApp<MockWorker>>) {
-    let summary = harness.state().licensing.status().summary();
-    harness
-        .get_by_label(&format!("License warning: {summary} Manage license"))
-        .click();
-    harness.run_steps(2);
-    harness.get_by_label("License & account");
-}
-
 #[test]
 fn licensed_commercial_account_actions_show_license_details() {
     let mut harness = licensing_harness(LicenseStatus::Licensed(fixed_lease(
         "commercial",
         "active_subscription",
     )));
-    assert!(
-        harness
-            .query_by_label("License warning: Commercial license active. Manage license")
-            .is_none()
+    open_license_settings(
+        &mut harness,
+        LicenseEntry::Settings {
+            card_detail: "Active",
+        },
     );
 
-    open_settings(&mut harness);
-    let license_position = harness.get_by_label(OPEN_LICENSE_SETTINGS).rect().center();
-    primary_click(&mut harness, license_position);
-    harness.run_steps(2);
-
     harness.get_by_label("Commercial license active.");
+    assert!(harness.query_by_label(FREE_USE_NOTE).is_none());
     harness.get_by_label("Available offline until: 2100-01-01T00:00:00Z");
     assert!(harness.query_by_label("Sign in").is_none());
     harness.get_by_label("Refresh license");
@@ -375,6 +425,27 @@ fn licensed_commercial_account_actions_show_license_details() {
 }
 
 #[test]
+fn grace_lease_warns_but_keeps_the_license_details() {
+    let mut harness = licensing_harness(LicenseStatus::Licensed(fixed_lease(
+        "grace",
+        "subscription_past_due",
+    )));
+    harness.get_by_label("License grace period active until 2100-01-01T00:00:00Z.");
+    open_license_settings(&mut harness, LicenseEntry::Warning);
+
+    harness.get_by_label("Available offline until: 2100-01-01T00:00:00Z");
+    assert!(
+        harness
+            .query_by_label_contains("Styrhous is free")
+            .is_none()
+    );
+    assert!(harness.query_by_label("Sign in").is_none());
+    harness.get_by_label("Refresh license");
+    harness.get_by_label("Sign out");
+    harness.ui_harness("licensing/grace_lease_account_actions");
+}
+
+#[test]
 fn offline_lease_account_actions_warn_about_session_only_credentials() {
     let mut harness =
         licensing_harness(LicenseStatus::Offline(fixed_lease("trial", "trial_active")));
@@ -383,16 +454,16 @@ fn offline_lease_account_actions_warn_about_session_only_credentials() {
         .licensing
         .set_keychain_warning_for_test(true);
     harness.run();
-    open_license_settings_from_warning(&mut harness);
+    // A still-valid offline lease is not a problem, so only the blade shows the summary.
+    open_license_settings(
+        &mut harness,
+        LicenseEntry::Settings {
+            card_detail: "Offline",
+        },
+    );
 
-    // The summary appears in both the warning bar and the blade.
-    assert_eq!(
-        harness
-            .get_all_by_label(
-                "Licensing service is unreachable; offline trial lease is valid until 2100-01-01T00:00:00Z."
-            )
-            .count(),
-        2
+    harness.get_by_label(
+        "Licensing service is unreachable; offline trial lease is valid until 2100-01-01T00:00:00Z.",
     );
     harness.get_by_label(
         "Secure credential storage is unavailable. This sign-in lasts only for this session.",
@@ -408,7 +479,7 @@ fn failed_check_offers_every_account_action() {
     let mut harness = licensing_harness(LicenseStatus::Failed {
         message: "the licensing service is unreachable".into(),
     });
-    open_license_settings_from_warning(&mut harness);
+    open_license_settings(&mut harness, LicenseEntry::Warning);
 
     for action in ["Sign in", "Refresh license", "Manage account", "Sign out"] {
         harness.get_by_label(action);
@@ -425,7 +496,12 @@ fn awaiting_approval_shows_the_code_and_can_be_cancelled() {
             .into(),
         expires_in: 600,
     }));
-    open_license_settings_from_warning(&mut harness);
+    open_license_settings(
+        &mut harness,
+        LicenseEntry::Settings {
+            card_detail: "Pending",
+        },
+    );
 
     harness.get_by_label("BCDF-GHJK");
     harness.get_by_label("This request expires in 10 minutes.");
@@ -444,7 +520,12 @@ fn awaiting_approval_shows_the_code_and_can_be_cancelled() {
 #[test]
 fn checking_offers_only_account_management_and_sign_out() {
     let mut harness = licensing_harness(LicenseStatus::Checking);
-    open_license_settings_from_warning(&mut harness);
+    open_license_settings(
+        &mut harness,
+        LicenseEntry::Settings {
+            card_detail: "Checking…",
+        },
+    );
 
     harness.get_by_label("Manage account");
     harness.get_by_label("Sign out");
@@ -461,12 +542,15 @@ fn unconfigured_licensing_requires_a_server_before_sign_in() {
         .switch_server(LicenseServer::Custom(String::new()));
     harness.run();
 
-    harness
-        .get_by_label("License warning: Licensing server is not configured. Manage license")
-        .click();
-    harness.run_steps(2);
+    open_license_settings(
+        &mut harness,
+        LicenseEntry::Settings {
+            card_detail: "Not signed in",
+        },
+    );
 
-    harness.get_by_label("License & account");
+    harness.get_by_label("No licensing server is configured.");
+    harness.get_by_label(FREE_USE_SIGN_IN_NOTE);
     assert!(harness.query_by_label("Sign in").is_none());
     assert!(harness.query_by_label("Refresh license").is_none());
     assert!(harness.query_by_label("Manage account").is_none());

@@ -132,8 +132,8 @@
       const created = await api.createOrganization(name);
       organizationName = '';
       await loadOrganizations(created.organizationId);
-      actionStatus = created.trialWasTransferred
-        ? `${name} is ready. Your active personal trial was transferred to it.`
+      actionStatus = created.trialStarted
+        ? `${name} is ready. Its 30-day trial with 5 seats has started.`
         : `${name} is ready.`;
     });
   }
@@ -328,7 +328,7 @@
   function organizationCreationDescription() {
     const descriptions: string[] = [];
     if (!loadingOrganizations && organizations.length === 0) {
-      descriptions.push('organization-trial-transfer-help');
+      descriptions.push('organization-trial-help');
     }
     if (failedAction === 'create-organization') {
       descriptions.push('organization-action-error');
@@ -379,9 +379,9 @@
       onsubmit={createOrganization}
     >
       {#if !loadingOrganizations && organizations.length === 0}
-        <p id="organization-trial-transfer-help" class="organization-creation-note">
-          If this is the first organization you create and your personal trial is active, the
-          trial moves to the organization.
+        <p id="organization-trial-help" class="organization-creation-note">
+          If you haven't had a trial yet, your new organization starts a 30-day trial with up to 5
+          seats.
         </p>
       {/if}
       <div class="field-group grow-field">

@@ -8,7 +8,7 @@ export async function countRows(query: string, ...binds: unknown[]): Promise<num
   return row!.total;
 }
 
-/** Ends the trial that a user started, wherever it now belongs. */
+/** Ends the trial that a user started with their first organization. */
 export async function expireUserTrial(userId: string) {
   await env.DB.prepare('UPDATE trials SET started_at = ?, ends_at = ? WHERE originating_user_id = ?')
     .bind(past, '2020-01-31T00:00:00.000Z', userId)

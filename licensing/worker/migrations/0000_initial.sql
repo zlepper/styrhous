@@ -181,7 +181,6 @@ CREATE TABLE `trials` (
 	`billing_account_id` text NOT NULL,
 	`started_at` text NOT NULL,
 	`ends_at` text NOT NULL,
-	`transferred_at` text,
 	`terminated_at` text,
 	FOREIGN KEY (`originating_user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`billing_account_id`) REFERENCES `billing_accounts`(`id`) ON UPDATE no action ON DELETE no action,

@@ -18,7 +18,20 @@ const EVALUATION_RECHECK_DELAY: Duration = Duration::from_secs(60 * 60);
 const LEASE_SCHEMA_VERSION: u8 = 2;
 /// How far ahead of the local clock a freshly issued lease may start, absorbing clock drift.
 const CLOCK_SKEW_LEEWAY: Duration = Duration::from_secs(5 * 60);
+/// Client-side reason for a cached commercial or grace lease that expired while offline.
 const OFFLINE_LEASE_EXPIRED: &str = "offline_lease_expired";
+// Entitlement reason codes sent by the licensing service (`entitlements/rules.ts`).
+const TRIAL_EXPIRED: &str = "trial_expired";
+const TRIAL_NOT_STARTED: &str = "trial_not_started";
+const NO_VALID_ENTITLEMENT: &str = "no_valid_entitlement";
+const PRODUCT_SEAT_NOT_ASSIGNED: &str = "product_seat_not_assigned";
+const SUBSCRIPTION_NOT_STARTED: &str = "subscription_not_started";
+const SUBSCRIPTION_EXPIRED: &str = "subscription_expired";
+const SUBSCRIPTION_INACTIVE: &str = "subscription_inactive";
+const SUBSCRIPTION_SEAT_CAPACITY_EXCEEDED: &str = "subscription_seat_capacity_exceeded";
+const LEASE_STATE_TRIAL: &str = "trial";
+const LEASE_STATE_COMMERCIAL: &str = "commercial";
+const LEASE_STATE_GRACE: &str = "grace";
 const HOSTED_ORIGIN: Option<&str> = option_env!("STYRHOUS_HOSTED_LICENSE_ORIGIN");
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -82,6 +95,22 @@ impl LicensingSettings {
     }
 }
 
+/// Who may use Styrhous without a subscription, per section 4 of `LICENSE.md`.
+macro_rules! free_use_eligibility {
+    () => {
+        "Styrhous is free for personal use, education, non-commercial open source, and \
+         organizations with fewer than 250 people and less than €10M in annual revenue."
+    };
+}
+
+/// The free-use explanation for an installation that is signed in without a license.
+pub(crate) const FREE_USE_NOTE: &str = free_use_eligibility!();
+/// The free-use explanation for an installation that can sign in.
+pub(crate) const FREE_USE_SIGN_IN_NOTE: &str = concat!(
+    free_use_eligibility!(),
+    " Sign in if your company has a subscription."
+);
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum LicenseStatus {
     Unconfigured,
@@ -90,25 +119,72 @@ pub(crate) enum LicenseStatus {
     AwaitingApproval(DeviceAuthorization),
     Licensed(VerifiedLease),
     Offline(VerifiedLease),
-    Evaluation { reason_code: String },
-    Failed { message: String },
+    /// Signed in without an entitlement. Most such users qualify for free use, so only
+    /// problems with a commercial subscription warn.
+    Evaluation {
+        reason_code: String,
+    },
+    /// The licensing service rejected this installation's credential, for example because the
+    /// device was removed from its seat.
+    Revoked,
+    Failed {
+        message: String,
+    },
 }
 
 impl LicenseStatus {
+    /// Whether the app should draw attention to the license. Free use is the normal state, so
+    /// only problems with a commercial seat warn.
     pub(crate) fn shows_warning(&self) -> bool {
-        !matches!(self, Self::Licensed(lease) if lease.state == "commercial")
+        match self {
+            Self::Unconfigured | Self::SignedOut | Self::Checking | Self::AwaitingApproval(_) => {
+                false
+            }
+            Self::Licensed(lease) | Self::Offline(lease) => lease.state == LEASE_STATE_GRACE,
+            Self::Evaluation { reason_code } => is_commercial_problem(reason_code),
+            Self::Revoked | Self::Failed { .. } => true,
+        }
+    }
+
+    /// A one- or two-word status for compact places such as the settings home card.
+    pub(crate) fn short_label(&self) -> &'static str {
+        match self {
+            // Covers grace leases and commercial subscription problems, plus these two.
+            _ if self.shows_warning() => "Needs attention",
+            Self::Revoked | Self::Failed { .. } => "Needs attention",
+            Self::Licensed(_) => "Active",
+            Self::Offline(_) => "Offline",
+            Self::Checking => "Checking…",
+            Self::AwaitingApproval(_) => "Pending",
+            Self::Evaluation { .. } => "No subscription",
+            Self::Unconfigured | Self::SignedOut => "Not signed in",
+        }
+    }
+
+    /// The free-use explanation, for states where the installation holds no license.
+    pub(crate) fn free_use_note(&self) -> Option<&'static str> {
+        match self {
+            Self::Unconfigured | Self::SignedOut | Self::Revoked | Self::Failed { .. } => {
+                Some(FREE_USE_SIGN_IN_NOTE)
+            }
+            Self::Evaluation { .. } => Some(FREE_USE_NOTE),
+            Self::Checking | Self::AwaitingApproval(_) | Self::Licensed(_) | Self::Offline(_) => {
+                None
+            }
+        }
     }
 
     pub(crate) fn summary(&self) -> String {
         match self {
-            Self::Unconfigured => "Licensing server is not configured.".into(),
-            Self::SignedOut => "Sign in to refresh your Styrhous license.".into(),
+            Self::Unconfigured => "No licensing server is configured.".into(),
+            Self::SignedOut => "Not signed in.".into(),
+            Self::Revoked => "This device's license was revoked.".into(),
             Self::Checking => "Checking license…".into(),
             Self::AwaitingApproval(_) => "Waiting for browser approval…".into(),
-            Self::Licensed(lease) if lease.state == "commercial" => {
+            Self::Licensed(lease) if lease.state == LEASE_STATE_COMMERCIAL => {
                 "Commercial license active.".into()
             }
-            Self::Licensed(lease) if lease.state == "trial" => {
+            Self::Licensed(lease) if lease.state == LEASE_STATE_TRIAL => {
                 format!("Trial license active until {}.", lease.expiry_label())
             }
             Self::Licensed(lease) => {
@@ -122,9 +198,7 @@ impl LicenseStatus {
                 lease.state,
                 lease.expiry_label()
             ),
-            Self::Evaluation { reason_code } => {
-                format!("Evaluation mode: {}.", reason_label(reason_code))
-            }
+            Self::Evaluation { reason_code } => entitlement_summary(reason_code),
             Self::Failed { message } => format!("License check failed: {message}"),
         }
     }
@@ -240,14 +314,16 @@ impl LicensingService {
 
     fn poll_at(&mut self, now: u64) {
         self.poll_events();
-        if self
-            .status
-            .lease()
-            .is_some_and(|lease| now >= lease.expires_at)
-        {
+        if let Some(lease) = self.status.lease().filter(|lease| now >= lease.expires_at) {
+            // A lapsed trial falls back to free use quietly, like the server's `trial_expired`.
+            let reason_code = if lease.state == LEASE_STATE_TRIAL {
+                TRIAL_EXPIRED
+            } else {
+                OFFLINE_LEASE_EXPIRED
+            };
             self.settings.clear_account();
             self.status = LicenseStatus::Evaluation {
-                reason_code: OFFLINE_LEASE_EXPIRED.into(),
+                reason_code: reason_code.into(),
             };
         }
     }
@@ -314,9 +390,20 @@ impl LicensingService {
                         LicenseStatus::Unconfigured
                     };
                 }
+                LicenseEvent::Revoked => {
+                    self.settings.clear_account();
+                    self.settings.signed_out = false;
+                    self.status = LicenseStatus::Revoked;
+                }
                 LicenseEvent::ClearCachedLease => self.settings.clear_account(),
                 LicenseEvent::Failed(message) => {
-                    self.status = LicenseStatus::Failed { message };
+                    if matches!(self.status, LicenseStatus::Evaluation { .. }) {
+                        // A failed recheck does not change what the service last said: most users
+                        // without a license qualify for free use and should not see a warning.
+                        tracing::warn!(error = %message, "license recheck failed");
+                    } else {
+                        self.status = LicenseStatus::Failed { message };
+                    }
                 }
                 LicenseEvent::KeychainUnavailable => self.keychain_warning = true,
             }
@@ -461,6 +548,8 @@ enum LicenseEvent {
     SignedOut {
         suppress_auto_refresh: bool,
     },
+    /// The service rejected the installation credential, which has been forgotten.
+    Revoked,
     ClearCachedLease,
     Failed(String),
     KeychainUnavailable,
@@ -865,7 +954,7 @@ async fn sign_in_with<T: LicenseTransport, C: CredentialStore>(
     let mut interval = Duration::from_secs(authorization.interval.max(1));
     loop {
         if tokio::time::Instant::now() >= deadline {
-            bail!("the device authorization expired");
+            return Ok(abandon_sign_in(settings, runtime, "expired"));
         }
         tokio::time::sleep(interval).await;
         let exchange = match runtime.transport.poll(&authorization.device_code).await {
@@ -886,9 +975,25 @@ async fn sign_in_with<T: LicenseTransport, C: CredentialStore>(
                 interval += Duration::from_secs(5);
             }
             TokenExchange::Pending(_) => {}
-            TokenExchange::Denied(error) => bail!("device authorization was denied: {error}"),
+            TokenExchange::Denied(error) => return Ok(abandon_sign_in(settings, runtime, &error)),
         }
     }
+}
+
+/// A denied or expired sign-in is a normal outcome, for example for a free user without a seat,
+/// so it returns quietly to the signed-out state instead of failing.
+fn abandon_sign_in<T, C>(
+    settings: &mut LicensingSettings,
+    runtime: &LicenseRuntime<'_, T, C, impl UnixClock>,
+    reason: &str,
+) -> SessionState {
+    tracing::info!(reason, "device sign-in ended without approval");
+    settings.clear_account();
+    settings.signed_out = true;
+    runtime.events.send(LicenseEvent::SignedOut {
+        suppress_auto_refresh: true,
+    });
+    SessionState::SignedOut
 }
 
 /// Keeps the installation token in the OS keychain, or only in memory when it is unavailable.
@@ -958,9 +1063,7 @@ where
             forget_credential(runtime.credentials, &runtime.origin, runtime.events);
             *session_token = None;
             settings.clear_account();
-            runtime.events.send(LicenseEvent::SignedOut {
-                suppress_auto_refresh: false,
-            });
+            runtime.events.send(LicenseEvent::Revoked);
             Ok(SessionState::SignedOut)
         }
     }
@@ -1355,7 +1458,10 @@ fn validate_lease_at(
         || claims.aud != LEASE_AUDIENCE
         || claims.installation_id != installation_id
         || claims.signing_key_id != key_id
-        || !matches!(claims.state.as_str(), "trial" | "commercial" | "grace")
+        || !matches!(
+            claims.state.as_str(),
+            LEASE_STATE_TRIAL | LEASE_STATE_COMMERCIAL | LEASE_STATE_GRACE
+        )
         || claims.iat > claims.nbf
         || claims.nbf > observed_at.saturating_add(CLOCK_SKEW_LEEWAY.as_secs())
         || claims.exp <= observed_at
@@ -1448,8 +1554,33 @@ fn scheduled_refresh_delay(settings: &LicensingSettings, now: u64) -> Option<Dur
     ))
 }
 
-fn reason_label(reason_code: &str) -> String {
-    reason_code.replace('_', " ")
+/// Whether an ineligible entitlement points at a problem with a commercial subscription, as
+/// opposed to a user who simply has no subscription (and most likely qualifies for free use).
+fn is_commercial_problem(reason_code: &str) -> bool {
+    matches!(
+        reason_code,
+        SUBSCRIPTION_EXPIRED
+            | SUBSCRIPTION_INACTIVE
+            | SUBSCRIPTION_SEAT_CAPACITY_EXCEEDED
+            | OFFLINE_LEASE_EXPIRED
+    )
+}
+
+fn entitlement_summary(reason_code: &str) -> String {
+    match reason_code {
+        TRIAL_EXPIRED => "Your organization's trial has ended.".into(),
+        NO_VALID_ENTITLEMENT | TRIAL_NOT_STARTED | SUBSCRIPTION_NOT_STARTED => {
+            "Signed in without a subscription.".into()
+        }
+        PRODUCT_SEAT_NOT_ASSIGNED => "Your organization hasn't assigned you a seat.".into(),
+        SUBSCRIPTION_EXPIRED => "Your organization's subscription has expired.".into(),
+        SUBSCRIPTION_INACTIVE => "Your organization's subscription is inactive.".into(),
+        SUBSCRIPTION_SEAT_CAPACITY_EXCEEDED => {
+            "Your organization's subscription has no free seat for you.".into()
+        }
+        OFFLINE_LEASE_EXPIRED => "Your offline license has expired. Refresh to renew it.".into(),
+        other => format!("No license: {}.", other.replace('_', " ")),
+    }
 }
 
 #[cfg(test)]
@@ -1731,7 +1862,7 @@ mod tests {
             billing_account_id: Uuid::now_v7(),
             installation_id,
             activation_id: Uuid::now_v7(),
-            state: "commercial".into(),
+            state: LEASE_STATE_COMMERCIAL.into(),
             reason_code: "active_subscription".into(),
             expires_at: unix_now() + 300,
             refresh_after: unix_now() + 100,
@@ -1754,11 +1885,196 @@ mod tests {
     }
 
     #[test]
-    fn commercial_online_status_is_the_only_status_without_a_warning() {
+    fn only_problems_with_a_commercial_seat_warn() {
+        let lease_in = |state: &str| VerifiedLease {
+            state: state.into(),
+            ..test_lease(Uuid::now_v7())
+        };
+        let evaluation = |reason_code: &str| LicenseStatus::Evaluation {
+            reason_code: reason_code.into(),
+        };
+        let quiet = [
+            LicenseStatus::Unconfigured,
+            LicenseStatus::SignedOut,
+            LicenseStatus::Checking,
+            LicenseStatus::AwaitingApproval(DeviceAuthorization {
+                user_code: "ABCD-EFGH".into(),
+                verification_uri: "https://licenses.example.com/device".into(),
+                verification_uri_complete: "https://licenses.example.com/device?code=1".into(),
+                expires_in: 600,
+            }),
+            LicenseStatus::Licensed(lease_in(LEASE_STATE_COMMERCIAL)),
+            LicenseStatus::Licensed(lease_in(LEASE_STATE_TRIAL)),
+            LicenseStatus::Offline(lease_in(LEASE_STATE_COMMERCIAL)),
+            LicenseStatus::Offline(lease_in(LEASE_STATE_TRIAL)),
+            evaluation(TRIAL_EXPIRED),
+            evaluation(TRIAL_NOT_STARTED),
+            evaluation(NO_VALID_ENTITLEMENT),
+            evaluation(PRODUCT_SEAT_NOT_ASSIGNED),
+            evaluation(SUBSCRIPTION_NOT_STARTED),
+        ];
+        let warning = [
+            LicenseStatus::Revoked,
+            LicenseStatus::Failed {
+                message: "offline".into(),
+            },
+            LicenseStatus::Licensed(lease_in(LEASE_STATE_GRACE)),
+            LicenseStatus::Offline(lease_in(LEASE_STATE_GRACE)),
+            evaluation(SUBSCRIPTION_EXPIRED),
+            evaluation(SUBSCRIPTION_INACTIVE),
+            evaluation(SUBSCRIPTION_SEAT_CAPACITY_EXCEEDED),
+            evaluation(OFFLINE_LEASE_EXPIRED),
+        ];
+        for status in quiet {
+            assert!(!status.shows_warning(), "{status:?} should be quiet");
+        }
+        for status in warning {
+            assert!(status.shows_warning(), "{status:?} should warn");
+        }
+    }
+
+    #[test]
+    fn free_use_is_explained_only_without_a_license() {
         let lease = test_lease(Uuid::now_v7());
-        assert!(!LicenseStatus::Licensed(lease.clone()).shows_warning());
-        assert!(LicenseStatus::Offline(lease).shows_warning());
-        assert!(LicenseStatus::SignedOut.shows_warning());
+        for status in [
+            LicenseStatus::Unconfigured,
+            LicenseStatus::SignedOut,
+            LicenseStatus::Revoked,
+            LicenseStatus::Failed {
+                message: "offline".into(),
+            },
+        ] {
+            assert_eq!(
+                status.free_use_note(),
+                Some(FREE_USE_SIGN_IN_NOTE),
+                "{status:?}"
+            );
+        }
+        // Already signed in, so only the eligibility applies.
+        assert_eq!(
+            LicenseStatus::Evaluation {
+                reason_code: TRIAL_EXPIRED.into(),
+            }
+            .free_use_note(),
+            Some(FREE_USE_NOTE)
+        );
+        for status in [
+            LicenseStatus::Checking,
+            LicenseStatus::Licensed(lease.clone()),
+            LicenseStatus::Offline(lease),
+        ] {
+            assert_eq!(status.free_use_note(), None, "{status:?}");
+        }
+    }
+
+    #[test]
+    fn labels_and_summaries_describe_each_state() {
+        let lease_in = |state: &str| VerifiedLease {
+            state: state.into(),
+            ..test_lease(Uuid::now_v7())
+        };
+        let evaluation = |reason_code: &str| LicenseStatus::Evaluation {
+            reason_code: reason_code.into(),
+        };
+        let labels = [
+            (LicenseStatus::Unconfigured, "Not signed in"),
+            (LicenseStatus::SignedOut, "Not signed in"),
+            (LicenseStatus::Checking, "Checking…"),
+            (
+                LicenseStatus::Licensed(lease_in(LEASE_STATE_COMMERCIAL)),
+                "Active",
+            ),
+            (
+                LicenseStatus::Licensed(lease_in(LEASE_STATE_TRIAL)),
+                "Active",
+            ),
+            (
+                LicenseStatus::Licensed(lease_in(LEASE_STATE_GRACE)),
+                "Needs attention",
+            ),
+            (
+                LicenseStatus::Offline(lease_in(LEASE_STATE_COMMERCIAL)),
+                "Offline",
+            ),
+            (
+                LicenseStatus::Offline(lease_in(LEASE_STATE_GRACE)),
+                "Needs attention",
+            ),
+            (evaluation(TRIAL_EXPIRED), "No subscription"),
+            (evaluation(SUBSCRIPTION_EXPIRED), "Needs attention"),
+            (LicenseStatus::Revoked, "Needs attention"),
+            (
+                LicenseStatus::Failed {
+                    message: "offline".into(),
+                },
+                "Needs attention",
+            ),
+        ];
+        for (status, label) in labels {
+            assert_eq!(status.short_label(), label, "{status:?}");
+        }
+
+        let summaries = [
+            (TRIAL_EXPIRED, "Your organization's trial has ended."),
+            (NO_VALID_ENTITLEMENT, "Signed in without a subscription."),
+            (
+                PRODUCT_SEAT_NOT_ASSIGNED,
+                "Your organization hasn't assigned you a seat.",
+            ),
+            (
+                SUBSCRIPTION_EXPIRED,
+                "Your organization's subscription has expired.",
+            ),
+            (
+                SUBSCRIPTION_INACTIVE,
+                "Your organization's subscription is inactive.",
+            ),
+            (
+                SUBSCRIPTION_SEAT_CAPACITY_EXCEEDED,
+                "Your organization's subscription has no free seat for you.",
+            ),
+            (
+                OFFLINE_LEASE_EXPIRED,
+                "Your offline license has expired. Refresh to renew it.",
+            ),
+            ("some_new_reason", "No license: some new reason."),
+        ];
+        for (reason_code, summary) in summaries {
+            assert_eq!(evaluation(reason_code).summary(), summary, "{reason_code}");
+        }
+    }
+
+    #[test]
+    fn an_expired_cached_trial_falls_back_quietly() {
+        let lease = VerifiedLease {
+            state: LEASE_STATE_TRIAL.into(),
+            ..test_lease(Uuid::now_v7())
+        };
+        let expires_at = lease.expires_at;
+        let mut service = LicensingService {
+            status: LicenseStatus::Offline(lease),
+            ..Default::default()
+        };
+
+        service.poll_at(expires_at);
+
+        let trial_expired = LicenseStatus::Evaluation {
+            reason_code: TRIAL_EXPIRED.into(),
+        };
+        assert_eq!(service.status(), &trial_expired);
+        assert!(!service.status().shows_warning());
+
+        // The worker's follow-up check fails while offline, which must not raise a warning.
+        let (events, received) = std::sync::mpsc::channel();
+        service.results = Some(received);
+        events
+            .send(LicenseEventMessage {
+                operation_generation: 0,
+                event: LicenseEvent::Failed("the licensing service is unreachable".into()),
+            })
+            .unwrap();
+        service.poll_at(expires_at + 30);
+        assert_eq!(service.status(), &trial_expired);
     }
 
     #[test]
@@ -2084,23 +2400,34 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn device_sign_in_reports_a_denied_authorization() {
-        let golden = golden();
-        let transport = FakeTransport::approving(&golden);
-        *transport.poll_results.lock().unwrap() =
-            vec![Ok(TokenExchange::Denied("access_denied".into()))];
-        let harness = Harness::new(&golden, transport, FakeCredentialStore::default());
+    async fn device_sign_in_returns_quietly_to_signed_out_when_denied_or_expired() {
+        for denial in ["access_denied", "expired_token"] {
+            let golden = golden();
+            let transport = FakeTransport::approving(&golden);
+            *transport.poll_results.lock().unwrap() =
+                vec![Ok(TokenExchange::Denied(denial.into()))];
+            let harness = Harness::new(&golden, transport, FakeCredentialStore::default());
+            let mut settings = settings_for(&golden, false);
 
-        let error = sign_in_with(
-            &mut settings_for(&golden, false),
-            &mut None,
-            &harness.runtime(),
-        )
-        .await
-        .unwrap_err();
+            let state = sign_in_with(&mut settings, &mut None, &harness.runtime())
+                .await
+                .unwrap();
 
-        assert!(error.to_string().contains("access_denied"));
-        assert!(harness.credentials.token.lock().unwrap().is_none());
+            assert_eq!(state, SessionState::SignedOut, "{denial}");
+            assert!(settings.signed_out, "{denial}");
+            assert!(harness.credentials.token.lock().unwrap().is_none());
+            assert!(matches!(
+                harness.next_event(),
+                LicenseEvent::AwaitingApproval(_)
+            ));
+            assert!(matches!(
+                harness.next_event(),
+                LicenseEvent::SignedOut {
+                    suppress_auto_refresh: true
+                }
+            ));
+            harness.assert_no_more_events();
+        }
     }
 
     #[tokio::test]
@@ -2289,7 +2616,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn revoked_installation_token_signs_out_and_forgets_the_credential() {
+    async fn revoked_installation_token_reports_revocation_and_forgets_the_credential() {
         for delete_fails in [false, true] {
             let golden = golden();
             let harness = Harness::new(
@@ -2318,12 +2645,7 @@ mod tests {
                     LicenseEvent::KeychainUnavailable
                 ));
             }
-            assert!(matches!(
-                harness.next_event(),
-                LicenseEvent::SignedOut {
-                    suppress_auto_refresh: false
-                }
-            ));
+            assert!(matches!(harness.next_event(), LicenseEvent::Revoked));
         }
     }
 
@@ -2523,7 +2845,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn device_sign_in_with_a_revoked_token_signs_out_and_forgets_it() {
+    async fn device_sign_in_with_a_revoked_token_reports_revocation_and_forgets_it() {
         let golden = golden();
         let harness = Harness::new(
             &golden,
@@ -2548,12 +2870,7 @@ mod tests {
             harness.next_event(),
             LicenseEvent::AwaitingApproval(_)
         ));
-        assert!(matches!(
-            harness.next_event(),
-            LicenseEvent::SignedOut {
-                suppress_auto_refresh: false
-            }
-        ));
+        assert!(matches!(harness.next_event(), LicenseEvent::Revoked));
     }
 
     #[tokio::test(start_paused = true)]
@@ -2586,16 +2903,15 @@ mod tests {
         // Every poll fails; the loop must stop at the authorization's expiry, not spin forever.
         transport.poll_results.lock().unwrap().clear();
         let harness = Harness::new(&golden, transport, FakeCredentialStore::default());
+        let mut settings = settings_for(&golden, false);
 
-        let error = sign_in_with(
-            &mut settings_for(&golden, false),
-            &mut None,
-            &harness.runtime(),
-        )
-        .await
-        .unwrap_err();
+        let state = sign_in_with(&mut settings, &mut None, &harness.runtime())
+            .await
+            .unwrap();
 
-        assert!(error.to_string().contains("expired"));
+        // An unapproved sign-in, e.g. by a free user without a seat, ends quietly signed out.
+        assert_eq!(state, SessionState::SignedOut);
+        assert!(settings.signed_out);
         assert_eq!(harness.transport.polls(), 60);
     }
 
@@ -2606,15 +2922,15 @@ mod tests {
         transport.authorization.as_mut().unwrap().expires_in = 0;
         let harness = Harness::new(&golden, transport, FakeCredentialStore::default());
 
-        let error = sign_in_with(
+        let state = sign_in_with(
             &mut settings_for(&golden, false),
             &mut None,
             &harness.runtime(),
         )
         .await
-        .unwrap_err();
+        .unwrap();
 
-        assert!(error.to_string().contains("expired"));
+        assert_eq!(state, SessionState::SignedOut);
         assert_eq!(harness.transport.polls(), 0);
     }
 
@@ -2780,6 +3096,12 @@ mod tests {
                 LicenseEvent::Failed("offline".into()),
                 failed.clone(),
             ),
+            // A failed recheck keeps the last answer instead of raising a warning.
+            (
+                evaluation.clone(),
+                LicenseEvent::Failed("offline".into()),
+                evaluation.clone(),
+            ),
             (
                 LicenseStatus::Licensed(lease.clone()),
                 LicenseEvent::SignedOut {
@@ -2787,13 +3109,20 @@ mod tests {
                 },
                 LicenseStatus::SignedOut,
             ),
+            (
+                LicenseStatus::Licensed(lease.clone()),
+                LicenseEvent::Revoked,
+                LicenseStatus::Revoked,
+            ),
         ];
         for (initial, event, expected) in cases {
             let description = format!("{initial:?} + {event:?}");
-            // Evaluation and sign-out forget the cached lease; other events keep it.
+            // Evaluation, sign-out, and revocation forget the cached lease; other events keep it.
             let forgets_lease = matches!(
                 event,
-                LicenseEvent::Evaluation { .. } | LicenseEvent::SignedOut { .. }
+                LicenseEvent::Evaluation { .. }
+                    | LicenseEvent::SignedOut { .. }
+                    | LicenseEvent::Revoked
             );
             let (events, received) = std::sync::mpsc::channel();
             let mut service = LicensingService {

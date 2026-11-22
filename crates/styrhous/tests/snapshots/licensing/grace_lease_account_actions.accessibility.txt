@@ -19,10 +19,10 @@ Window state=[focused] rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
-          Label value="Evaluation mode: trial expired." rect=(x=85.0 y=11.0 width=199.4 height=17.0 center_x=184.7 center_y=19.5)
-            TextRun value="Evaluation mode: trial expired." rect=(x=85.0 y=11.0 width=199.4 height=17.0 center_x=184.7 center_y=19.5)
-          Button name="License warning: Evaluation mode: trial expired. Manage license" rect=(x=300.4 y=11.0 width=104.1 height=17.0 center_x=352.4 center_y=19.5)
-            TextRun value="Manage license" rect=(x=300.4 y=11.0 width=104.1 height=17.0 center_x=352.4 center_y=19.5)
+          Label value="License grace period active until 2100-01-01T00:00:00Z." rect=(x=85.0 y=11.0 width=375.2 height=17.0 center_x=272.6 center_y=19.5)
+            TextRun value="License grace period active until 2100-01-01T00:00:00Z." rect=(x=85.0 y=11.0 width=375.2 height=17.0 center_x=272.6 center_y=19.5)
+          Button name="License warning: License grace period active until 2100-01-01T00:00:00Z. Manage license" rect=(x=476.2 y=11.0 width=104.1 height=17.0 center_x=528.2 center_y=19.5)
+            TextRun value="Manage license" rect=(x=476.2 y=11.0 width=104.1 height=17.0 center_x=528.2 center_y=19.5)
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
@@ -647,19 +647,21 @@ Window state=[focused] rect=<none>
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
                     Button name="Close blade" rect=(x=1469.0 y=34.0 width=34.0 height=34.0 center_x=1486.0 center_y=51.0)
-              Label value="Evaluation mode: trial expired." rect=(x=809.0 y=88.0 width=199.4 height=17.0 center_x=908.7 center_y=96.5)
-                TextRun value="Evaluation mode: trial expired." rect=(x=809.0 y=88.0 width=199.4 height=17.0 center_x=908.7 center_y=96.5)
+              Label value="License grace period active until 2100-01-01T00:00:00Z." rect=(x=809.0 y=88.0 width=375.2 height=17.0 center_x=996.6 center_y=96.5)
+                TextRun value="License grace period active until 2100-01-01T00:00:00Z." rect=(x=809.0 y=88.0 width=375.2 height=17.0 center_x=996.6 center_y=96.5)
+              Label value="Available offline until: 2100-01-01T00:00:00Z" rect=(x=809.0 y=116.0 width=296.6 height=17.0 center_x=957.3 center_y=124.5)
+                TextRun value="Available offline until: 2100-01-01T00:00:00Z" rect=(x=809.0 y=116.0 width=296.6 height=17.0 center_x=957.3 center_y=124.5)
               GenericContainer rect=<none>
-                Button name="Refresh license" rect=(x=809.0 y=124.0 width=153.7 height=38.0 center_x=885.9 center_y=143.0)
-                Button name="Manage account" rect=(x=970.7 y=124.0 width=162.7 height=38.0 center_x=1052.1 center_y=143.0)
-                Button name="Sign out" rect=(x=1141.4 y=124.0 width=106.4 height=38.0 center_x=1194.6 center_y=143.0)
-              Label value="INSTALLATION" rect=(x=809.0 y=214.0 width=101.0 height=17.0 center_x=859.5 center_y=222.5)
-                TextRun value="INSTALLATION" rect=(x=809.0 y=214.0 width=101.0 height=17.0 center_x=859.5 center_y=222.5)
-              Label value="Device name" rect=(x=809.0 y=242.0 width=85.9 height=17.0 center_x=852.0 center_y=250.5)
-                TextRun value="Device name" rect=(x=809.0 y=242.0 width=85.9 height=17.0 center_x=852.0 center_y=250.5)
+                Button name="Refresh license" rect=(x=809.0 y=152.0 width=153.7 height=38.0 center_x=885.9 center_y=171.0)
+                Button name="Manage account" rect=(x=970.7 y=152.0 width=162.7 height=38.0 center_x=1052.1 center_y=171.0)
+                Button name="Sign out" rect=(x=1141.4 y=152.0 width=106.4 height=38.0 center_x=1194.6 center_y=171.0)
+              Label value="INSTALLATION" rect=(x=809.0 y=242.0 width=101.0 height=17.0 center_x=859.5 center_y=250.5)
+                TextRun value="INSTALLATION" rect=(x=809.0 y=242.0 width=101.0 height=17.0 center_x=859.5 center_y=250.5)
+              Label value="Device name" rect=(x=809.0 y=270.0 width=85.9 height=17.0 center_x=852.0 center_y=278.5)
+                TextRun value="Device name" rect=(x=809.0 y=270.0 width=85.9 height=17.0 center_x=852.0 center_y=278.5)
               GenericContainer rect=<none>
-                TextInput name="License device display name" value="Styrhous on linux" rect=(x=809.0 y=262.0 width=694.0 height=28.0 center_x=1156.0 center_y=276.0)
-                  TextRun value="Styrhous on linux" rect=(x=818.0 y=267.0 width=115.1 height=17.0 center_x=875.5 center_y=275.5)
-              Button name="Save name" rect=(x=809.0 y=293.0 width=124.9 height=38.0 center_x=871.5 center_y=312.0)
+                TextInput name="License device display name" value="Styrhous on linux" rect=(x=809.0 y=290.0 width=694.0 height=28.0 center_x=1156.0 center_y=304.0)
+                  TextRun value="Styrhous on linux" rect=(x=818.0 y=295.0 width=115.1 height=17.0 center_x=875.5 center_y=303.5)
+              Button name="Save name" rect=(x=809.0 y=321.0 width=124.9 height=38.0 center_x=871.5 center_y=340.0)
               GenericContainer rect=<none>
-                Button name="Advanced" rect=(x=809.0 y=350.0 width=89.0 height=19.0 center_x=853.5 center_y=359.5)
+                Button name="Advanced" rect=(x=809.0 y=378.0 width=89.0 height=19.0 center_x=853.5 center_y=387.5)

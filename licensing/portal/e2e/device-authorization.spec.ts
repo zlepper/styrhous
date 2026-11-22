@@ -58,7 +58,7 @@ test('reviews capacity, revokes a device, and approves the selected seat', async
 });
 
 test('approves the sole license without asking for a selection', async ({ page }) => {
-  const state = await installDeviceAuthorizationApi(page, true);
+  const state = await installDeviceAuthorizationApi(page, 1);
   await page.goto(`/devices/authorize?user_code=${userCode}`);
   await expect(page.getByText('Personal seat', { exact: true })).toBeVisible();
   await expect(page.getByRole('radio')).toHaveCount(0);
@@ -69,6 +69,19 @@ test('approves the sole license without asking for a selection', async ({ page }
     decision: 'approve',
     seatId: personalSeatId
   });
+});
+
+test('tells a user without a license that free use needs no sign-in', async ({ page }) => {
+  const state = await installDeviceAuthorizationApi(page, 0);
+  await page.goto(`/devices/authorize?user_code=${userCode}`);
+
+  await expect(
+    page.getByText(
+      "No license is available. Free use doesn't need a sign-in, so you can close this page. If your organization has a subscription, ask it to assign you a seat."
+    )
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Approve sign-in' })).toHaveCount(0);
+  expect(state.approvalRequests).toHaveLength(0);
 });
 
 test('denies the pending desktop without requiring a seat selection', async ({ page }) => {
@@ -315,7 +328,7 @@ test('ignores a delayed device revocation after navigation changes the code', as
   await expect(page.locator('.error-message')).toHaveCount(0);
 });
 
-async function installDeviceAuthorizationApi(page: Page, personalOnly = false) {
+async function installDeviceAuthorizationApi(page: Page, eligibleSeatCount = 2) {
   const state: {
     approvalReads: number;
     approvalReadCodes: string[];
@@ -365,8 +378,8 @@ async function installDeviceAuthorizationApi(page: Page, personalOnly = false) {
               seatId: personalSeatId,
               billingAccountId: '0191a8f0-1111-7000-8000-000000000083',
               name: 'Personal seat',
-              entitlementState: 'trial',
-              entitlementReasonCode: 'active_trial',
+              entitlementState: 'commercial',
+              entitlementReasonCode: 'active_subscription',
               deviceLimit: 3,
               canActivate: true,
               activeDevices: []
@@ -381,7 +394,7 @@ async function installDeviceAuthorizationApi(page: Page, personalOnly = false) {
               canActivate: state.organizationDevices.length < 3,
               activeDevices: state.organizationDevices
             }
-          ].slice(0, personalOnly ? 1 : 2),
+          ].slice(0, eligibleSeatCount),
           selectedSeatId: null
         }
       });

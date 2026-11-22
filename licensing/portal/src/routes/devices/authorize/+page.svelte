@@ -224,7 +224,10 @@
     {:else if approval.eligibleSeats.length === 0}
       <div class="inline-empty-state">
         <span aria-hidden="true">—</span>
-        <p>No license is available. Check Billing or ask your organization to assign one.</p>
+        <p>
+          No license is available. Free use doesn't need a sign-in, so you can close this page. If
+          your organization has a subscription, ask it to assign you a seat.
+        </p>
       </div>
     {:else}
       {#if approval.eligibleSeats.length === 1 && selectedSeat}

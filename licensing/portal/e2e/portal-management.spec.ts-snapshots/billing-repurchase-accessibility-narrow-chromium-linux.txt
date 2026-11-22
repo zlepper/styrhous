@@ -24,14 +24,15 @@
     - heading "Billing" [level=1]
   - article "Personal plan":
     - heading "Personal plan" [level=2]
-    - text: Active trial
+    - text: Subscription inactive
     - term: Seats in use
     - definition: 1 / 1
-    - term: Access until
+    - term: Billing period ends
     - definition:
-      - time: Sep 14, 2026, 10:15 AM
+      - time: Oct 1, 2026, 12:00 AM
     - form "Purchase Personal plan":
       - heading "Start a subscription" [level=3]
+      - paragraph: You don't need a subscription for personal use, education, non-commercial open source, or organizations with fewer than 250 people and less than €10M in annual revenue.
       - paragraph: Review the total, including tax, before confirming payment.
       - text: Billing period
       - combobox "Billing period for Personal plan":

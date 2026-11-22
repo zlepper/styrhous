@@ -24,12 +24,12 @@
     - heading "Billing" [level=1]
   - article "Personal plan":
     - heading "Personal plan" [level=2]
-    - text: Active trial Payment overdue
+    - text: Subscription inactive Payment overdue
     - term: Seats in use
     - definition: 1 / 1
-    - term: Access until
+    - term: Billing period ends
     - definition:
-      - time: Sep 14, 2026, 10:15 AM
+      - time: Oct 1, 2026, 12:00 AM
     - form "Manage billing for Personal plan":
       - heading "Manage subscription" [level=3]
       - paragraph: Payment methods, invoices, and cancellation.

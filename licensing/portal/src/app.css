@@ -1278,6 +1278,10 @@ input::placeholder {
   line-height: 1.5;
 }
 
+.checkout-copy + .checkout-copy {
+  margin-top: var(--space-2);
+}
+
 .checkout-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

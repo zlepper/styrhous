@@ -10,7 +10,7 @@
 <svelte:head>
   <meta
     name="description"
-    content="Manage Styrhous trials, organizations, seats, devices, and billing."
+    content="Manage Styrhous subscriptions, organizations, seats, and devices."
   />
   <link rel="icon" href={applicationIcon} type="image/svg+xml" />
 </svelte:head>

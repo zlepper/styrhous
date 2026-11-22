@@ -24,12 +24,14 @@ export type SubscriptionTerms = Readonly<{
 export type TrialTerms = Readonly<{
   startedAt: string;
   endsAt: string;
-  transferredAt: string | null;
   terminatedAt: string | null;
 }>;
 
-/** Seat capacity of an organization whose personal trial was transferred to it. */
-const transferredTrialSeatCapacity = 5;
+/** How long the trial a user's first organization starts with lasts. */
+export const trialDurationMs = 30 * dayMs;
+
+/** Seat capacity of an organization during its trial. */
+const trialSeatCapacity = 5;
 
 /**
  * How long an active subscription whose period has ended keeps commercial entitlement while
@@ -135,8 +137,8 @@ export function organizationSeatCapacity(
   if (subscription && isEligible(subscriptionEntitlement(subscription, now))) {
     return subscription.seatQuantity;
   }
-  if (trial?.transferredAt && isEligible(trialEntitlement(trial, now))) {
-    return transferredTrialSeatCapacity;
+  if (trial && isEligible(trialEntitlement(trial, now))) {
+    return trialSeatCapacity;
   }
   return null;
 }

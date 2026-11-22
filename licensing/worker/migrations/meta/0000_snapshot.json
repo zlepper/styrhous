@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "1297d34f-bc71-4300-b6d7-63bb40838919",
+  "id": "2f4c494b-226f-4d46-9b17-369bf92b1607",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "audit_records": {
@@ -1269,13 +1269,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
-        },
-        "transferred_at": {
-          "name": "transferred_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
           "autoincrement": false
         },
         "terminated_at": {

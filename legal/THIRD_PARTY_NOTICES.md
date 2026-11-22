@@ -2,7 +2,7 @@
 
 Styrhous includes third-party software, fonts, and provider marks. Those
 materials remain governed by their own terms. The Styrhous Source-Available
-Evaluation License does not replace or restrict the rights their licenses
+License does not replace or restrict the rights their licenses
 grant.
 
 The complete selected license texts for Rust dependencies are distributed in

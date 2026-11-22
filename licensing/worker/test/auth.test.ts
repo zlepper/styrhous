@@ -25,7 +25,7 @@ const sessionCookie = '__Host-styrhous-session';
 const stateCookie = '__Host-styrhous-oauth';
 
 describe('sign-in', () => {
-  it('creates an account with a personal seat and trial on first sign-in', async () => {
+  it('creates an account with a personal seat but no trial on first sign-in', async () => {
     const { browser, userId } = await signedInBrowser(upstream, 'ada@example.com');
 
     const session = await browser.json('/auth/session');
@@ -40,11 +40,13 @@ describe('sign-in', () => {
 
     const entitlements = await browser.json<{ entitlements: Record<string, unknown>[] }>('/api/entitlements');
     expect(entitlements.body.entitlements).toHaveLength(1);
+    // Free use needs no license, so only an organization starts a trial.
     expect(entitlements.body.entitlements[0]).toMatchObject({
-      state: 'trial',
-      reasonCode: 'active_trial',
-      isEligible: true
+      state: 'evaluation',
+      reasonCode: 'no_valid_entitlement',
+      isEligible: false
     });
+    expect(await countRows('SELECT count(*) AS total FROM trials WHERE originating_user_id = ?', userId)).toBe(0);
   });
 
   it('returns the same account on a repeated sign-in', async () => {

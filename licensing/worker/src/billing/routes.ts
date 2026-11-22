@@ -141,7 +141,6 @@ billingRoutes.get('/billing-accounts', async (c) => {
           startedAt: trial.startedAt,
           endsAt: trial.endsAt,
           terminatedAt: trial.terminatedAt,
-          transferredAt: trial.transferredAt,
           isActive: isEligible(trialEntitlement(trial, now))
         },
         subscription: subscription && {
