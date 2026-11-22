@@ -74,7 +74,9 @@ jobs:
           tool: cargo-nextest@0.9.140
 
       - name: Install Mesa software renderer
-        run: sudo apt-get install --yes libegl1 libgl1-mesa-dri
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libegl1 libgl1-mesa-dri
 
       - name: Run workspace tests without Kind integrations
         env:
@@ -118,7 +120,9 @@ jobs:
           tool: cargo-nextest@0.9.140
 
       - name: Install Mesa software renderer
-        run: sudo apt-get install --yes libegl1 libgl1-mesa-dri
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libegl1 libgl1-mesa-dri
 
       - name: Run Kind-backed integration tests
         env:
