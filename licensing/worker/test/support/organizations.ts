@@ -12,6 +12,16 @@ export async function createOrganization(browser: Browser, name = 'Acme'): Promi
   return response.body;
 }
 
+/**
+ * A signed-in user with a licensed seat: personal accounts start without a trial, so this creates
+ * the user's first organization, which starts one.
+ */
+export async function licensedBrowser(upstream: FakeUpstream, email: string, organizationName = 'Acme') {
+  const user = await signedInBrowser(upstream, email);
+  const organization = await createOrganization(user.browser, organizationName);
+  return { ...user, organization };
+}
+
 /** Captures invitation emails sent through the Email Service binding. */
 export function captureEmails() {
   return vi.spyOn(env.EMAIL, 'send').mockResolvedValue({ messageId: 'test-message' });

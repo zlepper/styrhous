@@ -1,10 +1,13 @@
 # Styrhous licensing
 
-Styrhous licensing is an honor-based commercial signal. Licenses are recurring per-seat Stripe
-subscriptions:
+Styrhous licensing is an honor-based commercial signal. Personal use, education, non-commercial
+open source, and organizations with fewer than 250 people and less than EUR 10M in annual revenue
+are free and need no account (see `LICENSE.md`). Larger organizations buy recurring per-seat
+Stripe subscriptions:
 
-- Every verified first sign-in starts a 30-day trial. It moves once, to the user's first
-  organization.
+- Signing in creates a personal account and seat without a trial.
+- The first organization a user creates starts a 30-day trial with 5 seats. Each user starts at
+  most one trial.
 - Organizations have Owner, Admin, and Member roles. Product seats are assigned separately from
   roles.
 - A seat allows three active desktop devices. A device unseen for seven days may be replaced.

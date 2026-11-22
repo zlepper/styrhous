@@ -1,4 +1,4 @@
-import { and, asc, eq, exists, gt, inArray, isNull, lte, ne, notExists, sql } from 'drizzle-orm';
+import { and, asc, eq, exists, inArray, ne, notExists } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppEnv } from '../env';
@@ -19,7 +19,8 @@ import {
 import { fail } from '../http/errors';
 import { validate } from '../http/validation';
 import { uuidv7 } from '../lib/ids';
-import { isoNow } from '../lib/time';
+import { isoAfter, isoNow } from '../lib/time';
+import { trialDurationMs } from '../entitlements/rules';
 import { organizationAccess, organizationMember, requireRole } from './access';
 import { seatCapacityGuard } from './capacity';
 import { invitationRoutes } from './invitations';
@@ -68,20 +69,17 @@ organizationRoutes.post(
       ownerMembershipId: uuidv7(),
       seatId: uuidv7()
     };
-    // A still-running personal trial moves once, to the user's first organization.
-    const trialTransfer = db
-      .update(trials)
-      .set({ billingAccountId: ids.billingAccountId, transferredAt: now })
-      .where(
-        and(
-          eq(trials.originatingUserId, session.userId),
-          isNull(trials.transferredAt),
-          isNull(trials.terminatedAt),
-          lte(trials.startedAt, now),
-          gt(trials.endsAt, now),
-          sql`(SELECT count(*) FROM ${organizations} WHERE ${organizations.createdByUserId} = ${session.userId}) = 1`
-        )
-      );
+    // Each user starts one trial, with the first organization they create.
+    const trialStart = db
+      .insert(trials)
+      .values({
+        id: uuidv7(),
+        originatingUserId: session.userId,
+        billingAccountId: ids.billingAccountId,
+        startedAt: now,
+        endsAt: isoAfter(now, trialDurationMs)
+      })
+      .onConflictDoNothing({ target: trials.originatingUserId });
 
     const statements = [
       db.insert(billingAccounts).values({ id: ids.billingAccountId, kind: 'organization', createdAt: now }),
@@ -109,14 +107,14 @@ organizationRoutes.post(
         createdAt: now
       }),
       audit.insert('seat_assigned', 'seat', ids.seatId),
-      trialTransfer,
-      audit.insert('trial_transferred', 'organization', ids.organizationId)
+      trialStart,
+      audit.insert('trial_started', 'organization', ids.organizationId)
     ];
     const results = await runBatch(db, statements);
-    const trialWasTransferred = results[statements.indexOf(trialTransfer)]!.meta.changes > 0;
+    const trialStarted = results[statements.indexOf(trialStart)]!.meta.changes > 0;
 
     return c.json(
-      { userId: session.userId, ...ids, correlationId: audit.correlationId, trialWasTransferred },
+      { userId: session.userId, ...ids, correlationId: audit.correlationId, trialStarted },
       201
     );
   }

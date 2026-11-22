@@ -1,11 +1,11 @@
 import type { Database } from '../env';
-import { billingAccounts, seats, trials } from '../db/schema';
+import { billingAccounts, seats } from '../db/schema';
 import { uuidv7 } from '../lib/ids';
-import { dayMs, isoAfter } from '../lib/time';
 
-const trialDurationMs = 30 * dayMs;
-
-/** Statements creating a new user's personal billing account, product seat, and trial. */
+/**
+ * Statements creating a new user's personal billing account and product seat. Free use needs no
+ * account, so a personal account starts without a trial; trials start with an organization.
+ */
 export function personalAccountInserts(db: Database, userId: string, now: string) {
   const billingAccountId = uuidv7();
   return [
@@ -21,13 +21,6 @@ export function personalAccountInserts(db: Database, userId: string, now: string
       userId,
       productAccess: true,
       createdAt: now
-    }),
-    db.insert(trials).values({
-      id: uuidv7(),
-      originatingUserId: userId,
-      billingAccountId,
-      startedAt: now,
-      endsAt: isoAfter(now, trialDurationMs)
     })
   ] as const;
 }

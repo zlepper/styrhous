@@ -254,7 +254,7 @@ test('replaces an authentication retry with one authoritative organization load'
   await expect(page.getByRole('heading', { level: 2, name: 'Northstar Platform' })).toBeVisible();
 });
 
-test('explains a possible trial transfer before creating an organization', async ({ page }) => {
+test('explains the trial before creating a first organization', async ({ page }) => {
   await page.route('**/api/organizations', async (route) => {
     await route.fulfill({ json: { reasonCode: 'organizations_listed', organizations: [] } });
   });
@@ -262,19 +262,19 @@ test('explains a possible trial transfer before creating an organization', async
   await page.goto('/organizations');
 
   await expect(page.getByRole('heading', { name: 'No organizations' })).toBeVisible();
-  const transferDisclosure = page.getByText(
-    'If this is the first organization you create and your personal trial is active, the trial moves to the organization.'
+  const trialDisclosure = page.getByText(
+    "If you haven't had a trial yet, your new organization starts a 30-day trial with up to 5 seats."
   );
-  await expect(transferDisclosure).toBeVisible();
+  await expect(trialDisclosure).toBeVisible();
   await expect(page.getByLabel('New organization')).toHaveAttribute(
     'aria-describedby',
-    'organization-trial-transfer-help'
+    'organization-trial-help'
   );
   await expect(page.locator('form.compact-form')).toHaveAttribute(
     'aria-describedby',
-    'organization-trial-transfer-help'
+    'organization-trial-help'
   );
-  await expect(transferDisclosure).toHaveAttribute('id', 'organization-trial-transfer-help');
+  await expect(trialDisclosure).toHaveAttribute('id', 'organization-trial-help');
 
   expect.soft(await page.locator('body').ariaSnapshot()).toMatchSnapshot(
     'organizations-empty-accessibility.txt'
@@ -282,7 +282,7 @@ test('explains a possible trial transfer before creating an organization', async
   await expect.soft(page).toHaveScreenshot('organizations-empty.png', { fullPage: true });
 });
 
-test('creates an organization, reports a trial transfer, and switches workspaces', async ({ page }) => {
+test('creates an organization, reports its trial, and switches workspaces', async ({ page }) => {
   const mutationRequests: Request[] = [];
   await installOrganizationApi(page, mutationRequests);
 
@@ -291,11 +291,11 @@ test('creates an organization, reports a trial transfer, and switches workspaces
   await page.getByLabel('New organization').fill('Release Engineering');
   await page.getByRole('button', { name: 'Create organization' }).click();
 
-  const transferStatus = page.getByText(
-    'Release Engineering is ready. Your active personal trial was transferred to it.'
+  const trialStatus = page.getByText(
+    'Release Engineering is ready. Its 30-day trial with 5 seats has started.'
   );
-  await expect(transferStatus).toBeVisible();
-  await expect(transferStatus).toBeFocused();
+  await expect(trialStatus).toBeVisible();
+  await expect(trialStatus).toBeFocused();
   await expect(page.getByRole('heading', { level: 2, name: 'Release Engineering' })).toBeVisible();
   await expect(organizationSeatRow(page, 'owner@example.com')).toBeVisible();
 
@@ -1498,7 +1498,7 @@ async function installOrganizationApi(
           ownerMembershipId: createdOwnerMembershipId,
           seatId: '0191a8f0-1111-7000-8000-000000000036',
           correlationId: '0191a8f0-1111-7000-8000-000000000038',
-          trialWasTransferred: true
+          trialStarted: true
         }
       });
       return;
@@ -1631,11 +1631,11 @@ async function installDeviceApi(page: Page, mutationRequests: Request[]) {
             {
               seatId: personalSeatId,
               billingAccountId: '0191a8f0-1111-7000-8000-000000000030',
-              state: 'trial',
-              reasonCode: 'active_trial',
+              state: 'commercial',
+              reasonCode: 'active_subscription',
               isEligible: true,
-              validFrom: '2026-08-15T10:15:00Z',
-              validUntil: '2026-09-14T10:15:00Z'
+              validFrom: '2026-09-01T00:00:00Z',
+              validUntil: '2026-10-01T00:00:00Z'
             },
             {
               seatId: organizationSeatId,
@@ -1764,20 +1764,13 @@ async function installBillingApi(page: Page) {
       entitlement: {
         seatId: personalSeatId,
         billingAccountId: '0191a8f0-1111-7000-8000-000000000040',
-        state: 'trial',
-        reasonCode: 'active_trial',
-        isEligible: true,
-        validFrom: '2026-08-15T10:15:00Z',
-        validUntil: '2026-09-14T10:15:00Z'
+        state: 'evaluation',
+        reasonCode: 'subscription_inactive',
+        isEligible: false,
+        validFrom: '2026-09-01T00:00:00Z',
+        validUntil: '2026-10-01T00:00:00Z'
       },
-      trial: {
-        trialId: '0191a8f0-1111-7000-8000-000000000041',
-        startedAt: '2026-08-15T10:15:00Z',
-        endsAt: '2026-09-14T10:15:00Z',
-        terminatedAt: null,
-        transferredAt: null,
-        isActive: true
-      },
+      trial: null,
       subscription: {
         subscriptionId: '0191a8f0-1111-7000-8000-000000000044',
         status: 'unpaid',
@@ -1840,7 +1833,6 @@ async function installBillingApi(page: Page) {
         startedAt: '2026-08-20T10:15:00Z',
         endsAt: '2026-09-19T10:15:00Z',
         terminatedAt: null,
-        transferredAt: '2026-08-22T10:15:00Z',
         isActive: true
       },
       subscription: null
@@ -1921,6 +1913,19 @@ async function installBillingApi(page: Page) {
           }
         : account
     );
+    const purchasablePersonalAccount = (terminalStatus: string | null) => ({
+      ...accounts[0],
+      canStartCheckout: true,
+      ...(terminalStatus
+        ? {
+            entitlement: { ...accounts[0].entitlement, reasonCode: 'subscription_inactive' },
+            subscription: { ...accounts[0].subscription, status: terminalStatus }
+          }
+        : {
+            entitlement: { ...accounts[0].entitlement, reasonCode: 'no_valid_entitlement' },
+            subscription: null
+          })
+    });
     await route.fulfill({
       json: {
         reasonCode: 'billing_accounts_listed',
@@ -1931,8 +1936,7 @@ async function installBillingApi(page: Page) {
           : state.showSeatlessOnly
             ? [seatlessAccount]
           : state.showPurchasablePersonalOnly
-            ? [{ ...accounts[0], canStartCheckout: true, subscription: state.terminalPersonalStatus
-              ? { ...accounts[0].subscription, status: state.terminalPersonalStatus } : null }]
+            ? [purchasablePersonalAccount(state.terminalPersonalStatus)]
             : listedAccounts
       }
     });

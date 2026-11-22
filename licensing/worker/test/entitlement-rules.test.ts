@@ -20,7 +20,6 @@ const subscription = (overrides: Partial<SubscriptionTerms> = {}): SubscriptionT
 const trial = (overrides: Partial<TrialTerms> = {}): TrialTerms => ({
   startedAt: '2030-06-01T00:00:00.000Z',
   endsAt: '2030-07-01T00:00:00.000Z',
-  transferredAt: null,
   terminatedAt: null,
   ...overrides
 });
@@ -88,10 +87,10 @@ describe('seat funding and capacity', () => {
     expect([...funded].sort()).toEqual(['a', 'c']);
   });
 
-  it('derives organization capacity from the subscription or a transferred trial', () => {
+  it('derives organization capacity from the subscription or a running trial', () => {
     expect(organizationSeatCapacity(subscription(), null, now)).toBe(3);
-    expect(organizationSeatCapacity(null, trial({ transferredAt: now }), now)).toBe(5);
-    expect(organizationSeatCapacity(null, trial(), now)).toBeNull();
+    expect(organizationSeatCapacity(null, trial(), now)).toBe(5);
+    expect(organizationSeatCapacity(null, trial({ terminatedAt: '2030-06-10T00:00:00.000Z' }), now)).toBeNull();
     expect(organizationSeatCapacity(subscription({ status: 'canceled' }), null, now)).toBeNull();
   });
 });

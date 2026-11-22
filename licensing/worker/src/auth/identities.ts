@@ -25,7 +25,7 @@ async function findEmailOwner(db: Database, email: string) {
 }
 
 /**
- * Resolves the account for a sign-in, creating a new account (with personal seat and trial)
+ * Resolves the account for a sign-in, creating a new account (with a personal seat)
  * for a first-time identity. An email that already belongs to another account must be linked
  * explicitly from that account instead of being merged automatically.
  */

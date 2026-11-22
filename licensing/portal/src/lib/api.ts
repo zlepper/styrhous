@@ -50,7 +50,7 @@ export type OrganizationCreation = Readonly<{
   ownerMembershipId: string;
   seatId: string;
   correlationId: string;
-  trialWasTransferred: boolean;
+  trialStarted: boolean;
 }>;
 
 export type OrganizationInvitationAcceptance = Readonly<{
@@ -136,7 +136,6 @@ export type BillingTrial = Readonly<{
   startedAt: string;
   endsAt: string;
   terminatedAt: string | null;
-  transferredAt: string | null;
   isActive: boolean;
 }>;
 

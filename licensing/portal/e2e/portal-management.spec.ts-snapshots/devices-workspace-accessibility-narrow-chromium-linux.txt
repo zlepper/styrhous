@@ -24,12 +24,12 @@
     - heading "Devices" [level=1]
   - region "Personal seat":
     - heading "Personal seat" [level=2]
-    - text: Trial access is active
+    - text: Subscription is active
     - strong: 1 / 3
     - text: devices
     - paragraph:
       - text: Valid until
-      - time: Sep 14, 2026, 10:15 AM
+      - time: Oct 1, 2026, 12:00 AM
     - list:
       - listitem:
         - heading "Laptop" [level=3]

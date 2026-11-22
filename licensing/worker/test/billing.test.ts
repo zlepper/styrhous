@@ -47,6 +47,11 @@ async function personalAccount(browser: Browser): Promise<Account> {
   return (await browser.json<{ accounts: Account[] }>('/api/billing-accounts')).body.accounts[0]!;
 }
 
+async function billingAccount(browser: Browser, billingAccountId: string): Promise<Account> {
+  const { accounts } = (await browser.json<{ accounts: Account[] }>('/api/billing-accounts')).body;
+  return accounts.find((account) => account.billingAccountId === billingAccountId)!;
+}
+
 async function startCheckout(browser: Browser, billingAccountId: string, seatQuantity = 1, cadence = 'monthly') {
   return browser.json<{ redirectUrl: string; reasonCode: string }>(`/api/billing-accounts/${billingAccountId}/checkout-sessions`, 'POST', {
     cadence,
@@ -80,11 +85,11 @@ async function subscribe(
 }
 
 describe('personal billing', () => {
-  it('lists the personal account with its trial and prices', async () => {
+  it('lists the personal account without a trial, and the prices', async () => {
     const { browser } = await signedInBrowser(upstream, 'billing@example.com');
     const accounts = await browser.json<{ accounts: Account[] }>('/api/billing-accounts');
     expect(accounts.body.accounts).toEqual([
-      expect.objectContaining({ accountKind: 'personal', canStartCheckout: true, subscription: null, trial: expect.objectContaining({ isActive: true }) })
+      expect.objectContaining({ accountKind: 'personal', canStartCheckout: true, subscription: null, trial: null })
     ]);
     const prices = await browser.json('/api/billing-prices');
     expect(prices.body).toEqual({
@@ -95,7 +100,7 @@ describe('personal billing', () => {
     });
   });
 
-  it('subscribes through Checkout, ending the trial when the subscription is active', async () => {
+  it('subscribes a personal account through Checkout', async () => {
     const { browser } = await signedInBrowser(upstream, 'subscriber@example.com');
     const account = await personalAccount(browser);
     expect((await startCheckout(browser, account.billingAccountId, 2, 'annual')).body).toEqual({ reasonCode: 'personal_seat_quantity_invalid' });
@@ -111,7 +116,7 @@ describe('personal billing', () => {
       canStartCheckout: false,
       entitlement: { state: 'commercial', reasonCode: 'active_subscription' },
       subscription: { seatQuantity: 1, status: 'active' },
-      trial: { isActive: false, terminatedAt: expect.any(String) }
+      trial: null
     });
     expect((await startCheckout(browser, account.billingAccountId)).body).toEqual({ reasonCode: 'subscription_already_exists' });
     expect((await browser.json(`/api/billing-accounts/${account.billingAccountId}/customer-portal-sessions`, 'POST')).body).toEqual({
@@ -195,8 +200,8 @@ describe('personal billing', () => {
 
     expect(await personalAccount(browser)).toMatchObject({
       canStartCheckout: false,
-      subscription: { status: 'incomplete' },
-      trial: { isActive: true, terminatedAt: null }
+      entitlement: { state: 'evaluation' },
+      subscription: { status: 'incomplete' }
     });
     expect((await startCheckout(browser, billingAccountId)).body).toEqual({ reasonCode: 'subscription_already_exists' });
 
@@ -207,8 +212,7 @@ describe('personal billing', () => {
     }
     expect(await personalAccount(browser)).toMatchObject({
       entitlement: { state: 'commercial', reasonCode: 'active_subscription' },
-      subscription: { status: 'active' },
-      trial: { isActive: false, terminatedAt: expect.any(String) }
+      subscription: { status: 'active' }
     });
     expect(await countRows('SELECT count(*) AS total FROM subscriptions WHERE billing_account_id = ?', billingAccountId)).toBe(1);
   });
@@ -220,15 +224,30 @@ describe('personal billing', () => {
 
     const response = await checkoutSessionEvent('checkout.session.async_payment_failed', subscription.id);
     expect(await response.json()).toMatchObject({ reasonCode: 'billing_webhook_received' });
-    expect(await personalAccount(browser)).toMatchObject({
-      subscription: { status: 'incomplete' },
-      trial: { isActive: true, terminatedAt: null }
-    });
+    expect(await personalAccount(browser)).toMatchObject({ subscription: { status: 'incomplete' } });
     expect((await personalAccount(browser)).entitlement.state).not.toBe('commercial');
   });
 });
 
 describe('organization billing', () => {
+  it("ends the organization's trial once its subscription is live", async () => {
+    const owner = await signedInBrowser(upstream, 'org-trial-owner@example.com');
+    const organization = await createOrganization(owner.browser);
+    const account = () => billingAccount(owner.browser, organization.billingAccountId);
+    expect(await account()).toMatchObject({ entitlement: { state: 'trial' }, trial: { isActive: true, terminatedAt: null } });
+
+    // A Checkout awaiting a delayed payment keeps the trial running.
+    const subscription = await subscribe(owner.browser, organization.billingAccountId, 1, { status: 'incomplete' });
+    expect(await account()).toMatchObject({ entitlement: { state: 'trial' }, trial: { isActive: true, terminatedAt: null } });
+
+    stripe.subscriptions.get(subscription.id)!.status = 'active';
+    await checkoutSessionEvent('checkout.session.async_payment_succeeded', subscription.id);
+    expect(await account()).toMatchObject({
+      entitlement: { state: 'commercial', reasonCode: 'active_subscription' },
+      trial: { isActive: false, terminatedAt: expect.any(String) }
+    });
+  });
+
   it('only lets the owner manage billing and enforces the seats in use', async () => {
     const owner = await signedInBrowser(upstream, 'org-billing-owner@example.com');
     const organization = await createOrganization(owner.browser);
@@ -256,8 +275,7 @@ describe('organization billing', () => {
     expect(stripe.subscriptionUpdates.at(-1)!.get('proration_behavior')).toBe('none');
     expect(stripe.subscriptionUpdates.at(-1)!.get('payment_behavior')).toBeNull();
 
-    const accounts = await owner.browser.json<{ accounts: Account[] }>('/api/billing-accounts');
-    expect(accounts.body.accounts.find((account) => account.billingAccountId === organization.billingAccountId)!.subscription!.seatQuantity).toBe(3);
+    expect((await billingAccount(owner.browser, organization.billingAccountId)).subscription!.seatQuantity).toBe(3);
   });
 
   it('adds seats only once their invoice is paid', async () => {
@@ -274,8 +292,7 @@ describe('organization billing', () => {
     });
     expect(stripe.subscriptionUpdates.at(-1)!.get('expand[0]')).toBe('latest_invoice');
     expect(stripe.subscriptions.get(subscription.id)!.quantity).toBe(1);
-    const accounts = await owner.browser.json<{ accounts: Account[] }>('/api/billing-accounts');
-    expect(accounts.body.accounts.find((account) => account.billingAccountId === organization.billingAccountId)!.subscription!.seatQuantity).toBe(1);
+    expect((await billingAccount(owner.browser, organization.billingAccountId)).subscription!.seatQuantity).toBe(1);
 
     // The owner holds the only paid seat, so there is still no room for another.
     const invitation = await owner.browser.json(`/api/organizations/${organization.organizationId}/invitations`, 'POST', {
@@ -288,8 +305,7 @@ describe('organization billing', () => {
     // Paying the invoice applies the pending update, and its webhook brings the seats.
     stripe.subscriptions.get(subscription.id)!.quantity = 50;
     await deliver({ id: 'evt_seats_paid', type: 'invoice.paid', data: { object: { id: 'in_seats', parent: { subscription_details: { subscription: subscription.id } } } } });
-    const paid = await owner.browser.json<{ accounts: Account[] }>('/api/billing-accounts');
-    expect(paid.body.accounts.find((account) => account.billingAccountId === organization.billingAccountId)!.subscription!.seatQuantity).toBe(50);
+    expect((await billingAccount(owner.browser, organization.billingAccountId)).subscription!.seatQuantity).toBe(50);
     const admitted = await owner.browser.json(`/api/organizations/${organization.organizationId}/invitations`, 'POST', {
       email: 'unpaid-seat@example.com',
       role: 'member'

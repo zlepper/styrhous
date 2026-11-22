@@ -25,7 +25,7 @@
   - region "Organization controls":
     - group:
       - text: New organization
-      - paragraph: If this is the first organization you create and your personal trial is active, the trial moves to the organization.
+      - paragraph: If you haven't had a trial yet, your new organization starts a 30-day trial with up to 5 seats.
       - text: New organization
       - textbox "New organization":
         - /placeholder: Platform team

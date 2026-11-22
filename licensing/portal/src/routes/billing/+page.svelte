@@ -544,6 +544,13 @@
           >
             <div>
               <h3 class="card-kicker">Start a subscription</h3>
+              {#if account.accountKind === 'personal'}
+                <p class="checkout-copy">
+                  You don't need a subscription for personal use, education, non-commercial open
+                  source, or organizations with fewer than 250 people and less than €10M in annual
+                  revenue.
+                </p>
+              {/if}
               <p class="checkout-copy">
                 Review the total, including tax, before confirming payment.
               </p>

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { leaseAudience, leaseKeys, signLease } from '../src/desktop/lease';
 import { countRows, expireUserTrial, past } from './support/db.ts';
 import { signedInBrowser } from './support/identity.ts';
-import { createOrganization } from './support/organizations.ts';
+import { createOrganization, licensedBrowser } from './support/organizations.ts';
 import {
   approveDesktop,
   desktop,
@@ -27,7 +27,7 @@ type Devices = { activeDevices: { activationId: string; displayName: string }[] 
 
 describe('device authorization', () => {
   it('signs a desktop installation in after browser approval and issues a verifiable lease', async () => {
-    const { browser, userId } = await signedInBrowser(upstream, 'desktop@example.com');
+    const { browser, userId } = await licensedBrowser(upstream, 'desktop@example.com');
     const installation = newInstallation('Laptop');
     const authorization = await startAuthorization(installation);
     expect(authorization.user_code).toMatch(/^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$/);
@@ -40,7 +40,7 @@ describe('device authorization', () => {
     expect(approval.body).toMatchObject({
       reasonCode: 'device_authorization_awaiting_approval',
       installation: { installationId: installation.installation_id, displayName: 'Laptop' },
-      eligibleSeats: [{ name: 'Personal', entitlementState: 'trial', canActivate: true, activeDevices: [] }]
+      eligibleSeats: [{ name: 'Acme', entitlementState: 'trial', canActivate: true, activeDevices: [] }]
     });
     const seatId = approval.body.selectedSeatId;
     const decision = await browser.json(`/api/device-authorizations/${authorization.user_code}`, 'POST', { decision: 'approve', seatId });
@@ -104,7 +104,7 @@ describe('device authorization', () => {
   });
 
   it('denies the token when the device was revoked before the client collected it', async () => {
-    const { browser } = await signedInBrowser(upstream, 'revoked-early@example.com');
+    const { browser } = await licensedBrowser(upstream, 'revoked-early@example.com');
     const authorization = await startAuthorization(newInstallation('Early'));
     const seatId = await approveDesktop(browser, authorization.user_code);
     const devices = await browser.json<Devices>(`/api/seats/${seatId}/devices`);
@@ -117,11 +117,14 @@ describe('device authorization', () => {
     const other = await signedInBrowser(upstream, 'seat-other@example.com');
     const [personalSeat] = (await owner.browser.json<{ entitlements: { seatId: string }[] }>('/api/entitlements')).body.entitlements;
     const [otherSeat] = (await other.browser.json<{ entitlements: { seatId: string }[] }>('/api/entitlements')).body.entitlements;
-    // The first organization takes over the personal trial, leaving the personal seat ineligible.
-    const organization = await createOrganization(owner.browser);
-
     const authorization = await startAuthorization();
     const path = `/api/device-authorizations/${authorization.user_code}`;
+    // Free use needs no license, so a personal seat alone offers nothing to approve with.
+    expect((await owner.browser.json(path)).body).toMatchObject({ eligibleSeats: [], selectedSeatId: null });
+
+    // The first organization starts a trial, making its seat the only eligible one.
+    const organization = await createOrganization(owner.browser);
+
     const approval = await owner.browser.json<{ eligibleSeats: { seatId: string; billingAccountId: string }[] }>(path);
     expect(approval.body.eligibleSeats.map((seat) => seat.billingAccountId)).toEqual([organization.billingAccountId]);
 
@@ -138,7 +141,7 @@ describe('device authorization', () => {
   });
 
   it('enforces the device limit, replacing only stale devices', async () => {
-    const { browser } = await signedInBrowser(upstream, 'limit@example.com');
+    const { browser } = await licensedBrowser(upstream, 'limit@example.com');
     const signedIn = [];
     for (const name of ['One', 'Two', 'Three']) signedIn.push(await signInDesktop(browser, newInstallation(name)));
 
@@ -156,7 +159,7 @@ describe('device authorization', () => {
   });
 
   it('frees the slot of an approved device that never collected its token', async () => {
-    const { browser } = await signedInBrowser(upstream, 'abandoned@example.com');
+    const { browser } = await licensedBrowser(upstream, 'abandoned@example.com');
     const one = await signInDesktop(browser, newInstallation('One'));
     await signInDesktop(browser, newInstallation('Two'));
     const abandoned = await startAuthorization(newInstallation('Abandoned'));
@@ -179,7 +182,7 @@ describe('device authorization', () => {
   });
 
   it('lets only one of two concurrent approvals take the last device slot', async () => {
-    const { browser } = await signedInBrowser(upstream, 'last-slot@example.com');
+    const { browser } = await licensedBrowser(upstream, 'last-slot@example.com');
     const { seatId } = await signInDesktop(browser, newInstallation('One'));
     await signInDesktop(browser, newInstallation('Two'));
     const pending = [await startAuthorization(newInstallation('Three')), await startAuthorization(newInstallation('Four'))];
@@ -197,7 +200,7 @@ describe('device authorization', () => {
   });
 
   it('approves a sign-in only once when it is approved twice at once', async () => {
-    const { browser } = await signedInBrowser(upstream, 'double-approve@example.com');
+    const { browser } = await licensedBrowser(upstream, 'double-approve@example.com');
     const authorization = await startAuthorization();
     const path = `/api/device-authorizations/${authorization.user_code}`;
     const seatId = (await browser.json(path)).body.selectedSeatId;
@@ -210,7 +213,7 @@ describe('device authorization', () => {
   });
 
   it('re-approving an installation reuses its activation and invalidates the old token', async () => {
-    const { browser } = await signedInBrowser(upstream, 'reapprove@example.com');
+    const { browser } = await licensedBrowser(upstream, 'reapprove@example.com');
     const installation = newInstallation('Desk');
     const first = await signInDesktop(browser, installation);
     const second = await signInDesktop(browser, installation);
@@ -228,7 +231,7 @@ describe('installation tokens', () => {
     expect(unknown.headers.get('WWW-Authenticate')).toBe('Bearer');
     expect((await desktop('/sign-out', { token: 'not-a-token' })).status).toBe(204);
 
-    const { browser } = await signedInBrowser(upstream, 'revoke@example.com');
+    const { browser } = await licensedBrowser(upstream, 'revoke@example.com');
     const revoked = await signInDesktop(browser, newInstallation('Revoked'));
     const devices = await browser.json<Devices>(`/api/seats/${revoked.seatId}/devices`);
     const revocation = await browser.json(`/api/device-activations/${devices.body.activeDevices[0]!.activationId}`, 'DELETE');
@@ -241,7 +244,7 @@ describe('installation tokens', () => {
   });
 
   it("refuses to list or revoke another user's devices", async () => {
-    const owner = await signedInBrowser(upstream, 'device-owner@example.com');
+    const owner = await licensedBrowser(upstream, 'device-owner@example.com');
     const intruder = await signedInBrowser(upstream, 'device-intruder@example.com');
     const signedIn = await signInDesktop(owner.browser);
     const [device] = (await owner.browser.json<Devices>(`/api/seats/${signedIn.seatId}/devices`)).body.activeDevices;
@@ -261,14 +264,14 @@ describe('installation tokens', () => {
   });
 
   it('keeps the installation signed in but refuses a lease without entitlement', async () => {
-    const { browser, userId } = await signedInBrowser(upstream, 'expired-desktop@example.com');
+    const { browser, userId } = await licensedBrowser(upstream, 'expired-desktop@example.com');
     const signedIn = await signInDesktop(browser);
     await expireUserTrial(userId);
     expect(await desktop('/entitlement', { token: signedIn.token })).toMatchObject({ status: 403, body: { reasonCode: 'trial_expired' } });
   });
 
   it('ends the lease with the entitlement', async () => {
-    const { browser, userId } = await signedInBrowser(upstream, 'short-trial@example.com');
+    const { browser, userId } = await licensedBrowser(upstream, 'short-trial@example.com');
     const signedIn = await signInDesktop(browser);
     const trialEnd = new Date(Date.now() + 2 * 24 * 3600_000).toISOString();
     await env.DB.prepare('UPDATE trials SET ends_at = ? WHERE originating_user_id = ?').bind(trialEnd, userId).run();
