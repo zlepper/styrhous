@@ -527,6 +527,7 @@ jobs:
           dpkg-deb --extract "$package" "$temporary_directory"
           bash scripts/verify-packaged-legal-files.sh "$temporary_directory"
 
+          sudo apt-get update
           sudo apt-get install --yes "$package"
           executable=$(dpkg -L styrhous | awk '/\/usr\/bin\// { print; exit }')
           test -n "$executable"
