@@ -384,6 +384,144 @@ fn cron_job_run_action_opens_a_confirmation_and_sends_a_worker_command() {
     );
 }
 
+/// GitHub issue #30: starting a second run (of another CronJob) must not hide
+/// the failure of a run that is still in flight.
+#[test]
+fn overlapping_cron_job_runs_started_from_the_ui_keep_the_earlier_failure_visible() {
+    let cron_job = fixture_api_resource("batch", "CronJob", "cronjobs");
+    let mut state = oracle_resource_table_state();
+    let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
+    cluster.selected_api_resource = Some(cron_job.clone());
+    cluster.resource_navigation = build_resource_navigation(vec![cron_job.clone()]);
+    cluster.resource_cache.insert(
+        (cron_job, Some("kube-system".to_owned())),
+        ResourceWatchState {
+            resources: ["nightly-report", "weekly-cleanup"]
+                .into_iter()
+                .map(|name| {
+                    (
+                        format!("{name}-uid"),
+                        MinimalResource {
+                            uid: format!("{name}-uid"),
+                            name: name.to_owned(),
+                            namespace: Some("kube-system".to_owned()),
+                            creation_timestamp: None,
+                            controller_owner: None,
+                            labels: Default::default(),
+                            annotations: Default::default(),
+                            cells: BTreeMap::new(),
+                            log_containers: Vec::new(),
+                        },
+                    )
+                })
+                .collect(),
+            is_synced: true,
+            error: None,
+            revision: 0,
+        },
+    );
+    // Another connected cluster with its own run 1, to prove results are
+    // correlated per cluster and not by operation id alone.
+    let other_cluster = state.clusters.get_mut(&3).expect("fixture exists");
+    other_cluster.connection = ClusterConnectionState::Connected;
+    other_cluster.cron_job_runs_in_flight.insert(1);
+
+    let mut harness = application_harness::<MockWorker>();
+    harness.seed_ui_state(state);
+    for cron_job_name in ["nightly-report", "weekly-cleanup"] {
+        harness
+            .get_by_label(&format!("More actions for {cron_job_name}"))
+            .click();
+        harness.run();
+        harness.get_by_label("Run now").click();
+        harness.run();
+        harness.event(egui::Event::PointerGone);
+        harness.run();
+        // The confirmation dialog's primary button.
+        harness.get_by_label("Run now").click();
+        harness.run();
+        harness.event(egui::Event::PointerGone);
+        harness.run();
+    }
+
+    let runs = harness
+        .state()
+        .worker
+        .commands_of::<RunCronJob>()
+        .map(|command| (command.operation_id, command.resource_name.clone()))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        runs,
+        vec![
+            (1, "nightly-report".to_owned()),
+            (2, "weekly-cleanup".to_owned())
+        ]
+    );
+
+    // The later run finishes first, then the earlier one fails.
+    harness.deliver_worker_result(CronJobRunCompleted {
+        cluster_key: 2,
+        operation_id: 2,
+        namespace: "kube-system".to_owned(),
+        cron_job_name: "weekly-cleanup".to_owned(),
+        job_name: "weekly-cleanup-manual-abc12".to_owned(),
+    });
+    harness.deliver_worker_result(CronJobRunFailed {
+        cluster_key: 3,
+        operation_id: 1,
+        namespace: "kube-system".to_owned(),
+        cron_job_name: "other-cluster-job".to_owned(),
+        error: "other cluster failure".to_owned(),
+    });
+    assert_eq!(
+        harness.state().ui_state.clusters[&2].cron_job_runs_in_flight,
+        BTreeSet::from([1]),
+        "a result from another cluster must not settle this cluster's run"
+    );
+    assert!(
+        harness.state().ui_state.clusters[&3]
+            .cron_job_runs_in_flight
+            .is_empty()
+    );
+
+    harness.deliver_worker_result(CronJobRunFailed {
+        cluster_key: 2,
+        operation_id: 1,
+        namespace: "kube-system".to_owned(),
+        cron_job_name: "nightly-report".to_owned(),
+        error: "Forbidden: cannot create jobs".to_owned(),
+    });
+
+    let cluster = &harness.state().ui_state.clusters[&2];
+    assert!(cluster.cron_job_runs_in_flight.is_empty());
+    assert_eq!(
+        cluster
+            .operation_history
+            .iter()
+            .map(|entry| (
+                entry.title.as_str(),
+                entry.target.as_str(),
+                entry.details.as_deref()
+            ))
+            .collect::<Vec<_>>(),
+        vec![
+            (
+                "CronJob started",
+                "weekly-cleanup • kube-system",
+                Some("Created Job weekly-cleanup-manual-abc12")
+            ),
+            (
+                "Couldn’t run CronJob",
+                "nightly-report • kube-system",
+                Some("Forbidden: cannot create jobs")
+            ),
+        ]
+    );
+    // Both failures (this cluster and the other one) stay visible as toasts.
+    assert_eq!(harness.get_all_by_label("Couldn’t run CronJob").count(), 2);
+    harness.get_by_label("nightly-report • kube-system");
+}
+
 #[test]
 fn cron_job_run_results_record_each_concurrent_operation_outcome() {
     let mut state = oracle_resource_table_state();
