@@ -1,7 +1,6 @@
 //! Kind CronJob and resource-scale action scenarios.
 
 use super::*;
-use crate::ui::state::OperationOutcome;
 use std::time::Duration;
 
 const CRON_JOB_RUN_TIMEOUT_MS: u64 = 10_000;
@@ -384,14 +383,7 @@ fn test_resource_scale_integration() {
                 .as_ref()
                 .map(|_| ())
         },
-        |app| {
-            app.ui_state.clusters[&cluster_key]
-                .operation_history
-                .iter()
-                .rev()
-                .find(|entry| entry.outcome == OperationOutcome::Failure)
-                .and_then(|entry| entry.details.clone())
-        },
+        |app| latest_operation_failure(app, cluster_key),
         10_000,
     );
     // Worker results are applied after the workspace render pass. Render the
@@ -420,14 +412,7 @@ fn test_resource_scale_integration() {
                 .is_none()
                 .then_some(())
         },
-        |app| {
-            app.ui_state.clusters[&cluster_key]
-                .operation_history
-                .iter()
-                .rev()
-                .find(|entry| entry.outcome == OperationOutcome::Failure)
-                .and_then(|entry| entry.details.clone())
-        },
+        |app| latest_operation_failure(app, cluster_key),
         5_000,
     );
 

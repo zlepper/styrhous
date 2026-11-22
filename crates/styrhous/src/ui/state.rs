@@ -210,6 +210,8 @@ pub(crate) use selected_namespaces::{NamespaceScope, SelectedNamespaces};
 
 mod cluster_operations;
 mod cluster_results;
+#[cfg(test)]
+pub(crate) use cluster_results::FAILED_API_GROUPS_TITLE_SUFFIX;
 mod deployment_rollback;
 mod detail_results;
 mod details;

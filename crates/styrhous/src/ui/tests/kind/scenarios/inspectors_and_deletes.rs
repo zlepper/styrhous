@@ -1,7 +1,6 @@
 //! Kind inspector and resource-delete scenarios.
 
 use super::*;
-use crate::ui::state::OperationOutcome;
 
 #[test]
 fn test_managed_resource_inspector_integration() {
@@ -443,14 +442,7 @@ fn test_bulk_resource_delete_integration() {
                     .is_none_or(|selection| selection.is_empty()))
             .then_some(())
         },
-        |app| {
-            app.ui_state.clusters[&cluster_key]
-                .operation_history
-                .iter()
-                .rev()
-                .find(|entry| entry.outcome == OperationOutcome::Failure)
-                .and_then(|entry| entry.details.clone())
-        },
+        |app| latest_operation_failure(app, cluster_key),
         10_000,
     );
     assert!(matches!(

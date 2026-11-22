@@ -274,6 +274,10 @@ fn name_api_groups<'a>(group_versions: impl ExactSizeIterator<Item = &'a str>) -
     names
 }
 
+/// Ends the title of the outcome recorded when API groups could not be
+/// discovered; they are retried in the background.
+pub(crate) const FAILED_API_GROUPS_TITLE_SUFFIX: &str = "could not be loaded";
+
 fn describe_failed_api_groups(
     failed_api_groups: &[crate::worker::FailedApiGroup],
 ) -> FailedApiGroupsSummary {
@@ -284,7 +288,7 @@ fn describe_failed_api_groups(
         .join("\n");
     FailedApiGroupsSummary {
         title: format!(
-            "{} could not be loaded",
+            "{} {FAILED_API_GROUPS_TITLE_SUFFIX}",
             api_groups_label(failed_api_groups.len())
         ),
         target: name_api_groups(

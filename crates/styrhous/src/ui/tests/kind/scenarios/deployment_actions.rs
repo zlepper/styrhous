@@ -1,7 +1,6 @@
 //! Kind deployment completion and action scenarios.
 
 use super::*;
-use crate::ui::state::OperationOutcome;
 
 #[test]
 fn test_force_delete_resource_with_finalizer_integration() {
@@ -146,14 +145,7 @@ fn test_force_delete_resource_with_finalizer_integration() {
                 configmaps.get(&resource_name),
             ))
         },
-        |app| {
-            app.ui_state.clusters[&cluster_key]
-                .operation_history
-                .iter()
-                .rev()
-                .find(|entry| entry.outcome == OperationOutcome::Failure)
-                .and_then(|entry| entry.details.clone())
-        },
+        |app| latest_operation_failure(app, cluster_key),
         20_000,
     );
     wait_for_resource_watch(
@@ -399,14 +391,7 @@ fn test_deployment_rollout_restart_integration() {
                 },
             )
         },
-        |app| {
-            app.ui_state.clusters[&cluster_key]
-                .operation_history
-                .iter()
-                .rev()
-                .find(|entry| entry.outcome == OperationOutcome::Failure)
-                .and_then(|entry| entry.details.clone())
-        },
+        |app| latest_operation_failure(app, cluster_key),
         10_000,
     );
 }
@@ -515,25 +500,41 @@ fn test_deployment_rollback_integration() {
     harness.get_by_label(&actions_label).click();
     wait_for_settled_clickable(&mut harness, "Roll back…", 5_000);
     harness.get_by_label("Roll back…").click();
-    let history = wait_for(
+    let history = wait_for_with_terminal_and_timeout_diagnostic(
         &mut harness,
         "the rollback dialog to load revision 1 as the default target",
-        |app| {
-            let pending = app.ui_state.clusters[&cluster_key]
-                .pending_deployment_rollback
-                .as_ref()?;
-            match &pending.revisions {
-                DeploymentRevisionsLoad::Failed(error) => {
-                    panic!("Loading revisions failed: {error}")
-                }
-                DeploymentRevisionsLoad::Loaded {
-                    history,
-                    selected: Some(1),
-                } => Some(history.clone()),
-                _ => None,
-            }
+        |app| match &app.ui_state.clusters[&cluster_key]
+            .pending_deployment_rollback
+            .as_ref()?
+            .revisions
+        {
+            DeploymentRevisionsLoad::Loaded {
+                history,
+                selected: Some(1),
+            } => Some(history.clone()),
+            _ => None,
         },
-        10_000,
+        |app| match &app.ui_state.clusters[&cluster_key]
+            .pending_deployment_rollback
+            .as_ref()?
+            .revisions
+        {
+            DeploymentRevisionsLoad::Failed(error) => {
+                Some(format!("loading revisions failed: {error}"))
+            }
+            _ => None,
+        },
+        |app| {
+            Some(
+                match &app.ui_state.clusters[&cluster_key].pending_deployment_rollback {
+                    None => "the rollback dialog is not open".to_owned(),
+                    Some(pending) => format!("the dialog shows {:#?}", pending.revisions),
+                },
+            )
+        },
+        // A GET and a LIST against an API server shared with the other
+        // parallel Kind tests, so the same bound as the Kubernetes waits above.
+        30_000,
     );
     // What the server really returns: defaulting must not make the
     // templates look different beyond the one change that was made.
@@ -580,14 +581,7 @@ fn test_deployment_rollback_integration() {
                 (observed == (Some("3".to_owned()), Some("first".to_owned()))).then_some(())
             })
         },
-        |app| {
-            app.ui_state.clusters[&cluster_key]
-                .operation_history
-                .iter()
-                .rev()
-                .find(|entry| entry.outcome == OperationOutcome::Failure)
-                .and_then(|entry| entry.details.clone())
-        },
+        |app| latest_operation_failure(app, cluster_key),
         20_000,
     );
     wait_for(

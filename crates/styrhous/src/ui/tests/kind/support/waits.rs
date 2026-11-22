@@ -113,6 +113,27 @@ pub(in crate::ui::tests::kind) fn wait_for_harness<T>(
     );
 }
 
+/// The details of the latest failed operation in the cluster's history, to
+/// stop a wait early. The API discovery outcome is not an operation failure:
+/// under the parallel Kind tests the shared API server can be slow to answer
+/// discovery, and the application keeps retrying those groups in the background.
+pub(in crate::ui::tests::kind) fn latest_operation_failure(
+    app: &MyEguiApp<Worker>,
+    cluster_key: i32,
+) -> Option<String> {
+    app.ui_state.clusters[&cluster_key]
+        .operation_history
+        .iter()
+        .rev()
+        .find(|entry| {
+            entry.outcome == crate::ui::state::OperationOutcome::Failure
+                && !entry
+                    .title
+                    .ends_with(crate::ui::state::FAILED_API_GROUPS_TITLE_SUFFIX)
+        })
+        .and_then(|entry| entry.details.clone())
+}
+
 /// Waits until exactly one node has `label`, is enabled, and kept its bounds
 /// for a frame. Blades slide in and tables re-lay out as watches sync, so a
 /// real pointer click is only reliable on settled geometry.

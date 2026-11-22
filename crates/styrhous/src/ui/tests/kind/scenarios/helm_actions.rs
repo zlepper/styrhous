@@ -4,7 +4,6 @@ use super::*;
 use crate::api_resource::ApiResource;
 use crate::helm_release::StorageDriver;
 use crate::ui::MyEguiApp;
-use crate::ui::state::OperationOutcome;
 use crate::worker::Worker;
 
 const RELEASE_NAME: &str = "rollback-demo";
@@ -113,14 +112,7 @@ fn roll_back_through_the_inspector(test_name: &str, storage: StorageDriver) {
                 (greeting.as_deref() == Some("first")).then_some(())
             })
         },
-        |app| {
-            app.ui_state.clusters[&cluster_key]
-                .operation_history
-                .iter()
-                .rev()
-                .find(|entry| entry.outcome == OperationOutcome::Failure)
-                .and_then(|entry| entry.details.clone())
-        },
+        |app| latest_operation_failure(app, cluster_key),
         60_000,
     );
     wait_for(
