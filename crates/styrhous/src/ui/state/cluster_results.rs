@@ -440,26 +440,6 @@ impl WorkerResult for crate::worker::KubernetesCustomResourceColumnsLoaded {
     }
 }
 
-impl WorkerResult for crate::worker::KubernetesResourceSchemasLoaded {
-    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
-        let crate::worker::KubernetesResourceSchemasLoaded {
-            cluster_key,
-            schemas,
-        } = self;
-        for (api_resource, schema) in schemas {
-            ui.resource_schemas
-                .insert((cluster_key, api_resource.clone()), schema.clone());
-            for editor in ui.yaml_editors.values_mut().filter(|editor| {
-                editor.cluster_key == cluster_key && editor.api_resource == api_resource
-            }) {
-                editor.schema = Some(schema.clone());
-                editor.schema_loading = false;
-                editor.validation_revision = 0;
-            }
-        }
-    }
-}
-
 impl WorkerResult for crate::worker::KubernetesApisLoadFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         let crate::worker::KubernetesApisLoadFailed { cluster_key, error } = self;

@@ -18,7 +18,7 @@ pub(crate) async fn delete_resource(
         namespace.as_deref().unwrap_or("cluster-wide scope")
     );
 
-    let api = dynamic_api::create(&client, &api_resource, namespace.as_deref()).await?;
+    let api = dynamic_api::create(&client, &api_resource, namespace.as_deref())?;
     let delete_params = resource_uid.map(|uid| {
         DeleteParams::default().preconditions(Preconditions {
             uid: Some(uid),
@@ -46,7 +46,7 @@ pub(crate) async fn force_delete_resource(
     resource_name: String,
     resource_uid: String,
 ) -> Result<ResourceForceDeleteCompleted> {
-    let api = dynamic_api::create(&client, &api_resource, namespace.as_deref()).await?;
+    let api = dynamic_api::create(&client, &api_resource, namespace.as_deref())?;
     let resource = api.get(&resource_name).await?;
     let metadata = resource.meta();
     if metadata.uid.as_deref() != Some(&resource_uid) {
@@ -228,7 +228,7 @@ pub(crate) async fn apply_resource_yaml(
         namespace.as_deref().unwrap_or("cluster-wide scope")
     );
 
-    let api = dynamic_api::create(&client, &api_resource, namespace.as_deref()).await?;
+    let api = dynamic_api::create(&client, &api_resource, namespace.as_deref())?;
     let mut current = api.get(&resource_name).await?;
     let obj = match resource_yaml::prepare_editor_replacement(
         &original_yaml,

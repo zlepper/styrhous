@@ -48,7 +48,7 @@ pub(crate) async fn get_resource_scale(
     namespace: Option<String>,
     resource_name: String,
 ) -> Result<ResourceScaleFetched> {
-    let api = dynamic_api::create(&client, &api_resource, namespace.as_deref()).await?;
+    let api = dynamic_api::create(&client, &api_resource, namespace.as_deref())?;
     let scale = api.get_scale(&resource_name).await?;
     let replicas = scale
         .spec
@@ -75,7 +75,7 @@ pub(crate) async fn update_resource_scale(
     resource_name: String,
     replicas: i32,
 ) -> Result<ResourceScaleUpdated> {
-    let api = dynamic_api::create(&client, &api_resource, namespace.as_deref()).await?;
+    let api = dynamic_api::create(&client, &api_resource, namespace.as_deref())?;
     let patch: serde_yaml::Value =
         serde_yaml::from_str(&format!("spec:\n  replicas: {replicas}\n"))?;
     api.patch_scale(
@@ -111,7 +111,7 @@ pub(crate) async fn get_resource_yaml(
         namespace.as_deref().unwrap_or("cluster-wide scope")
     );
 
-    let api = dynamic_api::create(&client, &api_resource, namespace.as_deref()).await?;
+    let api = dynamic_api::create(&client, &api_resource, namespace.as_deref())?;
     let mut obj = api.get(&resource_name).await?;
 
     let (yaml, resource_version, resource_uid) = resource_yaml::editor_yaml(&mut obj)?;
@@ -199,7 +199,7 @@ pub(crate) async fn validate_resource_yaml(
         resource_uid,
     } = request;
 
-    let api = dynamic_api::create(&client, &api_resource, namespace.as_deref()).await?;
+    let api = dynamic_api::create(&client, &api_resource, namespace.as_deref())?;
     let mut current = api.get(&resource_name).await?;
     let obj = match resource_yaml::prepare_editor_replacement(
         &original_yaml,

@@ -118,11 +118,6 @@ pub(crate) struct KubernetesCustomResourceColumnsLoaded {
     pub(crate) columns: std::collections::BTreeMap<ApiResource, Vec<CustomResourceColumn>>,
 }
 #[derive(Debug)]
-pub(crate) struct KubernetesResourceSchemasLoaded {
-    pub(crate) cluster_key: i32,
-    pub(crate) schemas: std::collections::BTreeMap<ApiResource, ResourceSchema>,
-}
-#[derive(Debug)]
 pub(crate) struct KubernetesApisLoadFailed {
     pub(crate) cluster_key: i32,
     pub(crate) error: String,

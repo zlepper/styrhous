@@ -1,15 +1,16 @@
 use super::*;
 
 const MAX_CONCURRENT_API_DISCOVERY_REQUESTS: usize = 4;
-const API_DISCOVERY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(25);
-/// Time limits for one discovery run. `group` bounds each API group request and
-/// `crd_metadata` is reserved at the end of `total` for the optional CRD listing, so a
-/// slow group list or CRD listing cannot turn a partial discovery into a failure.
+const API_DISCOVERY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+/// A custom resource table waits for its printer columns before showing rows, so a CRD
+/// lookup that stops answering only costs its optional columns.
+const CRD_COLUMNS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+/// Time limits for one discovery run. `group` bounds each API group request within
+/// `total`, so a slow group list cannot turn a partial discovery into a failure.
 #[derive(Clone, Copy)]
 struct DiscoveryTimeouts {
     total: std::time::Duration,
     group: std::time::Duration,
-    crd_metadata: std::time::Duration,
 }
 
 const DISCOVERY_TIMEOUTS: DiscoveryTimeouts = DiscoveryTimeouts {
@@ -18,16 +19,9 @@ const DISCOVERY_TIMEOUTS: DiscoveryTimeouts = DiscoveryTimeouts {
     // group is only dropped once it has clearly stopped answering. A stalled group
     // occupies one of the concurrent request slots without blocking the others.
     group: std::time::Duration::from_secs(15),
-    crd_metadata: std::time::Duration::from_secs(5),
 };
 
-const _: () = {
-    assert!(DISCOVERY_TIMEOUTS.crd_metadata.as_nanos() < DISCOVERY_TIMEOUTS.total.as_nanos());
-    assert!(
-        DISCOVERY_TIMEOUTS.group.as_nanos()
-            <= DISCOVERY_TIMEOUTS.total.as_nanos() - DISCOVERY_TIMEOUTS.crd_metadata.as_nanos()
-    );
-};
+const _: () = assert!(DISCOVERY_TIMEOUTS.group.as_nanos() <= DISCOVERY_TIMEOUTS.total.as_nanos());
 
 pub(crate) struct KubernetesApiInspector {
     pub(crate) client: kube::Client,
@@ -41,8 +35,6 @@ pub(crate) struct ApiInspection {
     pub(crate) retry_targets: Vec<ApiGroupTarget>,
     pub(crate) pod_metrics_api_available: bool,
     pub(crate) node_metrics_api_available: bool,
-    pub(crate) custom_resource_columns: BTreeMap<ApiResource, Vec<CustomResourceColumn>>,
-    pub(crate) resource_schemas: BTreeMap<ApiResource, ResourceSchema>,
 }
 
 pub(crate) struct DiscoveredApiResources {
@@ -185,20 +177,16 @@ impl KubernetesApiInspector {
         timeouts: DiscoveryTimeouts,
     ) -> Result<ApiInspection> {
         let started = tokio::time::Instant::now();
-        let groups_deadline = started + (timeouts.total - timeouts.crd_metadata);
-        let crd_deadline = started + timeouts.total;
+        let groups_deadline = started + timeouts.total;
 
         // Without the group list and the core API nothing works, so these stay fatal.
-        let (api_groups, core_resources) = await_discovery_with_timeout(
-            timeouts.total - timeouts.crd_metadata,
-            "Kubernetes API discovery",
-            async {
+        let (api_groups, core_resources) =
+            await_discovery_with_timeout(timeouts.total, "Kubernetes API discovery", async {
                 let api_groups = self.client.list_api_groups().await?;
                 let core_resources = self.get_core_api_resources().await?;
                 Ok((api_groups, core_resources))
-            },
-        )
-        .await?;
+            })
+            .await?;
 
         let client = self.client.clone();
         let targets = api_groups
@@ -256,20 +244,6 @@ impl KubernetesApiInspector {
             pod_metrics_api_available(&discovered_resources.api_resources);
         let node_metrics_api_available =
             node_metrics_api_available(&discovered_resources.api_resources);
-        let (custom_resource_columns, resource_schemas) = match tokio::time::timeout_at(
-            crd_deadline,
-            self.custom_resource_metadata(),
-        )
-        .await
-        {
-            Ok(metadata) => metadata,
-            Err(_) => {
-                tracing::warn!(
-                    "listing CustomResourceDefinitions timed out; continuing without custom resource metadata"
-                );
-                Default::default()
-            }
-        };
         Ok(ApiInspection {
             api_resources: discovered_resources.api_resources,
             scalable_api_resources: discovered_resources.scalable_api_resources,
@@ -277,87 +251,52 @@ impl KubernetesApiInspector {
             retry_targets,
             pod_metrics_api_available,
             node_metrics_api_available,
-            custom_resource_columns,
-            resource_schemas,
         })
     }
+}
 
-    pub(super) async fn custom_resource_metadata(
-        &self,
-    ) -> (
-        BTreeMap<ApiResource, Vec<CustomResourceColumn>>,
-        BTreeMap<ApiResource, ResourceSchema>,
-    ) {
-        // Access to CRDs is commonly restricted. Dynamic resources still work without
-        // their optional columns, so do not fail API discovery in that case.
-        self.try_custom_resource_metadata()
-            .await
-            .unwrap_or_default()
+/// The printer columns a CustomResourceDefinition declares for `api_resource`'s version.
+///
+/// Reads only that one CRD, by its `<plural>.<group>` name. A resource that is not a CRD
+/// (built-in or served by an aggregated API), missing permission, or a failing lookup all
+/// mean the table shows no custom columns.
+pub(crate) async fn crd_printer_columns(
+    client: kube::Client,
+    api_resource: &ApiResource,
+) -> Vec<CustomResourceColumn> {
+    // Every CRD group contains a dot; the dotless groups are all built in.
+    if !api_resource.group.contains('.') {
+        return Vec::new();
     }
-
-    /// Like `custom_resource_metadata`, but reports a failure that may be transient. Missing
-    /// permission is not transient and yields no metadata.
-    pub(super) async fn try_custom_resource_metadata(
-        &self,
-    ) -> Result<(
-        BTreeMap<ApiResource, Vec<CustomResourceColumn>>,
-        BTreeMap<ApiResource, ResourceSchema>,
-    )> {
-        let crds = Api::<CustomResourceDefinition>::all(self.client.clone());
-        let crds = match crds.list(&Default::default()).await {
-            Ok(crds) => crds,
-            Err(kube::Error::Api(status)) if matches!(status.code, 401 | 403) => {
-                return Ok(Default::default());
-            }
-            Err(error) => return Err(error.into()),
-        };
-
-        let mut columns_by_resource = BTreeMap::new();
-        let mut schemas_by_resource = BTreeMap::new();
-        for crd in &crds.items {
-            let spec = &crd.spec;
-            for version in &spec.versions {
-                let api_resource = ApiResource {
-                    group: spec.group.clone(),
-                    version: version.name.clone(),
-                    kind: spec.names.kind.clone(),
-                    name: spec.names.plural.clone(),
-                    namespaced: spec.scope == "Namespaced",
-                };
-                if let Some(columns) = &version.additional_printer_columns {
-                    columns_by_resource.insert(
-                        api_resource.clone(),
-                        columns
-                            .iter()
-                            .enumerate()
-                            .map(|(index, column)| CustomResourceColumn {
-                                id: format!("crd-{index}"),
-                                label: column.name.clone(),
-                                json_path: column.json_path.clone(),
-                                type_: column.type_.clone(),
-                                format: column.format.clone(),
-                            })
-                            .collect(),
-                    );
-                }
-                if let Some(schema) = version
-                    .schema
-                    .as_ref()
-                    .and_then(|schema| schema.open_api_v3_schema.as_ref())
-                    && let Ok(root) = k8s_openapi::serde_json::to_value(schema)
-                {
-                    schemas_by_resource.insert(api_resource, ResourceSchema::new(root));
-                }
-            }
+    let name = format!("{}.{}", api_resource.name, api_resource.group);
+    let crds = Api::<CustomResourceDefinition>::all(client);
+    let crd = match tokio::time::timeout(CRD_COLUMNS_TIMEOUT, crds.get_opt(&name)).await {
+        Ok(Ok(crd)) => crd,
+        Ok(Err(kube::Error::Api(status))) if matches!(status.code, 401 | 403) => None,
+        Ok(Err(error)) => {
+            tracing::warn!(%error, crd = %name, "reading the CustomResourceDefinition failed");
+            None
         }
-        Ok((columns_by_resource, schemas_by_resource))
-    }
-
-    pub(crate) async fn custom_resource_columns(
-        &self,
-    ) -> BTreeMap<ApiResource, Vec<CustomResourceColumn>> {
-        self.custom_resource_metadata().await.0
-    }
+        Err(_) => {
+            tracing::warn!(crd = %name, "reading the CustomResourceDefinition timed out");
+            None
+        }
+    };
+    crd.into_iter()
+        .flat_map(|crd| crd.spec.versions)
+        .find(|version| version.name == api_resource.version)
+        .and_then(|version| version.additional_printer_columns)
+        .unwrap_or_default()
+        .into_iter()
+        .enumerate()
+        .map(|(index, column)| CustomResourceColumn {
+            id: format!("crd-{index}"),
+            label: column.name,
+            json_path: column.json_path,
+            type_: column.type_,
+            format: column.format,
+        })
+        .collect()
 }
 
 struct GroupDiscovery<T> {
@@ -702,8 +641,6 @@ mod tests {
         Hang,
     }
 
-    const EMPTY_CRD_LIST: &str = r#"{"apiVersion":"apiextensions.k8s.io/v1","kind":"CustomResourceDefinitionList","metadata":{},"items":[]}"#;
-    const CRD_PATH: &str = "/apis/apiextensions.k8s.io/v1/customresourcedefinitions";
     const API_FAILURE: &str = r#"{"kind":"Status","apiVersion":"v1","status":"Failure","message":"the server is currently unable to handle the request","reason":"ServiceUnavailable","code":503}"#;
 
     fn group_list(groups: &[(&str, &str)]) -> String {
@@ -735,10 +672,20 @@ mod tests {
         )
     }
 
+    type RecordedRequests = Arc<std::sync::Mutex<Vec<String>>>;
+
     /// Serves the scripted replies by request path until the returned task is dropped.
     async fn scripted_api_server(
         replies: Vec<(&'static str, ScriptedReply)>,
     ) -> (kube::Client, tokio::task::JoinHandle<()>) {
+        let (client, server, _) = recording_api_server(replies).await;
+        (client, server)
+    }
+
+    /// Serves the scripted replies by request path, recording every requested path.
+    async fn recording_api_server(
+        replies: Vec<(&'static str, ScriptedReply)>,
+    ) -> (kube::Client, tokio::task::JoinHandle<()>, RecordedRequests) {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -746,9 +693,12 @@ mod tests {
             .expect("test server should bind");
         let address = listener.local_addr().expect("test server has an address");
         let replies = Arc::new(replies);
+        let requests = RecordedRequests::default();
+        let recorded = Arc::clone(&requests);
         let server = tokio::spawn(async move {
             while let Ok((mut socket, _)) = listener.accept().await {
                 let replies = Arc::clone(&replies);
+                let recorded = Arc::clone(&recorded);
                 tokio::spawn(async move {
                     let mut request = Vec::new();
                     let mut buffer = [0_u8; 1_024];
@@ -765,6 +715,7 @@ mod tests {
                         .and_then(|target| target.split('?').next())
                         .unwrap_or_default()
                         .to_owned();
+                    recorded.lock().unwrap().push(path.clone());
                     let (status, body) = match replies.iter().find(|(route, _)| *route == path) {
                         Some((_, ScriptedReply::Json(status, body))) => (*status, *body),
                         Some((
@@ -802,7 +753,7 @@ mod tests {
                 .expect("test server URL is valid"),
         );
         let client = kube::Client::try_from(config).expect("test client should build");
-        (client, server)
+        (client, server, requests)
     }
 
     fn leak(text: String) -> &'static str {
@@ -832,7 +783,6 @@ mod tests {
                     leak(resource_list("apps/v1", &[("deployments", "Deployment")])),
                 ),
             ),
-            (CRD_PATH, ScriptedReply::Json("200 OK", EMPTY_CRD_LIST)),
         ]
     }
 
@@ -904,21 +854,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn stalled_group_and_crd_listing_degrade_instead_of_failing_the_inspection() {
+    async fn a_stalled_group_degrades_instead_of_failing_the_inspection() {
         let replies = with_reply(
-            with_reply(
-                healthy_replies(),
-                "/apis/metrics.k8s.io/v1beta1",
-                ScriptedReply::Hang,
-            ),
-            CRD_PATH,
+            healthy_replies(),
+            "/apis/metrics.k8s.io/v1beta1",
             ScriptedReply::Hang,
         );
-        let (client, _server) = scripted_api_server(replies).await;
+        let (client, _server, requests) = recording_api_server(replies).await;
         let timeouts = DiscoveryTimeouts {
             total: Duration::from_millis(1_500),
             group: Duration::from_millis(200),
-            crd_metadata: Duration::from_millis(300),
         };
 
         let started = std::time::Instant::now();
@@ -930,8 +875,92 @@ mod tests {
         assert!(started.elapsed() < timeouts.total + Duration::from_millis(500));
         assert_eq!(inspection.api_resources.len(), 2);
         assert_eq!(inspection.failed_api_groups.len(), 1);
-        assert!(inspection.custom_resource_columns.is_empty());
-        assert!(inspection.resource_schemas.is_empty());
+        assert!(
+            !requests
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|path| path.contains("customresourcedefinitions")),
+            "discovery must not list CRDs: {requests:?}"
+        );
+    }
+
+    fn crd_with_printer_columns(name: &str) -> String {
+        format!(
+            r#"{{"apiVersion":"apiextensions.k8s.io/v1","kind":"CustomResourceDefinition","metadata":{{"name":"{name}"}},"spec":{{"group":"example.com","names":{{"plural":"widgets","kind":"Widget"}},"scope":"Namespaced","versions":[{{"name":"v1alpha1","served":true,"storage":false}},{{"name":"v1","served":true,"storage":true,"additionalPrinterColumns":[{{"name":"Size","type":"integer","jsonPath":".spec.size"}},{{"name":"Phase","type":"string","jsonPath":".status.phase"}}]}}]}}}}"#
+        )
+    }
+
+    fn widgets(version: &str) -> ApiResource {
+        ApiResource {
+            group: "example.com".to_owned(),
+            version: version.to_owned(),
+            kind: "Widget".to_owned(),
+            name: "widgets".to_owned(),
+            namespaced: true,
+        }
+    }
+
+    #[tokio::test]
+    async fn crd_printer_columns_reads_the_one_crd_for_the_requested_version() {
+        let (client, _server, requests) = recording_api_server(vec![(
+            "/apis/apiextensions.k8s.io/v1/customresourcedefinitions/widgets.example.com",
+            ScriptedReply::Json(
+                "200 OK",
+                leak(crd_with_printer_columns("widgets.example.com")),
+            ),
+        )])
+        .await;
+
+        let columns = crd_printer_columns(client.clone(), &widgets("v1")).await;
+        let other_version = crd_printer_columns(client, &widgets("v1alpha1")).await;
+
+        assert_eq!(
+            columns
+                .iter()
+                .map(|column| (
+                    column.id.as_str(),
+                    column.label.as_str(),
+                    column.json_path.as_str()
+                ))
+                .collect::<Vec<_>>(),
+            vec![
+                ("crd-0", "Size", ".spec.size"),
+                ("crd-1", "Phase", ".status.phase")
+            ]
+        );
+        assert!(other_version.is_empty());
+        assert_eq!(
+            requests.lock().unwrap().len(),
+            2,
+            "only the named CRD is read"
+        );
+    }
+
+    #[tokio::test]
+    async fn crd_printer_columns_are_empty_for_resources_that_are_not_crds() {
+        let (client, _server, requests) = recording_api_server(Vec::new()).await;
+
+        let aggregated = crd_printer_columns(client.clone(), &widgets("v1")).await;
+        let built_in = crd_printer_columns(
+            client,
+            &ApiResource {
+                group: "apps".to_owned(),
+                version: "v1".to_owned(),
+                kind: "Deployment".to_owned(),
+                name: "deployments".to_owned(),
+                namespaced: true,
+            },
+        )
+        .await;
+
+        assert!(aggregated.is_empty(), "a 404 means no columns");
+        assert!(built_in.is_empty());
+        assert_eq!(
+            requests.lock().unwrap().len(),
+            1,
+            "a dotless built-in group is never looked up"
+        );
     }
 
     #[tokio::test]
@@ -982,11 +1011,7 @@ mod tests {
             .iter()
             .map(|result| format!("{result:?}"))
             .collect::<Vec<_>>();
-        assert_eq!(
-            debug.len(),
-            1,
-            "one recovery and no CRD metadata: {debug:?}"
-        );
+        assert_eq!(debug.len(), 1, "one recovery: {debug:?}");
         assert!(
             debug[0].contains("KubernetesApiGroupsRecovered"),
             "{debug:?}"

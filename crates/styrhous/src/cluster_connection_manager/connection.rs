@@ -220,20 +220,6 @@ async fn load_api_resources(
                 })
                 .await
                 .log_if_error("Failed to send kubernetes API resources");
-            event_output
-                .send(KubernetesCustomResourceColumnsLoaded {
-                    cluster_key,
-                    columns: inspection.custom_resource_columns,
-                })
-                .await
-                .log_if_error("Failed to send custom resource columns");
-            event_output
-                .send(KubernetesResourceSchemasLoaded {
-                    cluster_key,
-                    schemas: inspection.resource_schemas,
-                })
-                .await
-                .log_if_error("Failed to send custom resource schemas");
             if !inspection.retry_targets.is_empty() {
                 super::retry_failed_api_groups_for_cluster(
                     cluster_key,
@@ -299,7 +285,7 @@ mod tests {
                 std::iter::repeat(Duration::from_millis(5)),
                 tokio::time::sleep,
                 |_| async { anyhow::bail!("still failing") },
-                |_| async { Some(true) },
+                |_| async { true },
                 vec![ApiGroupTarget {
                     group_version: "metrics.k8s.io/v1beta1".to_owned(),
                     group_name: "metrics.k8s.io".to_owned(),

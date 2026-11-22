@@ -27,7 +27,7 @@ pub(crate) async fn watch_detail_object(
     history_entry_id: u64,
     event_sender: WorkerResultSender,
 ) {
-    let api = match dynamic_api::create(&client, &api_resource, namespace.as_deref()).await {
+    let api = match dynamic_api::create(&client, &api_resource, namespace.as_deref()) {
         Ok(api) => api,
         Err(error) => {
             send_detail_error(

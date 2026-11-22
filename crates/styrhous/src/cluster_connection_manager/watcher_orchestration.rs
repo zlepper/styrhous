@@ -93,23 +93,7 @@ pub(crate) async fn start_resource_watcher_with_scope(
         namespace: namespace.clone(),
         watched_namespaces: watched_namespaces.clone(),
     };
-    let watcher = if let Some(watcher) = resource_handlers::watcher_for(context) {
-        watcher
-    } else {
-        let custom_columns = KubernetesApiInspector {
-            client: client.clone(),
-        }
-        .custom_resource_columns()
-        .await
-        .remove(&api_resource)
-        .unwrap_or_default();
-        event_sender
-            .send(KubernetesCustomResourceColumnsLoaded {
-                cluster_key,
-                columns: BTreeMap::from([(api_resource.clone(), custom_columns.clone())]),
-            })
-            .await
-            .log_if_error("Failed to send custom resource columns");
+    let watcher = resource_handlers::watcher_for(context).unwrap_or_else(|| {
         Box::new(DynamicKubernetesResourceWatcher {
             client,
             event_sender,
@@ -117,9 +101,8 @@ pub(crate) async fn start_resource_watcher_with_scope(
             api_resource: api_resource.clone(),
             namespace: namespace.clone(),
             watched_namespaces,
-            custom_columns,
         })
-    };
+    });
 
     let task = tokio::spawn(watcher.watch_resources(initialized));
 

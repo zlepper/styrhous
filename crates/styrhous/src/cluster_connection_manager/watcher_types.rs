@@ -7,7 +7,6 @@ pub(crate) struct DynamicKubernetesResourceWatcher {
     pub(crate) api_resource: ApiResource,
     pub(crate) namespace: Option<String>,
     pub(crate) watched_namespaces: Option<BTreeSet<String>>,
-    pub(crate) custom_columns: Vec<CustomResourceColumn>,
 }
 
 impl DynamicKubernetesResourceWatcher {
@@ -19,50 +18,25 @@ impl DynamicKubernetesResourceWatcher {
             api_resource,
             namespace,
             watched_namespaces,
-            custom_columns,
         } = self;
-        // Convert our ApiResource to kube's ApiResource using discovery
-        let group = if api_resource.group == "core" {
-            ""
-        } else {
-            &api_resource.group
-        };
-
-        let gvk = GroupVersionKind::gvk(group, &api_resource.version, &api_resource.kind);
-
-        let discovery_result = kube::discovery::pinned_kind(&client, &gvk).await;
-        let (ar, caps) = match discovery_result {
-            Ok(r) => r,
-            Err(error) => {
-                warn!(
-                    "Failed to discover API resource {}/{}: {}",
-                    api_resource.group, api_resource.name, error
-                );
-                event_sender
-                    .send(KubernetesResourceWatchFailed {
-                        cluster_key,
-                        api_resource,
-                        namespace,
-                        error: format!("{error:#?}"),
-                    })
-                    .await
-                    .log_if_error("Failed to send resource watcher discovery error");
-                drop(initialized);
-                return;
+        let kube_resource = dynamic_api::kube_api_resource(&api_resource);
+        let api: Api<DynamicObject> = match (api_resource.namespaced, namespace.as_deref()) {
+            (true, Some(namespace)) => {
+                Api::namespaced_with(client.clone(), namespace, &kube_resource)
             }
-        };
-
-        let api: Api<DynamicObject> = match (caps.scope, namespace.as_deref()) {
-            (kube::discovery::Scope::Namespaced, Some(namespace)) => {
-                Api::namespaced_with(client, namespace, &ar)
+            (true, None) if watched_namespaces.is_some() => {
+                Api::all_with(client.clone(), &kube_resource)
             }
-            (kube::discovery::Scope::Namespaced, None) if watched_namespaces.is_some() => {
-                Api::all_with(client, &ar)
-            }
-            (kube::discovery::Scope::Cluster, None) => Api::all_with(client, &ar),
-            (discovered_scope, requested_namespace) => {
+            (false, None) => Api::all_with(client.clone(), &kube_resource),
+            (namespaced, requested_namespace) => {
                 let error = format!(
-                    "Resource scope mismatch: discovered {discovered_scope:?} scope with namespace {requested_namespace:?}"
+                    "Resource scope mismatch: {} is {} but the watch has namespace {requested_namespace:?}",
+                    api_resource.kind,
+                    if namespaced {
+                        "namespaced"
+                    } else {
+                        "cluster-scoped"
+                    },
                 );
                 event_sender
                     .send(KubernetesResourceWatchFailed {
@@ -78,8 +52,23 @@ impl DynamicKubernetesResourceWatcher {
             }
         };
 
+        // Rows are converted with the CRD's printer columns, so look them up while the
+        // first page is being listed rather than before starting the list.
+        let (custom_columns, events) = buffer_until(
+            resilient_watcher(api, watcher_config()).boxed(),
+            crd_printer_columns(client, &api_resource),
+        )
+        .await;
+        event_sender
+            .send(KubernetesCustomResourceColumnsLoaded {
+                cluster_key,
+                columns: BTreeMap::from([(api_resource.clone(), custom_columns.clone())]),
+            })
+            .await
+            .log_if_error("Failed to send custom resource columns");
+
         run_resource_watch(
-            resilient_watcher(api, watcher_config()),
+            events,
             ResourceWatchContext {
                 event_sender,
                 cluster_key,
@@ -94,6 +83,34 @@ impl DynamicKubernetesResourceWatcher {
         )
         .await;
     }
+}
+
+/// `stream` with the items `buffer_until` buffered in front of it.
+pub(crate) type BufferedStream<S> = futures_util::stream::Chain<
+    futures_util::stream::Iter<std::vec::IntoIter<<S as futures_util::Stream>::Item>>,
+    S,
+>;
+
+/// Resolves `ready` while still polling `stream`, so neither waits for the other. Items
+/// that arrive first are buffered and replayed, in order, ahead of the rest of the stream.
+pub(crate) async fn buffer_until<S, F>(mut stream: S, ready: F) -> (F::Output, BufferedStream<S>)
+where
+    S: futures_util::Stream + Unpin,
+    F: Future,
+{
+    let mut buffered = Vec::new();
+    let mut ready = std::pin::pin!(ready);
+    let mut stream_open = true;
+    let output = loop {
+        tokio::select! {
+            output = &mut ready => break output,
+            item = stream.next(), if stream_open => match item {
+                Some(item) => buffered.push(item),
+                None => stream_open = false,
+            },
+        }
+    };
+    (output, futures_util::stream::iter(buffered).chain(stream))
 }
 
 impl ResourceWatcher for DynamicKubernetesResourceWatcher {
@@ -312,4 +329,47 @@ where
         namespace: context.namespace,
         extract,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[tokio::test]
+    async fn items_that_arrive_before_the_future_resolves_are_replayed_in_order() {
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let items = futures_util::stream::unfold(receiver, |mut receiver| async move {
+            receiver.recv().await.map(|item| (item, receiver))
+        })
+        .boxed();
+        let (resolve, ready) = oneshot::channel::<&str>();
+        sender.send(1).unwrap();
+        sender.send(2).unwrap();
+        let resolver = tokio::spawn(async move {
+            // Both items are pulled from the stream while the future is still pending.
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            resolve.send("columns").unwrap();
+        });
+
+        let (output, rest) = buffer_until(items, async { ready.await.unwrap() }).await;
+        resolver.await.unwrap();
+        sender.send(3).unwrap();
+        drop(sender);
+
+        assert_eq!(output, "columns");
+        assert_eq!(rest.collect::<Vec<_>>().await, vec![1, 2, 3]);
+    }
+
+    #[tokio::test]
+    async fn a_stream_that_ends_first_still_waits_for_the_future() {
+        let (output, rest) = buffer_until(futures_util::stream::iter([1, 2]), async {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            "done"
+        })
+        .await;
+
+        assert_eq!(output, "done");
+        assert_eq!(rest.collect::<Vec<_>>().await, vec![1, 2]);
+    }
 }

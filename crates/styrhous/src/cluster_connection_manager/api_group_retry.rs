@@ -7,7 +7,6 @@ use super::{
     pod_metrics_api_available,
 };
 use crate::api_resource::ApiResource;
-use crate::helpers::ResultExt;
 use crate::worker::*;
 use anyhow::Result;
 use futures_util::stream::StreamExt;
@@ -18,7 +17,6 @@ use std::time::Duration;
 /// A retry that has not answered by now is counted as failed, like in the initial discovery.
 const GROUP_RETRY_TIMEOUT: Duration = Duration::from_secs(15);
 const CONCURRENT_GROUP_RETRIES: usize = 4;
-const CRD_METADATA_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Groups that answered a retry, with the resources they expose.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -30,20 +28,9 @@ pub(crate) struct RecoveredApiGroups {
     pub(crate) still_failing: Vec<String>,
 }
 
-/// What one round hands to the publisher.
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub(crate) struct RetryUpdate {
-    /// Groups recovered in this round, if any.
-    pub(crate) recovered: Option<RecoveredApiGroups>,
-    /// API group names whose custom resource metadata has not been delivered yet.
-    pub(crate) metadata_groups: BTreeSet<String>,
-}
-
-/// Retries `pending` forever, passing recoveries to `publish`, until every group has
-/// recovered and its metadata is delivered. `publish` returns `None` when nobody is
-/// listening any more, which ends the loop, or `Some(true)` once the metadata was delivered
-/// (`Some(false)` keeps it pending for the next round). The owner stops the loop by
-/// dropping (aborting) the future.
+/// Retries `pending` until every group has recovered, passing each round's recoveries to
+/// `publish`. `publish` returns `false` when nobody is listening any more, which ends the
+/// loop. The owner stops the loop by dropping (aborting) the future.
 ///
 /// `delays` supplies the wait before each round and `sleep` performs it, so tests can run
 /// the schedule without real time.
@@ -51,15 +38,14 @@ pub(crate) async fn retry_failed_api_groups<Sleep, Fetch, Publish>(
     mut delays: impl Iterator<Item = Duration>,
     sleep: impl Fn(Duration) -> Sleep,
     fetch_group: impl Fn(ApiGroupTarget) -> Fetch,
-    mut publish: impl FnMut(RetryUpdate) -> Publish,
+    mut publish: impl FnMut(RecoveredApiGroups) -> Publish,
     mut pending: Vec<ApiGroupTarget>,
 ) where
     Sleep: Future<Output = ()>,
     Fetch: Future<Output = Result<DiscoveredApiResources>>,
-    Publish: Future<Output = Option<bool>>,
+    Publish: Future<Output = bool>,
 {
-    let mut metadata_pending = BTreeSet::<String>::new();
-    while !pending.is_empty() || !metadata_pending.is_empty() {
+    while !pending.is_empty() {
         let Some(delay) = delays.next() else {
             return;
         };
@@ -81,7 +67,6 @@ pub(crate) async fn retry_failed_api_groups<Sleep, Fetch, Publish>(
         for (target, outcome) in attempts {
             match outcome {
                 Ok(discovered) => {
-                    metadata_pending.insert(target.group_name);
                     recovered.group_versions.push(target.group_version);
                     recovered.api_resources.extend(discovered.api_resources);
                     recovered
@@ -98,24 +83,15 @@ pub(crate) async fn retry_failed_api_groups<Sleep, Fetch, Publish>(
                 }
             }
         }
-        let recovered = (!recovered.group_versions.is_empty()).then(|| RecoveredApiGroups {
-            still_failing: pending
-                .iter()
-                .map(|target| target.group_version.clone())
-                .collect(),
-            ..recovered
-        });
-        if recovered.is_none() && metadata_pending.is_empty() {
+        if recovered.group_versions.is_empty() {
             continue;
         }
-        let update = RetryUpdate {
-            recovered,
-            metadata_groups: metadata_pending.clone(),
-        };
-        match publish(update).await {
-            None => return,
-            Some(true) => metadata_pending.clear(),
-            Some(false) => {}
+        recovered.still_failing = pending
+            .iter()
+            .map(|target| target.group_version.clone())
+            .collect();
+        if !publish(recovered).await {
+            return;
         }
     }
 }
@@ -151,10 +127,25 @@ pub(crate) async fn retry_cluster_api_groups(
             let client = client.clone();
             async move { fetch_group(&client, &target).await }
         },
-        |update| {
-            let client = client.clone();
+        |recovered| {
             let event_output = event_output.clone();
-            async move { publish_update(cluster_key, &client, &event_output, update).await }
+            async move {
+                let pod_metrics_api_available = pod_metrics_api_available(&recovered.api_resources);
+                let node_metrics_api_available =
+                    node_metrics_api_available(&recovered.api_resources);
+                event_output
+                    .send(KubernetesApiGroupsRecovered {
+                        cluster_key,
+                        group_versions: recovered.group_versions,
+                        api_resources: recovered.api_resources,
+                        scalable_api_resources: recovered.scalable_api_resources,
+                        still_failing_group_versions: recovered.still_failing,
+                        pod_metrics_api_available,
+                        node_metrics_api_available,
+                    })
+                    .await
+                    .is_ok()
+            }
         },
         failed,
     )
@@ -177,73 +168,6 @@ async fn fetch_group(
         Ok(result) => result,
         Err(_) => anyhow::bail!("timed out waiting for the API server to respond"),
     }
-}
-
-async fn publish_update(
-    cluster_key: i32,
-    client: &kube::Client,
-    event_output: &WorkerResultSender,
-    update: RetryUpdate,
-) -> Option<bool> {
-    if let Some(recovered) = update.recovered {
-        let pod_metrics_api_available = pod_metrics_api_available(&recovered.api_resources);
-        let node_metrics_api_available = node_metrics_api_available(&recovered.api_resources);
-        event_output
-            .send(KubernetesApiGroupsRecovered {
-                cluster_key,
-                group_versions: recovered.group_versions,
-                api_resources: recovered.api_resources,
-                scalable_api_resources: recovered.scalable_api_resources,
-                still_failing_group_versions: recovered.still_failing,
-                pod_metrics_api_available,
-                node_metrics_api_available,
-            })
-            .await
-            .ok()?;
-    }
-
-    // A recovered group may be an aggregated API that serves custom resources, so fetch
-    // their optional printer columns and schemas, bounded like the initial discovery.
-    let inspector = KubernetesApiInspector {
-        client: client.clone(),
-    };
-    let metadata = tokio::time::timeout(
-        CRD_METADATA_TIMEOUT,
-        inspector.try_custom_resource_metadata(),
-    )
-    .await;
-    let (mut columns, mut schemas) = match metadata {
-        Ok(Ok(metadata)) => metadata,
-        Ok(Err(error)) => {
-            tracing::warn!(%error, "listing CustomResourceDefinitions failed; will retry");
-            return Some(false);
-        }
-        Err(_) => {
-            tracing::warn!("listing CustomResourceDefinitions timed out; will retry");
-            return Some(false);
-        }
-    };
-    columns.retain(|resource, _| update.metadata_groups.contains(&resource.group));
-    schemas.retain(|resource, _| update.metadata_groups.contains(&resource.group));
-    if !columns.is_empty() {
-        event_output
-            .send(KubernetesCustomResourceColumnsLoaded {
-                cluster_key,
-                columns,
-            })
-            .await
-            .log_if_error("Failed to send custom resource columns");
-    }
-    if !schemas.is_empty() {
-        event_output
-            .send(KubernetesResourceSchemasLoaded {
-                cluster_key,
-                schemas,
-            })
-            .await
-            .log_if_error("Failed to send custom resource schemas");
-    }
-    Some(true)
 }
 
 #[cfg(test)]
@@ -276,13 +200,12 @@ mod tests {
     }
 
     /// Scripted per-group results (exhausted scripts keep failing), a recorded sleep
-    /// schedule and recorded updates.
+    /// schedule and recorded recoveries.
     #[derive(Default)]
     struct Fake {
         scripts: RefCell<BTreeMap<String, VecDeque<bool>>>,
         sleeps: RefCell<Vec<Duration>>,
-        updates: RefCell<Vec<RetryUpdate>>,
-        metadata_outcomes: RefCell<VecDeque<bool>>,
+        recoveries: RefCell<Vec<RecoveredApiGroups>>,
         stop_after_sleeps: Option<usize>,
     }
 
@@ -319,14 +242,9 @@ mod tests {
                         api_resources: vec![resource],
                     })
                 },
-                |update| async move {
-                    self.updates.borrow_mut().push(update);
-                    Some(
-                        self.metadata_outcomes
-                            .borrow_mut()
-                            .pop_front()
-                            .unwrap_or(true),
-                    )
+                |recovered| async move {
+                    self.recoveries.borrow_mut().push(recovered);
+                    true
                 },
                 pending,
             )
@@ -343,15 +261,12 @@ mod tests {
         fake.run(&DELAYS, vec![target("metrics.k8s.io")]).await;
 
         assert_eq!(
-            *fake.updates.borrow(),
-            vec![RetryUpdate {
-                recovered: Some(RecoveredApiGroups {
-                    group_versions: vec!["metrics.k8s.io/v1".to_owned()],
-                    api_resources: vec![resource("metrics.k8s.io")],
-                    scalable_api_resources: BTreeSet::from([resource("metrics.k8s.io")]),
-                    still_failing: Vec::new(),
-                }),
-                metadata_groups: BTreeSet::from(["metrics.k8s.io".to_owned()]),
+            *fake.recoveries.borrow(),
+            vec![RecoveredApiGroups {
+                group_versions: vec!["metrics.k8s.io/v1".to_owned()],
+                api_resources: vec![resource("metrics.k8s.io")],
+                scalable_api_resources: BTreeSet::from([resource("metrics.k8s.io")]),
+                still_failing: Vec::new(),
             }]
         );
         assert_eq!(
@@ -373,14 +288,12 @@ mod tests {
         )
         .await;
 
-        let updates = fake.updates.borrow();
-        assert_eq!(updates.len(), 2);
-        let first = updates[0].recovered.as_ref().unwrap();
-        assert_eq!(first.group_versions, vec!["a.example.com/v1"]);
-        assert_eq!(first.still_failing, vec!["b.example.com/v1"]);
-        let second = updates[1].recovered.as_ref().unwrap();
-        assert_eq!(second.group_versions, vec!["b.example.com/v1"]);
-        assert!(second.still_failing.is_empty());
+        let recoveries = fake.recoveries.borrow();
+        assert_eq!(recoveries.len(), 2);
+        assert_eq!(recoveries[0].group_versions, vec!["a.example.com/v1"]);
+        assert_eq!(recoveries[0].still_failing, vec!["b.example.com/v1"]);
+        assert_eq!(recoveries[1].group_versions, vec!["b.example.com/v1"]);
+        assert!(recoveries[1].still_failing.is_empty());
     }
 
     #[tokio::test]
@@ -397,50 +310,36 @@ mod tests {
         .await;
 
         assert!(outcome.is_err(), "the loop must not give up by itself");
-        assert!(fake.updates.borrow().is_empty());
+        assert!(fake.recoveries.borrow().is_empty());
         assert_eq!(*fake.sleeps.borrow(), DELAYS.map(Duration::from_secs));
-    }
-
-    #[tokio::test]
-    async fn metadata_that_could_not_be_fetched_is_retried_on_the_next_round() {
-        let fake = Fake::default().script("example.com", &[true]);
-        fake.metadata_outcomes
-            .borrow_mut()
-            .extend([false, false, true]);
-
-        fake.run(&DELAYS, vec![target("example.com")]).await;
-
-        let updates = fake.updates.borrow();
-        assert_eq!(updates.len(), 3);
-        assert!(updates[0].recovered.is_some());
-        assert!(updates[1..].iter().all(|update| update.recovered.is_none()));
-        assert!(
-            updates
-                .iter()
-                .all(|update| update.metadata_groups.contains("example.com"))
-        );
-        assert_eq!(fake.sleeps.borrow().len(), 3);
     }
 
     #[tokio::test]
     async fn the_loop_ends_when_the_receiver_is_gone() {
         let sleeps = RefCell::new(0);
+        let fetched = RefCell::new(0);
         retry_failed_api_groups(
             DELAYS.map(Duration::from_secs).into_iter(),
             |_| async { *sleeps.borrow_mut() += 1 },
-            |target| async move {
-                let resource = resource(&target.group_name);
-                Ok(DiscoveredApiResources {
-                    scalable_api_resources: BTreeSet::new(),
-                    api_resources: vec![resource],
-                })
+            |target| {
+                *fetched.borrow_mut() += 1;
+                async move {
+                    if target.group_name == "b.example.com" {
+                        bail!("still failing");
+                    }
+                    Ok(DiscoveredApiResources {
+                        scalable_api_resources: BTreeSet::new(),
+                        api_resources: vec![resource(&target.group_name)],
+                    })
+                }
             },
-            |_| async { None },
+            |_| async { false },
             vec![target("a.example.com"), target("b.example.com")],
         )
         .await;
 
-        assert_eq!(*sleeps.borrow(), 1);
+        assert_eq!(*sleeps.borrow(), 1, "b would be retried if anyone listened");
+        assert_eq!(*fetched.borrow(), 2);
     }
 
     #[test]
