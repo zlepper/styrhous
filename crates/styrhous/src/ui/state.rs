@@ -47,6 +47,9 @@ pub(crate) struct UiState {
     pub(super) selected_cluster: Option<i32>,
     pub(super) log_windows: BTreeMap<u64, PodLogWindowState>,
     pub(super) next_log_window_id: u64,
+    /// Exports still being written for windows that have closed, keyed by
+    /// (window id, export id), so their outcome is still recorded.
+    pub(super) orphaned_log_exports: HashMap<(u64, u64), i32>,
     pub(super) pending_log_sources: Option<PendingLogSources>,
     pub(super) yaml_editors: BTreeMap<u64, YamlEditorWindowState>,
     pub(super) next_yaml_editor_id: u64,

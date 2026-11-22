@@ -86,8 +86,13 @@ pub(super) fn show_log_window_with_scroll_state(
                             (PodLogInstance::Current, "Current"),
                             (PodLogInstance::Previous, "Previous"),
                         ] {
+                            // Switching replaces the window's store, which an
+                            // export in progress still needs.
                             if ui
-                                .add(egui::Button::new(label).selected(window.instance == instance))
+                                .add_enabled(
+                                    !window.export.is_busy(),
+                                    egui::Button::new(label).selected(window.instance == instance),
+                                )
                                 .clicked()
                             {
                                 window.requested_instance = Some(instance);
@@ -112,6 +117,9 @@ pub(super) fn show_log_window_with_scroll_state(
                         if all_sources_reconnecting {
                             status.on_hover_text(source_issue_details(&window.source_reconnects));
                         }
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            show_export_controls(ui, window, display_options);
+                        });
                     },
                 );
             });

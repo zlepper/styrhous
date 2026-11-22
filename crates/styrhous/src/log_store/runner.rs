@@ -1,5 +1,6 @@
 use super::storage::LogStore;
 use super::*;
+use anyhow::Context as _;
 
 pub(super) struct StoreThread {
     pub(super) control_receiver: mpsc::Receiver<Command>,
@@ -227,6 +228,24 @@ pub(super) fn run_store(store_thread: StoreThread) {
                 closed.insert(window_id);
                 live_updates.remove(window_id);
             }
+            Command::Export {
+                window_id,
+                export_id,
+                path,
+                options,
+            } => {
+                match stores
+                    .get(&window_id)
+                    .context("The log window is closed")
+                    .and_then(|store| store.prepare_export(options))
+                {
+                    Ok(export) => export.spawn(window_id, export_id, path, result_sender.clone()),
+                    Err(error) => send_result(
+                        &result_sender,
+                        LogStoreResult::export_outcome(window_id, export_id, path, Err(error)),
+                    ),
+                }
+            }
             Command::ScanProgress {
                 window_id,
                 generation,
@@ -344,7 +363,7 @@ impl LogStoreResultSender {
     }
 }
 
-fn send_result(sender: &LogStoreResultSender, result: LogStoreResult) {
+pub(super) fn send_result(sender: &LogStoreResultSender, result: LogStoreResult) {
     let _ = sender.send(result);
 }
 

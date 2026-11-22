@@ -284,14 +284,8 @@ pub(super) fn sync_search(
         window.search.search_complete = true;
         return;
     }
-    let pattern = if window.search.regex_mode {
-        window.search.query.clone()
-    } else {
-        regex::escape(&window.search.query)
-    };
-    if let Err(error) = regex::RegexBuilder::new(&pattern)
-        .case_insensitive(true)
-        .build()
+    if let Err(error) =
+        crate::log_store::log_matcher(&window.search.query, window.search.regex_mode)
     {
         window.search.error = Some(error.to_string());
         window.search.search_complete = true;

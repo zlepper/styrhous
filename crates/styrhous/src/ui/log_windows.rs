@@ -148,10 +148,22 @@ pub(super) fn show(
         .log_windows
         .values()
         .filter(|window| window.close_requested)
-        .map(|window| (window.id, window.cluster_key))
+        .map(|window| {
+            (
+                window.id,
+                window.cluster_key,
+                window.export.writing_export_id(),
+            )
+        })
         .collect::<Vec<_>>();
-    for (id, cluster_key) in closed {
+    for (id, cluster_key, writing_export) in closed {
         ui_state.log_windows.remove(&id);
+        if let Some(export_id) = writing_export {
+            // The export keeps writing from its snapshot; report it anyway.
+            ui_state
+                .orphaned_log_exports
+                .insert((id, export_id), cluster_key);
+        }
         log_store.close(id);
         commands_to_send.push(Box::new(StopPodLogStream {
             cluster_key,
@@ -233,6 +245,7 @@ pub(super) fn show_log_window(
 }
 
 mod caret;
+mod export;
 mod layout;
 mod navigation;
 #[path = "log_windows/search.rs"]
@@ -240,6 +253,10 @@ mod search_controls;
 mod viewer;
 
 use caret::*;
+#[cfg(test)]
+pub(super) use export::LogExportStatus;
+use export::show_export_controls;
+pub(super) use export::{LogExportNotification, LogExportState};
 use layout::*;
 use navigation::*;
 use search_controls::*;

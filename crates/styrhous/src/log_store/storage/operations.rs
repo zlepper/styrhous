@@ -1,3 +1,4 @@
+use super::super::export::LogExport;
 use super::super::scan::{SearchScan, scan_records};
 use super::super::*;
 use super::core::{BackfillStore, LogRebase, LogStore, LogicalReader, SearchState};
@@ -217,6 +218,21 @@ impl LogStore {
         })
     }
 
+    /// Snapshots the records present now for an export, so later appends,
+    /// rebases and closing the window cannot affect it.
+    pub(crate) fn prepare_export(&self, options: LogExportOptions) -> anyhow::Result<LogExport> {
+        Ok(LogExport {
+            reader: self.logical_reader()?,
+            total_lines: self.visible_total_lines(),
+            matcher: options
+                .filter
+                .as_ref()
+                .map(|filter| log_matcher(&filter.query, filter.regex_mode))
+                .transpose()?,
+            format: options.format,
+        })
+    }
+
     pub(crate) fn start_search(
         &mut self,
         window_id: u64,
@@ -233,14 +249,7 @@ impl LogStore {
             self.search = None;
             return Ok(());
         }
-        let pattern = if regex_mode {
-            query
-        } else {
-            regex::escape(&query)
-        };
-        let matcher = regex::RegexBuilder::new(&pattern)
-            .case_insensitive(true)
-            .build()?;
+        let matcher = log_matcher(&query, regex_mode)?;
         let cancellation = Arc::new(AtomicBool::new(false));
         let scan_lines = self.visible_total_lines();
         let reader = self.logical_reader()?;
@@ -301,7 +310,7 @@ impl LogStore {
         // here before the index becomes visible.
         for line_index in scanned_lines..self.visible_total_lines() {
             let record = self.read_record(line_index)?;
-            if matcher.is_match(&parse_kubernetes_log_line(&record.text).line.text) {
+            if matcher.is_match(&searchable_message(&record.text)) {
                 tail_matches.push(line_index);
             }
         }

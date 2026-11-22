@@ -477,6 +477,7 @@ mod debug_profiles;
 mod deployment_rollback;
 mod discovery_and_navigation;
 mod global_blades;
+mod log_export;
 mod resource_details;
 mod resource_inspectors;
 mod resource_tables;

@@ -65,7 +65,7 @@ pub use inspector_details::{
     InspectorDetails, InspectorDetailsResponse,
 };
 pub use interaction::PointingHand;
-pub use more_button::{MoreButton, MoreMenu};
+pub use more_button::{MoreButton, MoreMenu, menu_frame};
 pub use reorderable_table::{ReorderHandle, ReorderableTable, move_item};
 pub use search::{
     SEARCH_NAVIGATION_BUTTON_SIZE, SearchInputResponse, TailwindSearchInput,
@@ -75,7 +75,8 @@ pub use sidebar::{
     ExpandableResponse, NarrowSidebar, NarrowSidebarContent, WideSidebar, WideSidebarContent,
 };
 pub use table::{
-    SortDirection, SortState, TableColumnBuilder, TableRowBuilder, TailwindTable, tailwind_checkbox,
+    SortDirection, SortState, TableColumnBuilder, TableRowBuilder, TailwindTable, checkbox_field,
+    tailwind_checkbox,
 };
 pub use tabs::{Tabs, TabsContent, TabsResponse};
 pub use text_input::TailwindTextInput;

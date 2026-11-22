@@ -32,7 +32,7 @@ pub(super) fn scan_records(search_scan: SearchScan) {
         let Ok(record) = reader.read_record(scanned_lines) else {
             return;
         };
-        if matcher.is_match(&parse_kubernetes_log_line(&record.text).line.text) {
+        if matcher.is_match(&searchable_message(&record.text)) {
             match_lines.push(scanned_lines);
         }
         scanned_lines += 1;

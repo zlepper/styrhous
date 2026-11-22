@@ -1,7 +1,33 @@
 use crate::ansi::AnsiStyleSpan;
 use std::io::{Read, Write};
+use std::path::PathBuf;
 
 pub(crate) const LOG_PAGE_SIZE: usize = 256;
+
+/// Which records a log export writes, and how.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LogExportOptions {
+    /// Only records whose message matches this filter, like the log window's.
+    pub(crate) filter: Option<LogExportFilter>,
+    pub(crate) format: LogExportFormat,
+}
+
+/// How each exported record is written.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct LogExportFormat {
+    /// The Kubernetes timestamp the record arrived with.
+    pub(crate) include_timestamps: bool,
+    /// The full `namespace/pod · container` source, also for single-source windows.
+    pub(crate) include_sources: bool,
+    /// Write the message as received instead of without its ANSI styling.
+    pub(crate) keep_ansi: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LogExportFilter {
+    pub(crate) query: String,
+    pub(crate) regex_mode: bool,
+}
 
 /// One Kubernetes log record and the source that produced it.
 ///
@@ -171,4 +197,39 @@ pub(crate) enum LogStoreResult {
         window_id: u64,
         error: String,
     },
+    Exported {
+        window_id: u64,
+        export_id: u64,
+        path: PathBuf,
+        lines: usize,
+    },
+    ExportFailed {
+        window_id: u64,
+        export_id: u64,
+        error: String,
+    },
+}
+
+impl LogStoreResult {
+    /// The result reporting how the export `export_id` of `window_id` ended.
+    pub(crate) fn export_outcome(
+        window_id: u64,
+        export_id: u64,
+        path: PathBuf,
+        outcome: anyhow::Result<usize>,
+    ) -> Self {
+        match outcome {
+            Ok(lines) => Self::Exported {
+                window_id,
+                export_id,
+                path,
+                lines,
+            },
+            Err(error) => Self::ExportFailed {
+                window_id,
+                export_id,
+                error: format!("{error:#}"),
+            },
+        }
+    }
 }

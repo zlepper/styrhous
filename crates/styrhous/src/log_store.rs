@@ -3,9 +3,9 @@
 //! The Kubernetes worker streams directly into this spool through a bounded
 //! ingress handle. The UI only consumes coalesced progress and paged results.
 
-use crate::ansi::parse_kubernetes_log_line;
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc};
 use std::thread;
@@ -55,6 +55,12 @@ enum Command {
     },
     Close {
         window_id: u64,
+    },
+    Export {
+        window_id: u64,
+        export_id: u64,
+        path: PathBuf,
+        options: LogExportOptions,
     },
     ScanProgress {
         window_id: u64,
@@ -407,6 +413,23 @@ impl LogStoreService {
         self.send(Command::Close { window_id })
     }
 
+    /// Writes the window's records, as they are now, to `path` in the
+    /// background; the outcome arrives as `Exported` or `ExportFailed`.
+    pub(crate) fn export(
+        &self,
+        window_id: u64,
+        export_id: u64,
+        path: PathBuf,
+        options: LogExportOptions,
+    ) -> bool {
+        self.send(Command::Export {
+            window_id,
+            export_id,
+            path,
+            options,
+        })
+    }
+
     pub(crate) fn resolve_match(&self, window_id: u64, generation: u64, match_row: usize) -> bool {
         self.send(Command::ResolveMatch {
             window_id,
@@ -453,11 +476,14 @@ impl LogStoreService {
     }
 }
 
+mod export;
+mod matching;
 mod runner;
 mod scan;
 mod storage;
 mod types;
 
+pub(crate) use matching::{log_matcher, searchable_message};
 #[cfg(test)]
 use runner::next_store_command;
 use runner::{LogStoreResultSender, StoreThread, run_store};

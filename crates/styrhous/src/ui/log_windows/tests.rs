@@ -302,6 +302,7 @@ fn show_wide_test_scroll_area(
 
 mod caret_snapshots;
 mod display;
+mod export;
 mod filtering;
 mod keyboard_basic;
 mod keyboard_document;

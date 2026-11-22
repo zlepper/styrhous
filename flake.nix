@@ -19,6 +19,8 @@
       pkgs = pkgsBySystem.${system};
       playwrightBrowsers = pkgs.playwright-driver.browsers;
       runtimeLibrariesFor = pkgs: with pkgs; [
+        # The native save dialog (rfd) reaches the desktop portal through libdbus.
+        dbus.lib
         libGL
         libx11
         libxcb

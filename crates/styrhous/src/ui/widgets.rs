@@ -183,3 +183,8 @@ fn show_state_area<R>(
         })
         .inner
 }
+
+/// "1 line", "3 lines": a count with its noun, pluralised with an "s".
+pub(super) fn count_noun(count: usize, noun: &str) -> String {
+    format!("{count} {noun}{}", if count == 1 { "" } else { "s" })
+}

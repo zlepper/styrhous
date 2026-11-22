@@ -238,7 +238,8 @@ impl MoreMenu<'_> {
     }
 }
 
-fn menu_frame() -> Frame {
+/// The frame of menus and popovers anchored to a control.
+pub fn menu_frame() -> Frame {
     Frame::new()
         .fill(WHITE)
         .stroke(Stroke::new(1.0, gray::_200))

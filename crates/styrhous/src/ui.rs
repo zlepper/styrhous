@@ -21,6 +21,7 @@ mod resource_table_cache;
 #[doc(hidden)]
 pub mod resource_table_profile;
 mod resource_table_settings;
+mod save_file_dialog;
 mod settings;
 pub(crate) mod state;
 mod table_preferences;
@@ -45,6 +46,7 @@ use dialogs::{
     show_scale_dialog, show_terminal_launch_error,
 };
 use namespace_selector::NamespaceSelectorSettings;
+use save_file_dialog::{SaveFileDialog, SystemSaveFileDialog};
 use state::{LogDisplayOptions, PersistedClusterSelections, ResourceNavigationExpansion, UiState};
 use table_preferences::PersistedResourceTablePreferences;
 
@@ -59,6 +61,7 @@ const LICENSING_SETTINGS_STORAGE_KEY: &str = "licensing_settings";
 pub struct MyEguiApp<W: WorkerTrait = Worker, L: TerminalLauncher = SystemTerminalLauncher> {
     worker: W,
     terminal_launcher: L,
+    save_file_dialog: Box<dyn SaveFileDialog>,
     terminal_launch_settings: TerminalLaunchSettings,
     resource_table_preferences: PersistedResourceTablePreferences,
     namespace_selector_settings: NamespaceSelectorSettings,
@@ -76,6 +79,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> Default for MyEguiApp<W, L> {
         Self {
             worker,
             terminal_launcher: L::default(),
+            save_file_dialog: Box::new(SystemSaveFileDialog::default()),
             terminal_launch_settings: TerminalLaunchSettings::default(),
             resource_table_preferences: PersistedResourceTablePreferences::default(),
             namespace_selector_settings: NamespaceSelectorSettings::default(),
@@ -93,10 +97,21 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
     }
 
     #[cfg(test)]
+    pub(crate) fn set_save_file_dialog(&mut self, dialog: impl SaveFileDialog + 'static) {
+        self.save_file_dialog = Box::new(dialog);
+    }
+
+    #[cfg(test)]
     pub(crate) fn new_for_test(cc: &eframe::CreationContext<'_>) -> Self {
         let mut updater = crate::updater::UpdaterService::default();
         updater.set_status_for_test(crate::updater::UpdateStatus::LocalBuild);
         let mut app = Self::new_with_updater(cc, updater);
+        // Never open a real dialog from a test; tests that export install their own.
+        app.set_save_file_dialog(
+            save_file_dialog::test_support::MockSaveFileDialog::answering(
+                save_file_dialog::SaveFileChoice::Cancelled,
+            ),
+        );
         app.licensing
             .set_status_for_test(crate::licensing::LicenseStatus::Licensed(
                 test_commercial_lease(),
@@ -121,6 +136,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
         let mut app = Self {
             worker,
             terminal_launcher: L::default(),
+            save_file_dialog: Box::new(SystemSaveFileDialog::default()),
             terminal_launch_settings: TerminalLaunchSettings::default(),
             resource_table_preferences: PersistedResourceTablePreferences::default(),
             namespace_selector_settings: NamespaceSelectorSettings::default(),
@@ -207,6 +223,10 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             }
             self.ui_state.apply_log_store_result(result);
         }
+        for answer in self.save_file_dialog.poll() {
+            self.ui_state
+                .answer_log_export_dialog(answer, &self.log_store);
+        }
 
         for command in commands_to_send {
             self.worker.send_command(command);
@@ -262,6 +282,14 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             &self.log_store,
             &mut commands_to_send,
         );
+        for request in self
+            .ui_state
+            .log_windows
+            .values_mut()
+            .filter_map(state::PodLogWindowState::take_save_request)
+        {
+            self.save_file_dialog.request(&ctx, request);
+        }
         show_delete_confirmation(&ctx, &mut self.ui_state, &mut commands_to_send);
         show_bulk_delete_confirmation(&ctx, &mut self.ui_state, &mut commands_to_send);
         show_log_source_confirmation(&ctx, &mut self.ui_state, &mut commands_to_send);

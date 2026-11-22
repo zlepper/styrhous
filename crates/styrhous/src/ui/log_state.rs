@@ -90,6 +90,7 @@ pub(super) struct PodLogWindowState {
     /// Make the next rendered caret visible in the horizontal scroll viewport.
     pub(super) ensure_caret_visible: bool,
     pub(super) copied_text: Option<String>,
+    pub(super) export: super::log_windows::LogExportState,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -414,6 +415,7 @@ impl PodLogWindowState {
             pending_caret: None,
             ensure_caret_visible: false,
             copied_text: None,
+            export: Default::default(),
         })
     }
 
@@ -536,10 +538,11 @@ impl PodLogWindowState {
     }
 }
 
+/// Applies a store result to its window, returning an export outcome to record.
 pub(super) fn apply_store_result(
     windows: &mut BTreeMap<u64, PodLogWindowState>,
     result: LogStoreResult,
-) {
+) -> Option<super::log_windows::LogExportNotification> {
     match result {
         LogStoreResult::Updated {
             window_id,
@@ -699,7 +702,14 @@ pub(super) fn apply_store_result(
                 window.status = PodLogStatus::Failed(format!("Log storage failed: {error}"));
             }
         }
+        LogStoreResult::Exported { window_id, .. }
+        | LogStoreResult::ExportFailed { window_id, .. } => {
+            return windows
+                .get_mut(&window_id)
+                .and_then(|window| window.settle_export(&result));
+        }
     }
+    None
 }
 
 /// Translate a row in the initial tail segment to its logical position after

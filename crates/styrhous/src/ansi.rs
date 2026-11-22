@@ -25,20 +25,24 @@ pub(crate) struct ParsedKubernetesLogLine {
     pub(crate) line: ParsedLogLine,
 }
 
+/// Split the optional RFC 3339 timestamp Kubernetes prepends when
+/// `timestamps=true` from the raw (still ANSI-styled) message.
+pub(crate) fn split_kubernetes_timestamp(line: &str) -> (Option<&str>, &str) {
+    match line.split_once(' ') {
+        Some((timestamp, message)) if OffsetDateTime::parse(timestamp, &Rfc3339).is_ok() => {
+            (Some(timestamp), message)
+        }
+        _ => (None, line),
+    }
+}
+
 /// Split the optional timestamp Kubernetes prepends when `timestamps=true`
 /// before removing ANSI controls from the log message.
 pub(crate) fn parse_kubernetes_log_line(line: &str) -> ParsedKubernetesLogLine {
-    if let Some((timestamp, message)) = line.split_once(' ')
-        && OffsetDateTime::parse(timestamp, &Rfc3339).is_ok()
-    {
-        return ParsedKubernetesLogLine {
-            timestamp: Some(timestamp.to_owned()),
-            line: parse_log_line(message),
-        };
-    }
+    let (timestamp, message) = split_kubernetes_timestamp(line);
     ParsedKubernetesLogLine {
-        timestamp: None,
-        line: parse_log_line(line),
+        timestamp: timestamp.map(str::to_owned),
+        line: parse_log_line(message),
     }
 }
 
@@ -356,6 +360,28 @@ mod tests {
         );
         assert_eq!(parsed.line.text, "WARN cache is stale");
         assert_eq!(parsed.line.style_spans.len(), 1);
+    }
+
+    #[test]
+    fn splits_only_a_leading_rfc3339_timestamp_from_the_raw_message() {
+        const TIMESTAMP: &str = "2026-08-10T12:00:00.5Z";
+        assert_eq!(
+            split_kubernetes_timestamp(&format!("{TIMESTAMP} \u{1b}[1mready\u{1b}[0m")),
+            (Some(TIMESTAMP), "\u{1b}[1mready\u{1b}[0m")
+        );
+        assert_eq!(
+            split_kubernetes_timestamp(&format!("{TIMESTAMP}  indented")),
+            (Some(TIMESTAMP), " indented")
+        );
+        assert_eq!(
+            split_kubernetes_timestamp(&format!("{TIMESTAMP} ")),
+            (Some(TIMESTAMP), "")
+        );
+        assert_eq!(split_kubernetes_timestamp(TIMESTAMP), (None, TIMESTAMP));
+        assert_eq!(
+            split_kubernetes_timestamp("yesterday it broke"),
+            (None, "yesterday it broke")
+        );
     }
 
     #[test]

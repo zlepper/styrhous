@@ -56,6 +56,8 @@ Window state=[focused] rect=<none>
                   TextRun value="●" rect=(x=302.6 y=69.5 width=12.8 height=17.0 center_x=309.0 center_y=78.0)
                 Label value="Stream failed: The Kubernetes API closed the log stream unexpectedly" rect=(x=323.4 y=69.5 width=466.5 height=17.0 center_x=556.7 center_y=78.0)
                   TextRun value="Stream failed: The Kubernetes API closed the log stream unexpectedly" rect=(x=323.4 y=69.5 width=466.5 height=17.0 center_x=556.7 center_y=78.0)
+                GenericContainer rect=<none>
+                  Button name="Export logs" rect=(x=1439.8 y=68.5 width=63.2 height=19.0 center_x=1471.4 center_y=78.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             Unknown name="Pod log text" rect=(x=24.0 y=114.0 width=1488.0 height=886.0 center_x=768.0 center_y=557.0)

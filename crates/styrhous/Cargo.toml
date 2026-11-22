@@ -87,6 +87,7 @@ base64 = "0.22"
 flate2 = "1.1"
 cargo-packager-updater = { version = "0.2.3", optional = true }
 minisign-verify = { version = "0.2.5", optional = true }
+rfd = { version = "0.18", default-features = false, features = ["xdg-portal"] }
 
 [dev-dependencies]
 criterion = "0.8.2"

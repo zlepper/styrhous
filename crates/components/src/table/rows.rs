@@ -172,6 +172,29 @@ pub fn tailwind_checkbox(ui: &mut Ui, checked: bool, label: &str) -> egui::Respo
     )
 }
 
+/// A checkbox with a visible label; clicking either toggles `checked`.
+pub fn checkbox_field(ui: &mut Ui, checked: &mut bool, label: &str) -> egui::Response {
+    ui.horizontal(|ui| {
+        let box_response = tailwind_checkbox(ui, *checked, label);
+        ui.add_space(spacing::SM);
+        let label_response = ui
+            .add(
+                egui::Label::new(
+                    egui::RichText::new(label)
+                        .font(typography::body())
+                        .color(gray::_800),
+                )
+                .sense(egui::Sense::click()),
+            )
+            .with_pointing_hand();
+        if box_response.clicked() || label_response.clicked() {
+            *checked = !*checked;
+        }
+        box_response | label_response
+    })
+    .inner
+}
+
 pub(super) fn render_checkbox(ui: &mut Ui, state: CheckboxState, label: &str) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(CHECKBOX_SIZE), egui::Sense::click());
     let response = response.with_pointing_hand();

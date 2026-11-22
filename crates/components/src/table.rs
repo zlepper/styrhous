@@ -163,7 +163,7 @@ use rows::{
     CheckboxState, handle_column_resize, paint_table_cell, render_checkbox,
     row_context_menu_response, set_accessibility_label,
 };
-pub use rows::{TableRowBuilder, tailwind_checkbox};
+pub use rows::{TableRowBuilder, checkbox_field, tailwind_checkbox};
 
 #[cfg(test)]
 mod tests;

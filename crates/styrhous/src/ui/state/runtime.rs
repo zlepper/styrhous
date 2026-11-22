@@ -1,4 +1,6 @@
 use super::*;
+use crate::ui::log_windows::LogExportNotification;
+use crate::ui::save_file_dialog::SaveFileAnswer;
 
 impl UiState {
     pub(crate) fn settle_bulk_delete_target(
@@ -51,7 +53,55 @@ impl UiState {
     }
 
     pub(crate) fn apply_log_store_result(&mut self, result: LogStoreResult) {
-        super::super::log_state::apply_store_result(&mut self.log_windows, result);
+        let orphaned = match &result {
+            LogStoreResult::Exported {
+                window_id,
+                export_id,
+                ..
+            }
+            | LogStoreResult::ExportFailed {
+                window_id,
+                export_id,
+                ..
+            } => self
+                .orphaned_log_exports
+                .remove(&(*window_id, *export_id))
+                .and_then(|cluster_key| LogExportNotification::for_result(cluster_key, &result)),
+            _ => None,
+        };
+        let export = orphaned
+            .or_else(|| super::super::log_state::apply_store_result(&mut self.log_windows, result));
+        if let Some(export) = export {
+            self.record_log_export(export);
+        }
+    }
+
+    /// Hands a save dialog's answer to the window that asked.
+    pub(crate) fn answer_log_export_dialog(
+        &mut self,
+        answer: SaveFileAnswer,
+        log_store: &crate::log_store::LogStoreService,
+    ) {
+        let failure = self
+            .log_windows
+            .get_mut(&answer.window_id)
+            .and_then(|window| window.answer_save_request(answer, log_store));
+        if let Some(failure) = failure {
+            self.record_log_export(failure);
+        }
+    }
+
+    fn record_log_export(&mut self, export: LogExportNotification) {
+        // Log windows outlive the cluster session, so record the outcome even
+        // while the cluster is reconnecting.
+        self.push_operation_outcome(
+            export.cluster_key,
+            export.outcome,
+            export.title,
+            None,
+            export.target,
+            Some(export.details),
+        );
     }
 
     pub(crate) fn resource_watch_failed(
