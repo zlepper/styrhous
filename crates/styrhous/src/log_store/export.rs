@@ -64,14 +64,16 @@ impl LogExport {
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty())
             .unwrap_or(Path::new("."));
-        let mut builder = tempfile::Builder::new();
+        let builder = tempfile::Builder::new();
         #[cfg(unix)]
-        {
+        let builder = {
             use std::os::unix::fs::PermissionsExt;
+            let mut builder = builder;
             // Masked by the umask like any newly created file, unlike
             // tempfile's private default.
             builder.permissions(std::fs::Permissions::from_mode(0o666));
-        }
+            builder
+        };
         let file = builder
             .tempfile_in(directory)
             .with_context(|| format!("Could not write to {}", directory.display()))?;
