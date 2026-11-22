@@ -272,9 +272,6 @@ pub(in crate::ui::tests::kind) fn cluster_load_failure(
     if let ClusterLoadState::Failed(error) = &cluster.namespaces_load {
         return Some(format!("namespace discovery failed: {error}"));
     }
-    if let ClusterLoadState::Failed(error) = &cluster.api_resources_load {
-        return Some(format!("Kubernetes API discovery failed: {error}"));
-    }
     None
 }
 
@@ -286,11 +283,12 @@ pub(in crate::ui::tests::kind) fn cluster_load_state(
         return Some(format!("cluster {cluster_key} is no longer present"));
     };
     Some(format!(
-        "connection={:?}, namespaces={:?} ({} loaded), APIs={:?} ({} navigation entries loaded)",
+        "connection={:?}, reachable={}, namespaces={:?} ({} loaded), API discovery complete={} ({} navigation entries loaded)",
         cluster.connection,
+        cluster.reachable,
         cluster.namespaces_load,
         cluster.namespaces.len(),
-        cluster.api_resources_load,
+        cluster.api_discovery.complete,
         cluster.resource_navigation.curated_entries.len()
             + cluster.resource_navigation.other_api_groups.len(),
     ))

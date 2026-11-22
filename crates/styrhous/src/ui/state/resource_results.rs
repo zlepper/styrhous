@@ -74,32 +74,75 @@ impl WorkerResult for crate::worker::KubernetesResourcesReplaced {
             resources,
         } = self;
         if let Some(cluster) = ui.clusters.get_mut(&cluster_key) {
-            let watch = cluster
-                .resource_cache
-                .entry((api_resource.clone(), namespace))
-                .or_default();
-            watch.resources = resources
-                .into_iter()
-                .map(|resource| (resource.uid.clone(), resource))
-                .collect();
-            watch.revision = watch.revision.wrapping_add(1);
-            watch.is_synced = true;
-            watch.error = None;
-            let visible_uids = cluster
-                .resource_cache
-                .iter()
-                .filter(|((cached_resource, cached_namespace), _)| {
-                    cached_resource == &api_resource
-                        && (!api_resource.namespaced
-                            || cached_namespace.as_ref().is_some_and(|namespace| {
-                                cluster.namespace_scope().contains(namespace)
-                            }))
-                })
-                .flat_map(|(_, watch)| watch.resources.keys().cloned())
-                .collect::<HashSet<_>>();
-            if let Some(selection) = cluster.resource_selections.get_mut(&api_resource) {
-                selection.retain(|uid| visible_uids.contains(uid));
-            }
+            cluster.reachable = true;
+            replace_watched_resources(cluster, (api_resource.clone(), namespace), resources);
+            cluster.retain_visible_resource_selection(&api_resource);
+        }
+    }
+}
+
+impl WorkerResult for crate::worker::KubernetesResourcesReplacedInEveryNamespace {
+    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let crate::worker::KubernetesResourcesReplacedInEveryNamespace {
+            cluster_key,
+            api_resource,
+            mut resources_by_namespace,
+        } = self;
+        let Some(cluster) = ui.clusters.get_mut(&cluster_key) else {
+            return;
+        };
+        cluster.reachable = true;
+        // Namespaces the list no longer mentions have no resources of this type now.
+        let cached_namespaces = cluster
+            .resource_cache
+            .keys()
+            .filter(|(resource, _)| resource == &api_resource)
+            .filter_map(|(_, namespace)| namespace.clone())
+            .collect::<Vec<_>>();
+        for namespace in cached_namespaces {
+            resources_by_namespace.entry(namespace).or_default();
+        }
+        for (namespace, resources) in resources_by_namespace {
+            replace_watched_resources(cluster, (api_resource.clone(), Some(namespace)), resources);
+        }
+        // The watch's own state: synced means every namespace is listed.
+        replace_watched_resources(cluster, (api_resource.clone(), None), Vec::new());
+        cluster.retain_visible_resource_selection(&api_resource);
+    }
+}
+
+fn replace_watched_resources(
+    cluster: &mut ClusterState,
+    key: ResourceWatchKey,
+    resources: Vec<MinimalResource>,
+) {
+    let watch = cluster.resource_cache.entry(key).or_default();
+    watch.resources = resources
+        .into_iter()
+        .map(|resource| (resource.uid.clone(), resource))
+        .collect();
+    watch.revision = watch.revision.wrapping_add(1);
+    watch.is_synced = true;
+    watch.error = None;
+}
+
+impl ClusterState {
+    /// Drops selected rows of `api_resource` that are no longer shown.
+    fn retain_visible_resource_selection(&mut self, api_resource: &ApiResource) {
+        let visible_uids = self
+            .resource_cache
+            .iter()
+            .filter(|((cached_resource, cached_namespace), _)| {
+                cached_resource == api_resource
+                    && (!api_resource.namespaced
+                        || cached_namespace
+                            .as_ref()
+                            .is_some_and(|namespace| self.shows_namespace(api_resource, namespace)))
+            })
+            .flat_map(|(_, watch)| watch.resources.keys().cloned())
+            .collect::<HashSet<_>>();
+        if let Some(selection) = self.resource_selections.get_mut(api_resource) {
+            selection.retain(|uid| visible_uids.contains(uid));
         }
     }
 }

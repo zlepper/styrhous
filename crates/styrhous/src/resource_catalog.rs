@@ -1,4 +1,4 @@
-use crate::api_resource::ApiResource;
+use crate::api_resource::{ApiResource, ApiResourceSet};
 use crate::resource_detail::ResourceOwner;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -331,6 +331,74 @@ fn discovered_resource(
 
 fn canonical_group(group: &str) -> &str {
     if group.is_empty() { CORE } else { group }
+}
+
+/// The built-in Kubernetes resources of the curated navigation, assumed to exist before
+/// discovery has answered so a first connection can show them at once. Version, kind and
+/// scope come from the Kubernetes API definitions; discovery replaces them if the cluster
+/// serves something else.
+pub(crate) fn builtin_api_resources() -> ApiResourceSet {
+    use k8s_openapi::api::{
+        apps::v1 as apps, autoscaling::v2 as autoscaling, batch::v1 as batch,
+        coordination::v1 as coordination, core::v1 as core, discovery::v1 as discovery,
+        networking::v1 as networking, node::v1 as node, policy::v1 as policy, rbac::v1 as rbac,
+        scheduling::v1 as scheduling, storage::v1 as storage,
+    };
+
+    fn builtin<K: k8s_openapi::Resource>() -> ApiResource
+    where
+        K::Scope: 'static,
+    {
+        ApiResource {
+            group: canonical_group(K::GROUP).to_owned(),
+            version: K::VERSION.to_owned(),
+            kind: K::KIND.to_owned(),
+            name: K::URL_PATH_SEGMENT.to_owned(),
+            namespaced: std::any::TypeId::of::<K::Scope>()
+                == std::any::TypeId::of::<k8s_openapi::NamespaceResourceScope>(),
+        }
+    }
+
+    let mut resources = ApiResourceSet::default();
+    for (api_resource, scalable) in [
+        (builtin::<core::Node>(), false),
+        (builtin::<core::Pod>(), false),
+        (builtin::<apps::Deployment>(), true),
+        (builtin::<apps::StatefulSet>(), true),
+        (builtin::<apps::DaemonSet>(), false),
+        (builtin::<apps::ReplicaSet>(), true),
+        (builtin::<core::ReplicationController>(), true),
+        (builtin::<batch::Job>(), false),
+        (builtin::<batch::CronJob>(), false),
+        (builtin::<core::ConfigMap>(), false),
+        (builtin::<core::Secret>(), false),
+        (builtin::<core::ResourceQuota>(), false),
+        (builtin::<core::LimitRange>(), false),
+        (builtin::<autoscaling::HorizontalPodAutoscaler>(), false),
+        (builtin::<policy::PodDisruptionBudget>(), false),
+        (builtin::<scheduling::PriorityClass>(), false),
+        (builtin::<node::RuntimeClass>(), false),
+        (builtin::<coordination::Lease>(), false),
+        (builtin::<core::Service>(), false),
+        (builtin::<core::Endpoints>(), false),
+        (builtin::<discovery::EndpointSlice>(), false),
+        (builtin::<networking::Ingress>(), false),
+        (builtin::<networking::IngressClass>(), false),
+        (builtin::<networking::NetworkPolicy>(), false),
+        (builtin::<core::PersistentVolume>(), false),
+        (builtin::<core::PersistentVolumeClaim>(), false),
+        (builtin::<storage::StorageClass>(), false),
+        (builtin::<core::Namespace>(), false),
+        (builtin::<core::Event>(), false),
+        (builtin::<core::ServiceAccount>(), false),
+        (builtin::<rbac::Role>(), false),
+        (builtin::<rbac::RoleBinding>(), false),
+        (builtin::<rbac::ClusterRole>(), false),
+        (builtin::<rbac::ClusterRoleBinding>(), false),
+    ] {
+        resources.push(api_resource, scalable);
+    }
+    resources
 }
 
 #[cfg(test)]

@@ -12,7 +12,9 @@ pub(crate) struct ClusterState {
     /// Set while the namespace watcher has been retrying past the grace
     /// period; the last known namespaces stay usable meanwhile.
     pub(crate) namespaces_reconnecting: Option<String>,
-    pub(crate) api_resources_load: ClusterLoadState,
+    /// Whether the API server has answered an authenticated request this session. Until
+    /// then a connection that was set up may still fail its first request.
+    pub(crate) reachable: bool,
     pub(crate) selected_namespaces: SelectedNamespaces,
     pub(crate) resources: ClusterResourceState,
 }
@@ -26,8 +28,10 @@ pub(crate) struct ClusterState {
 /// the ownership boundary visible.
 #[derive(Debug)]
 pub(crate) struct ClusterResourceState {
-    /// Every discovered API resource, in discovery order, so recovered API groups can be
-    /// merged in and the navigation rebuilt without disturbing the selection.
+    /// What discovery reported and what was assumed before it answered.
+    pub(crate) api_discovery: ApiDiscoveryState,
+    /// The API resources shown, derived from `api_discovery` by
+    /// `refresh_api_resources`, in discovery order.
     pub(crate) discovered_api_resources: Vec<ApiResource>,
     pub(crate) resource_navigation: ResourceNavigation,
     pub(crate) custom_resource_columns: BTreeMap<ApiResource, Vec<CustomResourceColumn>>,
@@ -39,7 +43,7 @@ pub(crate) struct ClusterResourceState {
     pub(crate) active_watchers: HashSet<ResourceWatchKey>,
     /// The namespaces each active all-namespaces watcher was started for. It
     /// filters events by this set, so it is restarted only when the set changes.
-    pub(crate) all_namespaces_watch_scopes: HashMap<ApiResource, BTreeSet<String>>,
+    pub(crate) all_namespaces_watch_scopes: HashMap<ApiResource, crate::worker::WatchedNamespaces>,
     pub(crate) pod_metrics_api_available: bool,
     pub(crate) pod_metrics: HashMap<String, PodMetricsNamespaceState>,
     pub(crate) active_pod_metrics: HashSet<String>,
@@ -84,7 +88,7 @@ impl ClusterState {
             connection: ClusterConnectionState::Disconnected,
             namespaces_load: ClusterLoadState::Loading,
             namespaces_reconnecting: None,
-            api_resources_load: ClusterLoadState::Loading,
+            reachable: false,
             selected_namespaces: SelectedNamespaces::default(),
             resources: ClusterResourceState::new(false),
         }
@@ -114,7 +118,7 @@ impl ClusterState {
         self.connection = ClusterConnectionState::Connecting;
         self.namespaces_load = ClusterLoadState::Loading;
         self.namespaces_reconnecting = None;
-        self.api_resources_load = ClusterLoadState::Loading;
+        self.reachable = false;
         self.namespaces.clear();
         self.selected_namespaces = SelectedNamespaces::default();
         self.resources.reset_for_connection();
@@ -128,7 +132,8 @@ impl ClusterState {
     pub(crate) fn for_test(cluster_key: i32, name: impl Into<String>) -> Self {
         let mut state = Self::new(cluster_key, name.into());
         state.namespaces_load = ClusterLoadState::Ready;
-        state.api_resources_load = ClusterLoadState::Ready;
+        state.reachable = true;
+        state.resources.api_discovery.complete = true;
         state.resources.pod_metrics_api_available = true;
         state.resources.node_metrics_api_available = true;
         state
@@ -136,15 +141,28 @@ impl ClusterState {
 }
 
 impl ClusterResourceState {
-    /// Replaces the discovered resources and rebuilds the navigation from them. The
-    /// selection is kept as is.
-    pub(crate) fn set_discovered_api_resources(&mut self, api_resources: Vec<ApiResource>) {
-        self.resource_navigation = build_resource_navigation(api_resources.clone());
-        self.discovered_api_resources = api_resources;
+    /// Whether the Pod and Node usage columns show the Metrics API as available. Until
+    /// discovery completes it is not known, so the columns wait for data instead.
+    pub(crate) fn metrics_shown_as_available(&self) -> (bool, bool) {
+        let undecided = !self.api_discovery.complete;
+        (
+            self.pod_metrics_api_available || undecided,
+            self.node_metrics_api_available || undecided,
+        )
+    }
+
+    /// Derives the shown resources, their scale support and the navigation from the
+    /// discovery state. The selection is kept as is.
+    pub(crate) fn refresh_api_resources(&mut self) {
+        let displayed = self.api_discovery.displayed();
+        self.resource_navigation = build_resource_navigation(displayed.api_resources.clone());
+        self.discovered_api_resources = displayed.api_resources;
+        self.scalable_api_resources = displayed.scalable_api_resources;
     }
 
     fn new(metrics_api_available: bool) -> Self {
         Self {
+            api_discovery: ApiDiscoveryState::default(),
             discovered_api_resources: Vec::new(),
             resource_navigation: ResourceNavigation::default(),
             custom_resource_columns: BTreeMap::new(),

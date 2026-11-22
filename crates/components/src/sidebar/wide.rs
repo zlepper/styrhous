@@ -310,7 +310,7 @@ impl<'a> WideSidebarContent<'a> {
         draw_background(self.core.ui.painter(), rect, colors.background);
 
         let chevron_rect = egui::Rect::from_min_size(
-            inner_rect.min + Vec2::new(12.0 + indent, (group_height - CHEVRON_SIZE) / 2.0),
+            inner_rect.min + Vec2::new(CHEVRON_INSET + indent, (group_height - CHEVRON_SIZE) / 2.0),
             Vec2::splat(CHEVRON_SIZE),
         );
         let mut chevron_ui =
@@ -403,6 +403,57 @@ impl<'a> WideSidebarContent<'a> {
         }
 
         response
+    }
+
+    /// Add a muted, non-interactive row with a spinner, for navigation that is still
+    /// being filled in.
+    pub fn loading_item(&mut self, text: &str) {
+        let ui = &mut *self.core.ui;
+        let (rect, _) = ui.allocate_exact_size(
+            Vec2::new(ui.available_width(), WIDE_ITEM_HEIGHT),
+            Sense::hover(),
+        );
+        let color = if self.core.dark {
+            gray::_400
+        } else {
+            gray::_500
+        };
+        // The spinner sits where a section's chevron does, and the text where its label does.
+        let inner_rect = rect.shrink2(Vec2::new(ITEM_PADDING_X, 0.0));
+        let spinner_size = typography::META_SIZE;
+        let spinner_rect = egui::Rect::from_center_size(
+            egui::pos2(
+                inner_rect.left() + CHEVRON_INSET + CHEVRON_SIZE / 2.0,
+                rect.center().y,
+            ),
+            Vec2::splat(spinner_size),
+        );
+        egui::Spinner::new()
+            .size(spinner_size)
+            .color(color)
+            .paint_at(ui, spinner_rect);
+        let text_rect = egui::Rect::from_min_max(
+            egui::pos2(
+                text_pos_after_chevron(inner_rect, WIDE_ITEM_HEIGHT).x,
+                rect.top(),
+            ),
+            egui::pos2(inner_rect.right(), rect.bottom()),
+        );
+        ui.scope_builder(
+            UiBuilder::new()
+                .max_rect(text_rect)
+                .layout(egui::Layout::left_to_right(egui::Align::Center)),
+            |ui| {
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(text)
+                            .font(typography::metadata())
+                            .color(color),
+                    )
+                    .truncate(),
+                );
+            },
+        );
     }
 
     /// Add a visual separator line

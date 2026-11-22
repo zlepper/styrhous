@@ -1,4 +1,4 @@
-use crate::api_resource::ApiResource;
+use crate::api_resource::{ApiResource, ApiResourceSet};
 use crate::helm_release::{HelmRelease, StorageDriver, decode_release};
 use crate::helpers::ResultExt;
 use crate::minimal_namespace::MinimalNamespace;

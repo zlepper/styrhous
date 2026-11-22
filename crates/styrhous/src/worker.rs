@@ -376,3 +376,30 @@ pub(crate) use worker_state::*;
 
 #[cfg(test)]
 mod tests;
+
+/// A whole API discovery for tests: its resources, then its completion.
+#[cfg(test)]
+#[derive(Debug)]
+pub(crate) struct DiscoveryFinished {
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resources: Vec<ApiResource>,
+    pub(crate) scalable_api_resources: std::collections::BTreeSet<ApiResource>,
+    pub(crate) failed_api_groups: Vec<FailedApiGroup>,
+}
+
+#[cfg(test)]
+impl WorkerResult for DiscoveryFinished {
+    fn apply(self, ui: &mut crate::ui::state::UiState, commands: &mut Vec<WorkerCommandBox>) {
+        KubernetesApiResourcesDiscovered {
+            cluster_key: self.cluster_key,
+            api_resources: self.api_resources,
+            scalable_api_resources: self.scalable_api_resources,
+        }
+        .apply(ui, commands);
+        KubernetesApiDiscoveryCompleted {
+            cluster_key: self.cluster_key,
+            failed_api_groups: self.failed_api_groups,
+        }
+        .apply(ui, commands);
+    }
+}

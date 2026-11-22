@@ -4,7 +4,7 @@ use super::resource_table_cache::{PreparedResourceTable, PreparedResourceTableRo
 use super::state::{
     BulkDeleteTarget, ClusterConnectionState, ClusterLoadState, NamespaceScope, PendingBulkDelete,
     PendingCronJobRun, PendingDelete, PendingDeploymentRestart, PendingForceDelete, ResourceAction,
-    ResourceSearchState, UiState,
+    ResourceSearchState, SelectedNamespaces, UiState,
 };
 use super::table_preferences::{
     MetadataColumnSource, PersistedResourceTablePreferences, ResourceTableKey,
@@ -294,7 +294,9 @@ pub(super) fn show(
                 };
 
                 match &cluster.connection {
-                    ClusterConnectionState::Connecting => {
+                    ClusterConnectionState::Connecting | ClusterConnectionState::Connected
+                        if !cluster.reachable =>
+                    {
                         workspace_loading_state(
                             ui,
                             "Connecting to cluster",
@@ -315,24 +317,7 @@ pub(super) fn show(
                         );
                         return;
                     }
-                    ClusterConnectionState::Connected => {}
-                }
-
-                match (&cluster.namespaces_load, &cluster.api_resources_load) {
-                    (ClusterLoadState::Failed(error), _) | (_, ClusterLoadState::Failed(error)) => {
-                        effects.retry_requested =
-                            workspace_error_state(ui, "Unable to load cluster data", error);
-                        return;
-                    }
-                    (ClusterLoadState::Ready, ClusterLoadState::Ready) => {}
-                    _ => {
-                        workspace_loading_state(
-                            ui,
-                            "Loading cluster data",
-                            "Discovering namespaces and API resources.",
-                        );
-                        return;
-                    }
+                    ClusterConnectionState::Connecting | ClusterConnectionState::Connected => {}
                 }
 
                 let selected_api_resource = cluster.selected_api_resource.clone();
@@ -372,22 +357,27 @@ pub(super) fn show(
                                 .get(api_resource)
                                 .map(Vec::as_slice)
                                 .unwrap_or_default(),
-                            api_resource.namespaced && cluster.namespace_scope().len() > 1,
+                            api_resource.namespaced
+                                && (cluster.watches_every_namespace(api_resource)
+                                    || cluster.namespace_scope().len() > 1),
                             table_preferences,
                         );
                         let selected_namespaces =
                             NamespaceScope::new(&cluster.selected_namespaces, &cluster.namespaces);
+                        let watches_every_namespace = cluster.watches_every_namespace(api_resource);
+                        let (pod_metrics_shown, node_metrics_shown) =
+                            cluster.metrics_shown_as_available();
                         let resources = &mut cluster.resources;
                         let prepared = prepare_resource_table(
                             &mut resources.resource_table_cache,
                             ResourceTableData {
                                 selected_namespaces,
+                                watches_every_namespace,
                                 resource_cache: &resources.resource_cache,
                                 metrics: ResourceMetrics {
-                                    pod_metrics_api_available: resources.pod_metrics_api_available,
+                                    pod_metrics_api_available: pod_metrics_shown,
                                     pod_metrics: &resources.pod_metrics,
-                                    node_metrics_api_available: resources
-                                        .node_metrics_api_available,
+                                    node_metrics_api_available: node_metrics_shown,
                                     node_metrics: &resources.node_metrics,
                                 },
                             },
@@ -442,23 +432,26 @@ pub(super) fn show(
                 let table_configuration = table_configuration
                     .as_ref()
                     .expect("selected resources have a table configuration");
-                let namespace_selection_empty =
-                    api_resource.namespaced && cluster.namespace_scope().is_empty();
+                let namespace_selection_empty = api_resource.namespaced
+                    && cluster.selected_namespaces == SelectedNamespaces::default();
                 let watch_error = selected_watch_error(cluster, api_resource);
                 let watches_are_loading = selected_watches_are_loading(cluster, api_resource);
                 let selected_namespaces =
                     NamespaceScope::new(&cluster.selected_namespaces, &cluster.namespaces);
+                let (pod_metrics_shown, node_metrics_shown) = cluster.metrics_shown_as_available();
+                let watches_every_namespace = cluster.watches_every_namespace(api_resource);
                 let resources = &mut cluster.resources;
                 let metrics = ResourceMetrics {
-                    pod_metrics_api_available: resources.pod_metrics_api_available,
+                    pod_metrics_api_available: pod_metrics_shown,
                     pod_metrics: &resources.pod_metrics,
-                    node_metrics_api_available: resources.node_metrics_api_available,
+                    node_metrics_api_available: node_metrics_shown,
                     node_metrics: &resources.node_metrics,
                 };
                 let prepared = prepare_resource_table(
                     &mut resources.resource_table_cache,
                     ResourceTableData {
                         selected_namespaces,
+                        watches_every_namespace,
                         resource_cache: &resources.resource_cache,
                         metrics,
                     },

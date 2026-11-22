@@ -11,6 +11,7 @@ pub(super) fn show(ui: &mut egui::Ui, ui_state: &mut UiState) -> Option<ApiResou
     let cluster_name = cluster.presentation.display_name(&cluster.name).to_owned();
     let resource_navigation = cluster.resource_navigation.clone();
     let selected_api_resource = cluster.selected_api_resource.clone();
+    let discovering = !cluster.api_discovery.complete;
     let mut clicked_api_resource = None;
 
     egui::Panel::left("api-selector")
@@ -104,6 +105,9 @@ pub(super) fn show(ui: &mut egui::Ui, ui_state: &mut UiState) -> Option<ApiResou
                         other_resources_node,
                         response.is_open,
                     );
+                }
+                if discovering {
+                    sidebar.loading_item("Discovering API groups...");
                 }
             });
         });

@@ -61,8 +61,27 @@ pub(crate) struct ReconcileResourceWatches {
 #[derive(Debug, Clone)]
 pub(crate) enum ResourceWatchSource {
     Namespace(String),
-    AllNamespaces(BTreeSet<String>),
+    AllNamespaces(WatchedNamespaces),
     Cluster,
+}
+
+/// The namespaces an all-namespaces watch reports.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum WatchedNamespaces {
+    /// Every namespace, including ones created while the watch runs. Needs no
+    /// namespace list, so the watch can start before namespaces are known.
+    Every,
+    /// Only these namespaces; events from others are ignored.
+    Only(BTreeSet<String>),
+}
+
+impl WatchedNamespaces {
+    pub(crate) fn contains(&self, namespace: &str) -> bool {
+        match self {
+            Self::Every => true,
+            Self::Only(namespaces) => namespaces.contains(namespace),
+        }
+    }
 }
 #[derive(Debug)]
 pub(crate) struct StartResourceDetailWatch {

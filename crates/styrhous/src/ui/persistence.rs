@@ -1,7 +1,7 @@
 //! Serializable UI choices that outlive a transient cluster connection.
 
 use super::state::SelectedNamespaces;
-use crate::api_resource::ApiResource;
+use crate::api_resource::{ApiResource, ApiResourceSet};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -14,6 +14,14 @@ pub(super) struct PersistedClusterSelections {
     pub(super) selections: BTreeMap<String, PersistedClusterSelection>,
     #[serde(default)]
     pub(super) last_selected_context: Option<String>,
+}
+
+/// The last completed API discovery of each kubeconfig context, shown while a new
+/// connection discovers the cluster again.
+#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub(super) struct PersistedApiDiscovery {
+    #[serde(default)]
+    pub(super) contexts: BTreeMap<String, ApiResourceSet>,
 }
 
 #[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]

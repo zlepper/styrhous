@@ -2,10 +2,11 @@ use super::*;
 
 #[test]
 fn resource_watch_scope_filters_all_namespaces_and_preserves_cluster_scope() {
-    let all_namespaces = ResourceWatchScope::AllNamespaces(BTreeSet::from([
-        "apps".to_owned(),
-        "default".to_owned(),
-    ]));
+    let all_namespaces =
+        ResourceWatchScope::AllNamespaces(WatchedNamespaces::Only(BTreeSet::from([
+            "apps".to_owned(),
+            "default".to_owned(),
+        ])));
     assert_eq!(
         all_namespaces.event_namespace(Some("apps")),
         Some(Some("apps".to_owned()))
@@ -73,10 +74,9 @@ fn resource_watch_runner_batches_filters_and_routes_events() {
                 event_sender: WorkerResultSender::new(sender, None),
                 cluster_key: 4,
                 api_resource: api_resource.clone(),
-                scope: ResourceWatchScope::AllNamespaces(BTreeSet::from([
-                    "apps".to_owned(),
-                    "default".to_owned(),
-                ])),
+                scope: ResourceWatchScope::AllNamespaces(WatchedNamespaces::Only(BTreeSet::from(
+                    ["apps".to_owned(), "default".to_owned()],
+                ))),
             },
             Some(initialized),
             resource,
@@ -132,6 +132,79 @@ fn resource_watch_runner_batches_filters_and_routes_events() {
                 .downcast_ref::<KubernetesResourceDeleted>()
                 .is_some_and(|result| result.namespace.as_deref() == Some("apps")
                     && result.resource_uid == "apps-1")
+        );
+    });
+}
+
+#[test]
+fn a_watch_across_every_namespace_needs_no_namespace_list() {
+    let every = ResourceWatchScope::AllNamespaces(WatchedNamespaces::Every);
+    assert_eq!(
+        every.event_namespace(Some("created-later")),
+        Some(Some("created-later".to_owned()))
+    );
+    assert_eq!(every.event_namespace(None), None);
+
+    let resource = |uid: &str, namespace: &str| MinimalResource {
+        uid: uid.to_owned(),
+        name: uid.to_owned(),
+        namespace: Some(namespace.to_owned()),
+        creation_timestamp: None,
+        controller_owner: None,
+        labels: BTreeMap::new(),
+        annotations: BTreeMap::new(),
+        cells: BTreeMap::new(),
+        log_containers: Vec::new(),
+    };
+    let api_resource = ApiResource {
+        group: "core".to_owned(),
+        version: "v1".to_owned(),
+        kind: "Pod".to_owned(),
+        name: "pods".to_owned(),
+        namespaced: true,
+    };
+    let runtime = tokio::runtime::Runtime::new().expect("runtime initializes");
+    runtime.block_on(async {
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(8);
+        every
+            .send_initial_replacements(
+                &WorkerResultSender::new(sender, None),
+                4,
+                &api_resource,
+                vec![
+                    resource("a-1", "apps"),
+                    resource("s-1", "kube-system"),
+                    resource("a-2", "apps"),
+                ],
+            )
+            .await;
+
+        let replaced = receiver.recv().await.expect("one replacement");
+        let replaced = replaced
+            .as_ref()
+            .as_any()
+            .downcast_ref::<KubernetesResourcesReplacedInEveryNamespace>()
+            .expect("grouped by namespace in one result");
+        let grouped = replaced
+            .resources_by_namespace
+            .iter()
+            .map(|(namespace, resources)| {
+                (
+                    namespace.as_str(),
+                    resources
+                        .iter()
+                        .map(|resource| resource.uid.as_str())
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            grouped,
+            vec![("apps", vec!["a-1", "a-2"]), ("kube-system", vec!["s-1"])]
+        );
+        assert!(
+            receiver.try_recv().is_err(),
+            "nothing is sent per namespace"
         );
     });
 }

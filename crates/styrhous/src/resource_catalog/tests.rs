@@ -185,3 +185,57 @@ fn entry_name(entry: &CuratedNavigationEntry) -> &str {
         CuratedNavigationEntry::Section(section) => section.name,
     }
 }
+
+#[test]
+fn the_builtin_baseline_covers_the_curated_built_in_resources_exactly() {
+    let baseline = builtin_api_resources();
+    let baseline_keys = baseline
+        .api_resources
+        .iter()
+        .map(|resource| (resource.group.as_str(), resource.name.as_str()))
+        .collect::<BTreeSet<_>>();
+    let curated_built_ins = CATALOG
+        .iter()
+        .flat_map(|item| match item {
+            CatalogItem::Resource(entry) => std::slice::from_ref(entry),
+            CatalogItem::Section(section) => section.entries,
+        })
+        // Gateway API resources are CRDs that a cluster may not have installed.
+        .filter(|entry| entry.group != "gateway.networking.k8s.io")
+        .map(|entry| (entry.group, entry.name))
+        .collect::<BTreeSet<_>>();
+
+    assert_eq!(baseline_keys, curated_built_ins);
+    let navigation = build_resource_navigation(baseline.api_resources.clone());
+    assert!(
+        navigation.other_api_groups.is_empty(),
+        "every baseline resource has a curated place: {:?}",
+        navigation.other_api_groups
+    );
+    let pods = baseline
+        .api_resources
+        .iter()
+        .find(|resource| resource.name == "pods")
+        .expect("pods are built in");
+    assert_eq!(
+        (
+            pods.group.as_str(),
+            pods.version.as_str(),
+            pods.kind.as_str(),
+            pods.namespaced
+        ),
+        ("core", "v1", "Pod", true)
+    );
+    let nodes = baseline
+        .api_resources
+        .iter()
+        .find(|resource| resource.name == "nodes")
+        .expect("nodes are built in");
+    assert!(!nodes.namespaced);
+    assert!(
+        baseline
+            .scalable_api_resources
+            .iter()
+            .any(|resource| resource.name == "deployments")
+    );
+}

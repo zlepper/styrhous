@@ -23,6 +23,8 @@ pub(super) struct ResourceMetrics<'a> {
 #[derive(Clone, Copy)]
 pub(super) struct ResourceTableData<'a> {
     pub(super) selected_namespaces: NamespaceScope<'a>,
+    /// Whether the resource is watched across every namespace, known or not.
+    pub(super) watches_every_namespace: bool,
     pub(super) resource_cache: &'a HashMap<ResourceWatchKey, ResourceWatchState>,
     pub(super) metrics: ResourceMetrics<'a>,
 }

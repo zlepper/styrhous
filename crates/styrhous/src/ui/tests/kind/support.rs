@@ -217,10 +217,8 @@ pub(super) fn wait_for_cluster_data(harness: &mut Harness<MyEguiApp<Worker>>, cl
         "the Kind connection, namespaces, and Kubernetes APIs to load",
         |app| {
             app.ui_state.clusters.get(&cluster_key).and_then(|cluster| {
-                (!cluster.namespaces.is_empty()
-                    && (!cluster.resource_navigation.curated_entries.is_empty()
-                        || !cluster.resource_navigation.other_api_groups.is_empty()))
-                .then_some(())
+                // The navigation is filled before discovery answers, so wait for it to complete.
+                (!cluster.namespaces.is_empty() && cluster.api_discovery.complete).then_some(())
             })
         },
         |app| cluster_load_failure(&app.ui_state, cluster_key),

@@ -1,4 +1,7 @@
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
+
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct ApiResource {
     pub group: String,
     pub version: String,
@@ -22,6 +25,23 @@ impl ApiResource {
         self == &Self::helm_releases()
     }
 
+    /// Whether this is the Metrics API resource that Pod usage is read from.
+    pub(crate) fn is_pod_metrics(&self) -> bool {
+        self.is_metrics_resource("PodMetrics", "pods")
+    }
+
+    /// Whether this is the Metrics API resource that Node usage is read from.
+    pub(crate) fn is_node_metrics(&self) -> bool {
+        self.is_metrics_resource("NodeMetrics", "nodes")
+    }
+
+    fn is_metrics_resource(&self, kind: &str, name: &str) -> bool {
+        self.group == "metrics.k8s.io"
+            && self.version == "v1beta1"
+            && self.kind == kind
+            && self.name == name
+    }
+
     /// A human-readable, plural label for use in resource navigation.
     ///
     /// Kubernetes discovery gives resource names as lowercase plurals, but its Kind retains
@@ -39,6 +59,32 @@ impl ApiResource {
         }
 
         display_name
+    }
+}
+
+/// API resources together with the ones among them that support the scale subresource.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct ApiResourceSet {
+    pub(crate) api_resources: Vec<ApiResource>,
+    pub(crate) scalable_api_resources: BTreeSet<ApiResource>,
+}
+
+impl ApiResourceSet {
+    pub(crate) fn push(&mut self, api_resource: ApiResource, scalable: bool) {
+        if scalable {
+            self.scalable_api_resources.insert(api_resource.clone());
+        }
+        self.api_resources.push(api_resource);
+    }
+
+    pub(crate) fn extend(&mut self, other: ApiResourceSet) {
+        self.api_resources.extend(other.api_resources);
+        self.scalable_api_resources
+            .extend(other.scalable_api_resources);
+    }
+
+    pub(crate) fn is_scalable(&self, api_resource: &ApiResource) -> bool {
+        self.scalable_api_resources.contains(api_resource)
     }
 }
 

@@ -63,7 +63,10 @@ fn watched_namespaces(commands: &[WorkerCommandBox]) -> BTreeSet<String> {
     commands_of::<ReconcileResourceWatches>(commands)
         .flat_map(|command| command.sources.iter())
         .flat_map(|source| match source {
-            ResourceWatchSource::AllNamespaces(namespaces) => namespaces.clone(),
+            ResourceWatchSource::AllNamespaces(WatchedNamespaces::Only(namespaces)) => {
+                namespaces.clone()
+            }
+            ResourceWatchSource::AllNamespaces(WatchedNamespaces::Every) => BTreeSet::new(),
             ResourceWatchSource::Namespace(namespace) => BTreeSet::from([namespace.clone()]),
             ResourceWatchSource::Cluster => BTreeSet::new(),
         })
@@ -71,7 +74,7 @@ fn watched_namespaces(commands: &[WorkerCommandBox]) -> BTreeSet<String> {
 }
 
 /// The namespaces of the single all-namespaces source the commands request.
-fn all_namespaces_source(commands: &[WorkerCommandBox]) -> Option<&BTreeSet<String>> {
+fn all_namespaces_source(commands: &[WorkerCommandBox]) -> Option<&WatchedNamespaces> {
     commands_of::<ReconcileResourceWatches>(commands).find_map(|command| {
         match command.sources.as_slice() {
             [ResourceWatchSource::AllNamespaces(namespaces)] => Some(namespaces),
@@ -97,20 +100,27 @@ fn names<const N: usize>(names: [&str; N]) -> BTreeSet<String> {
 }
 
 #[test]
-fn all_namespaces_selection_watches_namespaces_created_later() {
+fn all_namespaces_selection_watches_every_namespace_without_restarting() {
     let mut state = state_showing(pods());
-    state.select_all_namespaces(1, &mut Vec::new());
+    let mut commands = Vec::new();
+    state.select_all_namespaces(1, &mut commands);
+    assert_eq!(
+        all_namespaces_source(&commands),
+        Some(&WatchedNamespaces::Every)
+    );
 
     let commands = add_namespace(&mut state, "c");
 
     let cluster = &state.clusters[&1];
     assert_eq!(cluster.selected_namespaces, SelectedNamespaces::All);
     assert_eq!(
-        all_namespaces_source(&commands),
-        Some(&names(["a", "b", "c"]))
+        commands_of::<ReconcileResourceWatches>(&commands).count(),
+        0,
+        "the watch already covers namespaces created later"
     );
     assert_eq!(started_pod_metrics(&commands), ["c"]);
     assert!(cluster.namespace_scope().contains("c"));
+    assert!(cluster.is_namespace_watched(&pods(), "c"));
     assert_eq!(
         state.cluster_selections.selections["kind"].selected_namespaces,
         SelectedNamespaces::All
@@ -118,17 +128,64 @@ fn all_namespaces_selection_watches_namespaces_created_later() {
 }
 
 #[test]
-fn all_namespaces_watcher_keeps_its_rows_while_it_restarts_for_a_new_namespace() {
+fn all_namespaces_watch_starts_before_the_namespace_list_arrives() {
+    let mut state = connected_state();
+    let mut commands = Vec::new();
+    state.select_all_namespaces(1, &mut commands);
+
+    state.select_api_resource(1, pods(), &mut commands);
+
+    assert_eq!(
+        all_namespaces_source(&commands),
+        Some(&WatchedNamespaces::Every)
+    );
+    let commands = replace_namespaces(&mut state, ["a", "b"]);
+    assert_eq!(
+        commands_of::<ReconcileResourceWatches>(&commands).count(),
+        0,
+        "the namespace list does not restart it"
+    );
+}
+
+#[test]
+fn an_every_namespace_list_marks_unlisted_namespaces_as_empty() {
     let mut state = state_showing(pods());
     state.select_all_namespaces(1, &mut Vec::new());
     list_resources(&mut state, pods(), "a");
 
-    add_namespace(&mut state, "c");
+    KubernetesResourcesReplacedInEveryNamespace {
+        cluster_key: 1,
+        api_resource: pods(),
+        resources_by_namespace: BTreeMap::from([(
+            "b".to_owned(),
+            vec![MinimalResource {
+                uid: "b-pod".into(),
+                name: "b-pod".into(),
+                namespace: Some("b".into()),
+                creation_timestamp: None,
+                controller_owner: None,
+                labels: BTreeMap::new(),
+                annotations: BTreeMap::new(),
+                cells: BTreeMap::new(),
+                log_containers: Vec::new(),
+            }],
+        )]),
+    }
+    .apply(&mut state, &mut Vec::new());
 
     let cluster = &state.clusters[&1];
-    assert!(cluster.resource_cache[&(pods(), Some("a".to_owned()))].is_synced);
-    assert!(cluster.active_watchers.contains(&(pods(), None)));
-    assert!(cluster.is_namespace_watched(&pods(), "c"));
+    let a = &cluster.resource_cache[&(pods(), Some("a".to_owned()))];
+    assert!(
+        a.is_synced && a.resources.is_empty(),
+        "a no longer has pods"
+    );
+    assert_eq!(
+        cluster.resource_cache[&(pods(), Some("b".to_owned()))]
+            .resources
+            .len(),
+        1
+    );
+    assert!(cluster.resource_cache[&(pods(), None)].is_synced);
 }
 
 #[test]
@@ -154,24 +211,21 @@ fn updating_a_namespace_does_not_restart_the_all_namespaces_watcher() {
 }
 
 #[test]
-fn namespace_relist_in_all_namespaces_mode_follows_the_new_set() {
+fn namespace_relist_in_all_namespaces_mode_keeps_the_watch_and_follows_metrics() {
     let mut state = state_showing(pods());
     state.select_all_namespaces(1, &mut Vec::new());
-    list_resources(&mut state, pods(), "a");
     list_resources(&mut state, pods(), "b");
 
     let commands = replace_namespaces(&mut state, ["b", "c"]);
 
     let cluster = &state.clusters[&1];
     assert_eq!(cluster.selected_namespaces, SelectedNamespaces::All);
-    assert_eq!(all_namespaces_source(&commands), Some(&names(["b", "c"])));
+    assert_eq!(
+        commands_of::<ReconcileResourceWatches>(&commands).count(),
+        0
+    );
     assert_eq!(stopped_pod_metrics(&commands), ["a"]);
     assert_eq!(started_pod_metrics(&commands), ["c"]);
-    assert!(
-        !cluster
-            .resource_cache
-            .contains_key(&(pods(), Some("a".to_owned())))
-    );
     assert!(cluster.resource_cache[&(pods(), Some("b".to_owned()))].is_synced);
     assert_eq!(
         state.cluster_selections.selections["kind"].selected_namespaces,
@@ -195,9 +249,9 @@ fn all_namespaces_mode_survives_a_deleted_namespace() {
         SelectedNamespaces::All
     );
 
-    let commands = add_namespace(&mut state, "c");
+    add_namespace(&mut state, "c");
 
-    assert_eq!(all_namespaces_source(&commands), Some(&names(["b", "c"])));
+    assert!(state.clusters[&1].watches_every_namespace(&pods()));
 }
 
 #[test]

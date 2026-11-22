@@ -320,7 +320,7 @@ fn test_ui_flow() {
         .state_mut()
         .worker
         .results
-        .push_back(Box::new(KubernetesApisLoaded {
+        .push_back(Box::new(DiscoveryFinished {
             cluster_key: 1,
             api_resources: vec![
                 fixture_api_resource("", "Pod", "pods"),
@@ -332,8 +332,6 @@ fn test_ui_flow() {
             ],
             scalable_api_resources: Default::default(),
             failed_api_groups: Vec::new(),
-            pod_metrics_api_available: true,
-            node_metrics_api_available: true,
         }) as WorkerResultBox);
     harness.run();
 
@@ -795,4 +793,51 @@ fn scale_reply_after_the_inspector_was_swapped_does_not_open_the_dialog() {
     harness.run_steps(2);
 
     assert!(harness.cluster(2).pending_scale.is_none());
+}
+
+#[test]
+fn a_restored_table_shows_rows_before_namespaces_and_discovery_arrive() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.seed_ui_state(UiState {
+        cluster_selections: super::super::super::state::PersistedClusterSelections {
+            selections: BTreeMap::from([(
+                "dev".to_owned(),
+                super::super::super::state::PersistedClusterSelection {
+                    selected_namespaces: SelectedNamespaces::All,
+                    selected_api_resource: Some(super::super::super::state::PersistedApiResource {
+                        group: "core".to_owned(),
+                        name: "pods".to_owned(),
+                    }),
+                },
+            )]),
+            last_selected_context: Some("dev".to_owned()),
+        },
+        ..Default::default()
+    });
+    let worker = &mut harness.state_mut().worker;
+    worker.enqueue_result(KubernetesClustersUpdated(vec![Cluster {
+        name: "dev".into(),
+        is_current: true,
+        presentation: Default::default(),
+    }]));
+    worker.enqueue_result(KubernetesClusterConnectionCreated { cluster_key: 1 });
+    // The restored watch across every namespace answers before anything else.
+    worker.enqueue_result(KubernetesResourcesReplacedInEveryNamespace {
+        cluster_key: 1,
+        api_resource: fixture_api_resource("core", "Pod", "pods"),
+        resources_by_namespace: BTreeMap::from([(
+            "kube-system".to_owned(),
+            vec![fixture_resource(0, "coredns"), fixture_resource(1, "etcd")],
+        )]),
+    });
+    // The discovery row's spinner keeps repainting.
+    harness.run_steps(3);
+
+    let cluster = harness.cluster(1);
+    assert!(cluster.reachable);
+    assert!(cluster.namespaces.is_empty() && !cluster.api_discovery.complete);
+    harness.get_by_label("Open details for coredns");
+    harness.ui_harness(
+        "cluster_connection/a_restored_table_shows_rows_before_namespaces_and_discovery_arrive/rows_before_discovery",
+    );
 }

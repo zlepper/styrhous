@@ -52,6 +52,8 @@ const ICON_SIZE: f32 = 16.0;
 const ICON_TEXT_SPACING: f32 = spacing::SM;
 const CHEVRON_SIZE: f32 = 16.0;
 const CHEVRON_GAP: f32 = 8.0;
+/// Distance from an expandable item's padded edge to its disclosure chevron.
+const CHEVRON_INSET: f32 = 12.0;
 
 struct ItemColors {
     background: Color32,

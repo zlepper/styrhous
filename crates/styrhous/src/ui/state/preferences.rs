@@ -100,51 +100,100 @@ impl UiState {
         self.prune_empty_cluster_selection(cluster_key);
     }
 
-    pub(crate) fn restored_api_resource(
+    /// The persisted namespace selection of the cluster's context, without checking it
+    /// against the namespaces, so watches can start before the namespace list arrives.
+    pub(crate) fn apply_persisted_namespaces(&mut self, cluster_key: i32) {
+        let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
+            return;
+        };
+        if let Some(selection) = self.cluster_selections.selections.get(&cluster.name) {
+            cluster.selected_namespaces = selection.selected_namespaces.clone();
+        }
+    }
+
+    /// Keeps the selected resource in line with what discovery has shown so far.
+    ///
+    /// Without a selection, the context's saved resource is selected once it is known. A
+    /// selected resource that discovery has superseded by another version follows it. Once
+    /// discovery is complete, a saved or selected resource that does not exist is
+    /// forgotten; one in a group whose discovery failed may still exist and is kept.
+    pub(crate) fn reconcile_selection_with_discovery(
         &mut self,
         cluster_key: i32,
-        api_resources: &[ApiResource],
-        failed_group_versions: &[String],
-    ) -> Option<ApiResource> {
-        let context_name = self
+        commands_to_send: &mut Vec<WorkerCommandBox>,
+    ) {
+        let Some(cluster) = self.clusters.get(&cluster_key) else {
+            return;
+        };
+        let find = |group: &str, name: &str| {
+            cluster
+                .discovered_api_resources
+                .iter()
+                .find(|resource| {
+                    canonical_group(&resource.group) == canonical_group(group)
+                        && resource.name == name
+                })
+                .cloned()
+        };
+        match cluster.selected_api_resource.clone() {
+            Some(selected)
+                if selected.is_helm_releases()
+                    || cluster.discovered_api_resources.contains(&selected) => {}
+            Some(selected) => {
+                let replacement = find(&selected.group, &selected.name);
+                if replacement.is_none() && !cluster.api_discovery.absence_is_final(&selected.group)
+                {
+                    return;
+                }
+                if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
+                    Self::stop_resource_watches(cluster, &selected, commands_to_send);
+                    cluster.selected_api_resource = None;
+                }
+                match replacement {
+                    Some(replacement) => {
+                        self.select_api_resource(cluster_key, replacement, commands_to_send);
+                    }
+                    None => self.forget_selected_api_resource(cluster_key),
+                }
+            }
+            None => {
+                let Some(saved) = self
+                    .cluster_selections
+                    .selections
+                    .get(&cluster.name)
+                    .and_then(|selection| selection.selected_api_resource.clone())
+                else {
+                    return;
+                };
+                let restored = if saved.matches(&ApiResource::helm_releases()) {
+                    Some(ApiResource::helm_releases())
+                } else {
+                    find(&saved.group, &saved.name)
+                };
+                match restored {
+                    Some(api_resource) => {
+                        self.select_api_resource(cluster_key, api_resource, commands_to_send);
+                    }
+                    None if cluster.api_discovery.absence_is_final(&saved.group) => {
+                        self.forget_selected_api_resource(cluster_key);
+                    }
+                    None => {}
+                }
+            }
+        }
+    }
+
+    fn forget_selected_api_resource(&mut self, cluster_key: i32) {
+        let Some(context_name) = self
             .clusters
             .get(&cluster_key)
-            .map(|cluster| cluster.name.clone())?;
-        let saved_resource = self
-            .cluster_selections
-            .selections
-            .get(&context_name)
-            .and_then(|selection| selection.selected_api_resource.as_ref());
-        let api_resource = saved_resource.and_then(|saved_resource| {
-            if saved_resource.matches(&ApiResource::helm_releases()) {
-                Some(ApiResource::helm_releases())
-            } else {
-                api_resources
-                    .iter()
-                    .find(|api_resource| saved_resource.matches(api_resource))
-                    .cloned()
-            }
-        });
-
-        // A resource in a group that failed discovery may simply not be known yet; keep
-        // the saved selection so it can be restored once the group recovers.
-        let in_failed_group = saved_resource.is_some_and(|saved| {
-            failed_group_versions
-                .iter()
-                .any(|group_version| group_version.split('/').next() == Some(saved.group.as_str()))
-        });
-        if in_failed_group && api_resource.is_none() {
-            return None;
+            .map(|cluster| cluster.name.clone())
+        else {
+            return;
+        };
+        if let Some(selection) = self.cluster_selections.selections.get_mut(&context_name) {
+            selection.selected_api_resource = None;
         }
-
-        if saved_resource.is_some() && api_resource.is_none() {
-            if let Some(selection) = self.cluster_selections.selections.get_mut(&context_name) {
-                selection.selected_api_resource = None;
-            }
-            self.prune_empty_cluster_selection(cluster_key);
-            return None;
-        }
-
-        api_resource
+        self.prune_empty_cluster_selection(cluster_key);
     }
 }

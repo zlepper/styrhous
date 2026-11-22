@@ -257,6 +257,22 @@ fn test_real_cluster_connection() {
             || !cluster.resource_navigation.other_api_groups.is_empty(),
         "Kind should advertise Kubernetes API resources"
     );
+    // The built-in resources shown before discovery answers must match what a real
+    // cluster serves, or every first connection would show and then retract them.
+    let fresh = &cluster.api_discovery.fresh;
+    for builtin in crate::resource_catalog::builtin_api_resources().api_resources {
+        assert!(
+            fresh.api_resources.contains(&builtin),
+            "Kind should serve the built-in {builtin:?} exactly as the baseline assumes"
+        );
+    }
+    for scalable in crate::resource_catalog::builtin_api_resources().scalable_api_resources {
+        assert!(
+            fresh.is_scalable(&scalable),
+            "Kind should support scaling {}",
+            scalable.name
+        );
+    }
 }
 
 /// Integration test for a real resource watcher using accessibility interactions.

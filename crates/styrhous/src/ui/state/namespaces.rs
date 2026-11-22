@@ -110,7 +110,6 @@ impl UiState {
         let retry_connection = self.clusters.get(&cluster_key).is_some_and(|cluster| {
             matches!(&cluster.connection, ClusterConnectionState::Failed(_))
                 || matches!(&cluster.namespaces_load, ClusterLoadState::Failed(_))
-                || matches!(&cluster.api_resources_load, ClusterLoadState::Failed(_))
         });
         if retry_connection {
             self.select_cluster_without_remembering(cluster_key, commands_to_send);
@@ -132,10 +131,18 @@ impl UiState {
         commands_to_send: &mut Vec<WorkerCommandBox>,
     ) {
         let scope = cluster.namespace_scope();
-        let all_namespaces_scope = (api_resource.namespaced
-            && !api_resource.is_helm_releases()
-            && scope.covers_all_discovered())
-        .then(|| scope.iter().cloned().collect::<BTreeSet<_>>());
+        // "All namespaces" needs no namespace list, so its watch starts at once and keeps
+        // running as namespaces come and go. An explicit selection that happens to cover
+        // every namespace is watched the same way but filtered to that selection.
+        let all_namespaces_scope = (api_resource.namespaced && !api_resource.is_helm_releases())
+            .then(|| match &cluster.selected_namespaces {
+                SelectedNamespaces::All => Some(crate::worker::WatchedNamespaces::Every),
+                SelectedNamespaces::Selected(_) if scope.covers_all_discovered() => Some(
+                    crate::worker::WatchedNamespaces::Only(scope.iter().cloned().collect()),
+                ),
+                SelectedNamespaces::Selected(_) => None,
+            })
+            .flatten();
         let desired = if all_namespaces_scope.is_some() || !api_resource.namespaced {
             HashSet::from([None])
         } else {
@@ -227,6 +234,34 @@ impl UiState {
         }
         Self::reconcile_pod_metrics(cluster, commands_to_send);
         Self::reconcile_node_metrics(cluster, commands_to_send);
+    }
+
+    /// Stops every watch of `api_resource` and drops its rows, for a resource that turned
+    /// out not to exist in the version that was watched.
+    pub(crate) fn stop_resource_watches(
+        cluster: &mut ClusterState,
+        api_resource: &ApiResource,
+        commands_to_send: &mut Vec<WorkerCommandBox>,
+    ) {
+        let had_active_sources = cluster
+            .active_watchers
+            .iter()
+            .any(|(resource, _)| resource == api_resource);
+        cluster
+            .active_watchers
+            .retain(|(resource, _)| resource != api_resource);
+        cluster.all_namespaces_watch_scopes.remove(api_resource);
+        cluster
+            .resource_cache
+            .retain(|(resource, _), _| resource != api_resource);
+        cluster.resource_table_cache.clear();
+        if had_active_sources {
+            commands_to_send.push(Box::new(crate::worker::ReconcileResourceWatches {
+                cluster_key: cluster.cluster_key,
+                api_resource: api_resource.clone(),
+                sources: Vec::new(),
+            }));
+        }
     }
 
     pub(crate) fn reconcile_after_namespace_change(

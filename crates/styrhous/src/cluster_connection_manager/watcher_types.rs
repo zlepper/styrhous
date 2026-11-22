@@ -6,7 +6,7 @@ pub(crate) struct DynamicKubernetesResourceWatcher {
     pub(crate) cluster_key: i32,
     pub(crate) api_resource: ApiResource,
     pub(crate) namespace: Option<String>,
-    pub(crate) watched_namespaces: Option<BTreeSet<String>>,
+    pub(crate) watched_namespaces: Option<WatchedNamespaces>,
 }
 
 impl DynamicKubernetesResourceWatcher {
@@ -128,7 +128,7 @@ pub(crate) struct TypedKubernetesResourceWatcher<T> {
     cluster_key: i32,
     api_resource: ApiResource,
     namespace: Option<String>,
-    watched_namespaces: Option<BTreeSet<String>>,
+    watched_namespaces: Option<WatchedNamespaces>,
     extract: fn(&T) -> MinimalResource,
 }
 

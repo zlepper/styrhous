@@ -73,7 +73,7 @@ pub(super) fn fixture_cluster_scoped_api_resource(
     }
 }
 
-fn fixture_resource(index: usize, name: &str) -> MinimalResource {
+pub(super) fn fixture_resource(index: usize, name: &str) -> MinimalResource {
     MinimalResource {
         uid: format!("fixture-{index}"),
         name: name.into(),

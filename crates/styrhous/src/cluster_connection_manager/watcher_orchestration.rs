@@ -34,7 +34,7 @@ pub(crate) async fn start_all_namespaces_resource_watcher(
     cluster_key: i32,
     client: kube::Client,
     api_resource: ApiResource,
-    namespaces: BTreeSet<String>,
+    namespaces: WatchedNamespaces,
     event_sender: WorkerResultSender,
     initialized: Option<oneshot::Sender<()>>,
 ) -> Result<(KubernetesResourceWatchStarted, tokio::task::JoinHandle<()>)> {
@@ -55,7 +55,7 @@ pub(crate) async fn start_resource_watcher_with_scope(
     client: kube::Client,
     api_resource: ApiResource,
     namespace: Option<String>,
-    watched_namespaces: Option<BTreeSet<String>>,
+    watched_namespaces: Option<WatchedNamespaces>,
     event_sender: WorkerResultSender,
     initialized: Option<oneshot::Sender<()>>,
 ) -> Result<(KubernetesResourceWatchStarted, tokio::task::JoinHandle<()>)> {
@@ -477,5 +477,5 @@ pub(crate) struct TypedWatcherContext {
     pub(crate) cluster_key: i32,
     pub(crate) api_resource: ApiResource,
     pub(crate) namespace: Option<String>,
-    pub(crate) watched_namespaces: Option<BTreeSet<String>>,
+    pub(crate) watched_namespaces: Option<WatchedNamespaces>,
 }

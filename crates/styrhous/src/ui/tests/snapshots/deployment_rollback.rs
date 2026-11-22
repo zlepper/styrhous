@@ -444,7 +444,8 @@ fn deployment_rollback_replies_are_scoped_to_their_cluster_and_session() {
         .expect("kind fixture exists");
     cluster.connection = ClusterConnectionState::Connected;
     cluster.namespaces_load = crate::ui::state::ClusterLoadState::Ready;
-    cluster.api_resources_load = crate::ui::state::ClusterLoadState::Ready;
+    cluster.reachable = true;
+    cluster.api_discovery.complete = true;
     cluster.namespaces = reloaded.namespaces;
     cluster.selected_namespaces = reloaded.selected_namespaces;
     cluster.resources.selected_api_resource = reloaded.resources.selected_api_resource;

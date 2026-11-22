@@ -26,6 +26,7 @@ fn replacing_watch_sources_clears_prepared_rows_before_revisions_restart() {
             &mut resources.resource_table_cache,
             ResourceTableData {
                 selected_namespaces,
+                watches_every_namespace: false,
                 resource_cache: &resources.resource_cache,
                 metrics: ResourceMetrics {
                     pod_metrics_api_available: resources.pod_metrics_api_available,

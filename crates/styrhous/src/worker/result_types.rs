@@ -90,14 +90,20 @@ pub(crate) struct FailedApiGroup {
 pub(crate) struct KubernetesNamespacesRecovered {
     pub(crate) cluster_key: i32,
 }
+/// API resources from one discovery response or API group. More follow until
+/// `KubernetesApiDiscoveryCompleted`.
 #[derive(Debug)]
-pub(crate) struct KubernetesApisLoaded {
+pub(crate) struct KubernetesApiResourcesDiscovered {
     pub(crate) cluster_key: i32,
     pub(crate) api_resources: Vec<ApiResource>,
     pub(crate) scalable_api_resources: std::collections::BTreeSet<ApiResource>,
+}
+/// Every API group has been discovered or has failed; failed groups are retried in the
+/// background and reported through `KubernetesApiGroupsRecovered`.
+#[derive(Debug)]
+pub(crate) struct KubernetesApiDiscoveryCompleted {
+    pub(crate) cluster_key: i32,
     pub(crate) failed_api_groups: Vec<FailedApiGroup>,
-    pub(crate) pod_metrics_api_available: bool,
-    pub(crate) node_metrics_api_available: bool,
 }
 /// API groups that failed the initial discovery and have since answered a background retry.
 #[derive(Debug)]
@@ -108,19 +114,11 @@ pub(crate) struct KubernetesApiGroupsRecovered {
     pub(crate) scalable_api_resources: std::collections::BTreeSet<ApiResource>,
     /// Group versions that are still failing and being retried.
     pub(crate) still_failing_group_versions: Vec<String>,
-    /// Whether the recovered groups provide the metrics APIs.
-    pub(crate) pod_metrics_api_available: bool,
-    pub(crate) node_metrics_api_available: bool,
 }
 #[derive(Debug)]
 pub(crate) struct KubernetesCustomResourceColumnsLoaded {
     pub(crate) cluster_key: i32,
     pub(crate) columns: std::collections::BTreeMap<ApiResource, Vec<CustomResourceColumn>>,
-}
-#[derive(Debug)]
-pub(crate) struct KubernetesApisLoadFailed {
-    pub(crate) cluster_key: i32,
-    pub(crate) error: String,
 }
 #[derive(Debug)]
 pub(crate) struct KubernetesClusterConnectionCreated {
@@ -146,6 +144,14 @@ pub(crate) struct KubernetesResourcesReplaced {
     pub(crate) api_resource: ApiResource,
     pub(crate) namespace: Option<String>,
     pub(crate) resources: Vec<MinimalResource>,
+}
+/// The initial list of a watch across every namespace, grouped by namespace. A namespace
+/// that is not listed has no resources of this type.
+#[derive(Debug)]
+pub(crate) struct KubernetesResourcesReplacedInEveryNamespace {
+    pub(crate) cluster_key: i32,
+    pub(crate) api_resource: ApiResource,
+    pub(crate) resources_by_namespace: std::collections::BTreeMap<String, Vec<MinimalResource>>,
 }
 #[derive(Debug)]
 pub(crate) struct KubernetesResourceWatchStarted {

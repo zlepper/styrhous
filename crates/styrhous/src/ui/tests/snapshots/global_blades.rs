@@ -80,9 +80,13 @@ fn partial_api_discovery_shows_a_toast_naming_the_failed_groups() {
         .state_mut()
         .worker
         .results
-        .push_back(Box::new(KubernetesApisLoaded {
+        .push_back(Box::new(DiscoveryFinished {
             cluster_key: 2,
-            api_resources: vec![fixture_api_resource("apps", "Deployment", "deployments")],
+            // Discovery still reports the Pods the fixture shows.
+            api_resources: vec![
+                fixture_api_resource("core", "Pod", "pods"),
+                fixture_api_resource("apps", "Deployment", "deployments"),
+            ],
             scalable_api_resources: Default::default(),
             failed_api_groups: vec![
                 FailedApiGroup {
@@ -94,8 +98,6 @@ fn partial_api_discovery_shows_a_toast_naming_the_failed_groups() {
                     error: "timed out waiting for the API server to respond".into(),
                 },
             ],
-            pod_metrics_api_available: false,
-            node_metrics_api_available: false,
         }) as WorkerResultBox);
     harness.run();
 
@@ -123,16 +125,18 @@ fn recovered_api_groups_appear_in_the_sidebar_with_a_success_toast() {
         .state_mut()
         .worker
         .results
-        .push_back(Box::new(KubernetesApisLoaded {
+        .push_back(Box::new(DiscoveryFinished {
             cluster_key: 2,
-            api_resources: vec![fixture_api_resource("apps", "Deployment", "deployments")],
+            // Discovery still reports the Pods the fixture shows.
+            api_resources: vec![
+                fixture_api_resource("core", "Pod", "pods"),
+                fixture_api_resource("apps", "Deployment", "deployments"),
+            ],
             scalable_api_resources: Default::default(),
             failed_api_groups: vec![FailedApiGroup {
                 group_version: "batch/v1".into(),
                 error: "the server is currently unable to handle the request".into(),
             }],
-            pod_metrics_api_available: false,
-            node_metrics_api_available: false,
         }) as WorkerResultBox);
     run_with_pinned_toasts(&mut harness);
     harness.get_by_label("Apps & Containers").click();
@@ -151,8 +155,6 @@ fn recovered_api_groups_appear_in_the_sidebar_with_a_success_toast() {
             api_resources: vec![fixture_api_resource("batch", "Job", "jobs")],
             scalable_api_resources: Default::default(),
             still_failing_group_versions: Vec::new(),
-            pod_metrics_api_available: false,
-            node_metrics_api_available: false,
         }) as WorkerResultBox);
     run_with_pinned_toasts(&mut harness);
     // The bottom-anchored toast stack is positioned from the previous frame's size.
@@ -172,9 +174,13 @@ fn partial_api_discovery_toast_summarises_many_failed_groups() {
         .state_mut()
         .worker
         .results
-        .push_back(Box::new(KubernetesApisLoaded {
+        .push_back(Box::new(DiscoveryFinished {
             cluster_key: 2,
-            api_resources: vec![fixture_api_resource("apps", "Deployment", "deployments")],
+            // Discovery still reports the Pods the fixture shows.
+            api_resources: vec![
+                fixture_api_resource("core", "Pod", "pods"),
+                fixture_api_resource("apps", "Deployment", "deployments"),
+            ],
             scalable_api_resources: Default::default(),
             failed_api_groups: [
                 "metrics.k8s.io/v1beta1",
@@ -189,8 +195,6 @@ fn partial_api_discovery_toast_summarises_many_failed_groups() {
                 error: "the server is currently unable to handle the request".into(),
             })
             .collect(),
-            pod_metrics_api_available: false,
-            node_metrics_api_available: false,
         }) as WorkerResultBox);
     harness.run();
 

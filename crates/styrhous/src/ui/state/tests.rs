@@ -82,6 +82,7 @@ mod editors;
 mod log_state;
 mod metrics;
 mod notifications;
+mod provisional_discovery;
 mod watch_recovery;
 mod workflows;
 

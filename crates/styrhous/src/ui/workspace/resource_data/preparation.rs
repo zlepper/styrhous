@@ -21,10 +21,15 @@ pub(in crate::ui::workspace) fn prepare_resource_table<'a>(
     resource_search: &ResourceSearchState,
     configuration: &ResourceTableConfiguration,
 ) -> &'a PreparedResourceTable {
-    let mut watch_keys = resource_watch_namespaces_for(data.selected_namespaces, api_resource)
-        .into_iter()
-        .map(|namespace| (api_resource.clone(), namespace))
-        .collect::<Vec<_>>();
+    let mut watch_keys = resource_watch_namespaces_for(
+        data.selected_namespaces,
+        data.watches_every_namespace,
+        data.resource_cache,
+        api_resource,
+    )
+    .into_iter()
+    .map(|namespace| (api_resource.clone(), namespace))
+    .collect::<Vec<_>>();
     watch_keys.sort();
     let watch_revisions = watch_keys
         .iter()

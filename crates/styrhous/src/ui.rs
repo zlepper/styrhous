@@ -47,10 +47,14 @@ use dialogs::{
 };
 use namespace_selector::NamespaceSelectorSettings;
 use save_file_dialog::{SaveFileDialog, SystemSaveFileDialog};
-use state::{LogDisplayOptions, PersistedClusterSelections, ResourceNavigationExpansion, UiState};
+use state::{
+    LogDisplayOptions, PersistedApiDiscovery, PersistedClusterSelections,
+    ResourceNavigationExpansion, UiState,
+};
 use table_preferences::PersistedResourceTablePreferences;
 
 const CLUSTER_SELECTIONS_STORAGE_KEY: &str = "cluster_selections";
+const API_DISCOVERY_CACHE_STORAGE_KEY: &str = "api_discovery_cache";
 const LOG_DISPLAY_OPTIONS_STORAGE_KEY: &str = "log_display_options";
 const RESOURCE_NAVIGATION_EXPANSION_STORAGE_KEY: &str = "resource_navigation_expansion";
 const TERMINAL_LAUNCH_SETTINGS_STORAGE_KEY: &str = "terminal_launch_settings";
@@ -169,6 +173,11 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
                     storage,
                     CLUSTER_SELECTIONS_STORAGE_KEY,
                 )
+            })
+            .unwrap_or_default();
+        self.ui_state.api_discovery_cache = storage
+            .and_then(|storage| {
+                eframe::get_value::<PersistedApiDiscovery>(storage, API_DISCOVERY_CACHE_STORAGE_KEY)
             })
             .unwrap_or_default();
         self.ui_state.resource_navigation_expansion = storage
@@ -331,6 +340,11 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             storage,
             CLUSTER_SELECTIONS_STORAGE_KEY,
             &self.ui_state.cluster_selections,
+        );
+        eframe::set_value(
+            storage,
+            API_DISCOVERY_CACHE_STORAGE_KEY,
+            &self.ui_state.api_discovery_cache,
         );
         eframe::set_value(
             storage,

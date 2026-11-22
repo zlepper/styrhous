@@ -1,5 +1,5 @@
 use super::global_blade::{GlobalBladeContent, GlobalBladeCoordinator};
-use crate::api_resource::ApiResource;
+use crate::api_resource::{ApiResource, ApiResourceSet};
 use crate::cluster_connection_manager::{
     AvailableAksCluster, AvailableEksCluster, AvailableTailscaleCluster, AwsAccount, AwsProfile,
     Cluster, ClusterDiscoveryTools,
@@ -34,8 +34,8 @@ pub(super) use super::log_state::{
 };
 
 pub(super) use super::persistence::{
-    PersistedApiResource, PersistedClusterSelection, PersistedClusterSelections,
-    ResourceNavigationExpansion,
+    PersistedApiDiscovery, PersistedApiResource, PersistedClusterSelection,
+    PersistedClusterSelections, ResourceNavigationExpansion,
 };
 
 const DELETE_CONFIRMATION_DELAY: Duration = Duration::from_secs(3);
@@ -58,6 +58,7 @@ pub(crate) struct UiState {
     pub(super) global_blades: GlobalBladeCoordinator,
     pub(super) terminal_launch_error: Option<String>,
     pub(super) cluster_selections: PersistedClusterSelections,
+    pub(super) api_discovery_cache: PersistedApiDiscovery,
     pub(super) resource_navigation_expansion: ResourceNavigationExpansion,
     pub(super) next_operation_toast_sequence: u64,
     pub(super) next_scale_request_id: u64,
@@ -188,6 +189,7 @@ pub(crate) enum ClusterLoadState {
 }
 
 mod actions;
+mod api_discovery;
 mod blades;
 mod clusters;
 mod editors;
@@ -198,6 +200,7 @@ mod resource_data;
 mod selected_namespaces;
 
 pub(super) use actions::*;
+pub(crate) use api_discovery::{ApiDiscoveryState, canonical_group};
 pub(super) use blades::*;
 pub(super) use clusters::*;
 pub(super) use editors::*;

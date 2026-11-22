@@ -62,7 +62,7 @@ fn partial_api_discovery_readies_the_cluster_and_reports_the_failed_groups() {
     };
     let mut commands = Vec::new();
 
-    KubernetesApisLoaded {
+    DiscoveryFinished {
         cluster_key: 7,
         api_resources: vec![deployment],
         scalable_api_resources: Default::default(),
@@ -76,16 +76,11 @@ fn partial_api_discovery_readies_the_cluster_and_reports_the_failed_groups() {
                 error: "timed out waiting for the API server to respond".to_owned(),
             },
         ],
-        pod_metrics_api_available: false,
-        node_metrics_api_available: false,
     }
     .apply(&mut state, &mut commands);
 
     let cluster = &state.clusters[&7];
-    assert!(matches!(
-        cluster.api_resources_load,
-        ClusterLoadState::Ready
-    ));
+    assert!(cluster.reachable && cluster.api_discovery.complete);
     assert!(!cluster.pod_metrics_api_available);
     assert!(!cluster.node_metrics_api_available);
     assert!(!cluster.resource_navigation.curated_entries.is_empty());
@@ -111,13 +106,11 @@ fn complete_api_discovery_reports_no_failed_groups() {
     state.clusters.insert(7, ClusterState::new(7, "dev".into()));
     let mut commands = Vec::new();
 
-    KubernetesApisLoaded {
+    DiscoveryFinished {
         cluster_key: 7,
         api_resources: Vec::new(),
         scalable_api_resources: Default::default(),
         failed_api_groups: Vec::new(),
-        pod_metrics_api_available: false,
-        node_metrics_api_available: false,
     }
     .apply(&mut state, &mut commands);
 
@@ -135,6 +128,13 @@ fn api_resource(group: &str, kind: &str, name: &str) -> ApiResource {
     }
 }
 
+fn metrics_resource(kind: &str, name: &str) -> ApiResource {
+    ApiResource {
+        version: "v1beta1".to_owned(),
+        ..api_resource("metrics.k8s.io", kind, name)
+    }
+}
+
 #[test]
 fn recovered_api_groups_merge_into_the_navigation_without_changing_the_selection() {
     let mut state = UiState::default();
@@ -142,7 +142,7 @@ fn recovered_api_groups_merge_into_the_navigation_without_changing_the_selection
     let pods = api_resource("core", "Pod", "pods");
     let widgets = api_resource("example.com", "Widget", "widgets");
     let mut commands = Vec::new();
-    KubernetesApisLoaded {
+    DiscoveryFinished {
         cluster_key: 7,
         api_resources: vec![pods.clone()],
         scalable_api_resources: Default::default(),
@@ -156,8 +156,6 @@ fn recovered_api_groups_merge_into_the_navigation_without_changing_the_selection
                 error: "503".to_owned(),
             },
         ],
-        pod_metrics_api_available: false,
-        node_metrics_api_available: false,
     }
     .apply(&mut state, &mut commands);
     state.clusters.get_mut(&7).unwrap().selected_api_resource = Some(pods.clone());
@@ -168,8 +166,6 @@ fn recovered_api_groups_merge_into_the_navigation_without_changing_the_selection
         api_resources: vec![widgets.clone(), pods.clone()],
         scalable_api_resources: [widgets.clone()].into(),
         still_failing_group_versions: vec!["metrics.k8s.io/v1beta1".to_owned()],
-        pod_metrics_api_available: false,
-        node_metrics_api_available: false,
     }
     .apply(&mut state, &mut commands);
 
@@ -202,7 +198,7 @@ fn recovered_metrics_group_restores_metrics_availability_and_restarts_the_watch(
     state.clusters.insert(7, ClusterState::new(7, "dev".into()));
     let pods = api_resource("core", "Pod", "pods");
     let mut commands = Vec::new();
-    KubernetesApisLoaded {
+    DiscoveryFinished {
         cluster_key: 7,
         api_resources: vec![pods.clone()],
         scalable_api_resources: Default::default(),
@@ -210,8 +206,6 @@ fn recovered_metrics_group_restores_metrics_availability_and_restarts_the_watch(
             group_version: "metrics.k8s.io/v1beta1".to_owned(),
             error: "503".to_owned(),
         }],
-        pod_metrics_api_available: false,
-        node_metrics_api_available: false,
     }
     .apply(&mut state, &mut commands);
     {
@@ -225,13 +219,11 @@ fn recovered_metrics_group_restores_metrics_availability_and_restarts_the_watch(
         cluster_key: 7,
         group_versions: vec!["metrics.k8s.io/v1beta1".to_owned()],
         api_resources: vec![
-            api_resource("metrics.k8s.io", "PodMetrics", "pods"),
-            api_resource("metrics.k8s.io", "NodeMetrics", "nodes"),
+            metrics_resource("PodMetrics", "pods"),
+            metrics_resource("NodeMetrics", "nodes"),
         ],
         scalable_api_resources: Default::default(),
         still_failing_group_versions: Vec::new(),
-        pod_metrics_api_available: true,
-        node_metrics_api_available: true,
     }
     .apply(&mut state, &mut commands);
 
@@ -260,8 +252,6 @@ fn recovered_api_groups_are_ignored_before_the_session_has_loaded() {
         api_resources: vec![api_resource("example.com", "Widget", "widgets")],
         scalable_api_resources: Default::default(),
         still_failing_group_versions: Vec::new(),
-        pod_metrics_api_available: false,
-        node_metrics_api_available: false,
     }
     .apply(&mut state, &mut commands);
 
@@ -293,8 +283,6 @@ fn recovered(
             .iter()
             .map(|group| group.to_string())
             .collect(),
-        pod_metrics_api_available: false,
-        node_metrics_api_available: false,
     }
 }
 
@@ -316,13 +304,11 @@ fn saved_selection_in_a_failed_group_is_kept_and_restored_when_the_group_recover
     );
     let widgets = api_resource("example.com", "Widget", "widgets");
     let mut commands = Vec::new();
-    KubernetesApisLoaded {
+    DiscoveryFinished {
         cluster_key: 7,
         api_resources: vec![api_resource("core", "Pod", "pods")],
         scalable_api_resources: Default::default(),
         failed_api_groups: vec![failing_group("example.com/v1")],
-        pod_metrics_api_available: true,
-        node_metrics_api_available: true,
     }
     .apply(&mut state, &mut commands);
 
@@ -358,13 +344,11 @@ fn recovery_does_not_override_a_manual_selection() {
     );
     let pods = api_resource("core", "Pod", "pods");
     let mut commands = Vec::new();
-    KubernetesApisLoaded {
+    DiscoveryFinished {
         cluster_key: 7,
         api_resources: vec![pods.clone()],
         scalable_api_resources: Default::default(),
         failed_api_groups: vec![failing_group("example.com/v1")],
-        pod_metrics_api_available: true,
-        node_metrics_api_available: true,
     }
     .apply(&mut state, &mut commands);
     state.select_api_resource(7, pods.clone(), &mut commands);
@@ -385,13 +369,11 @@ fn recovered_metrics_restart_the_watches_of_open_inspectors() {
     state.clusters.insert(7, ClusterState::new(7, "dev".into()));
     let pods = api_resource("core", "Pod", "pods");
     let mut commands = Vec::new();
-    KubernetesApisLoaded {
+    DiscoveryFinished {
         cluster_key: 7,
         api_resources: vec![pods.clone()],
         scalable_api_resources: Default::default(),
         failed_api_groups: vec![failing_group("metrics.k8s.io/v1beta1")],
-        pod_metrics_api_available: false,
-        node_metrics_api_available: false,
     }
     .apply(&mut state, &mut commands);
     state.open_resource_detail(
@@ -404,13 +386,12 @@ fn recovered_metrics_restart_the_watches_of_open_inspectors() {
     );
     commands.clear();
 
-    let mut recovery = recovered(
-        vec![api_resource("metrics.k8s.io", "PodMetrics", "pods")],
+    recovered(
+        vec![metrics_resource("PodMetrics", "pods")],
         &["metrics.k8s.io/v1beta1"],
         &[],
-    );
-    recovery.pod_metrics_api_available = true;
-    recovery.apply(&mut state, &mut commands);
+    )
+    .apply(&mut state, &mut commands);
 
     let entry = state
         .global_blades
@@ -443,7 +424,7 @@ fn recovered_metrics_restart_the_watches_of_open_inspectors() {
 fn recovered_api_groups_are_ignored_after_the_session_failed_to_load() {
     let mut state = UiState::default();
     let mut cluster = ClusterState::new(7, "dev".into());
-    cluster.api_resources_load = ClusterLoadState::Failed("boom".into());
+    cluster.connection = ClusterConnectionState::Failed("boom".into());
     state.clusters.insert(7, cluster);
     let mut commands = Vec::new();
 

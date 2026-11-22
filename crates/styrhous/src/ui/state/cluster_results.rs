@@ -108,6 +108,9 @@ fn apply_kubernetes_clusters(
 ) {
     ui.discard_resource_detail_blades(commands);
     ui.clusters.clear();
+    ui.api_discovery_cache
+        .contexts
+        .retain(|context, _| clusters.iter().any(|cluster| &cluster.name == context));
     ui.selected_cluster = None;
     let mut current_cluster_key = None;
     let mut remembered_cluster_key = None;
@@ -215,6 +218,7 @@ impl WorkerResult for crate::worker::KubernetesNamespacesReplaced {
                 .collect();
             cluster.namespaces_load = ClusterLoadState::Ready;
             cluster.namespaces_reconnecting = None;
+            cluster.reachable = true;
         }
         ui.restore_selected_namespaces(cluster_key, _commands);
     }
@@ -300,29 +304,42 @@ fn describe_failed_api_groups(
     }
 }
 
-impl WorkerResult for crate::worker::KubernetesApisLoaded {
+impl WorkerResult for crate::worker::KubernetesApiResourcesDiscovered {
     fn apply(self, ui: &mut UiState, commands: &mut Vec<WorkerCommandBox>) {
-        let crate::worker::KubernetesApisLoaded {
+        let crate::worker::KubernetesApiResourcesDiscovered {
             cluster_key,
             api_resources,
             scalable_api_resources,
-            failed_api_groups,
-            pod_metrics_api_available,
-            node_metrics_api_available,
         } = self;
-        let failed_group_versions = failed_api_groups
-            .iter()
-            .map(|group| group.group_version.clone())
-            .collect::<Vec<_>>();
-        let restored_api_resource =
-            ui.restored_api_resource(cluster_key, &api_resources, &failed_group_versions);
-        if let Some(cluster) = ui.clusters.get_mut(&cluster_key) {
-            cluster.set_discovered_api_resources(api_resources);
-            cluster.scalable_api_resources = scalable_api_resources;
-            cluster.pod_metrics_api_available = pod_metrics_api_available;
-            cluster.node_metrics_api_available = node_metrics_api_available;
-            cluster.api_resources_load = ClusterLoadState::Ready;
-        }
+        let Some(cluster) = ui.clusters.get_mut(&cluster_key) else {
+            return;
+        };
+        cluster.reachable = true;
+        cluster.api_discovery.fresh.extend(ApiResourceSet {
+            api_resources,
+            scalable_api_resources,
+        });
+        ui.apply_api_discovery(cluster_key, commands);
+    }
+}
+
+impl WorkerResult for crate::worker::KubernetesApiDiscoveryCompleted {
+    fn apply(self, ui: &mut UiState, commands: &mut Vec<WorkerCommandBox>) {
+        let crate::worker::KubernetesApiDiscoveryCompleted {
+            cluster_key,
+            failed_api_groups,
+        } = self;
+        let Some(cluster) = ui.clusters.get_mut(&cluster_key) else {
+            return;
+        };
+        cluster.api_discovery.complete = true;
+        cluster.api_discovery.set_failed_group_versions(
+            failed_api_groups
+                .iter()
+                .map(|group| group.group_version.as_str()),
+        );
+        ui.apply_api_discovery(cluster_key, commands);
+        ui.remember_api_discovery(cluster_key);
         if !failed_api_groups.is_empty() {
             let summary = describe_failed_api_groups(&failed_api_groups);
             ui.push_operation_outcome(
@@ -337,14 +354,18 @@ impl WorkerResult for crate::worker::KubernetesApisLoaded {
                 )),
             );
         }
-        if !pod_metrics_api_available {
+        let Some(cluster) = ui.clusters.get(&cluster_key) else {
+            return;
+        };
+        let (pod_metrics_available, node_metrics_available) = (
+            cluster.pod_metrics_api_available,
+            cluster.node_metrics_api_available,
+        );
+        if !pod_metrics_available {
             ui.mark_pod_metrics_api_unavailable(cluster_key);
         }
-        if !node_metrics_api_available {
+        if !node_metrics_available {
             ui.mark_node_metrics_api_unavailable(cluster_key);
-        }
-        if let Some(api_resource) = restored_api_resource {
-            ui.select_api_resource(cluster_key, api_resource, commands);
         }
     }
 }
@@ -357,58 +378,23 @@ impl WorkerResult for crate::worker::KubernetesApiGroupsRecovered {
             api_resources,
             scalable_api_resources,
             still_failing_group_versions,
-            pod_metrics_api_available,
-            node_metrics_api_available,
         } = self;
         let Some(cluster) = ui.clusters.get_mut(&cluster_key) else {
             return;
         };
-        // A result that outlives its session, or arrives while the session has no
-        // discovery to merge into, is dropped.
-        if !matches!(cluster.api_resources_load, ClusterLoadState::Ready) {
+        // Retries only follow a completed discovery; anything else outlived its session.
+        if !cluster.api_discovery.complete {
             return;
         }
-        let known = cluster
-            .discovered_api_resources
-            .iter()
-            .cloned()
-            .collect::<BTreeSet<_>>();
-        let mut discovered = std::mem::take(&mut cluster.discovered_api_resources);
-        discovered.extend(
-            api_resources
-                .into_iter()
-                .filter(|resource| !known.contains(resource)),
-        );
-        cluster.set_discovered_api_resources(discovered);
+        cluster.api_discovery.fresh.extend(ApiResourceSet {
+            api_resources,
+            scalable_api_resources,
+        });
         cluster
-            .scalable_api_resources
-            .extend(scalable_api_resources);
-
-        let restore_pod_metrics = pod_metrics_api_available && !cluster.pod_metrics_api_available;
-        let restore_node_metrics =
-            node_metrics_api_available && !cluster.node_metrics_api_available;
-        if restore_pod_metrics {
-            cluster.pod_metrics_api_available = true;
-            UiState::reconcile_pod_metrics(cluster, commands);
-        }
-        if restore_node_metrics {
-            cluster.node_metrics_api_available = true;
-            UiState::reconcile_node_metrics(cluster, commands);
-        }
-        let selection_unset = cluster.selected_api_resource.is_none();
-        let discovered = cluster.discovered_api_resources.clone();
-        ui.restore_metrics_in_resource_detail_blades(
-            cluster_key,
-            restore_pod_metrics,
-            restore_node_metrics,
-            commands,
-        );
-        if selection_unset
-            && let Some(api_resource) =
-                ui.restored_api_resource(cluster_key, &discovered, &still_failing_group_versions)
-        {
-            ui.select_api_resource(cluster_key, api_resource, commands);
-        }
+            .api_discovery
+            .set_failed_group_versions(still_failing_group_versions.iter().map(String::as_str));
+        ui.apply_api_discovery(cluster_key, commands);
+        ui.remember_api_discovery(cluster_key);
 
         let mut details = format!("Loaded: {}", group_versions.join(", "));
         if !still_failing_group_versions.is_empty() {
@@ -428,6 +414,54 @@ impl WorkerResult for crate::worker::KubernetesApiGroupsRecovered {
     }
 }
 
+impl UiState {
+    /// Shows what discovery knows now: rebuilds the navigation, follows the availability
+    /// of the Metrics API (decided once discovery completes, or as soon as it is
+    /// reported), and keeps the selection in line.
+    fn apply_api_discovery(&mut self, cluster_key: i32, commands: &mut Vec<WorkerCommandBox>) {
+        let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
+            return;
+        };
+        cluster.refresh_api_resources();
+        let complete = cluster.api_discovery.complete;
+        let pod_metrics = cluster.api_discovery.has_fresh(ApiResource::is_pod_metrics);
+        let node_metrics = cluster
+            .api_discovery
+            .has_fresh(ApiResource::is_node_metrics);
+        let restore_pod_metrics = pod_metrics && !cluster.pod_metrics_api_available;
+        let restore_node_metrics = node_metrics && !cluster.node_metrics_api_available;
+        if pod_metrics != cluster.pod_metrics_api_available && (pod_metrics || complete) {
+            cluster.pod_metrics_api_available = pod_metrics;
+            UiState::reconcile_pod_metrics(cluster, commands);
+        }
+        if node_metrics != cluster.node_metrics_api_available && (node_metrics || complete) {
+            cluster.node_metrics_api_available = node_metrics;
+            UiState::reconcile_node_metrics(cluster, commands);
+        }
+        self.restore_metrics_in_resource_detail_blades(
+            cluster_key,
+            restore_pod_metrics,
+            restore_node_metrics,
+            commands,
+        );
+        self.reconcile_selection_with_discovery(cluster_key, commands);
+    }
+
+    /// Keeps the completed discovery of a context for its next connection.
+    fn remember_api_discovery(&mut self, cluster_key: i32) {
+        let Some(cluster) = self.clusters.get(&cluster_key) else {
+            return;
+        };
+        self.api_discovery_cache.contexts.insert(
+            cluster.name.clone(),
+            ApiResourceSet {
+                api_resources: cluster.discovered_api_resources.clone(),
+                scalable_api_resources: cluster.scalable_api_resources.clone(),
+            },
+        );
+    }
+}
+
 impl WorkerResult for crate::worker::KubernetesCustomResourceColumnsLoaded {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         let crate::worker::KubernetesCustomResourceColumnsLoaded {
@@ -440,19 +474,13 @@ impl WorkerResult for crate::worker::KubernetesCustomResourceColumnsLoaded {
     }
 }
 
-impl WorkerResult for crate::worker::KubernetesApisLoadFailed {
-    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
-        let crate::worker::KubernetesApisLoadFailed { cluster_key, error } = self;
-        if let Some(cluster) = ui.clusters.get_mut(&cluster_key) {
-            cluster.api_resources_load = ClusterLoadState::Failed(error);
-        }
-    }
-}
-
 impl WorkerResult for crate::worker::KubernetesClusterConnectionCreated {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         let crate::worker::KubernetesClusterConnectionCreated { cluster_key } = self;
-        if let Some(cluster) = ui.clusters.get_mut(&cluster_key) {
+        // Discovery starts with the connection and may already have failed it.
+        if let Some(cluster) = ui.clusters.get_mut(&cluster_key)
+            && matches!(cluster.connection, ClusterConnectionState::Connecting)
+        {
             cluster.connection = ClusterConnectionState::Connected;
         }
     }

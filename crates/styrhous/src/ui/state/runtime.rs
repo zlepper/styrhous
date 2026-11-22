@@ -172,9 +172,22 @@ impl UiState {
 }
 
 impl ClusterState {
+    /// Whether `api_resource` is watched across every namespace, including ones that are
+    /// not known yet.
+    pub(crate) fn watches_every_namespace(&self, api_resource: &ApiResource) -> bool {
+        api_resource.namespaced
+            && self.all_namespaces_watch_scopes.get(api_resource)
+                == Some(&crate::worker::WatchedNamespaces::Every)
+    }
+
+    /// Whether rows of `api_resource` in `namespace` are shown.
+    pub(crate) fn shows_namespace(&self, api_resource: &ApiResource, namespace: &str) -> bool {
+        self.watches_every_namespace(api_resource) || self.namespace_scope().contains(namespace)
+    }
+
     /// The cache keys a watcher's result applies to. A namespaced resource
     /// watched across namespaces reports without a namespace and covers every
-    /// selected one.
+    /// selected one, as well as the watch's own entry.
     fn watch_keys_for(
         &self,
         api_resource: &ApiResource,
@@ -184,6 +197,7 @@ impl ClusterState {
             self.namespace_scope()
                 .iter()
                 .map(|namespace| (api_resource.clone(), Some(namespace.clone())))
+                .chain(std::iter::once((api_resource.clone(), None)))
                 .collect()
         } else {
             vec![(api_resource.clone(), namespace)]

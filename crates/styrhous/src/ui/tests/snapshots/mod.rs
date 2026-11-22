@@ -13,7 +13,7 @@ use super::super::table_preferences::{
 use super::fixtures::{
     application_harness, application_harness_with_cluster, application_harness_with_state,
     application_harness_with_terminal, fixture_api_resource, fixture_cluster,
-    fixture_cluster_scoped_api_resource, oracle_resource_table_state,
+    fixture_cluster_scoped_api_resource, fixture_resource, oracle_resource_table_state,
 };
 use super::harness::{MockUiHarnessExt, command_is};
 use crate::cluster_connection_manager::{

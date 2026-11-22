@@ -49,12 +49,25 @@ impl UiState {
             return;
         };
         cluster.reset_for_connection();
+        // Show the last discovery of this context, or the built-in resources, until this
+        // connection's discovery answers.
+        cluster.api_discovery = ApiDiscoveryState::provisional(
+            self.api_discovery_cache
+                .contexts
+                .get(&cluster.name)
+                .cloned()
+                .unwrap_or_else(crate::resource_catalog::builtin_api_resources),
+        );
+        cluster.refresh_api_resources();
 
         tracing::info!("Connecting to cluster '{}'", cluster.name);
         commands_to_send.push(Box::new(crate::worker::ConnectToCluster {
             cluster: cluster.name.clone(),
             cluster_key,
         }));
+        // The saved resource is watched right away; the worker connects first.
+        self.apply_persisted_namespaces(cluster_key);
+        self.reconcile_selection_with_discovery(cluster_key, commands_to_send);
     }
 
     pub(crate) fn select_api_resource(

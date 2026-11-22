@@ -139,11 +139,10 @@ fn select_all_namespaces_includes_namespaces_created_afterwards() {
             .namespaces
             .insert(namespace.into(), MinimalNamespace::named(namespace));
     }
-    let list_pods = |namespace: &str| KubernetesResourcesReplaced {
+    let list_pods = || KubernetesResourcesReplacedInEveryNamespace {
         cluster_key: 1,
         api_resource: pods.clone(),
-        namespace: Some(namespace.into()),
-        resources: Vec::new(),
+        resources_by_namespace: BTreeMap::new(),
     };
     let mut harness = application_harness::<MockWorker>();
     harness.seed_ui_state(UiState {
@@ -160,9 +159,17 @@ fn select_all_namespaces_includes_namespaces_created_afterwards() {
     harness.get_by_label("Select all").click();
     // Loading watches show a spinner, which keeps repainting until they list.
     harness.run_steps(2);
-    let worker = &mut harness.state_mut().worker;
-    worker.enqueue_result(list_pods("default"));
-    worker.enqueue_result(list_pods("kube-system"));
+    assert!(
+        harness
+            .state()
+            .worker
+            .commands_of::<ReconcileResourceWatches>()
+            .any(|command| matches!(
+                command.sources.as_slice(),
+                [ResourceWatchSource::AllNamespaces(WatchedNamespaces::Every)]
+            ))
+    );
+    harness.state_mut().worker.enqueue_result(list_pods());
     harness.run_steps(2);
     harness.state_mut().worker.commands.clear();
 
@@ -179,16 +186,16 @@ fn select_all_namespaces_includes_namespaces_created_afterwards() {
         harness.cluster(1).selected_namespaces,
         SelectedNamespaces::All
     );
-    let worker = &harness.state().worker;
-    assert!(
-        worker
+    assert_eq!(
+        harness
+            .state()
+            .worker
             .commands_of::<ReconcileResourceWatches>()
-            .any(|command| matches!(
-                command.sources.as_slice(),
-                [ResourceWatchSource::AllNamespaces(namespaces)]
-                    if namespaces.contains("monitoring")
-            ))
+            .count(),
+        0,
+        "the watch already covers namespaces created later"
     );
+    assert!(harness.cluster(1).is_namespace_watched(&pods, "monitoring"));
     for namespace in ["Select all", "default", "kube-system", "monitoring"] {
         assert_eq!(
             harness.get_by_label(namespace).accesskit_node().toggled(),
@@ -197,7 +204,6 @@ fn select_all_namespaces_includes_namespaces_created_afterwards() {
         );
     }
 
-    harness.deliver_worker_result(list_pods("monitoring"));
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "cluster_connection/select_all_namespaces_includes_namespaces_created_afterwards/namespace_selector_all_namespaces_after_creation",
     ));
@@ -880,7 +886,8 @@ fn helm_rollback_result_from_a_previous_session_is_ignored() {
     cluster.reset_for_connection();
     cluster.connection = ClusterConnectionState::Connected;
     cluster.namespaces_load = crate::ui::state::ClusterLoadState::Ready;
-    cluster.api_resources_load = crate::ui::state::ClusterLoadState::Ready;
+    cluster.reachable = true;
+    cluster.api_discovery.complete = true;
     let current_operation = cluster.helm_rollbacks.start(demo_release());
     assert_ne!(stale_operation, current_operation);
     let mut harness = application_harness::<MockWorker>();

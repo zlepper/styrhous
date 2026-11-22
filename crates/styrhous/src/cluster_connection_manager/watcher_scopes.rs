@@ -3,7 +3,7 @@ use super::*;
 #[derive(Clone)]
 pub(crate) enum ResourceWatchScope {
     Single(Option<String>),
-    AllNamespaces(BTreeSet<String>),
+    AllNamespaces(WatchedNamespaces),
 }
 
 pub(crate) struct ResourceWatchContext {
@@ -16,7 +16,7 @@ pub(crate) struct ResourceWatchContext {
 impl ResourceWatchScope {
     pub(crate) fn from_parts(
         namespace: Option<String>,
-        watched_namespaces: Option<BTreeSet<String>>,
+        watched_namespaces: Option<WatchedNamespaces>,
     ) -> Self {
         watched_namespaces.map_or(Self::Single(namespace), Self::AllNamespaces)
     }
@@ -35,12 +35,12 @@ impl ResourceWatchScope {
         match self {
             Self::Single(namespace) => Some(namespace.clone()),
             Self::AllNamespaces(namespaces) => resource_namespace
-                .filter(|namespace| namespaces.contains(*namespace))
+                .filter(|namespace| namespaces.contains(namespace))
                 .map(|namespace| Some(namespace.to_owned())),
         }
     }
 
-    async fn send_initial_replacements(
+    pub(super) async fn send_initial_replacements(
         &self,
         event_sender: &WorkerResultSender,
         cluster_key: i32,
@@ -60,21 +60,38 @@ impl ResourceWatchScope {
                     .log_if_error("Failed to send resources replaced");
             }
             Self::AllNamespaces(namespaces) => {
-                for namespace in namespaces {
-                    let resources = resources
-                        .iter()
-                        .filter(|resource| resource.namespace.as_deref() == Some(namespace))
-                        .cloned()
-                        .collect();
-                    event_sender
-                        .send(KubernetesResourcesReplaced {
-                            cluster_key,
-                            api_resource: api_resource.clone(),
-                            namespace: Some(namespace.clone()),
-                            resources,
-                        })
-                        .await
-                        .log_if_error("Failed to send resources replaced");
+                let mut by_namespace = BTreeMap::<String, Vec<MinimalResource>>::new();
+                for resource in resources {
+                    if let Some(namespace) = resource.namespace.clone() {
+                        by_namespace.entry(namespace).or_default().push(resource);
+                    }
+                }
+                match namespaces {
+                    WatchedNamespaces::Every => {
+                        event_sender
+                            .send(KubernetesResourcesReplacedInEveryNamespace {
+                                cluster_key,
+                                api_resource: api_resource.clone(),
+                                resources_by_namespace: by_namespace,
+                            })
+                            .await
+                            .log_if_error("Failed to send resources replaced");
+                    }
+                    // Every watched namespace is replaced, so one without resources is
+                    // shown as empty rather than still loading.
+                    WatchedNamespaces::Only(namespaces) => {
+                        for namespace in namespaces {
+                            event_sender
+                                .send(KubernetesResourcesReplaced {
+                                    cluster_key,
+                                    api_resource: api_resource.clone(),
+                                    namespace: Some(namespace.clone()),
+                                    resources: by_namespace.remove(namespace).unwrap_or_default(),
+                                })
+                                .await
+                                .log_if_error("Failed to send resources replaced");
+                        }
+                    }
                 }
             }
         }

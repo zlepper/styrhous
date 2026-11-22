@@ -15,23 +15,30 @@ pub(super) fn show_toolbar(
     selection_controls: ResourceSelectionControls<'_>,
 ) {
     let selected_namespaces = cluster.namespace_scope();
+    let namespaces_loading = matches!(cluster.namespaces_load, ClusterLoadState::Loading);
     let selected_text = match selected_namespaces.len() {
+        0 if cluster.selected_namespaces == SelectedNamespaces::All => "All namespaces".to_owned(),
+        0 if namespaces_loading => "Loading namespaces...".to_owned(),
         0 => "Select namespaces".to_owned(),
         1 => selected_namespaces
             .iter()
             .next()
-            .and_then(|selected| {
+            .map(|selected| {
+                // A restored namespace is named before the namespace list arrives.
                 cluster
                     .namespaces
                     .values()
                     .find(|namespace| namespace.name == *selected)
-            })
-            .map(|namespace| {
-                crate::ui::namespace_selector::presentation(
-                    namespace,
-                    selection_controls.namespace_selector_settings,
-                )
-                .primary
+                    .map_or_else(
+                        || selected.clone(),
+                        |namespace| {
+                            crate::ui::namespace_selector::presentation(
+                                namespace,
+                                selection_controls.namespace_selector_settings,
+                            )
+                            .primary
+                        },
+                    )
             })
             .unwrap_or_default(),
         count => format!("{count} namespaces"),
@@ -209,14 +216,28 @@ pub(super) fn show_toolbar(
                             }
                             // Trailing, so toggling it never shifts the controls
                             // before it.
-                            if let Some(error) = &cluster.namespaces_reconnecting {
+                            let namespace_problem = match (
+                                &cluster.namespaces_reconnecting,
+                                &cluster.namespaces_load,
+                            ) {
+                                (Some(error), _) => Some((
+                                    "Reconnecting...",
+                                    format!("Namespace updates are paused: {error}"),
+                                )),
+                                (None, ClusterLoadState::Failed(error)) => Some((
+                                    "Namespaces unavailable",
+                                    format!("The namespace list could not be loaded: {error}"),
+                                )),
+                                _ => None,
+                            };
+                            if let Some((label, hover)) = namespace_problem {
                                 ui.add_space(spacing::MD);
                                 ui.label(
-                                    egui::RichText::new("Reconnecting...")
+                                    egui::RichText::new(label)
                                         .font(typography::metadata())
                                         .color(components::design::status::WARNING_TEXT),
                                 )
-                                .on_hover_text(format!("Namespace updates are paused: {error}"));
+                                .on_hover_text(hover);
                             }
                         });
                         strip.cell(|ui| {

@@ -1,7 +1,6 @@
 //! Kubeconfig discovery and the lifetime owner for a connected cluster.
 
-use super::{KubernetesApiInspector, KubernetesNamespaceWatcher};
-use crate::helpers::ResultExt;
+use super::{KubernetesNamespaceWatcher, discover_cluster_api};
 use crate::worker::*;
 use anyhow::{Context, Result};
 use kube::config::{KubeConfigOptions, Kubeconfig};
@@ -161,7 +160,7 @@ impl ClusterConnection {
         );
         // The same task retries groups that failed discovery after reporting the initial
         // result, so it lives and dies with the connection like the namespace watcher.
-        let api_resources_handle = tokio::spawn(load_api_resources(
+        let api_resources_handle = tokio::spawn(discover_cluster_api(
             cluster_key,
             client.clone(),
             event_output,
@@ -186,49 +185,6 @@ impl Drop for ClusterConnection {
     fn drop(&mut self) {
         for handle in self.join_handles.drain(..) {
             handle.abort_handle().abort();
-        }
-    }
-}
-
-async fn load_api_resources(
-    cluster_key: i32,
-    client: kube::Client,
-    event_output: WorkerResultSender,
-) {
-    let inspection = (KubernetesApiInspector {
-        client: client.clone(),
-    })
-    .inspect_api()
-    .await;
-    match inspection {
-        Err(error) => event_output
-            .send(KubernetesApisLoadFailed {
-                cluster_key,
-                error: format!("{error:#?}"),
-            })
-            .await
-            .log_if_error("Failed to send error from inspecting resource api"),
-        Ok(inspection) => {
-            event_output
-                .send(KubernetesApisLoaded {
-                    cluster_key,
-                    api_resources: inspection.api_resources,
-                    scalable_api_resources: inspection.scalable_api_resources,
-                    failed_api_groups: inspection.failed_api_groups,
-                    pod_metrics_api_available: inspection.pod_metrics_api_available,
-                    node_metrics_api_available: inspection.node_metrics_api_available,
-                })
-                .await
-                .log_if_error("Failed to send kubernetes API resources");
-            if !inspection.retry_targets.is_empty() {
-                super::retry_failed_api_groups_for_cluster(
-                    cluster_key,
-                    client,
-                    event_output,
-                    inspection.retry_targets,
-                )
-                .await;
-            }
         }
     }
 }

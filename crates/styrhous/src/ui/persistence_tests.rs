@@ -212,13 +212,11 @@ fn dev_namespaces() -> WorkerResultBox {
 }
 
 fn dev_api_resources() -> WorkerResultBox {
-    Box::new(KubernetesApisLoaded {
+    Box::new(DiscoveryFinished {
         cluster_key: 1,
         api_resources: vec![api_resource("apps", "v1", "Deployment", "deployments")],
         scalable_api_resources: Default::default(),
         failed_api_groups: Vec::new(),
-        pod_metrics_api_available: false,
-        node_metrics_api_available: false,
     })
 }
 
@@ -294,8 +292,7 @@ fn saved_all_namespaces_selection_includes_namespaces_created_while_closed() {
     assert!(
         commands_of::<ReconcileResourceWatches>(&commands).any(|command| matches!(
             command.sources.as_slice(),
-            [ResourceWatchSource::AllNamespaces(namespaces)]
-                if namespaces == &BTreeSet::from(["created-later".into(), "default".into()])
+            [ResourceWatchSource::AllNamespaces(WatchedNamespaces::Every)]
         ))
     );
 }
@@ -345,6 +342,36 @@ fn resource_navigation_expansion_round_trips_through_app_storage() {
 }
 
 #[test]
+fn api_discovery_cache_round_trips_through_app_storage() {
+    let deployments = ApiResource {
+        group: "apps".into(),
+        version: "v1".into(),
+        kind: "Deployment".into(),
+        name: "deployments".into(),
+        namespaced: true,
+    };
+    let expected = state::PersistedApiDiscovery {
+        contexts: BTreeMap::from([(
+            "dev".into(),
+            crate::api_resource::ApiResourceSet {
+                api_resources: vec![deployments.clone()],
+                scalable_api_resources: BTreeSet::from([deployments]),
+            },
+        )]),
+    };
+    let mut storage = MemoryStorage::default();
+    let mut app = MyEguiApp::<MockWorker>::default();
+    app.ui_state.api_discovery_cache = expected.clone();
+
+    eframe::App::save(&mut app, &mut storage);
+
+    let mut restored = MyEguiApp::<MockWorker>::default();
+    restored.load_persisted_state(Some(&storage));
+
+    assert_eq!(restored.ui_state.api_discovery_cache, expected);
+}
+
+#[test]
 fn saved_selection_restores_when_discovery_results_arrive_in_either_order() {
     for results in [
         vec![current_dev_cluster(), dev_namespaces(), dev_api_resources()],
@@ -378,7 +405,7 @@ fn saved_selection_restores_when_discovery_results_arrive_in_either_order() {
                         && command.api_resource.name == "deployments"
                         && matches!(
                             command.sources.as_slice(),
-                            [ResourceWatchSource::AllNamespaces(namespaces)]
+                            [ResourceWatchSource::AllNamespaces(WatchedNamespaces::Only(namespaces))]
                                 if namespaces == &BTreeSet::from(["default".to_owned()])
                         )
                 })
@@ -421,13 +448,11 @@ fn unavailable_saved_selection_is_discarded_without_affecting_other_contexts() {
                     annotations: Default::default(),
                 }],
             }),
-            Box::new(KubernetesApisLoaded {
+            Box::new(DiscoveryFinished {
                 cluster_key: 1,
                 api_resources: vec![api_resource("apps", "v1", "Service", "services")],
                 scalable_api_resources: Default::default(),
                 failed_api_groups: Vec::new(),
-                pod_metrics_api_available: false,
-                node_metrics_api_available: false,
             }),
         ],
     );
@@ -461,13 +486,11 @@ fn selection_changes_update_only_their_contexts_persisted_entry() {
         [
             current_dev_cluster(),
             dev_namespaces(),
-            Box::new(KubernetesApisLoaded {
+            Box::new(DiscoveryFinished {
                 cluster_key: 1,
                 api_resources: vec![api_resource("apps", "v1", "Deployment", "deployments")],
                 scalable_api_resources: Default::default(),
                 failed_api_groups: Vec::new(),
-                pod_metrics_api_available: false,
-                node_metrics_api_available: false,
             }),
         ],
     );

@@ -1,26 +1,34 @@
 use super::*;
 
 #[test]
-fn metrics_availability_requires_the_matching_served_resource() {
-    let resources = vec![ApiResource {
+fn metrics_resources_are_recognised_by_group_version_kind_and_plural() {
+    let pod_metrics = ApiResource {
         group: "metrics.k8s.io".into(),
         version: "v1beta1".into(),
         kind: "PodMetrics".into(),
         name: "pods".into(),
         namespaced: true,
-    }];
-    assert!(pod_metrics_api_available(&resources));
-    assert!(!node_metrics_api_available(&resources));
+    };
+    assert!(pod_metrics.is_pod_metrics());
+    assert!(!pod_metrics.is_node_metrics());
 
-    let missing_metrics = vec![ApiResource {
+    let node_metrics = ApiResource {
         group: "metrics.k8s.io".into(),
         version: "v1beta1".into(),
         kind: "NodeMetrics".into(),
         name: "nodes".into(),
         namespaced: false,
-    }];
-    assert!(!pod_metrics_api_available(&missing_metrics));
-    assert!(node_metrics_api_available(&missing_metrics));
+    };
+    assert!(!node_metrics.is_pod_metrics());
+    assert!(node_metrics.is_node_metrics());
+    assert!(
+        !ApiResource {
+            version: "v1".into(),
+            ..node_metrics
+        }
+        .is_node_metrics(),
+        "only the version the usage columns read counts"
+    );
 }
 
 #[test]

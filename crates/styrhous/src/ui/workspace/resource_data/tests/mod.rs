@@ -29,6 +29,7 @@ fn api_resource(kind: &str, name: &str, namespaced: bool) -> crate::api_resource
 fn table_data(cluster: &ClusterState) -> ResourceTableData<'_> {
     ResourceTableData {
         selected_namespaces: cluster.namespace_scope(),
+        watches_every_namespace: false,
         resource_cache: &cluster.resource_cache,
         metrics: ResourceMetrics {
             pod_metrics_api_available: cluster.pod_metrics_api_available,

@@ -1,45 +1,39 @@
 use super::*;
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::{APIGroupList, APIVersions};
+use kube::client::{APIGroupDiscoveryList, APIResourceDiscovery};
+use kube::core::discovery::v2::ACCEPT_AGGREGATED_DISCOVERY_V2;
+use kube::runtime::watcher::DefaultBackoff;
 
-const MAX_CONCURRENT_API_DISCOVERY_REQUESTS: usize = 4;
-const API_DISCOVERY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+/// Legacy discovery asks for each group separately. The requests are small, so many can be
+/// in flight at once without loading the API server.
+const MAX_CONCURRENT_API_DISCOVERY_REQUESTS: usize = 16;
 /// A custom resource table waits for its printer columns before showing rows, so a CRD
 /// lookup that stops answering only costs its optional columns.
 const CRD_COLUMNS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
-/// Time limits for one discovery run. `group` bounds each API group request within
-/// `total`, so a slow group list cannot turn a partial discovery into a failure.
+
+/// Time limits for one discovery run.
 #[derive(Clone, Copy)]
 struct DiscoveryTimeouts {
-    total: std::time::Duration,
-    group: std::time::Duration,
+    /// Bounds each discovery request: the core API, the group list and every group.
+    request: std::time::Duration,
+    /// Bounds legacy per-group discovery as a whole, so a slow group list cannot keep the
+    /// remaining groups pending indefinitely.
+    groups: std::time::Duration,
 }
 
 const DISCOVERY_TIMEOUTS: DiscoveryTimeouts = DiscoveryTimeouts {
-    total: API_DISCOVERY_TIMEOUT,
     // Healthy groups stalled for over 10s were observed on a loaded local cluster, so a
     // group is only dropped once it has clearly stopped answering. A stalled group
     // occupies one of the concurrent request slots without blocking the others.
-    group: std::time::Duration::from_secs(15),
+    request: std::time::Duration::from_secs(15),
+    groups: std::time::Duration::from_secs(20),
 };
 
-const _: () = assert!(DISCOVERY_TIMEOUTS.group.as_nanos() <= DISCOVERY_TIMEOUTS.total.as_nanos());
+const _: () =
+    assert!(DISCOVERY_TIMEOUTS.request.as_nanos() <= DISCOVERY_TIMEOUTS.groups.as_nanos());
 
 pub(crate) struct KubernetesApiInspector {
     pub(crate) client: kube::Client,
-}
-
-pub(crate) struct ApiInspection {
-    pub(crate) api_resources: Vec<ApiResource>,
-    pub(crate) scalable_api_resources: BTreeSet<ApiResource>,
-    pub(crate) failed_api_groups: Vec<FailedApiGroup>,
-    /// What is needed to fetch the groups in `failed_api_groups` again.
-    pub(crate) retry_targets: Vec<ApiGroupTarget>,
-    pub(crate) pod_metrics_api_available: bool,
-    pub(crate) node_metrics_api_available: bool,
-}
-
-pub(crate) struct DiscoveredApiResources {
-    pub(super) api_resources: Vec<ApiResource>,
-    pub(super) scalable_api_resources: BTreeSet<ApiResource>,
 }
 
 /// One API group to discover: its name and the versions whose resources are listed.
@@ -67,191 +61,437 @@ impl ApiGroupTarget {
             versions,
         }
     }
+
+    fn single_version(group_name: &str, version: &str) -> Self {
+        let group_version = format!("{group_name}/{version}");
+        Self {
+            group_version: group_version.clone(),
+            group_name: group_name.to_owned(),
+            versions: vec![GroupVersionForDiscovery {
+                group_version,
+                version: version.to_owned(),
+            }],
+        }
+    }
+}
+
+/// The API groups, as `/apis` described them.
+enum GroupListing {
+    /// Aggregated discovery: every group's resources, plus the groups whose aggregated
+    /// API is currently unavailable.
+    Aggregated {
+        discovered: ApiResourceSet,
+        stale: Vec<ApiGroupTarget>,
+    },
+    /// Legacy discovery: each group has to be asked for its resources.
+    Legacy(Vec<ApiGroupTarget>),
+}
+
+/// Discovers the cluster's API resources and reports them to the UI as they arrive.
+///
+/// `/api` and `/apis` are requested concurrently with aggregated discovery, which answers
+/// with every resource at once; older servers answer the same requests with the legacy
+/// lists, so falling back costs no extra round trip. The core API also proves that the
+/// cluster accepts the credentials: if it fails, the connection has failed. Groups that
+/// fail are reported in `KubernetesApiDiscoveryCompleted` and retried in the background.
+pub(crate) async fn discover_cluster_api(
+    cluster_key: i32,
+    client: kube::Client,
+    events: WorkerResultSender,
+) {
+    discover_cluster_api_with(
+        cluster_key,
+        client,
+        events,
+        DISCOVERY_TIMEOUTS,
+        DefaultBackoff::default(),
+        DefaultBackoff::default(),
+    )
+    .await;
+}
+
+/// `discover_cluster_api` with its time limits and retry schedules supplied.
+async fn discover_cluster_api_with(
+    cluster_key: i32,
+    client: kube::Client,
+    events: WorkerResultSender,
+    timeouts: DiscoveryTimeouts,
+    group_list_delays: impl Iterator<Item = std::time::Duration>,
+    group_retry_delays: impl Iterator<Item = std::time::Duration>,
+) {
+    let inspector = KubernetesApiInspector {
+        client: client.clone(),
+    };
+    let core = async {
+        match inspector.discover_core(timeouts).await {
+            Ok(core) => {
+                send_discovered(cluster_key, &events, core).await;
+                true
+            }
+            Err(error) => {
+                events
+                    .send(ClusterConnectionFailed {
+                        cluster_key,
+                        error: format!("{error:#}"),
+                    })
+                    .await
+                    .log_if_error("Failed to send the core API discovery failure");
+                false
+            }
+        }
+    };
+    let groups = inspector.discover_groups(timeouts, group_list_delays, |discovered| {
+        send_discovered(cluster_key, &events, discovered)
+    });
+
+    let (failed_api_groups, retry_targets) = {
+        let mut core = std::pin::pin!(core);
+        let mut groups = std::pin::pin!(groups);
+        let mut group_outcome = None;
+        // A failed core API ends the connection, so stop discovering groups as well.
+        let core_succeeded = loop {
+            tokio::select! {
+                succeeded = &mut core => break succeeded,
+                outcome = &mut groups, if group_outcome.is_none() => group_outcome = Some(outcome),
+            }
+        };
+        if !core_succeeded {
+            return;
+        }
+        match group_outcome {
+            Some(outcome) => outcome,
+            None => groups.await,
+        }
+    };
+    for failure in &failed_api_groups {
+        tracing::warn!(
+            group_version = %failure.group_version,
+            error = %failure.error,
+            "API group discovery failed; continuing without it"
+        );
+    }
+    if events
+        .send(KubernetesApiDiscoveryCompleted {
+            cluster_key,
+            failed_api_groups,
+        })
+        .await
+        .is_err()
+    {
+        return;
+    }
+    if !retry_targets.is_empty() {
+        retry_cluster_api_groups(
+            cluster_key,
+            client,
+            events,
+            retry_targets,
+            group_retry_delays,
+        )
+        .await;
+    }
+}
+
+async fn send_discovered(
+    cluster_key: i32,
+    events: &WorkerResultSender,
+    discovered: ApiResourceSet,
+) {
+    if discovered.api_resources.is_empty() {
+        return;
+    }
+    events
+        .send(KubernetesApiResourcesDiscovered {
+            cluster_key,
+            api_resources: discovered.api_resources,
+            scalable_api_resources: discovered.scalable_api_resources,
+        })
+        .await
+        .log_if_error("Failed to send discovered API resources");
 }
 
 impl KubernetesApiInspector {
+    /// GETs a discovery document, preferring the aggregated form.
+    async fn discovery_document(
+        &self,
+        path: &str,
+        timeout: std::time::Duration,
+    ) -> Result<k8s_openapi::serde_json::Value> {
+        let request = Request::get(path)
+            .header(http::header::ACCEPT, ACCEPT_AGGREGATED_DISCOVERY_V2)
+            .body(Vec::new())?;
+        match tokio::time::timeout(timeout, self.client.request(request)).await {
+            Ok(document) => Ok(document?),
+            Err(_) => bail!("timed out waiting for the API server to answer {path}"),
+        }
+    }
+
+    async fn discover_core(&self, timeouts: DiscoveryTimeouts) -> Result<ApiResourceSet> {
+        let document = self
+            .discovery_document("/api", timeouts.request)
+            .await
+            .with_context(|| "Error discovering the core Kubernetes API")?;
+        match document_kind(&document) {
+            "APIGroupDiscoveryList" => {
+                let list: APIGroupDiscoveryList = k8s_openapi::serde_json::from_value(document)?;
+                let mut discovered = ApiResourceSet::default();
+                for group in list.items {
+                    for version in group.versions {
+                        let version_name = version.version.unwrap_or_default();
+                        aggregated_resources(
+                            &mut discovered,
+                            "core",
+                            &version_name,
+                            version.resources,
+                        );
+                    }
+                }
+                Ok(discovered)
+            }
+            "APIVersions" => {
+                let versions: APIVersions = k8s_openapi::serde_json::from_value(document)?;
+                let lists = futures_util::future::try_join_all(versions.versions.iter().map(
+                    |version| async move {
+                        let resources = tokio::time::timeout(
+                            timeouts.request,
+                            self.client.list_core_api_resources(version),
+                        )
+                        .await
+                        .map_err(|_| {
+                            anyhow::anyhow!("timed out discovering the core API {version}")
+                        })??;
+                        anyhow::Ok((version, resources))
+                    },
+                ))
+                .await?;
+                let mut discovered = ApiResourceSet::default();
+                for (version, resources) in lists {
+                    legacy_resources(&mut discovered, "core", version, &resources.resources);
+                }
+                Ok(discovered)
+            }
+            kind => bail!("unexpected core API discovery document {kind:?}"),
+        }
+    }
+
+    /// Lists the API groups, retrying the list itself on the supplied delays until it is
+    /// available, then reports every group's resources through `publish` as they arrive.
+    /// Returns the groups that failed and what is needed to retry them.
+    async fn discover_groups<Publish>(
+        &self,
+        timeouts: DiscoveryTimeouts,
+        mut retry_delays: impl Iterator<Item = std::time::Duration>,
+        mut publish: impl FnMut(ApiResourceSet) -> Publish,
+    ) -> (Vec<FailedApiGroup>, Vec<ApiGroupTarget>)
+    where
+        Publish: Future<Output = ()>,
+    {
+        let listing = loop {
+            match self.list_groups(timeouts).await {
+                Ok(listing) => break listing,
+                Err(error) => {
+                    let Some(delay) = retry_delays.next() else {
+                        return (
+                            vec![FailedApiGroup {
+                                group_version: "API group list".to_owned(),
+                                error: format!("{error:#}"),
+                            }],
+                            Vec::new(),
+                        );
+                    };
+                    tracing::warn!(error = %format!("{error:#}"), "listing the API groups failed; retrying");
+                    tokio::time::sleep(delay).await;
+                }
+            }
+        };
+        let (failures, retry_targets) = match listing {
+            GroupListing::Aggregated { discovered, stale } => {
+                publish(discovered).await;
+                let failures = stale
+                    .iter()
+                    .map(|target| FailedApiGroup {
+                        group_version: target.group_version.clone(),
+                        error: "the aggregated API is currently unavailable".to_owned(),
+                    })
+                    .collect();
+                (failures, stale)
+            }
+            GroupListing::Legacy(targets) => {
+                let mut failures = Vec::new();
+                let requests = targets.iter().cloned().map(|target| {
+                    // Owned, so the requests do not borrow `self` across the stream.
+                    let inspector = KubernetesApiInspector {
+                        client: self.client.clone(),
+                    };
+                    (target.group_version.clone(), async move {
+                        inspector
+                            .get_api_resources_for_group_versions(&target)
+                            .await
+                    })
+                });
+                let outcomes = tolerant_group_discovery(
+                    requests,
+                    MAX_CONCURRENT_API_DISCOVERY_REQUESTS,
+                    timeouts.request,
+                    tokio::time::Instant::now() + timeouts.groups,
+                );
+                let mut outcomes = std::pin::pin!(outcomes);
+                while let Some((group_version, outcome)) = outcomes.next().await {
+                    match outcome {
+                        Ok(discovered) => publish(discovered).await,
+                        Err(error) => failures.push(FailedApiGroup {
+                            group_version,
+                            error,
+                        }),
+                    }
+                }
+                let retry_targets = targets
+                    .iter()
+                    .filter(|target| {
+                        failures
+                            .iter()
+                            .any(|failure| failure.group_version == target.group_version)
+                    })
+                    .cloned()
+                    .collect();
+                (failures, retry_targets)
+            }
+        };
+        let mut failures: Vec<FailedApiGroup> = failures;
+        failures.sort_by(|a, b| a.group_version.cmp(&b.group_version));
+        (failures, retry_targets)
+    }
+
+    async fn list_groups(&self, timeouts: DiscoveryTimeouts) -> Result<GroupListing> {
+        let document = self
+            .discovery_document("/apis", timeouts.request)
+            .await
+            .with_context(|| "Error listing the Kubernetes API groups")?;
+        match document_kind(&document) {
+            "APIGroupDiscoveryList" => {
+                let list: APIGroupDiscoveryList = k8s_openapi::serde_json::from_value(document)?;
+                let mut discovered = ApiResourceSet::default();
+                let mut stale = Vec::new();
+                for group in list.items {
+                    let group_name = group
+                        .metadata
+                        .and_then(|metadata| metadata.name)
+                        .unwrap_or_default();
+                    // Versions are listed in preference order, like legacy discovery's
+                    // preferred version.
+                    let Some(version) = group.versions.into_iter().next() else {
+                        continue;
+                    };
+                    let version_name = version.version.unwrap_or_default();
+                    if version.freshness.as_deref() == Some("Stale") {
+                        stale.push(ApiGroupTarget::single_version(&group_name, &version_name));
+                        continue;
+                    }
+                    aggregated_resources(
+                        &mut discovered,
+                        &group_name,
+                        &version_name,
+                        version.resources,
+                    );
+                }
+                Ok(GroupListing::Aggregated { discovered, stale })
+            }
+            "APIGroupList" => {
+                let list: APIGroupList = k8s_openapi::serde_json::from_value(document)?;
+                Ok(GroupListing::Legacy(
+                    list.groups
+                        .into_iter()
+                        .map(ApiGroupTarget::from_group)
+                        .collect(),
+                ))
+            }
+            kind => bail!("unexpected API group discovery document {kind:?}"),
+        }
+    }
+
     pub(super) async fn get_api_resources_for_group_versions(
         &self,
         target: &ApiGroupTarget,
-    ) -> Result<DiscoveredApiResources> {
-        let api_group_name = &target.group_name;
-        let versions = &target.versions;
-        let mut resource_lists = Vec::with_capacity(versions.len());
-        for version in versions {
-            resource_lists.push(
-                self.client
-                    .list_api_group_resources(&version.group_version)
-                    .await?,
+    ) -> Result<ApiResourceSet> {
+        let lists = futures_util::future::try_join_all(
+            target
+                .versions
+                .iter()
+                .map(|version| self.client.list_api_group_resources(&version.group_version)),
+        )
+        .await?;
+        let mut discovered = ApiResourceSet::default();
+        for (resources, version) in lists.iter().zip(&target.versions) {
+            legacy_resources(
+                &mut discovered,
+                &target.group_name,
+                &version.version,
+                &resources.resources,
             );
         }
-        let resources = resource_lists
-            .iter()
-            .zip(versions)
-            .map(|(resources, version)| {
-                let version_name = version.version.clone();
-
-                let mut api_resources = Vec::new();
-                let mut scalable_api_resources = BTreeSet::new();
-
-                for resource in &resources.resources {
-                    // Skip resources like "Status" and "Scale"
-                    if resource.name.contains('/') {
-                        continue;
-                    }
-
-                    let api_resource = ApiResource {
-                        group: api_group_name.clone(),
-                        version: version_name.clone(),
-                        kind: resource.kind.clone(),
-                        name: resource.name.clone(),
-                        namespaced: resource.namespaced,
-                    };
-                    if supports_scale_subresource(&resources.resources, &resource.name) {
-                        scalable_api_resources.insert(api_resource.clone());
-                    }
-                    api_resources.push(api_resource);
-                }
-
-                DiscoveredApiResources {
-                    api_resources,
-                    scalable_api_resources,
-                }
-            })
-            .fold(
-                DiscoveredApiResources {
-                    api_resources: Vec::new(),
-                    scalable_api_resources: BTreeSet::new(),
-                },
-                |mut all, discovered| {
-                    all.api_resources.extend(discovered.api_resources);
-                    all.scalable_api_resources
-                        .extend(discovered.scalable_api_resources);
-                    all
-                },
-            );
-
-        Ok(resources)
-    }
-
-    async fn get_core_api_resources(&self) -> Result<DiscoveredApiResources> {
-        let core_api_versions = self.client.list_core_api_versions().await?;
-
-        let mut discovered = DiscoveredApiResources {
-            api_resources: Vec::new(),
-            scalable_api_resources: BTreeSet::new(),
-        };
-
-        for version in &core_api_versions.versions {
-            let api_resources = self.client.list_core_api_resources(version).await?;
-
-            for resource in &api_resources.resources {
-                if resource.name.contains("/") {
-                    continue;
-                }
-
-                let api_resource = ApiResource {
-                    group: "core".to_string(),
-                    version: version.clone(),
-                    kind: resource.kind.clone(),
-                    name: resource.name.clone(),
-                    namespaced: resource.namespaced,
-                };
-                if supports_scale_subresource(&api_resources.resources, &resource.name) {
-                    discovered
-                        .scalable_api_resources
-                        .insert(api_resource.clone());
-                }
-                discovered.api_resources.push(api_resource);
-            }
-        }
-
         Ok(discovered)
     }
+}
 
-    pub(crate) async fn inspect_api(&self) -> Result<ApiInspection> {
-        self.inspect_api_with_timeouts(DISCOVERY_TIMEOUTS).await
-    }
+fn document_kind(document: &k8s_openapi::serde_json::Value) -> &str {
+    document
+        .get("kind")
+        .and_then(k8s_openapi::serde_json::Value::as_str)
+        .unwrap_or_default()
+}
 
-    async fn inspect_api_with_timeouts(
-        &self,
-        timeouts: DiscoveryTimeouts,
-    ) -> Result<ApiInspection> {
-        let started = tokio::time::Instant::now();
-        let groups_deadline = started + timeouts.total;
-
-        // Without the group list and the core API nothing works, so these stay fatal.
-        let (api_groups, core_resources) =
-            await_discovery_with_timeout(timeouts.total, "Kubernetes API discovery", async {
-                let api_groups = self.client.list_api_groups().await?;
-                let core_resources = self.get_core_api_resources().await?;
-                Ok((api_groups, core_resources))
-            })
-            .await?;
-
-        let client = self.client.clone();
-        let targets = api_groups
-            .groups
-            .into_iter()
-            .map(ApiGroupTarget::from_group)
-            .collect::<Vec<_>>();
-        let tasks = targets.iter().cloned().map(|target| {
-            let inspector = KubernetesApiInspector {
-                client: client.clone(),
-            };
-            (target.group_version.clone(), async move {
-                inspector
-                    .get_api_resources_for_group_versions(&target)
-                    .await
-            })
+fn aggregated_resources(
+    discovered: &mut ApiResourceSet,
+    group: &str,
+    version: &str,
+    resources: Vec<APIResourceDiscovery>,
+) {
+    for resource in resources {
+        let (Some(name), Some(kind)) = (
+            resource.resource,
+            resource.response_kind.and_then(|kind| kind.kind),
+        ) else {
+            continue;
+        };
+        let scalable = resource.subresources.iter().any(|subresource| {
+            subresource.subresource.as_deref() == Some("scale")
+                && subresource.verbs.iter().any(|verb| verb == "get")
+                && subresource.verbs.iter().any(|verb| verb == "patch")
         });
+        discovered.push(
+            ApiResource {
+                group: group.to_owned(),
+                version: version.to_owned(),
+                kind,
+                name,
+                namespaced: resource.scope.as_deref() == Some("Namespaced"),
+            },
+            scalable,
+        );
+    }
+}
 
-        let GroupDiscovery {
-            discovered,
-            failures: failed_api_groups,
-        } = collect_tolerant_group_discovery(
-            tasks,
-            MAX_CONCURRENT_API_DISCOVERY_REQUESTS,
-            timeouts.group,
-            groups_deadline,
-        )
-        .await;
-        let retry_targets = targets
-            .into_iter()
-            .filter(|target| {
-                failed_api_groups
-                    .iter()
-                    .any(|failure| failure.group_version == target.group_version)
-            })
-            .collect();
-        for failure in &failed_api_groups {
-            tracing::warn!(
-                group_version = %failure.group_version,
-                error = %failure.error,
-                "API group discovery failed; continuing without it"
-            );
+fn legacy_resources(
+    discovered: &mut ApiResourceSet,
+    group: &str,
+    version: &str,
+    resources: &[k8s_openapi::apimachinery::pkg::apis::meta::v1::APIResource],
+) {
+    for resource in resources {
+        // Subresources such as "pods/status" and "deployments/scale" are not listed.
+        if resource.name.contains('/') {
+            continue;
         }
-        let discovered_resources =
-            discovered
-                .into_iter()
-                .fold(core_resources, |mut all, discovered| {
-                    all.api_resources.extend(discovered.api_resources);
-                    all.scalable_api_resources
-                        .extend(discovered.scalable_api_resources);
-                    all
-                });
-
-        let pod_metrics_api_available =
-            pod_metrics_api_available(&discovered_resources.api_resources);
-        let node_metrics_api_available =
-            node_metrics_api_available(&discovered_resources.api_resources);
-        Ok(ApiInspection {
-            api_resources: discovered_resources.api_resources,
-            scalable_api_resources: discovered_resources.scalable_api_resources,
-            failed_api_groups,
-            retry_targets,
-            pod_metrics_api_available,
-            node_metrics_api_available,
-        })
+        discovered.push(
+            ApiResource {
+                group: group.to_owned(),
+                version: version.to_owned(),
+                kind: resource.kind.clone(),
+                name: resource.name.clone(),
+                namespaced: resource.namespaced,
+            },
+            supports_scale_subresource(resources, &resource.name),
+        );
     }
 }
 
@@ -299,89 +539,32 @@ pub(crate) async fn crd_printer_columns(
         .collect()
 }
 
-struct GroupDiscovery<T> {
-    discovered: Vec<T>,
-    failures: Vec<FailedApiGroup>,
-}
-
-/// Runs the labelled group requests with bounded concurrency. A request that fails or
-/// exceeds `per_request_timeout` (or the shared `deadline`) is reported as a
-/// `FailedApiGroup` while the others keep their results, in input order.
-async fn collect_tolerant_group_discovery<I, F, T>(
+/// Runs the labelled group requests with bounded concurrency and yields each outcome as it
+/// settles. A request that fails or exceeds `per_request_timeout` (or the shared
+/// `deadline`) yields its error.
+fn tolerant_group_discovery<I, F, T>(
     requests: I,
     max_concurrent_requests: usize,
     per_request_timeout: std::time::Duration,
     deadline: tokio::time::Instant,
-) -> GroupDiscovery<T>
+) -> impl futures_util::Stream<Item = (String, std::result::Result<T, String>)>
 where
-    I: IntoIterator<Item = (String, F)> + Send,
-    I::IntoIter: Send,
-    F: Future<Output = Result<T>> + Send,
-    T: Send,
+    I: IntoIterator<Item = (String, F)>,
+    F: Future<Output = Result<T>>,
 {
-    let requests =
-        requests
-            .into_iter()
-            .enumerate()
-            .map(|(index, (group_version, request))| async move {
-                let request_deadline =
-                    (tokio::time::Instant::now() + per_request_timeout).min(deadline);
-                let outcome = match tokio::time::timeout_at(request_deadline, request).await {
-                    Ok(Ok(discovered)) => Ok(discovered),
-                    Ok(Err(error)) => Err(format!("{error:#}")),
-                    Err(_) => Err("timed out waiting for the API server to respond".to_owned()),
-                };
-                (index, group_version, outcome)
-            });
-    let requests = futures_util::stream::iter(requests).buffer_unordered(max_concurrent_requests);
-    let mut outcomes = requests.collect::<Vec<_>>().await;
-    outcomes.sort_unstable_by_key(|(index, ..)| *index);
-
-    let mut discovery = GroupDiscovery {
-        discovered: Vec::new(),
-        failures: Vec::new(),
-    };
-    for (_, group_version, outcome) in outcomes {
-        match outcome {
-            Ok(discovered) => discovery.discovered.push(discovered),
-            Err(error) => discovery.failures.push(FailedApiGroup {
-                group_version,
-                error,
-            }),
-        }
-    }
-    discovery
-}
-
-async fn await_discovery_with_timeout<T>(
-    timeout: std::time::Duration,
-    operation: &str,
-    discovery: impl Future<Output = Result<T>> + Send,
-) -> Result<T>
-where
-    T: Send,
-{
-    match tokio::time::timeout(timeout, discovery).await {
-        Ok(result) => result,
-        Err(_) => bail!("{operation} timed out after {} seconds", timeout.as_secs()),
-    }
-}
-
-pub(crate) fn pod_metrics_api_available(api_resources: &[ApiResource]) -> bool {
-    metrics_api_available(api_resources, "PodMetrics", "pods")
-}
-
-pub(crate) fn node_metrics_api_available(api_resources: &[ApiResource]) -> bool {
-    metrics_api_available(api_resources, "NodeMetrics", "nodes")
-}
-
-pub(crate) fn metrics_api_available(api_resources: &[ApiResource], kind: &str, name: &str) -> bool {
-    api_resources.iter().any(|resource| {
-        resource.group == "metrics.k8s.io"
-            && resource.version == "v1beta1"
-            && resource.kind == kind
-            && resource.name == name
-    })
+    futures_util::stream::iter(requests.into_iter().map(
+        move |(group_version, request)| async move {
+            let request_deadline =
+                (tokio::time::Instant::now() + per_request_timeout).min(deadline);
+            let outcome = match tokio::time::timeout_at(request_deadline, request).await {
+                Ok(Ok(discovered)) => Ok(discovered),
+                Ok(Err(error)) => Err(format!("{error:#}")),
+                Err(_) => Err("timed out waiting for the API server to respond".to_owned()),
+            };
+            (group_version, outcome)
+        },
+    ))
+    .buffer_unordered(max_concurrent_requests)
 }
 
 #[cfg(test)]
@@ -393,6 +576,10 @@ mod tests {
     use tokio::sync::Semaphore;
 
     const PER_REQUEST_TIMEOUT: Duration = Duration::from_millis(50);
+    const FAST_TIMEOUTS: DiscoveryTimeouts = DiscoveryTimeouts {
+        request: Duration::from_millis(300),
+        groups: Duration::from_millis(600),
+    };
 
     fn far_deadline() -> tokio::time::Instant {
         tokio::time::Instant::now() + Duration::from_secs(60)
@@ -400,6 +587,21 @@ mod tests {
 
     fn labelled<F>(index: usize, request: F) -> (String, F) {
         (format!("group{index}/v1"), request)
+    }
+
+    async fn collect_outcomes<T>(
+        outcomes: impl futures_util::Stream<Item = (String, std::result::Result<T, String>)>,
+    ) -> (Vec<T>, Vec<(String, String)>) {
+        let mut discovered = Vec::new();
+        let mut failures = Vec::new();
+        let mut outcomes = std::pin::pin!(outcomes);
+        while let Some((group_version, outcome)) = outcomes.next().await {
+            match outcome {
+                Ok(value) => discovered.push(value),
+                Err(error) => failures.push((group_version, error)),
+            }
+        }
+        (discovered, failures)
     }
 
     #[tokio::test]
@@ -412,36 +614,37 @@ mod tests {
         let started_requests = Arc::new(AtomicUsize::new(0));
         let completion_gate = Arc::new(Semaphore::new(0));
 
-        let request_active_requests = Arc::clone(&active_requests);
-        let request_maximum_active_requests = Arc::clone(&maximum_active_requests);
-        let request_started_requests = Arc::clone(&started_requests);
-        let request_completion_gate = Arc::clone(&completion_gate);
-        let requests = (0..REQUEST_COUNT).map(move |index| {
-            let active_requests = Arc::clone(&request_active_requests);
-            let maximum_active_requests = Arc::clone(&request_maximum_active_requests);
-            let started_requests = Arc::clone(&request_started_requests);
-            let completion_gate = Arc::clone(&request_completion_gate);
-            labelled(index, async move {
-                let active = active_requests.fetch_add(1, Ordering::SeqCst) + 1;
-                maximum_active_requests.fetch_max(active, Ordering::SeqCst);
-                started_requests.fetch_add(1, Ordering::SeqCst);
-
-                let permit = completion_gate
-                    .acquire()
-                    .await
-                    .expect("completion gate should remain open");
-                active_requests.fetch_sub(1, Ordering::SeqCst);
-                drop(permit);
-                Ok::<_, anyhow::Error>(())
-            })
+        let requests = (0..REQUEST_COUNT).map({
+            let active_requests = Arc::clone(&active_requests);
+            let maximum_active_requests = Arc::clone(&maximum_active_requests);
+            let started_requests = Arc::clone(&started_requests);
+            let completion_gate = Arc::clone(&completion_gate);
+            move |index| {
+                let active_requests = Arc::clone(&active_requests);
+                let maximum_active_requests = Arc::clone(&maximum_active_requests);
+                let started_requests = Arc::clone(&started_requests);
+                let completion_gate = Arc::clone(&completion_gate);
+                labelled(index, async move {
+                    let active = active_requests.fetch_add(1, Ordering::SeqCst) + 1;
+                    maximum_active_requests.fetch_max(active, Ordering::SeqCst);
+                    started_requests.fetch_add(1, Ordering::SeqCst);
+                    let permit = completion_gate
+                        .acquire()
+                        .await
+                        .expect("completion gate should remain open");
+                    active_requests.fetch_sub(1, Ordering::SeqCst);
+                    drop(permit);
+                    Ok::<_, anyhow::Error>(())
+                })
+            }
         });
 
-        let collection = tokio::spawn(collect_tolerant_group_discovery(
+        let collection = tokio::spawn(collect_outcomes(tolerant_group_discovery(
             requests,
             MAX_CONCURRENT_REQUESTS,
             Duration::from_secs(30),
             far_deadline(),
-        ));
+        )));
 
         tokio::time::timeout(Duration::from_secs(1), async {
             while started_requests.load(Ordering::SeqCst) < MAX_CONCURRENT_REQUESTS {
@@ -459,28 +662,13 @@ mod tests {
         );
 
         completion_gate.add_permits(REQUEST_COUNT);
-        let discovery = collection.await.expect("collection task should finish");
-        assert!(discovery.failures.is_empty());
-        assert_eq!(discovery.discovered.len(), REQUEST_COUNT);
+        let (discovered, failures) = collection.await.expect("collection task should finish");
+        assert!(failures.is_empty());
+        assert_eq!(discovered.len(), REQUEST_COUNT);
         assert_eq!(
             maximum_active_requests.load(Ordering::SeqCst),
             MAX_CONCURRENT_REQUESTS
         );
-    }
-
-    #[tokio::test]
-    async fn stalled_api_discovery_request_returns_a_timeout_error() {
-        let error = await_discovery_with_timeout(
-            Duration::from_millis(1),
-            "listing test API resources",
-            std::future::pending::<Result<()>>(),
-        )
-        .await
-        .expect_err("a stalled discovery request should time out");
-
-        let message = format!("{error:#}");
-        assert!(message.contains("listing test API resources"), "{message}");
-        assert!(message.contains("timed out"), "{message}");
     }
 
     #[tokio::test]
@@ -502,24 +690,51 @@ mod tests {
             ("batch/v1".into(), Box::pin(async { Ok("batch") })),
         ];
 
-        let discovery = tokio::time::timeout(
+        let (mut discovered, mut failures) = tokio::time::timeout(
             Duration::from_secs(5),
-            collect_tolerant_group_discovery(requests, 4, PER_REQUEST_TIMEOUT, far_deadline()),
+            collect_outcomes(tolerant_group_discovery(
+                requests,
+                4,
+                PER_REQUEST_TIMEOUT,
+                far_deadline(),
+            )),
         )
         .await
         .expect("a stalled group must not block discovery past its own timeout");
 
-        assert_eq!(discovery.discovered, vec!["apps", "batch"]);
-        let failures = discovery
-            .failures
-            .iter()
-            .map(|failure| (failure.group_version.as_str(), failure.error.as_str()))
-            .collect::<Vec<_>>();
+        discovered.sort_unstable();
+        failures.sort_unstable();
+        assert_eq!(discovered, vec!["apps", "batch"]);
         assert_eq!(failures.len(), 2, "{failures:?}");
         assert_eq!(failures[0].0, "metrics.k8s.io/v1beta1");
         assert!(failures[0].1.contains("unable to handle"), "{failures:?}");
         assert_eq!(failures[1].0, "stuck.example.com/v1");
         assert!(failures[1].1.contains("timed out"), "{failures:?}");
+    }
+
+    #[tokio::test]
+    async fn outcomes_are_yielded_as_soon_as_each_group_settles() {
+        let requests = (0..3).map(|index| {
+            labelled(index, async move {
+                if index == 0 {
+                    std::future::pending::<()>().await;
+                }
+                tokio::time::sleep(Duration::from_millis(20 * index as u64)).await;
+                Ok::<_, anyhow::Error>(index)
+            })
+        });
+        let outcomes =
+            tolerant_group_discovery(requests, 3, Duration::from_secs(30), far_deadline());
+        let mut outcomes = std::pin::pin!(outcomes);
+
+        let first = tokio::time::timeout(Duration::from_secs(1), outcomes.next())
+            .await
+            .expect("a settled group must not wait for a stalled one")
+            .expect("an outcome");
+        let second = outcomes.next().await.expect("an outcome");
+
+        assert_eq!(first, ("group1/v1".to_owned(), Ok(1)));
+        assert_eq!(second, ("group2/v1".to_owned(), Ok(2)));
     }
 
     #[tokio::test]
@@ -533,105 +748,43 @@ mod tests {
             })
         });
 
-        let discovery =
-            collect_tolerant_group_discovery(requests, 1, PER_REQUEST_TIMEOUT, far_deadline())
-                .await;
-
-        assert_eq!(discovery.discovered, vec![1, 2, 3]);
-        assert_eq!(discovery.failures.len(), 1);
-        assert_eq!(discovery.failures[0].group_version, "group0/v1");
-    }
-
-    #[tokio::test]
-    async fn a_pending_group_between_ready_groups_fails_alone_under_a_short_deadline() {
-        type Request = (String, Pin<Box<dyn Future<Output = Result<usize>> + Send>>);
-        let requests: Vec<Request> = vec![
-            ("a/v1".into(), Box::pin(async { Ok(1) })),
-            ("b/v1".into(), Box::pin(std::future::pending())),
-            ("c/v1".into(), Box::pin(async { Ok(3) })),
-        ];
-
-        let discovery = collect_tolerant_group_discovery(
+        let (discovered, failures) = collect_outcomes(tolerant_group_discovery(
             requests,
             1,
-            Duration::from_secs(60),
-            tokio::time::Instant::now() + Duration::from_millis(100),
-        )
+            PER_REQUEST_TIMEOUT,
+            far_deadline(),
+        ))
         .await;
 
-        assert_eq!(discovery.discovered, vec![1, 3]);
-        assert_eq!(discovery.failures.len(), 1);
-        assert_eq!(discovery.failures[0].group_version, "b/v1");
-    }
-
-    #[tokio::test]
-    async fn failures_keep_input_order_when_requests_fail_out_of_order() {
-        let requests = (0..4).map(|index| {
-            labelled(index, async move {
-                tokio::time::sleep(Duration::from_millis(((4 - index) * 10) as u64)).await;
-                bail!("failure {index}") as Result<()>
-            })
-        });
-
-        let discovery =
-            collect_tolerant_group_discovery(requests, 4, Duration::from_secs(30), far_deadline())
-                .await;
-
-        assert_eq!(
-            discovery
-                .failures
-                .iter()
-                .map(|failure| failure.group_version.as_str())
-                .collect::<Vec<_>>(),
-            vec!["group0/v1", "group1/v1", "group2/v1", "group3/v1"]
-        );
-        assert_eq!(discovery.failures[2].error, "failure 2");
+        assert_eq!(discovered, vec![1, 2, 3]);
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].0, "group0/v1");
     }
 
     #[tokio::test]
     async fn groups_not_settled_by_the_shared_deadline_are_reported_as_failed() {
         let requests = (0..3).map(|index| labelled(index, std::future::pending::<Result<()>>()));
 
-        let discovery = tokio::time::timeout(
+        let (discovered, failures) = tokio::time::timeout(
             Duration::from_secs(5),
-            collect_tolerant_group_discovery(
+            collect_outcomes(tolerant_group_discovery(
                 requests,
                 1,
                 Duration::from_secs(60),
                 tokio::time::Instant::now() + Duration::from_millis(30),
-            ),
+            )),
         )
         .await
         .expect("the shared deadline should bound every group, including queued ones");
 
-        assert!(discovery.discovered.is_empty());
-        assert_eq!(discovery.failures.len(), 3);
-    }
-
-    #[tokio::test]
-    async fn api_discovery_preserves_input_order_when_requests_finish_out_of_order() {
-        const REQUEST_COUNT: usize = 4;
-        let requests = (0..REQUEST_COUNT).map(|index| {
-            labelled(index, async move {
-                tokio::time::sleep(Duration::from_millis(((REQUEST_COUNT - index) * 5) as u64))
-                    .await;
-                Ok::<_, anyhow::Error>(index)
-            })
-        });
-
-        let discovery = collect_tolerant_group_discovery(
-            requests,
-            REQUEST_COUNT,
-            Duration::from_secs(30),
-            far_deadline(),
-        )
-        .await;
-
-        assert_eq!(discovery.discovered, (0..REQUEST_COUNT).collect::<Vec<_>>());
+        assert!(discovered.is_empty());
+        assert_eq!(failures.len(), 3);
     }
 
     enum ScriptedReply {
         Json(&'static str, &'static str),
+        /// Answers 200 with the body after the delay.
+        Delayed(Duration, &'static str),
         /// Answers 503 until `failures` requests have been served, then the body.
         FailsFirst {
             failures: usize,
@@ -642,6 +795,8 @@ mod tests {
     }
 
     const API_FAILURE: &str = r#"{"kind":"Status","apiVersion":"v1","status":"Failure","message":"the server is currently unable to handle the request","reason":"ServiceUnavailable","code":503}"#;
+    const UNAUTHORIZED: &str = r#"{"kind":"Status","apiVersion":"v1","status":"Failure","message":"Unauthorized","reason":"Unauthorized","code":401}"#;
+    const CORE_VERSIONS: &str = r#"{"kind":"APIVersions","versions":["v1"]}"#;
 
     fn group_list(groups: &[(&str, &str)]) -> String {
         let groups = groups
@@ -672,20 +827,101 @@ mod tests {
         )
     }
 
-    type RecordedRequests = Arc<std::sync::Mutex<Vec<String>>>;
+    /// One group of an aggregated discovery document: (name, version, freshness, resources
+    /// as (plural, kind, scope, scalable)).
+    type AggregatedGroup<'a> = (
+        &'a str,
+        &'a str,
+        &'a str,
+        &'a [(&'a str, &'a str, &'a str, bool)],
+    );
 
-    /// Serves the scripted replies by request path until the returned task is dropped.
-    async fn scripted_api_server(
-        replies: Vec<(&'static str, ScriptedReply)>,
-    ) -> (kube::Client, tokio::task::JoinHandle<()>) {
-        let (client, server, _) = recording_api_server(replies).await;
-        (client, server)
+    fn aggregated(groups: &[AggregatedGroup]) -> String {
+        let items = groups
+            .iter()
+            .map(|(name, version, freshness, resources)| {
+                let resources = resources
+                    .iter()
+                    .map(|(plural, kind, scope, scalable)| {
+                        let subresources = if *scalable {
+                            r#"[{"subresource":"scale","responseKind":{"group":"autoscaling","version":"v1","kind":"Scale"},"verbs":["get","patch","update"]}]"#
+                        } else {
+                            "[]"
+                        };
+                        format!(
+                            r#"{{"resource":"{plural}","responseKind":{{"group":"","version":"","kind":"{kind}"}},"scope":"{scope}","verbs":["list","watch"],"subresources":{subresources}}}"#
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!(
+                    r#"{{"metadata":{{"name":"{name}"}},"versions":[{{"version":"{version}","resources":[{resources}],"freshness":"{freshness}"}}]}}"#
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        format!(
+            r#"{{"kind":"APIGroupDiscoveryList","apiVersion":"apidiscovery.k8s.io/v2","metadata":{{}},"items":[{items}]}}"#
+        )
     }
 
-    /// Serves the scripted replies by request path, recording every requested path.
-    async fn recording_api_server(
+    fn aggregated_core() -> &'static str {
+        leak(aggregated(&[(
+            "",
+            "v1",
+            "Current",
+            &[
+                ("pods", "Pod", "Namespaced", false),
+                (
+                    "replicationcontrollers",
+                    "ReplicationController",
+                    "Namespaced",
+                    true,
+                ),
+                ("nodes", "Node", "Cluster", false),
+            ],
+        )]))
+    }
+
+    fn aggregated_groups(metrics_freshness: &str) -> &'static str {
+        leak(aggregated(&[
+            (
+                "apps",
+                "v1",
+                "Current",
+                &[("deployments", "Deployment", "Namespaced", true)],
+            ),
+            (
+                "metrics.k8s.io",
+                "v1beta1",
+                metrics_freshness,
+                &[
+                    ("pods", "PodMetrics", "Namespaced", false),
+                    ("nodes", "NodeMetrics", "Cluster", false),
+                ],
+            ),
+        ]))
+    }
+
+    #[derive(Default)]
+    struct Recorder {
+        paths: std::sync::Mutex<Vec<String>>,
+        accept_headers: std::sync::Mutex<Vec<String>>,
+        in_flight: AtomicUsize,
+        max_in_flight: AtomicUsize,
+    }
+
+    impl Recorder {
+        fn paths(&self) -> Vec<String> {
+            self.paths.lock().unwrap().clone()
+        }
+    }
+
+    /// Serves the scripted replies by request path until the returned task is dropped,
+    /// recording what was requested.
+    async fn scripted_api_server(
         replies: Vec<(&'static str, ScriptedReply)>,
-    ) -> (kube::Client, tokio::task::JoinHandle<()>, RecordedRequests) {
+    ) -> (kube::Client, tokio::task::JoinHandle<()>, Arc<Recorder>) {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -693,12 +929,12 @@ mod tests {
             .expect("test server should bind");
         let address = listener.local_addr().expect("test server has an address");
         let replies = Arc::new(replies);
-        let requests = RecordedRequests::default();
-        let recorded = Arc::clone(&requests);
+        let recorder = Arc::new(Recorder::default());
+        let recorded = Arc::clone(&recorder);
         let server = tokio::spawn(async move {
             while let Ok((mut socket, _)) = listener.accept().await {
                 let replies = Arc::clone(&replies);
-                let recorded = Arc::clone(&recorded);
+                let recorder = Arc::clone(&recorded);
                 tokio::spawn(async move {
                     let mut request = Vec::new();
                     let mut buffer = [0_u8; 1_024];
@@ -715,9 +951,23 @@ mod tests {
                         .and_then(|target| target.split('?').next())
                         .unwrap_or_default()
                         .to_owned();
-                    recorded.lock().unwrap().push(path.clone());
+                    let accept = request
+                        .lines()
+                        .find_map(|line| line.strip_prefix("accept: "))
+                        .unwrap_or_default()
+                        .to_owned();
+                    recorder.paths.lock().unwrap().push(path.clone());
+                    recorder.accept_headers.lock().unwrap().push(accept);
+                    let in_flight = recorder.in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+                    recorder
+                        .max_in_flight
+                        .fetch_max(in_flight, Ordering::SeqCst);
                     let (status, body) = match replies.iter().find(|(route, _)| *route == path) {
                         Some((_, ScriptedReply::Json(status, body))) => (*status, *body),
+                        Some((_, ScriptedReply::Delayed(delay, body))) => {
+                            tokio::time::sleep(*delay).await;
+                            ("200 OK", *body)
+                        }
                         Some((
                             _,
                             ScriptedReply::FailsFirst {
@@ -738,6 +988,7 @@ mod tests {
                         }
                         None => ("404 Not Found", API_FAILURE),
                     };
+                    recorder.in_flight.fetch_sub(1, Ordering::SeqCst);
                     let response = format!(
                         "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
                         body.len()
@@ -753,16 +1004,14 @@ mod tests {
                 .expect("test server URL is valid"),
         );
         let client = kube::Client::try_from(config).expect("test client should build");
-        (client, server, requests)
+        (client, server, recorder)
     }
 
     fn leak(text: String) -> &'static str {
         Box::leak(text.into_boxed_str())
     }
 
-    const CORE_VERSIONS: &str = r#"{"kind":"APIVersions","versions":["v1"]}"#;
-
-    fn healthy_replies() -> Vec<(&'static str, ScriptedReply)> {
+    fn legacy_replies() -> Vec<(&'static str, ScriptedReply)> {
         vec![
             ("/api", ScriptedReply::Json("200 OK", CORE_VERSIONS)),
             (
@@ -783,6 +1032,16 @@ mod tests {
                     leak(resource_list("apps/v1", &[("deployments", "Deployment")])),
                 ),
             ),
+            (
+                "/apis/metrics.k8s.io/v1beta1",
+                ScriptedReply::Json(
+                    "200 OK",
+                    leak(resource_list(
+                        "metrics.k8s.io/v1beta1",
+                        &[("pods", "PodMetrics"), ("nodes", "NodeMetrics")],
+                    )),
+                ),
+            ),
         ]
     }
 
@@ -796,92 +1055,304 @@ mod tests {
         replies
     }
 
-    #[tokio::test]
-    async fn inspection_fails_when_the_core_api_cannot_be_listed() {
-        let replies = with_reply(
-            healthy_replies(),
-            "/api",
-            ScriptedReply::Json("500 Internal Server Error", API_FAILURE),
-        );
-        let (client, _server) = scripted_api_server(replies).await;
-
-        let result = (KubernetesApiInspector { client }).inspect_api().await;
-
-        assert!(result.is_err(), "the core API is required");
+    /// What one discovery run reported, in order.
+    #[derive(Debug, PartialEq)]
+    enum Reported {
+        Discovered(Vec<String>),
+        Completed(Vec<String>),
+        Recovered(Vec<String>),
+        ConnectionFailed(String),
     }
 
-    #[tokio::test]
-    async fn inspection_fails_when_the_api_group_list_cannot_be_listed() {
-        let replies = with_reply(
-            healthy_replies(),
-            "/apis",
-            ScriptedReply::Json("500 Internal Server Error", API_FAILURE),
-        );
-        let (client, _server) = scripted_api_server(replies).await;
-
-        let result = (KubernetesApiInspector { client }).inspect_api().await;
-
-        assert!(result.is_err(), "the API group list is required");
-    }
-
-    #[tokio::test]
-    async fn inspection_keeps_healthy_groups_when_the_metrics_group_is_unavailable() {
-        let replies = with_reply(
-            healthy_replies(),
-            "/apis/metrics.k8s.io/v1beta1",
-            ScriptedReply::Json("503 Service Unavailable", API_FAILURE),
-        );
-        let (client, _server) = scripted_api_server(replies).await;
-
-        let inspection = (KubernetesApiInspector { client })
-            .inspect_api()
-            .await
-            .expect("a failing aggregated API must not fail discovery");
-
-        let names = inspection
-            .api_resources
-            .iter()
-            .map(|resource| resource.name.as_str())
-            .collect::<Vec<_>>();
-        assert_eq!(names, vec!["pods", "deployments"]);
-        assert_eq!(inspection.failed_api_groups.len(), 1);
-        assert_eq!(
-            inspection.failed_api_groups[0].group_version,
-            "metrics.k8s.io/v1beta1"
-        );
-        assert!(!inspection.pod_metrics_api_available);
-        assert!(!inspection.node_metrics_api_available);
-    }
-
-    #[tokio::test]
-    async fn a_stalled_group_degrades_instead_of_failing_the_inspection() {
-        let replies = with_reply(
-            healthy_replies(),
-            "/apis/metrics.k8s.io/v1beta1",
-            ScriptedReply::Hang,
-        );
-        let (client, _server, requests) = recording_api_server(replies).await;
-        let timeouts = DiscoveryTimeouts {
-            total: Duration::from_millis(1_500),
-            group: Duration::from_millis(200),
+    fn reported(result: &WorkerResultBox) -> Reported {
+        let any = result.as_ref().as_any();
+        let names = |resources: &[ApiResource]| {
+            resources
+                .iter()
+                .map(|resource| format!("{}/{}", resource.group, resource.name))
+                .collect()
         };
+        if let Some(discovered) = any.downcast_ref::<KubernetesApiResourcesDiscovered>() {
+            Reported::Discovered(names(&discovered.api_resources))
+        } else if let Some(completed) = any.downcast_ref::<KubernetesApiDiscoveryCompleted>() {
+            Reported::Completed(
+                completed
+                    .failed_api_groups
+                    .iter()
+                    .map(|failure| failure.group_version.clone())
+                    .collect(),
+            )
+        } else if let Some(recovered) = any.downcast_ref::<KubernetesApiGroupsRecovered>() {
+            Reported::Recovered(recovered.group_versions.clone())
+        } else if let Some(failed) = any.downcast_ref::<ClusterConnectionFailed>() {
+            Reported::ConnectionFailed(failed.error.clone())
+        } else {
+            panic!("unexpected discovery result {result:?}")
+        }
+    }
 
-        let started = std::time::Instant::now();
-        let inspection = (KubernetesApiInspector { client })
-            .inspect_api_with_timeouts(timeouts)
-            .await
-            .expect("slow optional discovery must not fail the inspection");
+    /// Runs discovery against the scripted server with fast timeouts and retries, until it
+    /// ends or `max` results were reported.
+    async fn run_discovery(
+        replies: Vec<(&'static str, ScriptedReply)>,
+        max: usize,
+    ) -> (Vec<Reported>, Vec<WorkerResultBox>, Arc<Recorder>) {
+        let (client, _server, recorder) = scripted_api_server(replies).await;
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(64);
+        let discovery = tokio::spawn(discover_cluster_api_with(
+            7,
+            client,
+            WorkerResultSender::new(sender, None),
+            FAST_TIMEOUTS,
+            std::iter::repeat(Duration::from_millis(5)),
+            std::iter::repeat(Duration::from_millis(5)),
+        ));
+        let mut results = Vec::new();
+        while results.len() < max {
+            match tokio::time::timeout(Duration::from_secs(5), receiver.recv()).await {
+                Ok(Some(result)) => results.push(result),
+                Ok(None) => break,
+                Err(_) => panic!("discovery stalled after {results:?}"),
+            }
+        }
+        discovery.abort();
+        (results.iter().map(reported).collect(), results, recorder)
+    }
 
-        assert!(started.elapsed() < timeouts.total + Duration::from_millis(500));
-        assert_eq!(inspection.api_resources.len(), 2);
-        assert_eq!(inspection.failed_api_groups.len(), 1);
+    fn discovered(names: &[&str]) -> Reported {
+        Reported::Discovered(names.iter().map(|name| (*name).to_owned()).collect())
+    }
+
+    #[tokio::test]
+    async fn aggregated_discovery_needs_only_two_concurrent_requests() {
+        let replies = vec![
+            (
+                "/api",
+                ScriptedReply::Delayed(Duration::from_millis(100), aggregated_core()),
+            ),
+            (
+                "/apis",
+                ScriptedReply::Delayed(Duration::from_millis(100), aggregated_groups("Current")),
+            ),
+        ];
+
+        let (reported, results, recorder) = run_discovery(replies, 3).await;
+
+        assert_eq!(reported.len(), 3, "{reported:?}");
+        assert!(reported.contains(&discovered(&[
+            "core/pods",
+            "core/replicationcontrollers",
+            "core/nodes"
+        ])));
+        assert!(reported.contains(&discovered(&[
+            "apps/deployments",
+            "metrics.k8s.io/pods",
+            "metrics.k8s.io/nodes"
+        ])));
+        assert_eq!(reported[2], Reported::Completed(Vec::new()));
+        let mut paths = recorder.paths();
+        paths.sort();
+        assert_eq!(paths, vec!["/api", "/apis"], "no per-group or CRD requests");
+        assert_eq!(
+            recorder.max_in_flight.load(Ordering::SeqCst),
+            2,
+            "requested concurrently"
+        );
         assert!(
-            !requests
+            recorder
+                .accept_headers
                 .lock()
                 .unwrap()
                 .iter()
-                .any(|path| path.contains("customresourcedefinitions")),
-            "discovery must not list CRDs: {requests:?}"
+                .all(|accept| accept.contains("g=apidiscovery.k8s.io;v=v2")),
+            "aggregated discovery is requested"
+        );
+        let scalable = results
+            .iter()
+            .filter_map(|result| {
+                result
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<KubernetesApiResourcesDiscovered>()
+            })
+            .flat_map(|discovered| {
+                discovered
+                    .scalable_api_resources
+                    .iter()
+                    .map(|resource| resource.name.clone())
+            })
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            scalable,
+            BTreeSet::from([
+                "deployments".to_owned(),
+                "replicationcontrollers".to_owned()
+            ])
+        );
+        let namespaced = results
+            .iter()
+            .filter_map(|result| {
+                result
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<KubernetesApiResourcesDiscovered>()
+            })
+            .flat_map(|discovered| discovered.api_resources.iter())
+            .map(|resource| {
+                (
+                    resource.name.as_str(),
+                    resource.group.as_str(),
+                    resource.namespaced,
+                )
+            })
+            .collect::<Vec<_>>();
+        assert!(namespaced.contains(&("nodes", "core", false)));
+        assert!(namespaced.contains(&("pods", "core", true)));
+    }
+
+    #[tokio::test]
+    async fn a_stale_aggregated_group_is_reported_failed_and_recovered_by_the_legacy_retry() {
+        let replies = vec![
+            ("/api", ScriptedReply::Json("200 OK", aggregated_core())),
+            (
+                "/apis",
+                ScriptedReply::Json("200 OK", aggregated_groups("Stale")),
+            ),
+            (
+                "/apis/metrics.k8s.io/v1beta1",
+                ScriptedReply::FailsFirst {
+                    failures: 1,
+                    served: AtomicUsize::new(0),
+                    body: leak(resource_list(
+                        "metrics.k8s.io/v1beta1",
+                        &[("pods", "PodMetrics"), ("nodes", "NodeMetrics")],
+                    )),
+                },
+            ),
+        ];
+
+        let (reported, _, _) = run_discovery(replies, 4).await;
+
+        assert!(
+            reported.contains(&discovered(&["apps/deployments"])),
+            "{reported:?}"
+        );
+        assert_eq!(
+            reported[2],
+            Reported::Completed(vec!["metrics.k8s.io/v1beta1".to_owned()])
+        );
+        assert_eq!(
+            reported[3],
+            Reported::Recovered(vec!["metrics.k8s.io/v1beta1".to_owned()])
+        );
+    }
+
+    #[tokio::test]
+    async fn legacy_servers_report_each_group_as_it_answers() {
+        let replies = with_reply(
+            with_reply(
+                legacy_replies(),
+                "/apis",
+                ScriptedReply::Json(
+                    "200 OK",
+                    leak(group_list(&[
+                        ("apps", "v1"),
+                        ("stuck.example.com", "v1"),
+                        ("metrics.k8s.io", "v1beta1"),
+                    ])),
+                ),
+            ),
+            "/apis/stuck.example.com/v1",
+            ScriptedReply::Hang,
+        );
+
+        let (reported, _, recorder) = run_discovery(replies, 4).await;
+
+        let completed_at = reported
+            .iter()
+            .position(|reported| matches!(reported, Reported::Completed(_)))
+            .expect("discovery completes despite the stalled group");
+        assert_eq!(
+            completed_at, 3,
+            "core and both healthy groups come first: {reported:?}"
+        );
+        assert!(reported.contains(&discovered(&["core/pods"])));
+        assert!(reported.contains(&discovered(&["apps/deployments"])));
+        assert!(reported.contains(&discovered(&[
+            "metrics.k8s.io/pods",
+            "metrics.k8s.io/nodes"
+        ])));
+        assert_eq!(
+            reported[completed_at],
+            Reported::Completed(vec!["stuck.example.com/v1".to_owned()])
+        );
+        assert!(
+            !recorder
+                .paths()
+                .iter()
+                .any(|path| path.contains("customresourcedefinitions"))
+        );
+    }
+
+    #[tokio::test]
+    async fn a_failing_core_api_fails_the_connection_without_waiting_for_the_groups() {
+        let replies = vec![
+            (
+                "/api",
+                ScriptedReply::Json("401 Unauthorized", UNAUTHORIZED),
+            ),
+            ("/apis", ScriptedReply::Hang),
+        ];
+
+        let (reported, _, _) = run_discovery(replies, 2).await;
+
+        assert_eq!(
+            reported.len(),
+            1,
+            "discovery ends with the failure: {reported:?}"
+        );
+        let Reported::ConnectionFailed(error) = &reported[0] else {
+            panic!("expected a connection failure: {reported:?}");
+        };
+        assert!(error.contains("core Kubernetes API"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn a_failing_group_list_is_retried_without_failing_the_connection() {
+        let replies = vec![
+            ("/api", ScriptedReply::Json("200 OK", aggregated_core())),
+            (
+                "/apis",
+                ScriptedReply::FailsFirst {
+                    failures: 2,
+                    served: AtomicUsize::new(0),
+                    body: aggregated_groups("Current"),
+                },
+            ),
+        ];
+
+        let (reported, _, recorder) = run_discovery(replies, 3).await;
+
+        assert_eq!(
+            reported[0],
+            discovered(&["core/pods", "core/replicationcontrollers", "core/nodes"])
+        );
+        assert_eq!(
+            reported[1],
+            discovered(&[
+                "apps/deployments",
+                "metrics.k8s.io/pods",
+                "metrics.k8s.io/nodes"
+            ])
+        );
+        assert_eq!(reported[2], Reported::Completed(Vec::new()));
+        assert_eq!(
+            recorder
+                .paths()
+                .iter()
+                .filter(|path| *path == "/apis")
+                .count(),
+            3
         );
     }
 
@@ -903,7 +1374,7 @@ mod tests {
 
     #[tokio::test]
     async fn crd_printer_columns_reads_the_one_crd_for_the_requested_version() {
-        let (client, _server, requests) = recording_api_server(vec![(
+        let (client, _server, recorder) = scripted_api_server(vec![(
             "/apis/apiextensions.k8s.io/v1/customresourcedefinitions/widgets.example.com",
             ScriptedReply::Json(
                 "200 OK",
@@ -930,16 +1401,12 @@ mod tests {
             ]
         );
         assert!(other_version.is_empty());
-        assert_eq!(
-            requests.lock().unwrap().len(),
-            2,
-            "only the named CRD is read"
-        );
+        assert_eq!(recorder.paths().len(), 2, "only the named CRD is read");
     }
 
     #[tokio::test]
     async fn crd_printer_columns_are_empty_for_resources_that_are_not_crds() {
-        let (client, _server, requests) = recording_api_server(Vec::new()).await;
+        let (client, _server, recorder) = scripted_api_server(Vec::new()).await;
 
         let aggregated = crd_printer_columns(client.clone(), &widgets("v1")).await;
         let built_in = crd_printer_columns(
@@ -957,73 +1424,9 @@ mod tests {
         assert!(aggregated.is_empty(), "a 404 means no columns");
         assert!(built_in.is_empty());
         assert_eq!(
-            requests.lock().unwrap().len(),
+            recorder.paths().len(),
             1,
             "a dotless built-in group is never looked up"
-        );
-    }
-
-    #[tokio::test]
-    async fn a_group_that_fails_discovery_recovers_through_the_background_retry() {
-        use super::super::api_group_retry::retry_cluster_api_groups;
-
-        let replies = with_reply(
-            healthy_replies(),
-            "/apis/metrics.k8s.io/v1beta1",
-            ScriptedReply::FailsFirst {
-                failures: 2,
-                served: AtomicUsize::new(0),
-                body: leak(resource_list(
-                    "metrics.k8s.io/v1beta1",
-                    &[("pods", "PodMetrics"), ("nodes", "NodeMetrics")],
-                )),
-            },
-        );
-        let (client, _server) = scripted_api_server(replies).await;
-        let inspection = (KubernetesApiInspector {
-            client: client.clone(),
-        })
-        .inspect_api()
-        .await
-        .expect("discovery tolerates the failing group");
-        assert_eq!(inspection.retry_targets.len(), 1);
-        assert!(!inspection.pod_metrics_api_available);
-
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(8);
-        tokio::time::timeout(
-            Duration::from_secs(10),
-            retry_cluster_api_groups(
-                3,
-                client,
-                WorkerResultSender::new(sender, None),
-                inspection.retry_targets,
-                std::iter::repeat(Duration::from_millis(2)),
-            ),
-        )
-        .await
-        .expect("the retry should finish once the group answers");
-
-        let mut results = Vec::new();
-        while let Ok(result) = receiver.try_recv() {
-            results.push(result);
-        }
-        let debug = results
-            .iter()
-            .map(|result| format!("{result:?}"))
-            .collect::<Vec<_>>();
-        assert_eq!(debug.len(), 1, "one recovery: {debug:?}");
-        assert!(
-            debug[0].contains("KubernetesApiGroupsRecovered"),
-            "{debug:?}"
-        );
-        assert!(debug[0].contains("metrics.k8s.io/v1beta1"), "{debug:?}");
-        assert!(
-            debug[0].contains("pod_metrics_api_available: true"),
-            "{debug:?}"
-        );
-        assert!(
-            debug[0].contains("node_metrics_api_available: true"),
-            "{debug:?}"
         );
     }
 }

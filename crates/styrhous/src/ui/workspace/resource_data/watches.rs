@@ -1,17 +1,21 @@
 use crate::api_resource::ApiResource;
 use crate::minimal_resource::MinimalResource;
-use crate::ui::state::{ClusterState, NamespaceScope};
+use crate::ui::state::{
+    ClusterLoadState, ClusterState, NamespaceScope, ResourceWatchKey, ResourceWatchState,
+    SelectedNamespaces,
+};
+use std::collections::HashMap;
 
 pub(in crate::ui::workspace) fn selected_watch_error(
     cluster: &ClusterState,
     api_resource: &ApiResource,
 ) -> Option<String> {
-    resource_watch_namespaces(cluster, api_resource)
+    watch_state_keys(cluster, api_resource)
         .into_iter()
-        .find_map(|namespace| {
+        .find_map(|key| {
             cluster
                 .resource_cache
-                .get(&(api_resource.clone(), namespace))
+                .get(&key)
                 .and_then(|watch| watch.error.clone())
         })
 }
@@ -20,14 +24,20 @@ pub(in crate::ui::workspace) fn selected_watches_are_loading(
     cluster: &ClusterState,
     api_resource: &ApiResource,
 ) -> bool {
-    resource_watch_namespaces(cluster, api_resource)
-        .into_iter()
-        .any(|namespace| {
-            cluster
-                .resource_cache
-                .get(&(api_resource.clone(), namespace))
-                .is_none_or(|watch| !watch.is_synced)
-        })
+    // "All namespaces" without a watch across every namespace waits for the list.
+    let awaiting_namespaces = api_resource.namespaced
+        && !cluster.watches_every_namespace(api_resource)
+        && cluster.selected_namespaces == SelectedNamespaces::All
+        && !matches!(cluster.namespaces_load, ClusterLoadState::Ready);
+    awaiting_namespaces
+        || watch_state_keys(cluster, api_resource)
+            .into_iter()
+            .any(|key| {
+                cluster
+                    .resource_cache
+                    .get(&key)
+                    .is_none_or(|watch| !watch.is_synced)
+            })
 }
 
 pub(in crate::ui::workspace) fn selected_resources(
@@ -50,20 +60,48 @@ pub(in crate::ui::workspace) fn selected_resources(
     resources
 }
 
+/// The cache entries whose sync state and error describe the selected watches. A watch
+/// across every namespace keeps them in its own entry.
+fn watch_state_keys(cluster: &ClusterState, api_resource: &ApiResource) -> Vec<ResourceWatchKey> {
+    if cluster.watches_every_namespace(api_resource) {
+        vec![(api_resource.clone(), None)]
+    } else {
+        resource_watch_namespaces(cluster, api_resource)
+            .into_iter()
+            .map(|namespace| (api_resource.clone(), namespace))
+            .collect()
+    }
+}
+
 fn resource_watch_namespaces(
     cluster: &ClusterState,
     api_resource: &ApiResource,
 ) -> Vec<Option<String>> {
-    resource_watch_namespaces_for(cluster.namespace_scope(), api_resource)
+    resource_watch_namespaces_for(
+        cluster.namespace_scope(),
+        cluster.watches_every_namespace(api_resource),
+        &cluster.resource_cache,
+        api_resource,
+    )
 }
 
+/// The cache entries whose rows are shown. A watch across every namespace shows every
+/// namespace it has rows for, whether or not the namespace list has arrived.
 pub(super) fn resource_watch_namespaces_for(
     selected_namespaces: NamespaceScope<'_>,
+    watches_every_namespace: bool,
+    resource_cache: &HashMap<ResourceWatchKey, ResourceWatchState>,
     api_resource: &ApiResource,
 ) -> Vec<Option<String>> {
-    if api_resource.namespaced {
-        selected_namespaces.iter().cloned().map(Some).collect()
-    } else {
+    if !api_resource.namespaced {
         vec![None]
+    } else if watches_every_namespace {
+        resource_cache
+            .keys()
+            .filter(|(resource, namespace)| resource == api_resource && namespace.is_some())
+            .map(|(_, namespace)| namespace.clone())
+            .collect()
+    } else {
+        selected_namespaces.iter().cloned().map(Some).collect()
     }
 }

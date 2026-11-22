@@ -2,15 +2,12 @@
 //! so a transient failure (for example an aggregated API that was still starting) does not
 //! leave the cluster half-loaded until the application restarts.
 
-use super::{
-    ApiGroupTarget, DiscoveredApiResources, KubernetesApiInspector, node_metrics_api_available,
-    pod_metrics_api_available,
-};
-use crate::api_resource::ApiResource;
+use super::{ApiGroupTarget, KubernetesApiInspector};
+
+use crate::api_resource::{ApiResource, ApiResourceSet};
 use crate::worker::*;
 use anyhow::Result;
 use futures_util::stream::StreamExt;
-use kube::runtime::watcher::DefaultBackoff;
 use std::collections::BTreeSet;
 use std::time::Duration;
 
@@ -42,7 +39,7 @@ pub(crate) async fn retry_failed_api_groups<Sleep, Fetch, Publish>(
     mut pending: Vec<ApiGroupTarget>,
 ) where
     Sleep: Future<Output = ()>,
-    Fetch: Future<Output = Result<DiscoveredApiResources>>,
+    Fetch: Future<Output = Result<ApiResourceSet>>,
     Publish: Future<Output = bool>,
 {
     while !pending.is_empty() {
@@ -97,22 +94,6 @@ pub(crate) async fn retry_failed_api_groups<Sleep, Fetch, Publish>(
 }
 
 /// Retries against a real cluster and reports recoveries to the UI.
-pub(crate) async fn retry_failed_api_groups_for_cluster(
-    cluster_key: i32,
-    client: kube::Client,
-    event_output: WorkerResultSender,
-    failed: Vec<ApiGroupTarget>,
-) {
-    retry_cluster_api_groups(
-        cluster_key,
-        client,
-        event_output,
-        failed,
-        DefaultBackoff::default(),
-    )
-    .await;
-}
-
 pub(crate) async fn retry_cluster_api_groups(
     cluster_key: i32,
     client: kube::Client,
@@ -130,9 +111,6 @@ pub(crate) async fn retry_cluster_api_groups(
         |recovered| {
             let event_output = event_output.clone();
             async move {
-                let pod_metrics_api_available = pod_metrics_api_available(&recovered.api_resources);
-                let node_metrics_api_available =
-                    node_metrics_api_available(&recovered.api_resources);
                 event_output
                     .send(KubernetesApiGroupsRecovered {
                         cluster_key,
@@ -140,8 +118,6 @@ pub(crate) async fn retry_cluster_api_groups(
                         api_resources: recovered.api_resources,
                         scalable_api_resources: recovered.scalable_api_resources,
                         still_failing_group_versions: recovered.still_failing,
-                        pod_metrics_api_available,
-                        node_metrics_api_available,
                     })
                     .await
                     .is_ok()
@@ -152,10 +128,7 @@ pub(crate) async fn retry_cluster_api_groups(
     .await;
 }
 
-async fn fetch_group(
-    client: &kube::Client,
-    target: &ApiGroupTarget,
-) -> Result<DiscoveredApiResources> {
+async fn fetch_group(client: &kube::Client, target: &ApiGroupTarget) -> Result<ApiResourceSet> {
     let inspector = KubernetesApiInspector {
         client: client.clone(),
     };
@@ -175,6 +148,7 @@ mod tests {
     use super::*;
     use anyhow::bail;
     use k8s_openapi::apimachinery::pkg::apis::meta::v1::GroupVersionForDiscovery;
+    use kube::runtime::watcher::DefaultBackoff;
     use std::cell::RefCell;
     use std::collections::{BTreeMap, VecDeque};
 
@@ -237,7 +211,7 @@ mod tests {
                         bail!("503 Service Unavailable");
                     }
                     let resource = resource(&target.group_name);
-                    Ok(DiscoveredApiResources {
+                    Ok(ApiResourceSet {
                         scalable_api_resources: BTreeSet::from([resource.clone()]),
                         api_resources: vec![resource],
                     })
@@ -327,7 +301,7 @@ mod tests {
                     if target.group_name == "b.example.com" {
                         bail!("still failing");
                     }
-                    Ok(DiscoveredApiResources {
+                    Ok(ApiResourceSet {
                         scalable_api_resources: BTreeSet::new(),
                         api_resources: vec![resource(&target.group_name)],
                     })
