@@ -54,15 +54,26 @@ impl GlobalBladeContent for LicenseSettingsBlade {
             )
         };
 
+        let headline_color = if status.shows_warning() {
+            status::WARNING_TEXT
+        } else if matches!(status, LicenseStatus::Licensed(_)) {
+            status::SUCCESS
+        } else {
+            gray::_700
+        };
         ui.label(
             egui::RichText::new(status.summary())
                 .font(typography::body())
-                .color(if status.shows_warning() {
-                    status::WARNING_TEXT
-                } else {
-                    status::SUCCESS
-                }),
+                .color(headline_color),
         );
+        if let Some(note) = status.free_use_note() {
+            ui.add_space(spacing::SM);
+            ui.label(
+                egui::RichText::new(note)
+                    .font(typography::body())
+                    .color(gray::_500),
+            );
+        }
         if let Some(lease) = status.lease() {
             ui.add_space(spacing::SM);
             ui.label(format!("Available offline until: {}", lease.expiry_label()));
@@ -239,7 +250,7 @@ fn show_account_actions(
         // Evaluation means signed in without entitlement, so it offers a refresh, not sign-in.
         if matches!(
             status,
-            LicenseStatus::SignedOut | LicenseStatus::Failed { .. }
+            LicenseStatus::SignedOut | LicenseStatus::Revoked | LicenseStatus::Failed { .. }
         ) && TailwindButton::new("Sign in").show(ui).clicked()
         {
             context.licensing().sign_in();
@@ -263,12 +274,14 @@ fn show_account_actions(
         {
             ui.ctx().open_url(egui::OpenUrl::new_tab(url));
         }
+        // For a revoked installation, signing out dismisses the warning and returns to free use.
         if matches!(
             status,
             LicenseStatus::Checking
                 | LicenseStatus::Licensed(_)
                 | LicenseStatus::Offline(_)
                 | LicenseStatus::Evaluation { .. }
+                | LicenseStatus::Revoked
                 | LicenseStatus::Failed { .. }
         ) && TailwindButton::danger("Sign out").show(ui).clicked()
         {

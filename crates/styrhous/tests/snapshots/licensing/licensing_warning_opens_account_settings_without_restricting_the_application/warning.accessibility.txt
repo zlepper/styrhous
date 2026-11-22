@@ -19,10 +19,10 @@ Window state=[focused] rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
-          Label value="Sign in to refresh your Styrhous license." rect=(x=85.0 y=11.0 width=264.5 height=17.0 center_x=217.2 center_y=19.5)
-            TextRun value="Sign in to refresh your Styrhous license." rect=(x=85.0 y=11.0 width=264.5 height=17.0 center_x=217.2 center_y=19.5)
-          Button name="License warning: Sign in to refresh your Styrhous license. Manage license" rect=(x=365.5 y=11.0 width=104.1 height=17.0 center_x=417.5 center_y=19.5)
-            TextRun value="Manage license" rect=(x=365.5 y=11.0 width=104.1 height=17.0 center_x=417.5 center_y=19.5)
+          Label value="This device's license was revoked." rect=(x=85.0 y=11.0 width=229.6 height=17.0 center_x=199.8 center_y=19.5)
+            TextRun value="This device's license was revoked." rect=(x=85.0 y=11.0 width=229.6 height=17.0 center_x=199.8 center_y=19.5)
+          Button name="License warning: This device's license was revoked. Manage license" rect=(x=330.6 y=11.0 width=104.1 height=17.0 center_x=382.7 center_y=19.5)
+            TextRun value="Manage license" rect=(x=330.6 y=11.0 width=104.1 height=17.0 center_x=382.7 center_y=19.5)
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
