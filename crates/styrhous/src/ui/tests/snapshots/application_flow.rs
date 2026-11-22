@@ -841,3 +841,78 @@ fn a_restored_table_shows_rows_before_namespaces_and_discovery_arrive() {
         "cluster_connection/a_restored_table_shows_rows_before_namespaces_and_discovery_arrive/rows_before_discovery",
     );
 }
+
+/// Cluster 1 part-way through connecting: `started` and `authenticated` are seconds
+/// relative to the harness clock, which starts at zero.
+fn connecting_cluster(
+    connection: ClusterConnectionState,
+    started: f64,
+    authenticated: Option<f64>,
+) -> UiState {
+    let mut cluster = fixture_cluster(1, "dev");
+    cluster.connection = connection;
+    cluster.reachable = false;
+    cluster.connection_progress = super::super::super::state::ConnectionProgress {
+        authenticated,
+        ..super::super::super::state::ConnectionProgress::started_at(started)
+    };
+    UiState {
+        clusters: HashMap::from([(1, cluster)]),
+        next_cluster_key: 1,
+        selected_cluster: Some(1),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn connecting_shows_a_slow_credential_step_with_its_elapsed_time() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state =
+        connecting_cluster(ClusterConnectionState::Connecting, -3.2, None);
+    // The step's spinner keeps repainting.
+    harness.run_steps(2);
+
+    harness.get_by_label_contains("Authenticate: in progress, ");
+    harness.get_by_label("Contact API server: pending");
+    harness.ui_harness("cluster_connection/connection_progress/authenticating");
+}
+
+#[test]
+fn connecting_shows_how_long_each_finished_step_took() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state =
+        connecting_cluster(ClusterConnectionState::Connected, -2.4, Some(-2.0));
+    harness.run_steps(2);
+
+    harness.get_by_label("Authenticate: done, 0.4 s");
+    harness.get_by_label_contains("Contact API server: in progress, ");
+    harness.ui_harness("cluster_connection/connection_progress/contacting_api_server");
+}
+
+#[test]
+fn a_failed_connection_names_the_failed_step_and_retries_from_the_start() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = connecting_cluster(
+        ClusterConnectionState::Failed(
+            "Error discovering the core Kubernetes API: ApiError: Unauthorized (401)".to_owned(),
+        ),
+        -1.0,
+        Some(-0.6),
+    );
+    harness.run();
+
+    harness.get_by_label("Authenticate: done, 0.4 s");
+    harness.get_by_label("Contact API server: failed");
+    harness.ui_harness("cluster_connection/connection_progress/failed");
+
+    harness.get_by_label("Retry").click();
+    harness.run_steps(2);
+    assert!(
+        harness
+            .state()
+            .worker
+            .commands
+            .iter()
+            .any(|command| command_is::<ConnectToCluster>(command).is_some())
+    );
+}

@@ -74,8 +74,9 @@ impl WorkerResult for crate::worker::KubernetesResourcesReplaced {
             resources,
         } = self;
         if let Some(cluster) = ui.clusters.get_mut(&cluster_key) {
-            cluster.reachable = true;
+            cluster.mark_reachable(ui.now);
             replace_watched_resources(cluster, (api_resource.clone(), namespace), resources);
+            cluster.mark_rows_received(&api_resource, ui.now);
             cluster.retain_visible_resource_selection(&api_resource);
         }
     }
@@ -91,7 +92,7 @@ impl WorkerResult for crate::worker::KubernetesResourcesReplacedInEveryNamespace
         let Some(cluster) = ui.clusters.get_mut(&cluster_key) else {
             return;
         };
-        cluster.reachable = true;
+        cluster.mark_reachable(ui.now);
         // Namespaces the list no longer mentions have no resources of this type now.
         let cached_namespaces = cluster
             .resource_cache
@@ -107,6 +108,7 @@ impl WorkerResult for crate::worker::KubernetesResourcesReplacedInEveryNamespace
         }
         // The watch's own state: synced means every namespace is listed.
         replace_watched_resources(cluster, (api_resource.clone(), None), Vec::new());
+        cluster.mark_rows_received(&api_resource, ui.now);
         cluster.retain_visible_resource_selection(&api_resource);
     }
 }

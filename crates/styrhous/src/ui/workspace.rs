@@ -294,19 +294,14 @@ pub(super) fn show(
                 };
 
                 match &cluster.connection {
+                    ClusterConnectionState::Failed(_) => {
+                        effects.retry_requested = show_connection_progress(ui, cluster);
+                        return;
+                    }
                     ClusterConnectionState::Connecting | ClusterConnectionState::Connected
                         if !cluster.reachable =>
                     {
-                        workspace_loading_state(
-                            ui,
-                            "Connecting to cluster",
-                            "Establishing a connection to the selected Kubernetes context.",
-                        );
-                        return;
-                    }
-                    ClusterConnectionState::Failed(error) => {
-                        effects.retry_requested =
-                            workspace_error_state(ui, "Unable to connect", error);
+                        show_connection_progress(ui, cluster);
                         return;
                     }
                     ClusterConnectionState::Disconnected => {
@@ -669,11 +664,13 @@ pub(super) fn show(
     effects.apply(ui_state, &ctx, commands_to_send, shell_requests);
 }
 
+mod connection_progress;
 mod helm;
 mod resource_data;
 mod resource_table;
 mod toolbar;
 
+use connection_progress::show_connection_progress;
 use helm::*;
 use resource_data::*;
 use resource_table::*;

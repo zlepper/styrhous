@@ -15,6 +15,8 @@ pub(crate) struct ClusterState {
     /// Whether the API server has answered an authenticated request this session. Until
     /// then a connection that was set up may still fail its first request.
     pub(crate) reachable: bool,
+    /// When the current connection attempt passed each step.
+    pub(crate) connection_progress: ConnectionProgress,
     pub(crate) selected_namespaces: SelectedNamespaces,
     pub(crate) resources: ClusterResourceState,
 }
@@ -89,6 +91,7 @@ impl ClusterState {
             namespaces_load: ClusterLoadState::Loading,
             namespaces_reconnecting: None,
             reachable: false,
+            connection_progress: ConnectionProgress::default(),
             selected_namespaces: SelectedNamespaces::default(),
             resources: ClusterResourceState::new(false),
         }
@@ -137,6 +140,62 @@ impl ClusterState {
         state.resources.pod_metrics_api_available = true;
         state.resources.node_metrics_api_available = true;
         state
+    }
+}
+
+impl ClusterState {
+    /// The connection was set up: the kubeconfig and credentials were loaded.
+    pub(crate) fn mark_authenticated(&mut self, now: f64) {
+        if self.connection_progress.authenticated.is_none() {
+            self.connection_progress.authenticated = Some(now);
+            self.log_connect_timing("authenticated", now);
+        }
+    }
+
+    /// The API server answered an authenticated request; see `reachable`.
+    pub(crate) fn mark_reachable(&mut self, now: f64) {
+        if !self.reachable {
+            self.reachable = true;
+            self.connection_progress.reachable = Some(now);
+            self.log_connect_timing("API server answered", now);
+        }
+    }
+
+    /// Rows of `api_resource` arrived; the first ones of the selected resource are timed.
+    pub(crate) fn mark_rows_received(&mut self, api_resource: &ApiResource, now: f64) {
+        if self.connection_progress.first_rows.is_none()
+            && self.selected_api_resource.as_ref() == Some(api_resource)
+        {
+            self.connection_progress.first_rows = Some(now);
+            self.log_connect_timing("first table rows received", now);
+        }
+    }
+
+    fn log_connect_timing(&self, milestone: &str, now: f64) {
+        tracing::info!(
+            target: "styrhous::connect_timing",
+            cluster = %self.name,
+            "{milestone} {:.0} ms after connecting",
+            (now - self.connection_progress.started) * 1000.0
+        );
+    }
+}
+
+/// When a connection attempt started and passed each step, in seconds of egui input time.
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub(crate) struct ConnectionProgress {
+    pub(crate) started: f64,
+    pub(crate) authenticated: Option<f64>,
+    pub(crate) reachable: Option<f64>,
+    pub(crate) first_rows: Option<f64>,
+}
+
+impl ConnectionProgress {
+    pub(crate) fn started_at(now: f64) -> Self {
+        Self {
+            started: now,
+            ..Self::default()
+        }
     }
 }
 

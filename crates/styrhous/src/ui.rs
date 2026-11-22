@@ -219,6 +219,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
         self.updater.poll();
         self.licensing.poll(ctx);
         self.worker.start();
+        self.ui_state.now = ctx.input(|input| input.time);
         let mut commands_to_send = self.ui_state.update(&mut self.worker);
         while let Some(result) = self.log_store.try_next_result() {
             if let crate::log_store::LogStoreResult::Failed { window_id, .. } = &result

@@ -45,10 +45,12 @@ impl UiState {
             // the UI and worker agree about what is still running.
             self.discard_resource_detail_blades(commands_to_send);
         }
+        let now = self.now;
         let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
             return;
         };
         cluster.reset_for_connection();
+        cluster.connection_progress = ConnectionProgress::started_at(now);
         // Show the last discovery of this context, or the built-in resources, until this
         // connection's discovery answers.
         cluster.api_discovery = ApiDiscoveryState::provisional(

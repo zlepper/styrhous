@@ -65,6 +65,8 @@ pub(crate) struct UiState {
     pub(super) awaited_scale_lookup: Option<AwaitedScaleLookup>,
     pub(super) managed_cluster_discovery: ManagedClusterDiscoveryState,
     pub(super) context_presentation_saves: HashMap<String, ContextPresentationSave>,
+    /// The time of the frame being processed, in seconds of egui input time.
+    pub(super) now: f64,
 }
 
 #[derive(Debug)]

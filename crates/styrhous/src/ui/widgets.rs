@@ -2,7 +2,7 @@ use crate::minimal_resource::format_age;
 use crate::resource_table::{CellValue, ContainerIndicator, StatusTone};
 use components::colors::gray;
 use components::design::{radius, spacing, status, typography};
-use components::{TableRowBuilder, TailwindButton, WorkspaceEmptyState};
+use components::{ProgressChecklist, TableRowBuilder, TailwindButton, WorkspaceEmptyState};
 
 const STATE_MARGIN: i8 = spacing::XXL as i8;
 
@@ -112,11 +112,40 @@ pub(super) fn workspace_loading_state(ui: &mut egui::Ui, title: &str, message: &
 }
 
 pub(super) fn workspace_error_state(ui: &mut egui::Ui, title: &str, message: &str) -> bool {
-    workspace_error_details(ui, title, message, 42.0, |ui| {
-        ui.add_space(12.0);
-        ui.vertical_centered(|ui| TailwindButton::primary("Retry").show(ui).clicked())
-            .inner
+    workspace_error_details(ui, title, message, RETRY_FOOTER_HEIGHT, retry_footer)
+}
+
+/// The progress of connecting to a cluster, and why it failed with a way to retry.
+/// Returns whether retry was clicked.
+pub(super) fn workspace_connection_progress(
+    ui: &mut egui::Ui,
+    checklist: ProgressChecklist<'_>,
+    error: Option<&str>,
+) -> bool {
+    let error_height = error.map_or(0.0, |message| {
+        spacing::XL + error_details_height(ui, message) + RETRY_FOOTER_HEIGHT
+    });
+    show_state_area(ui, checklist.height(ui) + error_height, |ui| {
+        checklist.show(ui);
+        let Some(message) = error else {
+            return false;
+        };
+        ui.add_space(spacing::XL);
+        ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
+            show_error_details(ui, message);
+            retry_footer(ui)
+        })
+        .inner
     })
+}
+
+const ERROR_TITLE_HEIGHT: f32 = 22.0 + 6.0;
+const RETRY_FOOTER_HEIGHT: f32 = 42.0;
+
+fn retry_footer(ui: &mut egui::Ui) -> bool {
+    ui.add_space(12.0);
+    ui.vertical_centered(|ui| TailwindButton::primary("Retry").show(ui).clicked())
+        .inner
 }
 
 fn workspace_error_details<R>(
@@ -126,9 +155,7 @@ fn workspace_error_details<R>(
     footer_height: f32,
     show_footer: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
-    let code_line_height = ui.text_style_height(&egui::TextStyle::Monospace);
-    let code_height = 16.0 + code_line_height * message.lines().count().max(1) as f32;
-    let content_height = 22.0 + 6.0 + 16.0 + 4.0 + code_height + footer_height;
+    let content_height = ERROR_TITLE_HEIGHT + error_details_height(ui, message) + footer_height;
 
     show_state_area(ui, content_height, |ui| {
         ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
@@ -140,27 +167,38 @@ fn workspace_error_details<R>(
                 );
             });
             ui.add_space(spacing::SM);
-            ui.label(
-                egui::RichText::new("Error details")
-                    .font(typography::body())
-                    .color(gray::_500),
-            );
-            ui.add_space(spacing::XS);
-            let code_width = ui.available_width();
-            let code_background = ui.visuals().code_bg_color;
-            egui::Frame::new()
-                .fill(code_background)
-                .stroke(egui::Stroke::new(1.0, gray::_200))
-                .corner_radius(radius::subtle())
-                .inner_margin(egui::Margin::same(spacing::SM as i8))
-                .show(ui, |ui| {
-                    ui.set_min_width((code_width - 16.0).max(0.0));
-                    ui.code(message);
-                });
+            show_error_details(ui, message);
             show_footer(ui)
         })
         .inner
     })
+}
+
+/// The height `show_error_details` needs for `message`.
+fn error_details_height(ui: &egui::Ui, message: &str) -> f32 {
+    let code_line_height = ui.text_style_height(&egui::TextStyle::Monospace);
+    16.0 + 4.0 + 16.0 + code_line_height * message.lines().count().max(1) as f32
+}
+
+/// "Error details" above the message in a code block.
+fn show_error_details(ui: &mut egui::Ui, message: &str) {
+    ui.label(
+        egui::RichText::new("Error details")
+            .font(typography::body())
+            .color(gray::_500),
+    );
+    ui.add_space(spacing::XS);
+    let code_width = ui.available_width();
+    let code_background = ui.visuals().code_bg_color;
+    egui::Frame::new()
+        .fill(code_background)
+        .stroke(egui::Stroke::new(1.0, gray::_200))
+        .corner_radius(radius::subtle())
+        .inner_margin(egui::Margin::same(spacing::SM as i8))
+        .show(ui, |ui| {
+            ui.set_min_width((code_width - 16.0).max(0.0));
+            ui.code(message);
+        });
 }
 
 fn show_state_area<R>(

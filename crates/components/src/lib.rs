@@ -33,6 +33,7 @@ pub mod icons;
 pub mod inspector_details;
 pub mod interaction;
 pub mod more_button;
+pub mod progress_checklist;
 pub mod reorderable_table;
 pub mod scroll;
 pub mod search;
@@ -66,6 +67,7 @@ pub use inspector_details::{
 };
 pub use interaction::PointingHand;
 pub use more_button::{MoreButton, MoreMenu, menu_frame};
+pub use progress_checklist::{ChecklistStep, ChecklistStepState, ProgressChecklist};
 pub use reorderable_table::{ReorderHandle, ReorderableTable, move_item};
 pub use search::{
     SEARCH_NAVIGATION_BUTTON_SIZE, SearchInputResponse, TailwindSearchInput,

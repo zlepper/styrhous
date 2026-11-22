@@ -218,7 +218,7 @@ impl WorkerResult for crate::worker::KubernetesNamespacesReplaced {
                 .collect();
             cluster.namespaces_load = ClusterLoadState::Ready;
             cluster.namespaces_reconnecting = None;
-            cluster.reachable = true;
+            cluster.mark_reachable(ui.now);
         }
         ui.restore_selected_namespaces(cluster_key, _commands);
     }
@@ -314,7 +314,7 @@ impl WorkerResult for crate::worker::KubernetesApiResourcesDiscovered {
         let Some(cluster) = ui.clusters.get_mut(&cluster_key) else {
             return;
         };
-        cluster.reachable = true;
+        cluster.mark_reachable(ui.now);
         cluster.api_discovery.fresh.extend(ApiResourceSet {
             api_resources,
             scalable_api_resources,
@@ -482,6 +482,7 @@ impl WorkerResult for crate::worker::KubernetesClusterConnectionCreated {
             && matches!(cluster.connection, ClusterConnectionState::Connecting)
         {
             cluster.connection = ClusterConnectionState::Connected;
+            cluster.mark_authenticated(ui.now);
         }
     }
 }
