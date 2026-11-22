@@ -323,8 +323,8 @@ fn cron_job_run_action_opens_a_confirmation_and_sends_a_worker_command() {
                 && command.resource_name == "nightly-report")
     );
     assert_eq!(
-        harness.state().ui_state.clusters[&2].cron_job_runs_in_flight,
-        BTreeSet::from([1])
+        harness.state().ui_state.clusters[&2].cron_job_runs.ids(),
+        vec![1]
     );
 
     harness.event(egui::Event::PointerGone);
@@ -350,8 +350,8 @@ fn cron_job_run_action_opens_a_confirmation_and_sends_a_worker_command() {
         .collect::<Vec<_>>();
     assert_eq!(operation_ids, vec![1, 2]);
     assert_eq!(
-        harness.state().ui_state.clusters[&2].cron_job_runs_in_flight,
-        BTreeSet::from([1, 2])
+        harness.state().ui_state.clusters[&2].cron_job_runs.ids(),
+        vec![1, 2]
     );
 
     harness.deliver_worker_result(CronJobRunCompleted {
@@ -362,8 +362,8 @@ fn cron_job_run_action_opens_a_confirmation_and_sends_a_worker_command() {
         job_name: "nightly-report-manual-stale".to_owned(),
     });
     assert_eq!(
-        harness.state().ui_state.clusters[&2].cron_job_runs_in_flight,
-        BTreeSet::from([2])
+        harness.state().ui_state.clusters[&2].cron_job_runs.ids(),
+        vec![2]
     );
 
     harness.deliver_worker_result(CronJobRunCompleted {
@@ -374,7 +374,7 @@ fn cron_job_run_action_opens_a_confirmation_and_sends_a_worker_command() {
         job_name: "nightly-report-manual-current".to_owned(),
     });
     let cluster = &harness.state().ui_state.clusters[&2];
-    assert!(cluster.cron_job_runs_in_flight.is_empty());
+    assert!(cluster.cron_job_runs.ids().is_empty());
     assert_eq!(cluster.operation_history.len(), 2);
     assert!(
         cluster
@@ -424,7 +424,7 @@ fn overlapping_cron_job_runs_started_from_the_ui_keep_the_earlier_failure_visibl
     // correlated per cluster and not by operation id alone.
     let other_cluster = state.clusters.get_mut(&3).expect("fixture exists");
     other_cluster.connection = ClusterConnectionState::Connected;
-    other_cluster.cron_job_runs_in_flight.insert(1);
+    other_cluster.cron_job_runs.start(());
 
     let mut harness = application_harness::<MockWorker>();
     harness.seed_ui_state(state);
@@ -474,13 +474,14 @@ fn overlapping_cron_job_runs_started_from_the_ui_keep_the_earlier_failure_visibl
         error: "other cluster failure".to_owned(),
     });
     assert_eq!(
-        harness.state().ui_state.clusters[&2].cron_job_runs_in_flight,
-        BTreeSet::from([1]),
+        harness.state().ui_state.clusters[&2].cron_job_runs.ids(),
+        vec![1],
         "a result from another cluster must not settle this cluster's run"
     );
     assert!(
         harness.state().ui_state.clusters[&3]
-            .cron_job_runs_in_flight
+            .cron_job_runs
+            .ids()
             .is_empty()
     );
 
@@ -493,7 +494,7 @@ fn overlapping_cron_job_runs_started_from_the_ui_keep_the_earlier_failure_visibl
     });
 
     let cluster = &harness.state().ui_state.clusters[&2];
-    assert!(cluster.cron_job_runs_in_flight.is_empty());
+    assert!(cluster.cron_job_runs.ids().is_empty());
     assert_eq!(
         cluster
             .operation_history
@@ -525,12 +526,12 @@ fn overlapping_cron_job_runs_started_from_the_ui_keep_the_earlier_failure_visibl
 #[test]
 fn cron_job_run_results_record_each_concurrent_operation_outcome() {
     let mut state = oracle_resource_table_state();
-    state
+    let cron_job_runs = &mut state
         .clusters
         .get_mut(&2)
         .expect("kind fixture exists")
-        .cron_job_runs_in_flight
-        .extend([1, 2]);
+        .cron_job_runs;
+    assert_eq!([cron_job_runs.start(()), cron_job_runs.start(())], [1, 2]);
     let mut harness = application_harness::<MockWorker>();
     harness.seed_ui_state(state);
 
@@ -543,8 +544,8 @@ fn cron_job_run_results_record_each_concurrent_operation_outcome() {
     });
 
     assert_eq!(
-        harness.state().ui_state.clusters[&2].cron_job_runs_in_flight,
-        BTreeSet::from([2])
+        harness.state().ui_state.clusters[&2].cron_job_runs.ids(),
+        vec![2]
     );
 
     harness.deliver_worker_result(CronJobRunCompleted {
@@ -556,7 +557,7 @@ fn cron_job_run_results_record_each_concurrent_operation_outcome() {
     });
 
     let cluster = &harness.state().ui_state.clusters[&2];
-    assert!(cluster.cron_job_runs_in_flight.is_empty());
+    assert!(cluster.cron_job_runs.ids().is_empty());
     assert_eq!(
         cluster
             .operation_history
@@ -588,14 +589,14 @@ fn cron_job_run_results_record_each_concurrent_operation_outcome() {
         "duplicate and untracked terminal results must be ignored"
     );
 
-    harness
+    let cron_job_runs = &mut harness
         .state_mut()
         .ui_state
         .clusters
         .get_mut(&2)
         .expect("kind fixture exists")
-        .cron_job_runs_in_flight
-        .extend([3, 4]);
+        .cron_job_runs;
+    assert_eq!([cron_job_runs.start(()), cron_job_runs.start(())], [3, 4]);
     harness.deliver_worker_result(CronJobRunFailed {
         cluster_key: 2,
         operation_id: 4,
@@ -612,7 +613,7 @@ fn cron_job_run_results_record_each_concurrent_operation_outcome() {
     });
 
     let cluster = &harness.state().ui_state.clusters[&2];
-    assert!(cluster.cron_job_runs_in_flight.is_empty());
+    assert!(cluster.cron_job_runs.ids().is_empty());
     assert_eq!(cluster.operation_history.len(), 4);
     assert_eq!(
         cluster

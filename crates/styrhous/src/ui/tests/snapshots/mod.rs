@@ -18,9 +18,9 @@ use super::fixtures::{
 use super::harness::{MockUiHarnessExt, command_is};
 use crate::cluster_connection_manager::{
     AvailableAksCluster, AvailableEksCluster, AvailableTailscaleCluster, AwsAccount, AwsProfile,
-    Cluster, ClusterDiscoveryTools,
+    Cluster, ClusterDiscoveryTools, HelmRollbackTarget,
 };
-use crate::helm_release::{HelmRelease, StorageDriver};
+use crate::helm_release::{HelmRelease, HelmReleaseKey, StorageDriver};
 use crate::licensing::{DeviceAuthorization, LicenseServer, LicenseStatus, VerifiedLease};
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::{MinimalResource, PodLogContainer};
@@ -48,7 +48,7 @@ use egui::text::{CCursor, CCursorRange};
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT, Queryable};
 use k8s_openapi::serde_json::json;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use time::OffsetDateTime;
 
 mod context_settings;

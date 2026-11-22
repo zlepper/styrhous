@@ -2,8 +2,9 @@ use super::global_blade::{
     GlobalBladeContent, GlobalBladeEffect, GlobalBladeEffectContext, GlobalBladeNavigation,
     GlobalBladeRenderContext, GlobalBladeRenderResult,
 };
+use super::state::PendingHelmRollback;
 use crate::api_resource::ApiResource;
-use crate::helm_release::HelmRelease;
+use crate::helm_release::{HelmRelease, HelmReleaseKey};
 use components::colors::{gray, indigo};
 use components::design::{radius, spacing, typography};
 use components::{BladeLayer, DetailCell, DetailRow, InspectorDetails, WorkspaceCard};
@@ -11,10 +12,10 @@ use components::{BladeLayer, DetailCell, DetailRow, InspectorDetails, WorkspaceC
 #[derive(Debug)]
 pub(super) struct HelmReleaseDetailBlade {
     cluster_key: i32,
-    release_name: String,
-    namespace: String,
+    release: HelmReleaseKey,
     selected_revision: i64,
     pending_navigation: Option<ManifestNavigation>,
+    pending_rollback: Option<PendingHelmRollback>,
     parsed_manifest: Option<ParsedManifest>,
 }
 
@@ -59,10 +60,13 @@ impl HelmReleaseDetailBlade {
     pub(super) fn new(cluster_key: i32, release_name: String, namespace: String) -> Self {
         Self {
             cluster_key,
-            release_name,
-            namespace,
+            release: HelmReleaseKey {
+                namespace,
+                release_name,
+            },
             selected_revision: 0,
             pending_navigation: None,
+            pending_rollback: None,
             parsed_manifest: None,
         }
     }
@@ -82,11 +86,15 @@ impl GlobalBladeContent for HelmReleaseDetailBlade {
         _layer: BladeLayer,
         context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
-        let releases = context.helm_releases(self.cluster_key, &self.namespace, &self.release_name);
+        let releases = context.helm_releases(
+            self.cluster_key,
+            &self.release.namespace,
+            &self.release.release_name,
+        );
         let title = self
             .selected(&releases)
             .map(|release| release.name.as_str())
-            .unwrap_or(&self.release_name);
+            .unwrap_or(&self.release.release_name);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             egui::Frame::new()
                 .fill(indigo::_50)
@@ -122,8 +130,11 @@ impl GlobalBladeContent for HelmReleaseDetailBlade {
         _layer: BladeLayer,
         context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
-        let mut releases =
-            context.helm_releases(self.cluster_key, &self.namespace, &self.release_name);
+        let mut releases = context.helm_releases(
+            self.cluster_key,
+            &self.release.namespace,
+            &self.release.release_name,
+        );
         releases.sort_by_key(|release| std::cmp::Reverse(release.revision));
         let Some(release) = self.selected(&releases).cloned() else {
             ui.label(
@@ -171,15 +182,34 @@ impl GlobalBladeContent for HelmReleaseDetailBlade {
             });
         ui.add_space(spacing::MD);
         let mut column_settings = None;
-        if let Some(revision) = show_revision_history(
+        // `releases` is sorted newest first.
+        let current_revision = releases
+            .first()
+            .map_or(release.revision, |current| current.revision);
+        let rollback = if release.revision == current_revision {
+            RevisionRollback::Unavailable
+        } else if context.is_helm_rollback_in_progress(self.cluster_key, &self.release) {
+            RevisionRollback::InProgress
+        } else {
+            RevisionRollback::Available
+        };
+        let history = show_revision_history(
             ui,
             &releases,
             release.revision,
+            rollback,
             release.id(),
             context.table_preferences(),
             &mut column_settings,
-        ) {
+        );
+        if let Some(revision) = history.selected_revision {
             self.selected_revision = revision;
+        }
+        if history.rollback_requested {
+            self.pending_rollback = Some(PendingHelmRollback {
+                release: self.release.clone(),
+                target_revision: release.revision,
+            });
         }
         ui.add_space(spacing::MD);
         show_release_notes(ui, &release.notes);
@@ -207,35 +237,54 @@ impl GlobalBladeContent for HelmReleaseDetailBlade {
     }
 
     fn take_effect(&mut self) -> Option<Box<dyn GlobalBladeEffect>> {
-        self.pending_navigation.take().map(|navigation| {
-            Box::new(HelmReleaseDetailEffect {
-                cluster_key: self.cluster_key,
-                navigation,
-            }) as Box<dyn GlobalBladeEffect>
-        })
+        let action = if let Some(rollback) = self.pending_rollback.take() {
+            HelmReleaseDetailAction::RequestRollback(rollback)
+        } else {
+            HelmReleaseDetailAction::Navigate(self.pending_navigation.take()?)
+        };
+        Some(Box::new(HelmReleaseDetailEffect {
+            cluster_key: self.cluster_key,
+            action,
+        }))
     }
+}
+
+#[derive(Debug)]
+enum HelmReleaseDetailAction {
+    Navigate(ManifestNavigation),
+    /// Opens the rollback confirmation, which is drawn by the application.
+    RequestRollback(PendingHelmRollback),
 }
 
 #[derive(Debug)]
 struct HelmReleaseDetailEffect {
     cluster_key: i32,
-    navigation: ManifestNavigation,
+    action: HelmReleaseDetailAction,
 }
 
 impl GlobalBladeEffect for HelmReleaseDetailEffect {
     fn apply(
         self: Box<Self>,
         context: &mut GlobalBladeEffectContext<'_>,
-        _navigation: &mut GlobalBladeNavigation<'_>,
+        navigation: &mut GlobalBladeNavigation<'_>,
     ) {
-        context.ui_state.open_resource_detail(
-            self.cluster_key,
-            self.navigation.api_resource.clone(),
-            self.navigation.name.clone(),
-            self.navigation.namespace.clone(),
-            self.navigation.uid.clone(),
-            _navigation.commands_to_send(),
-        );
+        match self.action {
+            HelmReleaseDetailAction::Navigate(target) => {
+                context.ui_state.open_resource_detail(
+                    self.cluster_key,
+                    target.api_resource,
+                    target.name,
+                    target.namespace,
+                    target.uid,
+                    navigation.commands_to_send(),
+                );
+            }
+            HelmReleaseDetailAction::RequestRollback(rollback) => {
+                if let Some(cluster) = context.ui_state.clusters.get_mut(&self.cluster_key) {
+                    cluster.pending_helm_rollback = Some(rollback);
+                }
+            }
+        }
     }
 }
 
@@ -244,8 +293,8 @@ mod tables;
 
 pub(super) use manifest::{ManifestResource, manifest_resource_namespace, manifest_resources};
 use tables::{
-    display_or_dash, helm_status_tone, show_manifest_resources, show_release_notes,
-    show_revision_history, show_storage_metadata, show_values_disclosure,
+    RevisionRollback, display_or_dash, helm_status_tone, show_manifest_resources,
+    show_release_notes, show_revision_history, show_storage_metadata, show_values_disclosure,
 };
 
 #[cfg(test)]

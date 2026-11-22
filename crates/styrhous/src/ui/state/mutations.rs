@@ -137,6 +137,14 @@ pub(crate) struct PendingCronJobRun {
     pub(crate) namespace: String,
 }
 
+/// A rollback awaiting confirmation. The current revision and storage driver
+/// are read live while the dialog is shown, since they can change meanwhile.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PendingHelmRollback {
+    pub(crate) release: crate::helm_release::HelmReleaseKey,
+    pub(crate) target_revision: i64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum OperationOutcome {
     Success,

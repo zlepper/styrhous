@@ -4,7 +4,7 @@ use crate::cluster_connection_manager::{
     AvailableAksCluster, AvailableEksCluster, AvailableTailscaleCluster, AwsAccount, AwsProfile,
     Cluster, ClusterDiscoveryTools,
 };
-use crate::helm_release::HelmRelease;
+use crate::helm_release::{HelmRelease, HelmReleaseKey};
 use crate::log_store::LogStoreResult;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::{MinimalResource, PodLogContainer};
@@ -190,6 +190,7 @@ mod clusters;
 mod editors;
 mod mutations;
 mod notifications;
+mod operations;
 mod resource_data;
 mod selected_namespaces;
 
@@ -199,6 +200,7 @@ pub(super) use clusters::*;
 pub(super) use editors::*;
 pub(super) use mutations::*;
 pub(super) use notifications::*;
+pub(crate) use operations::InFlightOperations;
 pub(super) use resource_data::*;
 pub(super) use scale_lookup::AwaitedScaleLookup;
 pub(crate) use selected_namespaces::{NamespaceScope, SelectedNamespaces};

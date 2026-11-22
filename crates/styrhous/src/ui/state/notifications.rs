@@ -101,10 +101,16 @@ impl UiState {
         details
     }
 
-    pub(crate) fn settle_cron_job_run(&mut self, cluster_key: i32, operation_id: u64) -> bool {
-        self.clusters
-            .get_mut(&cluster_key)
-            .is_some_and(|cluster| cluster.cron_job_runs_in_flight.remove(&operation_id))
+    /// Settles a terminal result against the cluster's operations of one kind,
+    /// returning the operation when the result belongs to a tracked one.
+    pub(crate) fn settle_operation<T>(
+        &mut self,
+        cluster_key: i32,
+        operation_id: u64,
+        operations: impl FnOnce(&mut ClusterResourceState) -> &mut InFlightOperations<T>,
+    ) -> Option<T> {
+        let cluster = self.clusters.get_mut(&cluster_key)?;
+        operations(&mut cluster.resources).settle(operation_id)
     }
 
     pub(crate) fn unread_operation_count(&self) -> usize {

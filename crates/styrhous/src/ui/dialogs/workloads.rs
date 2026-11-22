@@ -92,10 +92,8 @@ pub(crate) fn show_cron_job_run_confirmation(
         let Some(cluster) = ui_state.clusters.get_mut(&cluster_id) else {
             return;
         };
-        cluster.next_cron_job_run_operation_id += 1;
-        let operation_id = cluster.next_cron_job_run_operation_id;
+        let operation_id = cluster.cron_job_runs.start(());
         cluster.pending_cron_job_run = None;
-        cluster.cron_job_runs_in_flight.insert(operation_id);
         commands_to_send.push(Box::new(RunCronJob {
             cluster_key,
             operation_id,

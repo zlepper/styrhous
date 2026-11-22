@@ -58,11 +58,10 @@ pub(crate) struct ClusterResourceState {
     pub(crate) pending_force_delete: Option<PendingForceDelete>,
     pub(crate) pending_deployment_restart: Option<PendingDeploymentRestart>,
     pub(crate) pending_cron_job_run: Option<PendingCronJobRun>,
-    pub(crate) next_cron_job_run_operation_id: u64,
-    /// Every submitted CronJob run remains tracked until its own terminal
-    /// result arrives. A single slot would let a second run hide an earlier
-    /// failure (GitHub issue #30).
-    pub(crate) cron_job_runs_in_flight: BTreeSet<u64>,
+    pub(crate) cron_job_runs: InFlightOperations,
+    pub(crate) pending_helm_rollback: Option<PendingHelmRollback>,
+    /// The release (namespace, name) each submitted rollback targets.
+    pub(crate) helm_rollbacks: InFlightOperations<HelmReleaseKey>,
     pub(crate) pending_scale: Option<PendingScale>,
     /// Outcomes are intentionally session-scoped: rebuilding this resource
     /// state on reconnect drops entries from the previous cluster session.
@@ -171,8 +170,9 @@ impl ClusterResourceState {
             pending_force_delete: None,
             pending_deployment_restart: None,
             pending_cron_job_run: None,
-            next_cron_job_run_operation_id: 0,
-            cron_job_runs_in_flight: BTreeSet::new(),
+            cron_job_runs: InFlightOperations::default(),
+            pending_helm_rollback: None,
+            helm_rollbacks: InFlightOperations::default(),
             pending_scale: None,
             operation_history: Vec::new(),
             transient_operation_toasts: Vec::new(),
@@ -180,7 +180,13 @@ impl ClusterResourceState {
     }
 
     fn reset_for_connection(&mut self) {
-        *self = Self::new(false);
+        let cron_job_runs = self.cron_job_runs.restarted();
+        let helm_rollbacks = self.helm_rollbacks.restarted();
+        *self = Self {
+            cron_job_runs,
+            helm_rollbacks,
+            ..Self::new(false)
+        };
     }
 }
 

@@ -14,10 +14,27 @@ pub(crate) const VERSION: &str = "v1";
 pub(crate) const KIND: &str = "HelmRelease";
 pub(crate) const NAME: &str = "releases";
 
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub(crate) enum StorageDriver {
     Secret,
     ConfigMap,
+}
+
+impl StorageDriver {
+    /// The `HELM_DRIVER` value that makes the `helm` CLI read this backend.
+    pub(crate) fn helm_driver_name(self) -> &'static str {
+        match self {
+            Self::Secret => "secret",
+            Self::ConfigMap => "configmap",
+        }
+    }
+}
+
+/// Identifies one Helm release (all of its revisions) within a cluster.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct HelmReleaseKey {
+    pub(crate) namespace: String,
+    pub(crate) release_name: String,
 }
 
 impl std::fmt::Display for StorageDriver {

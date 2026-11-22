@@ -513,6 +513,23 @@ pub(crate) struct CronJobRunFailed {
     pub(crate) error: String,
 }
 #[derive(Debug)]
+pub(crate) struct HelmRollbackCompleted {
+    pub(crate) cluster_key: i32,
+    pub(crate) operation_id: u64,
+    pub(crate) release: HelmReleaseKey,
+    pub(crate) revision: i64,
+}
+#[derive(Debug)]
+pub(crate) struct HelmRollbackFailed {
+    pub(crate) cluster_key: i32,
+    pub(crate) operation_id: u64,
+    pub(crate) release: HelmReleaseKey,
+    pub(crate) revision: i64,
+    pub(crate) error: String,
+    /// `helm` could not be started, so the user needs installation guidance.
+    pub(crate) helm_missing: bool,
+}
+#[derive(Debug)]
 pub(crate) struct ResourceScaleFetchFailed {
     pub(crate) cluster_key: i32,
     pub(crate) request_id: u64,

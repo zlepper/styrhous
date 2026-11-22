@@ -214,6 +214,39 @@ impl WorkerCommand for RunCronJob {
 }
 
 #[async_trait]
+impl WorkerCommand for RollbackHelmRelease {
+    type Output = Result<HelmRollbackCompleted, HelmRollbackFailed>;
+
+    async fn execute(self, _state: &WorkerState) -> Self::Output {
+        let result = rollback_helm_release(&self.target).await;
+        let HelmRollbackTarget {
+            release, revision, ..
+        } = self.target;
+        match result {
+            Ok(()) => Ok(HelmRollbackCompleted {
+                cluster_key: self.cluster_key,
+                operation_id: self.operation_id,
+                release,
+                revision,
+            }),
+            Err(error) => Err(HelmRollbackFailed {
+                cluster_key: self.cluster_key,
+                operation_id: self.operation_id,
+                release,
+                revision,
+                helm_missing: is_cli_not_installed(&error),
+                error: format!("{error:#}"),
+            }),
+        }
+    }
+
+    // Deliberately not routed to the cluster's runtime: `helm` does not use the
+    // session's client, and a rollback can run for minutes, which would stall a
+    // reconnect that drains that runtime's in-flight commands. Operation ids
+    // stay unique across sessions, so a late result cannot settle a new one.
+}
+
+#[async_trait]
 impl WorkerCommand for GetResourceScale {
     type Output = Result<ResourceScaleFetched, ResourceScaleFetchFailed>;
 

@@ -159,7 +159,12 @@ impl WorkerResult for DeploymentRestartCompleted {
 
 impl WorkerResult for CronJobRunFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
-        if ui.settle_cron_job_run(self.cluster_key, self.operation_id) {
+        if ui
+            .settle_operation(self.cluster_key, self.operation_id, |cluster| {
+                &mut cluster.cron_job_runs
+            })
+            .is_some()
+        {
             ui.record_operation_outcome(
                 self.cluster_key,
                 OperationOutcome::Failure,
@@ -178,7 +183,12 @@ impl WorkerResult for CronJobRunCompleted {
             "Created one-off Job {} from CronJob {} in {}",
             self.job_name, self.cron_job_name, self.namespace
         );
-        if ui.settle_cron_job_run(self.cluster_key, self.operation_id) {
+        if ui
+            .settle_operation(self.cluster_key, self.operation_id, |cluster| {
+                &mut cluster.cron_job_runs
+            })
+            .is_some()
+        {
             ui.record_operation_outcome(
                 self.cluster_key,
                 OperationOutcome::Success,
@@ -301,12 +311,14 @@ fn record_bulk_delete_outcome(ui: &mut UiState, cluster_key: i32, outcome: BulkD
 }
 
 mod deletes;
+mod helm;
 mod logs;
 mod scale;
 mod terminal;
 mod workloads;
 
 pub(super) use deletes::*;
+pub(super) use helm::*;
 pub(super) use logs::*;
 pub(super) use scale::*;
 pub(super) use terminal::*;

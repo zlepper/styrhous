@@ -38,6 +38,19 @@ pub enum ButtonSize {
     Xl,
 }
 
+impl ButtonSize {
+    /// The fixed height of a button of this size, for rows that must line up with one.
+    pub const fn height(self) -> f32 {
+        match self {
+            Self::Xs => 32.0,
+            Self::Sm => 34.0,
+            Self::Md => 38.0,
+            Self::Lg => 40.0,
+            Self::Xl => 44.0,
+        }
+    }
+}
+
 /// Button corner rounding style
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ButtonRounding {
@@ -264,13 +277,14 @@ impl<'a> TailwindButton<'a> {
 
     /// Get size metrics for the current size
     fn size_metrics(&self) -> (Vec2, f32) {
-        match self.size {
-            ButtonSize::Xs => (Vec2::new(8.0, 7.0), 32.0),
-            ButtonSize::Sm => (Vec2::new(17.5, 8.0), 34.0),
-            ButtonSize::Md => (Vec2::new(26.0, 10.0), 38.0),
-            ButtonSize::Lg => (Vec2::new(30.5, 11.0), 40.0),
-            ButtonSize::Xl => (Vec2::new(43.0, 13.0), 44.0),
-        }
+        let padding = match self.size {
+            ButtonSize::Xs => Vec2::new(8.0, 7.0),
+            ButtonSize::Sm => Vec2::new(17.5, 8.0),
+            ButtonSize::Md => Vec2::new(26.0, 10.0),
+            ButtonSize::Lg => Vec2::new(30.5, 11.0),
+            ButtonSize::Xl => Vec2::new(43.0, 13.0),
+        };
+        (padding, self.size.height())
     }
 
     /// Get corner radius for the current rounding style

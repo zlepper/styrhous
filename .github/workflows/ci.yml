@@ -124,6 +124,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes libegl1 libgl1-mesa-dri
 
+      # The runner image ships Kind, kubectl and Helm; the Helm rollback test needs `helm`.
+      - name: Check Helm is available
+        run: helm version --short
+
       - name: Run Kind-backed integration tests
         env:
           WGPU_BACKEND: gl

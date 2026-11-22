@@ -248,7 +248,7 @@ fn test_cron_job_run_now_integration() {
                 .as_ref()
                 .map(|pending| pending.resource_name.as_str())
                 .unwrap_or("none"),
-            cluster.cron_job_runs_in_flight,
+            cluster.cron_job_runs.ids(),
             cluster.operation_history,
         );
         let api_observation = match kubernetes_request(
@@ -277,12 +277,11 @@ fn test_cron_job_run_now_integration() {
         "Run now confirmation click was not applied; {}",
         cron_job_diagnostic(harness.state())
     );
-    let operation_id =
-        harness.state().ui_state.clusters[&cluster_key].next_cron_job_run_operation_id;
+    let cron_job_runs = &harness.state().ui_state.clusters[&cluster_key].cron_job_runs;
     assert!(
-        harness.state().ui_state.clusters[&cluster_key]
-            .cron_job_runs_in_flight
-            .contains(&operation_id),
+        cron_job_runs
+            .ids()
+            .contains(&cron_job_runs.last_started_id()),
         "Run now command did not enter the expected running state; {}",
         cron_job_diagnostic(harness.state())
     );

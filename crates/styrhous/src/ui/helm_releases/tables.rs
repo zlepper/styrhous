@@ -10,27 +10,72 @@ use crate::resource_detail::ResourceOwner;
 use components::colors::{gray, indigo};
 use components::design::spacing;
 use components::{
-    DetailCell, DetailRow, DetailTone, InspectorDetails, MoreButton, TableRowBuilder,
-    TailwindTable, WorkspaceCard,
+    ButtonSize, DetailCell, DetailRow, DetailTone, InspectorDetails, MoreButton, TableRowBuilder,
+    TailwindButton, TailwindTable, WorkspaceCard,
 };
 use std::cell::RefCell;
+
+const ROLLBACK_BUTTON_SIZE: ButtonSize = ButtonSize::Xs;
+
+/// Whether the selected revision can be rolled back to from the history header.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum RevisionRollback {
+    /// The selected revision is the release's current one.
+    Unavailable,
+    Available,
+    /// A rollback of this release is still running.
+    InProgress,
+}
+
+#[derive(Debug)]
+pub(super) struct RevisionHistoryResponse {
+    pub(super) selected_revision: Option<i64>,
+    pub(super) rollback_requested: bool,
+}
 
 pub(super) fn show_revision_history(
     ui: &mut egui::Ui,
     releases: &[HelmRelease],
     selected_revision: i64,
+    rollback: RevisionRollback,
     release_id: String,
     table_preferences: &mut PersistedResourceTablePreferences,
     column_settings: &mut Option<
         super::super::resource_table_settings::ResourceTableSettingsTarget,
     >,
-) -> Option<i64> {
-    ui.horizontal(|ui| {
-        ui.heading("Revision history");
-        ui.label(
-            egui::RichText::new(format!("Revision {selected_revision} selected")).color(gray::_600),
-        );
-    });
+) -> RevisionHistoryResponse {
+    let mut rollback_requested = false;
+    // Reserve the button's height whether or not it is shown, so the table does
+    // not jump when another revision is selected, and centre the row on it.
+    ui.allocate_ui_with_layout(
+        egui::vec2(ui.available_width(), ROLLBACK_BUTTON_SIZE.height()),
+        egui::Layout::left_to_right(egui::Align::Center),
+        |ui| {
+            ui.heading("Revision history");
+            ui.label(
+                egui::RichText::new(format!("Revision {selected_revision} selected"))
+                    .color(gray::_600),
+            );
+            if rollback != RevisionRollback::Unavailable {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let in_progress = rollback == RevisionRollback::InProgress;
+                    let label = if in_progress {
+                        "Rolling back…".into()
+                    } else {
+                        format!("Roll back to revision {selected_revision}")
+                    };
+                    rollback_requested = ui
+                        .add_enabled_ui(!in_progress, |ui| {
+                            TailwindButton::secondary(label)
+                                .size(ROLLBACK_BUTTON_SIZE)
+                                .show(ui)
+                        })
+                        .inner
+                        .clicked();
+                });
+            }
+        },
+    );
     let column_definitions = vec![
         TableColumnDefinition::sortable("revision", "Revision", 110.0),
         TableColumnDefinition::sortable("status", "Status", 135.0),
@@ -136,7 +181,10 @@ pub(super) fn show_revision_history(
             )
         },
     );
-    selected.into_inner()
+    RevisionHistoryResponse {
+        selected_revision: selected.into_inner(),
+        rollback_requested,
+    }
 }
 
 pub(super) fn show_manifest_resources(

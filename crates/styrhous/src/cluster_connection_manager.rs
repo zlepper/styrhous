@@ -41,9 +41,11 @@ use tokio::task::JoinSet;
 use tokio::time::MissedTickBehavior;
 use tracing::{info, warn};
 
+mod cli;
 mod connection;
 mod discovery;
 mod dynamic_api;
+mod helm_rollback;
 pub(crate) mod kubeconfig;
 mod resource_data;
 mod resource_yaml;
@@ -76,8 +78,10 @@ mod watcher_types;
 
 pub(crate) use api_group_retry::*;
 pub(crate) use api_inspection::*;
+pub(crate) use cli::is_cli_not_installed;
 pub(crate) use detail_watches::*;
 pub(crate) use extraction::*;
+pub(crate) use helm_rollback::*;
 pub(crate) use managed_watches::*;
 pub(crate) use namespace_watcher::*;
 pub(crate) use resource_actions::*;

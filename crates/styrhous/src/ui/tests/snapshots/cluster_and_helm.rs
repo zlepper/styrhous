@@ -552,6 +552,345 @@ fn helm_release_inspector_selects_a_previous_revision() {
     );
 }
 
+fn demo_release() -> HelmReleaseKey {
+    HelmReleaseKey {
+        namespace: "kube-system".into(),
+        release_name: "demo".into(),
+    }
+}
+
+fn set_helm_releases(state: &mut UiState, releases: Vec<HelmRelease>) {
+    state
+        .clusters
+        .get_mut(&2)
+        .expect("kind fixture exists")
+        .helm_release_cache
+        .insert(
+            "kube-system".into(),
+            HelmReleaseWatchState {
+                releases,
+                is_synced: true,
+                backend_errors: BTreeMap::new(),
+            },
+        );
+}
+
+/// The demo release inspector (revisions 2 and 1) with revision 1 selected.
+fn helm_rollback_harness(
+    customize: impl FnOnce(&mut UiState),
+) -> Harness<'static, MyEguiApp<MockWorker>> {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    let mut releases = fixture_helm_release_revisions();
+    releases[1].chart_version = "1.0.0".into();
+    set_helm_releases(&mut state, releases);
+    customize(&mut state);
+    let mut commands = Vec::new();
+    state.open_helm_release_detail(2, "demo".into(), "kube-system".into(), &mut commands);
+    harness.seed_ui_state(state);
+    harness.get_by_label("Select revision 1").click();
+    harness.run();
+    harness
+}
+
+fn open_rollback_confirmation(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) {
+    harness.get_by_label("Roll back to revision 1").click();
+    harness.run();
+    harness.event(egui::Event::PointerGone);
+    harness.run();
+    harness.get_by_label("Roll back demo to revision 1?");
+}
+
+fn confirm_rollback(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) -> u64 {
+    harness.get_by_label("Roll back").click();
+    harness.run();
+    harness.event(egui::Event::PointerGone);
+    harness.run();
+    harness
+        .state()
+        .worker
+        .last_command::<RollbackHelmRelease>()
+        .expect("rollback command sent")
+        .operation_id
+}
+
+fn history(
+    harness: &Harness<'static, MyEguiApp<MockWorker>>,
+) -> Vec<(String, String, Option<String>)> {
+    harness.state().ui_state.clusters[&2]
+        .operation_history
+        .iter()
+        .map(|entry| {
+            (
+                entry.title.clone(),
+                entry.target.clone(),
+                entry.details.clone(),
+            )
+        })
+        .collect()
+}
+
+fn rollback_completed(cluster_key: i32, operation_id: u64) -> HelmRollbackCompleted {
+    HelmRollbackCompleted {
+        cluster_key,
+        operation_id,
+        release: demo_release(),
+        revision: 1,
+    }
+}
+
+fn rollback_failed(operation_id: u64, error: &str, helm_missing: bool) -> HelmRollbackFailed {
+    HelmRollbackFailed {
+        cluster_key: 2,
+        operation_id,
+        release: demo_release(),
+        revision: 1,
+        error: error.into(),
+        helm_missing,
+    }
+}
+
+fn rollback_button_enabled(harness: &Harness<'static, MyEguiApp<MockWorker>>) -> bool {
+    !harness
+        .get_by_label("Roll back to revision 1")
+        .accesskit_node()
+        .is_disabled()
+}
+
+#[test]
+fn helm_release_rollback_is_confirmed_tracked_and_reported() {
+    let mut harness = helm_rollback_harness(|_| {});
+    harness.get_by_label("Revision 1 selected");
+    open_rollback_confirmation(&mut harness);
+    harness.ui_harness(
+        "helm_releases/helm_release_rollback_is_confirmed_tracked_and_reported/rollback_confirmation",
+    );
+    assert_eq!(confirm_rollback(&mut harness), 1);
+    assert_eq!(
+        harness
+            .state()
+            .worker
+            .last_command::<RollbackHelmRelease>()
+            .map(|command| (command.cluster_key, command.target.clone())),
+        Some((
+            2,
+            HelmRollbackTarget {
+                kube_context: "kind-kind".into(),
+                release: demo_release(),
+                storage: StorageDriver::Secret,
+                revision: 1,
+            }
+        ))
+    );
+    assert!(
+        harness
+            .get_by_label("Rolling back…")
+            .accesskit_node()
+            .is_disabled(),
+        "a running rollback blocks another submission"
+    );
+    harness.ui_harness(
+        "helm_releases/helm_release_rollback_is_confirmed_tracked_and_reported/rollback_in_progress",
+    );
+
+    harness.deliver_worker_result(rollback_failed(
+        1,
+        "helm is not installed or not on PATH",
+        true,
+    ));
+    assert!(rollback_button_enabled(&harness));
+    open_rollback_confirmation(&mut harness);
+    assert_eq!(confirm_rollback(&mut harness), 2);
+    let helm_error =
+        "helm rollback --namespace=kube-system -- demo 1 failed: Error: release: not found";
+    harness.deliver_worker_result(rollback_failed(2, helm_error, false));
+    assert!(rollback_button_enabled(&harness));
+
+    open_rollback_confirmation(&mut harness);
+    assert_eq!(confirm_rollback(&mut harness), 3);
+    for operation_id in [3, 3, 99] {
+        // The duplicate and the untracked result must both be ignored.
+        harness.deliver_worker_result(rollback_completed(2, operation_id));
+    }
+    assert!(rollback_button_enabled(&harness));
+    assert!(
+        harness.state().ui_state.clusters[&2]
+            .helm_rollbacks
+            .ids()
+            .is_empty()
+    );
+
+    let target = "demo • kube-system".to_owned();
+    assert_eq!(
+        history(&harness),
+        vec![
+            (
+                "Couldn’t roll back to revision 1".to_owned(),
+                target.clone(),
+                Some(crate::ui::dialogs::HELM_INSTALL_GUIDANCE.to_owned())
+            ),
+            (
+                "Couldn’t roll back to revision 1".to_owned(),
+                target.clone(),
+                Some(helm_error.to_owned())
+            ),
+            (
+                "Helm release rolled back".to_owned(),
+                target,
+                Some("Rolled back to revision 1".to_owned())
+            ),
+        ]
+    );
+}
+
+#[test]
+fn helm_rollback_is_unavailable_for_the_current_revision() {
+    let mut harness = helm_rollback_harness(|_| {});
+    harness.get_by_label("Select revision 2").click();
+    harness.run();
+    assert!(harness.query_by_label("Roll back to revision 2").is_none());
+    assert!(harness.query_by_label("Roll back to revision 1").is_none());
+}
+
+#[test]
+fn helm_rollback_confirmation_can_be_cancelled_or_dismissed_with_escape() {
+    let mut harness = helm_rollback_harness(|_| {});
+    open_rollback_confirmation(&mut harness);
+    harness.get_by_label("Cancel").click();
+    harness.run();
+
+    open_rollback_confirmation(&mut harness);
+    harness.key_press(egui::Key::Escape);
+    harness.run();
+
+    let cluster = &harness.state().ui_state.clusters[&2];
+    assert!(cluster.pending_helm_rollback.is_none());
+    assert!(cluster.helm_rollbacks.ids().is_empty());
+    assert!(
+        harness
+            .state()
+            .worker
+            .last_command::<RollbackHelmRelease>()
+            .is_none()
+    );
+    assert!(
+        rollback_button_enabled(&harness),
+        "Escape dismisses only the dialog, not the inspector beneath it"
+    );
+}
+
+#[test]
+fn helm_rollback_progress_and_results_are_scoped_to_their_release_and_cluster() {
+    let mut harness = helm_rollback_harness(|state| {
+        let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
+        // Rollbacks of other releases: same name elsewhere, other name here.
+        for (namespace, release_name) in [("default", "demo"), ("kube-system", "other")] {
+            cluster.helm_rollbacks.start(HelmReleaseKey {
+                namespace: namespace.into(),
+                release_name: release_name.into(),
+            });
+        }
+        let other_cluster = state.clusters.get_mut(&3).expect("fixture exists");
+        other_cluster.connection = ClusterConnectionState::Connected;
+        other_cluster.helm_rollbacks.start(demo_release());
+    });
+    assert!(
+        rollback_button_enabled(&harness),
+        "only a rollback of this release disables its action"
+    );
+
+    open_rollback_confirmation(&mut harness);
+    assert_eq!(confirm_rollback(&mut harness), 3);
+    harness.deliver_worker_result(rollback_completed(3, 1));
+    harness.deliver_worker_result(rollback_completed(3, 3));
+    assert_eq!(
+        harness.state().ui_state.clusters[&2].helm_rollbacks.ids(),
+        vec![1, 2, 3],
+        "results from another cluster must not settle this cluster's rollbacks"
+    );
+    assert!(harness.query_by_label("Rolling back…").is_some());
+    assert!(history(&harness).is_empty());
+}
+
+#[test]
+fn helm_rollback_dialog_follows_revisions_that_land_while_it_is_open() {
+    let mut harness = helm_rollback_harness(|_| {});
+    open_rollback_confirmation(&mut harness);
+
+    // Someone upgrades the release (now stored in ConfigMaps) meanwhile.
+    let mut state = std::mem::take(&mut harness.state_mut().ui_state);
+    let mut releases = state.helm_releases(2, "kube-system", "demo");
+    let mut upgraded = fixture_helm_release();
+    upgraded.revision = 3;
+    upgraded.chart_version = "2.0.0".into();
+    upgraded.storage = StorageDriver::ConfigMap;
+    releases.push(upgraded);
+    set_helm_releases(&mut state, releases);
+    harness.seed_ui_state(state);
+    harness.get_by_label(
+        "Helm will create a new revision of demo in the kube-system namespace from \
+         revision 1 (nginx 1.0.0). The current one is revision 3 (nginx 2.0.0).",
+    );
+
+    confirm_rollback(&mut harness);
+    assert_eq!(
+        harness
+            .state()
+            .worker
+            .last_command::<RollbackHelmRelease>()
+            .map(|command| (command.target.storage, command.target.revision)),
+        Some((StorageDriver::ConfigMap, 1)),
+        "Helm reads the release through the current revision's storage driver"
+    );
+}
+
+#[test]
+fn helm_rollback_dialog_disables_rolling_back_to_a_pruned_revision() {
+    let mut harness = helm_rollback_harness(|_| {});
+    open_rollback_confirmation(&mut harness);
+
+    let mut state = std::mem::take(&mut harness.state_mut().ui_state);
+    let releases = state
+        .helm_releases(2, "kube-system", "demo")
+        .into_iter()
+        .filter(|release| release.revision != 1)
+        .collect();
+    set_helm_releases(&mut state, releases);
+    harness.seed_ui_state(state);
+    harness.event(egui::Event::PointerGone);
+    harness.run();
+
+    harness.get_by_label("There is nothing to roll back to.");
+    assert!(
+        harness
+            .get_by_label("Roll back")
+            .accesskit_node()
+            .is_disabled()
+    );
+    harness.ui_harness(
+        "helm_releases/helm_rollback_dialog_disables_rolling_back_to_a_pruned_revision/pruned_revision",
+    );
+}
+
+#[test]
+fn helm_rollback_result_from_a_previous_session_is_ignored() {
+    let mut state = oracle_resource_table_state();
+    let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
+    let stale_operation = cluster.helm_rollbacks.start(demo_release());
+    cluster.reset_for_connection();
+    cluster.connection = ClusterConnectionState::Connected;
+    cluster.namespaces_load = crate::ui::state::ClusterLoadState::Ready;
+    cluster.api_resources_load = crate::ui::state::ClusterLoadState::Ready;
+    let current_operation = cluster.helm_rollbacks.start(demo_release());
+    assert_ne!(stale_operation, current_operation);
+    let mut harness = application_harness::<MockWorker>();
+    harness.seed_ui_state(state);
+
+    harness.deliver_worker_result(rollback_completed(2, stale_operation));
+    assert!(history(&harness).is_empty());
+    harness.deliver_worker_result(rollback_completed(2, current_operation));
+    assert_eq!(history(&harness).len(), 1);
+}
 #[test]
 fn helm_release_inspector_expands_values_with_an_accessible_disclosure() {
     let mut harness = application_harness::<MockWorker>();

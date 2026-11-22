@@ -113,6 +113,33 @@ pub(in crate::ui::tests::kind) fn wait_for_harness<T>(
     );
 }
 
+/// Waits until exactly one node has `label`, is enabled, and kept its bounds
+/// for a frame. Blades slide in and tables re-lay out as watches sync, so a
+/// real pointer click is only reliable on settled geometry.
+#[track_caller]
+pub(in crate::ui::tests::kind) fn wait_for_settled_clickable(
+    harness: &mut Harness<MyEguiApp<Worker>>,
+    label: &str,
+    max_ms: u64,
+) {
+    use egui_kittest::kittest::{NodeT, Queryable};
+    let mut previous_rect = None;
+    wait_for_harness(
+        harness,
+        &format!("{label} to be enabled and settled"),
+        |harness| {
+            let mut nodes = harness.query_all_by_label(label);
+            let node = nodes.next()?;
+            if nodes.next().is_some() || node.accesskit_node().is_disabled() {
+                return None;
+            }
+            let rect = node.rect();
+            (previous_rect.replace(rect) == Some(rect)).then_some(())
+        },
+        max_ms,
+    );
+}
+
 #[track_caller]
 pub(in crate::ui::tests::kind) fn wait_for_kubernetes<T>(
     harness: &mut Harness<MyEguiApp<Worker>>,

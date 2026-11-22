@@ -150,7 +150,10 @@ impl GlobalBladeCoordinator {
             ),
         );
 
-        let mut close = ctx.input(|input| input.key_pressed(egui::Key::Escape));
+        // Escape belongs to a confirmation dialog shown over the blade; it is
+        // drawn later in the frame, so the blade would otherwise see it first.
+        let modal_open = ctx.memory(|memory| memory.top_modal_layer().is_some());
+        let mut close = !modal_open && ctx.input(|input| input.key_pressed(egui::Key::Escape));
         close |= (resource_detail_cluster_keys.is_empty() || dismiss_on_outside_click)
             && response.dismissed;
         close |= response.header.close || response.active.close;
@@ -376,6 +379,17 @@ impl<'a> GlobalBladeRenderContext<'a> {
     ) -> Vec<crate::helm_release::HelmRelease> {
         self.ui_state
             .helm_releases(cluster_key, namespace, release_name)
+    }
+
+    pub(super) fn is_helm_rollback_in_progress(
+        &self,
+        cluster_key: i32,
+        release: &crate::helm_release::HelmReleaseKey,
+    ) -> bool {
+        self.ui_state
+            .clusters
+            .get(&cluster_key)
+            .is_some_and(|cluster| cluster.helm_rollbacks.contains(release))
     }
 
     /// Resolves a manifest inventory entry against an already-synchronized resource watch.

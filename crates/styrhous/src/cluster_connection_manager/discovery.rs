@@ -1,12 +1,12 @@
 //! Managed Kubernetes discovery backed by locally installed provider CLIs.
 
+use super::cli::{CliCommand, CliOutput, ensure_success, run_cli};
 use super::kubeconfig_context_references;
 use anyhow::{Context, Result, bail};
 use futures_util::StreamExt;
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::Duration;
-use tokio::process::Command;
 
 mod aws;
 pub use aws::{
@@ -15,7 +15,6 @@ pub use aws::{
 };
 
 const TAILSCALE_K8S_OPERATOR_TAG: &str = "tag:k8s-operator";
-const MAX_STDERR_LENGTH: usize = 2_000;
 const MAX_AKS_DISCOVERY_CONCURRENCY: usize = 8;
 const CLI_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -56,13 +55,6 @@ pub struct AvailableTailscaleCluster {
     pub configured: bool,
 }
 
-#[derive(Debug)]
-struct CliOutput {
-    stdout: Vec<u8>,
-    stderr: String,
-    success: bool,
-}
-
 #[async_trait::async_trait]
 trait CliRunner: Send + Sync {
     async fn run(&self, program: &str, args: &[String]) -> Result<CliOutput>;
@@ -73,27 +65,13 @@ struct SystemCliRunner;
 #[async_trait::async_trait]
 impl CliRunner for SystemCliRunner {
     async fn run(&self, program: &str, args: &[String]) -> Result<CliOutput> {
-        let mut command = Command::new(program);
-        command.args(args).kill_on_drop(true);
+        let mut command = CliCommand::new(program, args, CLI_TIMEOUT);
         if program == "aws" {
-            command
+            command = command
                 .env("AWS_PAGER", "")
                 .env("AWS_CLI_AUTO_PROMPT", "off");
         }
-        let output = tokio::time::timeout(CLI_TIMEOUT, command.output())
-            .await
-            .with_context(|| {
-                format!(
-                    "{program} timed out after {} seconds",
-                    CLI_TIMEOUT.as_secs()
-                )
-            })?
-            .with_context(|| format!("Could not start {program}"))?;
-        Ok(CliOutput {
-            stdout: output.stdout,
-            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
-            success: output.status.success(),
-        })
+        run_cli(&command).await
     }
 }
 
@@ -344,30 +322,7 @@ async fn json_output<T: for<'de> Deserialize<'de>>(
 async fn run_success(runner: &impl CliRunner, program: &str, args: &[&str]) -> Result<CliOutput> {
     let args = args.iter().map(|arg| (*arg).to_owned()).collect::<Vec<_>>();
     let output = runner.run(program, &args).await?;
-    if !output.success {
-        let stderr = truncate_text(output.stderr.trim(), MAX_STDERR_LENGTH);
-        bail!(
-            "{program} {} failed{}",
-            args.join(" "),
-            if stderr.is_empty() {
-                String::new()
-            } else {
-                format!(": {stderr}")
-            }
-        );
-    }
-    Ok(output)
-}
-
-fn truncate_text(text: &str, max_bytes: usize) -> &str {
-    if text.len() <= max_bytes {
-        return text;
-    }
-    let mut end = max_bytes;
-    while !text.is_char_boundary(end) {
-        end -= 1;
-    }
-    &text[..end]
+    ensure_success(program, &args, output)
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

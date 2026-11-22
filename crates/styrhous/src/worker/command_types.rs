@@ -137,6 +137,12 @@ pub(crate) struct RunCronJob {
     pub(crate) resource_name: String,
 }
 #[derive(Debug)]
+pub(crate) struct RollbackHelmRelease {
+    pub(crate) cluster_key: i32,
+    pub(crate) operation_id: u64,
+    pub(crate) target: HelmRollbackTarget,
+}
+#[derive(Debug)]
 pub(crate) struct GetResourceScale {
     pub(crate) cluster_key: i32,
     pub(crate) request_id: u64,

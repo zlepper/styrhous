@@ -63,6 +63,7 @@
             imagemagick
             jetbrains.rust-rover
             kind
+            kubernetes-helm
             kubectl
             nodejs_22
           ])
