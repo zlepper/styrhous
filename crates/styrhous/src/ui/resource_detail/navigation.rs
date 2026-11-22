@@ -16,6 +16,7 @@ pub(super) fn navigate_resource_detail_in_navigator(
     let history_entry_id = cluster.next_detail_generation;
     let pod_metrics_api_available = cluster.pod_metrics_api_available;
     let node_metrics_api_available = cluster.node_metrics_api_available;
+    let (pod_metrics_shown, node_metrics_shown) = cluster.metrics_shown_as_available();
     if cluster.resource_detail_panel.is_none() {
         return;
     }
@@ -36,11 +37,13 @@ pub(super) fn navigate_resource_detail_in_navigator(
         pod_usage: None,
         pod_usage_history: Vec::new(),
         pod_usage_missing: false,
-        pod_metrics_api_unavailable: !pod_metrics_api_available,
+        pod_metrics_api_unavailable: !pod_metrics_shown,
+        pod_metrics_watched: pod_metrics_api_available,
         pod_usage_error: None,
         node_usage: None,
         node_usage_history: Vec::new(),
-        node_metrics_api_unavailable: !node_metrics_api_available,
+        node_metrics_api_unavailable: !node_metrics_shown,
+        node_metrics_watched: node_metrics_api_available,
         node_usage_error: None,
         data_editor: None,
         pending_action: None,

@@ -427,7 +427,7 @@ impl<'a> GlobalBladeRenderContext<'a> {
         self.ui_state
             .clusters
             .get(&cluster_key)
-            .is_some_and(|cluster| cluster.scalable_api_resources.contains(api_resource))
+            .is_some_and(|cluster| cluster.displayed_api_resources.is_scalable(api_resource))
     }
 
     pub(super) fn debug_image_presets(&self) -> &[DebugImagePreset] {

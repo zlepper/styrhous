@@ -283,20 +283,11 @@ impl<'a> ComboboxUi<'a> {
             if is_selected {
                 let check_color = if is_focused { WHITE } else { indigo::_600 };
                 let check_center = rect.right_center() - Vec2::new(22.0, 0.0);
-                let stroke = Stroke::new(2.0, check_color);
-                self.ui.painter().line_segment(
-                    [
-                        check_center + Vec2::new(-6.0, 0.0),
-                        check_center + Vec2::new(-1.5, 4.5),
-                    ],
-                    stroke,
-                );
-                self.ui.painter().line_segment(
-                    [
-                        check_center + Vec2::new(-1.5, 4.5),
-                        check_center + Vec2::new(7.0, -5.0),
-                    ],
-                    stroke,
+                crate::icons::paint_check_mark(
+                    self.ui.painter(),
+                    check_center,
+                    13.0,
+                    Stroke::new(2.0, check_color),
                 );
             }
         }

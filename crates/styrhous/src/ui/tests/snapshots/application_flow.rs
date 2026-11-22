@@ -330,7 +330,6 @@ fn test_ui_flow() {
                 fixture_api_resource("apps", "StatefulSet", "statefulsets"),
                 fixture_api_resource("networking.k8s.io", "Ingress", "ingresses"),
             ],
-            scalable_api_resources: Default::default(),
             failed_api_groups: Vec::new(),
         }) as WorkerResultBox);
     harness.run();
@@ -724,6 +723,7 @@ fn harness_with_scalable_inspector() -> Harness<'static, MyEguiApp<MockWorker>> 
         .clusters
         .get_mut(&2)
         .expect("kind fixture exists")
+        .displayed_api_resources
         .scalable_api_resources
         .insert(config_maps.clone());
     let mut harness = application_harness_with_state(state);
@@ -834,7 +834,7 @@ fn a_restored_table_shows_rows_before_namespaces_and_discovery_arrive() {
     harness.run_steps(3);
 
     let cluster = harness.cluster(1);
-    assert!(cluster.reachable);
+    assert!(cluster.reachable());
     assert!(cluster.namespaces.is_empty() && !cluster.api_discovery.complete);
     harness.get_by_label("Open details for coredns");
     harness.ui_harness(
@@ -851,7 +851,6 @@ fn connecting_cluster(
 ) -> UiState {
     let mut cluster = fixture_cluster(1, "dev");
     cluster.connection = connection;
-    cluster.reachable = false;
     cluster.connection_progress = super::super::super::state::ConnectionProgress {
         authenticated,
         ..super::super::super::state::ConnectionProgress::started_at(started)

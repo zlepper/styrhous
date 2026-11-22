@@ -1,0 +1,14 @@
+viewport: width=280.0 height=140.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Button name="Section" state=[toggled=False] rect=(x=8.0 y=14.0 width=240.0 height=44.0 center_x=128.0 center_y=36.0)
+              GenericContainer rect=<none>
+                Image rect=(x=28.0 y=28.0 width=16.0 height=16.0 center_x=36.0 center_y=36.0)
+              GenericContainer rect=<none>
+                Label value="Discovering API groups..." rect=(x=64.0 y=71.5 width=143.2 height=15.0 center_x=135.6 center_y=79.0)
+                  TextRun value="Discovering API groups..." rect=(x=64.0 y=71.5 width=143.2 height=15.0 center_x=135.6 center_y=79.0)

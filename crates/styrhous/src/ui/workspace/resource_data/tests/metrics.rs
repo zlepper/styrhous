@@ -76,7 +76,7 @@ fn pod_metric_results_invalidate_cpu_sort_and_update_cells() {
         resolved_resource_cell(
             first_resource,
             CPU_COLUMN,
-            table_data(cluster).metrics,
+            ResourceTableData::of(cluster, &pod).metrics,
             &pod
         ),
         Some(CellValue::Usage {
@@ -108,7 +108,7 @@ fn pod_metric_results_invalidate_cpu_sort_and_update_cells() {
         resolved_resource_cell(
             first_resource,
             CPU_COLUMN,
-            table_data(failed_cluster).metrics,
+            ResourceTableData::of(failed_cluster, &pod).metrics,
             &pod,
         ),
         Some(CellValue::Unavailable)
@@ -229,7 +229,7 @@ fn node_metric_results_and_api_unavailable_refresh_cpu_sort_and_cells() {
         resolved_resource_cell(
             first_resource,
             CPU_COLUMN,
-            table_data(unavailable_cluster).metrics,
+            ResourceTableData::of(unavailable_cluster, &node).metrics,
             &node,
         ),
         Some(CellValue::Unavailable)

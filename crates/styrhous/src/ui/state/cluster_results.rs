@@ -1,9 +1,14 @@
 use super::*;
 
 impl WorkerResult for crate::worker::ClusterConnectionFailed {
-    fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+    fn apply(self, ui: &mut UiState, commands: &mut Vec<WorkerCommandBox>) {
         if let Some(cluster) = ui.clusters.get_mut(&self.cluster_key) {
             cluster.connection = ClusterConnectionState::Failed(self.error);
+            // Discovery can fail a connection that is already set up; end its namespace
+            // watcher and watches instead of letting them retry against it.
+            commands.push(Box::new(crate::worker::DisconnectCluster {
+                cluster_key: self.cluster_key,
+            }));
         }
     }
 }
@@ -308,17 +313,13 @@ impl WorkerResult for crate::worker::KubernetesApiResourcesDiscovered {
     fn apply(self, ui: &mut UiState, commands: &mut Vec<WorkerCommandBox>) {
         let crate::worker::KubernetesApiResourcesDiscovered {
             cluster_key,
-            api_resources,
-            scalable_api_resources,
+            resources,
         } = self;
         let Some(cluster) = ui.clusters.get_mut(&cluster_key) else {
             return;
         };
         cluster.mark_reachable(ui.now);
-        cluster.api_discovery.fresh.extend(ApiResourceSet {
-            api_resources,
-            scalable_api_resources,
-        });
+        cluster.api_discovery.fresh.extend(resources);
         ui.apply_api_discovery(cluster_key, commands);
     }
 }
@@ -328,11 +329,13 @@ impl WorkerResult for crate::worker::KubernetesApiDiscoveryCompleted {
         let crate::worker::KubernetesApiDiscoveryCompleted {
             cluster_key,
             failed_api_groups,
+            group_list_failed,
         } = self;
         let Some(cluster) = ui.clusters.get_mut(&cluster_key) else {
             return;
         };
         cluster.api_discovery.complete = true;
+        cluster.api_discovery.group_list_failed = group_list_failed;
         cluster.api_discovery.set_failed_group_versions(
             failed_api_groups
                 .iter()
@@ -354,19 +357,6 @@ impl WorkerResult for crate::worker::KubernetesApiDiscoveryCompleted {
                 )),
             );
         }
-        let Some(cluster) = ui.clusters.get(&cluster_key) else {
-            return;
-        };
-        let (pod_metrics_available, node_metrics_available) = (
-            cluster.pod_metrics_api_available,
-            cluster.node_metrics_api_available,
-        );
-        if !pod_metrics_available {
-            ui.mark_pod_metrics_api_unavailable(cluster_key);
-        }
-        if !node_metrics_available {
-            ui.mark_node_metrics_api_unavailable(cluster_key);
-        }
     }
 }
 
@@ -375,8 +365,7 @@ impl WorkerResult for crate::worker::KubernetesApiGroupsRecovered {
         let crate::worker::KubernetesApiGroupsRecovered {
             cluster_key,
             group_versions,
-            api_resources,
-            scalable_api_resources,
+            resources,
             still_failing_group_versions,
         } = self;
         let Some(cluster) = ui.clusters.get_mut(&cluster_key) else {
@@ -386,15 +375,16 @@ impl WorkerResult for crate::worker::KubernetesApiGroupsRecovered {
         if !cluster.api_discovery.complete {
             return;
         }
-        cluster.api_discovery.fresh.extend(ApiResourceSet {
-            api_resources,
-            scalable_api_resources,
-        });
+        cluster.api_discovery.fresh.extend(resources);
+        cluster.api_discovery.group_list_failed = false;
         cluster
             .api_discovery
             .set_failed_group_versions(still_failing_group_versions.iter().map(String::as_str));
         ui.apply_api_discovery(cluster_key, commands);
         ui.remember_api_discovery(cluster_key);
+        if group_versions.is_empty() {
+            return;
+        }
 
         let mut details = format!("Loaded: {}", group_versions.join(", "));
         if !still_failing_group_versions.is_empty() {
@@ -423,27 +413,46 @@ impl UiState {
             return;
         };
         cluster.refresh_api_resources();
-        let complete = cluster.api_discovery.complete;
-        let pod_metrics = cluster.api_discovery.has_fresh(ApiResource::is_pod_metrics);
-        let node_metrics = cluster
-            .api_discovery
-            .has_fresh(ApiResource::is_node_metrics);
-        let restore_pod_metrics = pod_metrics && !cluster.pod_metrics_api_available;
-        let restore_node_metrics = node_metrics && !cluster.node_metrics_api_available;
-        if pod_metrics != cluster.pod_metrics_api_available && (pod_metrics || complete) {
-            cluster.pod_metrics_api_available = pod_metrics;
+        let discovery = &cluster.api_discovery;
+        let pod_metrics = metrics_availability_change(
+            cluster.pod_metrics_api_available,
+            discovery.has_fresh(ApiResource::is_pod_metrics),
+            discovery.metrics_decided(),
+        );
+        let node_metrics = metrics_availability_change(
+            cluster.node_metrics_api_available,
+            discovery.has_fresh(ApiResource::is_node_metrics),
+            discovery.metrics_decided(),
+        );
+        if let Some(available) = pod_metrics {
+            cluster.pod_metrics_api_available = available;
             UiState::reconcile_pod_metrics(cluster, commands);
         }
-        if node_metrics != cluster.node_metrics_api_available && (node_metrics || complete) {
-            cluster.node_metrics_api_available = node_metrics;
+        if let Some(available) = node_metrics {
+            cluster.node_metrics_api_available = available;
             UiState::reconcile_node_metrics(cluster, commands);
         }
         self.restore_metrics_in_resource_detail_blades(
             cluster_key,
-            restore_pod_metrics,
-            restore_node_metrics,
+            pod_metrics == Some(true),
+            node_metrics == Some(true),
             commands,
         );
+        // Inspectors opened while discovery ran treated the Metrics API as possibly there.
+        if let Some(cluster) = self.clusters.get(&cluster_key)
+            && cluster.api_discovery.metrics_decided()
+        {
+            let (pod_available, node_available) = (
+                cluster.pod_metrics_api_available,
+                cluster.node_metrics_api_available,
+            );
+            if !pod_available {
+                self.mark_pod_metrics_api_unavailable(cluster_key);
+            }
+            if !node_available {
+                self.mark_node_metrics_api_unavailable(cluster_key);
+            }
+        }
         self.reconcile_selection_with_discovery(cluster_key, commands);
     }
 
@@ -454,12 +463,15 @@ impl UiState {
         };
         self.api_discovery_cache.contexts.insert(
             cluster.name.clone(),
-            ApiResourceSet {
-                api_resources: cluster.discovered_api_resources.clone(),
-                scalable_api_resources: cluster.scalable_api_resources.clone(),
-            },
+            cluster.displayed_api_resources.clone(),
         );
     }
+}
+
+/// The availability a Metrics API flag changes to, if any: discovery reporting the API
+/// makes it available at once, while only a discovery that has decided it can find it missing.
+fn metrics_availability_change(current: bool, discovered: bool, decided: bool) -> Option<bool> {
+    (discovered != current && (discovered || decided)).then_some(discovered)
 }
 
 impl WorkerResult for crate::worker::KubernetesCustomResourceColumnsLoaded {

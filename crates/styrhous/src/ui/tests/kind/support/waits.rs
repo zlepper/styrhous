@@ -285,7 +285,7 @@ pub(in crate::ui::tests::kind) fn cluster_load_state(
     Some(format!(
         "connection={:?}, reachable={}, namespaces={:?} ({} loaded), API discovery complete={} ({} navigation entries loaded)",
         cluster.connection,
-        cluster.reachable,
+        cluster.reachable(),
         cluster.namespaces_load,
         cluster.namespaces.len(),
         cluster.api_discovery.complete,

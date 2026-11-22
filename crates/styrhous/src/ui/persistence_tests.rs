@@ -215,7 +215,6 @@ fn dev_api_resources() -> WorkerResultBox {
     Box::new(DiscoveryFinished {
         cluster_key: 1,
         api_resources: vec![api_resource("apps", "v1", "Deployment", "deployments")],
-        scalable_api_resources: Default::default(),
         failed_api_groups: Vec::new(),
     })
 }
@@ -343,13 +342,7 @@ fn resource_navigation_expansion_round_trips_through_app_storage() {
 
 #[test]
 fn api_discovery_cache_round_trips_through_app_storage() {
-    let deployments = ApiResource {
-        group: "apps".into(),
-        version: "v1".into(),
-        kind: "Deployment".into(),
-        name: "deployments".into(),
-        namespaced: true,
-    };
+    let deployments = api_resource("apps", "v1", "Deployment", "deployments");
     let expected = state::PersistedApiDiscovery {
         contexts: BTreeMap::from([(
             "dev".into(),
@@ -451,7 +444,6 @@ fn unavailable_saved_selection_is_discarded_without_affecting_other_contexts() {
             Box::new(DiscoveryFinished {
                 cluster_key: 1,
                 api_resources: vec![api_resource("apps", "v1", "Service", "services")],
-                scalable_api_resources: Default::default(),
                 failed_api_groups: Vec::new(),
             }),
         ],
@@ -489,7 +481,6 @@ fn selection_changes_update_only_their_contexts_persisted_entry() {
             Box::new(DiscoveryFinished {
                 cluster_key: 1,
                 api_resources: vec![api_resource("apps", "v1", "Deployment", "deployments")],
-                scalable_api_resources: Default::default(),
                 failed_api_groups: Vec::new(),
             }),
         ],
@@ -514,5 +505,62 @@ fn selection_changes_update_only_their_contexts_persisted_entry() {
     assert_eq!(
         ui_state.cluster_selections.selections["prod"].selected_namespaces,
         SelectedNamespaces::from(["production"])
+    );
+}
+
+#[test]
+fn a_saved_namespace_that_no_longer_exists_is_watched_until_the_namespace_list_drops_it() {
+    let mut ui_state = UiState {
+        cluster_selections: saved_selections(),
+        ..Default::default()
+    };
+
+    let connect_commands = apply_results(&mut ui_state, [current_dev_cluster()]);
+    let watched = |commands: &[WorkerCommandBox]| {
+        commands_of::<ReconcileResourceWatches>(commands)
+            .filter(|command| command.api_resource.name == "deployments")
+            .last()
+            .map(|command| {
+                let mut sources = command
+                    .sources
+                    .iter()
+                    .map(|source| format!("{source:?}"))
+                    .collect::<Vec<_>>();
+                sources.sort();
+                sources
+            })
+    };
+    assert_eq!(
+        watched(&connect_commands),
+        Some(vec![
+            r#"Namespace("default")"#.to_owned(),
+            r#"Namespace("obsolete")"#.to_owned()
+        ]),
+        "the saved namespaces are watched before the namespace list arrives"
+    );
+
+    let commands = apply_results(&mut ui_state, [dev_namespaces()]);
+
+    let cluster = &ui_state.clusters[&1];
+    assert_eq!(
+        cluster.selected_namespaces,
+        SelectedNamespaces::from(["default"])
+    );
+    assert!(
+        commands_of::<ReconcileResourceWatches>(&commands).any(|command| {
+            command.api_resource.name == "deployments"
+                && matches!(
+                    command.sources.as_slice(),
+                    [ResourceWatchSource::AllNamespaces(WatchedNamespaces::Only(namespaces))]
+                        if namespaces == &BTreeSet::from(["default".to_owned()])
+                )
+        }),
+        "the remaining namespace covers every namespace there is"
+    );
+    assert!(
+        !cluster
+            .resource_cache
+            .keys()
+            .any(|(_, namespace)| namespace.as_deref() == Some("obsolete"))
     );
 }

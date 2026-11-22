@@ -10,7 +10,12 @@ impl UiState {
         uid: String,
         commands_to_send: &mut Vec<WorkerCommandBox>,
     ) {
-        let (selection_generation, pod_metrics_api_available, node_metrics_api_available) = {
+        let (
+            selection_generation,
+            pod_metrics_api_available,
+            node_metrics_api_available,
+            (pod_metrics_shown, node_metrics_shown),
+        ) = {
             let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
                 return;
             };
@@ -19,6 +24,7 @@ impl UiState {
                 cluster.next_detail_generation,
                 cluster.pod_metrics_api_available,
                 cluster.node_metrics_api_available,
+                cluster.metrics_shown_as_available(),
             )
         };
         self.replace_global_blade(
@@ -39,11 +45,13 @@ impl UiState {
                 pod_usage: None,
                 pod_usage_history: Vec::new(),
                 pod_usage_missing: false,
-                pod_metrics_api_unavailable: !pod_metrics_api_available,
+                pod_metrics_api_unavailable: !pod_metrics_shown,
+                pod_metrics_watched: pod_metrics_api_available,
                 pod_usage_error: None,
                 node_usage: None,
                 node_usage_history: Vec::new(),
-                node_metrics_api_unavailable: !node_metrics_api_available,
+                node_metrics_api_unavailable: !node_metrics_shown,
+                node_metrics_watched: node_metrics_api_available,
                 node_usage_error: None,
                 data_editor: None,
                 pending_action: None,
@@ -127,6 +135,7 @@ impl UiState {
         let selection_generation = cluster.next_detail_generation;
         let pod_metrics_api_available = cluster.pod_metrics_api_available;
         let node_metrics_api_available = cluster.node_metrics_api_available;
+        let (pod_metrics_shown, node_metrics_shown) = cluster.metrics_shown_as_available();
         if cluster.resource_detail_panel.is_none() {
             return;
         }
@@ -147,11 +156,13 @@ impl UiState {
             pod_usage: None,
             pod_usage_history: Vec::new(),
             pod_usage_missing: false,
-            pod_metrics_api_unavailable: !pod_metrics_api_available,
+            pod_metrics_api_unavailable: !pod_metrics_shown,
+            pod_metrics_watched: pod_metrics_api_available,
             pod_usage_error: None,
             node_usage: None,
             node_usage_history: Vec::new(),
-            node_metrics_api_unavailable: !node_metrics_api_available,
+            node_metrics_api_unavailable: !node_metrics_shown,
+            node_metrics_watched: node_metrics_api_available,
             node_usage_error: None,
             data_editor: None,
             pending_action: None,

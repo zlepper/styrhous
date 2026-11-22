@@ -202,7 +202,7 @@ mod resource_data;
 mod selected_namespaces;
 
 pub(super) use actions::*;
-pub(crate) use api_discovery::{ApiDiscoveryState, canonical_group};
+pub(crate) use api_discovery::ApiDiscoveryState;
 pub(super) use blades::*;
 pub(super) use clusters::*;
 pub(super) use editors::*;

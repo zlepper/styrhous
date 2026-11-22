@@ -67,6 +67,21 @@ pub(super) fn show_helm_releases_workspace(
     let filtered = filter_resources(&resources, &search);
     cluster.resource_searches.insert(api_resource, search);
     ui.add_space(TOOLBAR_VERTICAL_PADDING);
+    match cluster.awaited_namespace_list() {
+        NamespaceListWait::Ready => {}
+        NamespaceListWait::Loading => {
+            workspace_loading_state(
+                ui,
+                "Loading namespaces",
+                "Helm releases are listed per namespace once the namespaces are known.",
+            );
+            return None;
+        }
+        NamespaceListWait::Failed(error) => {
+            workspace_empty_state(ui, "Namespaces unavailable", error);
+            return None;
+        }
+    }
     let selected_namespaces = cluster.namespace_scope();
     if selected_namespaces.is_empty() {
         workspace_empty_state(

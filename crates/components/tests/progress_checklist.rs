@@ -4,11 +4,7 @@ use components::{ChecklistStep, ChecklistStepState, ProgressChecklist};
 use egui_kittest::{Harness, kittest::Queryable};
 
 fn step(label: &str, state: ChecklistStepState, detail: Option<&str>) -> ChecklistStep {
-    ChecklistStep {
-        label: label.to_owned(),
-        state,
-        detail: detail.map(str::to_owned),
-    }
+    ChecklistStep::new(label, state, detail.map(str::to_owned))
 }
 
 #[test]

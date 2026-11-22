@@ -69,13 +69,13 @@ Window state=[focused] rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
-                  Label value="Invalid regular expression" rect=(x=851.3 y=477.2 width=193.5 height=19.0 center_x=948.0 center_y=486.8)
-                    TextRun value="Invalid regular expression" rect=(x=851.0 y=477.2 width=193.5 height=19.0 center_x=947.8 center_y=486.8)
-                Label value="Error details" rect=(x=392.0 y=507.2 width=80.0 height=17.0 center_x=432.0 center_y=515.8)
-                  TextRun value="Error details" rect=(x=392.0 y=507.2 width=80.0 height=17.0 center_x=432.0 center_y=515.8)
+                  Label value="Invalid regular expression" rect=(x=851.3 y=473.5 width=193.5 height=19.0 center_x=948.0 center_y=483.0)
+                    TextRun value="Invalid regular expression" rect=(x=851.0 y=473.5 width=193.5 height=19.0 center_x=947.8 center_y=483.0)
+                Label value="Error details" rect=(x=392.0 y=503.5 width=80.0 height=17.0 center_x=432.0 center_y=512.0)
+                  TextRun value="Error details" rect=(x=392.0 y=503.5 width=80.0 height=17.0 center_x=432.0 center_y=512.0)
                 GenericContainer rect=<none>
-                  Label value="regex parse error:\n    coredns[a-z\n           ^\nerror: unclosed character class" rect=(x=401.0 y=540.2 width=242.6 height=60.0 center_x=522.3 center_y=570.2)
-                    TextRun value="regex parse error:\n" rect=(x=401.0 y=540.2 width=140.9 height=15.0 center_x=471.4 center_y=547.8)
-                    TextRun value="    coredns[a-z\n" rect=(x=401.0 y=555.2 width=117.4 height=15.0 center_x=459.7 center_y=562.8)
-                    TextRun value="           ^\n" rect=(x=401.0 y=570.2 width=93.9 height=15.0 center_x=448.0 center_y=577.8)
-                    TextRun value="error: unclosed character class" rect=(x=401.0 y=585.2 width=242.6 height=15.0 center_x=522.3 center_y=592.8)
+                  Label value="regex parse error:\n    coredns[a-z\n           ^\nerror: unclosed character class" rect=(x=401.0 y=536.5 width=242.6 height=60.0 center_x=522.3 center_y=566.5)
+                    TextRun value="regex parse error:\n" rect=(x=401.0 y=536.5 width=140.9 height=15.0 center_x=471.4 center_y=544.0)
+                    TextRun value="    coredns[a-z\n" rect=(x=401.0 y=551.5 width=117.4 height=15.0 center_x=459.7 center_y=559.0)
+                    TextRun value="           ^\n" rect=(x=401.0 y=566.5 width=93.9 height=15.0 center_x=448.0 center_y=574.0)
+                    TextRun value="error: unclosed character class" rect=(x=401.0 y=581.5 width=242.6 height=15.0 center_x=522.3 center_y=589.0)

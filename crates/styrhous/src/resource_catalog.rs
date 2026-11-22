@@ -1,4 +1,4 @@
-use crate::api_resource::{ApiResource, ApiResourceSet};
+use crate::api_resource::{ApiResource, ApiResourceSet, canonical_group};
 use crate::resource_detail::ResourceOwner;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -62,7 +62,7 @@ enum CatalogItem {
     Section(CatalogSection),
 }
 
-const CORE: &str = "core";
+const CORE: &str = crate::api_resource::CORE_GROUP;
 
 const CATALOG: &[CatalogItem] = &[
     CatalogItem::Resource(CatalogEntry {
@@ -329,10 +329,6 @@ fn discovered_resource(
     })
 }
 
-fn canonical_group(group: &str) -> &str {
-    if group.is_empty() { CORE } else { group }
-}
-
 /// The built-in Kubernetes resources of the curated navigation, assumed to exist before
 /// discovery has answered so a first connection can show them at once. Version, kind and
 /// scope come from the Kubernetes API definitions; discovery replaces them if the cluster
@@ -345,56 +341,45 @@ pub(crate) fn builtin_api_resources() -> ApiResourceSet {
         scheduling::v1 as scheduling, storage::v1 as storage,
     };
 
-    fn builtin<K: k8s_openapi::Resource>() -> ApiResource
-    where
-        K::Scope: 'static,
-    {
-        ApiResource {
-            group: canonical_group(K::GROUP).to_owned(),
-            version: K::VERSION.to_owned(),
-            kind: K::KIND.to_owned(),
-            name: K::URL_PATH_SEGMENT.to_owned(),
-            namespaced: std::any::TypeId::of::<K::Scope>()
-                == std::any::TypeId::of::<k8s_openapi::NamespaceResourceScope>(),
-        }
-    }
-
     let mut resources = ApiResourceSet::default();
     for (api_resource, scalable) in [
-        (builtin::<core::Node>(), false),
-        (builtin::<core::Pod>(), false),
-        (builtin::<apps::Deployment>(), true),
-        (builtin::<apps::StatefulSet>(), true),
-        (builtin::<apps::DaemonSet>(), false),
-        (builtin::<apps::ReplicaSet>(), true),
-        (builtin::<core::ReplicationController>(), true),
-        (builtin::<batch::Job>(), false),
-        (builtin::<batch::CronJob>(), false),
-        (builtin::<core::ConfigMap>(), false),
-        (builtin::<core::Secret>(), false),
-        (builtin::<core::ResourceQuota>(), false),
-        (builtin::<core::LimitRange>(), false),
-        (builtin::<autoscaling::HorizontalPodAutoscaler>(), false),
-        (builtin::<policy::PodDisruptionBudget>(), false),
-        (builtin::<scheduling::PriorityClass>(), false),
-        (builtin::<node::RuntimeClass>(), false),
-        (builtin::<coordination::Lease>(), false),
-        (builtin::<core::Service>(), false),
-        (builtin::<core::Endpoints>(), false),
-        (builtin::<discovery::EndpointSlice>(), false),
-        (builtin::<networking::Ingress>(), false),
-        (builtin::<networking::IngressClass>(), false),
-        (builtin::<networking::NetworkPolicy>(), false),
-        (builtin::<core::PersistentVolume>(), false),
-        (builtin::<core::PersistentVolumeClaim>(), false),
-        (builtin::<storage::StorageClass>(), false),
-        (builtin::<core::Namespace>(), false),
-        (builtin::<core::Event>(), false),
-        (builtin::<core::ServiceAccount>(), false),
-        (builtin::<rbac::Role>(), false),
-        (builtin::<rbac::RoleBinding>(), false),
-        (builtin::<rbac::ClusterRole>(), false),
-        (builtin::<rbac::ClusterRoleBinding>(), false),
+        (ApiResource::of::<core::Node>(), false),
+        (ApiResource::of::<core::Pod>(), false),
+        (ApiResource::of::<apps::Deployment>(), true),
+        (ApiResource::of::<apps::StatefulSet>(), true),
+        (ApiResource::of::<apps::DaemonSet>(), false),
+        (ApiResource::of::<apps::ReplicaSet>(), true),
+        (ApiResource::of::<core::ReplicationController>(), true),
+        (ApiResource::of::<batch::Job>(), false),
+        (ApiResource::of::<batch::CronJob>(), false),
+        (ApiResource::of::<core::ConfigMap>(), false),
+        (ApiResource::of::<core::Secret>(), false),
+        (ApiResource::of::<core::ResourceQuota>(), false),
+        (ApiResource::of::<core::LimitRange>(), false),
+        (
+            ApiResource::of::<autoscaling::HorizontalPodAutoscaler>(),
+            false,
+        ),
+        (ApiResource::of::<policy::PodDisruptionBudget>(), false),
+        (ApiResource::of::<scheduling::PriorityClass>(), false),
+        (ApiResource::of::<node::RuntimeClass>(), false),
+        (ApiResource::of::<coordination::Lease>(), false),
+        (ApiResource::of::<core::Service>(), false),
+        (ApiResource::of::<core::Endpoints>(), false),
+        (ApiResource::of::<discovery::EndpointSlice>(), false),
+        (ApiResource::of::<networking::Ingress>(), false),
+        (ApiResource::of::<networking::IngressClass>(), false),
+        (ApiResource::of::<networking::NetworkPolicy>(), false),
+        (ApiResource::of::<core::PersistentVolume>(), false),
+        (ApiResource::of::<core::PersistentVolumeClaim>(), false),
+        (ApiResource::of::<storage::StorageClass>(), false),
+        (ApiResource::of::<core::Namespace>(), false),
+        (ApiResource::of::<core::Event>(), false),
+        (ApiResource::of::<core::ServiceAccount>(), false),
+        (ApiResource::of::<rbac::Role>(), false),
+        (ApiResource::of::<rbac::RoleBinding>(), false),
+        (ApiResource::of::<rbac::ClusterRole>(), false),
+        (ApiResource::of::<rbac::ClusterRoleBinding>(), false),
     ] {
         resources.push(api_resource, scalable);
     }

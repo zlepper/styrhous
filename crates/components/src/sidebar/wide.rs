@@ -138,11 +138,7 @@ impl<'a> WideSidebarContent<'a> {
             ui.label(
                 RichText::new(text.to_uppercase())
                     .font(typography::metadata())
-                    .color(if self.core.dark {
-                        gray::_400
-                    } else {
-                        gray::_500
-                    }),
+                    .color(muted_text_color(self.core.dark)),
             );
         });
         self.core.ui.add_space(2.0);
@@ -170,14 +166,9 @@ impl<'a> WideSidebarContent<'a> {
         } else {
             Image::new(egui::include_image!("../icons/chevron-right.svg"))
         };
-        let chevron =
-            chevron
-                .fit_to_exact_size(Vec2::splat(CHEVRON_SIZE))
-                .tint(if self.core.dark {
-                    gray::_500
-                } else {
-                    gray::_400
-                });
+        let chevron = chevron
+            .fit_to_exact_size(Vec2::splat(CHEVRON_SIZE))
+            .tint(chevron_tint(self.core.dark));
 
         let (rect, inner_rect, response) = allocate_item(self.core.ui, WIDE_GROUP_HEIGHT);
         let colors = ItemColors::expandable(
@@ -294,11 +285,7 @@ impl<'a> WideSidebarContent<'a> {
             Image::new(egui::include_image!("../icons/chevron-right.svg"))
         }
         .fit_to_exact_size(Vec2::splat(CHEVRON_SIZE))
-        .tint(if self.core.dark {
-            gray::_500
-        } else {
-            gray::_400
-        });
+        .tint(chevron_tint(self.core.dark));
 
         let group_height = WIDE_GROUP_HEIGHT;
         let (rect, inner_rect, response) = allocate_item(self.core.ui, group_height);
@@ -413,11 +400,7 @@ impl<'a> WideSidebarContent<'a> {
             Vec2::new(ui.available_width(), WIDE_ITEM_HEIGHT),
             Sense::hover(),
         );
-        let color = if self.core.dark {
-            gray::_400
-        } else {
-            gray::_500
-        };
+        let color = muted_text_color(self.core.dark);
         // The spinner sits where a section's chevron does, and the text where its label does.
         let inner_rect = rect.shrink2(Vec2::new(ITEM_PADDING_X, 0.0));
         let spinner_size = typography::META_SIZE;

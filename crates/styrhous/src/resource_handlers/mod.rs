@@ -57,13 +57,7 @@ fn matches_api_resource<T>(api_resource: &ApiResource, namespaced: bool) -> bool
 where
     T: Resource<DynamicType = ()>,
 {
-    let group = T::group(&());
-    let group = if group.is_empty() {
-        "core"
-    } else {
-        group.as_ref()
-    };
-    api_resource.group == group
+    api_resource.group == crate::api_resource::canonical_group(&T::group(&()))
         && api_resource.version == T::version(&())
         && api_resource.kind == T::kind(&())
         && api_resource.name == T::plural(&())

@@ -228,7 +228,7 @@ pub(crate) async fn consume_managed_type_stream<T, E>(
     T: Resource<DynamicType = (), Scope = NamespaceResourceScope> + Debug,
     E: Debug,
 {
-    let api_resource = api_resource_for::<T>();
+    let api_resource = ApiResource::of::<T>();
     pin_mut!(stream);
     let mut resources = BTreeMap::new();
     while let Some(event) = stream.next().await {
@@ -329,7 +329,7 @@ pub(crate) async fn consume_node_pod_stream<E: Debug>(
     sender: &tokio::sync::mpsc::UnboundedSender<ManagedResourceUpdate>,
     mut retry: RetryTracker,
 ) {
-    let api_resource = api_resource_for::<Pod>();
+    let api_resource = ApiResource::of::<Pod>();
     pin_mut!(stream);
     let mut state = NodePodWatchState::new(node_name);
     while let Some(event) = stream.next().await {
@@ -562,37 +562,6 @@ fn max_thresholds(
     }
 }
 
-pub(crate) trait ApiResourceScope {
-    const NAMESPACED: bool;
-}
-
-impl ApiResourceScope for NamespaceResourceScope {
-    const NAMESPACED: bool = true;
-}
-
-impl ApiResourceScope for ClusterResourceScope {
-    const NAMESPACED: bool = false;
-}
-
-pub(crate) fn api_resource_for<T>() -> ApiResource
-where
-    T: Resource<DynamicType = ()>,
-    T::Scope: ApiResourceScope,
-{
-    let group = T::group(&());
-    ApiResource {
-        group: if group.is_empty() {
-            "core".into()
-        } else {
-            group.into_owned()
-        },
-        version: T::version(&()).into_owned(),
-        kind: T::kind(&()).into_owned(),
-        name: T::plural(&()).into_owned(),
-        namespaced: T::Scope::NAMESPACED,
-    }
-}
-
 pub(crate) fn managed_resource_from_typed<T>(
     resource: &T,
     extract: impl FnOnce(&T) -> MinimalResource,
@@ -610,7 +579,7 @@ where
         .clone();
     let minimal_resource = extract(resource);
     Some(ManagedResource {
-        api_resource: api_resource_for::<T>(),
+        api_resource: ApiResource::of::<T>(),
         name: minimal_resource.name,
         namespace: minimal_resource.namespace,
         uid: minimal_resource.uid,
@@ -624,7 +593,7 @@ pub(crate) fn scheduled_pod_from_typed(resource: &Pod) -> Option<ManagedResource
     let node_name = resource.spec.as_ref()?.node_name.clone()?;
     let minimal_resource = resource_handlers::pod::extract(resource);
     Some(ManagedResource {
-        api_resource: api_resource_for::<Pod>(),
+        api_resource: ApiResource::of::<Pod>(),
         name: minimal_resource.name,
         namespace: minimal_resource.namespace,
         uid: minimal_resource.uid,

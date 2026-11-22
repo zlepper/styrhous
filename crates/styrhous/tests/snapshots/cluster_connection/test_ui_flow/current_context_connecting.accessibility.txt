@@ -55,5 +55,5 @@ Window state=[focused] rect=<none>
               GenericContainer rect=<none>
                 Label value="Connecting to dev" rect=(x=788.0 y=464.3 width=138.5 height=19.0 center_x=857.2 center_y=473.8)
                   TextRun value="Connecting to dev" rect=(x=788.0 y=464.3 width=138.5 height=19.0 center_x=857.2 center_y=473.8)
-                Label value="Authenticate: in progress" rect=(x=788.0 y=495.3 width=320.0 height=32.0 center_x=948.0 center_y=511.3)
+                Label value="Authenticate: in progress, 0.0 s" rect=(x=788.0 y=495.3 width=320.0 height=32.0 center_x=948.0 center_y=511.3)
                 Label value="Contact API server: pending" rect=(x=788.0 y=527.3 width=320.0 height=32.0 center_x=948.0 center_y=543.3)

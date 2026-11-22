@@ -5,9 +5,6 @@ use super::super::state::{ClusterConnectionState, ClusterState};
 use super::super::widgets::workspace_connection_progress;
 use components::{ChecklistStep, ChecklistStepState, ProgressChecklist};
 
-/// An in-progress step shows how long it has taken once that becomes noticeable.
-const SHOW_ELAPSED_AFTER_SECONDS: f64 = 1.0;
-
 /// Shows the connection's progress, and its error with a retry when it failed. Returns
 /// whether retry was clicked.
 pub(super) fn show_connection_progress(ui: &mut egui::Ui, cluster: &ClusterState) -> bool {
@@ -46,11 +43,7 @@ pub(super) fn connection_steps(cluster: &ClusterState, now: f64) -> Vec<Checklis
         ("Contact API server", contact),
     ]
     .into_iter()
-    .map(|(label, (state, detail))| ChecklistStep {
-        label: label.to_owned(),
-        state,
-        detail,
-    })
+    .map(|(label, (state, detail))| ChecklistStep::new(label, state, detail))
     .collect()
 }
 
@@ -58,10 +51,11 @@ fn done(seconds: f64) -> (ChecklistStepState, Option<String>) {
     (ChecklistStepState::Done, Some(format_duration(seconds)))
 }
 
+/// The running step counts up, so progress is visible from the first frame.
 fn in_progress(seconds: f64) -> (ChecklistStepState, Option<String>) {
     (
         ChecklistStepState::InProgress,
-        (seconds >= SHOW_ELAPSED_AFTER_SECONDS).then(|| format_duration(seconds)),
+        Some(format_duration(seconds)),
     )
 }
 
@@ -95,7 +89,7 @@ mod tests {
     }
 
     #[test]
-    fn authenticating_shows_its_elapsed_time_only_once_it_is_noticeable() {
+    fn authenticating_counts_up_its_elapsed_time() {
         let connecting = cluster(
             ClusterConnectionState::Connecting,
             ConnectionProgress::started_at(10.0),
@@ -104,7 +98,7 @@ mod tests {
         assert_eq!(
             summary(&connection_steps(&connecting, 10.5)),
             vec![
-                (ChecklistStepState::InProgress, None),
+                (ChecklistStepState::InProgress, Some("0.5 s")),
                 (ChecklistStepState::Pending, None)
             ]
         );

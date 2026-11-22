@@ -12,10 +12,7 @@ pub(crate) struct ClusterState {
     /// Set while the namespace watcher has been retrying past the grace
     /// period; the last known namespaces stay usable meanwhile.
     pub(crate) namespaces_reconnecting: Option<String>,
-    /// Whether the API server has answered an authenticated request this session. Until
-    /// then a connection that was set up may still fail its first request.
-    pub(crate) reachable: bool,
-    /// When the current connection attempt passed each step.
+    /// When the current connection attempt passed each step; see `reachable`.
     pub(crate) connection_progress: ConnectionProgress,
     pub(crate) selected_namespaces: SelectedNamespaces,
     pub(crate) resources: ClusterResourceState,
@@ -32,12 +29,11 @@ pub(crate) struct ClusterState {
 pub(crate) struct ClusterResourceState {
     /// What discovery reported and what was assumed before it answered.
     pub(crate) api_discovery: ApiDiscoveryState,
-    /// The API resources shown, derived from `api_discovery` by
+    /// The API resources shown and which of them scale, derived from `api_discovery` by
     /// `refresh_api_resources`, in discovery order.
-    pub(crate) discovered_api_resources: Vec<ApiResource>,
+    pub(crate) displayed_api_resources: ApiResourceSet,
     pub(crate) resource_navigation: ResourceNavigation,
     pub(crate) custom_resource_columns: BTreeMap<ApiResource, Vec<CustomResourceColumn>>,
-    pub(crate) scalable_api_resources: BTreeSet<ApiResource>,
     pub(crate) selected_api_resource: Option<ApiResource>,
     pub(crate) resource_cache: HashMap<ResourceWatchKey, ResourceWatchState>,
     pub(in crate::ui) resource_table_cache: super::super::resource_table_cache::ResourceTableCache,
@@ -90,7 +86,6 @@ impl ClusterState {
             connection: ClusterConnectionState::Disconnected,
             namespaces_load: ClusterLoadState::Loading,
             namespaces_reconnecting: None,
-            reachable: false,
             connection_progress: ConnectionProgress::default(),
             selected_namespaces: SelectedNamespaces::default(),
             resources: ClusterResourceState::new(false),
@@ -100,6 +95,18 @@ impl ClusterState {
     /// The selected namespaces resolved against the discovered ones.
     pub(crate) fn namespace_scope(&self) -> NamespaceScope<'_> {
         NamespaceScope::new(&self.selected_namespaces, &self.namespaces)
+    }
+
+    /// Whether "All namespaces" is still resolved against a namespace list that has not
+    /// arrived, or that failed. An explicit selection never waits for the list.
+    pub(crate) fn awaited_namespace_list(&self) -> NamespaceListWait<'_> {
+        match (&self.selected_namespaces, &self.namespaces_load) {
+            (SelectedNamespaces::All, ClusterLoadState::Loading) => NamespaceListWait::Loading,
+            (SelectedNamespaces::All, ClusterLoadState::Failed(error)) => {
+                NamespaceListWait::Failed(error)
+            }
+            _ => NamespaceListWait::Ready,
+        }
     }
 
     /// Whether a running watcher covers `namespace`, either on its own or as
@@ -121,7 +128,7 @@ impl ClusterState {
         self.connection = ClusterConnectionState::Connecting;
         self.namespaces_load = ClusterLoadState::Loading;
         self.namespaces_reconnecting = None;
-        self.reachable = false;
+        self.connection_progress = ConnectionProgress::default();
         self.namespaces.clear();
         self.selected_namespaces = SelectedNamespaces::default();
         self.resources.reset_for_connection();
@@ -134,9 +141,7 @@ impl ClusterState {
     /// fixture so additions to `ClusterState` have one test default to update.
     pub(crate) fn for_test(cluster_key: i32, name: impl Into<String>) -> Self {
         let mut state = Self::new(cluster_key, name.into());
-        state.namespaces_load = ClusterLoadState::Ready;
-        state.reachable = true;
-        state.resources.api_discovery.complete = true;
+        state.mark_loaded_for_test();
         state.resources.pod_metrics_api_available = true;
         state.resources.node_metrics_api_available = true;
         state
@@ -144,6 +149,21 @@ impl ClusterState {
 }
 
 impl ClusterState {
+    /// Whether the API server has answered an authenticated request this session. Until
+    /// then a connection that was set up may still fail its first request.
+    pub(crate) fn reachable(&self) -> bool {
+        self.connection_progress.reachable.is_some()
+    }
+
+    #[cfg(any(test, feature = "benchmarks"))]
+    /// Marks the namespaces listed, the API server reachable and discovery complete, as
+    /// for a session that has finished loading. The connection state is left alone.
+    pub(crate) fn mark_loaded_for_test(&mut self) {
+        self.namespaces_load = ClusterLoadState::Ready;
+        self.connection_progress.reachable = Some(self.connection_progress.started);
+        self.resources.api_discovery.complete = true;
+    }
+
     /// The connection was set up: the kubeconfig and credentials were loaded.
     pub(crate) fn mark_authenticated(&mut self, now: f64) {
         if self.connection_progress.authenticated.is_none() {
@@ -154,8 +174,8 @@ impl ClusterState {
 
     /// The API server answered an authenticated request; see `reachable`.
     pub(crate) fn mark_reachable(&mut self, now: f64) {
-        if !self.reachable {
-            self.reachable = true;
+        // A failed session's late answers do not revive it.
+        if !self.reachable() && !matches!(self.connection, ClusterConnectionState::Failed(_)) {
             self.connection_progress.reachable = Some(now);
             self.log_connect_timing("API server answered", now);
         }
@@ -181,6 +201,14 @@ impl ClusterState {
     }
 }
 
+/// What a namespace scope still waits for; see `ClusterState::awaited_namespace_list`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NamespaceListWait<'a> {
+    Ready,
+    Loading,
+    Failed(&'a str),
+}
+
 /// When a connection attempt started and passed each step, in seconds of egui input time.
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub(crate) struct ConnectionProgress {
@@ -200,10 +228,17 @@ impl ConnectionProgress {
 }
 
 impl ClusterResourceState {
+    /// Forgets every watched row of `api_resource`, and the table prepared from them.
+    pub(crate) fn drop_rows_of(&mut self, api_resource: &ApiResource) {
+        self.resource_cache
+            .retain(|(resource, _), _| resource != api_resource);
+        self.resource_table_cache.clear();
+    }
+
     /// Whether the Pod and Node usage columns show the Metrics API as available. Until
     /// discovery completes it is not known, so the columns wait for data instead.
     pub(crate) fn metrics_shown_as_available(&self) -> (bool, bool) {
-        let undecided = !self.api_discovery.complete;
+        let undecided = !self.api_discovery.metrics_decided();
         (
             self.pod_metrics_api_available || undecided,
             self.node_metrics_api_available || undecided,
@@ -213,19 +248,17 @@ impl ClusterResourceState {
     /// Derives the shown resources, their scale support and the navigation from the
     /// discovery state. The selection is kept as is.
     pub(crate) fn refresh_api_resources(&mut self) {
-        let displayed = self.api_discovery.displayed();
-        self.resource_navigation = build_resource_navigation(displayed.api_resources.clone());
-        self.discovered_api_resources = displayed.api_resources;
-        self.scalable_api_resources = displayed.scalable_api_resources;
+        self.displayed_api_resources = self.api_discovery.displayed();
+        self.resource_navigation =
+            build_resource_navigation(self.displayed_api_resources.api_resources.clone());
     }
 
     fn new(metrics_api_available: bool) -> Self {
         Self {
             api_discovery: ApiDiscoveryState::default(),
-            discovered_api_resources: Vec::new(),
+            displayed_api_resources: ApiResourceSet::default(),
             resource_navigation: ResourceNavigation::default(),
             custom_resource_columns: BTreeMap::new(),
-            scalable_api_resources: BTreeSet::new(),
             selected_api_resource: None,
             resource_cache: HashMap::new(),
             resource_table_cache: Default::default(),

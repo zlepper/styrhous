@@ -115,6 +115,16 @@ impl ItemColors {
     }
 }
 
+/// Secondary text such as section headers and loading notes.
+fn muted_text_color(dark: bool) -> Color32 {
+    if dark { gray::_400 } else { gray::_500 }
+}
+
+/// The tint of disclosure chevrons.
+fn chevron_tint(dark: bool) -> Color32 {
+    if dark { gray::_500 } else { gray::_400 }
+}
+
 fn allocate_item(ui: &mut Ui, height: f32) -> (egui::Rect, egui::Rect, Response) {
     let available_width = ui.available_width();
     let (rect, response) =

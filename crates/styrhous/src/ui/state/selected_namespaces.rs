@@ -55,6 +55,11 @@ impl SelectedNamespaces {
         }
     }
 
+    /// Whether no namespace is selected, as opposed to "All namespaces".
+    pub(crate) fn is_nothing_selected(&self) -> bool {
+        matches!(self, Self::Selected(namespaces) if namespaces.is_empty())
+    }
+
     /// Forget a namespace that no longer exists. `All` is unaffected.
     pub(crate) fn remove(&mut self, namespace: &str) {
         if let Self::Selected(namespaces) = self {

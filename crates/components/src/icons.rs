@@ -352,3 +352,22 @@ pub fn settings_destination_namespace_icon() -> Image<'static> {
 pub fn settings_destination_account_icon() -> Image<'static> {
     Image::new(include_image!("icons/settings-destination-account.svg"))
 }
+
+/// Paints a check mark `width` points wide centred on `center`, as drawn for selected
+/// options and completed steps.
+pub fn paint_check_mark(
+    painter: &egui::Painter,
+    center: egui::Pos2,
+    width: f32,
+    stroke: egui::Stroke,
+) {
+    let scale = width / 13.0;
+    let [start, corner, end] = [
+        Vec2::new(-6.0, 0.0),
+        Vec2::new(-1.5, 4.5),
+        Vec2::new(7.0, -5.0),
+    ]
+    .map(|offset| center + offset * scale);
+    painter.line_segment([start, corner], stroke);
+    painter.line_segment([corner, end], stroke);
+}

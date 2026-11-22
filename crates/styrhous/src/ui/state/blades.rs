@@ -29,10 +29,15 @@ pub(crate) struct ResourceDetailHistoryEntry {
     pub(crate) pod_usage_missing: bool,
     /// The cluster does not serve PodMetrics, so resource usage cannot be collected.
     pub(crate) pod_metrics_api_unavailable: bool,
+    /// Whether this visit's watch collects Pod usage. An inspector opened before discovery
+    /// found the Metrics API is restarted once it does.
+    pub(crate) pod_metrics_watched: bool,
     pub(crate) pod_usage_error: Option<String>,
     pub(crate) node_usage: Option<NodeUsage>,
     pub(crate) node_usage_history: Vec<NodeUsage>,
     pub(crate) node_metrics_api_unavailable: bool,
+    /// Whether this visit's watch collects Node usage; see `pod_metrics_watched`.
+    pub(crate) node_metrics_watched: bool,
     pub(crate) node_usage_error: Option<String>,
     pub(crate) data_editor: Option<ResourceDataEditorState>,
     /// UI interactions are recorded while rendering, then consumed by the
@@ -135,6 +140,7 @@ impl UiState {
             .filter(|entry| entry.cluster_key == cluster_key)
         {
             entry.pod_metrics_api_unavailable = true;
+            entry.pod_metrics_watched = false;
         }
     }
 
@@ -152,6 +158,7 @@ impl UiState {
             })
         {
             entry.node_metrics_api_unavailable = true;
+            entry.node_metrics_watched = false;
         }
     }
 
@@ -180,9 +187,9 @@ impl UiState {
             .filter_map(|entry| entry.resource_detail_mut())
             .filter(|entry| entry.cluster_key == cluster_key)
         {
-            let restore_pod = pod_metrics && entry.pod_metrics_api_unavailable;
+            let restore_pod = pod_metrics && !entry.pod_metrics_watched;
             let restore_node = node_metrics
-                && entry.node_metrics_api_unavailable
+                && !entry.node_metrics_watched
                 && entry.api_resource.group == "core"
                 && entry.api_resource.kind == "Node";
             if !restore_pod && !restore_node {
@@ -190,6 +197,8 @@ impl UiState {
             }
             entry.pod_metrics_api_unavailable &= !restore_pod;
             entry.node_metrics_api_unavailable &= !restore_node;
+            entry.pod_metrics_watched = pod_metrics_api_available;
+            entry.node_metrics_watched = node_metrics_api_available;
             stop_resource_detail_watches(cluster_key, [entry.history_entry_id], commands_to_send);
             commands_to_send.push(Box::new(crate::worker::StartResourceDetailWatch {
                 cluster_key,

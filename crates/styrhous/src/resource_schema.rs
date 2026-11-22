@@ -157,11 +157,7 @@ impl ResourceSchema {
 
     pub fn from_openapi_document(document: Value, api_resource: &ApiResource) -> Option<Self> {
         let schemas = document.pointer("/components/schemas")?.as_object()?;
-        let group = if api_resource.group == "core" {
-            ""
-        } else {
-            &api_resource.group
-        };
+        let group = api_resource.kube_group();
         let name = schemas.iter().find_map(|(name, schema)| {
             schema
                 .get("x-kubernetes-group-version-kind")

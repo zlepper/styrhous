@@ -9,10 +9,20 @@ impl WorkerResult for crate::worker::KubernetesResourceAdded {
             resource,
         } = self;
         if let Some(cluster) = ui.clusters.get_mut(&cluster_key) {
+            // A namespace created after a watch across every namespace listed has had no
+            // rows until now, which the watch already reported.
+            let listed_everywhere = cluster.watches_every_namespace(&api_resource)
+                && cluster
+                    .resource_cache
+                    .get(&(api_resource.clone(), None))
+                    .is_some_and(|watch| watch.is_synced);
             let watch = cluster
                 .resource_cache
                 .entry((api_resource, namespace))
-                .or_default();
+                .or_insert_with(|| ResourceWatchState {
+                    is_synced: listed_everywhere,
+                    ..Default::default()
+                });
             watch.resources.insert(resource.uid.clone(), resource);
             watch.revision = watch.revision.wrapping_add(1);
         }

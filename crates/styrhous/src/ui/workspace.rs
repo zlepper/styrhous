@@ -2,9 +2,9 @@ use super::resource_actions::{log_stream_targets, show_resource_action_items};
 use super::resource_owner;
 use super::resource_table_cache::{PreparedResourceTable, PreparedResourceTableRow};
 use super::state::{
-    BulkDeleteTarget, ClusterConnectionState, ClusterLoadState, NamespaceScope, PendingBulkDelete,
-    PendingCronJobRun, PendingDelete, PendingDeploymentRestart, PendingForceDelete, ResourceAction,
-    ResourceSearchState, SelectedNamespaces, UiState,
+    BulkDeleteTarget, ClusterConnectionState, ClusterLoadState, NamespaceListWait,
+    PendingBulkDelete, PendingCronJobRun, PendingDelete, PendingDeploymentRestart,
+    PendingForceDelete, ResourceAction, ResourceSearchState, SelectedNamespaces, UiState,
 };
 use super::table_preferences::{
     MetadataColumnSource, PersistedResourceTablePreferences, ResourceTableKey,
@@ -299,7 +299,7 @@ pub(super) fn show(
                         return;
                     }
                     ClusterConnectionState::Connecting | ClusterConnectionState::Connected
-                        if !cluster.reachable =>
+                        if !cluster.reachable() =>
                     {
                         show_connection_progress(ui, cluster);
                         return;
@@ -357,29 +357,13 @@ pub(super) fn show(
                                     || cluster.namespace_scope().len() > 1),
                             table_preferences,
                         );
-                        let selected_namespaces =
-                            NamespaceScope::new(&cluster.selected_namespaces, &cluster.namespaces);
-                        let watches_every_namespace = cluster.watches_every_namespace(api_resource);
-                        let (pod_metrics_shown, node_metrics_shown) =
-                            cluster.metrics_shown_as_available();
-                        let resources = &mut cluster.resources;
-                        let prepared = prepare_resource_table(
-                            &mut resources.resource_table_cache,
-                            ResourceTableData {
-                                selected_namespaces,
-                                watches_every_namespace,
-                                resource_cache: &resources.resource_cache,
-                                metrics: ResourceMetrics {
-                                    pod_metrics_api_available: pod_metrics_shown,
-                                    pod_metrics: &resources.pod_metrics,
-                                    node_metrics_api_available: node_metrics_shown,
-                                    node_metrics: &resources.node_metrics,
-                                },
-                            },
+                        prepare_cluster_table(
+                            cluster,
                             api_resource,
                             &resource_search,
                             &configuration,
                         );
+                        let prepared = cluster.resource_table_cache.prepared();
                         let counts = (prepared.resource_count, prepared.visible_resource_count);
                         (Some(configuration), counts.0, counts.1)
                     } else {
@@ -427,35 +411,27 @@ pub(super) fn show(
                 let table_configuration = table_configuration
                     .as_ref()
                     .expect("selected resources have a table configuration");
-                let namespace_selection_empty = api_resource.namespaced
-                    && cluster.selected_namespaces == SelectedNamespaces::default();
+                let namespace_selection_empty =
+                    api_resource.namespaced && cluster.selected_namespaces.is_nothing_selected();
                 let watch_error = selected_watch_error(cluster, api_resource);
-                let watches_are_loading = selected_watches_are_loading(cluster, api_resource);
-                let selected_namespaces =
-                    NamespaceScope::new(&cluster.selected_namespaces, &cluster.namespaces);
-                let (pod_metrics_shown, node_metrics_shown) = cluster.metrics_shown_as_available();
-                let watches_every_namespace = cluster.watches_every_namespace(api_resource);
-                let resources = &mut cluster.resources;
-                let metrics = ResourceMetrics {
-                    pod_metrics_api_available: pod_metrics_shown,
-                    pod_metrics: &resources.pod_metrics,
-                    node_metrics_api_available: node_metrics_shown,
-                    node_metrics: &resources.node_metrics,
+                let namespace_list_error = match awaited_namespace_list(cluster, api_resource) {
+                    NamespaceListWait::Failed(error) => Some(error.to_owned()),
+                    NamespaceListWait::Ready | NamespaceListWait::Loading => None,
                 };
-                let prepared = prepare_resource_table(
-                    &mut resources.resource_table_cache,
-                    ResourceTableData {
-                        selected_namespaces,
-                        watches_every_namespace,
-                        resource_cache: &resources.resource_cache,
-                        metrics,
-                    },
-                    api_resource,
-                    resources
-                        .resource_searches
-                        .get(api_resource)
-                        .expect("selected resource search was just stored"),
-                    table_configuration,
+                let watches_are_loading = selected_watches_are_loading(cluster, api_resource);
+                let resource_search = cluster
+                    .resource_searches
+                    .get(api_resource)
+                    .expect("selected resource search was just stored")
+                    .clone();
+                prepare_cluster_table(cluster, api_resource, &resource_search, table_configuration);
+                let metrics_shown = cluster.metrics_shown_as_available();
+                let resources = &mut cluster.resources;
+                let prepared = resources.resource_table_cache.prepared();
+                let metrics = ResourceMetrics::new(
+                    metrics_shown,
+                    &resources.pod_metrics,
+                    &resources.node_metrics,
                 );
                 if namespace_selection_empty {
                     workspace_empty_state(
@@ -463,6 +439,9 @@ pub(super) fn show(
                         "Choose a namespace",
                         "Select one or more namespaces to start watching resources.",
                     );
+                } else if let Some(error) = &namespace_list_error {
+                    // The namespace watcher keeps retrying by itself, so there is nothing to retry.
+                    workspace_empty_state(ui, "Namespaces unavailable", error);
                 } else if let Some(error) = watch_error {
                     effects.retry_requested =
                         workspace_error_state(ui, "Unable to load resources", &error);
@@ -499,8 +478,8 @@ pub(super) fn show(
                             actions: ResourceActionAvailability {
                                 enabled: resource_actions_enabled,
                                 supports_scale: resources
-                                    .scalable_api_resources
-                                    .contains(api_resource),
+                                    .displayed_api_resources
+                                    .is_scalable(api_resource),
                             },
                             debug_image_presets,
                         },

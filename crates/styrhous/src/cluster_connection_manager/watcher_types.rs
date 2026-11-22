@@ -19,25 +19,15 @@ impl DynamicKubernetesResourceWatcher {
             namespace,
             watched_namespaces,
         } = self;
-        let kube_resource = dynamic_api::kube_api_resource(&api_resource);
-        let api: Api<DynamicObject> = match (api_resource.namespaced, namespace.as_deref()) {
-            (true, Some(namespace)) => {
-                Api::namespaced_with(client.clone(), namespace, &kube_resource)
-            }
-            (true, None) if watched_namespaces.is_some() => {
-                Api::all_with(client.clone(), &kube_resource)
-            }
-            (false, None) => Api::all_with(client.clone(), &kube_resource),
-            (namespaced, requested_namespace) => {
-                let error = format!(
-                    "Resource scope mismatch: {} is {} but the watch has namespace {requested_namespace:?}",
-                    api_resource.kind,
-                    if namespaced {
-                        "namespaced"
-                    } else {
-                        "cluster-scoped"
-                    },
-                );
+        let api = match dynamic_api::create_scoped(
+            &client,
+            &api_resource,
+            namespace.as_deref(),
+            watched_namespaces.is_some(),
+        ) {
+            Ok(api) => api,
+            Err(error) => {
+                let error = format!("{error:#}");
                 event_sender
                     .send(KubernetesResourceWatchFailed {
                         cluster_key,

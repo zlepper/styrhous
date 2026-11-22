@@ -5,9 +5,12 @@ use egui::{Color32, Response, Sense, Stroke, Ui, Vec2};
 use crate::colors::gray;
 use crate::design::{spacing, status, typography};
 
-const WIDTH: f32 = 320.0;
-const ROW_HEIGHT: f32 = 32.0;
-const ICON_SIZE: f32 = 16.0;
+/// The default column width, enough for a step label and its duration.
+const DEFAULT_WIDTH: f32 = 320.0;
+const ROW_HEIGHT: f32 = spacing::XXL;
+const ICON_SIZE: f32 = spacing::LG;
+const ICON_STROKE_WIDTH: f32 = 1.5;
+const PENDING_DOT_RADIUS: f32 = 3.0;
 const TITLE_GAP: f32 = spacing::MD;
 
 /// How far one step has come.
@@ -38,15 +41,40 @@ pub struct ChecklistStep {
     pub detail: Option<String>,
 }
 
+impl ChecklistStep {
+    pub fn new(
+        label: impl Into<String>,
+        state: ChecklistStepState,
+        detail: Option<String>,
+    ) -> Self {
+        Self {
+            label: label.into(),
+            state,
+            detail,
+        }
+    }
+}
+
 /// A titled checklist of steps, for showing progress through work that happens in stages.
 pub struct ProgressChecklist<'a> {
     title: &'a str,
     steps: &'a [ChecklistStep],
+    width: f32,
 }
 
 impl<'a> ProgressChecklist<'a> {
     pub fn new(title: &'a str, steps: &'a [ChecklistStep]) -> Self {
-        Self { title, steps }
+        Self {
+            title,
+            steps,
+            width: DEFAULT_WIDTH,
+        }
+    }
+
+    /// The width of the column the title and steps share; durations align to its right.
+    pub fn width(mut self, width: f32) -> Self {
+        self.width = width;
+        self
     }
 
     /// The height `show` allocates, so callers can center it.
@@ -60,10 +88,10 @@ impl<'a> ProgressChecklist<'a> {
     pub fn show(self, ui: &mut Ui) {
         let height = self.height(ui);
         ui.allocate_ui_with_layout(
-            Vec2::new(WIDTH, height),
+            Vec2::new(self.width, height),
             egui::Layout::top_down(egui::Align::LEFT),
             |ui| {
-                ui.set_width(WIDTH);
+                ui.set_width(self.width);
                 ui.spacing_mut().item_spacing.y = 0.0;
                 ui.label(
                     egui::RichText::new(self.title)
@@ -72,15 +100,15 @@ impl<'a> ProgressChecklist<'a> {
                 );
                 ui.add_space(TITLE_GAP);
                 for step in self.steps {
-                    show_step(ui, step);
+                    show_step(ui, step, self.width);
                 }
             },
         );
     }
 }
 
-fn show_step(ui: &mut Ui, step: &ChecklistStep) -> Response {
-    let (rect, response) = ui.allocate_exact_size(Vec2::new(WIDTH, ROW_HEIGHT), Sense::hover());
+fn show_step(ui: &mut Ui, step: &ChecklistStep, width: f32) -> Response {
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, ROW_HEIGHT), Sense::hover());
     let painter = ui.painter();
     let icon_rect = egui::Rect::from_center_size(
         egui::pos2(rect.left() + ICON_SIZE / 2.0, rect.center().y),
@@ -88,7 +116,11 @@ fn show_step(ui: &mut Ui, step: &ChecklistStep) -> Response {
     );
     match step.state {
         ChecklistStepState::Pending => {
-            painter.circle_stroke(icon_rect.center(), 3.0, Stroke::new(1.5, gray::_300));
+            painter.circle_stroke(
+                icon_rect.center(),
+                PENDING_DOT_RADIUS,
+                Stroke::new(ICON_STROKE_WIDTH, gray::_300),
+            );
         }
         ChecklistStepState::InProgress => {
             egui::Spinner::new()
@@ -133,30 +165,19 @@ fn show_step(ui: &mut Ui, step: &ChecklistStep) -> Response {
 
 fn paint_done(painter: &egui::Painter, rect: egui::Rect) {
     paint_status_circle(painter, rect, status::SUCCESS);
-    let size = ICON_SIZE * 0.3;
-    let center = rect.center();
-    let stroke = Stroke::new(1.5, status::SUCCESS);
-    painter.line_segment(
-        [
-            center + egui::vec2(-size * 0.8, 0.0),
-            center + egui::vec2(-size * 0.2, size * 0.6),
-        ],
-        stroke,
-    );
-    painter.line_segment(
-        [
-            center + egui::vec2(-size * 0.2, size * 0.6),
-            center + egui::vec2(size * 0.9, -size * 0.6),
-        ],
-        stroke,
+    crate::icons::paint_check_mark(
+        painter,
+        rect.center(),
+        ICON_SIZE * 0.5,
+        Stroke::new(ICON_STROKE_WIDTH, status::SUCCESS),
     );
 }
 
 fn paint_failed(painter: &egui::Painter, rect: egui::Rect) {
-    paint_status_circle(painter, rect, status::CRITICAL);
+    paint_status_circle(painter, rect, status::DANGER);
     let size = ICON_SIZE * 0.2;
     let center = rect.center();
-    let stroke = Stroke::new(1.5, status::CRITICAL);
+    let stroke = Stroke::new(ICON_STROKE_WIDTH, status::DANGER);
     for direction in [egui::vec2(1.0, 1.0), egui::vec2(1.0, -1.0)] {
         painter.line_segment(
             [center - direction * size, center + direction * size],
@@ -168,7 +189,7 @@ fn paint_failed(painter: &egui::Painter, rect: egui::Rect) {
 fn paint_status_circle(painter: &egui::Painter, rect: egui::Rect, color: Color32) {
     painter.circle_stroke(
         rect.center(),
-        ICON_SIZE / 2.0 - 0.75,
-        Stroke::new(1.5, color),
+        (ICON_SIZE - ICON_STROKE_WIDTH) / 2.0,
+        Stroke::new(ICON_STROKE_WIDTH, color),
     );
 }

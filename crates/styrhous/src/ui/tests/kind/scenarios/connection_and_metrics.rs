@@ -260,15 +260,16 @@ fn test_real_cluster_connection() {
     // The built-in resources shown before discovery answers must match what a real
     // cluster serves, or every first connection would show and then retract them.
     let fresh = &cluster.api_discovery.fresh;
-    for builtin in crate::resource_catalog::builtin_api_resources().api_resources {
+    let baseline = crate::resource_catalog::builtin_api_resources();
+    for builtin in &baseline.api_resources {
         assert!(
-            fresh.api_resources.contains(&builtin),
+            fresh.api_resources.contains(builtin),
             "Kind should serve the built-in {builtin:?} exactly as the baseline assumes"
         );
     }
-    for scalable in crate::resource_catalog::builtin_api_resources().scalable_api_resources {
+    for scalable in &baseline.scalable_api_resources {
         assert!(
-            fresh.is_scalable(&scalable),
+            fresh.is_scalable(scalable),
             "Kind should support scaling {}",
             scalable.name
         );
@@ -530,4 +531,62 @@ fn test_pod_metrics_charts_integration() {
         "Pod memory usage chart; usage history available; 10-minute history; scale from 0 to {}; Request 64Mi, Limit 64Mi",
         format_memory(max_memory),
     ));
+}
+
+/// "All namespaces" watches across every namespace, so a namespace created after the watch
+/// listed is shown without restarting it.
+#[test]
+fn test_all_namespaces_watch_includes_namespaces_created_later() {
+    let existing = IntegrationNamespaceFixture::create(
+        "all-namespaces",
+        WATCHER_CONFIGMAP_NAME,
+        "existing-value",
+    );
+    let (mut harness, cluster_key) = connected_kind_harness();
+    wait_for_cluster_data(&mut harness, cluster_key);
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
+        .click();
+    harness.run_steps(2);
+    harness.get_by_label("Select all").click();
+    harness.run_steps(2);
+    harness.key_press(egui::Key::Escape);
+    harness.run_steps(1);
+    let configmaps = select_resource(&mut harness, "Config", "Config Maps");
+    assert!(
+        harness.state().ui_state.clusters[&cluster_key].watches_every_namespace(&configmaps),
+        "All namespaces is watched across every namespace"
+    );
+    wait_for_resource_sync(
+        &mut harness,
+        cluster_key,
+        &configmaps,
+        Some(&existing.namespace),
+    );
+
+    let created = IntegrationNamespaceFixture::create(
+        "all-namespaces-later",
+        WATCHER_CONFIGMAP_NAME,
+        "created-value",
+    );
+
+    wait_for_resource_watch(
+        &mut harness,
+        "the ConfigMap of a namespace created after the watch listed",
+        cluster_key,
+        &configmaps,
+        Some(&created.namespace),
+        |watch| {
+            watch
+                .resources
+                .values()
+                .any(|resource| resource.name == created.name)
+                .then_some(())
+        },
+        30_000,
+    );
+    assert!(
+        harness.state().ui_state.clusters[&cluster_key].watches_every_namespace(&configmaps),
+        "the watch was not replaced by a filtered one"
+    );
 }

@@ -176,6 +176,24 @@ impl From<anyhow::Error> for ManagedClusterDiscoveryFailed {
 }
 
 #[async_trait]
+impl WorkerCommand for DisconnectCluster {
+    type Output = Result<NoResult, WorkerError>;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output {
+        state.stop_cluster(self.cluster_key).await;
+        Ok(NoResult)
+    }
+
+    fn serializes_session_lifecycle(&self) -> bool {
+        true
+    }
+
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
+    }
+}
+
+#[async_trait]
 impl WorkerCommand for ConnectToCluster {
     type Output = Result<KubernetesClusterConnectionCreated, ClusterConnectionFailed>;
 

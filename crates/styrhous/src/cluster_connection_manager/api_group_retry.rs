@@ -2,13 +2,12 @@
 //! so a transient failure (for example an aggregated API that was still starting) does not
 //! leave the cluster half-loaded until the application restarts.
 
-use super::{ApiGroupTarget, KubernetesApiInspector};
+use super::{ApiGroupTarget, KubernetesApiInspector, within};
 
-use crate::api_resource::{ApiResource, ApiResourceSet};
+use crate::api_resource::ApiResourceSet;
 use crate::worker::*;
 use anyhow::Result;
 use futures_util::stream::StreamExt;
-use std::collections::BTreeSet;
 use std::time::Duration;
 
 /// A retry that has not answered by now is counted as failed, like in the initial discovery.
@@ -19,8 +18,7 @@ const CONCURRENT_GROUP_RETRIES: usize = 4;
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub(crate) struct RecoveredApiGroups {
     pub(crate) group_versions: Vec<String>,
-    pub(crate) api_resources: Vec<ApiResource>,
-    pub(crate) scalable_api_resources: BTreeSet<ApiResource>,
+    pub(crate) resources: ApiResourceSet,
     /// Groups that are still failing and will be retried.
     pub(crate) still_failing: Vec<String>,
 }
@@ -65,10 +63,7 @@ pub(crate) async fn retry_failed_api_groups<Sleep, Fetch, Publish>(
             match outcome {
                 Ok(discovered) => {
                     recovered.group_versions.push(target.group_version);
-                    recovered.api_resources.extend(discovered.api_resources);
-                    recovered
-                        .scalable_api_resources
-                        .extend(discovered.scalable_api_resources);
+                    recovered.resources.extend(discovered);
                 }
                 Err(error) => {
                     tracing::debug!(
@@ -110,18 +105,7 @@ pub(crate) async fn retry_cluster_api_groups(
         },
         |recovered| {
             let event_output = event_output.clone();
-            async move {
-                event_output
-                    .send(KubernetesApiGroupsRecovered {
-                        cluster_key,
-                        group_versions: recovered.group_versions,
-                        api_resources: recovered.api_resources,
-                        scalable_api_resources: recovered.scalable_api_resources,
-                        still_failing_group_versions: recovered.still_failing,
-                    })
-                    .await
-                    .is_ok()
-            }
+            async move { send_recovered(cluster_key, &event_output, recovered).await }
         },
         failed,
     )
@@ -132,24 +116,40 @@ async fn fetch_group(client: &kube::Client, target: &ApiGroupTarget) -> Result<A
     let inspector = KubernetesApiInspector {
         client: client.clone(),
     };
-    match tokio::time::timeout(
+    within(
         GROUP_RETRY_TIMEOUT,
+        &target.group_version,
         inspector.get_api_resources_for_group_versions(target),
     )
     .await
-    {
-        Ok(result) => result,
-        Err(_) => anyhow::bail!("timed out waiting for the API server to respond"),
-    }
+}
+
+/// Reports groups that answered a retry. Returns `false` when nobody listens any more.
+pub(crate) async fn send_recovered(
+    cluster_key: i32,
+    events: &WorkerResultSender,
+    recovered: RecoveredApiGroups,
+) -> bool {
+    events
+        .send(KubernetesApiGroupsRecovered {
+            cluster_key,
+            group_versions: recovered.group_versions,
+            resources: recovered.resources,
+            still_failing_group_versions: recovered.still_failing,
+        })
+        .await
+        .is_ok()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::api_resource::ApiResource;
     use anyhow::bail;
     use k8s_openapi::apimachinery::pkg::apis::meta::v1::GroupVersionForDiscovery;
     use kube::runtime::watcher::DefaultBackoff;
     use std::cell::RefCell;
+    use std::collections::BTreeSet;
     use std::collections::{BTreeMap, VecDeque};
 
     fn target(group: &str) -> ApiGroupTarget {
@@ -238,8 +238,10 @@ mod tests {
             *fake.recoveries.borrow(),
             vec![RecoveredApiGroups {
                 group_versions: vec!["metrics.k8s.io/v1".to_owned()],
-                api_resources: vec![resource("metrics.k8s.io")],
-                scalable_api_resources: BTreeSet::from([resource("metrics.k8s.io")]),
+                resources: ApiResourceSet {
+                    api_resources: vec![resource("metrics.k8s.io")],
+                    scalable_api_resources: BTreeSet::from([resource("metrics.k8s.io")]),
+                },
                 still_failing: Vec::new(),
             }]
         );

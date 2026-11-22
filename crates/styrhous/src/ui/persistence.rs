@@ -47,16 +47,12 @@ pub(super) struct PersistedApiResource {
 impl PersistedApiResource {
     pub(super) fn from_api_resource(api_resource: &ApiResource) -> Self {
         Self {
-            group: canonical_api_group(&api_resource.group).to_owned(),
+            group: api_resource.identity().0.to_owned(),
             name: api_resource.name.clone(),
         }
     }
 
     pub(super) fn matches(&self, api_resource: &ApiResource) -> bool {
-        self.group == canonical_api_group(&api_resource.group) && self.name == api_resource.name
+        api_resource.identity() == (self.group.as_str(), self.name.as_str())
     }
-}
-
-fn canonical_api_group(group: &str) -> &str {
-    if group.is_empty() { "core" } else { group }
 }

@@ -125,22 +125,23 @@ impl UiState {
         let Some(cluster) = self.clusters.get(&cluster_key) else {
             return;
         };
-        let find = |group: &str, name: &str| {
+        let find = |identity: (&str, &str)| {
             cluster
-                .discovered_api_resources
+                .displayed_api_resources
+                .api_resources
                 .iter()
-                .find(|resource| {
-                    canonical_group(&resource.group) == canonical_group(group)
-                        && resource.name == name
-                })
+                .find(|resource| resource.identity() == identity)
                 .cloned()
         };
         match cluster.selected_api_resource.clone() {
             Some(selected)
                 if selected.is_helm_releases()
-                    || cluster.discovered_api_resources.contains(&selected) => {}
+                    || cluster
+                        .displayed_api_resources
+                        .api_resources
+                        .contains(&selected) => {}
             Some(selected) => {
-                let replacement = find(&selected.group, &selected.name);
+                let replacement = find(selected.identity());
                 if replacement.is_none() && !cluster.api_discovery.absence_is_final(&selected.group)
                 {
                     return;
@@ -168,7 +169,7 @@ impl UiState {
                 let restored = if saved.matches(&ApiResource::helm_releases()) {
                     Some(ApiResource::helm_releases())
                 } else {
-                    find(&saved.group, &saved.name)
+                    find((saved.group.as_str(), saved.name.as_str()))
                 };
                 match restored {
                     Some(api_resource) => {

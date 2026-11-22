@@ -62,8 +62,10 @@ fn discovered(state: &mut UiState, api_resources: Vec<ApiResource>) -> Vec<Worke
     let mut commands = Vec::new();
     KubernetesApiResourcesDiscovered {
         cluster_key: 1,
-        api_resources,
-        scalable_api_resources: Default::default(),
+        resources: ApiResourceSet {
+            api_resources,
+            scalable_api_resources: Default::default(),
+        },
     }
     .apply(state, &mut commands);
     commands
@@ -80,6 +82,7 @@ fn completed(state: &mut UiState, failed: &[&str]) -> Vec<WorkerCommandBox> {
                 error: "503".to_owned(),
             })
             .collect(),
+        group_list_failed: false,
     }
     .apply(state, &mut commands);
     commands
@@ -106,7 +109,8 @@ fn selected(state: &UiState) -> Option<(String, String)> {
 
 fn shown(state: &UiState, name: &str) -> bool {
     state.clusters[&1]
-        .discovered_api_resources
+        .displayed_api_resources
+        .api_resources
         .iter()
         .any(|resource| resource.name == name)
 }
@@ -121,7 +125,7 @@ fn a_first_connection_shows_the_built_in_resources_and_watches_the_saved_one_at_
     let commands = connect(&mut state);
 
     let cluster = &state.clusters[&1];
-    assert!(!cluster.reachable, "nothing has answered yet");
+    assert!(!cluster.reachable(), "nothing has answered yet");
     assert!(!cluster.api_discovery.complete);
     assert!(shown(&state, "deployments") && shown(&state, "nodes"));
     assert!(
@@ -196,7 +200,7 @@ fn any_authenticated_answer_proves_the_cluster_reachable() {
             .apply(&mut state, &mut commands),
         }
 
-        assert!(state.clusters[&1].reachable, "{answer}");
+        assert!(state.clusters[&1].reachable(), "{answer}");
     }
 }
 
@@ -287,7 +291,8 @@ fn a_resource_chosen_while_discovering_is_not_replaced_by_the_saved_one() {
     };
     connect(&mut state);
     let deployments = state.clusters[&1]
-        .discovered_api_resources
+        .displayed_api_resources
+        .api_resources
         .iter()
         .find(|resource| resource.name == "deployments")
         .cloned()
@@ -315,6 +320,18 @@ fn a_cached_resource_in_a_new_version_is_followed_and_its_old_watch_stopped() {
         Some(("widgets".to_owned(), "v1beta1".to_owned()))
     );
 
+    KubernetesResourcesReplacedInEveryNamespace {
+        cluster_key: 1,
+        api_resource: widgets("v1beta1"),
+        resources_by_namespace: BTreeMap::new(),
+    }
+    .apply(&mut state, &mut Vec::new());
+    assert!(
+        state.clusters[&1]
+            .resource_cache
+            .contains_key(&(widgets("v1beta1"), None))
+    );
+
     let commands = discovered(&mut state, vec![widgets("v1")]);
 
     assert_eq!(
@@ -328,6 +345,13 @@ fn a_cached_resource_in_a_new_version_is_followed_and_its_old_watch_stopped() {
             ("widgets".to_owned(), "v1".to_owned(), 1),
         ],
         "the old version's watch stops and the new one starts"
+    );
+    assert!(
+        !state.clusters[&1]
+            .resource_cache
+            .keys()
+            .any(|(resource, _)| resource.version == "v1beta1"),
+        "the old version's rows are dropped"
     );
 }
 
@@ -373,10 +397,7 @@ fn a_cached_resource_that_no_longer_exists_is_dropped_when_discovery_completes()
 
 #[test]
 fn the_metrics_api_is_only_trusted_once_discovery_reports_it() {
-    let pod_metrics = ApiResource {
-        version: "v1beta1".to_owned(),
-        ..resource("metrics.k8s.io", "v1beta1", "PodMetrics", "pods")
-    };
+    let pod_metrics = resource("metrics.k8s.io", "v1beta1", "PodMetrics", "pods");
     let mut state = UiState {
         api_discovery_cache: cache_of(vec![pods(), pod_metrics.clone()]),
         ..Default::default()
@@ -409,4 +430,274 @@ fn contexts_removed_from_the_kubeconfig_lose_their_cached_discovery() {
             .collect::<Vec<_>>(),
         vec!["kind"]
     );
+}
+
+fn group_list_failed(state: &mut UiState) -> Vec<WorkerCommandBox> {
+    let mut commands = Vec::new();
+    KubernetesApiDiscoveryCompleted {
+        cluster_key: 1,
+        failed_api_groups: vec![FailedApiGroup {
+            group_version: "API group list".to_owned(),
+            error: "timed out".to_owned(),
+        }],
+        group_list_failed: true,
+    }
+    .apply(state, &mut commands);
+    commands
+}
+
+fn recovered(state: &mut UiState, api_resources: Vec<ApiResource>) -> Vec<WorkerCommandBox> {
+    let mut commands = Vec::new();
+    KubernetesApiGroupsRecovered {
+        cluster_key: 1,
+        group_versions: vec!["apps/v1".to_owned()],
+        resources: ApiResourceSet {
+            api_resources,
+            scalable_api_resources: Default::default(),
+        },
+        still_failing_group_versions: Vec::new(),
+    }
+    .apply(state, &mut commands);
+    commands
+}
+
+fn deployments(version: &str) -> ApiResource {
+    resource("apps", version, "Deployment", "deployments")
+}
+
+#[test]
+fn a_failed_group_list_keeps_every_assumed_group_until_it_is_listed() {
+    let mut state = UiState {
+        cluster_selections: saved("apps", "deployments", SelectedNamespaces::All),
+        ..Default::default()
+    };
+    connect(&mut state);
+    discovered(&mut state, vec![pods()]);
+
+    group_list_failed(&mut state);
+
+    assert!(shown(&state, "deployments"), "unknown, not missing");
+    assert_eq!(
+        state.clusters[&1].metrics_shown_as_available(),
+        (true, true),
+        "whether the Metrics API exists is still unknown"
+    );
+    assert_eq!(
+        selected(&state).map(|(name, _)| name),
+        Some("deployments".to_owned())
+    );
+    assert!(
+        state.cluster_selections.selections["kind"]
+            .selected_api_resource
+            .is_some()
+    );
+
+    recovered(&mut state, vec![deployments("v1")]);
+
+    let discovery = &state.clusters[&1].api_discovery;
+    assert!(!discovery.group_list_failed);
+    assert!(
+        discovery.absence_is_final("batch"),
+        "the listed groups are now known"
+    );
+    assert!(
+        !shown(&state, "jobs"),
+        "the assumed groups that were not listed go away"
+    );
+    assert_eq!(
+        state.api_discovery_cache.contexts["kind"]
+            .api_resources
+            .iter()
+            .map(|resource| resource.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["pods", "deployments"],
+        "a recovery refreshes the cached discovery"
+    );
+}
+
+#[test]
+fn a_failed_connection_ends_its_session_and_ignores_late_answers() {
+    let mut state = UiState::default();
+    connect(&mut state);
+    let mut commands = Vec::new();
+
+    ClusterConnectionFailed {
+        cluster_key: 1,
+        error: "Unauthorized".to_owned(),
+    }
+    .apply(&mut state, &mut commands);
+    KubernetesNamespacesReplaced {
+        cluster_key: 1,
+        namespaces: vec![MinimalNamespace::named("default")],
+    }
+    .apply(&mut state, &mut commands);
+
+    assert!(
+        commands_of::<DisconnectCluster>(&commands).any(|command| command.cluster_key == 1),
+        "its namespace watcher and watches must not keep retrying"
+    );
+    assert!(!state.clusters[&1].reachable());
+}
+
+#[test]
+fn retrying_after_a_namespace_failure_restarts_the_watches_without_reconnecting() {
+    let mut state = UiState {
+        cluster_selections: saved("core", "nodes", SelectedNamespaces::All),
+        ..Default::default()
+    };
+    connect(&mut state);
+    let mut commands = Vec::new();
+    KubernetesClusterConnectionCreated { cluster_key: 1 }.apply(&mut state, &mut commands);
+    KubernetesNamespacesReconnecting {
+        cluster_key: 1,
+        error: "forbidden".to_owned(),
+    }
+    .apply(&mut state, &mut commands);
+    assert!(matches!(
+        state.clusters[&1].namespaces_load,
+        ClusterLoadState::Failed(_)
+    ));
+    // The table's watch failed for good as well, so retrying has something to restart.
+    KubernetesResourceWatchFailed {
+        cluster_key: 1,
+        api_resource: state.clusters[&1].selected_api_resource.clone().unwrap(),
+        namespace: None,
+        error: "forbidden".to_owned(),
+    }
+    .apply(&mut state, &mut commands);
+
+    let mut commands = Vec::new();
+    state.retry_selected_load(1, &mut commands);
+
+    assert!(commands_of::<ConnectToCluster>(&commands).next().is_none());
+    assert!(
+        commands_of::<ReconcileResourceWatches>(&commands)
+            .any(|command| command.api_resource.name == "nodes")
+    );
+}
+
+#[test]
+fn a_reconnect_shows_the_discovery_of_the_previous_session() {
+    let mut state = UiState::default();
+    connect(&mut state);
+    discovered(&mut state, vec![pods(), widgets("v1")]);
+    completed(&mut state, &[]);
+    let mut commands = Vec::new();
+    ClusterConnectionFailed {
+        cluster_key: 1,
+        error: "lost".to_owned(),
+    }
+    .apply(&mut state, &mut commands);
+
+    state.retry_selected_load(1, &mut commands);
+
+    assert!(
+        shown(&state, "widgets"),
+        "from the cache, not the built-in resources"
+    );
+    assert!(!shown(&state, "deployments"));
+}
+
+#[test]
+fn connection_progress_times_each_step_once() {
+    let mut state = UiState {
+        cluster_selections: saved("core", "pods", SelectedNamespaces::All),
+        now: 10.0,
+        ..Default::default()
+    };
+    connect(&mut state);
+    let cluster = state.clusters.get_mut(&1).unwrap();
+    assert_eq!(cluster.connection_progress.started, 10.0);
+
+    cluster.mark_authenticated(10.5);
+    cluster.mark_authenticated(11.0);
+    cluster.mark_rows_received(&deployments("v1"), 11.5);
+    cluster.mark_reachable(12.0);
+    cluster.mark_rows_received(&pods(), 12.5);
+    cluster.mark_rows_received(&pods(), 13.0);
+
+    assert_eq!(
+        cluster.connection_progress,
+        ConnectionProgress {
+            started: 10.0,
+            authenticated: Some(10.5),
+            reachable: Some(12.0),
+            first_rows: Some(12.5),
+        }
+    );
+}
+
+#[test]
+fn an_inspector_opened_while_discovering_waits_for_the_metrics_api_to_be_decided() {
+    let mut state = UiState {
+        cluster_selections: saved("core", "pods", SelectedNamespaces::All),
+        ..Default::default()
+    };
+    connect(&mut state);
+    let mut commands = Vec::new();
+    state.open_resource_detail(
+        1,
+        pods(),
+        "api".to_owned(),
+        Some("default".to_owned()),
+        "uid".to_owned(),
+        &mut commands,
+    );
+    let inspector = |state: &UiState| {
+        state
+            .global_blades
+            .navigator()
+            .unwrap()
+            .entries()
+            .find_map(|entry| entry.resource_detail())
+            .map(|entry| entry.pod_metrics_api_unavailable)
+            .unwrap()
+    };
+    assert!(!inspector(&state), "not yet known to be missing");
+    assert!(
+        commands_of::<StartResourceDetailWatch>(&commands)
+            .all(|command| !command.pod_metrics_api_available)
+    );
+
+    discovered(&mut state, vec![pods()]);
+    completed(&mut state, &[]);
+
+    assert!(
+        inspector(&state),
+        "discovery completed without the Metrics API"
+    );
+}
+
+#[test]
+fn an_inspector_opened_while_discovering_collects_usage_once_the_metrics_api_is_found() {
+    let pod_metrics = resource("metrics.k8s.io", "v1beta1", "PodMetrics", "pods");
+    let mut state = UiState {
+        cluster_selections: saved("core", "pods", SelectedNamespaces::All),
+        ..Default::default()
+    };
+    connect(&mut state);
+    state.open_resource_detail(
+        1,
+        pods(),
+        "api".to_owned(),
+        Some("default".to_owned()),
+        "uid".to_owned(),
+        &mut Vec::new(),
+    );
+
+    let commands = discovered(&mut state, vec![pods(), pod_metrics]);
+
+    assert!(
+        commands_of::<StartResourceDetailWatch>(&commands)
+            .any(|command| command.pod_metrics_api_available),
+        "the inspector's watch restarts with the Metrics API"
+    );
+    let entry = state
+        .global_blades
+        .navigator()
+        .unwrap()
+        .entries()
+        .find_map(|entry| entry.resource_detail())
+        .unwrap();
+    assert!(entry.pod_metrics_watched && !entry.pod_metrics_api_unavailable);
 }

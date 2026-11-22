@@ -16,6 +16,7 @@ use super::fixtures::{
     fixture_cluster_scoped_api_resource, fixture_resource, oracle_resource_table_state,
 };
 use super::harness::{MockUiHarnessExt, command_is};
+use crate::api_resource::ApiResourceSet;
 use crate::cluster_connection_manager::{
     AvailableAksCluster, AvailableEksCluster, AvailableTailscaleCluster, AwsAccount, AwsProfile,
     Cluster, ClusterDiscoveryTools, HelmRollbackTarget,

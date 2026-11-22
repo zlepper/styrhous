@@ -5,20 +5,17 @@ struct NamespaceOption<'a> {
     presentation: crate::ui::namespace_selector::NamespacePresentation,
 }
 
-pub(super) fn show_toolbar(
-    ui: &mut egui::Ui,
+/// What the namespace selector says is selected.
+pub(super) fn namespace_selector_text(
     cluster: &super::super::state::ClusterState,
-    selected_api_resource: Option<&crate::api_resource::ApiResource>,
-    resource_counts: ResourceCountSummary,
-    resource_search: &mut ResourceSearchState,
-    namespace_selection: &mut Option<NamespaceSelection>,
-    selection_controls: ResourceSelectionControls<'_>,
-) {
+    settings: &NamespaceSelectorSettings,
+) -> String {
     let selected_namespaces = cluster.namespace_scope();
-    let namespaces_loading = matches!(cluster.namespaces_load, ClusterLoadState::Loading);
-    let selected_text = match selected_namespaces.len() {
+    match selected_namespaces.len() {
         0 if cluster.selected_namespaces == SelectedNamespaces::All => "All namespaces".to_owned(),
-        0 if namespaces_loading => "Loading namespaces...".to_owned(),
+        0 if matches!(cluster.namespaces_load, ClusterLoadState::Loading) => {
+            "Loading namespaces...".to_owned()
+        }
         0 => "Select namespaces".to_owned(),
         1 => selected_namespaces
             .iter()
@@ -32,17 +29,27 @@ pub(super) fn show_toolbar(
                     .map_or_else(
                         || selected.clone(),
                         |namespace| {
-                            crate::ui::namespace_selector::presentation(
-                                namespace,
-                                selection_controls.namespace_selector_settings,
-                            )
-                            .primary
+                            crate::ui::namespace_selector::presentation(namespace, settings).primary
                         },
                     )
             })
             .unwrap_or_default(),
         count => format!("{count} namespaces"),
-    };
+    }
+}
+
+pub(super) fn show_toolbar(
+    ui: &mut egui::Ui,
+    cluster: &super::super::state::ClusterState,
+    selected_api_resource: Option<&crate::api_resource::ApiResource>,
+    resource_counts: ResourceCountSummary,
+    resource_search: &mut ResourceSearchState,
+    namespace_selection: &mut Option<NamespaceSelection>,
+    selection_controls: ResourceSelectionControls<'_>,
+) {
+    let selected_namespaces = cluster.namespace_scope();
+    let selected_text =
+        namespace_selector_text(cluster, selection_controls.namespace_selector_settings);
     let namespaces = cluster
         .namespaces
         .values()
@@ -344,5 +351,42 @@ pub(super) fn resource_count_label(
         format!("{visible_count} of {total_count} items")
     } else {
         format!("{total_count} items")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::state::ClusterState;
+
+    fn text(selected: SelectedNamespaces, namespaces_load: ClusterLoadState) -> String {
+        let mut cluster = ClusterState::for_test(1, "dev");
+        cluster.selected_namespaces = selected;
+        cluster.namespaces_load = namespaces_load;
+        namespace_selector_text(&cluster, &NamespaceSelectorSettings::default())
+    }
+
+    #[test]
+    fn the_selector_names_the_selection_before_the_namespace_list_arrives() {
+        assert_eq!(
+            text(SelectedNamespaces::default(), ClusterLoadState::Loading),
+            "Loading namespaces..."
+        );
+        assert_eq!(
+            text(SelectedNamespaces::All, ClusterLoadState::Loading),
+            "All namespaces"
+        );
+        assert_eq!(
+            text(
+                SelectedNamespaces::from(["default"]),
+                ClusterLoadState::Loading
+            ),
+            "default",
+            "a restored namespace is named before it is listed"
+        );
+        assert_eq!(
+            text(SelectedNamespaces::default(), ClusterLoadState::Ready),
+            "Select namespaces"
+        );
     }
 }

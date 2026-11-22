@@ -2,6 +2,9 @@ use super::*;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::{APIGroupList, APIVersions};
 use kube::client::{APIGroupDiscoveryList, APIResourceDiscovery};
 use kube::core::discovery::v2::ACCEPT_AGGREGATED_DISCOVERY_V2;
+
+/// Asks for the legacy discovery documents only.
+const ACCEPT_LEGACY_DISCOVERY: &str = "application/json";
 use kube::runtime::watcher::DefaultBackoff;
 
 /// Legacy discovery asks for each group separately. The requests are small, so many can be
@@ -32,6 +35,7 @@ const DISCOVERY_TIMEOUTS: DiscoveryTimeouts = DiscoveryTimeouts {
 const _: () =
     assert!(DISCOVERY_TIMEOUTS.request.as_nanos() <= DISCOVERY_TIMEOUTS.groups.as_nanos());
 
+#[derive(Clone)]
 pub(crate) struct KubernetesApiInspector {
     pub(crate) client: kube::Client,
 }
@@ -77,15 +81,47 @@ impl ApiGroupTarget {
 
 /// The API groups, as `/apis` described them.
 enum GroupListing {
-    /// Aggregated discovery: every group's resources, plus the groups whose aggregated
-    /// API is currently unavailable.
+    /// Aggregated discovery: every group's resources, the group versions they came from,
+    /// and the groups whose aggregated API is currently unavailable.
     Aggregated {
         discovered: ApiResourceSet,
+        group_versions: Vec<String>,
         stale: Vec<ApiGroupTarget>,
     },
     /// Legacy discovery: each group has to be asked for its resources.
     Legacy(Vec<ApiGroupTarget>),
 }
+
+/// What discovering the groups of one listing found.
+#[derive(Default)]
+struct GroupDiscovery {
+    /// The group versions whose resources were reported.
+    discovered: Vec<String>,
+    /// The groups that failed, with why.
+    failed: Vec<(ApiGroupTarget, String)>,
+}
+
+impl GroupDiscovery {
+    fn failures(&self) -> Vec<FailedApiGroup> {
+        let mut failures = self
+            .failed
+            .iter()
+            .map(|(target, error)| FailedApiGroup {
+                group_version: target.group_version.clone(),
+                error: error.clone(),
+            })
+            .collect::<Vec<_>>();
+        failures.sort_by(|a, b| a.group_version.cmp(&b.group_version));
+        failures
+    }
+
+    fn retry_targets(self) -> Vec<ApiGroupTarget> {
+        self.failed.into_iter().map(|(target, _)| target).collect()
+    }
+}
+
+/// How a failed group list is reported in place of a group version.
+const GROUP_LIST_FAILURE: &str = "API group list";
 
 /// Discovers the cluster's API resources and reports them to the UI as they arrive.
 ///
@@ -93,7 +129,8 @@ enum GroupListing {
 /// with every resource at once; older servers answer the same requests with the legacy
 /// lists, so falling back costs no extra round trip. The core API also proves that the
 /// cluster accepts the credentials: if it fails, the connection has failed. Groups that
-/// fail are reported in `KubernetesApiDiscoveryCompleted` and retried in the background.
+/// fail are reported in `KubernetesApiDiscoveryCompleted` and retried in the background,
+/// and so is the group list itself when it cannot be listed in time.
 pub(crate) async fn discover_cluster_api(
     cluster_key: i32,
     client: kube::Client,
@@ -116,12 +153,10 @@ async fn discover_cluster_api_with(
     client: kube::Client,
     events: WorkerResultSender,
     timeouts: DiscoveryTimeouts,
-    group_list_delays: impl Iterator<Item = std::time::Duration>,
+    mut group_list_delays: impl Iterator<Item = std::time::Duration>,
     group_retry_delays: impl Iterator<Item = std::time::Duration>,
 ) {
-    let inspector = KubernetesApiInspector {
-        client: client.clone(),
-    };
+    let inspector = KubernetesApiInspector { client };
     let core = async {
         match inspector.discover_core(timeouts).await {
             Ok(core) => {
@@ -140,11 +175,11 @@ async fn discover_cluster_api_with(
             }
         }
     };
-    let groups = inspector.discover_groups(timeouts, group_list_delays, |discovered| {
+    let groups = inspector.discover_groups(timeouts, &mut group_list_delays, |discovered| {
         send_discovered(cluster_key, &events, discovered)
     });
 
-    let (failed_api_groups, retry_targets) = {
+    let groups = {
         let mut core = std::pin::pin!(core);
         let mut groups = std::pin::pin!(groups);
         let mut group_outcome = None;
@@ -163,6 +198,16 @@ async fn discover_cluster_api_with(
             None => groups.await,
         }
     };
+    let (failed_api_groups, group_list_failed) = match &groups {
+        Ok(discovery) => (discovery.failures(), false),
+        Err(error) => (
+            vec![FailedApiGroup {
+                group_version: GROUP_LIST_FAILURE.to_owned(),
+                error: format!("{error:#}"),
+            }],
+            true,
+        ),
+    };
     for failure in &failed_api_groups {
         tracing::warn!(
             group_version = %failure.group_version,
@@ -174,16 +219,29 @@ async fn discover_cluster_api_with(
         .send(KubernetesApiDiscoveryCompleted {
             cluster_key,
             failed_api_groups,
+            group_list_failed,
         })
         .await
         .is_err()
     {
         return;
     }
+    let retry_targets = match groups {
+        Ok(discovery) => discovery.retry_targets(),
+        Err(_) => {
+            let Some(targets) = inspector
+                .recover_group_list(cluster_key, &events, timeouts, group_list_delays)
+                .await
+            else {
+                return;
+            };
+            targets
+        }
+    };
     if !retry_targets.is_empty() {
         retry_cluster_api_groups(
             cluster_key,
-            client,
+            inspector.client,
             events,
             retry_targets,
             group_retry_delays,
@@ -192,138 +250,217 @@ async fn discover_cluster_api_with(
     }
 }
 
-async fn send_discovered(
-    cluster_key: i32,
-    events: &WorkerResultSender,
-    discovered: ApiResourceSet,
-) {
-    if discovered.api_resources.is_empty() {
+async fn send_discovered(cluster_key: i32, events: &WorkerResultSender, resources: ApiResourceSet) {
+    if resources.api_resources.is_empty() {
         return;
     }
     events
         .send(KubernetesApiResourcesDiscovered {
             cluster_key,
-            api_resources: discovered.api_resources,
-            scalable_api_resources: discovered.scalable_api_resources,
+            resources,
         })
         .await
         .log_if_error("Failed to send discovered API resources");
 }
 
+/// `future`, or an error naming `what` once `timeout` has passed.
+pub(super) async fn within<T>(
+    timeout: std::time::Duration,
+    what: &str,
+    future: impl Future<Output = Result<T>>,
+) -> Result<T> {
+    match tokio::time::timeout(timeout, future).await {
+        Ok(result) => result,
+        Err(_) => bail!("timed out waiting for the API server to answer {what}"),
+    }
+}
+
 impl KubernetesApiInspector {
-    /// GETs a discovery document, preferring the aggregated form.
+    /// GETs a discovery document with the given `Accept` header.
     async fn discovery_document(
         &self,
         path: &str,
+        accept: &str,
         timeout: std::time::Duration,
     ) -> Result<k8s_openapi::serde_json::Value> {
         let request = Request::get(path)
-            .header(http::header::ACCEPT, ACCEPT_AGGREGATED_DISCOVERY_V2)
+            .header(http::header::ACCEPT, accept)
             .body(Vec::new())?;
-        match tokio::time::timeout(timeout, self.client.request(request)).await {
-            Ok(document) => Ok(document?),
-            Err(_) => bail!("timed out waiting for the API server to answer {path}"),
+        within(timeout, path, async {
+            Ok(self.client.request(request).await?)
+        })
+        .await
+    }
+
+    /// The discovery document at `path`, preferring the aggregated form. A document that
+    /// `parse` cannot read (for example a proxy that answered with something else) is
+    /// asked for once more in the legacy form only.
+    async fn discovery<T>(
+        &self,
+        path: &str,
+        timeout: std::time::Duration,
+        parse: impl Fn(k8s_openapi::serde_json::Value) -> Result<T>,
+    ) -> Result<T> {
+        let document = match self
+            .discovery_document(path, ACCEPT_AGGREGATED_DISCOVERY_V2, timeout)
+            .await
+        {
+            Ok(document) => document,
+            // A proxy may refuse the aggregated media type outright.
+            Err(error) if refuses_media_type(&error) => {
+                return parse(
+                    self.discovery_document(path, ACCEPT_LEGACY_DISCOVERY, timeout)
+                        .await?,
+                );
+            }
+            Err(error) => return Err(error),
+        };
+        match parse(document) {
+            Ok(parsed) => Ok(parsed),
+            Err(error) => {
+                tracing::debug!(%path, error = %format!("{error:#}"), "unusable discovery document; asking for the legacy form");
+                parse(
+                    self.discovery_document(path, ACCEPT_LEGACY_DISCOVERY, timeout)
+                        .await?,
+                )
+            }
         }
     }
 
     async fn discover_core(&self, timeouts: DiscoveryTimeouts) -> Result<ApiResourceSet> {
-        let document = self
-            .discovery_document("/api", timeouts.request)
+        let listing = self
+            .discovery("/api", timeouts.request, parse_core_listing)
             .await
             .with_context(|| "Error discovering the core Kubernetes API")?;
-        match document_kind(&document) {
-            "APIGroupDiscoveryList" => {
-                let list: APIGroupDiscoveryList = k8s_openapi::serde_json::from_value(document)?;
-                let mut discovered = ApiResourceSet::default();
-                for group in list.items {
-                    for version in group.versions {
-                        let version_name = version.version.unwrap_or_default();
-                        aggregated_resources(
-                            &mut discovered,
-                            "core",
-                            &version_name,
-                            version.resources,
-                        );
-                    }
-                }
-                Ok(discovered)
-            }
-            "APIVersions" => {
-                let versions: APIVersions = k8s_openapi::serde_json::from_value(document)?;
-                let lists = futures_util::future::try_join_all(versions.versions.iter().map(
-                    |version| async move {
-                        let resources = tokio::time::timeout(
-                            timeouts.request,
-                            self.client.list_core_api_resources(version),
-                        )
-                        .await
-                        .map_err(|_| {
-                            anyhow::anyhow!("timed out discovering the core API {version}")
-                        })??;
-                        anyhow::Ok((version, resources))
-                    },
-                ))
+        let versions = match listing {
+            CoreListing::Aggregated(resources) => return Ok(resources),
+            CoreListing::Legacy(versions) => versions,
+        };
+        let lists = futures_util::future::try_join_all(versions.versions.iter().map(
+            |version| async move {
+                let resources = within(timeouts.request, version, async {
+                    Ok(self.client.list_core_api_resources(version).await?)
+                })
                 .await?;
-                let mut discovered = ApiResourceSet::default();
-                for (version, resources) in lists {
-                    legacy_resources(&mut discovered, "core", version, &resources.resources);
-                }
-                Ok(discovered)
-            }
-            kind => bail!("unexpected core API discovery document {kind:?}"),
+                anyhow::Ok((version, resources))
+            },
+        ))
+        .await
+        .with_context(|| "Error discovering the core Kubernetes API")?;
+        let mut discovered = ApiResourceSet::default();
+        for (version, resources) in lists {
+            legacy_resources(&mut discovered, "core", version, &resources.resources);
         }
+        Ok(discovered)
     }
 
-    /// Lists the API groups, retrying the list itself on the supplied delays until it is
-    /// available, then reports every group's resources through `publish` as they arrive.
-    /// Returns the groups that failed and what is needed to retry them.
+    /// Lists the API groups, retrying the list on the supplied delays for as long as the
+    /// groups may take, then reports every group's resources through `publish` as they
+    /// arrive. Fails with the last error when the groups could not be listed in time.
     async fn discover_groups<Publish>(
         &self,
         timeouts: DiscoveryTimeouts,
-        mut retry_delays: impl Iterator<Item = std::time::Duration>,
-        mut publish: impl FnMut(ApiResourceSet) -> Publish,
-    ) -> (Vec<FailedApiGroup>, Vec<ApiGroupTarget>)
+        retry_delays: &mut impl Iterator<Item = std::time::Duration>,
+        publish: impl FnMut(ApiResourceSet) -> Publish,
+    ) -> Result<GroupDiscovery>
     where
         Publish: Future<Output = ()>,
     {
+        let deadline = tokio::time::Instant::now() + timeouts.groups;
         let listing = loop {
             match self.list_groups(timeouts).await {
                 Ok(listing) => break listing,
-                Err(error) => {
-                    let Some(delay) = retry_delays.next() else {
-                        return (
-                            vec![FailedApiGroup {
-                                group_version: "API group list".to_owned(),
-                                error: format!("{error:#}"),
-                            }],
-                            Vec::new(),
-                        );
-                    };
-                    tracing::warn!(error = %format!("{error:#}"), "listing the API groups failed; retrying");
-                    tokio::time::sleep(delay).await;
-                }
+                Err(error) => match retry_delays.next() {
+                    Some(delay) if tokio::time::Instant::now() + delay < deadline => {
+                        tracing::warn!(error = %format!("{error:#}"), "listing the API groups failed; retrying");
+                        tokio::time::sleep(delay).await;
+                    }
+                    _ => return Err(error),
+                },
             }
         };
-        let (failures, retry_targets) = match listing {
-            GroupListing::Aggregated { discovered, stale } => {
-                publish(discovered).await;
-                let failures = stale
+        Ok(self
+            .discover_listed_groups(listing, timeouts, publish)
+            .await)
+    }
+
+    /// Keeps listing the API groups after discovery gave up on them, and reports every
+    /// group's resources at once when the list answers. Returns the groups that still need
+    /// retrying, or `None` when nobody listens any more or the delays ran out.
+    async fn recover_group_list(
+        &self,
+        cluster_key: i32,
+        events: &WorkerResultSender,
+        timeouts: DiscoveryTimeouts,
+        mut delays: impl Iterator<Item = std::time::Duration>,
+    ) -> Option<Vec<ApiGroupTarget>> {
+        loop {
+            tokio::time::sleep(delays.next()?).await;
+            let listing = match self.list_groups(timeouts).await {
+                Ok(listing) => listing,
+                Err(error) => {
+                    tracing::debug!(error = %format!("{error:#}"), "listing the API groups failed again");
+                    continue;
+                }
+            };
+            let mut resources = ApiResourceSet::default();
+            let discovery = self
+                .discover_listed_groups(listing, timeouts, |discovered| {
+                    resources.extend(discovered);
+                    std::future::ready(())
+                })
+                .await;
+            let recovered = RecoveredApiGroups {
+                group_versions: discovery.discovered.clone(),
+                resources,
+                still_failing: discovery
+                    .failed
                     .iter()
-                    .map(|target| FailedApiGroup {
-                        group_version: target.group_version.clone(),
-                        error: "the aggregated API is currently unavailable".to_owned(),
-                    })
-                    .collect();
-                (failures, stale)
+                    .map(|(target, _)| target.group_version.clone())
+                    .collect(),
+            };
+            if !send_recovered(cluster_key, events, recovered).await {
+                return None;
+            }
+            return Some(discovery.retry_targets());
+        }
+    }
+
+    async fn discover_listed_groups<Publish>(
+        &self,
+        listing: GroupListing,
+        timeouts: DiscoveryTimeouts,
+        mut publish: impl FnMut(ApiResourceSet) -> Publish,
+    ) -> GroupDiscovery
+    where
+        Publish: Future<Output = ()>,
+    {
+        match listing {
+            GroupListing::Aggregated {
+                discovered,
+                group_versions,
+                stale,
+            } => {
+                publish(discovered).await;
+                GroupDiscovery {
+                    discovered: group_versions,
+                    failed: stale
+                        .into_iter()
+                        .map(|target| {
+                            (
+                                target,
+                                "the aggregated API is currently unavailable".to_owned(),
+                            )
+                        })
+                        .collect(),
+                }
             }
             GroupListing::Legacy(targets) => {
-                let mut failures = Vec::new();
-                let requests = targets.iter().cloned().map(|target| {
+                let requests = targets.into_iter().map(|target| {
                     // Owned, so the requests do not borrow `self` across the stream.
-                    let inspector = KubernetesApiInspector {
-                        client: self.client.clone(),
-                    };
-                    (target.group_version.clone(), async move {
+                    let inspector = self.clone();
+                    let label = target.clone();
+                    (label, async move {
                         inspector
                             .get_api_resources_for_group_versions(&target)
                             .await
@@ -336,77 +473,25 @@ impl KubernetesApiInspector {
                     tokio::time::Instant::now() + timeouts.groups,
                 );
                 let mut outcomes = std::pin::pin!(outcomes);
-                while let Some((group_version, outcome)) = outcomes.next().await {
+                let mut discovery = GroupDiscovery::default();
+                while let Some((target, outcome)) = outcomes.next().await {
                     match outcome {
-                        Ok(discovered) => publish(discovered).await,
-                        Err(error) => failures.push(FailedApiGroup {
-                            group_version,
-                            error,
-                        }),
+                        Ok(resources) => {
+                            discovery.discovered.push(target.group_version);
+                            publish(resources).await;
+                        }
+                        Err(error) => discovery.failed.push((target, error)),
                     }
                 }
-                let retry_targets = targets
-                    .iter()
-                    .filter(|target| {
-                        failures
-                            .iter()
-                            .any(|failure| failure.group_version == target.group_version)
-                    })
-                    .cloned()
-                    .collect();
-                (failures, retry_targets)
+                discovery
             }
-        };
-        let mut failures: Vec<FailedApiGroup> = failures;
-        failures.sort_by(|a, b| a.group_version.cmp(&b.group_version));
-        (failures, retry_targets)
+        }
     }
 
     async fn list_groups(&self, timeouts: DiscoveryTimeouts) -> Result<GroupListing> {
-        let document = self
-            .discovery_document("/apis", timeouts.request)
+        self.discovery("/apis", timeouts.request, parse_group_listing)
             .await
-            .with_context(|| "Error listing the Kubernetes API groups")?;
-        match document_kind(&document) {
-            "APIGroupDiscoveryList" => {
-                let list: APIGroupDiscoveryList = k8s_openapi::serde_json::from_value(document)?;
-                let mut discovered = ApiResourceSet::default();
-                let mut stale = Vec::new();
-                for group in list.items {
-                    let group_name = group
-                        .metadata
-                        .and_then(|metadata| metadata.name)
-                        .unwrap_or_default();
-                    // Versions are listed in preference order, like legacy discovery's
-                    // preferred version.
-                    let Some(version) = group.versions.into_iter().next() else {
-                        continue;
-                    };
-                    let version_name = version.version.unwrap_or_default();
-                    if version.freshness.as_deref() == Some("Stale") {
-                        stale.push(ApiGroupTarget::single_version(&group_name, &version_name));
-                        continue;
-                    }
-                    aggregated_resources(
-                        &mut discovered,
-                        &group_name,
-                        &version_name,
-                        version.resources,
-                    );
-                }
-                Ok(GroupListing::Aggregated { discovered, stale })
-            }
-            "APIGroupList" => {
-                let list: APIGroupList = k8s_openapi::serde_json::from_value(document)?;
-                Ok(GroupListing::Legacy(
-                    list.groups
-                        .into_iter()
-                        .map(ApiGroupTarget::from_group)
-                        .collect(),
-                ))
-            }
-            kind => bail!("unexpected API group discovery document {kind:?}"),
-        }
+            .with_context(|| "Error listing the Kubernetes API groups")
     }
 
     pub(super) async fn get_api_resources_for_group_versions(
@@ -433,6 +518,93 @@ impl KubernetesApiInspector {
     }
 }
 
+/// The core API, as `/api` described it.
+enum CoreListing {
+    /// Aggregated discovery: every core resource.
+    Aggregated(ApiResourceSet),
+    /// Legacy discovery: the versions whose resources have to be listed.
+    Legacy(APIVersions),
+}
+
+/// A legacy document is recognised by its kind, or by having none: the typed client used
+/// to accept such documents, and some proxies strip the field.
+fn parse_core_listing(document: k8s_openapi::serde_json::Value) -> Result<CoreListing> {
+    match document_kind(&document) {
+        "APIGroupDiscoveryList" => {
+            let list: APIGroupDiscoveryList = k8s_openapi::serde_json::from_value(document)?;
+            let mut discovered = ApiResourceSet::default();
+            for group in list.items {
+                for version in group.versions {
+                    let version_name = version.version.unwrap_or_default();
+                    aggregated_resources(&mut discovered, "core", &version_name, version.resources);
+                }
+            }
+            Ok(CoreListing::Aggregated(discovered))
+        }
+        "APIVersions" | "" => Ok(CoreListing::Legacy(k8s_openapi::serde_json::from_value(
+            document,
+        )?)),
+        kind => bail!("unexpected core API discovery document {kind:?}"),
+    }
+}
+
+fn parse_group_listing(document: k8s_openapi::serde_json::Value) -> Result<GroupListing> {
+    match document_kind(&document) {
+        "APIGroupDiscoveryList" => {
+            let list: APIGroupDiscoveryList = k8s_openapi::serde_json::from_value(document)?;
+            let mut discovered = ApiResourceSet::default();
+            let mut group_versions = Vec::new();
+            let mut stale = Vec::new();
+            for group in list.items {
+                let group_name = group
+                    .metadata
+                    .and_then(|metadata| metadata.name)
+                    .unwrap_or_default();
+                // Versions are listed in preference order, like legacy discovery's
+                // preferred version.
+                let Some(version) = group.versions.into_iter().next() else {
+                    continue;
+                };
+                let version_name = version.version.unwrap_or_default();
+                if version.freshness.as_deref() == Some("Stale") {
+                    stale.push(ApiGroupTarget::single_version(&group_name, &version_name));
+                    continue;
+                }
+                group_versions.push(format!("{group_name}/{version_name}"));
+                aggregated_resources(
+                    &mut discovered,
+                    &group_name,
+                    &version_name,
+                    version.resources,
+                );
+            }
+            Ok(GroupListing::Aggregated {
+                discovered,
+                group_versions,
+                stale,
+            })
+        }
+        "APIGroupList" | "" => {
+            let list: APIGroupList = k8s_openapi::serde_json::from_value(document)?;
+            Ok(GroupListing::Legacy(
+                list.groups
+                    .into_iter()
+                    .map(ApiGroupTarget::from_group)
+                    .collect(),
+            ))
+        }
+        kind => bail!("unexpected API group discovery document {kind:?}"),
+    }
+}
+
+/// Whether a request failed because the server would not answer in the requested form.
+fn refuses_media_type(error: &anyhow::Error) -> bool {
+    matches!(
+        error.downcast_ref::<kube::Error>(),
+        Some(kube::Error::Api(status)) if matches!(status.code, 406 | 415)
+    )
+}
+
 fn document_kind(document: &k8s_openapi::serde_json::Value) -> &str {
     document
         .get("kind")
@@ -455,8 +627,7 @@ fn aggregated_resources(
         };
         let scalable = resource.subresources.iter().any(|subresource| {
             subresource.subresource.as_deref() == Some("scale")
-                && subresource.verbs.iter().any(|verb| verb == "get")
-                && subresource.verbs.iter().any(|verb| verb == "patch")
+                && allows_scaling(&subresource.verbs)
         });
         discovered.push(
             ApiResource {
@@ -539,31 +710,33 @@ pub(crate) async fn crd_printer_columns(
         .collect()
 }
 
-/// Runs the labelled group requests with bounded concurrency and yields each outcome as it
-/// settles. A request that fails or exceeds `per_request_timeout` (or the shared
+/// Runs the group requests with bounded concurrency and yields each outcome, with its
+/// request's label, as it settles. A request that fails or exceeds `per_request_timeout` (or the shared
 /// `deadline`) yields its error.
-fn tolerant_group_discovery<I, F, T>(
+fn tolerant_group_discovery<I, L, F, T>(
     requests: I,
     max_concurrent_requests: usize,
     per_request_timeout: std::time::Duration,
     deadline: tokio::time::Instant,
-) -> impl futures_util::Stream<Item = (String, std::result::Result<T, String>)>
+) -> impl futures_util::Stream<Item = (L, std::result::Result<T, String>)>
 where
-    I: IntoIterator<Item = (String, F)>,
+    I: IntoIterator<Item = (L, F)>,
     F: Future<Output = Result<T>>,
 {
-    futures_util::stream::iter(requests.into_iter().map(
-        move |(group_version, request)| async move {
-            let request_deadline =
-                (tokio::time::Instant::now() + per_request_timeout).min(deadline);
-            let outcome = match tokio::time::timeout_at(request_deadline, request).await {
-                Ok(Ok(discovered)) => Ok(discovered),
-                Ok(Err(error)) => Err(format!("{error:#}")),
-                Err(_) => Err("timed out waiting for the API server to respond".to_owned()),
-            };
-            (group_version, outcome)
-        },
-    ))
+    futures_util::stream::iter(
+        requests
+            .into_iter()
+            .map(move |(label, request)| async move {
+                let request_deadline =
+                    (tokio::time::Instant::now() + per_request_timeout).min(deadline);
+                let outcome = match tokio::time::timeout_at(request_deadline, request).await {
+                    Ok(Ok(discovered)) => Ok(discovered),
+                    Ok(Err(error)) => Err(format!("{error:#}")),
+                    Err(_) => Err("timed out waiting for the API server to respond".to_owned()),
+                };
+                (label, outcome)
+            }),
+    )
     .buffer_unordered(max_concurrent_requests)
 }
 
@@ -782,6 +955,13 @@ mod tests {
     }
 
     enum ScriptedReply {
+        /// Refuses aggregated discovery with 406, and answers 200 with `legacy` otherwise.
+        RefusesAggregated(&'static str),
+        /// Answers 200 with `aggregated` when aggregated discovery is asked for, else `legacy`.
+        ByAccept {
+            aggregated: &'static str,
+            legacy: &'static str,
+        },
         Json(&'static str, &'static str),
         /// Answers 200 with the body after the delay.
         Delayed(Duration, &'static str),
@@ -795,6 +975,7 @@ mod tests {
     }
 
     const API_FAILURE: &str = r#"{"kind":"Status","apiVersion":"v1","status":"Failure","message":"the server is currently unable to handle the request","reason":"ServiceUnavailable","code":503}"#;
+    const NOT_ACCEPTABLE: &str = r#"{"kind":"Status","apiVersion":"v1","status":"Failure","message":"only legacy discovery is served","reason":"NotAcceptable","code":406}"#;
     const UNAUTHORIZED: &str = r#"{"kind":"Status","apiVersion":"v1","status":"Failure","message":"Unauthorized","reason":"Unauthorized","code":401}"#;
     const CORE_VERSIONS: &str = r#"{"kind":"APIVersions","versions":["v1"]}"#;
 
@@ -957,6 +1138,7 @@ mod tests {
                         .unwrap_or_default()
                         .to_owned();
                     recorder.paths.lock().unwrap().push(path.clone());
+                    let wants_aggregated = accept.contains("g=apidiscovery.k8s.io");
                     recorder.accept_headers.lock().unwrap().push(accept);
                     let in_flight = recorder.in_flight.fetch_add(1, Ordering::SeqCst) + 1;
                     recorder
@@ -964,6 +1146,21 @@ mod tests {
                         .fetch_max(in_flight, Ordering::SeqCst);
                     let (status, body) = match replies.iter().find(|(route, _)| *route == path) {
                         Some((_, ScriptedReply::Json(status, body))) => (*status, *body),
+                        Some((_, ScriptedReply::RefusesAggregated(legacy))) => {
+                            if wants_aggregated {
+                                ("406 Not Acceptable", NOT_ACCEPTABLE)
+                            } else {
+                                ("200 OK", *legacy)
+                            }
+                        }
+                        Some((_, ScriptedReply::ByAccept { aggregated, legacy })) => (
+                            "200 OK",
+                            if wants_aggregated {
+                                *aggregated
+                            } else {
+                                *legacy
+                            },
+                        ),
                         Some((_, ScriptedReply::Delayed(delay, body))) => {
                             tokio::time::sleep(*delay).await;
                             ("200 OK", *body)
@@ -1060,6 +1257,7 @@ mod tests {
     enum Reported {
         Discovered(Vec<String>),
         Completed(Vec<String>),
+        GroupListFailed,
         Recovered(Vec<String>),
         ConnectionFailed(String),
     }
@@ -1073,7 +1271,11 @@ mod tests {
                 .collect()
         };
         if let Some(discovered) = any.downcast_ref::<KubernetesApiResourcesDiscovered>() {
-            Reported::Discovered(names(&discovered.api_resources))
+            Reported::Discovered(names(&discovered.resources.api_resources))
+        } else if let Some(completed) = any.downcast_ref::<KubernetesApiDiscoveryCompleted>()
+            && completed.group_list_failed
+        {
+            Reported::GroupListFailed
         } else if let Some(completed) = any.downcast_ref::<KubernetesApiDiscoveryCompleted>() {
             Reported::Completed(
                 completed
@@ -1097,13 +1299,21 @@ mod tests {
         replies: Vec<(&'static str, ScriptedReply)>,
         max: usize,
     ) -> (Vec<Reported>, Vec<WorkerResultBox>, Arc<Recorder>) {
+        run_discovery_with(replies, max, FAST_TIMEOUTS).await
+    }
+
+    async fn run_discovery_with(
+        replies: Vec<(&'static str, ScriptedReply)>,
+        max: usize,
+        timeouts: DiscoveryTimeouts,
+    ) -> (Vec<Reported>, Vec<WorkerResultBox>, Arc<Recorder>) {
         let (client, _server, recorder) = scripted_api_server(replies).await;
         let (sender, mut receiver) = tokio::sync::mpsc::channel(64);
         let discovery = tokio::spawn(discover_cluster_api_with(
             7,
             client,
             WorkerResultSender::new(sender, None),
-            FAST_TIMEOUTS,
+            timeouts,
             std::iter::repeat(Duration::from_millis(5)),
             std::iter::repeat(Duration::from_millis(5)),
         ));
@@ -1177,6 +1387,7 @@ mod tests {
             })
             .flat_map(|discovered| {
                 discovered
+                    .resources
                     .scalable_api_resources
                     .iter()
                     .map(|resource| resource.name.clone())
@@ -1197,7 +1408,7 @@ mod tests {
                     .as_any()
                     .downcast_ref::<KubernetesApiResourcesDiscovered>()
             })
-            .flat_map(|discovered| discovered.api_resources.iter())
+            .flat_map(|discovered| discovered.resources.api_resources.iter())
             .map(|resource| {
                 (
                     resource.name.as_str(),
@@ -1354,6 +1565,210 @@ mod tests {
                 .count(),
             3
         );
+    }
+
+    #[tokio::test]
+    async fn an_unusable_aggregated_document_is_asked_for_again_in_the_legacy_form() {
+        let replies = vec![
+            // No kind at all, as some proxies answer: read as the legacy list.
+            (
+                "/api",
+                ScriptedReply::Json("200 OK", r#"{"versions":["v1"]}"#),
+            ),
+            (
+                "/api/v1",
+                ScriptedReply::Json("200 OK", leak(resource_list("v1", &[("pods", "Pod")]))),
+            ),
+            (
+                "/apis",
+                ScriptedReply::ByAccept {
+                    aggregated: r#"{"kind":"SomethingElse"}"#,
+                    legacy: leak(group_list(&[("apps", "v1")])),
+                },
+            ),
+            (
+                "/apis/apps/v1",
+                ScriptedReply::Json(
+                    "200 OK",
+                    leak(resource_list("apps/v1", &[("deployments", "Deployment")])),
+                ),
+            ),
+        ];
+
+        let (reported, _, recorder) = run_discovery(replies, 3).await;
+
+        assert!(
+            reported.contains(&discovered(&["core/pods"])),
+            "{reported:?}"
+        );
+        assert!(
+            reported.contains(&discovered(&["apps/deployments"])),
+            "{reported:?}"
+        );
+        assert_eq!(reported[2], Reported::Completed(Vec::new()));
+        let accepts = recorder.accept_headers.lock().unwrap().clone();
+        let paths = recorder.paths();
+        let apis_accepts = paths
+            .iter()
+            .zip(&accepts)
+            .filter(|(path, _)| *path == "/apis")
+            .map(|(_, accept)| accept.contains("g=apidiscovery.k8s.io"))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            apis_accepts,
+            vec![true, false],
+            "one aggregated, then one legacy request"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_refused_aggregated_request_is_asked_for_again_in_the_legacy_form() {
+        let replies = with_reply(
+            with_reply(
+                legacy_replies(),
+                "/api",
+                ScriptedReply::RefusesAggregated(CORE_VERSIONS),
+            ),
+            "/apis",
+            ScriptedReply::RefusesAggregated(leak(group_list(&[("apps", "v1")]))),
+        );
+
+        let (reported, _, _) = run_discovery(replies, 3).await;
+
+        assert!(
+            reported.contains(&discovered(&["core/pods"])),
+            "{reported:?}"
+        );
+        assert!(
+            reported.contains(&discovered(&["apps/deployments"])),
+            "{reported:?}"
+        );
+        assert_eq!(reported[2], Reported::Completed(Vec::new()));
+    }
+
+    #[tokio::test]
+    async fn a_group_list_that_does_not_answer_in_time_completes_discovery_and_recovers_later() {
+        let replies = vec![
+            ("/api", ScriptedReply::Json("200 OK", aggregated_core())),
+            (
+                "/apis",
+                ScriptedReply::FailsFirst {
+                    failures: 40,
+                    served: AtomicUsize::new(0),
+                    body: aggregated_groups("Current"),
+                },
+            ),
+        ];
+        // Forty failures, five milliseconds apart, outlast the group list's window.
+        let timeouts = DiscoveryTimeouts {
+            groups: Duration::from_millis(100),
+            ..FAST_TIMEOUTS
+        };
+
+        let (reported, results, _) = run_discovery_with(replies, 3, timeouts).await;
+
+        assert_eq!(
+            reported,
+            vec![
+                discovered(&["core/pods", "core/replicationcontrollers", "core/nodes"]),
+                Reported::GroupListFailed,
+                Reported::Recovered(vec![
+                    "apps/v1".to_owned(),
+                    "metrics.k8s.io/v1beta1".to_owned()
+                ]),
+            ]
+        );
+        let recovered = results[2]
+            .as_ref()
+            .as_any()
+            .downcast_ref::<KubernetesApiGroupsRecovered>()
+            .expect("the recovery");
+        assert_eq!(recovered.resources.api_resources.len(), 3);
+        assert!(recovered.still_failing_group_versions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn legacy_core_discovery_merges_every_version_and_fails_with_any_of_them() {
+        let core_versions = r#"{"kind":"APIVersions","versions":["v1","v2"]}"#;
+        let replies = |v2: ScriptedReply| {
+            vec![
+                ("/api", ScriptedReply::Json("200 OK", core_versions)),
+                (
+                    "/api/v1",
+                    ScriptedReply::Json("200 OK", leak(resource_list("v1", &[("pods", "Pod")]))),
+                ),
+                ("/api/v2", v2),
+                (
+                    "/apis",
+                    ScriptedReply::Json("200 OK", leak(group_list(&[]))),
+                ),
+            ]
+        };
+
+        let (reported, _, _) = run_discovery(
+            replies(ScriptedReply::Json(
+                "200 OK",
+                leak(resource_list("v2", &[("widgets", "Widget")])),
+            )),
+            2,
+        )
+        .await;
+        let (failed, _, _) = run_discovery(
+            replies(ScriptedReply::Json(
+                "500 Internal Server Error",
+                API_FAILURE,
+            )),
+            2,
+        )
+        .await;
+
+        assert_eq!(reported[0], discovered(&["core/pods", "core/widgets"]));
+        assert!(
+            matches!(failed.as_slice(), [Reported::ConnectionFailed(_)]),
+            "{failed:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_failed_legacy_group_is_retried_and_reported_when_it_recovers() {
+        let replies = with_reply(
+            legacy_replies(),
+            "/apis/metrics.k8s.io/v1beta1",
+            ScriptedReply::FailsFirst {
+                failures: 1,
+                served: AtomicUsize::new(0),
+                body: leak(resource_list(
+                    "metrics.k8s.io/v1beta1",
+                    &[("pods", "PodMetrics")],
+                )),
+            },
+        );
+
+        let (reported, _, _) = run_discovery(replies, 4).await;
+
+        assert_eq!(
+            reported[2],
+            Reported::Completed(vec!["metrics.k8s.io/v1beta1".to_owned()])
+        );
+        assert_eq!(
+            reported[3],
+            Reported::Recovered(vec!["metrics.k8s.io/v1beta1".to_owned()])
+        );
+    }
+
+    #[tokio::test]
+    async fn crd_printer_columns_are_empty_when_the_crd_cannot_be_read() {
+        const CRD: &str =
+            "/apis/apiextensions.k8s.io/v1/customresourcedefinitions/widgets.example.com";
+        for status in ["403 Forbidden", "500 Internal Server Error"] {
+            let (client, _server, recorder) =
+                scripted_api_server(vec![(CRD, ScriptedReply::Json(status, API_FAILURE))]).await;
+
+            let columns = crd_printer_columns(client, &widgets("v1")).await;
+
+            assert!(columns.is_empty(), "{status}");
+            assert_eq!(recorder.paths(), vec![CRD], "{status}");
+        }
     }
 
     fn crd_with_printer_columns(name: &str) -> String {

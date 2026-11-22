@@ -18,28 +18,12 @@ fn replacing_watch_sources_clears_prepared_rows_before_revisions_restart() {
         false,
         &mut PersistedResourceTablePreferences::default(),
     );
-    {
-        let selected_namespaces =
-            NamespaceScope::new(&cluster.selected_namespaces, &cluster.namespaces);
-        let resources = &mut cluster.resources;
-        prepare_resource_table(
-            &mut resources.resource_table_cache,
-            ResourceTableData {
-                selected_namespaces,
-                watches_every_namespace: false,
-                resource_cache: &resources.resource_cache,
-                metrics: ResourceMetrics {
-                    pod_metrics_api_available: resources.pod_metrics_api_available,
-                    pod_metrics: &resources.pod_metrics,
-                    node_metrics_api_available: resources.node_metrics_api_available,
-                    node_metrics: &resources.node_metrics,
-                },
-            },
-            &deployment,
-            &ResourceSearchState::default(),
-            &configuration,
-        );
-    }
+    prepare_cluster_table(
+        &mut cluster,
+        &deployment,
+        &ResourceSearchState::default(),
+        &configuration,
+    );
     assert!(cluster.resource_table_cache.generation() > 0);
 
     UiState::request_selected_resource_watches(&mut cluster, &deployment, &mut Vec::new());
@@ -170,7 +154,7 @@ fn metric_revisions_only_invalidate_tables_that_render_them() {
     let mut deployment_cache = ResourceTableCache::default();
     prepare_resource_table(
         &mut deployment_cache,
-        table_data(&cluster),
+        ResourceTableData::of(&cluster, &deployment),
         &deployment,
         &search,
         &deployment_configuration,
@@ -185,7 +169,7 @@ fn metric_revisions_only_invalidate_tables_that_render_them() {
     cluster.node_metrics.revision += 1;
     prepare_resource_table(
         &mut deployment_cache,
-        table_data(&cluster),
+        ResourceTableData::of(&cluster, &deployment),
         &deployment,
         &search,
         &deployment_configuration,
@@ -203,7 +187,7 @@ fn metric_revisions_only_invalidate_tables_that_render_them() {
     let mut unsorted_pod_cache = ResourceTableCache::default();
     prepare_resource_table(
         &mut unsorted_pod_cache,
-        table_data(&cluster),
+        ResourceTableData::of(&cluster, &pod),
         &pod,
         &search,
         &pod_configuration,
@@ -217,7 +201,7 @@ fn metric_revisions_only_invalidate_tables_that_render_them() {
         .revision += 1;
     prepare_resource_table(
         &mut unsorted_pod_cache,
-        table_data(&cluster),
+        ResourceTableData::of(&cluster, &pod),
         &pod,
         &search,
         &pod_configuration,
@@ -231,7 +215,7 @@ fn metric_revisions_only_invalidate_tables_that_render_them() {
     let mut pod_cache = ResourceTableCache::default();
     prepare_resource_table(
         &mut pod_cache,
-        table_data(&cluster),
+        ResourceTableData::of(&cluster, &pod),
         &pod,
         &search,
         &pod_configuration,
@@ -245,7 +229,7 @@ fn metric_revisions_only_invalidate_tables_that_render_them() {
         .revision += 1;
     prepare_resource_table(
         &mut pod_cache,
-        table_data(&cluster),
+        ResourceTableData::of(&cluster, &pod),
         &pod,
         &search,
         &pod_configuration,
@@ -267,7 +251,7 @@ fn metric_revisions_only_invalidate_tables_that_render_them() {
     let mut node_cache = ResourceTableCache::default();
     prepare_resource_table(
         &mut node_cache,
-        table_data(&cluster),
+        ResourceTableData::of(&cluster, &node),
         &node,
         &search,
         &node_configuration,
@@ -277,7 +261,7 @@ fn metric_revisions_only_invalidate_tables_that_render_them() {
     cluster.node_metrics.revision += 1;
     prepare_resource_table(
         &mut node_cache,
-        table_data(&cluster),
+        ResourceTableData::of(&cluster, &node),
         &node,
         &search,
         &node_configuration,

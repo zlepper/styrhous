@@ -1,5 +1,5 @@
 use super::{
-    ResourceMetrics, ResourceTableData, prepare_resource_table, resolve_prepared_resource,
+    ResourceTableData, prepare_cluster_table, prepare_resource_table, resolve_prepared_resource,
     resolved_resource_cell,
 };
 use crate::minimal_resource::MinimalResource;
@@ -7,8 +7,8 @@ use crate::pod_metrics::format_cpu_cores;
 use crate::resource_table::{CPU_COLUMN, CellValue};
 use crate::ui::resource_table_cache::{PreparedResourceTableRow, ResourceTableCache};
 use crate::ui::state::{
-    ClusterState, NamespaceScope, PodMetricsNamespaceState, ResourceSearchState,
-    ResourceWatchState, SelectedNamespaces, UiState,
+    ClusterState, PodMetricsNamespaceState, ResourceSearchState, ResourceWatchState,
+    SelectedNamespaces, UiState,
 };
 use crate::ui::table_preferences::{MetadataColumnSource, PersistedResourceTablePreferences};
 use crate::ui::workspace::resource_table::{
@@ -23,20 +23,6 @@ fn api_resource(kind: &str, name: &str, namespaced: bool) -> crate::api_resource
         kind: kind.to_owned(),
         name: name.to_owned(),
         namespaced,
-    }
-}
-
-fn table_data(cluster: &ClusterState) -> ResourceTableData<'_> {
-    ResourceTableData {
-        selected_namespaces: cluster.namespace_scope(),
-        watches_every_namespace: false,
-        resource_cache: &cluster.resource_cache,
-        metrics: ResourceMetrics {
-            pod_metrics_api_available: cluster.pod_metrics_api_available,
-            pod_metrics: &cluster.pod_metrics,
-            node_metrics_api_available: cluster.node_metrics_api_available,
-            node_metrics: &cluster.node_metrics,
-        },
     }
 }
 
@@ -84,7 +70,7 @@ fn prepared_names(
 ) -> Vec<String> {
     let prepared = prepare_resource_table(
         cache,
-        table_data(cluster),
+        ResourceTableData::of(cluster, api_resource),
         api_resource,
         search,
         configuration,
@@ -111,6 +97,7 @@ fn pod_usage(cpu_nanocores: i64) -> crate::pod_metrics::PodUsage {
     }
 }
 
+mod every_namespace;
 mod invalidation;
 mod metrics;
 mod preparation;

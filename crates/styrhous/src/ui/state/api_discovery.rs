@@ -1,7 +1,7 @@
 //! The API resources a cluster session knows about while discovery is still answering.
 
 use super::*;
-use crate::api_resource::ApiResourceSet;
+use crate::api_resource::{ApiResourceSet, canonical_group};
 
 /// What this session's discovery has reported (`fresh`), layered over the resources
 /// assumed until it answers (`provisional`), so the workspace is usable at once.
@@ -15,6 +15,9 @@ pub(crate) struct ApiDiscoveryState {
     pub(crate) complete: bool,
     /// Names of the groups whose discovery failed and is being retried.
     pub(crate) failed_groups: BTreeSet<String>,
+    /// The group list failed, so whether any group other than the core one exists is
+    /// unknown until it is listed again.
+    pub(crate) group_list_failed: bool,
 }
 
 impl ApiDiscoveryState {
@@ -43,9 +46,18 @@ impl ApiDiscoveryState {
             .collect();
     }
 
+    /// Whether discovery has decided if the Metrics API exists: it completed and listed the
+    /// API groups. A failing `metrics.k8s.io` counts as decided: it is there but unavailable.
+    pub(crate) fn metrics_decided(&self) -> bool {
+        self.complete && !self.group_list_failed
+    }
+
     /// Whether a resource of `group` that discovery has not reported is known not to exist.
     pub(crate) fn absence_is_final(&self, group: &str) -> bool {
-        self.complete && !self.failed_groups.contains(canonical_group(group))
+        let group = canonical_group(group);
+        let unknown =
+            self.failed_groups.contains(group) || (self.group_list_failed && group != "core");
+        self.complete && !unknown
     }
 
     /// The resources to show: every fresh resource, then the provisional ones discovery has
@@ -66,7 +78,7 @@ impl ApiDiscoveryState {
             .filter(|resource| !self.absence_is_final(&resource.group))
             .map(|resource| (resource, &self.provisional));
         for (resource, source) in fresh.chain(provisional) {
-            if shown.insert((canonical_group(&resource.group), resource.name.as_str())) {
+            if shown.insert(resource.identity()) {
                 displayed.push(resource.clone(), source.is_scalable(resource));
             }
         }
@@ -78,10 +90,6 @@ impl ApiDiscoveryState {
     pub(crate) fn has_fresh(&self, is_metrics: impl Fn(&ApiResource) -> bool) -> bool {
         self.fresh.api_resources.iter().any(is_metrics)
     }
-}
-
-pub(crate) fn canonical_group(group: &str) -> &str {
-    if group.is_empty() { "core" } else { group }
 }
 
 #[cfg(test)]

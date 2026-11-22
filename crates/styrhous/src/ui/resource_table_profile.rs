@@ -54,8 +54,7 @@ impl ResourceTableProfile {
         let api_resource = deployment_resource();
         let mut cluster = ClusterState::new(CLUSTER_KEY, "benchmark".to_owned());
         cluster.connection = ClusterConnectionState::Connected;
-        cluster.namespaces_load = super::state::ClusterLoadState::Ready;
-        cluster.reachable = true;
+        cluster.mark_loaded_for_test();
         cluster.selected_api_resource = Some(api_resource.clone());
         cluster.selected_namespaces = NAMESPACES.into();
 

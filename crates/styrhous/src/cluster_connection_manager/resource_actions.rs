@@ -32,11 +32,14 @@ pub(crate) fn supports_scale_subresource(
     resource_name: &str,
 ) -> bool {
     let scale_name = format!("{resource_name}/scale");
-    resources.iter().any(|resource| {
-        resource.name == scale_name
-            && resource.verbs.iter().any(|verb| verb == "get")
-            && resource.verbs.iter().any(|verb| verb == "patch")
-    })
+    resources
+        .iter()
+        .any(|resource| resource.name == scale_name && allows_scaling(&resource.verbs))
+}
+
+/// Whether a scale subresource's verbs allow reading and changing the replica count.
+pub(crate) fn allows_scaling(verbs: &[String]) -> bool {
+    verbs.iter().any(|verb| verb == "get") && verbs.iter().any(|verb| verb == "patch")
 }
 
 /// Fetch the desired replica count through a dynamically discovered Scale subresource.
@@ -128,15 +131,15 @@ pub(crate) async fn get_resource_yaml(
     })
 }
 
-/// Fetch the OpenAPI v3 group-version document and return the schema for one built-in resource.
-/// CRD schemas are sent with API discovery, so this path is only used as a lazy fallback.
+/// Fetch the OpenAPI v3 group-version document and return the schema for one resource,
+/// built in or custom. Schemas are only loaded here, when a YAML editor needs one.
 pub(crate) async fn get_resource_schema(
     editor_id: u64,
     cluster_key: i32,
     client: kube::Client,
     api_resource: ApiResource,
 ) -> Result<ResourceSchemaLoaded> {
-    let group_version = if api_resource.group == "core" {
+    let group_version = if api_resource.kube_group().is_empty() {
         format!("api/{}", api_resource.version)
     } else {
         format!("apis/{}/{}", api_resource.group, api_resource.version)

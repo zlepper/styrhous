@@ -1,4 +1,4 @@
-use crate::api_resource::ApiResource;
+use crate::api_resource::{ApiResource, ApiResourceSet};
 use crate::cluster_connection_manager::{
     AvailableAksCluster, AvailableEksCluster, AvailableTailscaleCluster, AwsAccount, AwsProfile,
     Cluster, ClusterConnection, ClusterDiscoveryTools, DeploymentRevisionHistory,
@@ -383,7 +383,6 @@ mod tests;
 pub(crate) struct DiscoveryFinished {
     pub(crate) cluster_key: i32,
     pub(crate) api_resources: Vec<ApiResource>,
-    pub(crate) scalable_api_resources: std::collections::BTreeSet<ApiResource>,
     pub(crate) failed_api_groups: Vec<FailedApiGroup>,
 }
 
@@ -392,13 +391,16 @@ impl WorkerResult for DiscoveryFinished {
     fn apply(self, ui: &mut crate::ui::state::UiState, commands: &mut Vec<WorkerCommandBox>) {
         KubernetesApiResourcesDiscovered {
             cluster_key: self.cluster_key,
-            api_resources: self.api_resources,
-            scalable_api_resources: self.scalable_api_resources,
+            resources: ApiResourceSet {
+                api_resources: self.api_resources,
+                scalable_api_resources: Default::default(),
+            },
         }
         .apply(ui, commands);
         KubernetesApiDiscoveryCompleted {
             cluster_key: self.cluster_key,
             failed_api_groups: self.failed_api_groups,
+            group_list_failed: false,
         }
         .apply(ui, commands);
     }

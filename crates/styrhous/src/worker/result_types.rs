@@ -95,8 +95,7 @@ pub(crate) struct KubernetesNamespacesRecovered {
 #[derive(Debug)]
 pub(crate) struct KubernetesApiResourcesDiscovered {
     pub(crate) cluster_key: i32,
-    pub(crate) api_resources: Vec<ApiResource>,
-    pub(crate) scalable_api_resources: std::collections::BTreeSet<ApiResource>,
+    pub(crate) resources: ApiResourceSet,
 }
 /// Every API group has been discovered or has failed; failed groups are retried in the
 /// background and reported through `KubernetesApiGroupsRecovered`.
@@ -104,14 +103,16 @@ pub(crate) struct KubernetesApiResourcesDiscovered {
 pub(crate) struct KubernetesApiDiscoveryCompleted {
     pub(crate) cluster_key: i32,
     pub(crate) failed_api_groups: Vec<FailedApiGroup>,
+    /// The group list itself could not be listed, so no group's resources are known. It is
+    /// retried in the background and reported through `KubernetesApiGroupsRecovered`.
+    pub(crate) group_list_failed: bool,
 }
 /// API groups that failed the initial discovery and have since answered a background retry.
 #[derive(Debug)]
 pub(crate) struct KubernetesApiGroupsRecovered {
     pub(crate) cluster_key: i32,
     pub(crate) group_versions: Vec<String>,
-    pub(crate) api_resources: Vec<ApiResource>,
-    pub(crate) scalable_api_resources: std::collections::BTreeSet<ApiResource>,
+    pub(crate) resources: ApiResourceSet,
     /// Group versions that are still failing and being retried.
     pub(crate) still_failing_group_versions: Vec<String>,
 }

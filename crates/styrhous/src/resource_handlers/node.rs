@@ -1,6 +1,6 @@
 use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::{
-    ResourceWatcher, TypedWatcherContext, api_resource_for, cluster_typed_watcher,
+    ResourceWatcher, TypedWatcherContext, cluster_typed_watcher,
 };
 use crate::minimal_resource::{MinimalResource, from_kubernetes_resource};
 use crate::pod_metrics::{MissingResourceQuantity, resource_thresholds};
@@ -19,7 +19,7 @@ pub(crate) fn watcher(context: TypedWatcherContext) -> Option<Box<dyn ResourceWa
 }
 
 pub(crate) fn api_resource() -> ApiResource {
-    api_resource_for::<Node>()
+    ApiResource::of::<Node>()
 }
 
 pub(crate) fn table_definition(api_resource: &ApiResource) -> Option<ResourceTableDefinition> {

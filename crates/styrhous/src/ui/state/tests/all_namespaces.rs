@@ -341,3 +341,98 @@ fn all_namespaces_with_nothing_discovered_selects_nothing() {
     assert!(scope.is_empty());
     assert!(!scope.covers_all_discovered());
 }
+
+fn pod_named(uid: &str, namespace: &str) -> MinimalResource {
+    MinimalResource {
+        uid: uid.into(),
+        name: uid.into(),
+        namespace: Some(namespace.into()),
+        creation_timestamp: None,
+        controller_owner: None,
+        labels: BTreeMap::new(),
+        annotations: BTreeMap::new(),
+        cells: BTreeMap::new(),
+        log_containers: Vec::new(),
+    }
+}
+
+#[test]
+fn a_failing_every_namespace_watch_reports_its_error_before_the_namespace_list() {
+    let mut state = connected_state();
+    let mut commands = Vec::new();
+    state.select_all_namespaces(1, &mut commands);
+    state.select_api_resource(1, pods(), &mut commands);
+
+    KubernetesResourceWatchFailed {
+        cluster_key: 1,
+        api_resource: pods(),
+        namespace: None,
+        error: "forbidden".to_owned(),
+    }
+    .apply(&mut state, &mut Vec::new());
+
+    let watch = &state.clusters[&1].resource_cache[&(pods(), None)];
+    assert_eq!(watch.error.as_deref(), Some("forbidden"));
+    assert!(!watch.is_synced);
+
+    let mut commands = Vec::new();
+    state.retry_selected_load(1, &mut commands);
+    assert_eq!(
+        all_namespaces_source(&commands),
+        Some(&WatchedNamespaces::Every),
+        "retrying restarts the watch across every namespace"
+    );
+}
+
+#[test]
+fn a_namespace_created_after_the_every_namespace_list_is_synced_with_its_first_row() {
+    let mut state = state_showing(pods());
+    state.select_all_namespaces(1, &mut Vec::new());
+    KubernetesResourcesReplacedInEveryNamespace {
+        cluster_key: 1,
+        api_resource: pods(),
+        resources_by_namespace: BTreeMap::new(),
+    }
+    .apply(&mut state, &mut Vec::new());
+
+    KubernetesResourceAdded {
+        cluster_key: 1,
+        api_resource: pods(),
+        namespace: Some("created-later".to_owned()),
+        resource: pod_named("late", "created-later"),
+    }
+    .apply(&mut state, &mut Vec::new());
+
+    let watch = &state.clusters[&1].resource_cache[&(pods(), Some("created-later".to_owned()))];
+    assert!(watch.is_synced, "the watch already listed every namespace");
+    assert_eq!(watch.resources.len(), 1);
+}
+
+#[test]
+fn a_selected_row_in_a_namespace_missing_from_the_list_survives_a_relist() {
+    let mut state = connected_state();
+    state.select_all_namespaces(1, &mut Vec::new());
+    state.select_api_resource(1, pods(), &mut Vec::new());
+    let replace = |state: &mut UiState| {
+        KubernetesResourcesReplacedInEveryNamespace {
+            cluster_key: 1,
+            api_resource: pods(),
+            resources_by_namespace: BTreeMap::from([(
+                "unlisted".to_owned(),
+                vec![pod_named("kept", "unlisted")],
+            )]),
+        }
+        .apply(state, &mut Vec::new());
+    };
+    replace(&mut state);
+    state
+        .clusters
+        .get_mut(&1)
+        .unwrap()
+        .resource_selections
+        .insert(pods(), HashSet::from(["kept".to_owned()]));
+
+    replace(&mut state);
+
+    assert!(state.clusters[&1].resource_selections[&pods()].contains("kept"));
+}

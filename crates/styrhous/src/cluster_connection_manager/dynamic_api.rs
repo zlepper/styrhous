@@ -8,12 +8,11 @@ use kube::api::{DynamicObject, GroupVersionKind};
 /// kube's description of `api_resource`, built from what discovery already reported
 /// instead of asking the API server for it again.
 pub(super) fn kube_api_resource(api_resource: &ApiResource) -> kube::discovery::ApiResource {
-    let group = if api_resource.group == "core" {
-        ""
-    } else {
-        &api_resource.group
-    };
-    let gvk = GroupVersionKind::gvk(group, &api_resource.version, &api_resource.kind);
+    let gvk = GroupVersionKind::gvk(
+        api_resource.kube_group(),
+        &api_resource.version,
+        &api_resource.kind,
+    );
     kube::discovery::ApiResource::from_gvk_with_plural(&gvk, &api_resource.name)
 }
 
@@ -23,9 +22,21 @@ pub(super) fn create(
     api_resource: &ApiResource,
     namespace: Option<&str>,
 ) -> Result<Api<DynamicObject>> {
+    create_scoped(client, api_resource, namespace, false)
+}
+
+/// Like `create`, but a namespaced resource without a namespace is allowed when
+/// `across_namespaces`: it is then read across every namespace.
+pub(super) fn create_scoped(
+    client: &kube::Client,
+    api_resource: &ApiResource,
+    namespace: Option<&str>,
+    across_namespaces: bool,
+) -> Result<Api<DynamicObject>> {
     let resource = kube_api_resource(api_resource);
     match (api_resource.namespaced, namespace) {
         (true, Some(namespace)) => Ok(Api::namespaced_with(client.clone(), namespace, &resource)),
+        (true, None) if across_namespaces => Ok(Api::all_with(client.clone(), &resource)),
         (false, None) => Ok(Api::all_with(client.clone(), &resource)),
         (namespaced, namespace) => bail!(
             "Resource scope mismatch: {} is {} but the request has namespace {namespace:?}",
@@ -77,5 +88,18 @@ mod tests {
         assert!(create(&client, &resource("example.com", false), None).is_ok());
         assert!(create(&client, &resource("example.com", true), None).is_err());
         assert!(create(&client, &resource("example.com", false), Some("default")).is_err());
+        assert!(
+            create_scoped(&client, &resource("example.com", true), None, true).is_ok(),
+            "a namespaced resource may be read across every namespace when asked for"
+        );
+        assert!(
+            create_scoped(
+                &client,
+                &resource("example.com", false),
+                Some("default"),
+                true
+            )
+            .is_err()
+        );
     }
 }

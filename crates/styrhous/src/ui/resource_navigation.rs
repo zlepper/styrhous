@@ -11,7 +11,11 @@ pub(super) fn show(ui: &mut egui::Ui, ui_state: &mut UiState) -> Option<ApiResou
     let cluster_name = cluster.presentation.display_name(&cluster.name).to_owned();
     let resource_navigation = cluster.resource_navigation.clone();
     let selected_api_resource = cluster.selected_api_resource.clone();
-    let discovering = !cluster.api_discovery.complete;
+    let discovering = !cluster.api_discovery.complete
+        && !matches!(
+            cluster.connection,
+            super::state::ClusterConnectionState::Failed(_)
+        );
     let mut clicked_api_resource = None;
 
     egui::Panel::left("api-selector")

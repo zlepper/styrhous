@@ -632,7 +632,10 @@ fn scalable_resource_action_fetches_and_updates_the_scale() {
         let mut state = oracle_resource_table_state();
         let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
         cluster.selected_api_resource = Some(deployment.clone());
-        cluster.scalable_api_resources.insert(deployment.clone());
+        cluster
+            .displayed_api_resources
+            .scalable_api_resources
+            .insert(deployment.clone());
         cluster.resource_cache.insert(
             (deployment.clone(), Some("kube-system".to_owned())),
             ResourceWatchState {

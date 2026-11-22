@@ -96,27 +96,40 @@ impl LazyLogClient {
     }
 }
 
-/// Builds a client off the async runtime: loading certificates and running an exec
-/// credential plugin are blocking operations.
-async fn build_client(config: kube::Config) -> Result<kube::Client> {
-    tokio::task::spawn_blocking(move || kube::Client::try_from(config))
+/// Runs blocking work, such as file I/O or an exec credential plugin, off the async runtime.
+async fn run_blocking<T, E>(
+    what: &'static str,
+    work: impl FnOnce() -> std::result::Result<T, E> + Send + 'static,
+) -> Result<T>
+where
+    T: Send + 'static,
+    E: std::error::Error + Send + Sync + 'static,
+{
+    tokio::task::spawn_blocking(work)
         .await
-        .with_context(|| "Kubernetes client construction was cancelled")?
-        .map_err(Into::into)
+        .with_context(|| format!("{what} was cancelled"))?
+        .with_context(|| format!("Error {what}"))
 }
 
+/// Builds a client, which loads certificates and may run an exec credential plugin.
+async fn build_client(config: kube::Config) -> Result<kube::Client> {
+    run_blocking("creating the Kubernetes client", move || {
+        kube::Client::try_from(config)
+    })
+    .await
+}
+
+/// Reads the kubeconfig and the certificate files it references for one context.
 async fn load_context_config(context_name: &str) -> Result<kube::Config> {
     let options = KubeConfigOptions {
         context: Some(context_name.to_owned()),
         ..Default::default()
     };
-    // Reading the kubeconfig and its certificate files is synchronous file I/O.
-    tokio::task::spawn_blocking(move || {
+    run_blocking("creating the Kubernetes config", move || {
+        // Nothing in it awaits I/O; it is async only by signature.
         tokio::runtime::Handle::current().block_on(kube::Config::from_kubeconfig(&options))
     })
     .await
-    .with_context(|| "Kubernetes config loading was cancelled")?
-    .with_context(|| "Error creating Kubernetes config")
 }
 
 impl Debug for ClusterConnection {
@@ -146,9 +159,7 @@ impl ClusterConnection {
     ) -> Result<Self> {
         let config = load_context_config(context_name).await?;
         let log_client = LazyLogClient::new(&config);
-        let client = build_client(config)
-            .await
-            .with_context(|| "Error creating Kubernetes client")?;
+        let client = build_client(config).await?;
 
         let namespaces_handle = tokio::spawn(
             KubernetesNamespaceWatcher {
@@ -230,6 +241,27 @@ mod tests {
         assert_eq!(log_client.config.read_timeout, None);
         log_client.get().await.expect("the log client builds");
         assert!(shared.is_built(), "clones share the built client");
+    }
+
+    #[tokio::test]
+    async fn a_log_client_that_cannot_be_built_reports_why_when_it_is_first_used() {
+        let mut config = kube::Config::new(
+            "https://kubernetes.example"
+                .parse()
+                .expect("test cluster URL is valid"),
+        );
+        config.root_cert = Some(vec![b"not a certificate".to_vec()]);
+        let log_client = LazyLogClient::new(&config);
+
+        let Err(error) = log_client.get().await else {
+            panic!("an unusable certificate fails the build");
+        };
+
+        assert!(
+            format!("{error:#}").contains("Kubernetes log client"),
+            "{error:#}"
+        );
+        assert!(!log_client.is_built(), "a later use tries again");
     }
 
     #[tokio::test]

@@ -1,7 +1,7 @@
 use crate::minimal_resource::format_age;
 use crate::resource_table::{CellValue, ContainerIndicator, StatusTone};
 use components::colors::gray;
-use components::design::{radius, spacing, status, typography};
+use components::design::{radius, spacing, status, surface, typography};
 use components::{ProgressChecklist, TableRowBuilder, TailwindButton, WorkspaceEmptyState};
 
 const STATE_MARGIN: i8 = spacing::XXL as i8;
@@ -112,8 +112,11 @@ pub(super) fn workspace_loading_state(ui: &mut egui::Ui, title: &str, message: &
 }
 
 pub(super) fn workspace_error_state(ui: &mut egui::Ui, title: &str, message: &str) -> bool {
-    workspace_error_details(ui, title, message, RETRY_FOOTER_HEIGHT, retry_footer)
+    workspace_error_details(ui, title, message, retry_footer_height(ui), retry_footer)
 }
+
+/// The column of a failed connection: its steps, the error and the retry share it.
+const FAILED_CONNECTION_COLUMN_WIDTH: f32 = 600.0;
 
 /// The progress of connecting to a cluster, and why it failed with a way to retry.
 /// Returns whether retry was clicked.
@@ -123,27 +126,41 @@ pub(super) fn workspace_connection_progress(
     error: Option<&str>,
 ) -> bool {
     let error_height = error.map_or(0.0, |message| {
-        spacing::XL + error_details_height(ui, message) + RETRY_FOOTER_HEIGHT
+        spacing::XL + error_details_height(ui, message) + retry_footer_height(ui)
     });
-    show_state_area(ui, checklist.height(ui) + error_height, |ui| {
-        checklist.show(ui);
+    let estimate = checklist.height(ui) + error_height;
+    show_measured_state_area(ui, "connection-progress", estimate, |ui| {
         let Some(message) = error else {
+            checklist.show(ui);
             return false;
         };
+        let width = ui.available_width().min(FAILED_CONNECTION_COLUMN_WIDTH);
+        checklist.width(width).show(ui);
         ui.add_space(spacing::XL);
-        ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
-            show_error_details(ui, message);
-            retry_footer(ui)
-        })
+        ui.allocate_ui_with_layout(
+            egui::vec2(width, 0.0),
+            egui::Layout::top_down(egui::Align::LEFT),
+            |ui| {
+                ui.set_width(width);
+                show_error_details(ui, message);
+                retry_footer(ui)
+            },
+        )
         .inner
     })
 }
 
-const ERROR_TITLE_HEIGHT: f32 = 22.0 + 6.0;
-const RETRY_FOOTER_HEIGHT: f32 = 42.0;
+/// The code block's border, inside its width.
+const CODE_FRAME_STROKE_WIDTH: f32 = surface::BORDER_WIDTH;
+/// A first-frame estimate of the Retry button's height; later frames measure it.
+const RETRY_BUTTON_HEIGHT: f32 = 38.0;
+
+fn retry_footer_height(ui: &egui::Ui) -> f32 {
+    spacing::MD + ui.spacing().item_spacing.y + RETRY_BUTTON_HEIGHT
+}
 
 fn retry_footer(ui: &mut egui::Ui) -> bool {
-    ui.add_space(12.0);
+    ui.add_space(spacing::MD);
     ui.vertical_centered(|ui| TailwindButton::primary("Retry").show(ui).clicked())
         .inner
 }
@@ -155,9 +172,11 @@ fn workspace_error_details<R>(
     footer_height: f32,
     show_footer: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
-    let content_height = ERROR_TITLE_HEIGHT + error_details_height(ui, message) + footer_height;
+    let title_height =
+        row_height(ui, typography::section_heading()) + ui.spacing().item_spacing.y + spacing::SM;
+    let estimate = title_height + error_details_height(ui, message) + footer_height;
 
-    show_state_area(ui, content_height, |ui| {
+    show_measured_state_area(ui, "error-details", estimate, |ui| {
         ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
             ui.vertical_centered(|ui| {
                 ui.label(
@@ -174,10 +193,17 @@ fn workspace_error_details<R>(
     })
 }
 
+fn row_height(ui: &egui::Ui, font: egui::FontId) -> f32 {
+    ui.ctx().fonts_mut(|fonts| fonts.row_height(&font))
+}
+
 /// The height `show_error_details` needs for `message`.
 fn error_details_height(ui: &egui::Ui, message: &str) -> f32 {
-    let code_line_height = ui.text_style_height(&egui::TextStyle::Monospace);
-    16.0 + 4.0 + 16.0 + code_line_height * message.lines().count().max(1) as f32
+    let item_spacing = ui.spacing().item_spacing.y;
+    let code_lines = message.lines().count().max(1) as f32;
+    let code_height = ui.text_style_height(&egui::TextStyle::Monospace) * code_lines
+        + 2.0 * (spacing::SM + CODE_FRAME_STROKE_WIDTH);
+    row_height(ui, typography::body()) + item_spacing + spacing::XS + item_spacing + code_height
 }
 
 /// "Error details" above the message in a code block.
@@ -192,13 +218,36 @@ fn show_error_details(ui: &mut egui::Ui, message: &str) {
     let code_background = ui.visuals().code_bg_color;
     egui::Frame::new()
         .fill(code_background)
-        .stroke(egui::Stroke::new(1.0, gray::_200))
+        .stroke(surface::muted_border())
         .corner_radius(radius::subtle())
         .inner_margin(egui::Margin::same(spacing::SM as i8))
         .show(ui, |ui| {
-            ui.set_min_width((code_width - 16.0).max(0.0));
+            // The frame's margin and border sit outside this width.
+            ui.set_min_width((code_width - 2.0 * (spacing::SM + CODE_FRAME_STROKE_WIDTH)).max(0.0));
             ui.code(message);
         });
+}
+
+/// `show_state_area`, centred on the content's height as measured in the previous frame,
+/// so `estimate` only has to be close for the first one. `id_salt` keeps the
+/// measurements of different pages apart.
+fn show_measured_state_area<R>(
+    ui: &mut egui::Ui,
+    id_salt: &str,
+    estimate: f32,
+    add_contents: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
+    let id = ui.id().with(id_salt);
+    let measured = ui.ctx().data(|data| data.get_temp::<f32>(id));
+    let (result, height) = show_state_area(ui, measured.unwrap_or(estimate), |ui| {
+        let result = add_contents(ui);
+        (result, ui.min_rect().height())
+    });
+    if measured != Some(height) {
+        ui.ctx().data_mut(|data| data.insert_temp(id, height));
+        ui.ctx().request_repaint();
+    }
+    result
 }
 
 fn show_state_area<R>(

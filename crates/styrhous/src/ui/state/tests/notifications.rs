@@ -65,7 +65,6 @@ fn partial_api_discovery_readies_the_cluster_and_reports_the_failed_groups() {
     DiscoveryFinished {
         cluster_key: 7,
         api_resources: vec![deployment],
-        scalable_api_resources: Default::default(),
         failed_api_groups: vec![
             FailedApiGroup {
                 group_version: "metrics.k8s.io/v1beta1".to_owned(),
@@ -80,7 +79,7 @@ fn partial_api_discovery_readies_the_cluster_and_reports_the_failed_groups() {
     .apply(&mut state, &mut commands);
 
     let cluster = &state.clusters[&7];
-    assert!(cluster.reachable && cluster.api_discovery.complete);
+    assert!(cluster.reachable() && cluster.api_discovery.complete);
     assert!(!cluster.pod_metrics_api_available);
     assert!(!cluster.node_metrics_api_available);
     assert!(!cluster.resource_navigation.curated_entries.is_empty());
@@ -109,7 +108,6 @@ fn complete_api_discovery_reports_no_failed_groups() {
     DiscoveryFinished {
         cluster_key: 7,
         api_resources: Vec::new(),
-        scalable_api_resources: Default::default(),
         failed_api_groups: Vec::new(),
     }
     .apply(&mut state, &mut commands);
@@ -145,7 +143,6 @@ fn recovered_api_groups_merge_into_the_navigation_without_changing_the_selection
     DiscoveryFinished {
         cluster_key: 7,
         api_resources: vec![pods.clone()],
-        scalable_api_resources: Default::default(),
         failed_api_groups: vec![
             FailedApiGroup {
                 group_version: "example.com/v1".to_owned(),
@@ -163,8 +160,10 @@ fn recovered_api_groups_merge_into_the_navigation_without_changing_the_selection
     KubernetesApiGroupsRecovered {
         cluster_key: 7,
         group_versions: vec!["example.com/v1".to_owned()],
-        api_resources: vec![widgets.clone(), pods.clone()],
-        scalable_api_resources: [widgets.clone()].into(),
+        resources: ApiResourceSet {
+            api_resources: vec![widgets.clone(), pods.clone()],
+            scalable_api_resources: [widgets.clone()].into(),
+        },
         still_failing_group_versions: vec!["metrics.k8s.io/v1beta1".to_owned()],
     }
     .apply(&mut state, &mut commands);
@@ -172,14 +171,14 @@ fn recovered_api_groups_merge_into_the_navigation_without_changing_the_selection
     let cluster = &state.clusters[&7];
     assert_eq!(cluster.selected_api_resource, Some(pods.clone()));
     assert_eq!(
-        cluster.discovered_api_resources,
+        cluster.displayed_api_resources.api_resources,
         vec![pods, widgets.clone()]
     );
     assert_eq!(
         cluster.resource_navigation.other_api_groups["example.com"],
         vec![widgets.clone()]
     );
-    assert!(cluster.scalable_api_resources.contains(&widgets));
+    assert!(cluster.displayed_api_resources.is_scalable(&widgets));
     assert!(!cluster.pod_metrics_api_available);
 
     let history = state.operation_history_entries();
@@ -201,7 +200,6 @@ fn recovered_metrics_group_restores_metrics_availability_and_restarts_the_watch(
     DiscoveryFinished {
         cluster_key: 7,
         api_resources: vec![pods.clone()],
-        scalable_api_resources: Default::default(),
         failed_api_groups: vec![FailedApiGroup {
             group_version: "metrics.k8s.io/v1beta1".to_owned(),
             error: "503".to_owned(),
@@ -218,11 +216,13 @@ fn recovered_metrics_group_restores_metrics_availability_and_restarts_the_watch(
     KubernetesApiGroupsRecovered {
         cluster_key: 7,
         group_versions: vec!["metrics.k8s.io/v1beta1".to_owned()],
-        api_resources: vec![
-            metrics_resource("PodMetrics", "pods"),
-            metrics_resource("NodeMetrics", "nodes"),
-        ],
-        scalable_api_resources: Default::default(),
+        resources: ApiResourceSet {
+            api_resources: vec![
+                metrics_resource("PodMetrics", "pods"),
+                metrics_resource("NodeMetrics", "nodes"),
+            ],
+            scalable_api_resources: Default::default(),
+        },
         still_failing_group_versions: Vec::new(),
     }
     .apply(&mut state, &mut commands);
@@ -249,13 +249,20 @@ fn recovered_api_groups_are_ignored_before_the_session_has_loaded() {
     KubernetesApiGroupsRecovered {
         cluster_key: 7,
         group_versions: vec!["example.com/v1".to_owned()],
-        api_resources: vec![api_resource("example.com", "Widget", "widgets")],
-        scalable_api_resources: Default::default(),
+        resources: ApiResourceSet {
+            api_resources: vec![api_resource("example.com", "Widget", "widgets")],
+            scalable_api_resources: Default::default(),
+        },
         still_failing_group_versions: Vec::new(),
     }
     .apply(&mut state, &mut commands);
 
-    assert!(state.clusters[&7].discovered_api_resources.is_empty());
+    assert!(
+        state.clusters[&7]
+            .displayed_api_resources
+            .api_resources
+            .is_empty()
+    );
     assert!(state.operation_history_entries().is_empty());
 }
 
@@ -277,8 +284,10 @@ fn recovered(
             .iter()
             .map(|group| group.to_string())
             .collect(),
-        api_resources,
-        scalable_api_resources: Default::default(),
+        resources: ApiResourceSet {
+            api_resources,
+            scalable_api_resources: Default::default(),
+        },
         still_failing_group_versions: still_failing
             .iter()
             .map(|group| group.to_string())
@@ -307,7 +316,6 @@ fn saved_selection_in_a_failed_group_is_kept_and_restored_when_the_group_recover
     DiscoveryFinished {
         cluster_key: 7,
         api_resources: vec![api_resource("core", "Pod", "pods")],
-        scalable_api_resources: Default::default(),
         failed_api_groups: vec![failing_group("example.com/v1")],
     }
     .apply(&mut state, &mut commands);
@@ -347,7 +355,6 @@ fn recovery_does_not_override_a_manual_selection() {
     DiscoveryFinished {
         cluster_key: 7,
         api_resources: vec![pods.clone()],
-        scalable_api_resources: Default::default(),
         failed_api_groups: vec![failing_group("example.com/v1")],
     }
     .apply(&mut state, &mut commands);
@@ -372,7 +379,6 @@ fn recovered_metrics_restart_the_watches_of_open_inspectors() {
     DiscoveryFinished {
         cluster_key: 7,
         api_resources: vec![pods.clone()],
-        scalable_api_resources: Default::default(),
         failed_api_groups: vec![failing_group("metrics.k8s.io/v1beta1")],
     }
     .apply(&mut state, &mut commands);
@@ -435,6 +441,11 @@ fn recovered_api_groups_are_ignored_after_the_session_failed_to_load() {
     )
     .apply(&mut state, &mut commands);
 
-    assert!(state.clusters[&7].discovered_api_resources.is_empty());
+    assert!(
+        state.clusters[&7]
+            .displayed_api_resources
+            .api_resources
+            .is_empty()
+    );
     assert!(state.operation_history_entries().is_empty());
 }

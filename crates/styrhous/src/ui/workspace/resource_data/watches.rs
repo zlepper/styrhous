@@ -1,8 +1,7 @@
 use crate::api_resource::ApiResource;
 use crate::minimal_resource::MinimalResource;
 use crate::ui::state::{
-    ClusterLoadState, ClusterState, NamespaceScope, ResourceWatchKey, ResourceWatchState,
-    SelectedNamespaces,
+    ClusterState, NamespaceListWait, NamespaceScope, ResourceWatchKey, ResourceWatchState,
 };
 use std::collections::HashMap;
 
@@ -24,12 +23,7 @@ pub(in crate::ui::workspace) fn selected_watches_are_loading(
     cluster: &ClusterState,
     api_resource: &ApiResource,
 ) -> bool {
-    // "All namespaces" without a watch across every namespace waits for the list.
-    let awaiting_namespaces = api_resource.namespaced
-        && !cluster.watches_every_namespace(api_resource)
-        && cluster.selected_namespaces == SelectedNamespaces::All
-        && !matches!(cluster.namespaces_load, ClusterLoadState::Ready);
-    awaiting_namespaces
+    awaited_namespace_list(cluster, api_resource) == NamespaceListWait::Loading
         || watch_state_keys(cluster, api_resource)
             .into_iter()
             .any(|key| {
@@ -58,6 +52,19 @@ pub(in crate::ui::workspace) fn selected_resources(
     }
     resources.sort_by_key(|resource| resource.name.to_lowercase());
     resources
+}
+
+/// What the selected watches wait for in the namespace list: only "All namespaces" without
+/// a watch across every namespace (Helm releases are watched per namespace) needs it.
+pub(in crate::ui::workspace) fn awaited_namespace_list<'a>(
+    cluster: &'a ClusterState,
+    api_resource: &ApiResource,
+) -> NamespaceListWait<'a> {
+    if api_resource.namespaced && !cluster.watches_every_namespace(api_resource) {
+        cluster.awaited_namespace_list()
+    } else {
+        NamespaceListWait::Ready
+    }
 }
 
 /// The cache entries whose sync state and error describe the selected watches. A watch

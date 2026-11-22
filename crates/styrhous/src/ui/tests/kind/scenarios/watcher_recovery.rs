@@ -5,9 +5,9 @@ use super::*;
 use crate::api_resource::ApiResource;
 use crate::cluster_connection_manager::start_resource_watcher;
 use crate::worker::{
-    KubernetesResourceAdded, KubernetesResourceWatchFailed, KubernetesResourceWatchReconnecting,
-    KubernetesResourceWatchRecovered, KubernetesResourcesReplaced, WorkerResultBox,
-    WorkerResultSender,
+    KubernetesCustomResourceColumnsLoaded, KubernetesResourceAdded, KubernetesResourceWatchFailed,
+    KubernetesResourceWatchReconnecting, KubernetesResourceWatchRecovered,
+    KubernetesResourcesReplaced, WorkerResultBox, WorkerResultSender,
 };
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use kube::api::{ApiResource as KubeApiResource, DynamicObject, PostParams};
@@ -70,10 +70,18 @@ fn crd(group: &str) -> CustomResourceDefinition {
 }
 
 async fn create_crd(crds: &Api<CustomResourceDefinition>, group: &str) {
+    create_crd_definition(crds, group, crd(group)).await;
+}
+
+async fn create_crd_definition(
+    crds: &Api<CustomResourceDefinition>,
+    group: &str,
+    definition: CustomResourceDefinition,
+) {
     // A CRD appearing or disappearing changes API discovery for every other
     // Kind test, so hold their discovery lock while it is being established.
     let _discovery_lock = KindDiscoveryLock::acquire();
-    crds.create(&PostParams::default(), &crd(group))
+    crds.create(&PostParams::default(), &definition)
         .await
         .expect("Failed to create the test CRD");
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
@@ -261,5 +269,107 @@ fn test_resource_watcher_resumes_after_its_api_returns() {
             "a reconnecting notice is followed by a recovery"
         );
         task.abort();
+    });
+}
+
+#[test]
+fn test_custom_resource_rows_arrive_with_their_printer_columns() {
+    let fixture = IntegrationNamespaceFixture::create("crd-columns", "anchor", "unused");
+    let group = format!("{}.example.com", fixture.namespace);
+    let namespace = fixture.namespace.clone();
+    let client = fixture
+        .runtime
+        .block_on(Client::try_default())
+        .expect("Failed to create Kubernetes client");
+    let crds: Api<CustomResourceDefinition> = Api::all(client.clone());
+    let _cleanup = CrdCleanup {
+        runtime_handle: fixture.runtime.handle().clone(),
+        crds: crds.clone(),
+        name: format!("widgets.{group}"),
+    };
+    let mut definition = crd(&group);
+    definition.spec.versions[0].additional_printer_columns = Some(vec![
+        k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceColumnDefinition {
+            name: "Size".to_owned(),
+            type_: "integer".to_owned(),
+            json_path: ".spec.size".to_owned(),
+            ..Default::default()
+        },
+    ]);
+    fixture.runtime.block_on(async {
+        create_crd_definition(&crds, &group, definition).await;
+        let resource = KubeApiResource {
+            group: group.clone(),
+            version: "v1".to_owned(),
+            api_version: format!("{group}/v1"),
+            kind: "Widget".to_owned(),
+            plural: "widgets".to_owned(),
+        };
+        let widgets: Api<DynamicObject> =
+            Api::namespaced_with(client.clone(), &namespace, &resource);
+        let mut widget = DynamicObject::new("sized", &resource).within(&namespace);
+        widget.data = k8s_openapi::serde_json::json!({ "spec": { "size": 3 } });
+        let deadline = std::time::Instant::now() + Duration::from_secs(30);
+        // The CRD can be established before its endpoint serves the first request.
+        while let Err(error) = widgets.create(&PostParams::default(), &widget).await {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "creating the widget: {error}"
+            );
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
+
+        let (sender, mut receiver) = mpsc::channel(1024);
+        let (_started, task) = start_resource_watcher(
+            1,
+            client.clone(),
+            ApiResource {
+                group: group.clone(),
+                version: "v1".to_owned(),
+                kind: "Widget".to_owned(),
+                name: "widgets".to_owned(),
+                namespaced: true,
+            },
+            Some(namespace.clone()),
+            WorkerResultSender::new(sender, None),
+            None,
+        )
+        .await
+        .expect("the resource watcher starts");
+
+        let seen = collect_until(&mut receiver, |result| replaced_names(result).is_some()).await;
+        task.abort();
+
+        let columns = seen
+            .iter()
+            .find_map(|result| {
+                result
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<KubernetesCustomResourceColumnsLoaded>()
+            })
+            .expect("the columns are sent before the first rows");
+        let labels = columns
+            .columns
+            .values()
+            .flatten()
+            .map(|column| column.label.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(labels, ["Size"]);
+        let replaced = seen
+            .last()
+            .and_then(|result| {
+                result
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<KubernetesResourcesReplaced>()
+            })
+            .expect("the rows");
+        assert_eq!(replaced.resources.len(), 1);
+        assert!(
+            replaced.resources[0].cells.contains_key("crd-0"),
+            "the rows carry the printer column: {:?}",
+            replaced.resources[0].cells
+        );
     });
 }

@@ -87,7 +87,6 @@ fn partial_api_discovery_shows_a_toast_naming_the_failed_groups() {
                 fixture_api_resource("core", "Pod", "pods"),
                 fixture_api_resource("apps", "Deployment", "deployments"),
             ],
-            scalable_api_resources: Default::default(),
             failed_api_groups: vec![
                 FailedApiGroup {
                     group_version: "metrics.k8s.io/v1beta1".into(),
@@ -132,7 +131,6 @@ fn recovered_api_groups_appear_in_the_sidebar_with_a_success_toast() {
                 fixture_api_resource("core", "Pod", "pods"),
                 fixture_api_resource("apps", "Deployment", "deployments"),
             ],
-            scalable_api_resources: Default::default(),
             failed_api_groups: vec![FailedApiGroup {
                 group_version: "batch/v1".into(),
                 error: "the server is currently unable to handle the request".into(),
@@ -152,8 +150,10 @@ fn recovered_api_groups_appear_in_the_sidebar_with_a_success_toast() {
         .push_back(Box::new(KubernetesApiGroupsRecovered {
             cluster_key: 2,
             group_versions: vec!["batch/v1".into()],
-            api_resources: vec![fixture_api_resource("batch", "Job", "jobs")],
-            scalable_api_resources: Default::default(),
+            resources: ApiResourceSet {
+                api_resources: vec![fixture_api_resource("batch", "Job", "jobs")],
+                scalable_api_resources: Default::default(),
+            },
             still_failing_group_versions: Vec::new(),
         }) as WorkerResultBox);
     run_with_pinned_toasts(&mut harness);
@@ -181,7 +181,6 @@ fn partial_api_discovery_toast_summarises_many_failed_groups() {
                 fixture_api_resource("core", "Pod", "pods"),
                 fixture_api_resource("apps", "Deployment", "deployments"),
             ],
-            scalable_api_resources: Default::default(),
             failed_api_groups: [
                 "metrics.k8s.io/v1beta1",
                 "custom.metrics.k8s.io/v1beta1",

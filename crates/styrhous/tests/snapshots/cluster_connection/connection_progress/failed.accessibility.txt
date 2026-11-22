@@ -28,15 +28,15 @@ Window state=[focused] rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
-                Label value="Could not connect to dev" rect=(x=788.0 y=405.8 width=190.5 height=19.0 center_x=883.3 center_y=415.2)
-                  TextRun value="Could not connect to dev" rect=(x=788.0 y=405.8 width=190.5 height=19.0 center_x=883.3 center_y=415.2)
-                Label value="Authenticate: done, 0.4 s" rect=(x=788.0 y=436.8 width=320.0 height=32.0 center_x=948.0 center_y=452.8)
-                Label value="Contact API server: failed" rect=(x=788.0 y=468.8 width=320.0 height=32.0 center_x=948.0 center_y=484.8)
+                Label value="Could not connect to dev" rect=(x=648.0 y=396.0 width=190.5 height=19.0 center_x=743.3 center_y=405.5)
+                  TextRun value="Could not connect to dev" rect=(x=648.0 y=396.0 width=190.5 height=19.0 center_x=743.3 center_y=405.5)
+                Label value="Authenticate: done, 0.4 s" rect=(x=648.0 y=427.0 width=600.0 height=32.0 center_x=948.0 center_y=443.0)
+                Label value="Contact API server: failed" rect=(x=648.0 y=459.0 width=600.0 height=32.0 center_x=948.0 center_y=475.0)
               GenericContainer rect=<none>
-                Label value="Error details" rect=(x=392.0 y=527.8 width=80.0 height=17.0 center_x=432.0 center_y=536.2)
-                  TextRun value="Error details" rect=(x=392.0 y=527.8 width=80.0 height=17.0 center_x=432.0 center_y=536.2)
+                Label value="Error details" rect=(x=648.0 y=518.0 width=80.0 height=17.0 center_x=688.0 center_y=526.5)
+                  TextRun value="Error details" rect=(x=648.0 y=518.0 width=80.0 height=17.0 center_x=688.0 center_y=526.5)
                 GenericContainer rect=<none>
-                  Label value="Error discovering the core Kubernetes API: ApiError: Unauthorized (401)" rect=(x=401.0 y=560.8 width=555.7 height=15.0 center_x=678.8 center_y=568.2)
-                    TextRun value="Error discovering the core Kubernetes API: ApiError: Unauthorized (401)" rect=(x=401.0 y=560.8 width=555.7 height=15.0 center_x=678.8 center_y=568.2)
+                  Label value="Error discovering the core Kubernetes API: ApiError: Unauthorized (401)" rect=(x=657.0 y=551.0 width=555.7 height=15.0 center_x=934.8 center_y=558.5)
+                    TextRun value="Error discovering the core Kubernetes API: ApiError: Unauthorized (401)" rect=(x=657.0 y=551.0 width=555.7 height=15.0 center_x=934.8 center_y=558.5)
                 GenericContainer rect=<none>
-                  Button name="Retry" rect=(x=905.6 y=599.8 width=86.9 height=38.0 center_x=949.0 center_y=618.8)
+                  Button name="Retry" rect=(x=904.6 y=590.0 width=86.9 height=38.0 center_x=948.0 center_y=609.0)

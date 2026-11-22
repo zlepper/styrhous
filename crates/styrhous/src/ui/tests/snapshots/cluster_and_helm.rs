@@ -885,9 +885,7 @@ fn helm_rollback_result_from_a_previous_session_is_ignored() {
     let stale_operation = cluster.helm_rollbacks.start(demo_release());
     cluster.reset_for_connection();
     cluster.connection = ClusterConnectionState::Connected;
-    cluster.namespaces_load = crate::ui::state::ClusterLoadState::Ready;
-    cluster.reachable = true;
-    cluster.api_discovery.complete = true;
+    cluster.mark_loaded_for_test();
     let current_operation = cluster.helm_rollbacks.start(demo_release());
     assert_ne!(stale_operation, current_operation);
     let mut harness = application_harness::<MockWorker>();
@@ -929,4 +927,71 @@ fn helm_release_inspector_expands_values_with_an_accessible_disclosure() {
     harness.ui_harness(
         "helm_releases/helm_release_inspector_expands_values_with_an_accessible_disclosure/values_expanded",
     );
+}
+
+#[test]
+fn namespace_selector_shows_while_the_namespace_list_loads_or_fails() {
+    let pods = fixture_api_resource("core", "Pod", "pods");
+    let mut state = oracle_resource_table_state();
+    let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
+    cluster.namespaces.clear();
+    cluster.namespaces_load = crate::ui::state::ClusterLoadState::Loading;
+    cluster.selected_namespaces = SelectedNamespaces::default();
+    cluster.selected_api_resource = Some(pods);
+    let mut harness = application_harness::<MockWorker>();
+    harness.seed_ui_state(state);
+
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "cluster_connection/namespace_selector_namespace_list_states/loading",
+    ));
+
+    // A watcher failing before its first list leaves the workspace usable.
+    harness.deliver_worker_result(KubernetesNamespacesReconnecting {
+        cluster_key: 2,
+        error: "namespaces is forbidden".into(),
+    });
+    harness.get_by_label("Namespaces unavailable");
+    harness.get_by_label("Choose a namespace");
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "cluster_connection/namespace_selector_namespace_list_states/unavailable",
+    ));
+
+    harness.deliver_worker_result(KubernetesNamespacesReplaced {
+        cluster_key: 2,
+        namespaces: vec![MinimalNamespace::named("default")],
+    });
+    assert!(harness.query_by_label("Namespaces unavailable").is_none());
+}
+
+#[test]
+fn helm_releases_in_all_namespaces_wait_for_the_namespace_list() {
+    let mut state = oracle_resource_table_state();
+    let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
+    cluster.namespaces.clear();
+    cluster.namespaces_load = crate::ui::state::ClusterLoadState::Loading;
+    cluster.selected_namespaces = SelectedNamespaces::All;
+    cluster.selected_api_resource = Some(crate::api_resource::ApiResource::helm_releases());
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = state;
+    // The loading state's spinner keeps repainting.
+    harness.run_steps(3);
+
+    harness.get_by_label("Loading namespaces");
+    assert!(harness.query_by_label("Choose a namespace").is_none());
+    harness.ui_harness(HarnessSnapshotOptions::one_pixel(
+        "helm_releases/helm_releases_in_all_namespaces_wait_for_the_namespace_list/loading",
+    ));
+
+    harness
+        .state_mut()
+        .worker
+        .enqueue_result(KubernetesNamespacesReconnecting {
+            cluster_key: 2,
+            error: "namespaces is forbidden".into(),
+        });
+    harness.run_steps(3);
+
+    // The page names the failure; the toolbar notes it as well.
+    harness.get_by_label("namespaces is forbidden");
+    assert!(harness.query_by_label("Choose a namespace").is_none());
 }

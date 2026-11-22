@@ -131,7 +131,7 @@ fn dynamic_resource_extractor_evaluates_custom_printer_columns_locally() {
 #[test]
 fn managed_resource_tree_keeps_only_supported_controller_descendants() {
     let replica_set = ManagedResource {
-        api_resource: api_resource_for::<ReplicaSet>(),
+        api_resource: ApiResource::of::<ReplicaSet>(),
         name: "api-7b948f".into(),
         namespace: Some("default".into()),
         uid: "replicaset-uid".into(),
@@ -140,7 +140,7 @@ fn managed_resource_tree_keeps_only_supported_controller_descendants() {
         cells: BTreeMap::new(),
     };
     let pod = ManagedResource {
-        api_resource: api_resource_for::<Pod>(),
+        api_resource: ApiResource::of::<Pod>(),
         name: "api-7b948f-pod".into(),
         namespace: Some("default".into()),
         uid: "pod-uid".into(),
@@ -164,19 +164,19 @@ fn managed_resource_tree_keeps_only_supported_controller_descendants() {
     assert!(belongs_to_workload_tree(
         &replica_set,
         "deployment-uid",
-        &api_resource_for::<Deployment>(),
+        &ApiResource::of::<Deployment>(),
         &resources
     ));
     assert!(belongs_to_workload_tree(
         &pod,
         "deployment-uid",
-        &api_resource_for::<Deployment>(),
+        &ApiResource::of::<Deployment>(),
         &resources
     ));
     assert!(!belongs_to_workload_tree(
         &unrelated_pod,
         "deployment-uid",
-        &api_resource_for::<Deployment>(),
+        &ApiResource::of::<Deployment>(),
         &resources
     ));
     let directly_owned_pod = ManagedResource {
@@ -186,7 +186,7 @@ fn managed_resource_tree_keeps_only_supported_controller_descendants() {
     assert!(!belongs_to_workload_tree(
         &directly_owned_pod,
         "deployment-uid",
-        &api_resource_for::<Deployment>(),
+        &ApiResource::of::<Deployment>(),
         &resources
     ));
 }
@@ -194,7 +194,7 @@ fn managed_resource_tree_keeps_only_supported_controller_descendants() {
 #[test]
 fn node_association_keeps_only_pods_scheduled_to_the_inspected_node() {
     let scheduled = ManagedResource {
-        api_resource: api_resource_for::<Pod>(),
+        api_resource: ApiResource::of::<Pod>(),
         name: "api".into(),
         namespace: Some("default".into()),
         uid: "pod-uid".into(),

@@ -107,9 +107,9 @@ impl UiState {
         cluster_key: i32,
         commands_to_send: &mut Vec<WorkerCommandBox>,
     ) {
+        // The namespace watcher retries by itself, so only a failed connection is reopened.
         let retry_connection = self.clusters.get(&cluster_key).is_some_and(|cluster| {
             matches!(&cluster.connection, ClusterConnectionState::Failed(_))
-                || matches!(&cluster.namespaces_load, ClusterLoadState::Failed(_))
         });
         if retry_connection {
             self.select_cluster_without_remembering(cluster_key, commands_to_send);
@@ -134,15 +134,14 @@ impl UiState {
         // "All namespaces" needs no namespace list, so its watch starts at once and keeps
         // running as namespaces come and go. An explicit selection that happens to cover
         // every namespace is watched the same way but filtered to that selection.
-        let all_namespaces_scope = (api_resource.namespaced && !api_resource.is_helm_releases())
-            .then(|| match &cluster.selected_namespaces {
-                SelectedNamespaces::All => Some(crate::worker::WatchedNamespaces::Every),
-                SelectedNamespaces::Selected(_) if scope.covers_all_discovered() => Some(
-                    crate::worker::WatchedNamespaces::Only(scope.iter().cloned().collect()),
-                ),
-                SelectedNamespaces::Selected(_) => None,
-            })
-            .flatten();
+        let all_namespaces_scope = match &cluster.selected_namespaces {
+            _ if !api_resource.namespaced || api_resource.is_helm_releases() => None,
+            SelectedNamespaces::All => Some(crate::worker::WatchedNamespaces::Every),
+            SelectedNamespaces::Selected(_) if scope.covers_all_discovered() => Some(
+                crate::worker::WatchedNamespaces::Only(scope.iter().cloned().collect()),
+            ),
+            SelectedNamespaces::Selected(_) => None,
+        };
         let desired = if all_namespaces_scope.is_some() || !api_resource.namespaced {
             HashSet::from([None])
         } else {
@@ -165,10 +164,7 @@ impl UiState {
                 .active_watchers
                 .retain(|(resource, _)| resource != api_resource);
             if had_active_sources && sources_changed {
-                cluster
-                    .resource_cache
-                    .retain(|(resource, _), _| resource != api_resource);
-                cluster.resource_table_cache.clear();
+                cluster.drop_rows_of(api_resource);
             } else if let Some(scope) = &all_namespaces_scope {
                 // The refreshed watcher replaces the rows of namespaces it still
                 // covers once it has listed them; drop those of removed ones.
@@ -251,10 +247,7 @@ impl UiState {
             .active_watchers
             .retain(|(resource, _)| resource != api_resource);
         cluster.all_namespaces_watch_scopes.remove(api_resource);
-        cluster
-            .resource_cache
-            .retain(|(resource, _), _| resource != api_resource);
-        cluster.resource_table_cache.clear();
+        cluster.drop_rows_of(api_resource);
         if had_active_sources {
             commands_to_send.push(Box::new(crate::worker::ReconcileResourceWatches {
                 cluster_key: cluster.cluster_key,

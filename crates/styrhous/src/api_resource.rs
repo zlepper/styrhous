@@ -11,6 +11,36 @@ pub struct ApiResource {
 }
 
 impl ApiResource {
+    /// The resource the Kubernetes type `T` describes, from its static API metadata.
+    pub(crate) fn of<T>() -> Self
+    where
+        T: kube::Resource<DynamicType = ()>,
+        T::Scope: Scope,
+    {
+        Self {
+            group: canonical_group(&T::group(&())).to_owned(),
+            version: T::version(&()).into_owned(),
+            kind: T::kind(&()).into_owned(),
+            name: T::plural(&()).into_owned(),
+            namespaced: T::Scope::NAMESPACED,
+        }
+    }
+
+    /// The group and plural that identify the resource whatever its version: the core
+    /// group is named "core" whether written that way or as Kubernetes' empty group.
+    pub(crate) fn identity(&self) -> (&str, &str) {
+        (canonical_group(&self.group), &self.name)
+    }
+
+    /// The group as the Kubernetes API spells it, with the core group empty.
+    pub(crate) fn kube_group(&self) -> &str {
+        if self.group == CORE_GROUP {
+            ""
+        } else {
+            &self.group
+        }
+    }
+
     pub(crate) fn helm_releases() -> Self {
         Self {
             group: crate::helm_release::GROUP.to_owned(),
@@ -60,6 +90,26 @@ impl ApiResource {
 
         display_name
     }
+}
+
+/// How a Kubernetes type's scope marker says whether it is namespaced.
+pub(crate) trait Scope {
+    const NAMESPACED: bool;
+}
+
+impl Scope for k8s_openapi::NamespaceResourceScope {
+    const NAMESPACED: bool = true;
+}
+
+impl Scope for k8s_openapi::ClusterResourceScope {
+    const NAMESPACED: bool = false;
+}
+
+pub(crate) const CORE_GROUP: &str = "core";
+
+/// The group name used throughout the application: "core" for Kubernetes' empty group.
+pub(crate) fn canonical_group(group: &str) -> &str {
+    if group.is_empty() { CORE_GROUP } else { group }
 }
 
 /// API resources together with the ones among them that support the scale subresource.

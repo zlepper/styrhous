@@ -268,3 +268,35 @@ fn test_sidebar_child_item_click() {
         "Engineering should be clicked via accessibility"
     );
 }
+
+#[test]
+fn test_sidebar_loading_item_lines_up_with_section_labels() {
+    for (dark, snapshot) in [(false, "light"), (true, "dark")] {
+        let mut harness = Harness::new_ui(move |ui| {
+            let sidebar = WideSidebar::new().width(240.0);
+            let sidebar = if dark { sidebar.dark() } else { sidebar };
+            sidebar.show(ui, |sidebar| {
+                sidebar.expandable_text("Section", false, |_| ());
+                sidebar.loading_item("Discovering API groups...");
+            });
+        });
+        crate::test_support::setup_egui(&mut harness);
+        harness.set_size(Vec2::new(280.0, 140.0));
+        // The spinner keeps repainting.
+        harness.run_steps(3);
+
+        let section = harness.get_by_label("Section").rect();
+        let loading = harness.get_by_label("Discovering API groups...").rect();
+        let label_left = text_pos_after_chevron(
+            section.shrink2(Vec2::new(ITEM_PADDING_X, 0.0)),
+            WIDE_GROUP_HEIGHT,
+        )
+        .x;
+        assert_eq!(
+            loading.left(),
+            label_left,
+            "the text starts where section labels do"
+        );
+        harness.ui_harness(format!("sidebars/test_sidebar_loading_item/{snapshot}").as_str());
+    }
+}

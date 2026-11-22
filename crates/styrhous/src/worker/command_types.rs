@@ -48,6 +48,11 @@ pub(crate) struct ConnectToCluster {
     pub(crate) cluster: String,
     pub(crate) cluster_key: i32,
 }
+/// Ends a cluster session: its connection, discovery and every watch.
+#[derive(Debug)]
+pub(crate) struct DisconnectCluster {
+    pub(crate) cluster_key: i32,
+}
 /// Replace every source used for one resource type as a single worker-side
 /// operation. This makes a namespace-scope change immediately supersede any
 /// queued initializations from the previous scope.
