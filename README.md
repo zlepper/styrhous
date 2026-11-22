@@ -40,4 +40,6 @@ app, override the package in `environment.systemPackages`:
 ```
 
 Without that override, you can select a custom licensing server in the app.
-See [LICENSE.md](LICENSE.md) for the source-available evaluation terms.
+Styrhous is free for personal use, education, non-commercial open source, and
+organizations with fewer than 250 people and less than EUR 10 million in annual
+revenue. Larger organizations need a subscription. See [LICENSE.md](LICENSE.md).
