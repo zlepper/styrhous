@@ -61,9 +61,63 @@ pub fn kubeconfig_context_references() -> Result<Vec<String>> {
 
 pub struct ClusterConnection {
     client: kube::Client,
-    log_client: kube::Client,
+    log_client: LazyLogClient,
     join_handles: Vec<JoinHandle<()>>,
     cluster_key: i32,
+}
+
+/// The client for Pod log follows, built on first use. Building a client runs the
+/// kubeconfig's exec credential plugin, which can take seconds, so connecting must not
+/// pay for a client that most sessions never use.
+#[derive(Clone)]
+pub struct LazyLogClient {
+    config: kube::Config,
+    client: std::sync::Arc<tokio::sync::OnceCell<kube::Client>>,
+}
+
+impl LazyLogClient {
+    fn new(config: &kube::Config) -> Self {
+        Self {
+            config: log_stream_config(config),
+            client: Default::default(),
+        }
+    }
+
+    pub async fn get(&self) -> Result<kube::Client> {
+        self.client
+            .get_or_try_init(|| build_client(self.config.clone()))
+            .await
+            .cloned()
+            .with_context(|| "Error creating Kubernetes log client")
+    }
+
+    #[cfg(test)]
+    fn is_built(&self) -> bool {
+        self.client.initialized()
+    }
+}
+
+/// Builds a client off the async runtime: loading certificates and running an exec
+/// credential plugin are blocking operations.
+async fn build_client(config: kube::Config) -> Result<kube::Client> {
+    tokio::task::spawn_blocking(move || kube::Client::try_from(config))
+        .await
+        .with_context(|| "Kubernetes client construction was cancelled")?
+        .map_err(Into::into)
+}
+
+async fn load_context_config(context_name: &str) -> Result<kube::Config> {
+    let options = KubeConfigOptions {
+        context: Some(context_name.to_owned()),
+        ..Default::default()
+    };
+    // Reading the kubeconfig and its certificate files is synchronous file I/O.
+    tokio::task::spawn_blocking(move || {
+        tokio::runtime::Handle::current().block_on(kube::Config::from_kubeconfig(&options))
+    })
+    .await
+    .with_context(|| "Kubernetes config loading was cancelled")?
+    .with_context(|| "Error creating Kubernetes config")
 }
 
 impl Debug for ClusterConnection {
@@ -82,7 +136,7 @@ impl ClusterConnection {
 
     /// Get the client whose reads may remain idle for the lifetime of a Pod
     /// log follow request.
-    pub fn log_client(&self) -> kube::Client {
+    pub fn log_client(&self) -> LazyLogClient {
         self.log_client.clone()
     }
 
@@ -91,17 +145,11 @@ impl ClusterConnection {
         context_name: &str,
         event_output: WorkerResultSender,
     ) -> Result<Self> {
-        let config = kube::Config::from_kubeconfig(&KubeConfigOptions {
-            context: Some(context_name.to_owned()),
-            ..Default::default()
-        })
-        .await
-        .with_context(|| "Error creating Kubernetes config")?;
-        let log_config = log_stream_config(&config);
-        let client =
-            kube::Client::try_from(config).with_context(|| "Error creating Kubernetes client")?;
-        let log_client = kube::Client::try_from(log_config)
-            .with_context(|| "Error creating Kubernetes log client")?;
+        let config = load_context_config(context_name).await?;
+        let log_client = LazyLogClient::new(&config);
+        let client = build_client(config)
+            .await
+            .with_context(|| "Error creating Kubernetes client")?;
 
         let namespaces_handle = tokio::spawn(
             KubernetesNamespaceWatcher {
@@ -226,6 +274,23 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_log_client_is_built_on_first_use_with_the_log_stream_timeouts() {
+        let mut config = kube::Config::new(
+            "https://kubernetes.example"
+                .parse()
+                .expect("test cluster URL is valid"),
+        );
+        config.read_timeout = Some(Duration::from_millis(50));
+        let log_client = LazyLogClient::new(&config);
+        let shared = log_client.clone();
+
+        assert!(!log_client.is_built(), "connecting must not build it");
+        assert_eq!(log_client.config.read_timeout, None);
+        log_client.get().await.expect("the log client builds");
+        assert!(shared.is_built(), "clones share the built client");
+    }
+
+    #[tokio::test]
     async fn dropping_the_connection_stops_the_api_group_retry_task() {
         let (alive, retry_stopped) = tokio::sync::oneshot::channel::<()>();
         let retry = tokio::spawn(async move {
@@ -250,7 +315,7 @@ mod tests {
         );
         let connection = ClusterConnection {
             client: kube::Client::try_from(config.clone()).expect("client"),
-            log_client: kube::Client::try_from(config).expect("log client"),
+            log_client: LazyLogClient::new(&config),
             join_handles: vec![retry],
             cluster_key: 1,
         };

@@ -92,12 +92,15 @@ impl WorkerState {
         &self,
         cluster_key: i32,
     ) -> anyhow::Result<(kube::Client, kube::Client)> {
-        self.connections
+        let (log_client, client) = self
+            .connections
             .lock()
             .await
             .get(&cluster_key)
             .map(|connection| (connection.log_client(), connection.client()))
-            .ok_or_else(|| anyhow::anyhow!("No client found for cluster_key {cluster_key}"))
+            .ok_or_else(|| anyhow::anyhow!("No client found for cluster_key {cluster_key}"))?;
+        // Built outside the connections lock: the first build may run an exec plugin.
+        Ok((log_client.get().await?, client))
     }
 
     pub(super) async fn stop_cluster(&self, cluster_key: i32) {
