@@ -43,7 +43,7 @@ fn namespace_popup_option_does_not_activate_the_overlapped_resource_button() {
 
     assert_eq!(
         harness.state().ui_state.clusters[&2].selected_namespaces,
-        HashSet::from(["default".to_owned()])
+        SelectedNamespaces::from(["default"])
     );
     assert!(
         harness.state().ui_state.clusters[&2]
@@ -98,7 +98,7 @@ fn namespace_popup_filters_to_an_offscreen_option_before_pointer_click() {
     let setup_state = || {
         let mut state = oracle_resource_table_state();
         let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");
-        cluster.selected_namespaces.clear();
+        cluster.selected_namespaces = SelectedNamespaces::default();
         cluster.selected_api_resource = None;
         cluster.namespaces = namespaces
             .iter()
@@ -119,7 +119,7 @@ fn namespace_popup_filters_to_an_offscreen_option_before_pointer_click() {
     offscreen_harness.run_steps(1);
     assert!(
         offscreen_harness.state().ui_state.clusters[&2]
-            .selected_namespaces
+            .namespace_scope()
             .is_empty(),
         "the unfiltered target is off-screen, so its accessibility node must not be used for a pointer click"
     );
@@ -158,7 +158,7 @@ fn namespace_popup_filters_to_an_offscreen_option_before_pointer_click() {
 
     assert_eq!(
         harness.state().ui_state.clusters[&2].selected_namespaces,
-        HashSet::from([target_namespace.to_owned()]),
+        SelectedNamespaces::from([target_namespace]),
         "the filtered namespace option must receive a pointer click even while the worker delivers a burst of discovery results"
     );
 }

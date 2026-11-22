@@ -19,7 +19,8 @@ fn replacing_watch_sources_clears_prepared_rows_before_revisions_restart() {
         &mut PersistedResourceTablePreferences::default(),
     );
     {
-        let selected_namespaces = &cluster.selected_namespaces;
+        let selected_namespaces =
+            NamespaceScope::new(&cluster.selected_namespaces, &cluster.namespaces);
         let resources = &mut cluster.resources;
         prepare_resource_table(
             &mut resources.resource_table_cache,
@@ -140,7 +141,7 @@ fn resource_results_refresh_cached_rows_for_add_delete_and_replace() {
 #[test]
 fn metric_revisions_only_invalidate_tables_that_render_them() {
     let mut cluster = ClusterState::for_test(1, "test");
-    cluster.selected_namespaces.insert("default".to_owned());
+    cluster.selected_namespaces = SelectedNamespaces::from(["default"]);
     cluster.pod_metrics.insert(
         "default".to_owned(),
         PodMetricsNamespaceState {

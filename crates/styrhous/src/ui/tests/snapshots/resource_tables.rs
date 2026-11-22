@@ -127,7 +127,7 @@ fn resource_table_snapshot_keeps_namespace_column_readable() {
             annotations: Default::default(),
         },
     );
-    cluster.selected_namespaces = HashSet::from(["default".into(), "kube-system".into()]);
+    cluster.selected_namespaces = SelectedNamespaces::from(["default", "kube-system"]);
     cluster.resource_cache.insert(
         (pods, Some("default".into())),
         ResourceWatchState {

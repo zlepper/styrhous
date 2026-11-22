@@ -11,10 +11,9 @@ impl UiState {
             let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
                 return;
             };
-            let was_selected = !cluster.selected_namespaces.insert(namespace.clone());
-            if was_selected {
-                cluster.selected_namespaces.remove(&namespace);
-            }
+            cluster
+                .selected_namespaces
+                .toggle(&namespace, &cluster.namespaces);
             cluster.selected_api_resource.clone()
         };
         self.remember_selected_namespaces(cluster_key);
@@ -54,8 +53,9 @@ impl UiState {
         }
     }
 
-    /// Select every discovered namespace and replace per-namespace sources with
-    /// one all-namespaces source when the resource supports it.
+    /// Select every namespace, including ones created later, and replace
+    /// per-namespace sources with one all-namespaces source when the resource
+    /// supports it.
     pub(crate) fn select_all_namespaces(
         &mut self,
         cluster_key: i32,
@@ -65,11 +65,7 @@ impl UiState {
             let Some(cluster) = self.clusters.get_mut(&cluster_key) else {
                 return;
             };
-            cluster.selected_namespaces = cluster
-                .namespaces
-                .values()
-                .map(|namespace| namespace.name.clone())
-                .collect();
+            cluster.selected_namespaces = SelectedNamespaces::All;
         }
         self.remember_selected_namespaces(cluster_key);
         let Some(api_resource) = self
@@ -95,7 +91,7 @@ impl UiState {
             .get(&cluster_key)
             .and_then(|cluster| cluster.selected_api_resource.clone());
         if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
-            cluster.selected_namespaces.clear();
+            cluster.selected_namespaces = SelectedNamespaces::default();
             if let Some(api_resource) = api_resource {
                 Self::request_selected_resource_watches(cluster, &api_resource, commands_to_send);
             } else {
@@ -135,24 +131,15 @@ impl UiState {
         api_resource: &ApiResource,
         commands_to_send: &mut Vec<WorkerCommandBox>,
     ) {
-        let discovered_namespaces = cluster
-            .namespaces
-            .values()
-            .map(|namespace| namespace.name.clone())
-            .collect::<HashSet<_>>();
-        let all_namespaces = api_resource.namespaced
+        let scope = cluster.namespace_scope();
+        let all_namespaces_scope = (api_resource.namespaced
             && !api_resource.is_helm_releases()
-            && !discovered_namespaces.is_empty()
-            && cluster.selected_namespaces == discovered_namespaces;
-        let desired = if all_namespaces || !api_resource.namespaced {
+            && scope.covers_all_discovered())
+        .then(|| scope.iter().cloned().collect::<BTreeSet<_>>());
+        let desired = if all_namespaces_scope.is_some() || !api_resource.namespaced {
             HashSet::from([None])
         } else {
-            cluster
-                .selected_namespaces
-                .iter()
-                .cloned()
-                .map(Some)
-                .collect()
+            scope.iter().cloned().map(Some).collect()
         };
         let active = cluster
             .active_watchers
@@ -160,17 +147,30 @@ impl UiState {
             .filter(|(resource, _)| resource == api_resource)
             .map(|(_, namespace)| namespace.clone())
             .collect::<HashSet<_>>();
+        let sources_changed = active != desired;
+        let all_namespaces_scope_changed = all_namespaces_scope.as_ref().is_some_and(|scope| {
+            cluster.all_namespaces_watch_scopes.get(api_resource) != Some(scope)
+        });
 
-        if active != desired {
+        if sources_changed || all_namespaces_scope_changed {
             let had_active_sources = !active.is_empty();
             cluster
                 .active_watchers
                 .retain(|(resource, _)| resource != api_resource);
-            if had_active_sources {
+            if had_active_sources && sources_changed {
                 cluster
                     .resource_cache
                     .retain(|(resource, _), _| resource != api_resource);
                 cluster.resource_table_cache.clear();
+            } else if let Some(scope) = &all_namespaces_scope {
+                // The refreshed watcher replaces the rows of namespaces it still
+                // covers once it has listed them; drop those of removed ones.
+                cluster.resource_cache.retain(|(resource, namespace), _| {
+                    resource != api_resource
+                        || namespace
+                            .as_ref()
+                            .is_none_or(|namespace| scope.contains(namespace))
+                });
             }
             let sources = if !api_resource.namespaced {
                 (!cluster
@@ -180,9 +180,9 @@ impl UiState {
                 .then_some(crate::worker::ResourceWatchSource::Cluster)
                 .into_iter()
                 .collect()
-            } else if all_namespaces {
+            } else if let Some(scope) = &all_namespaces_scope {
                 vec![crate::worker::ResourceWatchSource::AllNamespaces(
-                    discovered_namespaces.into_iter().collect(),
+                    scope.clone(),
                 )]
             } else {
                 desired
@@ -197,6 +197,16 @@ impl UiState {
                     .map(crate::worker::ResourceWatchSource::Namespace)
                     .collect()
             };
+            match all_namespaces_scope {
+                Some(scope) => {
+                    cluster
+                        .all_namespaces_watch_scopes
+                        .insert(api_resource.clone(), scope);
+                }
+                None => {
+                    cluster.all_namespaces_watch_scopes.remove(api_resource);
+                }
+            }
             cluster.active_watchers.extend(sources.iter().map(|source| {
                 let namespace = match source {
                     crate::worker::ResourceWatchSource::Namespace(namespace) => {
@@ -226,13 +236,6 @@ impl UiState {
         let Some(api_resource) = cluster.selected_api_resource.clone() else {
             return;
         };
-        // An all-namespaces watcher filters using the discovered namespace set
-        // captured when it started. Refresh it whenever that set changes.
-        if api_resource.namespaced && !api_resource.is_helm_releases() {
-            cluster
-                .active_watchers
-                .remove(&(api_resource.clone(), None));
-        }
         Self::request_selected_resource_watches(cluster, &api_resource, commands_to_send);
     }
 
@@ -245,7 +248,7 @@ impl UiState {
             .as_ref()
             .filter(|resource| resource.group == "core" && resource.kind == "Pod")
             .filter(|_| cluster.pod_metrics_api_available)
-            .map(|_| cluster.selected_namespaces.clone())
+            .map(|_| cluster.namespace_scope().iter().cloned().collect())
             .unwrap_or_default();
         let inactive = cluster
             .active_pod_metrics

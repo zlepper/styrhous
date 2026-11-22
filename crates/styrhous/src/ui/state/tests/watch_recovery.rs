@@ -1,28 +1,4 @@
 use super::*;
-use crate::api_resource::ApiResource;
-use crate::cluster_connection_manager::Cluster;
-
-fn pods() -> ApiResource {
-    ApiResource {
-        group: "core".to_owned(),
-        version: "v1".to_owned(),
-        kind: "Pod".to_owned(),
-        name: "pods".to_owned(),
-        namespaced: true,
-    }
-}
-
-fn connected_state() -> UiState {
-    let mut state = UiState::default();
-    let mut commands = Vec::new();
-    KubernetesClustersUpdated(vec![Cluster {
-        name: "kind".to_owned(),
-        is_current: true,
-        presentation: Default::default(),
-    }])
-    .apply(&mut state, &mut commands);
-    state
-}
 
 #[test]
 fn resource_reconnecting_keeps_rows_and_the_active_watcher_until_recovery() {
@@ -69,7 +45,7 @@ fn all_namespace_reconnecting_marks_every_selected_namespace() {
     let mut state = connected_state();
     let mut commands = Vec::new();
     let cluster = state.clusters.get_mut(&1).unwrap();
-    cluster.selected_namespaces = ["a".to_owned(), "b".to_owned()].into();
+    cluster.selected_namespaces = SelectedNamespaces::from(["a", "b"]);
     cluster.active_watchers.insert((pods(), None));
 
     KubernetesResourceWatchReconnecting {

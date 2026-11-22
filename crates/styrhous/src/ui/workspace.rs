@@ -2,7 +2,7 @@ use super::resource_actions::{log_stream_targets, show_resource_action_items};
 use super::resource_owner;
 use super::resource_table_cache::{PreparedResourceTable, PreparedResourceTableRow};
 use super::state::{
-    BulkDeleteTarget, ClusterConnectionState, ClusterLoadState, PendingBulkDelete,
+    BulkDeleteTarget, ClusterConnectionState, ClusterLoadState, NamespaceScope, PendingBulkDelete,
     PendingCronJobRun, PendingDelete, PendingDeploymentRestart, PendingForceDelete, ResourceAction,
     ResourceSearchState, UiState,
 };
@@ -361,10 +361,11 @@ pub(super) fn show(
                                 .get(api_resource)
                                 .map(Vec::as_slice)
                                 .unwrap_or_default(),
-                            api_resource.namespaced && cluster.selected_namespaces.len() > 1,
+                            api_resource.namespaced && cluster.namespace_scope().len() > 1,
                             table_preferences,
                         );
-                        let selected_namespaces = &cluster.selected_namespaces;
+                        let selected_namespaces =
+                            NamespaceScope::new(&cluster.selected_namespaces, &cluster.namespaces);
                         let resources = &mut cluster.resources;
                         let prepared = prepare_resource_table(
                             &mut resources.resource_table_cache,
@@ -431,10 +432,11 @@ pub(super) fn show(
                     .as_ref()
                     .expect("selected resources have a table configuration");
                 let namespace_selection_empty =
-                    api_resource.namespaced && cluster.selected_namespaces.is_empty();
+                    api_resource.namespaced && cluster.namespace_scope().is_empty();
                 let watch_error = selected_watch_error(cluster, api_resource);
                 let watches_are_loading = selected_watches_are_loading(cluster, api_resource);
-                let selected_namespaces = &cluster.selected_namespaces;
+                let selected_namespaces =
+                    NamespaceScope::new(&cluster.selected_namespaces, &cluster.namespaces);
                 let resources = &mut cluster.resources;
                 let metrics = ResourceMetrics {
                     pod_metrics_api_available: resources.pod_metrics_api_available,

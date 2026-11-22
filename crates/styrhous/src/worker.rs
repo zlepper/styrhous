@@ -311,10 +311,18 @@ impl MockWorker {
 
     /// Iterate over the commands of one concrete type in their dispatch order.
     pub fn commands_of<C: WorkerCommand>(&self) -> impl Iterator<Item = &C> {
-        self.commands
-            .iter()
-            .filter_map(|command| command.as_ref().as_any().downcast_ref())
+        commands_of(&self.commands)
     }
+}
+
+/// Iterate over the commands of one concrete type in their dispatch order.
+#[cfg(test)]
+pub(crate) fn commands_of<C: WorkerCommand>(
+    commands: &[WorkerCommandBox],
+) -> impl Iterator<Item = &C> {
+    commands
+        .iter()
+        .filter_map(|command| command.as_ref().as_any().downcast_ref())
 }
 
 #[cfg(test)]

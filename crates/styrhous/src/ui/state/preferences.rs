@@ -29,7 +29,7 @@ impl UiState {
             return;
         };
         let context_name = cluster.name.clone();
-        let namespaces = cluster.selected_namespaces.iter().cloned().collect();
+        let namespaces = cluster.selected_namespaces.clone();
         self.cluster_selections
             .selections
             .entry(context_name)
@@ -83,25 +83,18 @@ impl UiState {
         let Some(cluster) = self.clusters.get(&cluster_key) else {
             return;
         };
-        let context_name = cluster.name.clone();
-        let available_namespaces = cluster
-            .namespaces
-            .values()
-            .map(|namespace| namespace.name.clone())
-            .collect::<BTreeSet<_>>();
-
         let restored_namespaces =
-            if let Some(selection) = self.cluster_selections.selections.get_mut(&context_name) {
+            if let Some(selection) = self.cluster_selections.selections.get_mut(&cluster.name) {
                 selection
                     .selected_namespaces
-                    .retain(|namespace| available_namespaces.contains(namespace));
+                    .retain_discovered(&cluster.namespaces);
                 selection.selected_namespaces.clone()
             } else {
-                BTreeSet::new()
+                SelectedNamespaces::default()
             };
 
         if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
-            cluster.selected_namespaces = restored_namespaces.into_iter().collect();
+            cluster.selected_namespaces = restored_namespaces;
             Self::reconcile_after_namespace_change(cluster, commands_to_send);
         }
         self.prune_empty_cluster_selection(cluster_key);

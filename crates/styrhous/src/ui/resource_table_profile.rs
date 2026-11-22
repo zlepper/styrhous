@@ -57,9 +57,9 @@ impl ResourceTableProfile {
         cluster.namespaces_load = super::state::ClusterLoadState::Ready;
         cluster.api_resources_load = super::state::ClusterLoadState::Ready;
         cluster.selected_api_resource = Some(api_resource.clone());
+        cluster.selected_namespaces = NAMESPACES.into();
 
         for namespace in NAMESPACES {
-            cluster.selected_namespaces.insert(namespace.to_owned());
             cluster.resource_cache.insert(
                 (api_resource.clone(), Some(namespace.to_owned())),
                 ResourceWatchState {

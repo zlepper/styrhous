@@ -1,7 +1,8 @@
 use crate::ui::state::{
-    NodeMetricsState, PodMetricsNamespaceState, ResourceWatchKey, ResourceWatchState,
+    NamespaceScope, NodeMetricsState, PodMetricsNamespaceState, ResourceWatchKey,
+    ResourceWatchState,
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 mod metrics;
 mod preparation;
@@ -21,7 +22,7 @@ pub(super) struct ResourceMetrics<'a> {
 
 #[derive(Clone, Copy)]
 pub(super) struct ResourceTableData<'a> {
-    pub(super) selected_namespaces: &'a HashSet<String>,
+    pub(super) selected_namespaces: NamespaceScope<'a>,
     pub(super) resource_cache: &'a HashMap<ResourceWatchKey, ResourceWatchState>,
     pub(super) metrics: ResourceMetrics<'a>,
 }

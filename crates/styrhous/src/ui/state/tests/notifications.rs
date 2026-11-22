@@ -217,7 +217,7 @@ fn recovered_metrics_group_restores_metrics_availability_and_restarts_the_watch(
     {
         let cluster = state.clusters.get_mut(&7).unwrap();
         cluster.selected_api_resource = Some(pods);
-        cluster.selected_namespaces.insert("default".to_owned());
+        cluster.selected_namespaces = SelectedNamespaces::from(["default"]);
     }
     commands.clear();
 
@@ -302,7 +302,7 @@ fn recovered(
 fn saved_selection_in_a_failed_group_is_kept_and_restored_when_the_group_recovers() {
     let mut state = UiState::default();
     let mut cluster = ClusterState::new(7, "dev".into());
-    cluster.selected_namespaces.insert("default".to_owned());
+    cluster.selected_namespaces = SelectedNamespaces::from(["default"]);
     state.clusters.insert(7, cluster);
     state.cluster_selections.selections.insert(
         "dev".into(),

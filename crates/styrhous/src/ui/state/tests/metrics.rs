@@ -148,12 +148,7 @@ fn helm_release_selection_watches_each_selected_namespace() {
         presentation: Default::default(),
     }])
     .apply(&mut state, &mut commands);
-    state
-        .clusters
-        .get_mut(&1)
-        .unwrap()
-        .selected_namespaces
-        .insert("apps".to_owned());
+    state.clusters.get_mut(&1).unwrap().selected_namespaces = SelectedNamespaces::from(["apps"]);
 
     state.select_api_resource(1, ApiResource::helm_releases(), &mut commands);
 
