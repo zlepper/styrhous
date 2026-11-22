@@ -352,44 +352,7 @@ fn test_resource_scale_integration() {
         deployments
             .create(
                 &Default::default(),
-                &Deployment {
-                    metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
-                        name: Some(deployment_name.clone()),
-                        namespace: Some(fixture.namespace.clone()),
-                        ..Default::default()
-                    },
-                    spec: Some(DeploymentSpec {
-                        replicas: Some(1),
-                        selector: LabelSelector {
-                            match_labels: Some(BTreeMap::from([(
-                                "app".to_owned(),
-                                deployment_name.clone(),
-                            )])),
-                            ..Default::default()
-                        },
-                        template: PodTemplateSpec {
-                            metadata: Some(
-                                k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
-                                    labels: Some(BTreeMap::from([(
-                                        "app".to_owned(),
-                                        deployment_name.clone(),
-                                    )])),
-                                    ..Default::default()
-                                },
-                            ),
-                            spec: Some(PodSpec {
-                                containers: vec![Container {
-                                    name: "pause".to_owned(),
-                                    image: Some("registry.k8s.io/pause:3.10".to_owned()),
-                                    ..Default::default()
-                                }],
-                                ..Default::default()
-                            }),
-                        },
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                },
+                &pause_deployment(&deployment_name, &fixture.namespace),
             )
             .await
             .expect("Failed to create Deployment");
@@ -497,56 +460,26 @@ fn test_yaml_editor_removes_an_externally_owned_cpu_limit_integration() {
             .expect("Failed to create Kubernetes client")
     });
     let deployments: Api<Deployment> = Api::namespaced(client, &fixture.namespace);
+    let mut deployment = pause_deployment(&deployment_name, &fixture.namespace);
+    deployment
+        .spec
+        .as_mut()
+        .and_then(|spec| spec.template.spec.as_mut())
+        .expect("pause Deployment has a pod spec")
+        .containers[0]
+        .resources = Some(ResourceRequirements {
+        limits: Some(BTreeMap::from([
+            ("cpu".to_owned(), Quantity("100m".to_owned())),
+            ("memory".to_owned(), Quantity("64Mi".to_owned())),
+        ])),
+        ..Default::default()
+    });
     runtime.block_on(async {
         deployments
             .patch(
                 &deployment_name,
                 &kube::api::PatchParams::apply("external-fixture"),
-                &Patch::Apply(&Deployment {
-                    metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
-                        name: Some(deployment_name.clone()),
-                        namespace: Some(fixture.namespace.clone()),
-                        ..Default::default()
-                    },
-                    spec: Some(DeploymentSpec {
-                        replicas: Some(1),
-                        selector: LabelSelector {
-                            match_labels: Some(BTreeMap::from([(
-                                "app".to_owned(),
-                                deployment_name.clone(),
-                            )])),
-                            ..Default::default()
-                        },
-                        template: PodTemplateSpec {
-                            metadata: Some(
-                                k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
-                                    labels: Some(BTreeMap::from([(
-                                        "app".to_owned(),
-                                        deployment_name.clone(),
-                                    )])),
-                                    ..Default::default()
-                                },
-                            ),
-                            spec: Some(PodSpec {
-                                containers: vec![Container {
-                                    name: "pause".to_owned(),
-                                    image: Some("registry.k8s.io/pause:3.10".to_owned()),
-                                    resources: Some(ResourceRequirements {
-                                        limits: Some(BTreeMap::from([
-                                            ("cpu".to_owned(), Quantity("100m".to_owned())),
-                                            ("memory".to_owned(), Quantity("64Mi".to_owned())),
-                                        ])),
-                                        ..Default::default()
-                                    }),
-                                    ..Default::default()
-                                }],
-                                ..Default::default()
-                            }),
-                        },
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                }),
+                &Patch::Apply(&deployment),
             )
             .await
             .expect("Failed to create externally managed Deployment");

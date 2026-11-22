@@ -43,13 +43,7 @@ pub(crate) fn extract_minimal_resource(
     let uid = get_resource_uid(obj);
 
     // Parse creation timestamp
-    let creation_timestamp = metadata.creation_timestamp.as_ref().and_then(|ts| {
-        OffsetDateTime::parse(
-            &ts.0.to_string(),
-            &time::format_description::well_known::Rfc3339,
-        )
-        .ok()
-    });
+    let creation_timestamp = crate::minimal_resource::creation_time(metadata);
 
     MinimalResource {
         uid,

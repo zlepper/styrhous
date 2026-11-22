@@ -207,6 +207,7 @@ pub(crate) use selected_namespaces::{NamespaceScope, SelectedNamespaces};
 
 mod cluster_operations;
 mod cluster_results;
+mod deployment_rollback;
 mod detail_results;
 mod details;
 mod metrics_results;

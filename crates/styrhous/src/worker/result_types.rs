@@ -513,6 +513,32 @@ pub(crate) struct CronJobRunFailed {
     pub(crate) error: String,
 }
 #[derive(Debug)]
+pub(crate) struct DeploymentRevisionsFetched {
+    pub(crate) cluster_key: i32,
+    pub(crate) request_id: u64,
+    pub(crate) history: DeploymentRevisionHistory,
+}
+#[derive(Debug)]
+pub(crate) struct DeploymentRevisionsFetchFailed {
+    pub(crate) cluster_key: i32,
+    pub(crate) request_id: u64,
+    pub(crate) error: String,
+}
+#[derive(Debug)]
+pub(crate) struct DeploymentRolledBack {
+    pub(crate) cluster_key: i32,
+    pub(crate) operation_id: u64,
+    pub(crate) revision: i64,
+    pub(crate) outcome: DeploymentRollbackOutcome,
+}
+#[derive(Debug)]
+pub(crate) struct DeploymentRollbackFailed {
+    pub(crate) cluster_key: i32,
+    pub(crate) operation_id: u64,
+    pub(crate) revision: i64,
+    pub(crate) error: String,
+}
+#[derive(Debug)]
 pub(crate) struct HelmRollbackCompleted {
     pub(crate) cluster_key: i32,
     pub(crate) operation_id: u64,

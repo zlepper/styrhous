@@ -27,6 +27,10 @@ pub(crate) enum ResourceAction {
         name: String,
         namespace: String,
     },
+    RequestDeploymentRollback {
+        name: String,
+        namespace: String,
+    },
     RequestCronJobRun {
         name: String,
         namespace: String,
@@ -106,6 +110,7 @@ impl ResourceAction {
             | Self::RequestDelete { .. }
             | Self::RequestForceDelete { .. }
             | Self::RequestDeploymentRestart { .. }
+            | Self::RequestDeploymentRollback { .. }
             | Self::RequestCronJobRun { .. }
             | Self::RequestScale { .. }
             | Self::SaveData { .. }

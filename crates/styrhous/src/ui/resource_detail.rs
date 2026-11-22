@@ -314,6 +314,16 @@ impl GlobalBladeEffect for ResourceDetailEffect {
                     });
                 }
             }
+            ResourceAction::RequestDeploymentRollback { name, namespace } => {
+                if let Some(cluster) = context.ui_state.clusters.get_mut(&cluster_key) {
+                    cluster.request_deployment_rollback(
+                        cluster_key,
+                        namespace,
+                        name,
+                        navigation.commands_to_send(),
+                    );
+                }
+            }
             ResourceAction::RequestCronJobRun { name, namespace } => {
                 if let Some(cluster) = context.ui_state.clusters.get_mut(&cluster_key) {
                     cluster.pending_cron_job_run = Some(PendingCronJobRun {

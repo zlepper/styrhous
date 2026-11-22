@@ -20,6 +20,41 @@ const ACTIONS_SECRET_NAME: &str = "resource-secret-actions";
 const METRICS_LOAD_POD_NAME: &str = "metrics-load";
 const TEST_FINALIZER: &str = "tests.styrhous/finalizer";
 
+/// A one-replica Deployment of the pause image, selected by `app=<name>`.
+fn pause_deployment(name: &str, namespace: &str) -> Deployment {
+    let labels = BTreeMap::from([("app".to_owned(), name.to_owned())]);
+    Deployment {
+        metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+            name: Some(name.to_owned()),
+            namespace: Some(namespace.to_owned()),
+            ..Default::default()
+        },
+        spec: Some(DeploymentSpec {
+            replicas: Some(1),
+            selector: LabelSelector {
+                match_labels: Some(labels.clone()),
+                ..Default::default()
+            },
+            template: PodTemplateSpec {
+                metadata: Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                    labels: Some(labels),
+                    ..Default::default()
+                }),
+                spec: Some(PodSpec {
+                    containers: vec![Container {
+                        name: "pause".to_owned(),
+                        image: Some("registry.k8s.io/pause:3.10".to_owned()),
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                }),
+            },
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
+}
+
 /// Updates an existing Secret value through the inspector without exposing its
 /// plaintext until the test explicitly operates on the editor state.
 fn yaml_mapping_key_positions(yaml: &str) -> Vec<(usize, String, usize)> {

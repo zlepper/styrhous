@@ -474,6 +474,7 @@ fn open_workspace_column_settings(harness: &mut Harness<MyEguiApp<MockWorker>>) 
 mod application_flow;
 mod cluster_and_helm;
 mod debug_profiles;
+mod deployment_rollback;
 mod discovery_and_navigation;
 mod global_blades;
 mod resource_details;

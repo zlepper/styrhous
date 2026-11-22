@@ -154,6 +154,15 @@ pub(super) fn show_resource_action_items(
                 namespace,
             });
         }
+        if menu.action("Roll back…").clicked()
+            && pending_action.is_none()
+            && let Some(namespace) = resource.namespace.clone()
+        {
+            *pending_action = Some(ResourceAction::RequestDeploymentRollback {
+                name: resource.name.clone(),
+                namespace,
+            });
+        }
     }
     if crate::resource_handlers::cron_job::supports_manual_run(api_resource)
         && let Some(namespace) = resource.namespace.clone()

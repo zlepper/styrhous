@@ -190,44 +190,7 @@ fn test_deployment_match_labels_completion_integration() {
         deployments
             .create(
                 &Default::default(),
-                &Deployment {
-                    metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
-                        name: Some(deployment_name.clone()),
-                        namespace: Some(fixture.namespace.clone()),
-                        ..Default::default()
-                    },
-                    spec: Some(DeploymentSpec {
-                        replicas: Some(1),
-                        selector: LabelSelector {
-                            match_labels: Some(BTreeMap::from([(
-                                "app".to_owned(),
-                                deployment_name.clone(),
-                            )])),
-                            ..Default::default()
-                        },
-                        template: PodTemplateSpec {
-                            metadata: Some(
-                                k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
-                                    labels: Some(BTreeMap::from([(
-                                        "app".to_owned(),
-                                        deployment_name.clone(),
-                                    )])),
-                                    ..Default::default()
-                                },
-                            ),
-                            spec: Some(PodSpec {
-                                containers: vec![Container {
-                                    name: "pause".to_owned(),
-                                    image: Some("registry.k8s.io/pause:3.10".to_owned()),
-                                    ..Default::default()
-                                }],
-                                ..Default::default()
-                            }),
-                        },
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                },
+                &pause_deployment(&deployment_name, &fixture.namespace),
             )
             .await
             .expect("Failed to create integration Deployment");
@@ -353,44 +316,7 @@ fn test_deployment_rollout_restart_integration() {
         deployments
             .create(
                 &Default::default(),
-                &Deployment {
-                    metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
-                        name: Some(deployment_name.clone()),
-                        namespace: Some(fixture.namespace.clone()),
-                        ..Default::default()
-                    },
-                    spec: Some(DeploymentSpec {
-                        replicas: Some(1),
-                        selector: LabelSelector {
-                            match_labels: Some(BTreeMap::from([(
-                                "app".to_owned(),
-                                deployment_name.clone(),
-                            )])),
-                            ..Default::default()
-                        },
-                        template: PodTemplateSpec {
-                            metadata: Some(
-                                k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
-                                    labels: Some(BTreeMap::from([(
-                                        "app".to_owned(),
-                                        deployment_name.clone(),
-                                    )])),
-                                    ..Default::default()
-                                },
-                            ),
-                            spec: Some(PodSpec {
-                                containers: vec![Container {
-                                    name: "pause".to_owned(),
-                                    image: Some("registry.k8s.io/pause:3.10".to_owned()),
-                                    ..Default::default()
-                                }],
-                                ..Default::default()
-                            }),
-                        },
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                },
+                &pause_deployment(&deployment_name, &fixture.namespace),
             )
             .await
             .expect("Failed to create Deployment");
@@ -480,6 +406,199 @@ fn test_deployment_rollout_restart_integration() {
                 .rev()
                 .find(|entry| entry.outcome == OperationOutcome::Failure)
                 .and_then(|entry| entry.details.clone())
+        },
+        10_000,
+    );
+}
+
+/// Rolls a Deployment back to its first revision through "Roll back…", the
+/// way `kubectl rollout undo` does, against a real Deployment controller.
+#[test]
+fn test_deployment_rollback_integration() {
+    use crate::ui::state::DeploymentRevisionsLoad;
+    use k8s_openapi::api::core::v1::EnvVar;
+
+    let fixture = IntegrationNamespaceFixture::create("deployment-rollback", "anchor", "unused");
+    let deployment_name = "rollback-deployment".to_owned();
+    let runtime = &fixture.runtime;
+    let client = runtime.block_on(async {
+        Client::try_default()
+            .await
+            .expect("Failed to create Kubernetes client")
+    });
+    let deployments: Api<Deployment> = Api::namespaced(client, &fixture.namespace);
+    let with_greeting = |greeting: &str| {
+        let mut deployment = pause_deployment(&deployment_name, &fixture.namespace);
+        deployment
+            .spec
+            .as_mut()
+            .and_then(|spec| spec.template.spec.as_mut())
+            .expect("pause Deployment has a pod spec")
+            .containers[0]
+            .env = Some(vec![EnvVar {
+            name: "GREETING".to_owned(),
+            value: Some(greeting.to_owned()),
+            ..Default::default()
+        }]);
+        deployment
+    };
+    let observed = |remaining| {
+        kubernetes_request(runtime, remaining, deployments.get(&deployment_name)).map(
+            |deployment| {
+                let revision = deployment
+                    .metadata
+                    .annotations
+                    .as_ref()
+                    .and_then(|annotations| {
+                        annotations
+                            .get("deployment.kubernetes.io/revision")
+                            .cloned()
+                    });
+                let greeting = deployment
+                    .spec
+                    .and_then(|spec| spec.template.spec)
+                    .and_then(|spec| spec.containers.into_iter().next())
+                    .and_then(|container| container.env)
+                    .and_then(|env| env.into_iter().next())
+                    .and_then(|env| env.value);
+                (revision, greeting)
+            },
+        )
+    };
+    let (mut harness, cluster_key) = connected_kind_harness();
+    runtime.block_on(async {
+        deployments
+            .create(&Default::default(), &with_greeting("first"))
+            .await
+            .expect("Failed to create Deployment");
+    });
+    wait_for_kubernetes(
+        &mut harness,
+        &format!("Deployment {deployment_name} revision 1"),
+        |remaining| {
+            observed(remaining)
+                .map(|(revision, _)| (revision.as_deref() == Some("1")).then_some(()))
+        },
+        30_000,
+    );
+    runtime.block_on(async {
+        deployments
+            .replace(
+                &deployment_name,
+                &Default::default(),
+                &with_greeting("second"),
+            )
+            .await
+            .expect("Failed to update Deployment");
+    });
+    wait_for_kubernetes(
+        &mut harness,
+        &format!("Deployment {deployment_name} revision 2"),
+        |remaining| {
+            observed(remaining)
+                .map(|(revision, _)| (revision.as_deref() == Some("2")).then_some(()))
+        },
+        30_000,
+    );
+
+    wait_for_cluster_data(&mut harness, cluster_key);
+    select_namespace(&mut harness, cluster_key, &fixture.namespace);
+    let deployments_resource = select_resource(&mut harness, "Apps & Containers", "Deployments");
+    wait_for_resource_sync(
+        &mut harness,
+        cluster_key,
+        &deployments_resource,
+        Some(&fixture.namespace),
+    );
+    let actions_label = format!("More actions for {deployment_name}");
+    wait_for_settled_clickable(&mut harness, &actions_label, 5_000);
+    harness.get_by_label(&actions_label).click();
+    wait_for_settled_clickable(&mut harness, "Roll back…", 5_000);
+    harness.get_by_label("Roll back…").click();
+    let history = wait_for(
+        &mut harness,
+        "the rollback dialog to load revision 1 as the default target",
+        |app| {
+            let pending = app.ui_state.clusters[&cluster_key]
+                .pending_deployment_rollback
+                .as_ref()?;
+            match &pending.revisions {
+                DeploymentRevisionsLoad::Failed(error) => {
+                    panic!("Loading revisions failed: {error}")
+                }
+                DeploymentRevisionsLoad::Loaded {
+                    history,
+                    selected: Some(1),
+                } => Some(history.clone()),
+                _ => None,
+            }
+        },
+        10_000,
+    );
+    // What the server really returns: defaulting must not make the
+    // templates look different beyond the one change that was made.
+    assert!(!history.paused);
+    assert_eq!(
+        history
+            .revisions
+            .iter()
+            .map(|revision| (revision.revision, revision.is_current))
+            .collect::<Vec<_>>(),
+        vec![(2, true), (1, false)]
+    );
+    let previous = &history.revisions[1];
+    assert_eq!(
+        previous
+            .changes
+            .iter()
+            .map(|change| (
+                change.container.as_str(),
+                change.field.as_str(),
+                change.current.as_deref(),
+                change.target.as_deref()
+            ))
+            .collect::<Vec<_>>(),
+        vec![("pause", "env GREETING", Some("second"), Some("first"))]
+    );
+    assert!(!previous.other_changes);
+    assert!(previous.created.is_some());
+    wait_for_settled_clickable(&mut harness, "Roll back to revision 1", 5_000);
+    harness.get_by_label("Roll back to revision 1").click();
+    harness.run_steps(1);
+    let cluster = &harness.state().ui_state.clusters[&cluster_key];
+    assert!(
+        cluster.pending_deployment_rollback.is_none()
+            && !cluster.deployment_rollbacks.ids().is_empty(),
+        "the rollback confirmation click was not applied"
+    );
+
+    wait_for_kubernetes_with_diagnostic(
+        &mut harness,
+        &format!("Deployment {deployment_name} to run revision 1's template as revision 3"),
+        |remaining| {
+            observed(remaining).map(|observed| {
+                (observed == (Some("3".to_owned()), Some("first".to_owned()))).then_some(())
+            })
+        },
+        |app| {
+            app.ui_state.clusters[&cluster_key]
+                .operation_history
+                .iter()
+                .rev()
+                .find(|entry| entry.outcome == OperationOutcome::Failure)
+                .and_then(|entry| entry.details.clone())
+        },
+        20_000,
+    );
+    wait_for(
+        &mut harness,
+        "the rollback outcome to reach the notification history",
+        |app| {
+            app.ui_state.clusters[&cluster_key]
+                .operation_history
+                .iter()
+                .any(|entry| entry.title == "Deployment rolled back")
+                .then_some(())
         },
         10_000,
     );

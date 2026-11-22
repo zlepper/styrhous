@@ -214,6 +214,64 @@ impl WorkerCommand for RunCronJob {
 }
 
 #[async_trait]
+impl WorkerCommand for GetDeploymentRevisions {
+    type Output = Result<DeploymentRevisionsFetched, DeploymentRevisionsFetchFailed>;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output {
+        let history = async {
+            let client = state.client_for_cluster(self.cluster_key).await?;
+            deployment_revisions(client, &self.namespace, &self.resource_name).await
+        }
+        .await;
+        history
+            .map(|history| DeploymentRevisionsFetched {
+                cluster_key: self.cluster_key,
+                request_id: self.request_id,
+                history,
+            })
+            .map_err(|error| DeploymentRevisionsFetchFailed {
+                cluster_key: self.cluster_key,
+                request_id: self.request_id,
+                error: format!("{error:#}"),
+            })
+    }
+
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
+    }
+}
+
+#[async_trait]
+impl WorkerCommand for RollbackDeployment {
+    type Output = Result<DeploymentRolledBack, DeploymentRollbackFailed>;
+
+    async fn execute(self, state: &WorkerState) -> Self::Output {
+        let outcome = async {
+            let client = state.client_for_cluster(self.cluster_key).await?;
+            rollback_deployment(client, &self.namespace, &self.resource_name, self.revision).await
+        }
+        .await;
+        outcome
+            .map(|outcome| DeploymentRolledBack {
+                cluster_key: self.cluster_key,
+                operation_id: self.operation_id,
+                revision: self.revision,
+                outcome,
+            })
+            .map_err(|error| DeploymentRollbackFailed {
+                cluster_key: self.cluster_key,
+                operation_id: self.operation_id,
+                revision: self.revision,
+                error: format!("{error:#}"),
+            })
+    }
+
+    fn cluster_key(&self) -> Option<i32> {
+        Some(self.cluster_key)
+    }
+}
+
+#[async_trait]
 impl WorkerCommand for RollbackHelmRelease {
     type Output = Result<HelmRollbackCompleted, HelmRollbackFailed>;
 

@@ -62,6 +62,9 @@ pub(crate) struct ClusterResourceState {
     pub(crate) pending_helm_rollback: Option<PendingHelmRollback>,
     /// The release (namespace, name) each submitted rollback targets.
     pub(crate) helm_rollbacks: InFlightOperations<HelmReleaseKey>,
+    pub(crate) pending_deployment_rollback: Option<PendingDeploymentRollback>,
+    pub(crate) next_deployment_revisions_request_id: u64,
+    pub(crate) deployment_rollbacks: InFlightOperations<DeploymentKey>,
     pub(crate) pending_scale: Option<PendingScale>,
     /// Outcomes are intentionally session-scoped: rebuilding this resource
     /// state on reconnect drops entries from the previous cluster session.
@@ -173,6 +176,9 @@ impl ClusterResourceState {
             cron_job_runs: InFlightOperations::default(),
             pending_helm_rollback: None,
             helm_rollbacks: InFlightOperations::default(),
+            pending_deployment_rollback: None,
+            next_deployment_revisions_request_id: 0,
+            deployment_rollbacks: InFlightOperations::default(),
             pending_scale: None,
             operation_history: Vec::new(),
             transient_operation_toasts: Vec::new(),
@@ -182,9 +188,15 @@ impl ClusterResourceState {
     fn reset_for_connection(&mut self) {
         let cron_job_runs = self.cron_job_runs.restarted();
         let helm_rollbacks = self.helm_rollbacks.restarted();
+        let deployment_rollbacks = self.deployment_rollbacks.restarted();
+        // Like operation ids, request ids continue so a reply that outlives its
+        // session cannot fill a dialog opened in the next one.
+        let next_deployment_revisions_request_id = self.next_deployment_revisions_request_id;
         *self = Self {
             cron_job_runs,
             helm_rollbacks,
+            deployment_rollbacks,
+            next_deployment_revisions_request_id,
             ..Self::new(false)
         };
     }

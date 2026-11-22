@@ -19,44 +19,7 @@ fn test_managed_resource_inspector_integration() {
         deployments
             .create(
                 &Default::default(),
-                &Deployment {
-                    metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
-                        name: Some(deployment_name.clone()),
-                        namespace: Some(fixture.namespace.clone()),
-                        ..Default::default()
-                    },
-                    spec: Some(DeploymentSpec {
-                        replicas: Some(1),
-                        selector: LabelSelector {
-                            match_labels: Some(BTreeMap::from([(
-                                "app".to_owned(),
-                                deployment_name.clone(),
-                            )])),
-                            ..Default::default()
-                        },
-                        template: PodTemplateSpec {
-                            metadata: Some(
-                                k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
-                                    labels: Some(BTreeMap::from([(
-                                        "app".to_owned(),
-                                        deployment_name.clone(),
-                                    )])),
-                                    ..Default::default()
-                                },
-                            ),
-                            spec: Some(PodSpec {
-                                containers: vec![Container {
-                                    name: "pause".to_owned(),
-                                    image: Some("registry.k8s.io/pause:3.10".to_owned()),
-                                    ..Default::default()
-                                }],
-                                ..Default::default()
-                            }),
-                        },
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                },
+                &pause_deployment(&deployment_name, &fixture.namespace),
             )
             .await
             .expect("Failed to create Deployment");

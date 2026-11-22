@@ -65,12 +65,23 @@ pub enum ConfirmationDialogAction {
 
 impl ConfirmationDialog<'_> {
     /// Show the modal dialog and report the selected action for this frame.
-    pub fn show(mut self, ctx: &Context) -> ConfirmationDialogAction {
+    pub fn show(self, ctx: &Context) -> ConfirmationDialogAction {
+        self.show_with_body(ctx, DIALOG_WIDTH, |_| {})
+    }
+
+    /// Show the dialog `width` points wide, with `body` rendered below the
+    /// message for content the standard fields cannot express.
+    pub fn show_with_body(
+        mut self,
+        ctx: &Context,
+        width: f32,
+        body: impl FnOnce(&mut egui::Ui),
+    ) -> ConfirmationDialogAction {
         let mut action = ConfirmationDialogAction::None;
         let response = Modal::new(self.id)
             .area(
                 Modal::default_area(self.id)
-                    .default_width(DIALOG_WIDTH)
+                    .default_width(width)
                     .fade_in(false),
             )
             .backdrop_color(Color32::from_black_alpha(122))
@@ -88,7 +99,7 @@ impl ConfirmationDialog<'_> {
                     .inner_margin(Margin::same(spacing::XL as i8)),
             )
             .show(ctx, |ui| {
-                ui.set_width(DIALOG_WIDTH);
+                ui.set_width(width);
                 ui.label(
                     egui::RichText::new(self.eyebrow)
                         .font(typography::metadata())
@@ -106,6 +117,7 @@ impl ConfirmationDialog<'_> {
                         .font(typography::body())
                         .color(gray::_600),
                 );
+                body(ui);
                 if let Some(warning) = self.warning {
                     ui.add_space(spacing::LG);
                     Frame::new()

@@ -137,6 +137,21 @@ pub(crate) struct RunCronJob {
     pub(crate) resource_name: String,
 }
 #[derive(Debug)]
+pub(crate) struct GetDeploymentRevisions {
+    pub(crate) cluster_key: i32,
+    pub(crate) request_id: u64,
+    pub(crate) namespace: String,
+    pub(crate) resource_name: String,
+}
+#[derive(Debug)]
+pub(crate) struct RollbackDeployment {
+    pub(crate) cluster_key: i32,
+    pub(crate) operation_id: u64,
+    pub(crate) namespace: String,
+    pub(crate) resource_name: String,
+    pub(crate) revision: i64,
+}
+#[derive(Debug)]
 pub(crate) struct RollbackHelmRelease {
     pub(crate) cluster_key: i32,
     pub(crate) operation_id: u64,

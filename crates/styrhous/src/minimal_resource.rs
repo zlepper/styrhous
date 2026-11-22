@@ -103,13 +103,7 @@ pub(crate) fn from_kubernetes_resource<T: Resource>(
     cells: BTreeMap<String, CellValue>,
 ) -> MinimalResource {
     let metadata = resource.meta();
-    let creation_timestamp = metadata.creation_timestamp.as_ref().and_then(|timestamp| {
-        OffsetDateTime::parse(
-            &timestamp.0.to_string(),
-            &time::format_description::well_known::Rfc3339,
-        )
-        .ok()
-    });
+    let creation_timestamp = creation_time(metadata);
     let uid = metadata.uid.clone().unwrap_or_else(|| {
         format!(
             "{}/{}",
@@ -149,6 +143,15 @@ fn controller_owner(metadata: &ObjectMeta) -> Option<ResourceOwner> {
             uid: owner.uid.clone(),
             controller: true,
         })
+}
+
+/// The object's creation timestamp, when it is set and valid RFC 3339.
+pub(crate) fn creation_time(metadata: &ObjectMeta) -> Option<OffsetDateTime> {
+    OffsetDateTime::parse(
+        &metadata.creation_timestamp.as_ref()?.0.to_string(),
+        &time::format_description::well_known::Rfc3339,
+    )
+    .ok()
 }
 
 pub(crate) fn format_age(creation_timestamp: Option<OffsetDateTime>) -> String {

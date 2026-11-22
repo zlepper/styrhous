@@ -43,6 +43,7 @@ use tracing::{info, warn};
 
 mod cli;
 mod connection;
+mod deployment_rollback;
 mod discovery;
 mod dynamic_api;
 mod helm_rollback;
@@ -79,6 +80,7 @@ mod watcher_types;
 pub(crate) use api_group_retry::*;
 pub(crate) use api_inspection::*;
 pub(crate) use cli::is_cli_not_installed;
+pub(crate) use deployment_rollback::*;
 pub(crate) use detail_watches::*;
 pub(crate) use extraction::*;
 pub(crate) use helm_rollback::*;

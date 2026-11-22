@@ -108,6 +108,8 @@ struct WorkspaceEffects {
     column_settings_to_open: Option<super::resource_table_settings::ResourceTableSettingsTarget>,
     helm_detail_to_open: Option<HelmReleaseDetailTarget>,
     scale_to_request: Option<ScaleTarget>,
+    /// (namespace, name) of a Deployment whose rollback dialog to open.
+    deployment_rollback_to_request: Option<(String, String)>,
 }
 
 struct ResourceDetailTarget {
@@ -186,6 +188,15 @@ impl WorkspaceEffects {
             );
         }
         shell_requests.extend(self.shell_request);
+        if let (Some(cluster), Some((namespace, name))) = (
+            ui_state
+                .selected_cluster
+                .and_then(|cluster_key| ui_state.clusters.get_mut(&cluster_key)),
+            self.deployment_rollback_to_request,
+        ) {
+            let cluster_key = cluster.cluster_key;
+            cluster.request_deployment_rollback(cluster_key, namespace, name, commands_to_send);
+        }
         if let (Some(cluster_key), Some(selection)) =
             (ui_state.selected_cluster, self.namespace_selection)
         {
@@ -559,6 +570,9 @@ pub(super) fn show(
                                 resource_name: name,
                                 namespace,
                             });
+                        }
+                        ResourceAction::RequestDeploymentRollback { name, namespace } => {
+                            effects.deployment_rollback_to_request = Some((namespace, name));
                         }
                         ResourceAction::RequestCronJobRun { name, namespace } => {
                             resources.pending_cron_job_run = Some(PendingCronJobRun {

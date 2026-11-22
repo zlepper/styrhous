@@ -283,13 +283,7 @@ pub(crate) async fn resource_detail_from_dynamic(
     object: DynamicObject,
 ) -> ResourceDetail {
     let metadata = &object.metadata;
-    let creation_timestamp = metadata.creation_timestamp.as_ref().and_then(|timestamp| {
-        OffsetDateTime::parse(
-            &timestamp.0.to_string(),
-            &time::format_description::well_known::Rfc3339,
-        )
-        .ok()
-    });
+    let creation_timestamp = crate::minimal_resource::creation_time(metadata);
     let mut detail = ResourceDetail {
         api_resource: api_resource.clone(),
         name: metadata.name.clone().unwrap_or_default(),

@@ -137,6 +137,32 @@ pub(crate) struct PendingCronJobRun {
     pub(crate) namespace: String,
 }
 
+/// A Deployment rollback dialog: its revisions load when it opens.
+#[derive(Debug, Clone)]
+pub(crate) struct PendingDeploymentRollback {
+    pub(crate) deployment: DeploymentKey,
+    pub(crate) request_id: u64,
+    pub(crate) revisions: DeploymentRevisionsLoad,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum DeploymentRevisionsLoad {
+    Loading,
+    Loaded {
+        history: crate::cluster_connection_manager::DeploymentRevisionHistory,
+        /// The revision to roll back to; `None` when there is no earlier one.
+        selected: Option<i64>,
+    },
+    Failed(String),
+}
+
+/// Identifies one Deployment within a cluster.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DeploymentKey {
+    pub(crate) namespace: String,
+    pub(crate) resource_name: String,
+}
+
 /// A rollback awaiting confirmation. The current revision and storage driver
 /// are read live while the dialog is shown, since they can change meanwhile.
 #[derive(Debug, Clone, PartialEq, Eq)]

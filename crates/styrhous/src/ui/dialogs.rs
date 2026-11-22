@@ -311,6 +311,7 @@ fn record_bulk_delete_outcome(ui: &mut UiState, cluster_key: i32, outcome: BulkD
 }
 
 mod deletes;
+mod deployment_rollback;
 mod helm;
 mod logs;
 mod scale;
@@ -318,6 +319,7 @@ mod terminal;
 mod workloads;
 
 pub(super) use deletes::*;
+pub(super) use deployment_rollback::*;
 pub(super) use helm::*;
 pub(super) use logs::*;
 pub(super) use scale::*;
