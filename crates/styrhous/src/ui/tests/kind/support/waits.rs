@@ -5,7 +5,7 @@ use crate::ui::state::{
     ClusterConnectionState, ClusterLoadState, ResourceDetailHistoryEntry, ResourceWatchKey,
     ResourceWatchState, UiState, ValidationState, YamlEditorWindowState,
 };
-use crate::worker::Worker;
+use crate::worker::{Worker, WorkerTrait};
 use egui_kittest::Harness;
 use std::time::{Duration, Instant};
 
@@ -63,17 +63,17 @@ pub(in crate::ui::tests::kind) fn wait_for_with_terminal_and_timeout_diagnostic<
 }
 
 #[track_caller]
-fn wait_for_with_diagnostics<T>(
-    harness: &mut Harness<MyEguiApp<Worker>>,
+fn wait_for_with_diagnostics<W: WorkerTrait, T>(
+    harness: &mut Harness<MyEguiApp<W>>,
     expectation: &str,
-    mut condition: impl FnMut(&MyEguiApp<Worker>) -> Option<T>,
-    terminal_diagnostic: impl Fn(&MyEguiApp<Worker>) -> Option<String>,
-    timeout_diagnostic: impl Fn(&MyEguiApp<Worker>) -> Option<String>,
+    mut condition: impl FnMut(&MyEguiApp<W>) -> Option<T>,
+    terminal_diagnostic: impl Fn(&MyEguiApp<W>) -> Option<String>,
+    timeout_diagnostic: impl Fn(&MyEguiApp<W>) -> Option<String>,
     max_ms: u64,
 ) -> T {
-    let start = Instant::now();
-    while start.elapsed().as_millis() < max_ms as u128 {
-        harness.run_steps(1);
+    let mut frames = WaitFrames::new(max_ms);
+    loop {
+        let final_frame = frames.run(harness);
         let app = harness.state();
         if let Some(message) = terminal_diagnostic(app) {
             panic!("Failed while waiting for {expectation}: {message}");
@@ -81,15 +81,58 @@ fn wait_for_with_diagnostics<T>(
         if let Some(result) = condition(app) {
             return result;
         }
+        if final_frame {
+            break;
+        }
         std::thread::sleep(Duration::from_millis(50));
     }
     let diagnostic = timeout_diagnostic(harness.state())
         .map(|message| format!("\nLast observed state: {message}"))
         .unwrap_or_default();
     panic!(
-        "Timed out after {max_ms}ms waiting for {expectation} (requested at {}){diagnostic}",
+        "Timed out after {max_ms}ms waiting for {expectation} (requested at {}); {frames}{diagnostic}",
         std::panic::Location::caller(),
     );
+}
+
+/// Steps the application for a bounded wait. Worker results are applied at the start
+/// of a frame, so whatever arrived while the previous frame ran is only visible after
+/// the next one: the last frame therefore starts after the deadline, and a result
+/// delivered in time is never missed because a frame happened to run long.
+struct WaitFrames {
+    deadline: Instant,
+    count: u32,
+    slowest: Duration,
+}
+
+impl WaitFrames {
+    fn new(max_ms: u64) -> Self {
+        Self {
+            deadline: Instant::now() + Duration::from_millis(max_ms),
+            count: 0,
+            slowest: Duration::ZERO,
+        }
+    }
+
+    /// Runs one frame and returns whether it was the last one the wait allows.
+    fn run<W: WorkerTrait>(&mut self, harness: &mut Harness<MyEguiApp<W>>) -> bool {
+        let started = Instant::now();
+        let final_frame = started >= self.deadline;
+        harness.run_steps(1);
+        self.count += 1;
+        self.slowest = self.slowest.max(started.elapsed());
+        final_frame
+    }
+}
+
+impl std::fmt::Display for WaitFrames {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "{} frames ran, the slowest took {:?}",
+            self.count, self.slowest
+        )
+    }
 }
 
 #[track_caller]
@@ -99,16 +142,19 @@ pub(in crate::ui::tests::kind) fn wait_for_harness<T>(
     mut condition: impl FnMut(&mut Harness<MyEguiApp<Worker>>) -> Option<T>,
     max_ms: u64,
 ) -> T {
-    let start = Instant::now();
-    while start.elapsed().as_millis() < max_ms as u128 {
-        harness.run_steps(1);
+    let mut frames = WaitFrames::new(max_ms);
+    loop {
+        let final_frame = frames.run(harness);
         if let Some(result) = condition(harness) {
             return result;
+        }
+        if final_frame {
+            break;
         }
         std::thread::sleep(Duration::from_millis(50));
     }
     panic!(
-        "Timed out after {max_ms}ms waiting for {expectation} (requested at {})",
+        "Timed out after {max_ms}ms waiting for {expectation} (requested at {}); {frames}",
         std::panic::Location::caller(),
     );
 }
@@ -383,10 +429,32 @@ fn resource_wait_state(
     watch_key: &ResourceWatchKey,
 ) -> Option<String> {
     let Some(watch) = resource_watch(ui_state, cluster_key, watch_key) else {
+        let workspace = ui_state.clusters.get(&cluster_key).map(|cluster| {
+            let same_kind = |resource: &ApiResource| resource.identity() == watch_key.0.identity();
+            format!(
+                "; selected resource={:?}, namespaces={:?}, active watchers={:?}, all-namespaces scope={:?}, cache keys={:?}, discovery complete={} failed groups={:?}",
+                cluster.selected_api_resource,
+                cluster.selected_namespaces,
+                cluster
+                    .active_watchers
+                    .iter()
+                    .filter(|(resource, _)| same_kind(resource))
+                    .collect::<Vec<_>>(),
+                cluster.all_namespaces_watch_scopes.get(&watch_key.0),
+                cluster
+                    .resource_cache
+                    .keys()
+                    .filter(|(resource, _)| same_kind(resource))
+                    .collect::<Vec<_>>(),
+                cluster.api_discovery.complete,
+                cluster.api_discovery.failed_groups,
+            )
+        });
         return Some(format!(
-            "the {} watcher has not been initialized in {}",
+            "the {} watcher has not been initialized in {}{}",
             watch_key.0.kind,
-            watch_key.1.as_deref().unwrap_or("cluster scope")
+            watch_key.1.as_deref().unwrap_or("cluster scope"),
+            workspace.unwrap_or_default(),
         ));
     };
     Some(format!(
@@ -584,6 +652,71 @@ mod tests {
             resource_wait_failure(&ui_state, cluster_key, &watch_key).as_deref(),
             Some("ConfigMap watcher failed in default: watch stream closed")
         );
+    }
+
+    #[test]
+    fn a_result_delivered_by_the_deadline_is_observed_by_a_frame_after_it() {
+        use crate::ui::tests::fixtures::{application_harness, oracle_resource_table_state};
+        use crate::ui::tests::harness::MockUiHarnessExt;
+        use crate::worker::{KubernetesResourcesReplaced, MockWorker};
+
+        let mut harness = application_harness::<MockWorker>();
+        harness.seed_ui_state(oracle_resource_table_state());
+        let cluster_key = 2;
+        let watch_key = (config_maps_resource(), Some("kube-system".to_owned()));
+        // Delivered in time, but no frame has applied it yet.
+        harness
+            .state_mut()
+            .worker
+            .enqueue_result(KubernetesResourcesReplaced {
+                cluster_key,
+                api_resource: watch_key.0.clone(),
+                namespace: watch_key.1.clone(),
+                resources: Vec::new(),
+            });
+
+        // The deadline has already passed, so only the final frame runs.
+        wait_for_with_diagnostics(
+            &mut harness,
+            "the delivered ConfigMap list",
+            |app| {
+                resource_watch(&app.ui_state, cluster_key, &watch_key)
+                    .filter(|watch| watch.is_synced)
+                    .map(|_| ())
+            },
+            |_| None,
+            |_| None,
+            0,
+        );
+    }
+
+    #[test]
+    fn an_uninitialized_watch_reports_what_the_workspace_requested() {
+        let cluster_key = 7;
+        let api_resource = config_maps_resource();
+        let watch_key = (api_resource.clone(), Some("kube-system".to_owned()));
+        let mut ui_state = UiState::default();
+        let mut cluster = ClusterState::for_test(cluster_key, "kind-kind");
+        cluster.selected_api_resource = Some(api_resource.clone());
+        cluster.selected_namespaces = ["kube-system"].into();
+        cluster
+            .active_watchers
+            .insert((api_resource, Some("default".to_owned())));
+        ui_state.clusters.insert(cluster_key, cluster);
+
+        let state = resource_wait_state(&ui_state, cluster_key, &watch_key)
+            .expect("an uninitialized watch is described");
+
+        assert!(
+            state.starts_with("the ConfigMap watcher has not been initialized in kube-system;"),
+            "{state}"
+        );
+        assert!(state.contains(r#"Selected({"kube-system"})"#), "{state}");
+        assert!(
+            state.contains(r#"active watchers=[(ApiResource { group: "", version: "v1", kind: "ConfigMap", name: "configmaps", namespaced: true }, Some("default"))]"#),
+            "{state}"
+        );
+        assert!(state.contains("cache keys=[]"), "{state}");
     }
 
     #[test]

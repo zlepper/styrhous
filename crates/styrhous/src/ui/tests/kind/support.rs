@@ -191,6 +191,7 @@ pub(super) fn connected_kind_harness() -> (Harness<'static, MyEguiApp<Worker>>, 
     // Acquire the discovery lock before constructing or pumping the application so
     // that automatic discovery is guarded too; the remaining scenario stays parallel.
     let _discovery_lock = KindDiscoveryLock::acquire();
+    log_worker_events_to_stderr();
     let mut harness = application_harness::<Worker>();
     wait_for(
         &mut harness,
@@ -209,6 +210,18 @@ pub(super) fn connected_kind_harness() -> (Harness<'static, MyEguiApp<Worker>>, 
         .expect("Kind cluster should be selected after click");
     wait_for_cluster_data(&mut harness, cluster_key);
     (harness, cluster_key)
+}
+
+/// Sends the worker's log events to the test's stderr, which nextest shows for a failing
+/// test. Watchers retry transient Kubernetes errors silently for a grace period, so
+/// without these events a timed-out wait cannot tell a retrying watcher from one that
+/// never started. Each nextest test runs in its own process, so the subscriber is
+/// installed once per test; a second call keeps the existing one.
+fn log_worker_events_to_stderr() {
+    let _ = tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_ansi(false)
+        .try_init();
 }
 
 pub(super) fn wait_for_cluster_data(harness: &mut Harness<MyEguiApp<Worker>>, cluster_key: i32) {
