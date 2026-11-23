@@ -168,6 +168,7 @@ impl GlobalBladeCoordinator {
                         ctx,
                         ui_state,
                         shell_requests,
+                        terminal_launch_settings,
                     },
                     &mut navigation,
                 );
@@ -515,6 +516,7 @@ pub(super) struct GlobalBladeEffectContext<'a> {
     pub(super) ctx: &'a egui::Context,
     pub(super) ui_state: &'a mut UiState,
     pub(super) shell_requests: &'a mut Vec<ShellRequest>,
+    pub(super) terminal_launch_settings: &'a TerminalLaunchSettings,
 }
 
 /// The only navigation capability available to content effects. It keeps

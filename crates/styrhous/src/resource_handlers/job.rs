@@ -18,7 +18,7 @@ pub(crate) fn watcher(context: TypedWatcherContext) -> Option<Box<dyn ResourceWa
 pub(crate) fn table_definition(api_resource: &ApiResource) -> Option<ResourceTableDefinition> {
     matches_namespaced_api_resource::<Job>(api_resource).then(|| ResourceTableDefinition {
         columns: vec![
-            column(COMPLETIONS_COLUMN, "Completions", 112.0),
+            column(COMPLETIONS_COLUMN, "Completions", 112.0).numeric(),
             column(STATUS_COLUMN, "Status", 124.0),
         ],
     })

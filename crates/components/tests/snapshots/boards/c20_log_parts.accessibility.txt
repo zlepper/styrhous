@@ -1,0 +1,132 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Label value="C20 · COMPONENTS::{LOGHEADER, VOLUMESTRIP, SOURCEPILL, LOGLINE, FLOATINGTOOLBAR}" rect=(x=48.0 y=40.0 width=529.4 height=16.0 center_x=312.7 center_y=48.0)
+            TextRun value="C20 · COMPONENTS::{LOGHEADER, VOLUMESTRIP, SOURCEPILL, LOGLINE, FLOATINGTOOLBAR}" rect=(x=48.0 y=40.0 width=528.3 height=16.0 center_x=312.1 center_y=48.0)
+          Label value="Log viewer parts" rect=(x=48.0 y=60.0 width=218.2 height=36.0 center_x=157.1 center_y=78.0)
+            TextRun value="Log viewer parts" rect=(x=48.0 y=60.0 width=218.5 height=36.0 center_x=157.3 center_y=78.0)
+          Label value="The log window reads top-down: what you are looking at, how busy it was, then the lines. Every line carries its source and level as pills so interleaved replicas stay apart; tools float at the bottom, out of the text." rect=(x=48.0 y=102.0 width=926.5 height=40.0 center_x=511.2 center_y=122.0)
+            TextRun value="The log window reads top-down: what you are looking at, how busy it was, then the lines. Every line carries its source and level as pills so interleaved " rect=(x=48.0 y=102.0 width=926.5 height=20.0 center_x=511.2 center_y=112.0)
+            TextRun value="replicas stay apart; tools float at the bottom, out of the text." rect=(x=48.0 y=122.0 width=374.9 height=20.0 center_x=235.5 center_y=132.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Label value="HEADER" rect=(x=48.0 y=168.0 width=45.3 height=16.0 center_x=70.7 center_y=176.0)
+              TextRun value="HEADER" rect=(x=48.0 y=168.0 width=44.2 height=16.0 center_x=70.1 center_y=176.0)
+            GenericContainer rect=<none>
+              Group rect=<none>
+                Button name="Current" state=[toggled=True] rect=(x=760.9 y=204.0 width=69.2 height=28.0 center_x=795.5 center_y=218.0)
+                Button name="Previous" state=[toggled=False] rect=(x=832.1 y=204.0 width=73.9 height=28.0 center_x=869.0 center_y=218.0)
+            GenericContainer rect=<none>
+              Label value="Deployment" rect=(x=48.0 y=207.0 width=79.2 height=22.0 center_x=87.6 center_y=218.0)
+                TextRun value="Deployment" rect=(x=57.0 y=210.0 width=61.2 height=16.0 center_x=87.6 center_y=218.0)
+              Label value="ranker-v7 · 6 replicas" rect=(x=141.2 y=194.0 width=278.5 height=34.0 center_x=280.5 center_y=211.0)
+                TextRun value="ranker-v7 · 6 replicas" rect=(x=141.2 y=194.0 width=278.5 height=34.0 center_x=280.5 center_y=211.0)
+              Label value="container ranker · 412k lines" rect=(x=141.2 y=228.0 width=185.6 height=14.0 center_x=234.0 center_y=235.0)
+                TextRun value="CONTAINER RANKER · 412K LINES" rect=(x=141.2 y=228.0 width=184.7 height=14.0 center_x=233.6 center_y=235.0)
+              Label value="5 of 6 streaming" rect=(x=433.7 y=207.0 width=120.9 height=22.0 center_x=494.2 center_y=218.0)
+                TextRun value="5 of 6 streaming" rect=(x=456.7 y=210.0 width=88.9 height=16.0 center_x=501.2 center_y=218.0)
+            Label value="VOLUME STRIP · SOURCES AND VISIBLE WINDOW" rect=(x=48.0 y=264.0 width=275.8 height=16.0 center_x=185.9 center_y=272.0)
+              TextRun value="VOLUME STRIP · SOURCES AND VISIBLE WINDOW" rect=(x=48.0 y=264.0 width=274.8 height=16.0 center_x=185.4 center_y=272.0)
+            Label value="Volume · 15 min · 41 errors" rect=(x=66.0 y=308.0 width=170.7 height=16.0 center_x=151.3 center_y=316.0)
+              TextRun value="VOLUME · 15 MIN · 41 ERRORS" rect=(x=66.0 y=308.0 width=169.6 height=16.0 center_x=150.8 center_y=316.0)
+            GenericContainer rect=<none>
+              Button name="mm2vb · offline" rect=(x=765.2 y=304.0 width=124.8 height=24.0 center_x=827.6 center_y=316.0)
+              Button name="7hnwd · reconnecting" rect=(x=605.2 y=304.0 width=151.9 height=24.0 center_x=681.2 center_y=316.0)
+              Button name="q2kxm · 1,204" rect=(x=489.8 y=304.0 width=107.4 height=24.0 center_x=543.5 center_y=316.0)
+            GenericContainer rect=<none>
+              Unknown name="Log volume" rect=(x=66.0 y=342.0 width=797.0 height=36.0 center_x=464.5 center_y=360.0)
+              Unknown name="Visible window" rect=(x=706.0 y=338.0 width=160.0 height=44.0 center_x=786.0 center_y=360.0)
+            Label value="LOG LINES · TIME · SOURCE · LEVEL · MESSAGE" rect=(x=48.0 y=412.0 width=264.2 height=16.0 center_x=180.1 center_y=420.0)
+              TextRun value="LOG LINES · TIME · SOURCE · LEVEL · MESSAGE" rect=(x=48.0 y=412.0 width=263.1 height=16.0 center_x=179.6 center_y=420.0)
+            GenericContainer rect=<none>
+              Label value="15:20:00.000" rect=(x=66.0 y=448.0 width=90.0 height=22.0 center_x=111.0 center_y=459.0)
+                TextRun value="15:20:00.000" rect=(x=66.0 y=448.0 width=90.0 height=22.0 center_x=111.0 center_y=459.0)
+              Label value="q2kxm" rect=(x=164.0 y=450.0 width=68.0 height=18.0 center_x=198.0 center_y=459.0)
+                TextRun value="q2kxm" rect=(x=181.2 y=451.0 width=33.6 height=16.0 center_x=198.0 center_y=459.0)
+              Label value="ERROR" rect=(x=240.0 y=450.0 width=52.0 height=18.0 center_x=266.0 center_y=459.0)
+                TextRun value="ERROR" rect=(x=250.2 y=451.0 width=31.5 height=16.0 center_x=266.0 center_y=459.0)
+              Label value="feature-cache: read timeout after 250ms" rect=(x=300.0 y=448.0 width=292.5 height=22.0 center_x=446.2 center_y=459.0)
+                TextRun value="feature-cache: read timeout after 250ms" rect=(x=300.0 y=448.0 width=292.5 height=22.0 center_x=446.2 center_y=459.0)
+              Label value="15:20:07.113" rect=(x=66.0 y=470.0 width=90.0 height=22.0 center_x=111.0 center_y=481.0)
+                TextRun value="15:20:07.113" rect=(x=66.0 y=470.0 width=90.0 height=22.0 center_x=111.0 center_y=481.0)
+              Label value="7hnwd" rect=(x=164.0 y=472.0 width=68.0 height=18.0 center_x=198.0 center_y=481.0)
+                TextRun value="7hnwd" rect=(x=181.2 y=473.0 width=33.6 height=16.0 center_x=198.0 center_y=481.0)
+              Label value="WARN" rect=(x=240.0 y=472.0 width=52.0 height=18.0 center_x=266.0 center_y=481.0)
+                TextRun value="WARN" rect=(x=253.4 y=473.0 width=25.2 height=16.0 center_x=266.0 center_y=481.0)
+              Label value="ranker: falling back to cached scores" rect=(x=300.0 y=470.0 width=277.5 height=22.0 center_x=438.8 center_y=481.0)
+                TextRun value="ranker: falling back to cached scores" rect=(x=300.0 y=470.0 width=277.5 height=22.0 center_x=438.8 center_y=481.0)
+              Label value="15:20:14.226" rect=(x=66.0 y=492.0 width=90.0 height=22.0 center_x=111.0 center_y=503.0)
+                TextRun value="15:20:14.226" rect=(x=66.0 y=492.0 width=90.0 height=22.0 center_x=111.0 center_y=503.0)
+              Label value="q2kxm" rect=(x=164.0 y=494.0 width=68.0 height=18.0 center_x=198.0 center_y=503.0)
+                TextRun value="q2kxm" rect=(x=181.2 y=495.0 width=33.6 height=16.0 center_x=198.0 center_y=503.0)
+              Label value="ERROR" rect=(x=240.0 y=494.0 width=52.0 height=18.0 center_x=266.0 center_y=503.0)
+                TextRun value="ERROR" rect=(x=250.2 y=495.0 width=31.5 height=16.0 center_x=266.0 center_y=503.0)
+              Label value="grpc: deadline exceeded (timeout 300ms)" rect=(x=300.0 y=492.0 width=292.5 height=22.0 center_x=446.2 center_y=503.0)
+                TextRun value="grpc: deadline exceeded (timeout 300ms)" rect=(x=300.0 y=492.0 width=292.5 height=22.0 center_x=446.2 center_y=503.0)
+              Label value="15:20:21.339" rect=(x=66.0 y=514.0 width=90.0 height=22.0 center_x=111.0 center_y=525.0)
+                TextRun value="15:20:21.339" rect=(x=66.0 y=514.0 width=90.0 height=22.0 center_x=111.0 center_y=525.0)
+              Label value="7hnwd" rect=(x=164.0 y=516.0 width=68.0 height=18.0 center_x=198.0 center_y=525.0)
+                TextRun value="7hnwd" rect=(x=181.2 y=517.0 width=33.6 height=16.0 center_x=198.0 center_y=525.0)
+              Label value="INFO" rect=(x=240.0 y=516.0 width=52.0 height=18.0 center_x=266.0 center_y=525.0)
+                TextRun value="INFO" rect=(x=253.4 y=517.0 width=25.2 height=16.0 center_x=266.0 center_y=525.0)
+              Label value="ranker: served 412 candidates in 288ms" rect=(x=300.0 y=514.0 width=285.0 height=22.0 center_x=442.5 center_y=525.0)
+                TextRun value="ranker: served 412 candidates in 288ms" rect=(x=300.0 y=514.0 width=285.0 height=22.0 center_x=442.5 center_y=525.0)
+              Label value="15:20:35.565" rect=(x=66.0 y=536.0 width=90.0 height=22.0 center_x=111.0 center_y=547.0)
+                TextRun value="15:20:35.565" rect=(x=66.0 y=536.0 width=90.0 height=22.0 center_x=111.0 center_y=547.0)
+              Label value="q2kxm" rect=(x=164.0 y=538.0 width=68.0 height=18.0 center_x=198.0 center_y=547.0)
+                TextRun value="q2kxm" rect=(x=181.2 y=539.0 width=33.6 height=16.0 center_x=198.0 center_y=547.0)
+              Label value="DEBUG" rect=(x=240.0 y=538.0 width=52.0 height=18.0 center_x=266.0 center_y=547.0)
+                TextRun value="DEBUG" rect=(x=250.2 y=539.0 width=31.5 height=16.0 center_x=266.0 center_y=547.0)
+              Label value="ranker: cache hit ratio 0.71" rect=(x=300.0 y=536.0 width=210.0 height=22.0 center_x=405.0 center_y=547.0)
+                TextRun value="ranker: cache hit ratio 0.71" rect=(x=300.0 y=536.0 width=210.0 height=22.0 center_x=405.0 center_y=547.0)
+            Label value="FLOATING TOOLBAR" rect=(x=48.0 y=590.0 width=111.3 height=16.0 center_x=103.6 center_y=598.0)
+              TextRun value="FLOATING TOOLBAR" rect=(x=48.0 y=590.0 width=110.2 height=16.0 center_x=103.1 center_y=598.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  TextInput name="Search logs" value="timeout" rect=(x=54.0 y=622.0 width=138.8 height=36.0 center_x=123.4 center_y=640.0)
+                    TextRun value="timeout" rect=(x=90.0 y=633.0 width=45.8 height=20.0 center_x=112.9 center_y=643.0)
+                Label value="3 / 41" rect=(x=200.8 y=632.0 width=43.2 height=16.0 center_x=222.4 center_y=640.0)
+                  TextRun value="3 / 41" rect=(x=200.8 y=632.0 width=43.2 height=16.0 center_x=222.4 center_y=640.0)
+                Button name="Previous match" rect=(x=252.0 y=628.0 width=24.0 height=24.0 center_x=264.0 center_y=640.0)
+                Button name="Next match" rect=(x=284.0 y=628.0 width=24.0 height=24.0 center_x=296.0 center_y=640.0)
+                CheckBox name="Regular expression" state=[toggled=False] rect=(x=316.0 y=628.0 width=24.0 height=24.0 center_x=328.0 center_y=640.0)
+                Button name="Only matches" state=[toggled=True] rect=(x=360.0 y=624.0 width=104.9 height=32.0 center_x=412.4 center_y=640.0)
+                Button name="Line no." state=[toggled=False] rect=(x=470.9 y=624.0 width=69.2 height=32.0 center_x=505.5 center_y=640.0)
+                Button name="Time" state=[toggled=True] rect=(x=546.1 y=624.0 width=52.7 height=32.0 center_x=572.4 center_y=640.0)
+                Button name="Source" state=[toggled=True] rect=(x=604.8 y=624.0 width=65.5 height=32.0 center_x=637.5 center_y=640.0)
+                Button name="Follow" state=[toggled=False] rect=(x=676.2 y=624.0 width=82.2 height=32.0 center_x=717.3 center_y=640.0)
+          GenericContainer rect=<none>
+            Label value="LEVEL BADGES" rect=(x=968.0 y=168.0 width=82.4 height=16.0 center_x=1009.2 center_y=176.0)
+              TextRun value="LEVEL BADGES" rect=(x=968.0 y=168.0 width=81.3 height=16.0 center_x=1008.7 center_y=176.0)
+            GenericContainer rect=<none>
+              Label value="ERROR" rect=(x=968.0 y=194.0 width=52.0 height=18.0 center_x=994.0 center_y=203.0)
+                TextRun value="ERROR" rect=(x=978.2 y=195.0 width=31.5 height=16.0 center_x=994.0 center_y=203.0)
+              Label value="WARN" rect=(x=1028.0 y=194.0 width=52.0 height=18.0 center_x=1054.0 center_y=203.0)
+                TextRun value="WARN" rect=(x=1041.4 y=195.0 width=25.2 height=16.0 center_x=1054.0 center_y=203.0)
+              Label value="INFO" rect=(x=1088.0 y=194.0 width=52.0 height=18.0 center_x=1114.0 center_y=203.0)
+                TextRun value="INFO" rect=(x=1101.4 y=195.0 width=25.2 height=16.0 center_x=1114.0 center_y=203.0)
+              Label value="DEBUG" rect=(x=1148.0 y=194.0 width=52.0 height=18.0 center_x=1174.0 center_y=203.0)
+                TextRun value="DEBUG" rect=(x=1158.2 y=195.0 width=31.5 height=16.0 center_x=1174.0 center_y=203.0)
+            Label value="SOURCE PILL STATES" rect=(x=968.0 y=234.0 width=117.8 height=16.0 center_x=1026.9 center_y=242.0)
+              TextRun value="SOURCE PILL STATES" rect=(x=968.0 y=234.0 width=116.8 height=16.0 center_x=1026.4 center_y=242.0)
+            GenericContainer rect=<none>
+              Button name="q2kxm · 1,204" rect=(x=968.0 y=260.0 width=107.4 height=24.0 center_x=1021.7 center_y=272.0)
+              Button name="7hnwd · reconnecting" rect=(x=1083.4 y=260.0 width=151.9 height=24.0 center_x=1159.4 center_y=272.0)
+              Button name="mm2vb · offline" rect=(x=1243.4 y=260.0 width=124.8 height=24.0 center_x=1305.8 center_y=272.0)
+            Label value="RULES" rect=(x=968.0 y=306.0 width=35.6 height=16.0 center_x=985.8 center_y=314.0)
+              TextRun value="RULES" rect=(x=968.0 y=306.0 width=34.5 height=16.0 center_x=985.3 center_y=314.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Source colours come from category / log-source roles in a stable order per pod; the same replica keeps its colour across windows." rect=(x=984.0 y=332.0 width=504.0 height=40.0 center_x=1236.0 center_y=352.0)
+              GenericContainer rect=<none>
+                Label value="Matches are underlined in accent-fill; the active match is filled. Error lines get the log-\nrow-error tint; warnings only colour their badge." rect=(x=984.0 y=376.0 width=504.0 height=40.0 center_x=1236.0 center_y=396.0)
+              GenericContainer rect=<none>
+                Label value="The volume strip marks errors and warnings; the outlined window is the part on screen — drag it to scroll." rect=(x=984.0 y=420.0 width=504.0 height=40.0 center_x=1236.0 center_y=440.0)
+              GenericContainer rect=<none>
+                Label value="Toolbar floats 22 px above the window bottom, centred; it never covers the last line because the panel reserves 96 px." rect=(x=984.0 y=464.0 width=504.0 height=40.0 center_x=1236.0 center_y=484.0)
+              GenericContainer rect=<none>
+                Label value="Single-source windows drop the source pill and column." rect=(x=984.0 y=508.0 width=504.0 height=20.0 center_x=1236.0 center_y=518.0)

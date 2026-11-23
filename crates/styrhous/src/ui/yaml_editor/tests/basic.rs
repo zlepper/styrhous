@@ -186,4 +186,9 @@ fn command_f_focuses_yaml_search_and_enter_navigates_matches() {
     harness.step();
 
     assert_eq!(harness.state().editor.search.active_match, Some(1));
+    assert_eq!(
+        harness.state().editor.edited_yaml,
+        "name: first\nname: second",
+        "Enter in the search field never reaches the YAML"
+    );
 }

@@ -69,7 +69,6 @@ pub(super) fn show_resource_detail_header(
     supports_scale: bool,
     debug_image_presets: &[DebugImagePreset],
 ) -> BladeResult {
-    let theme = ui.tokens();
     let mut result = BladeResult::default();
     let log_containers = entry
         .detail
@@ -101,69 +100,30 @@ pub(super) fn show_resource_detail_header(
             .map(|detail| detail.finalizers.clone())
             .unwrap_or_default(),
     );
-    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        let more_label = if is_foreground {
-            format!("More actions for {}", resource.name)
-        } else {
-            format!("More actions for {} in background blade", resource.name)
-        };
-        MoreButton::new(more_label).show(ui, |menu| {
-            show_resource_action_items(
-                menu,
-                &theme,
-                &entry.api_resource,
-                &resource,
-                &resource.log_containers,
-                debug_image_presets,
-                supports_scale,
-                &mut result.action,
-            );
-        });
-        ui.add_space(space::S12);
-        let kind_width = ui
-            .painter()
-            .layout_no_wrap(
-                entry.api_resource.kind.clone(),
-                type_scale::BODY.font_id(ui.ctx()),
-                theme.accent.text,
-            )
-            .size()
-            .x
-            + space::S8 * 2.0;
-        let available_name_width = (ui.available_width() - kind_width - space::S12).max(0.0);
-        let natural_name_width = ui
-            .painter()
-            .layout_no_wrap(
-                entry.resource_name.clone(),
-                type_scale::HEADING.font_id(ui.ctx()),
-                theme.text.primary,
-            )
-            .size()
-            .x;
-        let name = egui::RichText::new(&entry.resource_name)
-            .font(type_scale::HEADING.font_id(ui.ctx()))
-            .color(theme.text.primary);
-        if natural_name_width <= available_name_width {
-            ui.label(name);
-        } else {
-            ui.add_sized(
-                egui::vec2(available_name_width, 24.0),
-                egui::Label::new(name).truncate().halign(egui::Align::RIGHT),
-            );
-        }
-        ui.add_space(space::S12);
-        egui::Frame::new()
-            .fill(theme.accent.tint)
-            .corner_radius(egui::CornerRadius::same(radius::KEY))
-            .inner_margin(egui::Margin::symmetric(space::S8 as i8, space::S4 as i8))
-            .show(ui, |ui| {
-                ui.label(
-                    egui::RichText::new(&entry.api_resource.kind)
-                        .font(type_scale::BODY.font_id(ui.ctx()))
-                        .color(theme.accent.text),
+    // Kind badge and title, then More at the end of the header.
+    let more_label = if is_foreground {
+        format!("More actions for {}", resource.name)
+    } else {
+        format!("More actions for {} in background blade", resource.name)
+    };
+    components::blade_title_with_actions(
+        ui,
+        Some(&entry.api_resource.kind),
+        &entry.resource_name,
+        |ui| {
+            MoreButton::new(more_label).show(ui, |menu| {
+                show_resource_action_items(
+                    menu,
+                    &entry.api_resource,
+                    &resource,
+                    &resource.log_containers,
+                    debug_image_presets,
+                    supports_scale,
+                    &mut result.action,
                 );
             });
-    });
+        },
+    );
     result
 }
 
@@ -192,11 +152,9 @@ pub(super) fn show_resource_detail_blade(
     node_metrics_api_unavailable: bool,
     node_usage_error: Option<&str>,
     data_editor: Option<&mut super::super::state::ResourceDataEditorState>,
-    table_preferences: Option<
-        &mut super::super::table_preferences::PersistedResourceTablePreferences,
-    >,
-    column_settings: Option<
-        &mut Option<super::super::resource_table_settings::ResourceTableSettingsTarget>,
+    table_preferences: &mut super::super::table_preferences::PersistedResourceTablePreferences,
+    column_settings: &mut Option<
+        super::super::resource_table_settings::ResourceTableSettingsTarget,
     >,
 ) -> BladeResult {
     let theme = ui.tokens();
@@ -229,7 +187,7 @@ pub(super) fn show_resource_detail_blade(
         show_resource_data(ui, detail, data_editor, &mut result.action);
         metadata_maps(ui, detail);
     } else {
-        ui.spinner();
+        components::Spinner::new().show(ui);
         ui.label(egui::RichText::new("Loading resource details…").color(theme.text.muted));
     }
     ui.add_space(20.0);

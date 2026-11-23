@@ -17,9 +17,9 @@ pub(crate) fn watcher(context: TypedWatcherContext) -> Option<Box<dyn ResourceWa
 pub(crate) fn table_definition(api_resource: &ApiResource) -> Option<ResourceTableDefinition> {
     matches_namespaced_api_resource::<Deployment>(api_resource).then(|| ResourceTableDefinition {
         columns: vec![
-            column(READY_COLUMN, "Ready", 90.0),
-            column(UP_TO_DATE_COLUMN, "Up-to-date", 132.0),
-            column(AVAILABLE_COLUMN, "Available", 116.0),
+            column(READY_COLUMN, "Ready", 90.0).numeric(),
+            column(UP_TO_DATE_COLUMN, "Up-to-date", 132.0).numeric(),
+            column(AVAILABLE_COLUMN, "Available", 116.0).numeric(),
         ],
     })
 }

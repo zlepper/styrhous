@@ -203,7 +203,7 @@ fn test_cron_job_run_now_integration() {
         "the CronJob action menu to show Run now",
         |harness| {
             harness
-                .query_by_role_and_label(egui::accesskit::Role::Button, "Run now")
+                .query_by_role_and_label(egui::accesskit::Role::MenuItem, "Run now")
                 .map(|_| ())
         },
         5_000,
@@ -373,7 +373,7 @@ fn test_resource_scale_integration() {
     let actions_label = format!("More actions for {deployment_name}");
     harness.get_by_label(&actions_label).click();
     harness.run_steps(1);
-    harness.get_by_label("Scale").click();
+    harness.get_by_label("Scale…").click();
     wait_for_with_diagnostic(
         &mut harness,
         &format!("the scale dialog for Deployment {deployment_name} to load"),
@@ -402,7 +402,7 @@ fn test_resource_scale_integration() {
         },
         5_000,
     );
-    harness.get_by_label("Update scale").click();
+    harness.get_by_label("Scale to 2").click();
     wait_for_with_diagnostic(
         &mut harness,
         &format!("the scale update for Deployment {deployment_name} to complete"),
@@ -487,7 +487,7 @@ fn test_yaml_editor_removes_an_externally_owned_cpu_limit_integration() {
         .get_by_label(&format!("More actions for {deployment_name}"))
         .click();
     harness.run_steps(1);
-    harness.get_by_label("Edit").click();
+    harness.get_by_label("Edit YAML").click();
     harness.run_steps(1);
     let editor_id = wait_for_yaml_editor(&mut harness, &deployment_name, 5_000);
     let editor = harness

@@ -1,0 +1,41 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          TextInput name="Search 0" value="" rect=(x=8.0 y=8.0 width=219.0 height=32.0 center_x=117.5 center_y=24.0)
+            TextRun value="" rect=(x=44.0 y=16.0 width=0.0 height=20.0 center_x=44.0 center_y=26.0)
+        Button name="Previous match" state=[disabled] rect=(x=240.0 y=12.0 width=24.0 height=24.0 center_x=252.0 center_y=24.0)
+        Button name="Next match" state=[disabled] rect=(x=270.0 y=12.0 width=24.0 height=24.0 center_x=282.0 center_y=24.0)
+        CheckBox name="Regular expression" state=[toggled=False] rect=(x=300.0 y=12.0 width=24.0 height=24.0 center_x=312.0 center_y=24.0)
+        GenericContainer rect=<none>
+          TextInput name="Search 1" value="http" rect=(x=8.0 y=52.0 width=133.8 height=32.0 center_x=74.9 center_y=68.0)
+            TextRun value="http" rect=(x=44.0 y=60.0 width=24.8 height=20.0 center_x=56.4 center_y=70.0)
+        Label value="Searching… 4" rect=(x=147.8 y=58.0 width=79.2 height=20.0 center_x=187.4 center_y=68.0)
+          TextRun value="Searching… 4" rect=(x=147.8 y=58.0 width=79.2 height=20.0 center_x=187.4 center_y=68.0)
+        Button name="Previous match" rect=(x=240.0 y=56.0 width=24.0 height=24.0 center_x=252.0 center_y=68.0)
+        Button name="Next match" rect=(x=270.0 y=56.0 width=24.0 height=24.0 center_x=282.0 center_y=68.0)
+        CheckBox name="Regular expression" state=[toggled=False] rect=(x=300.0 y=56.0 width=24.0 height=24.0 center_x=312.0 center_y=68.0)
+        GenericContainer rect=<none>
+          TextInput name="Search 2" value="http" rect=(x=8.0 y=96.0 width=143.4 height=32.0 center_x=79.7 center_y=112.0)
+            TextRun value="http" rect=(x=44.0 y=104.0 width=24.8 height=20.0 center_x=56.4 center_y=114.0)
+        Label value="3 / 12" rect=(x=157.4 y=102.0 width=39.6 height=20.0 center_x=177.2 center_y=112.0)
+          TextRun value="3 / 12" rect=(x=157.4 y=102.0 width=39.6 height=20.0 center_x=177.2 center_y=112.0)
+        Button name="Clear search" rect=(x=203.0 y=100.0 width=24.0 height=24.0 center_x=215.0 center_y=112.0)
+        Button name="Previous match" rect=(x=240.0 y=100.0 width=24.0 height=24.0 center_x=252.0 center_y=112.0)
+        Button name="Next match" rect=(x=270.0 y=100.0 width=24.0 height=24.0 center_x=282.0 center_y=112.0)
+        CheckBox name="Regular expression" state=[toggled=False] rect=(x=300.0 y=100.0 width=24.0 height=24.0 center_x=312.0 center_y=112.0)
+        GenericContainer rect=<none>
+          TextInput name="Search 3" value="pod" rect=(x=8.0 y=140.0 width=203.4 height=32.0 center_x=109.7 center_y=156.0)
+            TextRun value="pod" rect=(x=44.0 y=148.0 width=22.8 height=20.0 center_x=55.4 center_y=158.0)
+        Label value="1 of 8" rect=(x=217.4 y=146.0 width=39.6 height=20.0 center_x=237.2 center_y=156.0)
+          TextRun value="1 of 8" rect=(x=217.4 y=146.0 width=39.6 height=20.0 center_x=237.2 center_y=156.0)
+        Button name="Clear search" rect=(x=263.0 y=144.0 width=24.0 height=24.0 center_x=275.0 center_y=156.0)
+        CheckBox name="Regular expression" state=[toggled=False] rect=(x=300.0 y=144.0 width=24.0 height=24.0 center_x=312.0 center_y=156.0)
+        GenericContainer rect=<none>
+          TextInput name="Search 4" value="coredns[a-z" rect=(x=8.0 y=184.0 width=219.0 height=32.0 center_x=117.5 center_y=200.0)
+            TextRun value="coredns[a-z" rect=(x=44.0 y=192.0 width=69.7 height=20.0 center_x=78.8 center_y=202.0)
+        Button name="Previous match" state=[disabled] rect=(x=240.0 y=188.0 width=24.0 height=24.0 center_x=252.0 center_y=200.0)
+        Button name="Next match" state=[disabled] rect=(x=270.0 y=188.0 width=24.0 height=24.0 center_x=282.0 center_y=200.0)
+        CheckBox name="Regular expression" state=[toggled=True] rect=(x=300.0 y=188.0 width=24.0 height=24.0 center_x=312.0 center_y=200.0)

@@ -1,0 +1,23 @@
+viewport: width=640.0 height=400.0 points, pixels_per_point=1.0
+Window rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        Label value="Content under the scrim" rect=(x=8.0 y=8.0 width=153.3 height=20.0 center_x=84.7 center_y=18.0)
+          TextRun value="Content under the scrim" rect=(x=8.0 y=8.0 width=153.3 height=20.0 center_x=84.7 center_y=18.0)
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        AlertDialog name="Delete pod?" rect=(x=100.0 y=110.0 width=440.0 height=181.0 center_x=320.0 center_y=200.5)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="Delete pod?" rect=(x=180.0 y=134.0 width=90.2 height=24.0 center_x=225.1 center_y=146.0)
+                TextRun value="Delete pod?" rect=(x=180.0 y=134.0 width=90.2 height=24.0 center_x=225.1 center_y=146.0)
+              Label value="Deletes coredns-66bc5c9577-ffw2s from kube-system." rect=(x=180.0 y=162.0 width=267.5 height=40.0 center_x=313.7 center_y=182.0)
+                TextRun value="Deletes coredns-66bc5c9577-ffw2s from " rect=(x=180.0 y=162.0 width=267.5 height=20.0 center_x=313.7 center_y=172.0)
+                TextRun value="kube-system." rect=(x=180.0 y=182.0 width=85.9 height=20.0 center_x=223.0 center_y=192.0)
+            GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Button name="Delete pod" rect=(x=421.2 y=243.0 width=94.8 height=32.0 center_x=468.6 center_y=259.0)
+            Button name="Cancel" state=[focused] rect=(x=342.4 y=243.0 width=70.8 height=32.0 center_x=377.8 center_y=259.0)

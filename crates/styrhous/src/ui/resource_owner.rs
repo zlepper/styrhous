@@ -20,15 +20,6 @@ pub(super) fn navigation_action(
         })
 }
 
-pub(super) fn queue_navigation_action(
-    pending_action: &mut Option<ResourceAction>,
-    action: ResourceAction,
-) {
-    if pending_action.is_none() {
-        *pending_action = Some(action);
-    }
-}
-
 pub(super) fn unavailable_tooltip(owner: &ResourceOwner) -> String {
     format!(
         "Details for {} are unavailable because this resource type is not available on the cluster.",

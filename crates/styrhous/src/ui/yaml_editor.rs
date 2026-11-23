@@ -3,38 +3,28 @@ use super::state::{
     YamlEditorHighlightCacheKey, YamlEditorWindowState, api_error_message,
     diagnostics_from_api_error, set_editor_diagnostics,
 };
-use crate::resource_schema::{
-    CompletionContext, CompletionContextKind, SourceRange, YamlDiagnostic,
-};
+use crate::resource_schema::{CompletionContextKind, SourceRange, YamlDiagnostic};
 use crate::worker::{
     ApplyResourceYaml, ResourceApplyCompleted, ResourceApplyFailed, ResourceSchemaLoadFailed,
     ResourceSchemaLoaded, ResourceYamlApplyCommandFailed, ResourceYamlFetchFailed,
     ResourceYamlFetched, ResourceYamlValidated, ResourceYamlValidationCommandFailed,
     ResourceYamlValidationFailed, ValidateResourceYaml, WorkerCommandBox, WorkerResult,
 };
-use components::design::theme::{self, Theme, ThemeExt, ThemeScope, Tone, ToneColors};
-use components::design::{space, stroke, type_scale};
+use components::design::theme::{Theme, ThemeExt, Tone};
+use components::design::{size, space, type_scale};
 use components::{
-    ConfirmationDialog, ConfirmationDialogAction, ConfirmationDialogKind, PointingHand,
-    SEARCH_NAVIGATION_BUTTON_SIZE, TailwindButton, TailwindSearchInput, icons,
-    search_navigation_button,
+    Button, Completion, CompletionDoc, CompletionExpects, ConfirmationDialog,
+    ConfirmationDialogAction, ConfirmationDialogKind, Problem, ProblemsPanel, SearchField,
+    SearchStatus, Severity, StatusBar, Toolbar, WindowHeader, icons, problems_toggle, status_icon,
+    status_number, status_text, toolbar_activity,
 };
 use egui::text::{CCursor, CCursorRange};
 use std::collections::HashSet;
 use std::ops::Range;
 use std::time::{Duration, Instant};
 
-const TOOLBAR_HEIGHT: f32 = 52.0;
 const VALIDATION_DEBOUNCE: Duration = Duration::from_millis(500);
-const COMPLETION_LIST_MIN_WIDTH: f32 = 240.0;
-const COMPLETION_LIST_MAX_WIDTH: f32 = 280.0;
-const COMPLETION_DOCUMENTATION_WIDTH: f32 = 280.0;
-const COMPLETION_ROW_HEIGHT: f32 = 26.0;
 const COMPLETION_LIST_MAX_HEIGHT: f32 = 260.0;
-const COMPLETION_POPUP_CHROME_HEIGHT: f32 = 68.0;
-const DIAGNOSTIC_ROW_HEIGHT: f32 = 21.0;
-const DIAGNOSTIC_LIST_MAX_HEIGHT: f32 = 6.0 * DIAGNOSTIC_ROW_HEIGHT;
-const SEARCH_CONTROL_WIDTH: f32 = 212.0;
 
 impl WorkerResult for ResourceYamlFetchFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {

@@ -55,6 +55,16 @@ impl ApiResource {
         self == &Self::helm_releases()
     }
 
+    /// Whether this is the core Pod resource.
+    pub(crate) fn is_pod(&self) -> bool {
+        self.group == "core" && self.kind == "Pod"
+    }
+
+    /// Whether this is the core Node resource.
+    pub(crate) fn is_node(&self) -> bool {
+        self.group == "core" && self.kind == "Node"
+    }
+
     /// Whether this is the Metrics API resource that Pod usage is read from.
     pub(crate) fn is_pod_metrics(&self) -> bool {
         self.is_metrics_resource("PodMetrics", "pods")

@@ -1,4 +1,9 @@
 use super::*;
+use crate::ui::preference_table::{
+    AGE_COLUMN_ID, ColumnControls, PreferenceTable, age_column, fill_first_column,
+};
+use crate::ui::resource_table_settings::ResourceTableSettingsTarget;
+use crate::ui::table_preferences::PersistedResourceTablePreferences;
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn show_managed_resources_for(
@@ -8,12 +13,8 @@ pub(super) fn show_managed_resources_for(
     managed_resources: &[ManagedResource],
     managed_resources_error: Option<&str>,
     pending_action: &mut Option<ResourceAction>,
-    mut table_preferences: Option<
-        &mut super::super::table_preferences::PersistedResourceTablePreferences,
-    >,
-    mut column_settings: Option<
-        &mut Option<super::super::resource_table_settings::ResourceTableSettingsTarget>,
-    >,
+    table_preferences: &mut PersistedResourceTablePreferences,
+    column_settings: &mut Option<ResourceTableSettingsTarget>,
 ) {
     let theme = ui.tokens();
     let table_kinds = managed_resource_table_kinds(api_resource);
@@ -33,10 +34,10 @@ pub(super) fn show_managed_resources_for(
             resource_uid,
             kind,
             &rows,
-            api_resource.kind == "Node",
+            api_resource.is_node(),
             pending_action,
-            table_preferences.as_deref_mut(),
-            column_settings.as_deref_mut(),
+            table_preferences,
+            column_settings,
         );
         if rows.is_empty() {
             ui.add_space(8.0);
@@ -59,201 +60,77 @@ pub(super) fn show_managed_resource_table(
     rows: &[ManagedResourceRow],
     show_namespace_column: bool,
     pending_action: &mut Option<ResourceAction>,
-    table_preferences: Option<
-        &mut super::super::table_preferences::PersistedResourceTablePreferences,
-    >,
-    column_settings: Option<
-        &mut Option<super::super::resource_table_settings::ResourceTableSettingsTarget>,
-    >,
+    table_preferences: &mut PersistedResourceTablePreferences,
+    column_settings: &mut Option<ResourceTableSettingsTarget>,
 ) {
     let theme = ui.tokens();
     let definition = managed_resource_table_definition(kind, show_namespace_column);
-    if let (Some(table_preferences), Some(column_settings)) = (table_preferences, column_settings) {
-        let mut column_definitions = vec![TableColumnDefinition {
-            id: "name".into(),
-            label: "Name".into(),
-            default_width: 160.0,
-            sortable: true,
-        }];
-        if show_namespace_column {
-            column_definitions.push(TableColumnDefinition {
-                id: "namespace".into(),
-                label: "Namespace".into(),
-                default_width: 150.0,
-                sortable: true,
-            });
-        }
-        column_definitions.extend(
-            definition
-                .columns
-                .iter()
-                .map(|column| TableColumnDefinition {
-                    id: column.id.clone(),
-                    label: column.label.clone(),
-                    default_width: column.initial_width,
-                    sortable: true,
-                }),
-        );
-        column_definitions.push(TableColumnDefinition {
-            id: "age".into(),
-            label: "Age".into(),
-            default_width: 77.0,
-            sortable: true,
-        });
-        let fixed_width = column_definitions
-            .iter()
-            .skip(1)
-            .map(|column| column.default_width)
-            .sum::<f32>();
-        column_definitions[0].default_width =
-            (ui.available_width() - fixed_width - 16.0).max(160.0);
-        let table_resource = managed_resource_api_resource(kind);
-        let table_key = ResourceTableKey::detail(detail_api_resource, &table_resource);
-        let visible_columns = table_preferences.resolved_columns(&table_key, &column_definitions);
-        let sort_state = table_preferences
-            .sort(&table_key, &column_definitions)
-            .map(|(column_id, direction)| components::SortState::new(column_id, direction));
-        let mut sorted_rows = rows.to_vec();
-        if let Some(sort) = &sort_state {
-            sorted_rows.sort_by(|left, right| {
-                compare_managed_resource_column(left, right, &sort.column_id, sort.direction)
-            });
-        }
-        let mut table =
-            TailwindTable::new(format!("managed-resource-table-{resource_uid}-{kind}")).roomy();
-        for column in &visible_columns {
-            table = table.column(
-                column.definition.id.clone(),
-                column.definition.label.clone(),
-                |builder| {
-                    let builder = builder.initial_width(column.width);
-                    if column.definition.sortable {
-                        builder.sortable()
-                    } else {
-                        builder
-                    }
-                },
-            );
-        }
-        let table_preferences = RefCell::new(table_preferences);
-        let pending_action = RefCell::new(pending_action);
-        table.show_configurable_with_row_response(
-            ui,
-            &sorted_rows,
-            sort_state.as_ref(),
-            |header, id, _label, sortable| {
-                MoreButton::show_context_menu(header, |menu| {
-                    super::super::resource_table_settings::show_configurable_table_header(
-                        menu,
-                        sortable,
-                        id,
-                        &table_key,
-                        &column_definitions,
-                        &table_preferences,
-                        column_settings,
-                    );
-                });
-            },
-            |id, width| {
-                table_preferences
-                    .borrow_mut()
-                    .set_width(&table_key, &column_definitions, id, width)
-            },
-            |ui, row, column_index| match visible_columns[column_index].definition.id.as_str() {
-                "name" => {
-                    if TableRowBuilder::clickable_text(
-                        ui,
-                        &row.name,
-                        theme.text.primary,
-                        format!("Open details for {}", row.name),
-                    )
-                    .clicked()
-                        && pending_action.borrow().is_none()
-                    {
-                        **pending_action.borrow_mut() = Some(ResourceAction::NavigateDetails {
-                            api_resource: row.api_resource.clone(),
-                            name: row.name.clone(),
-                            namespace: row.namespace.clone(),
-                            uid: row.uid.clone(),
-                        });
-                    }
-                }
-                "namespace" => {
-                    TableRowBuilder::text(ui, row.namespace.as_deref().unwrap_or("-"), false)
-                }
-                "age" => TableRowBuilder::text(ui, &format_age(row.creation_timestamp), false),
-                id => show_resource_cell(ui, row.cells.get(id)),
-            },
-            |response, row, column_index| {
-                if response.clicked() && pending_action.borrow().is_none() {
-                    **pending_action.borrow_mut() = Some(ResourceAction::NavigateDetails {
-                        api_resource: row.api_resource.clone(),
-                        name: row.name.clone(),
-                        namespace: row.namespace.clone(),
-                        uid: row.uid.clone(),
-                    });
-                }
-                let _ = column_index;
-            },
-        );
-        return;
-    }
-    let mut table = TailwindTable::new(format!("managed-resource-table-{resource_uid}-{kind}",))
-        .roomy()
-        .column("name", "Name", |column| column.fill_remaining());
+    let mut column_definitions = vec![TableColumnDefinition::sortable("name", "Name", 160.0)];
     if show_namespace_column {
-        table = table.column("namespace", "Namespace", |column| {
-            column.initial_width(150.0)
-        });
+        column_definitions.push(TableColumnDefinition::sortable(
+            "namespace",
+            "Namespace",
+            150.0,
+        ));
     }
-    for column in &definition.columns {
-        table = table.column(column.id.clone(), column.label.clone(), |table_column| {
-            table_column.initial_width(column.initial_width)
-        });
-    }
-    table = table.column("age", "Age", |column| column.initial_width(77.0));
-    table.show_with_row_response(
+    column_definitions.extend(
+        definition
+            .columns
+            .iter()
+            .map(|column| TableColumnDefinition {
+                numeric: column.numeric,
+                ..TableColumnDefinition::sortable(&column.id, &column.label, column.initial_width)
+            }),
+    );
+    column_definitions.push(age_column());
+    fill_first_column(&mut column_definitions, ui.available_width(), 0.0);
+    let layout = PreferenceTable::new(
+        table_preferences,
+        ResourceTableKey::detail(detail_api_resource, &managed_resource_api_resource(kind)),
+        column_definitions,
+    );
+    let sorted_rows = layout.sorted(rows, compare_managed_resource_column);
+    let table = layout.table(format!("managed-resource-table-{resource_uid}-{kind}"));
+    // The first click of a frame wins.
+    let pending_action = RefCell::new(pending_action);
+    let open = |row: &ManagedResourceRow| {
+        pending_action
+            .borrow_mut()
+            .get_or_insert_with(|| row.details_action());
+    };
+    layout.show(
         ui,
-        rows,
-        |ui, row, column_index| {
-            let type_specific_start = 1 + usize::from(show_namespace_column);
-            match column_index {
-                0 => {
-                    if TableRowBuilder::clickable_text(
-                        ui,
-                        &row.name,
-                        theme.text.primary,
-                        format!("Open details for {}", row.name),
-                    )
-                    .clicked()
-                        && pending_action.is_none()
-                    {
-                        *pending_action = Some(ResourceAction::NavigateDetails {
-                            api_resource: row.api_resource.clone(),
-                            name: row.name.clone(),
-                            namespace: row.namespace.clone(),
-                            uid: row.uid.clone(),
-                        });
-                    }
+        table,
+        &sorted_rows,
+        ColumnControls {
+            preferences: table_preferences,
+            metadata_key_suggestions: None,
+            column_settings,
+        },
+        |ui, row, column_id| match column_id {
+            "name" => {
+                let response = TableRowBuilder::clickable_text(
+                    ui,
+                    &row.name,
+                    theme.text.primary,
+                    format!("Open details for {}", row.name),
+                );
+                if response.clicked() {
+                    open(row);
                 }
-                1 if show_namespace_column => {
-                    TableRowBuilder::text(ui, row.namespace.as_deref().unwrap_or("-"), false)
-                }
-                index
-                    if index >= type_specific_start
-                        && index < type_specific_start + definition.columns.len() =>
-                {
-                    let column = &definition.columns[index - type_specific_start];
-                    show_resource_cell(ui, row.cells.get(&column.id));
-                }
-                _ => TableRowBuilder::text(ui, &format_age(row.creation_timestamp), false),
+            }
+            "namespace" => namespace_cell(ui, row.namespace.as_deref()),
+            AGE_COLUMN_ID => age_cell(ui, row.creation_timestamp),
+            id => show_resource_cell(ui, id, row.cells.get(id)),
+        },
+        |response, row, _| {
+            if response.clicked() {
+                open(row);
             }
         },
-        |_, _, _| {},
     );
 }
 
-#[derive(Clone)]
 pub(super) struct ManagedResourceRow {
     api_resource: crate::api_resource::ApiResource,
     name: String,
@@ -261,6 +138,18 @@ pub(super) struct ManagedResourceRow {
     uid: String,
     creation_timestamp: Option<time::OffsetDateTime>,
     cells: BTreeMap<String, crate::resource_table::CellValue>,
+}
+
+impl ManagedResourceRow {
+    /// Open this resource's inspector.
+    fn details_action(&self) -> ResourceAction {
+        ResourceAction::NavigateDetails {
+            api_resource: self.api_resource.clone(),
+            name: self.name.clone(),
+            namespace: self.namespace.clone(),
+            uid: self.uid.clone(),
+        }
+    }
 }
 
 pub(super) fn managed_resource_rows(
@@ -285,7 +174,7 @@ pub(super) fn compare_managed_resource_column(
     let value = |row: &ManagedResourceRow| match column_id {
         "name" => SortValue::Text(row.name.clone()),
         "namespace" => SortValue::Text(row.namespace.clone().unwrap_or_default()),
-        "age" => row
+        AGE_COLUMN_ID => row
             .creation_timestamp
             .map(|time| SortValue::Number(time.unix_timestamp()))
             .unwrap_or(SortValue::Empty),

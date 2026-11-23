@@ -1,0 +1,11 @@
+viewport: width=480.0 height=320.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        Label value="Couldn’t watch pods" rect=(x=178.9 y=144.0 width=122.1 height=20.0 center_x=240.0 center_y=154.0)
+          TextRun value="Couldn’t watch pods" rect=(x=178.9 y=144.0 width=122.1 height=20.0 center_x=240.0 center_y=154.0)
+        Label value="Forbidden: user cannot list pods" rect=(x=154.0 y=168.0 width=172.1 height=16.0 center_x=240.0 center_y=176.0)
+          TextRun value="Forbidden: user cannot list pods" rect=(x=154.0 y=168.0 width=172.1 height=16.0 center_x=240.0 center_y=176.0)
+        GenericContainer rect=<none>
+          Button name="Retry" rect=(x=203.0 y=196.0 width=74.0 height=28.0 center_x=240.0 center_y=210.0)

@@ -28,12 +28,12 @@ pub(crate) fn watcher(context: TypedWatcherContext) -> Option<Box<dyn ResourceWa
 pub(crate) fn table_definition(api_resource: &ApiResource) -> Option<ResourceTableDefinition> {
     matches_namespaced_api_resource::<Pod>(api_resource).then(|| ResourceTableDefinition {
         columns: vec![
-            column(READY_COLUMN, "Ready", 55.0),
-            column(CONTAINERS_COLUMN, "Containers", 110.0),
-            column(STATUS_COLUMN, "Status", 85.0),
-            column(CPU_COLUMN, "CPU", 65.0),
-            column(MEMORY_COLUMN, "Memory", 75.0),
-            column(RESTARTS_COLUMN, "Restarts", 70.0),
+            column(READY_COLUMN, "Ready", 72.0).numeric(),
+            column(CONTAINERS_COLUMN, "Containers", 104.0),
+            column(STATUS_COLUMN, "Status", 120.0),
+            column(CPU_COLUMN, "CPU", 80.0).numeric(),
+            column(MEMORY_COLUMN, "Memory", 88.0).numeric(),
+            column(RESTARTS_COLUMN, "Restarts", 88.0).numeric(),
             column(NODE_COLUMN, "Node", 95.0),
         ],
     })

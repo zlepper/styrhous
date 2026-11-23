@@ -19,7 +19,7 @@ pub(crate) fn table_definition(api_resource: &ApiResource) -> Option<ResourceTab
     matches_cluster_api_resource::<PersistentVolume>(api_resource).then(|| {
         ResourceTableDefinition {
             columns: vec![
-                column(CAPACITY_COLUMN, "Capacity", 104.0),
+                column(CAPACITY_COLUMN, "Capacity", 104.0).numeric(),
                 column(ACCESS_MODES_COLUMN, "Access modes", 136.0),
                 column(STATUS_COLUMN, "Status", 96.0),
                 column(RECLAIM_POLICY_COLUMN, "Reclaim policy", 136.0),

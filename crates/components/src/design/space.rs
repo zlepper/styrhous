@@ -24,3 +24,8 @@ pub const LABEL_TO_CONTROL: f32 = S6;
 pub const BLADE_SECTION: f32 = S24;
 /// Inset of a blade from the window edge.
 pub const BLADE_INSET: f32 = S8;
+
+// C12
+/// Gap between a status icon or kind square and its words in callouts,
+/// banners and sidebar items (`gap: 10px`).
+pub const ICON_TEXT: f32 = 10.0;

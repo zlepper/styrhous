@@ -2,27 +2,21 @@ use super::*;
 use crate::context_presentation::{ContextPresentation, automatic_badge};
 use crate::ui::state::ContextPresentationSave;
 use crate::worker::SaveContextPresentation;
-use components::TextAvatar;
+use components::Avatar;
+use components::tooltip::elided_label;
 use uuid::Uuid;
 
 const CONTEXT_ROW_HEIGHT: f32 = 112.0;
 const CONTEXT_AVATAR_SIZE: f32 = 60.0;
 const CONTEXT_ACTION_WIDTH: f32 = 96.0;
-const CONTEXT_ROW_TEXT_HEIGHT: f32 = 44.0;
+/// The display name over the context name, [`context_identity`]'s block.
+const CONTEXT_ROW_TEXT_HEIGHT: f32 =
+    type_scale::TITLE.line_height() + space::S4 + type_scale::MONO.line_height();
 const CONTEXT_BADGE_INPUT_WIDTH: f32 = 184.0;
 const CONTEXT_PREVIEW_RAIL_HEIGHT: f32 = 112.0;
 
 #[derive(Debug)]
 pub(super) struct ContextsSettingsBlade;
-
-fn header(ui: &mut egui::Ui, title: &str) {
-    let theme = ui.tokens();
-    ui.label(
-        egui::RichText::new(title)
-            .font(type_scale::HEADING.font_id(ui.ctx()))
-            .color(theme.text.primary),
-    );
-}
 
 fn introduction(ui: &mut egui::Ui, text: &str) {
     let theme = ui.tokens();
@@ -47,24 +41,14 @@ fn supporting_text(ui: &mut egui::Ui, text: &str) {
 
 fn context_identity(ui: &mut egui::Ui, name: &str, presentation: &ContextPresentation) {
     let theme = ui.tokens();
-    ui.add(
-        egui::Label::new(
-            egui::RichText::new(presentation.display_name(name))
-                .font(type_scale::TITLE.font_id(ui.ctx()))
-                .color(theme.text.primary),
-        )
-        .truncate(),
-    )
-    .on_hover_text(presentation.display_name(name));
-    ui.add(
-        egui::Label::new(
-            egui::RichText::new(name)
-                .font(type_scale::MONO.font_id(ui.ctx()))
-                .color(theme.text.muted),
-        )
-        .truncate(),
-    )
-    .on_hover_text(name);
+    ui.spacing_mut().item_spacing.y = space::S4;
+    elided_label(
+        ui,
+        type_scale::TITLE,
+        presentation.display_name(name),
+        theme.text.primary,
+    );
+    elided_label(ui, type_scale::MONO, name, theme.text.muted);
 }
 
 impl GlobalBladeContent for ContextsSettingsBlade {
@@ -74,7 +58,7 @@ impl GlobalBladeContent for ContextsSettingsBlade {
         _layer: components::BladeLayer,
         _context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
-        header(ui, "Contexts");
+        components::blade_title(ui, None, "Contexts");
         GlobalBladeRenderResult::default()
     }
 
@@ -123,7 +107,7 @@ impl GlobalBladeContent for ContextsSettingsBlade {
                     .id_salt("context-settings-list")
                     .auto_shrink([false, true])
                     .show(ui, |ui| {
-                        WorkspaceCard::new().margin(0).show(ui, |ui| {
+                        Card::new().padding(0).show(ui, |ui| {
                             ui.set_min_width(ui.available_width());
                             ui.spacing_mut().item_spacing.y = 0.0;
                             for (index, (name, presentation)) in contexts.iter().enumerate() {
@@ -141,7 +125,7 @@ impl GlobalBladeContent for ContextsSettingsBlade {
                                             ));
                                             ui.spacing_mut().item_spacing.x = 0.0;
                                             ui.add_space(space::S24);
-                                            TextAvatar::new(&presentation.badge(name))
+                                            Avatar::new(&presentation.badge(name))
                                                 .accent()
                                                 .size(CONTEXT_AVATAR_SIZE)
                                                 .font(type_scale::HEADING)
@@ -156,7 +140,6 @@ impl GlobalBladeContent for ContextsSettingsBlade {
                                                 egui::Layout::top_down(egui::Align::Min),
                                                 |ui| {
                                                     ui.set_width(text_width);
-                                                    ui.spacing_mut().item_spacing.y = space::S4;
                                                     context_identity(ui, name, presentation);
                                                 },
                                             );
@@ -166,16 +149,13 @@ impl GlobalBladeContent for ContextsSettingsBlade {
                                                 egui::Layout::right_to_left(egui::Align::Center),
                                                 |ui| {
                                                     ui.set_min_width(CONTEXT_ACTION_WIDTH);
-                                                    if TailwindButton::image_and_text(
-                                                        icons::pencil_icon(),
-                                                        "Edit",
-                                                    )
-                                                    .variant(ButtonVariant::Secondary)
-                                                    .accessibility_label(format!(
-                                                        "Edit context {name}"
-                                                    ))
-                                                    .show(ui)
-                                                    .clicked()
+                                                    if Button::secondary("Edit")
+                                                        .leading_icon(icons::Icon::Pencil)
+                                                        .accessibility_label(format!(
+                                                            "Edit context {name}"
+                                                        ))
+                                                        .show(ui)
+                                                        .clicked()
                                                     {
                                                         next_content =
                                                             Some(Box::new(ContextEditorBlade::new(
@@ -215,7 +195,6 @@ struct ContextEditorBlade {
     badge: String,
     error: Option<String>,
     request_id: Option<Uuid>,
-    footer_height: Option<f32>,
     effect: Option<ContextEditorEffect>,
 }
 
@@ -227,7 +206,6 @@ impl ContextEditorBlade {
             badge: presentation.badge.unwrap_or_default(),
             error: None,
             request_id: None,
-            footer_height: None,
             effect: None,
         }
     }
@@ -241,26 +219,21 @@ impl ContextEditorBlade {
 
     fn form(&mut self, ui: &mut egui::Ui) {
         let theme = ui.tokens();
-        WorkspaceCard::new()
-            .margin(space::S16)
-            .show_inner(ui, |ui| {
-                ui.set_width((ui.available_width()).max(0.0));
-                ui.label(
-                    egui::RichText::new("KUBECONFIG CONTEXT")
-                        .font(type_scale::META.font_id(ui.ctx()))
-                        .color(theme.text.muted),
-                );
-                ui.add_space(space::S4);
-                ui.add(
-                    egui::Label::new(
-                        egui::RichText::new(&self.context_name)
-                            .font(type_scale::MONO.font_id(ui.ctx()))
-                            .color(theme.text.secondary),
-                    )
-                    .truncate(),
-                )
-                .on_hover_text(&self.context_name);
-            });
+        Card::new().show_inner(ui, |ui| {
+            ui.set_width((ui.available_width()).max(0.0));
+            ui.label(
+                egui::RichText::new("KUBECONFIG CONTEXT")
+                    .font(type_scale::META.font_id(ui.ctx()))
+                    .color(theme.text.muted),
+            );
+            ui.add_space(space::S4);
+            elided_label(
+                ui,
+                type_scale::MONO,
+                &self.context_name,
+                theme.text.secondary,
+            );
+        });
         ui.add_space(space::S24);
         ui.separator();
         ui.add_space(space::S24);
@@ -271,10 +244,10 @@ impl ContextEditorBlade {
         );
         ui.add_space(space::S24);
         ui.label("Display name");
-        TailwindTextInput::new(&mut self.display_name)
+        TextInput::new(&mut self.display_name)
             .id_salt(("context-display-name", &self.context_name))
             .accessibility_label("Display name")
-            .hint_text(&self.context_name)
+            .placeholder(&self.context_name)
             .show(ui);
         ui.add_space(space::S4);
         supporting_text(ui, "Leave blank to use the kubeconfig context name.");
@@ -282,13 +255,16 @@ impl ContextEditorBlade {
         ui.label("Badge");
         ui.horizontal(|ui| {
             ui.allocate_ui_with_layout(
-                egui::vec2(CONTEXT_BADGE_INPUT_WIDTH, 28.0),
+                egui::vec2(
+                    CONTEXT_BADGE_INPUT_WIDTH,
+                    components::FieldSize::Md.height(),
+                ),
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
-                    TailwindTextInput::new(&mut self.badge)
+                    TextInput::new(&mut self.badge)
                         .id_salt(("context-badge", &self.context_name))
                         .accessibility_label("Badge")
-                        .hint_text("Automatic")
+                        .placeholder("Automatic")
                         .show(ui);
                 },
             );
@@ -325,73 +301,60 @@ impl ContextEditorBlade {
     }
 
     fn footer(ui: &mut egui::Ui, saving: bool) -> (bool, bool) {
-        ui.separator();
-        ui.add_space(space::S8);
-        ui.allocate_ui_with_layout(
-            egui::vec2(ui.available_width(), 0.0),
-            egui::Layout::right_to_left(egui::Align::Min),
-            |ui| {
-                let save = ui
-                    .add_enabled_ui(!saving, |ui| {
-                        TailwindButton::new(if saving { "Saving…" } else { "Save changes" })
-                            .show(ui)
-                    })
-                    .inner
-                    .clicked();
-                let cancel = ui
-                    .add_enabled_ui(!saving, |ui| TailwindButton::secondary("Cancel").show(ui))
-                    .inner
-                    .clicked();
-                (save, cancel)
-            },
-        )
-        .inner
+        components::blade_body_footer(ui, |ui| {
+            let save = Button::primary(if saving { "Saving…" } else { "Save changes" })
+                .enabled(!saving)
+                .show(ui)
+                .clicked();
+            let cancel = Button::secondary("Cancel")
+                .enabled(!saving)
+                .show(ui)
+                .clicked();
+            (save, cancel)
+        })
     }
 
     fn preview(&self, ui: &mut egui::Ui, presentation: &ContextPresentation) {
         let theme = ui.tokens();
-        WorkspaceCard::new()
-            .margin(space::S16)
-            .show_inner(ui, |ui| {
-                ui.set_width(ui.available_width());
-                ui.label(
-                    egui::RichText::new("PREVIEW")
-                        .font(type_scale::META.font_id(ui.ctx()))
-                        .color(theme.text.muted),
+        Card::new().show_inner(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(
+                egui::RichText::new("PREVIEW")
+                    .font(type_scale::META.font_id(ui.ctx()))
+                    .color(theme.text.muted),
+            );
+            ui.add_space(space::S12);
+            ui.horizontal(|ui| {
+                let (rail, _) = ui.allocate_exact_size(
+                    egui::vec2(68.0, CONTEXT_PREVIEW_RAIL_HEIGHT),
+                    egui::Sense::hover(),
                 );
-                ui.add_space(space::S12);
-                ui.horizontal(|ui| {
-                    let (rail, _) = ui.allocate_exact_size(
-                        egui::vec2(68.0, CONTEXT_PREVIEW_RAIL_HEIGHT),
-                        egui::Sense::hover(),
-                    );
-                    ui.painter().rect_filled(
-                        rail,
-                        egui::CornerRadius::same(radius::KEY),
-                        theme.nav.rail,
-                    );
-                    let selected =
-                        egui::Rect::from_center_size(rail.center(), egui::vec2(52.0, 48.0));
-                    ui.painter().rect_filled(
-                        selected,
-                        egui::CornerRadius::same(radius::KEY),
-                        theme.nav.item_selected,
-                    );
-                    TextAvatar::new(&presentation.badge(&self.context_name))
-                        .identity()
-                        .paint(ui, rail.center());
-                    ui.add_space(space::S16);
-                    let width = ui.available_width();
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(width, CONTEXT_ROW_TEXT_HEIGHT),
-                        egui::Layout::top_down(egui::Align::Min),
-                        |ui| {
-                            ui.set_min_size(egui::vec2(width, CONTEXT_ROW_TEXT_HEIGHT));
-                            context_identity(ui, &self.context_name, presentation);
-                        },
-                    );
-                });
+                ui.painter().rect_filled(
+                    rail,
+                    egui::CornerRadius::same(radius::KEY),
+                    theme.nav.rail,
+                );
+                let selected = egui::Rect::from_center_size(rail.center(), egui::vec2(52.0, 48.0));
+                ui.painter().rect_filled(
+                    selected,
+                    egui::CornerRadius::same(radius::KEY),
+                    theme.nav.item_selected,
+                );
+                Avatar::new(&presentation.badge(&self.context_name))
+                    .identity()
+                    .paint(ui, rail.center());
+                ui.add_space(space::S16);
+                let width = ui.available_width();
+                ui.allocate_ui_with_layout(
+                    egui::vec2(width, CONTEXT_ROW_TEXT_HEIGHT),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        ui.set_min_size(egui::vec2(width, CONTEXT_ROW_TEXT_HEIGHT));
+                        context_identity(ui, &self.context_name, presentation);
+                    },
+                );
             });
+        });
     }
 }
 
@@ -402,7 +365,7 @@ impl GlobalBladeContent for ContextEditorBlade {
         _layer: components::BladeLayer,
         _context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
-        header(ui, "Edit context");
+        components::blade_title(ui, None, "Edit context");
         GlobalBladeRenderResult::default()
     }
 
@@ -441,11 +404,8 @@ impl GlobalBladeContent for ContextEditorBlade {
                 .color(theme.text.secondary),
         );
         ui.add_space(space::S24);
-        // egui resolves the footer's intrinsic size in a layout pass. Reuse the
-        // measured size so the live form stays before the actions in keyboard order.
-        let footer_height = self.footer_height.unwrap_or(0.0);
-        let form_height =
-            (ui.available_height() - footer_height - ui.spacing().item_spacing.y).max(0.0);
+        // The form scrolls above the blade footer, before it in keyboard order.
+        let form_height = (ui.available_height() - super::FOOTER_HEIGHT).max(0.0);
         ui.allocate_ui_with_layout(
             egui::vec2(ui.available_width(), form_height),
             egui::Layout::top_down(egui::Align::Min),
@@ -458,15 +418,7 @@ impl GlobalBladeContent for ContextEditorBlade {
                     });
             },
         );
-        let footer = ui.scope(|ui| Self::footer(ui, saving));
-        let measured_height = footer.response.rect.height();
-        if self.footer_height != Some(measured_height) {
-            self.footer_height = Some(measured_height);
-            ui.ctx()
-                .request_discard("context editor footer size changed");
-            return GlobalBladeRenderResult::default();
-        }
-        let (save, cancel) = footer.inner;
+        let (save, cancel) = Self::footer(ui, saving);
         if cancel {
             // Discard cancelled drafts even if the user later navigates Forward.
             if let Some((_, presentation)) = context

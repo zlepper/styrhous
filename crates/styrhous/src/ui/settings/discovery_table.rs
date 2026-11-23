@@ -1,5 +1,7 @@
 use super::discovery::ManagedDiscoveryAction;
 use super::*;
+use components::design::theme::Tone;
+use components::tooltip::truncated_label;
 use std::collections::BTreeMap;
 
 pub(super) fn discovery_tag_summary(tags: &BTreeMap<String, String>) -> Option<String> {
@@ -186,10 +188,9 @@ impl DiscoveryRow<'_> {
                 row_height,
                 egui::Layout::left_to_right(egui::Align::Center),
                 |ui| {
-                    if let Some(color) = self.dot_color(&theme) {
-                        ui.label(egui::RichText::new("●").color(color));
-                        ui.add_space(space::S8);
-                    }
+                    let (tone, words) = self.lamp();
+                    components::status_dot(ui, tone, words);
+                    ui.add_space(space::S8);
                     ui.allocate_ui_with_layout(
                         egui::vec2(ui.available_width(), row_height),
                         egui::Layout::top_down(egui::Align::Min),
@@ -226,10 +227,9 @@ impl DiscoveryRow<'_> {
                 row_height,
                 egui::Layout::left_to_right(egui::Align::Center),
                 |ui| {
-                    if let Some(color) = self.dot_color(&theme) {
-                        ui.label(egui::RichText::new("●").color(color));
-                        ui.add_space(space::S8);
-                    }
+                    let (tone, words) = self.lamp();
+                    components::status_dot(ui, tone, words);
+                    ui.add_space(space::S8);
                     show_truncated_label(
                         ui,
                         self.name,
@@ -278,11 +278,12 @@ impl DiscoveryRow<'_> {
             .hline(rect.x_range(), rect.bottom(), stroke::divider(&theme));
     }
 
-    fn dot_color(self, theme: &Theme) -> Option<egui::Color32> {
+    /// The row's status lamp and the words it stands for.
+    fn lamp(self) -> (Tone, &'static str) {
         match self.status {
-            DiscoveryRowStatus::Aks | DiscoveryRowStatus::Eks => Some(theme.success.fill),
-            DiscoveryRowStatus::Tailscale { online: true } => Some(theme.success.fill),
-            DiscoveryRowStatus::Tailscale { online: false } => Some(theme.status.neutral),
+            DiscoveryRowStatus::Aks | DiscoveryRowStatus::Eks => (Tone::Success, "Available"),
+            DiscoveryRowStatus::Tailscale { online: true } => (Tone::Success, "Online"),
+            DiscoveryRowStatus::Tailscale { online: false } => (Tone::Neutral, "Offline"),
         }
     }
 
@@ -317,13 +318,17 @@ pub(super) fn show_truncated_label(
     font: egui::FontId,
     color: egui::Color32,
 ) {
-    ui.add(egui::Label::new(egui::RichText::new(text).font(font).color(color)).truncate());
+    truncated_label(
+        ui,
+        egui::RichText::new(text).font(font).color(color),
+        |label| label,
+    );
 }
 
 pub(super) fn show_discovery_loading(ui: &mut egui::Ui, message: &str) {
     let theme = ui.tokens();
     ui.horizontal(|ui| {
-        ui.add(egui::Spinner::new());
+        components::Spinner::new().show(ui);
         ui.label(
             egui::RichText::new(message)
                 .font(type_scale::BODY.font_id(ui.ctx()))
@@ -365,24 +370,7 @@ pub(super) fn show_discovery_error(ui: &mut egui::Ui, error: &str) {
 }
 
 pub(super) fn show_discovery_warning(ui: &mut egui::Ui, warning: &str) {
-    let theme = ui.tokens();
-    egui::Frame::new()
-        .fill(theme.warning.tint)
-        .stroke(stroke::hairline(theme.warning.outline))
-        .corner_radius(egui::CornerRadius::same(radius::KEY))
-        .inner_margin(egui::Margin::symmetric(space::S12 as i8, space::S12 as i8))
-        .show(ui, |ui| {
-            ui.set_min_width(ui.available_width());
-            ui.set_min_height(space::S24);
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("⚠").color(theme.warning.text));
-                ui.label(
-                    egui::RichText::new(warning)
-                        .font(type_scale::META.font_id(ui.ctx()))
-                        .color(theme.warning.text_on_tint),
-                );
-            });
-        });
+    components::Callout::new(Tone::Warning, warning).show(ui);
 }
 
 pub(super) fn show_import_button(
@@ -391,26 +379,21 @@ pub(super) fn show_import_button(
     on_click: impl FnOnce(),
 ) {
     if matches!(state, DiscoveryImportState::Configured) {
-        ui.add_enabled_ui(false, |ui| {
-            TailwindButton::secondary("Already in kubeconfig")
-                // Discovery rows reserve a narrow fixed action column. Keep
-                // the long configured-state label within that column now that
-                // the application-wide default button is more spacious.
-                .size(ButtonSize::Xs)
-                .show(ui)
-        });
-    } else if ui
-        .add_enabled_ui(matches!(state, DiscoveryImportState::Ready), |ui| {
-            TailwindButton::primary(if matches!(state, DiscoveryImportState::Importing) {
-                "Adding…"
-            } else {
-                "Add to kubeconfig"
-            })
-            .size(ButtonSize::Xs)
-            .show(ui)
-            .clicked()
-        })
-        .inner
+        // Discovery rows reserve a narrow fixed action column; the small
+        // size keeps the long configured-state label within it.
+        Button::secondary("Already in kubeconfig")
+            .size(ButtonSize::Sm)
+            .enabled(false)
+            .show(ui);
+    } else if Button::primary(if matches!(state, DiscoveryImportState::Importing) {
+        "Adding…"
+    } else {
+        "Add to kubeconfig"
+    })
+    .size(ButtonSize::Sm)
+    .enabled(matches!(state, DiscoveryImportState::Ready))
+    .show(ui)
+    .clicked()
     {
         on_click();
     }

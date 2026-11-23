@@ -1,4 +1,5 @@
 use super::*;
+use components::tooltip::TooltipExt;
 
 pub(super) fn show_log_window_with_scroll_state(
     ui: &mut egui::Ui,
@@ -14,107 +15,23 @@ pub(super) fn show_log_window_with_scroll_state(
         ctx.copy_text(text);
     }
     request_copy(&ctx, window, log_store);
+    // The status bar shows the counts the search field shows this frame,
+    // before the toolbar starts a pending search.
+    let counts = LogCounts::of(window);
     egui::Panel::top("pod-log-header")
-        .exact_size(90.0)
-        .frame(
-            egui::Frame::new()
-                .fill(theme.surface.panel)
-                .stroke(stroke::divider(&theme))
-                .inner_margin(egui::Margin::symmetric(space::S24 as i8, space::S8 as i8)),
-        )
+        .exact_size(size::HEADER_BAR + size::TOOLBAR)
+        .frame(egui::Frame::NONE)
         .show(ui, |ui| {
-            ui.vertical(|ui| {
-                let header_width = ui.available_width();
-                ui.allocate_ui_with_layout(
-                    egui::vec2(header_width, 36.0),
-                    egui::Layout::left_to_right(egui::Align::Center),
-                    |ui| {
-                        // The title and the subtitle share the title's baseline.
-                        let baseline = type_scale::TITLE
-                            .centred_baseline(ui.available_height(), ui.ctx().pixels_per_point());
-                        let (title, subtitle) = if window.has_multiple_sources() {
-                            (
-                                format!("{} sources", window.targets.len()),
-                                "Interleaved Pod logs".to_owned(),
-                            )
-                        } else {
-                            let target = window
-                                .targets
-                                .first()
-                                .expect("log windows always contain one source");
-                            (
-                                target.pod_name.clone(),
-                                format!("Container: {}", target.container),
-                            )
-                        };
-                        let primary = theme.text.primary;
-                        type_scale::TITLE.label_on_baseline(ui, "Logs", primary, baseline);
-                        ui.add_space(space::S16);
-                        type_scale::TITLE.label_on_baseline(ui, &title, primary, baseline);
-                        ui.add_space(space::S12);
-                        type_scale::BODY.label_on_baseline(
-                            ui,
-                            &subtitle,
-                            theme.text.secondary,
-                            baseline,
-                        );
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            show_log_search_controls(&ctx, ui, window, display_options, log_store)
-                        });
-                    },
-                );
-                ui.add_space(space::S8);
-                ui.allocate_ui_with_layout(
-                    egui::vec2(header_width, 28.0),
-                    egui::Layout::left_to_right(egui::Align::Center),
-                    |ui| {
-                        ui.label(
-                            egui::RichText::new("Container start")
-                                .font(type_scale::BODY.font_id(ui.ctx()))
-                                .color(theme.text.secondary),
-                        );
-                        ui.add_space(space::S8);
-                        for (instance, label) in [
-                            (PodLogInstance::Current, "Current"),
-                            (PodLogInstance::Previous, "Previous"),
-                        ] {
-                            // Switching replaces the window's store, which an
-                            // export in progress still needs.
-                            if ui
-                                .add_enabled(
-                                    !window.export.is_busy(),
-                                    egui::Button::new(label).selected(window.instance == instance),
-                                )
-                                .clicked()
-                            {
-                                window.requested_instance = Some(instance);
-                            }
-                        }
-                        ui.add_space(space::S16);
-                        ui.label(
-                            egui::RichText::new("●")
-                                .font(type_scale::BODY.font_id(ui.ctx()))
-                                .color(theme.tone(status_tone(window)).fill),
-                        );
-                        let all_sources_reconnecting = all_sources_are_reconnecting(window);
-                        if !all_sources_reconnecting {
-                            show_source_issue(ui, &window.source_reconnects, "reconnecting");
-                        }
-                        show_source_issue(ui, &window.source_failures, "unavailable");
-                        let status = ui.label(
-                            egui::RichText::new(status_label(window))
-                                .font(type_scale::BODY.font_id(ui.ctx()))
-                                .color(theme.text.secondary),
-                        );
-                        if all_sources_reconnecting {
-                            status.on_hover_text(source_issue_details(&window.source_reconnects));
-                        }
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            show_export_controls(ui, window, display_options);
-                        });
-                    },
-                );
-            });
+            ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
+            show_log_header(ui, window, display_options);
+            show_log_search_controls(&ctx, ui, window, display_options, log_store);
+        });
+    egui::Panel::bottom("pod-log-status")
+        .exact_size(size::STATUS_BAR)
+        .frame(egui::Frame::NONE)
+        .show(ui, |ui| {
+            ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
+            show_log_status_bar(ui, window.id, counts, display_options);
         });
 
     egui::CentralPanel::default()
@@ -536,17 +453,14 @@ fn show_source_issue(
     if issues.is_empty() {
         return;
     }
-    ui.add_space(space::S12);
-    ui.label(
-        egui::RichText::new(format!(
-            "{} source{} {state}",
-            issues.len(),
-            if issues.len() == 1 { "" } else { "s" }
-        ))
-        .font(type_scale::BODY.font_id(ui.ctx()))
-        .color(theme.warning.text),
-    )
-    .on_hover_text(source_issue_details(issues));
+    let text = format!(
+        "{} source{} {state}",
+        issues.len(),
+        if issues.len() == 1 { "" } else { "s" }
+    );
+    type_scale::META
+        .label(ui, &text, theme.warning.text)
+        .tooltip(source_issue_details(issues));
 }
 
 fn source_issue_details(
@@ -558,4 +472,132 @@ fn source_issue_details(
         .collect::<Vec<_>>();
     details.sort();
     details.join("\n")
+}
+
+/// The window header: the source, its live state, the instance and export.
+fn show_log_header(
+    ui: &mut egui::Ui,
+    window: &mut PodLogWindowState,
+    display_options: &LogDisplayOptions,
+) {
+    let theme = ui.tokens();
+    let (title, meta) = if window.has_multiple_sources() {
+        (
+            format!("{} sources", window.targets.len()),
+            "Interleaved Pod logs".to_owned(),
+        )
+    } else {
+        let target = window
+            .targets
+            .first()
+            .expect("log windows always contain one source");
+        (
+            target.pod_name.clone(),
+            format!("Pod logs · container {}", target.container),
+        )
+    };
+    let label = status_label(window);
+    let headline = status_headline(&label).to_owned();
+    let all_sources_reconnecting = all_sources_are_reconnecting(window);
+    let header = WindowHeader::new(("pod-log", window.id), icons::Icon::DocumentText, &title)
+        .meta(&meta)
+        .status(&headline, status_tone(window))
+        .live_status()
+        .show(ui, |ui| {
+            if !all_sources_reconnecting {
+                show_source_issue(ui, &window.source_reconnects, "reconnecting");
+            }
+            show_source_issue(ui, &window.source_failures, "unavailable");
+            type_scale::META.label(ui, "Container start", theme.text.muted);
+            let mut instance = window.instance;
+            // Switching replaces the window's store, which an export in
+            // progress still needs.
+            if Segmented::new(&mut instance)
+                .option(PodLogInstance::Current, "Current")
+                .option(PodLogInstance::Previous, "Previous")
+                .label("Log instance")
+                .enabled(!window.export.is_busy())
+                .show(ui)
+                .changed()
+            {
+                window.requested_instance = Some(instance);
+            }
+            show_export_controls(ui, window, display_options);
+        });
+    if let Some(status) = header.status {
+        if all_sources_reconnecting {
+            status.tooltip(source_issue_details(&window.source_reconnects));
+        } else if headline != label {
+            status.tooltip(label.as_str());
+        }
+    }
+}
+
+/// The status bar: how many lines the surface holds and matches, and the
+/// time zone of the timestamps.
+fn show_log_status_bar(
+    ui: &mut egui::Ui,
+    window_id: u64,
+    counts: LogCounts,
+    display_options: &LogDisplayOptions,
+) {
+    StatusBar::new(("pod-log", window_id)).show(
+        ui,
+        |ui| {
+            status_number(ui, &line_count_text(counts.lines, LINES));
+            if let Some(matches) = counts.matches {
+                status_number(ui, &line_count_text(matches, MATCHES));
+            }
+        },
+        |ui| {
+            if display_options.show_timestamps {
+                status_text(ui, "UTC");
+            }
+        },
+    );
+}
+
+/// What the status bar counts.
+#[derive(Clone, Copy)]
+struct LogCounts {
+    lines: usize,
+    /// Matches of the search, while there is one.
+    matches: Option<usize>,
+}
+
+impl LogCounts {
+    fn of(window: &PodLogWindowState) -> Self {
+        let search = &window.search;
+        Self {
+            lines: window.total_lines,
+            matches: (!search.query.is_empty() && search.error.is_none())
+                .then_some(search.match_count),
+        }
+    }
+}
+
+/// The nouns of the status bar counts.
+const LINES: [&str; 2] = ["line", "lines"];
+const MATCHES: [&str; 2] = ["match", "matches"];
+
+/// "1,284 lines", "1 match", "12.4k lines" (counts formatted like the
+/// search field's).
+pub(super) fn line_count_text(count: usize, [singular, plural]: [&str; 2]) -> String {
+    let noun = if count == 1 { singular } else { plural };
+    format!("{} {noun}", components::search::format_count(count))
+}
+
+#[cfg(test)]
+mod line_count_tests {
+    use super::{LINES, MATCHES, line_count_text};
+
+    #[test]
+    fn counts_group_thousands_and_agree_in_number() {
+        assert_eq!(line_count_text(0, LINES), "0 lines");
+        assert_eq!(line_count_text(1, LINES), "1 line");
+        assert_eq!(line_count_text(1_284, LINES), "1,284 lines");
+        assert_eq!(line_count_text(12_400, LINES), "12.4k lines");
+        assert_eq!(line_count_text(1, MATCHES), "1 match");
+        assert_eq!(line_count_text(12, MATCHES), "12 matches");
+    }
 }

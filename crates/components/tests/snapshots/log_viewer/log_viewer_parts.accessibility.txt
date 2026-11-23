@@ -1,0 +1,63 @@
+viewport: width=760.0 height=520.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Label value="Pod" rect=(x=8.0 y=21.0 width=37.3 height=22.0 center_x=26.7 center_y=32.0)
+              TextRun value="Pod" rect=(x=17.0 y=24.0 width=19.3 height=16.0 center_x=26.7 center_y=32.0)
+            Label value="api-0" rect=(x=59.3 y=8.0 width=69.3 height=34.0 center_x=94.0 center_y=25.0)
+              TextRun value="api-0" rect=(x=59.3 y=8.0 width=69.3 height=34.0 center_x=94.0 center_y=25.0)
+            Label value="container api · 1.2k lines" rect=(x=59.3 y=42.0 width=157.7 height=14.0 center_x=138.2 center_y=49.0)
+              TextRun value="CONTAINER API · 1.2K LINES" rect=(x=59.3 y=42.0 width=156.8 height=14.0 center_x=137.7 center_y=49.0)
+            Label value="Following" rect=(x=231.0 y=21.0 width=84.6 height=22.0 center_x=273.3 center_y=32.0)
+              TextRun value="Following" rect=(x=254.0 y=24.0 width=52.6 height=16.0 center_x=280.3 center_y=32.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Label value="Pod" rect=(x=8.0 y=81.0 width=37.3 height=22.0 center_x=26.7 center_y=92.0)
+              TextRun value="Pod" rect=(x=17.0 y=84.0 width=19.3 height=16.0 center_x=26.7 center_y=92.0)
+            Label value="api-0" rect=(x=59.3 y=68.0 width=69.3 height=34.0 center_x=94.0 center_y=85.0)
+              TextRun value="api-0" rect=(x=59.3 y=68.0 width=69.3 height=34.0 center_x=94.0 center_y=85.0)
+            Label value="container api · 1.2k lines" rect=(x=59.3 y=102.0 width=157.7 height=14.0 center_x=138.2 center_y=109.0)
+              TextRun value="CONTAINER API · 1.2K LINES" rect=(x=59.3 y=102.0 width=156.8 height=14.0 center_x=137.7 center_y=109.0)
+            Label value="Unavailable" rect=(x=231.0 y=81.0 width=94.7 height=22.0 center_x=278.4 center_y=92.0)
+              TextRun value="Unavailable" rect=(x=254.0 y=84.0 width=62.7 height=16.0 center_x=285.4 center_y=92.0)
+        Label value="Volume · 15 min · 1 error" rect=(x=26.0 y=146.0 width=156.6 height=16.0 center_x=104.3 center_y=154.0)
+          TextRun value="VOLUME · 15 MIN · 1 ERROR" rect=(x=26.0 y=146.0 width=155.5 height=16.0 center_x=103.8 center_y=154.0)
+        GenericContainer rect=<none>
+          Button name="api-1 · reconnecting" rect=(x=568.2 y=142.0 width=141.8 height=24.0 center_x=639.1 center_y=154.0)
+          Button name="api-0 · 1,204" rect=(x=459.9 y=142.0 width=100.4 height=24.0 center_x=510.1 center_y=154.0)
+        GenericContainer rect=<none>
+          Unknown name="Log volume" rect=(x=26.0 y=180.0 width=477.0 height=36.0 center_x=264.5 center_y=198.0)
+          Unknown name="Visible window" rect=(x=266.0 y=176.0 width=96.0 height=44.0 center_x=314.0 center_y=198.0)
+        GenericContainer rect=<none>
+          Label value="ERROR" rect=(x=8.0 y=240.0 width=52.0 height=18.0 center_x=34.0 center_y=249.0)
+            TextRun value="ERROR" rect=(x=18.2 y=241.0 width=31.5 height=16.0 center_x=34.0 center_y=249.0)
+          Label value="WARN" rect=(x=68.0 y=240.0 width=52.0 height=18.0 center_x=94.0 center_y=249.0)
+            TextRun value="WARN" rect=(x=81.4 y=241.0 width=25.2 height=16.0 center_x=94.0 center_y=249.0)
+          Label value="INFO" rect=(x=128.0 y=240.0 width=52.0 height=18.0 center_x=154.0 center_y=249.0)
+            TextRun value="INFO" rect=(x=141.4 y=241.0 width=25.2 height=16.0 center_x=154.0 center_y=249.0)
+          Label value="DEBUG" rect=(x=188.0 y=240.0 width=52.0 height=18.0 center_x=214.0 center_y=249.0)
+            TextRun value="DEBUG" rect=(x=198.2 y=241.0 width=31.5 height=16.0 center_x=214.0 center_y=249.0)
+        GenericContainer rect=<none>
+          Label value="41" rect=(x=51.0 y=270.0 width=15.0 height=22.0 center_x=58.5 center_y=281.0)
+            TextRun value="41" rect=(x=51.0 y=270.0 width=15.0 height=22.0 center_x=58.5 center_y=281.0)
+          Label value="15:20:00.000" rect=(x=74.0 y=270.0 width=90.0 height=22.0 center_x=119.0 center_y=281.0)
+            TextRun value="15:20:00.000" rect=(x=74.0 y=270.0 width=90.0 height=22.0 center_x=119.0 center_y=281.0)
+          Label value="ERROR" rect=(x=172.0 y=272.0 width=52.0 height=18.0 center_x=198.0 center_y=281.0)
+            TextRun value="ERROR" rect=(x=182.2 y=273.0 width=31.5 height=16.0 center_x=198.0 center_y=281.0)
+          Label value="read timeout" rect=(x=232.0 y=270.0 width=90.0 height=22.0 center_x=277.0 center_y=281.0)
+            TextRun value="read timeout" rect=(x=232.0 y=270.0 width=90.0 height=22.0 center_x=277.0 center_y=281.0)
+          Label value="42" rect=(x=51.0 y=292.0 width=15.0 height=22.0 center_x=58.5 center_y=303.0)
+            TextRun value="42" rect=(x=51.0 y=292.0 width=15.0 height=22.0 center_x=58.5 center_y=303.0)
+          Label value="INFO" rect=(x=74.0 y=294.0 width=52.0 height=18.0 center_x=100.0 center_y=303.0)
+            TextRun value="INFO" rect=(x=87.4 y=295.0 width=25.2 height=16.0 center_x=100.0 center_y=303.0)
+          Label value="single source, no pill" rect=(x=134.0 y=292.0 width=165.0 height=22.0 center_x=216.5 center_y=303.0)
+            TextRun value="single source, no pill" rect=(x=134.0 y=292.0 width=165.0 height=22.0 center_x=216.5 center_y=303.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Button name="Only matches" state=[toggled=True] rect=(x=14.0 y=332.0 width=104.9 height=32.0 center_x=66.4 center_y=348.0)
+            Button name="Follow" state=[toggled=False] rect=(x=124.9 y=332.0 width=82.2 height=32.0 center_x=166.0 center_y=348.0)

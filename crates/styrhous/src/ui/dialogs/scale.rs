@@ -5,7 +5,6 @@ pub(crate) fn show_scale_dialog(
     ui_state: &mut UiState,
     commands_to_send: &mut Vec<WorkerCommandBox>,
 ) {
-    let theme = ctx.tokens();
     let Some(cluster_id) = ui_state.selected_cluster else {
         return;
     };
@@ -16,139 +15,83 @@ pub(crate) fn show_scale_dialog(
         return;
     };
 
-    let mut cancel = false;
-    let mut scale_request = None;
-    let dialog_id = egui::Id::new("resource-scale-dialog");
-    let response = components::dialog_modal(ctx, dialog_id, SCALE_DIALOG_WIDTH).show(ctx, |ui| {
-        theme::scope(ui, ThemeScope::Dialog, |ui| {
-            ui.set_width(SCALE_DIALOG_WIDTH);
-            let scope = pending.namespace.as_deref().map_or_else(
-                || "the cluster".to_owned(),
-                |namespace| format!("the {namespace} namespace"),
-            );
-            components::show_dialog_header(
-                ui,
-                &pending.api_resource.kind.to_ascii_uppercase(),
-                &format!("Scale {}", pending.resource_name),
-                &format!(
-                    "Set the desired replica count for this {} in {scope}.",
-                    pending.api_resource.kind
-                ),
-            );
-            ui.add_space(space::S16);
-            ui.label(
-                egui::RichText::new("Desired replicas")
-                    .font(type_scale::BODY_STRONG.font_id(ui.ctx()))
-                    .color(theme.text.primary),
-            );
-            ui.add_space(space::S4);
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 0.0;
-                let field_width = ui.available_width() - 60.0;
-                let desired_replicas = ui.add_sized(
-                    egui::vec2(field_width, 30.0),
-                    egui::TextEdit::singleline(&mut pending.desired_replicas)
-                        .id(egui::Id::new("desired-replicas"))
-                        .frame(
-                            Frame::new()
-                                .fill(theme.components.field_bg)
-                                .stroke(stroke::control(&theme))
-                                .corner_radius(egui::CornerRadius::same(radius::KEY))
-                                .inner_margin(Margin::symmetric(space::S8 as i8, 2)),
-                        )
-                        .font(type_scale::BODY.font_id(ui.ctx()))
-                        .vertical_align(Align::Center),
-                );
-                ui.ctx()
-                    .accesskit_node_builder(desired_replicas.id, |builder| {
-                        builder.set_label("Desired replicas");
-                    });
-                Frame::new()
-                    .fill(theme.control.fill)
-                    .stroke(stroke::control(&theme))
-                    .corner_radius(egui::CornerRadius::same(radius::KEY))
-                    .show(ui, |ui| {
-                        ui.spacing_mut().item_spacing.x = 0.0;
-                        let parsed = pending.desired_replicas.parse::<i32>().ok();
-                        let decrement = show_scale_stepper_button(
-                            ui,
-                            "−",
+    let title = format!("Scale {}?", pending.resource_name);
+    let kind = pending.api_resource.kind.clone();
+    let description = match pending.namespace.as_deref() {
+        Some(namespace) => Prose::new()
+            .plain(format!("Sets the desired replica count of the {kind} "))
+            .strong(pending.resource_name.clone())
+            .plain(" in ")
+            .strong(namespace.to_owned())
+            .plain("."),
+        None => Prose::new()
+            .plain(format!("Sets the desired replica count of the {kind} "))
+            .strong(pending.resource_name.clone())
+            .plain("."),
+    };
+    let current = pending.current_replicas;
+    // The body edits the count; the footer reads it after this frame's edit.
+    let edited = std::cell::Cell::new(None);
+    let response = Dialog::new(
+        egui::Id::new("resource-scale-dialog"),
+        components::icons::Icon::ArrowsUpDown,
+        components::design::theme::Tone::Accent,
+        &title,
+    )
+    .description(description)
+    .show(
+        ctx,
+        |ui| {
+            let valid = parse_replicas(&pending.desired_replicas).is_some();
+            let help = format!("Current: {current} · Min 0");
+            FormField::new("Desired replicas")
+                .help(&help)
+                .error((!valid).then_some("Enter a whole number of zero or greater."))
+                .show(ui, |ui| {
+                    let field = NumberField::new(&mut pending.desired_replicas)
+                        .id_salt("desired-replicas")
+                        .range(0..=i64::from(i32::MAX))
+                        .fallback(i64::from(current))
+                        .accessibility_labels(
+                            "Desired replicas",
                             "Decrease desired replicas",
-                            parsed.is_some_and(|replicas| replicas > 0),
-                        );
-                        ui.separator();
-                        let increment =
-                            show_scale_stepper_button(ui, "+", "Increase desired replicas", true);
-                        if decrement {
-                            pending.desired_replicas = (parsed.unwrap_or_default() - 1).to_string();
-                        }
-                        if increment {
-                            pending.desired_replicas = parsed
-                                .unwrap_or(pending.current_replicas)
-                                .saturating_add(1)
-                                .to_string();
-                        }
-                    });
-            });
-            let replicas = pending
-                .desired_replicas
-                .parse::<i32>()
-                .ok()
-                .filter(|replicas| *replicas >= 0);
-            ui.add_space(space::S8);
-            ui.label(
-                egui::RichText::new(format!(
-                    "Current desired replicas: {}",
-                    pending.current_replicas
-                ))
-                .font(type_scale::BODY.font_id(ui.ctx()))
-                .color(theme.text.muted),
-            );
-            if replicas.is_none() {
-                ui.add_space(space::S4);
-                ui.label(
-                    egui::RichText::new("Enter a whole number of zero or greater.")
-                        .font(type_scale::META.font_id(ui.ctx()))
-                        .color(theme.danger.text),
-                );
-            }
-            ui.add_space(space::S24);
-            ui.separator();
-            ui.add_space(space::S12);
-            ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                if ui
-                    .add_enabled_ui(replicas.is_some(), |ui| {
-                        TailwindButton::primary("Update scale")
-                            .size(ButtonSize::Md)
-                            .show(ui)
-                    })
-                    .inner
-                    .clicked()
-                {
-                    scale_request = replicas.map(|replicas| {
-                        (
-                            pending.api_resource.clone(),
-                            pending.namespace.clone(),
-                            pending.resource_name.clone(),
-                            replicas,
+                            "Increase desired replicas",
                         )
-                    });
-                }
-                if TailwindButton::secondary("Cancel")
-                    .size(ButtonSize::Md)
-                    .show(ui)
-                    .clicked()
-                {
-                    cancel = true;
-                }
-            });
-        })
+                        .invalid(!valid);
+                    let field = field.show(ui);
+                    // The error line and ring read the value from before this
+                    // frame's edit; show the new verdict on the next frame.
+                    if field.response.changed() || field.stepped {
+                        ui.ctx().request_repaint();
+                    }
+                });
+            edited.set(parse_replicas(&pending.desired_replicas));
+        },
+        |ui| {
+            // The confirm button repeats the verb with the new count.
+            let replicas = edited.get();
+            let confirm_label = replicas.map_or_else(
+                || "Scale".to_owned(),
+                |replicas| format!("Scale to {replicas}"),
+            );
+            let scale = Button::primary(confirm_label)
+                .enabled(replicas.is_some())
+                .show(ui)
+                .clicked();
+            let cancel = Button::secondary("Cancel").show(ui).clicked();
+            (scale.then_some(replicas).flatten(), cancel)
+        },
+    );
+    let (replicas, cancel) = response.inner;
+    let scale_request = replicas.map(|replicas| {
+        (
+            pending.api_resource.clone(),
+            pending.namespace.clone(),
+            pending.resource_name.clone(),
+            replicas,
+        )
     });
-
-    let escape_pressed = response.is_top_modal
-        && !response.any_popup_open
-        && ctx.input_mut(|input| input.consume_key(Modifiers::NONE, Key::Escape));
-    if cancel || escape_pressed || scale_request.is_some() {
+    if cancel || response.dismissed || scale_request.is_some() {
         cluster.pending_scale = None;
     }
     if let Some((api_resource, namespace, resource_name, replicas)) = scale_request {
@@ -162,36 +105,11 @@ pub(crate) fn show_scale_dialog(
     }
 }
 
-fn show_scale_stepper_button(ui: &mut egui::Ui, glyph: &str, label: &str, enabled: bool) -> bool {
-    let theme = ui.tokens();
-    let response = ui
-        .add_enabled_ui(enabled, |ui| {
-            let (rect, response) =
-                ui.allocate_exact_size(egui::Vec2::splat(28.0), egui::Sense::click());
-            if response.hovered() {
-                ui.painter().rect_filled(
-                    rect,
-                    egui::CornerRadius::same(radius::KEY),
-                    theme.control.fill_hover,
-                );
-            }
-            ui.painter().text(
-                rect.center(),
-                egui::Align2::CENTER_CENTER,
-                glyph,
-                type_scale::BODY.font_id(ui.ctx()),
-                if enabled {
-                    theme.text.secondary
-                } else {
-                    theme.text.disabled
-                },
-            );
-            response
-        })
-        .inner
-        .with_pointing_hand();
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, label.to_owned())
-    });
-    response.on_hover_text(label).clicked()
+/// The desired replica count `text` holds, if it is a whole number of zero
+/// or more.
+fn parse_replicas(text: &str) -> Option<i32> {
+    text.trim()
+        .parse::<i32>()
+        .ok()
+        .filter(|replicas| *replicas >= 0)
 }

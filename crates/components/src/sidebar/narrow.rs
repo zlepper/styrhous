@@ -136,16 +136,19 @@ impl<'a> NarrowSidebarContent<'a> {
         self.core.avatar_item(text, initial, selected)
     }
 
-    /// Add an avatar item with caller-provided tooltip text.
+    /// Add an avatar item with caller-provided tooltip text and, for a
+    /// cluster, its connection state as a status square (see
+    /// [`crate::Avatar::status`]).
     pub fn avatar_item_with_tooltip(
         &mut self,
         text: impl Into<WidgetText>,
         initial: &str,
         tooltip: &str,
         selected: bool,
+        status: impl Into<Option<crate::design::theme::Tone>>,
     ) -> Response {
         self.core
-            .avatar_item_with_tooltip(text, initial, selected, Some(tooltip))
+            .avatar_item_with_tooltip(text, initial, selected, Some(tooltip), status.into())
     }
 
     /// Add a visual separator line

@@ -1,5 +1,6 @@
 use super::*;
-use crate::test_support::UiHarnessSnapshot;
+use crate::test_support::{UiHarnessSnapshot, primary_click, primary_press, primary_release};
+use crate::{BulkSelectionBar, CellAlign, HeaderState, column_visibility_menu};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use std::cell::RefCell;
@@ -67,7 +68,7 @@ fn test_table_basic() {
     let users = test_users();
 
     let mut harness = Harness::new_ui(|ui| {
-        TailwindTable::new("users-table")
+        Table::new("users-table")
             .column("name", "Name", |col| col.initial_width(150.0))
             .column("title", "Title", |col| col.initial_width(150.0))
             .column("email", "Email", |col| col.initial_width(200.0))
@@ -94,7 +95,7 @@ fn test_table_alternating_rows() {
     let users = test_users();
 
     let mut harness = Harness::new_ui(|ui| {
-        TailwindTable::new("users-alternating")
+        Table::new("users-alternating")
             .column("name", "Name", |col| col.initial_width(200.0))
             .column("email", "Email", |col| col.initial_width(250.0))
             .show(ui, &users, |ui, user, col_index| {
@@ -118,7 +119,7 @@ fn test_table_with_selection() {
     let mut selection: HashSet<u32> = HashSet::new();
 
     let mut harness = Harness::new_ui(|ui| {
-        TailwindTable::new("users-selection")
+        Table::new("users-selection")
             .column("name", "Name", |col| col.initial_width(150.0))
             .column("title", "Title", |col| col.initial_width(150.0))
             .selectable()
@@ -152,7 +153,7 @@ fn selectable_table_toggles_rows_and_only_visible_rows_from_its_header() {
     let selected_for_ui = selected.clone();
     let visible_users = &users[..2];
     let mut harness = Harness::new_ui(move |ui| {
-        TailwindTable::new("users-selection-interactions")
+        Table::new("users-selection-interactions")
             .column("name", "Name", |col| col.initial_width(150.0))
             .selectable()
             .show_selectable(
@@ -166,15 +167,15 @@ fn selectable_table_toggles_rows_and_only_visible_rows_from_its_header() {
 
     crate::test_support::setup_egui(&mut harness);
     harness.run();
-    harness.get_by_label("Select row 1").click_accesskit();
+    harness.get_by_label("Select row 1").click();
     harness.run();
     assert_eq!(*selected.borrow(), HashSet::from([1, 3]));
 
-    harness.get_by_label("Select all rows").click_accesskit();
+    harness.get_by_label("Select all rows").click();
     harness.run();
     assert_eq!(*selected.borrow(), HashSet::from([1, 2, 3]));
 
-    harness.get_by_label("Select all rows").click_accesskit();
+    harness.get_by_label("Select all rows").click();
     harness.run();
     assert_eq!(*selected.borrow(), HashSet::from([3]));
 }
@@ -186,7 +187,7 @@ fn test_table_select_all() {
     let mut selection: HashSet<u32> = users.iter().map(|u| u.id).collect();
 
     let mut harness = Harness::new_ui(|ui| {
-        TailwindTable::new("users-select-all")
+        Table::new("users-select-all")
             .column("name", "Name", |col| col.initial_width(150.0))
             .column("title", "Title", |col| col.initial_width(150.0))
             .selectable()
@@ -220,7 +221,7 @@ fn test_table_select_all_indeterminate() {
     selection.insert(3);
 
     let mut harness = Harness::new_ui(|ui| {
-        TailwindTable::new("users-indeterminate")
+        Table::new("users-indeterminate")
             .column("name", "Name", |col| col.initial_width(150.0))
             .column("title", "Title", |col| col.initial_width(150.0))
             .selectable()
@@ -274,7 +275,7 @@ fn test_table_sorting() {
     let users = test_users();
     let mut harness = Harness::new_ui(|ui| {
         let mut sort_state: Option<SortState> = None;
-        TailwindTable::new("users-sortable")
+        Table::new("users-sortable")
             .column("name", "Name", |col| col.sortable().initial_width(150.0))
             .column("title", "Title", |col| col.sortable().initial_width(150.0))
             .column("email", "Email", |col| col.initial_width(200.0)) // Not sortable
@@ -299,7 +300,7 @@ fn test_table_sorting() {
     sort_users(&mut users, &sort_state);
 
     let mut harness = Harness::new_ui(|ui| {
-        TailwindTable::new("users-sort-name-asc")
+        Table::new("users-sort-name-asc")
             .column("name", "Name", |col| col.sortable().initial_width(150.0))
             .column("title", "Title", |col| col.sortable().initial_width(150.0))
             .column("email", "Email", |col| col.initial_width(200.0))
@@ -323,7 +324,7 @@ fn test_table_sorting() {
     sort_users(&mut users, &sort_state);
 
     let mut harness = Harness::new_ui(|ui| {
-        TailwindTable::new("users-sort-title-desc")
+        Table::new("users-sort-title-desc")
             .column("name", "Name", |col| col.sortable().initial_width(150.0))
             .column("title", "Title", |col| col.sortable().initial_width(150.0))
             .column("email", "Email", |col| col.initial_width(200.0))
@@ -348,7 +349,7 @@ fn test_table_column_toggle_menu() {
     let hidden_columns: HashSet<String> = HashSet::new();
 
     let mut harness = Harness::new_ui(|ui| {
-        TailwindTable::new("users-column-toggle")
+        Table::new("users-column-toggle")
             .column("name", "Name", |col| col.initial_width(150.0))
             .column("title", "Title", |col| col.initial_width(150.0))
             .column("email", "Email", |col| col.initial_width(200.0))
@@ -375,7 +376,7 @@ fn test_table_hidden_column() {
     hidden_columns.insert("title".to_string()); // Hide the Title column
 
     let mut harness = Harness::new_ui(|ui| {
-        TailwindTable::new("users-hidden-column")
+        Table::new("users-hidden-column")
             .column("name", "Name", |col| col.initial_width(150.0))
             .column("title", "Title", |col| col.initial_width(150.0))
             .column("email", "Email", |col| col.initial_width(200.0))
@@ -401,7 +402,7 @@ fn configurable_table_preserves_header_and_row_accessibility_targets() {
     let clicked_headers = Rc::new(RefCell::new(Vec::new()));
     let clicked_headers_for_ui = clicked_headers.clone();
     let mut harness = Harness::new_ui(move |ui| {
-        TailwindTable::new("configurable-accessibility")
+        Table::new("configurable-accessibility")
             .column("name", "Name", |column| {
                 column.sortable().initial_width(150.0)
             })
@@ -437,7 +438,7 @@ fn configurable_table_invokes_each_row_callback_for_its_cell() {
     let callback_cells = Rc::new(RefCell::new(Vec::new()));
     let callback_cells_for_ui = callback_cells.clone();
     let mut harness = Harness::new_ui(move |ui| {
-        TailwindTable::new("configurable-row-callbacks")
+        Table::new("configurable-row-callbacks")
             .column("name", "Name", |column| column.initial_width(150.0))
             .column("title", "Title", |column| column.initial_width(150.0))
             .show_configurable_with_row_response(
@@ -484,7 +485,7 @@ fn selectable_configurable_table_only_selects_rows_with_keys() {
     let clicked_headers_for_ui = clicked_headers.clone();
     let visible_users = &users[..3];
     let mut harness = Harness::new_ui(move |ui| {
-        TailwindTable::new("selectable-configurable-keys")
+        Table::new("selectable-configurable-keys")
             .column("name", "Name", |column| column.initial_width(150.0))
             .selectable()
             .show_selectable_configurable_with_row_response(
@@ -531,7 +532,7 @@ fn selectable_configurable_table_ignores_a_press_that_started_outside_its_checkb
     let selected = Rc::new(RefCell::new(HashSet::new()));
     let selected_for_ui = selected.clone();
     let mut harness = Harness::new_ui(move |ui| {
-        TailwindTable::new("selectable-configurable-press-origin")
+        Table::new("selectable-configurable-press-origin")
             .column("name", "Name", |column| column.initial_width(150.0))
             .selectable()
             .show_selectable_configurable_with_row_response(
@@ -578,27 +579,481 @@ fn selectable_configurable_table_ignores_a_press_that_started_outside_its_checkb
     assert_eq!(*selected.borrow(), HashSet::from([1]));
 }
 
-fn primary_click<State>(harness: &mut Harness<'_, State>, position: egui::Pos2) {
-    primary_press(harness, position);
-    primary_release(harness, position);
+/// A table of `users` with a selectable column and a name column, sharing
+/// `selected` with the test.
+fn selectable_users_harness(selected: Rc<RefCell<HashSet<u32>>>) -> Harness<'static> {
+    let users = test_users();
+    let mut harness = Harness::new_ui(move |ui| {
+        Table::new("users-range")
+            .column("name", "Name", |col| col.initial_width(200.0))
+            .selectable()
+            .show_selectable(
+                ui,
+                &users,
+                &mut selected.borrow_mut(),
+                |user| user.id,
+                |ui, user, _| TableRowBuilder::text(ui, &user.name, true),
+            );
+    });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+    harness
 }
 
-fn primary_press<State>(harness: &mut Harness<'_, State>, position: egui::Pos2) {
-    harness.event(egui::Event::PointerMoved(position));
-    harness.event(egui::Event::PointerButton {
-        pos: position,
-        button: egui::PointerButton::Primary,
-        pressed: true,
-        modifiers: egui::Modifiers::default(),
-    });
+/// Click at `position` with Shift held, then release Shift.
+fn shift_click(harness: &mut Harness<'_>, position: egui::Pos2) {
+    harness.event(egui::Event::ModifiersChanged(egui::Modifiers::SHIFT));
+    primary_click(harness, position);
+    harness.run();
+    harness.event(egui::Event::ModifiersChanged(egui::Modifiers::NONE));
+    harness.run();
 }
 
-fn primary_release<State>(harness: &mut Harness<'_, State>, position: egui::Pos2) {
-    harness.event(egui::Event::PointerMoved(position));
-    harness.event(egui::Event::PointerButton {
-        pos: position,
-        button: egui::PointerButton::Primary,
-        pressed: false,
-        modifiers: egui::Modifiers::default(),
+#[test]
+fn shift_clicking_a_checkbox_selects_the_range_from_the_last_clicked_row() {
+    let selected = Rc::new(RefCell::new(HashSet::new()));
+    let mut harness = selectable_users_harness(selected.clone());
+    harness.get_by_label("Select row 2").click();
+    harness.run();
+
+    let fifth = harness.get_by_label("Select row 5").rect().center();
+    shift_click(&mut harness, fifth);
+    assert_eq!(*selected.borrow(), HashSet::from([2, 3, 4, 5]));
+
+    let third = harness.get_by_label("Select row 3").rect().center();
+    shift_click(&mut harness, third);
+    assert_eq!(
+        *selected.borrow(),
+        HashSet::from([2]),
+        "shift-clicking a selected row deselects the range"
+    );
+}
+
+#[test]
+fn clicking_a_sortable_header_cycles_ascending_descending_and_default() {
+    assert_eq!(
+        SortState::after_click(None, "name").map(|state| state.direction),
+        Some(SortDirection::Ascending)
+    );
+    let ascending = SortState::new("name", SortDirection::Ascending);
+    assert_eq!(
+        SortState::after_click(Some(&ascending), "name").map(|state| state.direction),
+        Some(SortDirection::Descending)
+    );
+    let descending = SortState::new("name", SortDirection::Descending);
+    assert!(SortState::after_click(Some(&descending), "name").is_none());
+    assert_eq!(
+        SortState::after_click(Some(&descending), "title").map(|state| state.column_id),
+        Some("title".to_owned())
+    );
+
+    let users = test_users();
+    let sort = Rc::new(RefCell::new(None::<SortState>));
+    let sort_in_ui = sort.clone();
+    let mut harness = Harness::new_ui(move |ui| {
+        Table::new("users-cycle")
+            .column("name", "Name", |col| col.sortable().initial_width(150.0))
+            .show_sortable(ui, &users, &mut sort_in_ui.borrow_mut(), |ui, user, _| {
+                TableRowBuilder::text(ui, &user.name, true);
+            });
     });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+    harness.get_by_label("Sort by Name").click();
+    harness.run();
+    harness
+        .get_by_label("Sort by Name; currently ascending")
+        .click();
+    harness.run();
+    harness
+        .get_by_label("Sort by Name; currently descending")
+        .click();
+    harness.run();
+    assert!(sort.borrow().is_none());
+}
+
+#[test]
+fn rows_show_hover_selection_and_inspection_as_tile_fills() {
+    let users = test_users();
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(520.0, 300.0))
+        .build_ui(move |ui| {
+            ui.set_max_width(520.0);
+            let mut selected = HashSet::from([2, 3]);
+            Table::new("users-row-states")
+                .column("name", "Name", |col| col.sortable().fill_remaining())
+                .column("restarts", "Restarts", |col| {
+                    col.numeric().initial_width(88.0)
+                })
+                .column("cpu", "CPU", |col| col.numeric().initial_width(80.0))
+                .column("actions", "", |col| {
+                    col.align(CellAlign::Center).initial_width(48.0)
+                })
+                .selectable()
+                .inspected_row(Some(4))
+                .force_row_hovered(1)
+                .force_header_state("restarts", HeaderState::Hovered)
+                .show_selectable(
+                    ui,
+                    &users,
+                    &mut selected,
+                    |user| user.id,
+                    |ui, user, column| match column {
+                        0 => TableRowBuilder::text(ui, &user.name, true),
+                        1 => TableRowBuilder::number(ui, &user.id.to_string()),
+                        2 if user.id % 2 == 0 => TableRowBuilder::number(ui, "12m"),
+                        2 => TableRowBuilder::missing(ui, "Metrics server not available"),
+                        _ => {
+                            crate::MoreButton::new(format!("More actions for {}", user.name))
+                                .show(ui, |_| {});
+                        }
+                    },
+                );
+        });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+
+    let name = harness.get_by_label("Lindsay Walton").rect();
+    let number = harness.get_by_label("1").rect();
+    let actions = harness
+        .get_by_label("More actions for Lindsay Walton")
+        .rect();
+    assert_eq!(name.center().y, number.center().y);
+    assert_eq!(name.center().y, actions.center().y);
+    harness.ui_harness("tables/rows_show_hover_selection_and_inspection_as_tile_fills");
+
+    let missing = |harness: &Harness<'_>| {
+        harness
+            .get_all_by_label("Metrics server not available")
+            .count()
+    };
+    let cells = missing(&harness);
+    harness
+        .get_all_by_label("Metrics server not available")
+        .next()
+        .expect("a missing value")
+        .hover();
+    harness.run();
+    assert_eq!(
+        missing(&harness),
+        cells + 1,
+        "the em dash explains itself in a tooltip"
+    );
+}
+
+#[test]
+fn bulk_selection_bar_counts_the_selection_and_clears_it() {
+    let cleared = Rc::new(RefCell::new(0));
+    let cleared_in_ui = cleared.clone();
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(720.0, 60.0))
+        .build_ui(move |ui| {
+            ui.add_space(8.0);
+            ui.set_max_width(720.0);
+            let response = BulkSelectionBar::new(2, 6).show(ui, |ui| {
+                crate::Button::danger_quiet("Delete")
+                    .leading_icon(crate::icons::Icon::Trash)
+                    .size(crate::ButtonSize::Sm)
+                    .show(ui);
+            });
+            if response.clear {
+                *cleared_in_ui.borrow_mut() += 1;
+            }
+        });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+    harness.ui_harness("tables/bulk_selection_bar_counts_the_selection_and_clears_it");
+
+    harness.get_by_label("Clear selection").click();
+    harness.run();
+    harness.get_by_label("Selected rows").click();
+    harness.run();
+    assert_eq!(*cleared.borrow(), 2);
+}
+
+#[test]
+fn column_visibility_menu_toggles_columns_and_resets() {
+    let hidden = Rc::new(RefCell::new(HashSet::from(["owner".to_owned()])));
+    let reset = Rc::new(RefCell::new(false));
+    let (hidden_in_ui, reset_in_ui) = (hidden.clone(), reset.clone());
+    let mut harness = Harness::new_ui(move |ui| {
+        crate::MoreButton::new("Columns").show(ui, |menu| {
+            let response = column_visibility_menu(
+                menu,
+                &[("name", "Name"), ("owner", "Owner"), ("age", "Age")],
+                &mut hidden_in_ui.borrow_mut(),
+            );
+            *reset_in_ui.borrow_mut() |= response.reset;
+        });
+    });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+    harness.get_by_label("Columns").click();
+    harness.run();
+    harness.get_by_label("Owner").click();
+    harness.run();
+    harness.get_by_label("Age").click();
+    harness.run();
+    assert_eq!(*hidden.borrow(), HashSet::from(["age".to_owned()]));
+
+    harness.get_by_label("Reset to default").click();
+    harness.run();
+    assert!(*reset.borrow());
+}
+
+#[test]
+fn loading_tables_show_skeleton_rows_under_their_header() {
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(420.0, 140.0))
+        .build_ui(|ui| {
+            ui.set_max_width(420.0);
+            Table::new("loading")
+                .column("name", "Name", |col| {
+                    col.initial_width(200.0).skeleton_width(150.0)
+                })
+                .column("status", "Status", |col| col.initial_width(112.0))
+                .column("age", "Age", |col| col.numeric().initial_width(80.0))
+                .show_loading(ui, 3, "Loading pods");
+        });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+    harness.ui_harness("tables/loading_tables_show_skeleton_rows_under_their_header");
+}
+
+#[test]
+fn resizing_a_column_stops_at_the_minimum_width() {
+    let users = test_users();
+    let width = Rc::new(RefCell::new(150.0_f32));
+    let width_in_ui = width.clone();
+    let mut harness = Harness::new_ui(move |ui| {
+        let current = *width_in_ui.borrow();
+        Table::new("users-resize")
+            .column("name", "Name", |col| col.initial_width(current))
+            .column("title", "Title", |col| col.initial_width(150.0))
+            .show_configurable_with_row_response(
+                ui,
+                &users,
+                None,
+                |_, _, _, _| {},
+                |_, new_width| *width_in_ui.borrow_mut() = new_width,
+                |ui, user, _| TableRowBuilder::text(ui, &user.name, true),
+                |_, _, _| {},
+            );
+    });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+    let handle = harness.get_by_label("Resize Name column").rect().center();
+    harness.drag_at(handle);
+    harness.run();
+    harness.hover_at(handle + egui::vec2(-40.0, 0.0));
+    harness.run();
+    assert_eq!(*width.borrow(), 110.0);
+    harness.hover_at(handle + egui::vec2(-400.0, 0.0));
+    harness.run();
+    harness.drop_at(handle + egui::vec2(-400.0, 0.0));
+    harness.run();
+    assert_eq!(*width.borrow(), 48.0);
+}
+
+#[test]
+fn numbers_use_tabular_figures_only_in_tabular_columns() {
+    let mut harness = Harness::new_ui(|ui| {
+        Table::new("figures")
+            .column("proportional", "Proportional", |col| {
+                col.numeric().initial_width(120.0)
+            })
+            .column("tabular", "Tabular", |col| {
+                col.numeric().tabular().initial_width(120.0)
+            })
+            .show(ui, &["111"], |ui, value, _| {
+                TableRowBuilder::number(ui, value)
+            });
+    });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+    let widths: Vec<f32> = harness
+        .get_all_by_label("111")
+        .map(|node| node.rect().width())
+        .collect();
+    assert_eq!(widths.len(), 2);
+    assert!(
+        widths[1] > widths[0],
+        "tabular ones are wider than proportional ones: {widths:?}"
+    );
+}
+
+#[test]
+fn configurable_tables_report_a_clicked_sortable_header() {
+    let users = test_users();
+    let sorted_by = Rc::new(RefCell::new(Vec::new()));
+    let sorted_by_ui = sorted_by.clone();
+    let mut harness = Harness::new_ui(move |ui| {
+        let clicked = Table::new("configurable-sort")
+            .column("name", "Name", |column| {
+                column.sortable().initial_width(150.0)
+            })
+            .column("title", "Title", |column| column.initial_width(150.0))
+            .show_configurable_with_row_response(
+                ui,
+                &users,
+                None,
+                |_, _, _, _| {},
+                |_, _| {},
+                |ui, user, column| match column {
+                    0 => TableRowBuilder::text(ui, &user.name, true),
+                    _ => TableRowBuilder::text(ui, &user.title, false),
+                },
+                |_, _, _| {},
+            );
+        sorted_by_ui.borrow_mut().extend(clicked);
+    });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+
+    harness.get_by_label("Name column").click();
+    harness.run();
+    harness.get_by_label("Title column").click();
+    harness.run();
+    assert_eq!(
+        *sorted_by.borrow(),
+        ["name"],
+        "only the sortable column asks to sort"
+    );
+}
+
+#[test]
+fn selectable_loading_rows_keep_the_checkbox_column_and_skip_unlabelled_columns() {
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(420.0, 140.0))
+        .build_ui(|ui| {
+            ui.set_max_width(420.0);
+            Table::new("loading-selectable")
+                .column("name", "Name", |col| col.fill_remaining())
+                .column("actions", "", |col| {
+                    col.initial_width(crate::design::size::TABLE_ACTIONS_COLUMN)
+                        .align(CellAlign::Center)
+                })
+                .selectable()
+                .show_loading(ui, 3, "Loading pods");
+        });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+
+    let loading = harness.get_by_label("Loading pods").rect();
+    let name = harness
+        .get_by_role_and_label(egui::accesskit::Role::ColumnHeader, "Name")
+        .rect();
+    assert_eq!(
+        name.left() - loading.left(),
+        crate::design::size::TABLE_CHECKBOX_COLUMN,
+        "the Name column starts after the empty checkbox column"
+    );
+    harness.ui_harness(
+        "tables/selectable_loading_rows_keep_the_checkbox_column_and_skip_unlabelled_columns",
+    );
+}
+
+#[test]
+fn container_squares_describe_each_container_in_a_key_value_tooltip() {
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(360.0, 160.0))
+        .build_ui(|ui| {
+            ui.add_space(100.0);
+            ui.horizontal(|ui| {
+                ui.add_space(150.0);
+                TableRowBuilder::containers(
+                    ui,
+                    [
+                        (
+                            crate::design::theme::Tone::Success,
+                            "Container: api",
+                            crate::tooltip::TooltipContent::KeyValues(&[
+                                ("Container", "api"),
+                                ("State", "Running"),
+                            ]),
+                        ),
+                        (
+                            crate::design::theme::Tone::Warning,
+                            "Container: sidecar",
+                            crate::tooltip::TooltipContent::KeyValues(&[
+                                ("Container", "sidecar"),
+                                ("State", "Waiting · ContainerCreating"),
+                            ]),
+                        ),
+                    ],
+                );
+            });
+        });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+    assert!(
+        harness
+            .query_by_label(" Waiting · ContainerCreating")
+            .is_none()
+    );
+
+    harness.get_by_label("Container: sidecar").hover();
+    harness.run();
+    harness.get_by_label(" Waiting · ContainerCreating");
+    assert!(
+        harness.query_by_label(" Running").is_none(),
+        "only the hovered container is described"
+    );
+}
+
+// C17
+const GROUP_A: [&str; 3] = ["a-0", "a-1", "a-2"];
+const GROUP_B: [&str; 2] = ["b-0", "b-1"];
+
+#[test]
+fn a_grouped_table_selects_the_rows_it_shows_and_ranges_within_a_group() {
+    let selected = Rc::new(RefCell::new(HashSet::<&str>::new()));
+    let expanded = Rc::new(std::cell::Cell::new(false));
+    let (set, open) = (selected.clone(), expanded.clone());
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(400.0, 400.0))
+        .build_ui(move |ui| {
+            let _ = Table::new("groups")
+                .column("name", "Name", |col| col.initial_width(200.0))
+                .selectable()
+                .show_grouped(
+                    ui,
+                    vec![
+                        crate::TableGroup::new(crate::GroupHeader::new("a", 3), &GROUP_A[..]),
+                        crate::TableGroup::new(crate::GroupHeader::new("b", 2), &GROUP_B[..])
+                            .expanded(open.get()),
+                    ],
+                    Some(&mut set.borrow_mut()),
+                    |name: &&str| Some(*name),
+                    None,
+                    |_| None,
+                    |ui, name, _| TableRowBuilder::text(ui, name, true),
+                );
+        });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+
+    harness.get_by_label("Select all rows").click();
+    harness.run();
+    assert_eq!(
+        *selected.borrow(),
+        HashSet::from(GROUP_A),
+        "the rows of a collapsed group are not selected"
+    );
+
+    selected.borrow_mut().clear();
+    expanded.set(true);
+    harness.run();
+    harness.get_by_label("Select row 3").click();
+    harness.run();
+    let b_1 = harness.get_by_label("Select row 5").rect().center();
+    shift_click(&mut harness, b_1);
+    assert_eq!(
+        *selected.borrow(),
+        HashSet::from(["a-2", "b-1"]),
+        "a range does not reach from one group into another"
+    );
+    let b_0 = harness.get_by_label("Select row 4").rect().center();
+    shift_click(&mut harness, b_0);
+    assert_eq!(*selected.borrow(), HashSet::from(["a-2", "b-0", "b-1"]));
 }

@@ -193,8 +193,6 @@ fn resource_navigation_selects_primary_curated_gateway_and_other_resources() {
         Some("httproutes")
     );
 
-    harness.get_by_label("Other Resources").click_accesskit();
-    harness.run();
     harness.get_by_label("apps").click_accesskit();
     harness.run();
     harness
@@ -602,7 +600,7 @@ fn scale_update_for_another_resource_keeps_the_scale_dialog_the_user_is_editing(
         .expect("resource-b's scale dialog must stay open");
     assert_eq!(pending.resource_name, "resource-b");
     assert_eq!(pending.desired_replicas, "7");
-    harness.get_by_label("Scale resource-b");
+    harness.get_by_label("Scale resource-b?");
 }
 
 #[test]
@@ -620,7 +618,7 @@ fn late_scale_fetch_does_not_replace_the_open_scale_dialog() {
         .expect("resource-b's scale dialog must stay open");
     assert_eq!(pending.resource_name, "resource-b");
     assert_eq!(pending.desired_replicas, "7");
-    harness.get_by_label("Scale resource-b");
+    harness.get_by_label("Scale resource-b?");
 }
 
 #[test]
@@ -634,7 +632,7 @@ fn only_the_latest_scale_fetch_opens_the_scale_dialog() {
     assert!(harness.cluster(1).pending_scale.is_none());
 
     harness.deliver_worker_result(scale_fetched("resource-b", second, 5));
-    harness.get_by_label("Scale resource-b");
+    harness.get_by_label("Scale resource-b?");
     assert_eq!(
         harness
             .cluster(1)
@@ -697,7 +695,7 @@ fn scale_fetch_failures_are_recorded_and_only_the_awaited_one_cancels_the_lookup
     harness.deliver_worker_result(scale_fetch_failed("resource-a", stale));
     assert_eq!(harness.cluster(1).operation_history.len(), 1);
     harness.deliver_worker_result(scale_fetched("resource-b", awaited, 4));
-    harness.get_by_label("Scale resource-b");
+    harness.get_by_label("Scale resource-b?");
 
     let mut harness = application_harness_with_cluster(connected_cluster());
     let awaited = request_scale(&mut harness, "resource-b");
@@ -738,7 +736,7 @@ fn harness_with_scalable_inspector() -> Harness<'static, MyEguiApp<MockWorker>> 
 fn click_scale_in_inspector(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) -> u64 {
     harness.get_by_label("More actions for settings").click();
     harness.run();
-    harness.get_by_label("Scale").click();
+    harness.get_by_label("Scale…").click();
     harness.run();
     harness
         .state()
@@ -766,7 +764,7 @@ fn scale_requested_from_the_inspector_opens_the_scale_dialog() {
 
     harness.deliver_worker_result(inspector_scale_fetched(request_id));
 
-    harness.get_by_label("Scale settings");
+    harness.get_by_label("Scale settings?");
     assert!(harness.cluster(2).pending_scale.is_some());
 }
 

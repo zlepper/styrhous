@@ -71,10 +71,28 @@ fn display_toggles_update_the_shared_options() {
     );
     assert!(window.borrow().show_source_labels);
     assert!(!window.borrow().tail.is_following());
+    let pressed = |harness: &Harness<'_>, label: &str| {
+        use egui_kittest::kittest::NodeT as _;
+        harness.get_by_label(label).accesskit_node().toggled()
+            == Some(egui::accesskit::Toggled::True)
+    };
+    // The toolbar toggles announce their pressed state.
+    harness.run();
+    for (label, expected) in [
+        ("Show log line numbers", true),
+        ("Show Kubernetes log timestamps", true),
+        ("Render ANSI styling", false),
+        ("Show log source labels", true),
+        ("Lock to bottom", false),
+    ] {
+        assert_eq!(pressed(&harness, label), expected, "{label}");
+    }
 
     harness.get_by_label("Lock to bottom").click();
     harness.run();
     assert!(window.borrow().tail.is_following());
+    harness.run();
+    assert!(pressed(&harness, "Lock to bottom"));
 
     harness.get_by_label("Previous matching line").click();
     harness.run();
@@ -624,6 +642,18 @@ fn status_label_compacts_history_spool_progress() {
     assert_eq!(status_label(&window), "Following · backfill 12.3k");
     window.backfill_lines = Some(1_250_000);
     assert_eq!(status_label(&window), "Following · backfill 1.2M");
+}
+
+#[test]
+fn the_status_pill_reads_the_headline_and_keeps_error_detail_for_its_tooltip() {
+    assert_eq!(
+        status_headline("Stream failed: connection reset"),
+        "Stream failed"
+    );
+    assert_eq!(
+        status_headline("Following · backfill 12.3k"),
+        "Following · backfill 12.3k"
+    );
 }
 
 #[test]

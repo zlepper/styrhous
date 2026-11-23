@@ -1,0 +1,114 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Label value="C15 · COMPONENTS::{CODESURFACE, COMPLETION, DIAGNOSTICS}" rect=(x=48.0 y=40.0 width=375.2 height=16.0 center_x=235.6 center_y=48.0)
+            TextRun value="C15 · COMPONENTS::{CODESURFACE, COMPLETION, DIAGNOSTICS}" rect=(x=48.0 y=40.0 width=374.2 height=16.0 center_x=235.1 center_y=48.0)
+          Label value="Code surface" rect=(x=48.0 y=60.0 width=175.4 height=36.0 center_x=135.7 center_y=78.0)
+            TextRun value="Code surface" rect=(x=48.0 y=60.0 width=175.7 height=36.0 center_x=135.8 center_y=78.0)
+          Label value="Shared monospaced surface for logs and YAML: 13/20 IBM Plex Mono on code-surface, 56 px gutter, one-row highlight model. Popovers on the code surface use the same raised popover as the rest of the app." rect=(x=48.0 y=102.0 width=897.5 height=40.0 center_x=496.7 center_y=122.0)
+            TextRun value="Shared monospaced surface for logs and YAML: 13/20 IBM Plex Mono on code-surface, 56 px gutter, one-row highlight model. Popovers on the " rect=(x=48.0 y=102.0 width=897.5 height=20.0 center_x=496.7 center_y=112.0)
+            TextRun value="code surface use the same raised popover as the rest of the app." rect=(x=48.0 y=122.0 width=404.9 height=20.0 center_x=250.5 center_y=132.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="LOG LINES — GUTTER, TIMESTAMP, LEVEL, MATCH, ACTIVE MATCH, SELECTION, CARET, HOVER, LOADING ROW" rect=(x=48.0 y=168.0 width=614.9 height=16.0 center_x=355.4 center_y=176.0)
+                  TextRun value="LOG LINES — GUTTER, TIMESTAMP, LEVEL, MATCH, ACTIVE MATCH, SELECTION, CARET, HOVER, LOADING ROW" rect=(x=48.0 y=168.0 width=613.8 height=16.0 center_x=354.9 center_y=176.0)
+                Label value="2026-11-22T15:22:18Z  INFO  server: listening on 0.0.0.0:8080" rect=(x=104.0 y=208.0 width=475.8 height=20.0 center_x=341.9 center_y=218.0)
+                  TextRun value="2026-11-22T15:22:18Z  INFO  server: listening on 0.0.0.0:8080" rect=(x=104.0 y=208.0 width=475.8 height=20.0 center_x=341.9 center_y=218.0)
+                Label value="2026-11-22T15:22:18Z  INFO  http: GET /healthz 200 2ms" rect=(x=104.0 y=228.0 width=421.2 height=20.0 center_x=314.6 center_y=238.0)
+                  TextRun value="2026-11-22T15:22:18Z  INFO  http: GET /healthz 200 2ms" rect=(x=104.0 y=228.0 width=421.2 height=20.0 center_x=314.6 center_y=238.0)
+                Label value="2026-11-22T15:22:19Z  WARN  cache: refreshing stale entry widgets:featured" rect=(x=104.0 y=248.0 width=577.2 height=20.0 center_x=392.6 center_y=258.0)
+                  TextRun value="2026-11-22T15:22:19Z  WARN  cache: refreshing stale entry widgets:featured" rect=(x=104.0 y=248.0 width=577.2 height=20.0 center_x=392.6 center_y=258.0)
+                Label value="2026-11-22T15:22:19Z  INFO  http: POST /v1/widgets 201 38ms" rect=(x=104.0 y=268.0 width=460.2 height=20.0 center_x=334.1 center_y=278.0)
+                  TextRun value="2026-11-22T15:22:19Z  INFO  http: POST /v1/widgets 201 38ms" rect=(x=104.0 y=268.0 width=460.2 height=20.0 center_x=334.1 center_y=278.0)
+                Label value="2026-11-22T15:22:20Z  ERROR worker: job 42 failed: context deadline exceeded" rect=(x=104.0 y=288.0 width=592.8 height=20.0 center_x=400.4 center_y=298.0)
+                  TextRun value="2026-11-22T15:22:20Z  ERROR worker: job 42 failed: context deadline exceeded" rect=(x=104.0 y=288.0 width=592.8 height=20.0 center_x=400.4 center_y=298.0)
+                Label value="2026-11-22T15:22:20Z  DEBUG metrics: flushed 18 samples" rect=(x=104.0 y=308.0 width=429.0 height=20.0 center_x=318.5 center_y=318.0)
+                  TextRun value="2026-11-22T15:22:20Z  DEBUG metrics: flushed 18 samples" rect=(x=104.0 y=308.0 width=429.0 height=20.0 center_x=318.5 center_y=318.0)
+                Label value="Loading…" rect=(x=104.0 y=328.0 width=62.4 height=20.0 center_x=135.2 center_y=338.0)
+                  TextRun value="Loading…" rect=(x=104.0 y=328.0 width=62.4 height=20.0 center_x=135.2 center_y=338.0)
+              GenericContainer rect=<none>
+                Label value="INTERLEAVED SOURCES — LABEL COLUMN USES A PER-SOURCE COLOUR" rect=(x=48.0 y=380.0 width=400.6 height=16.0 center_x=248.3 center_y=388.0)
+                  TextRun value="INTERLEAVED SOURCES — LABEL COLUMN USES A PER-SOURCE COLOUR" rect=(x=48.0 y=380.0 width=399.5 height=16.0 center_x=247.7 center_y=388.0)
+                Label value="api-0      server ready" rect=(x=64.0 y=420.0 width=179.4 height=20.0 center_x=153.7 center_y=430.0)
+                  TextRun value="api-0      server ready" rect=(x=64.0 y=420.0 width=179.4 height=20.0 center_x=153.7 center_y=430.0)
+                Label value="worker-0   job accepted" rect=(x=64.0 y=440.0 width=179.4 height=20.0 center_x=153.7 center_y=450.0)
+                  TextRun value="worker-0   job accepted" rect=(x=64.0 y=440.0 width=179.4 height=20.0 center_x=153.7 center_y=450.0)
+                Label value="api-0      application-provided timestamp: 15:22:18" rect=(x=64.0 y=460.0 width=397.8 height=20.0 center_x=262.9 center_y=470.0)
+                  TextRun value="api-0      application-provided timestamp: 15:22:18" rect=(x=64.0 y=460.0 width=397.8 height=20.0 center_x=262.9 center_y=470.0)
+              GenericContainer rect=<none>
+                Label value="DIAGNOSTICS PANEL" rect=(x=48.0 y=512.0 width=117.5 height=16.0 center_x=106.8 center_y=520.0)
+                  TextRun value="DIAGNOSTICS PANEL" rect=(x=48.0 y=512.0 width=116.4 height=16.0 center_x=106.2 center_y=520.0)
+                GenericContainer rect=<none>
+                  Button name="Problems 2" state=[toggled=True] rect=(x=49.0 y=541.0 width=590.0 height=32.0 center_x=344.0 center_y=557.0)
+                  GenericContainer rect=<none>
+                    Label value="Problems" rect=(x=83.0 y=548.5 width=50.9 height=16.0 center_x=108.5 center_y=556.5)
+                      TextRun value="Problems" rect=(x=83.0 y=548.5 width=50.9 height=16.0 center_x=108.5 center_y=556.5)
+                    GenericContainer rect=<none>
+                      Button name="Collapse" rect=(x=647.0 y=542.5 width=28.0 height=28.0 center_x=661.0 center_y=556.5)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        Button name="Ln 4 “settings” is not an allowed value" rect=(x=49.0 y=573.0 width=638.0 height=28.0 center_x=368.0 center_y=587.0)
+                          Label value="Ln 7" rect=(x=83.0 y=605.0 width=28.8 height=20.0 center_x=97.4 center_y=615.0)
+                            TextRun value="Ln 7" rect=(x=83.0 y=605.0 width=28.8 height=20.0 center_x=97.4 center_y=615.0)
+                          Label value="“settings” is not an allowed value" rect=(x=135.0 y=579.0 width=174.6 height=16.0 center_x=222.3 center_y=587.0)
+                            TextRun value="“settings” is not an allowed value" rect=(x=135.0 y=579.0 width=174.6 height=16.0 center_x=222.3 center_y=587.0)
+                        Button name="Ln 7 Unknown field “mode” for ConfigMap.data — values must be strings" rect=(x=49.0 y=601.0 width=638.0 height=28.0 center_x=368.0 center_y=615.0)
+                          Label value="Unknown field “mode” for ConfigMap.data — values must be strings" rect=(x=135.0 y=607.0 width=364.8 height=16.0 center_x=317.4 center_y=615.0)
+                            TextRun value="Unknown field “mode” for ConfigMap.data — values must be strings" rect=(x=135.0 y=607.0 width=364.8 height=16.0 center_x=317.4 center_y=615.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="EDITOR — SYNTAX, DIAGNOSTIC UNDERLINE, ERROR GUTTER, CURRENT LINE, COMPLETION" rect=(x=840.0 y=168.0 width=513.6 height=16.0 center_x=1096.8 center_y=176.0)
+                  TextRun value="EDITOR — SYNTAX, DIAGNOSTIC UNDERLINE, ERROR GUTTER, CURRENT LINE, COMPLETION" rect=(x=840.0 y=168.0 width=512.5 height=16.0 center_x=1096.3 center_y=176.0)
+                GenericContainer rect=<none>
+                  Label value="apiVersion: v1" rect=(x=896.0 y=208.0 width=109.2 height=20.0 center_x=950.6 center_y=218.0)
+                    TextRun value="apiVersion: v1" rect=(x=896.0 y=208.0 width=109.2 height=20.0 center_x=950.6 center_y=218.0)
+                  Label value="kind: ConfigMap" rect=(x=896.0 y=228.0 width=117.0 height=20.0 center_x=954.5 center_y=238.0)
+                    TextRun value="kind: ConfigMap" rect=(x=896.0 y=228.0 width=117.0 height=20.0 center_x=954.5 center_y=238.0)
+                  Label value="metadata:" rect=(x=896.0 y=248.0 width=70.2 height=20.0 center_x=931.1 center_y=258.0)
+                    TextRun value="metadata:" rect=(x=896.0 y=248.0 width=70.2 height=20.0 center_x=931.1 center_y=258.0)
+                  Label value="  name: settings" rect=(x=896.0 y=268.0 width=124.8 height=20.0 center_x=958.4 center_y=278.0)
+                    TextRun value="  name: settings" rect=(x=896.0 y=268.0 width=124.8 height=20.0 center_x=958.4 center_y=278.0)
+                  Label value="  namespace: kube-system" rect=(x=896.0 y=288.0 width=187.2 height=20.0 center_x=989.6 center_y=298.0)
+                    TextRun value="  namespace: kube-system" rect=(x=896.0 y=288.0 width=187.2 height=20.0 center_x=989.6 center_y=298.0)
+                  Label value="data:" rect=(x=896.0 y=308.0 width=39.0 height=20.0 center_x=915.5 center_y=318.0)
+                    TextRun value="data:" rect=(x=896.0 y=308.0 width=39.0 height=20.0 center_x=915.5 center_y=318.0)
+                  Label value="  mode: Read" rect=(x=896.0 y=328.0 width=93.6 height=20.0 center_x=942.8 center_y=338.0)
+                    TextRun value="  mode: Read" rect=(x=896.0 y=328.0 width=93.6 height=20.0 center_x=942.8 center_y=338.0)
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      Label value="Expects value" rect=(x=948.0 y=370.0 width=88.8 height=16.0 center_x=992.4 center_y=378.0)
+        TextRun value="EXPECTS VALUE" rect=(x=948.0 y=370.0 width=87.7 height=16.0 center_x=991.8 center_y=378.0)
+      Label value="string · enum" rect=(x=1042.8 y=370.0 width=69.8 height=16.0 center_x=1077.7 center_y=378.0)
+        TextRun value="string · enum" rect=(x=1042.8 y=370.0 width=69.8 height=16.0 center_x=1077.7 center_y=378.0)
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          ListBoxOption name="ReadOnly" state=[toggled=True] rect=(x=940.0 y=392.0 width=256.0 height=28.0 center_x=1068.0 center_y=406.0)
+            TextRun value="ReadOnly" rect=(x=950.0 y=396.0 width=57.6 height=20.0 center_x=978.8 center_y=406.0)
+          ListBoxOption name="ReadWrite" state=[toggled=False] rect=(x=940.0 y=420.0 width=256.0 height=28.0 center_x=1068.0 center_y=434.0)
+            TextRun value="ReadWrite" rect=(x=950.0 y=424.0 width=64.8 height=20.0 center_x=982.4 center_y=434.0)
+          ListBoxOption name="ReadWriteOnce" state=[toggled=False] rect=(x=940.0 y=448.0 width=256.0 height=28.0 center_x=1068.0 center_y=462.0)
+            TextRun value="ReadWriteOnce" rect=(x=950.0 y=452.0 width=93.6 height=20.0 center_x=996.8 center_y=462.0)
+      Label value="↑ ↓ move · Enter apply · Esc dismiss" rect=(x=940.0 y=480.0 width=256.0 height=28.0 center_x=1068.0 center_y=494.0)
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Label value="enum" rect=(x=1220.0 y=374.0 width=46.0 height=20.0 center_x=1243.0 center_y=384.0)
+            TextRun value="enum" rect=(x=1229.0 y=376.0 width=28.0 height=16.0 center_x=1243.0 center_y=384.0)
+          Label value="ReadOnly" rect=(x=1274.0 y=374.0 width=57.6 height=20.0 center_x=1302.8 center_y=384.0)
+            TextRun value="ReadOnly" rect=(x=1274.0 y=374.0 width=57.6 height=20.0 center_x=1302.8 center_y=384.0)
+        Label value="Mount the volume read-only. Writes fail with EROFS." rect=(x=1220.0 y=400.0 width=157.0 height=32.0 center_x=1298.5 center_y=416.0)
+          TextRun value="Mount the volume read-only. " rect=(x=1220.0 y=400.0 width=157.0 height=16.0 center_x=1298.5 center_y=408.0)
+          TextRun value="Writes fail with EROFS." rect=(x=1220.0 y=416.0 width=123.5 height=16.0 center_x=1281.8 center_y=424.0)
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        Label value="“settings” is not an allowed value · expected one of: ReadOnly, ReadWrite" rect=(x=976.0 y=298.0 width=260.0 height=32.0 center_x=1106.0 center_y=314.0)
+          TextRun value="“settings” is not an allowed value · expected one " rect=(x=976.0 y=298.0 width=261.9 height=16.0 center_x=1107.0 center_y=306.0)
+          TextRun value="of: ReadOnly, ReadWrite" rect=(x=976.0 y=314.0 width=132.6 height=16.0 center_x=1042.3 center_y=322.0)

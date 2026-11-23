@@ -545,10 +545,10 @@ fn test_all_namespaces_watch_includes_namespaces_created_later() {
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
     harness
-        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace scope")
         .click();
     harness.run_steps(2);
-    harness.get_by_label("Select all").click();
+    harness.get_by_label("All namespaces").click();
     harness.run_steps(2);
     harness.key_press(egui::Key::Escape);
     harness.run_steps(1);

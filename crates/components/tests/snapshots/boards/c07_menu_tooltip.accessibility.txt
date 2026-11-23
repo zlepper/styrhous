@@ -1,0 +1,125 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Label value="C07 · COMPONENTS::{MENU, MOREBUTTON, TOOLTIP}" rect=(x=48.0 y=40.0 width=299.6 height=16.0 center_x=197.8 center_y=48.0)
+            TextRun value="C07 · COMPONENTS::{MENU, MOREBUTTON, TOOLTIP}" rect=(x=48.0 y=40.0 width=298.5 height=16.0 center_x=197.3 center_y=48.0)
+          Label value="Menu & tooltip" rect=(x=48.0 y=60.0 width=193.5 height=36.0 center_x=144.8 center_y=78.0)
+            TextRun value="Menu & tooltip" rect=(x=48.0 y=60.0 width=193.8 height=36.0 center_x=144.9 center_y=78.0)
+          Label value="Menus share the popover surface with selects. Items are 32 px; icons sit in a 16 px column so labels align; destructive items go last, after a separator. Tooltips are cream with dark text, 12 px, and appear after 500 ms." rect=(x=48.0 y=102.0 width=860.5 height=40.0 center_x=478.2 center_y=122.0)
+            TextRun value="Menus share the popover surface with selects. Items are 32 px; icons sit in a 16 px column so labels align; destructive items go last, after a " rect=(x=48.0 y=102.0 width=860.5 height=20.0 center_x=478.2 center_y=112.0)
+            TextRun value="separator. Tooltips are cream with dark text, 12 px, and appear after 500 ms." rect=(x=48.0 y=122.0 width=472.9 height=20.0 center_x=284.5 center_y=132.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="TRIGGER STATES (REST · HOVER · OPEN · FOCUS)" rect=(x=48.0 y=168.0 width=275.2 height=16.0 center_x=185.6 center_y=176.0)
+                  TextRun value="TRIGGER STATES (REST · HOVER · OPEN · FOCUS)" rect=(x=48.0 y=168.0 width=274.1 height=16.0 center_x=185.1 center_y=176.0)
+                GenericContainer rect=<none>
+                  Button name="More actions" rect=(x=48.0 y=196.0 width=28.0 height=28.0 center_x=62.0 center_y=210.0)
+                  Button name="More actions" rect=(x=84.0 y=196.0 width=28.0 height=28.0 center_x=98.0 center_y=210.0)
+                  Button name="More actions" rect=(x=120.0 y=196.0 width=28.0 height=28.0 center_x=134.0 center_y=210.0)
+                  Button name="More actions" rect=(x=156.0 y=196.0 width=28.0 height=28.0 center_x=170.0 center_y=210.0)
+              GenericContainer rect=<none>
+                Label value="RESOURCE ACTIONS MENU WITH SUBMENU" rect=(x=48.0 y=256.0 width=241.3 height=16.0 center_x=168.6 center_y=264.0)
+                  TextRun value="RESOURCE ACTIONS MENU WITH SUBMENU" rect=(x=48.0 y=256.0 width=240.2 height=16.0 center_x=168.1 center_y=264.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      MenuItem name="Edit YAML" rect=(x=52.0 y=288.0 width=212.0 height=32.0 center_x=158.0 center_y=304.0)
+                        TextRun value="Edit YAML" rect=(x=86.0 y=294.0 width=60.9 height=20.0 center_x=116.4 center_y=304.0)
+                      MenuItem name="View logs" rect=(x=52.0 y=320.0 width=212.0 height=32.0 center_x=158.0 center_y=336.0)
+                        TextRun value="View logs" rect=(x=86.0 y=326.0 width=56.4 height=20.0 center_x=114.2 center_y=336.0)
+                      MenuItem name="Shell" rect=(x=52.0 y=352.0 width=212.0 height=32.0 center_x=158.0 center_y=368.0)
+                        TextRun value="Shell" rect=(x=86.0 y=358.0 width=28.1 height=20.0 center_x=100.0 center_y=368.0)
+                      MenuItem name="Copy name" rect=(x=52.0 y=384.0 width=212.0 height=32.0 center_x=158.0 center_y=400.0)
+                        TextRun value="Copy name" rect=(x=86.0 y=390.0 width=66.5 height=20.0 center_x=119.3 center_y=400.0)
+                      MenuItem name="Restart rollout" rect=(x=52.0 y=425.0 width=212.0 height=32.0 center_x=158.0 center_y=441.0)
+                        TextRun value="Restart rollout" rect=(x=86.0 y=431.0 width=82.7 height=20.0 center_x=127.3 center_y=441.0)
+                      MenuItem name="Scale…" rect=(x=52.0 y=457.0 width=212.0 height=32.0 center_x=158.0 center_y=473.0)
+                        TextRun value="Scale…" rect=(x=86.0 y=463.0 width=39.6 height=20.0 center_x=105.8 center_y=473.0)
+                      MenuItem name="Delete" rect=(x=52.0 y=498.0 width=212.0 height=32.0 center_x=158.0 center_y=514.0)
+                        TextRun value="Delete" rect=(x=86.0 y=504.0 width=38.0 height=20.0 center_x=105.0 center_y=514.0)
+                  Menu name="Resource actions menu" rect=<none>
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        Label value="Debug image" rect=(x=286.0 y=368.0 width=78.9 height=16.0 center_x=325.5 center_y=376.0)
+                          TextRun value="DEBUG IMAGE" rect=(x=286.0 y=368.0 width=77.8 height=16.0 center_x=324.9 center_y=376.0)
+                        MenuItem name="Busybox (General profile)" rect=(x=276.0 y=388.0 width=212.0 height=44.0 center_x=382.0 center_y=410.0)
+                          TextRun value="Busybox" rect=(x=286.0 y=392.0 width=49.4 height=20.0 center_x=310.7 center_y=402.0)
+                        MenuItem name="Ubuntu (General profile)" rect=(x=276.0 y=432.0 width=212.0 height=44.0 center_x=382.0 center_y=454.0)
+                          TextRun value="Ubuntu" rect=(x=286.0 y=436.0 width=43.5 height=20.0 center_x=307.8 center_y=446.0)
+                        MenuItem name="Netshoot (Network admin profile)" rect=(x=276.0 y=476.0 width=212.0 height=44.0 center_x=382.0 center_y=498.0)
+                          TextRun value="Netshoot" rect=(x=286.0 y=480.0 width=55.4 height=20.0 center_x=313.7 center_y=490.0)
+                        MenuItem name="Configure presets…" rect=(x=276.0 y=529.0 width=212.0 height=32.0 center_x=382.0 center_y=545.0)
+                          TextRun value="Configure presets…" rect=(x=310.0 y=535.0 width=112.8 height=20.0 center_x=366.4 center_y=545.0)
+                    Menu name="Shell menu" rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="DANGER HIGHLIGHT & DISABLED ITEM" rect=(x=540.0 y=168.0 width=216.9 height=16.0 center_x=648.5 center_y=176.0)
+                  TextRun value="DANGER HIGHLIGHT & DISABLED ITEM" rect=(x=540.0 y=168.0 width=215.8 height=16.0 center_x=647.9 center_y=176.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    MenuItem name="Edit" rect=(x=544.0 y=200.0 width=192.0 height=32.0 center_x=640.0 center_y=216.0)
+                      TextRun value="Edit" rect=(x=578.0 y=206.0 width=23.2 height=20.0 center_x=589.6 center_y=216.0)
+                    MenuItem name="Force delete" rect=(x=544.0 y=232.0 width=192.0 height=32.0 center_x=640.0 center_y=248.0)
+                      TextRun value="Force delete" rect=(x=578.0 y=238.0 width=72.9 height=20.0 center_x=614.5 center_y=248.0)
+                    MenuItem name="Restart rollout" state=[disabled] rect=(x=544.0 y=264.0 width=192.0 height=32.0 center_x=640.0 center_y=280.0)
+                      TextRun value="Restart rollout" rect=(x=578.0 y=270.0 width=82.7 height=20.0 center_x=619.3 center_y=280.0)
+                Menu name="Actions menu" rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="TOOLTIP" rect=(x=804.9 y=168.0 width=47.7 height=16.0 center_x=828.8 center_y=176.0)
+                  TextRun value="TOOLTIP" rect=(x=804.9 y=168.0 width=46.6 height=16.0 center_x=828.2 center_y=176.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        GenericContainer rect=<none>
+                          Label value="Show timestamps" rect=(x=814.9 y=202.0 width=97.0 height=16.0 center_x=863.5 center_y=210.0)
+                            TextRun value="Show timestamps" rect=(x=814.9 y=202.0 width=97.0 height=16.0 center_x=863.5 center_y=210.0)
+                      GenericContainer rect=<none>
+                        Group name="Timestamps" rect=<none>
+                          Button name="Timestamps" state=[toggled=False] rect=(x=849.5 y=230.0 width=28.0 height=28.0 center_x=863.5 center_y=244.0)
+                    Label value="Label tooltip" rect=(x=804.9 y=268.0 width=67.0 height=16.0 center_x=838.5 center_y=276.0)
+                      TextRun value="Label tooltip" rect=(x=804.9 y=268.0 width=67.0 height=16.0 center_x=838.5 center_y=276.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        Label value="Container" rect=(x=814.9 y=306.0 width=59.4 height=16.0 center_x=844.6 center_y=314.0)
+                          TextRun value="Container" rect=(x=814.9 y=306.0 width=59.4 height=16.0 center_x=844.6 center_y=314.0)
+                        Label value=" sidecar" rect=(x=874.3 y=306.0 width=41.9 height=16.0 center_x=895.3 center_y=314.0)
+                          TextRun value=" sidecar" rect=(x=874.3 y=306.0 width=41.9 height=16.0 center_x=895.3 center_y=314.0)
+                        Label value="State" rect=(x=814.9 y=322.0 width=33.0 height=16.0 center_x=831.4 center_y=330.0)
+                          TextRun value="State" rect=(x=814.9 y=322.0 width=33.0 height=16.0 center_x=831.4 center_y=330.0)
+                        Label value=" Waiting · ContainerCreating" rect=(x=847.9 y=322.0 width=153.8 height=16.0 center_x=924.8 center_y=330.0)
+                          TextRun value=" Waiting · ContainerCreating" rect=(x=847.9 y=322.0 width=153.8 height=16.0 center_x=924.8 center_y=330.0)
+                        Label value="Restarts" rect=(x=814.9 y=338.0 width=52.8 height=16.0 center_x=841.3 center_y=346.0)
+                          TextRun value="Restarts" rect=(x=814.9 y=338.0 width=52.8 height=16.0 center_x=841.3 center_y=346.0)
+                        Label value=" 3" rect=(x=867.8 y=338.0 width=9.5 height=16.0 center_x=872.5 center_y=346.0)
+                          TextRun value=" 3" rect=(x=867.8 y=338.0 width=9.5 height=16.0 center_x=872.5 center_y=346.0)
+                        Label value="Message" rect=(x=814.9 y=354.0 width=46.2 height=16.0 center_x=838.0 center_y=362.0)
+                          TextRun value="Message" rect=(x=814.9 y=354.0 width=46.2 height=16.0 center_x=838.0 center_y=362.0)
+                        Label value=" Waiting for volume mount" rect=(x=861.1 y=354.0 width=143.6 height=16.0 center_x=932.9 center_y=362.0)
+                          TextRun value=" Waiting for volume mount" rect=(x=861.1 y=354.0 width=143.6 height=16.0 center_x=932.9 center_y=362.0)
+                    Label value="Key / value tooltip (container status)" rect=(x=804.9 y=384.0 width=195.3 height=16.0 center_x=902.6 center_y=392.0)
+                      TextRun value="Key / value tooltip (container status)" rect=(x=804.9 y=384.0 width=195.3 height=16.0 center_x=902.6 center_y=392.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        Label value="kube-controller-manager-kind-control-plane" rect=(x=814.9 y=422.0 width=241.3 height=16.0 center_x=935.6 center_y=430.0)
+                          TextRun value="kube-controller-manager-kind-control-plane" rect=(x=814.9 y=422.0 width=241.3 height=16.0 center_x=935.6 center_y=430.0)
+                    Label value="Truncation tooltip — only when text is actually clipped" rect=(x=804.9 y=452.0 width=292.3 height=16.0 center_x=951.1 center_y=460.0)
+                      TextRun value="Truncation tooltip — only when text is actually clipped" rect=(x=804.9 y=452.0 width=292.3 height=16.0 center_x=951.1 center_y=460.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        Label value="Next match " rect=(x=814.9 y=490.0 width=66.4 height=16.0 center_x=848.1 center_y=498.0)
+                          TextRun value="Next match " rect=(x=814.9 y=490.0 width=66.4 height=16.0 center_x=848.1 center_y=498.0)
+                        Label value="Enter" rect=(x=889.3 y=490.0 width=33.0 height=16.0 center_x=905.8 center_y=498.0)
+                          TextRun value="Enter" rect=(x=889.3 y=490.0 width=33.0 height=16.0 center_x=905.8 center_y=498.0)
+                    Label value="Shortcut tooltip" rect=(x=804.9 y=520.0 width=85.8 height=16.0 center_x=847.8 center_y=528.0)
+                      TextRun value="Shortcut tooltip" rect=(x=804.9 y=520.0 width=85.8 height=16.0 center_x=847.8 center_y=528.0)

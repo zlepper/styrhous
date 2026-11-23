@@ -43,121 +43,121 @@ snapshot = ""
 id = "C01"
 title = "Icons & status"
 oracle = "docs/design-oracles/harbour/C01.png"
-snapshot = ""
+snapshot = "crates/components/tests/snapshots/boards/c01_icons_status.png"
 
 [[board]]
 id = "C02"
 title = "Buttons"
 oracle = "docs/design-oracles/harbour/C02.png"
-snapshot = ""
+snapshot = "crates/components/tests/snapshots/boards/c02_buttons.png"
 
 [[board]]
 id = "C03"
 title = "Toggles, groups & segmented controls"
 oracle = "docs/design-oracles/harbour/C03.png"
-snapshot = ""
+snapshot = "crates/components/tests/snapshots/boards/c03_toggles.png"
 
 [[board]]
 id = "C04"
 title = "Text inputs & search"
 oracle = "docs/design-oracles/harbour/C04.png"
-snapshot = ""
+snapshot = "crates/components/tests/snapshots/boards/c04_inputs.png"
 
 [[board]]
 id = "C05"
 title = "Select & combobox"
 oracle = "docs/design-oracles/harbour/C05.png"
-snapshot = ""
+snapshot = "crates/components/tests/snapshots/boards/c05_select.png"
 
 [[board]]
 id = "C06"
 title = "Checkbox, radio & switch"
 oracle = "docs/design-oracles/harbour/C06.png"
-snapshot = ""
+snapshot = "crates/components/tests/snapshots/boards/c06_selection.png"
 
 [[board]]
 id = "C07"
 title = "Menu & tooltip"
 oracle = "docs/design-oracles/harbour/C07.png"
-snapshot = ""
+snapshot = "crates/components/tests/snapshots/boards/c07_menu_tooltip.png"
 
 [[board]]
 id = "C08"
 title = "Table"
 oracle = "docs/design-oracles/harbour/C08.png"
-snapshot = ""
+snapshot = "crates/components/tests/snapshots/boards/c08_table.png"
 
 [[board]]
 id = "C09"
 title = "Sidebar"
 oracle = "docs/design-oracles/harbour/C09.png"
-snapshot = ""
+snapshot = "crates/components/tests/snapshots/boards/c09_sidebar.png"
 
 [[board]]
 id = "C10"
 title = "Blade"
 oracle = "docs/design-oracles/harbour/C10.png"
-snapshot = ""
+snapshot = "crates/components/tests/snapshots/boards/c10_blade.png"
 
 [[board]]
 id = "C11"
 title = "Dialog"
 oracle = "docs/design-oracles/harbour/C11.png"
-snapshot = ""
+snapshot = "crates/components/tests/snapshots/boards/c11_dialogs.png"
 
 [[board]]
 id = "C12"
 title = "Feedback"
 oracle = "docs/design-oracles/harbour/C12.png"
-snapshot = ""
+snapshot = "crates/components/tests/snapshots/boards/c12_feedback.png"
 
 [[board]]
 id = "C13"
 title = "Data display"
 oracle = "docs/design-oracles/harbour/C13.png"
-snapshot = ""
+snapshot = "crates/components/tests/snapshots/boards/c13_data_display.png"
 
 [[board]]
 id = "C14"
 title = "Document window chrome"
 oracle = "docs/design-oracles/harbour/C14.png"
-snapshot = ""
+snapshot = "crates/components/tests/snapshots/boards/c14_window_chrome.png"
 
 [[board]]
 id = "C15"
 title = "Code surface"
 oracle = "docs/design-oracles/harbour/C15.png"
-snapshot = ""
+snapshot = "crates/components/tests/snapshots/boards/c15_code_surface.png"
 
 [[board]]
 id = "C16"
 title = "Top bar"
 oracle = "docs/design-oracles/harbour/C16.png"
-snapshot = ""
+snapshot = "crates/components/tests/snapshots/boards/c16_top_bar.png"
 
 [[board]]
 id = "C17"
 title = "Grouped table"
 oracle = "docs/design-oracles/harbour/C17.png"
-snapshot = ""
+snapshot = "crates/components/tests/snapshots/boards/c17_grouped_table.png"
 
 [[board]]
 id = "C18"
 title = "Cluster switcher"
 oracle = "docs/design-oracles/harbour/C18.png"
-snapshot = ""
+snapshot = "crates/components/tests/snapshots/boards/c18_cluster_switcher.png"
 
 [[board]]
 id = "C19"
 title = "Readouts and section rail"
 oracle = "docs/design-oracles/harbour/C19.png"
-snapshot = ""
+snapshot = "crates/components/tests/snapshots/boards/c19_readouts.png"
 
 [[board]]
 id = "C20"
 title = "Log viewer parts"
 oracle = "docs/design-oracles/harbour/C20.png"
-snapshot = ""
+snapshot = "crates/components/tests/snapshots/boards/c20_log_parts.png"
 
 [[board]]
 id = "A01"

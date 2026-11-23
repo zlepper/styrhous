@@ -1,0 +1,119 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          CheckBox name="Select all rows" state=[toggled=Mixed] rect=(x=20.0 y=18.0 width=16.0 height=16.0 center_x=28.0 center_y=26.0)
+        ColumnHeader name="Name" rect=(x=48.0 y=8.0 width=264.0 height=36.0 center_x=180.0 center_y=26.0)
+          TextRun value="NAME" rect=(x=60.0 y=18.0 width=30.3 height=16.0 center_x=75.1 center_y=26.0)
+        ColumnHeader name="Restarts" rect=(x=312.0 y=8.0 width=88.0 height=36.0 center_x=356.0 center_y=26.0)
+          TextRun value="RESTARTS" rect=(x=333.2 y=18.0 width=53.9 height=16.0 center_x=360.2 center_y=26.0)
+        ColumnHeader name="CPU" rect=(x=400.0 y=8.0 width=80.0 height=36.0 center_x=440.0 center_y=26.0)
+          TextRun value="CPU" rect=(x=446.0 y=18.0 width=21.1 height=16.0 center_x=456.6 center_y=26.0)
+        Unknown name="" rect=(x=480.0 y=8.0 width=48.0 height=36.0 center_x=504.0 center_y=26.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                CheckBox name="Select row 1" state=[toggled=False] rect=(x=20.0 y=54.0 width=16.0 height=16.0 center_x=28.0 center_y=62.0)
+              Unknown name="Name, row 1" rect=(x=48.0 y=44.0 width=264.0 height=36.0 center_x=180.0 center_y=62.0)
+              GenericContainer rect=<none>
+                Label value="Lindsay Walton" rect=(x=60.0 y=52.0 width=89.2 height=20.0 center_x=104.6 center_y=62.0)
+                  TextRun value="Lindsay Walton" rect=(x=60.0 y=52.0 width=89.2 height=20.0 center_x=104.6 center_y=62.0)
+              Unknown name="Restarts, row 1" rect=(x=312.0 y=44.0 width=88.0 height=36.0 center_x=356.0 center_y=62.0)
+              GenericContainer rect=<none>
+                Label value="1" rect=(x=382.6 y=52.0 width=5.4 height=20.0 center_x=385.3 center_y=62.0)
+                  TextRun value="1" rect=(x=382.6 y=52.0 width=5.4 height=20.0 center_x=385.3 center_y=62.0)
+              Unknown name="CPU, row 1" rect=(x=400.0 y=44.0 width=80.0 height=36.0 center_x=440.0 center_y=62.0)
+              GenericContainer rect=<none>
+                Label value="Metrics server not available" rect=(x=453.7 y=52.0 width=14.3 height=20.0 center_x=460.8 center_y=62.0)
+                  TextRun value="—" rect=(x=453.7 y=52.0 width=14.3 height=20.0 center_x=460.8 center_y=62.0)
+              Unknown name="actions, row 1" rect=(x=480.0 y=44.0 width=48.0 height=36.0 center_x=504.0 center_y=62.0)
+              GenericContainer rect=<none>
+                Button name="More actions for Lindsay Walton" rect=(x=490.0 y=48.0 width=28.0 height=28.0 center_x=504.0 center_y=62.0)
+              GenericContainer rect=<none>
+                CheckBox name="Select row 2" state=[toggled=True] rect=(x=20.0 y=94.0 width=16.0 height=16.0 center_x=28.0 center_y=102.0)
+              Unknown name="Name, row 2" rect=(x=48.0 y=84.0 width=264.0 height=36.0 center_x=180.0 center_y=102.0)
+              GenericContainer rect=<none>
+                Label value="Courtney Henry" rect=(x=60.0 y=92.0 width=93.9 height=20.0 center_x=106.9 center_y=102.0)
+                  TextRun value="Courtney Henry" rect=(x=60.0 y=92.0 width=93.9 height=20.0 center_x=106.9 center_y=102.0)
+              Unknown name="Restarts, row 2" rect=(x=312.0 y=84.0 width=88.0 height=36.0 center_x=356.0 center_y=102.0)
+              GenericContainer rect=<none>
+                Label value="2" rect=(x=380.7 y=92.0 width=7.3 height=20.0 center_x=384.4 center_y=102.0)
+                  TextRun value="2" rect=(x=380.7 y=92.0 width=7.3 height=20.0 center_x=384.4 center_y=102.0)
+              Unknown name="CPU, row 2" rect=(x=400.0 y=84.0 width=80.0 height=36.0 center_x=440.0 center_y=102.0)
+              GenericContainer rect=<none>
+                Label value="12m" rect=(x=444.3 y=92.0 width=23.7 height=20.0 center_x=456.2 center_y=102.0)
+                  TextRun value="12m" rect=(x=444.3 y=92.0 width=23.7 height=20.0 center_x=456.2 center_y=102.0)
+              Unknown name="actions, row 2" rect=(x=480.0 y=84.0 width=48.0 height=36.0 center_x=504.0 center_y=102.0)
+              GenericContainer rect=<none>
+                Button name="More actions for Courtney Henry" rect=(x=490.0 y=88.0 width=28.0 height=28.0 center_x=504.0 center_y=102.0)
+              GenericContainer rect=<none>
+                CheckBox name="Select row 3" state=[toggled=True] rect=(x=20.0 y=134.0 width=16.0 height=16.0 center_x=28.0 center_y=142.0)
+              Unknown name="Name, row 3" rect=(x=48.0 y=124.0 width=264.0 height=36.0 center_x=180.0 center_y=142.0)
+              GenericContainer rect=<none>
+                Label value="Tom Cook" rect=(x=60.0 y=132.0 width=59.3 height=20.0 center_x=89.6 center_y=142.0)
+                  TextRun value="Tom Cook" rect=(x=60.0 y=132.0 width=59.3 height=20.0 center_x=89.6 center_y=142.0)
+              Unknown name="Restarts, row 3" rect=(x=312.0 y=124.0 width=88.0 height=36.0 center_x=356.0 center_y=142.0)
+              GenericContainer rect=<none>
+                Label value="3" rect=(x=380.9 y=132.0 width=7.1 height=20.0 center_x=384.5 center_y=142.0)
+                  TextRun value="3" rect=(x=380.9 y=132.0 width=7.1 height=20.0 center_x=384.5 center_y=142.0)
+              Unknown name="CPU, row 3" rect=(x=400.0 y=124.0 width=80.0 height=36.0 center_x=440.0 center_y=142.0)
+              GenericContainer rect=<none>
+                Label value="Metrics server not available" rect=(x=453.7 y=132.0 width=14.3 height=20.0 center_x=460.8 center_y=142.0)
+                  TextRun value="—" rect=(x=453.7 y=132.0 width=14.3 height=20.0 center_x=460.8 center_y=142.0)
+              Unknown name="actions, row 3" rect=(x=480.0 y=124.0 width=48.0 height=36.0 center_x=504.0 center_y=142.0)
+              GenericContainer rect=<none>
+                Button name="More actions for Tom Cook" rect=(x=490.0 y=128.0 width=28.0 height=28.0 center_x=504.0 center_y=142.0)
+              GenericContainer rect=<none>
+                CheckBox name="Select row 4" state=[toggled=False] rect=(x=20.0 y=174.0 width=16.0 height=16.0 center_x=28.0 center_y=182.0)
+              Unknown name="Name, row 4" rect=(x=48.0 y=164.0 width=264.0 height=36.0 center_x=180.0 center_y=182.0)
+              GenericContainer rect=<none>
+                Label value="Whitney Francis" rect=(x=60.0 y=172.0 width=94.1 height=20.0 center_x=107.0 center_y=182.0)
+                  TextRun value="Whitney Francis" rect=(x=60.0 y=172.0 width=94.1 height=20.0 center_x=107.0 center_y=182.0)
+              Unknown name="Restarts, row 4" rect=(x=312.0 y=164.0 width=88.0 height=36.0 center_x=356.0 center_y=182.0)
+              GenericContainer rect=<none>
+                Label value="4" rect=(x=379.9 y=172.0 width=8.1 height=20.0 center_x=384.0 center_y=182.0)
+                  TextRun value="4" rect=(x=379.9 y=172.0 width=8.1 height=20.0 center_x=384.0 center_y=182.0)
+              Unknown name="CPU, row 4" rect=(x=400.0 y=164.0 width=80.0 height=36.0 center_x=440.0 center_y=182.0)
+              GenericContainer rect=<none>
+                Label value="12m" rect=(x=444.3 y=172.0 width=23.7 height=20.0 center_x=456.2 center_y=182.0)
+                  TextRun value="12m" rect=(x=444.3 y=172.0 width=23.7 height=20.0 center_x=456.2 center_y=182.0)
+              Unknown name="actions, row 4" rect=(x=480.0 y=164.0 width=48.0 height=36.0 center_x=504.0 center_y=182.0)
+              GenericContainer rect=<none>
+                Button name="More actions for Whitney Francis" rect=(x=490.0 y=168.0 width=28.0 height=28.0 center_x=504.0 center_y=182.0)
+              GenericContainer rect=<none>
+                CheckBox name="Select row 5" state=[toggled=False] rect=(x=20.0 y=214.0 width=16.0 height=16.0 center_x=28.0 center_y=222.0)
+              Unknown name="Name, row 5" rect=(x=48.0 y=204.0 width=264.0 height=36.0 center_x=180.0 center_y=222.0)
+              GenericContainer rect=<none>
+                Label value="Leonard Krasner" rect=(x=60.0 y=212.0 width=95.2 height=20.0 center_x=107.6 center_y=222.0)
+                  TextRun value="Leonard Krasner" rect=(x=60.0 y=212.0 width=95.2 height=20.0 center_x=107.6 center_y=222.0)
+              Unknown name="Restarts, row 5" rect=(x=312.0 y=204.0 width=88.0 height=36.0 center_x=356.0 center_y=222.0)
+              GenericContainer rect=<none>
+                Label value="5" rect=(x=380.5 y=212.0 width=7.5 height=20.0 center_x=384.3 center_y=222.0)
+                  TextRun value="5" rect=(x=380.5 y=212.0 width=7.5 height=20.0 center_x=384.3 center_y=222.0)
+              Unknown name="CPU, row 5" rect=(x=400.0 y=204.0 width=80.0 height=36.0 center_x=440.0 center_y=222.0)
+              GenericContainer rect=<none>
+                Label value="Metrics server not available" rect=(x=453.7 y=212.0 width=14.3 height=20.0 center_x=460.8 center_y=222.0)
+                  TextRun value="—" rect=(x=453.7 y=212.0 width=14.3 height=20.0 center_x=460.8 center_y=222.0)
+              Unknown name="actions, row 5" rect=(x=480.0 y=204.0 width=48.0 height=36.0 center_x=504.0 center_y=222.0)
+              GenericContainer rect=<none>
+                Button name="More actions for Leonard Krasner" rect=(x=490.0 y=208.0 width=28.0 height=28.0 center_x=504.0 center_y=222.0)
+              GenericContainer rect=<none>
+                CheckBox name="Select row 6" state=[toggled=False] rect=(x=20.0 y=254.0 width=16.0 height=16.0 center_x=28.0 center_y=262.0)
+              Unknown name="Name, row 6" rect=(x=48.0 y=244.0 width=264.0 height=36.0 center_x=180.0 center_y=262.0)
+              GenericContainer rect=<none>
+                Label value="Floyd Miles" rect=(x=60.0 y=252.0 width=65.3 height=20.0 center_x=92.7 center_y=262.0)
+                  TextRun value="Floyd Miles" rect=(x=60.0 y=252.0 width=65.3 height=20.0 center_x=92.7 center_y=262.0)
+              Unknown name="Restarts, row 6" rect=(x=312.0 y=244.0 width=88.0 height=36.0 center_x=356.0 center_y=262.0)
+              GenericContainer rect=<none>
+                Label value="6" rect=(x=380.7 y=252.0 width=7.3 height=20.0 center_x=384.3 center_y=262.0)
+                  TextRun value="6" rect=(x=380.7 y=252.0 width=7.3 height=20.0 center_x=384.3 center_y=262.0)
+              Unknown name="CPU, row 6" rect=(x=400.0 y=244.0 width=80.0 height=36.0 center_x=440.0 center_y=262.0)
+              GenericContainer rect=<none>
+                Label value="12m" rect=(x=444.3 y=252.0 width=23.7 height=20.0 center_x=456.2 center_y=262.0)
+                  TextRun value="12m" rect=(x=444.3 y=252.0 width=23.7 height=20.0 center_x=456.2 center_y=262.0)
+              Unknown name="actions, row 6" rect=(x=480.0 y=244.0 width=48.0 height=36.0 center_x=504.0 center_y=262.0)
+              GenericContainer rect=<none>
+                Button name="More actions for Floyd Miles" rect=(x=490.0 y=248.0 width=28.0 height=28.0 center_x=504.0 center_y=262.0)

@@ -164,7 +164,7 @@ fn resource_detail_more_actions_use_the_shared_resource_menu() {
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "resource_actions/resource_detail_more_actions_use_the_shared_resource_menu/config_map_resource_detail_actions",
     ));
-    harness.get_by_label("Edit").click_accesskit();
+    harness.get_by_label("Edit YAML").click_accesskit();
     harness.run();
     assert!(
         harness
@@ -374,4 +374,50 @@ fn resource_table_reflows_after_viewport_resize() {
     harness.ui_harness(
         "resource_tables/resource_table_reflows_after_viewport_resize/resource_table_resized",
     );
+}
+
+#[test]
+fn labels_and_annotations_open_as_chips_that_copy_key_and_value() {
+    let deployment = fixture_api_resource("apps", "Deployment", "deployments");
+    let detail = ResourceDetail {
+        api_resource: deployment.clone(),
+        name: "api".into(),
+        namespace: Some("kube-system".into()),
+        uid: "deployment-uid".into(),
+        resource_version: "1".into(),
+        is_deleting: false,
+        finalizers: Vec::new(),
+        creation_timestamp: None,
+        owners: Vec::new(),
+        labels: BTreeMap::from([
+            ("app.kubernetes.io/name".to_owned(), "api".to_owned()),
+            ("tier".to_owned(), "backend".to_owned()),
+        ]),
+        annotations: BTreeMap::from([(
+            "deployment.kubernetes.io/revision".to_owned(),
+            "3".to_owned(),
+        )]),
+        payload: ResourceDetailPayload::Generic,
+    };
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    open_typed_detail(&mut harness, deployment, detail);
+
+    harness.get_by_label("Labels & annotations").click();
+    harness.run();
+    assert!(
+        harness
+            .query_by_label("Copy Labels app.kubernetes.io/name=api")
+            .is_some()
+    );
+    harness.ui_harness(
+        "resource_inspectors/labels_and_annotations_open_as_chips_that_copy_key_and_value/open",
+    );
+
+    let chip = harness
+        .get_by_label("Copy Labels tier=backend")
+        .rect()
+        .center();
+    let copied = components::test_support::click_and_collect_copies(&mut harness, chip);
+    assert_eq!(copied, ["tier=backend"]);
 }

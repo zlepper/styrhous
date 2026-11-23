@@ -10,10 +10,13 @@ use crate::worker::{
     StopPodLogStream, WorkerCommandBox, WorkerResult,
 };
 use anstyle::{Ansi256Color, AnsiColor, Color, Effects, RgbColor, Style};
-use components::design::stroke;
+use components::design::size;
 use components::design::theme::{self, AnsiRoles, Theme, ThemeExt, ThemeScope, Tone};
-use components::design::{radius, space, type_scale};
-use components::{PointingHand, TailwindSearchInput, icons, search_navigation_button};
+use components::design::{space, type_scale};
+use components::{
+    ButtonGroup, SearchField, SearchStatus, Segmented, StatusBar, ToggleButton, Toolbar,
+    WindowHeader, icons, status_number, status_text, toolbar_divider,
+};
 use std::time::{Duration, Instant};
 
 const LOG_FONT_SIZE: f32 = 14.0;

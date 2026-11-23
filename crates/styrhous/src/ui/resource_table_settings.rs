@@ -4,13 +4,11 @@ use super::table_preferences::{
     CustomMetadataColumn, MetadataColumnSource, PersistedResourceTablePreferences,
     ResourceTableKey, TableColumnDefinition,
 };
-use components::design::stroke;
 use components::design::theme::ThemeExt;
-use components::{
-    ButtonSize, MoreMenu, ReorderHandle, ReorderableTable, TailwindButton, TailwindTextInput,
-    WorkspaceCard,
-};
-use std::cell::RefCell;
+use components::{Button, ButtonSize, Card, CellAlign, ReorderableTable, TextInput};
+
+/// Room for a custom column's Edit and Remove buttons.
+const CUSTOM_COLUMN_ACTIONS_WIDTH: f32 = 160.0;
 
 #[derive(Debug, Clone)]
 pub(super) struct ResourceTableSettingsTarget {
@@ -51,43 +49,6 @@ pub(super) fn target(
         MetadataKeySuggestions::default(),
         false,
     )
-}
-
-pub(super) fn show_configurable_table_header(
-    menu: &mut MoreMenu<'_>,
-    sortable: bool,
-    id: &str,
-    table_key: &ResourceTableKey,
-    column_definitions: &[TableColumnDefinition],
-    table_preferences: &RefCell<&mut PersistedResourceTablePreferences>,
-    column_settings: &mut Option<ResourceTableSettingsTarget>,
-) {
-    if sortable {
-        if menu.action("Sort ascending").clicked() {
-            table_preferences.borrow_mut().set_sort(
-                table_key,
-                column_definitions,
-                id,
-                components::SortDirection::Ascending,
-            );
-        }
-        if menu.action("Sort descending").clicked() {
-            table_preferences.borrow_mut().set_sort(
-                table_key,
-                column_definitions,
-                id,
-                components::SortDirection::Descending,
-            );
-        }
-        menu.separator();
-    }
-    if menu.action("Configure columns").clicked() {
-        *column_settings = Some(target(
-            &mut table_preferences.borrow_mut(),
-            table_key.clone(),
-            column_definitions,
-        ));
-    }
 }
 
 pub(super) fn target_with_metadata_key_suggestions(
@@ -162,7 +123,7 @@ pub(super) fn show_target(
     );
     ui.add_space(components::design::space::S24);
     if target.supports_custom_columns {
-        if TailwindButton::soft("Add custom column")
+        if Button::soft("Add custom column")
             .size(ButtonSize::Sm)
             .show(ui)
             .clicked()
@@ -194,14 +155,25 @@ pub(super) fn show_target(
     if close_custom_column_form {
         target.custom_column_draft = None;
     }
-    let width = ui.available_width();
-    let moved = ReorderableTable::new(("resource-table-settings-rows", &target.key), 44.0).show(
-        ui,
-        &mut target.columns,
-        width,
-        |ui, column, _index, handle| show_column_row(ui, column, handle),
-        show_column_preview,
-    );
+    let moved = ReorderableTable::new(("resource-table-settings-rows", &target.key))
+        .column("column", "Column", |column| column.fill_remaining())
+        .column("actions", "", |column| {
+            column
+                .initial_width(CUSTOM_COLUMN_ACTIONS_WIDTH)
+                .align(CellAlign::End)
+        })
+        .show(
+            ui,
+            &mut target.columns,
+            |column| format!("Reorder {} column", column.definition.label),
+            |ui, column, _, cell| match cell {
+                0 => {
+                    components::Checkbox::new(&mut column.visible, &column.definition.label)
+                        .show(ui);
+                }
+                _ => show_custom_column_actions(ui, column),
+            },
+        );
     let removed_ids = target
         .columns
         .iter()

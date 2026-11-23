@@ -208,7 +208,7 @@ fn metric_revisions_only_invalidate_tables_that_render_them() {
     );
     assert_eq!(unsorted_pod_cache.generation(), unsorted_pod_generation);
 
-    pod_configuration.sort_state = Some(components::SortState::new(
+    pod_configuration.layout.sort = Some(components::SortState::new(
         CPU_COLUMN,
         components::SortDirection::Ascending,
     ));
@@ -244,7 +244,7 @@ fn metric_revisions_only_invalidate_tables_that_render_them() {
         false,
         &mut PersistedResourceTablePreferences::default(),
     );
-    node_configuration.sort_state = Some(components::SortState::new(
+    node_configuration.layout.sort = Some(components::SortState::new(
         CPU_COLUMN,
         components::SortDirection::Ascending,
     ));

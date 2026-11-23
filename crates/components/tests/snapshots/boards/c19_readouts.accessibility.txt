@@ -1,0 +1,99 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Label value="C19 · COMPONENTS::{READOUT, INSPECTORHEADER, SECTIONRAIL}" rect=(x=48.0 y=40.0 width=380.8 height=16.0 center_x=238.4 center_y=48.0)
+            TextRun value="C19 · COMPONENTS::{READOUT, INSPECTORHEADER, SECTIONRAIL}" rect=(x=48.0 y=40.0 width=379.7 height=16.0 center_x=237.9 center_y=48.0)
+          Label value="Readouts & section rail" rect=(x=48.0 y=60.0 width=303.9 height=36.0 center_x=200.0 center_y=78.0)
+            TextRun value="Readouts & section rail" rect=(x=48.0 y=60.0 width=304.2 height=36.0 center_x=200.1 center_y=78.0)
+          Label value="Readouts lift the few numbers you check first out of the property grid: caption in condensed caps, value in mono. Inspectors put them in the header and add a section rail so long resources stay navigable." rect=(x=48.0 y=102.0 width=953.5 height=40.0 center_x=524.7 center_y=122.0)
+            TextRun value="Readouts lift the few numbers you check first out of the property grid: caption in condensed caps, value in mono. Inspectors put them in the header and " rect=(x=48.0 y=102.0 width=953.5 height=20.0 center_x=524.7 center_y=112.0)
+            TextRun value="add a section rail so long resources stay navigable." rect=(x=48.0 y=122.0 width=314.9 height=20.0 center_x=205.5 center_y=132.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Label value="READOUT ROW · INSPECTOR SIZE" rect=(x=48.0 y=168.0 width=187.8 height=16.0 center_x=141.9 center_y=176.0)
+              TextRun value="READOUT ROW · INSPECTOR SIZE" rect=(x=48.0 y=168.0 width=186.7 height=16.0 center_x=141.4 center_y=176.0)
+            Label value="Ready: 5 / 6" rect=(x=48.0 y=194.0 width=130.0 height=55.0 center_x=113.0 center_y=221.5)
+            Label value="Restarts: 15" rect=(x=186.0 y=194.0 width=130.0 height=55.0 center_x=251.0 center_y=221.5)
+            Label value="Node: ip-10-0-41-17" rect=(x=324.0 y=194.0 width=130.0 height=55.0 center_x=389.0 center_y=221.5)
+            Label value="CPU: 412m / 2" rect=(x=462.0 y=194.0 width=130.0 height=55.0 center_x=527.0 center_y=221.5)
+            Label value="Memory: 6.1 / 8 Gi" rect=(x=600.0 y=194.0 width=130.0 height=55.0 center_x=665.0 center_y=221.5)
+            Label value="Age: 6 h" rect=(x=738.0 y=194.0 width=130.0 height=55.0 center_x=803.0 center_y=221.5)
+            Label value="GAUGE SIZE · OVERVIEWS AND THE CLUSTER STRIP" rect=(x=48.0 y=271.0 width=289.3 height=16.0 center_x=192.7 center_y=279.0)
+              TextRun value="GAUGE SIZE · OVERVIEWS AND THE CLUSTER STRIP" rect=(x=48.0 y=271.0 width=288.2 height=16.0 center_x=192.1 center_y=279.0)
+            Label value="Pods: 4,812" rect=(x=48.0 y=297.0 width=199.0 height=67.0 center_x=147.5 center_y=330.5)
+            Label value="Failing: 98" rect=(x=255.0 y=297.0 width=199.0 height=67.0 center_x=354.5 center_y=330.5)
+            Label value="Nodes: 86" rect=(x=462.0 y=297.0 width=199.0 height=67.0 center_x=561.5 center_y=330.5)
+            Label value="Latency: 38 ms" rect=(x=669.0 y=297.0 width=199.0 height=67.0 center_x=768.5 center_y=330.5)
+            Label value="VALUE TONES" rect=(x=48.0 y=386.0 width=75.8 height=16.0 center_x=85.9 center_y=394.0)
+              TextRun value="VALUE TONES" rect=(x=48.0 y=386.0 width=74.7 height=16.0 center_x=85.3 center_y=394.0)
+            Label value="Neutral: 220d" rect=(x=48.0 y=412.0 width=157.6 height=54.0 center_x=126.8 center_y=439.0)
+            Label value="OK: Deployed" rect=(x=213.6 y=412.0 width=157.6 height=54.0 center_x=292.4 center_y=439.0)
+            Label value="Warning: 15" rect=(x=379.2 y=412.0 width=157.6 height=54.0 center_x=458.0 center_y=439.0)
+            Label value="Problem: Failed" rect=(x=544.8 y=412.0 width=157.6 height=54.0 center_x=623.6 center_y=439.0)
+            Label value="Link: kind-worker" rect=(x=710.4 y=412.0 width=157.6 height=54.0 center_x=789.2 center_y=439.0)
+            Label value="INSPECTOR HEADER" rect=(x=48.0 y=488.0 width=113.3 height=16.0 center_x=104.6 center_y=496.0)
+              TextRun value="INSPECTOR HEADER" rect=(x=48.0 y=488.0 width=112.2 height=16.0 center_x=104.1 center_y=496.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Button name="Back" rect=(x=64.0 y=534.0 width=28.0 height=28.0 center_x=78.0 center_y=548.0)
+                  Button name="Forward" state=[disabled] rect=(x=94.0 y=534.0 width=28.0 height=28.0 center_x=108.0 center_y=548.0)
+                Label value="Pod" rect=(x=147.0 y=537.0 width=37.3 height=22.0 center_x=165.7 center_y=548.0)
+                  TextRun value="Pod" rect=(x=156.0 y=540.0 width=19.3 height=16.0 center_x=165.7 center_y=548.0)
+                Label value="ranker-v7-5jqmbprhg-ldnm9" rect=(x=194.3 y=528.0 width=317.2 height=24.0 center_x=352.9 center_y=540.0)
+                  TextRun value="ranker-v7-5jqmbprhg-ldnm9" rect=(x=194.3 y=528.0 width=247.7 height=24.0 center_x=318.2 center_y=540.0)
+                GenericContainer rect=<none>
+                  Label value="Degraded" rect=(x=194.3 y=552.0 width=67.5 height=16.0 center_x=228.1 center_y=560.0)
+                    TextRun value="Degraded" rect=(x=208.3 y=552.0 width=53.5 height=16.0 center_x=235.1 center_y=560.0)
+                  Label value="· warmup container crash-looping" rect=(x=267.8 y=552.0 width=180.4 height=16.0 center_x=358.0 center_y=560.0)
+                    TextRun value="· warmup container crash-looping" rect=(x=267.8 y=552.0 width=180.4 height=16.0 center_x=358.0 center_y=560.0)
+              GenericContainer rect=<none>
+                Button name="Logs" rect=(x=521.6 y=534.0 width=72.1 height=28.0 center_x=557.6 center_y=548.0)
+                Button name="Shell" rect=(x=603.6 y=534.0 width=72.4 height=28.0 center_x=639.8 center_y=548.0)
+                Button name="More actions" rect=(x=686.0 y=534.0 width=28.0 height=28.0 center_x=700.0 center_y=548.0)
+              GenericContainer rect=<none>
+                Button name="Close blade" rect=(x=724.0 y=534.0 width=28.0 height=28.0 center_x=738.0 center_y=548.0)
+              GenericContainer rect=<none>
+                Label value="Ready: 5 / 6" rect=(x=68.0 y=582.0 width=129.6 height=54.0 center_x=132.8 center_y=609.0)
+                Label value="Restarts: 15" rect=(x=205.6 y=582.0 width=129.6 height=54.0 center_x=270.4 center_y=609.0)
+                Label value="CPU: 412m" rect=(x=343.2 y=582.0 width=129.6 height=54.0 center_x=408.0 center_y=609.0)
+                Label value="Memory: 6.1Gi" rect=(x=480.8 y=582.0 width=129.6 height=54.0 center_x=545.6 center_y=609.0)
+                Label value="Age: 6h" rect=(x=618.4 y=582.0 width=129.6 height=54.0 center_x=683.2 center_y=609.0)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="SECTION RAIL" rect=(x=940.0 y=168.0 width=79.9 height=16.0 center_x=980.0 center_y=176.0)
+                  TextRun value="SECTION RAIL" rect=(x=940.0 y=168.0 width=78.8 height=16.0 center_x=979.4 center_y=176.0)
+                Label value="On this pod" rect=(x=960.0 y=208.0 width=73.8 height=16.0 center_x=996.9 center_y=216.0)
+                  TextRun value="ON THIS POD" rect=(x=960.0 y=208.0 width=72.8 height=16.0 center_x=996.4 center_y=216.0)
+                Button name="Overview" state=[toggled=False] rect=(x=950.0 y=234.0 width=156.0 height=32.0 center_x=1028.0 center_y=250.0)
+                  TextRun value="Overview" rect=(x=960.0 y=240.0 width=55.1 height=20.0 center_x=987.5 center_y=250.0)
+                Button name="Usage" state=[toggled=False] rect=(x=950.0 y=268.0 width=156.0 height=32.0 center_x=1028.0 center_y=284.0)
+                  TextRun value="Usage" rect=(x=960.0 y=274.0 width=36.6 height=20.0 center_x=978.3 center_y=284.0)
+                Button name="Containers, 6" state=[toggled=False] rect=(x=950.0 y=302.0 width=156.0 height=32.0 center_x=1028.0 center_y=318.0)
+                  TextRun value="Containers" rect=(x=960.0 y=308.0 width=63.5 height=20.0 center_x=991.8 center_y=318.0)
+                Button name="Environment, 63" state=[toggled=True] rect=(x=950.0 y=336.0 width=156.0 height=32.0 center_x=1028.0 center_y=352.0)
+                  TextRun value="Environment" rect=(x=960.0 y=342.0 width=75.6 height=20.0 center_x=997.8 center_y=352.0)
+                Button name="Volumes, 14" state=[toggled=False] rect=(x=950.0 y=370.0 width=156.0 height=32.0 center_x=1028.0 center_y=386.0)
+                  TextRun value="Volumes" rect=(x=960.0 y=376.0 width=50.4 height=20.0 center_x=985.2 center_y=386.0)
+                Button name="Events, 37" state=[toggled=False] rect=(x=950.0 y=404.0 width=156.0 height=32.0 center_x=1028.0 center_y=420.0)
+                  TextRun value="Events" rect=(x=960.0 y=410.0 width=39.6 height=20.0 center_x=979.8 center_y=420.0)
+                Button name="YAML" state=[toggled=False] rect=(x=950.0 y=438.0 width=156.0 height=32.0 center_x=1028.0 center_y=454.0)
+                  TextRun value="YAML" rect=(x=960.0 y=444.0 width=34.4 height=20.0 center_x=977.2 center_y=454.0)
+              GenericContainer rect=<none>
+                Label value="RULES" rect=(x=1148.0 y=168.0 width=35.6 height=16.0 center_x=1165.8 center_y=176.0)
+                  TextRun value="RULES" rect=(x=1148.0 y=168.0 width=34.5 height=16.0 center_x=1165.3 center_y=176.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="One row of 4–6 readouts, never wrapping; values truncate with a tooltip." rect=(x=1164.0 y=194.0 width=314.0 height=40.0 center_x=1321.0 center_y=214.0)
+                  GenericContainer rect=<none>
+                    Label value="Only live or decisive values: readiness, restarts, usage, age. Identity fields stay in the property grid." rect=(x=1164.0 y=238.0 width=314.0 height=40.0 center_x=1321.0 center_y=258.0)
+                  GenericContainer rect=<none>
+                    Label value="Tone the value, not the tile: warning-text, danger-text, success-text, accent-text for links." rect=(x=1164.0 y=282.0 width=314.0 height=40.0 center_x=1321.0 center_y=302.0)
+                  GenericContainer rect=<none>
+                    Label value="Section rail lists the inspector’s sections with counts; clicking scrolls, scrolling moves the selection. Inspectors with fewer than four sections skip the rail." rect=(x=1164.0 y=326.0 width=314.0 height=60.0 center_x=1321.0 center_y=356.0)
+                  GenericContainer rect=<none>
+                    Label value="Primary header action shows its key (\u{200b}, \u{200b})." rect=(x=1164.0 y=390.0 width=314.0 height=20.0 center_x=1321.0 center_y=400.0)

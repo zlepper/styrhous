@@ -9,7 +9,7 @@ use super::state::{
     PendingForceDelete, ResourceAction, ResourceDetailHistoryEntry, UiState,
 };
 use super::table_preferences::{ResourceTableKey, TableColumnDefinition};
-use super::widgets::show_resource_cell;
+use super::widgets::{age_cell, namespace_cell, show_resource_cell};
 use crate::minimal_resource::{MinimalResource, format_age};
 use crate::pod_metrics::{
     ContainerUsage, NodeUsage, POD_USAGE_HISTORY_WINDOW, PodUsage, format_cpu, format_memory,
@@ -31,12 +31,11 @@ use crate::worker::{
     WorkerCommandBox, WorkerResult,
 };
 use components::design::stroke;
-use components::design::theme::{Theme, ThemeExt, Tone};
+use components::design::theme::{ThemeExt, Tone};
 use components::design::{radius, space, type_scale};
 use components::{
-    ButtonSize, DetailCell, DetailColumn, DetailRow, DetailTableCell, DetailTableRow, DetailValue,
-    InspectorDetails, MoreButton, PointingHand, TableRowBuilder, TailwindButton, TailwindTable,
-    TailwindTextArea, WorkspaceCard,
+    Button, ButtonSize, Card, DetailCell, DetailColumn, DetailRow, DetailTableCell, DetailTableRow,
+    DetailValue, InspectorDetails, MoreButton, PointingHand, TableRowBuilder, TextArea,
 };
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -45,13 +44,6 @@ const CARD_CONTENT_PADDING: i8 = space::S12 as i8;
 const CARD_HEADER_HEIGHT: f32 = 40.0;
 const CARD_HEADER_PADDING: f32 = space::S16;
 const CARD_GAP: f32 = space::S12;
-const USAGE_CHART_HEIGHT: f32 = 80.0;
-const USAGE_CHART_LEFT_INSET: f32 = 30.0;
-const USAGE_CHART_TOP_INSET: f32 = 3.0;
-const USAGE_CHART_RIGHT_INSET: f32 = 2.0;
-const USAGE_CHART_BOTTOM_INSET: f32 = 16.0;
-const USAGE_CHART_AREA_OPACITY: f32 = 0.14;
-const USAGE_CHART_REFERENCE_OPACITY: f32 = 0.8;
 
 impl WorkerResult for ResourceDataUpdateFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
@@ -209,8 +201,8 @@ impl GlobalBladeContent for ResourceDetailHistoryEntry {
             } else {
                 None
             },
-            Some(context.table_preferences()),
-            Some(&mut column_settings),
+            context.table_preferences(),
+            &mut column_settings,
         );
         if let Some(column_settings) = column_settings.as_mut() {
             column_settings.set_resource_detail_owner(self.history_entry_id);
@@ -399,6 +391,12 @@ impl GlobalBladeEffect for ResourceDetailEffect {
                     context.shell_requests.push(request);
                 }
             }
+            ResourceAction::ConfigureDebugImages => navigation.push(Box::new(
+                super::settings::TerminalSettingsBlade::new(
+                    context.terminal_launch_settings.clone(),
+                )
+                .returning_on_save(),
+            )),
             ResourceAction::OpenDetails { .. } => {
                 unreachable!("inspector actions cannot open detail")
             }
@@ -485,32 +483,6 @@ mod tests {
             misc::format_remaining(None, Some(1), format_cpu, "Loading…"),
             "Not reported"
         );
-    }
-
-    #[test]
-    fn usage_area_mesh_tessellates_each_non_monotonic_segment_independently() {
-        let points = [
-            egui::pos2(0.0, 6.0),
-            egui::pos2(10.0, 30.0),
-            egui::pos2(20.0, 8.0),
-            egui::pos2(30.0, 24.0),
-        ];
-        let baseline = 40.0;
-        let mesh = usage_area_mesh(&points, baseline, Theme::default().components.chart_cpu);
-
-        assert_eq!(mesh.vertices.len(), 4 * (points.len() - 1));
-        assert_eq!(mesh.indices.len(), 6 * (points.len() - 1));
-        assert!(
-            mesh.indices
-                .iter()
-                .all(|index| (*index as usize) < mesh.vertices.len())
-        );
-        for (segment, vertices) in points.windows(2).zip(mesh.vertices.chunks_exact(4)) {
-            assert_eq!(vertices[0].pos, segment[0]);
-            assert_eq!(vertices[1].pos, egui::pos2(segment[0].x, baseline));
-            assert_eq!(vertices[2].pos, segment[1]);
-            assert_eq!(vertices[3].pos, egui::pos2(segment[1].x, baseline));
-        }
     }
 
     #[test]
@@ -720,7 +692,7 @@ mod usage;
 use charts::*;
 use environment::*;
 use managed::*;
-pub(crate) use metadata::disclosure_card;
+
 use metadata::*;
 use misc::*;
 use navigation::*;

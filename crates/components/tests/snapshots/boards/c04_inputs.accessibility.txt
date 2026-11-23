@@ -1,0 +1,175 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Label value="C04 · COMPONENTS::{TEXTINPUT, SEARCHFIELD, TEXTAREA, NUMBERFIELD}" rect=(x=48.0 y=40.0 width=428.3 height=16.0 center_x=262.1 center_y=48.0)
+            TextRun value="C04 · COMPONENTS::{TEXTINPUT, SEARCHFIELD, TEXTAREA, NUMBERFIELD}" rect=(x=48.0 y=40.0 width=427.2 height=16.0 center_x=261.6 center_y=48.0)
+          Label value="Text input & search field" rect=(x=48.0 y=60.0 width=317.5 height=36.0 center_x=206.7 center_y=78.0)
+            TextRun value="Text input & search field" rect=(x=48.0 y=60.0 width=317.8 height=36.0 center_x=206.9 center_y=78.0)
+          Label value="Inputs are 32 px borderless pill wells; focus draws a 1.5 px coral ring with a soft halo. The search field owns its own count, match navigation and regex toggle so every surface searches the same way." rect=(x=48.0 y=102.0 width=893.5 height=40.0 center_x=494.7 center_y=122.0)
+            TextRun value="Inputs are 32 px borderless pill wells; focus draws a 1.5 px coral ring with a soft halo. The search field owns its own count, match navigation and " rect=(x=48.0 y=102.0 width=893.5 height=20.0 center_x=494.7 center_y=112.0)
+            TextRun value="regex toggle so every surface searches the same way." rect=(x=48.0 y=122.0 width=335.9 height=20.0 center_x=216.0 center_y=132.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="TEXT INPUT STATES" rect=(x=48.0 y=168.0 width=111.4 height=16.0 center_x=103.7 center_y=176.0)
+                  TextRun value="TEXT INPUT STATES" rect=(x=48.0 y=168.0 width=110.3 height=16.0 center_x=103.2 center_y=176.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        GenericContainer rect=<none>
+                          TextInput name="Rest" value="" rect=(x=48.0 y=196.0 width=260.0 height=32.0 center_x=178.0 center_y=212.0)
+                            TextRun value="" rect=(x=62.0 y=204.0 width=0.0 height=20.0 center_x=62.0 center_y=214.0)
+                        Label value="Rest" rect=(x=48.0 y=236.0 width=24.2 height=16.0 center_x=60.1 center_y=244.0)
+                          TextRun value="Rest" rect=(x=48.0 y=236.0 width=24.2 height=16.0 center_x=60.1 center_y=244.0)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        GenericContainer rect=<none>
+                          TextInput name="Hover" value="" rect=(x=336.0 y=196.0 width=260.0 height=32.0 center_x=466.0 center_y=212.0)
+                            TextRun value="" rect=(x=350.0 y=204.0 width=0.0 height=20.0 center_x=350.0 center_y=214.0)
+                        Label value="Hover" rect=(x=336.0 y=236.0 width=32.5 height=16.0 center_x=352.3 center_y=244.0)
+                          TextRun value="Hover" rect=(x=336.0 y=236.0 width=32.5 height=16.0 center_x=352.3 center_y=244.0)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        GenericContainer rect=<none>
+                          TextInput name="Focus" value="Styrhous on linux" rect=(x=624.0 y=196.0 width=260.0 height=32.0 center_x=754.0 center_y=212.0)
+                            TextRun value="Styrhous on linux" rect=(x=638.0 y=204.0 width=100.0 height=20.0 center_x=688.0 center_y=214.0)
+                        Label value="Focus" rect=(x=624.0 y=236.0 width=32.2 height=16.0 center_x=640.1 center_y=244.0)
+                          TextRun value="Focus" rect=(x=624.0 y=236.0 width=32.2 height=16.0 center_x=640.1 center_y=244.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        GenericContainer rect=<none>
+                          TextInput name="Filled" value="Styrhous on linux" rect=(x=48.0 y=272.0 width=260.0 height=32.0 center_x=178.0 center_y=288.0)
+                            TextRun value="Styrhous on linux" rect=(x=62.0 y=280.0 width=100.0 height=20.0 center_x=112.0 center_y=290.0)
+                        Label value="Filled" rect=(x=48.0 y=312.0 width=28.2 height=16.0 center_x=62.1 center_y=320.0)
+                          TextRun value="Filled" rect=(x=48.0 y=312.0 width=28.2 height=16.0 center_x=62.1 center_y=320.0)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        GenericContainer rect=<none>
+                          TextInput name="Error" value="Styrhous on linux" rect=(x=336.0 y=272.0 width=260.0 height=32.0 center_x=466.0 center_y=288.0)
+                            TextRun value="Styrhous on linux" rect=(x=350.0 y=280.0 width=100.0 height=20.0 center_x=400.0 center_y=290.0)
+                        Label value="Error" rect=(x=336.0 y=312.0 width=26.2 height=16.0 center_x=349.1 center_y=320.0)
+                          TextRun value="Error" rect=(x=336.0 y=312.0 width=26.2 height=16.0 center_x=349.1 center_y=320.0)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        GenericContainer rect=<none>
+                          TextInput name="Disabled" value="Styrhous on linux" state=[disabled] rect=(x=624.0 y=272.0 width=260.0 height=32.0 center_x=754.0 center_y=288.0)
+                            TextRun value="Styrhous on linux" rect=(x=638.0 y=280.0 width=100.0 height=20.0 center_x=688.0 center_y=290.0)
+                        Label value="Disabled" rect=(x=624.0 y=312.0 width=46.0 height=16.0 center_x=647.0 center_y=320.0)
+                          TextRun value="Disabled" rect=(x=624.0 y=312.0 width=46.0 height=16.0 center_x=647.0 center_y=320.0)
+              GenericContainer rect=<none>
+                Label value="SEARCH FIELD (FIND-IN-SURFACE AND TABLE FILTER)" rect=(x=48.0 y=356.0 width=303.0 height=16.0 center_x=199.5 center_y=364.0)
+                  TextRun value="SEARCH FIELD (FIND-IN-SURFACE AND TABLE FILTER)" rect=(x=48.0 y=356.0 width=301.9 height=16.0 center_x=199.0 center_y=364.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      TextInput name="Empty" value="" rect=(x=48.0 y=384.0 width=219.0 height=32.0 center_x=157.5 center_y=400.0)
+                        TextRun value="" rect=(x=84.0 y=392.0 width=0.0 height=20.0 center_x=84.0 center_y=402.0)
+                    Button name="Previous match" state=[disabled] rect=(x=280.0 y=388.0 width=24.0 height=24.0 center_x=292.0 center_y=400.0)
+                    Button name="Next match" state=[disabled] rect=(x=310.0 y=388.0 width=24.0 height=24.0 center_x=322.0 center_y=400.0)
+                    CheckBox name="Regular expression" state=[toggled=False] rect=(x=340.0 y=388.0 width=24.0 height=24.0 center_x=352.0 center_y=400.0)
+                    Label value="Empty" rect=(x=48.0 y=424.0 width=35.2 height=16.0 center_x=65.6 center_y=432.0)
+                      TextRun value="Empty" rect=(x=48.0 y=424.0 width=35.2 height=16.0 center_x=65.6 center_y=432.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      TextInput name="Typing — 150 ms debounce, count updates as the scan progresses" value="http" rect=(x=48.0 y=458.0 width=133.8 height=32.0 center_x=114.9 center_y=474.0)
+                        TextRun value="http" rect=(x=84.0 y=466.0 width=24.8 height=20.0 center_x=96.4 center_y=476.0)
+                    Label value="Searching… 4" rect=(x=187.8 y=464.0 width=79.2 height=20.0 center_x=227.4 center_y=474.0)
+                      TextRun value="Searching… 4" rect=(x=187.8 y=464.0 width=79.2 height=20.0 center_x=227.4 center_y=474.0)
+                    Button name="Previous match" rect=(x=280.0 y=462.0 width=24.0 height=24.0 center_x=292.0 center_y=474.0)
+                    Button name="Next match" rect=(x=310.0 y=462.0 width=24.0 height=24.0 center_x=322.0 center_y=474.0)
+                    CheckBox name="Regular expression" state=[toggled=False] rect=(x=340.0 y=462.0 width=24.0 height=24.0 center_x=352.0 center_y=474.0)
+                    Label value="Typing — 150 ms debounce, count updates as the scan progresses" rect=(x=48.0 y=498.0 width=359.8 height=16.0 center_x=227.9 center_y=506.0)
+                      TextRun value="Typing — 150 ms debounce, count updates as the scan progresses" rect=(x=48.0 y=498.0 width=359.8 height=16.0 center_x=227.9 center_y=506.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      TextInput name="Results — current / total; ↑ ↓ move between matches" value="http" rect=(x=48.0 y=532.0 width=143.4 height=32.0 center_x=119.7 center_y=548.0)
+                        TextRun value="http" rect=(x=84.0 y=540.0 width=24.8 height=20.0 center_x=96.4 center_y=550.0)
+                    Label value="3 / 12" rect=(x=197.4 y=538.0 width=39.6 height=20.0 center_x=217.2 center_y=548.0)
+                      TextRun value="3 / 12" rect=(x=197.4 y=538.0 width=39.6 height=20.0 center_x=217.2 center_y=548.0)
+                    Button name="Clear search" rect=(x=243.0 y=536.0 width=24.0 height=24.0 center_x=255.0 center_y=548.0)
+                    Button name="Previous match" rect=(x=280.0 y=536.0 width=24.0 height=24.0 center_x=292.0 center_y=548.0)
+                    Button name="Next match" rect=(x=310.0 y=536.0 width=24.0 height=24.0 center_x=322.0 center_y=548.0)
+                    CheckBox name="Regular expression" state=[toggled=False] rect=(x=340.0 y=536.0 width=24.0 height=24.0 center_x=352.0 center_y=548.0)
+                    Label value="Results — current / total; ↑ ↓ move between matches" rect=(x=48.0 y=572.0 width=290.4 height=16.0 center_x=193.2 center_y=580.0)
+                      TextRun value="Results — current / total; ↑ ↓ move between matches" rect=(x=48.0 y=572.0 width=290.4 height=16.0 center_x=193.2 center_y=580.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      TextInput name="No matches" value="timeout" rect=(x=48.0 y=606.0 width=123.6 height=32.0 center_x=109.8 center_y=622.0)
+                        TextRun value="timeout" rect=(x=84.0 y=614.0 width=45.8 height=20.0 center_x=106.9 center_y=624.0)
+                    Label value="0 results" rect=(x=177.6 y=612.0 width=59.4 height=20.0 center_x=207.3 center_y=622.0)
+                      TextRun value="0 results" rect=(x=177.6 y=612.0 width=59.4 height=20.0 center_x=207.3 center_y=622.0)
+                    Button name="Clear search" rect=(x=243.0 y=610.0 width=24.0 height=24.0 center_x=255.0 center_y=622.0)
+                    Button name="Previous match" state=[disabled] rect=(x=280.0 y=610.0 width=24.0 height=24.0 center_x=292.0 center_y=622.0)
+                    Button name="Next match" state=[disabled] rect=(x=310.0 y=610.0 width=24.0 height=24.0 center_x=322.0 center_y=622.0)
+                    CheckBox name="Regular expression" state=[toggled=False] rect=(x=340.0 y=610.0 width=24.0 height=24.0 center_x=352.0 center_y=622.0)
+                    Label value="No matches" rect=(x=48.0 y=646.0 width=65.4 height=16.0 center_x=80.7 center_y=654.0)
+                      TextRun value="No matches" rect=(x=48.0 y=646.0 width=65.4 height=16.0 center_x=80.7 center_y=654.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      TextInput name="Regex on" value="GET /v1/.*" rect=(x=48.0 y=680.0 width=150.0 height=32.0 center_x=123.0 center_y=696.0)
+                        TextRun value="GET /v1/.*" rect=(x=84.0 y=688.0 width=59.2 height=20.0 center_x=113.6 center_y=698.0)
+                    Label value="5 / 5" rect=(x=204.0 y=686.0 width=33.0 height=20.0 center_x=220.5 center_y=696.0)
+                      TextRun value="5 / 5" rect=(x=204.0 y=686.0 width=33.0 height=20.0 center_x=220.5 center_y=696.0)
+                    Button name="Clear search" rect=(x=243.0 y=684.0 width=24.0 height=24.0 center_x=255.0 center_y=696.0)
+                    Button name="Previous match" rect=(x=280.0 y=684.0 width=24.0 height=24.0 center_x=292.0 center_y=696.0)
+                    Button name="Next match" rect=(x=310.0 y=684.0 width=24.0 height=24.0 center_x=322.0 center_y=696.0)
+                    CheckBox name="Regular expression" state=[toggled=True] rect=(x=340.0 y=684.0 width=24.0 height=24.0 center_x=352.0 center_y=696.0)
+                    Label value="Regex on" rect=(x=48.0 y=720.0 width=49.9 height=16.0 center_x=73.0 center_y=728.0)
+                      TextRun value="Regex on" rect=(x=48.0 y=720.0 width=49.9 height=16.0 center_x=73.0 center_y=728.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      TextInput name="Invalid regex — message below, field keeps focus" value="coredns[a-z" rect=(x=48.0 y=754.0 width=219.0 height=32.0 center_x=157.5 center_y=770.0)
+                        TextRun value="coredns[a-z" rect=(x=84.0 y=762.0 width=69.7 height=20.0 center_x=118.8 center_y=772.0)
+                    Button name="Previous match" state=[disabled] rect=(x=280.0 y=758.0 width=24.0 height=24.0 center_x=292.0 center_y=770.0)
+                    Button name="Next match" state=[disabled] rect=(x=310.0 y=758.0 width=24.0 height=24.0 center_x=322.0 center_y=770.0)
+                    CheckBox name="Regular expression" state=[toggled=True] rect=(x=340.0 y=758.0 width=24.0 height=24.0 center_x=352.0 center_y=770.0)
+                    Label value="Unclosed character class at position 7" rect=(x=48.0 y=794.0 width=221.3 height=16.0 center_x=158.6 center_y=802.0)
+                      TextRun value="Unclosed character class at position 7" rect=(x=66.0 y=794.0 width=203.3 height=16.0 center_x=167.6 center_y=802.0)
+                    Label value="Invalid regex — message below, field keeps focus" rect=(x=48.0 y=818.0 width=266.2 height=16.0 center_x=181.1 center_y=826.0)
+                      TextRun value="Invalid regex — message below, field keeps focus" rect=(x=48.0 y=818.0 width=266.2 height=16.0 center_x=181.1 center_y=826.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="FORM FIELDS" rect=(x=944.0 y=168.0 width=75.0 height=16.0 center_x=981.5 center_y=176.0)
+                  TextRun value="FORM FIELDS" rect=(x=944.0 y=168.0 width=73.9 height=16.0 center_x=981.0 center_y=176.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="Display name" rect=(x=944.0 y=196.0 width=72.7 height=16.0 center_x=980.3 center_y=204.0)
+                      TextRun value="Display name" rect=(x=944.0 y=196.0 width=72.7 height=16.0 center_x=980.3 center_y=204.0)
+                    GenericContainer rect=<none>
+                      TextInput name="Display name" value="Production Europe" rect=(x=944.0 y=218.0 width=360.0 height=32.0 center_x=1124.0 center_y=234.0)
+                        TextRun value="Production Europe" rect=(x=958.0 y=226.0 width=108.9 height=20.0 center_x=1012.5 center_y=236.0)
+                    Label value="Leave blank to use the kubeconfig context name." rect=(x=944.0 y=256.0 width=262.6 height=16.0 center_x=1075.3 center_y=264.0)
+                      TextRun value="Leave blank to use the kubeconfig context name." rect=(x=944.0 y=256.0 width=262.6 height=16.0 center_x=1075.3 center_y=264.0)
+                  GenericContainer rect=<none>
+                    Label value="Badge" rect=(x=944.0 y=292.0 width=34.5 height=16.0 center_x=961.2 center_y=300.0)
+                      TextRun value="Badge" rect=(x=944.0 y=292.0 width=34.5 height=16.0 center_x=961.2 center_y=300.0)
+                    GenericContainer rect=<none>
+                      TextInput name="Badge" value="PRX" rect=(x=944.0 y=314.0 width=120.0 height=32.0 center_x=1004.0 center_y=330.0)
+                        TextRun value="PRX" rect=(x=958.0 y=322.0 width=23.7 height=20.0 center_x=969.8 center_y=332.0)
+                    Label value="Use one or two characters." rect=(x=944.0 y=352.0 width=161.6 height=16.0 center_x=1024.8 center_y=360.0)
+                      TextRun value="Use one or two characters." rect=(x=962.0 y=352.0 width=143.6 height=16.0 center_x=1033.8 center_y=360.0)
+                  GenericContainer rect=<none>
+                    Label value="Command template" rect=(x=944.0 y=388.0 width=108.6 height=16.0 center_x=998.3 center_y=396.0)
+                      TextRun value="Command template" rect=(x=944.0 y=388.0 width=108.6 height=16.0 center_x=998.3 center_y=396.0)
+                    GenericContainer rect=<none>
+                      MultilineTextInput name="Command template" value="alacritty -e {command}" rect=(x=944.0 y=410.0 width=360.0 height=56.0 center_x=1124.0 center_y=438.0)
+                        TextRun value="alacritty -e {command}" rect=(x=958.0 y=422.0 width=158.4 height=20.0 center_x=1037.2 center_y=432.0)
+                    Label value="Use {command} as the placeholder." rect=(x=944.0 y=472.0 width=190.3 height=16.0 center_x=1039.1 center_y=480.0)
+                      TextRun value="Use {command} as the placeholder." rect=(x=944.0 y=472.0 width=190.3 height=16.0 center_x=1039.1 center_y=480.0)
+                  GenericContainer rect=<none>
+                    Label value="Replicas" rect=(x=944.0 y=508.0 width=45.7 height=16.0 center_x=966.8 center_y=516.0)
+                      TextRun value="Replicas" rect=(x=944.0 y=508.0 width=45.7 height=16.0 center_x=966.8 center_y=516.0)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        TextInput name="Replicas" value="3" rect=(x=944.0 y=530.0 width=70.0 height=32.0 center_x=979.0 center_y=546.0)
+                          TextRun value="3" rect=(x=958.0 y=538.0 width=7.1 height=20.0 center_x=961.5 center_y=548.0)
+                      Button name="Decrease" rect=(x=1014.0 y=530.0 width=32.0 height=32.0 center_x=1030.0 center_y=546.0)
+                      Button name="Increase" rect=(x=1046.0 y=530.0 width=32.0 height=32.0 center_x=1062.0 center_y=546.0)
+                    Label value="Current: 2 · Min 0" rect=(x=944.0 y=568.0 width=93.2 height=16.0 center_x=990.6 center_y=576.0)
+                      TextRun value="Current: 2 · Min 0" rect=(x=944.0 y=568.0 width=93.2 height=16.0 center_x=990.6 center_y=576.0)

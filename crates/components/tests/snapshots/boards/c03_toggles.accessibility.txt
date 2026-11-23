@@ -1,0 +1,140 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Label value="C03 · COMPONENTS::{TOGGLEBUTTON, BUTTONGROUP, SEGMENTED}" rect=(x=48.0 y=40.0 width=383.7 height=16.0 center_x=239.9 center_y=48.0)
+            TextRun value="C03 · COMPONENTS::{TOGGLEBUTTON, BUTTONGROUP, SEGMENTED}" rect=(x=48.0 y=40.0 width=382.6 height=16.0 center_x=239.3 center_y=48.0)
+          Label value="Toggle button, button group & segmented control" rect=(x=48.0 y=60.0 width=648.1 height=36.0 center_x=372.0 center_y=78.0)
+            TextRun value="Toggle button, button group & segmented control" rect=(x=48.0 y=60.0 width=648.3 height=36.0 center_x=372.2 center_y=78.0)
+          Label value="Pressed-state controls for view options. Groups share one 32 px frame with 2 px padding; every child is a 28 px pill so groups line up with inputs and buttons on the same toolbar." rect=(x=48.0 y=102.0 width=899.5 height=40.0 center_x=497.7 center_y=122.0)
+            TextRun value="Pressed-state controls for view options. Groups share one 32 px frame with 2 px padding; every child is a 28 px pill so groups line up with inputs " rect=(x=48.0 y=102.0 width=899.5 height=20.0 center_x=497.7 center_y=112.0)
+            TextRun value="and buttons on the same toolbar." rect=(x=48.0 y=122.0 width=206.9 height=20.0 center_x=151.5 center_y=132.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="TOGGLE BUTTON STATES (INSIDE A GROUP)" rect=(x=48.0 y=168.0 width=243.9 height=16.0 center_x=169.9 center_y=176.0)
+                  TextRun value="TOGGLE BUTTON STATES (INSIDE A GROUP)" rect=(x=48.0 y=168.0 width=242.8 height=16.0 center_x=169.4 center_y=176.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Group name="Off" rect=<none>
+                      Button name="Line numbers" state=[toggled=False] rect=(x=50.0 y=198.0 width=28.0 height=28.0 center_x=64.0 center_y=212.0)
+                    Label value="Off" rect=(x=48.0 y=236.0 width=18.2 height=16.0 center_x=57.1 center_y=244.0)
+                      TextRun value="Off" rect=(x=48.0 y=236.0 width=18.2 height=16.0 center_x=57.1 center_y=244.0)
+                  GenericContainer rect=<none>
+                    Group name="Off · hover" rect=<none>
+                      Button name="Line numbers" state=[toggled=False] rect=(x=110.0 y=198.0 width=28.0 height=28.0 center_x=124.0 center_y=212.0)
+                    Label value="Off · hover" rect=(x=108.0 y=236.0 width=57.3 height=16.0 center_x=136.7 center_y=244.0)
+                      TextRun value="Off · hover" rect=(x=108.0 y=236.0 width=57.3 height=16.0 center_x=136.7 center_y=244.0)
+                  GenericContainer rect=<none>
+                    Group name="On" rect=<none>
+                      Button name="Line numbers" state=[toggled=True] rect=(x=195.3 y=198.0 width=28.0 height=28.0 center_x=209.3 center_y=212.0)
+                    Label value="On" rect=(x=193.3 y=236.0 width=16.0 height=16.0 center_x=201.3 center_y=244.0)
+                      TextRun value="On" rect=(x=193.3 y=236.0 width=16.0 height=16.0 center_x=201.3 center_y=244.0)
+                  GenericContainer rect=<none>
+                    Group name="On · hover" rect=<none>
+                      Button name="Line numbers" state=[toggled=True] rect=(x=255.3 y=198.0 width=28.0 height=28.0 center_x=269.3 center_y=212.0)
+                    Label value="On · hover" rect=(x=253.3 y=236.0 width=55.2 height=16.0 center_x=280.9 center_y=244.0)
+                      TextRun value="On · hover" rect=(x=253.3 y=236.0 width=55.2 height=16.0 center_x=280.9 center_y=244.0)
+                  GenericContainer rect=<none>
+                    Group name="Focus" rect=<none>
+                      Button name="Line numbers" state=[toggled=False] rect=(x=338.5 y=198.0 width=28.0 height=28.0 center_x=352.5 center_y=212.0)
+                    Label value="Focus" rect=(x=336.5 y=236.0 width=32.2 height=16.0 center_x=352.6 center_y=244.0)
+                      TextRun value="Focus" rect=(x=336.5 y=236.0 width=32.2 height=16.0 center_x=352.6 center_y=244.0)
+                  GenericContainer rect=<none>
+                    Group name="Disabled" rect=<none>
+                      Button name="Line numbers" state=[disabled, toggled=False] rect=(x=398.7 y=198.0 width=28.0 height=28.0 center_x=412.7 center_y=212.0)
+                    Label value="Disabled" rect=(x=396.7 y=236.0 width=46.0 height=16.0 center_x=419.7 center_y=244.0)
+                      TextRun value="Disabled" rect=(x=396.7 y=236.0 width=46.0 height=16.0 center_x=419.7 center_y=244.0)
+              GenericContainer rect=<none>
+                Label value="BUTTON GROUPS" rect=(x=48.0 y=280.0 width=95.0 height=16.0 center_x=95.5 center_y=288.0)
+                  TextRun value="BUTTON GROUPS" rect=(x=48.0 y=280.0 width=93.9 height=16.0 center_x=95.0 center_y=288.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Group name="View options" rect=<none>
+                      Button name="Line numbers" state=[toggled=True] rect=(x=50.0 y=310.0 width=28.0 height=28.0 center_x=64.0 center_y=324.0)
+                      Button name="Timestamps" state=[toggled=True] rect=(x=80.0 y=310.0 width=28.0 height=28.0 center_x=94.0 center_y=324.0)
+                      Button name="ANSI colours" state=[toggled=False] rect=(x=110.0 y=310.0 width=28.0 height=28.0 center_x=124.0 center_y=324.0)
+                      Button name="Source labels" state=[toggled=False] rect=(x=140.0 y=310.0 width=28.0 height=28.0 center_x=154.0 center_y=324.0)
+                    Label value="View options — Line numbers · Timestamps · ANSI colours · Source labels (2 on)" rect=(x=48.0 y=348.0 width=430.7 height=16.0 center_x=263.3 center_y=356.0)
+                      TextRun value="View options — Line numbers · Timestamps · ANSI colours · Source labels (2 on)" rect=(x=48.0 y=348.0 width=430.7 height=16.0 center_x=263.3 center_y=356.0)
+                  GenericContainer rect=<none>
+                    Group name="Line navigation" rect=<none>
+                      Button name="Previous line" rect=(x=50.0 y=386.0 width=28.0 height=28.0 center_x=64.0 center_y=400.0)
+                      Button name="Next line" rect=(x=80.0 y=386.0 width=28.0 height=28.0 center_x=94.0 center_y=400.0)
+                    Label value="Line navigation — previous / next displayed line" rect=(x=48.0 y=424.0 width=255.6 height=16.0 center_x=175.8 center_y=432.0)
+                      TextRun value="Line navigation — previous / next displayed line" rect=(x=48.0 y=424.0 width=255.6 height=16.0 center_x=175.8 center_y=432.0)
+                  GenericContainer rect=<none>
+                    Group name="Search" rect=<none>
+                      Button name="Filter to matches" state=[toggled=True] rect=(x=50.0 y=462.0 width=71.8 height=28.0 center_x=85.9 center_y=476.0)
+                      Button name="Follow tail" state=[toggled=False] rect=(x=130.8 y=462.0 width=80.2 height=28.0 center_x=170.9 center_y=476.0)
+                    Label value="Mixed: text toggle inside a group" rect=(x=48.0 y=500.0 width=175.4 height=16.0 center_x=135.7 center_y=508.0)
+                      TextRun value="Mixed: text toggle inside a group" rect=(x=48.0 y=500.0 width=175.4 height=16.0 center_x=135.7 center_y=508.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="STANDALONE TOGGLE" rect=(x=752.0 y=168.0 width=120.8 height=16.0 center_x=812.4 center_y=176.0)
+                  TextRun value="STANDALONE TOGGLE" rect=(x=752.0 y=168.0 width=119.8 height=16.0 center_x=811.9 center_y=176.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Button name="Follow" state=[toggled=True] rect=(x=752.0 y=196.0 width=84.2 height=32.0 center_x=794.1 center_y=212.0)
+                    Label value="Follow · on" rect=(x=752.0 y=236.0 width=57.5 height=16.0 center_x=780.8 center_y=244.0)
+                      TextRun value="Follow · on" rect=(x=752.0 y=236.0 width=57.5 height=16.0 center_x=780.8 center_y=244.0)
+                  GenericContainer rect=<none>
+                    Button name="Follow" state=[toggled=False] rect=(x=856.2 y=196.0 width=84.2 height=32.0 center_x=898.2 center_y=212.0)
+                    Label value="Follow · off" rect=(x=856.2 y=236.0 width=59.7 height=16.0 center_x=886.0 center_y=244.0)
+                      TextRun value="Follow · off" rect=(x=856.2 y=236.0 width=59.7 height=16.0 center_x=886.0 center_y=244.0)
+                  GenericContainer rect=<none>
+                    Button name="Matches only" state=[toggled=True] rect=(x=960.3 y=196.0 width=124.2 height=32.0 center_x=1022.4 center_y=212.0)
+                    Label value="Filter · on" rect=(x=960.3 y=236.0 width=49.7 height=16.0 center_x=985.2 center_y=244.0)
+                      TextRun value="Filter · on" rect=(x=960.3 y=236.0 width=49.7 height=16.0 center_x=985.2 center_y=244.0)
+                  GenericContainer rect=<none>
+                    Button name="funnel" state=[toggled=False] rect=(x=1104.5 y=196.0 width=32.0 height=32.0 center_x=1120.5 center_y=212.0)
+                    Label value="Icon solo · off" rect=(x=1104.5 y=236.0 width=73.3 height=16.0 center_x=1141.2 center_y=244.0)
+                      TextRun value="Icon solo · off" rect=(x=1104.5 y=236.0 width=73.3 height=16.0 center_x=1141.2 center_y=244.0)
+                  GenericContainer rect=<none>
+                    Button name="Follow" state=[toggled=False] rect=(x=1197.8 y=196.0 width=84.2 height=32.0 center_x=1239.9 center_y=212.0)
+                    Label value="Hover" rect=(x=1197.8 y=236.0 width=32.5 height=16.0 center_x=1214.1 center_y=244.0)
+                      TextRun value="Hover" rect=(x=1197.8 y=236.0 width=32.5 height=16.0 center_x=1214.1 center_y=244.0)
+              GenericContainer rect=<none>
+                Label value="SEGMENTED CONTROL" rect=(x=752.0 y=280.0 width=124.0 height=16.0 center_x=814.0 center_y=288.0)
+                  TextRun value="SEGMENTED CONTROL" rect=(x=752.0 y=280.0 width=122.9 height=16.0 center_x=813.5 center_y=288.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Group rect=<none>
+                      Button name="Current" state=[toggled=True] rect=(x=754.0 y=310.0 width=69.2 height=28.0 center_x=788.6 center_y=324.0)
+                      Button name="Previous" state=[toggled=False] rect=(x=825.2 y=310.0 width=73.9 height=28.0 center_x=862.1 center_y=324.0)
+                    Label value="Log instance · md" rect=(x=752.0 y=348.0 width=94.9 height=16.0 center_x=799.4 center_y=356.0)
+                      TextRun value="Log instance · md" rect=(x=752.0 y=348.0 width=94.9 height=16.0 center_x=799.4 center_y=356.0)
+                  GenericContainer rect=<none>
+                    Group rect=<none>
+                      Button name="Current" state=[toggled=False] rect=(x=754.0 y=386.0 width=69.2 height=28.0 center_x=788.6 center_y=400.0)
+                      Button name="Previous" state=[toggled=True] rect=(x=825.2 y=386.0 width=73.9 height=28.0 center_x=862.1 center_y=400.0)
+                    Label value="Previous selected, Current hovered" rect=(x=752.0 y=424.0 width=188.2 height=16.0 center_x=846.1 center_y=432.0)
+                      TextRun value="Previous selected, Current hovered" rect=(x=752.0 y=424.0 width=188.2 height=16.0 center_x=846.1 center_y=432.0)
+                  GenericContainer rect=<none>
+                    Group rect=<none>
+                      Button name="Table" state=[toggled=True] rect=(x=754.0 y=462.0 width=70.5 height=24.0 center_x=789.3 center_y=474.0)
+                      Button name="YAML" state=[toggled=False] rect=(x=826.5 y=462.0 width=74.1 height=24.0 center_x=863.6 center_y=474.0)
+                    Label value="With icons · sm" rect=(x=752.0 y=496.0 width=81.8 height=16.0 center_x=792.9 center_y=504.0)
+                      TextRun value="With icons · sm" rect=(x=752.0 y=496.0 width=81.8 height=16.0 center_x=792.9 center_y=504.0)
+                  GenericContainer rect=<none>
+                    Group rect=<none>
+                      Button name="1 h" state=[toggled=False] rect=(x=754.0 y=534.0 width=34.7 height=24.0 center_x=771.3 center_y=546.0)
+                      Button name="6 h" state=[toggled=True] rect=(x=790.7 y=534.0 width=36.5 height=24.0 center_x=808.9 center_y=546.0)
+                      Button name="24 h" state=[toggled=False] rect=(x=829.2 y=534.0 width=43.9 height=24.0 center_x=851.1 center_y=546.0)
+                    Label value="Three options" rect=(x=752.0 y=568.0 width=74.1 height=16.0 center_x=789.0 center_y=576.0)
+                      TextRun value="Three options" rect=(x=752.0 y=568.0 width=74.1 height=16.0 center_x=789.0 center_y=576.0)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="Replaces" rect=(x=768.0 y=628.0 width=49.3 height=16.0 center_x=792.6 center_y=636.0)
+                      TextRun value="Replaces" rect=(x=768.0 y=628.0 width=49.3 height=16.0 center_x=792.6 center_y=636.0)
+                    Label value="log toolbar badges" rect=(x=825.3 y=628.0 width=100.2 height=16.0 center_x=875.4 center_y=636.0)
+                      TextRun value="log toolbar badges" rect=(x=825.3 y=628.0 width=100.2 height=16.0 center_x=875.4 center_y=636.0)
+                  Label value="The current log toolbar marks an active toggle with a green check badge that sits on the button edge and overlaps its neighbour, and fixes the group width (158/160 pt) so new buttons spill. A toggle now shows its on state as a cream pill inside its own 28×28 bounds, and a group sizes to its children." rect=(x=768.0 y=650.0 width=528.0 height=64.0 center_x=1032.0 center_y=682.0)
+                    TextRun value="The current log toolbar marks an active toggle with a green check badge that sits on the button " rect=(x=768.0 y=650.0 width=513.0 height=16.0 center_x=1024.5 center_y=658.0)
+                    TextRun value="edge and overlaps its neighbour, and fixes the group width (158/160 pt) so new buttons spill. A " rect=(x=768.0 y=666.0 width=510.0 height=16.0 center_x=1023.0 center_y=674.0)
+                    TextRun value="toggle now shows its on state as a cream pill inside its own 28×28 bounds, and a group sizes to its " rect=(x=768.0 y=682.0 width=528.0 height=16.0 center_x=1032.0 center_y=690.0)
+                    TextRun value="children." rect=(x=768.0 y=698.0 width=45.5 height=16.0 center_x=790.8 center_y=706.0)

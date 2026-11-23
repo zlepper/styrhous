@@ -11,8 +11,9 @@ use super::table_preferences::{
     TableColumnDefinition,
 };
 use super::widgets::{
-    show_resource_cell, workspace_empty_state, workspace_error_state, workspace_loading_state,
-    workspace_search_error_state,
+    age_cell, namespace_cell, show_resource_cell, workspace_empty_state, workspace_error_state,
+    workspace_filtered_empty_state, workspace_loading_state, workspace_search_error_state,
+    workspace_unavailable_state,
 };
 use crate::api_resource::ApiResource;
 use crate::helm_release::HelmRelease;
@@ -23,27 +24,27 @@ use crate::resource_handlers::table_definition;
 use crate::resource_table::{
     CellValue, CustomResourceColumn, NODE_COLUMN, SortValue, cell_sort_value,
 };
-use crate::terminal_launcher::{DebugImagePreset, ShellRequest};
+use crate::terminal_launcher::{DebugImagePreset, ShellRequest, TerminalLaunchSettings};
 use crate::ui::global_blade::resource_detail_entry_ids;
 use crate::ui::namespace_selector::NamespaceSelectorSettings;
 use crate::worker::WorkerCommandBox;
 use components::design::theme::ThemeExt;
 use components::design::{space, type_scale};
 use components::fuzzy::{fuzzy_match_score, normalize_for_search};
+use components::icons::Icon;
 use components::{
-    ButtonSize, MoreButton, SelectionAction, TableRowBuilder, TailwindButton, TailwindCombobox,
-    TailwindSearchInput, TailwindTable, WorkspacePage,
+    BulkSelectionBar, Button, ButtonSize, CheckState, MoreButton, SearchStatus, SelectionAction,
+    Table, TableRowBuilder, WorkspacePage,
 };
-use egui_extras::{Size, StripBuilder};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
-const RESOURCE_SEARCH_WIDTH: f32 = 210.0;
-const TOOLBAR_RIGHT_INSET: f32 = space::S24;
-const TOOLBAR_HEIGHT: f32 = 52.0;
-const TOOLBAR_CONTENT_HEIGHT: f32 = 36.0;
-const TOOLBAR_VERTICAL_PADDING: f32 = (TOOLBAR_HEIGHT - TOOLBAR_CONTENT_HEIGHT) / 2.0;
-const RESOURCE_TABLE_SELECTION_WIDTH: f32 = 48.0;
+/// How far the top bar stays off the workspace's edges.
+const TOP_BAR_INSET: f32 = space::S16;
+/// Skeleton rows shown while a resource list first loads (S08).
+const LOADING_ROWS: usize = 3;
+/// Around the bulk selection bar, between the toolbar and the table header (C08).
+const BULK_BAR_GAP: f32 = space::S12;
 
 struct FilteredResources {
     resources: Vec<MinimalResource>,
@@ -55,20 +56,14 @@ struct ResourceActionAvailability {
     supports_scale: bool,
 }
 
-struct ResourceSelectionControls<'a> {
-    selected_count: usize,
-    actions_enabled: bool,
-    interleaved_logs_available: bool,
-    action: &'a mut Option<ResourceSelectionAction>,
-    namespace_selector_settings: &'a NamespaceSelectorSettings,
-}
-
 struct ResourceTableOptions<'a> {
     resource_cache: &'a HashMap<super::state::ResourceWatchKey, super::state::ResourceWatchState>,
     metrics: ResourceMetrics<'a>,
     resource_navigation: &'a ResourceNavigation,
     actions: ResourceActionAvailability,
     debug_image_presets: &'a [DebugImagePreset],
+    /// The uid of the resource whose inspector blade is open.
+    inspected_uid: Option<&'a str>,
 }
 
 struct ResourceTableControls<'a> {
@@ -76,12 +71,6 @@ struct ResourceTableControls<'a> {
     table_preferences: &'a mut PersistedResourceTablePreferences,
     column_settings_to_open:
         &'a mut Option<super::resource_table_settings::ResourceTableSettingsTarget>,
-}
-
-#[derive(Clone, Copy)]
-struct ResourceCountSummary {
-    total: usize,
-    visible: usize,
 }
 
 enum NamespaceSelection {
@@ -110,6 +99,8 @@ struct WorkspaceEffects {
     scale_to_request: Option<ScaleTarget>,
     /// (namespace, name) of a Deployment whose rollback dialog to open.
     deployment_rollback_to_request: Option<(String, String)>,
+    /// The terminal settings, opened from a debug image menu.
+    terminal_settings_to_open: Option<TerminalLaunchSettings>,
 }
 
 struct ResourceDetailTarget {
@@ -188,6 +179,9 @@ impl WorkspaceEffects {
             );
         }
         shell_requests.extend(self.shell_request);
+        if let Some(settings) = self.terminal_settings_to_open {
+            ui_state.open_terminal_settings(&settings, commands_to_send);
+        }
         if let (Some(cluster), Some((namespace, name))) = (
             ui_state
                 .selected_cluster
@@ -258,38 +252,40 @@ pub(super) fn show(
     ui_state: &mut UiState,
     commands_to_send: &mut Vec<WorkerCommandBox>,
     shell_requests: &mut Vec<ShellRequest>,
-    debug_image_presets: &[DebugImagePreset],
+    terminal_launch_settings: &TerminalLaunchSettings,
     table_preferences: &mut PersistedResourceTablePreferences,
     namespace_selector_settings: &NamespaceSelectorSettings,
 ) {
+    let debug_image_presets = terminal_launch_settings.debug_image_presets.as_slice();
     let ctx = ui.ctx().clone();
     let mut effects = WorkspaceEffects::default();
     let mut resource_selection_action = None;
+    // The resource whose inspector blade (opened from the table) is showing.
+    let inspected = ui_state
+        .global_blades
+        .navigator()
+        .and_then(|navigator| {
+            navigator
+                .entries()
+                .find_map(|content| content.resource_detail())
+        })
+        .map(|entry| {
+            (
+                entry.cluster_key,
+                entry.api_resource.clone(),
+                entry.resource_uid.clone(),
+            )
+        });
     egui::CentralPanel::default()
         .frame(WorkspacePage::canvas_frame(&ui.tokens()))
         .show(ui, |ui| {
             WorkspacePage::show(ui, |ui| {
-                let toolbar_rect = egui::Rect::from_min_size(
-                    ui.max_rect().min,
-                    egui::vec2(ui.available_width(), TOOLBAR_HEIGHT),
-                );
-                ui.painter()
-                    .rect_filled(toolbar_rect, 0.0, ui.tokens().surface.canvas);
-
                 let Some(selected_cluster_id) = ui_state.selected_cluster else {
-                    workspace_empty_state(
-                        ui,
-                        "Choose a cluster",
-                        "Select a Kubernetes context from the cluster rail to begin exploring.",
-                    );
+                    choose_cluster_state(ui);
                     return;
                 };
                 let Some(cluster) = ui_state.clusters.get_mut(&selected_cluster_id) else {
-                    workspace_empty_state(
-                        ui,
-                        "Choose a cluster",
-                        "Select a Kubernetes context from the cluster rail to begin exploring.",
-                    );
+                    choose_cluster_state(ui);
                     return;
                 };
 
@@ -305,11 +301,7 @@ pub(super) fn show(
                         return;
                     }
                     ClusterConnectionState::Disconnected => {
-                        workspace_empty_state(
-                            ui,
-                            "Choose a cluster",
-                            "Select a Kubernetes context from the cluster rail to begin exploring.",
-                        );
+                        choose_cluster_state(ui);
                         return;
                     }
                     ClusterConnectionState::Connecting | ClusterConnectionState::Connected => {}
@@ -373,36 +365,31 @@ pub(super) fn show(
                     ui,
                     cluster,
                     selected_api_resource.as_ref(),
-                    ResourceCountSummary {
+                    ListSummary {
                         total: resource_count,
                         visible: visible_count,
+                        live: selected_api_resource.as_ref().is_some_and(|api_resource| {
+                            // Nothing is watched until a namespace is chosen.
+                            !(api_resource.namespaced
+                                && cluster.selected_namespaces.is_nothing_selected())
+                                && !selected_watches_are_loading(cluster, api_resource)
+                                && selected_watch_error(cluster, api_resource).is_none()
+                        }),
                     },
                     &mut resource_search,
                     &mut effects.namespace_selection,
-                    ResourceSelectionControls {
-                        selected_count: selected_resource_count,
-                        actions_enabled: resource_actions_enabled,
-                        interleaved_logs_available: selected_api_resource
-                            .as_ref()
-                            .is_some_and(|resource| resource.kind == "Pod"),
-                        action: &mut resource_selection_action,
-                        namespace_selector_settings,
-                    },
+                    namespace_selector_settings,
                 );
                 if let Some(api_resource) = &selected_api_resource {
                     cluster
                         .resource_searches
                         .insert(api_resource.clone(), resource_search);
                 }
-                ui.add_space(TOOLBAR_VERTICAL_PADDING);
-                ui.painter().line_segment(
-                    [toolbar_rect.left_bottom(), toolbar_rect.right_bottom()],
-                    ui.visuals().widgets.noninteractive.bg_stroke,
-                );
 
                 let Some(api_resource) = &selected_api_resource else {
                     workspace_empty_state(
                         ui,
+                        Icon::QueueList,
                         "Select a resource",
                         "Choose an API resource from the navigator to inspect it.",
                     );
@@ -425,6 +412,12 @@ pub(super) fn show(
                     .expect("selected resource search was just stored")
                     .clone();
                 prepare_cluster_table(cluster, api_resource, &resource_search, table_configuration);
+                let inspected_uid = inspected
+                    .as_ref()
+                    .filter(|(cluster_key, resource, _)| {
+                        *cluster_key == cluster.cluster_key && resource == api_resource
+                    })
+                    .map(|(_, _, uid)| uid.clone());
                 let metrics_shown = cluster.metrics_shown_as_available();
                 let resources = &mut cluster.resources;
                 let prepared = resources.resource_table_cache.prepared();
@@ -433,38 +426,67 @@ pub(super) fn show(
                     &resources.pod_metrics,
                     &resources.node_metrics,
                 );
+                let mut clear_filter = false;
+                // The bar stays above every state while rows are selected, so the
+                // selection can always be cleared or acted on.
+                if selected_resource_count > 0 {
+                    let selection = resources.resource_selections.get(api_resource);
+                    let visible_selected = prepared
+                        .rows
+                        .iter()
+                        .filter(|row| {
+                            matches!(row, PreparedResourceTableRow::Resource(identity)
+                                if selection.is_some_and(|selection| selection.contains(&identity.uid)))
+                        })
+                        .count();
+                    show_bulk_selection_bar(
+                        ui,
+                        BulkSelection {
+                            selected: selected_resource_count,
+                            hidden: selected_resource_count.saturating_sub(visible_selected),
+                            visible: prepared.visible_resource_count,
+                            actions_enabled: resource_actions_enabled,
+                            interleaved_logs: api_resource.is_pod(),
+                        },
+                        &mut resource_selection_action,
+                    );
+                }
                 if namespace_selection_empty {
                     workspace_empty_state(
                         ui,
+                        Icon::Folder,
                         "Choose a namespace",
                         "Select one or more namespaces to start watching resources.",
                     );
                 } else if let Some(error) = &namespace_list_error {
                     // The namespace watcher keeps retrying by itself, so there is nothing to retry.
-                    workspace_empty_state(ui, "Namespaces unavailable", error);
+                    workspace_unavailable_state(ui, "Namespaces unavailable", error);
                 } else if let Some(error) = watch_error {
                     effects.retry_requested =
                         workspace_error_state(ui, "Unable to load resources", &error);
                 } else if watches_are_loading {
-                    workspace_loading_state(
-                        ui,
-                        "Loading resources",
-                        "Waiting for the selected namespace resources to synchronize.",
-                    );
+                    // The first list response: the table's header over skeleton rows (S08).
+                    table_configuration
+                        .table(api_resource)
+                        .selectable()
+                        .show_loading(ui, LOADING_ROWS, "Loading resources");
                 } else if prepared.resource_count == 0 {
                     workspace_empty_state(
                         ui,
+                        Icon::Cube,
                         "No resources found",
                         "This resource type has no items in the selected namespace scope.",
                     );
                 } else if let Some(error) = &prepared.regex_error {
                     workspace_search_error_state(ui, error);
                 } else if prepared.visible_resource_count == 0 {
-                    workspace_empty_state(
+                    if workspace_filtered_empty_state(
                         ui,
                         "No matching resources",
                         "Try a different search term.",
-                    );
+                    ) {
+                        clear_filter = true;
+                    }
                 } else if let Some(action) = {
                     show_resource_table(
                         ui,
@@ -482,6 +504,7 @@ pub(super) fn show(
                                     .is_scalable(api_resource),
                             },
                             debug_image_presets,
+                            inspected_uid: inspected_uid.as_deref(),
                         },
                         ResourceTableControls {
                             selection: resources
@@ -565,6 +588,10 @@ pub(super) fn show(
                         | ResourceAction::NodeShell { .. }) => {
                             effects.shell_request = action.shell_request(&cluster.name);
                         }
+                        ResourceAction::ConfigureDebugImages => {
+                            effects.terminal_settings_to_open =
+                                Some(terminal_launch_settings.clone());
+                        }
                         ResourceAction::SaveData { .. } => {
                             unreachable!("resource table actions cannot save inspector data")
                         }
@@ -637,6 +664,21 @@ pub(super) fn show(
                         }
                     }
                 }
+                // Ticking the first row or clearing the last one adds or removes the
+                // bulk bar above the table: lay the frame out again rather than
+                // showing the table where the pointer no longer is.
+                let selected_after = resources
+                    .resource_selections
+                    .get(api_resource)
+                    .map_or(0, HashSet::len);
+                if (selected_resource_count > 0) != (selected_after > 0) {
+                    ui.ctx().request_discard("the bulk selection bar appeared or went");
+                }
+                if clear_filter
+                    && let Some(search) = cluster.resource_searches.get_mut(api_resource)
+                {
+                    search.query.clear();
+                }
             });
         });
 
@@ -657,3 +699,13 @@ use toolbar::*;
 
 #[cfg(test)]
 mod tests;
+
+/// No cluster is selected or connected: point at the cluster rail.
+fn choose_cluster_state(ui: &mut egui::Ui) {
+    workspace_empty_state(
+        ui,
+        Icon::ServerStack,
+        "Choose a cluster",
+        "Select a Kubernetes context from the cluster rail to begin exploring.",
+    );
+}

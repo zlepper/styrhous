@@ -260,7 +260,7 @@ fn test_resource_actions_integration() {
     let actions_label = format!("More actions for {test_configmap_name}");
     harness.get_by_label(&actions_label).click();
     harness.run_steps(1);
-    harness.get_by_label("Edit").click();
+    harness.get_by_label("Edit YAML").click();
     harness.run_steps(1);
     let yaml_editor_id = wait_for_yaml_editor(&mut harness, &test_configmap_name, 5_000);
 
@@ -403,6 +403,9 @@ fn test_bulk_resource_delete_integration() {
 
     harness.get_by_label("Select row 1").click();
     harness.run_steps(1);
+    // The bulk bar appeared over the table in the same frame, so row 2 is
+    // found where it now is.
+    harness.get_by_label("Delete selected");
     harness.get_by_label("Select row 2").click();
     harness.run_steps(1);
     harness.get_by_label("Delete selected").click();

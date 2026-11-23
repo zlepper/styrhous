@@ -5,36 +5,29 @@ Window rect=<none>
       GenericContainer rect=<none>
         Label value="Comboboxes" rect=(x=8.0 y=8.0 width=126.8 height=24.0 center_x=71.4 center_y=20.0)
           TextRun value="Comboboxes" rect=(x=8.0 y=8.0 width=126.8 height=24.0 center_x=71.4 center_y=20.0)
-        Label value="Empty selection" rect=(x=8.0 y=47.0 width=94.3 height=16.0 center_x=55.1 center_y=55.0)
-          TextRun value="Empty selection" rect=(x=8.0 y=47.0 width=94.3 height=16.0 center_x=55.1 center_y=55.0)
-        ComboBox name="Empty selection" rect=(x=8.0 y=66.0 width=280.0 height=36.0 center_x=148.0 center_y=84.0)
-        GenericContainer rect=<none>
-          Image rect=(x=264.0 y=76.0 width=16.0 height=16.0 center_x=272.0 center_y=84.0)
-        Label value="Selected value" rect=(x=8.0 y=117.0 width=85.3 height=16.0 center_x=50.7 center_y=125.0)
-          TextRun value="Selected value" rect=(x=8.0 y=117.0 width=85.3 height=16.0 center_x=50.7 center_y=125.0)
-        ComboBox name="Selected value" rect=(x=8.0 y=136.0 width=280.0 height=36.0 center_x=148.0 center_y=154.0)
-        GenericContainer rect=<none>
-          Image rect=(x=264.0 y=146.0 width=16.0 height=16.0 center_x=272.0 center_y=154.0)
-        Label value="Multi-select" rect=(x=8.0 y=187.0 width=69.5 height=16.0 center_x=42.8 center_y=195.0)
-          TextRun value="Multi-select" rect=(x=8.0 y=187.0 width=69.5 height=16.0 center_x=42.8 center_y=195.0)
-        ComboBox name="Multi-select" rect=(x=8.0 y=206.0 width=280.0 height=36.0 center_x=148.0 center_y=224.0)
-        GenericContainer rect=<none>
-          Image rect=(x=264.0 y=216.0 width=16.0 height=16.0 center_x=272.0 center_y=224.0)
-        GenericContainer rect=<none>
-          TextInput name="Search Multi-select" value="" state=[focused] rect=(x=20.0 y=214.0 width=232.0 height=20.0 center_x=136.0 center_y=224.0)
-            TextRun value="" rect=(x=24.0 y=216.0 width=0.0 height=16.0 center_x=24.0 center_y=224.0)
-        Label value="Filter results" rect=(x=8.0 y=257.0 width=71.2 height=16.0 center_x=43.6 center_y=265.0)
-          TextRun value="Filter results" rect=(x=8.0 y=257.0 width=71.2 height=16.0 center_x=43.6 center_y=265.0)
-        ComboBox name="Filter results" rect=(x=8.0 y=276.0 width=280.0 height=36.0 center_x=148.0 center_y=294.0)
-        GenericContainer rect=<none>
-          Image rect=(x=264.0 y=286.0 width=16.0 height=16.0 center_x=272.0 center_y=294.0)
-  Unknown name="Multi-select options" rect=(x=8.0 y=242.0 width=280.0 height=186.0 center_x=148.0 center_y=335.0)
+        Label value="Empty selection" rect=(x=8.0 y=47.0 width=88.5 height=16.0 center_x=52.3 center_y=55.0)
+          TextRun value="Empty selection" rect=(x=8.0 y=47.0 width=88.5 height=16.0 center_x=52.3 center_y=55.0)
+        ComboBox name="Empty selection" rect=(x=8.0 y=69.0 width=280.0 height=32.0 center_x=148.0 center_y=85.0)
+        Label value="Selected value" rect=(x=8.0 y=116.0 width=80.0 height=16.0 center_x=48.0 center_y=124.0)
+          TextRun value="Selected value" rect=(x=8.0 y=116.0 width=80.0 height=16.0 center_x=48.0 center_y=124.0)
+        ComboBox name="Selected value" value="Michael Foster" rect=(x=8.0 y=138.0 width=280.0 height=32.0 center_x=148.0 center_y=154.0)
+        Label value="Multi-select" rect=(x=8.0 y=185.0 width=65.4 height=16.0 center_x=40.7 center_y=193.0)
+          TextRun value="Multi-select" rect=(x=8.0 y=185.0 width=65.4 height=16.0 center_x=40.7 center_y=193.0)
+        ComboBox name="Multi-select" value="2 people selected" rect=(x=8.0 y=207.0 width=280.0 height=32.0 center_x=148.0 center_y=223.0)
+        Label value="Filter results" rect=(x=8.0 y=254.0 width=67.4 height=16.0 center_x=41.7 center_y=262.0)
+          TextRun value="Filter results" rect=(x=8.0 y=254.0 width=67.4 height=16.0 center_x=41.7 center_y=262.0)
+        ComboBox name="Filter results" rect=(x=8.0 y=276.0 width=280.0 height=32.0 center_x=148.0 center_y=292.0)
+  Unknown name="Multi-select options" rect=(x=8.0 y=243.0 width=280.0 height=213.0 center_x=148.0 center_y=349.5)
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
           GenericContainer rect=<none>
-            CheckBox name="Select all" state=[toggled=False] rect=(x=15.0 y=249.0 width=266.0 height=32.0 center_x=148.0 center_y=265.0)
-            CheckBox name="Michael Foster" state=[toggled=True] rect=(x=15.0 y=284.0 width=266.0 height=32.0 center_x=148.0 center_y=300.0)
-            CheckBox name="Emily Selman" state=[toggled=True] rect=(x=15.0 y=319.0 width=266.0 height=32.0 center_x=148.0 center_y=335.0)
-            CheckBox name="Floyd Miles" state=[toggled=False] rect=(x=15.0 y=354.0 width=266.0 height=32.0 center_x=148.0 center_y=370.0)
-            CheckBox name="Courtney Henry" state=[toggled=False] rect=(x=15.0 y=389.0 width=266.0 height=32.0 center_x=148.0 center_y=405.0)
+            TextInput name="Search Multi-select" value="" state=[focused] rect=(x=44.0 y=251.0 width=196.0 height=20.0 center_x=142.0 center_y=261.0)
+              TextRun value="" rect=(x=44.0 y=253.0 width=0.0 height=20.0 center_x=44.0 center_y=263.0)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              CheckBox name="Select all" state=[toggled=False] rect=(x=12.0 y=283.0 width=272.0 height=32.0 center_x=148.0 center_y=299.0)
+              CheckBox name="Michael Foster" state=[toggled=True] rect=(x=12.0 y=324.0 width=272.0 height=32.0 center_x=148.0 center_y=340.0)
+              CheckBox name="Emily Selman" state=[toggled=True] rect=(x=12.0 y=356.0 width=272.0 height=32.0 center_x=148.0 center_y=372.0)
+              CheckBox name="Floyd Miles" state=[toggled=False] rect=(x=12.0 y=388.0 width=272.0 height=32.0 center_x=148.0 center_y=404.0)
+              CheckBox name="Courtney Henry" state=[toggled=False] rect=(x=12.0 y=420.0 width=272.0 height=32.0 center_x=148.0 center_y=436.0)

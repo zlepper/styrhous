@@ -233,78 +233,23 @@ pub(super) fn format_remaining(
     }
 }
 
-/// The copy icon of a chip.
-const CHIP_COPY_ICON_SIZE: f32 = 14.0;
-
-pub(super) fn chip_row(ui: &mut egui::Ui, label: &str, values: &[String]) {
-    let theme = ui.tokens();
-    ui.label(
-        egui::RichText::new(label)
-            .font(type_scale::META.font_id(ui.ctx()))
-            .color(theme.text.muted),
-    );
-    ui.with_layout(
-        egui::Layout::left_to_right(egui::Align::TOP).with_main_wrap(true),
-        |ui| {
-            for value in values {
-                let chip_width = (value.chars().count() as f32 * 6.7 + 28.0).clamp(54.0, 320.0);
-                ui.allocate_ui_with_layout(
-                    egui::vec2(chip_width, 0.0),
-                    egui::Layout::top_down(egui::Align::LEFT),
-                    |ui| {
-                        egui::Frame::new()
-                            .fill(theme.components.well_bg)
-                            .stroke(stroke::subtle_divider(&theme))
-                            .corner_radius(egui::CornerRadius::same(radius::KEY))
-                            .inner_margin(egui::Margin::symmetric((space::S8 - 3.0) as i8, 0))
-                            .show(ui, |ui| {
-                                ui.set_max_width(chip_width - 10.0);
-                                ui.horizontal_top(|ui| {
-                                    let font = type_scale::MONO.font_id(ui.ctx());
-                                    let line_height = ui.fonts_mut(|fonts| fonts.row_height(&font));
-                                    let text = ui.add(
-                                        egui::Label::new(
-                                            egui::RichText::new(value)
-                                                .font(font)
-                                                .color(theme.text.primary),
-                                        )
-                                        .wrap(),
-                                    );
-                                    // Centred on the first text line, as inspector copy icons are.
-                                    let icon_rect = egui::Rect::from_center_size(
-                                        egui::pos2(
-                                            ui.cursor().left() + CHIP_COPY_ICON_SIZE / 2.0,
-                                            text.rect.top() + line_height / 2.0,
-                                        ),
-                                        egui::Vec2::splat(CHIP_COPY_ICON_SIZE),
-                                    );
-                                    let copy_action =
-                                        ui.allocate_rect(icon_rect, egui::Sense::click());
-                                    copy_action.widget_info(|| {
-                                        egui::WidgetInfo::labeled(
-                                            egui::WidgetType::Button,
-                                            copy_action.enabled(),
-                                            format!("Copy {label}"),
-                                        )
-                                    });
-                                    if copy_action.hovered() {
-                                        components::icons::document_duplicate_icon()
-                                            .fit_to_exact_size(egui::Vec2::splat(
-                                                CHIP_COPY_ICON_SIZE,
-                                            ))
-                                            .tint(theme.text.secondary)
-                                            .paint_at(ui, icon_rect);
-                                    }
-                                    if copy_action.clicked() {
-                                        ui.ctx().copy_text(value.clone());
-                                    }
-                                });
-                            });
-                    },
-                );
-            }
-        },
-    );
+/// Captioned rows of container values (command, arguments, ports) as
+/// chips, [`space::S12`] apart; clicking one copies its value. Empty rows
+/// are left out.
+pub(super) fn chip_rows<'a>(
+    ui: &mut egui::Ui,
+    rows: impl IntoIterator<Item = (&'a str, &'a Vec<String>)>,
+) {
+    ui.vertical(|ui| {
+        ui.spacing_mut().item_spacing.y = space::S12;
+        for (label, values) in rows.into_iter().filter(|(_, values)| !values.is_empty()) {
+            components::labelled_chips(ui, label, |ui| {
+                for value in values {
+                    components::Chip::new(value).copyable(label).show(ui);
+                }
+            });
+        }
+    });
 }
 
 pub(super) fn volume_detail_row(

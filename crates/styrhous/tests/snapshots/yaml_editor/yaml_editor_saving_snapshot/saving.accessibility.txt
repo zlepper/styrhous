@@ -1,0 +1,53 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Button name="Discard" rect=(x=1307.8 y=19.5 width=74.6 height=32.0 center_x=1345.1 center_y=35.5)
+              Button name="Apply changes" state=[disabled] rect=(x=1394.4 y=19.5 width=117.6 height=32.0 center_x=1453.2 center_y=35.5)
+            GenericContainer rect=<none>
+              Label value="settings" rect=(x=64.0 y=17.5 width=51.5 height=20.0 center_x=89.8 center_y=27.5)
+                TextRun value="settings" rect=(x=64.0 y=17.5 width=51.5 height=20.0 center_x=89.8 center_y=27.5)
+              Label value="ConfigMap · kube-system" rect=(x=64.0 y=37.5 width=138.8 height=16.0 center_x=133.4 center_y=45.5)
+                TextRun value="ConfigMap · kube-system" rect=(x=64.0 y=37.5 width=138.8 height=16.0 center_x=133.4 center_y=45.5)
+              Label value="Applying…" rect=(x=214.8 y=24.5 width=89.2 height=22.0 center_x=259.4 center_y=35.5)
+                TextRun value="Applying…" rect=(x=237.8 y=27.5 width=57.2 height=16.0 center_x=266.4 center_y=35.5)
+            GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                TextInput name="Search YAML" value="" rect=(x=24.0 y=71.5 width=219.0 height=32.0 center_x=133.5 center_y=87.5)
+                  TextRun value="" rect=(x=60.0 y=79.5 width=0.0 height=20.0 center_x=60.0 center_y=89.5)
+              Button name="Previous match" state=[disabled] rect=(x=256.0 y=75.5 width=24.0 height=24.0 center_x=268.0 center_y=87.5)
+              Button name="Next match" state=[disabled] rect=(x=286.0 y=75.5 width=24.0 height=24.0 center_x=298.0 center_y=87.5)
+              CheckBox name="Regular expression" state=[toggled=False] rect=(x=316.0 y=75.5 width=24.0 height=24.0 center_x=328.0 center_y=87.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="YAML" rect=(x=1480.2 y=995.5 width=31.8 height=16.0 center_x=1496.1 center_y=1003.5)
+                TextRun value="YAML" rect=(x=1480.2 y=995.5 width=31.8 height=16.0 center_x=1496.1 center_y=1003.5)
+            GenericContainer rect=<none>
+              Label value="Changes apply directly to the cluster" rect=(x=54.0 y=995.5 width=197.6 height=16.0 center_x=152.8 center_y=1003.5)
+                TextRun value="Changes apply directly to the cluster" rect=(x=54.0 y=995.5 width=197.6 height=16.0 center_x=152.8 center_y=1003.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="1\n2\n3\n4\n5\n6" rect=(x=24.0 y=130.0 width=7.8 height=102.0 center_x=27.9 center_y=181.0)
+                      TextRun value="1\n" rect=(x=24.0 y=130.0 width=7.8 height=17.0 center_x=27.9 center_y=138.5)
+                      TextRun value="2\n" rect=(x=24.0 y=147.0 width=7.8 height=17.0 center_x=27.9 center_y=155.5)
+                      TextRun value="3\n" rect=(x=24.0 y=164.0 width=7.8 height=17.0 center_x=27.9 center_y=172.5)
+                      TextRun value="4\n" rect=(x=24.0 y=181.0 width=7.8 height=17.0 center_x=27.9 center_y=189.5)
+                      TextRun value="5\n" rect=(x=24.0 y=198.0 width=7.8 height=17.0 center_x=27.9 center_y=206.5)
+                      TextRun value="6" rect=(x=24.0 y=215.0 width=7.8 height=17.0 center_x=27.9 center_y=223.5)
+                  MultilineTextInput name="Kubernetes resource manifest" value="apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: settings\ndata:\n  mode: development" rect=(x=82.0 y=128.0 width=1430.0 height=106.0 center_x=797.0 center_y=181.0)
+                    TextRun value="apiVersion: v1\n" rect=(x=86.0 y=130.0 width=109.2 height=17.0 center_x=140.6 center_y=138.5)
+                    TextRun value="kind: ConfigMap\n" rect=(x=86.0 y=147.0 width=117.0 height=17.0 center_x=144.5 center_y=155.5)
+                    TextRun value="metadata:\n" rect=(x=86.0 y=164.0 width=70.2 height=17.0 center_x=121.1 center_y=172.5)
+                    TextRun value="  name: settings\n" rect=(x=86.0 y=181.0 width=124.8 height=17.0 center_x=148.4 center_y=189.5)
+                    TextRun value="data:\n" rect=(x=86.0 y=198.0 width=39.0 height=17.0 center_x=105.5 center_y=206.5)
+                    TextRun value="  mode: development" rect=(x=86.0 y=215.0 width=148.2 height=17.0 center_x=160.1 center_y=223.5)

@@ -1,0 +1,129 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Label value="C12 · COMPONENTS::{TOAST, BANNER, CALLOUT, EMPTYSTATE}" rect=(x=48.0 y=40.0 width=351.2 height=16.0 center_x=223.6 center_y=48.0)
+            TextRun value="C12 · COMPONENTS::{TOAST, BANNER, CALLOUT, EMPTYSTATE}" rect=(x=48.0 y=40.0 width=350.2 height=16.0 center_x=223.1 center_y=48.0)
+          Label value="Toast, banner, callout & empty state" rect=(x=48.0 y=60.0 width=468.4 height=36.0 center_x=282.2 center_y=78.0)
+            TextRun value="Toast, banner, callout & empty state" rect=(x=48.0 y=60.0 width=468.7 height=36.0 center_x=282.3 center_y=78.0)
+          Label value="Toasts report the outcome of something the user just did; banners report app-wide conditions; callouts explain something in place; empty states say what is missing and what to do next." rect=(x=48.0 y=102.0 width=864.5 height=40.0 center_x=480.2 center_y=122.0)
+            TextRun value="Toasts report the outcome of something the user just did; banners report app-wide conditions; callouts explain something in place; empty " rect=(x=48.0 y=102.0 width=864.5 height=20.0 center_x=480.2 center_y=112.0)
+            TextRun value="states say what is missing and what to do next." rect=(x=48.0 y=122.0 width=292.9 height=20.0 center_x=194.5 center_y=132.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Label value="TOAST" rect=(x=48.0 y=168.0 width=35.9 height=16.0 center_x=65.9 center_y=176.0)
+                    TextRun value="TOAST" rect=(x=48.0 y=168.0 width=34.8 height=16.0 center_x=65.4 center_y=176.0)
+                  GenericContainer rect=<none>
+                    Status name="CronJob started" rect=<none>
+                      GenericContainer rect=<none>
+                        Label value="CronJob started" rect=(x=96.0 y=208.0 width=96.9 height=20.0 center_x=144.4 center_y=218.0)
+                          TextRun value="CronJob started" rect=(x=96.0 y=208.0 width=96.9 height=20.0 center_x=144.4 center_y=218.0)
+                        Label value="nightly-report · kube-system" rect=(x=96.0 y=230.0 width=153.8 height=16.0 center_x=172.9 center_y=238.0)
+                          TextRun value="nightly-report · kube-system" rect=(x=96.0 y=230.0 width=153.8 height=16.0 center_x=172.9 center_y=238.0)
+                        Button name="View job" rect=(x=96.0 y=254.0 width=52.1 height=20.0 center_x=122.0 center_y=264.0)
+                      Button name="Dismiss" rect=(x=372.0 y=208.0 width=24.0 height=24.0 center_x=384.0 center_y=220.0)
+                    Status name="Couldn’t run CronJob" rect=<none>
+                      GenericContainer rect=<none>
+                        Label value="Couldn’t run CronJob" rect=(x=96.0 y=306.0 width=127.0 height=20.0 center_x=159.5 center_y=316.0)
+                          TextRun value="Couldn’t run CronJob" rect=(x=96.0 y=306.0 width=127.0 height=20.0 center_x=159.5 center_y=316.0)
+                        Label value="Forbidden: cannot create jobs.batch" rect=(x=96.0 y=328.0 width=194.4 height=16.0 center_x=193.2 center_y=336.0)
+                          TextRun value="Forbidden: cannot create jobs.batch" rect=(x=96.0 y=328.0 width=194.4 height=16.0 center_x=193.2 center_y=336.0)
+                      Button name="Dismiss" rect=(x=372.0 y=306.0 width=24.0 height=24.0 center_x=384.0 center_y=318.0)
+                    Status name="1 API group couldn’t be loaded" rect=<none>
+                      GenericContainer rect=<none>
+                        Label value="1 API group couldn’t be loaded" rect=(x=96.0 y=376.0 width=179.3 height=20.0 center_x=185.7 center_y=386.0)
+                          TextRun value="1 API group couldn’t be loaded" rect=(x=96.0 y=376.0 width=179.3 height=20.0 center_x=185.7 center_y=386.0)
+                        Label value="metrics.k8s.io/v1beta1 · retrying" rect=(x=96.0 y=398.0 width=169.8 height=16.0 center_x=180.9 center_y=406.0)
+                          TextRun value="metrics.k8s.io/v1beta1 · retrying" rect=(x=96.0 y=398.0 width=169.8 height=16.0 center_x=180.9 center_y=406.0)
+                      Button name="Dismiss" rect=(x=372.0 y=376.0 width=24.0 height=24.0 center_x=384.0 center_y=388.0)
+                    Status name="Update ready" rect=<none>
+                      GenericContainer rect=<none>
+                        Label value="Update ready" rect=(x=96.0 y=446.0 width=80.3 height=20.0 center_x=136.2 center_y=456.0)
+                          TextRun value="Update ready" rect=(x=96.0 y=446.0 width=80.3 height=20.0 center_x=136.2 center_y=456.0)
+                        Label value="Restart Styrhous to use 0.9.2" rect=(x=96.0 y=468.0 width=155.4 height=16.0 center_x=173.7 center_y=476.0)
+                          TextRun value="Restart Styrhous to use 0.9.2" rect=(x=96.0 y=468.0 width=155.4 height=16.0 center_x=173.7 center_y=476.0)
+                        Button name="Restart now" rect=(x=96.0 y=492.0 width=71.5 height=20.0 center_x=131.8 center_y=502.0)
+                      Button name="Dismiss" rect=(x=372.0 y=446.0 width=24.0 height=24.0 center_x=384.0 center_y=458.0)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Label value="BANNER (SPANS THE WORKSPACE)" rect=(x=456.0 y=168.0 width=193.0 height=16.0 center_x=552.5 center_y=176.0)
+                    TextRun value="BANNER (SPANS THE WORKSPACE)" rect=(x=456.0 y=168.0 width=191.9 height=16.0 center_x=552.0 center_y=176.0)
+                  GenericContainer rect=<none>
+                    Status name="License grace period ends 1 Jan 2100." rect=<none>
+                      GenericContainer rect=<none>
+                        Label value="License grace period ends 1 Jan 2100." rect=(x=498.0 y=204.0 width=219.7 height=20.0 center_x=607.8 center_y=214.0)
+                          TextRun value="License grace period ends 1 Jan 2100." rect=(x=498.0 y=204.0 width=219.7 height=20.0 center_x=607.8 center_y=214.0)
+                        Link name="Manage license" rect=(x=727.7 y=204.0 width=91.2 height=20.0 center_x=773.3 center_y=214.0)
+                          TextRun value="Manage license" rect=(x=727.7 y=204.0 width=91.2 height=20.0 center_x=773.3 center_y=214.0)
+                      Button name="Dismiss" rect=(x=1056.0 y=201.5 width=24.0 height=24.0 center_x=1068.0 center_y=213.5)
+                    Status name="License check failed: the licensing service is unreachable." rect=<none>
+                      GenericContainer rect=<none>
+                        Label value="License check failed: the licensing service is unreachable." rect=(x=498.0 y=248.0 width=331.6 height=20.0 center_x=663.8 center_y=258.0)
+                          TextRun value="License check failed: the licensing service is unreachable." rect=(x=498.0 y=248.0 width=331.6 height=20.0 center_x=663.8 center_y=258.0)
+                        Link name="Retry" rect=(x=839.6 y=248.0 width=32.5 height=20.0 center_x=855.9 center_y=258.0)
+                          TextRun value="Retry" rect=(x=839.6 y=248.0 width=32.5 height=20.0 center_x=855.9 center_y=258.0)
+                      Button name="Dismiss" rect=(x=1056.0 y=245.5 width=24.0 height=24.0 center_x=1068.0 center_y=257.5)
+                    Status name="Viewing previous container instance — logs are not live." rect=<none>
+                      GenericContainer rect=<none>
+                        Label value="Viewing previous container instance — logs are not live." rect=(x=498.0 y=292.0 width=325.2 height=20.0 center_x=660.6 center_y=302.0)
+                          TextRun value="Viewing previous container instance — logs are not live." rect=(x=498.0 y=292.0 width=325.2 height=20.0 center_x=660.6 center_y=302.0)
+                GenericContainer rect=<none>
+                  Label value="CALLOUT (INLINE)" rect=(x=456.0 y=348.0 width=102.3 height=16.0 center_x=507.2 center_y=356.0)
+                    TextRun value="CALLOUT (INLINE)" rect=(x=456.0 y=348.0 width=101.2 height=16.0 center_x=506.6 center_y=356.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      Label value="Use {command} as the placeholder" rect=(x=498.0 y=388.0 width=205.9 height=20.0 center_x=601.0 center_y=398.0)
+                        TextRun value="Use {command} as the placeholder" rect=(x=498.0 y=388.0 width=205.9 height=20.0 center_x=601.0 center_y=398.0)
+                      Label value="It is replaced with the complete, already-quoted kubectl command." rect=(x=498.0 y=410.0 width=389.8 height=20.0 center_x=692.9 center_y=420.0)
+                        TextRun value="It is replaced with the complete, already-quoted kubectl command." rect=(x=498.0 y=410.0 width=389.8 height=20.0 center_x=692.9 center_y=420.0)
+                    GenericContainer rect=<none>
+                      Label value="Values may contain secrets" rect=(x=498.0 y=462.0 width=161.4 height=20.0 center_x=578.7 center_y=472.0)
+                        TextRun value="Values may contain secrets" rect=(x=498.0 y=462.0 width=161.4 height=20.0 center_x=578.7 center_y=472.0)
+                      Label value="Treat this content like a Kubernetes Secret." rect=(x=498.0 y=484.0 width=249.7 height=20.0 center_x=622.9 center_y=494.0)
+                        TextRun value="Treat this content like a Kubernetes Secret." rect=(x=498.0 y=484.0 width=249.7 height=20.0 center_x=622.9 center_y=494.0)
+                    GenericContainer rect=<none>
+                      Label value="Kubeconfig is read-only" rect=(x=498.0 y=536.0 width=140.9 height=20.0 center_x=568.5 center_y=546.0)
+                        TextRun value="Kubeconfig is read-only" rect=(x=498.0 y=536.0 width=140.9 height=20.0 center_x=568.5 center_y=546.0)
+                      Label value="Styrhous could not write to ~/.kube/config." rect=(x=498.0 y=558.0 width=250.7 height=20.0 center_x=623.4 center_y=568.0)
+                        TextRun value="Styrhous could not write to ~/.kube/config." rect=(x=498.0 y=558.0 width=250.7 height=20.0 center_x=623.4 center_y=568.0)
+                    GenericContainer rect=<none>
+                      Label value="Added to kubeconfig" rect=(x=498.0 y=610.0 width=124.9 height=20.0 center_x=560.5 center_y=620.0)
+                        TextRun value="Added to kubeconfig" rect=(x=498.0 y=610.0 width=124.9 height=20.0 center_x=560.5 center_y=620.0)
+                      Label value="payments · eu-west-1" rect=(x=498.0 y=632.0 width=125.8 height=20.0 center_x=560.9 center_y=642.0)
+                        TextRun value="payments · eu-west-1" rect=(x=498.0 y=632.0 width=125.8 height=20.0 center_x=560.9 center_y=642.0)
+            GenericContainer rect=<none>
+              Label value="EMPTY, ERROR & LOADING STATES" rect=(x=48.0 y=692.0 width=192.3 height=16.0 center_x=144.1 center_y=700.0)
+                TextRun value="EMPTY, ERROR & LOADING STATES" rect=(x=48.0 y=692.0 width=191.2 height=16.0 center_x=143.6 center_y=700.0)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="Choose a cluster" rect=(x=148.7 y=812.0 width=98.6 height=20.0 center_x=198.0 center_y=822.0)
+                      TextRun value="Choose a cluster" rect=(x=148.7 y=812.0 width=98.6 height=20.0 center_x=198.0 center_y=822.0)
+                    Label value="Select a context from the rail to start exploring." rect=(x=71.7 y=836.0 width=252.6 height=16.0 center_x=198.0 center_y=844.0)
+                      TextRun value="Select a context from the rail to start exploring." rect=(x=71.7 y=836.0 width=252.6 height=16.0 center_x=198.0 center_y=844.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="No pods in kube-system" rect=(x=442.2 y=812.0 width=143.7 height=20.0 center_x=514.0 center_y=822.0)
+                      TextRun value="No pods in kube-system" rect=(x=442.2 y=812.0 width=143.7 height=20.0 center_x=514.0 center_y=822.0)
+                    Label value="Try another namespace or All namespaces." rect=(x=399.9 y=836.0 width=228.2 height=16.0 center_x=514.0 center_y=844.0)
+                      TextRun value="Try another namespace or All namespaces." rect=(x=399.9 y=836.0 width=228.2 height=16.0 center_x=514.0 center_y=844.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="Couldn’t watch pods" rect=(x=768.9 y=792.0 width=122.1 height=20.0 center_x=830.0 center_y=802.0)
+                      TextRun value="Couldn’t watch pods" rect=(x=768.9 y=792.0 width=122.1 height=20.0 center_x=830.0 center_y=802.0)
+                    Label value="Forbidden: user cannot list pods" rect=(x=744.0 y=816.0 width=172.1 height=16.0 center_x=830.0 center_y=824.0)
+                      TextRun value="Forbidden: user cannot list pods" rect=(x=744.0 y=816.0 width=172.1 height=16.0 center_x=830.0 center_y=824.0)
+                    GenericContainer rect=<none>
+                      Button name="Retry" rect=(x=793.0 y=844.0 width=74.0 height=28.0 center_x=830.0 center_y=858.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    ProgressIndicator name="Loading" rect=(x=1136.0 y=772.0 width=20.0 height=20.0 center_x=1146.0 center_y=782.0)
+                    Label value="Loading pods…" rect=(x=1101.9 y=804.0 width=88.2 height=20.0 center_x=1146.0 center_y=814.0)
+                      TextRun value="Loading pods…" rect=(x=1101.9 y=804.0 width=88.2 height=20.0 center_x=1146.0 center_y=814.0)
+                    Label value="Waiting for the first list response." rect=(x=1057.2 y=828.0 width=177.5 height=16.0 center_x=1146.0 center_y=836.0)
+                      TextRun value="Waiting for the first list response." rect=(x=1057.2 y=828.0 width=177.5 height=16.0 center_x=1146.0 center_y=836.0)

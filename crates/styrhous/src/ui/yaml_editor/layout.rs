@@ -89,8 +89,15 @@ pub(super) fn show_diagnostic_underlines(
                     format!("Validation error: {}", diagnostic.message),
                 )
             });
-            response.on_hover_text(&diagnostic.message);
-            paint_diagnostic_squiggle(ui.painter(), rect, theme.code.error);
+            show_diagnostic_tooltip(ui, &response, &diagnostic.message);
+            let metrics = type_scale::MONO.face().metrics;
+            let baseline = rect.top() + type_scale::MONO.size() * metrics.ascent;
+            components::code_surface::paint_squiggle(
+                ui.painter(),
+                rect.left()..=rect.right(),
+                baseline,
+                theme.code.error,
+            );
         }
     }
 }
@@ -191,25 +198,33 @@ pub(super) fn diagnostic_rects(
     rects
 }
 
-pub(super) fn paint_diagnostic_squiggle(
-    painter: &egui::Painter,
-    rect: egui::Rect,
-    color: egui::Color32,
-) {
-    let wavelength = 4.0;
-    let amplitude = 1.5;
-    let baseline = rect.bottom() - 2.0;
-    let steps = (rect.width() / (wavelength / 2.0)).ceil() as usize;
-    let points = (0..=steps)
-        .map(|step| {
-            let x = (rect.left() + step as f32 * (wavelength / 2.0)).min(rect.right());
-            let y = baseline + if step % 2 == 0 { -amplitude } else { amplitude };
-            egui::pos2(x, y)
-        })
-        .collect();
-    painter.add(egui::Shape::line(points, egui::Stroke::new(1.5, color)));
-}
-
 pub(super) fn yaml_editor_text_edit_id(editor_id: u64) -> egui::Id {
     egui::Id::new(("yaml-editor-text", editor_id))
+}
+
+/// How long the pointer rests on a diagnostic before its tooltip shows.
+const DIAGNOSTIC_TOOLTIP_DELAY: f32 = 0.3;
+
+/// The diagnostic tooltip below the range under the pointer, once the
+/// pointer has rested on it for [`DIAGNOSTIC_TOOLTIP_DELAY`].
+fn show_diagnostic_tooltip(ui: &egui::Ui, response: &egui::Response, message: &str) {
+    if !response.hovered() {
+        return;
+    }
+    let rested = ui.input(|input| input.pointer.time_since_last_movement());
+    if rested < DIAGNOSTIC_TOOLTIP_DELAY {
+        ui.ctx()
+            .request_repaint_after_secs(DIAGNOSTIC_TOOLTIP_DELAY - rested);
+        return;
+    }
+    egui::Area::new(response.id.with("tooltip"))
+        .order(egui::Order::Tooltip)
+        .fixed_pos(response.rect.left_bottom() + egui::vec2(0.0, size::POPOVER_GAP))
+        .interactable(false)
+        .show(ui.ctx(), |ui| {
+            components::tooltip::show_inline(
+                ui,
+                components::tooltip::TooltipContent::Text(message),
+            );
+        });
 }

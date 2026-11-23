@@ -4,4 +4,5 @@
 .claude/
 
 *.old.png
+*.accessibility.old.txt
 *.diff.png

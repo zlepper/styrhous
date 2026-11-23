@@ -123,6 +123,7 @@ pub(crate) fn apply_theme(ctx: &Context, theme: &Theme) {
     ctx.style_mut_of(mode, |style| {
         style.visuals = visuals(theme, pixels_per_point);
         style.spacing.button_padding = size::BUTTON_PADDING_SM;
+        crate::tooltip::configure_style(style);
         for (text_style, role) in [
             (TextStyle::Small, type_scale::META),
             (TextStyle::Body, type_scale::UI),

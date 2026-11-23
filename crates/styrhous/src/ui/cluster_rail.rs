@@ -3,12 +3,22 @@ use crate::licensing::LicenseStatus;
 use crate::terminal_launcher::TerminalLaunchSettings;
 use crate::updater::UpdateStatus;
 use crate::worker::WorkerCommandBox;
+use components::design::size;
 use components::design::theme::{ThemeExt, Tone};
-use components::design::type_scale;
-use components::{NarrowSidebar, icons};
+use components::{CountBadge, NarrowSidebar, corner_rect, icons, paint_status_dot};
 use tracing::info;
 
 const CLUSTER_RAIL_FOOTER_ITEMS: usize = 2;
+/// Where a count badge sits on a rail button: points from its right and top.
+const RAIL_BADGE_INSET: egui::Vec2 = egui::vec2(3.0, 4.0);
+/// Where the settings warning lamp sits on its rail button: points from its
+/// right and top.
+const RAIL_LAMP_INSET: egui::Vec2 = egui::vec2(8.0, 8.0);
+
+/// The 40 point rail button centred in a rail item's `rect`.
+fn rail_button(rect: egui::Rect) -> egui::Rect {
+    egui::Rect::from_center_size(rect.center(), egui::Vec2::splat(size::RAIL_BUTTON))
+}
 
 pub(super) fn show(
     ui: &mut egui::Ui,
@@ -53,7 +63,6 @@ pub(super) fn show(
                                     ("Disconnected", Tone::Neutral)
                                 }
                             };
-                            let status_color = theme.tone(status_tone).fill;
                             let tooltip = if cluster_name == cluster.name {
                                 format!("{cluster_name} — {status_label}")
                             } else {
@@ -70,12 +79,7 @@ pub(super) fn show(
                                 &initial,
                                 &tooltip,
                                 selected,
-                            );
-                            let marker_center = response.rect.center() + egui::vec2(10.0, 10.0);
-                            sidebar.ui_mut().painter().circle_filled(
-                                marker_center,
-                                4.0,
-                                status_color,
+                                status_tone,
                             );
 
                             if response.clicked() {
@@ -89,37 +93,29 @@ pub(super) fn show(
                     },
                     |sidebar| {
                         let notifications = sidebar.button_with_tooltip(
-                            "Notifications",
-                            icons::bell_icon(),
-                            if unread_count == 0 {
-                                "Notifications".to_owned()
-                            } else {
-                                format!("Notifications\n{unread_count} unread")
-                            }
-                            .as_str(),
+                            notifications_label(unread_count),
+                            icons::Icon::Bell.image(),
+                            &notifications_label(unread_count).replace(", ", "\n"),
                         );
                         if unread_count > 0 {
-                            let center = notifications.rect.center() + egui::vec2(9.0, -9.0);
                             let sidebar_ui = sidebar.ui_mut();
-                            let font = type_scale::META
-                                .with_weight(type_scale::Weight::SemiBold)
-                                .with_size(10.0, 12.0)
-                                .font_id(sidebar_ui.ctx());
-                            let painter = sidebar_ui.painter();
-                            painter.circle_filled(center, 8.0, theme.accent.fill);
-                            painter.text(
-                                center,
-                                egui::Align2::CENTER_CENTER,
-                                unread_badge_text(unread_count),
-                                font,
-                                theme.text.on_fill,
+                            let badge = CountBadge::new(unread_count).tone(Tone::Accent);
+                            let badge_size = badge.size(sidebar_ui);
+                            // `.rbtn .count`: 4 points from the top and 3 from the
+                            // right of the 40 point rail button.
+                            let badge_rect = corner_rect(
+                                rail_button(notifications.rect),
+                                egui::Align2::RIGHT_TOP,
+                                badge_size,
+                                RAIL_BADGE_INSET,
                             );
+                            badge.paint(sidebar_ui, badge_rect, theme.nav.rail);
                         }
                         open_notifications.set(notifications.clicked());
 
                         let response = sidebar.button_with_tooltip(
                             "Settings",
-                            icons::settings_icon(),
+                            icons::Icon::Cog6Tooth.image(),
                             &format!(
                                 "Settings\n{}\n{}",
                                 update_status.summary(),
@@ -127,11 +123,17 @@ pub(super) fn show(
                             ),
                         );
                         if update_status.shows_badge() || license_status.shows_warning() {
-                            let marker_center = response.rect.center() + egui::vec2(8.0, -8.0);
-                            sidebar.ui_mut().painter().circle_filled(
-                                marker_center,
-                                4.0,
-                                theme.warning.fill,
+                            let marker = corner_rect(
+                                rail_button(response.rect),
+                                egui::Align2::RIGHT_TOP,
+                                egui::Vec2::splat(size::STATUS_DOT),
+                                RAIL_LAMP_INSET,
+                            );
+                            paint_status_dot(
+                                sidebar.ui_mut().painter(),
+                                &theme,
+                                marker,
+                                Tone::Warning,
                             );
                         }
                         open_settings.set(response.clicked());
@@ -147,22 +149,12 @@ pub(super) fn show(
     }
 }
 
-fn unread_badge_text(unread_count: usize) -> String {
-    if unread_count > 9 {
-        "9+".to_owned()
+/// The accessible name of the notifications rail button, which carries the
+/// unread count its badge shows.
+fn notifications_label(unread_count: usize) -> String {
+    if unread_count == 0 {
+        "Notifications".to_owned()
     } else {
-        unread_count.to_string()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::unread_badge_text;
-
-    #[test]
-    fn unread_badge_uses_a_plus_suffix_for_counts_above_nine() {
-        assert_eq!(unread_badge_text(0), "0");
-        assert_eq!(unread_badge_text(9), "9");
-        assert_eq!(unread_badge_text(10), "9+");
+        format!("Notifications, {unread_count} unread")
     }
 }

@@ -177,7 +177,9 @@ fn pod_resource_detail_inspector_snapshot() {
         .rect()
         .top();
     assert_eq!(first_arg_top, second_arg_top);
-    assert_eq!(second_arg_top, long_arg_top);
+    // Arguments flow as chips: one that no longer fits the 720 point blade's
+    // value column starts the next row rather than widening it.
+    assert!(long_arg_top >= second_arg_top);
 
     harness.event(egui::Event::PointerGone);
     harness.run();
@@ -235,7 +237,7 @@ fn deployment_editor_completes_match_labels_in_a_selector() {
         .get_by_label("More actions for coredns")
         .click_accesskit();
     harness.run();
-    harness.get_by_label("Edit").click_accesskit();
+    harness.get_by_label("Edit YAML").click_accesskit();
     harness.run();
 
     let editor_id = harness

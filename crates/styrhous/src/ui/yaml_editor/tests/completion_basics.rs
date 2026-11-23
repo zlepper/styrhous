@@ -269,7 +269,7 @@ fn ctrl_space_shows_an_empty_completion_message_snapshot() {
 
     assert!(harness.state().editor.suggestions_visible);
     assert!(harness.state().editor.suggestions.is_empty());
-    harness.get_by_label("No completions available");
+    harness.get_by_label("No completions");
     harness.ui_harness(
         "yaml_editor/ctrl_space_shows_an_empty_completion_message_snapshot/no_completions",
     );

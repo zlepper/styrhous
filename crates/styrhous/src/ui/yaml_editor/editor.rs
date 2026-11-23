@@ -54,6 +54,7 @@ pub(super) fn show_code_editor(
     let mut cursor_byte = None;
     let mut text_edit_id = None;
     let mut caret_rect = None;
+    apply_pending_focus(ctx, editor.id);
     let scroll_target = editor.scroll_to_diagnostic.take();
     let search_scroll_target = editor
         .search
@@ -166,13 +167,14 @@ pub(super) fn show_code_editor(
         clear_active_match(editor);
     }
 
+    // Popovers stay inside the code area, clear of its edges.
+    let surface = ui.clip_rect().shrink(space::S12);
+    let popup_size = egui::vec2(
+        size::COMPLETION_WIDTH,
+        components::Completion::height(editor.suggestions.len(), COMPLETION_LIST_MAX_HEIGHT),
+    );
     let completion_position = caret_rect.map_or(fallback_completion_position, |caret_rect| {
-        completion_popup_position(
-            ctx.content_rect(),
-            caret_rect,
-            completion_popup_height(editor.suggestions.len()),
-            completion_popup_width(&editor.suggestions),
-        )
+        components::completion_position(surface, caret_rect, popup_size)
     });
 
     let cursor_moved = cursor_byte != editor.completion_cursor;
@@ -209,125 +211,69 @@ pub(super) fn show_code_editor(
     if editor.suggestions_visible {
         let pointer_pressed = ctx.input(|input| input.pointer.any_pressed());
         let pointer_position = ctx.input(|input| input.pointer.interact_pos());
-        let completion_list_width = completion_list_width(&editor.suggestions);
-        let completion_popup_width = completion_list_width + 2.0 * space::S12;
-        let mut selected_row_rect = None;
+        let labels: Vec<&str> = editor
+            .suggestions
+            .iter()
+            .map(|suggestion| suggestion.label.as_str())
+            .collect();
+        let context = editor.completion_context.as_ref();
+        let expects = match context.map(|context| &context.kind) {
+            Some(CompletionContextKind::MappingKey) => CompletionExpects::Key,
+            Some(CompletionContextKind::Value) => CompletionExpects::Value,
+            None => CompletionExpects::Anything,
+        };
         let popup = egui::Area::new(egui::Id::new(("yaml-editor-suggestions", editor.id)))
             .order(egui::Order::Foreground)
             .fixed_pos(completion_position)
+            .constrain_to(surface)
             .show(ctx, |ui| {
-                theme::scope(ui, ThemeScope::Popover, |ui| {
-                    ui.set_width(completion_popup_width);
-                    components::popover_frame(&theme)
-                        .inner_margin(egui::Margin::same(space::S12 as i8))
-                        .show(ui, |ui| {
-                            completion_context_header(ui, editor.completion_context.as_ref());
-                            ui.add_space(space::S4);
-                            let mut accepted =
-                                accept_suggestion.then_some(editor.suggestion_selection);
-                            let mut hovered = None;
-                            if editor.suggestions.is_empty() {
-                                ui.add_sized(
-                                    egui::vec2(completion_list_width, COMPLETION_ROW_HEIGHT),
-                                    egui::Label::new(
-                                        egui::RichText::new("No completions available")
-                                            .font(type_scale::BODY.font_id(ui.ctx()))
-                                            .color(theme.text.muted),
-                                    ),
-                                );
-                            } else {
-                                components::scroll::vertical()
-                                    .id_salt(("yaml-editor-suggestion-list", editor.id))
-                                    .max_height(COMPLETION_LIST_MAX_HEIGHT)
-                                    .auto_shrink([false, true])
-                                    .show(ui, |ui| {
-                                        ui.set_width(completion_list_width);
-                                        for (index, suggestion) in
-                                            editor.suggestions.iter().enumerate()
-                                        {
-                                            let is_selected = index == editor.suggestion_selection;
-                                            let response = completion_row(
-                                                ui,
-                                                suggestion,
-                                                is_selected,
-                                                completion_list_width,
-                                            );
-                                            if is_selected {
-                                                if selection_changed {
-                                                    response
-                                                        .scroll_to_me(Some(egui::Align::Center));
-                                                }
-                                                selected_row_rect = Some(response.rect);
-                                            }
-                                            if response.hovered() {
-                                                hovered = Some((index, response.rect));
-                                            }
-                                            if response.clicked() {
-                                                accepted = Some(index);
-                                            }
-                                        }
-                                    });
-                            }
-                            if let Some((index, rect)) = hovered {
-                                editor.suggestion_selection = index;
-                                selected_row_rect = Some(rect);
-                            }
-                            ui.add_space(space::S4);
-                            ui.separator();
-                            ui.add_space(space::S4);
-                            ui.label(
-                                egui::RichText::new(if editor.suggestions.is_empty() {
-                                    "Esc dismiss"
-                                } else {
-                                    "↑↓ navigate  ·  Enter apply  ·  Esc dismiss"
-                                })
-                                .font(type_scale::META.font_id(ui.ctx()))
-                                .color(theme.text.muted),
-                            );
-                            if let Some(index) = accepted
-                                && let Some(suggestion) = editor.suggestions.get(index)
-                                && let (Some(cursor), Some(id)) = (cursor_byte, text_edit_id)
-                            {
-                                let new_cursor = insert_suggestion(
-                                    &mut editor.edited_yaml,
-                                    cursor,
-                                    &suggestion.label,
-                                );
-                                let mut state =
-                                    egui::widgets::text_edit::TextEditState::load(ctx, id)
-                                        .unwrap_or_default();
-                                state
-                                    .cursor
-                                    .set_char_range(Some(CCursorRange::one(CCursor::new(
-                                        new_cursor,
-                                    ))));
-                                state.store(ctx, id);
-                                editor.suggestions_visible = false;
-                                editor.completion_cursor = None;
-                                changed = true;
-                            }
-                        });
-                })
+                let mut completion = Completion::new(expects, &labels)
+                    .id_salt(("yaml-editor-suggestion-list", editor.id))
+                    .active((!labels.is_empty()).then_some(editor.suggestion_selection))
+                    .max_rows_height(COMPLETION_LIST_MAX_HEIGHT)
+                    .scroll_to_active(selection_changed)
+                    .option_label("Insert YAML completion");
+                if let Some(type_label) = context.and_then(|context| context.type_label.as_deref())
+                {
+                    completion = completion.type_label(type_label);
+                }
+                completion.show(ui)
             });
+        let completion = popup.inner;
+        if let Some((index, _)) = completion.hovered {
+            editor.suggestion_selection = index;
+        }
+        let accepted = completion
+            .clicked
+            .or(accept_suggestion.then_some(editor.suggestion_selection));
+        if let Some(index) = accepted
+            && let Some(suggestion) = editor.suggestions.get(index)
+            && let (Some(cursor), Some(id)) = (cursor_byte, text_edit_id)
+        {
+            let new_cursor = insert_suggestion(&mut editor.edited_yaml, cursor, &suggestion.label);
+            let mut state =
+                egui::widgets::text_edit::TextEditState::load(ctx, id).unwrap_or_default();
+            state
+                .cursor
+                .set_char_range(Some(CCursorRange::one(CCursor::new(new_cursor))));
+            state.store(ctx, id);
+            editor.suggestions_visible = false;
+            editor.completion_cursor = None;
+            changed = true;
+        }
         if pointer_pressed
             && pointer_position.is_some_and(|position| !popup.response.rect.contains(position))
         {
             editor.suggestions_visible = false;
             editor.completion_cursor = None;
         }
-        if let Some(suggestion) = editor
-            .suggestions
-            .get(editor.suggestion_selection)
-            .filter(|suggestion| suggestion.detail.is_some())
+        if editor.suggestions_visible
+            && let Some(suggestion) = editor
+                .suggestions
+                .get(editor.suggestion_selection)
+                .filter(|suggestion| suggestion.detail.is_some())
         {
-            show_completion_documentation(
-                ctx,
-                popup.response.rect,
-                selected_row_rect.unwrap_or_else(|| {
-                    egui::Rect::from_min_size(completion_position, egui::Vec2::ZERO)
-                }),
-                suggestion,
-            );
+            show_completion_documentation(ctx, surface, popup.response.rect, suggestion);
         }
     }
     changed

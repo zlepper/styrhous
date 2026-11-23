@@ -61,6 +61,8 @@ pub(crate) enum ResourceAction {
         name: String,
         preset: DebugImagePreset,
     },
+    /// Open the terminal settings, where the debug image presets live.
+    ConfigureDebugImages,
     NavigateDetails {
         api_resource: ApiResource,
         name: String,
@@ -70,6 +72,15 @@ pub(crate) enum ResourceAction {
 }
 
 impl ResourceAction {
+    /// Open `resource`'s inspector.
+    pub(crate) fn open_details(resource: &crate::minimal_resource::MinimalResource) -> Self {
+        Self::OpenDetails {
+            name: resource.name.clone(),
+            namespace: resource.namespace.clone(),
+            uid: resource.uid.clone(),
+        }
+    }
+
     pub(crate) fn shell_request(&self, kube_context: &str) -> Option<ShellRequest> {
         match self {
             Self::Shell {
@@ -115,7 +126,8 @@ impl ResourceAction {
             | Self::RequestScale { .. }
             | Self::SaveData { .. }
             | Self::ViewLogs { .. }
-            | Self::NavigateDetails { .. } => None,
+            | Self::NavigateDetails { .. }
+            | Self::ConfigureDebugImages => None,
         }
     }
 }

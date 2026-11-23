@@ -5,9 +5,9 @@ Window state=[focused] rect=<none>
       GenericContainer rect=<none>
   GenericContainer rect=<none>
   GenericContainer rect=<none>
-    Unknown name="Dismiss blade" rect=(x=0.0 y=0.0 width=1156.0 height=1024.0 center_x=578.0 center_y=512.0)
+    Unknown name="Dismiss blade" rect=(x=0.0 y=0.0 width=1168.0 height=1024.0 center_x=584.0 center_y=512.0)
   GenericContainer rect=<none>
-    Unknown name="Dismiss blade" rect=(x=784.0 y=1016.0 width=744.0 height=8.0 center_x=1156.0 center_y=1020.0)
+    Unknown name="Dismiss blade" rect=(x=808.0 y=1016.0 width=720.0 height=8.0 center_x=1168.0 center_y=1020.0)
   GenericContainer rect=<none>
     Unknown name="Dismiss blade" rect=(x=1528.0 y=0.0 width=8.0 height=1024.0 center_x=1532.0 center_y=512.0)
   GenericContainer rect=<none>
@@ -15,20 +15,18 @@ Window state=[focused] rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
           GenericContainer rect=<none>
+            Button name="Back" state=[disabled] rect=(x=820.0 y=21.5 width=28.0 height=28.0 center_x=834.0 center_y=35.5)
+            Button name="Forward" state=[disabled] rect=(x=850.0 y=21.5 width=28.0 height=28.0 center_x=864.0 center_y=35.5)
+          GenericContainer rect=<none>
+            Label value="First" rect=(x=903.0 y=24.0 width=577.0 height=24.0 center_x=1191.5 center_y=36.0)
+              TextRun value="First" rect=(x=903.0 y=24.0 width=35.8 height=24.0 center_x=920.9 center_y=36.0)
+          GenericContainer rect=<none>
+            Button name="Close blade" rect=(x=1488.0 y=21.5 width=28.0 height=28.0 center_x=1502.0 center_y=35.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  GenericContainer rect=<none>
-                    Button name="Back" state=[disabled] rect=(x=809.0 y=34.0 width=34.0 height=34.0 center_x=826.0 center_y=51.0)
-                  GenericContainer rect=<none>
-                    Button name="Forward" state=[disabled] rect=(x=851.0 y=34.0 width=34.0 height=34.0 center_x=868.0 center_y=51.0)
-                GenericContainer rect=<none>
-                  Label value="First" rect=(x=917.0 y=39.0 width=44.6 height=24.0 center_x=939.3 center_y=51.0)
-                    TextRun value="First" rect=(x=917.0 y=39.0 width=44.6 height=24.0 center_x=939.3 center_y=51.0)
-                GenericContainer rect=<none>
-                  GenericContainer rect=<none>
-                    Button name="Close blade" rect=(x=1469.0 y=34.0 width=34.0 height=34.0 center_x=1486.0 center_y=51.0)
-              Label value="Active · First" rect=(x=809.0 y=88.0 width=72.5 height=16.0 center_x=845.3 center_y=96.0)
-                TextRun value="Active · First" rect=(x=809.0 y=88.0 width=72.5 height=16.0 center_x=845.3 center_y=96.0)
-              Label value="back: false · forward: false" rect=(x=809.0 y=107.0 width=150.5 height=16.0 center_x=884.2 center_y=115.0)
-                TextRun value="back: false · forward: false" rect=(x=809.0 y=107.0 width=150.5 height=16.0 center_x=884.2 center_y=115.0)
+                Label value="Active · First" rect=(x=832.0 y=84.0 width=72.5 height=16.0 center_x=868.3 center_y=92.0)
+                  TextRun value="Active · First" rect=(x=832.0 y=84.0 width=72.5 height=16.0 center_x=868.3 center_y=92.0)
+                Label value="back: false · forward: false" rect=(x=832.0 y=103.0 width=150.5 height=16.0 center_x=907.2 center_y=111.0)
+                  TextRun value="back: false · forward: false" rect=(x=832.0 y=103.0 width=150.5 height=16.0 center_x=907.2 center_y=111.0)

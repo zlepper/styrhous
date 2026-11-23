@@ -4,8 +4,14 @@
 //! width 1.5 — extracted byte for byte from the Harbour stylesheet by
 //! `scripts/design-oracles/extract-icons.mjs` into `assets/icons/`, so egui
 //! and the design oracles rasterize identical paths. They are drawn in white
-//! and tinted with a theme role. A few app-only icons (Heroicons the design
-//! does not use, and provider brand marks) live next to them.
+//! and tinted with the text colour of their context. A few app-only icons
+//! (Heroicons the design does not use, and provider brand marks) live next
+//! to them.
+//!
+//! Every icon is an [`Icon`] variant, named after its SVG file; each also has
+//! a `<name>_icon()` function returning its [`Image`]. Icons are drawn at the
+//! design's sizes (12, 14, 16 by default, 20 and 24 points: `ICON_XS` to `ICON_XL` in
+//! [`crate::design::size`]).
 //!
 //! Icons render through the egui_extras SVG loader, which rasterizes at the
 //! exact pixel size the image is shown at. The consuming application must
@@ -17,187 +23,224 @@
 //! # Usage
 //!
 //! ```ignore
-//! icons::chevron_right(ui, 16.0, ui.tokens().text.muted);
+//! Icon::ChevronRight.show(ui, size::ICON, ui.tokens().text.muted);
 //! ```
 
-use egui::{Color32, CornerRadius, Image, Painter, Rect, Response, Ui, Vec2, include_image};
+use egui::{Color32, Image, Rect, Response, Ui, Vec2, include_image};
 
 use crate::PointingHand;
-use crate::design::theme::{Theme, Tone};
 
 macro_rules! icons {
-    ($($(#[$doc:meta])* $name:ident => $file:literal;)+) => {
-        $(
-            $(#[$doc])*
-            pub fn $name() -> Image<'static> {
-                Image::new(include_image!(concat!("../assets/icons/", $file)))
+    (
+        design { $($(#[$design_doc:meta])* $design:ident => $design_file:literal;)+ }
+        app { $($(#[$app_doc:meta])* $app:ident => $app_file:literal;)+ }
+    ) => {
+        /// An icon of the bundled set, named after its SVG file.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+        pub enum Icon {
+            $($(#[$design_doc])* $design,)+
+            $($(#[$app_doc])* $app,)+
+        }
+
+        impl Icon {
+            /// The design's icon set (the `.ic-*` masks of the Harbour
+            /// stylesheet), in stylesheet order.
+            pub const DESIGN: &[Self] = &[$(Self::$design,)+];
+            /// Every bundled icon: the design set, then the app-only icons.
+            pub const ALL: &[Self] = &[$(Self::$design,)+ $(Self::$app,)+];
+
+            /// The SVG file stem, which is also the design's icon name, for
+            /// example `"arrow-left"`.
+            pub const fn name(self) -> &'static str {
+                match self {
+                    $(Self::$design => $design_file,)+
+                    $(Self::$app => $app_file,)+
+                }
             }
-        )+
+
+            /// The icon as an egui image, white until tinted.
+            pub fn image(self) -> Image<'static> {
+                match self {
+                    $(Self::$design => Image::new(include_image!(concat!("../assets/icons/", $design_file, ".svg"))),)+
+                    $(Self::$app => Image::new(include_image!(concat!("../assets/icons/", $app_file, ".svg"))),)+
+                }
+            }
+        }
+
     };
 }
 
 icons! {
-    /// Home.
-    home_icon => "home.svg";
-    /// Users.
-    users_icon => "users.svg";
-    /// Folder.
-    folder_icon => "folder.svg";
-    /// Calendar.
-    calendar_icon => "calendar.svg";
-    /// Document.
-    document_icon => "document.svg";
-    /// Code bracket, for literal values.
-    code_bracket_icon => "code-bracket.svg";
-    /// Key, for secret-backed values.
-    key_icon => "key.svg";
-    /// Document text, for Kubernetes field references.
-    document_text_icon => "document-text.svg";
-    /// Question mark, for unknown or unspecified values.
-    question_mark_circle_icon => "question-mark-circle.svg";
-    /// Bar chart.
-    chart_bar_icon => "chart-bar.svg";
-    /// Horizontal ellipsis, for compact action menus.
-    ellipsis_horizontal_icon => "ellipsis-horizontal.svg";
-    /// Left arrow, for backwards navigation.
-    arrow_left_icon => "arrow-left.svg";
-    /// Right arrow, for forwards navigation.
-    arrow_right_icon => "arrow-right.svg";
-    /// Up arrow.
-    arrow_up_icon => "arrow-up.svg";
-    /// Down arrow.
-    arrow_down_icon => "arrow-down.svg";
-    /// Circular arrow, for reload actions.
-    arrow_path_icon => "arrow-path.svg";
-    /// Chevron right, for navigation affordances.
-    chevron_right_icon => "chevron-right.svg";
-    /// Chevron down.
-    chevron_down_icon => "chevron-down.svg";
-    /// Funnel, for filtering controls.
-    funnel_icon => "funnel.svg";
-    /// Numbered list, for line-number visibility controls.
-    numbered_list_icon => "numbered-list.svg";
-    /// Calendar days, for timestamp visibility controls.
-    calendar_days_icon => "calendar-days.svg";
-    /// Swatch, for ANSI styling controls.
-    swatch_icon => "swatch.svg";
-    /// X mark, for dismissing overlays and panels.
-    x_mark_icon => "x-mark.svg";
-    /// Trash, for destructive actions.
-    trash_icon => "trash.svg";
-    /// Pencil, for edit actions.
-    pencil_icon => "pencil.svg";
-    /// Plus, for add controls.
-    plus_icon => "plus.svg";
-    /// Cog, for application settings.
-    settings_icon => "cog-6-tooth.svg";
-    /// Bell, for the session operation history.
-    bell_icon => "bell.svg";
-    /// Document duplicate, for copy actions.
-    document_duplicate_icon => "document-duplicate.svg";
-    /// Magnifying glass.
-    magnifying_glass_icon => "magnifying-glass.svg";
-    /// Check mark.
-    check_icon => "check.svg";
-    /// Cube, a Kubernetes resource.
-    cube_icon => "cube.svg";
-    /// Globe.
-    globe_alt_icon => "globe-alt.svg";
-    /// Circle stack: contexts and clusters.
-    circle_stack_icon => "circle-stack.svg";
-    /// Horizontal adjustments: presentation settings.
-    adjustments_horizontal_icon => "adjustments-horizontal.svg";
-    /// Share: cluster discovery.
-    share_icon => "share.svg";
-    /// Wrench and screwdriver: application preferences.
-    wrench_screwdriver_icon => "wrench-screwdriver.svg";
-    /// User circle: license and account.
-    user_circle_icon => "user-circle.svg";
-    /// The bundled Microsoft Azure brand mark for Azure provider surfaces.
-    azure_icon => "azure.svg";
-    /// The bundled Tailscale brand mark for Tailscale provider surfaces.
-    tailscale_icon => "tailscale.svg";
+    design {
+        /// Left arrow, for backwards navigation.
+        ArrowLeft => "arrow-left";
+        /// Right arrow, for forwards navigation.
+        ArrowRight => "arrow-right";
+        /// Up arrow.
+        ArrowUp => "arrow-up";
+        /// Down arrow.
+        ArrowDown => "arrow-down";
+        /// Circular arrow, for reload actions.
+        ArrowPath => "arrow-path";
+        /// Chevron down.
+        ChevronDown => "chevron-down";
+        /// Chevron up.
+        ChevronUp => "chevron-up";
+        /// Chevron right, for navigation affordances.
+        ChevronRight => "chevron-right";
+        /// Chevron left.
+        ChevronLeft => "chevron-left";
+        /// Up-down chevrons, for select triggers.
+        ChevronUpDown => "chevron-up-down";
+        /// Double chevron down, for jumping to the end.
+        ChevronDoubleDown => "chevron-double-down";
+        /// X mark, for dismissing overlays and panels.
+        XMark => "x-mark";
+        /// Check mark.
+        Check => "check";
+        /// Minus.
+        Minus => "minus";
+        /// Plus, for add controls.
+        Plus => "plus";
+        /// Magnifying glass.
+        MagnifyingGlass => "magnifying-glass";
+        /// Funnel, for filtering controls.
+        Funnel => "funnel";
+        /// Numbered list, for line-number visibility controls.
+        NumberedList => "numbered-list";
+        /// Calendar days, for timestamp visibility controls.
+        CalendarDays => "calendar-days";
+        /// Swatch, for ANSI styling controls.
+        Swatch => "swatch";
+        /// Tag, for source labels.
+        Tag => "tag";
+        /// Document text, for Kubernetes field references.
+        DocumentText => "document-text";
+        /// Horizontal ellipsis, for compact action menus.
+        EllipsisHorizontal => "ellipsis-horizontal";
+        /// Pencil on a square, for opening an editor.
+        PencilSquare => "pencil-square";
+        /// Pencil, for edit actions.
+        Pencil => "pencil";
+        /// Trash, for destructive actions.
+        Trash => "trash";
+        /// Bell, for the session operation history.
+        Bell => "bell";
+        /// Cog, for application settings.
+        Cog6Tooth => "cog-6-tooth";
+        /// Command line, for shells and terminals.
+        CommandLine => "command-line";
+        /// Clipboard document, for copying.
+        ClipboardDocument => "clipboard-document";
+        /// Document duplicate, for copy actions.
+        DocumentDuplicate => "document-duplicate";
+        /// Eye, for revealing values.
+        Eye => "eye";
+        /// Information circle.
+        InformationCircle => "information-circle";
+        /// Exclamation triangle, for warnings.
+        ExclamationTriangle => "exclamation-triangle";
+        /// Exclamation circle, for errors.
+        ExclamationCircle => "exclamation-circle";
+        /// Check circle, for completed operations.
+        CheckCircle => "check-circle";
+        /// X circle, for failed operations.
+        XCircle => "x-circle";
+        /// Closed lock.
+        LockClosed => "lock-closed";
+        /// Server stack: nodes.
+        ServerStack => "server-stack";
+        /// Cube, a Kubernetes resource.
+        Cube => "cube";
+        /// Globe.
+        GlobeAlt => "globe-alt";
+        /// Folder.
+        Folder => "folder";
+        /// Circle stack: contexts and clusters.
+        CircleStack => "circle-stack";
+        /// Horizontal adjustments: presentation settings.
+        AdjustmentsHorizontal => "adjustments-horizontal";
+        /// Share: cluster discovery.
+        Share => "share";
+        /// User circle: license and account.
+        UserCircle => "user-circle";
+        /// Arrow into a tray, for downloads.
+        ArrowDownTray => "arrow-down-tray";
+        /// Play.
+        Play => "play";
+        /// Clock, for timestamps.
+        Clock => "clock";
+        /// Queue list.
+        QueueList => "queue-list";
+        /// Cloud.
+        Cloud => "cloud";
+        /// Link.
+        Link => "link";
+        /// Rectangle stack.
+        RectangleStack => "rectangle-stack";
+        /// Arrow out of a square, for opening in a new window.
+        ArrowTopRightOnSquare => "arrow-top-right-on-square";
+        /// Key, for secret-backed values.
+        Key => "key";
+        /// Three bars, for menus.
+        Bars3 => "bars-3";
+        /// Up and down arrows, for sorting.
+        ArrowsUpDown => "arrows-up-down";
+        /// Two-by-two squares.
+        Squares2x2 => "squares-2x2";
+        /// Wrench and screwdriver: application preferences.
+        WrenchScrewdriver => "wrench-screwdriver";
+        /// Signal.
+        Signal => "signal";
+        /// U-turn arrow, for undo.
+        ArrowUturnLeft => "arrow-uturn-left";
+    }
+    app {
+        /// Home.
+        Home => "home";
+        /// Users.
+        Users => "users";
+        /// Calendar.
+        Calendar => "calendar";
+        /// Document.
+        Document => "document";
+        /// Code bracket, for literal values.
+        CodeBracket => "code-bracket";
+        /// Question mark, for unknown or unspecified values.
+        QuestionMarkCircle => "question-mark-circle";
+        /// Bar chart.
+        ChartBar => "chart-bar";
+        /// The bundled Microsoft Azure brand mark for Azure provider surfaces.
+        Azure => "azure";
+        /// The bundled Tailscale brand mark for Tailscale provider surfaces.
+        Tailscale => "tailscale";
+    }
 }
 
-/// Show `image` at `size` points, tinted `color`.
-fn show(ui: &mut Ui, image: Image<'static>, size: f32, color: Color32) -> Response {
-    ui.add(image.fit_to_exact_size(Vec2::splat(size)).tint(color))
+impl Icon {
+    /// Show the icon `size` points square, tinted `color` (the text colour of
+    /// its context).
+    pub fn show(self, ui: &mut Ui, size: f32, color: Color32) -> Response {
+        ui.add(
+            self.image()
+                .fit_to_exact_size(Vec2::splat(size))
+                .tint(color),
+        )
+    }
+
+    /// Paint the icon into `rect`, tinted `color`.
+    pub fn paint(self, ui: &Ui, rect: Rect, color: Color32) {
+        self.image().tint(color).paint_at(ui, rect);
+    }
 }
 
-/// Render a chevron-right icon `size` points square, tinted `color`.
-pub fn chevron_right(ui: &mut Ui, size: f32, color: Color32) -> Response {
-    show(ui, chevron_right_icon(), size, color)
-}
-
-/// Render a chevron-down icon `size` points square, tinted `color`.
-pub fn chevron_down(ui: &mut Ui, size: f32, color: Color32) -> Response {
-    show(ui, chevron_down_icon(), size, color)
-}
-
-/// Render a chevron-up icon `size` points square, tinted `color`.
-pub fn chevron_up(ui: &mut Ui, size: f32, color: Color32) -> Response {
-    show(
-        ui,
-        Image::new(include_image!("../assets/icons/chevron-up.svg")),
-        size,
-        color,
-    )
-}
-
-/// Render a bars-3 (hamburger menu) icon `size` points square, tinted `color`.
-pub fn bars_3(ui: &mut Ui, size: f32, color: Color32) -> Response {
-    show(
-        ui,
-        Image::new(include_image!("../assets/icons/bars-3.svg")),
-        size,
-        color,
-    )
-}
-
-/// Render a trash (delete) icon (non-interactive). For a clickable version,
-/// use [`trash_button`].
-pub fn trash(ui: &mut Ui, size: f32, color: Color32) -> Response {
-    show(ui, trash_icon(), size, color)
-}
-
-/// Render a pencil (edit) icon (non-interactive). For a clickable version,
-/// use [`pencil_button`].
-pub fn pencil(ui: &mut Ui, size: f32, color: Color32) -> Response {
-    show(ui, pencil_icon(), size, color)
-}
-
-/// A clickable, frameless trash (delete) icon button labelled `label` for
-/// assistive technologies.
-pub fn trash_button(ui: &mut Ui, size: f32, color: Color32, label: &str) -> Response {
-    icon_button(ui, trash_icon(), size, color, label)
-}
-
-/// A clickable, frameless pencil (edit) icon button labelled `label` for
-/// assistive technologies.
-pub fn pencil_button(ui: &mut Ui, size: f32, color: Color32, label: &str) -> Response {
-    icon_button(ui, pencil_icon(), size, color, label)
-}
-
-/// A clickable, frameless eye icon button labelled `label` for assistive
-/// technologies.
-pub fn eye_button(ui: &mut Ui, size: f32, color: Color32, label: &str) -> Response {
-    icon_button(
-        ui,
-        Image::new(include_image!("../assets/icons/eye.svg")),
-        size,
-        color,
-        label,
-    )
-}
-
-fn icon_button(
-    ui: &mut Ui,
-    image: Image<'static>,
-    size: f32,
-    color: Color32,
-    label: &str,
-) -> Response {
-    let image = image.fit_to_exact_size(Vec2::splat(size)).tint(color);
+/// A clickable, frameless `icon` button `size` points square, tinted
+/// `color` and labelled `label` for assistive technologies.
+pub fn icon_button(ui: &mut Ui, icon: Icon, size: f32, color: Color32, label: &str) -> Response {
+    let image = icon
+        .image()
+        .fit_to_exact_size(Vec2::splat(size))
+        .tint(color);
     let response = ui
         .add(egui::Button::image(image).frame(false))
         .with_pointing_hand();
@@ -207,55 +250,20 @@ fn icon_button(
     response
 }
 
-/// The fill and glyph colours of an icon tile in `tone` (the design's
-/// `.tile` variants): accent and info tiles are tinted with a coloured glyph
-/// (`.tile`), neutral tiles use the strong control fill with a secondary
-/// glyph (`.tile.gray`), and status tiles are solid with a dark glyph
-/// (`.tile.ok`, `.tile.warn`, `.tile.bad`).
-pub fn tile_colors(theme: &Theme, tone: Tone) -> (Color32, Color32) {
-    let colors = theme.tone(tone);
-    match tone {
-        Tone::Accent | Tone::Info => (colors.tint, colors.text),
-        Tone::Neutral => (theme.control.fill_strong, theme.text.secondary),
-        Tone::Success | Tone::Warning | Tone::Danger => (colors.fill, theme.text.on_fill),
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_design_set_is_complete_and_uniquely_named() {
+        assert_eq!(
+            Icon::DESIGN.len(),
+            61,
+            "the Harbour stylesheet has 61 icons"
+        );
+        let names: std::collections::HashSet<_> =
+            Icon::ALL.iter().map(|icon| icon.name()).collect();
+        assert_eq!(names.len(), Icon::ALL.len());
+        assert_eq!(Icon::Cog6Tooth.name(), "cog-6-tooth");
     }
-}
-
-/// Glyph size relative to the tile: a 20 point glyph on a 36 point tile.
-const TILE_GLYPH_RATIO: f32 = 20.0 / 36.0;
-
-/// Paint an icon tile into `rect`: a rounded square in `tone` with `glyph`
-/// centred on it, tinted to match.
-pub fn paint_tile(
-    ui: &Ui,
-    painter: &Painter,
-    rect: Rect,
-    glyph: Image<'static>,
-    tone: Tone,
-    corner_radius: impl Into<CornerRadius>,
-) {
-    let (fill, glyph_color) = tile_colors(&crate::design::theme::ThemeExt::tokens(ui), tone);
-    painter.rect_filled(rect, corner_radius, fill);
-    let glyph_size = (rect.height() * TILE_GLYPH_RATIO).round();
-    let glyph_rect = Rect::from_center_size(rect.center(), Vec2::splat(glyph_size));
-    glyph.tint(glyph_color).paint_at(ui, glyph_rect);
-}
-
-/// Paints a check mark `width` points wide centred on `center`, as drawn for selected
-/// options and completed steps.
-pub fn paint_check_mark(
-    painter: &egui::Painter,
-    center: egui::Pos2,
-    width: f32,
-    stroke: egui::Stroke,
-) {
-    let scale = width / 13.0;
-    let [start, corner, end] = [
-        Vec2::new(-6.0, 0.0),
-        Vec2::new(-1.5, 4.5),
-        Vec2::new(7.0, -5.0),
-    ]
-    .map(|offset| center + offset * scale);
-    painter.line_segment([start, corner], stroke);
-    painter.line_segment([corner, end], stroke);
 }

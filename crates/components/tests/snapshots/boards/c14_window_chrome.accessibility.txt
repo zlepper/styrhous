@@ -1,0 +1,138 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Label value="C14 · COMPONENTS::{WINDOWHEADER, TOOLBAR, STATUSBAR}" rect=(x=48.0 y=40.0 width=354.4 height=16.0 center_x=225.2 center_y=48.0)
+            TextRun value="C14 · COMPONENTS::{WINDOWHEADER, TOOLBAR, STATUSBAR}" rect=(x=48.0 y=40.0 width=353.3 height=16.0 center_x=224.6 center_y=48.0)
+          Label value="Document window chrome" rect=(x=48.0 y=60.0 width=356.0 height=36.0 center_x=226.0 center_y=78.0)
+            TextRun value="Document window chrome" rect=(x=48.0 y=60.0 width=356.2 height=36.0 center_x=226.1 center_y=78.0)
+          Label value="Log viewer and YAML editor are the same window: a title header with state, a single toolbar row, the code surface and a status bar. Primary actions live in the header; tools live in the toolbar." rect=(x=48.0 y=102.0 width=868.5 height=40.0 center_x=482.2 center_y=122.0)
+            TextRun value="Log viewer and YAML editor are the same window: a title header with state, a single toolbar row, the code surface and a status bar. Primary " rect=(x=48.0 y=102.0 width=868.5 height=20.0 center_x=482.2 center_y=112.0)
+            TextRun value="actions live in the header; tools live in the toolbar." rect=(x=48.0 y=122.0 width=307.9 height=20.0 center_x=202.0 center_y=132.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="LOG WINDOW — HEADER 56 · TOOLBAR 48 · STATUS BAR 28" rect=(x=48.0 y=168.0 width=331.8 height=16.0 center_x=213.9 center_y=176.0)
+                TextRun value="LOG WINDOW — HEADER 56 · TOOLBAR 48 · STATUS BAR 28" rect=(x=48.0 y=168.0 width=330.8 height=16.0 center_x=213.4 center_y=176.0)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Label value="Container start" rect=(x=1229.2 y=216.5 width=80.8 height=16.0 center_x=1269.5 center_y=224.5)
+                    TextRun value="Container start" rect=(x=1229.2 y=216.5 width=80.8 height=16.0 center_x=1269.5 center_y=224.5)
+                  Group name="Container instance" rect=<none>
+                    Button name="Current" state=[toggled=True] rect=(x=1323.9 y=210.5 width=69.2 height=28.0 center_x=1358.5 center_y=224.5)
+                    Button name="Previous" state=[toggled=False] rect=(x=1395.1 y=210.5 width=73.9 height=28.0 center_x=1432.0 center_y=224.5)
+                GenericContainer rect=<none>
+                  Label value="api-0" rect=(x=105.0 y=206.5 width=34.0 height=20.0 center_x=122.0 center_y=216.5)
+                    TextRun value="api-0" rect=(x=105.0 y=206.5 width=34.0 height=20.0 center_x=122.0 center_y=216.5)
+                  Label value="Pod logs · container api · kube-system" rect=(x=105.0 y=226.5 width=203.7 height=16.0 center_x=206.8 center_y=234.5)
+                    TextRun value="Pod logs · container api · kube-system" rect=(x=105.0 y=226.5 width=203.7 height=16.0 center_x=206.8 center_y=234.5)
+                  Label value="Following" rect=(x=320.7 y=213.5 width=84.6 height=22.0 center_x=363.0 center_y=224.5)
+                    TextRun value="Following" rect=(x=343.7 y=216.5 width=52.6 height=16.0 center_x=370.0 center_y=224.5)
+                GenericContainer rect=<none>
+                  Group name="Line navigation" rect=<none>
+                    Button name="Previous line" rect=(x=1318.8 y=262.5 width=28.0 height=28.0 center_x=1332.8 center_y=276.5)
+                    Button name="Next line" rect=(x=1348.8 y=262.5 width=28.0 height=28.0 center_x=1362.8 center_y=276.5)
+                  Button name="Follow" state=[toggled=True] rect=(x=1386.8 y=260.5 width=84.2 height=32.0 center_x=1428.9 center_y=276.5)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    TextInput name="Search" value="http" rect=(x=65.0 y=260.5 width=143.4 height=32.0 center_x=136.7 center_y=276.5)
+                      TextRun value="http" rect=(x=101.0 y=268.5 width=24.8 height=20.0 center_x=113.4 center_y=278.5)
+                  Label value="3 / 12" rect=(x=214.4 y=266.5 width=39.6 height=20.0 center_x=234.2 center_y=276.5)
+                    TextRun value="3 / 12" rect=(x=214.4 y=266.5 width=39.6 height=20.0 center_x=234.2 center_y=276.5)
+                  Button name="Clear search" rect=(x=260.0 y=264.5 width=24.0 height=24.0 center_x=272.0 center_y=276.5)
+                  Button name="Previous match" rect=(x=297.0 y=264.5 width=24.0 height=24.0 center_x=309.0 center_y=276.5)
+                  Button name="Next match" rect=(x=327.0 y=264.5 width=24.0 height=24.0 center_x=339.0 center_y=276.5)
+                  CheckBox name="Regular expression" state=[toggled=False] rect=(x=357.0 y=264.5 width=24.0 height=24.0 center_x=369.0 center_y=276.5)
+                  Button name="Matches only" state=[toggled=False] rect=(x=393.0 y=260.5 width=124.2 height=32.0 center_x=455.1 center_y=276.5)
+                  Group name="View options" rect=<none>
+                    Button name="Line numbers" state=[toggled=True] rect=(x=536.2 y=262.5 width=28.0 height=28.0 center_x=550.2 center_y=276.5)
+                    Button name="Timestamps" state=[toggled=False] rect=(x=566.2 y=262.5 width=28.0 height=28.0 center_x=580.2 center_y=276.5)
+                    Button name="ANSI colours" state=[toggled=True] rect=(x=596.2 y=262.5 width=28.0 height=28.0 center_x=610.2 center_y=276.5)
+                    Button name="Source labels" state=[toggled=False] rect=(x=626.2 y=262.5 width=28.0 height=28.0 center_x=640.2 center_y=276.5)
+                GenericContainer rect=<none>
+                  Label value="Selection 2 lines" rect=(x=1343.9 y=341.5 width=87.5 height=16.0 center_x=1387.6 center_y=349.5)
+                    TextRun value="Selection 2 lines" rect=(x=1343.9 y=341.5 width=87.5 height=16.0 center_x=1387.6 center_y=349.5)
+                  Label value="UTC" rect=(x=1447.3 y=341.5 width=23.7 height=16.0 center_x=1459.2 center_y=349.5)
+                    TextRun value="UTC" rect=(x=1447.3 y=341.5 width=23.7 height=16.0 center_x=1459.2 center_y=349.5)
+                GenericContainer rect=<none>
+                  Label value="1,284 lines" rect=(x=65.0 y=341.5 width=59.8 height=16.0 center_x=94.9 center_y=349.5)
+                    TextRun value="1,284 lines" rect=(x=65.0 y=341.5 width=59.8 height=16.0 center_x=94.9 center_y=349.5)
+                  Label value="12 matches" rect=(x=140.8 y=341.5 width=64.1 height=16.0 center_x=172.9 center_y=349.5)
+                    TextRun value="12 matches" rect=(x=140.8 y=341.5 width=64.1 height=16.0 center_x=172.9 center_y=349.5)
+                  Label value="Backfill 2.1k" rect=(x=220.9 y=341.5 width=61.2 height=16.0 center_x=251.5 center_y=349.5)
+                    TextRun value="Backfill 2.1k" rect=(x=220.9 y=341.5 width=61.2 height=16.0 center_x=251.5 center_y=349.5)
+            GenericContainer rect=<none>
+              Label value="YAML EDITOR — SAME HEADER, TOOLBAR AND STATUS BAR" rect=(x=48.0 y=388.0 width=328.8 height=16.0 center_x=212.4 center_y=396.0)
+                TextRun value="YAML EDITOR — SAME HEADER, TOOLBAR AND STATUS BAR" rect=(x=48.0 y=388.0 width=327.7 height=16.0 center_x=211.9 center_y=396.0)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Button name="Discard" rect=(x=1266.8 y=428.5 width=74.6 height=32.0 center_x=1304.1 center_y=444.5)
+                  Button name="Apply changes" rect=(x=1353.4 y=428.5 width=117.6 height=32.0 center_x=1412.2 center_y=444.5)
+                GenericContainer rect=<none>
+                  Label value="settings" rect=(x=105.0 y=426.5 width=51.5 height=20.0 center_x=130.8 center_y=436.5)
+                    TextRun value="settings" rect=(x=105.0 y=426.5 width=51.5 height=20.0 center_x=130.8 center_y=436.5)
+                  Label value="ConfigMap · kube-system" rect=(x=105.0 y=446.5 width=138.8 height=16.0 center_x=174.4 center_y=454.5)
+                    TextRun value="ConfigMap · kube-system" rect=(x=105.0 y=446.5 width=138.8 height=16.0 center_x=174.4 center_y=454.5)
+                  Label value="Modified" rect=(x=255.8 y=433.5 width=80.6 height=22.0 center_x=296.1 center_y=444.5)
+                    TextRun value="Modified" rect=(x=278.8 y=436.5 width=48.6 height=16.0 center_x=303.1 center_y=444.5)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    ProgressIndicator name="Loading" rect=(x=1392.1 y=490.5 width=12.0 height=12.0 center_x=1398.1 center_y=496.5)
+                    Label value="Validating…" rect=(x=1410.1 y=488.5 width=60.9 height=16.0 center_x=1440.5 center_y=496.5)
+                      TextRun value="Validating…" rect=(x=1410.1 y=488.5 width=60.9 height=16.0 center_x=1440.5 center_y=496.5)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    TextInput name="Search" value="map" rect=(x=65.0 y=480.5 width=150.0 height=32.0 center_x=140.0 center_y=496.5)
+                      TextRun value="map" rect=(x=101.0 y=488.5 width=25.4 height=20.0 center_x=113.7 center_y=498.5)
+                  Label value="1 / 2" rect=(x=221.0 y=486.5 width=33.0 height=20.0 center_x=237.5 center_y=496.5)
+                    TextRun value="1 / 2" rect=(x=221.0 y=486.5 width=33.0 height=20.0 center_x=237.5 center_y=496.5)
+                  Button name="Clear search" rect=(x=260.0 y=484.5 width=24.0 height=24.0 center_x=272.0 center_y=496.5)
+                  Button name="Previous match" rect=(x=297.0 y=484.5 width=24.0 height=24.0 center_x=309.0 center_y=496.5)
+                  Button name="Next match" rect=(x=327.0 y=484.5 width=24.0 height=24.0 center_x=339.0 center_y=496.5)
+                  CheckBox name="Regular expression" state=[toggled=False] rect=(x=357.0 y=484.5 width=24.0 height=24.0 center_x=369.0 center_y=496.5)
+                GenericContainer rect=<none>
+                  Button name="1 problem" rect=(x=1271.6 y=561.5 width=70.5 height=16.0 center_x=1306.8 center_y=569.5)
+                    TextRun value="1 problem" rect=(x=1289.6 y=561.5 width=52.5 height=16.0 center_x=1315.8 center_y=569.5)
+                  Label value="Ln 4, Col 12" rect=(x=1358.0 y=561.5 width=65.2 height=16.0 center_x=1390.6 center_y=569.5)
+                    TextRun value="Ln 4, Col 12" rect=(x=1358.0 y=561.5 width=65.2 height=16.0 center_x=1390.6 center_y=569.5)
+                  Label value="YAML" rect=(x=1439.2 y=561.5 width=31.8 height=16.0 center_x=1455.1 center_y=569.5)
+                    TextRun value="YAML" rect=(x=1439.2 y=561.5 width=31.8 height=16.0 center_x=1455.1 center_y=569.5)
+                GenericContainer rect=<none>
+                  Label value="Changes apply directly to the cluster" rect=(x=95.0 y=561.5 width=197.6 height=16.0 center_x=193.8 center_y=569.5)
+                    TextRun value="Changes apply directly to the cluster" rect=(x=95.0 y=561.5 width=197.6 height=16.0 center_x=193.8 center_y=569.5)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="NARROW WINDOW (< 960 PX): TITLES TRUNCATE, VIEW TOGGLES COLLAPSE INTO A MENU, LABELS DROP" rect=(x=48.0 y=608.0 width=587.4 height=16.0 center_x=341.7 center_y=616.0)
+                  TextRun value="NARROW WINDOW (< 960 PX): TITLES TRUNCATE, VIEW TOGGLES COLLAPSE INTO A MENU, LABELS DROP" rect=(x=48.0 y=608.0 width=586.3 height=16.0 center_x=341.2 center_y=616.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Group name="Container instance" rect=<none>
+                      Button name="Current" state=[toggled=True] rect=(x=659.2 y=652.5 width=61.7 height=24.0 center_x=690.1 center_y=664.5)
+                      Button name="Previous" state=[toggled=False] rect=(x=722.9 y=652.5 width=66.1 height=24.0 center_x=756.0 center_y=664.5)
+                  GenericContainer rect=<none>
+                    Label value="kube-controller-manager-kind-control-plane" rect=(x=105.0 y=646.5 width=284.7 height=20.0 center_x=247.3 center_y=656.5)
+                      TextRun value="kube-controller-manager-kind-control-plane" rect=(x=105.0 y=646.5 width=284.7 height=20.0 center_x=247.3 center_y=656.5)
+                    Label value="Pod logs · 2 sources" rect=(x=105.0 y=666.5 width=106.6 height=16.0 center_x=158.3 center_y=674.5)
+                      TextRun value="Pod logs · 2 sources" rect=(x=105.0 y=666.5 width=106.6 height=16.0 center_x=158.3 center_y=674.5)
+                    Label value="Reconnecting…" rect=(x=401.7 y=653.5 width=116.1 height=22.0 center_x=459.7 center_y=664.5)
+                      TextRun value="Reconnecting…" rect=(x=424.7 y=656.5 width=84.1 height=16.0 center_x=466.7 center_y=664.5)
+                  GenericContainer rect=<none>
+                    Button name="Follow" state=[toggled=True] rect=(x=759.0 y=700.5 width=32.0 height=32.0 center_x=775.0 center_y=716.5)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      TextInput name="Search" value="" rect=(x=65.0 y=700.5 width=119.0 height=32.0 center_x=124.5 center_y=716.5)
+                        TextRun value="" rect=(x=101.0 y=708.5 width=0.0 height=20.0 center_x=101.0 center_y=718.5)
+                    Button name="Previous match" state=[disabled] rect=(x=197.0 y=704.5 width=24.0 height=24.0 center_x=209.0 center_y=716.5)
+                    Button name="Next match" state=[disabled] rect=(x=227.0 y=704.5 width=24.0 height=24.0 center_x=239.0 center_y=716.5)
+                    CheckBox name="Regular expression" state=[toggled=False] rect=(x=257.0 y=704.5 width=24.0 height=24.0 center_x=269.0 center_y=716.5)
+                    Button name="Matches only" state=[toggled=False] rect=(x=293.0 y=700.5 width=32.0 height=32.0 center_x=309.0 center_y=716.5)
+                    Button name="View options" rect=(x=342.0 y=700.5 width=149.8 height=32.0 center_x=416.9 center_y=716.5)
+              GenericContainer rect=<none>
+                Label value="TOOLBAR ORDER" rect=(x=848.0 y=608.0 width=93.7 height=16.0 center_x=894.8 center_y=616.0)
+                  TextRun value="TOOLBAR ORDER" rect=(x=848.0 y=608.0 width=92.6 height=16.0 center_x=894.3 center_y=616.0)
+                Label value="Search → filter → view options | flexible space | navigation → mode toggles. Groups never overlap: when the toolbar runs out of room, the view-option group collapses first, then button labels, then the search field shrinks to 200 px." rect=(x=848.0 y=632.0 width=600.0 height=60.0 center_x=1148.0 center_y=662.0)
+                  TextRun value="Search → filter → view options | flexible space | navigation → mode toggles. Groups never overlap: when " rect=(x=848.0 y=632.0 width=600.2 height=20.0 center_x=1148.1 center_y=642.0)
+                  TextRun value="the toolbar runs out of room, the view-option group collapses first, then button labels, then the search " rect=(x=848.0 y=652.0 width=596.2 height=20.0 center_x=1146.1 center_y=662.0)
+                  TextRun value="field shrinks to 200 px." rect=(x=848.0 y=672.0 width=131.7 height=20.0 center_x=913.9 center_y=682.0)

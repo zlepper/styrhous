@@ -1,4 +1,5 @@
 use super::*;
+use crate::tooltip::TooltipExt;
 
 pub(super) fn show_property_rows(
     ui: &mut Ui,
@@ -8,14 +9,15 @@ pub(super) fn show_property_rows(
     let mut rows = rows.iter().filter(|row| !row.cells.is_empty()).peekable();
     while let Some(row) = rows.next() {
         if row.framed {
-            show_card(ui, space::S12 as i8, |ui| {
-                show_property_row(ui, row, response)
-            });
+            crate::Card::new()
+                .padding(space::S12 as i8)
+                .show(ui, |ui| show_property_row(ui, row, response));
         } else {
             show_property_row(ui, row, response);
         }
         if rows.peek().is_some() {
-            ui.add_space(space::S8);
+            // The property grid's own row gap.
+            ui.add_space(space::S16);
         }
     }
 }
@@ -49,51 +51,33 @@ pub(super) fn show_property_row(
     row: &DetailRow<'_>,
     response: &mut InspectorDetailsResponse,
 ) {
-    let capacity = column_capacity(ui.available_width());
-    let columns = row.cells.len().min(capacity);
-    for cells in row.cells.chunks(columns) {
-        ui.columns(cells.len(), |columns| {
-            for (cell, column) in cells.iter().zip(columns) {
-                column.with_layout(Layout::top_down(Align::LEFT), |ui| {
-                    show_property_cell(ui, cell, response);
-                });
-            }
-        });
-        if cells.len() < row.cells.len() {
-            ui.add_space(space::S8);
-        }
-    }
+    let properties: Vec<Property<'_>> = row.cells.iter().map(property).collect();
+    // A row with fewer cells than columns spreads them across the width.
+    let grid = PropertyGrid::new(&properties)
+        .max_columns(properties.len())
+        .show(ui);
+    response.activated.extend(grid.activated);
+    response.copied.extend(grid.copied);
 }
 
-pub(super) fn column_capacity(available_width: f32) -> usize {
-    for columns in (2..=3).rev() {
-        let gaps = space::S8 * (columns - 1) as f32;
-        if (available_width - gaps) / columns as f32 >= MIN_COLUMN_WIDTH {
-            return columns;
-        }
+/// The [`Property`] that shows `cell`.
+fn property<'a>(cell: &DetailCell<'a>) -> Property<'a> {
+    let label = cell.label.clone();
+    let property = match &cell.value {
+        DetailValue::Text(text) => Property::text(label, text.clone()),
+        DetailValue::Unavailable => Property::unavailable(label),
+        DetailValue::Status { text, tone } => Property::status(label, text.clone(), *tone),
+        DetailValue::Link { text, action } => Property::link(label, text.clone(), *action),
+    };
+    let property = if cell.free_text {
+        property.wrap(FREE_TEXT_MAX_LINES)
+    } else {
+        property
+    };
+    match &cell.copy_text {
+        Some(text) => property.copyable_as(text.clone()),
+        None => property,
     }
-    1
-}
-
-pub(super) fn show_property_cell(
-    ui: &mut Ui,
-    cell: &DetailCell<'_>,
-    response: &mut InspectorDetailsResponse,
-) {
-    ui.label(
-        RichText::new(cell.label.as_ref())
-            .font(type_scale::META.font_id(ui.ctx()))
-            .color(ui.tokens().text.muted),
-    );
-    show_value(
-        ui,
-        &cell.value,
-        cell.copy_text
-            .as_deref()
-            .map(|text| (cell.label.as_ref(), text)),
-        Some(cell.label.as_ref()),
-        response,
-    );
 }
 
 pub(super) fn show_value(
@@ -121,26 +105,14 @@ pub(super) fn show_value(
             unavailable.widget_info(|| {
                 WidgetInfo::labeled(WidgetType::Label, true, accessibility_label.clone())
             });
-            unavailable.on_hover_text("This value is unavailable for this resource.");
+            unavailable.tooltip("This value is unavailable for this resource.");
         }
         DetailValue::Status { text, tone } => {
-            ui.horizontal_top(|ui| {
-                let (marker_rect, _) =
-                    ui.allocate_exact_size(egui::vec2(12.0, 0.0), egui::Sense::hover());
-                let label = ui.add(
-                    Label::new(
-                        RichText::new(text.as_ref())
-                            .font(type_scale::META.font_id(ui.ctx()))
-                            .color(ui.tokens().text.primary),
-                    )
-                    .wrap(),
-                );
-                ui.painter().circle_filled(
-                    egui::pos2(marker_rect.center().x, label.rect.center().y),
-                    4.0,
-                    ui.tokens().tone(*tone).fill,
-                );
-            });
+            // The other values are plain egui labels; share their baseline.
+            crate::StatusLabel::new(text.as_ref(), *tone)
+                .role(type_scale::META)
+                .in_egui_row()
+                .show(ui);
         }
         DetailValue::Link { text, action } => {
             let link = ui
@@ -180,54 +152,18 @@ pub(super) fn show_text_value(
     response: &mut InspectorDetailsResponse,
 ) {
     if let Some((label, copy_text)) = copy {
-        let metadata_font = type_scale::META.font_id(ui.ctx());
-        let metadata_line_height = ui.fonts_mut(|fonts| fonts.row_height(&metadata_font));
-        ui.horizontal_top(|ui| {
-            let text_layout = ui.allocate_ui_with_layout(
-                egui::vec2(
-                    (ui.available_width() - COPY_ICON_SIZE - ui.spacing().item_spacing.x).max(0.0),
-                    0.0,
-                ),
-                Layout::top_down(Align::LEFT),
-                |ui| {
-                    ui.add(
-                        Label::new(
-                            RichText::new(text)
-                                .font(type_scale::META.font_id(ui.ctx()))
-                                .color(color),
-                        )
-                        .wrap(),
-                    )
-                },
-            );
-            let icon_rect = Rect::from_center_size(
-                egui::pos2(
-                    ui.cursor().left() + COPY_ICON_SIZE / 2.0,
-                    text_layout.response.rect.top() + metadata_line_height / 2.0,
-                ),
-                Vec2::splat(COPY_ICON_SIZE),
-            );
-            let copy_action = ui
-                .interact(
-                    icon_rect,
-                    ui.id().with(("copy", label, copy_text)),
-                    egui::Sense::click(),
-                )
-                .with_pointing_hand();
-            copy_action.widget_info(|| {
-                WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), format!("Copy {label}"))
-            });
-            if copy_action.hovered() {
-                crate::icons::document_duplicate_icon()
-                    .fit_to_exact_size(Vec2::splat(COPY_ICON_SIZE))
-                    .tint(ui.tokens().text.secondary)
-                    .paint_at(ui, icon_rect);
-            }
-            if copy_action.clicked() {
-                ui.ctx().copy_text(copy_text.to_owned());
-                response.copied.push(copy_text.to_owned());
-            }
-        });
+        // The same copy control as property values: the whole value is the
+        // target and a click confirms with "Copied".
+        let copied = Copyable::new(text)
+            .copy_as(copy_text)
+            .label(label)
+            .role(type_scale::META)
+            .wrap(usize::MAX)
+            .show(ui)
+            .clicked();
+        if copied {
+            response.copied.push(copy_text.to_owned());
+        }
     } else {
         ui.add(
             Label::new(

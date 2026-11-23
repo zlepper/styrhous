@@ -11,101 +11,104 @@ Window state=[focused] rect=<none>
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="Key" rect=(x=25.0 y=58.0 width=19.9 height=14.0 center_x=35.0 center_y=65.0)
+              Label value="Key" rect=(x=24.0 y=57.0 width=19.9 height=14.0 center_x=34.0 center_y=64.0)
             GenericContainer rect=<none>
-              Label value="Value" rect=(x=256.0 y=58.0 width=29.8 height=14.0 center_x=270.9 center_y=65.0)
+              Label value="Value" rect=(x=256.0 y=57.0 width=29.8 height=14.0 center_x=270.9 center_y=64.0)
             GenericContainer rect=<none>
-              Label value="Source" rect=(x=487.0 y=58.0 width=64.0 height=14.0 center_x=519.0 center_y=65.0)
-                TextRun value="Source" rect=(x=499.9 y=58.0 width=38.1 height=14.0 center_x=519.0 center_y=65.0)
+              Label value="Source" rect=(x=488.0 y=57.0 width=64.0 height=14.0 center_x=520.0 center_y=64.0)
+                TextRun value="Source" rect=(x=500.9 y=57.0 width=38.1 height=14.0 center_x=520.0 center_y=64.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="APPLICATION_CONFIGURATION_WITH_A_LONG_NAME" rect=(x=25.0 y=96.5 width=216.8 height=17.0 center_x=133.4 center_y=105.0)
-                TextRun value="APPLICATION_CONFIGURATION_W…" rect=(x=25.0 y=96.5 width=216.8 height=17.0 center_x=133.4 center_y=105.0)
+              Label value="APPLICATION_CONFIGURATION_WITH_A_LONG_NAME" rect=(x=24.0 y=95.5 width=216.8 height=17.0 center_x=132.4 center_y=104.0)
+                TextRun value="APPLICATION_CONFIGURATION_W…" rect=(x=24.0 y=95.5 width=216.8 height=17.0 center_x=132.4 center_y=104.0)
             GenericContainer rect=<none>
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
-                  Label value="https://api.example.test/v1/very/long/environment/variable/value" rect=(x=256.0 y=96.5 width=216.8 height=17.0 center_x=364.4 center_y=105.0)
-                    TextRun value="https://api.example.test/v1…" rect=(x=256.0 y=96.5 width=216.8 height=17.0 center_x=364.4 center_y=105.0)
+                  Label value="https://api.example.test/v1/very/long/environment/variable/value" rect=(x=256.0 y=95.5 width=216.8 height=17.0 center_x=364.4 center_y=104.0)
+                    TextRun value="https://api.example.test/v1…" rect=(x=256.0 y=95.5 width=216.8 height=17.0 center_x=364.4 center_y=104.0)
             GenericContainer rect=<none>
-              Image name="Literal" rect=(x=487.0 y=97.0 width=64.0 height=16.0 center_x=519.0 center_y=105.0)
+              Image name="Literal" rect=(x=488.0 y=96.0 width=64.0 height=16.0 center_x=520.0 center_y=104.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="CONFIGURED_API_URL" rect=(x=25.0 y=140.5 width=140.4 height=17.0 center_x=95.2 center_y=149.0)
-                TextRun value="CONFIGURED_API_URL" rect=(x=25.0 y=140.5 width=140.4 height=17.0 center_x=95.2 center_y=149.0)
+              Label value="CONFIGURED_API_URL" rect=(x=24.0 y=139.5 width=140.4 height=17.0 center_x=94.2 center_y=148.0)
+                TextRun value="CONFIGURED_API_URL" rect=(x=24.0 y=139.5 width=140.4 height=17.0 center_x=94.2 center_y=148.0)
             GenericContainer rect=<none>
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
-                  Label value="https://api.example.test/v1" rect=(x=256.0 y=140.5 width=210.6 height=17.0 center_x=361.3 center_y=149.0)
-                    TextRun value="https://api.example.test/v1" rect=(x=256.0 y=140.5 width=210.6 height=17.0 center_x=361.3 center_y=149.0)
+                  Label value="https://api.example.test/v1" rect=(x=256.0 y=139.5 width=210.6 height=17.0 center_x=361.3 center_y=148.0)
+                    TextRun value="https://api.example.test/v1" rect=(x=256.0 y=139.5 width=210.6 height=17.0 center_x=361.3 center_y=148.0)
             GenericContainer rect=<none>
-              Image name="ConfigMap application-configuration/api-url · resolved" rect=(x=487.0 y=141.0 width=64.0 height=16.0 center_x=519.0 center_y=149.0)
+              Image name="ConfigMap application-configuration/api-url · resolved" rect=(x=488.0 y=140.0 width=64.0 height=16.0 center_x=520.0 center_y=148.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="DATABASE_PASSWORD" rect=(x=25.0 y=184.5 width=132.6 height=17.0 center_x=91.3 center_y=193.0)
-                TextRun value="DATABASE_PASSWORD" rect=(x=25.0 y=184.5 width=132.6 height=17.0 center_x=91.3 center_y=193.0)
+              Label value="DATABASE_PASSWORD" rect=(x=24.0 y=183.5 width=132.6 height=17.0 center_x=90.3 center_y=192.0)
+                TextRun value="DATABASE_PASSWORD" rect=(x=24.0 y=183.5 width=132.6 height=17.0 center_x=90.3 center_y=192.0)
             GenericContainer rect=<none>
               GenericContainer rect=<none>
-                Button name="Reveal" rect=(x=465.0 y=184.0 width=14.0 height=18.0 center_x=472.0 center_y=193.0)
+                Button name="Reveal" rect=(x=466.0 y=183.0 width=14.0 height=18.0 center_x=473.0 center_y=192.0)
                 GenericContainer rect=<none>
-                  Label value="••••••" rect=(x=256.0 y=184.5 width=46.8 height=17.0 center_x=279.4 center_y=193.0)
-                    TextRun value="••••••" rect=(x=256.0 y=184.5 width=46.8 height=17.0 center_x=279.4 center_y=193.0)
+                  Label value="••••••" rect=(x=256.0 y=183.5 width=46.8 height=17.0 center_x=279.4 center_y=192.0)
+                    TextRun value="••••••" rect=(x=256.0 y=183.5 width=46.8 height=17.0 center_x=279.4 center_y=192.0)
             GenericContainer rect=<none>
-              Image name="Secret application-database/password · resolved" rect=(x=487.0 y=185.0 width=64.0 height=16.0 center_x=519.0 center_y=193.0)
+              Image name="Secret application-database/password · resolved" rect=(x=488.0 y=184.0 width=64.0 height=16.0 center_x=520.0 center_y=192.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="IMPORTED_CONFIGURATION" rect=(x=25.0 y=228.5 width=171.6 height=17.0 center_x=110.8 center_y=237.0)
-                TextRun value="IMPORTED_CONFIGURATION" rect=(x=25.0 y=228.5 width=171.6 height=17.0 center_x=110.8 center_y=237.0)
-            GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Label value="loaded" rect=(x=256.0 y=228.5 width=46.8 height=17.0 center_x=279.4 center_y=237.0)
-                    TextRun value="loaded" rect=(x=256.0 y=228.5 width=46.8 height=17.0 center_x=279.4 center_y=237.0)
-            GenericContainer rect=<none>
-              Image name="ConfigMap import application-defaults · resolved" rect=(x=487.0 y=229.0 width=64.0 height=16.0 center_x=519.0 center_y=237.0)
-          GenericContainer rect=<none>
-            GenericContainer rect=<none>
-              Label value="IMPORTED_SECRET" rect=(x=25.0 y=272.5 width=117.0 height=17.0 center_x=83.5 center_y=281.0)
-                TextRun value="IMPORTED_SECRET" rect=(x=25.0 y=272.5 width=117.0 height=17.0 center_x=83.5 center_y=281.0)
+              Label value="IMPORTED_CONFIGURATION" rect=(x=24.0 y=227.5 width=171.6 height=17.0 center_x=109.8 center_y=236.0)
+                TextRun value="IMPORTED_CONFIGURATION" rect=(x=24.0 y=227.5 width=171.6 height=17.0 center_x=109.8 center_y=236.0)
             GenericContainer rect=<none>
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
-                  Label value="Unavailable" rect=(x=256.0 y=272.5 width=85.8 height=17.0 center_x=298.9 center_y=281.0)
-                    TextRun value="Unavailable" rect=(x=256.0 y=272.5 width=85.8 height=17.0 center_x=298.9 center_y=281.0)
+                  Label value="loaded" rect=(x=256.0 y=227.5 width=46.8 height=17.0 center_x=279.4 center_y=236.0)
+                    TextRun value="loaded" rect=(x=256.0 y=227.5 width=46.8 height=17.0 center_x=279.4 center_y=236.0)
             GenericContainer rect=<none>
-              Image name="Secret import application-secrets (optional) · unavailable" rect=(x=487.0 y=273.0 width=64.0 height=16.0 center_x=519.0 center_y=281.0)
+              Image name="ConfigMap import application-defaults · resolved" rect=(x=488.0 y=228.0 width=64.0 height=16.0 center_x=520.0 center_y=236.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="POD_NAME" rect=(x=25.0 y=316.5 width=62.4 height=17.0 center_x=56.2 center_y=325.0)
-                TextRun value="POD_NAME" rect=(x=25.0 y=316.5 width=62.4 height=17.0 center_x=56.2 center_y=325.0)
+              Label value="IMPORTED_SECRET" rect=(x=24.0 y=271.5 width=117.0 height=17.0 center_x=82.5 center_y=280.0)
+                TextRun value="IMPORTED_SECRET" rect=(x=24.0 y=271.5 width=117.0 height=17.0 center_x=82.5 center_y=280.0)
             GenericContainer rect=<none>
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
-                  Label value="api-7f8c9d" rect=(x=256.0 y=316.5 width=78.0 height=17.0 center_x=295.0 center_y=325.0)
-                    TextRun value="api-7f8c9d" rect=(x=256.0 y=316.5 width=78.0 height=17.0 center_x=295.0 center_y=325.0)
+                  Label value="Unavailable" rect=(x=256.0 y=271.5 width=85.8 height=17.0 center_x=298.9 center_y=280.0)
+                    TextRun value="Unavailable" rect=(x=256.0 y=271.5 width=85.8 height=17.0 center_x=298.9 center_y=280.0)
             GenericContainer rect=<none>
-              Image name="Field metadata.name · resolved" rect=(x=487.0 y=317.0 width=64.0 height=16.0 center_x=519.0 center_y=325.0)
+              Image name="Secret import application-secrets (optional) · unavailable" rect=(x=488.0 y=272.0 width=64.0 height=16.0 center_x=520.0 center_y=280.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="CPU_LIMIT" rect=(x=25.0 y=360.5 width=70.2 height=17.0 center_x=60.1 center_y=369.0)
-                TextRun value="CPU_LIMIT" rect=(x=25.0 y=360.5 width=70.2 height=17.0 center_x=60.1 center_y=369.0)
+              Label value="POD_NAME" rect=(x=24.0 y=315.5 width=62.4 height=17.0 center_x=55.2 center_y=324.0)
+                TextRun value="POD_NAME" rect=(x=24.0 y=315.5 width=62.4 height=17.0 center_x=55.2 center_y=324.0)
             GenericContainer rect=<none>
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
-                  Label value="500m" rect=(x=256.0 y=360.5 width=31.2 height=17.0 center_x=271.6 center_y=369.0)
-                    TextRun value="500m" rect=(x=256.0 y=360.5 width=31.2 height=17.0 center_x=271.6 center_y=369.0)
+                  Label value="api-7f8c9d" rect=(x=256.0 y=315.5 width=78.0 height=17.0 center_x=295.0 center_y=324.0)
+                    TextRun value="api-7f8c9d" rect=(x=256.0 y=315.5 width=78.0 height=17.0 center_x=295.0 center_y=324.0)
             GenericContainer rect=<none>
-              Image name="Resource field limits.cpu (api) · resolved" rect=(x=487.0 y=361.0 width=64.0 height=16.0 center_x=519.0 center_y=369.0)
+              Image name="Field metadata.name · resolved" rect=(x=488.0 y=316.0 width=64.0 height=16.0 center_x=520.0 center_y=324.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="UNKNOWN_CONFIGURATION" rect=(x=25.0 y=404.5 width=163.8 height=17.0 center_x=106.9 center_y=413.0)
-                TextRun value="UNKNOWN_CONFIGURATION" rect=(x=25.0 y=404.5 width=163.8 height=17.0 center_x=106.9 center_y=413.0)
+              Label value="CPU_LIMIT" rect=(x=24.0 y=359.5 width=70.2 height=17.0 center_x=59.1 center_y=368.0)
+                TextRun value="CPU_LIMIT" rect=(x=24.0 y=359.5 width=70.2 height=17.0 center_x=59.1 center_y=368.0)
             GenericContainer rect=<none>
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
-                  Label value="Unavailable" rect=(x=256.0 y=404.5 width=85.8 height=17.0 center_x=298.9 center_y=413.0)
-                    TextRun value="Unavailable" rect=(x=256.0 y=404.5 width=85.8 height=17.0 center_x=298.9 center_y=413.0)
+                  Label value="500m" rect=(x=256.0 y=359.5 width=31.2 height=17.0 center_x=271.6 center_y=368.0)
+                    TextRun value="500m" rect=(x=256.0 y=359.5 width=31.2 height=17.0 center_x=271.6 center_y=368.0)
             GenericContainer rect=<none>
-              Image name="Unspecified source" rect=(x=487.0 y=405.0 width=64.0 height=16.0 center_x=519.0 center_y=413.0)
+              Image name="Resource field limits.cpu (api) · resolved" rect=(x=488.0 y=360.0 width=64.0 height=16.0 center_x=520.0 center_y=368.0)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="UNKNOWN_CONFIGURATION" rect=(x=24.0 y=403.5 width=163.8 height=17.0 center_x=105.9 center_y=412.0)
+                TextRun value="UNKNOWN_CONFIGURATION" rect=(x=24.0 y=403.5 width=163.8 height=17.0 center_x=105.9 center_y=412.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Label value="Unavailable" rect=(x=256.0 y=403.5 width=85.8 height=17.0 center_x=298.9 center_y=412.0)
+                    TextRun value="Unavailable" rect=(x=256.0 y=403.5 width=85.8 height=17.0 center_x=298.9 center_y=412.0)
+            GenericContainer rect=<none>
+              Image name="Unspecified source" rect=(x=488.0 y=404.0 width=64.0 height=16.0 center_x=520.0 center_y=412.0)
   GenericContainer rect=<none>
     GenericContainer rect=<none>
-      Label value="APPLICATION_CONFIGURATION_WITH_A_LONG_NAME" rect=(x=32.0 y=125.0 width=327.6 height=17.0 center_x=195.8 center_y=133.5)
+      GenericContainer rect=<none>
+        Label value="APPLICATION_CONFIGURATION_WITH_A_LONG_NAME" rect=(x=34.0 y=125.0 width=260.0 height=32.0 center_x=164.0 center_y=141.0)
+          TextRun value="APPLICATION_CONFIGURATION_WITH_A_" rect=(x=34.0 y=125.0 width=235.2 height=16.0 center_x=151.6 center_y=133.0)
+          TextRun value="LONG_NAME" rect=(x=34.0 y=141.0 width=73.1 height=16.0 center_x=70.5 center_y=149.0)

@@ -35,7 +35,7 @@ fn namespace_selector_reconciles_watch_sources_when_selection_changes() {
     );
 
     harness
-        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace scope")
         .click();
     harness.run_steps(1);
     let namespace_position = harness.get_by_label("kube-system").rect().center();
@@ -72,18 +72,18 @@ fn namespace_selector_reconciles_watch_sources_when_selection_changes() {
     );
 
     harness
-        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace scope")
         .click();
     harness.run();
 
-    harness.get_by_label("Select all").click();
+    harness.get_by_label("All namespaces").click();
     harness.run();
     assert_eq!(
         harness.state().ui_state.clusters[&1].selected_namespaces,
         SelectedNamespaces::All
     );
 
-    harness.get_by_label("Select all").click();
+    harness.get_by_label("All namespaces").click();
     harness.run();
     assert!(
         harness.state().ui_state.clusters[&1]
@@ -91,7 +91,7 @@ fn namespace_selector_reconciles_watch_sources_when_selection_changes() {
             .is_empty()
     );
 
-    harness.get_by_label("Select all").click();
+    harness.get_by_label("All namespaces").click();
     harness.run();
 
     let mut commands = Vec::new();
@@ -153,10 +153,10 @@ fn select_all_namespaces_includes_namespaces_created_afterwards() {
     });
 
     harness
-        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace scope")
         .click();
     harness.run();
-    harness.get_by_label("Select all").click();
+    harness.get_by_label("All namespaces").click();
     // Loading watches show a spinner, which keeps repainting until they list.
     harness.run_steps(2);
     assert!(
@@ -196,7 +196,7 @@ fn select_all_namespaces_includes_namespaces_created_afterwards() {
         "the watch already covers namespaces created later"
     );
     assert!(harness.cluster(1).is_namespace_watched(&pods, "monitoring"));
-    for namespace in ["Select all", "default", "kube-system", "monitoring"] {
+    for namespace in ["All namespaces", "default", "kube-system", "monitoring"] {
         assert_eq!(
             harness.get_by_label(namespace).accesskit_node().toggled(),
             Some(egui::accesskit::Toggled::True),
@@ -285,7 +285,17 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
             )]),
         }) as WorkerResultBox);
     harness.run();
-    harness.get_by_label("Cluster-wide");
+    // A cluster-scoped kind's scope pill says "Cluster-wide" and cannot be
+    // opened to choose namespaces.
+    let scope = harness.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace scope");
+    assert_eq!(scope.value().as_deref(), Some("Cluster-wide"));
+    scope.click();
+    harness.run();
+    assert!(
+        harness
+            .query_by_role_and_label(egui::accesskit::Role::TextInput, "Search Namespace")
+            .is_none()
+    );
     harness.get_by_label("Open details for kind-control-plane");
     harness.get_by_label("0.500");
     harness.get_by_label("1Gi");
@@ -344,7 +354,7 @@ fn namespace_selector_search_snapshot_shows_active_watches() {
     let mut harness = application_harness::<MockWorker>();
     harness.seed_ui_state(state);
     harness
-        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace scope")
         .click();
     harness.run();
     harness
@@ -366,7 +376,7 @@ fn namespace_selector_shows_a_reconnecting_indicator_only_while_the_watcher_is_d
     let mut harness = application_harness::<MockWorker>();
     harness.seed_ui_state(state);
     harness.run();
-    assert!(harness.query_by_label("Reconnecting...").is_none());
+    assert!(harness.query_by_label("namespaces reconnecting").is_none());
 
     harness
         .state_mut()
@@ -377,7 +387,7 @@ fn namespace_selector_shows_a_reconnecting_indicator_only_while_the_watcher_is_d
             error: "connection lost".into(),
         }) as WorkerResultBox);
     harness.run();
-    assert!(harness.query_by_label("Reconnecting...").is_some());
+    assert!(harness.query_by_label("namespaces reconnecting").is_some());
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "cluster_connection/namespace_selector_reconnecting_indicator/namespace_selector_reconnecting",
     ));
@@ -388,7 +398,7 @@ fn namespace_selector_shows_a_reconnecting_indicator_only_while_the_watcher_is_d
         .results
         .push_back(Box::new(KubernetesNamespacesRecovered { cluster_key: 2 }) as WorkerResultBox);
     harness.run();
-    assert!(harness.query_by_label("Reconnecting...").is_none());
+    assert!(harness.query_by_label("namespaces reconnecting").is_none());
 }
 
 #[test]
@@ -429,7 +439,7 @@ fn namespace_selector_searches_configured_identity_values() {
             }],
         };
     harness
-        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace scope")
         .click();
     harness.run();
     harness
@@ -950,7 +960,7 @@ fn namespace_selector_shows_while_the_namespace_list_loads_or_fails() {
         cluster_key: 2,
         error: "namespaces is forbidden".into(),
     });
-    harness.get_by_label("Namespaces unavailable");
+    harness.get_by_label("namespaces unavailable");
     harness.get_by_label("Choose a namespace");
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "cluster_connection/namespace_selector_namespace_list_states/unavailable",
@@ -960,7 +970,7 @@ fn namespace_selector_shows_while_the_namespace_list_loads_or_fails() {
         cluster_key: 2,
         namespaces: vec![MinimalNamespace::named("default")],
     });
-    assert!(harness.query_by_label("Namespaces unavailable").is_none());
+    assert!(harness.query_by_label("namespaces unavailable").is_none());
 }
 
 #[test]
@@ -994,4 +1004,49 @@ fn helm_releases_in_all_namespaces_wait_for_the_namespace_list() {
     // The page names the failure; the toolbar notes it as well.
     harness.get_by_label("namespaces is forbidden");
     assert!(harness.query_by_label("Choose a namespace").is_none());
+}
+
+#[test]
+fn clicking_a_helm_release_header_sorts_the_releases() {
+    let release = |name: &str, revision: i64| HelmRelease {
+        name: name.into(),
+        revision,
+        ..fixture_helm_release()
+    };
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    let cluster = state.clusters.get_mut(&2).unwrap();
+    cluster.selected_api_resource = Some(crate::api_resource::ApiResource::helm_releases());
+    cluster.helm_release_cache.insert(
+        "kube-system".into(),
+        HelmReleaseWatchState {
+            releases: vec![release("demo", 2), release("alpha", 5), release("zeta", 1)],
+            is_synced: true,
+            backend_errors: BTreeMap::new(),
+        },
+    );
+    harness.state_mut().ui_state = state;
+    harness.run();
+
+    let release_names = |harness: &Harness<MyEguiApp<MockWorker>>| {
+        let mut rows = harness
+            .query_all_by_role(egui::accesskit::Role::Button)
+            .filter_map(|node| {
+                let label = node.accesskit_node().label()?;
+                let name = label.strip_prefix("Inspect Helm release ")?.to_owned();
+                Some((node.rect().top(), name))
+            })
+            .collect::<Vec<_>>();
+        rows.sort_by(|left, right| left.0.total_cmp(&right.0));
+        rows.into_iter().map(|(_, name)| name).collect::<Vec<_>>()
+    };
+    let default_order = release_names(&harness);
+    for expected in [
+        ["zeta", "demo", "alpha"].map(String::from).to_vec(),
+        ["alpha", "demo", "zeta"].map(String::from).to_vec(),
+        default_order,
+    ] {
+        click_label(&mut harness, "Revision column");
+        assert_eq!(release_names(&harness), expected);
+    }
 }

@@ -165,6 +165,15 @@ pub fn parse_hex(value: &str) -> Option<Color32> {
     Color32::from_hex(value).ok()
 }
 
+/// `color` with its sRGB channels scaled by `factor`, as CSS
+/// `filter: brightness(factor)` paints it (hovered avatars brighten by 10 %).
+/// Alpha is kept.
+pub fn brightness(color: Color32, factor: f32) -> Color32 {
+    let [r, g, b, a] = color.to_srgba_unmultiplied();
+    let scale = |channel: u8| (f32::from(channel) * factor).round().clamp(0.0, 255.0) as u8;
+    Color32::from_rgba_unmultiplied(scale(r), scale(g), scale(b), a)
+}
+
 /// An opaque colour of its own for each `index` below 256, unlike any
 /// Harbour entry. Only for tests that need every role to have a distinct
 /// colour (`test_support::distinct_role_theme`).
@@ -194,5 +203,14 @@ mod tests {
             Color32::from_rgba_unmultiplied(255, 138, 101, 41)
         );
         assert_eq!(CORAL_A16.to_srgba_unmultiplied()[3], 41);
+    }
+
+    #[test]
+    fn brightness_scales_srgb_channels_and_clamps() {
+        assert_eq!(
+            brightness(Color32::from_rgb(100, 200, 250), 1.1),
+            Color32::from_rgb(110, 220, 255)
+        );
+        assert_eq!(brightness(BLACK_A55, 1.1), BLACK_A55);
     }
 }

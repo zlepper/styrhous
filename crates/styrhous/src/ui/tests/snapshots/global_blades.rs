@@ -51,7 +51,10 @@ fn notification_history_blade_shows_session_outcomes_and_marks_them_read() {
         4
     );
     harness.ui_harness("notifications/notification_history_unread_badge");
-    let notifications_position = harness.get_by_label("Notifications").rect().center();
+    let notifications_position = harness
+        .get_by_label("Notifications, 4 unread")
+        .rect()
+        .center();
     primary_click(&mut harness, notifications_position);
     harness.run_steps(2);
 
@@ -226,7 +229,10 @@ fn notification_history_includes_every_cluster_and_marks_all_entries_read() {
     harness.run();
     assert_eq!(harness.state().ui_state.unread_operation_count(), 2);
 
-    let notifications_position = harness.get_by_label("Notifications").rect().center();
+    let notifications_position = harness
+        .get_by_label("Notifications, 2 unread")
+        .rect()
+        .center();
     primary_click(&mut harness, notifications_position);
     harness.run_steps(2);
 
@@ -281,7 +287,11 @@ fn licensing_warning_opens_account_settings_without_restricting_the_application(
     harness.get_by_label("Sign out").click();
     harness.run();
     harness.get_by_label("Not signed in.");
-    assert!(harness.query_by_label_contains(LICENSE_WARNING).is_none());
+    assert!(
+        harness
+            .query_by_role_and_label(egui::accesskit::Role::Link, LICENSE_WARNING)
+            .is_none()
+    );
 }
 
 #[test]
@@ -343,8 +353,8 @@ fn signed_in_without_entitlement_keeps_account_actions_available() {
     }
 }
 
-/// The start of the warning banner's accessibility label.
-const LICENSE_WARNING: &str = "License warning:";
+/// The license warning banner's action.
+const LICENSE_WARNING: &str = "Manage license";
 
 /// How a test reaches the license blade. A status that warns must be reachable from the warning
 /// banner; any other status must show no banner and is opened from the settings home, whose
@@ -356,10 +366,14 @@ enum LicenseEntry {
 
 fn open_license_settings(harness: &mut Harness<MyEguiApp<MockWorker>>, entry: LicenseEntry) {
     match entry {
-        LicenseEntry::Warning => harness.get_by_label_contains(LICENSE_WARNING).click(),
+        LicenseEntry::Warning => harness
+            .get_by_role_and_label(egui::accesskit::Role::Link, LICENSE_WARNING)
+            .click(),
         LicenseEntry::Settings { card_detail } => {
             assert!(
-                harness.query_by_label_contains(LICENSE_WARNING).is_none(),
+                harness
+                    .query_by_role_and_label(egui::accesskit::Role::Link, LICENSE_WARNING)
+                    .is_none(),
                 "unexpected license warning"
             );
             open_settings(harness);
@@ -923,5 +937,42 @@ fn clicking_the_selected_cluster_rail_button_dismisses_inspector_without_reconne
             .iter()
             .all(|command| command_is::<ConnectToCluster>(command).is_none()),
         "re-selecting a connected cluster must not reconnect it"
+    );
+}
+
+/// Dismissing a toast removes only that toast; the outcome stays in the
+/// notification history.
+#[test]
+fn dismissing_a_toast_removes_only_that_toast() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness.run();
+    for title in ["Deployment scaled", "Deployment restarted"] {
+        harness.state_mut().ui_state.push_operation_outcome(
+            2,
+            crate::ui::state::OperationOutcome::Success,
+            title,
+            Some("kube-system"),
+            "web",
+            None,
+        );
+    }
+    run_with_pinned_toasts(&mut harness);
+    let history = harness.state().ui_state.clusters[&2]
+        .operation_history
+        .len();
+    let dismisses = harness.get_all_by_label("Dismiss").collect::<Vec<_>>();
+    assert_eq!(dismisses.len(), 2);
+    dismisses[0].click();
+    harness.run();
+
+    let toasts = &harness.state().ui_state.clusters[&2].transient_operation_toasts;
+    assert_eq!(toasts.len(), 1);
+    assert_eq!(toasts[0].title, "Deployment restarted");
+    assert_eq!(
+        harness.state().ui_state.clusters[&2]
+            .operation_history
+            .len(),
+        history
     );
 }

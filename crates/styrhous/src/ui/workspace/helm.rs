@@ -1,4 +1,18 @@
 use super::*;
+use crate::ui::preference_table::{ColumnControls, PreferenceTable};
+
+/// Whether the release list is live: a namespace is chosen and the release
+/// watch of every chosen namespace has synchronised.
+pub(super) fn helm_list_is_live(cluster: &super::super::state::ClusterState) -> bool {
+    let scope = cluster.namespace_scope();
+    !scope.is_empty()
+        && scope.iter().all(|namespace| {
+            cluster
+                .helm_release_cache
+                .get(namespace)
+                .is_some_and(|watch| watch.is_synced)
+        })
+}
 
 pub(super) fn show_helm_releases_workspace(
     ui: &mut egui::Ui,
@@ -46,28 +60,22 @@ pub(super) fn show_helm_releases_workspace(
         .cloned()
         .unwrap_or_default();
     let filtered = filter_resources(&resources, &search);
-    let mut ignored_selection_action = None;
+    let live = helm_list_is_live(cluster);
     show_toolbar(
         ui,
         cluster,
         Some(&api_resource),
-        ResourceCountSummary {
+        ListSummary {
             total: resources.len(),
             visible: filtered.resources.len(),
+            live,
         },
         &mut search,
         namespace_selection,
-        ResourceSelectionControls {
-            selected_count: 0,
-            actions_enabled: false,
-            interleaved_logs_available: false,
-            action: &mut ignored_selection_action,
-            namespace_selector_settings,
-        },
+        namespace_selector_settings,
     );
     let filtered = filter_resources(&resources, &search);
     cluster.resource_searches.insert(api_resource, search);
-    ui.add_space(TOOLBAR_VERTICAL_PADDING);
     match cluster.awaited_namespace_list() {
         NamespaceListWait::Ready => {}
         NamespaceListWait::Loading => {
@@ -79,7 +87,7 @@ pub(super) fn show_helm_releases_workspace(
             return None;
         }
         NamespaceListWait::Failed(error) => {
-            workspace_empty_state(ui, "Namespaces unavailable", error);
+            workspace_unavailable_state(ui, "Namespaces unavailable", error);
             return None;
         }
     }
@@ -87,6 +95,7 @@ pub(super) fn show_helm_releases_workspace(
     if selected_namespaces.is_empty() {
         workspace_empty_state(
             ui,
+            Icon::Folder,
             "Choose a namespace",
             "Select one or more namespaces to inspect Helm releases.",
         );
@@ -129,6 +138,7 @@ pub(super) fn show_helm_releases_workspace(
     if releases.is_empty() {
         workspace_empty_state(
             ui,
+            Icon::Cube,
             "No Helm releases found",
             "No Helm release records were found in the selected namespace scope.",
         );
@@ -145,93 +155,71 @@ pub(super) fn show_helm_release_table(
         super::super::resource_table_settings::ResourceTableSettingsTarget,
     >,
 ) -> Option<(String, String)> {
-    let theme = ui.tokens();
     let columns = vec![
         TableColumnDefinition::sortable("name", "Name", 170.0),
         TableColumnDefinition::sortable("namespace", "Namespace", 135.0),
         TableColumnDefinition::sortable("chart", "Chart", 155.0),
-        TableColumnDefinition::sortable("revision", "Revision", 82.0),
+        TableColumnDefinition::sortable("revision", "Revision", 82.0).numeric(),
         TableColumnDefinition::sortable("version", "Version", 100.0),
         TableColumnDefinition::sortable("app-version", "App Version", 110.0),
         TableColumnDefinition::sortable("status", "Status", 105.0),
         TableColumnDefinition::sortable("updated", "Updated", 180.0),
     ];
-    let table_key = ResourceTableKey::workspace(&ApiResource::helm_releases());
-    let visible_columns = table_preferences.resolved_columns(&table_key, &columns);
-    let sort_state = table_preferences
-        .sort(&table_key, &columns)
-        .map(|(column_id, direction)| components::SortState::new(column_id, direction));
-    let mut sorted_releases = releases.to_vec();
-    if let Some(sort) = &sort_state {
-        sorted_releases.sort_by(|left, right| {
-            compare_helm_release_column(left, right, &sort.column_id, sort.direction)
-        });
-    }
-    let mut table = TailwindTable::new("helm-release-table");
-    for column in &visible_columns {
-        table = table.column(
-            column.definition.id.clone(),
-            column.definition.label.clone(),
-            |builder| builder.initial_width(column.width).sortable(),
-        );
-    }
+    let layout = PreferenceTable::new(
+        table_preferences,
+        ResourceTableKey::workspace(&ApiResource::helm_releases()),
+        columns,
+    );
+    let sorted_releases = layout.sorted(releases, compare_helm_release_column);
+    let table = layout.table("helm-release-table").fill_available_height();
     let pending = RefCell::new(None);
-    let table_preferences = RefCell::new(table_preferences);
-    table
-        .fill_available_height()
-        .show_configurable_with_row_response(
-            ui,
-            &sorted_releases,
-            sort_state.as_ref(),
-            |header, id, _label, sortable| {
-                MoreButton::show_context_menu(header, |menu| {
-                    super::super::resource_table_settings::show_configurable_table_header(
-                        menu,
-                        sortable,
-                        id,
-                        &table_key,
-                        &columns,
-                        &table_preferences,
-                        column_settings_to_open,
-                    );
-                });
-            },
-            |id, width| {
-                table_preferences
-                    .borrow_mut()
-                    .set_width(&table_key, &columns, id, width);
-            },
-            |ui, release, column| match visible_columns[column].definition.id.as_str() {
-                "name" => {
-                    let response = TableRowBuilder::clickable_text(
-                        ui,
-                        &release.name,
-                        theme.text.primary,
-                        format!("Inspect Helm release {}", release.name),
-                    );
-                    if response.clicked() && pending.borrow().is_none() {
-                        *pending.borrow_mut() =
-                            Some((release.name.clone(), release.namespace.clone()));
-                    }
+    // The first click of a frame wins.
+    let inspect = |release: &HelmRelease| {
+        pending
+            .borrow_mut()
+            .get_or_insert_with(|| (release.name.clone(), release.namespace.clone()));
+    };
+    layout.show(
+        ui,
+        table,
+        &sorted_releases,
+        ColumnControls {
+            preferences: table_preferences,
+            metadata_key_suggestions: None,
+            column_settings: column_settings_to_open,
+        },
+        |ui, release, column_id| match column_id {
+            "name" => {
+                let response = TableRowBuilder::clickable_name(
+                    ui,
+                    &release.name,
+                    format!("Inspect Helm release {}", release.name),
+                );
+                if response.clicked() {
+                    inspect(release);
                 }
-                "namespace" => TableRowBuilder::text(ui, &release.namespace, false),
-                "chart" => TableRowBuilder::text(ui, &release.chart, false),
-                "revision" => {
-                    let revision = release.revision.to_string();
-                    TableRowBuilder::text(ui, &revision, false);
-                }
-                "version" => TableRowBuilder::text(ui, &release.chart_version, false),
-                "app-version" => TableRowBuilder::text(ui, &release.app_version, false),
-                "status" => TableRowBuilder::text(ui, &release.status, false),
-                "updated" => TableRowBuilder::text(ui, &release.last_deployed, false),
-                _ => unreachable!("Helm release table columns are defined locally"),
-            },
-            |response, release, _column| {
-                if response.clicked() && pending.borrow().is_none() {
-                    *pending.borrow_mut() = Some((release.name.clone(), release.namespace.clone()));
-                }
-            },
-        );
+            }
+            "namespace" => TableRowBuilder::text(ui, &release.namespace, false),
+            "chart" => TableRowBuilder::text(ui, &release.chart, false),
+            "revision" => TableRowBuilder::number(ui, &release.revision.to_string()),
+            "version" => TableRowBuilder::text(ui, &release.chart_version, false),
+            "app-version" => TableRowBuilder::text(ui, &release.app_version, false),
+            "status" => {
+                TableRowBuilder::problem_status(
+                    ui,
+                    &release.status,
+                    crate::ui::helm_releases::helm_status_tone(&release.status),
+                );
+            }
+            "updated" => TableRowBuilder::text(ui, &release.last_deployed, false),
+            _ => unreachable!("Helm release table columns are defined locally"),
+        },
+        |response, release, _| {
+            if response.clicked() {
+                inspect(release);
+            }
+        },
+    );
     pending.into_inner()
 }
 

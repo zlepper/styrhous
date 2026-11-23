@@ -696,7 +696,7 @@ fn scalable_resource_action_fetches_and_updates_the_scale() {
     harness.run();
     harness.get_by_label("More actions for coredns").click();
     harness.run();
-    harness.get_by_label("Scale").click();
+    harness.get_by_label("Scale…").click();
     harness.run();
 
     assert!(
@@ -738,7 +738,7 @@ fn scalable_resource_action_fetches_and_updates_the_scale() {
         "the pointer click must update the visible scale dialog before submitting it"
     );
 
-    harness.get_by_label("Update scale").click();
+    harness.get_by_label("Scale to 4").click();
     harness.run();
 
     assert!(
@@ -762,5 +762,82 @@ fn scalable_resource_action_fetches_and_updates_the_scale() {
             .pending_scale
             .is_none(),
         "confirming closes the dialog immediately, so completions never need to"
+    );
+}
+
+/// The scale dialog repeats the new count on its confirm button, disables it
+/// for a count that is not a whole number, and Cancel or Escape close it
+/// without scaling.
+#[test]
+fn scale_dialog_validates_its_count_and_cancels_without_scaling() {
+    let deployment = fixture_api_resource("apps", "Deployment", "deployments");
+    let pending = || super::super::super::state::PendingScale {
+        api_resource: deployment.clone(),
+        resource_name: "coredns".into(),
+        namespace: Some("kube-system".into()),
+        current_replicas: 3,
+        desired_replicas: "abc".into(),
+    };
+    for close in ["Cancel", "Escape"] {
+        let mut harness = application_harness::<MockWorker>();
+        harness.state_mut().ui_state = oracle_resource_table_state();
+        harness.run();
+        harness
+            .state_mut()
+            .ui_state
+            .clusters
+            .get_mut(&2)
+            .unwrap()
+            .pending_scale = Some(pending());
+        harness.run();
+        harness.run();
+
+        harness.get_by_role_and_label(egui::accesskit::Role::AlertDialog, "Scale coredns?");
+        assert!(harness.get_by_label("Scale").accesskit_node().is_disabled());
+        harness.get_by_label("Enter a whole number of zero or greater.");
+
+        match close {
+            "Cancel" => harness.get_by_label("Cancel").click(),
+            _ => harness.key_press(egui::Key::Escape),
+        }
+        harness.run();
+        assert!(harness.cluster(2).pending_scale.is_none(), "{close}");
+        assert!(
+            harness
+                .state()
+                .worker
+                .last_command::<UpdateResourceScale>()
+                .is_none(),
+            "{close} must not scale"
+        );
+    }
+}
+
+/// Navigator groups open and close on click and keep their state.
+#[test]
+fn navigator_groups_open_and_close() {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness.run();
+    assert!(harness.query_by_label("Deployments").is_none());
+
+    harness.get_by_label("Apps & Containers").click();
+    harness.run();
+    harness.get_by_label("Deployments");
+    assert!(
+        harness
+            .state()
+            .ui_state
+            .resource_navigation_node_is_expanded("section:Apps & Containers")
+    );
+
+    harness.get_by_label("Apps & Containers").click();
+    harness.run();
+    assert!(harness.query_by_label("Deployments").is_none());
+    assert!(
+        !harness
+            .state()
+            .ui_state
+            .resource_navigation_node_is_expanded("section:Apps & Containers")
     );
 }

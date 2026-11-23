@@ -4,7 +4,7 @@ use crate::cluster_connection_manager::{
 };
 use crate::minimal_resource::format_age;
 use crate::ui::state::{DeploymentKey, DeploymentRevisionsLoad};
-use components::{DetailColumn, DetailTableRow, InspectorDetails, TailwindCombobox};
+use components::{Combobox, DetailColumn, DetailTableRow, InspectorDetails};
 
 /// Wide enough for image references in the change table.
 const DIALOG_WIDTH: f32 = 640.0;
@@ -110,7 +110,7 @@ fn show_revisions(
         .iter()
         .map(|revision| (revision.revision, revision_label(revision)))
         .collect::<Vec<_>>();
-    TailwindCombobox::new("deployment-rollback-revision")
+    Combobox::new("deployment-rollback-revision")
         .accessibility_label("Revision")
         .placeholder("Search revisions...")
         .search_accessibility_label("Search revisions")
@@ -194,9 +194,9 @@ pub(crate) fn show_deployment_rollback_dialog(
     );
     let action = ConfirmationDialog {
         id: egui::Id::new("deployment-rollback-dialog"),
-        eyebrow: "DEPLOYMENT",
+        icon: components::icons::Icon::ArrowUturnLeft,
         title: &title,
-        message: &message,
+        message: (&message).into(),
         unavailable_message,
         cancel_label: "Cancel",
         confirm_label: &confirm_label,

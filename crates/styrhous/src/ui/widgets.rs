@@ -1,111 +1,176 @@
 use crate::minimal_resource::format_age;
-use crate::resource_table::{CellValue, ContainerIndicator, Tone};
+use crate::resource_table::{
+    CONTAINERS_COLUMN, CPU_COLUMN, CellValue, ContainerIndicator, MEMORY_COLUMN,
+};
 use components::design::theme::ThemeExt;
-use components::design::{radius, space, type_scale};
-use components::{ProgressChecklist, TableRowBuilder, TailwindButton, WorkspaceEmptyState};
+use components::design::{space, type_scale};
+use components::icons::Icon;
+use components::tooltip::TooltipContent;
+use components::{Button, EmptyState, ProgressChecklist, TableRowBuilder};
 
 const STATE_MARGIN: i8 = space::S32 as i8;
 
-pub(super) fn resource_status(ui: &mut egui::Ui, status: &str, tone: Tone) {
-    let color = ui.tokens().tone(tone).fill;
-    ui.horizontal(|ui| {
-        ui.add_space(-13.0);
-        let (dot_rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-        ui.painter().circle_filled(dot_rect.center(), 4.0, color);
-        ui.add_space(5.0);
-        TableRowBuilder::text(ui, status, false);
-    });
-}
+/// Why a CPU or memory cell has no value (S08).
+pub(super) const METRICS_UNAVAILABLE: &str = "Metrics server not available";
 
 pub(super) fn container_indicators(ui: &mut egui::Ui, indicators: &[ContainerIndicator]) {
-    let theme = ui.tokens();
     if indicators.is_empty() {
-        TableRowBuilder::text(ui, "-", false);
+        TableRowBuilder::missing(ui, "No containers");
         return;
     }
-
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 5.0;
-        for indicator in indicators {
-            let label = format!("{}: {}", indicator.kind.label(), indicator.name);
-            let (rect, response) =
-                ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
-            ui.painter().rect_filled(
-                rect,
-                egui::CornerRadius::same(2),
-                theme.tone(indicator.tone).fill,
-            );
-            response
-                .on_hover_text(container_indicator_tooltip(indicator))
-                .widget_info(|| {
-                    egui::WidgetInfo::labeled(egui::WidgetType::Image, true, label.clone())
-                });
-        }
-    });
+    let labels = indicators
+        .iter()
+        .map(|indicator| format!("{}: {}", indicator.kind.label(), indicator.name))
+        .collect::<Vec<_>>();
+    let statuses = indicators
+        .iter()
+        .map(container_status_rows)
+        .collect::<Vec<_>>();
+    let rows = statuses
+        .iter()
+        .map(|rows| {
+            rows.iter()
+                .map(|(key, value)| (*key, value.as_str()))
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    TableRowBuilder::containers(
+        ui,
+        indicators
+            .iter()
+            .zip(&labels)
+            .zip(&rows)
+            .map(|((indicator, label), rows)| {
+                (
+                    indicator.tone,
+                    label.as_str(),
+                    TooltipContent::KeyValues(rows),
+                )
+            }),
+    );
 }
 
 /// Render a type-specific resource-table value using the shared table visual
 /// vocabulary. Inspector tables use this too, so a Pod or Job looks the same
 /// wherever it is listed.
-pub(super) fn show_resource_cell(ui: &mut egui::Ui, cell: Option<&CellValue>) {
+pub(super) fn show_resource_cell(ui: &mut egui::Ui, column_id: &str, cell: Option<&CellValue>) {
     match cell.unwrap_or(&CellValue::Empty) {
         CellValue::Text(value) => TableRowBuilder::text(ui, value, false),
-        CellValue::Number(value) => TableRowBuilder::text(ui, &value.to_string(), false),
-        CellValue::Usage { label, .. } => TableRowBuilder::text(ui, label, false),
-        CellValue::Timestamp(value) => TableRowBuilder::text(ui, &format_age(Some(*value)), false),
-        CellValue::Status { label, tone } => resource_status(ui, label, *tone),
+        CellValue::Number(value) => TableRowBuilder::number(ui, &value.to_string()),
+        CellValue::Usage { label, .. } => TableRowBuilder::number(ui, label),
+        CellValue::Timestamp(value) => TableRowBuilder::number(ui, &format_age(Some(*value))),
+        CellValue::Status { label, tone } => {
+            TableRowBuilder::problem_status(ui, label, *tone);
+        }
         CellValue::ContainerIndicators(indicators) => container_indicators(ui, indicators),
         CellValue::List(values) => TableRowBuilder::text(ui, &values.join(", "), false),
-        CellValue::Unavailable => TableRowBuilder::text(ui, "Unavailable", false),
-        CellValue::Empty => TableRowBuilder::text(ui, "-", false),
+        CellValue::Unavailable => TableRowBuilder::missing(ui, METRICS_UNAVAILABLE),
+        CellValue::Empty => TableRowBuilder::missing(ui, empty_reason(column_id)),
     }
 }
 
-fn container_indicator_tooltip(indicator: &ContainerIndicator) -> String {
-    let mut lines = vec![
-        format!("{}: {}", indicator.kind.label(), indicator.name),
-        format!("State: {}", indicator.state),
-        format!("Ready: {}", if indicator.ready { "Yes" } else { "No" }),
-        format!("Restarts: {}", indicator.restart_count),
+/// Why the column `column_id` has no value.
+fn empty_reason(column_id: &str) -> &'static str {
+    match column_id {
+        CPU_COLUMN | MEMORY_COLUMN => "No metrics reported for this resource",
+        CONTAINERS_COLUMN => "No container statuses reported yet",
+        _ => "Not set",
+    }
+}
+
+/// A container's status as tooltip rows: its kind and name, state (with
+/// the reason), readiness, restarts and message.
+fn container_status_rows(indicator: &ContainerIndicator) -> Vec<(&'static str, String)> {
+    let state = match &indicator.reason {
+        Some(reason) => format!("{} · {reason}", indicator.state),
+        None => indicator.state.clone(),
+    };
+    let mut rows = vec![
+        (indicator.kind.label(), indicator.name.clone()),
+        ("State", state),
+        (
+            "Ready",
+            if indicator.ready { "Yes" } else { "No" }.to_owned(),
+        ),
+        ("Restarts", indicator.restart_count.to_string()),
     ];
-    if let Some(reason) = &indicator.reason {
-        lines.push(format!("Reason: {reason}"));
-    }
     if let Some(message) = &indicator.message {
-        lines.push(format!("Message: {message}"));
+        rows.push(("Message", message.clone()));
     }
-    lines.join("\n")
+    rows
 }
 
-pub(super) fn workspace_empty_state(ui: &mut egui::Ui, title: &str, message: &str) {
-    WorkspaceEmptyState::new(title, message).show(ui);
+/// What is missing and what to do next, led by a neutral `icon` tile.
+pub(super) fn workspace_empty_state(ui: &mut egui::Ui, icon: Icon, title: &str, message: &str) {
+    let _ = EmptyState::new(icon, title).description(message).show(ui);
 }
 
+/// A failure that recovers by itself (a watcher that keeps retrying): a danger
+/// tile and the server's message, with nothing to retry.
+pub(super) fn workspace_unavailable_state(ui: &mut egui::Ui, title: &str, message: &str) {
+    let _ = EmptyState::error(title).description(message).show(ui);
+}
+
+/// Everything is hidden by the search: says so and offers Clear filter.
+/// Returns whether it was clicked.
+pub(super) fn workspace_filtered_empty_state(
+    ui: &mut egui::Ui,
+    title: &str,
+    message: &str,
+) -> bool {
+    EmptyState::filtered(title)
+        .description(message)
+        .action("Clear filter")
+        .show(ui)
+        .is_some_and(|response| response.clicked())
+}
+
+/// The search is not a valid regular expression; the parser's message keeps
+/// its monospaced caret under the offending character.
 pub(super) fn workspace_search_error_state(ui: &mut egui::Ui, message: &str) {
     workspace_error_details(ui, "Invalid regular expression", message, 0.0, |_| ());
 }
 
 pub(super) fn workspace_loading_state(ui: &mut egui::Ui, title: &str, message: &str) {
-    let theme = ui.tokens();
-    show_state_area(ui, 74.0, |ui| {
-        ui.add(egui::Spinner::new().size(20.0));
-        ui.add_space(space::S8);
-        ui.label(
-            egui::RichText::new(title)
-                .font(type_scale::TITLE.font_id(ui.ctx()))
-                .color(theme.text.primary),
-        );
-        ui.add_space(space::S8);
-        ui.label(
-            egui::RichText::new(message)
-                .font(type_scale::BODY.font_id(ui.ctx()))
-                .color(theme.text.muted),
-        );
-    });
+    let _ = EmptyState::loading(title).description(message).show(ui);
 }
 
+/// A failure the user can retry: its title, the technical message in a code
+/// block and Retry, laid out like a failed connection. Returns whether Retry
+/// was clicked.
 pub(super) fn workspace_error_state(ui: &mut egui::Ui, title: &str, message: &str) -> bool {
     workspace_error_details(ui, title, message, retry_footer_height(ui), retry_footer)
+}
+
+/// `title` over "Error details" and `message` in a code block, then
+/// `show_footer`, in a column as wide as a failed connection's.
+fn workspace_error_details<R>(
+    ui: &mut egui::Ui,
+    title: &str,
+    message: &str,
+    footer_height: f32,
+    show_footer: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
+    let width = ui.available_width().min(FAILED_CONNECTION_COLUMN_WIDTH);
+    let estimate = type_scale::TITLE.line_height()
+        + space::S16
+        + error_details_height(ui, message, width)
+        + footer_height;
+    show_measured_state_area(ui, "error-details", estimate, |ui| {
+        ui.allocate_ui_with_layout(
+            egui::vec2(width, 0.0),
+            egui::Layout::top_down(egui::Align::LEFT),
+            |ui| {
+                ui.set_width(width);
+                ui.spacing_mut().item_spacing.y = 0.0;
+                type_scale::TITLE.label(ui, title, ui.tokens().text.primary);
+                ui.add_space(space::S16);
+                show_error_details(ui, message);
+                show_footer(ui)
+            },
+        )
+        .inner
+    })
 }
 
 /// The column of a failed connection: its steps, the error and the retry share it.
@@ -118,8 +183,9 @@ pub(super) fn workspace_connection_progress(
     checklist: ProgressChecklist<'_>,
     error: Option<&str>,
 ) -> bool {
+    let width = ui.available_width().min(FAILED_CONNECTION_COLUMN_WIDTH);
     let error_height = error.map_or(0.0, |message| {
-        space::S24 + error_details_height(ui, message) + retry_footer_height(ui)
+        space::S24 + error_details_height(ui, message, width) + retry_footer_height(ui)
     });
     let estimate = checklist.height(ui) + error_height;
     show_measured_state_area(ui, "connection-progress", estimate, |ui| {
@@ -143,10 +209,8 @@ pub(super) fn workspace_connection_progress(
     })
 }
 
-/// The code block's border, inside its width.
-const CODE_FRAME_STROKE_WIDTH: f32 = components::design::size::HAIRLINE;
-/// A first-frame estimate of the Retry button's height; later frames measure it.
-const RETRY_BUTTON_HEIGHT: f32 = 38.0;
+/// The Retry button's height.
+const RETRY_BUTTON_HEIGHT: f32 = components::ButtonSize::Md.height();
 
 fn retry_footer_height(ui: &egui::Ui) -> f32 {
     space::S12 + ui.spacing().item_spacing.y + RETRY_BUTTON_HEIGHT
@@ -154,81 +218,36 @@ fn retry_footer_height(ui: &egui::Ui) -> f32 {
 
 fn retry_footer(ui: &mut egui::Ui) -> bool {
     ui.add_space(space::S12);
-    ui.vertical_centered(|ui| TailwindButton::primary("Retry").show(ui).clicked())
+    ui.vertical_centered(|ui| Button::primary("Retry").show(ui).clicked())
         .inner
 }
 
-fn workspace_error_details<R>(
-    ui: &mut egui::Ui,
-    title: &str,
-    message: &str,
-    footer_height: f32,
-    show_footer: impl FnOnce(&mut egui::Ui) -> R,
-) -> R {
-    let theme = ui.tokens();
-    let title_height = row_height(ui, type_scale::TITLE.font_id(ui.ctx()))
-        + ui.spacing().item_spacing.y
-        + space::S8;
-    let estimate = title_height + error_details_height(ui, message) + footer_height;
+/// Padding of a code block ([`components::CodeBlock`], `padding: 10px 14px`).
+const CODE_BLOCK_PADDING: egui::Vec2 = egui::vec2(14.0, 10.0);
 
-    show_measured_state_area(ui, "error-details", estimate, |ui| {
-        ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
-            ui.vertical_centered(|ui| {
-                ui.label(
-                    egui::RichText::new(title)
-                        .font(type_scale::TITLE.font_id(ui.ctx()))
-                        .color(theme.text.primary),
-                );
-            });
-            ui.add_space(space::S8);
-            show_error_details(ui, message);
-            show_footer(ui)
-        })
-        .inner
-    })
+/// The height `show_error_details` needs for `message` at `width`.
+fn error_details_height(ui: &egui::Ui, message: &str, width: f32) -> f32 {
+    let code = type_scale::MONO_SMALL
+        .galley(
+            ui.ctx(),
+            message,
+            ui.tokens().code.text,
+            width - 2.0 * space::S12,
+        )
+        .rect
+        .height();
+    type_scale::BODY.line_height() + space::S4 + code + 2.0 * CODE_BLOCK_PADDING.y
 }
 
-fn row_height(ui: &egui::Ui, font: egui::FontId) -> f32 {
-    ui.ctx().fonts_mut(|fonts| fonts.row_height(&font))
-}
-
-/// The height `show_error_details` needs for `message`.
-fn error_details_height(ui: &egui::Ui, message: &str) -> f32 {
-    let item_spacing = ui.spacing().item_spacing.y;
-    let code_lines = message.lines().count().max(1) as f32;
-    let code_height = ui.text_style_height(&egui::TextStyle::Monospace) * code_lines
-        + 2.0 * (space::S8 + CODE_FRAME_STROKE_WIDTH);
-    row_height(ui, type_scale::BODY.font_id(ui.ctx()))
-        + item_spacing
-        + space::S4
-        + item_spacing
-        + code_height
-}
-
-/// "Error details" above the message in a code block.
+/// "Error details" above the message in a wrapping, selectable code block.
 fn show_error_details(ui: &mut egui::Ui, message: &str) {
     let theme = ui.tokens();
-    ui.label(
-        egui::RichText::new("Error details")
-            .font(type_scale::BODY.font_id(ui.ctx()))
-            .color(theme.text.muted),
-    );
-    ui.add_space(space::S4);
-    let code_width = ui.available_width();
-    let code_background = ui.visuals().code_bg_color;
-    egui::Frame::new()
-        .fill(code_background)
-        .stroke(egui::Stroke::new(
-            CODE_FRAME_STROKE_WIDTH,
-            theme.code.divider,
-        ))
-        .corner_radius(egui::CornerRadius::same(radius::KEY))
-        .inner_margin(egui::Margin::same(space::S8 as i8))
-        .show(ui, |ui| {
-            // The frame's margin and border sit outside this width.
-            ui.set_min_width((code_width - 2.0 * (space::S8 + CODE_FRAME_STROKE_WIDTH)).max(0.0));
-            ui.code(message);
-        });
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        type_scale::BODY.label(ui, "Error details", theme.text.muted);
+        ui.add_space(space::S4);
+        let _ = components::CodeBlock::new(message).wrap().show(ui);
+    });
 }
 
 /// `show_state_area`, centred on the content's height as measured in the previous frame,
@@ -277,4 +296,46 @@ fn show_state_area<R>(
 /// "1 line", "3 lines": a count with its noun, pluralised with an "s".
 pub(super) fn count_noun(count: usize, noun: &str) -> String {
     format!("{count} {noun}{}", if count == 1 { "" } else { "s" })
+}
+
+/// A captioned group of `key=value` chips (labels, annotations); clicking a
+/// chip copies `key=value`. Nothing is shown for an empty group.
+pub(super) fn key_value_chips<'a>(
+    ui: &mut egui::Ui,
+    caption: &str,
+    entries: impl IntoIterator<Item = (&'a String, &'a String)>,
+) {
+    let mut entries = entries.into_iter().peekable();
+    if entries.peek().is_none() {
+        return;
+    }
+    ui.vertical(|ui| {
+        ui.spacing_mut().item_spacing.y = space::S6;
+        type_scale::CAPTION.label(ui, caption, ui.tokens().text.muted);
+        components::chip_flow(ui, |ui| {
+            for (key, value) in entries {
+                let key = format!("{key}=");
+                let copy = format!("{key}{value}");
+                components::Chip::new(value)
+                    .key(&key)
+                    .copyable(caption)
+                    .copy_as(&copy)
+                    .show(ui);
+            }
+        });
+    });
+}
+
+/// A resource's age in a right-aligned Age cell, or an em dash when
+/// Kubernetes reported no creation time.
+pub(super) fn age_cell(ui: &mut egui::Ui, creation_timestamp: Option<time::OffsetDateTime>) {
+    match creation_timestamp {
+        Some(_) => TableRowBuilder::number(ui, &format_age(creation_timestamp)),
+        None => TableRowBuilder::missing(ui, "No creation time reported"),
+    }
+}
+
+/// A resource's namespace, or an em dash for a cluster-scoped resource.
+pub(super) fn namespace_cell(ui: &mut egui::Ui, namespace: Option<&str>) {
+    TableRowBuilder::text_or_missing(ui, namespace, "Not namespaced");
 }

@@ -28,11 +28,18 @@ pub(super) fn progress<T>(ctx: &egui::Context, navigator: &BladeNavigator<T>) ->
 pub(super) fn height(viewport: Rect) -> f32 {
     (viewport.height() - INSET * 2.0).max(0.0)
 }
-/// The width every blade is drawn at: [`WIDTH`], or less when the viewport
-/// cannot fit a full blade plus its [`INSET`] on both sides.
+/// The width every blade is drawn at: [`WIDTH`], at most half the viewport
+/// but never under [`size::BLADE_MIN`], and less when the viewport cannot
+/// fit that plus its [`INSET`] on both sides.
 pub(super) fn blade_width(viewport: Rect) -> f32 {
-    WIDTH.min((viewport.width() - INSET * 2.0).max(0.0))
+    let share = (viewport.width() * MAX_WINDOW_SHARE).max(size::BLADE_MIN);
+    WIDTH
+        .min(share)
+        .min((viewport.width() - INSET * 2.0).max(0.0))
 }
+
+/// The largest share of the viewport a blade takes (S10: max 50%).
+const MAX_WINDOW_SHARE: f32 = 0.5;
 pub(super) fn active_transform(viewport: Rect) -> Transform {
     Transform {
         position: egui::pos2(

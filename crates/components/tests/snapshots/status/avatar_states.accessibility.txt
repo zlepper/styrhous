@@ -1,0 +1,20 @@
+viewport: width=420.0 height=120.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="DE" rect=(x=40.0 y=44.0 width=40.0 height=40.0 center_x=60.0 center_y=64.0)
+                TextRun value="DE" rect=(x=51.4 y=56.0 width=17.2 height=16.0 center_x=60.0 center_y=64.0)
+              Label value="KK" rect=(x=100.0 y=44.0 width=40.0 height=40.0 center_x=120.0 center_y=64.0)
+                TextRun value="KK" rect=(x=111.1 y=56.0 width=17.9 height=16.0 center_x=120.0 center_y=64.0)
+              Label value="PR" rect=(x=160.0 y=44.0 width=40.0 height=40.0 center_x=180.0 center_y=64.0)
+                TextRun value="PR" rect=(x=171.4 y=56.0 width=17.2 height=16.0 center_x=180.0 center_y=64.0)
+              Label value="KL" rect=(x=220.0 y=44.0 width=40.0 height=40.0 center_x=240.0 center_y=64.0)
+                TextRun value="KL" rect=(x=232.2 y=56.0 width=15.6 height=16.0 center_x=240.0 center_y=64.0)
+              Label value="CS" rect=(x=280.0 y=44.0 width=40.0 height=40.0 center_x=300.0 center_y=64.0)
+                TextRun value="CS" rect=(x=291.2 y=56.0 width=17.5 height=16.0 center_x=300.0 center_y=64.0)
+              Label value="AD" rect=(x=340.0 y=44.0 width=40.0 height=40.0 center_x=360.0 center_y=64.0)
+                TextRun value="AD" rect=(x=350.9 y=56.0 width=18.2 height=16.0 center_x=360.0 center_y=64.0)

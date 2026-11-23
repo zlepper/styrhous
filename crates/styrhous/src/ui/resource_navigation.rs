@@ -1,9 +1,12 @@
 use super::state::UiState;
 use crate::api_resource::ApiResource;
 use crate::resource_catalog::CuratedNavigationEntry;
-use components::WideSidebar;
-use components::design::theme::ThemeExt;
-use components::design::type_scale;
+use components::design::theme::{self, ThemeExt, ThemeScope};
+use components::design::{size, space, type_scale};
+use components::{SideItem, side_caption};
+
+/// Width of the resource navigator beside the cluster rail.
+const NAVIGATOR_WIDTH: f32 = 292.0;
 
 pub(super) fn show(ui: &mut egui::Ui, ui_state: &mut UiState) -> Option<ApiResource> {
     let selected_cluster_id = ui_state.selected_cluster?;
@@ -18,102 +21,103 @@ pub(super) fn show(ui: &mut egui::Ui, ui_state: &mut UiState) -> Option<ApiResou
         );
     let mut clicked_api_resource = None;
     let nav = ui.tokens().nav;
+    let is_selected =
+        |api_resource: &ApiResource| selected_api_resource.as_ref() == Some(api_resource);
 
     egui::Panel::left("api-selector")
-        .exact_size(292.0)
+        .exact_size(NAVIGATOR_WIDTH)
         .resizable(false)
-        .frame(egui::Frame::NONE.fill(nav.surface))
+        .frame(
+            egui::Frame::NONE
+                .fill(nav.surface)
+                .inner_margin(egui::Margin::same(size::SIDEBAR_PADDING as i8)),
+        )
         .show(ui, |ui| {
-            WideSidebar::new().show(ui, |sidebar| {
-                sidebar.ui_mut().add_space(23.0);
-                sidebar.ui_mut().horizontal(|ui| {
-                    ui.add_space(24.0);
-                    ui.label(
-                        egui::RichText::new(&cluster_name)
-                            .font(type_scale::HEADING.font_id(ui.ctx()))
-                            .color(nav.text),
-                    );
-                });
-                sidebar.ui_mut().add_space(17.0);
-                for entry in &resource_navigation.curated_entries {
-                    match entry {
-                        CuratedNavigationEntry::Resource(api_resource) => {
-                            let selected = selected_api_resource.as_ref() == Some(api_resource);
-                            if sidebar
-                                .primary_text_item(api_resource.display_name(), selected)
-                                .clicked()
-                            {
-                                clicked_api_resource = Some(api_resource.clone());
-                            }
-                        }
-                        CuratedNavigationEntry::Section(section) => {
-                            let node_id = format!("section:{}", section.name);
-                            let response = sidebar.expandable_text(
-                                section.name,
-                                ui_state.resource_navigation_node_is_expanded(&node_id),
-                                |sidebar| {
-                                    for api_resource in &section.api_resources {
-                                        let selected =
-                                            selected_api_resource.as_ref() == Some(api_resource);
-                                        if sidebar
-                                            .child_item(api_resource.display_name(), selected)
-                                            .clicked()
-                                        {
-                                            clicked_api_resource = Some(api_resource.clone());
-                                        }
+            theme::scope(ui, ThemeScope::Sidebar, |ui| {
+                ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
+                ui.add_space(space::S8);
+                type_scale::HEADING.label(ui, &cluster_name, nav.text);
+                ui.add_space(space::S12);
+                components::scroll::vertical()
+                    .id_salt("resource-navigator")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
+                        for entry in &resource_navigation.curated_entries {
+                            match entry {
+                                CuratedNavigationEntry::Resource(api_resource) => {
+                                    if SideItem::plain(&api_resource.display_name())
+                                        .selected(is_selected(api_resource))
+                                        .show(ui)
+                                        .clicked()
+                                    {
+                                        clicked_api_resource = Some(api_resource.clone());
                                     }
-                                },
-                            );
-                            ui_state
-                                .set_resource_navigation_node_expanded(node_id, response.is_open);
-                        }
-                    }
-                }
-                if !resource_navigation.other_api_groups.is_empty() {
-                    let other_resources_node = "other-resources";
-                    let response = sidebar.expandable_text(
-                        "Other Resources",
-                        ui_state.resource_navigation_node_is_expanded(other_resources_node),
-                        |sidebar| {
-                            for (api_group_name, api_resources) in
-                                &resource_navigation.other_api_groups
-                            {
-                                let node_id = format!("other-resource-group:{api_group_name}");
-                                let response = sidebar.nested_expandable_text(
-                                    format!("other-{api_group_name}"),
-                                    api_group_name,
-                                    ui_state.resource_navigation_node_is_expanded(&node_id),
-                                    |sidebar| {
-                                        for api_resource in api_resources {
-                                            let selected = selected_api_resource.as_ref()
-                                                == Some(api_resource);
-                                            if sidebar
-                                                .nested_child_item(
-                                                    api_resource.display_name(),
-                                                    selected,
-                                                )
+                                }
+                                CuratedNavigationEntry::Section(section) => {
+                                    let node_id = format!("section:{}", section.name);
+                                    let open =
+                                        ui_state.resource_navigation_node_is_expanded(&node_id);
+                                    if SideItem::group(section.name, open).show(ui).clicked() {
+                                        ui_state
+                                            .set_resource_navigation_node_expanded(node_id, !open);
+                                    }
+                                    if open {
+                                        for api_resource in &section.api_resources {
+                                            if SideItem::child(&api_resource.display_name())
+                                                .selected(is_selected(api_resource))
+                                                .show(ui)
                                                 .clicked()
                                             {
                                                 clicked_api_resource = Some(api_resource.clone());
                                             }
                                         }
-                                    },
-                                );
-                                ui_state.set_resource_navigation_node_expanded(
-                                    node_id,
-                                    response.is_open,
-                                );
+                                    }
+                                }
                             }
-                        },
-                    );
-                    ui_state.set_resource_navigation_node_expanded(
-                        other_resources_node,
-                        response.is_open,
-                    );
-                }
-                if discovering {
-                    sidebar.loading_item("Discovering API groups...");
-                }
+                        }
+                        if !resource_navigation.other_api_groups.is_empty() {
+                            let groups = resource_navigation.other_api_groups.len();
+                            let detail = if groups == 1 {
+                                "1 group".to_owned()
+                            } else {
+                                format!("{groups} groups")
+                            };
+                            side_caption(ui, "Other resources", Some(&detail));
+                            for (api_group_name, api_resources) in
+                                &resource_navigation.other_api_groups
+                            {
+                                let node_id = format!("other-resource-group:{api_group_name}");
+                                let open = ui_state.resource_navigation_node_is_expanded(&node_id);
+                                if SideItem::api_group(api_group_name, open)
+                                    .count(api_resources.len())
+                                    .show(ui)
+                                    .clicked()
+                                {
+                                    ui_state.set_resource_navigation_node_expanded(node_id, !open);
+                                }
+                                if open {
+                                    for api_resource in api_resources {
+                                        if SideItem::child(&api_resource.display_name())
+                                            .selected(is_selected(api_resource))
+                                            .show(ui)
+                                            .clicked()
+                                        {
+                                            clicked_api_resource = Some(api_resource.clone());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if discovering {
+                            ui.add_space(space::S8);
+                            components::StatusLabel::new(
+                                "Discovering API groups…",
+                                components::design::theme::Tone::Neutral,
+                            )
+                            .show(ui);
+                        }
+                    });
             });
         });
 

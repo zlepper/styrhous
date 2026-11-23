@@ -42,10 +42,11 @@ pub(in crate::ui::workspace) fn prepare_resource_table<'a>(
             )
         })
         .collect::<Vec<_>>();
-    let is_pod = api_resource.group == "core" && api_resource.kind == "Pod";
-    let is_node = api_resource.group == "core" && api_resource.kind == "Node";
+    let is_pod = api_resource.is_pod();
+    let is_node = api_resource.is_node();
     let sort = configuration
-        .sort_state
+        .layout
+        .sort
         .as_ref()
         .map(|sort| (sort.column_id.clone(), sort.direction));
     let is_metric_sort = sort
@@ -136,7 +137,7 @@ fn build_prepared_resource_table(
                 },
                 name: resource.name.clone(),
                 default_name: resource.name.to_lowercase(),
-                sort_value: configuration.sort_state.as_ref().map(|sort| {
+                sort_value: configuration.layout.sort.as_ref().map(|sort| {
                     resource_column_sort_value(
                         resource,
                         &sort.column_id,
@@ -178,14 +179,14 @@ fn build_prepared_resource_table(
                 candidate.fuzzy_score = fuzzy_match_score(&candidate.name, &query);
                 candidate.fuzzy_score.is_some()
             });
-            if configuration.sort_state.is_none() {
+            if configuration.layout.sort.is_none() {
                 candidates.sort_by_key(|candidate| std::cmp::Reverse(candidate.fuzzy_score));
             }
         }
         None
     };
 
-    if let Some(sort) = &configuration.sort_state {
+    if let Some(sort) = &configuration.layout.sort {
         candidates.sort_by(|left, right| {
             crate::resource_table::compare_sort_value_refs(
                 left.sort_value

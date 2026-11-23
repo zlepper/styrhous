@@ -101,7 +101,6 @@ impl YamlEditorHighlightCache {
 pub(crate) struct YamlEditorSearchState {
     pub(crate) query: String,
     pub(crate) regex_mode: bool,
-    pub(crate) input_focused: bool,
     pub(crate) active_match: Option<usize>,
     /// The next rendered editor frame scrolls this match into view, then clears it.
     pub(crate) scroll_to_match: Option<usize>,

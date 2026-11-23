@@ -12,6 +12,7 @@ mod notification_history;
 mod operation_outcome;
 mod operation_toasts;
 mod persistence;
+mod preference_table;
 mod resource_actions;
 mod resource_detail;
 mod resource_navigation;
@@ -39,8 +40,7 @@ use crate::terminal_launcher::{
     ShellRequest, SystemTerminalLauncher, TerminalLaunchSettings, TerminalLauncher,
 };
 use crate::worker::{Worker, WorkerTrait};
-use components::design::stroke;
-use components::design::theme::{self, ThemeExt, configure_default};
+use components::design::theme::{self, configure_default};
 use components::scroll;
 use dialogs::{
     show_bulk_delete_confirmation, show_cron_job_run_confirmation, show_delete_confirmation,
@@ -324,7 +324,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             &mut self.ui_state,
             &mut commands_to_send,
             &mut shell_requests,
-            &debug_image_presets,
+            &self.terminal_launch_settings,
             &mut self.resource_table_preferences,
             &self.namespace_selector_settings,
         );
@@ -449,40 +449,24 @@ fn show_license_banner(
     if !licensing.status().shows_warning() {
         return;
     }
-    let theme = ui.tokens();
     let summary = licensing.status().summary();
     let mut open = false;
     egui::Panel::top("license-status-banner")
-        .exact_size(40.0)
-        .frame(
-            egui::Frame::new()
-                .fill(theme.warning.tint)
-                .stroke(stroke::hairline(theme.warning.outline))
-                .inner_margin(egui::Margin::symmetric(
-                    components::design::space::S16 as i8,
-                    components::design::space::S8 as i8,
-                )),
-        )
+        .exact_size(components::design::size::BANNER)
+        .frame(egui::Frame::NONE)
         .show(ui, |ui| {
-            let response = ui
-                .horizontal_centered(|ui| {
-                    ui.label(
-                        egui::RichText::new(&summary)
-                            .font(components::design::type_scale::BODY.font_id(ui.ctx()))
-                            .color(theme.warning.text_on_tint),
-                    );
-                    ui.add_space(components::design::space::S8);
-                    ui.link("Manage license")
-                })
-                .inner;
-            response.widget_info(|| {
-                egui::WidgetInfo::labeled(
-                    egui::WidgetType::Button,
-                    ui.is_enabled(),
-                    format!("License warning: {summary} Manage license"),
-                )
-            });
-            open = response.clicked();
+            // A licence that no longer works outranks one that needs attention soon.
+            let tone = match licensing.status() {
+                crate::licensing::LicenseStatus::Revoked
+                | crate::licensing::LicenseStatus::Failed { .. } => {
+                    components::design::theme::Tone::Danger
+                }
+                _ => components::design::theme::Tone::Warning,
+            };
+            open = components::Banner::new(tone, &summary)
+                .action("Manage license")
+                .show(ui)
+                .action;
         });
     if open {
         ui_state.open_license_settings(commands_to_send);

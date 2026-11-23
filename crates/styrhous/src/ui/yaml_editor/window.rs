@@ -15,81 +15,102 @@ pub(super) fn show_editor_window_inner(
     reconcile_search_state(editor, search_matches.as_ref().ok());
 
     egui::Panel::top("yaml-editor-header")
-        .exact_size(TOOLBAR_HEIGHT)
-        .frame(toolbar_frame(&theme))
+        .exact_size(size::HEADER_BAR + size::TOOLBAR)
+        .frame(egui::Frame::NONE)
         .show(ui, |ui| {
-            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                // The title and the scope share the title's baseline.
-                let baseline = type_scale::TITLE
-                    .centred_baseline(ui.available_height(), ui.ctx().pixels_per_point());
-                type_scale::TITLE.label_on_baseline(ui, "Edit", theme.text.primary, baseline);
-                ui.add_space(space::S16);
-                type_scale::TITLE.label_on_baseline(
-                    ui,
-                    &editor.resource_name,
-                    theme.text.primary,
-                    baseline,
-                );
-                ui.add_space(space::S12);
-                type_scale::BODY.label_on_baseline(
-                    ui,
-                    &resource_scope(editor),
-                    theme.text.secondary,
-                    baseline,
-                );
-                if editor.saving {
-                    ui.add_space(space::S12);
-                    status_indicator(ui, theme.status.neutral, "Applying…");
-                } else if editor.is_modified() {
-                    ui.add_space(space::S12);
-                    status_indicator(ui, theme.warning.fill, "Modified");
-                }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let apply_clicked = ui
-                        .add_enabled_ui(editor.is_modified() && !editor.saving, |ui| {
-                            TailwindButton::primary("Apply changes")
-                                .show(ui)
-                                .with_pointing_hand()
-                                .clicked()
-                        })
-                        .inner;
-                    if apply_clicked {
-                        apply_editor(editor, commands_to_send);
-                    }
+            ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
+            let scope = resource_scope(editor);
+            let status = if editor.saving {
+                Some(("Applying…", Tone::Neutral))
+            } else if editor.is_modified() {
+                Some(("Modified", Tone::Warning))
+            } else {
+                None
+            };
+            let mut header = WindowHeader::new(
+                ("yaml-editor", editor.id),
+                icons::Icon::PencilSquare,
+                &editor.resource_name,
+            )
+            .meta(&scope);
+            if let Some((text, tone)) = status {
+                header = header.status(text, tone);
+            }
+            let (close, apply) = header
+                .show(ui, |ui| {
                     let close_label = if editor.is_modified() {
                         "Discard"
                     } else {
                         "Close"
                     };
-                    if TailwindButton::secondary(close_label)
+                    let close = Button::secondary(close_label).show(ui).clicked();
+                    let apply = Button::primary("Apply changes")
+                        .enabled(editor.is_modified() && !editor.saving)
+                        .disabled_reason(if editor.saving {
+                            "Applying the changes…"
+                        } else {
+                            "No changes to apply"
+                        })
                         .show(ui)
-                        .with_pointing_hand()
-                        .clicked()
-                    {
-                        request_close(&ctx, editor);
+                        .clicked();
+                    (close, apply)
+                })
+                .inner;
+            if apply {
+                apply_editor(editor, commands_to_send);
+            }
+            if close {
+                request_close(&ctx, editor);
+            }
+            let validation = validation_status(editor);
+            Toolbar::new(("yaml-editor", editor.id)).show(
+                ui,
+                |ui| show_search_controls(&ctx, ui, editor, &search_matches),
+                |ui| {
+                    if let Some((text, in_progress)) = validation {
+                        if in_progress {
+                            toolbar_activity(ui, text);
+                        } else {
+                            status_indicator(ui, Tone::Success, text);
+                        }
                     }
-                    ui.add_space(space::S12);
-                    show_search_controls(&ctx, ui, editor, &search_matches);
-                });
-            });
+                },
+            );
         });
 
     egui::Panel::bottom("yaml-editor-footer")
-        .exact_size(40.0)
-        .frame(toolbar_frame(&theme))
+        .exact_size(size::STATUS_BAR)
+        .frame(egui::Frame::NONE)
         .show(ui, |ui| {
-            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                ui.label(
-                    egui::RichText::new("Changes apply directly to the cluster")
-                        .font(type_scale::BODY.font_id(ui.ctx()))
-                        .color(theme.text.secondary),
-                );
-            });
+            ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
+            let problem_count = diagnostics_to_display(editor).0.len();
+            let position = cursor_position(&ctx, editor);
+            let toggled = StatusBar::new(("yaml-editor", editor.id))
+                .show(
+                    ui,
+                    |ui| {
+                        status_icon(ui, icons::Icon::InformationCircle);
+                        status_text(ui, "Changes apply directly to the cluster");
+                    },
+                    |ui| {
+                        let toggled =
+                            problem_count > 0 && problems_toggle(ui, problem_count).clicked();
+                        if let Some((line, column)) = position {
+                            status_number(ui, &format!("Ln {line}, Col {column}"));
+                        }
+                        status_text(ui, "YAML");
+                        toggled
+                    },
+                )
+                .1;
+            if toggled {
+                toggle_problems(&ctx, editor);
+            }
         });
 
-    if has_diagnostics_feedback(editor) {
+    if !diagnostics_to_display(editor).0.is_empty() {
         egui::Panel::bottom("yaml-editor-diagnostics")
-            .frame(toolbar_frame(&theme))
+            .frame(egui::Frame::NONE)
             .show(ui, |ui| show_diagnostics(&ctx, ui, editor));
     }
 
@@ -115,6 +136,9 @@ pub(super) fn show_editor_window_inner(
                 }
                 if let Some(error) = &editor.error {
                     error_strip(ui, error);
+                }
+                if let ValidationState::Failed(message) = &editor.server_validation {
+                    error_strip(ui, message);
                 }
                 if show_code_editor(
                     &ctx,

@@ -1,4 +1,5 @@
 use super::*;
+use components::tooltip::{TooltipExt, truncated_label};
 
 const SOURCE_COLUMN_WIDTH: f32 = space::S32 * 2.0;
 const SOURCE_ICON_SIZE: f32 = space::S16;
@@ -16,8 +17,8 @@ pub(super) fn environment_variables(
         Some(environment_variable_count_label(variables.len())),
     );
     ui.add_space(space::S8);
-    WorkspaceCard::new()
-        .margin(egui::Margin::symmetric(space::S16 as i8, space::S8 as i8))
+    Card::new()
+        .padding(egui::Margin::symmetric(space::S16 as i8, space::S8 as i8))
         .show_inner(ui, |ui| {
             environment_variable_header(ui);
             ui.separator();
@@ -88,7 +89,7 @@ fn environment_variable_text_cell(
                     .strong()
                     .color(theme.text.primary)
             };
-            ui.add(egui::Label::new(text).selectable(!header).truncate());
+            truncated_label(ui, text, |label| label.selectable(!header));
         },
     );
 }
@@ -134,9 +135,14 @@ pub(super) fn environment_variable_value_cell(
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if secret && variable.value.is_some() {
                     let action = if revealed { "Hide" } else { "Reveal" };
-                    let response =
-                        components::icons::eye_button(ui, 14.0, theme.text.secondary, action);
-                    if response.on_hover_text(action).clicked() {
+                    let response = components::icons::icon_button(
+                        ui,
+                        components::icons::Icon::Eye,
+                        components::design::size::ICON_SM,
+                        theme.text.secondary,
+                        action,
+                    );
+                    if response.tooltip(action).clicked() {
                         ui.data_mut(|data| {
                             data.insert_temp(
                                 environment_variable_secret_id(secret_reveal_scope, variable),
@@ -147,15 +153,13 @@ pub(super) fn environment_variable_value_cell(
                 }
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                     ui.set_min_width(ui.available_width());
-                    ui.add(
-                        egui::Label::new(
-                            egui::RichText::new(value)
-                                .monospace()
-                                .font(type_scale::MONO.font_id(ui.ctx()))
-                                .color(theme.text.secondary),
-                        )
-                        .selectable(true)
-                        .truncate(),
+                    truncated_label(
+                        ui,
+                        egui::RichText::new(value)
+                            .monospace()
+                            .font(type_scale::MONO.font_id(ui.ctx()))
+                            .color(theme.text.secondary),
+                        |label| label.selectable(true),
                     );
                 });
             });
@@ -180,7 +184,7 @@ pub(super) fn environment_variable_source_cell(
                     .alt_text(&source)
                     .sense(egui::Sense::hover()),
             )
-            .on_hover_text(source);
+            .tooltip(source);
         },
     );
 }
@@ -191,14 +195,20 @@ fn environment_variable_source_icon(
     use crate::resource_detail::PodEnvironmentVariableSource;
 
     match variable.source {
-        PodEnvironmentVariableSource::Literal => components::icons::code_bracket_icon(),
+        PodEnvironmentVariableSource::Literal => components::icons::Icon::CodeBracket.image(),
         PodEnvironmentVariableSource::ConfigMapKey { .. }
-        | PodEnvironmentVariableSource::ConfigMapImport { .. } => components::icons::folder_icon(),
+        | PodEnvironmentVariableSource::ConfigMapImport { .. } => {
+            components::icons::Icon::Folder.image()
+        }
         PodEnvironmentVariableSource::SecretKey { .. }
-        | PodEnvironmentVariableSource::SecretImport { .. } => components::icons::key_icon(),
-        PodEnvironmentVariableSource::Field { .. } => components::icons::document_text_icon(),
-        PodEnvironmentVariableSource::ResourceField { .. } => components::icons::chart_bar_icon(),
-        PodEnvironmentVariableSource::Unspecified => components::icons::question_mark_circle_icon(),
+        | PodEnvironmentVariableSource::SecretImport { .. } => components::icons::Icon::Key.image(),
+        PodEnvironmentVariableSource::Field { .. } => components::icons::Icon::DocumentText.image(),
+        PodEnvironmentVariableSource::ResourceField { .. } => {
+            components::icons::Icon::ChartBar.image()
+        }
+        PodEnvironmentVariableSource::Unspecified => {
+            components::icons::Icon::QuestionMarkCircle.image()
+        }
     }
 }
 

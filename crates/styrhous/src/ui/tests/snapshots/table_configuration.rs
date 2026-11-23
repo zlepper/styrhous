@@ -14,7 +14,7 @@ fn resource_table_header_menu_opens_the_column_settings_blade() {
         "resource_tables/resource_table_column_configuration/header_context_menu",
     ));
 
-    let configure = harness.get_by_label("Configure columns").rect().center();
+    let configure = harness.get_by_label("Configure columns…").rect().center();
     primary_click(&mut harness, configure);
     harness.run_steps(2);
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
@@ -239,6 +239,32 @@ fn cluster_rail_settings_item_shows_its_update_status() {
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "cluster_connection/cluster_rail_settings_item_shows_its_update_status/settings_update_status",
     ));
+}
+
+#[test]
+fn cluster_rail_notification_badge_grows_left_for_large_counts() {
+    for unread in [12, 120] {
+        let mut harness = application_harness::<MockWorker>();
+        let mut state = oracle_resource_table_state();
+        for index in 0..unread {
+            state.record_operation_outcome(
+                2,
+                crate::ui::state::OperationOutcome::Success,
+                "Deployment scaled",
+                Some("kube-system"),
+                format!("deployment-{index}"),
+                None,
+            );
+        }
+        harness.state_mut().ui_state = state;
+        harness.run();
+
+        // The count is part of the button's name, as the badge only shows it.
+        harness.get_by_label(&format!("Notifications, {unread} unread"));
+        harness.ui_harness(HarnessSnapshotOptions::one_pixel(format!(
+            "cluster_connection/cluster_rail_notification_badge_grows_left_for_large_counts/unread_{unread}"
+        )));
+    }
 }
 
 #[test]

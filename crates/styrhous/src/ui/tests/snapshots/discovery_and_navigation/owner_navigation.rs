@@ -114,7 +114,7 @@ fn owner_reference_with_a_very_long_name_does_not_widen_the_inspector_blade() {
     let close = harness.get_by_label("Close blade").rect();
     assert_eq!(
         close.right(),
-        blade_left + components::BLADE_WIDTH - 1.0 - 24.0,
+        blade_left + components::BLADE_WIDTH - components::design::space::S12,
         "the inspector must keep its fixed width and position"
     );
     let link = harness.get_by_label_contains("Open details for Deployment / a-deployment-with");

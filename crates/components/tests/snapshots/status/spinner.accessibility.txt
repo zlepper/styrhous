@@ -1,0 +1,12 @@
+viewport: width=220.0 height=80.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            ProgressIndicator name="Loading" rect=(x=24.0 y=40.0 width=16.0 height=16.0 center_x=32.0 center_y=48.0)
+            ProgressIndicator name="Loading" rect=(x=48.0 y=40.0 width=16.0 height=16.0 center_x=56.0 center_y=48.0)
+            ProgressIndicator name="Loading" rect=(x=72.0 y=38.0 width=20.0 height=20.0 center_x=82.0 center_y=48.0)
+            GenericContainer rect=<none>
+              ProgressIndicator name="Loading" rect=(x=108.0 y=40.0 width=16.0 height=16.0 center_x=116.0 center_y=48.0)

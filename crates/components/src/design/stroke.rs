@@ -5,7 +5,8 @@
 //! and the elevation rings ([`super::elevation::ShadowRole::outline`]).
 //! Build every stroke here so widths stay on the scale in [`super::size`].
 
-use egui::{Color32, Stroke};
+use egui::epaint::CornerRadiusF32;
+use egui::{Color32, CornerRadius, Painter, Rect, Stroke, StrokeKind};
 
 use super::size;
 use super::theme::Theme;
@@ -38,6 +39,42 @@ pub fn control_border(color: Color32, pixels_per_point: f32) -> Stroke {
         size::css_border_width(size::CONTROL_STROKE, pixels_per_point),
         color,
     )
+}
+
+/// A focus or selection ring around `rect` (CSS `box-shadow: 0 0 0 2px
+/// surface, 0 0 0 4px ring`): a [`size::FOCUS_RING_GAP`] band in `surface`,
+/// the colour around the control, then a [`size::FOCUS_RING`] band in `ring`
+/// each with corners grown by its spread. Paint it before the control.
+pub fn paint_focus_ring(
+    painter: &Painter,
+    rect: Rect,
+    corner_radius: impl Into<CornerRadius>,
+    surface: Color32,
+    ring: Color32,
+) {
+    let corner_radius = corner_radius.into();
+    let band = |inset: f32, width: f32, color: Color32| {
+        let offset = inset + width / 2.0;
+        painter.rect_stroke(
+            rect.expand(offset),
+            grow(corner_radius, offset),
+            Stroke::new(width, color),
+            StrokeKind::Middle,
+        );
+    };
+    // Chromium paints the ring shadow from the control's edge and the gap
+    // shadow over it, both clipped to outside the control, so a trace of
+    // the ring shows along the edge.
+    band(0.0, size::FOCUS_RING_EXTENT, ring);
+    band(0.0, size::FOCUS_RING_GAP, surface);
+}
+
+/// `corner_radius` grown by `amount` points, as a CSS box-shadow spread grows
+/// its corners.
+pub fn grow(corner_radius: CornerRadius, amount: f32) -> CornerRadius {
+    let mut grown = CornerRadiusF32::from(corner_radius);
+    grown += amount;
+    grown.into()
 }
 
 #[cfg(test)]

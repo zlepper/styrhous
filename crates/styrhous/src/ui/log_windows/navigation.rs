@@ -73,6 +73,15 @@ pub(super) fn status_label(window: &PodLogWindowState) -> String {
     }
 }
 
+/// The words of the window's status pill: [`status_label`] up to any error
+/// detail ("Stream failed: …" reads "Stream failed"), which the pill shows
+/// as its tooltip instead.
+pub(super) fn status_headline(label: &str) -> &str {
+    label
+        .split_once(": ")
+        .map_or(label, |(headline, _)| headline)
+}
+
 pub(super) fn compact_line_count(lines: usize) -> String {
     match lines {
         0..=999 => lines.to_string(),

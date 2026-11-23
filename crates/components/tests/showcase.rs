@@ -7,17 +7,15 @@
 use std::collections::HashSet;
 
 use components::design::theme::ThemeExt;
-use components::design::{radius, type_scale};
-use components::icons::{
-    arrow_left_icon, arrow_right_icon, calendar_icon, document_icon, ellipsis_horizontal_icon,
-    folder_icon, home_icon, pencil_icon, trash_icon, users_icon,
-};
+use components::design::type_scale;
+use components::icons::Icon;
 use components::test_support::UiHarnessSnapshot;
+use components::test_support::board::{BoardHeader, board, cell, column, row};
 use components::{
-    ButtonRounding, ButtonSize, ButtonVariant, SortDirection, SortState, TableRowBuilder, Tabs,
-    TailwindButton, TailwindCombobox, TailwindTable, WideSidebar,
+    Button, ButtonSize, ButtonVariant, CheckState, Combobox, SortDirection, SortState, Table,
+    TableRowBuilder, Tabs, WideSidebar,
 };
-use egui::{Align, Label, Layout, Pos2, Rect, RichText, Ui, UiBuilder, Vec2};
+use egui::{Align, Layout, Ui, Vec2};
 use egui_kittest::{Harness, kittest::Queryable};
 
 struct Person {
@@ -61,7 +59,7 @@ fn apply_reference_theme(harness: &mut Harness<'_>) {
 }
 
 fn show_people_table(ui: &mut egui::Ui, people: &[Person]) {
-    TailwindTable::new(ui.id().with("people-table"))
+    Table::new(ui.id().with("people-table"))
         .column("name", "Name", |column| column.initial_width(150.0))
         .column("role", "Role", |column| column.initial_width(100.0))
         .show(ui, people, |ui, person, column_index| {
@@ -83,223 +81,126 @@ fn showcase_buttons() {
     harness.ui_harness("showcase/showcase_buttons/buttons");
 }
 
-const BUTTON_SHOWCASE_CARD: Rect =
-    Rect::from_min_max(Pos2::new(96.0, 188.0), Pos2::new(1438.0, 926.0));
-/// The generated oracle's matrix rasterizes one pixel right and one pixel up
-/// from egui's natural control placement. Keep that adjustment at the shared
-/// matrix boundary instead of compensating for every label and button.
-const BUTTON_SHOWCASE_CONTENT_OFFSET: Vec2 = Vec2::new(1.0, -1.0);
-const BUTTON_SHOWCASE_COLUMNS: [(ButtonSize, &str, f32); 5] = [
-    (ButtonSize::Xs, "XS", 380.0),
-    (ButtonSize::Sm, "SM", 574.0),
-    (ButtonSize::Md, "MD", 786.0),
-    (ButtonSize::Lg, "LG", 1011.0),
-    (ButtonSize::Xl, "XL", 1250.0),
+const BUTTON_VARIANTS: [(&str, ButtonVariant); 7] = [
+    ("Primary", ButtonVariant::Primary),
+    ("Secondary", ButtonVariant::Secondary),
+    ("Soft", ButtonVariant::Soft),
+    ("Ghost", ButtonVariant::Ghost),
+    ("Danger", ButtonVariant::Danger),
+    ("Danger quiet", ButtonVariant::DangerQuiet),
+    ("Link", ButtonVariant::Link),
 ];
+const BUTTON_SIZES: [(&str, ButtonSize); 3] = [
+    ("sm · 28", ButtonSize::Sm),
+    ("md · 32", ButtonSize::Md),
+    ("lg · 36", ButtonSize::Lg),
+];
+const BUTTON_LABEL_COLUMN: f32 = 132.0;
+const BUTTON_COLUMN: f32 = 200.0;
+const BUTTON_ROW: f32 = 48.0;
 
+/// Every variant at every size, then the icon, loading and disabled forms.
 fn show_buttons_showcase(ui: &mut Ui) {
-    ui.ctx().layer_painter(ui.layer_id()).rect_filled(
-        Rect::from_min_size(Pos2::ZERO, Vec2::new(1536.0, 1024.0)),
-        0.0,
-        ui.tokens().surface.canvas,
-    );
-
-    showcase_text(
-        ui,
-        Rect::from_min_size(Pos2::new(696.0, 62.0), Vec2::new(160.0, 52.0)),
-        RichText::new("Buttons")
-            .font(
-                type_scale::UI
-                    .with_weight(type_scale::Weight::SemiBold)
-                    .with_size(40.0, 48.0)
-                    .font_id(ui.ctx()),
-            )
-            .color(ui.tokens().text.primary),
-    );
-    showcase_text(
-        ui,
-        Rect::from_min_size(Pos2::new(620.0, 120.0), Vec2::new(320.0, 30.0)),
-        RichText::new("Application button styles and sizes")
-            .font(egui::FontId::proportional(18.0))
-            .color(ui.tokens().text.secondary),
-    );
-
-    ui.painter().rect(
-        BUTTON_SHOWCASE_CARD,
-        egui::CornerRadius::same(radius::MENU_ITEM),
-        ui.tokens().surface.panel,
-        egui::Stroke::new(1.0, ui.tokens().divider.base),
-        egui::StrokeKind::Inside,
-    );
-
-    for (_, label, center_x) in BUTTON_SHOWCASE_COLUMNS {
-        let label_width = match label {
-            "XS" => 21.0,
-            "SM" => 24.7,
-            "MD" => 26.0,
-            "LG" => 20.5,
-            "XL" => 20.0,
-            _ => unreachable!("all showcase column labels are covered"),
-        };
-        showcase_matrix_text(
-            ui,
-            Rect::from_min_size(
-                Pos2::new(center_x - label_width / 2.0, 231.5),
-                Vec2::new(40.0, 24.0),
-            ),
-            RichText::new(label)
-                .font(type_scale::TITLE.font_id(ui.ctx()))
-                .color(ui.tokens().text.primary),
-        );
-    }
-
-    for (label, variant, center_y) in [
-        ("Primary", ButtonVariant::Primary, 322.0),
-        ("Secondary", ButtonVariant::Secondary, 424.0),
-        ("Soft", ButtonVariant::Soft, 526.0),
-        ("Danger", ButtonVariant::Danger, 622.0),
-    ] {
-        showcase_matrix_text(
-            ui,
-            Rect::from_center_size(Pos2::new(188.0, center_y), Vec2::new(96.0, 30.0)),
-            RichText::new(label)
-                .font(type_scale::TITLE.with_size(18.0, 26.0).font_id(ui.ctx()))
-                .color(ui.tokens().text.primary),
-        );
-        for (size, _, center_x) in BUTTON_SHOWCASE_COLUMNS {
-            showcase_matrix_button(
-                ui,
-                button_showcase_rect(Pos2::new(center_x, center_y), size),
-                TailwindButton::new("Button text")
-                    .variant(variant)
-                    .size(size),
-            );
-        }
-    }
-
-    ui.painter().hline(
-        140.0..=1396.0,
-        698.0,
-        egui::Stroke::new(1.0, ui.tokens().divider.base),
-    );
-    ui.painter().vline(
-        764.0,
-        735.0..=885.0,
-        egui::Stroke::new(1.0, ui.tokens().divider.base),
-    );
-
-    showcase_text(
-        ui,
-        Rect::from_min_size(Pos2::new(140.0, 746.0), Vec2::new(160.0, 28.0)),
-        RichText::new("Icon buttons")
-            .font(type_scale::TITLE.with_size(18.0, 26.0).font_id(ui.ctx()))
-            .color(ui.tokens().text.primary),
-    );
-    for (label, icon, center_x) in [
-        ("Back", arrow_left_icon(), 178.0),
-        ("Forward", arrow_right_icon(), 296.0),
-        ("Edit", pencil_icon(), 411.0),
-        ("Delete", trash_icon(), 525.0),
-        ("More actions", ellipsis_horizontal_icon(), 630.0),
-    ] {
-        showcase_button(
-            ui,
-            Rect::from_center_size(Pos2::new(center_x, 835.0), Vec2::splat(44.0)),
-            TailwindButton::icon(
-                icon.fit_to_exact_size(Vec2::splat(16.0))
-                    .tint(ui.tokens().text.primary),
-            )
-            .variant(ButtonVariant::Secondary)
-            .size(ButtonSize::Xl)
-            .accessibility_label(label),
-        );
-    }
-
-    showcase_text(
-        ui,
-        Rect::from_min_size(Pos2::new(818.0, 746.0), Vec2::new(180.0, 28.0)),
-        RichText::new("Corner radius")
-            .font(type_scale::TITLE.with_size(18.0, 26.0).font_id(ui.ctx()))
-            .color(ui.tokens().text.primary),
-    );
-    for (label, rounding, center_x) in [
-        ("Default", ButtonRounding::Default, 886.0),
-        ("Rounded", ButtonRounding::Rounded, 1076.0),
-        ("Pill", ButtonRounding::Pill, 1261.0),
-    ] {
-        showcase_button(
-            ui,
-            button_showcase_rounding_rect(Pos2::new(center_x, 838.0), label),
-            TailwindButton::primary(label)
-                .size(ButtonSize::Xl)
-                .rounded(rounding),
-        );
-    }
-}
-
-fn showcase_text(ui: &mut Ui, rect: Rect, rich_text: RichText) {
-    showcase_text_at(ui, rect, rich_text, Vec2::ZERO);
-}
-
-fn showcase_matrix_text(ui: &mut Ui, rect: Rect, rich_text: RichText) {
-    showcase_text_at(ui, rect, rich_text, BUTTON_SHOWCASE_CONTENT_OFFSET);
-}
-
-fn showcase_text_at(ui: &mut Ui, rect: Rect, rich_text: RichText, offset: Vec2) {
-    let rect = rect.translate(offset);
-    let mut text_ui = ui.new_child(
-        UiBuilder::new()
-            .max_rect(rect)
-            .layout(Layout::left_to_right(Align::Center)),
-    );
-    text_ui.add(Label::new(rich_text).extend().selectable(false));
-}
-
-fn showcase_button(ui: &mut Ui, rect: Rect, button: TailwindButton<'_>) {
-    showcase_button_at(ui, rect, button, Vec2::ZERO);
-}
-
-fn showcase_matrix_button(ui: &mut Ui, rect: Rect, button: TailwindButton<'_>) {
-    showcase_button_at(ui, rect, button, BUTTON_SHOWCASE_CONTENT_OFFSET);
-}
-
-fn showcase_button_at(ui: &mut Ui, rect: Rect, button: TailwindButton<'_>, offset: Vec2) {
-    let rect = rect.translate(offset);
-    let mut button_ui = ui.new_child(
-        UiBuilder::new()
-            .max_rect(rect)
-            .layout(Layout::left_to_right(Align::Center).with_main_align(Align::Center)),
-    );
-    button.show(&mut button_ui);
-}
-
-fn button_showcase_rect(center: Pos2, size: ButtonSize) -> Rect {
-    let dimensions = match size {
-        ButtonSize::Xs => Vec2::new(87.8, 32.0),
-        ButtonSize::Sm => Vec2::new(106.8, 34.0),
-        ButtonSize::Md => Vec2::new(123.8, 38.0),
-        ButtonSize::Lg => Vec2::new(132.8, 40.0),
-        ButtonSize::Xl => Vec2::new(157.8, 44.0),
+    let header = BoardHeader {
+        eyebrow: "Showcase · components::Button",
+        title: "Buttons",
+        description: "Every variant at every size, with icons, loading and disabled states.",
     };
-    // Egui snaps the odd-pixel SM and LG controls half a pixel to the right.
-    // Offset their slots so the rendered accessibility bounds remain centered
-    // under the corresponding column heading.
-    let center = if matches!(size, ButtonSize::Sm | ButtonSize::Lg) {
-        Pos2::new(center.x - 0.5, center.y)
-    } else {
-        center
-    };
-    Rect::from_center_size(center, dimensions)
-}
-
-fn button_showcase_rounding_rect(center: Pos2, label: &str) -> Rect {
-    let width = match label {
-        "Default" => 133.5,
-        "Rounded" => 145.1,
-        "Pill" => 105.1,
-        _ => unreachable!("all showcase rounding labels are covered"),
-    };
-    Rect::from_center_size(center, Vec2::new(width, 44.0))
+    board(ui, header, |ui| {
+        let theme = ui.tokens();
+        let layout = Layout::left_to_right(Align::Center);
+        column(ui, 0.0, |ui| {
+            row(ui, BUTTON_ROW, 0.0, Align::Center, |ui| {
+                cell(
+                    ui,
+                    Vec2::new(BUTTON_LABEL_COLUMN, BUTTON_ROW),
+                    layout,
+                    0.0,
+                    |_| {},
+                );
+                for (label, _) in BUTTON_SIZES {
+                    cell(
+                        ui,
+                        Vec2::new(BUTTON_COLUMN, BUTTON_ROW),
+                        layout,
+                        0.0,
+                        |ui| {
+                            type_scale::META.label(ui, label, theme.text.muted);
+                        },
+                    );
+                }
+                for label in ["Leading icon", "Icon only", "Loading", "Disabled"] {
+                    cell(
+                        ui,
+                        Vec2::new(BUTTON_COLUMN, BUTTON_ROW),
+                        layout,
+                        0.0,
+                        |ui| {
+                            type_scale::META.label(ui, label, theme.text.muted);
+                        },
+                    );
+                }
+            });
+            for (name, variant) in BUTTON_VARIANTS {
+                row(ui, BUTTON_ROW, 0.0, Align::Center, |ui| {
+                    let demo = |ui: &mut Ui, button: Button| {
+                        cell(
+                            ui,
+                            Vec2::new(BUTTON_COLUMN, BUTTON_ROW),
+                            layout,
+                            0.0,
+                            |ui| {
+                                button.show(ui);
+                            },
+                        );
+                    };
+                    cell(
+                        ui,
+                        Vec2::new(BUTTON_LABEL_COLUMN, BUTTON_ROW),
+                        layout,
+                        0.0,
+                        |ui| {
+                            type_scale::UI_CONTROL.label(ui, name, theme.text.primary);
+                        },
+                    );
+                    for (size_label, size) in BUTTON_SIZES {
+                        demo(
+                            ui,
+                            Button::new("Button text")
+                                .variant(variant)
+                                .size(size)
+                                .accessibility_label(format!("{name} {size_label}")),
+                        );
+                    }
+                    demo(
+                        ui,
+                        Button::new("Refresh")
+                            .variant(variant)
+                            .leading_icon(Icon::ArrowPath)
+                            .accessibility_label(format!("{name} with icon")),
+                    );
+                    demo(
+                        ui,
+                        Button::icon(Icon::Pencil, format!("{name} icon")).variant(variant),
+                    );
+                    demo(
+                        ui,
+                        Button::new("Saving")
+                            .variant(variant)
+                            .loading(true)
+                            .accessibility_label(format!("{name} loading")),
+                    );
+                    demo(
+                        ui,
+                        Button::new("Unavailable")
+                            .variant(variant)
+                            .enabled(false)
+                            .accessibility_label(format!("{name} disabled")),
+                    );
+                });
+            }
+        });
+    });
 }
 
 #[test]
@@ -307,7 +208,7 @@ fn showcase_comboboxes() {
     let mut harness = Harness::new_ui(|ui| {
         showcase_title(ui, "Comboboxes");
 
-        TailwindCombobox::from_label("Empty selection")
+        Combobox::from_label("Empty selection")
             .placeholder("Search people...")
             .width(280.0)
             .filter_by(|person: &Person| person.name)
@@ -317,7 +218,7 @@ fn showcase_comboboxes() {
 
         ui.add_space(12.0);
 
-        TailwindCombobox::from_label("Selected value")
+        Combobox::from_label("Selected value")
             .selected_text("Michael Foster")
             .selected_status(Some(true))
             .width(280.0)
@@ -332,10 +233,10 @@ fn showcase_comboboxes() {
 
         ui.add_space(12.0);
 
-        TailwindCombobox::from_label("Multi-select")
+        Combobox::from_label("Multi-select")
             .selected_text("2 people selected")
             .width(280.0)
-            .select_all(false)
+            .select_all("Select all", CheckState::Off)
             .filter_by(|person: &Person| person.name)
             .show_items(ui, &PEOPLE, |combobox, person| {
                 combobox.item_with_status(
@@ -347,7 +248,7 @@ fn showcase_comboboxes() {
 
         ui.add_space(12.0);
 
-        TailwindCombobox::from_label("Filter results")
+        Combobox::from_label("Filter results")
             .placeholder("Type to filter...")
             .width(280.0)
             .filter_by(|person: &Person| person.name)
@@ -373,8 +274,8 @@ fn showcase_sidebars() {
             ui.vertical(|ui| {
                 ui.label(egui::RichText::new("Narrow").strong());
                 components::NarrowSidebar::new().show(ui, |sidebar| {
-                    sidebar.item("Dashboard", home_icon(), true);
-                    sidebar.item("People", users_icon(), false);
+                    sidebar.item("Dashboard", Icon::Home.image(), true);
+                    sidebar.item("People", Icon::Users.image(), false);
                     sidebar.separator();
                     sidebar.avatar_item("Tailwind Labs", "T", false);
                     sidebar.avatar_item("Acme", "A", false);
@@ -386,14 +287,14 @@ fn showcase_sidebars() {
             ui.vertical(|ui| {
                 ui.label(egui::RichText::new("Wide").strong());
                 WideSidebar::new().width(280.0).show(ui, |sidebar| {
-                    sidebar.item("Dashboard", home_icon(), true);
-                    sidebar.item("Calendar", calendar_icon(), false);
+                    sidebar.item("Dashboard", Icon::Home.image(), true);
+                    sidebar.item("Calendar", Icon::Calendar.image(), false);
                     sidebar.section_header("Workspace");
-                    sidebar.expandable("Projects", folder_icon(), true, |sidebar| {
+                    sidebar.expandable("Projects", Icon::Folder.image(), true, |sidebar| {
                         sidebar.child_item("Platform", false);
                         sidebar.child_item("Kubernetes UI", true);
                     });
-                    sidebar.item("Documents", document_icon(), false);
+                    sidebar.item("Documents", Icon::Document.image(), false);
                 });
             });
         });
@@ -414,7 +315,7 @@ fn showcase_tables() {
             columns[0].add_space(20.0);
             columns[0].label(egui::RichText::new("Selectable").strong());
             let mut selected = HashSet::from(["Michael Foster"]);
-            TailwindTable::new("showcase-selectable")
+            Table::new("showcase-selectable")
                 .column("name", "Name", |column| column.initial_width(150.0))
                 .column("role", "Role", |column| column.initial_width(100.0))
                 .selectable()
@@ -435,7 +336,7 @@ fn showcase_tables() {
 
             columns[1].label(egui::RichText::new("Sorted").strong());
             let mut sort = Some(SortState::new("name", SortDirection::Ascending));
-            TailwindTable::new("showcase-sorted")
+            Table::new("showcase-sorted")
                 .column("name", "Name", |column| {
                     column.sortable().initial_width(150.0)
                 })
@@ -456,7 +357,7 @@ fn showcase_tables() {
             columns[1].add_space(20.0);
             columns[1].label(egui::RichText::new("Column visibility").strong());
             let hidden_columns = HashSet::from(["role".to_owned()]);
-            TailwindTable::new("showcase-column-visibility")
+            Table::new("showcase-column-visibility")
                 .column("name", "Name", |column| {
                     column.initial_width(150.0).not_hideable()
                 })
@@ -502,13 +403,13 @@ fn showcase_tabs() {
         ui.add_space(32.0);
         ui.label(egui::RichText::new("Tabs with icons").strong());
         Tabs::new("showcase-icon-tabs").show(ui, |tabs| {
-            tabs.tab("Dashboard", Some(home_icon()), |ui| {
+            tabs.tab("Dashboard", Some(Icon::Home.image()), |ui| {
                 ui.label("Dashboard content");
             });
-            tabs.tab("People", Some(users_icon()), |ui| {
+            tabs.tab("People", Some(Icon::Users.image()), |ui| {
                 ui.label("People content");
             });
-            tabs.tab("Documents", Some(document_icon()), |ui| {
+            tabs.tab("Documents", Some(Icon::Document.image()), |ui| {
                 ui.label("Documents content");
             });
         });

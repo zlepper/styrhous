@@ -86,7 +86,7 @@ impl BladeStack {
                         can_go_forward: true,
                     };
                     let _ = show_header(ui, layer, |ui| render_header(ui, entry, layer));
-                    render_content(ui, entry, layer);
+                    show_body(ui, |ui| render_content(ui, entry, layer));
                 },
             );
         }
@@ -119,7 +119,7 @@ impl BladeStack {
                         can_go_forward: true,
                     };
                     let _ = show_header(ui, layer, |ui| render_header(ui, entry, layer));
-                    render_content(ui, entry, layer);
+                    show_body(ui, |ui| render_content(ui, entry, layer));
                 },
             );
         }
@@ -156,7 +156,7 @@ impl BladeStack {
                             can_go_forward,
                         };
                         let _ = show_header(ui, layer, |ui| render_header(ui, entry, layer));
-                        render_content(ui, entry, layer);
+                        show_body(ui, |ui| render_content(ui, entry, layer));
                     },
                 );
             }
@@ -215,7 +215,7 @@ impl BladeStack {
                 let (header, header_action) = show_header(ui, layer, |ui| {
                     render_header(ui, navigator.current_mut(), layer)
                 });
-                let active = render_content(ui, navigator.current_mut(), layer);
+                let active = show_body(ui, |ui| render_content(ui, navigator.current_mut(), layer));
                 (header, active, header_action)
             },
         );
@@ -269,11 +269,7 @@ impl BladeStack {
             ctx,
             navigator,
             |ui, entry, _| {
-                ui.label(
-                    egui::RichText::new(title(entry))
-                        .font(crate::design::type_scale::HEADING.font_id(ui.ctx()))
-                        .color(ui.tokens().text.primary),
-                );
+                chrome::blade_title(ui, None, &title(entry));
             },
             render_content,
         )

@@ -16,12 +16,10 @@ Window state=[focused] rect=<none>
             Image rect=(x=20.0 y=976.0 width=28.0 height=28.0 center_x=34.0 center_y=990.0)
     GenericContainer rect=<none>
       GenericContainer rect=<none>
+        Label value="dev" rect=(x=82.0 y=22.0 width=35.4 height=28.0 center_x=99.7 center_y=36.0)
+          TextRun value="dev" rect=(x=82.0 y=22.0 width=35.4 height=28.0 center_x=99.7 center_y=36.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
-            GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="dev" rect=(x=92.0 y=29.0 width=35.4 height=24.0 center_x=109.7 center_y=41.0)
-                  TextRun value="dev" rect=(x=92.0 y=29.0 width=35.4 height=24.0 center_x=109.7 center_y=41.0)
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>

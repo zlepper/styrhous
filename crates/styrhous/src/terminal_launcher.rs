@@ -44,8 +44,9 @@ pub(crate) struct DebugImagePreset {
 }
 
 impl DebugImagePreset {
-    pub(crate) fn menu_label(&self) -> String {
-        format!("{} — {}", self.name, self.profile.label())
+    /// The preset's profile as a menu item's secondary line ("General profile").
+    pub(crate) fn profile_label(&self) -> String {
+        format!("{} profile", self.profile.label())
     }
 }
 

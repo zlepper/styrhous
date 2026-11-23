@@ -7,23 +7,29 @@ Window state=[focused] rect=<none>
           TextRun value="Tabs" rect=(x=8.0 y=8.0 width=45.3 height=24.0 center_x=30.6 center_y=20.0)
         Label value="Text tabs" rect=(x=8.0 y=47.0 width=52.9 height=16.0 center_x=34.4 center_y=55.0)
           TextRun value="Text tabs" rect=(x=8.0 y=47.0 width=52.9 height=16.0 center_x=34.4 center_y=55.0)
-        Label value="Overview content" rect=(x=8.0 y=113.0 width=104.2 height=16.0 center_x=60.1 center_y=121.0)
-          TextRun value="Overview content" rect=(x=8.0 y=113.0 width=104.2 height=16.0 center_x=60.1 center_y=121.0)
+        Label value="Overview content" rect=(x=8.0 y=109.0 width=104.2 height=16.0 center_x=60.1 center_y=117.0)
+          TextRun value="Overview content" rect=(x=8.0 y=109.0 width=104.2 height=16.0 center_x=60.1 center_y=117.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
-                Button name="Overview" state=[toggled=True] rect=(x=8.0 y=66.0 width=67.3 height=44.0 center_x=41.7 center_y=88.0)
-                Button name="Activity" state=[toggled=False] rect=(x=91.3 y=66.0 width=56.7 height=44.0 center_x=119.7 center_y=88.0)
-                Button name="Settings" state=[toggled=False] rect=(x=164.0 y=66.0 width=60.6 height=44.0 center_x=194.3 center_y=88.0)
-        Label value="Tabs with icons" rect=(x=8.0 y=164.0 width=89.4 height=16.0 center_x=52.7 center_y=172.0)
-          TextRun value="Tabs with icons" rect=(x=8.0 y=164.0 width=89.4 height=16.0 center_x=52.7 center_y=172.0)
-        Label value="Dashboard content" rect=(x=8.0 y=230.0 width=111.9 height=16.0 center_x=63.9 center_y=238.0)
-          TextRun value="Dashboard content" rect=(x=8.0 y=230.0 width=111.9 height=16.0 center_x=63.9 center_y=238.0)
+                Button name="Overview" state=[toggled=True] rect=(x=8.0 y=71.0 width=79.8 height=30.0 center_x=47.9 center_y=86.0)
+                  TextRun value="Overview" rect=(x=20.0 y=76.0 width=55.8 height=20.0 center_x=47.9 center_y=86.0)
+                Button name="Activity" state=[toggled=False] rect=(x=91.8 y=71.0 width=70.0 height=30.0 center_x=126.8 center_y=86.0)
+                  TextRun value="Activity" rect=(x=103.8 y=76.0 width=46.0 height=20.0 center_x=126.8 center_y=86.0)
+                Button name="Settings" state=[toggled=False] rect=(x=165.8 y=71.0 width=73.2 height=30.0 center_x=202.4 center_y=86.0)
+                  TextRun value="Settings" rect=(x=177.8 y=76.0 width=49.2 height=20.0 center_x=202.4 center_y=86.0)
+        Label value="Tabs with icons" rect=(x=8.0 y=160.0 width=89.4 height=16.0 center_x=52.7 center_y=168.0)
+          TextRun value="Tabs with icons" rect=(x=8.0 y=160.0 width=89.4 height=16.0 center_x=52.7 center_y=168.0)
+        Label value="Dashboard content" rect=(x=8.0 y=222.0 width=111.9 height=16.0 center_x=63.9 center_y=230.0)
+          TextRun value="Dashboard content" rect=(x=8.0 y=222.0 width=111.9 height=16.0 center_x=63.9 center_y=230.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
-                Button name="Dashboard" state=[toggled=True] rect=(x=8.0 y=183.0 width=101.5 height=44.0 center_x=58.8 center_y=205.0)
-                Button name="People" state=[toggled=False] rect=(x=125.5 y=183.0 width=76.7 height=44.0 center_x=163.9 center_y=205.0)
-                Button name="Documents" state=[toggled=False] rect=(x=218.2 y=183.0 width=106.3 height=44.0 center_x=271.4 center_y=205.0)
+                Button name="Dashboard" state=[toggled=True] rect=(x=8.0 y=184.0 width=109.1 height=30.0 center_x=62.6 center_y=199.0)
+                  TextRun value="Dashboard" rect=(x=42.0 y=189.0 width=63.1 height=20.0 center_x=73.6 center_y=199.0)
+                Button name="People" state=[toggled=False] rect=(x=121.1 y=184.0 width=85.9 height=30.0 center_x=164.1 center_y=199.0)
+                  TextRun value="People" rect=(x=155.1 y=189.0 width=39.9 height=20.0 center_x=175.1 center_y=199.0)
+                Button name="Documents" state=[toggled=False] rect=(x=211.1 y=184.0 width=113.5 height=30.0 center_x=267.8 center_y=199.0)
+                  TextRun value="Documents" rect=(x=245.1 y=189.0 width=67.5 height=20.0 center_x=278.8 center_y=199.0)

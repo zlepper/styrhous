@@ -1,0 +1,153 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Label value="C09 · COMPONENTS::{SIDEBAR, CLUSTERCARD, KINDLIST}" rect=(x=48.0 y=40.0 width=326.3 height=16.0 center_x=211.1 center_y=48.0)
+            TextRun value="C09 · COMPONENTS::{SIDEBAR, CLUSTERCARD, KINDLIST}" rect=(x=48.0 y=40.0 width=325.2 height=16.0 center_x=210.6 center_y=48.0)
+          Label value="Sidebar" rect=(x=48.0 y=60.0 width=102.6 height=36.0 center_x=99.3 center_y=78.0)
+            TextRun value="Sidebar" rect=(x=48.0 y=60.0 width=102.9 height=36.0 center_x=99.5 center_y=78.0)
+          Label value="One floating panel replaces the cluster rail and navigator: the cluster card switches clusters (opens C18), the kind list switches resource types. Kind colours match the kind badges on blades." rect=(x=48.0 y=102.0 width=919.5 height=40.0 center_x=507.7 center_y=122.0)
+            TextRun value="One floating panel replaces the cluster rail and navigator: the cluster card switches clusters (opens C18), the kind list switches resource types. Kind " rect=(x=48.0 y=102.0 width=919.5 height=20.0 center_x=507.7 center_y=112.0)
+            TextRun value="colours match the kind badges on blades." rect=(x=48.0 y=122.0 width=258.9 height=20.0 center_x=177.5 center_y=132.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="SIDEBAR" rect=(x=48.0 y=168.0 width=50.0 height=16.0 center_x=73.0 center_y=176.0)
+                TextRun value="SIDEBAR" rect=(x=48.0 y=168.0 width=48.9 height=16.0 center_x=72.5 center_y=176.0)
+              Navigation name="Workspace" rect=(x=48.0 y=194.0 width=268.0 height=800.0 center_x=182.0 center_y=594.0)
+                GenericContainer rect=<none>
+                  Button name="Switch cluster" rect=(x=62.0 y=208.0 width=240.0 height=60.0 center_x=182.0 center_y=238.0)
+                    TextRun value="kind-kind" rect=(x=124.0 y=221.0 width=69.3 height=20.0 center_x=158.7 center_y=231.0)
+                  GenericContainer rect=<none>
+                    TextInput name="Filter kinds" value="" rect=(x=62.0 y=280.0 width=240.0 height=34.0 center_x=182.0 center_y=297.0)
+                      TextRun value="" rect=(x=98.0 y=289.0 width=0.0 height=20.0 center_x=98.0 center_y=299.0)
+                  Label value="PINNED" rect=(x=70.0 y=328.0 width=43.9 height=14.0 center_x=91.9 center_y=335.0)
+                    TextRun value="PINNED" rect=(x=70.0 y=328.0 width=42.8 height=14.0 center_x=91.4 center_y=335.0)
+                  Button name="Pods" state=[toggled=True] rect=(x=62.0 y=348.0 width=240.0 height=34.0 center_x=182.0 center_y=365.0)
+                    TextRun value="Pods" rect=(x=98.0 y=355.0 width=30.0 height=20.0 center_x=113.0 center_y=365.0)
+                  Button name="Deployments" state=[toggled=False] rect=(x=62.0 y=382.0 width=240.0 height=34.0 center_x=182.0 center_y=399.0)
+                    TextRun value="Deployments" rect=(x=98.0 y=389.0 width=80.7 height=20.0 center_x=138.4 center_y=399.0)
+                  Button name="Nodes" state=[toggled=False] rect=(x=62.0 y=416.0 width=240.0 height=34.0 center_x=182.0 center_y=433.0)
+                    TextRun value="Nodes" rect=(x=98.0 y=423.0 width=39.9 height=20.0 center_x=118.0 center_y=433.0)
+                  Button name="Helm releases" state=[toggled=False] rect=(x=62.0 y=450.0 width=240.0 height=34.0 center_x=182.0 center_y=467.0)
+                    TextRun value="Helm releases" rect=(x=98.0 y=457.0 width=85.0 height=20.0 center_x=140.5 center_y=467.0)
+                  Label value="KUBERNETES" rect=(x=70.0 y=498.0 width=73.9 height=14.0 center_x=106.9 center_y=505.0)
+                    TextRun value="KUBERNETES" rect=(x=70.0 y=498.0 width=72.8 height=14.0 center_x=106.4 center_y=505.0)
+                  Label value="54" rect=(x=279.9 y=498.0 width=14.1 height=14.0 center_x=287.0 center_y=505.0)
+                    TextRun value="54" rect=(x=279.9 y=498.0 width=13.0 height=14.0 center_x=286.4 center_y=505.0)
+                  Button name="Workloads" state=[toggled=False] rect=(x=62.0 y=518.0 width=240.0 height=30.0 center_x=182.0 center_y=533.0)
+                    TextRun value="Workloads" rect=(x=92.0 y=523.0 width=61.5 height=20.0 center_x=122.8 center_y=533.0)
+                  Button name="Network" state=[toggled=False] rect=(x=62.0 y=548.0 width=240.0 height=30.0 center_x=182.0 center_y=563.0)
+                    TextRun value="Network" rect=(x=92.0 y=553.0 width=51.0 height=20.0 center_x=117.5 center_y=563.0)
+                  Button name="Config & secrets" state=[toggled=False] rect=(x=62.0 y=578.0 width=240.0 height=30.0 center_x=182.0 center_y=593.0)
+                    TextRun value="Config & secrets" rect=(x=92.0 y=583.0 width=97.6 height=20.0 center_x=140.8 center_y=593.0)
+                  Button name="Storage" state=[toggled=False] rect=(x=62.0 y=608.0 width=240.0 height=30.0 center_x=182.0 center_y=623.0)
+                    TextRun value="Storage" rect=(x=92.0 y=613.0 width=46.5 height=20.0 center_x=115.2 center_y=623.0)
+                  Button name="Cluster" state=[toggled=False] rect=(x=62.0 y=638.0 width=240.0 height=30.0 center_x=182.0 center_y=653.0)
+                    TextRun value="Cluster" rect=(x=92.0 y=643.0 width=42.3 height=20.0 center_x=113.1 center_y=653.0)
+                  Button name="Access control" state=[toggled=False] rect=(x=62.0 y=668.0 width=240.0 height=30.0 center_x=182.0 center_y=683.0)
+                    TextRun value="Access control" rect=(x=92.0 y=673.0 width=87.2 height=20.0 center_x=135.6 center_y=683.0)
+                  Button name="Namespaces" state=[toggled=False] rect=(x=62.0 y=698.0 width=240.0 height=34.0 center_x=182.0 center_y=715.0)
+                    TextRun value="Namespaces" rect=(x=98.0 y=705.0 width=78.7 height=20.0 center_x=137.3 center_y=715.0)
+                  Button name="Events" state=[toggled=False] rect=(x=62.0 y=732.0 width=240.0 height=34.0 center_x=182.0 center_y=749.0)
+                    TextRun value="Events" rect=(x=98.0 y=739.0 width=41.4 height=20.0 center_x=118.7 center_y=749.0)
+                  Label value="CUSTOM RESOURCES" rect=(x=70.0 y=780.0 width=116.2 height=14.0 center_x=128.1 center_y=787.0)
+                    TextRun value="CUSTOM RESOURCES" rect=(x=70.0 y=780.0 width=115.1 height=14.0 center_x=127.5 center_y=787.0)
+                  Label value="6 GROUPS" rect=(x=237.5 y=780.0 width=56.5 height=14.0 center_x=265.7 center_y=787.0)
+                    TextRun value="6 GROUPS" rect=(x=237.5 y=780.0 width=55.4 height=14.0 center_x=265.2 center_y=787.0)
+                  Button name="helm.sh" state=[toggled=False] rect=(x=62.0 y=800.0 width=240.0 height=30.0 center_x=182.0 center_y=815.0)
+                    TextRun value="helm.sh" rect=(x=92.0 y=805.0 width=48.3 height=20.0 center_x=116.2 center_y=815.0)
+                  Button name="metrics.k8s.io" state=[toggled=False] rect=(x=62.0 y=830.0 width=240.0 height=30.0 center_x=182.0 center_y=845.0)
+                    TextRun value="metrics.k8s.io" rect=(x=92.0 y=835.0 width=96.6 height=20.0 center_x=140.3 center_y=845.0)
+                GenericContainer rect=<none>
+                  Button name="Notifications" state=[toggled=False] rect=(x=62.0 y=946.0 width=144.9 height=34.0 center_x=134.4 center_y=963.0)
+                    TextRun value="Notifications" rect=(x=94.0 y=953.0 width=79.4 height=20.0 center_x=133.7 center_y=963.0)
+                  Button name="Settings" state=[toggled=False] rect=(x=210.9 y=946.0 width=91.1 height=34.0 center_x=256.4 center_y=963.0)
+                    TextRun value="Settings" rect=(x=242.9 y=953.0 width=51.1 height=20.0 center_x=268.4 center_y=963.0)
+            GenericContainer rect=<none>
+              Label value="CLUSTER CARD" rect=(x=356.0 y=168.0 width=83.6 height=16.0 center_x=397.8 center_y=176.0)
+                TextRun value="CLUSTER CARD" rect=(x=356.0 y=168.0 width=82.5 height=16.0 center_x=397.2 center_y=176.0)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Button name="Switch cluster" rect=(x=356.0 y=208.0 width=268.0 height=60.0 center_x=490.0 center_y=238.0)
+                    TextRun value="kind-kind" rect=(x=418.0 y=221.0 width=69.3 height=20.0 center_x=452.7 center_y=231.0)
+                  Label value="Connected" rect=(x=356.0 y=274.0 width=60.1 height=16.0 center_x=386.1 center_y=282.0)
+                    TextRun value="Connected" rect=(x=356.0 y=274.0 width=60.1 height=16.0 center_x=386.1 center_y=282.0)
+                GenericContainer rect=<none>
+                  Button name="Switch cluster" rect=(x=356.0 y=304.0 width=268.0 height=60.0 center_x=490.0 center_y=334.0)
+                    TextRun value="dev-eu" rect=(x=418.0 y=317.0 width=50.2 height=20.0 center_x=443.1 center_y=327.0)
+                  Label value="Connecting — lamp warn" rect=(x=356.0 y=370.0 width=137.4 height=16.0 center_x=424.7 center_y=378.0)
+                    TextRun value="Connecting — lamp warn" rect=(x=356.0 y=370.0 width=137.4 height=16.0 center_x=424.7 center_y=378.0)
+                GenericContainer rect=<none>
+                  Button name="Switch cluster" rect=(x=356.0 y=400.0 width=268.0 height=60.0 center_x=490.0 center_y=430.0)
+                    TextRun value="prod-eu" rect=(x=418.0 y=413.0 width=58.3 height=20.0 center_x=447.2 center_y=423.0)
+                  Label value="Unreachable — lamp bad" rect=(x=356.0 y=466.0 width=135.8 height=16.0 center_x=423.9 center_y=474.0)
+                    TextRun value="Unreachable — lamp bad" rect=(x=356.0 y=466.0 width=135.8 height=16.0 center_x=423.9 center_y=474.0)
+                GenericContainer rect=<none>
+                  Button name="Switch cluster" rect=(x=356.0 y=496.0 width=268.0 height=60.0 center_x=490.0 center_y=526.0)
+                    TextRun value="Choose a cluster" rect=(x=418.0 y=509.0 width=121.8 height=20.0 center_x=478.9 center_y=519.0)
+                  Label value="No cluster" rect=(x=356.0 y=562.0 width=55.8 height=16.0 center_x=383.9 center_y=570.0)
+                    TextRun value="No cluster" rect=(x=356.0 y=562.0 width=55.8 height=16.0 center_x=383.9 center_y=570.0)
+            GenericContainer rect=<none>
+              Label value="KIND LIST ITEMS" rect=(x=664.0 y=168.0 width=96.3 height=16.0 center_x=712.1 center_y=176.0)
+                TextRun value="KIND LIST ITEMS" rect=(x=664.0 y=168.0 width=95.2 height=16.0 center_x=711.6 center_y=176.0)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Button name="Deployments" state=[toggled=False] rect=(x=672.0 y=216.0 width=252.0 height=34.0 center_x=798.0 center_y=233.0)
+                      TextRun value="Deployments" rect=(x=708.0 y=223.0 width=80.7 height=20.0 center_x=748.4 center_y=233.0)
+                  Label value="Rest · kind colour + count" rect=(x=664.0 y=264.0 width=137.1 height=16.0 center_x=732.5 center_y=272.0)
+                    TextRun value="Rest · kind colour + count" rect=(x=664.0 y=264.0 width=137.1 height=16.0 center_x=732.5 center_y=272.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Button name="Deployments" state=[toggled=False] rect=(x=672.0 y=302.0 width=252.0 height=34.0 center_x=798.0 center_y=319.0)
+                      TextRun value="Deployments" rect=(x=708.0 y=309.0 width=80.7 height=20.0 center_x=748.4 center_y=319.0)
+                  Label value="Hover" rect=(x=664.0 y=350.0 width=32.5 height=16.0 center_x=680.3 center_y=358.0)
+                    TextRun value="Hover" rect=(x=664.0 y=350.0 width=32.5 height=16.0 center_x=680.3 center_y=358.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Button name="Pods" state=[toggled=True] rect=(x=672.0 y=388.0 width=252.0 height=34.0 center_x=798.0 center_y=405.0)
+                      TextRun value="Pods" rect=(x=708.0 y=395.0 width=30.0 height=20.0 center_x=723.0 center_y=405.0)
+                  Label value="Selected · count in nav-accent" rect=(x=664.0 y=436.0 width=164.3 height=16.0 center_x=746.2 center_y=444.0)
+                    TextRun value="Selected · count in nav-accent" rect=(x=664.0 y=436.0 width=164.3 height=16.0 center_x=746.2 center_y=444.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Button name="Network" state=[toggled=False] rect=(x=672.0 y=474.0 width=252.0 height=30.0 center_x=798.0 center_y=489.0)
+                      TextRun value="Network" rect=(x=702.0 y=479.0 width=51.0 height=20.0 center_x=727.5 center_y=489.0)
+                    Button name="Workloads" state=[toggled=False] rect=(x=672.0 y=504.0 width=252.0 height=30.0 center_x=798.0 center_y=519.0)
+                      TextRun value="Workloads" rect=(x=702.0 y=509.0 width=61.5 height=20.0 center_x=732.8 center_y=519.0)
+                    Button name="StatefulSets" state=[toggled=False] rect=(x=672.0 y=534.0 width=252.0 height=30.0 center_x=798.0 center_y=549.0)
+                      TextRun value="StatefulSets" rect=(x=702.0 y=539.0 width=72.9 height=20.0 center_x=738.5 center_y=549.0)
+                  Label value="Group collapsed · expanded · child" rect=(x=664.0 y=578.0 width=184.3 height=16.0 center_x=756.2 center_y=586.0)
+                    TextRun value="Group collapsed · expanded · child" rect=(x=664.0 y=578.0 width=184.3 height=16.0 center_x=756.2 center_y=586.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Button name="cert-manager.io" state=[toggled=False] rect=(x=672.0 y=616.0 width=252.0 height=30.0 center_x=798.0 center_y=631.0)
+                      TextRun value="cert-manager.io" rect=(x=702.0 y=621.0 width=103.5 height=20.0 center_x=753.8 center_y=631.0)
+                  Label value="Custom resource group (API group in mono)" rect=(x=664.0 y=660.0 width=238.1 height=16.0 center_x=783.0 center_y=668.0)
+                    TextRun value="Custom resource group (API group in mono)" rect=(x=664.0 y=660.0 width=238.1 height=16.0 center_x=783.0 center_y=668.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      Button name="Notifications" state=[toggled=False] rect=(x=672.0 y=698.0 width=156.4 height=34.0 center_x=750.2 center_y=715.0)
+                        TextRun value="Notifications" rect=(x=704.0 y=705.0 width=79.4 height=20.0 center_x=743.7 center_y=715.0)
+                      Button name="Settings" state=[toggled=True] rect=(x=832.4 y=698.0 width=91.6 height=34.0 center_x=878.2 center_y=715.0)
+                        TextRun value="Settings" rect=(x=864.4 y=705.0 width=51.6 height=20.0 center_x=890.2 center_y=715.0)
+                  Label value="Footer · Settings blade open" rect=(x=664.0 y=746.0 width=152.2 height=16.0 center_x=740.1 center_y=754.0)
+                    TextRun value="Footer · Settings blade open" rect=(x=664.0 y=746.0 width=152.2 height=16.0 center_x=740.1 center_y=754.0)
+            GenericContainer rect=<none>
+              Label value="RULES" rect=(x=972.0 y=168.0 width=35.6 height=16.0 center_x=989.8 center_y=176.0)
+                TextRun value="RULES" rect=(x=972.0 y=168.0 width=34.5 height=16.0 center_x=989.3 center_y=176.0)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Label value="Floating: 12 px inset, radius 20, nav-surface on surface-canvas." rect=(x=988.0 y=194.0 width=284.0 height=40.0 center_x=1130.0 center_y=214.0)
+                GenericContainer rect=<none>
+                  Label value="Order: cluster card · kind filter (\u{200b}) · Pinned · Kubernetes groups · Custom resources by API group · footer." rect=(x=988.0 y=238.0 width=284.0 height=60.0 center_x=1130.0 center_y=268.0)
+                GenericContainer rect=<none>
+                  Label value="Counts are live and in mono; a kind with problems may show its count in danger-text." rect=(x=988.0 y=302.0 width=284.0 height=40.0 center_x=1130.0 center_y=322.0)
+                GenericContainer rect=<none>
+                  Label value="Pinned kinds are user-chosen (drag from the list); the first four kinds are pinned by default." rect=(x=988.0 y=346.0 width=284.0 height=40.0 center_x=1130.0 center_y=366.0)
+                GenericContainer rect=<none>
+                  Label value="Selection is item-selected with the count in nav-accent — never a solid accent fill." rect=(x=988.0 y=390.0 width=284.0 height=40.0 center_x=1130.0 center_y=410.0)

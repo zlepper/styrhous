@@ -98,6 +98,14 @@ fn yaml_editor_modified_snapshot() {
 }
 
 #[test]
+fn yaml_editor_saving_snapshot() {
+    let mut editor = editor("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: settings");
+    editor.edited_yaml.push_str("\ndata:\n  mode: development");
+    editor.saving = true;
+    snapshot_editor(editor, "yaml_editor/yaml_editor_saving_snapshot/saving");
+}
+
+#[test]
 fn command_enter_does_not_apply_yaml_changes() {
     let mut editor = editor("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: settings");
     editor.edited_yaml.push_str("\ndata:\n  mode: development");
@@ -279,4 +287,35 @@ fn yaml_editor_discard_confirmation_snapshot() {
         editor,
         "yaml_editor/yaml_editor_discard_confirmation_snapshot/discard_confirmation",
     );
+}
+
+#[test]
+fn yaml_apply_is_disabled_with_a_reason_until_the_yaml_changes() {
+    use egui_kittest::kittest::NodeT as _;
+    let mut harness = editor_harness(editor("kind: ConfigMap"));
+    assert!(
+        harness
+            .get_by_label("Apply changes")
+            .accesskit_node()
+            .is_disabled()
+    );
+    harness.get_by_label("Apply changes").hover();
+    harness.run();
+    assert!(harness.query_by_label("No changes to apply").is_some());
+
+    harness.state_mut().editor.edited_yaml = "kind: Secret".into();
+    harness.run();
+    assert!(
+        !harness
+            .get_by_label("Apply changes")
+            .accesskit_node()
+            .is_disabled(),
+        "an edit enables Apply"
+    );
+
+    harness.state_mut().editor.saving = true;
+    harness.run();
+    harness.get_by_label("Apply changes").hover();
+    harness.run();
+    assert!(harness.query_by_label("Applying the changes…").is_some());
 }

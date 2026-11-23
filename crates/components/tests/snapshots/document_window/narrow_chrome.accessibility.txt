@@ -1,0 +1,24 @@
+viewport: width=480.0 height=160.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Button name="Apply changes" rect=(x=338.4 y=19.5 width=117.6 height=32.0 center_x=397.2 center_y=35.5)
+        GenericContainer rect=<none>
+          Label value="kube-controller-manager-kind-control-plane" rect=(x=64.0 y=17.5 width=163.4 height=20.0 center_x=145.7 center_y=27.5)
+            TextRun value="kube-controller-manage…" rect=(x=64.0 y=17.5 width=163.4 height=20.0 center_x=145.7 center_y=27.5)
+          Label value="Pod logs · container kube-controller-manager · kube-system" rect=(x=64.0 y=37.5 width=160.3 height=16.0 center_x=144.2 center_y=45.5)
+            TextRun value="Pod logs · container kube-co…" rect=(x=64.0 y=37.5 width=160.3 height=16.0 center_x=144.2 center_y=45.5)
+          Label value="Following" rect=(x=239.4 y=24.5 width=84.6 height=22.0 center_x=281.7 center_y=35.5)
+            TextRun value="Following" rect=(x=262.4 y=27.5 width=52.6 height=16.0 center_x=288.7 center_y=35.5)
+        GenericContainer rect=<none>
+          Button name="Follow" rect=(x=424.0 y=71.5 width=32.0 height=32.0 center_x=440.0 center_y=87.5)
+        GenericContainer rect=<none>
+          Button name="View options" rect=(x=24.0 y=71.5 width=129.8 height=32.0 center_x=88.9 center_y=87.5)
+        GenericContainer rect=<none>
+          Label value="UTC" rect=(x=432.3 y=130.5 width=23.7 height=16.0 center_x=444.2 center_y=138.5)
+            TextRun value="UTC" rect=(x=432.3 y=130.5 width=23.7 height=16.0 center_x=444.2 center_y=138.5)
+        GenericContainer rect=<none>
+          Label value="1,284 lines" rect=(x=24.0 y=130.5 width=59.8 height=16.0 center_x=53.9 center_y=138.5)
+            TextRun value="1,284 lines" rect=(x=24.0 y=130.5 width=59.8 height=16.0 center_x=53.9 center_y=138.5)

@@ -8,9 +8,13 @@ use components::test_support::{HarnessSnapshotOptions, UiHarnessSnapshot};
 use egui_kittest::{Harness, kittest::Queryable};
 use k8s_openapi::serde_json::json;
 
-const COMPLETION_POPUP_MAX_WIDTH: f32 = COMPLETION_LIST_MAX_WIDTH + 2.0 * space::S12;
-const COMPLETION_POPUP_MAX_HEIGHT: f32 =
-    COMPLETION_POPUP_CHROME_HEIGHT + COMPLETION_LIST_MAX_HEIGHT;
+/// The largest completion popover.
+fn completion_popup_max_size() -> egui::Vec2 {
+    egui::vec2(
+        size::COMPLETION_WIDTH,
+        Completion::height(usize::MAX / 2, COMPLETION_LIST_MAX_HEIGHT),
+    )
+}
 
 mod basic;
 mod completion_basics;

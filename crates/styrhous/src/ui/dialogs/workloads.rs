@@ -15,15 +15,17 @@ pub(crate) fn show_deployment_restart_confirmation(
         return;
     };
     let cluster_key = cluster.cluster_key;
-    let message = format!(
-        "This updates the pod template and starts a rolling replacement of the pods for {} in the {} namespace.",
-        pending.resource_name, pending.namespace
-    );
+    let message = Prose::new()
+        .plain("Starts a rolling replacement of the pods for ")
+        .strong(pending.resource_name.as_str())
+        .plain(" in ")
+        .strong(pending.namespace.as_str())
+        .plain(".");
     let action = ConfirmationDialog {
         id: egui::Id::new("restart-deployment-rollout-confirmation"),
-        eyebrow: "DEPLOYMENT",
+        icon: components::icons::Icon::ArrowPath,
         title: "Restart rollout?",
-        message: &message,
+        message,
         unavailable_message: None,
         cancel_label: "Cancel",
         confirm_label: "Restart rollout",
@@ -65,15 +67,17 @@ pub(crate) fn show_cron_job_run_confirmation(
         return;
     };
     let cluster_key = cluster.cluster_key;
-    let message = format!(
-        "This creates and starts one Job from the current template for {} in the {} namespace.",
-        pending.resource_name, pending.namespace
-    );
+    let message = Prose::new()
+        .plain("Starts one Job from the current template of ")
+        .strong(pending.resource_name.as_str())
+        .plain(" in ")
+        .strong(pending.namespace.as_str())
+        .plain(".");
     let action = ConfirmationDialog {
         id: egui::Id::new("run-cron-job-confirmation"),
-        eyebrow: "CRONJOB",
+        icon: components::icons::Icon::Play,
         title: "Run CronJob now?",
-        message: &message,
+        message,
         unavailable_message: None,
         cancel_label: "Cancel",
         confirm_label: "Run now",

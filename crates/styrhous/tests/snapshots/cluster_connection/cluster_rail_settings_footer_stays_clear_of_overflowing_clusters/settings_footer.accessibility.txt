@@ -40,18 +40,14 @@ Window state=[focused] rect=<none>
             Image rect=(x=20.0 y=976.0 width=28.0 height=28.0 center_x=34.0 center_y=990.0)
     GenericContainer rect=<none>
       GenericContainer rect=<none>
+        Label value="cluster-1" rect=(x=82.0 y=22.0 width=80.7 height=28.0 center_x=122.3 center_y=36.0)
+          TextRun value="cluster-1" rect=(x=82.0 y=22.0 width=80.7 height=28.0 center_x=122.3 center_y=36.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
-            GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="cluster-1" rect=(x=92.0 y=29.0 width=80.7 height=24.0 center_x=132.3 center_y=41.0)
-                  TextRun value="cluster-1" rect=(x=92.0 y=29.0 width=80.7 height=24.0 center_x=132.3 center_y=41.0)
     GenericContainer rect=<none>
       GenericContainer rect=<none>
-        GenericContainer rect=<none>
-          GenericContainer rect=<none>
-            GenericContainer rect=<none>
-              Label value="Choose a cluster" rect=(x=883.5 y=490.0 width=128.9 height=19.0 center_x=948.0 center_y=499.5)
-                TextRun value="Choose a cluster" rect=(x=884.0 y=490.0 width=128.9 height=19.0 center_x=948.5 center_y=499.5)
-              Label value="Select a Kubernetes context from the cluster rail to begin exploring." rect=(x=737.1 y=520.0 width=421.9 height=17.0 center_x=948.0 center_y=528.5)
-                TextRun value="Select a Kubernetes context from the cluster rail to begin exploring." rect=(x=737.0 y=520.0 width=421.9 height=17.0 center_x=948.0 center_y=528.5)
+        Label value="Choose a cluster" rect=(x=898.7 y=508.0 width=98.6 height=20.0 center_x=948.0 center_y=518.0)
+          TextRun value="Choose a cluster" rect=(x=898.7 y=508.0 width=98.6 height=20.0 center_x=948.0 center_y=518.0)
+        Label value="Select a Kubernetes context from the cluster rail to begin exploring." rect=(x=795.0 y=532.0 width=306.7 height=32.0 center_x=948.3 center_y=548.0)
+          TextRun value="Select a Kubernetes context from the cluster rail to begin " rect=(x=795.0 y=532.0 width=306.7 height=16.0 center_x=948.3 center_y=540.0)
+          TextRun value="exploring." rect=(x=922.0 y=548.0 width=51.5 height=16.0 center_x=947.8 center_y=556.0)

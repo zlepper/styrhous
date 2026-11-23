@@ -1,4 +1,5 @@
 use super::*;
+use components::tooltip::TooltipExt;
 
 pub(super) fn show_detail(
     ui: &mut egui::Ui,
@@ -155,7 +156,7 @@ pub(super) fn show_config_map_data(
             key,
             None,
             |ui| {
-                if TailwindButton::secondary(format!("Copy {key}"))
+                if Button::secondary(format!("Copy {key}"))
                     .size(ButtonSize::Sm)
                     .show(ui)
                     .clicked()
@@ -208,7 +209,7 @@ pub(super) fn show_secret_data(
             Some(value.byte_len),
             |ui| {
                 if let Some(copy_value) = copy_value.as_ref()
-                    && TailwindButton::secondary(format!("Copy {key}"))
+                    && Button::secondary(format!("Copy {key}"))
                         .size(ButtonSize::Sm)
                         .show(ui)
                         .clicked()
@@ -216,7 +217,7 @@ pub(super) fn show_secret_data(
                     ui.ctx().copy_text(copy_value.clone());
                 }
                 if value.text.is_some()
-                    && TailwindButton::secondary(if revealed { "Hide" } else { "Reveal" })
+                    && Button::secondary(if revealed { "Hide" } else { "Reveal" })
                         .size(ButtonSize::Sm)
                         .show(ui)
                         .clicked()
@@ -243,7 +244,7 @@ pub(super) fn show_secret_data(
 }
 
 pub(super) fn detail_summary_card(ui: &mut egui::Ui, add_content: impl FnOnce(&mut egui::Ui)) {
-    WorkspaceCard::new().margin(18).show(ui, add_content);
+    Card::new().padding(18).show(ui, add_content);
 }
 
 pub(super) fn detail_item_card(
@@ -251,20 +252,18 @@ pub(super) fn detail_item_card(
     add_header: impl FnOnce(&mut egui::Ui),
     add_content: impl FnOnce(&mut egui::Ui),
 ) {
-    WorkspaceCard::new()
-        .margin(CARD_CONTENT_PADDING)
-        .show(ui, |ui| {
-            add_header(ui);
-            ui.add_space(8.0);
-            ui.separator();
-            ui.add_space(8.0);
-            add_content(ui);
-        });
+    Card::new().padding(CARD_CONTENT_PADDING).show(ui, |ui| {
+        add_header(ui);
+        ui.add_space(8.0);
+        ui.separator();
+        ui.add_space(8.0);
+        add_content(ui);
+    });
 }
 
 pub(super) fn detail_message_card(ui: &mut egui::Ui, add_content: impl FnOnce(&mut egui::Ui)) {
-    WorkspaceCard::new()
-        .margin(CARD_CONTENT_PADDING)
+    Card::new()
+        .padding(CARD_CONTENT_PADDING)
         .show(ui, add_content);
 }
 
@@ -314,15 +313,15 @@ pub(super) fn data_value_editor(
         .draft_values
         .get_mut(key)
         .expect("typed data detail and editor keys remain in sync");
-    let response = TailwindTextArea::new(value)
+    let response = TextArea::new(value)
         .id_salt(("resource-data-value", key))
         .accessibility_label(format!("Value for {key}"))
         .monospace()
-        .desired_rows(3)
+        .min_rows(3)
         .enabled(!immutable && !editor.saving)
         .show(ui);
-    if response.hovered() && immutable {
-        response.on_hover_text("This resource's data is immutable.");
+    if immutable {
+        response.disabled_tooltip("This resource's data is immutable.");
     }
 }
 
@@ -390,16 +389,14 @@ pub(super) fn data_save_controls(
     let save_clicked = ui
         .horizontal(|ui| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.add_enabled_ui(!editor.saving && !updated_values.is_empty(), |ui| {
-                    TailwindButton::primary(if editor.saving {
-                        "Saving…"
-                    } else {
-                        "Save data"
-                    })
-                    .size(ButtonSize::Sm)
-                    .show(ui)
+                Button::primary(if editor.saving {
+                    "Saving…"
+                } else {
+                    "Save data"
                 })
-                .inner
+                .size(ButtonSize::Sm)
+                .enabled(!editor.saving && !updated_values.is_empty())
+                .show(ui)
             })
             .inner
         })
@@ -436,14 +433,10 @@ pub(super) fn show_data_conflict_dialog(
             ui.label("This resource changed on the cluster while you have unsaved data edits.");
             ui.add_space(12.0);
             ui.horizontal(|ui| {
-                if ui
-                    .button("Use cluster version")
-                    .with_pointing_hand()
-                    .clicked()
-                {
+                if Button::secondary("Use cluster version").show(ui).clicked() {
                     use_external = true;
                 }
-                if ui.button("Keep my edits").with_pointing_hand().clicked() {
+                if Button::secondary("Keep my edits").show(ui).clicked() {
                     keep_local = true;
                 }
             });

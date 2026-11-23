@@ -162,6 +162,8 @@ pub(crate) struct ResourceColumn {
     pub(crate) label: String,
     pub(crate) initial_width: f32,
     pub(crate) sortable: bool,
+    /// Numbers (counts, quantities, ages): right-aligned (S08).
+    pub(crate) numeric: bool,
 }
 
 /// The local, extensible definition of a resource's data columns.
@@ -176,6 +178,15 @@ pub(crate) fn column(id: &str, label: &str, initial_width: f32) -> ResourceColum
         label: label.to_owned(),
         initial_width,
         sortable: false,
+        numeric: false,
+    }
+}
+
+impl ResourceColumn {
+    /// Mark the column as holding numbers, right-aligned.
+    pub(crate) fn numeric(mut self) -> Self {
+        self.numeric = true;
+        self
     }
 }
 
@@ -190,6 +201,7 @@ pub(crate) fn custom_table_definition(
                 label: column.label.clone(),
                 initial_width: 120.0,
                 sortable: false,
+                numeric: matches!(column.type_.as_str(), "integer" | "number"),
             })
             .collect(),
     }
@@ -222,6 +234,30 @@ mod tests {
 
         assert_eq!(definition.columns[0].id, "crd-0");
         assert_eq!(definition.columns[0].label, "State");
+    }
+
+    #[test]
+    fn custom_integer_and_number_columns_hold_numbers() {
+        let column = |id: &str, type_: &str| CustomResourceColumn {
+            id: id.into(),
+            label: id.into(),
+            json_path: format!(".status.{id}"),
+            type_: type_.into(),
+            format: None,
+        };
+        let definition = custom_table_definition(&[
+            column("replicas", "integer"),
+            column("ratio", "number"),
+            column("phase", "string"),
+        ]);
+        assert_eq!(
+            definition
+                .columns
+                .iter()
+                .map(|column| column.numeric)
+                .collect::<Vec<_>>(),
+            [true, true, false]
+        );
     }
 
     #[test]

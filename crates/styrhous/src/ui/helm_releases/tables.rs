@@ -7,15 +7,14 @@ use super::{ManifestNavigation, ManifestResource, manifest_resource_namespace};
 use crate::api_resource::ApiResource;
 use crate::helm_release::HelmRelease;
 use crate::resource_detail::ResourceOwner;
+use crate::ui::preference_table::{ColumnControls, PreferenceTable};
 use components::design::space;
 use components::design::theme::{ThemeExt, Tone};
-use components::{
-    ButtonSize, DetailCell, DetailRow, InspectorDetails, MoreButton, TableRowBuilder,
-    TailwindButton, TailwindTable, WorkspaceCard,
-};
+use components::{Button, ButtonSize, Card, TableRowBuilder};
 use std::cell::RefCell;
 
-const ROLLBACK_BUTTON_SIZE: ButtonSize = ButtonSize::Xs;
+/// The height of the release inspector's tables.
+const HELM_TABLE_HEIGHT: f32 = 230.0;
 
 /// Whether the selected revision can be rolled back to from the history header.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,7 +48,7 @@ pub(super) fn show_revision_history(
     // Reserve the button's height whether or not it is shown, so the table does
     // not jump when another revision is selected, and centre the row on it.
     ui.allocate_ui_with_layout(
-        egui::vec2(ui.available_width(), ROLLBACK_BUTTON_SIZE.height()),
+        egui::vec2(ui.available_width(), ButtonSize::Sm.height()),
         egui::Layout::left_to_right(egui::Align::Center),
         |ui| {
             ui.heading("Revision history");
@@ -65,13 +64,10 @@ pub(super) fn show_revision_history(
                     } else {
                         format!("Roll back to revision {selected_revision}")
                     };
-                    rollback_requested = ui
-                        .add_enabled_ui(!in_progress, |ui| {
-                            TailwindButton::secondary(label)
-                                .size(ROLLBACK_BUTTON_SIZE)
-                                .show(ui)
-                        })
-                        .inner
+                    rollback_requested = Button::secondary(label)
+                        .size(ButtonSize::Sm)
+                        .enabled(!in_progress)
+                        .show(ui)
                         .clicked();
                 });
             }
@@ -83,64 +79,28 @@ pub(super) fn show_revision_history(
         TableColumnDefinition::sortable("deployed", "Deployed", 195.0),
         TableColumnDefinition::sortable("description", "Description", 260.0),
     ];
-    let table_key = helm_detail_table_key("helm-release-revisions");
-    let visible_columns = table_preferences.resolved_columns(&table_key, &column_definitions);
-    let sort_state = table_preferences
-        .sort(&table_key, &column_definitions)
-        .map(|(column_id, direction)| components::SortState::new(column_id, direction));
-    let mut sorted_releases = releases.to_vec();
-    if let Some(sort) = &sort_state {
-        sorted_releases.sort_by(|left, right| {
-            compare_revision_column(left, right, &sort.column_id, sort.direction)
-        });
-    }
-    let mut table = TailwindTable::new(("helm-release-revisions", release_id)).roomy();
-    for column in &visible_columns {
-        table = table.column(
-            column.definition.id.clone(),
-            column.definition.label.clone(),
-            |builder| {
-                let builder = builder.initial_width(column.width);
-                if column.definition.sortable {
-                    builder.sortable()
-                } else {
-                    builder
-                }
-            },
-        );
-    }
+    let layout = PreferenceTable::new(
+        table_preferences,
+        helm_detail_table_key("helm-release-revisions"),
+        column_definitions,
+    );
+    let sorted_releases = layout.sorted(releases, compare_revision_column);
+    let table = layout.table(("helm-release-revisions", release_id));
     let selected = RefCell::new(None);
-    let table_preferences = RefCell::new(table_preferences);
     ui.allocate_ui_with_layout(
-        egui::vec2(ui.available_width(), 230.0),
+        egui::vec2(ui.available_width(), HELM_TABLE_HEIGHT),
         egui::Layout::top_down(egui::Align::Min),
         |table_ui| {
-            table.show_configurable_with_row_response(
+            layout.show(
                 table_ui,
+                table,
                 &sorted_releases,
-                sort_state.as_ref(),
-                |header, id, _label, sortable| {
-                    MoreButton::show_context_menu(header, |menu| {
-                        super::super::resource_table_settings::show_configurable_table_header(
-                            menu,
-                            sortable,
-                            id,
-                            &table_key,
-                            &column_definitions,
-                            &table_preferences,
-                            column_settings,
-                        );
-                    });
+                ColumnControls {
+                    preferences: table_preferences,
+                    metadata_key_suggestions: None,
+                    column_settings,
                 },
-                |id, width| {
-                    table_preferences.borrow_mut().set_width(
-                        &table_key,
-                        &column_definitions,
-                        id,
-                        width,
-                    );
-                },
-                |ui, release, column| match visible_columns[column].definition.id.as_str() {
+                |ui, release, column_id| match column_id {
                     "revision" => {
                         let label = if release.revision == selected_revision {
                             format!("{} (selected)", release.revision)
@@ -165,21 +125,31 @@ pub(super) fn show_revision_history(
                             selected.replace(Some(release.revision));
                         }
                     }
-                    "status" => show_status_cell(ui, &release.status),
-                    "deployed" => {
-                        TableRowBuilder::text(ui, display_or_dash(&release.last_deployed), false)
+                    "status" => {
+                        TableRowBuilder::problem_status(
+                            ui,
+                            &release.status,
+                            helm_status_tone(&release.status),
+                        );
                     }
-                    "description" => {
-                        TableRowBuilder::text(ui, display_or_dash(&release.description), false)
-                    }
+                    "deployed" => TableRowBuilder::text_or_missing(
+                        ui,
+                        Some(&release.last_deployed),
+                        "Helm recorded no deployment time",
+                    ),
+                    "description" => TableRowBuilder::text_or_missing(
+                        ui,
+                        Some(&release.description),
+                        "Helm recorded no description",
+                    ),
                     _ => unreachable!("revision table columns are defined locally"),
                 },
-                |response, release, _column| {
+                |response, release, _| {
                     if response.clicked() {
                         selected.replace(Some(release.revision));
                     }
                 },
-            )
+            );
         },
     );
     RevisionHistoryResponse {
@@ -252,82 +222,42 @@ pub(super) fn show_manifest_resources(
         TableColumnDefinition::sortable("namespace", "Namespace", 170.0),
         TableColumnDefinition::sortable("api-version", "API version", 130.0),
     ];
-    let table_key = helm_detail_table_key("helm-manifest-resources");
     let table_preferences = context.table_preferences();
-    let visible_columns = table_preferences.resolved_columns(&table_key, &column_definitions);
-    let sort_state = table_preferences
-        .sort(&table_key, &column_definitions)
-        .map(|(column_id, direction)| components::SortState::new(column_id, direction));
-    let mut sorted_rows = rows;
-    if let Some(sort) = &sort_state {
-        sorted_rows.sort_by(|left, right| {
-            compare_manifest_resource_column(left, right, &sort.column_id, sort.direction)
-        });
-    }
-    let mut table = TailwindTable::new(("helm-manifest-resources", release_id)).roomy();
-    for column in &visible_columns {
-        table = table.column(
-            column.definition.id.clone(),
-            column.definition.label.clone(),
-            |builder| {
-                let builder = builder.initial_width(column.width);
-                if column.definition.sortable {
-                    builder.sortable()
-                } else {
-                    builder
-                }
-            },
-        );
-    }
+    let layout = PreferenceTable::new(
+        table_preferences,
+        helm_detail_table_key("helm-manifest-resources"),
+        column_definitions,
+    );
+    let sorted_rows = layout.sorted(&rows, compare_manifest_resource_column);
+    let table = layout.table(("helm-manifest-resources", release_id));
     let selected = RefCell::new(None);
-    let table_preferences = RefCell::new(table_preferences);
     ui.allocate_ui_with_layout(
-        egui::vec2(ui.available_width(), 230.0),
+        egui::vec2(ui.available_width(), HELM_TABLE_HEIGHT),
         egui::Layout::top_down(egui::Align::Min),
         |table_ui| {
-            table.show_configurable_with_row_response(
+            layout.show(
                 table_ui,
+                table,
                 &sorted_rows,
-                sort_state.as_ref(),
-                |header, id, _label, sortable| {
-                    MoreButton::show_context_menu(header, |menu| {
-                        super::super::resource_table_settings::show_configurable_table_header(
-                            menu,
-                            sortable,
-                            id,
-                            &table_key,
-                            &column_definitions,
-                            &table_preferences,
-                            column_settings,
-                        );
-                    });
+                ColumnControls {
+                    preferences: table_preferences,
+                    metadata_key_suggestions: None,
+                    column_settings,
                 },
-                |id, width| {
-                    table_preferences.borrow_mut().set_width(
-                        &table_key,
-                        &column_definitions,
-                        id,
-                        width,
-                    );
-                },
-                |ui, row, column| match visible_columns[column].definition.id.as_str() {
+                |ui, row, column_id| match column_id {
                     "kind" => TableRowBuilder::text(ui, &row.resource.kind, true),
-                    "name" => {
-                        if row.api_resource.is_some()
-                            && row.uid.is_some()
-                            && TableRowBuilder::clickable_text(
-                                ui,
-                                &row.resource.name,
-                                theme.accent.text,
-                                format!("Open details for {}", row.resource.name),
-                            )
-                            .clicked()
-                        {
-                            selected.replace(Some(row));
-                        } else {
-                            TableRowBuilder::text(ui, &row.resource.name, false);
+                    "name" if row.is_navigable() => {
+                        let response = TableRowBuilder::clickable_text(
+                            ui,
+                            &row.resource.name,
+                            theme.accent.text,
+                            format!("Open details for {}", row.resource.name),
+                        );
+                        if response.clicked() {
+                            selected.replace(Some(*row));
                         }
                     }
+                    "name" => TableRowBuilder::text(ui, &row.resource.name, false),
                     "namespace" => TableRowBuilder::text(
                         ui,
                         row.namespace.as_deref().unwrap_or("Cluster-wide"),
@@ -336,12 +266,12 @@ pub(super) fn show_manifest_resources(
                     "api-version" => TableRowBuilder::text(ui, &row.resource.api_version, false),
                     _ => unreachable!("manifest inventory columns are defined locally"),
                 },
-                |response, row, _column| {
-                    if response.clicked() && row.api_resource.is_some() && row.uid.is_some() {
-                        selected.replace(Some(row));
+                |response, row, _| {
+                    if response.clicked() && row.is_navigable() {
+                        selected.replace(Some(*row));
                     }
                 },
-            )
+            );
         },
     );
     if let Some(row) = selected.into_inner()
@@ -362,25 +292,25 @@ pub(super) fn show_manifest_resources(
 
 pub(super) fn show_values_disclosure(ui: &mut egui::Ui, values: &str) {
     let theme = ui.tokens();
-    super::super::resource_detail::disclosure_card(
-        ui,
+    // Values may be secret: open only for this session, never on restart.
+    components::Disclosure::new(
         "helm-release-values-open",
         "Values (sensitive values may be present)",
-        false,
-        |ui| {
-            ui.label(
-                egui::RichText::new("Treat this content like a Kubernetes Secret.")
-                    .color(theme.text.secondary),
-            );
-            ui.add_space(space::S8);
-            show_read_only_code(ui, values, 8, "Helm release values");
-        },
-    );
+    )
+    .session_only()
+    .show(ui, |ui| {
+        ui.label(
+            egui::RichText::new("Treat this content like a Kubernetes Secret.")
+                .color(theme.text.secondary),
+        );
+        ui.add_space(space::S8);
+        show_read_only_code(ui, values, 8, "Helm release values");
+    });
 }
 
 pub(super) fn show_release_notes(ui: &mut egui::Ui, notes: &str) {
     let theme = ui.tokens();
-    WorkspaceCard::new().show(ui, |ui| {
+    Card::new().show(ui, |ui| {
         ui.heading("Release notes");
         if notes.is_empty() {
             ui.label(
@@ -415,47 +345,14 @@ fn show_read_only_code(ui: &mut egui::Ui, content: &str, desired_rows: usize, la
 }
 
 pub(super) fn show_storage_metadata(ui: &mut egui::Ui, release: &HelmRelease) {
-    let theme = ui.tokens();
     if release.storage_labels.is_empty() && release.storage_annotations.is_empty() {
         return;
     }
-    WorkspaceCard::new().show(ui, |ui| {
+    Card::new().show(ui, |ui| {
         ui.heading("Storage metadata");
-        if !release.storage_labels.is_empty() {
-            ui.label(
-                egui::RichText::new("Labels")
-                    .strong()
-                    .color(theme.text.primary),
-            );
-            InspectorDetails::show_properties(
-                ui,
-                &[DetailRow::new(release.storage_labels.iter().map(
-                    |(key, value)| {
-                        DetailCell::new(key.as_str(), value.as_str())
-                            .copyable_as(format!("{key}={value}"))
-                    },
-                ))],
-            );
-        }
-        if !release.storage_annotations.is_empty() {
-            if !release.storage_labels.is_empty() {
-                ui.add_space(space::S8);
-            }
-            ui.label(
-                egui::RichText::new("Annotations")
-                    .strong()
-                    .color(theme.text.primary),
-            );
-            InspectorDetails::show_properties(
-                ui,
-                &[DetailRow::new(release.storage_annotations.iter().map(
-                    |(key, value)| {
-                        DetailCell::new(key.as_str(), value.as_str())
-                            .copyable_as(format!("{key}={value}"))
-                    },
-                ))],
-            );
-        }
+        ui.spacing_mut().item_spacing.y = space::S12;
+        crate::ui::widgets::key_value_chips(ui, "Labels", &release.storage_labels);
+        crate::ui::widgets::key_value_chips(ui, "Annotations", &release.storage_annotations);
     });
 }
 
@@ -515,7 +412,7 @@ fn apply_sort_direction(
     }
 }
 
-pub(super) fn helm_status_tone(status: &str) -> Tone {
+pub(in crate::ui) fn helm_status_tone(status: &str) -> Tone {
     match status {
         "deployed" => Tone::Success,
         "pending-install" | "pending-upgrade" | "pending-rollback" | "uninstalling" => {
@@ -527,15 +424,5 @@ pub(super) fn helm_status_tone(status: &str) -> Tone {
 }
 
 pub(super) fn display_or_dash(value: &str) -> &str {
-    if value.is_empty() { "-" } else { value }
-}
-
-fn show_status_cell(ui: &mut egui::Ui, status: &str) {
-    let theme = ui.tokens();
-    let color = theme.tone(helm_status_tone(status)).fill;
-    ui.horizontal(|ui| {
-        let (marker, _) = ui.allocate_exact_size(egui::vec2(12.0, 16.0), egui::Sense::hover());
-        ui.painter().circle_filled(marker.center(), 4.0, color);
-        TableRowBuilder::text(ui, status, false);
-    });
+    if value.is_empty() { "—" } else { value }
 }

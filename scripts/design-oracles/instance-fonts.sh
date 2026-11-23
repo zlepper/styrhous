@@ -4,6 +4,8 @@
 #
 # egui cannot apply variable-font axes, so the variable sources are instanced with fontTools:
 # - Figtree at every weight the boards request from Google Fonts.
+#   Each weight also gets a "Figtree Tabular" copy whose digits are the `tnum` forms
+#   (tabular-figures.py), for the boards' `font-variant-numeric: tabular-nums` text.
 # - Bricolage Grotesque at each (opsz, wght) pair the boards render. Chrome applies
 #   `font-optical-sizing: auto`, i.e. opsz = font-size in CSS px, so every display size needs its
 #   own instance. Re-run `npm run audit-fonts` after design changes and update BRICOLAGE_BOLD_OPSZ.
@@ -72,6 +74,8 @@ done
 for entry in "${FIGTREE_WEIGHTS[@]}"; do
   instance "$src/figtree/Figtree[wght].ttf" "$out/figtree/Figtree-${entry%%:*}.ttf" \
     "wght=${entry##*:}" --update-name-table
+  python3 -I "$script_dir/tabular-figures.py" "$out/figtree/Figtree-${entry%%:*}.ttf" \
+    "$out/figtree/FigtreeTabular-${entry%%:*}.ttf"
 done
 
 for opsz in "${BRICOLAGE_BOLD_OPSZ[@]}"; do

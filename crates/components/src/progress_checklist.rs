@@ -3,12 +3,13 @@
 use egui::{Color32, Response, Sense, Stroke, Ui, Vec2};
 
 use crate::design::theme::{Theme, ThemeExt};
-use crate::design::{space, type_scale};
+use crate::design::{size, space, type_scale};
+use crate::icons::Icon;
 
 /// The default column width, enough for a step label and its duration.
 const DEFAULT_WIDTH: f32 = 320.0;
 const ROW_HEIGHT: f32 = space::S32;
-const ICON_SIZE: f32 = space::S16;
+const ICON_SIZE: f32 = size::ICON;
 const ICON_STROKE_WIDTH: f32 = 1.5;
 const PENDING_DOT_RADIUS: f32 = 3.0;
 const TITLE_GAP: f32 = space::S12;
@@ -123,13 +124,10 @@ fn show_step(ui: &mut Ui, step: &ChecklistStep, width: f32) -> Response {
             );
         }
         ChecklistStepState::InProgress => {
-            egui::Spinner::new()
-                .size(ICON_SIZE)
-                .color(tokens.accent.fill)
-                .paint_at(ui, icon_rect);
+            crate::Spinner::new().paint(ui, icon_rect);
         }
-        ChecklistStepState::Done => paint_done(painter, icon_rect, tokens.success.fill),
-        ChecklistStepState::Failed => paint_failed(painter, icon_rect, tokens.danger.fill),
+        ChecklistStepState::Done => Icon::CheckCircle.paint(ui, icon_rect, tokens.success.fill),
+        ChecklistStepState::Failed => Icon::XCircle.paint(ui, icon_rect, tokens.danger.fill),
     }
 
     let text_color = step_text_color(&tokens, step.state);
@@ -165,35 +163,4 @@ fn step_text_color(theme: &Theme, state: ChecklistStepState) -> Color32 {
         ChecklistStepState::Done => theme.text.secondary,
         ChecklistStepState::Failed => theme.danger.text,
     }
-}
-
-fn paint_done(painter: &egui::Painter, rect: egui::Rect, color: Color32) {
-    paint_status_circle(painter, rect, color);
-    crate::icons::paint_check_mark(
-        painter,
-        rect.center(),
-        ICON_SIZE * 0.5,
-        Stroke::new(ICON_STROKE_WIDTH, color),
-    );
-}
-
-fn paint_failed(painter: &egui::Painter, rect: egui::Rect, color: Color32) {
-    paint_status_circle(painter, rect, color);
-    let size = ICON_SIZE * 0.2;
-    let center = rect.center();
-    let stroke = Stroke::new(ICON_STROKE_WIDTH, color);
-    for direction in [egui::vec2(1.0, 1.0), egui::vec2(1.0, -1.0)] {
-        painter.line_segment(
-            [center - direction * size, center + direction * size],
-            stroke,
-        );
-    }
-}
-
-fn paint_status_circle(painter: &egui::Painter, rect: egui::Rect, color: Color32) {
-    painter.circle_stroke(
-        rect.center(),
-        (ICON_SIZE - ICON_STROKE_WIDTH) / 2.0,
-        Stroke::new(ICON_STROKE_WIDTH, color),
-    );
 }

@@ -88,11 +88,6 @@ impl MinimalResource {
     pub(crate) fn can_force_delete(&self) -> bool {
         self.is_deleting() && !self.finalizers().is_empty()
     }
-
-    /// Calculate age from creation_timestamp as human-readable string.
-    pub fn age(&self) -> String {
-        format_age(self.creation_timestamp)
-    }
 }
 
 /// Projects metadata plus resource-specific table cells into the worker-to-UI
@@ -208,7 +203,7 @@ mod tests {
             cells: BTreeMap::new(),
             log_containers: Vec::new(),
         };
-        assert_eq!(resource.age(), "2h");
+        assert_eq!(format_age(resource.creation_timestamp), "2h");
 
         // 3 days ago
         let resource = MinimalResource {
@@ -222,7 +217,7 @@ mod tests {
             cells: BTreeMap::new(),
             log_containers: Vec::new(),
         };
-        assert_eq!(resource.age(), "3d");
+        assert_eq!(format_age(resource.creation_timestamp), "3d");
 
         // 45 minutes ago
         let resource = MinimalResource {
@@ -236,7 +231,7 @@ mod tests {
             cells: BTreeMap::new(),
             log_containers: Vec::new(),
         };
-        assert_eq!(resource.age(), "45m");
+        assert_eq!(format_age(resource.creation_timestamp), "45m");
 
         // 30 seconds ago
         let resource = MinimalResource {
@@ -250,7 +245,7 @@ mod tests {
             cells: BTreeMap::new(),
             log_containers: Vec::new(),
         };
-        assert_eq!(resource.age(), "30s");
+        assert_eq!(format_age(resource.creation_timestamp), "30s");
     }
 
     #[test]
@@ -266,7 +261,7 @@ mod tests {
             cells: BTreeMap::new(),
             log_containers: Vec::new(),
         };
-        assert_eq!(resource.age(), "Unknown");
+        assert_eq!(format_age(resource.creation_timestamp), "Unknown");
     }
 
     #[test]

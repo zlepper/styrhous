@@ -26,15 +26,23 @@ pub(crate) fn show_delete_confirmation(
     let seconds = remaining.as_millis().div_ceil(1_000);
     let unavailable_message =
         (!confirm_enabled).then(|| format!("Delete will be available in {seconds} seconds."));
-    let scope_text = pending.namespace.as_deref().map_or_else(
-        || "This will delete the cluster-wide resource.".to_owned(),
-        |namespace| format!("This will delete the resource from namespace {namespace}."),
-    );
+    let scope_text = match pending.namespace.as_deref() {
+        Some(namespace) => Prose::new()
+            .plain("Deletes ")
+            .strong(pending.resource_name.as_str())
+            .plain(" from ")
+            .strong(namespace)
+            .plain("."),
+        None => Prose::new()
+            .plain("Deletes the cluster-wide resource ")
+            .strong(pending.resource_name.as_str())
+            .plain("."),
+    };
     let action = ConfirmationDialog {
         id: egui::Id::new("delete-resource-confirmation"),
-        eyebrow: "DELETE RESOURCE",
+        icon: components::icons::Icon::Trash,
         title: "Delete resource?",
-        message: &scope_text,
+        message: scope_text,
         unavailable_message: unavailable_message.as_deref(),
         cancel_label: "Cancel",
         confirm_label: &format!("Delete {}", pending.resource_name),
@@ -104,9 +112,9 @@ pub(crate) fn show_bulk_delete_confirmation(
     });
     let action = ConfirmationDialog {
         id: egui::Id::new("bulk-delete-resources-confirmation"),
-        eyebrow: "DELETE RESOURCES",
+        icon: components::icons::Icon::Trash,
         title: &title,
-        message: &message,
+        message: (&message).into(),
         unavailable_message: unavailable_message.as_deref(),
         cancel_label: "Cancel",
         confirm_label: &confirm_label,
@@ -115,6 +123,7 @@ pub(crate) fn show_bulk_delete_confirmation(
         warning: Some(ConfirmationDialogWarning {
             title: "Deletion targets",
             message: "Review every resource before confirming. This action cannot be undone.",
+            chips: &[],
             details: Some(&target_list),
         }),
         acknowledgement: None,
@@ -177,13 +186,8 @@ pub(crate) fn show_force_delete_confirmation(
     if !delay_elapsed {
         ctx.request_repaint_after(remaining);
     }
-    let finalizers = pending
-        .finalizers
-        .iter()
-        .map(|finalizer| format!("• {finalizer}"))
-        .collect::<Vec<_>>()
-        .join("\n");
-    let message = "This permanently removes every finalizer from this deleting resource.";
+    let finalizers = pending.finalizers.clone();
+    let resource_name = pending.resource_name.clone();
     let unavailable_message = (!delay_elapsed).then(|| {
         format!(
             "Remove finalizers will be available in {} seconds.",
@@ -195,16 +199,17 @@ pub(crate) fn show_force_delete_confirmation(
         .get_mut(&cluster_id)
         .and_then(|cluster| cluster.pending_force_delete.as_mut())
         .expect("pending force deletion was checked above");
-    let acknowledgement_label = format!(
-        "Type {} to acknowledge that you are bypassing cleanup:",
-        pending.resource_name
-    );
-    let confirm_enabled = delay_elapsed && pending.acknowledgement == pending.resource_name;
+    let acknowledgement_label = format!("Type {} to confirm", pending.resource_name);
+    // The dialog checks the typed name itself, after this frame's typing.
+    let confirm_enabled = delay_elapsed;
     let action = ConfirmationDialog {
         id: egui::Id::new("force-delete-resource-confirmation"),
-        eyebrow: "DANGEROUS: REMOVE FINALIZERS",
+        icon: components::icons::Icon::Trash,
         title: "Force delete resource?",
-        message,
+        message: Prose::new()
+            .plain("Removes every finalizer from ")
+            .strong(resource_name.as_str())
+            .plain("."),
         unavailable_message: unavailable_message.as_deref(),
         cancel_label: "Cancel",
         confirm_label: "Remove finalizers",
@@ -212,12 +217,14 @@ pub(crate) fn show_force_delete_confirmation(
         confirm_enabled,
         warning: Some(ConfirmationDialogWarning {
             title: "This bypasses controller cleanup",
-            message: "It can orphan external infrastructure, leak data, and corrupt application state. Only continue if you understand why the controllers cannot finish deletion.",
-            details: Some(&finalizers),
+            message: "Can orphan external infrastructure, leak data and corrupt application state. \
+                      Only continue if you understand why the controllers cannot finish deletion.",
+            chips: &finalizers,
+            details: None,
         }),
         acknowledgement: Some(ConfirmationDialogAcknowledgement {
             label: &acknowledgement_label,
-            hint_text: "Resource name",
+            expected: &pending.resource_name,
             value: &mut pending.acknowledgement,
         }),
     }

@@ -10,8 +10,9 @@ use components::design::theme::Tone;
 use components::design::theme::{Theme, ThemeExt};
 use components::design::type_scale::{self, TextRole, Weight};
 use components::design::{radius, size, stroke};
-use components::icons;
+use components::icons::Icon;
 use components::test_support::{UiHarnessSnapshot, setup_egui};
+use components::{BoxLook, paint_box, paint_radio};
 use egui::{Color32, CornerRadius, Painter, Rect, Stroke, StrokeKind, Ui, Vec2, pos2, vec2};
 use egui_kittest::Harness;
 
@@ -240,7 +241,7 @@ fn radius_scale(painter: &Painter, theme: &Theme) {
     }
 }
 
-fn strokes(painter: &Painter, theme: &Theme) {
+fn strokes(ui: &mut Ui, painter: &Painter, theme: &Theme) {
     let pixels_per_point = painter.pixels_per_point();
     let hairline = stroke::hairline;
     // CSS borders snap to whole device pixels; the inset ring (a box-shadow) does not.
@@ -268,36 +269,23 @@ fn strokes(painter: &Painter, theme: &Theme) {
         StrokeKind::Inside,
     );
 
-    let checkbox = Vec2::splat(size::CHECKBOX);
-    painter.rect_stroke(
-        Rect::from_min_size(pos2(984.0, 160.0), checkbox),
+    // The selection controls, as the C06 components paint them (the board's
+    // checked box has no check mark).
+    let control = |left: f32| Rect::from_min_size(pos2(left, 160.0), Vec2::splat(size::CHECKBOX));
+    paint_box(
+        painter,
+        control(984.0),
         radius::CHECKBOX,
-        border(theme.control.border),
-        StrokeKind::Inside,
+        BoxLook::off(theme, false),
     );
-    painter.rect_filled(
-        Rect::from_min_size(pos2(1016.0, 160.0), checkbox),
+    paint_box(
+        painter,
+        control(1016.0),
         radius::CHECKBOX,
-        theme.accent.fill,
+        BoxLook::checked(theme, false),
     );
-    let radio = |left: f32| Rect::from_min_size(pos2(left, 160.0), checkbox);
-    // `border-radius: 50%` on the border box: an inside stroke of a full pill.
-    painter.rect_stroke(
-        radio(1048.0),
-        radius::FULL,
-        border(theme.control.border),
-        StrokeKind::Inside,
-    );
-    painter.circle_filled(
-        radio(1080.0).center(),
-        size::CHECKBOX / 2.0,
-        theme.accent.fill,
-    );
-    painter.circle_filled(
-        radio(1080.0).center(),
-        size::RADIO_DOT / 2.0,
-        theme.text.on_fill,
-    );
+    paint_radio(ui, control(1048.0), false, false);
+    paint_radio(ui, control(1080.0), true, false);
 
     painter.rect_filled(
         rect(1120.0, 152.0, 200.0, size::HAIRLINE),
@@ -336,37 +324,37 @@ fn elevation(painter: &Painter, theme: &Theme) {
     painter.rect_filled(tooltip, radius::MENU_ITEM, theme.components.tooltip_bg);
 }
 
-fn icon_rows(ui: &Ui, painter: &Painter, theme: &Theme) {
-    let glyphs = || {
-        [
-            icons::magnifying_glass_icon(),
-            icons::settings_icon(),
-            icons::x_mark_icon(),
-            icons::chevron_down_icon(),
-            icons::check_icon(),
-            icons::cube_icon(),
-        ]
-    };
+fn icon_rows(ui: &Ui, theme: &Theme) {
+    let glyphs = [
+        Icon::MagnifyingGlass,
+        Icon::Cog6Tooth,
+        Icon::XMark,
+        Icon::ChevronDown,
+        Icon::Check,
+        Icon::Cube,
+    ];
     // `.icons`: a 20 point high flex row with 24 point gaps, items centred.
     for (top, icon_size) in [(600.0, size::ICON), (640.0, size::ICON_LG)] {
-        for (index, glyph) in glyphs().into_iter().enumerate() {
+        for (index, glyph) in glyphs.into_iter().enumerate() {
             let min = pos2(
                 560.0 + (icon_size + 24.0) * index as f32,
                 top + (size::ICON_LG - icon_size) / 2.0,
             );
-            glyph
-                .tint(theme.text.secondary)
-                .paint_at(ui, Rect::from_min_size(min, Vec2::splat(icon_size)));
+            glyph.paint(
+                ui,
+                Rect::from_min_size(min, Vec2::splat(icon_size)),
+                theme.text.secondary,
+            );
         }
     }
 
     let tile = |left: f32, glyph, tone| {
         let area = Rect::from_min_size(pos2(left, 688.0), Vec2::splat(size::TILE));
-        icons::paint_tile(ui, painter, area, glyph, tone, radius::TILE);
+        components::Tile::new(glyph).tone(tone).paint(ui, area);
     };
-    tile(560.0, icons::circle_stack_icon(), Tone::Accent);
-    tile(612.0, icons::globe_alt_icon(), Tone::Accent);
-    tile(664.0, icons::settings_icon(), Tone::Neutral);
+    tile(560.0, Icon::CircleStack, Tone::Accent);
+    tile(612.0, Icon::GlobeAlt, Tone::Accent);
+    tile(664.0, Icon::Cog6Tooth, Tone::Neutral);
 }
 
 fn calibration_scene(ui: &mut Ui) {
@@ -380,9 +368,9 @@ fn calibration_scene(ui: &mut Ui) {
     type_samples(ui, &painter, &theme);
     pills(ui, &painter, &theme);
     radius_scale(&painter, &theme);
-    strokes(&painter, &theme);
+    strokes(ui, &painter, &theme);
     elevation(&painter, &theme);
-    icon_rows(ui, &painter, &theme);
+    icon_rows(ui, &theme);
 }
 
 #[test]

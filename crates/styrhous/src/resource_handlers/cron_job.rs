@@ -19,7 +19,7 @@ pub(crate) fn table_definition(api_resource: &ApiResource) -> Option<ResourceTab
         columns: vec![
             column(SCHEDULE_COLUMN, "Schedule", 128.0),
             column(SUSPEND_COLUMN, "Suspend", 96.0),
-            column(ACTIVE_COLUMN, "Active", 88.0),
+            column(ACTIVE_COLUMN, "Active", 88.0).numeric(),
         ],
     })
 }

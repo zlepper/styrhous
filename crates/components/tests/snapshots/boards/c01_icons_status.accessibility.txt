@@ -1,0 +1,392 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Label value="C01 · COMPONENTS::ICONS, COMPONENTS::STATUS" rect=(x=48.0 y=40.0 width=289.1 height=16.0 center_x=192.5 center_y=48.0)
+            TextRun value="C01 · COMPONENTS::ICONS, COMPONENTS::STATUS" rect=(x=48.0 y=40.0 width=288.0 height=16.0 center_x=192.0 center_y=48.0)
+          Label value="Icons & status" rect=(x=48.0 y=60.0 width=187.7 height=36.0 center_x=141.8 center_y=78.0)
+            TextRun value="Icons & status" rect=(x=48.0 y=60.0 width=187.9 height=36.0 center_x=142.0 center_y=78.0)
+          Label value="One outline icon family at 16 px by default, tinted with the surrounding text colour. Status is always dot + words, never colour alone." rect=(x=48.0 y=102.0 width=820.1 height=20.0 center_x=458.1 center_y=112.0)
+            TextRun value="One outline icon family at 16 px by default, tinted with the surrounding text colour. Status is always dot + words, never colour alone." rect=(x=48.0 y=102.0 width=820.1 height=20.0 center_x=458.1 center_y=112.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="ICON SET · HEROICONS OUTLINE 1.5 PX STROKE, MIT" rect=(x=48.0 y=168.0 width=299.9 height=16.0 center_x=198.0 center_y=176.0)
+                TextRun value="ICON SET · HEROICONS OUTLINE 1.5 PX STROKE, MIT" rect=(x=48.0 y=168.0 width=298.8 height=16.0 center_x=197.4 center_y=176.0)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Image rect=(x=48.0 y=202.0 width=16.0 height=16.0 center_x=56.0 center_y=210.0)
+                    Label value="arrow-left" rect=(x=72.0 y=202.0 width=53.6 height=16.0 center_x=98.8 center_y=210.0)
+                      TextRun value="arrow-left" rect=(x=72.0 y=202.0 width=53.6 height=16.0 center_x=98.8 center_y=210.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=229.0 y=202.0 width=16.0 height=16.0 center_x=237.0 center_y=210.0)
+                    Label value="arrow-right" rect=(x=253.0 y=202.0 width=60.6 height=16.0 center_x=283.3 center_y=210.0)
+                      TextRun value="arrow-right" rect=(x=253.0 y=202.0 width=60.6 height=16.0 center_x=283.3 center_y=210.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=410.0 y=202.0 width=16.0 height=16.0 center_x=418.0 center_y=210.0)
+                    Label value="arrow-up" rect=(x=434.0 y=202.0 width=49.2 height=16.0 center_x=458.6 center_y=210.0)
+                      TextRun value="arrow-up" rect=(x=434.0 y=202.0 width=49.2 height=16.0 center_x=458.6 center_y=210.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=591.0 y=202.0 width=16.0 height=16.0 center_x=599.0 center_y=210.0)
+                    Label value="arrow-down" rect=(x=615.0 y=202.0 width=65.4 height=16.0 center_x=647.7 center_y=210.0)
+                      TextRun value="arrow-down" rect=(x=615.0 y=202.0 width=65.4 height=16.0 center_x=647.7 center_y=210.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=772.0 y=202.0 width=16.0 height=16.0 center_x=780.0 center_y=210.0)
+                    Label value="arrow-path" rect=(x=796.0 y=202.0 width=59.9 height=16.0 center_x=826.0 center_y=210.0)
+                      TextRun value="arrow-path" rect=(x=796.0 y=202.0 width=59.9 height=16.0 center_x=826.0 center_y=210.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=953.0 y=202.0 width=16.0 height=16.0 center_x=961.0 center_y=210.0)
+                    Label value="chevron-down" rect=(x=977.0 y=202.0 width=78.5 height=16.0 center_x=1016.2 center_y=210.0)
+                      TextRun value="chevron-down" rect=(x=977.0 y=202.0 width=78.5 height=16.0 center_x=1016.2 center_y=210.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=1134.0 y=202.0 width=16.0 height=16.0 center_x=1142.0 center_y=210.0)
+                    Label value="chevron-up" rect=(x=1158.0 y=202.0 width=62.3 height=16.0 center_x=1189.2 center_y=210.0)
+                      TextRun value="chevron-up" rect=(x=1158.0 y=202.0 width=62.3 height=16.0 center_x=1189.2 center_y=210.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=1315.0 y=202.0 width=16.0 height=16.0 center_x=1323.0 center_y=210.0)
+                    Label value="chevron-right" rect=(x=1339.0 y=202.0 width=73.7 height=16.0 center_x=1375.8 center_y=210.0)
+                      TextRun value="chevron-right" rect=(x=1339.0 y=202.0 width=73.7 height=16.0 center_x=1375.8 center_y=210.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Image rect=(x=48.0 y=234.0 width=16.0 height=16.0 center_x=56.0 center_y=242.0)
+                    Label value="chevron-up-down" rect=(x=72.0 y=234.0 width=97.3 height=16.0 center_x=120.6 center_y=242.0)
+                      TextRun value="chevron-up-down" rect=(x=72.0 y=234.0 width=97.3 height=16.0 center_x=120.6 center_y=242.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=229.0 y=234.0 width=16.0 height=16.0 center_x=237.0 center_y=242.0)
+                    Label value="chevron-double-down" rect=(x=253.0 y=234.0 width=120.4 height=16.0 center_x=313.2 center_y=242.0)
+                      TextRun value="chevron-double-down" rect=(x=253.0 y=234.0 width=120.4 height=16.0 center_x=313.2 center_y=242.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=410.0 y=234.0 width=16.0 height=16.0 center_x=418.0 center_y=242.0)
+                    Label value="x-mark" rect=(x=434.0 y=234.0 width=36.9 height=16.0 center_x=452.5 center_y=242.0)
+                      TextRun value="x-mark" rect=(x=434.0 y=234.0 width=36.9 height=16.0 center_x=452.5 center_y=242.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=591.0 y=234.0 width=16.0 height=16.0 center_x=599.0 center_y=242.0)
+                    Label value="check" rect=(x=615.0 y=234.0 width=32.1 height=16.0 center_x=631.0 center_y=242.0)
+                      TextRun value="check" rect=(x=615.0 y=234.0 width=32.1 height=16.0 center_x=631.0 center_y=242.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=772.0 y=234.0 width=16.0 height=16.0 center_x=780.0 center_y=242.0)
+                    Label value="minus" rect=(x=796.0 y=234.0 width=32.0 height=16.0 center_x=812.0 center_y=242.0)
+                      TextRun value="minus" rect=(x=796.0 y=234.0 width=32.0 height=16.0 center_x=812.0 center_y=242.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=953.0 y=234.0 width=16.0 height=16.0 center_x=961.0 center_y=242.0)
+                    Label value="plus" rect=(x=977.0 y=234.0 width=22.0 height=16.0 center_x=988.0 center_y=242.0)
+                      TextRun value="plus" rect=(x=977.0 y=234.0 width=22.0 height=16.0 center_x=988.0 center_y=242.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=1134.0 y=234.0 width=16.0 height=16.0 center_x=1142.0 center_y=242.0)
+                    Label value="magnifying-glass" rect=(x=1158.0 y=234.0 width=92.1 height=16.0 center_x=1204.1 center_y=242.0)
+                      TextRun value="magnifying-glass" rect=(x=1158.0 y=234.0 width=92.1 height=16.0 center_x=1204.1 center_y=242.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=1315.0 y=234.0 width=16.0 height=16.0 center_x=1323.0 center_y=242.0)
+                    Label value="funnel" rect=(x=1339.0 y=234.0 width=33.7 height=16.0 center_x=1355.9 center_y=242.0)
+                      TextRun value="funnel" rect=(x=1339.0 y=234.0 width=33.7 height=16.0 center_x=1355.9 center_y=242.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Image rect=(x=48.0 y=266.0 width=16.0 height=16.0 center_x=56.0 center_y=274.0)
+                    Label value="numbered-list" rect=(x=72.0 y=266.0 width=75.4 height=16.0 center_x=109.7 center_y=274.0)
+                      TextRun value="numbered-list" rect=(x=72.0 y=266.0 width=75.4 height=16.0 center_x=109.7 center_y=274.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=229.0 y=266.0 width=16.0 height=16.0 center_x=237.0 center_y=274.0)
+                    Label value="calendar-days" rect=(x=253.0 y=266.0 width=75.7 height=16.0 center_x=290.8 center_y=274.0)
+                      TextRun value="calendar-days" rect=(x=253.0 y=266.0 width=75.7 height=16.0 center_x=290.8 center_y=274.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=410.0 y=266.0 width=16.0 height=16.0 center_x=418.0 center_y=274.0)
+                    Label value="swatch" rect=(x=434.0 y=266.0 width=38.7 height=16.0 center_x=453.3 center_y=274.0)
+                      TextRun value="swatch" rect=(x=434.0 y=266.0 width=38.7 height=16.0 center_x=453.3 center_y=274.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=591.0 y=266.0 width=16.0 height=16.0 center_x=599.0 center_y=274.0)
+                    Label value="tag" rect=(x=615.0 y=266.0 width=17.7 height=16.0 center_x=623.8 center_y=274.0)
+                      TextRun value="tag" rect=(x=615.0 y=266.0 width=17.7 height=16.0 center_x=623.8 center_y=274.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=772.0 y=266.0 width=16.0 height=16.0 center_x=780.0 center_y=274.0)
+                    Label value="document-text" rect=(x=796.0 y=266.0 width=81.4 height=16.0 center_x=836.7 center_y=274.0)
+                      TextRun value="document-text" rect=(x=796.0 y=266.0 width=81.4 height=16.0 center_x=836.7 center_y=274.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=953.0 y=266.0 width=16.0 height=16.0 center_x=961.0 center_y=274.0)
+                    Label value="ellipsis-horizontal" rect=(x=977.0 y=266.0 width=94.0 height=16.0 center_x=1024.0 center_y=274.0)
+                      TextRun value="ellipsis-horizontal" rect=(x=977.0 y=266.0 width=94.0 height=16.0 center_x=1024.0 center_y=274.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=1134.0 y=266.0 width=16.0 height=16.0 center_x=1142.0 center_y=274.0)
+                    Label value="pencil-square" rect=(x=1158.0 y=266.0 width=73.2 height=16.0 center_x=1194.6 center_y=274.0)
+                      TextRun value="pencil-square" rect=(x=1158.0 y=266.0 width=73.2 height=16.0 center_x=1194.6 center_y=274.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=1315.0 y=266.0 width=16.0 height=16.0 center_x=1323.0 center_y=274.0)
+                    Label value="pencil" rect=(x=1339.0 y=266.0 width=32.2 height=16.0 center_x=1355.1 center_y=274.0)
+                      TextRun value="pencil" rect=(x=1339.0 y=266.0 width=32.2 height=16.0 center_x=1355.1 center_y=274.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Image rect=(x=48.0 y=298.0 width=16.0 height=16.0 center_x=56.0 center_y=306.0)
+                    Label value="trash" rect=(x=72.0 y=298.0 width=27.0 height=16.0 center_x=85.5 center_y=306.0)
+                      TextRun value="trash" rect=(x=72.0 y=298.0 width=27.0 height=16.0 center_x=85.5 center_y=306.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=229.0 y=298.0 width=16.0 height=16.0 center_x=237.0 center_y=306.0)
+                    Label value="bell" rect=(x=253.0 y=298.0 width=18.9 height=16.0 center_x=262.4 center_y=306.0)
+                      TextRun value="bell" rect=(x=253.0 y=298.0 width=18.9 height=16.0 center_x=262.4 center_y=306.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=410.0 y=298.0 width=16.0 height=16.0 center_x=418.0 center_y=306.0)
+                    Label value="cog-6-tooth" rect=(x=434.0 y=298.0 width=66.9 height=16.0 center_x=467.5 center_y=306.0)
+                      TextRun value="cog-6-tooth" rect=(x=434.0 y=298.0 width=66.9 height=16.0 center_x=467.5 center_y=306.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=591.0 y=298.0 width=16.0 height=16.0 center_x=599.0 center_y=306.0)
+                    Label value="command-line" rect=(x=615.0 y=298.0 width=77.4 height=16.0 center_x=653.7 center_y=306.0)
+                      TextRun value="command-line" rect=(x=615.0 y=298.0 width=77.4 height=16.0 center_x=653.7 center_y=306.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=772.0 y=298.0 width=16.0 height=16.0 center_x=780.0 center_y=306.0)
+                    Label value="clipboard-document" rect=(x=796.0 y=298.0 width=110.4 height=16.0 center_x=851.2 center_y=306.0)
+                      TextRun value="clipboard-document" rect=(x=796.0 y=298.0 width=110.4 height=16.0 center_x=851.2 center_y=306.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=953.0 y=298.0 width=16.0 height=16.0 center_x=961.0 center_y=306.0)
+                    Label value="document-duplicate" rect=(x=977.0 y=298.0 width=110.1 height=16.0 center_x=1032.0 center_y=306.0)
+                      TextRun value="document-duplicate" rect=(x=977.0 y=298.0 width=110.1 height=16.0 center_x=1032.0 center_y=306.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=1134.0 y=298.0 width=16.0 height=16.0 center_x=1142.0 center_y=306.0)
+                    Label value="eye" rect=(x=1158.0 y=298.0 width=19.1 height=16.0 center_x=1167.6 center_y=306.0)
+                      TextRun value="eye" rect=(x=1158.0 y=298.0 width=19.1 height=16.0 center_x=1167.6 center_y=306.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=1315.0 y=298.0 width=16.0 height=16.0 center_x=1323.0 center_y=306.0)
+                    Label value="information-circle" rect=(x=1339.0 y=298.0 width=96.2 height=16.0 center_x=1387.1 center_y=306.0)
+                      TextRun value="information-circle" rect=(x=1339.0 y=298.0 width=96.2 height=16.0 center_x=1387.1 center_y=306.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Image rect=(x=48.0 y=330.0 width=16.0 height=16.0 center_x=56.0 center_y=338.0)
+                    Label value="exclamation-triangle" rect=(x=72.0 y=330.0 width=110.1 height=16.0 center_x=127.1 center_y=338.0)
+                      TextRun value="exclamation-triangle" rect=(x=72.0 y=330.0 width=110.1 height=16.0 center_x=127.1 center_y=338.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=229.0 y=330.0 width=16.0 height=16.0 center_x=237.0 center_y=338.0)
+                    Label value="exclamation-circle" rect=(x=253.0 y=330.0 width=98.7 height=16.0 center_x=302.4 center_y=338.0)
+                      TextRun value="exclamation-circle" rect=(x=253.0 y=330.0 width=98.7 height=16.0 center_x=302.4 center_y=338.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=410.0 y=330.0 width=16.0 height=16.0 center_x=418.0 center_y=338.0)
+                    Label value="check-circle" rect=(x=434.0 y=330.0 width=66.1 height=16.0 center_x=467.0 center_y=338.0)
+                      TextRun value="check-circle" rect=(x=434.0 y=330.0 width=66.1 height=16.0 center_x=467.0 center_y=338.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=591.0 y=330.0 width=16.0 height=16.0 center_x=599.0 center_y=338.0)
+                    Label value="x-circle" rect=(x=615.0 y=330.0 width=39.7 height=16.0 center_x=634.9 center_y=338.0)
+                      TextRun value="x-circle" rect=(x=615.0 y=330.0 width=39.7 height=16.0 center_x=634.9 center_y=338.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=772.0 y=330.0 width=16.0 height=16.0 center_x=780.0 center_y=338.0)
+                    Label value="lock-closed" rect=(x=796.0 y=330.0 width=62.2 height=16.0 center_x=827.1 center_y=338.0)
+                      TextRun value="lock-closed" rect=(x=796.0 y=330.0 width=62.2 height=16.0 center_x=827.1 center_y=338.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=953.0 y=330.0 width=16.0 height=16.0 center_x=961.0 center_y=338.0)
+                    Label value="server-stack" rect=(x=977.0 y=330.0 width=66.4 height=16.0 center_x=1010.2 center_y=338.0)
+                      TextRun value="server-stack" rect=(x=977.0 y=330.0 width=66.4 height=16.0 center_x=1010.2 center_y=338.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=1134.0 y=330.0 width=16.0 height=16.0 center_x=1142.0 center_y=338.0)
+                    Label value="cube" rect=(x=1158.0 y=330.0 width=26.8 height=16.0 center_x=1171.4 center_y=338.0)
+                      TextRun value="cube" rect=(x=1158.0 y=330.0 width=26.8 height=16.0 center_x=1171.4 center_y=338.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=1315.0 y=330.0 width=16.0 height=16.0 center_x=1323.0 center_y=338.0)
+                    Label value="globe-alt" rect=(x=1339.0 y=330.0 width=48.5 height=16.0 center_x=1363.3 center_y=338.0)
+                      TextRun value="globe-alt" rect=(x=1339.0 y=330.0 width=48.5 height=16.0 center_x=1363.3 center_y=338.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Image rect=(x=48.0 y=362.0 width=16.0 height=16.0 center_x=56.0 center_y=370.0)
+                    Label value="folder" rect=(x=72.0 y=362.0 width=31.6 height=16.0 center_x=87.8 center_y=370.0)
+                      TextRun value="folder" rect=(x=72.0 y=362.0 width=31.6 height=16.0 center_x=87.8 center_y=370.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=229.0 y=362.0 width=16.0 height=16.0 center_x=237.0 center_y=370.0)
+                    Label value="circle-stack" rect=(x=253.0 y=362.0 width=62.5 height=16.0 center_x=284.3 center_y=370.0)
+                      TextRun value="circle-stack" rect=(x=253.0 y=362.0 width=62.5 height=16.0 center_x=284.3 center_y=370.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=410.0 y=362.0 width=16.0 height=16.0 center_x=418.0 center_y=370.0)
+                    Label value="adjustments-horizontal" rect=(x=434.0 y=362.0 width=125.1 height=16.0 center_x=496.5 center_y=370.0)
+                      TextRun value="adjustments-horizontal" rect=(x=434.0 y=362.0 width=125.1 height=16.0 center_x=496.5 center_y=370.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=591.0 y=362.0 width=16.0 height=16.0 center_x=599.0 center_y=370.0)
+                    Label value="share" rect=(x=615.0 y=362.0 width=29.0 height=16.0 center_x=629.5 center_y=370.0)
+                      TextRun value="share" rect=(x=615.0 y=362.0 width=29.0 height=16.0 center_x=629.5 center_y=370.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=772.0 y=362.0 width=16.0 height=16.0 center_x=780.0 center_y=370.0)
+                    Label value="user-circle" rect=(x=796.0 y=362.0 width=56.9 height=16.0 center_x=824.5 center_y=370.0)
+                      TextRun value="user-circle" rect=(x=796.0 y=362.0 width=56.9 height=16.0 center_x=824.5 center_y=370.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=953.0 y=362.0 width=16.0 height=16.0 center_x=961.0 center_y=370.0)
+                    Label value="arrow-down-tray" rect=(x=977.0 y=362.0 width=91.3 height=16.0 center_x=1022.7 center_y=370.0)
+                      TextRun value="arrow-down-tray" rect=(x=977.0 y=362.0 width=91.3 height=16.0 center_x=1022.7 center_y=370.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=1134.0 y=362.0 width=16.0 height=16.0 center_x=1142.0 center_y=370.0)
+                    Label value="play" rect=(x=1158.0 y=362.0 width=22.1 height=16.0 center_x=1169.0 center_y=370.0)
+                      TextRun value="play" rect=(x=1158.0 y=362.0 width=22.1 height=16.0 center_x=1169.0 center_y=370.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=1315.0 y=362.0 width=16.0 height=16.0 center_x=1323.0 center_y=370.0)
+                    Label value="clock" rect=(x=1339.0 y=362.0 width=28.4 height=16.0 center_x=1353.2 center_y=370.0)
+                      TextRun value="clock" rect=(x=1339.0 y=362.0 width=28.4 height=16.0 center_x=1353.2 center_y=370.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Image rect=(x=48.0 y=394.0 width=16.0 height=16.0 center_x=56.0 center_y=402.0)
+                    Label value="queue-list" rect=(x=72.0 y=394.0 width=54.0 height=16.0 center_x=99.0 center_y=402.0)
+                      TextRun value="queue-list" rect=(x=72.0 y=394.0 width=54.0 height=16.0 center_x=99.0 center_y=402.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=229.0 y=394.0 width=16.0 height=16.0 center_x=237.0 center_y=402.0)
+                    Label value="cloud" rect=(x=253.0 y=394.0 width=29.8 height=16.0 center_x=267.9 center_y=402.0)
+                      TextRun value="cloud" rect=(x=253.0 y=394.0 width=29.8 height=16.0 center_x=267.9 center_y=402.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=410.0 y=394.0 width=16.0 height=16.0 center_x=418.0 center_y=402.0)
+                    Label value="link" rect=(x=434.0 y=394.0 width=17.9 height=16.0 center_x=443.0 center_y=402.0)
+                      TextRun value="link" rect=(x=434.0 y=394.0 width=17.9 height=16.0 center_x=443.0 center_y=402.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=591.0 y=394.0 width=16.0 height=16.0 center_x=599.0 center_y=402.0)
+                    Label value="rectangle-stack" rect=(x=615.0 y=394.0 width=84.2 height=16.0 center_x=657.1 center_y=402.0)
+                      TextRun value="rectangle-stack" rect=(x=615.0 y=394.0 width=84.2 height=16.0 center_x=657.1 center_y=402.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=772.0 y=394.0 width=16.0 height=16.0 center_x=780.0 center_y=402.0)
+                    Label value="arrow-top-right-on-square" rect=(x=796.0 y=394.0 width=143.8 height=16.0 center_x=867.9 center_y=402.0)
+                      TextRun value="arrow-top-right-on-square" rect=(x=796.0 y=394.0 width=143.8 height=16.0 center_x=867.9 center_y=402.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=953.0 y=394.0 width=16.0 height=16.0 center_x=961.0 center_y=402.0)
+                    Label value="key" rect=(x=977.0 y=394.0 width=18.4 height=16.0 center_x=986.2 center_y=402.0)
+                      TextRun value="key" rect=(x=977.0 y=394.0 width=18.4 height=16.0 center_x=986.2 center_y=402.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=1134.0 y=394.0 width=16.0 height=16.0 center_x=1142.0 center_y=402.0)
+                    Label value="bars-3" rect=(x=1158.0 y=394.0 width=34.3 height=16.0 center_x=1175.2 center_y=402.0)
+                      TextRun value="bars-3" rect=(x=1158.0 y=394.0 width=34.3 height=16.0 center_x=1175.2 center_y=402.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=1315.0 y=394.0 width=16.0 height=16.0 center_x=1323.0 center_y=402.0)
+                    Label value="arrows-up-down" rect=(x=1339.0 y=394.0 width=89.8 height=16.0 center_x=1383.9 center_y=402.0)
+                      TextRun value="arrows-up-down" rect=(x=1339.0 y=394.0 width=89.8 height=16.0 center_x=1383.9 center_y=402.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Image rect=(x=48.0 y=426.0 width=16.0 height=16.0 center_x=56.0 center_y=434.0)
+                    Label value="squares-2x2" rect=(x=72.0 y=426.0 width=65.7 height=16.0 center_x=104.8 center_y=434.0)
+                      TextRun value="squares-2x2" rect=(x=72.0 y=426.0 width=65.7 height=16.0 center_x=104.8 center_y=434.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=229.0 y=426.0 width=16.0 height=16.0 center_x=237.0 center_y=434.0)
+                    Label value="wrench-screwdriver" rect=(x=253.0 y=426.0 width=107.3 height=16.0 center_x=306.6 center_y=434.0)
+                      TextRun value="wrench-screwdriver" rect=(x=253.0 y=426.0 width=107.3 height=16.0 center_x=306.6 center_y=434.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=410.0 y=426.0 width=16.0 height=16.0 center_x=418.0 center_y=434.0)
+                    Label value="signal" rect=(x=434.0 y=426.0 width=30.9 height=16.0 center_x=449.4 center_y=434.0)
+                      TextRun value="signal" rect=(x=434.0 y=426.0 width=30.9 height=16.0 center_x=449.4 center_y=434.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=591.0 y=426.0 width=16.0 height=16.0 center_x=599.0 center_y=434.0)
+                    Label value="arrow-uturn-left" rect=(x=615.0 y=426.0 width=87.3 height=16.0 center_x=658.6 center_y=434.0)
+                      TextRun value="arrow-uturn-left" rect=(x=615.0 y=426.0 width=87.3 height=16.0 center_x=658.6 center_y=434.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="SIZES" rect=(x=48.0 y=476.0 width=33.2 height=16.0 center_x=64.6 center_y=484.0)
+                  TextRun value="SIZES" rect=(x=48.0 y=476.0 width=32.2 height=16.0 center_x=64.1 center_y=484.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Image rect=(x=48.0 y=516.0 width=12.0 height=12.0 center_x=54.0 center_y=522.0)
+                    Label value="12 px" rect=(x=48.0 y=536.0 width=27.4 height=16.0 center_x=61.7 center_y=544.0)
+                      TextRun value="12 px" rect=(x=48.0 y=536.0 width=27.4 height=16.0 center_x=61.7 center_y=544.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=95.4 y=514.0 width=14.0 height=14.0 center_x=102.4 center_y=521.0)
+                    Label value="14 px" rect=(x=95.4 y=536.0 width=28.1 height=16.0 center_x=109.4 center_y=544.0)
+                      TextRun value="14 px" rect=(x=95.4 y=536.0 width=28.1 height=16.0 center_x=109.4 center_y=544.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=143.5 y=512.0 width=16.0 height=16.0 center_x=151.5 center_y=520.0)
+                    Label value="16 px" rect=(x=143.5 y=536.0 width=27.4 height=16.0 center_x=157.2 center_y=544.0)
+                      TextRun value="16 px" rect=(x=143.5 y=536.0 width=27.4 height=16.0 center_x=157.2 center_y=544.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=190.9 y=508.0 width=20.0 height=20.0 center_x=200.9 center_y=518.0)
+                    Label value="20 px" rect=(x=190.9 y=536.0 width=30.1 height=16.0 center_x=206.0 center_y=544.0)
+                      TextRun value="20 px" rect=(x=190.9 y=536.0 width=30.1 height=16.0 center_x=206.0 center_y=544.0)
+                  GenericContainer rect=<none>
+                    Image rect=(x=241.0 y=504.0 width=24.0 height=24.0 center_x=253.0 center_y=516.0)
+                    Label value="24 px" rect=(x=241.0 y=536.0 width=29.8 height=16.0 center_x=255.9 center_y=544.0)
+                      TextRun value="24 px" rect=(x=241.0 y=536.0 width=29.8 height=16.0 center_x=255.9 center_y=544.0)
+              GenericContainer rect=<none>
+                Label value="STATUS TEXT (TABLES)" rect=(x=326.8 y=476.0 width=127.6 height=16.0 center_x=390.7 center_y=484.0)
+                  TextRun value="STATUS TEXT (TABLES)" rect=(x=326.8 y=476.0 width=126.5 height=16.0 center_x=390.1 center_y=484.0)
+                GenericContainer rect=<none>
+                  Label value="Running" rect=(x=326.8 y=504.0 width=61.8 height=20.0 center_x=357.8 center_y=514.0)
+                    TextRun value="Running" rect=(x=340.8 y=504.0 width=47.8 height=20.0 center_x=364.8 center_y=514.0)
+                  Label value="Pending" rect=(x=408.7 y=504.0 width=61.3 height=20.0 center_x=439.3 center_y=514.0)
+                    TextRun value="Pending" rect=(x=422.7 y=504.0 width=47.3 height=20.0 center_x=446.3 center_y=514.0)
+                  Label value="Failed" rect=(x=489.9 y=504.0 width=48.2 height=20.0 center_x=514.0 center_y=514.0)
+                    TextRun value="Failed" rect=(x=503.9 y=504.0 width=34.2 height=20.0 center_x=521.0 center_y=514.0)
+                  Label value="Succeeded" rect=(x=558.1 y=504.0 width=79.8 height=20.0 center_x=598.0 center_y=514.0)
+                    TextRun value="Succeeded" rect=(x=572.1 y=504.0 width=65.8 height=20.0 center_x=605.0 center_y=514.0)
+                  Label value="Terminating" rect=(x=658.0 y=504.0 width=82.6 height=20.0 center_x=699.3 center_y=514.0)
+                    TextRun value="Terminating" rect=(x=672.0 y=504.0 width=68.6 height=20.0 center_x=706.3 center_y=514.0)
+              GenericContainer rect=<none>
+                Label value="STATUS PILLS (HEADERS)" rect=(x=796.6 y=476.0 width=142.0 height=16.0 center_x=867.6 center_y=484.0)
+                  TextRun value="STATUS PILLS (HEADERS)" rect=(x=796.6 y=476.0 width=140.9 height=16.0 center_x=867.0 center_y=484.0)
+                GenericContainer rect=<none>
+                  Label value="Following" rect=(x=796.6 y=504.0 width=84.6 height=22.0 center_x=838.9 center_y=515.0)
+                    TextRun value="Following" rect=(x=819.6 y=507.0 width=52.6 height=16.0 center_x=845.9 center_y=515.0)
+                  Label value="Reconnecting…" rect=(x=889.2 y=504.0 width=116.1 height=22.0 center_x=947.2 center_y=515.0)
+                    TextRun value="Reconnecting…" rect=(x=912.2 y=507.0 width=84.1 height=16.0 center_x=954.2 center_y=515.0)
+                  Label value="Stream failed" rect=(x=1013.3 y=504.0 width=104.9 height=22.0 center_x=1065.8 center_y=515.0)
+                    TextRun value="Stream failed" rect=(x=1036.3 y=507.0 width=72.9 height=16.0 center_x=1072.8 center_y=515.0)
+                  Label value="Stream finished" rect=(x=1126.2 y=504.0 width=118.0 height=22.0 center_x=1185.2 center_y=515.0)
+                    TextRun value="Stream finished" rect=(x=1149.2 y=507.0 width=86.0 height=16.0 center_x=1192.2 center_y=515.0)
+                  Label value="Modified" rect=(x=1252.2 y=504.0 width=80.6 height=22.0 center_x=1292.5 center_y=515.0)
+                    TextRun value="Modified" rect=(x=1275.2 y=507.0 width=48.6 height=16.0 center_x=1299.5 center_y=515.0)
+                  Label value="Selected" rect=(x=1340.8 y=504.0 width=80.2 height=22.0 center_x=1380.9 center_y=515.0)
+                    TextRun value="Selected" rect=(x=1363.8 y=507.0 width=48.2 height=16.0 center_x=1387.9 center_y=515.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="BADGES & INDICATORS" rect=(x=48.0 y=580.0 width=130.5 height=16.0 center_x=113.2 center_y=588.0)
+                  TextRun value="BADGES & INDICATORS" rect=(x=48.0 y=580.0 width=129.4 height=16.0 center_x=112.7 center_y=588.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="Deployment" rect=(x=48.0 y=610.0 width=79.2 height=22.0 center_x=87.6 center_y=621.0)
+                      TextRun value="Deployment" rect=(x=57.0 y=613.0 width=61.2 height=16.0 center_x=87.6 center_y=621.0)
+                    Label value="Kind badge" rect=(x=48.0 y=640.0 width=60.6 height=16.0 center_x=78.3 center_y=648.0)
+                      TextRun value="Kind badge" rect=(x=48.0 y=640.0 width=60.6 height=16.0 center_x=78.3 center_y=648.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      Label value="3" rect=(x=151.2 y=613.0 width=16.0 height=16.0 center_x=159.2 center_y=621.0)
+                        TextRun value="3" rect=(x=156.5 y=613.0 width=5.6 height=16.0 center_x=159.2 center_y=621.0)
+                      Label value="12" rect=(x=173.2 y=613.0 width=20.0 height=16.0 center_x=183.2 center_y=621.0)
+                        TextRun value="12" rect=(x=178.2 y=613.0 width=10.0 height=16.0 center_x=183.2 center_y=621.0)
+                      Label value="99+" rect=(x=199.2 y=613.0 width=27.9 height=16.0 center_x=213.2 center_y=621.0)
+                        TextRun value="99+" rect=(x=204.2 y=613.0 width=17.9 height=16.0 center_x=213.2 center_y=621.0)
+                    Label value="Count" rect=(x=151.2 y=637.0 width=33.5 height=16.0 center_x=168.0 center_y=645.0)
+                      TextRun value="Count" rect=(x=151.2 y=637.0 width=33.5 height=16.0 center_x=168.0 center_y=645.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      Image name="Container 1" rect=(x=251.2 y=617.0 width=8.0 height=8.0 center_x=255.2 center_y=621.0)
+                      Image name="Container 2" rect=(x=262.2 y=617.0 width=8.0 height=8.0 center_x=266.2 center_y=621.0)
+                      Image name="Container 3" rect=(x=273.2 y=617.0 width=8.0 height=8.0 center_x=277.2 center_y=621.0)
+                      Image name="Container 4" rect=(x=284.2 y=617.0 width=8.0 height=8.0 center_x=288.2 center_y=621.0)
+                    Label value="Containers" rect=(x=251.2 y=633.0 width=58.6 height=16.0 center_x=280.5 center_y=641.0)
+                      TextRun value="Containers" rect=(x=251.2 y=633.0 width=58.6 height=16.0 center_x=280.5 center_y=641.0)
+                  GenericContainer rect=<none>
+                    ProgressIndicator name="Loading" rect=(x=333.8 y=613.0 width=16.0 height=16.0 center_x=341.8 center_y=621.0)
+                    Label value="Spinner" rect=(x=333.8 y=637.0 width=41.2 height=16.0 center_x=354.4 center_y=645.0)
+                      TextRun value="Spinner" rect=(x=333.8 y=637.0 width=41.2 height=16.0 center_x=354.4 center_y=645.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                    Label value="Skeleton" rect=(x=399.0 y=642.0 width=47.0 height=16.0 center_x=422.5 center_y=650.0)
+                      TextRun value="Skeleton" rect=(x=399.0 y=642.0 width=47.0 height=16.0 center_x=422.5 center_y=650.0)
+              GenericContainer rect=<none>
+                Label value="AVATAR (CLUSTER) STATES" rect=(x=575.0 y=580.0 width=148.8 height=16.0 center_x=649.4 center_y=588.0)
+                  TextRun value="AVATAR (CLUSTER) STATES" rect=(x=575.0 y=580.0 width=147.7 height=16.0 center_x=648.8 center_y=588.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      Label value="DE" rect=(x=595.0 y=624.0 width=40.0 height=40.0 center_x=615.0 center_y=644.0)
+                        TextRun value="DE" rect=(x=606.4 y=636.0 width=17.2 height=16.0 center_x=615.0 center_y=644.0)
+                      Label value="Connected" rect=(x=595.0 y=672.0 width=60.1 height=16.0 center_x=625.1 center_y=680.0)
+                        TextRun value="Connected" rect=(x=595.0 y=672.0 width=60.1 height=16.0 center_x=625.1 center_y=680.0)
+                    GenericContainer rect=<none>
+                      Label value="KK" rect=(x=675.1 y=624.0 width=40.0 height=40.0 center_x=695.1 center_y=644.0)
+                        TextRun value="KK" rect=(x=686.2 y=636.0 width=17.9 height=16.0 center_x=695.1 center_y=644.0)
+                      Label value="Connecting" rect=(x=675.1 y=672.0 width=63.1 height=16.0 center_x=706.7 center_y=680.0)
+                        TextRun value="Connecting" rect=(x=675.1 y=672.0 width=63.1 height=16.0 center_x=706.7 center_y=680.0)
+                    GenericContainer rect=<none>
+                      Label value="PR" rect=(x=758.2 y=624.0 width=40.0 height=40.0 center_x=778.2 center_y=644.0)
+                        TextRun value="PR" rect=(x=769.6 y=636.0 width=17.2 height=16.0 center_x=778.2 center_y=644.0)
+                      Label value="Error" rect=(x=758.2 y=672.0 width=26.2 height=16.0 center_x=771.3 center_y=680.0)
+                        TextRun value="Error" rect=(x=758.2 y=672.0 width=26.2 height=16.0 center_x=771.3 center_y=680.0)
+                    GenericContainer rect=<none>
+                      Label value="KL" rect=(x=818.2 y=624.0 width=40.0 height=40.0 center_x=838.2 center_y=644.0)
+                        TextRun value="KL" rect=(x=830.4 y=636.0 width=15.6 height=16.0 center_x=838.2 center_y=644.0)
+                      Label value="Idle" rect=(x=818.2 y=672.0 width=19.5 height=16.0 center_x=828.0 center_y=680.0)
+                        TextRun value="Idle" rect=(x=818.2 y=672.0 width=19.5 height=16.0 center_x=828.0 center_y=680.0)
+                    GenericContainer rect=<none>
+                      Label value="CS" rect=(x=878.2 y=624.0 width=40.0 height=40.0 center_x=898.2 center_y=644.0)
+                        TextRun value="CS" rect=(x=889.5 y=636.0 width=17.5 height=16.0 center_x=898.2 center_y=644.0)
+                      Label value="Selected" rect=(x=878.2 y=672.0 width=47.7 height=16.0 center_x=902.1 center_y=680.0)
+                        TextRun value="Selected" rect=(x=878.2 y=672.0 width=47.7 height=16.0 center_x=902.1 center_y=680.0)
+                    GenericContainer rect=<none>
+                      Label value="AD" rect=(x=945.9 y=624.0 width=40.0 height=40.0 center_x=965.9 center_y=644.0)
+                        TextRun value="AD" rect=(x=956.8 y=636.0 width=18.2 height=16.0 center_x=965.9 center_y=644.0)
+                      Label value="Hover" rect=(x=945.9 y=672.0 width=32.5 height=16.0 center_x=962.2 center_y=680.0)
+                        TextRun value="Hover" rect=(x=945.9 y=672.0 width=32.5 height=16.0 center_x=962.2 center_y=680.0)

@@ -83,9 +83,9 @@ pub(crate) fn show_helm_rollback_confirmation(
     );
     let action = ConfirmationDialog {
         id: egui::Id::new("helm-rollback-confirmation"),
-        eyebrow: "HELM RELEASE",
+        icon: components::icons::Icon::ArrowUturnLeft,
         title: &title,
-        message: &plan.message,
+        message: (&plan.message).into(),
         unavailable_message: plan.unavailable_message,
         cancel_label: "Cancel",
         confirm_label: "Roll back",

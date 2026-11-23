@@ -1,0 +1,19 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        ColumnHeader name="Name" rect=(x=40.0 y=8.0 width=360.0 height=36.0 center_x=220.0 center_y=26.0)
+          TextRun value="NAME" rect=(x=52.0 y=18.0 width=30.3 height=16.0 center_x=67.1 center_y=26.0)
+        Button name="Reorder Ubuntu" rect=(x=8.0 y=44.0 width=32.0 height=36.0 center_x=24.0 center_y=62.0)
+        GenericContainer rect=<none>
+          Label value="Ubuntu" rect=(x=52.0 y=52.0 width=43.5 height=20.0 center_x=73.8 center_y=62.0)
+            TextRun value="Ubuntu" rect=(x=52.0 y=52.0 width=43.5 height=20.0 center_x=73.8 center_y=62.0)
+        Button name="Reorder Netshoot" rect=(x=8.0 y=84.0 width=32.0 height=36.0 center_x=24.0 center_y=102.0)
+        GenericContainer rect=<none>
+          Label value="Netshoot" rect=(x=52.0 y=92.0 width=55.4 height=20.0 center_x=79.7 center_y=102.0)
+            TextRun value="Netshoot" rect=(x=52.0 y=92.0 width=55.4 height=20.0 center_x=79.7 center_y=102.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Label value="Busybox" rect=(x=52.0 y=132.0 width=49.4 height=20.0 center_x=76.7 center_y=142.0)
+              TextRun value="Busybox" rect=(x=52.0 y=132.0 width=49.4 height=20.0 center_x=76.7 center_y=142.0)

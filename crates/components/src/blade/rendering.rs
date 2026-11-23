@@ -1,109 +1,28 @@
 use super::*;
 use super::{interaction::*, transforms::*};
 
+/// The header of `layer` ([`chrome::show_header`]), its controls named for
+/// a background blade when it is not in front.
 pub(super) fn show_header<H>(
     ui: &mut Ui,
     layer: BladeLayer,
     add_content: impl FnOnce(&mut Ui) -> H,
 ) -> (H, HeaderAction) {
-    let header_height = 36.0;
-    let navigation_width = 80.0;
-    let close_width = 36.0;
-    let mut action = HeaderAction::None;
-    let header_width = ui.available_width();
-    let content = ui
-        .allocate_ui_with_layout(
-            egui::vec2(header_width, header_height),
-            egui::Layout::top_down(egui::Align::Min),
-            |ui| {
-                let mut content = None;
-                StripBuilder::new(ui)
-                    .size(Size::exact(navigation_width))
-                    .size(Size::exact(space::S12))
-                    .size(Size::remainder())
-                    .size(Size::exact(space::S12))
-                    .size(Size::exact(close_width))
-                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                    .horizontal(|mut strip| {
-                        strip.cell(|ui| {
-                            let back_clicked = ui
-                                .add_enabled_ui(layer.can_go_back, |ui| {
-                                    TailwindButton::icon(
-                                        icons::arrow_left_icon()
-                                            .fit_to_exact_size(egui::Vec2::splat(16.0))
-                                            .tint(ui.tokens().text.primary),
-                                    )
-                                    .variant(ButtonVariant::Secondary)
-                                    .size(ButtonSize::Sm)
-                                    .accessibility_label(if layer.is_foreground {
-                                        "Back"
-                                    } else {
-                                        "Back in background blade"
-                                    })
-                                    .show(ui)
-                                    .clicked()
-                                })
-                                .inner;
-                            if back_clicked {
-                                action = HeaderAction::Back;
-                            }
-                            let forward_clicked = ui
-                                .add_enabled_ui(layer.can_go_forward, |ui| {
-                                    TailwindButton::icon(
-                                        icons::arrow_right_icon()
-                                            .fit_to_exact_size(egui::Vec2::splat(16.0))
-                                            .tint(ui.tokens().text.primary),
-                                    )
-                                    .variant(ButtonVariant::Secondary)
-                                    .size(ButtonSize::Sm)
-                                    .accessibility_label(if layer.is_foreground {
-                                        "Forward"
-                                    } else {
-                                        "Forward in background blade"
-                                    })
-                                    .show(ui)
-                                    .clicked()
-                                })
-                                .inner;
-                            if forward_clicked {
-                                action = HeaderAction::Forward;
-                            }
-                        });
-                        strip.empty();
-                        strip.cell(|ui| content = Some(add_content(ui)));
-                        strip.empty();
-                        strip.cell(|ui| {
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    if TailwindButton::icon(
-                                        icons::x_mark_icon()
-                                            .fit_to_exact_size(egui::Vec2::splat(16.0))
-                                            .tint(ui.tokens().text.primary),
-                                    )
-                                    .variant(ButtonVariant::Secondary)
-                                    .size(ButtonSize::Sm)
-                                    .accessibility_label(if layer.is_foreground {
-                                        "Close blade"
-                                    } else {
-                                        "Close background blade"
-                                    })
-                                    .show(ui)
-                                    .clicked()
-                                    {
-                                        action = HeaderAction::Close;
-                                    }
-                                },
-                            );
-                        });
-                    });
-                content.expect("header content cell is always rendered")
-            },
-        )
-        .inner;
-    ui.add_space(space::S16);
-    (content, action)
+    let navigation = if layer.is_foreground {
+        chrome::BladeNavigation::new(layer.can_go_back, layer.can_go_forward)
+    } else {
+        chrome::BladeNavigation {
+            back_label: "Back in background blade",
+            forward_label: "Forward in background blade",
+            close_label: "Close background blade",
+            ..chrome::BladeNavigation::new(layer.can_go_back, layer.can_go_forward)
+        }
+    };
+    chrome::show_header(ui, navigation, add_content)
 }
+
+/// Show one blade of the stack: its surface, with `add` laying out its
+/// header ([`show_header`]) and then its body ([`show_body`]).
 pub(super) fn show_layer<R>(
     ctx: &egui::Context,
     id: Id,
@@ -114,6 +33,7 @@ pub(super) fn show_layer<R>(
 ) -> R {
     let origin = active_transform(viewport).position;
     let width = blade_width(viewport);
+    let blade_height = height(viewport);
     let visual = egui::emath::TSTransform::new(
         transform.position.to_vec2() - origin.to_vec2() * transform.scale,
         transform.scale,
@@ -129,35 +49,50 @@ pub(super) fn show_layer<R>(
         .interactable(interactable)
         .show(ctx, |ui| {
             ui.set_width(width);
-            ui.set_height(height(viewport));
+            ui.set_height(blade_height);
             ui.with_visual_transform(visual, |ui| {
-                crate::scroll::vertical()
-                    .id_salt(ui.id().with("scroll"))
-                    .auto_shrink([false, false])
-                    .min_scrolled_height(height(viewport))
-                    .max_height(height(viewport))
-                    .show(ui, |ui| {
-                        ui.set_width(width);
-                        let frame = crate::frames::overlay_frame(&ui.tokens())
-                            .inner_margin(egui::Margin::same(PADDING));
-                        let content_width = content_width(width);
-                        let content_height =
-                            (height(viewport) - frame.total_margin().sum().y).max(0.0);
-                        frame
-                            .show(ui, |ui| {
-                                // The frame owns the content geometry, so callers can
-                                // draw their body without managing parent widths.
-                                ui.set_width(content_width);
-                                ui.set_min_height(content_height);
-                                theme::scope(ui, ThemeScope::Blade, |ui| {
-                                    show_clipped_body(ui, content_width, add)
-                                })
-                            })
-                            .inner
-                    })
-                    .inner
+                let rect = Rect::from_min_size(ui.cursor().min, egui::vec2(width, blade_height));
+                chrome::paint_surface(ui, rect, ui.tokens().surface.panel);
+                let mut blade = ui.new_child(
+                    egui::UiBuilder::new()
+                        .max_rect(rect)
+                        .layout(egui::Layout::top_down(egui::Align::Min)),
+                );
+                blade.set_clip_rect(rect.intersect(ui.clip_rect()));
+                blade.spacing_mut().item_spacing = egui::Vec2::ZERO;
+                let result = theme::scope(&mut blade, ThemeScope::Blade, add);
+                ui.allocate_rect(rect, Sense::hover());
+                result
             })
             .inner
+        })
+        .inner
+}
+
+/// The body under a blade's header: the rest of the blade, scrolling, with
+/// [`chrome::BODY_PADDING`] around a fixed-width column laid out by `add`.
+pub(super) fn show_body<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let body_height = ui.available_height();
+    let content_width = content_width(ui.available_width());
+    crate::scroll::vertical()
+        .id_salt(ui.id().with("scroll"))
+        .auto_shrink([false, false])
+        .min_scrolled_height(body_height)
+        .max_height(body_height)
+        .show(ui, |ui| {
+            egui::Frame::new()
+                .inner_margin(chrome::BODY_PADDING)
+                .show(ui, |ui| {
+                    // The blade owns the body geometry, so callers can draw it
+                    // without managing parent widths.
+                    ui.set_width(content_width);
+                    ui.set_min_height((body_height - chrome::BODY_PADDING.sum().y).max(0.0));
+                    // The header is laid out without item spacing; the body
+                    // keeps the spacing of the app's style.
+                    ui.spacing_mut().item_spacing = ui.ctx().global_style().spacing.item_spacing;
+                    show_clipped_body(ui, content_width, add)
+                })
+                .inner
         })
         .inner
 }
@@ -165,12 +100,12 @@ pub(super) fn show_layer<R>(
 /// Lay the body out in a fixed-width column and clip it to the blade.
 ///
 /// Rows that cannot wrap may extend past the column, but only the column's
-/// width is allocated in the frame, so they never resize the blade.
+/// width is allocated, so they never resize the blade.
 fn show_clipped_body<R>(ui: &mut Ui, content_width: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     let origin = ui.cursor().min;
     let column = Rect::from_min_size(origin, egui::vec2(content_width, ui.available_height()));
     let mut body = ui.new_child(egui::UiBuilder::new().max_rect(column));
-    let padding = f32::from(PADDING) + FRAME_STROKE_WIDTH;
+    let padding = f32::from(chrome::BODY_PADDING.left);
     let clip = Rect::from_x_y_ranges(
         (origin.x - padding)..=(origin.x + content_width + padding),
         f32::NEG_INFINITY..=f32::INFINITY,

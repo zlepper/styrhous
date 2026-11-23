@@ -65,7 +65,7 @@ fn prepared_table_uses_production_filter_sort_and_metadata_paths() {
         ["example.com/team"]
     );
 
-    configuration.sort_state = Some(components::SortState::new(
+    configuration.layout.sort = Some(components::SortState::new(
         "owner",
         components::SortDirection::Ascending,
     ));
@@ -87,7 +87,7 @@ fn prepared_table_uses_production_filter_sort_and_metadata_paths() {
     };
     let metadata_column_id = metadata_column.id();
     configuration.metadata_columns = vec![metadata_column];
-    configuration.sort_state = Some(components::SortState::new(
+    configuration.layout.sort = Some(components::SortState::new(
         &metadata_column_id,
         components::SortDirection::Ascending,
     ));

@@ -1,4 +1,5 @@
 use super::*;
+use crate::tooltip::TooltipExt;
 
 // The settings SVG has generous view-box padding. Allocate a larger image so its visible cog
 // matches the visual weight of the 21px control it replaced.
@@ -110,7 +111,7 @@ impl<'a> SidebarContentCore<'a> {
                 inner_rect.right() - text_pos_after_icon(inner_rect, self.item_height).x,
             );
             if text_is_truncated {
-                response.clone().on_hover_text(tooltip);
+                response.clone().tooltip(tooltip);
             }
         } else {
             // For narrow mode, center icon within full rect (not inner_rect)
@@ -121,7 +122,7 @@ impl<'a> SidebarContentCore<'a> {
                 colors.icon,
                 icon_size,
             );
-            response.clone().on_hover_text(tooltip);
+            response.clone().tooltip(tooltip);
         }
 
         if is_button {
@@ -140,7 +141,7 @@ impl<'a> SidebarContentCore<'a> {
         initial: &str,
         selected: bool,
     ) -> Response {
-        self.avatar_item_with_tooltip(text, initial, selected, None)
+        self.avatar_item_with_tooltip(text, initial, selected, None, None)
     }
 
     pub(super) fn avatar_item_with_tooltip(
@@ -149,6 +150,7 @@ impl<'a> SidebarContentCore<'a> {
         initial: &str,
         selected: bool,
         tooltip: Option<&str>,
+        status: Option<crate::design::theme::Tone>,
     ) -> Response {
         let text = text.into();
         let text_str = text.text();
@@ -157,14 +159,8 @@ impl<'a> SidebarContentCore<'a> {
         let (rect, inner_rect, response) = allocate_item(self.ui, self.item_height);
         let colors = ItemColors::navigation(&self.ui.tokens(), selected, response.hovered());
 
-        let background_rect = if self.show_text {
-            inner_rect
-        } else {
-            inner_rect.shrink2(Vec2::new(0.0, 2.0))
-        };
-        draw_background(self.ui.painter(), background_rect, colors.background);
-
         if self.show_text {
+            draw_background(self.ui.painter(), inner_rect, colors.background);
             let avatar_x = CHEVRON_SIZE + CHEVRON_GAP;
             let avatar_center =
                 inner_rect.min + Vec2::new(avatar_x + ICON_SIZE / 2.0, self.item_height / 2.0);
@@ -177,12 +173,18 @@ impl<'a> SidebarContentCore<'a> {
                 inner_rect.right() - text_pos_after_icon(inner_rect, self.item_height).x,
             );
             if text_is_truncated {
-                response.clone().on_hover_text(tooltip);
+                response.clone().tooltip(tooltip);
             }
         } else {
-            // For narrow mode, center avatar within full rect (not inner_rect)
-            paint_avatar(self.ui, rect.center(), initial, NARROW_AVATAR_SIZE);
-            response.clone().on_hover_text(tooltip);
+            // The rail shows the cluster avatar itself (`.av`): its selected
+            // ring and hover brightening replace the item background.
+            crate::Avatar::new(initial)
+                .identity()
+                .status(status)
+                .selected(selected)
+                .hovered(response.hovered())
+                .paint(self.ui, rect.center());
+            response.clone().tooltip(tooltip);
         }
 
         add_selectable_accessibility(&response, self.ui, text_str, selected);
@@ -298,9 +300,12 @@ pub(super) struct SidebarLayout {
     pub(super) top_padding: f32,
 }
 
+/// A small identity avatar beside a wide sidebar item's text; its initials
+/// use the 12 point meta role so they fit the 16 point square.
 fn paint_avatar(ui: &Ui, center: egui::Pos2, text: &str, size: f32) {
-    crate::TextAvatar::new(text)
+    crate::Avatar::new(text)
         .identity()
         .size(size)
+        .font(type_scale::META.with_weight(type_scale::Weight::SemiBold))
         .paint(ui, center);
 }

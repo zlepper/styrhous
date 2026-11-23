@@ -1,12 +1,5 @@
 use super::*;
 
-pub(super) fn toolbar_frame(theme: &Theme) -> egui::Frame {
-    egui::Frame::new()
-        .fill(theme.surface.panel)
-        .stroke(stroke::divider(theme))
-        .inner_margin(egui::Margin::symmetric(space::S24 as i8, space::S8 as i8))
-}
-
 pub(super) fn show_search_controls(
     ctx: &egui::Context,
     ui: &mut egui::Ui,
@@ -15,92 +8,31 @@ pub(super) fn show_search_controls(
 ) {
     let focus_search =
         ctx.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::F));
-    let search_input_salt = egui::Id::new(("yaml-editor-search", editor.id));
-    // Consume Enter before the single-line TextEdit sees it. This keeps the
-    // shortcut from adding a newline to YAML or being swallowed by the input.
-    let keyboard_navigation = editor.search.input_focused.then(|| {
-        ctx.input_mut(|input| {
-            (
-                input.consume_key(egui::Modifiers::NONE, egui::Key::Enter),
-                input.consume_key(egui::Modifiers::SHIFT, egui::Key::Enter),
-            )
-        })
-    });
-    let theme = ui.tokens();
-    let invalid = search_matches.is_err();
-    let response = ui
-        .allocate_ui_with_layout(
-            egui::vec2(SEARCH_CONTROL_WIDTH, 36.0),
-            egui::Layout::left_to_right(egui::Align::Center),
-            |ui| {
-                TailwindSearchInput::new(&mut editor.search.query, &mut editor.search.regex_mode)
-                    .hint_text("Search...")
-                    .id_salt(search_input_salt)
-                    .accessibility_label("Search YAML")
-                    .invalid(invalid)
-                    .focus(focus_search)
-                    .show(ui)
-            },
-        )
-        .inner;
-    if response.text.changed() || response.regex.changed() {
+    let status = match search_matches {
+        Err(error) => SearchStatus::Invalid(error.clone()),
+        Ok(_) if editor.search.query.is_empty() => SearchStatus::Idle,
+        Ok(matches) => SearchStatus::Matches {
+            active: editor.search.active_match,
+            total: matches.len(),
+        },
+    };
+    let match_count = search_matches.as_ref().map_or(0, Vec::len);
+    let response = SearchField::new(&mut editor.search.query)
+        .regex(&mut editor.search.regex_mode)
+        .placeholder("Search…")
+        .id_salt(("yaml-editor-search", editor.id))
+        .accessibility_label("Search YAML")
+        .status(status)
+        .request_focus(focus_search)
+        .show(ui);
+    if response.changed {
         clear_active_match(editor);
     }
-    editor.search.input_focused = response.text.has_focus();
-
-    let matches = search_matches.as_ref().ok();
-    let match_count = matches.map_or(0, Vec::len);
-
-    ui.add_space(space::S8);
-    ui.label(
-        egui::RichText::new(match_count_label(editor, match_count))
-            .font(type_scale::META.font_id(ui.ctx()))
-            .color(if invalid {
-                theme.danger.text
-            } else {
-                theme.text.secondary
-            }),
-    );
-    ui.add_space(space::S4);
-    let (previous_clicked, next_clicked) = ui
-        .allocate_ui_with_layout(
-            egui::vec2(
-                2.0 * SEARCH_NAVIGATION_BUTTON_SIZE,
-                SEARCH_NAVIGATION_BUTTON_SIZE,
-            ),
-            egui::Layout::left_to_right(egui::Align::Center),
-            |ui| {
-                ui.add_enabled_ui(match_count > 0, |ui| {
-                    ui.spacing_mut().item_spacing.x = 0.0;
-                    let previous =
-                        search_navigation_button(ui, icons::arrow_left_icon(), "Previous match");
-                    let next =
-                        search_navigation_button(ui, icons::arrow_right_icon(), "Next match");
-                    (previous, next)
-                })
-                .inner
-            },
-        )
-        .inner;
-
-    let previous_requested =
-        previous_clicked || keyboard_navigation.is_some_and(|(_, previous)| previous);
-    let next_requested = next_clicked || keyboard_navigation.is_some_and(|(next, _)| next);
-    if previous_requested {
+    if response.previous {
         advance_search_match(editor, match_count, false);
     }
-    if next_requested {
+    if response.next {
         advance_search_match(editor, match_count, true);
-    }
-}
-
-pub(super) fn match_count_label(editor: &YamlEditorWindowState, match_count: usize) -> String {
-    if editor.search.query.is_empty() {
-        return "0 matches".to_owned();
-    }
-    match editor.search.active_match {
-        Some(active_match) => format!("{} of {match_count}", active_match + 1),
-        None => format!("0 of {match_count}"),
     }
 }
 
@@ -185,38 +117,19 @@ pub(super) fn resource_scope(editor: &YamlEditorWindowState) -> String {
     )
 }
 
-pub(super) fn status_indicator(ui: &mut egui::Ui, color: egui::Color32, label: &str) {
+/// Status words with their lamp in `tone`, set like the surrounding body text.
+pub(super) fn status_indicator(ui: &mut egui::Ui, tone: Tone, label: &str) {
     let label_color = ui.tokens().text.secondary;
-    ui.label(
-        egui::RichText::new("●")
-            .font(type_scale::BODY.font_id(ui.ctx()))
-            .color(color),
-    );
-    ui.label(
-        egui::RichText::new(label)
-            .font(type_scale::BODY.font_id(ui.ctx()))
-            .color(label_color),
-    );
+    components::StatusLabel::new(label, tone)
+        .role(type_scale::BODY)
+        .color(label_color)
+        .show(ui);
 }
 
 pub(super) fn error_strip(ui: &mut egui::Ui, error: &str) {
-    let theme = ui.tokens();
-    egui::Frame::new()
-        .fill(theme.danger.tint)
-        .stroke(stroke::hairline(theme.danger.outline))
-        .inner_margin(egui::Margin::symmetric(space::S16 as i8, space::S8 as i8))
-        .show(ui, |ui| {
-            ui.set_min_width(ui.available_width());
-            let response = ui.label(
-                egui::RichText::new(error)
-                    .font(type_scale::BODY.font_id(ui.ctx()))
-                    .color(theme.danger.text_on_tint),
-            );
-            ui.ctx().accesskit_node_builder(response.id, |builder| {
-                builder.set_role(egui::accesskit::Role::Alert);
-                builder.set_label(error);
-            });
-        });
+    components::Callout::new(Tone::Danger, error)
+        .alert()
+        .show(ui);
     ui.add_space(space::S8);
 }
 

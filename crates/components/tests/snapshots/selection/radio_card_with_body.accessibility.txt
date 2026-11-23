@@ -1,0 +1,12 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        RadioButton name="Automatic" state=[toggled=False] rect=(x=8.0 y=8.0 width=1520.0 height=64.0 center_x=768.0 center_y=40.0)
+          TextRun value="Automatic" rect=(x=52.0 y=22.0 width=61.7 height=20.0 center_x=82.9 center_y=32.0)
+        RadioButton name="Custom launcher" state=[toggled=True] rect=(x=8.0 y=84.0 width=1520.0 height=62.0 center_x=768.0 center_y=115.0)
+          TextRun value="Custom launcher" rect=(x=52.0 y=98.0 width=99.8 height=20.0 center_x=101.9 center_y=108.0)
+        GenericContainer rect=<none>
+          Label value="alacritty -e {command}" rect=(x=52.0 y=146.0 width=124.0 height=16.0 center_x=114.0 center_y=154.0)
+            TextRun value="alacritty -e {command}" rect=(x=52.0 y=146.0 width=124.0 height=16.0 center_x=114.0 center_y=154.0)

@@ -127,6 +127,7 @@ fn open_inspector_with_column_settings(state: &mut UiState, commands: &mut Vec<W
             label: "Name".into(),
             default_width: 160.0,
             sortable: true,
+            numeric: false,
         }],
     );
     settings.set_resource_detail_owner(1);
@@ -136,7 +137,7 @@ fn open_inspector_with_column_settings(state: &mut UiState, commands: &mut Vec<W
 
 fn select_namespace(harness: &mut Harness<MyEguiApp<MockWorker>>, namespace: &str) {
     harness
-        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace scope")
         .click();
     harness.run_steps(3);
     harness.get_by_label(namespace).click();
@@ -245,6 +246,14 @@ fn primary_click<L: TerminalLauncher>(
         pressed: false,
         modifiers: egui::Modifiers::default(),
     });
+}
+
+/// Click the centre of the node labelled `label` with the pointer, then
+/// let the frame settle.
+fn click_label<L: TerminalLauncher>(harness: &mut Harness<MyEguiApp<MockWorker, L>>, label: &str) {
+    let position = harness.get_by_label(label).rect().center();
+    primary_click(harness, position);
+    harness.run();
 }
 
 fn open_settings(harness: &mut Harness<MyEguiApp<MockWorker>>) {
@@ -449,6 +458,7 @@ fn resource_table_name_width(harness: &mut Harness<MyEguiApp<MockWorker>>) -> f3
         label: "Name".into(),
         default_width: 160.0,
         sortable: true,
+        numeric: false,
     };
     harness
         .state_mut()
@@ -467,7 +477,7 @@ fn open_workspace_column_settings(harness: &mut Harness<MyEguiApp<MockWorker>>) 
     let header = resource_table_name_header_context_position(harness);
     secondary_click(harness, header);
     harness.run_steps(2);
-    let configure = harness.get_by_label("Configure columns").rect().center();
+    let configure = harness.get_by_label("Configure columns…").rect().center();
     primary_click(harness, configure);
     harness.run_steps(2);
 }
@@ -481,6 +491,7 @@ mod global_blades;
 mod log_export;
 mod resource_details;
 mod resource_inspectors;
+mod resource_menus_and_cells;
 mod resource_tables;
 mod selection_and_context;
 mod table_configuration;

@@ -6,175 +6,157 @@ Window state=[focused] rect=<none>
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="Properties" rect=(x=45.0 y=45.0 width=102.5 height=24.0 center_x=96.2 center_y=57.0)
-                TextRun value="Properties" rect=(x=45.0 y=45.0 width=102.5 height=24.0 center_x=96.2 center_y=57.0)
+              Label value="Properties" rect=(x=48.0 y=48.0 width=102.5 height=24.0 center_x=99.2 center_y=60.0)
+                TextRun value="Properties" rect=(x=48.0 y=48.0 width=102.5 height=24.0 center_x=99.2 center_y=60.0)
+              Label value="Namespace" rect=(x=48.0 y=87.0 width=67.6 height=16.0 center_x=81.8 center_y=95.0)
+                TextRun value="NAMESPACE" rect=(x=48.0 y=87.0 width=66.5 height=16.0 center_x=81.2 center_y=95.0)
               GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Label value="Namespace" rect=(x=45.0 y=84.0 width=64.0 height=14.0 center_x=77.0 center_y=91.0)
-                    TextRun value="Namespace" rect=(x=45.0 y=84.0 width=64.0 height=14.0 center_x=77.0 center_y=91.0)
-                  Label value="Cluster-wide" rect=(x=45.0 y=101.0 width=69.5 height=14.0 center_x=79.7 center_y=108.0)
-                    TextRun value="Cluster-wide" rect=(x=45.0 y=101.0 width=69.5 height=14.0 center_x=79.7 center_y=108.0)
+                Label value="Cluster-wide" rect=(x=48.0 y=103.0 width=75.2 height=20.0 center_x=85.6 center_y=113.0)
+                  TextRun value="Cluster-wide" rect=(x=48.0 y=105.0 width=75.2 height=20.0 center_x=85.6 center_y=115.0)
+              Label value="Age" rect=(x=276.7 y=87.0 width=22.5 height=16.0 center_x=287.9 center_y=95.0)
+                TextRun value="AGE" rect=(x=276.7 y=87.0 width=21.4 height=16.0 center_x=287.4 center_y=95.0)
               GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Label value="Age" rect=(x=270.3 y=84.0 width=21.6 height=14.0 center_x=281.2 center_y=91.0)
-                    TextRun value="Age" rect=(x=270.3 y=84.0 width=21.6 height=14.0 center_x=281.2 center_y=91.0)
-                  Label value="132d" rect=(x=270.3 y=101.0 width=25.2 height=14.0 center_x=283.0 center_y=108.0)
-                    TextRun value="132d" rect=(x=270.3 y=101.0 width=25.2 height=14.0 center_x=283.0 center_y=108.0)
+                Label value="132d" rect=(x=276.7 y=103.0 width=27.3 height=20.0 center_x=290.3 center_y=113.0)
+                  TextRun value="132d" rect=(x=276.0 y=105.0 width=28.0 height=20.0 center_x=290.0 center_y=115.0)
+              Label value="Scheduling" rect=(x=505.3 y=87.0 width=73.1 height=16.0 center_x=541.9 center_y=95.0)
+                TextRun value="SCHEDULING" rect=(x=505.3 y=87.0 width=72.0 height=16.0 center_x=541.3 center_y=95.0)
               GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Label value="Scheduling" rect=(x=495.7 y=84.0 width=60.0 height=14.0 center_x=525.7 center_y=91.0)
-                    TextRun value="Scheduling" rect=(x=495.7 y=84.0 width=60.0 height=14.0 center_x=525.7 center_y=91.0)
-                  GenericContainer rect=<none>
-                    Label value="Schedulable" rect=(x=515.7 y=101.0 width=65.8 height=14.0 center_x=548.6 center_y=108.0)
-                      TextRun value="Schedulable" rect=(x=515.7 y=101.0 width=65.8 height=14.0 center_x=548.6 center_y=108.0)
+                Label value="Schedulable" rect=(x=505.3 y=103.0 width=85.3 height=20.0 center_x=548.0 center_y=113.0)
+                  TextRun value="Schedulable" rect=(x=519.3 y=103.0 width=71.3 height=20.0 center_x=555.0 center_y=113.0)
               GenericContainer rect=<none>
+                Label value="Provider ID" rect=(x=60.0 y=154.0 width=74.4 height=16.0 center_x=97.2 center_y=162.0)
+                  TextRun value="PROVIDER ID" rect=(x=60.0 y=154.0 width=73.3 height=16.0 center_x=96.7 center_y=162.0)
                 GenericContainer rect=<none>
-                  GenericContainer rect=<none>
-                    Label value="Provider ID" rect=(x=58.0 y=139.0 width=58.9 height=14.0 center_x=87.5 center_y=146.0)
-                      TextRun value="Provider ID" rect=(x=58.0 y=139.0 width=58.9 height=14.0 center_x=87.5 center_y=146.0)
-                    GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        Label value="kind://docker/kind/kind-control-plane" rect=(x=58.0 y=156.0 width=202.9 height=14.0 center_x=159.5 center_y=163.0)
-                          TextRun value="kind://docker/kind/kind-control-plane" rect=(x=58.0 y=156.0 width=202.9 height=14.0 center_x=159.5 center_y=163.0)
-                      Button name="Copy Provider ID" rect=(x=268.9 y=156.2 width=14.0 height=14.0 center_x=275.9 center_y=163.2)
+                  Button name="Copy Provider ID" rect=(x=60.0 y=170.0 width=307.0 height=20.0 center_x=213.5 center_y=180.0)
+                    Label value="kind://docker/kind/kind-control-plane" rect=(x=60.0 y=170.0 width=219.8 height=20.0 center_x=169.9 center_y=180.0)
+                      TextRun value="kind://docker/kind/kind-control-plane" rect=(x=60.0 y=170.0 width=219.8 height=20.0 center_x=169.9 center_y=180.0)
+                Label value="Pod CIDRs" rect=(x=391.0 y=154.0 width=62.0 height=16.0 center_x=422.0 center_y=162.0)
+                  TextRun value="POD CIDRS" rect=(x=391.0 y=154.0 width=60.9 height=16.0 center_x=421.4 center_y=162.0)
                 GenericContainer rect=<none>
-                  GenericContainer rect=<none>
-                    Label value="Pod CIDRs" rect=(x=383.0 y=139.0 width=57.1 height=14.0 center_x=411.6 center_y=146.0)
-                      TextRun value="Pod CIDRs" rect=(x=383.0 y=139.0 width=57.1 height=14.0 center_x=411.6 center_y=146.0)
-                    Label value="10.244.0.0/24, fd00:10:244::/56" rect=(x=383.0 y=156.0 width=173.2 height=14.0 center_x=469.6 center_y=163.0)
-                      TextRun value="10.244.0.0/24, fd00:10:244::/56" rect=(x=383.0 y=156.0 width=173.2 height=14.0 center_x=469.6 center_y=163.0)
+                  Label value="10.244.0.0/24, fd00:10:244::/56" rect=(x=391.0 y=170.0 width=187.7 height=20.0 center_x=484.8 center_y=180.0)
+                    TextRun value="10.244.0.0/24, fd00:10:244::/56" rect=(x=391.0 y=172.0 width=187.7 height=20.0 center_x=484.8 center_y=182.0)
               GenericContainer rect=<none>
+                Label value="UID" rect=(x=60.0 y=233.0 width=21.0 height=16.0 center_x=70.5 center_y=241.0)
+                  TextRun value="UID" rect=(x=60.0 y=233.0 width=19.9 height=16.0 center_x=70.0 center_y=241.0)
                 GenericContainer rect=<none>
-                  GenericContainer rect=<none>
-                    Label value="UID" rect=(x=58.0 y=207.0 width=20.0 height=14.0 center_x=68.0 center_y=214.0)
-                      TextRun value="UID" rect=(x=58.0 y=207.0 width=20.0 height=14.0 center_x=68.0 center_y=214.0)
-                    GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        Label value="d1f2c3a4-b5e6-47f8-9a0b-1c2d3e4f5a6b" rect=(x=58.0 y=224.0 width=227.3 height=14.0 center_x=171.7 center_y=231.0)
-                          TextRun value="d1f2c3a4-b5e6-47f8-9a0b-1c2d3e4f5a6b" rect=(x=58.0 y=224.0 width=227.3 height=14.0 center_x=171.7 center_y=231.0)
-                      Button name="Copy UID" rect=(x=293.3 y=224.2 width=14.0 height=14.0 center_x=300.3 center_y=231.2)
+                  Button name="Copy UID" rect=(x=60.0 y=249.0 width=638.0 height=20.0 center_x=379.0 center_y=259.0)
+                    Label value="d1f2c3a4-b5e6-47f8-9a0b-1c2d3e4f5a6b" rect=(x=60.0 y=249.0 width=246.3 height=20.0 center_x=183.1 center_y=259.0)
+                      TextRun value="d1f2c3a4-b5e6-47f8-9a0b-1c2d3e4f5a6b" rect=(x=60.0 y=249.0 width=246.3 height=20.0 center_x=183.1 center_y=259.0)
               GenericContainer rect=<none>
+                Label value="Description" rect=(x=60.0 y=312.0 width=77.9 height=16.0 center_x=98.9 center_y=320.0)
+                  TextRun value="DESCRIPTION" rect=(x=60.0 y=312.0 width=76.8 height=16.0 center_x=98.4 center_y=320.0)
                 GenericContainer rect=<none>
-                  GenericContainer rect=<none>
-                    Label value="Description" rect=(x=58.0 y=275.0 width=61.8 height=14.0 center_x=88.9 center_y=282.0)
-                      TextRun value="Description" rect=(x=58.0 y=275.0 width=61.8 height=14.0 center_x=88.9 center_y=282.0)
-                    Label value="This node runs the control-plane components and is reserved for cluster infrastructure workloads." rect=(x=58.0 y=292.0 width=522.4 height=14.0 center_x=319.2 center_y=299.0)
-                      TextRun value="This node runs the control-plane components and is reserved for cluster infrastructure workloads." rect=(x=58.0 y=292.0 width=522.4 height=14.0 center_x=319.2 center_y=299.0)
+                  Label value="This node runs the control-plane components and is reserved for cluster infrastructure workloads." rect=(x=60.0 y=328.0 width=566.0 height=20.0 center_x=343.0 center_y=338.0)
+                    TextRun value="This node runs the control-plane components and is reserved for cluster infrastructure workloads." rect=(x=60.0 y=330.0 width=566.0 height=20.0 center_x=343.0 center_y=340.0)
               GenericContainer rect=<none>
+                Label value="External ID" rect=(x=60.0 y=391.0 width=74.5 height=16.0 center_x=97.3 center_y=399.0)
+                  TextRun value="EXTERNAL ID" rect=(x=60.0 y=391.0 width=73.4 height=16.0 center_x=96.7 center_y=399.0)
                 GenericContainer rect=<none>
-                  GenericContainer rect=<none>
-                    Label value="External ID" rect=(x=58.0 y=343.0 width=57.8 height=14.0 center_x=86.9 center_y=350.0)
-                      TextRun value="External ID" rect=(x=58.0 y=343.0 width=57.8 height=14.0 center_x=86.9 center_y=350.0)
-                    Label value="External ID: unavailable" rect=(x=58.0 y=360.0 width=61.2 height=14.0 center_x=88.6 center_y=367.0)
-                      TextRun value="Unavailable" rect=(x=58.0 y=360.0 width=61.2 height=14.0 center_x=88.6 center_y=367.0)
+                  Label value="Unavailable" rect=(x=60.0 y=407.0 width=66.3 height=20.0 center_x=93.1 center_y=417.0)
+                    TextRun value="Unavailable" rect=(x=60.0 y=409.0 width=66.3 height=20.0 center_x=93.1 center_y=419.0)
+                Label value="Architecture" rect=(x=391.0 y=391.0 width=86.5 height=16.0 center_x=434.3 center_y=399.0)
+                  TextRun value="ARCHITECTURE" rect=(x=391.0 y=391.0 width=85.4 height=16.0 center_x=433.7 center_y=399.0)
                 GenericContainer rect=<none>
-                  GenericContainer rect=<none>
-                    Label value="Architecture" rect=(x=383.0 y=343.0 width=67.5 height=14.0 center_x=416.8 center_y=350.0)
-                      TextRun value="Architecture" rect=(x=383.0 y=343.0 width=67.5 height=14.0 center_x=416.8 center_y=350.0)
-                    Label value="amd64" rect=(x=383.0 y=360.0 width=37.6 height=14.0 center_x=401.8 center_y=367.0)
-                      TextRun value="amd64" rect=(x=383.0 y=360.0 width=37.6 height=14.0 center_x=401.8 center_y=367.0)
+                  Label value="amd64" rect=(x=391.0 y=407.0 width=40.8 height=20.0 center_x=411.4 center_y=417.0)
+                    TextRun value="amd64" rect=(x=391.0 y=409.0 width=40.8 height=20.0 center_x=411.4 center_y=419.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="Events & conditions" rect=(x=771.1 y=45.0 width=193.1 height=24.0 center_x=867.6 center_y=57.0)
-                TextRun value="Events & conditions" rect=(x=771.1 y=45.0 width=193.1 height=24.0 center_x=867.6 center_y=57.0)
-              Label value="Events" rect=(x=771.1 y=84.0 width=39.6 height=16.0 center_x=790.9 center_y=92.0)
-                TextRun value="Events" rect=(x=771.1 y=84.0 width=39.6 height=16.0 center_x=790.9 center_y=92.0)
+              Label value="Events & conditions" rect=(x=774.0 y=48.0 width=193.1 height=24.0 center_x=870.5 center_y=60.0)
+                TextRun value="Events & conditions" rect=(x=774.0 y=48.0 width=193.1 height=24.0 center_x=870.5 center_y=60.0)
+              Label value="Events" rect=(x=774.0 y=87.0 width=39.6 height=16.0 center_x=793.8 center_y=95.0)
+                TextRun value="Events" rect=(x=774.0 y=87.0 width=39.6 height=16.0 center_x=793.8 center_y=95.0)
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Label value="Type" rect=(x=771.1 y=103.0 width=26.4 height=14.0 center_x=784.3 center_y=110.0)
-                      TextRun value="Type" rect=(x=771.1 y=103.0 width=26.4 height=14.0 center_x=784.3 center_y=110.0)
+                    Label value="Type" rect=(x=774.0 y=106.0 width=26.4 height=14.0 center_x=787.2 center_y=113.0)
+                      TextRun value="Type" rect=(x=774.0 y=106.0 width=26.4 height=14.0 center_x=787.2 center_y=113.0)
                   GenericContainer rect=<none>
-                    Label value="Reason" rect=(x=885.1 y=103.0 width=39.4 height=14.0 center_x=904.8 center_y=110.0)
-                      TextRun value="Reason" rect=(x=885.1 y=103.0 width=39.4 height=14.0 center_x=904.8 center_y=110.0)
+                    Label value="Reason" rect=(x=887.0 y=106.0 width=39.4 height=14.0 center_x=906.7 center_y=113.0)
+                      TextRun value="Reason" rect=(x=887.0 y=106.0 width=39.4 height=14.0 center_x=906.7 center_y=113.0)
                   GenericContainer rect=<none>
-                    Label value="Message" rect=(x=999.1 y=103.0 width=47.6 height=14.0 center_x=1022.9 center_y=110.0)
-                      TextRun value="Message" rect=(x=999.1 y=103.0 width=47.6 height=14.0 center_x=1022.9 center_y=110.0)
+                    Label value="Message" rect=(x=1000.0 y=106.0 width=47.6 height=14.0 center_x=1023.8 center_y=113.0)
+                      TextRun value="Message" rect=(x=1000.0 y=106.0 width=47.6 height=14.0 center_x=1023.8 center_y=113.0)
                   GenericContainer rect=<none>
-                    Label value="Source" rect=(x=1219.1 y=103.0 width=38.1 height=14.0 center_x=1238.1 center_y=110.0)
-                      TextRun value="Source" rect=(x=1219.1 y=103.0 width=38.1 height=14.0 center_x=1238.1 center_y=110.0)
+                    Label value="Source" rect=(x=1218.0 y=106.0 width=38.1 height=14.0 center_x=1237.1 center_y=113.0)
+                      TextRun value="Source" rect=(x=1218.0 y=106.0 width=38.1 height=14.0 center_x=1237.1 center_y=113.0)
                   GenericContainer rect=<none>
-                    Label value="Time" rect=(x=1333.1 y=103.0 width=26.2 height=14.0 center_x=1346.2 center_y=110.0)
-                      TextRun value="Time" rect=(x=1333.1 y=103.0 width=26.2 height=14.0 center_x=1346.2 center_y=110.0)
+                    Label value="Time" rect=(x=1331.0 y=106.0 width=26.2 height=14.0 center_x=1344.1 center_y=113.0)
+                      TextRun value="Time" rect=(x=1331.0 y=106.0 width=26.2 height=14.0 center_x=1344.1 center_y=113.0)
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    GenericContainer rect=<none>
-                      Label value="Normal" rect=(x=791.1 y=145.0 width=39.3 height=14.0 center_x=810.7 center_y=152.0)
-                        TextRun value="Normal" rect=(x=791.1 y=145.0 width=39.3 height=14.0 center_x=810.7 center_y=152.0)
+                    Label value="Normal" rect=(x=774.0 y=148.0 width=53.3 height=14.0 center_x=800.6 center_y=155.0)
+                      TextRun value="Normal" rect=(x=788.0 y=148.0 width=39.3 height=14.0 center_x=807.6 center_y=155.0)
                   GenericContainer rect=<none>
-                    Label value="Pulled" rect=(x=885.1 y=145.0 width=32.5 height=14.0 center_x=901.3 center_y=152.0)
-                      TextRun value="Pulled" rect=(x=885.1 y=145.0 width=32.5 height=14.0 center_x=901.3 center_y=152.0)
+                    Label value="Pulled" rect=(x=887.0 y=148.0 width=32.5 height=14.0 center_x=903.2 center_y=155.0)
+                      TextRun value="Pulled" rect=(x=887.0 y=148.0 width=32.5 height=14.0 center_x=903.2 center_y=155.0)
                   GenericContainer rect=<none>
-                    Label value="Successfully pulled image" rect=(x=999.1 y=145.0 width=138.8 height=14.0 center_x=1068.5 center_y=152.0)
-                      TextRun value="Successfully pulled image" rect=(x=999.1 y=145.0 width=138.8 height=14.0 center_x=1068.5 center_y=152.0)
+                    Label value="Successfully pulled image" rect=(x=1000.0 y=148.0 width=138.8 height=14.0 center_x=1069.4 center_y=155.0)
+                      TextRun value="Successfully pulled image" rect=(x=1000.0 y=148.0 width=138.8 height=14.0 center_x=1069.4 center_y=155.0)
                   GenericContainer rect=<none>
-                    Label value="kubelet" rect=(x=1219.1 y=145.0 width=39.8 height=14.0 center_x=1239.0 center_y=152.0)
-                      TextRun value="kubelet" rect=(x=1219.1 y=145.0 width=39.8 height=14.0 center_x=1239.0 center_y=152.0)
+                    Label value="kubelet" rect=(x=1218.0 y=148.0 width=39.8 height=14.0 center_x=1237.9 center_y=155.0)
+                      TextRun value="kubelet" rect=(x=1218.0 y=148.0 width=39.8 height=14.0 center_x=1237.9 center_y=155.0)
                   GenericContainer rect=<none>
-                    Label value="2m ago" rect=(x=1333.1 y=145.0 width=40.0 height=14.0 center_x=1353.1 center_y=152.0)
-                      TextRun value="2m ago" rect=(x=1333.1 y=145.0 width=40.0 height=14.0 center_x=1353.1 center_y=152.0)
+                    Label value="2m ago" rect=(x=1331.0 y=148.0 width=40.0 height=14.0 center_x=1351.0 center_y=155.0)
+                      TextRun value="2m ago" rect=(x=1331.0 y=148.0 width=40.0 height=14.0 center_x=1351.0 center_y=155.0)
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    GenericContainer rect=<none>
-                      Label value="Warning" rect=(x=791.1 y=187.0 width=44.4 height=14.0 center_x=813.3 center_y=194.0)
-                        TextRun value="Warning" rect=(x=791.1 y=187.0 width=44.4 height=14.0 center_x=813.3 center_y=194.0)
+                    Label value="Warning" rect=(x=774.0 y=190.0 width=58.4 height=14.0 center_x=803.2 center_y=197.0)
+                      TextRun value="Warning" rect=(x=788.0 y=190.0 width=44.4 height=14.0 center_x=810.2 center_y=197.0)
                   GenericContainer rect=<none>
-                    Label value="BackOff" rect=(x=885.1 y=187.0 width=43.9 height=14.0 center_x=907.0 center_y=194.0)
-                      TextRun value="BackOff" rect=(x=885.1 y=187.0 width=43.9 height=14.0 center_x=907.0 center_y=194.0)
+                    Label value="BackOff" rect=(x=887.0 y=190.0 width=43.9 height=14.0 center_x=909.0 center_y=197.0)
+                      TextRun value="BackOff" rect=(x=887.0 y=190.0 width=43.9 height=14.0 center_x=909.0 center_y=197.0)
                   GenericContainer rect=<none>
-                    Label value="Back-off restarting failed container" rect=(x=999.1 y=187.0 width=187.8 height=14.0 center_x=1093.0 center_y=194.0)
-                      TextRun value="Back-off restarting failed container" rect=(x=999.1 y=187.0 width=187.8 height=14.0 center_x=1093.0 center_y=194.0)
+                    Label value="Back-off restarting failed container" rect=(x=1000.0 y=190.0 width=187.8 height=14.0 center_x=1093.9 center_y=197.0)
+                      TextRun value="Back-off restarting failed container" rect=(x=1000.0 y=190.0 width=187.8 height=14.0 center_x=1093.9 center_y=197.0)
                   GenericContainer rect=<none>
-                    Label value="kubelet" rect=(x=1219.1 y=187.0 width=39.8 height=14.0 center_x=1239.0 center_y=194.0)
-                      TextRun value="kubelet" rect=(x=1219.1 y=187.0 width=39.8 height=14.0 center_x=1239.0 center_y=194.0)
+                    Label value="kubelet" rect=(x=1218.0 y=190.0 width=39.8 height=14.0 center_x=1237.9 center_y=197.0)
+                      TextRun value="kubelet" rect=(x=1218.0 y=190.0 width=39.8 height=14.0 center_x=1237.9 center_y=197.0)
                   GenericContainer rect=<none>
-                    Label value="1m ago" rect=(x=1333.1 y=187.0 width=38.2 height=14.0 center_x=1352.2 center_y=194.0)
-                      TextRun value="1m ago" rect=(x=1333.1 y=187.0 width=38.2 height=14.0 center_x=1352.2 center_y=194.0)
-              Label value="Conditions" rect=(x=771.1 y=237.0 width=63.6 height=16.0 center_x=802.9 center_y=245.0)
-                TextRun value="Conditions" rect=(x=771.1 y=237.0 width=63.6 height=16.0 center_x=802.9 center_y=245.0)
+                    Label value="1m ago" rect=(x=1331.0 y=190.0 width=38.2 height=14.0 center_x=1350.1 center_y=197.0)
+                      TextRun value="1m ago" rect=(x=1331.0 y=190.0 width=38.2 height=14.0 center_x=1350.1 center_y=197.0)
+              Label value="Conditions" rect=(x=774.0 y=240.0 width=63.6 height=16.0 center_x=805.8 center_y=248.0)
+                TextRun value="Conditions" rect=(x=774.0 y=240.0 width=63.6 height=16.0 center_x=805.8 center_y=248.0)
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Label value="Type" rect=(x=771.1 y=256.0 width=26.4 height=14.0 center_x=784.3 center_y=263.0)
-                      TextRun value="Type" rect=(x=771.1 y=256.0 width=26.4 height=14.0 center_x=784.3 center_y=263.0)
+                    Label value="Type" rect=(x=774.0 y=259.0 width=26.4 height=14.0 center_x=787.2 center_y=266.0)
+                      TextRun value="Type" rect=(x=774.0 y=259.0 width=26.4 height=14.0 center_x=787.2 center_y=266.0)
                   GenericContainer rect=<none>
-                    Label value="Status" rect=(x=896.2 y=256.0 width=34.8 height=14.0 center_x=913.6 center_y=263.0)
-                      TextRun value="Status" rect=(x=896.2 y=256.0 width=34.8 height=14.0 center_x=913.6 center_y=263.0)
+                    Label value="Status" rect=(x=898.0 y=259.0 width=34.8 height=14.0 center_x=915.4 center_y=266.0)
+                      TextRun value="Status" rect=(x=898.0 y=259.0 width=34.8 height=14.0 center_x=915.4 center_y=266.0)
                   GenericContainer rect=<none>
-                    Label value="Reason" rect=(x=1021.2 y=256.0 width=39.4 height=14.0 center_x=1041.0 center_y=263.0)
-                      TextRun value="Reason" rect=(x=1021.2 y=256.0 width=39.4 height=14.0 center_x=1041.0 center_y=263.0)
+                    Label value="Reason" rect=(x=1022.0 y=259.0 width=39.4 height=14.0 center_x=1041.7 center_y=266.0)
+                      TextRun value="Reason" rect=(x=1022.0 y=259.0 width=39.4 height=14.0 center_x=1041.7 center_y=266.0)
                   GenericContainer rect=<none>
-                    Label value="Message" rect=(x=1204.9 y=256.0 width=47.6 height=14.0 center_x=1228.7 center_y=263.0)
-                      TextRun value="Message" rect=(x=1204.9 y=256.0 width=47.6 height=14.0 center_x=1228.7 center_y=263.0)
+                    Label value="Message" rect=(x=1204.0 y=259.0 width=47.6 height=14.0 center_x=1227.8 center_y=266.0)
+                      TextRun value="Message" rect=(x=1204.0 y=259.0 width=47.6 height=14.0 center_x=1227.8 center_y=266.0)
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Label value="Ready" rect=(x=771.1 y=298.0 width=33.5 height=14.0 center_x=787.8 center_y=305.0)
-                      TextRun value="Ready" rect=(x=771.1 y=298.0 width=33.5 height=14.0 center_x=787.8 center_y=305.0)
+                    Label value="Ready" rect=(x=774.0 y=301.0 width=33.5 height=14.0 center_x=790.8 center_y=308.0)
+                      TextRun value="Ready" rect=(x=774.0 y=301.0 width=33.5 height=14.0 center_x=790.8 center_y=308.0)
                   GenericContainer rect=<none>
-                    GenericContainer rect=<none>
-                      Label value="True" rect=(x=916.2 y=298.0 width=23.4 height=14.0 center_x=927.8 center_y=305.0)
-                        TextRun value="True" rect=(x=916.2 y=298.0 width=23.4 height=14.0 center_x=927.8 center_y=305.0)
+                    Label value="True" rect=(x=898.0 y=301.0 width=37.4 height=14.0 center_x=916.7 center_y=308.0)
+                      TextRun value="True" rect=(x=912.0 y=301.0 width=23.4 height=14.0 center_x=923.7 center_y=308.0)
                   GenericContainer rect=<none>
-                    Label value="KubeletReady" rect=(x=1021.2 y=298.0 width=74.8 height=14.0 center_x=1058.7 center_y=305.0)
-                      TextRun value="KubeletReady" rect=(x=1021.2 y=298.0 width=74.8 height=14.0 center_x=1058.7 center_y=305.0)
+                    Label value="KubeletReady" rect=(x=1022.0 y=301.0 width=74.8 height=14.0 center_x=1059.4 center_y=308.0)
+                      TextRun value="KubeletReady" rect=(x=1022.0 y=301.0 width=74.8 height=14.0 center_x=1059.4 center_y=308.0)
                   GenericContainer rect=<none>
-                    Label value="kubelet is posting ready status" rect=(x=1204.9 y=298.0 width=163.9 height=14.0 center_x=1286.8 center_y=305.0)
-                      TextRun value="kubelet is posting ready status" rect=(x=1204.9 y=298.0 width=163.9 height=14.0 center_x=1286.8 center_y=305.0)
+                    Label value="kubelet is posting ready status" rect=(x=1204.0 y=301.0 width=163.9 height=14.0 center_x=1285.9 center_y=308.0)
+                      TextRun value="kubelet is posting ready status" rect=(x=1204.0 y=301.0 width=163.9 height=14.0 center_x=1285.9 center_y=308.0)
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Label value="MemoryPressure" rect=(x=771.1 y=340.0 width=90.2 height=14.0 center_x=816.2 center_y=347.0)
-                      TextRun value="MemoryPressure" rect=(x=771.1 y=340.0 width=90.2 height=14.0 center_x=816.2 center_y=347.0)
+                    Label value="MemoryPressure" rect=(x=774.0 y=343.0 width=90.2 height=14.0 center_x=819.1 center_y=350.0)
+                      TextRun value="MemoryPressure" rect=(x=774.0 y=343.0 width=90.2 height=14.0 center_x=819.1 center_y=350.0)
                   GenericContainer rect=<none>
-                    GenericContainer rect=<none>
-                      Label value="False" rect=(x=916.2 y=340.0 width=27.3 height=14.0 center_x=929.8 center_y=347.0)
-                        TextRun value="False" rect=(x=916.2 y=340.0 width=27.3 height=14.0 center_x=929.8 center_y=347.0)
+                    Label value="False" rect=(x=898.0 y=343.0 width=41.3 height=14.0 center_x=918.7 center_y=350.0)
+                      TextRun value="False" rect=(x=912.0 y=343.0 width=27.3 height=14.0 center_x=925.7 center_y=350.0)
                   GenericContainer rect=<none>
-                    Label value="KubeletHasSufficientMemory" rect=(x=1021.2 y=340.0 width=159.0 height=14.0 center_x=1100.8 center_y=347.0)
-                      TextRun value="KubeletHasSufficientMemory" rect=(x=1021.2 y=340.0 width=159.0 height=14.0 center_x=1100.8 center_y=347.0)
+                    Label value="KubeletHasSufficientMemory" rect=(x=1022.0 y=343.0 width=159.0 height=14.0 center_x=1101.5 center_y=350.0)
+                      TextRun value="KubeletHasSufficientMemory" rect=(x=1022.0 y=343.0 width=159.0 height=14.0 center_x=1101.5 center_y=350.0)
                   GenericContainer rect=<none>
-                    Label value="kubelet has sufficient memory" rect=(x=1204.9 y=340.0 width=162.4 height=14.0 center_x=1286.1 center_y=347.0)
-                      TextRun value="kubelet has sufficient memory" rect=(x=1204.9 y=340.0 width=162.4 height=14.0 center_x=1286.1 center_y=347.0)
+                    Label value="kubelet has sufficient memory" rect=(x=1204.0 y=343.0 width=162.4 height=14.0 center_x=1285.2 center_y=350.0)
+                      TextRun value="kubelet has sufficient memory" rect=(x=1204.0 y=343.0 width=162.4 height=14.0 center_x=1285.2 center_y=350.0)

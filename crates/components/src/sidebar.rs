@@ -25,7 +25,7 @@
 //! ```ignore
 //! NarrowSidebar::new().show(ui, |sidebar| {
 //!     sidebar.item("Dashboard", home_icon, true);
-//!     sidebar.item("Settings", settings_icon, false);
+//!     sidebar.item("Settings", cog_6_tooth_icon, false);
 //! });
 //! ```
 
@@ -36,7 +36,7 @@ use egui::{
 
 use crate::PointingHand;
 use crate::design::theme::{self, Theme, ThemeExt, ThemeScope};
-use crate::design::{radius, space, stroke, type_scale};
+use crate::design::{radius, size, space, stroke, type_scale};
 
 const WIDE_WIDTH: f32 = 292.0;
 const NARROW_WIDTH: f32 = 68.0;
@@ -46,11 +46,10 @@ const NARROW_WIDTH: f32 = 68.0;
 const WIDE_ITEM_HEIGHT: f32 = 36.0;
 const WIDE_GROUP_HEIGHT: f32 = 44.0;
 const NARROW_ITEM_HEIGHT: f32 = 52.0;
-const NARROW_AVATAR_SIZE: f32 = 28.0;
 const ITEM_PADDING_X: f32 = space::S8;
-const ICON_SIZE: f32 = 16.0;
+const ICON_SIZE: f32 = size::ICON;
 const ICON_TEXT_SPACING: f32 = space::S8;
-const CHEVRON_SIZE: f32 = 16.0;
+const CHEVRON_SIZE: f32 = size::ICON;
 const CHEVRON_GAP: f32 = 8.0;
 /// Distance from an expandable item's padded edge to its disclosure chevron.
 const CHEVRON_INSET: f32 = 12.0;
@@ -235,9 +234,13 @@ fn text_pos_after_chevron(inner_rect: egui::Rect, item_height: f32) -> egui::Pos
 }
 
 mod core;
+mod floating;
 mod narrow;
 mod wide;
 
+pub use floating::{
+    ClusterCard, FloatingSidebar, SideItem, kind_filter, side_caption, side_footer,
+};
 pub use narrow::{NarrowSidebar, NarrowSidebarContent};
 pub use wide::{ExpandableResponse, WideSidebar, WideSidebarContent};
 

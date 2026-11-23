@@ -1,5 +1,6 @@
 use super::core::*;
 use super::*;
+use crate::tooltip::TooltipExt;
 
 /// Response from an expandable sidebar section
 pub struct ExpandableResponse<R> {
@@ -103,7 +104,7 @@ impl<'a> WideSidebarContent<'a> {
         );
         add_selectable_accessibility(&response, self.core.ui, text_str, selected);
         if text_is_truncated {
-            response.clone().on_hover_text(text_str);
+            response.clone().tooltip(text_str);
         }
 
         response
@@ -143,9 +144,9 @@ impl<'a> WideSidebarContent<'a> {
 
         // Chevron
         let chevron = if is_open {
-            crate::icons::chevron_down_icon()
+            crate::icons::Icon::ChevronDown.image()
         } else {
-            crate::icons::chevron_right_icon()
+            crate::icons::Icon::ChevronRight.image()
         };
         let chevron = chevron
             .fit_to_exact_size(Vec2::splat(CHEVRON_SIZE))
@@ -191,7 +192,7 @@ impl<'a> WideSidebarContent<'a> {
             inner_rect.right() - text_pos_after_icon(inner_rect, WIDE_GROUP_HEIGHT).x,
         );
         if text_is_truncated {
-            response.clone().on_hover_text(text_str);
+            response.clone().tooltip(text_str);
         }
 
         if response.clicked() {
@@ -261,9 +262,9 @@ impl<'a> WideSidebarContent<'a> {
             CollapsingState::load_with_default_open(self.core.ui.ctx(), id, default_open);
         let is_open = state.is_open();
         let chevron = if is_open {
-            crate::icons::chevron_down_icon()
+            crate::icons::Icon::ChevronDown.image()
         } else {
-            crate::icons::chevron_right_icon()
+            crate::icons::Icon::ChevronRight.image()
         }
         .fit_to_exact_size(Vec2::splat(CHEVRON_SIZE))
         .tint(chevron_tint(self.core.ui));
@@ -298,7 +299,7 @@ impl<'a> WideSidebarContent<'a> {
             inner_rect.right() - text_pos.x,
         );
         if text_is_truncated {
-            response.clone().on_hover_text(text_str);
+            response.clone().tooltip(text_str);
         }
 
         if response.clicked() {
@@ -367,7 +368,7 @@ impl<'a> WideSidebarContent<'a> {
         );
         add_selectable_accessibility(&response, self.core.ui, text_str, selected);
         if text_is_truncated {
-            response.clone().on_hover_text(text_str);
+            response.clone().tooltip(text_str);
         }
 
         response
@@ -384,7 +385,7 @@ impl<'a> WideSidebarContent<'a> {
         let color = muted_text_color(ui);
         // The spinner sits where a section's chevron does, and the text where its label does.
         let inner_rect = rect.shrink2(Vec2::new(ITEM_PADDING_X, 0.0));
-        let spinner_size = type_scale::META.size();
+        let spinner_size = crate::design::size::SPINNER_SM;
         let spinner_rect = egui::Rect::from_center_size(
             egui::pos2(
                 inner_rect.left() + CHEVRON_INSET + CHEVRON_SIZE / 2.0,
@@ -392,10 +393,10 @@ impl<'a> WideSidebarContent<'a> {
             ),
             Vec2::splat(spinner_size),
         );
-        egui::Spinner::new()
+        crate::Spinner::new()
             .size(spinner_size)
-            .color(color)
-            .paint_at(ui, spinner_rect);
+            .neutral(color)
+            .paint(ui, spinner_rect);
         let text_rect = egui::Rect::from_min_max(
             egui::pos2(
                 text_pos_after_chevron(inner_rect, WIDE_ITEM_HEIGHT).x,
@@ -408,13 +409,12 @@ impl<'a> WideSidebarContent<'a> {
                 .max_rect(text_rect)
                 .layout(egui::Layout::left_to_right(egui::Align::Center)),
             |ui| {
-                ui.add(
-                    egui::Label::new(
-                        RichText::new(text)
-                            .font(type_scale::META.font_id(ui.ctx()))
-                            .color(color),
-                    )
-                    .truncate(),
+                crate::tooltip::truncated_label(
+                    ui,
+                    RichText::new(text)
+                        .font(type_scale::META.font_id(ui.ctx()))
+                        .color(color),
+                    |label| label,
                 );
             },
         );

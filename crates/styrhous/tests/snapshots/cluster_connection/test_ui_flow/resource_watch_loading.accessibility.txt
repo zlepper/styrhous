@@ -17,51 +17,52 @@ Window state=[focused] rect=<none>
             Image rect=(x=20.0 y=976.0 width=28.0 height=28.0 center_x=34.0 center_y=990.0)
     GenericContainer rect=<none>
       GenericContainer rect=<none>
+        Label value="dev" rect=(x=82.0 y=22.0 width=35.4 height=28.0 center_x=99.7 center_y=36.0)
+          TextRun value="dev" rect=(x=82.0 y=22.0 width=35.4 height=28.0 center_x=99.7 center_y=36.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
-            GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="dev" rect=(x=92.0 y=29.0 width=35.4 height=24.0 center_x=109.7 center_y=41.0)
-                  TextRun value="dev" rect=(x=92.0 y=29.0 width=35.4 height=24.0 center_x=109.7 center_y=41.0)
-              Button name="Apps & Containers" state=[toggled=True] rect=(x=68.0 y=73.0 width=291.0 height=44.0 center_x=213.5 center_y=95.0)
-              GenericContainer rect=<none>
-                Image rect=(x=88.0 y=87.0 width=16.0 height=16.0 center_x=96.0 center_y=95.0)
-              Button name="Pods" state=[toggled=True] rect=(x=68.0 y=126.0 width=291.0 height=36.0 center_x=213.5 center_y=144.0)
-              Button name="Deployments" state=[toggled=False] rect=(x=68.0 y=165.0 width=291.0 height=36.0 center_x=213.5 center_y=183.0)
-              Button name="Stateful Sets" state=[toggled=False] rect=(x=68.0 y=204.0 width=291.0 height=36.0 center_x=213.5 center_y=222.0)
-              Button name="Config" state=[toggled=False] rect=(x=68.0 y=245.0 width=291.0 height=44.0 center_x=213.5 center_y=267.0)
-              GenericContainer rect=<none>
-                Image rect=(x=88.0 y=259.0 width=16.0 height=16.0 center_x=96.0 center_y=267.0)
-              Button name="Networking" state=[toggled=False] rect=(x=68.0 y=292.0 width=291.0 height=44.0 center_x=213.5 center_y=314.0)
-              GenericContainer rect=<none>
-                Image rect=(x=88.0 y=306.0 width=16.0 height=16.0 center_x=96.0 center_y=314.0)
-              Button name="Helm" state=[toggled=False] rect=(x=68.0 y=339.0 width=291.0 height=44.0 center_x=213.5 center_y=361.0)
-              GenericContainer rect=<none>
-                Image rect=(x=88.0 y=353.0 width=16.0 height=16.0 center_x=96.0 center_y=361.0)
+            Button name="Apps & Containers" state=[toggled=False] rect=(x=82.0 y=62.0 width=263.0 height=30.0 center_x=213.5 center_y=77.0)
+              TextRun value="Apps & Containers" rect=(x=112.0 y=67.0 width=109.2 height=20.0 center_x=166.6 center_y=77.0)
+            Button name="Pods" state=[toggled=True] rect=(x=82.0 y=92.0 width=263.0 height=30.0 center_x=213.5 center_y=107.0)
+              TextRun value="Pods" rect=(x=112.0 y=97.0 width=28.9 height=20.0 center_x=126.4 center_y=107.0)
+            Button name="Deployments" state=[toggled=False] rect=(x=82.0 y=122.0 width=263.0 height=30.0 center_x=213.5 center_y=137.0)
+              TextRun value="Deployments" rect=(x=112.0 y=127.0 width=77.8 height=20.0 center_x=150.9 center_y=137.0)
+            Button name="Stateful Sets" state=[toggled=False] rect=(x=82.0 y=152.0 width=263.0 height=30.0 center_x=213.5 center_y=167.0)
+              TextRun value="Stateful Sets" rect=(x=112.0 y=157.0 width=76.1 height=20.0 center_x=150.0 center_y=167.0)
+            Button name="Config" state=[toggled=False] rect=(x=82.0 y=182.0 width=263.0 height=30.0 center_x=213.5 center_y=197.0)
+              TextRun value="Config" rect=(x=112.0 y=187.0 width=39.9 height=20.0 center_x=132.0 center_y=197.0)
+            Button name="Networking" state=[toggled=False] rect=(x=82.0 y=212.0 width=263.0 height=30.0 center_x=213.5 center_y=227.0)
+              TextRun value="Networking" rect=(x=112.0 y=217.0 width=69.1 height=20.0 center_x=146.5 center_y=227.0)
+            Button name="Helm" state=[toggled=False] rect=(x=82.0 y=242.0 width=263.0 height=30.0 center_x=213.5 center_y=257.0)
+              TextRun value="Helm" rect=(x=112.0 y=247.0 width=31.0 height=20.0 center_x=127.5 center_y=257.0)
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
-          Label value="Namespace" rect=(x=397.0 y=17.5 width=74.7 height=17.0 center_x=434.3 center_y=26.0)
-            TextRun value="Namespace" rect=(x=397.0 y=17.5 width=74.7 height=17.0 center_x=434.3 center_y=26.0)
-          ComboBox name="Namespace" rect=(x=486.7 y=10.0 width=230.0 height=32.0 center_x=601.7 center_y=26.0)
-          GenericContainer rect=<none>
-            Image rect=(x=692.7 y=18.0 width=16.0 height=16.0 center_x=700.7 center_y=26.0)
-          GenericContainer rect=<none>
-            Label value="0 items" rect=(x=771.7 y=16.5 width=58.1 height=19.0 center_x=800.7 center_y=26.0)
-              TextRun value="0 items" rect=(x=771.7 y=16.5 width=58.1 height=19.0 center_x=800.7 center_y=26.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  GenericContainer rect=<none>
-                    TextInput name="Search resources" value="" rect=(x=1303.0 y=13.0 width=150.0 height=26.0 center_x=1378.0 center_y=26.0)
-                      TextRun value="" rect=(x=1307.0 y=15.0 width=0.0 height=17.0 center_x=1307.0 center_y=23.5)
-                  CheckBox name="Use regex search" state=[toggled=Mixed] rect=(x=1475.0 y=17.0 width=15.7 height=18.0 center_x=1482.8 center_y=26.0)
-        GenericContainer rect=<none>
+                TextInput name="Search resources" value="" rect=(x=376.0 y=20.0 width=228.0 height=38.0 center_x=490.0 center_y=39.0)
+                  TextRun value="" rect=(x=412.0 y=31.0 width=0.0 height=20.0 center_x=412.0 center_y=41.0)
+              CheckBox name="Regular expression" state=[toggled=False] rect=(x=612.0 y=27.0 width=24.0 height=24.0 center_x=624.0 center_y=39.0)
+            ComboBox name="Namespace scope" value="default" rect=(x=684.0 y=20.0 width=240.0 height=38.0 center_x=804.0 center_y=39.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              ProgressIndicator rect=(x=938.0 y=502.5 width=20.0 height=20.0 center_x=948.0 center_y=512.5)
-              Label value="Loading resources" rect=(x=876.2 y=533.5 width=143.7 height=19.0 center_x=948.0 center_y=543.0)
-                TextRun value="Loading resources" rect=(x=876.0 y=533.5 width=143.7 height=19.0 center_x=947.9 center_y=543.0)
-              Label value="Waiting for the selected namespace resources to synchronize." rect=(x=753.6 y=563.5 width=388.9 height=17.0 center_x=948.0 center_y=572.0)
-                TextRun value="Waiting for the selected namespace resources to synchronize." rect=(x=754.0 y=563.5 width=388.9 height=17.0 center_x=948.5 center_y=572.0)
+              Label value="0 pods" rect=(x=1482.7 y=29.0 width=37.3 height=20.0 center_x=1501.3 center_y=39.0)
+                TextRun value="0 pods" rect=(x=1482.7 y=29.0 width=37.3 height=20.0 center_x=1501.3 center_y=39.0)
+        ColumnHeader name="Name" rect=(x=400.0 y=81.0 width=856.0 height=36.0 center_x=828.0 center_y=99.0)
+          TextRun value="NAME" rect=(x=412.0 y=91.0 width=30.3 height=16.0 center_x=427.1 center_y=99.0)
+        ColumnHeader name="Owner" rect=(x=1256.0 y=81.0 width=160.0 height=36.0 center_x=1336.0 center_y=99.0)
+          TextRun value="OWNER" rect=(x=1268.0 y=91.0 width=39.1 height=16.0 center_x=1287.5 center_y=99.0)
+        ColumnHeader name="Age" rect=(x=1416.0 y=81.0 width=72.0 height=36.0 center_x=1452.0 center_y=99.0)
+          TextRun value="AGE" rect=(x=1454.1 y=91.0 width=21.0 height=16.0 center_x=1464.6 center_y=99.0)
+        Unknown name="" rect=(x=1488.0 y=81.0 width=48.0 height=36.0 center_x=1512.0 center_y=99.0)
+        Label value="Loading resources" rect=(x=360.0 y=117.0 width=1176.0 height=120.0 center_x=948.0 center_y=177.0)
+        GenericContainer rect=<none>
+        GenericContainer rect=<none>
+        GenericContainer rect=<none>
+        GenericContainer rect=<none>
+        GenericContainer rect=<none>
+        GenericContainer rect=<none>
+        GenericContainer rect=<none>
+        GenericContainer rect=<none>
+        GenericContainer rect=<none>

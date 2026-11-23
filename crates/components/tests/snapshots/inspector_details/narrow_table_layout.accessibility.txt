@@ -24,10 +24,8 @@ Window state=[focused] rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Label value="Normal" rect=(x=28.0 y=98.0 width=20.1 height=28.0 center_x=38.0 center_y=112.0)
-                    TextRun value="Nor" rect=(x=28.0 y=98.0 width=20.1 height=14.0 center_x=38.0 center_y=105.0)
-                    TextRun value="mal" rect=(x=28.0 y=112.0 width=18.6 height=14.0 center_x=37.3 center_y=119.0)
+                Label value="Normal" rect=(x=8.0 y=98.0 width=41.0 height=14.0 center_x=28.5 center_y=105.0)
+                  TextRun value="Nor…" rect=(x=22.0 y=98.0 width=27.3 height=14.0 center_x=35.7 center_y=105.0)
               GenericContainer rect=<none>
                 Label value="Pulled" rect=(x=57.3 y=98.0 width=32.5 height=14.0 center_x=73.6 center_y=105.0)
                   TextRun value="Pulled" rect=(x=57.3 y=98.0 width=32.5 height=14.0 center_x=73.6 center_y=105.0)
@@ -44,11 +42,8 @@ Window state=[focused] rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Label value="Warning" rect=(x=28.0 y=154.0 width=21.0 height=42.0 center_x=38.5 center_y=175.0)
-                    TextRun value="War" rect=(x=28.0 y=154.0 width=21.1 height=14.0 center_x=38.5 center_y=161.0)
-                    TextRun value="nin" rect=(x=28.0 y=168.0 width=15.7 height=14.0 center_x=35.8 center_y=175.0)
-                    TextRun value="g" rect=(x=28.0 y=182.0 width=7.0 height=14.0 center_x=31.5 center_y=189.0)
+                Label value="Warning" rect=(x=8.0 y=154.0 width=38.3 height=14.0 center_x=27.2 center_y=161.0)
+                  TextRun value="Wa…" rect=(x=22.0 y=154.0 width=24.3 height=14.0 center_x=34.2 center_y=161.0)
               GenericContainer rect=<none>
                 Label value="BackOff" rect=(x=57.3 y=154.0 width=39.4 height=28.0 center_x=77.1 center_y=168.0)
                   TextRun value="BackOf" rect=(x=57.3 y=154.0 width=39.4 height=14.0 center_x=77.1 center_y=161.0)

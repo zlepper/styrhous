@@ -27,9 +27,9 @@ pub(crate) fn show_log_source_confirmation(
     );
     match (ConfirmationDialog {
         id: egui::Id::new("pod-log-source-confirmation"),
-        eyebrow: "LOG SOURCES",
+        icon: components::icons::Icon::DocumentText,
         title: &title,
-        message: &message,
+        message: (&message).into(),
         unavailable_message: None,
         cancel_label: "Cancel",
         confirm_label: "Open logs",
@@ -38,6 +38,7 @@ pub(crate) fn show_log_source_confirmation(
         warning: Some(ConfirmationDialogWarning {
             title: "Log sources",
             message: "Review the selected sources before opening the combined stream.",
+            chips: &[],
             details: Some(&details),
         }),
         acknowledgement: None,

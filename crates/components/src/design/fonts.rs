@@ -28,6 +28,10 @@ pub mod family {
     pub const FIGTREE_MEDIUM: &str = "Figtree Medium";
     pub const FIGTREE_SEMIBOLD: &str = "Figtree SemiBold";
     pub const FIGTREE_BOLD: &str = "Figtree Bold";
+    pub const FIGTREE_TABULAR_REGULAR: &str = "Figtree Tabular";
+    pub const FIGTREE_TABULAR_MEDIUM: &str = "Figtree Tabular Medium";
+    pub const FIGTREE_TABULAR_SEMIBOLD: &str = "Figtree Tabular SemiBold";
+    pub const FIGTREE_TABULAR_BOLD: &str = "Figtree Tabular Bold";
     pub const MONO_REGULAR: &str = "IBM Plex Mono";
     pub const MONO_MEDIUM: &str = "IBM Plex Mono Medium";
     pub const MONO_SEMIBOLD: &str = "IBM Plex Mono SemiBold";
@@ -103,6 +107,34 @@ pub const FIGTREE_BOLD: Face = face!(
     "figtree-bold",
     family::FIGTREE_BOLD,
     "figtree/Figtree-Bold.ttf",
+    FIGTREE_METRICS
+);
+/// Figtree with tabular figures: each weight's digits are the glyphs its
+/// `tnum` feature substitutes (CSS `font-variant-numeric: tabular-nums`),
+/// since egui cannot apply OpenType features. Written by
+/// `scripts/design-oracles/tabular-figures.py`; see [`super::type_scale::TextRole::tabular`].
+pub const FIGTREE_TABULAR_REGULAR: Face = face!(
+    "figtree-tabular-regular",
+    family::FIGTREE_TABULAR_REGULAR,
+    "figtree/FigtreeTabular-Regular.ttf",
+    FIGTREE_METRICS
+);
+pub const FIGTREE_TABULAR_MEDIUM: Face = face!(
+    "figtree-tabular-medium",
+    family::FIGTREE_TABULAR_MEDIUM,
+    "figtree/FigtreeTabular-Medium.ttf",
+    FIGTREE_METRICS
+);
+pub const FIGTREE_TABULAR_SEMIBOLD: Face = face!(
+    "figtree-tabular-semibold",
+    family::FIGTREE_TABULAR_SEMIBOLD,
+    "figtree/FigtreeTabular-SemiBold.ttf",
+    FIGTREE_METRICS
+);
+pub const FIGTREE_TABULAR_BOLD: Face = face!(
+    "figtree-tabular-bold",
+    family::FIGTREE_TABULAR_BOLD,
+    "figtree/FigtreeTabular-Bold.ttf",
     FIGTREE_METRICS
 );
 pub const MONO_REGULAR: Face = face!(
@@ -254,6 +286,10 @@ pub fn faces() -> impl Iterator<Item = &'static Face> {
         &FIGTREE_MEDIUM,
         &FIGTREE_SEMIBOLD,
         &FIGTREE_BOLD,
+        &FIGTREE_TABULAR_REGULAR,
+        &FIGTREE_TABULAR_MEDIUM,
+        &FIGTREE_TABULAR_SEMIBOLD,
+        &FIGTREE_TABULAR_BOLD,
         &MONO_REGULAR,
         &MONO_MEDIUM,
         &MONO_SEMIBOLD,

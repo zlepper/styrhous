@@ -1,68 +1,41 @@
-//! Tailwind-styled horizontal tabs component for egui
+//! Tabs (`.tabs`, C13): a [`size::TABS`] row of [`size::TAB`] pill tabs,
+//! [`TAB_GAP`] apart, in 13/20 medium `text-secondary`. The selected tab is
+//! a `pill-on-bg` pill with a `pill-on-text` label; a hovered tab fills with
+//! `control-fill`. A tab may carry a neutral count badge.
 //!
-//! A tab component that manages its own selection state and supports optional icons.
-//! Each tab can have a content closure that only executes when that tab is selected.
-//!
-//! # Example
+//! The component remembers its selected tab under its id. Each tab's content
+//! closure runs only while that tab is selected. ←/→ move between tabs while
+//! one has keyboard focus.
 //!
 //! ```ignore
-//! use egui::{include_image, Image};
-//! use components::Tabs;
-//!
-//! let account_icon = Image::new(include_image!("icons/user.svg"));
-//!
-//! Tabs::new("settings").show(ui, |tabs| {
-//!     tabs.tab("My Account", Some(account_icon), |ui| {
-//!         ui.label("Account settings here");
-//!     });
-//!     tabs.tab("Company", None, |ui| {
-//!         ui.label("Company settings here");
-//!     });
+//! Tabs::new("pod").show(ui, |tabs| {
+//!     tabs.tab("Overview", None, |ui| { /* … */ });
+//!     tabs.tab_with_count("Events", 4, |ui| { /* … */ });
 //! });
 //! ```
 
-use egui::{Color32, Image, Response, Sense, Ui, Vec2};
+use egui::{Align, Color32, Image, Layout, Rect, Response, Sense, Ui, Vec2, pos2, vec2};
 
 use crate::PointingHand;
-use crate::design::theme::{Theme, ThemeExt};
-use crate::design::{space, type_scale};
+use crate::badge::CountBadge;
+use crate::design::theme::{Theme, ThemeExt, Tone};
+use crate::design::{size, space, type_scale};
 
-// Constants from Tailwind classes
-const TAB_GAP: f32 = space::S16;
-const TAB_PADDING_X: f32 = 4.0; // px-1
-const TAB_PADDING_Y: f32 = space::S12;
-const ICON_SIZE: f32 = 20.0; // size-5
-const ICON_MARGIN_RIGHT: f32 = 8.0; // mr-2
-const ICON_MARGIN_LEFT: f32 = -2.0; // -ml-0.5
-const UNDERLINE_HEIGHT: f32 = 2.0; // border-b-2
-const SEPARATOR_HEIGHT: f32 = 1.0; // border-b
+/// Gap between tabs.
+const TAB_GAP: f32 = space::S4;
+/// Gap between a tab's icon, label and count.
+const TAB_CONTENT_GAP: f32 = space::S6;
 
-/// Colors for a tab based on its state
-struct TabColors {
-    text: Color32,
-    border: Color32,
-    icon: Color32,
-}
-
-impl TabColors {
-    fn for_state(theme: &Theme, selected: bool, hovered: bool) -> Self {
-        match (selected, hovered) {
-            (true, _) => Self {
-                text: theme.accent.text,
-                border: theme.accent.fill,
-                icon: theme.accent.text,
-            },
-            (false, true) => Self {
-                text: theme.text.primary,
-                border: theme.divider.strong,
-                icon: theme.text.secondary,
-            },
-            (false, false) => Self {
-                text: theme.text.secondary,
-                border: Color32::TRANSPARENT,
-                icon: theme.text.muted,
-            },
-        }
+/// The fill and content colour of a tab.
+fn tab_colors(theme: &Theme, selected: bool, hovered: bool) -> (Color32, Color32) {
+    match (selected, hovered) {
+        (true, false) => (theme.components.pill_on_bg, theme.components.pill_on_text),
+        (true, true) => (
+            theme.components.pill_on_bg_hover,
+            theme.components.pill_on_text,
+        ),
+        (false, true) => (theme.control.fill, theme.text.primary),
+        (false, false) => (Color32::TRANSPARENT, theme.text.secondary),
     }
 }
 
@@ -70,6 +43,7 @@ impl TabColors {
 struct TabHeader {
     label: String,
     icon: Option<Image<'static>>,
+    count: Option<usize>,
 }
 
 /// Builder for creating a tabs component.
@@ -77,6 +51,7 @@ struct TabHeader {
 /// The component manages its own selection state using egui's Id-based storage.
 pub struct Tabs {
     id: egui::Id,
+    forced_hover: Option<usize>,
 }
 
 impl Tabs {
@@ -86,7 +61,18 @@ impl Tabs {
     pub fn new(id_source: impl std::hash::Hash + std::fmt::Debug) -> Self {
         Self {
             id: egui::Id::new(id_source),
+            forced_hover: None,
         }
+    }
+
+    /// Paint the tab at `index` hovered (design boards and snapshots).
+    pub fn force_hover(mut self, index: usize) -> Self {
+        self.forced_hover = Some(index);
+        self
+    }
+
+    fn tab_id(&self, index: usize) -> egui::Id {
+        self.id.with(("tab", index))
     }
 
     /// Show the tabs component.
@@ -95,90 +81,75 @@ impl Tabs {
     /// Each tab's content closure is only executed if that tab is selected.
     pub fn show(self, ui: &mut Ui, add_tabs: impl FnOnce(&mut TabsContent<'_>)) -> TabsResponse {
         let id = self.id;
-
-        // Load persisted selection
         let selected: usize = ui.data(|d| d.get_temp(id)).unwrap_or(0);
 
-        // Calculate header row height based on actual text metrics
-        let sample_galley = ui.painter().layout_no_wrap(
-            "Xg".to_string(), // Use characters with ascenders/descenders
-            type_scale::BODY.font_id(ui.ctx()),
-            Color32::PLACEHOLDER,
-        );
-        let header_height = TAB_PADDING_Y * 2.0 + sample_galley.size().y.max(ICON_SIZE);
-
-        // Reserve space for headers at the top (will render into this later)
+        // Reserve the header row; the headers are painted after the tabs
+        // are known.
         let header_rect = ui
-            .allocate_space(Vec2::new(ui.available_width(), header_height))
+            .allocate_space(Vec2::new(ui.available_width(), size::TABS))
             .1;
 
-        // Collect headers and render content for selected tab
-        let mut new_selected = selected;
         let mut headers: Vec<TabHeader> = Vec::new();
+        add_tabs(&mut TabsContent {
+            ui,
+            selected,
+            current_index: 0,
+            headers: &mut headers,
+        });
 
-        {
-            let mut tabs_content = TabsContent {
-                ui,
-                selected,
-                current_index: 0,
-                headers: &mut headers,
-            };
-
-            add_tabs(&mut tabs_content);
-        }
-
-        let tab_count = headers.len();
-
-        // Render headers into the reserved space
-        {
-            let mut header_ui = ui.new_child(egui::UiBuilder::new().max_rect(header_rect));
-
-            crate::scroll::horizontal()
-                .id_salt(id.with("header-scroll"))
-                .show(&mut header_ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = TAB_GAP;
-
-                        for (index, header) in headers.iter().enumerate() {
-                            let is_selected = index == selected;
-                            let response = render_tab_header(
-                                ui,
-                                &header.label,
-                                header.icon.as_ref(),
-                                is_selected,
-                            );
-
-                            if response.clicked() {
-                                new_selected = index;
+        let mut new_selected = selected;
+        let mut focus = None;
+        let mut header_ui = ui.new_child(egui::UiBuilder::new().max_rect(header_rect));
+        crate::scroll::horizontal()
+            .id_salt(id.with("header-scroll"))
+            .show(&mut header_ui, |ui| {
+                ui.set_min_height(size::TABS);
+                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                    ui.spacing_mut().item_spacing.x = TAB_GAP;
+                    for (index, header) in headers.iter().enumerate() {
+                        let hovered = self.forced_hover == Some(index);
+                        let response =
+                            render_tab(ui, self.tab_id(index), header, index == selected, hovered);
+                        if response.clicked() {
+                            new_selected = index;
+                        }
+                        if response.has_focus() {
+                            // The tabs move focus themselves; keep egui from also
+                            // moving it with the arrow keys.
+                            let filter = egui::EventFilter {
+                                horizontal_arrows: true,
+                                ..Default::default()
+                            };
+                            ui.memory_mut(|memory| {
+                                memory.set_focus_lock_filter(response.id, filter);
+                            });
+                            let step = ui.input_mut(|input| {
+                                if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft) {
+                                    -1
+                                } else if input
+                                    .consume_key(egui::Modifiers::NONE, egui::Key::ArrowRight)
+                                {
+                                    1
+                                } else {
+                                    0
+                                }
+                            });
+                            let target = index as isize + step;
+                            if step != 0 && (0..headers.len() as isize).contains(&target) {
+                                new_selected = target as usize;
+                                focus = Some(new_selected);
                             }
                         }
-                    });
+                    }
                 });
+            });
+        if let Some(index) = focus {
+            ui.memory_mut(|memory| memory.request_focus(self.tab_id(index)));
         }
 
-        // Keyboard navigation (arrow keys)
-        if tab_count > 0 {
-            if ui.input(|i| i.key_pressed(egui::Key::ArrowLeft)) && new_selected > 0 {
-                new_selected -= 1;
-            }
-            if ui.input(|i| i.key_pressed(egui::Key::ArrowRight)) && new_selected < tab_count - 1 {
-                new_selected += 1;
-            }
-        }
-
-        // Draw separator line at the bottom of the header area
-        let separator_rect = egui::Rect::from_min_size(
-            header_rect.left_bottom(),
-            Vec2::new(header_rect.width(), SEPARATOR_HEIGHT),
-        );
-        ui.painter()
-            .rect_filled(separator_rect, 0.0, ui.tokens().divider.base);
-
-        // Persist selection if changed
         if new_selected != selected {
             ui.data_mut(|d| d.insert_temp(id, new_selected));
         }
-
         TabsResponse {
             selected: new_selected,
             changed: new_selected != selected,
@@ -186,83 +157,93 @@ impl Tabs {
     }
 }
 
-/// Render a single tab header, returning its Response
-fn render_tab_header(
+/// The width of a tab's content and its count badge, if any.
+fn tab_content(
+    ui: &Ui,
+    header: &TabHeader,
+) -> (std::sync::Arc<egui::Galley>, Option<CountBadge>, f32) {
+    let galley =
+        type_scale::UI_CONTROL.galley(ui.ctx(), &header.label, Color32::PLACEHOLDER, f32::INFINITY);
+    let mut width = galley.rect.width();
+    if header.icon.is_some() {
+        width += size::ICON + TAB_CONTENT_GAP;
+    }
+    let count = header
+        .count
+        .map(|count| CountBadge::new(count).tone(Tone::Neutral));
+    if let Some(count) = &count {
+        width += TAB_CONTENT_GAP + count.size(ui).x;
+    }
+    (galley, count, width)
+}
+
+/// Render a single tab header, returning its response.
+fn render_tab(
     ui: &mut Ui,
-    label: &str,
-    icon: Option<&Image<'_>>,
+    id: egui::Id,
+    header: &TabHeader,
     is_selected: bool,
+    forced_hover: bool,
 ) -> Response {
-    // Create galley for measurement (use PLACEHOLDER so fallback_color works when painting)
-    let galley = ui.painter().layout_no_wrap(
-        label.to_string(),
-        type_scale::BODY.font_id(ui.ctx()),
-        Color32::PLACEHOLDER,
+    let (galley, count, content_width) = tab_content(ui, header);
+    let (rect, _) = ui.allocate_exact_size(
+        vec2(content_width + 2.0 * size::TAB_PADDING_X, size::TAB),
+        Sense::hover(),
     );
-
-    let icon_width = if icon.is_some() {
-        ICON_MARGIN_LEFT + ICON_SIZE + ICON_MARGIN_RIGHT
-    } else {
-        0.0
+    let response = ui.interact(rect, id, Sense::click()).with_pointing_hand();
+    let name = match header.count {
+        Some(count) => format!("{} {count}", header.label),
+        None => header.label.clone(),
     };
-
-    // Use galley's actual height for proper vertical centering
-    let text_height = galley.size().y;
-    let content_height = text_height.max(ICON_SIZE);
-    let tab_width = TAB_PADDING_X * 2.0 + icon_width + galley.size().x;
-    let tab_height = TAB_PADDING_Y * 2.0 + content_height;
-
-    // Allocate space and get response
-    let (rect, response) = ui.allocate_exact_size(Vec2::new(tab_width, tab_height), Sense::click());
-    let response = response.with_pointing_hand();
-
-    // Determine colors based on state
-    let colors = TabColors::for_state(&ui.tokens(), is_selected, response.hovered());
-
-    // Calculate content vertical center
-    let content_center_y = rect.center().y;
-
-    // Draw icon if present (paint directly, no child UI needed)
-    let mut text_x = rect.min.x + TAB_PADDING_X;
-    if let Some(icon) = icon {
-        let icon_x = text_x + ICON_MARGIN_LEFT;
-        let icon_y = content_center_y - ICON_SIZE / 2.0;
-        let icon_rect =
-            egui::Rect::from_min_size(egui::pos2(icon_x, icon_y), Vec2::splat(ICON_SIZE));
-
-        // Paint icon directly with tint
-        icon.clone()
-            .fit_to_exact_size(Vec2::splat(ICON_SIZE))
-            .tint(colors.icon)
-            .paint_at(ui, icon_rect);
-
-        text_x = icon_x + ICON_SIZE + ICON_MARGIN_RIGHT;
-    }
-
-    // Draw text using the galley (proper vertical centering using actual text height)
-    let text_y = content_center_y - text_height / 2.0;
-    ui.painter()
-        .galley(egui::pos2(text_x, text_y), galley, colors.text);
-
-    // Draw underline (border)
-    if colors.border != Color32::TRANSPARENT {
-        let underline_rect = egui::Rect::from_min_size(
-            egui::pos2(rect.min.x, rect.max.y - UNDERLINE_HEIGHT),
-            Vec2::new(rect.width(), UNDERLINE_HEIGHT),
-        );
-        ui.painter().rect_filled(underline_rect, 0.0, colors.border);
-    }
-
-    // Add accessibility info
     response.widget_info(|| {
         egui::WidgetInfo::selected(
             egui::WidgetType::Button,
             ui.is_enabled(),
             is_selected,
-            label,
+            &name,
         )
     });
-
+    if !ui.is_rect_visible(rect) {
+        return response;
+    }
+    let theme = ui.tokens();
+    let hovered = forced_hover || response.hovered();
+    let (fill, color) = tab_colors(&theme, is_selected, hovered);
+    ui.painter()
+        .rect_filled(rect, crate::design::radius::FULL, fill);
+    let center_y = rect.center().y;
+    let mut x = rect.left() + size::TAB_PADDING_X;
+    if let Some(icon) = &header.icon {
+        let icon_rect = Rect::from_min_size(
+            pos2(x, center_y - size::ICON / 2.0),
+            Vec2::splat(size::ICON),
+        );
+        icon.clone()
+            .fit_to_exact_size(Vec2::splat(size::ICON))
+            .tint(color)
+            .paint_at(ui, icon_rect);
+        x += size::ICON + TAB_CONTENT_GAP;
+    }
+    let text_width = galley.rect.width();
+    let pos = pos2(x, center_y - galley.rect.height() / 2.0);
+    type_scale::paint_text_as(
+        ui,
+        &response,
+        pos,
+        galley,
+        color,
+        egui::accesskit::Role::Button,
+    );
+    x += text_width + TAB_CONTENT_GAP;
+    if let Some(mut count) = count {
+        if is_selected {
+            count = count.on_pill();
+        }
+        let size = count.size(ui);
+        let count_rect = Rect::from_min_size(pos2(x, center_y - size.y / 2.0), size);
+        let mut count_ui = ui.new_child(egui::UiBuilder::new().max_rect(count_rect));
+        count.show(&mut count_ui);
+    }
     response
 }
 
@@ -276,7 +257,7 @@ pub struct TabsContent<'a> {
     headers: &'a mut Vec<TabHeader>,
 }
 
-impl<'a> TabsContent<'a> {
+impl TabsContent<'_> {
     /// Add a tab with a label, optional icon, and content closure.
     ///
     /// The content closure is only executed if this tab is selected.
@@ -287,17 +268,31 @@ impl<'a> TabsContent<'a> {
         icon: Option<Image<'static>>,
         content: impl FnOnce(&mut Ui),
     ) {
-        let label = label.into();
+        self.add(label.into(), icon, None, content);
+    }
+
+    /// Add a tab with a neutral count badge after its label ("Events 4").
+    pub fn tab_with_count(
+        &mut self,
+        label: impl Into<String>,
+        count: usize,
+        content: impl FnOnce(&mut Ui),
+    ) {
+        self.add(label.into(), None, Some(count), content);
+    }
+
+    fn add(
+        &mut self,
+        label: String,
+        icon: Option<Image<'static>>,
+        count: Option<usize>,
+        content: impl FnOnce(&mut Ui),
+    ) {
         let is_selected = self.current_index == self.selected;
-
-        // Store header info for later rendering (take ownership, no clone)
-        self.headers.push(TabHeader { label, icon });
-
-        // Render content immediately if this tab is selected
+        self.headers.push(TabHeader { label, icon, count });
         if is_selected {
             content(self.ui);
         }
-
         self.current_index += 1;
     }
 }
@@ -390,5 +385,44 @@ mod tests {
         harness.run();
 
         harness.ui_harness("tabs/test_tabs_selection_change/selection_changed");
+    }
+
+    #[test]
+    fn arrow_keys_move_between_tabs_only_while_one_has_focus() {
+        use egui::Key;
+        use egui_kittest::kittest::Queryable;
+
+        let mut harness = Harness::new_ui_state(
+            |ui, selected: &mut usize| {
+                *selected = Tabs::new("keyboard")
+                    .show(ui, |tabs| {
+                        tabs.tab("First", None, |_| {});
+                        tabs.tab_with_count("Events", 4, |_| {});
+                        tabs.tab("Logs", None, |_| {});
+                    })
+                    .selected;
+            },
+            0,
+        );
+        crate::test_support::setup_egui(&mut harness);
+        harness.run();
+        harness.key_press(Key::ArrowRight);
+        harness.run();
+        assert_eq!(*harness.state(), 0, "no tab has focus");
+
+        harness.get_by_label("First").focus();
+        harness.run();
+        harness.key_press(Key::ArrowRight);
+        harness.run();
+        assert_eq!(*harness.state(), 1);
+        assert!(harness.get_by_label("Events 4").is_focused());
+        harness.key_press(Key::ArrowRight);
+        harness.run();
+        assert_eq!(*harness.state(), 2, "one tab per press");
+        assert!(harness.get_by_label("Logs").is_focused());
+        harness.key_press(Key::ArrowLeft);
+        harness.run();
+        assert_eq!(*harness.state(), 1);
+        assert!(harness.get_by_label("Events 4").is_focused());
     }
 }

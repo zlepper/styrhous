@@ -8,8 +8,7 @@ use components::design::theme::{self, ThemeExt, ThemeScope};
 use components::design::{radius, space, type_scale};
 use components::test_support::UiHarnessSnapshot;
 use components::{
-    TableRowBuilder, TailwindCombobox, TailwindTable, TailwindTextInput, WorkspaceCard,
-    overlay_frame, popover_frame, raised_frame,
+    Card, Combobox, Table, TableRowBuilder, TextInput, overlay_frame, popover_frame, raised_frame,
 };
 use egui::{Frame, Margin, Rect, Ui, UiBuilder, pos2, vec2};
 use egui_kittest::{Harness, kittest::Queryable};
@@ -69,21 +68,21 @@ fn controls(ui: &mut Ui, context: Context, value: &mut String) {
         .show(ui, |ui| {
             ui.label(type_scale::META.text(ui.ctx(), "well chip", theme.text.secondary));
         });
-    TailwindTextInput::new(value)
+    TextInput::new(value)
         .id_salt(("field", name))
         .accessibility_label(format!("{name} field"))
         .show(ui);
-    TailwindTable::new(("rows", name))
+    Table::new(("rows", name))
         .column("name", "Name", |column| {
             column.initial_width(COLUMN_WIDTH - 96.0)
         })
         .show(ui, &["row"], |ui, row, _| {
             TableRowBuilder::text(ui, row, true);
         });
-    WorkspaceCard::new().show(ui, |ui| {
+    Card::new().show(ui, |ui| {
         ui.label(type_scale::META.text(ui.ctx(), "nested card", theme.text.secondary));
     });
-    TailwindCombobox::from_label(format!("{name} select"))
+    Combobox::from_label(format!("{name} select"))
         .placeholder("Select…")
         .width(ui.available_width())
         .filter_by(|item: &&str| *item)
@@ -103,7 +102,7 @@ fn column(ui: &mut Ui, context: Context, value: &mut String) {
             show(ui);
         }
         Context::Card => {
-            WorkspaceCard::new().margin(inset).show(ui, show);
+            Card::new().padding(inset).show(ui, show);
         }
         Context::Blade => {
             overlay_frame(&theme)
@@ -113,7 +112,7 @@ fn column(ui: &mut Ui, context: Context, value: &mut String) {
         Context::BladeCard => {
             overlay_frame(&theme).inner_margin(inset).show(ui, |ui| {
                 theme::scope(ui, ThemeScope::Blade, |ui| {
-                    WorkspaceCard::new().margin(inset).show(ui, show)
+                    Card::new().padding(inset).show(ui, show)
                 })
             });
         }

@@ -1,0 +1,51 @@
+viewport: width=560.0 height=330.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              CheckBox name="Select all rows" state=[toggled=False] rect=(x=20.0 y=18.0 width=16.0 height=16.0 center_x=28.0 center_y=26.0)
+            ColumnHeader name="Name" rect=(x=48.0 y=8.0 width=300.0 height=36.0 center_x=198.0 center_y=26.0)
+              TextRun value="NAME" rect=(x=60.0 y=18.0 width=30.3 height=16.0 center_x=75.1 center_y=26.0)
+            ColumnHeader name="Status" rect=(x=348.0 y=8.0 width=160.0 height=36.0 center_x=428.0 center_y=26.0)
+              TextRun value="STATUS" rect=(x=360.0 y=18.0 width=39.7 height=16.0 center_x=379.8 center_y=26.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Button name="Collapse api" rect=(x=14.0 y=48.0 width=57.6 height=26.0 center_x=42.8 center_y=61.0)
+                Label value="2 pods" rect=(x=81.6 y=51.0 width=43.2 height=20.0 center_x=103.2 center_y=61.0)
+                  TextRun value="2 pods" rect=(x=81.6 y=51.0 width=43.2 height=20.0 center_x=103.2 center_y=61.0)
+                Label value="1 failing" rect=(x=134.8 y=51.0 width=40.4 height=20.0 center_x=155.0 center_y=61.0)
+                  TextRun value="1 failing" rect=(x=134.8 y=51.0 width=40.4 height=20.0 center_x=155.0 center_y=61.0)
+                GenericContainer rect=<none>
+                  CheckBox name="Select row 1" state=[toggled=False] rect=(x=20.0 y=88.0 width=16.0 height=16.0 center_x=28.0 center_y=96.0)
+                Unknown name="Name, row 1" rect=(x=48.0 y=78.0 width=300.0 height=36.0 center_x=198.0 center_y=96.0)
+                GenericContainer rect=<none>
+                  Label value="api-0" rect=(x=60.0 y=86.0 width=31.6 height=20.0 center_x=75.8 center_y=96.0)
+                    TextRun value="api-0" rect=(x=60.0 y=86.0 width=31.6 height=20.0 center_x=75.8 center_y=96.0)
+                Unknown name="Status, row 1" rect=(x=348.0 y=78.0 width=160.0 height=36.0 center_x=428.0 center_y=96.0)
+                GenericContainer rect=<none>
+                  Label value="Running" rect=(x=360.0 y=86.0 width=61.8 height=20.0 center_x=390.9 center_y=96.0)
+                    TextRun value="Running" rect=(x=374.0 y=86.0 width=47.8 height=20.0 center_x=397.9 center_y=96.0)
+                GenericContainer rect=<none>
+                  CheckBox name="Select row 2" state=[toggled=False] rect=(x=20.0 y=128.0 width=16.0 height=16.0 center_x=28.0 center_y=136.0)
+                Unknown name="Name, row 2" rect=(x=48.0 y=118.0 width=300.0 height=36.0 center_x=198.0 center_y=136.0)
+                GenericContainer rect=<none>
+                  Label value="api-1" rect=(x=60.0 y=126.0 width=28.6 height=20.0 center_x=74.3 center_y=136.0)
+                    TextRun value="api-1" rect=(x=60.0 y=126.0 width=28.6 height=20.0 center_x=74.3 center_y=136.0)
+                Unknown name="Status, row 2" rect=(x=348.0 y=118.0 width=160.0 height=36.0 center_x=428.0 center_y=136.0)
+                GenericContainer rect=<none>
+                  Label value="CrashLoopBackOff" rect=(x=360.0 y=126.0 width=124.8 height=20.0 center_x=422.4 center_y=136.0)
+                    TextRun value="CrashLoopBackOff" rect=(x=374.0 y=126.0 width=110.8 height=20.0 center_x=429.4 center_y=136.0)
+                Button name="Expand jobs" rect=(x=14.0 y=162.0 width=64.8 height=26.0 center_x=46.4 center_y=175.0)
+                Label value="1 pod" rect=(x=88.8 y=165.0 width=36.0 height=20.0 center_x=106.8 center_y=175.0)
+                  TextRun value="1 pod" rect=(x=88.8 y=165.0 width=36.0 height=20.0 center_x=106.8 center_y=175.0)
+          Button name="2 problems" rect=(x=516.0 y=8.0 width=6.0 height=200.0 center_x=519.0 center_y=108.0)
+        Button name="Collapse search" rect=(x=14.0 y=284.0 width=79.2 height=26.0 center_x=53.6 center_y=297.0)
+        Label value="1,210 pods" rect=(x=103.2 y=287.0 width=72.0 height=20.0 center_x=139.2 center_y=297.0)
+          TextRun value="1,210 pods" rect=(x=103.2 y=287.0 width=72.0 height=20.0 center_x=139.2 center_y=297.0)
+        Label value="31 failing" rect=(x=185.2 y=287.0 width=46.9 height=20.0 center_x=208.6 center_y=297.0)
+          TextRun value="31 failing" rect=(x=185.2 y=287.0 width=46.9 height=20.0 center_x=208.6 center_y=297.0)
+        Label value="first 20 of 1,210" rect=(x=432.9 y=287.0 width=83.1 height=20.0 center_x=474.5 center_y=297.0)
+          TextRun value="first 20 of 1,210" rect=(x=432.9 y=287.0 width=83.1 height=20.0 center_x=474.5 center_y=297.0)

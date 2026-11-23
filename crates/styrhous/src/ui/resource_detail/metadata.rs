@@ -1,47 +1,28 @@
 use super::*;
+use components::tooltip::TooltipExt;
 
 pub(super) fn metadata_maps(ui: &mut egui::Ui, detail: &ResourceDetail) {
-    let theme = ui.tokens();
-    disclosure_card(
-        ui,
-        "labels-and-annotations-open",
-        "Labels & annotations",
-        false,
-        |ui| {
-            ui.label(
-                egui::RichText::new("Labels")
-                    .strong()
-                    .color(theme.text.primary),
-            );
-            InspectorDetails::show_properties(
-                ui,
-                &[DetailRow::new(detail.labels.iter().map(|(key, value)| {
-                    DetailCell::new(key.as_str(), value.as_str())
-                        .copyable_as(format!("{key}={value}"))
-                }))],
-            );
-            ui.add_space(8.0);
-            ui.label(
-                egui::RichText::new("Annotations")
-                    .strong()
-                    .color(theme.text.primary),
-            );
-            InspectorDetails::show_properties(
-                ui,
-                &[DetailRow::new(detail.annotations.iter().map(
-                    |(key, value)| {
-                        DetailCell::new(key.as_str(), value.as_str())
-                            .copyable_as(format!("{key}={value}"))
-                    },
-                ))],
-            );
-        },
+    let meta = format!(
+        "{} · {}",
+        crate::ui::widgets::count_noun(detail.labels.len(), "label"),
+        crate::ui::widgets::count_noun(detail.annotations.len(), "annotation"),
     );
+    components::Disclosure::new("labels-and-annotations-open", "Labels & annotations")
+        .meta(&meta)
+        .show(ui, |ui| {
+            if detail.labels.is_empty() && detail.annotations.is_empty() {
+                type_scale::META.label(ui, "No labels or annotations", ui.tokens().text.muted);
+                return;
+            }
+            ui.spacing_mut().item_spacing.y = space::S12;
+            crate::ui::widgets::key_value_chips(ui, "Labels", &detail.labels);
+            crate::ui::widgets::key_value_chips(ui, "Annotations", &detail.annotations);
+        });
 }
 
 pub(super) fn show_events(ui: &mut egui::Ui, events: &[ResourceEvent], error: Option<&str>) {
     let theme = ui.tokens();
-    WorkspaceCard::new().margin(0).show(ui, |ui| {
+    Card::new().padding(0).show(ui, |ui| {
         ui.allocate_ui_with_layout(
             egui::vec2(ui.available_width(), CARD_HEADER_HEIGHT),
             egui::Layout::left_to_right(egui::Align::Center),
@@ -174,9 +155,10 @@ pub(super) fn show_additional_sections(
                                     .color(theme.accent.text),
                             )
                             .truncate()
+                            .show_tooltip_when_elided(false)
                             .sense(egui::Sense::click()),
                         )
-                        .on_hover_text(&label)
+                        .tooltip(&label)
                         .with_pointing_hand();
                     response.widget_info(|| {
                         egui::WidgetInfo::labeled(
@@ -186,7 +168,8 @@ pub(super) fn show_additional_sections(
                         )
                     });
                     if response.clicked() {
-                        resource_owner::queue_navigation_action(pending_action, action);
+                        // The first click of a frame wins.
+                        pending_action.get_or_insert(action);
                     }
                 } else {
                     ui.add(
@@ -195,9 +178,10 @@ pub(super) fn show_additional_sections(
                                 .font(type_scale::META.font_id(ui.ctx()))
                                 .color(theme.text.primary),
                         )
-                        .truncate(),
+                        .truncate()
+                        .show_tooltip_when_elided(false),
                     )
-                    .on_hover_text(resource_owner::unavailable_tooltip(owner));
+                    .tooltip(resource_owner::unavailable_tooltip(owner));
                 }
             }
         }
@@ -255,6 +239,9 @@ pub(super) fn condition_tone(condition_status: &str) -> Tone {
     }
 }
 
+/// A [`components::Disclosure`] card titled `title` over `add_content`.
+/// Whether it is open is remembered per `id_source`, so a section opens and
+/// closes together for every resource.
 pub(crate) fn disclosure_card(
     ui: &mut egui::Ui,
     id_source: &str,
@@ -262,51 +249,9 @@ pub(crate) fn disclosure_card(
     default_open: bool,
     add_content: impl FnOnce(&mut egui::Ui),
 ) {
-    let theme = ui.tokens();
-    WorkspaceCard::new().margin(0).show(ui, |ui| {
-        let id = ui.id().with(id_source);
-        let mut open = ui
-            .data(|data| data.get_temp::<bool>(id))
-            .unwrap_or(default_open);
-        let (header, response) = ui.allocate_exact_size(
-            egui::vec2(ui.available_width(), CARD_HEADER_HEIGHT),
-            egui::Sense::click(),
-        );
-        let response = response.with_pointing_hand();
-        if response.clicked() {
-            open = !open;
-            ui.data_mut(|data| data.insert_temp(id, open));
-        }
-        response.widget_info(|| {
-            egui::WidgetInfo::selected(
-                egui::WidgetType::CollapsingHeader,
-                ui.is_enabled(),
-                open,
-                title,
-            )
-        });
-        let painter = ui.painter();
-        painter.text(
-            header.left_center() + egui::vec2(CARD_HEADER_PADDING, 0.0),
-            egui::Align2::LEFT_CENTER,
-            title,
-            type_scale::BODY.font_id(ui.ctx()),
-            theme.text.primary,
-        );
-        painter.text(
-            header.right_center() - egui::vec2(CARD_HEADER_PADDING, 0.0),
-            egui::Align2::RIGHT_CENTER,
-            if open { "⌃" } else { "⌄" },
-            type_scale::TITLE.font_id(ui.ctx()),
-            theme.text.secondary,
-        );
-        if open {
-            ui.separator();
-            egui::Frame::new()
-                .inner_margin(egui::Margin::same(CARD_CONTENT_PADDING))
-                .show(ui, add_content);
-        }
-    });
+    components::Disclosure::new(id_source, title)
+        .default_open(default_open)
+        .show(ui, add_content);
 }
 
 pub(super) fn section_header(ui: &mut egui::Ui, title: &str, detail: Option<String>) {

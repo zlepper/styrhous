@@ -36,6 +36,11 @@ nix develop ../.. -c npm test                        # unit tests of the scripts
   `npx @zlepper/kineprism@0.0.5`, and can be overridden with `KINEPRISM=/path/to/kineprism`. A
   comparison that fails (Kineprism error, missing report or image) becomes an `error` row and the
   others still run.
+- Each comparison runs twice. The second pass (`--ignore-antialiasing`, report in
+  `<ID>/non-aa/`) treats antialiased edges as equivalent and fills the "Changed (non-AA)" column.
+  It does not change raw MAE, which stays the acceptance metric, but it drops the glyph and curve
+  edge noise Chromium and egui rasterise differently, so its diff is the list of differences worth
+  fixing.
 
 ## Calibration board
 
@@ -56,6 +61,18 @@ oracles load those same static files (`lib.mjs` reads the faces from that direct
 egui rasterize identical outlines. IBM Plex Mono also ships its real SemiBold for the boards'
 weight-600 text (Google Fonts would only let Chrome synthesize it); IBM Plex Sans Condensed weight
 400 renders with Medium, as on Google Fonts.
+
+### Tabular figures
+
+The boards set counts and readouts with `font-variant-numeric: tabular-nums` (`.tnum`). Chrome
+applies Figtree's `tnum` feature; egui cannot apply OpenType features. Figtree's `tnum` is a single
+substitution of the ten digits by their tabular forms (`zero` -> `zero.tf`, ...), so
+`instance-fonts.sh` also writes a "Figtree Tabular" copy of every Figtree weight
+(`FigtreeTabular-<Weight>.ttf`, by `tabular-figures.py` with the pinned fontTools): the cmap maps the
+digits straight to the tabular glyphs and the family is renamed (Figtree's OFL declares no Reserved
+Font Name). The app selects it with `TextRole::tabular()`. The oracles keep loading plain Figtree,
+whose `tnum` glyphs are the same outlines, so `fonts.css` needs no extra face. IBM Plex Mono's
+figures are tabular already.
 
 Glyphs the Harbour fonts lack come from a single fallback face: DejaVu Sans (Book, nixpkgs
 `dejavu_fonts` 2.37 at the flake's pinned revision), subset by `instance-fonts.sh` to exactly the

@@ -18,6 +18,13 @@ pub(crate) struct ManifestInventoryRow<'a> {
     pub(crate) uid: Option<String>,
 }
 
+impl ManifestInventoryRow<'_> {
+    /// Whether the resource is on the cluster, so its inspector can open.
+    pub(crate) fn is_navigable(&self) -> bool {
+        self.api_resource.is_some() && self.uid.is_some()
+    }
+}
+
 pub(crate) fn manifest_resource_namespace(
     resource: &ManifestResource,
     api_resource: Option<&ApiResource>,

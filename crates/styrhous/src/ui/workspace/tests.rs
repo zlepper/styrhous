@@ -134,8 +134,20 @@ fn invalid_regex_has_no_results_and_an_error() {
 
 #[test]
 fn resource_count_includes_the_total_while_searching() {
-    assert_eq!(resource_count_label(8, 1, true), "1 of 8 items");
-    assert_eq!(resource_count_label(8, 8, false), "8 items");
+    assert_eq!(
+        resource_count_label(8, 1, true, ("pod", "pods")),
+        "1 of 8 pods"
+    );
+    assert_eq!(resource_count_label(8, 8, false, ("pod", "pods")), "8 pods");
+    assert_eq!(resource_count_label(1, 1, false, ("pod", "pods")), "1 pod");
+    assert_eq!(
+        resource_count_label(1, 0, true, ("pod", "pods")),
+        "0 of 1 pod"
+    );
+    assert_eq!(
+        resource_count_label(12_400, 1_234, true, ("pod", "pods")),
+        "1,234 of 12.4k pods"
+    );
 }
 
 #[test]
@@ -144,7 +156,7 @@ fn command_f_focuses_resource_search_input() {
     let search_for_ui = search.clone();
     let mut harness = Harness::builder().build_ui(move |ctx| {
         egui::CentralPanel::default().show(ctx, |ui| {
-            show_resource_search(ui, &mut search_for_ui.borrow_mut());
+            show_resource_search(ui, &mut search_for_ui.borrow_mut(), "pods", 300.0);
         });
     });
     components::test_support::setup_egui(&mut harness);
@@ -155,4 +167,51 @@ fn command_f_focuses_resource_search_input() {
     harness.run();
 
     assert_eq!(search.borrow().query, "worker");
+}
+
+#[test]
+fn a_single_resource_is_counted_with_the_singular_of_its_plural() {
+    for (kind, plural, singular) in [
+        ("Pod", "pods", "pod"),
+        ("ConfigMap", "configmaps", "configmap"),
+        ("ComponentStatus", "componentstatuses", "componentstatus"),
+        ("Prometheus", "prometheuses", "prometheus"),
+        ("Endpoints", "endpoints", "endpoints"),
+        // The kind does not start the plural: English rules undo it.
+        ("HelmRelease", "releases", "release"),
+        ("NetworkPolicy", "networkpolicies", "networkpolicy"),
+        ("Unrelated", "ingresses", "ingress"),
+        ("Unrelated", "storageclasses", "storageclass"),
+        ("Unrelated", "egress", "egress"),
+    ] {
+        assert_eq!(singular_of(kind, plural), singular, "{plural}");
+    }
+}
+
+#[test]
+fn the_release_list_is_live_once_every_chosen_namespace_has_synchronised() {
+    use crate::ui::state::{ClusterState, HelmReleaseWatchState};
+    let synced = |is_synced| HelmReleaseWatchState {
+        is_synced,
+        ..HelmReleaseWatchState::default()
+    };
+    let mut cluster = ClusterState::for_test(1, "dev");
+    cluster.selected_namespaces = SelectedNamespaces::default();
+    assert!(!helm_list_is_live(&cluster), "no namespace is chosen");
+
+    cluster.selected_namespaces = SelectedNamespaces::from(["default", "web"]);
+    cluster
+        .helm_release_cache
+        .insert("default".into(), synced(true));
+    assert!(!helm_list_is_live(&cluster), "web has no release watch yet");
+
+    cluster
+        .helm_release_cache
+        .insert("web".into(), synced(false));
+    assert!(!helm_list_is_live(&cluster), "web has not synchronised");
+
+    cluster
+        .helm_release_cache
+        .insert("web".into(), synced(true));
+    assert!(helm_list_is_live(&cluster));
 }

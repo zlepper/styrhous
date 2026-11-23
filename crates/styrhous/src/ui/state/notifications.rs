@@ -175,6 +175,17 @@ impl UiState {
         toasts
     }
 
+    /// Remove the toast `sequence` before it expires (its dismiss button).
+    pub(crate) fn dismiss_operation_toast(&mut self, sequence: u64) {
+        self.application_toasts
+            .retain(|toast| toast.sequence != sequence);
+        for cluster in self.clusters.values_mut() {
+            cluster
+                .transient_operation_toasts
+                .retain(|toast| toast.sequence != sequence);
+        }
+    }
+
     pub(crate) fn clear_operation_toasts(&mut self) {
         for cluster in self.clusters.values_mut() {
             cluster.transient_operation_toasts.clear();

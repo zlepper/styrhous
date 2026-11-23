@@ -1,0 +1,15 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            CheckBox name="Selected rows" state=[toggled=Mixed] rect=(x=21.0 y=30.0 width=16.0 height=16.0 center_x=29.0 center_y=38.0)
+            Label value="2 selected" rect=(x=49.0 y=28.0 width=60.5 height=20.0 center_x=79.2 center_y=38.0)
+              TextRun value="2 selected" rect=(x=49.0 y=28.0 width=60.5 height=20.0 center_x=79.2 center_y=38.0)
+            Button name="Delete" rect=(x=134.5 y=24.0 width=79.7 height=28.0 center_x=174.3 center_y=38.0)
+            Button name="Clear selection" rect=(x=226.2 y=24.0 width=105.3 height=28.0 center_x=278.8 center_y=38.0)
+            GenericContainer rect=<none>
+              Label value="Shift-click selects a range" rect=(x=576.5 y=30.0 width=138.5 height=16.0 center_x=645.8 center_y=38.0)
+                TextRun value="Shift-click selects a range" rect=(x=576.5 y=30.0 width=138.5 height=16.0 center_x=645.8 center_y=38.0)

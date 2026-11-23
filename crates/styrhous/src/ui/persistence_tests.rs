@@ -106,6 +106,7 @@ fn resource_table_preferences_round_trip_through_app_storage() {
         label: "Name".into(),
         default_width: 160.0,
         sortable: true,
+        numeric: false,
     }];
     let mut storage = MemoryStorage::default();
     let mut app = MyEguiApp::<MockWorker>::default();

@@ -17,36 +17,30 @@ Window state=[focused] rect=<none>
             Image rect=(x=20.0 y=976.0 width=28.0 height=28.0 center_x=34.0 center_y=990.0)
     GenericContainer rect=<none>
       GenericContainer rect=<none>
+        Label value="dev" rect=(x=82.0 y=22.0 width=35.4 height=28.0 center_x=99.7 center_y=36.0)
+          TextRun value="dev" rect=(x=82.0 y=22.0 width=35.4 height=28.0 center_x=99.7 center_y=36.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
-            GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="dev" rect=(x=92.0 y=29.0 width=35.4 height=24.0 center_x=109.7 center_y=41.0)
-                  TextRun value="dev" rect=(x=92.0 y=29.0 width=35.4 height=24.0 center_x=109.7 center_y=41.0)
-              Button name="Nodes" state=[toggled=False] rect=(x=68.0 y=73.0 width=291.0 height=36.0 center_x=213.5 center_y=91.0)
-              Button name="Apps & Containers" state=[toggled=False] rect=(x=68.0 y=112.0 width=291.0 height=44.0 center_x=213.5 center_y=134.0)
-              GenericContainer rect=<none>
-                Image rect=(x=88.0 y=126.0 width=16.0 height=16.0 center_x=96.0 center_y=134.0)
-              Button name="Config" state=[toggled=False] rect=(x=68.0 y=159.0 width=291.0 height=44.0 center_x=213.5 center_y=181.0)
-              GenericContainer rect=<none>
-                Image rect=(x=88.0 y=173.0 width=16.0 height=16.0 center_x=96.0 center_y=181.0)
-              Button name="Networking" state=[toggled=False] rect=(x=68.0 y=206.0 width=291.0 height=44.0 center_x=213.5 center_y=228.0)
-              GenericContainer rect=<none>
-                Image rect=(x=88.0 y=220.0 width=16.0 height=16.0 center_x=96.0 center_y=228.0)
-              Button name="Storage" state=[toggled=False] rect=(x=68.0 y=253.0 width=291.0 height=44.0 center_x=213.5 center_y=275.0)
-              GenericContainer rect=<none>
-                Image rect=(x=88.0 y=267.0 width=16.0 height=16.0 center_x=96.0 center_y=275.0)
-              Button name="Namespaces" state=[toggled=False] rect=(x=68.0 y=300.0 width=291.0 height=36.0 center_x=213.5 center_y=318.0)
-              Button name="Events" state=[toggled=False] rect=(x=68.0 y=339.0 width=291.0 height=36.0 center_x=213.5 center_y=357.0)
-              Button name="Security & Access Control" state=[toggled=False] rect=(x=68.0 y=378.0 width=291.0 height=44.0 center_x=213.5 center_y=400.0)
-              GenericContainer rect=<none>
-                Image rect=(x=88.0 y=392.0 width=16.0 height=16.0 center_x=96.0 center_y=400.0)
-              Button name="Helm" state=[toggled=False] rect=(x=68.0 y=425.0 width=291.0 height=44.0 center_x=213.5 center_y=447.0)
-              GenericContainer rect=<none>
-                Image rect=(x=88.0 y=439.0 width=16.0 height=16.0 center_x=96.0 center_y=447.0)
-              GenericContainer rect=<none>
-                Label value="Discovering API groups..." rect=(x=124.0 y=483.0 width=132.3 height=14.0 center_x=190.2 center_y=490.0)
-                  TextRun value="Discovering API groups..." rect=(x=124.0 y=483.0 width=132.3 height=14.0 center_x=190.2 center_y=490.0)
+            Button name="Nodes" state=[toggled=False] rect=(x=82.0 y=62.0 width=263.0 height=34.0 center_x=213.5 center_y=79.0)
+              TextRun value="Nodes" rect=(x=112.0 y=69.0 width=39.9 height=20.0 center_x=132.0 center_y=79.0)
+            Button name="Apps & Containers" state=[toggled=False] rect=(x=82.0 y=96.0 width=263.0 height=30.0 center_x=213.5 center_y=111.0)
+              TextRun value="Apps & Containers" rect=(x=112.0 y=101.0 width=109.2 height=20.0 center_x=166.6 center_y=111.0)
+            Button name="Config" state=[toggled=False] rect=(x=82.0 y=126.0 width=263.0 height=30.0 center_x=213.5 center_y=141.0)
+              TextRun value="Config" rect=(x=112.0 y=131.0 width=39.9 height=20.0 center_x=132.0 center_y=141.0)
+            Button name="Networking" state=[toggled=False] rect=(x=82.0 y=156.0 width=263.0 height=30.0 center_x=213.5 center_y=171.0)
+              TextRun value="Networking" rect=(x=112.0 y=161.0 width=69.1 height=20.0 center_x=146.5 center_y=171.0)
+            Button name="Storage" state=[toggled=False] rect=(x=82.0 y=186.0 width=263.0 height=30.0 center_x=213.5 center_y=201.0)
+              TextRun value="Storage" rect=(x=112.0 y=191.0 width=46.5 height=20.0 center_x=135.2 center_y=201.0)
+            Button name="Namespaces" state=[toggled=False] rect=(x=82.0 y=216.0 width=263.0 height=34.0 center_x=213.5 center_y=233.0)
+              TextRun value="Namespaces" rect=(x=112.0 y=223.0 width=78.7 height=20.0 center_x=151.3 center_y=233.0)
+            Button name="Events" state=[toggled=False] rect=(x=82.0 y=250.0 width=263.0 height=34.0 center_x=213.5 center_y=267.0)
+              TextRun value="Events" rect=(x=112.0 y=257.0 width=41.4 height=20.0 center_x=132.7 center_y=267.0)
+            Button name="Security & Access Control" state=[toggled=False] rect=(x=82.0 y=284.0 width=263.0 height=30.0 center_x=213.5 center_y=299.0)
+              TextRun value="Security & Access Control" rect=(x=112.0 y=289.0 width=153.4 height=20.0 center_x=188.7 center_y=299.0)
+            Button name="Helm" state=[toggled=False] rect=(x=82.0 y=314.0 width=263.0 height=30.0 center_x=213.5 center_y=329.0)
+              TextRun value="Helm" rect=(x=112.0 y=319.0 width=31.0 height=20.0 center_x=127.5 center_y=329.0)
+            Label value="Discovering API groups…" rect=(x=82.0 y=352.0 width=157.2 height=20.0 center_x=160.6 center_y=362.0)
+              TextRun value="Discovering API groups…" rect=(x=96.0 y=352.0 width=143.2 height=20.0 center_x=167.6 center_y=362.0)
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>

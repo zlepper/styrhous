@@ -59,12 +59,7 @@ impl GlobalBladeContent for NamespaceSelectorSettingsBlade {
         _layer: components::BladeLayer,
         _context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
-        let theme = ui.tokens();
-        ui.label(
-            egui::RichText::new("Namespace selector")
-                .font(type_scale::HEADING.font_id(ui.ctx()))
-                .color(theme.text.primary),
-        );
+        components::blade_title(ui, None, "Namespace selector");
         GlobalBladeRenderResult::default()
     }
 
@@ -98,7 +93,8 @@ impl GlobalBladeContent for NamespaceSelectorSettingsBlade {
         } else {
             30.0
         });
-        let content_height = (ui.available_height() - FOOTER_HEIGHT).max(120.0);
+        // The form scrolls in whatever room the blade footer leaves.
+        let content_height = (ui.available_height() - FOOTER_HEIGHT).max(0.0);
         ui.allocate_ui_with_layout(
             egui::vec2(ui.available_width(), content_height),
             egui::Layout::top_down(egui::Align::Min),
@@ -134,14 +130,9 @@ impl GlobalBladeContent for NamespaceSelectorSettingsBlade {
                     });
             },
         );
-        ui.separator();
-        ui.add_space(space::S8);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            save |= TailwindButton::new("Save changes").show(ui).clicked();
-            reset |= TailwindButton::secondary("Reset")
-                .size(ButtonSize::Md)
-                .show(ui)
-                .clicked();
+        components::blade_body_footer(ui, |ui| {
+            save |= Button::primary("Save changes").show(ui).clicked();
+            reset |= Button::secondary("Reset").show(ui).clicked();
         });
         if reset {
             self.draft = NamespaceSelectorSettings::default();
@@ -173,7 +164,7 @@ fn show_fields(ui: &mut egui::Ui, blade: &mut NamespaceSelectorSettingsBlade) {
                 .color(theme.text.primary),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if TailwindButton::primary("Add field")
+            if Button::soft("Add field")
                 .size(ButtonSize::Sm)
                 .show(ui)
                 .clicked()
@@ -190,7 +181,7 @@ fn show_fields(ui: &mut egui::Ui, blade: &mut NamespaceSelectorSettingsBlade) {
     let mut remove = None;
     let mut edit = None;
     let mut close_editor = false;
-    WorkspaceCard::new().margin(0).show_inner(ui, |ui| {
+    Card::new().padding(0).show_inner(ui, |ui| {
         // Measured inside the frame so its stroke is already excluded.
         let table_width = ui.available_width();
         let original_item_spacing = ui.spacing().item_spacing;
@@ -213,9 +204,10 @@ fn show_fields(ui: &mut egui::Ui, blade: &mut NamespaceSelectorSettingsBlade) {
                 show_field_form(ui, blade);
             }
         } else {
-            ReorderableTable::new("namespace-metadata-fields", 84.0).show(
+            ReorderableTable::new("namespace-metadata-fields").show_rows(
                 ui,
                 &mut blade.draft.fields,
+                84.0,
                 table_width,
                 |ui, field, index, handle| {
                     let row_actions =
@@ -285,47 +277,34 @@ fn show_metadata_field_row(
             .layout(egui::Layout::left_to_right(egui::Align::Center)),
     );
     row_ui.add_space(18.0);
-    let (handle_rect, response) = row_ui.allocate_exact_size(
-        egui::Vec2::splat(32.0),
-        if handle.is_some() {
-            egui::Sense::drag()
-        } else {
-            egui::Sense::hover()
-        },
-    );
-    if let Some(handle) = handle {
-        response.widget_info(|| {
-            egui::WidgetInfo::labeled(
-                egui::WidgetType::Button,
-                row_ui.is_enabled(),
-                format!("Reorder {} field", field.alias),
-            )
-        });
-        handle.register(&response.with_pointing_hand());
+    let (handle_rect, _) =
+        row_ui.allocate_exact_size(egui::Vec2::splat(32.0), egui::Sense::hover());
+    match handle {
+        Some(handle) => {
+            handle.grip(
+                &mut row_ui,
+                handle_rect,
+                &format!("Reorder {} field", field.alias),
+            );
+        }
+        // Being edited: the grip shows, but the row does not move.
+        None => components::ReorderHandle::paint_still(&row_ui, handle_rect),
     }
-    let icon_rect = egui::Rect::from_center_size(handle_rect.center(), egui::Vec2::splat(16.0));
-    let mut handle_ui = row_ui.new_child(
-        egui::UiBuilder::new()
-            .max_rect(icon_rect)
-            .layout(egui::Layout::left_to_right(egui::Align::Center)),
-    );
-    icons::bars_3(&mut handle_ui, 16.0, theme.text.muted);
     row_ui.add_space(11.0);
-    row_ui.horizontal(|ui| {
+    // The row's own centred layout, so the taller chip centres in the row too.
+    row_ui.scope(|ui| {
         ui.label(
             egui::RichText::new(format!("{}: {}", source_label(field.source), field.key))
                 .font(type_scale::BODY.font_id(ui.ctx()))
                 .color(theme.text.secondary),
         );
         ui.add_space(space::S12);
-        metadata_key_pill(ui, &field.alias);
+        components::Chip::new(&field.alias).show(ui);
     });
     row_ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         ui.add_space(30.0);
-        if TailwindButton::icon(icons::trash_icon().fit_to_exact_size(egui::Vec2::splat(16.0)))
-            .variant(ButtonVariant::Secondary)
-            .size(ButtonSize::Md)
-            .accessibility_label(format!("Remove {} field", field.alias))
+        if Button::icon(icons::Icon::Trash, format!("Remove {} field", field.alias))
+            .variant(ButtonVariant::DangerQuiet)
             .show(ui)
             .clicked()
         {
@@ -334,19 +313,13 @@ fn show_metadata_field_row(
         ui.add_space(space::S8);
         let (icon, label) = if is_editing {
             (
-                icons::arrow_up_icon(),
+                icons::Icon::ArrowUp,
                 format!("Close {} field editor", field.alias),
             )
         } else {
-            (icons::pencil_icon(), format!("Edit {} field", field.alias))
+            (icons::Icon::Pencil, format!("Edit {} field", field.alias))
         };
-        if TailwindButton::icon(icon.fit_to_exact_size(egui::Vec2::splat(16.0)))
-            .variant(ButtonVariant::Secondary)
-            .size(ButtonSize::Md)
-            .accessibility_label(label)
-            .show(ui)
-            .clicked()
-        {
+        if Button::icon(icon, label).show(ui).clicked() {
             if is_editing {
                 actions.close_editor = true;
             } else {
@@ -360,49 +333,47 @@ fn show_metadata_field_row(
 fn show_field_form(ui: &mut egui::Ui, blade: &mut NamespaceSelectorSettingsBlade) {
     let theme = ui.tokens();
     ui.add_space(space::S4);
-    WorkspaceCard::new()
-        .margin(space::S16 as i8)
-        .show_inner(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new(if blade.editing_field == Some(blade.draft.fields.len()) {
-                        "Add metadata field"
-                    } else {
-                        "Edit metadata field"
-                    })
-                    .font(type_scale::TITLE.font_id(ui.ctx()))
-                    .color(theme.text.primary),
-                );
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if TailwindButton::primary("Save field")
-                        .size(ButtonSize::Sm)
-                        .show(ui)
-                        .clicked()
-                    {
-                        blade.error = blade.save_field().err();
-                    }
-                    if TailwindButton::secondary("Cancel")
-                        .size(ButtonSize::Sm)
-                        .show(ui)
-                        .clicked()
-                    {
-                        blade.editing_field = None;
-                    }
-                });
-            });
-            ui.add_space(space::S12);
-            show_metadata_source_options(ui, &mut blade.field_draft.source, "Source");
-            ui.add_space(space::S12);
-            labeled_input(
-                ui,
-                "Selector",
-                &mut blade.field_draft.key,
-                "company.example/customer",
+    Card::new().show_inner(ui, |ui| {
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new(if blade.editing_field == Some(blade.draft.fields.len()) {
+                    "Add metadata field"
+                } else {
+                    "Edit metadata field"
+                })
+                .font(type_scale::TITLE.font_id(ui.ctx()))
+                .color(theme.text.primary),
             );
-            ui.add_space(space::S8);
-            labeled_input(ui, "Template key", &mut blade.field_draft.alias, "customer");
-            ui.add_space(space::S16);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if Button::primary("Save field")
+                    .size(ButtonSize::Sm)
+                    .show(ui)
+                    .clicked()
+                {
+                    blade.error = blade.save_field().err();
+                }
+                if Button::secondary("Cancel")
+                    .size(ButtonSize::Sm)
+                    .show(ui)
+                    .clicked()
+                {
+                    blade.editing_field = None;
+                }
+            });
         });
+        ui.add_space(space::S12);
+        show_metadata_source_options(ui, &mut blade.field_draft.source, "Source");
+        ui.add_space(space::S12);
+        labeled_input(
+            ui,
+            "Selector",
+            &mut blade.field_draft.key,
+            "company.example/customer",
+        );
+        ui.add_space(space::S8);
+        labeled_input(ui, "Template key", &mut blade.field_draft.alias, "customer");
+        ui.add_space(space::S16);
+    });
     ui.add_space(space::S4);
 }
 
@@ -415,7 +386,7 @@ fn show_templates(ui: &mut egui::Ui, settings: &mut NamespaceSelectorSettings) {
                 .color(theme.text.primary),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if TailwindButton::primary("Add template")
+            if Button::soft("Add template")
                 .size(ButtonSize::Sm)
                 .show(ui)
                 .clicked()
@@ -435,14 +406,15 @@ fn show_templates(ui: &mut egui::Ui, settings: &mut NamespaceSelectorSettings) {
     ui.add_space(space::S8);
     let mut remove = None;
     ui.add_space(3.0);
-    WorkspaceCard::new().margin(0).show_inner(ui, |ui| {
+    Card::new().padding(0).show_inner(ui, |ui| {
         // Measured inside the frame so its stroke is already excluded.
         let table_width = ui.available_width();
         let original_item_spacing = ui.spacing().item_spacing;
         ui.spacing_mut().item_spacing.y = 0.0;
-        let reordered = ReorderableTable::new("namespace-identity-templates", 72.0).show(
+        let reordered = ReorderableTable::new("namespace-identity-templates").show_rows(
             ui,
             &mut settings.templates,
+            72.0,
             table_width,
             |ui, template, index, handle| {
                 let (row_rect, _) = ui.allocate_exact_size(
@@ -463,52 +435,44 @@ fn show_templates(ui: &mut egui::Ui, settings: &mut NamespaceSelectorSettings) {
                     egui::Vec2::splat(36.0),
                 );
                 let input_rect = egui::Rect::from_min_max(
-                    egui::pos2(row_rect.left() + 67.0, center_y - 14.0),
-                    egui::pos2(remove_rect.left() - space::S16, center_y + 14.0),
+                    egui::pos2(
+                        row_rect.left() + 67.0,
+                        center_y - components::FieldSize::Md.height() / 2.0,
+                    ),
+                    egui::pos2(
+                        remove_rect.left() - space::S16,
+                        center_y + components::FieldSize::Md.height() / 2.0,
+                    ),
                 );
 
-                let response = ui.interact(
+                handle.grip(
+                    ui,
                     handle_rect,
-                    ui.id().with(("reorder-template", index)),
-                    egui::Sense::drag(),
+                    &format!("Reorder identity template {}", index + 1),
                 );
-                let icon_rect =
-                    egui::Rect::from_center_size(handle_rect.center(), egui::Vec2::splat(16.0));
-                let mut handle_ui = ui.new_child(
-                    egui::UiBuilder::new()
-                        .max_rect(icon_rect)
-                        .layout(egui::Layout::left_to_right(egui::Align::Center)),
-                );
-                response.widget_info(|| {
-                    egui::WidgetInfo::labeled(
-                        egui::WidgetType::Button,
-                        handle_ui.is_enabled(),
-                        format!("Reorder identity template {}", index + 1),
-                    )
-                });
-                icons::bars_3(&mut handle_ui, 16.0, theme.text.muted);
-                handle.register(&response.with_pointing_hand());
 
                 let mut input_ui =
                     ui.new_child(egui::UiBuilder::new().max_rect(input_rect).layout(
                         egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
                     ));
-                TailwindTextInput::new(&mut template.template)
+                TextInput::new(&mut template.template)
                     .id_salt(("namespace-identity-template", index))
-                    .hint_text("Customer: {{customer}}")
+                    .placeholder("Customer: {{customer}}")
                     .accessibility_label(format!("Identity template {}", index + 1))
                     .show(&mut input_ui);
 
-                let mut remove_ui =
-                    ui.new_child(egui::UiBuilder::new().max_rect(remove_rect).layout(
-                        egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
-                    ));
-                if TailwindButton::icon(
-                    icons::trash_icon().fit_to_exact_size(egui::Vec2::splat(16.0)),
+                // Centred, not justified: the icon button stays square.
+                let mut remove_ui = ui.new_child(
+                    egui::UiBuilder::new().max_rect(remove_rect).layout(
+                        egui::Layout::left_to_right(egui::Align::Center)
+                            .with_main_align(egui::Align::Center),
+                    ),
+                );
+                if Button::icon(
+                    icons::Icon::Trash,
+                    format!("Remove identity template {}", index + 1),
                 )
-                .variant(ButtonVariant::Secondary)
-                .size(ButtonSize::Md)
-                .accessibility_label(format!("Remove identity template {}", index + 1))
+                .variant(ButtonVariant::DangerQuiet)
                 .show(&mut remove_ui)
                 .clicked()
                 {
@@ -541,9 +505,8 @@ fn show_preview(
 ) {
     let theme = ui.tokens();
     let display = presentation(namespace, settings);
-    WorkspaceCard::new()
+    Card::new()
         .stroke(stroke::hairline(theme.accent.outline))
-        .margin(space::S16 as i8)
         .show_inner(ui, |ui| {
             ui.set_min_width(ui.available_width());
             ui.set_min_height(96.0);
@@ -562,21 +525,6 @@ fn show_preview(
             ui.label(
                 egui::RichText::new(display.secondary)
                     .font(type_scale::BODY.font_id(ui.ctx()))
-                    .color(theme.text.secondary),
-            );
-        });
-}
-
-fn metadata_key_pill(ui: &mut egui::Ui, key: &str) {
-    let theme = ui.tokens();
-    egui::Frame::new()
-        .fill(theme.components.well_bg)
-        .corner_radius(egui::CornerRadius::same(radius::KEY))
-        .inner_margin(egui::Margin::symmetric(space::S8 as i8, space::S4 as i8))
-        .show(ui, |ui| {
-            ui.label(
-                egui::RichText::new(key)
-                    .font(type_scale::META.font_id(ui.ctx()))
                     .color(theme.text.secondary),
             );
         });
@@ -618,8 +566,8 @@ fn labeled_input(ui: &mut egui::Ui, label: &str, value: &mut String, hint: &str)
             .color(theme.text.primary),
     );
     ui.add_space(space::S4);
-    TailwindTextInput::new(value)
-        .hint_text(hint)
+    TextInput::new(value)
+        .placeholder(hint)
         .accessibility_label(label)
         .show(ui);
 }

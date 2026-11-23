@@ -480,6 +480,8 @@ impl<State> AccessibilitySnapshot for Harness<'_, State> {
     }
 }
 
+pub mod board;
+
 mod accessibility;
 mod harness;
 mod snapshot_files;
@@ -489,3 +491,96 @@ use snapshot_files::*;
 
 #[cfg(test)]
 mod tests;
+
+/// Click the primary pointer button at `position`, the way a user does
+/// (move, press, release), without running a frame.
+pub fn primary_click<State>(harness: &mut Harness<'_, State>, position: Pos2) {
+    primary_press(harness, position);
+    primary_release(harness, position);
+}
+
+/// Move the pointer to `position` and press the primary button there.
+pub fn primary_press<State>(harness: &mut Harness<'_, State>, position: Pos2) {
+    primary_button(harness, position, true);
+}
+
+/// Move the pointer to `position` and release the primary button there.
+pub fn primary_release<State>(harness: &mut Harness<'_, State>, position: Pos2) {
+    primary_button(harness, position, false);
+}
+
+fn primary_button<State>(harness: &mut Harness<'_, State>, position: Pos2, pressed: bool) {
+    harness.event(egui::Event::PointerMoved(position));
+    harness.event(egui::Event::PointerButton {
+        pos: position,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::default(),
+    });
+}
+
+/// Click at `position` (press and release in separate frames, as a user
+/// does) and return every text the frames copied to the clipboard.
+pub fn click_and_collect_copies<State>(
+    harness: &mut Harness<'_, State>,
+    position: Pos2,
+) -> Vec<String> {
+    let mut copied = Vec::new();
+    let mut collect =
+        |harness: &mut Harness<'_, State>| {
+            harness.step();
+            copied.extend(
+                harness.output().platform_output.commands.iter().filter_map(
+                    |command| match command {
+                        egui::OutputCommand::CopyText(text) => Some(text.clone()),
+                        _ => None,
+                    },
+                ),
+            );
+        };
+    primary_press(harness, position);
+    collect(harness);
+    primary_release(harness, position);
+    collect(harness);
+    collect(harness);
+    copied
+}
+
+/// A harness `width` × `height` points showing `scene` on the canvas. With a
+/// `padding`, the scene is inset by it and its items are spaced 8 points
+/// across and 12 down (a gallery of states); without, it starts at the
+/// window's corner with no spacing (stacked window chrome).
+pub fn canvas_harness(
+    width: f32,
+    height: f32,
+    padding: Option<f32>,
+    scene: impl Fn(&mut egui::Ui) + 'static,
+) -> Harness<'static> {
+    use crate::design::space;
+    use crate::design::theme::ThemeExt as _;
+    let mut harness = Harness::builder().build_ui(move |ui| {
+        let canvas = ui.tokens().surface.canvas;
+        ui.ctx()
+            .layer_painter(egui::LayerId::background())
+            .rect_filled(ui.ctx().content_rect(), 0, canvas);
+        match padding {
+            Some(padding) => {
+                egui::Frame::new()
+                    .inner_margin(egui::Margin::same(padding as i8))
+                    .show(ui, |ui| {
+                        ui.set_min_size(ui.available_size());
+                        ui.spacing_mut().item_spacing = egui::vec2(space::S8, space::S12);
+                        scene(ui);
+                    });
+            }
+            None => {
+                ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
+                scene(ui);
+            }
+        }
+    });
+    setup_egui(&mut harness);
+    harness.set_size(egui::vec2(width, height));
+    harness.run();
+    harness
+}

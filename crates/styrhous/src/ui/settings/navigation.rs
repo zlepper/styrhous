@@ -1,6 +1,5 @@
 use super::destinations::{
-    SettingsDestination, settings_destination_card, settings_destination_divider,
-    settings_destination_group,
+    SettingsDestination, settings_destination_card, settings_destination_group,
 };
 use super::terminal::{
     show_debug_image_presets, show_settings_introduction, show_terminal_launcher,
@@ -19,12 +18,7 @@ impl GlobalBladeContent for SettingsHomeBlade {
         _layer: components::BladeLayer,
         _context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
-        let theme = ui.tokens();
-        ui.label(
-            egui::RichText::new("Settings")
-                .font(type_scale::HEADING.font_id(ui.ctx()))
-                .color(theme.text.primary),
-        );
+        components::blade_title(ui, None, "Settings");
         GlobalBladeRenderResult::default()
     }
 
@@ -63,60 +57,57 @@ impl GlobalBladeContent for SettingsHomeBlade {
             .id_salt("settings-destinations")
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                settings_destination_group(ui, "KUBERNETES", |ui| {
+                settings_destination_group(ui, "KUBERNETES", |group| {
                     contexts = settings_destination_card(
-                        ui,
+                        group,
                         SettingsDestination {
                             title: "Contexts",
                             label: "Open context settings",
                             description: "Customize display names and selector badges.",
-                            icon: icons::circle_stack_icon(),
+                            icon: icons::Icon::CircleStack,
                             detail: &count,
                         },
                     );
-                    settings_destination_divider(ui);
                     namespace_selector = settings_destination_card(
-                        ui,
+                        group,
                         SettingsDestination {
                             title: "Namespace selector",
                             label: "Open namespace selector settings",
                             description: "Choose how namespaces are displayed.",
-                            icon: icons::adjustments_horizontal_icon(),
+                            icon: icons::Icon::AdjustmentsHorizontal,
                             detail: "",
                         },
                     );
-                    settings_destination_divider(ui);
                     cluster_discovery = settings_destination_card(
-                        ui,
+                        group,
                         SettingsDestination {
                             title: "Cluster discovery",
                             label: "Open cluster discovery",
                             description: "Find and add clusters from your cloud accounts.",
-                            icon: icons::share_icon(),
+                            icon: icons::Icon::Share,
                             detail: "",
                         },
                     );
                 });
                 ui.add_space(space::S32 + space::S8);
-                settings_destination_group(ui, "APPLICATION", |ui| {
+                settings_destination_group(ui, "APPLICATION", |group| {
                     application_settings = settings_destination_card(
-                        ui,
+                        group,
                         SettingsDestination {
                             title: "Application preferences",
                             label: "Open application settings",
                             description: "Terminal, debug images, and updates.",
-                            icon: icons::wrench_screwdriver_icon(),
+                            icon: icons::Icon::WrenchScrewdriver,
                             detail: "",
                         },
                     );
-                    settings_destination_divider(ui);
                     license = settings_destination_card(
-                        ui,
+                        group,
                         SettingsDestination {
                             title: "License & account",
                             label: "Open license and account settings",
                             description: &license_description,
-                            icon: icons::user_circle_icon(),
+                            icon: icons::Icon::UserCircle,
                             detail: license_status,
                         },
                     );
@@ -159,11 +150,44 @@ impl GlobalBladeContent for SettingsHomeBlade {
 pub(crate) struct TerminalSettingsBlade {
     pub(crate) draft: TerminalLaunchSettings,
     pub(crate) error: Option<String>,
+    /// Saving returns to the blade this one was opened over (an inspector)
+    /// instead of closing the blades.
+    back_on_save: bool,
+    /// Saved; go back on the next effect pass.
+    go_back: bool,
 }
 
 impl TerminalSettingsBlade {
     pub(crate) fn new(draft: TerminalLaunchSettings) -> Self {
-        Self { draft, error: None }
+        Self {
+            draft,
+            error: None,
+            back_on_save: false,
+            go_back: false,
+        }
+    }
+
+    /// Settings opened over another blade (an inspector's "Configure
+    /// presets…"): saving returns to it.
+    pub(crate) fn returning_on_save(self) -> Self {
+        Self {
+            back_on_save: true,
+            ..self
+        }
+    }
+}
+
+/// Go back to the previous blade.
+#[derive(Debug)]
+struct GoBack;
+
+impl GlobalBladeEffect for GoBack {
+    fn apply(
+        self: Box<Self>,
+        _context: &mut GlobalBladeEffectContext<'_>,
+        navigation: &mut GlobalBladeNavigation<'_>,
+    ) {
+        navigation.go_back();
     }
 }
 
@@ -172,18 +196,18 @@ impl GlobalBladeContent for TerminalSettingsBlade {
     fn terminal_settings(&self) -> Option<&TerminalSettingsBlade> {
         Some(self)
     }
+
+    fn take_effect(&mut self) -> Option<Box<dyn GlobalBladeEffect>> {
+        std::mem::take(&mut self.go_back).then(|| Box::new(GoBack) as Box<dyn GlobalBladeEffect>)
+    }
+
     fn render_header(
         &mut self,
         ui: &mut egui::Ui,
         _layer: components::BladeLayer,
         _context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
-        let theme = ui.tokens();
-        ui.label(
-            egui::RichText::new("Application settings")
-                .font(type_scale::HEADING.font_id(ui.ctx()))
-                .color(theme.text.primary),
-        );
+        components::blade_title(ui, None, "Application settings");
         GlobalBladeRenderResult::default()
     }
 
@@ -200,7 +224,8 @@ impl GlobalBladeContent for TerminalSettingsBlade {
         ui.add_space(space::S24);
         ui.separator();
         ui.add_space(space::S24);
-        let content_height = (ui.available_height() - FOOTER_HEIGHT).max(120.0);
+        // The form scrolls in whatever room the blade footer leaves.
+        let content_height = (ui.available_height() - FOOTER_HEIGHT).max(0.0);
         ui.allocate_ui_with_layout(
             egui::vec2(ui.available_width(), content_height),
             egui::Layout::top_down(egui::Align::Min),
@@ -216,14 +241,9 @@ impl GlobalBladeContent for TerminalSettingsBlade {
                     });
             },
         );
-        ui.separator();
-        ui.add_space(space::S8);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            save |= TailwindButton::new("Save changes").show(ui).clicked();
-            reset |= TailwindButton::secondary("Reset")
-                .size(ButtonSize::Md)
-                .show(ui)
-                .clicked();
+        components::blade_body_footer(ui, |ui| {
+            save |= Button::primary("Save changes").show(ui).clicked();
+            reset |= Button::secondary("Reset").show(ui).clicked();
         });
         if reset {
             self.draft = TerminalLaunchSettings::default();
@@ -234,6 +254,10 @@ impl GlobalBladeContent for TerminalSettingsBlade {
                 Ok(()) => {
                     *context.terminal_launch_settings() = self.draft.clone();
                     self.error = None;
+                    if self.back_on_save {
+                        self.go_back = true;
+                        return GlobalBladeRenderResult::default();
+                    }
                     return GlobalBladeRenderResult {
                         close: true,
                         ..Default::default()

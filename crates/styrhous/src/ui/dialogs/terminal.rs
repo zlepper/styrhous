@@ -11,7 +11,6 @@ pub(crate) fn show_terminal_launch_error(
     };
     match (ErrorDialog {
         id: egui::Id::new("terminal-launch-error"),
-        eyebrow: "SHELL",
         title: "Couldn’t open a terminal",
         message: "Styrhous could not start an external terminal for this shell.",
         details: Some(&error),

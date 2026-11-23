@@ -3,14 +3,43 @@ use crate::api_resource::ApiResource;
 use crate::minimal_resource::{MinimalResource, PodLogContainer};
 use crate::resource_table::ContainerKind;
 use crate::terminal_launcher::DebugImagePreset;
-use components::design::theme::Theme;
-use components::{MoreMenu, icons};
+use components::icons::Icon;
+use components::{Menu, MenuItem};
 
-/// Render the shared resource-level actions used by table rows and inspectors.
+/// Queue `action` when `response` was clicked and no other action is queued
+/// this frame.
+fn queue(
+    pending_action: &mut Option<ResourceAction>,
+    response: &egui::Response,
+    action: impl FnOnce() -> Option<ResourceAction>,
+) {
+    if response.clicked() && pending_action.is_none() {
+        *pending_action = action();
+    }
+}
+
+/// Puts a separator between the groups of a menu that have items (S07).
+#[derive(Default)]
+struct MenuGroups {
+    started: bool,
+}
+
+impl MenuGroups {
+    /// Start the next group; call it only when the group has items.
+    fn next(&mut self, menu: &mut Menu<'_>) {
+        if self.started {
+            menu.separator();
+        }
+        self.started = true;
+    }
+}
+
+/// Render the shared resource-level actions used by table rows and
+/// inspectors, grouped in the S07 order: edit · inspect (logs, shells) ·
+/// copy · lifecycle · destructive.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn show_resource_action_items(
-    menu: &mut MoreMenu<'_>,
-    theme: &Theme,
+    menu: &mut Menu<'_>,
     api_resource: &ApiResource,
     resource: &MinimalResource,
     log_containers: &[PodLogContainer],
@@ -18,191 +47,258 @@ pub(super) fn show_resource_action_items(
     supports_scale: bool,
     pending_action: &mut Option<ResourceAction>,
 ) {
-    if api_resource.kind == "Node" && !debug_image_presets.is_empty() {
-        menu.submenu("Shell", |menu: &mut MoreMenu<'_>| {
-            for preset in debug_image_presets {
-                if menu.action(preset.menu_label()).clicked() && pending_action.is_none() {
-                    *pending_action = Some(ResourceAction::NodeShell {
-                        name: resource.name.clone(),
-                        preset: preset.clone(),
-                    });
-                    menu.close();
-                }
-            }
-        });
-        menu.separator();
-    }
+    let mut groups = MenuGroups::default();
+
+    groups.next(menu);
+    let edit = menu.item(MenuItem::new("Edit YAML").icon(Icon::PencilSquare));
+    queue(pending_action, &edit, || {
+        Some(ResourceAction::EditYaml {
+            name: resource.name.clone(),
+            namespace: resource.namespace.clone(),
+        })
+    });
+
     let shell_containers = log_containers
         .iter()
         .filter(|container| matches!(container.kind, ContainerKind::App))
         .collect::<Vec<_>>();
     let pod_image_presets = pod_image_presets(log_containers, debug_image_presets);
-    if api_resource.kind == "Pod"
+    let node_shell = api_resource.is_node() && !debug_image_presets.is_empty();
+    let pod_debug_shell = api_resource.is_pod()
         && !shell_containers.is_empty()
-        && (!debug_image_presets.is_empty() || !pod_image_presets.is_empty())
-    {
-        menu.submenu("Debug shell", |menu: &mut MoreMenu<'_>| {
-            for target in &shell_containers {
-                menu.submenu(&target.name, |menu: &mut MoreMenu<'_>| {
-                    for preset in debug_image_presets {
-                        add_pod_debug_shell_action(menu, resource, target, preset, pending_action);
-                    }
-                    if !debug_image_presets.is_empty() && !pod_image_presets.is_empty() {
-                        menu.separator();
-                    }
-                    for preset in &pod_image_presets {
-                        add_pod_debug_shell_action(menu, resource, target, preset, pending_action);
-                    }
-                });
-            }
-        });
-        menu.separator();
+        && (!debug_image_presets.is_empty() || !pod_image_presets.is_empty());
+    // Shell containers are among the log containers.
+    if !log_containers.is_empty() || node_shell || pod_debug_shell {
+        groups.next(menu);
     }
-    match shell_containers.as_slice() {
-        [] => {}
-        [container] => {
-            if menu.action("Shell").clicked() && pending_action.is_none() {
-                *pending_action = Some(ResourceAction::Shell {
-                    name: resource.name.clone(),
-                    namespace: resource.namespace.clone(),
-                    container: (*container).clone(),
-                });
-            }
-            menu.separator();
-        }
-        containers => {
-            menu.submenu("Shell", |menu: &mut MoreMenu<'_>| {
-                for container in containers {
-                    if menu.action(&container.name).clicked() && pending_action.is_none() {
-                        *pending_action = Some(ResourceAction::Shell {
-                            name: resource.name.clone(),
-                            namespace: resource.namespace.clone(),
-                            container: (*container).clone(),
-                        });
-                    }
+    show_log_actions(menu, resource, log_containers, pending_action);
+    show_shell_actions(menu, resource, &shell_containers, pending_action);
+    if pod_debug_shell {
+        menu.submenu(
+            MenuItem::new("Debug shell").icon(Icon::WrenchScrewdriver),
+            |menu: &mut Menu<'_>| {
+                for target in &shell_containers {
+                    menu.submenu(&target.name, |menu: &mut Menu<'_>| {
+                        show_debug_images(
+                            menu,
+                            debug_image_presets,
+                            &pod_image_presets,
+                            pending_action,
+                            |preset| ResourceAction::PodDebugShell {
+                                name: resource.name.clone(),
+                                namespace: resource.namespace.clone(),
+                                target_container: target.name.clone(),
+                                preset: preset.clone(),
+                            },
+                        );
+                    });
                 }
-            });
-            menu.separator();
-        }
+            },
+        );
     }
+    if node_shell {
+        menu.submenu(
+            MenuItem::new("Shell").icon(Icon::CommandLine),
+            |menu: &mut Menu<'_>| {
+                show_debug_images(menu, debug_image_presets, &[], pending_action, |preset| {
+                    ResourceAction::NodeShell {
+                        name: resource.name.clone(),
+                        preset: preset.clone(),
+                    }
+                });
+            },
+        );
+    }
+
+    groups.next(menu);
+    let copy = menu.item(MenuItem::new("Copy name").icon(Icon::ClipboardDocument));
+    if copy.clicked() {
+        copy.ctx.copy_text(resource.name.clone());
+    }
+
+    show_lifecycle_actions(
+        menu,
+        &mut groups,
+        api_resource,
+        resource,
+        supports_scale,
+        pending_action,
+    );
+
+    groups.next(menu);
+    let delete = menu.item(MenuItem::new("Delete").icon(Icon::Trash).danger());
+    queue(pending_action, &delete, || {
+        Some(ResourceAction::RequestDelete {
+            name: resource.name.clone(),
+            namespace: resource.namespace.clone(),
+        })
+    });
+    if resource.can_force_delete() {
+        let force_delete = menu.item(
+            MenuItem::new("Force delete (remove finalizers)")
+                .icon(Icon::Trash)
+                .danger(),
+        );
+        queue(pending_action, &force_delete, || {
+            Some(ResourceAction::RequestForceDelete {
+                name: resource.name.clone(),
+                uid: resource.uid.clone(),
+                namespace: resource.namespace.clone(),
+                finalizers: resource.finalizers().to_vec(),
+            })
+        });
+    }
+}
+
+/// "View logs": one item for a single container, otherwise a submenu that
+/// can also interleave every container.
+fn show_log_actions(
+    menu: &mut Menu<'_>,
+    resource: &MinimalResource,
+    log_containers: &[PodLogContainer],
+    pending_action: &mut Option<ResourceAction>,
+) {
+    let view_logs = |containers: &[PodLogContainer]| {
+        let targets = log_stream_targets(resource, containers);
+        (!targets.is_empty()).then_some(ResourceAction::ViewLogs { targets })
+    };
+    let item = MenuItem::new("View logs").icon(Icon::DocumentText);
     match log_containers {
         [] => {}
         [container] => {
-            if menu.action("View logs").clicked() && pending_action.is_none() {
-                let targets = log_stream_targets(resource, std::slice::from_ref(container));
-                if !targets.is_empty() {
-                    *pending_action = Some(ResourceAction::ViewLogs { targets });
-                }
-            }
-            menu.separator();
+            let response = menu.item(item);
+            queue(pending_action, &response, || {
+                view_logs(std::slice::from_ref(container))
+            });
         }
         containers => {
-            menu.submenu("View logs", |menu: &mut MoreMenu<'_>| {
-                if menu.action("All containers (interleaved)").clicked() && pending_action.is_none()
-                {
-                    let targets = log_stream_targets(resource, containers);
-                    if !targets.is_empty() {
-                        *pending_action = Some(ResourceAction::ViewLogs { targets });
-                        menu.close();
-                    }
-                }
+            menu.submenu(item, |menu: &mut Menu<'_>| {
+                let all = menu.action("All containers (interleaved)");
+                queue(pending_action, &all, || view_logs(containers));
                 menu.separator();
                 for container in containers {
                     let label = format!("{} — {}", container.name, container.kind.label());
-                    if menu.action(label).clicked() && pending_action.is_none() {
-                        let targets = log_stream_targets(resource, std::slice::from_ref(container));
-                        if !targets.is_empty() {
-                            *pending_action = Some(ResourceAction::ViewLogs { targets });
-                        }
-                    }
+                    let response = menu.action(label);
+                    queue(pending_action, &response, || {
+                        view_logs(std::slice::from_ref(container))
+                    });
                 }
             });
-            menu.separator();
         }
     }
-    if menu
-        .action_with_icon(
-            "Edit",
-            icons::document_icon()
-                .fit_to_exact_size(egui::Vec2::splat(16.0))
-                .tint(theme.text.muted),
-        )
-        .clicked()
-        && pending_action.is_none()
-    {
-        *pending_action = Some(ResourceAction::EditYaml {
+}
+
+/// "Shell" into an app container: one item for a single container,
+/// otherwise a submenu of containers.
+fn show_shell_actions(
+    menu: &mut Menu<'_>,
+    resource: &MinimalResource,
+    shell_containers: &[&PodLogContainer],
+    pending_action: &mut Option<ResourceAction>,
+) {
+    let shell = |container: &PodLogContainer| {
+        Some(ResourceAction::Shell {
             name: resource.name.clone(),
             namespace: resource.namespace.clone(),
+            container: container.clone(),
+        })
+    };
+    let item = MenuItem::new("Shell").icon(Icon::CommandLine);
+    match shell_containers {
+        [] => {}
+        [container] => {
+            let response = menu.item(item);
+            queue(pending_action, &response, || shell(container));
+        }
+        containers => {
+            menu.submenu(item, |menu: &mut Menu<'_>| {
+                for container in containers {
+                    let response = menu.action(&container.name);
+                    queue(pending_action, &response, || shell(container));
+                }
+            });
+        }
+    }
+}
+
+/// The "Debug image" list of a debug shell submenu: the configured presets,
+/// then the pod's own images, then a way to configure the presets.
+fn show_debug_images(
+    menu: &mut Menu<'_>,
+    configured_presets: &[DebugImagePreset],
+    pod_image_presets: &[DebugImagePreset],
+    pending_action: &mut Option<ResourceAction>,
+    action: impl Fn(&DebugImagePreset) -> ResourceAction,
+) {
+    menu.heading("Debug image");
+    for (index, preset) in configured_presets
+        .iter()
+        .chain(pod_image_presets)
+        .enumerate()
+    {
+        if index == configured_presets.len() && index > 0 {
+            menu.separator();
+        }
+        let profile = preset.profile_label();
+        let response = menu.item(MenuItem::new(&preset.name).detail(&profile));
+        queue(pending_action, &response, || Some(action(preset)));
+    }
+    menu.separator();
+    let configure = menu.item(MenuItem::new("Configure presets…").icon(Icon::Cog6Tooth));
+    queue(pending_action, &configure, || {
+        Some(ResourceAction::ConfigureDebugImages)
+    });
+}
+
+/// Restart, roll back, scale and run: the actions that change what runs.
+fn show_lifecycle_actions(
+    menu: &mut Menu<'_>,
+    groups: &mut MenuGroups,
+    api_resource: &ApiResource,
+    resource: &MinimalResource,
+    supports_scale: bool,
+    pending_action: &mut Option<ResourceAction>,
+) {
+    let rollout = crate::resource_handlers::deployment::supports_rollout_restart(api_resource);
+    let cron_job_namespace = crate::resource_handlers::cron_job::supports_manual_run(api_resource)
+        .then(|| resource.namespace.clone())
+        .flatten();
+    if !(rollout || supports_scale || cron_job_namespace.is_some()) {
+        return;
+    }
+    groups.next(menu);
+    if rollout {
+        let restart = menu.item(MenuItem::new("Restart rollout").icon(Icon::ArrowPath));
+        queue(pending_action, &restart, || {
+            Some(ResourceAction::RequestDeploymentRestart {
+                name: resource.name.clone(),
+                namespace: resource.namespace.clone()?,
+            })
+        });
+        let roll_back = menu.item(MenuItem::new("Roll back…").icon(Icon::ArrowUturnLeft));
+        queue(pending_action, &roll_back, || {
+            Some(ResourceAction::RequestDeploymentRollback {
+                name: resource.name.clone(),
+                namespace: resource.namespace.clone()?,
+            })
         });
     }
     if supports_scale {
-        menu.separator();
-        if menu.action("Scale").clicked() && pending_action.is_none() {
-            *pending_action = Some(ResourceAction::RequestScale {
+        let scale = menu.item(MenuItem::new("Scale…").icon(Icon::ArrowsUpDown));
+        queue(pending_action, &scale, || {
+            Some(ResourceAction::RequestScale {
                 name: resource.name.clone(),
                 namespace: resource.namespace.clone(),
-            });
-        }
-    }
-    if crate::resource_handlers::deployment::supports_rollout_restart(api_resource) {
-        menu.separator();
-        if menu.action("Restart rollout").clicked()
-            && pending_action.is_none()
-            && let Some(namespace) = resource.namespace.clone()
-        {
-            *pending_action = Some(ResourceAction::RequestDeploymentRestart {
-                name: resource.name.clone(),
-                namespace,
-            });
-        }
-        if menu.action("Roll back…").clicked()
-            && pending_action.is_none()
-            && let Some(namespace) = resource.namespace.clone()
-        {
-            *pending_action = Some(ResourceAction::RequestDeploymentRollback {
-                name: resource.name.clone(),
-                namespace,
-            });
-        }
-    }
-    if crate::resource_handlers::cron_job::supports_manual_run(api_resource)
-        && let Some(namespace) = resource.namespace.clone()
-    {
-        menu.separator();
-        if menu.action("Run now").clicked() && pending_action.is_none() {
-            *pending_action = Some(ResourceAction::RequestCronJobRun {
-                name: resource.name.clone(),
-                namespace,
-            });
-        }
-    }
-    menu.separator();
-    if menu
-        .destructive_action_with_icon(
-            "Delete",
-            icons::trash_icon()
-                .fit_to_exact_size(egui::Vec2::splat(16.0))
-                .tint(theme.danger.text),
-        )
-        .clicked()
-        && pending_action.is_none()
-    {
-        *pending_action = Some(ResourceAction::RequestDelete {
-            name: resource.name.clone(),
-            namespace: resource.namespace.clone(),
+            })
         });
     }
-    if resource.can_force_delete()
-        && menu
-            .destructive_action("Force delete (remove finalizers)")
-            .clicked()
-        && pending_action.is_none()
-    {
-        *pending_action = Some(ResourceAction::RequestForceDelete {
-            name: resource.name.clone(),
-            uid: resource.uid.clone(),
-            namespace: resource.namespace.clone(),
-            finalizers: resource.finalizers().to_vec(),
+    if let Some(namespace) = cron_job_namespace {
+        let run = menu.item(MenuItem::new("Run now").icon(Icon::Play));
+        queue(pending_action, &run, || {
+            Some(ResourceAction::RequestCronJobRun {
+                name: resource.name.clone(),
+                namespace,
+            })
         });
     }
 }
@@ -253,27 +349,144 @@ fn pod_image_presets(
     pod_image_presets
 }
 
-fn add_pod_debug_shell_action(
-    menu: &mut MoreMenu<'_>,
-    resource: &MinimalResource,
-    target: &PodLogContainer,
-    preset: &DebugImagePreset,
-    pending_action: &mut Option<ResourceAction>,
-) {
-    if menu.action(preset.menu_label()).clicked() && pending_action.is_none() {
-        *pending_action = Some(ResourceAction::PodDebugShell {
-            name: resource.name.clone(),
-            namespace: resource.namespace.clone(),
-            target_container: target.name.clone(),
-            preset: preset.clone(),
-        });
-        menu.close();
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use components::test_support::setup_egui;
+    use egui_kittest::Harness;
+    use egui_kittest::kittest::{NodeT, Queryable};
+
+    fn api_resource(group: &str, kind: &str, name: &str) -> ApiResource {
+        ApiResource {
+            group: group.into(),
+            version: "v1".into(),
+            kind: kind.into(),
+            name: name.into(),
+            namespaced: true,
+        }
+    }
+
+    fn resource(name: &str) -> MinimalResource {
+        MinimalResource {
+            uid: format!("{name}-uid"),
+            name: name.into(),
+            namespace: Some("default".into()),
+            creation_timestamp: None,
+            controller_owner: None,
+            labels: Default::default(),
+            annotations: Default::default(),
+            cells: Default::default(),
+            log_containers: Vec::new(),
+        }
+    }
+
+    /// The menu's item labels in their groups, top to bottom: a separator
+    /// shows as a gap taller than an item between two items.
+    fn menu_groups(
+        api_resource: ApiResource,
+        resource: MinimalResource,
+        log_containers: Vec<PodLogContainer>,
+        supports_scale: bool,
+    ) -> Vec<Vec<String>> {
+        let presets = vec![DebugImagePreset {
+            name: "Busybox".into(),
+            image: "busybox".into(),
+            profile: crate::terminal_launcher::DebugProfile::General,
+        }];
+        let mut harness = Harness::new_ui(move |ui| {
+            components::menu::preview(ui, 240.0, "Actions", |menu| {
+                show_resource_action_items(
+                    menu,
+                    &api_resource,
+                    &resource,
+                    &log_containers,
+                    &presets,
+                    supports_scale,
+                    &mut None,
+                );
+            });
+        });
+        setup_egui(&mut harness);
+        harness.run();
+        let mut items = harness
+            .query_all_by_role(egui::accesskit::Role::MenuItem)
+            .map(|node| {
+                (
+                    node.rect(),
+                    node.accesskit_node().label().unwrap_or_default(),
+                )
+            })
+            .collect::<Vec<_>>();
+        items.sort_by(|left, right| left.0.top().total_cmp(&right.0.top()));
+        let mut groups: Vec<Vec<String>> = Vec::new();
+        let mut previous_bottom = None;
+        for (rect, label) in items {
+            let separated = previous_bottom.is_some_and(|bottom: f32| rect.top() - bottom > 1.0);
+            if groups.is_empty() || separated {
+                groups.push(Vec::new());
+            }
+            groups.last_mut().expect("a group").push(label);
+            previous_bottom = Some(rect.bottom());
+        }
+        groups
+    }
+
+    #[test]
+    fn pod_actions_group_edit_inspect_copy_and_delete_in_menu_order() {
+        let containers = vec![
+            container("api", ContainerKind::App, Some("registry.example/api:v1")),
+            container("sidecar", ContainerKind::App, None),
+        ];
+        assert_eq!(
+            menu_groups(
+                api_resource("core", "Pod", "pods"),
+                resource("api-0"),
+                containers,
+                false,
+            ),
+            [
+                vec!["Edit YAML"],
+                vec!["View logs", "Shell", "Debug shell"],
+                vec!["Copy name"],
+                vec!["Delete"],
+            ]
+        );
+    }
+
+    #[test]
+    fn deployment_lifecycle_actions_form_their_own_group_before_delete() {
+        assert_eq!(
+            menu_groups(
+                api_resource("apps", "Deployment", "deployments"),
+                resource("api"),
+                Vec::new(),
+                true,
+            ),
+            [
+                vec!["Edit YAML"],
+                vec!["Copy name"],
+                vec!["Restart rollout", "Roll back…", "Scale…"],
+                vec!["Delete"],
+            ]
+        );
+    }
+
+    #[test]
+    fn force_delete_follows_delete_in_the_destructive_group() {
+        let terminating =
+            resource("stuck").with_lifecycle_metadata(true, vec!["example.com/cleanup".into()]);
+        assert_eq!(
+            menu_groups(
+                api_resource("", "ConfigMap", "configmaps"),
+                terminating,
+                Vec::new(),
+                false,
+            )
+            .last()
+            .expect("a destructive group"),
+            &vec!["Delete", "Force delete (remove finalizers)"]
+        );
+    }
 
     fn container(name: &str, kind: ContainerKind, image: Option<&str>) -> PodLogContainer {
         PodLogContainer {

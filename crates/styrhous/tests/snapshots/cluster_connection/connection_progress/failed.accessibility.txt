@@ -16,27 +16,27 @@ Window state=[focused] rect=<none>
             Image rect=(x=20.0 y=976.0 width=28.0 height=28.0 center_x=34.0 center_y=990.0)
     GenericContainer rect=<none>
       GenericContainer rect=<none>
+        Label value="dev" rect=(x=82.0 y=22.0 width=35.4 height=28.0 center_x=99.7 center_y=36.0)
+          TextRun value="dev" rect=(x=82.0 y=22.0 width=35.4 height=28.0 center_x=99.7 center_y=36.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
-            GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="dev" rect=(x=92.0 y=29.0 width=35.4 height=24.0 center_x=109.7 center_y=41.0)
-                  TextRun value="dev" rect=(x=92.0 y=29.0 width=35.4 height=24.0 center_x=109.7 center_y=41.0)
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
-                Label value="Could not connect to dev" rect=(x=648.0 y=395.0 width=194.0 height=19.0 center_x=745.0 center_y=404.5)
-                  TextRun value="Could not connect to dev" rect=(x=648.0 y=395.0 width=194.0 height=19.0 center_x=745.0 center_y=404.5)
-                Label value="Authenticate: done, 0.4 s" rect=(x=648.0 y=426.0 width=600.0 height=32.0 center_x=948.0 center_y=442.0)
-                Label value="Contact API server: failed" rect=(x=648.0 y=458.0 width=600.0 height=32.0 center_x=948.0 center_y=474.0)
+                Label value="Could not connect to dev" rect=(x=648.0 y=396.5 width=194.0 height=19.0 center_x=745.0 center_y=406.0)
+                  TextRun value="Could not connect to dev" rect=(x=648.0 y=396.5 width=194.0 height=19.0 center_x=745.0 center_y=406.0)
+                Label value="Authenticate: done, 0.4 s" rect=(x=648.0 y=427.5 width=600.0 height=32.0 center_x=948.0 center_y=443.5)
+                Label value="Contact API server: failed" rect=(x=648.0 y=459.5 width=600.0 height=32.0 center_x=948.0 center_y=475.5)
               GenericContainer rect=<none>
-                Label value="Error details" rect=(x=648.0 y=517.0 width=75.2 height=17.0 center_x=685.6 center_y=525.5)
-                  TextRun value="Error details" rect=(x=648.0 y=517.0 width=75.2 height=17.0 center_x=685.6 center_y=525.5)
                 GenericContainer rect=<none>
-                  Label value="Error discovering the core Kubernetes API: ApiError: Unauthorized (401)" rect=(x=657.0 y=550.0 width=553.8 height=17.0 center_x=933.9 center_y=558.5)
-                    TextRun value="Error discovering the core Kubernetes API: ApiError: Unauthorized (401)" rect=(x=657.0 y=550.0 width=553.8 height=17.0 center_x=933.9 center_y=558.5)
+                  Label value="Error details" rect=(x=648.0 y=518.5 width=75.2 height=20.0 center_x=685.6 center_y=528.5)
+                    TextRun value="Error details" rect=(x=648.0 y=518.5 width=75.2 height=20.0 center_x=685.6 center_y=528.5)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      Label value="Error discovering the core Kubernetes API: ApiError: Unauthorized (401)" rect=(x=662.0 y=552.5 width=511.2 height=18.0 center_x=917.6 center_y=561.5)
+                        TextRun value="Error discovering the core Kubernetes API: ApiError: Unauthorized (401)" rect=(x=662.0 y=553.5 width=511.2 height=18.0 center_x=917.6 center_y=562.5)
                 GenericContainer rect=<none>
-                  Button name="Retry" rect=(x=906.3 y=591.0 width=83.4 height=38.0 center_x=948.0 center_y=610.0)
+                  Button name="Retry" rect=(x=916.8 y=595.5 width=62.5 height=32.0 center_x=948.0 center_y=611.5)

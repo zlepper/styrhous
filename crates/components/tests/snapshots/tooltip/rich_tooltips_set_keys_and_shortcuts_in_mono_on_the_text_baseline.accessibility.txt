@@ -1,0 +1,28 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Container" rect=(x=26.0 y=22.0 width=59.4 height=16.0 center_x=55.7 center_y=30.0)
+                  TextRun value="Container" rect=(x=26.0 y=22.0 width=59.4 height=16.0 center_x=55.7 center_y=30.0)
+                Label value=" sidecar" rect=(x=85.4 y=22.0 width=41.9 height=16.0 center_x=106.4 center_y=30.0)
+                  TextRun value=" sidecar" rect=(x=85.4 y=22.0 width=41.9 height=16.0 center_x=106.4 center_y=30.0)
+                Label value="State" rect=(x=26.0 y=38.0 width=33.0 height=16.0 center_x=42.5 center_y=46.0)
+                  TextRun value="State" rect=(x=26.0 y=38.0 width=33.0 height=16.0 center_x=42.5 center_y=46.0)
+                Label value=" Waiting · ContainerCreating" rect=(x=59.0 y=38.0 width=153.8 height=16.0 center_x=135.9 center_y=46.0)
+                  TextRun value=" Waiting · ContainerCreating" rect=(x=59.0 y=38.0 width=153.8 height=16.0 center_x=135.9 center_y=46.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Next match " rect=(x=26.0 y=82.0 width=66.4 height=16.0 center_x=59.2 center_y=90.0)
+                  TextRun value="Next match " rect=(x=26.0 y=82.0 width=66.4 height=16.0 center_x=59.2 center_y=90.0)
+                Label value="Enter" rect=(x=100.4 y=82.0 width=33.0 height=16.0 center_x=116.9 center_y=90.0)
+                  TextRun value="Enter" rect=(x=100.4 y=82.0 width=33.0 height=16.0 center_x=116.9 center_y=90.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="A long explanation wraps once it reaches the tooltip's maximum width of 280 points." rect=(x=26.0 y=126.0 width=260.0 height=32.0 center_x=156.0 center_y=142.0)
+                  TextRun value="A long explanation wraps once it reaches the " rect=(x=26.0 y=126.0 width=244.9 height=16.0 center_x=148.5 center_y=134.0)
+                  TextRun value="tooltip's maximum width of 280 points." rect=(x=26.0 y=142.0 width=211.6 height=16.0 center_x=131.8 center_y=150.0)

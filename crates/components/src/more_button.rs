@@ -1,22 +1,21 @@
-//! A compact, Tailwind-inspired action menu for table rows and other dense UI.
+//! The more-actions trigger (C07 `MoreButton`): a small ghost "…" button
+//! that opens a [`Menu`] below it, right edges aligned, and the same menu as
+//! a row's context menu.
 
-use egui::{
-    Button, Color32, Image, InnerResponse, Popup, PopupCloseBehavior, Response, SetOpenCommand,
-    Stroke, Ui, Vec2,
-};
+use egui::{Popup, PopupCloseBehavior, RectAlign, Response, SetOpenCommand, Ui};
 
-use crate::design::theme::{self, ThemeExt, ThemeScope};
-use crate::design::{radius, space, stroke, type_scale};
-use crate::frames::popover_frame;
-use crate::{ButtonSize, ButtonVariant, PointingHand, TailwindButton, icons};
+use crate::design::size;
+use crate::design::theme::ThemeExt;
+use crate::interaction::ControlState;
+use crate::menu::{self, Menu};
+use crate::{ButtonSize, ButtonVariant, icons};
 
-const MENU_WIDTH: f32 = 192.0;
-const MENU_ITEM_HEIGHT: f32 = 32.0;
-const MENU_ITEM_PADDING: Vec2 = Vec2::new(space::S12, space::S8);
-
-/// A compact action-menu trigger styled as a secondary icon-only button.
+/// A compact action-menu trigger: a small ghost icon button (C02 "Ghost
+/// sm") that shows its pressed state while its menu is open.
+#[must_use = "call `show` to add the button"]
 pub struct MoreButton {
     accessibility_label: String,
+    forced_state: Option<ControlState>,
 }
 
 impl MoreButton {
@@ -24,54 +23,47 @@ impl MoreButton {
     pub fn new(accessibility_label: impl Into<String>) -> Self {
         Self {
             accessibility_label: accessibility_label.into(),
+            forced_state: None,
         }
     }
 
-    /// Show the trigger and its anchored action menu.
-    ///
-    /// The callback receives a [`MoreMenu`], whose [`MoreMenu::action`],
-    /// [`MoreMenu::destructive_action`], and [`MoreMenu::separator`] methods
-    /// build the menu contents.
-    pub fn show(self, ui: &mut Ui, add_contents: impl FnOnce(&mut MoreMenu<'_>)) -> Response {
+    /// Paint the trigger in `state` regardless of the pointer (boards and
+    /// snapshots).
+    pub fn force_state(mut self, state: ControlState) -> Self {
+        self.forced_state = Some(state);
+        self
+    }
+
+    /// Show the trigger and its anchored action menu, built by
+    /// `add_contents`.
+    pub fn show(self, ui: &mut Ui, add_contents: impl FnOnce(&mut Menu<'_>)) -> Response {
         let accessibility_label = self.accessibility_label;
-        let trigger = TailwindButton::icon(
-            icons::ellipsis_horizontal_icon()
-                .fit_to_exact_size(Vec2::splat(16.0))
-                .tint(ui.tokens().text.primary),
-        )
-        .variant(ButtonVariant::Secondary)
-        .size(ButtonSize::Md)
-        .accessibility_label(accessibility_label.clone())
-        .show(ui);
-
-        let popup_id = Popup::default_response_id(&trigger);
-        if let Some(popup) = Popup::menu(&trigger)
-            .align(egui::RectAlign::BOTTOM_END)
-            .width(MENU_WIDTH)
-            .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
-            .frame(popover_frame(&ui.tokens()))
-            .show(|ui| {
-                theme::scope(ui, ThemeScope::Popover, |ui| {
-                    let mut menu = MoreMenu { ui, popup_id };
-                    add_contents(&mut menu);
-                })
-            })
-        {
-            ui.ctx()
-                .accesskit_node_builder(popup.response.id, |builder| {
-                    builder.set_label(format!("{accessibility_label} menu"));
-                });
+        // The trigger's id, to know whether its menu is open before it is drawn.
+        let trigger_id = ui.next_auto_id();
+        let open = Popup::is_id_open(ui.ctx(), trigger_id.with("popup"));
+        let forced_state = self.forced_state.or(open.then_some(ControlState::Pressed));
+        let mut trigger =
+            crate::Button::icon(icons::Icon::EllipsisHorizontal, accessibility_label.clone())
+                .variant(ButtonVariant::Ghost)
+                .size(ButtonSize::Sm);
+        if let Some(state) = forced_state {
+            trigger = trigger.force_state(state);
         }
+        let trigger = trigger.show(ui);
+        ui.ctx()
+            .accesskit_node_builder(trigger.id, |node| node.set_expanded(open));
 
+        let popup = Popup::menu(&trigger)
+            .align(RectAlign::BOTTOM_END)
+            .gap(size::POPOVER_GAP)
+            .close_behavior(PopupCloseBehavior::CloseOnClickOutside);
+        menu::show_popup(popup, &ui.tokens(), &accessibility_label, add_contents);
         trigger
     }
 
-    /// Show the same action menu when an arbitrary response is right-clicked.
-    ///
-    /// The popup is anchored below the cursor, which makes it suitable for
-    /// row-level context menus.
-    pub fn show_context_menu(response: &Response, add_contents: impl FnOnce(&mut MoreMenu<'_>)) {
-        let popup_id = Popup::default_response_id(response);
+    /// Show the same action menu at the pointer when `response` is
+    /// right-clicked (a row's context menu).
+    pub fn show_context_menu(response: &Response, add_contents: impl FnOnce(&mut Menu<'_>)) {
         let set_open = if response.secondary_clicked() {
             Some(SetOpenCommand::Bool(true))
         } else if response.clicked() {
@@ -79,161 +71,11 @@ impl MoreButton {
         } else {
             None
         };
-        if let Some(popup) = Popup::context_menu(response)
+        let popup = Popup::context_menu(response)
             .open_memory(set_open)
-            .gap(4.0)
-            .width(MENU_WIDTH)
-            .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
-            .frame(popover_frame(&response.ctx.tokens()))
-            .show(|ui| {
-                theme::scope(ui, ThemeScope::Popover, |ui| {
-                    let mut menu = MoreMenu { ui, popup_id };
-                    add_contents(&mut menu);
-                })
-            })
-        {
-            response
-                .ctx
-                .accesskit_node_builder(popup.response.id, |builder| {
-                    builder.set_label("Context menu");
-                });
-        }
-    }
-}
-
-/// Builder passed to [`MoreButton::show`] for adding menu content.
-pub struct MoreMenu<'a> {
-    ui: &'a mut Ui,
-    popup_id: egui::Id,
-}
-
-impl MoreMenu<'_> {
-    /// Add a standard action and return its response.
-    pub fn action(&mut self, label: impl Into<String>) -> Response {
-        let color = self.ui.tokens().text.primary;
-        self.menu_button(label.into(), None, color)
-    }
-
-    /// Add a standard action with a leading icon and return its response.
-    pub fn action_with_icon(&mut self, label: impl Into<String>, icon: Image<'static>) -> Response {
-        let color = self.ui.tokens().text.primary;
-        self.menu_button(label.into(), Some(icon), color)
-    }
-
-    /// Add a nested menu for actions that require a further choice.
-    pub fn submenu<R>(
-        &mut self,
-        label: impl Into<String>,
-        add_contents: impl FnOnce(&mut MoreMenu<'_>) -> R,
-    ) -> InnerResponse<Option<R>> {
-        let popup_id = self.popup_id;
-        let color = self.ui.tokens().text.primary;
-        self.with_menu_item_style(color, |ui| {
-            let label = egui::RichText::new(label.into())
-                .font(type_scale::BODY.font_id(ui.ctx()))
-                .color(color);
-            let button = Button::new(label)
-                .right_text(
-                    egui::RichText::new(egui::menu::SubMenuButton::RIGHT_ARROW).color(color),
-                )
-                .min_size(Vec2::new(MENU_WIDTH, MENU_ITEM_HEIGHT));
-            let (response, inner) = egui::menu::SubMenuButton::from_button(button).ui(ui, |ui| {
-                let mut menu = MoreMenu { ui, popup_id };
-                add_contents(&mut menu)
-            });
-            InnerResponse::new(
-                inner.map(|inner| inner.inner),
-                response.with_pointing_hand(),
-            )
-        })
-    }
-
-    /// Close the containing menu after a nested action has been selected.
-    pub fn close(&self) {
-        Popup::close_id(self.ui.ctx(), self.popup_id);
-    }
-
-    /// Add a destructive action and return its response.
-    pub fn destructive_action(&mut self, label: impl Into<String>) -> Response {
-        let color = self.ui.tokens().danger.text;
-        self.menu_button(label.into(), None, color)
-    }
-
-    /// Add a destructive action with a leading icon and return its response.
-    pub fn destructive_action_with_icon(
-        &mut self,
-        label: impl Into<String>,
-        icon: Image<'static>,
-    ) -> Response {
-        let color = self.ui.tokens().danger.text;
-        self.menu_button(label.into(), Some(icon), color)
-    }
-
-    /// Add a horizontal rule between related action groups.
-    pub fn separator(&mut self) {
-        self.ui.add_space(3.0);
-        let width = self.ui.available_width();
-        let (_, rect) = self.ui.allocate_space(Vec2::new(width, 1.0));
-        self.ui.painter().line_segment(
-            [rect.left_center(), rect.right_center()],
-            stroke::divider(&self.ui.tokens()),
-        );
-        self.ui.add_space(3.0);
-    }
-
-    fn menu_button(
-        &mut self,
-        label: String,
-        icon: Option<Image<'static>>,
-        color: Color32,
-    ) -> Response {
-        let response = self.with_menu_item_style(color, |ui| {
-            let text = egui::RichText::new(label)
-                .font(type_scale::BODY.font_id(ui.ctx()))
-                .color(color);
-            let button = match icon {
-                Some(icon) => Button::image_and_text(icon, text),
-                None => Button::new(text),
-            }
-            .min_size(Vec2::new(MENU_WIDTH, MENU_ITEM_HEIGHT));
-            ui.add(button).with_pointing_hand()
-        });
-
-        if response.clicked() {
-            Popup::close_id(self.ui.ctx(), self.popup_id);
-        }
-        response
-    }
-
-    fn with_menu_item_style<R>(
-        &mut self,
-        color: Color32,
-        add_contents: impl FnOnce(&mut Ui) -> R,
-    ) -> R {
-        let saved_widgets = self.ui.visuals().widgets.clone();
-        let saved_padding = self.ui.spacing().button_padding;
-
-        let tokens = self.ui.tokens();
-        let widgets = &mut self.ui.visuals_mut().widgets;
-        for (visuals, fill) in [
-            (&mut widgets.inactive, Color32::TRANSPARENT),
-            (&mut widgets.hovered, tokens.item.highlight),
-            (&mut widgets.active, tokens.control.fill_active),
-            (&mut widgets.open, tokens.item.highlight),
-        ] {
-            visuals.weak_bg_fill = fill;
-            visuals.bg_fill = fill;
-            visuals.bg_stroke = Stroke::NONE;
-            visuals.fg_stroke = Stroke::new(1.0, color);
-            visuals.corner_radius = egui::CornerRadius::same(radius::KEY);
-        }
-        self.ui.spacing_mut().button_padding = MENU_ITEM_PADDING;
-
-        let response = add_contents(self.ui);
-
-        self.ui.visuals_mut().widgets = saved_widgets;
-        self.ui.spacing_mut().button_padding = saved_padding;
-        response
+            .gap(size::POPOVER_GAP)
+            .close_behavior(PopupCloseBehavior::CloseOnClickOutside);
+        menu::show_popup(popup, &response.ctx.tokens(), "Context", add_contents);
     }
 }
 
@@ -296,7 +138,7 @@ mod tests {
         harness.run();
         harness.get_by_label("More actions for api-pod").click();
         harness.run();
-        harness.get_by_label("View logs ⏵").click();
+        harness.get_by_label("View logs").click();
         harness.run();
         harness.get_by_label("api — Container").click();
         harness.run();

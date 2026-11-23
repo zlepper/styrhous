@@ -128,87 +128,44 @@ fn enter_applies_the_selected_fuzzy_matched_value_completion() {
 #[test]
 fn completion_popup_flips_and_clamps_at_each_viewport_edge() {
     let viewport = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(1600.0, 900.0));
-    let top_left = egui::Rect::from_min_size(egui::pos2(20.0, 20.0), egui::vec2(2.0, 18.0));
-    let top_right = egui::Rect::from_min_size(egui::pos2(1580.0, 20.0), egui::vec2(2.0, 18.0));
-    let bottom_left = egui::Rect::from_min_size(egui::pos2(20.0, 870.0), egui::vec2(2.0, 18.0));
-    let bottom_right = egui::Rect::from_min_size(egui::pos2(1580.0, 870.0), egui::vec2(2.0, 18.0));
-
-    let top_left_position = completion_popup_position(
-        viewport,
-        top_left,
-        COMPLETION_POPUP_MAX_HEIGHT,
-        COMPLETION_POPUP_MAX_WIDTH,
+    let surface = viewport.shrink(space::S12);
+    let popup = completion_popup_max_size();
+    let caret = |x: f32, y: f32| egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(2.0, 18.0));
+    let (top_left, top_right, bottom_left, bottom_right) = (
+        caret(20.0, 20.0),
+        caret(1580.0, 20.0),
+        caret(20.0, 870.0),
+        caret(1580.0, 870.0),
     );
-    let top_right_position = completion_popup_position(
-        viewport,
-        top_right,
-        COMPLETION_POPUP_MAX_HEIGHT,
-        COMPLETION_POPUP_MAX_WIDTH,
-    );
-    let bottom_left_position = completion_popup_position(
-        viewport,
-        bottom_left,
-        COMPLETION_POPUP_MAX_HEIGHT,
-        COMPLETION_POPUP_MAX_WIDTH,
-    );
-    let bottom_right_position = completion_popup_position(
-        viewport,
-        bottom_right,
-        COMPLETION_POPUP_MAX_HEIGHT,
-        COMPLETION_POPUP_MAX_WIDTH,
-    );
-
-    for position in [
-        top_left_position,
-        top_right_position,
-        bottom_left_position,
-        bottom_right_position,
-    ] {
+    let position = |caret| components::completion_position(surface, caret, popup);
+    for corner in [top_left, top_right, bottom_left, bottom_right] {
+        let position = position(corner);
         assert!(position.x >= space::S12);
-        assert!(position.x + COMPLETION_POPUP_MAX_WIDTH <= viewport.right() - space::S12);
+        assert!(position.x + popup.x <= viewport.right() - space::S12);
         assert!(position.y >= space::S12);
-        assert!(position.y + COMPLETION_POPUP_MAX_HEIGHT <= viewport.bottom() - space::S12);
+        assert!(position.y + popup.y <= viewport.bottom() - space::S12);
     }
-    assert!(top_left_position.y >= top_left.bottom());
-    assert!(top_right_position.x < top_right.left());
-    assert!(bottom_left_position.y < bottom_left.top());
-    assert!(bottom_right_position.x < bottom_right.left());
-    assert!(bottom_right_position.y < bottom_right.top());
-    assert_eq!(
-        completion_popup_height(3),
-        COMPLETION_POPUP_CHROME_HEIGHT + 3.0 * COMPLETION_ROW_HEIGHT
-    );
-    assert_eq!(completion_popup_height(128), COMPLETION_POPUP_MAX_HEIGHT);
+    assert!(position(top_left).y >= top_left.bottom());
+    assert!(position(top_right).x < top_right.left());
+    assert!(position(bottom_left).y < bottom_left.top());
+    assert!(position(bottom_right).x < bottom_right.left());
+    assert!(position(bottom_right).y < bottom_right.top());
 }
 
 #[test]
-fn completion_popup_width_fits_short_labels_without_penalizing_long_ones() {
-    assert_eq!(
-        completion_list_width(&many_suggestions(1)),
-        COMPLETION_LIST_MIN_WIDTH
-    );
-    assert_eq!(
-        completion_list_width(&[CompletionSuggestion {
-            label: "a".repeat(80),
-            type_label: None,
-            detail: None,
-        }]),
-        COMPLETION_LIST_MAX_WIDTH
-    );
-}
-
-#[test]
-fn completion_documentation_attaches_to_the_selected_row_without_overlapping_the_list() {
+fn completion_documentation_sits_beside_the_list_without_overlapping_it() {
     let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1536.0, 1024.0));
-    let selected_row =
-        egui::Rect::from_min_size(egui::pos2(1238.0, 830.0), egui::vec2(240.0, 26.0));
     let completion_popup = egui::Rect::from_min_size(
         egui::pos2(1230.0, 814.0),
-        egui::vec2(COMPLETION_POPUP_MAX_WIDTH, 144.0),
+        egui::vec2(size::COMPLETION_WIDTH, 144.0),
     );
 
-    let position = completion_documentation_position(viewport, completion_popup, selected_row);
+    let position = components::completion_doc_position(
+        viewport.shrink(space::S12),
+        completion_popup,
+        egui::vec2(size::COMPLETION_DOC_WIDTH, 0.0),
+    );
 
-    assert_eq!(position.y, selected_row.top());
-    assert!(position.x + COMPLETION_DOCUMENTATION_WIDTH + space::S8 <= completion_popup.left());
+    assert_eq!(position.y, completion_popup.top());
+    assert!(position.x + size::COMPLETION_DOC_WIDTH <= completion_popup.left());
 }

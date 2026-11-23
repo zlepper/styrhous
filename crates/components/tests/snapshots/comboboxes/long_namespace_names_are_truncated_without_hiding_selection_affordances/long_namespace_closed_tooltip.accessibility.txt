@@ -3,11 +3,12 @@ Window state=[focused] rect=<none>
   GenericContainer rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
-        Label value="Namespaces" rect=(x=8.0 y=8.0 width=75.4 height=16.0 center_x=45.7 center_y=16.0)
-          TextRun value="Namespaces" rect=(x=8.0 y=8.0 width=75.4 height=16.0 center_x=45.7 center_y=16.0)
-        ComboBox name="Namespaces" rect=(x=8.0 y=27.0 width=230.0 height=36.0 center_x=123.0 center_y=45.0)
-        GenericContainer rect=<none>
-          Image rect=(x=214.0 y=37.0 width=16.0 height=16.0 center_x=222.0 center_y=45.0)
+        Label value="Namespaces" rect=(x=8.0 y=8.0 width=70.3 height=16.0 center_x=43.2 center_y=16.0)
+          TextRun value="Namespaces" rect=(x=8.0 y=8.0 width=70.3 height=16.0 center_x=43.2 center_y=16.0)
+        ComboBox name="Namespaces" value="namespace-with-a-very-long-name-that-must-not-overlap-the-status-or-checkmark" rect=(x=8.0 y=30.0 width=230.0 height=32.0 center_x=123.0 center_y=46.0)
   GenericContainer rect=<none>
     GenericContainer rect=<none>
-      Label value="namespace-with-a-very-long-name-that-must-not-overlap-the-status-or-checkmark" rect=(x=15.0 y=74.0 width=496.8 height=16.0 center_x=263.4 center_y=82.0)
+      GenericContainer rect=<none>
+        Label value="namespace-with-a-very-long-name-that-must-not-overlap-the-status-or-checkmark" rect=(x=18.0 y=74.0 width=260.0 height=32.0 center_x=148.0 center_y=90.0)
+          TextRun value="namespace-with-a-very-long-name-that-must-" rect=(x=18.0 y=74.0 width=257.0 height=16.0 center_x=146.5 center_y=82.0)
+          TextRun value="not-overlap-the-status-or-checkmark" rect=(x=18.0 y=90.0 width=204.0 height=16.0 center_x=120.0 center_y=98.0)

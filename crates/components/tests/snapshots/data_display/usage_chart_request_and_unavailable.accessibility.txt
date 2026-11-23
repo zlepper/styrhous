@@ -1,0 +1,25 @@
+viewport: width=360.0 height=300.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Label value="CPU" rect=(x=24.0 y=24.0 width=22.7 height=16.0 center_x=35.3 center_y=32.0)
+              TextRun value="CPU" rect=(x=24.0 y=24.0 width=21.6 height=16.0 center_x=34.8 center_y=32.0)
+            Label value="request 50m · limit 100m" rect=(x=201.9 y=24.0 width=134.1 height=16.0 center_x=268.9 center_y=32.0)
+              TextRun value="request 50m · limit 100m" rect=(x=201.9 y=24.0 width=134.1 height=16.0 center_x=268.9 center_y=32.0)
+            Label value="30m" rect=(x=24.0 y=44.0 width=33.9 height=24.0 center_x=41.0 center_y=56.0)
+              TextRun value="30m" rect=(x=24.0 y=44.0 width=33.9 height=24.0 center_x=41.0 center_y=56.0)
+            Image name="CPU over the last 10 minutes" rect=(x=24.0 y=72.0 width=312.0 height=72.0 center_x=180.0 center_y=108.0)
+            Label value="now" rect=(x=313.1 y=148.0 width=22.9 height=16.0 center_x=324.5 center_y=156.0)
+              TextRun value="now" rect=(x=313.1 y=148.0 width=22.9 height=16.0 center_x=324.5 center_y=156.0)
+            Label value="10 min ago" rect=(x=24.0 y=148.0 width=58.4 height=16.0 center_x=53.2 center_y=156.0)
+              TextRun value="10 min ago" rect=(x=24.0 y=148.0 width=58.4 height=16.0 center_x=53.2 center_y=156.0)
+          GenericContainer rect=<none>
+            Label value="Memory" rect=(x=24.0 y=176.0 width=48.0 height=16.0 center_x=48.0 center_y=184.0)
+              TextRun value="MEMORY" rect=(x=24.0 y=176.0 width=46.9 height=16.0 center_x=47.5 center_y=184.0)
+            Label value="—" rect=(x=24.0 y=196.0 width=17.6 height=24.0 center_x=32.8 center_y=208.0)
+              TextRun value="—" rect=(x=24.0 y=196.0 width=17.6 height=24.0 center_x=32.8 center_y=208.0)
+            Label value="Metrics unavailable" rect=(x=24.0 y=224.0 width=102.5 height=16.0 center_x=75.3 center_y=232.0)
+              TextRun value="Metrics unavailable" rect=(x=24.0 y=224.0 width=102.5 height=16.0 center_x=75.3 center_y=232.0)

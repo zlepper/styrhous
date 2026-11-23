@@ -1,12 +1,26 @@
 use super::*;
+use crate::ui::preference_table::{
+    ACTIONS_COLUMN_ID, AGE_COLUMN_ID, ColumnControls, PreferenceTable, actions_column, age_column,
+    fill_first_column,
+};
+use components::design::size;
+use components::tooltip::{TooltipExt, elided_label};
 
 pub(super) struct ResourceTableConfiguration {
     definition: crate::resource_table::ResourceTableDefinition,
-    table_key: ResourceTableKey,
     pub(super) metadata_columns: Vec<super::super::table_preferences::CustomMetadataColumn>,
-    column_definitions: Vec<TableColumnDefinition>,
-    visible_columns: Vec<super::super::table_preferences::ResolvedTableColumn>,
-    pub(super) sort_state: Option<components::SortState>,
+    /// The visible columns, their widths and the sort.
+    pub(super) layout: PreferenceTable,
+}
+
+impl ResourceTableConfiguration {
+    /// The table of the visible columns.
+    pub(super) fn table(&self, api_resource: &crate::api_resource::ApiResource) -> Table {
+        self.layout.table(format!(
+            "resource-table-{}-{}-{}",
+            api_resource.group, api_resource.version, api_resource.name
+        ))
+    }
 }
 
 pub(super) fn resource_table_configuration(
@@ -19,76 +33,51 @@ pub(super) fn resource_table_configuration(
     let definition = table_definition(api_resource, custom_columns);
     let table_key = ResourceTableKey::workspace(api_resource);
     let metadata_columns = table_preferences.custom_columns(&table_key);
-    let mut column_definitions = vec![TableColumnDefinition {
-        id: "name".into(),
-        label: "Name".into(),
-        default_width: 160.0,
-        sortable: true,
-    }];
+    let mut column_definitions = vec![TableColumnDefinition::sortable("name", "Name", 160.0)];
     if show_namespace_column {
-        column_definitions.push(TableColumnDefinition {
-            id: "namespace".into(),
-            label: "Namespace".into(),
-            default_width: 180.0,
-            sortable: true,
-        });
+        column_definitions.push(TableColumnDefinition::sortable(
+            "namespace",
+            "Namespace",
+            180.0,
+        ));
     }
-    column_definitions.push(TableColumnDefinition {
-        id: "owner".into(),
-        label: "Owner".into(),
-        default_width: 160.0,
-        sortable: true,
-    });
+    column_definitions.push(TableColumnDefinition::sortable("owner", "Owner", 160.0));
     column_definitions.extend(
         definition
             .columns
             .iter()
             .map(|column| TableColumnDefinition {
-                id: column.id.clone(),
-                label: column.label.clone(),
-                default_width: column.initial_width,
-                sortable: true,
+                numeric: column.numeric,
+                ..TableColumnDefinition::sortable(&column.id, &column.label, column.initial_width)
             }),
     );
-    column_definitions.extend(metadata_columns.iter().map(|column| TableColumnDefinition {
-        id: column.id(),
-        label: column.label.clone(),
-        default_width: 160.0,
-        sortable: true,
-    }));
-    column_definitions.extend([
-        TableColumnDefinition {
-            id: "age".into(),
-            label: "Age".into(),
-            default_width: 77.0,
-            sortable: true,
-        },
-        TableColumnDefinition {
-            id: "actions".into(),
-            label: "Actions".into(),
-            default_width: 104.0,
-            sortable: false,
-        },
-    ]);
-    let fixed_width = RESOURCE_TABLE_SELECTION_WIDTH
-        + column_definitions
+    column_definitions.extend(
+        metadata_columns
             .iter()
-            .skip(1)
-            .map(|column| column.default_width)
-            .sum::<f32>();
-    column_definitions[0].default_width = (available_width - fixed_width - 16.0).max(160.0);
-    let visible_columns = table_preferences.resolved_columns(&table_key, &column_definitions);
-    let sort_state = table_preferences
-        .sort(&table_key, &column_definitions)
-        .map(|(column_id, direction)| components::SortState::new(column_id, direction));
+            .map(|column| TableColumnDefinition::sortable(&column.id(), &column.label, 160.0)),
+    );
+    column_definitions.extend([age_column(), actions_column()]);
+    fill_first_column(
+        &mut column_definitions,
+        available_width,
+        size::TABLE_CHECKBOX_COLUMN,
+    );
 
     ResourceTableConfiguration {
         definition,
-        table_key,
         metadata_columns,
-        column_definitions,
-        visible_columns,
-        sort_state,
+        layout: PreferenceTable::new(table_preferences, table_key, column_definitions),
+    }
+}
+
+/// The em dash shown, and the tooltip explaining it, for a metadata column
+/// whose key the resource does not have.
+fn missing_metadata_reason(
+    column: &super::super::table_preferences::CustomMetadataColumn,
+) -> String {
+    match column.source {
+        MetadataColumnSource::Label => format!("No label {}", column.key),
+        MetadataColumnSource::Annotation => format!("No annotation {}", column.key),
     }
 }
 
@@ -104,339 +93,195 @@ pub(super) fn show_resource_table(
     let pending_action = RefCell::new(None);
     let ResourceTableConfiguration {
         definition,
-        table_key,
         metadata_columns,
-        column_definitions,
-        visible_columns,
-        sort_state,
+        layout,
     } = configuration;
-    let node_column_index = visible_columns
-        .iter()
-        .position(|column| column.definition.id == NODE_COLUMN);
-    let mut table = TailwindTable::new(format!(
-        "resource-table-{}-{}-{}",
-        api_resource.group, api_resource.version, api_resource.name
-    ));
-    for column in visible_columns {
-        table = table.column(
-            column.definition.id.clone(),
-            column.definition.label.clone(),
-            |builder| {
-                let builder = builder.initial_width(column.width);
-                if column.definition.sortable {
-                    builder.sortable()
-                } else {
-                    builder
-                }
-            },
-        );
-    }
-    table = table.selectable().fill_available_height();
+    let inspected_row = options.inspected_uid.and_then(|uid| {
+        prepared.rows.iter().position(|row| {
+            matches!(row, PreparedResourceTableRow::Resource(identity) if identity.uid == uid)
+        })
+    });
+    let table = configuration
+        .table(api_resource)
+        .selectable()
+        .fill_available_height()
+        .inspected_row(inspected_row);
 
-    let table_preferences = RefCell::new(controls.table_preferences);
-    table.show_selectable_configurable_with_row_response(
+    let actions_menu = |menu: &mut components::Menu<'_>, resource: &MinimalResource| {
+        show_resource_action_items(
+            menu,
+            api_resource,
+            resource,
+            &resource.log_containers,
+            options.debug_image_presets,
+            options.actions.supports_scale,
+            &mut pending_action.borrow_mut(),
+        );
+    };
+    // The first click of a frame wins.
+    let queue = |action: ResourceAction| {
+        pending_action.borrow_mut().get_or_insert(action);
+    };
+    layout.show_selectable(
         ui,
+        table,
         &prepared.rows,
         controls.selection,
         |row| match row {
             PreparedResourceTableRow::Resource(identity) => Some(&identity.uid),
             PreparedResourceTableRow::HiddenBySearch(_) => None,
         },
-        sort_state.as_ref(),
-        |header, id, _label, sortable| {
-            MoreButton::show_context_menu(header, |menu| {
-                if sortable {
-                    if menu.action("Sort ascending").clicked() {
-                        table_preferences.borrow_mut().set_sort(
-                            table_key,
-                            column_definitions,
-                            id,
-                            components::SortDirection::Ascending,
-                        );
-                    }
-                    if menu.action("Sort descending").clicked() {
-                        table_preferences.borrow_mut().set_sort(
-                            table_key,
-                            column_definitions,
-                            id,
-                            components::SortDirection::Descending,
-                        );
-                    }
-                    menu.separator();
-                }
-                if menu.action("Configure columns").clicked() {
-                    *controls.column_settings_to_open = Some(
-                        super::super::resource_table_settings::target_with_metadata_key_suggestions(
-                            &mut table_preferences.borrow_mut(),
-                            table_key.clone(),
-                            column_definitions,
-                            prepared.metadata_key_suggestions.clone(),
-                        ),
-                    );
-                }
-            });
+        ColumnControls {
+            preferences: controls.table_preferences,
+            metadata_key_suggestions: Some(&prepared.metadata_key_suggestions),
+            column_settings: controls.column_settings_to_open,
         },
-        |id, width| {
-            table_preferences
-                .borrow_mut()
-                .set_width(table_key, column_definitions, id, width)
-        },
-        |ui, row, column_index| {
-            let column_id = &visible_columns[column_index].definition.id;
-            match row {
+        |ui, row, column_id| {
+            let resource = match row {
                 PreparedResourceTableRow::Resource(identity) => {
-                    let Some(resource) =
-                        resolve_prepared_resource(options.resource_cache, prepared, identity)
-                    else {
+                    resolve_prepared_resource(options.resource_cache, prepared, identity)
+                }
+                PreparedResourceTableRow::HiddenBySearch(hidden_count) => {
+                    if layout.is_first_column(column_id) {
+                        let label = if *hidden_count == 1 {
+                            "1 resource hidden by search".to_owned()
+                        } else {
+                            format!("{hidden_count} resources hidden by search")
+                        };
+                        TableRowBuilder::text(ui, &label, false);
+                    }
+                    return;
+                }
+            };
+            let Some(resource) = resource else {
+                return;
+            };
+            match column_id {
+                "name" if options.actions.enabled => {
+                    let response = TableRowBuilder::clickable_name(
+                        ui,
+                        &resource.name,
+                        format!("Open details for {}", resource.name),
+                    );
+                    if response.clicked() {
+                        queue(ResourceAction::open_details(resource));
+                    }
+                    MoreButton::show_context_menu(&response, |menu| {
+                        actions_menu(menu, resource);
+                    });
+                }
+                "name" => TableRowBuilder::name(ui, &resource.name),
+                "namespace" => namespace_cell(ui, resource.namespace.as_deref()),
+                "owner" => {
+                    let Some(owner) = &resource.controller_owner else {
+                        TableRowBuilder::missing(ui, "No controlling owner");
                         return;
                     };
-                    match column_id.as_str() {
-                        "name" if options.actions.enabled => {
+                    let label = owner.label();
+                    if let Some(action) = resource_owner::navigation_action(
+                        options.resource_navigation,
+                        owner,
+                        resource.namespace.as_deref(),
+                    ) {
+                        if options.actions.enabled {
                             let response = TableRowBuilder::clickable_text(
                                 ui,
-                                &resource.name,
-                                theme.text.primary,
-                                format!("Open details for {}", resource.name),
+                                &label,
+                                theme.accent.text,
+                                format!("Open details for {label}"),
+                            )
+                            .tooltip(&label);
+                            if response.clicked() {
+                                queue(action);
+                            }
+                        } else {
+                            TableRowBuilder::text(ui, &label, false);
+                        }
+                    } else {
+                        elided_label(ui, type_scale::UI, &label, theme.text.muted)
+                            .tooltip(resource_owner::unavailable_tooltip(owner));
+                    }
+                }
+                id if metadata_columns.iter().any(|column| column.id() == id) => {
+                    let column = metadata_columns
+                        .iter()
+                        .find(|column| column.id() == id)
+                        .expect("metadata column was checked");
+                    match resource_metadata_value(resource, column.source, &column.key) {
+                        Some(value) => show_metadata_cell(ui, value),
+                        None => TableRowBuilder::missing(ui, &missing_metadata_reason(column)),
+                    }
+                }
+                id if definition.columns.iter().any(|column| column.id == id) => {
+                    if id == NODE_COLUMN
+                        && api_resource.is_pod()
+                        && let Some(CellValue::Text(node_name)) = resource.cells.get(id)
+                    {
+                        if node_name == "-" {
+                            TableRowBuilder::missing(
+                                ui,
+                                "Kubernetes has not assigned this Pod to a Node.",
                             );
-                            if response.clicked() && pending_action.borrow().is_none() {
-                                *pending_action.borrow_mut() = Some(ResourceAction::OpenDetails {
-                                    name: resource.name.clone(),
-                                    namespace: resource.namespace.clone(),
-                                    uid: resource.uid.clone(),
+                        } else if options.actions.enabled {
+                            let response = TableRowBuilder::clickable_text(
+                                ui,
+                                node_name,
+                                theme.accent.text,
+                                format!("Open details for Node {node_name}"),
+                            );
+                            if response.clicked() {
+                                queue(ResourceAction::NavigateDetails {
+                                    api_resource: crate::resource_handlers::node::api_resource(),
+                                    name: node_name.clone(),
+                                    namespace: None,
+                                    uid: node_name.clone(),
                                 });
                             }
                             MoreButton::show_context_menu(&response, |menu| {
-                                show_resource_action_items(
-                                    menu,
-                                    &theme,
-                                    api_resource,
-                                    resource,
-                                    &resource.log_containers,
-                                    options.debug_image_presets,
-                                    options.actions.supports_scale,
-                                    &mut pending_action.borrow_mut(),
-                                );
+                                actions_menu(menu, resource);
                             });
+                        } else {
+                            TableRowBuilder::text(ui, node_name, false);
                         }
-                        "name" => TableRowBuilder::text(ui, &resource.name, true),
-                        "namespace" => {
-                            TableRowBuilder::text(
-                                ui,
-                                resource.namespace.as_deref().unwrap_or("-"),
-                                false,
-                            );
-                        }
-                        "owner" => {
-                            let Some(owner) = &resource.controller_owner else {
-                                TableRowBuilder::text(ui, "-", false);
-                                return;
-                            };
-                            let label = owner.label();
-                            if let Some(action) = resource_owner::navigation_action(
-                                options.resource_navigation,
-                                owner,
-                                resource.namespace.as_deref(),
-                            ) {
-                                if options.actions.enabled {
-                                    let response = TableRowBuilder::clickable_text(
-                                        ui,
-                                        &label,
-                                        theme.accent.text,
-                                        format!("Open details for {label}"),
-                                    );
-                                    response.clone().on_hover_text(&label);
-                                    if response.clicked() {
-                                        resource_owner::queue_navigation_action(
-                                            &mut pending_action.borrow_mut(),
-                                            action,
-                                        );
-                                    }
-                                } else {
-                                    TableRowBuilder::text(ui, &label, false);
-                                }
-                            } else {
-                                ui.label(
-                                    egui::RichText::new(label)
-                                        .font(type_scale::BODY.font_id(ui.ctx()))
-                                        .color(theme.text.muted),
-                                )
-                                .on_hover_text(resource_owner::unavailable_tooltip(owner));
-                            }
-                        }
-                        id if metadata_columns.iter().any(|column| column.id() == id) => {
-                            let column = metadata_columns
-                                .iter()
-                                .find(|column| column.id() == id)
-                                .expect("metadata column was checked");
-                            show_metadata_cell(
-                                ui,
-                                resource_metadata_value(resource, column.source, &column.key)
-                                    .unwrap_or("-"),
-                            );
-                        }
-                        id if definition.columns.iter().any(|column| column.id == id) => {
-                            let column = definition
-                                .columns
-                                .iter()
-                                .find(|column| column.id == id)
-                                .expect("resource column was checked");
-                            if column.id == NODE_COLUMN
-                                && api_resource.kind == "Pod"
-                                && let Some(CellValue::Text(node_name)) =
-                                    resource.cells.get(&column.id)
-                            {
-                                if options.actions.enabled && node_name != "-" {
-                                    let response = TableRowBuilder::clickable_text(
-                                        ui,
-                                        node_name,
-                                        theme.accent.text,
-                                        format!("Open details for Node {node_name}"),
-                                    );
-                                    if response.clicked() && pending_action.borrow().is_none() {
-                                        *pending_action.borrow_mut() =
-                                            Some(ResourceAction::NavigateDetails {
-                                                api_resource:
-                                                    crate::resource_handlers::node::api_resource(),
-                                                name: node_name.clone(),
-                                                namespace: None,
-                                                uid: node_name.clone(),
-                                            });
-                                    }
-                                    MoreButton::show_context_menu(&response, |menu| {
-                                        show_resource_action_items(
-                                            menu,
-                                            &theme,
-                                            api_resource,
-                                            resource,
-                                            &resource.log_containers,
-                                            options.debug_image_presets,
-                                            options.actions.supports_scale,
-                                            &mut pending_action.borrow_mut(),
-                                        );
-                                    });
-                                } else {
-                                    TableRowBuilder::text(ui, node_name, false);
-                                }
-                            } else {
-                                let resolved = resolved_resource_cell(
-                                    resource,
-                                    &column.id,
-                                    options.metrics,
-                                    api_resource,
-                                );
-                                show_resource_cell(
-                                    ui,
-                                    resolved.as_ref().or_else(|| resource.cells.get(&column.id)),
-                                );
-                            }
-                        }
-                        "age" => TableRowBuilder::text(ui, &resource.age(), false),
-                        "actions" if options.actions.enabled => {
-                            show_resource_actions(
-                                ui,
-                                api_resource,
-                                resource,
-                                options.actions.supports_scale,
-                                options.debug_image_presets,
-                                &mut pending_action.borrow_mut(),
-                            );
-                        }
-                        _ => {}
+                    } else {
+                        let resolved =
+                            resolved_resource_cell(resource, id, options.metrics, api_resource);
+                        show_resource_cell(
+                            ui,
+                            id,
+                            resolved.as_ref().or_else(|| resource.cells.get(id)),
+                        );
                     }
                 }
-                PreparedResourceTableRow::HiddenBySearch(hidden_count) if column_index == 0 => {
-                    let label = if *hidden_count == 1 {
-                        "1 resource hidden by search".to_owned()
-                    } else {
-                        format!("{hidden_count} resources hidden by search")
-                    };
-                    TableRowBuilder::text(ui, &label, false);
+                AGE_COLUMN_ID => age_cell(ui, resource.creation_timestamp),
+                ACTIONS_COLUMN_ID if options.actions.enabled => {
+                    MoreButton::new(format!("More actions for {}", resource.name))
+                        .show(ui, |menu| actions_menu(menu, resource));
                 }
                 _ => {}
             }
         },
-        |row_response, row, column_index| {
-            if let PreparedResourceTableRow::Resource(identity) = row {
-                let Some(resource) =
-                    resolve_prepared_resource(options.resource_cache, prepared, identity)
-                else {
-                    return;
-                };
-                let column_id = &visible_columns[column_index].definition.id;
-                if options.actions.enabled
-                    && column_id != "actions"
-                    && row_response.clicked()
-                    && pending_action.borrow().is_none()
-                {
-                    *pending_action.borrow_mut() = Some(ResourceAction::OpenDetails {
-                        name: resource.name.clone(),
-                        namespace: resource.namespace.clone(),
-                        uid: resource.uid.clone(),
-                    });
-                }
-                if Some(column_index) == node_column_index
-                    && let Some(CellValue::Text(node_name)) = resource.cells.get(NODE_COLUMN)
-                    && node_name == "-"
-                {
-                    row_response
-                        .clone()
-                        .on_hover_text("Kubernetes has not assigned this Pod to a Node.");
-                }
-                if options.actions.enabled {
-                    MoreButton::show_context_menu(row_response, |menu| {
-                        show_resource_action_items(
-                            menu,
-                            &theme,
-                            api_resource,
-                            resource,
-                            &resource.log_containers,
-                            options.debug_image_presets,
-                            options.actions.supports_scale,
-                            &mut pending_action.borrow_mut(),
-                        );
-                    });
-                }
+        |row_response, row, column_id| {
+            let PreparedResourceTableRow::Resource(identity) = row else {
+                return;
+            };
+            if !options.actions.enabled {
+                return;
             }
+            let Some(resource) =
+                resolve_prepared_resource(options.resource_cache, prepared, identity)
+            else {
+                return;
+            };
+            if column_id != ACTIONS_COLUMN_ID && row_response.clicked() {
+                queue(ResourceAction::open_details(resource));
+            }
+            MoreButton::show_context_menu(row_response, |menu| {
+                actions_menu(menu, resource);
+            });
         },
     );
     pending_action.into_inner()
-}
-
-pub(super) fn show_resource_actions(
-    ui: &mut egui::Ui,
-    api_resource: &crate::api_resource::ApiResource,
-    resource: &MinimalResource,
-    supports_scale: bool,
-    debug_image_presets: &[DebugImagePreset],
-    pending_action: &mut Option<ResourceAction>,
-) {
-    let theme = ui.tokens();
-    let mut action_ui = ui.new_child(
-        egui::UiBuilder::new()
-            // The table cell's content cursor sits below the row centre after
-            // its horizontal padding has been applied. Keep the square action
-            // control visually centred with the row's text and status marker.
-            // The horizontal inset makes Actions read as its own column rather
-            // than an extension of the Age value.
-            .max_rect(
-                ui.max_rect()
-                    .shrink2(egui::vec2(28.0, 0.0))
-                    .translate(egui::vec2(0.0, -8.0)),
-            )
-            .layout(egui::Layout::left_to_right(egui::Align::Center)),
-    );
-    MoreButton::new(format!("More actions for {}", resource.name)).show(&mut action_ui, |menu| {
-        show_resource_action_items(
-            menu,
-            &theme,
-            api_resource,
-            resource,
-            &resource.log_containers,
-            debug_image_presets,
-            supports_scale,
-            pending_action,
-        );
-    });
 }
 
 pub(super) fn resource_column_sort_value(
@@ -492,15 +337,7 @@ pub(super) fn resource_metadata_value<'a>(
     .map(String::as_str)
 }
 
-pub(super) fn show_metadata_cell(ui: &mut egui::Ui, value: &str) {
-    let theme = ui.tokens();
-    ui.add(
-        egui::Label::new(
-            egui::RichText::new(value)
-                .font(type_scale::BODY.font_id(ui.ctx()))
-                .color(theme.text.muted),
-        )
-        .truncate(),
-    )
-    .on_hover_text(value);
+fn show_metadata_cell(ui: &mut egui::Ui, value: &str) {
+    let color = ui.tokens().text.muted;
+    TableRowBuilder::text_in(ui, type_scale::UI, value, color);
 }

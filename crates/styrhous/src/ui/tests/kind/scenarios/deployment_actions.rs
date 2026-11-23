@@ -73,8 +73,7 @@ fn test_force_delete_resource_with_finalizer_integration() {
         .get_by_label("Force delete (remove finalizers)")
         .click();
     harness.run_steps(1);
-    let acknowledgement_label =
-        format!("Type {resource_name} to acknowledge that you are bypassing cleanup:");
+    let acknowledgement_label = format!("Type {resource_name} to confirm");
     let mut previous_input_rect = None;
     wait_for_harness(
         &mut harness,
@@ -202,7 +201,7 @@ fn test_deployment_match_labels_completion_integration() {
     let actions_label = format!("More actions for {deployment_name}");
     harness.get_by_label(&actions_label).click();
     harness.run_steps(1);
-    harness.get_by_label("Edit").click_accesskit();
+    harness.get_by_label("Edit YAML").click_accesskit();
     harness.run_steps(1);
     let (schema, yaml) = wait_for_yaml_editor_with_schema(&mut harness, &deployment_name, 10_000);
 
@@ -269,7 +268,7 @@ fn test_coredns_deployment_property_completion_integration() {
         .get_by_label("More actions for coredns")
         .click_accesskit();
     harness.run_steps(1);
-    harness.get_by_label("Edit").click_accesskit();
+    harness.get_by_label("Edit YAML").click_accesskit();
     harness.run_steps(1);
     let (schema, yaml) = wait_for_yaml_editor_with_schema(&mut harness, "coredns", 10_000);
 
@@ -334,7 +333,7 @@ fn test_deployment_rollout_restart_integration() {
         "the Restart rollout action to appear",
         |harness| {
             harness
-                .query_by_role_and_label(egui::accesskit::Role::Button, "Restart rollout")
+                .query_by_role_and_label(egui::accesskit::Role::MenuItem, "Restart rollout")
                 .map(|_| ())
         },
         5_000,

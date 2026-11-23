@@ -33,7 +33,15 @@ fn yaml_editor_diagnostic_tooltip_snapshot() {
     harness
         .get_by_label("Validation error: \"settings\" is not an allowed value")
         .hover();
-    harness.run();
+    // The tooltip waits for the pointer to rest 300 ms (a harness step is
+    // 250 ms).
+    harness.run_steps(1);
+    let message = "\"settings\" is not an allowed value";
+    // The Problems row carries the message too; the tooltip adds a second.
+    let shown = |harness: &Harness<'_, _>| harness.query_all_by_label(message).count();
+    assert_eq!(shown(&harness), 1, "not before the delay");
+    harness.run_steps(2);
+    assert_eq!(shown(&harness), 2);
     harness.ui_harness("yaml_editor/yaml_editor_diagnostic_tooltip_snapshot/diagnostics_tooltip");
 }
 
@@ -75,9 +83,16 @@ fn clicking_a_diagnostic_focuses_and_selects_its_yaml_range() {
         .expect("editor context is available");
     let text_edit_id = yaml_editor_text_edit_id(harness.state().editor.id);
 
-    harness
-        .get_by_label("Line 4: \"settings\" is not an allowed value")
-        .click_accesskit();
+    // Press and release in separate frames, as a real click does: the press
+    // takes focus away from the editor, the click gives it back.
+    let row = harness
+        .get_by_label("Ln 4 \"settings\" is not an allowed value")
+        .rect()
+        .center();
+    components::test_support::primary_press(&mut harness, row);
+    harness.step();
+    components::test_support::primary_release(&mut harness, row);
+    harness.step();
     harness.run_steps(2);
 
     assert!(ctx.memory(|memory| memory.has_focus(text_edit_id)));
@@ -94,4 +109,30 @@ fn clicking_a_diagnostic_focuses_and_selects_its_yaml_range() {
     );
     assert_eq!(selection.primary.index, egui::text::CharIndex(range.end));
     assert!(harness.state().editor.scroll_to_diagnostic.is_none());
+}
+
+#[test]
+fn the_status_bar_problem_count_toggles_the_problems_panel() {
+    let mut harness = editor_harness(diagnostic_editor());
+    let row = "Ln 4 \"settings\" is not an allowed value";
+    assert!(
+        harness.query_by_label(row).is_some(),
+        "the panel starts open"
+    );
+
+    harness.get_by_label("1 problem").click();
+    harness.run();
+    assert!(harness.query_by_label(row).is_none());
+
+    harness.get_by_label("1 problem").click();
+    harness.run();
+    assert!(harness.query_by_label(row).is_some());
+
+    // The panel's own collapse button and the status bar share one state.
+    harness.get_by_label("Collapse").click();
+    harness.run();
+    assert!(harness.query_by_label(row).is_none());
+    harness.get_by_label("1 problem").click();
+    harness.run();
+    assert!(harness.query_by_label(row).is_some());
 }

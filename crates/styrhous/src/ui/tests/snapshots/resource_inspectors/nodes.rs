@@ -222,40 +222,7 @@ fn node_inspector_shows_its_spec() {
 #[test]
 fn node_inspector_shell_action_launches_the_selected_preset() {
     let mut harness = application_harness_with_terminal::<MockWorker, MockTerminalLauncher>();
-    harness.state_mut().ui_state = oracle_resource_table_state();
-    let mut commands = Vec::new();
-    harness.state_mut().ui_state.open_resource_detail(
-        2,
-        crate::resource_handlers::node::api_resource(),
-        "kind-control-plane".into(),
-        None,
-        "node-uid".into(),
-        &mut commands,
-    );
-    harness
-        .state_mut()
-        .worker
-        .results
-        .push_back(Box::new(ResourceDetailUpdated {
-            cluster_key: 2,
-            history_entry_id: 1,
-            detail: Box::new(ResourceDetail {
-                api_resource: crate::resource_handlers::node::api_resource(),
-                name: "kind-control-plane".into(),
-                namespace: None,
-                uid: "node-uid".into(),
-                resource_version: "1".into(),
-                is_deleting: false,
-                finalizers: Vec::new(),
-                creation_timestamp: None,
-                owners: Vec::new(),
-                labels: BTreeMap::new(),
-                annotations: BTreeMap::new(),
-                payload: ResourceDetailPayload::Node(NodeDetail::default()),
-            }),
-        }) as WorkerResultBox);
-    harness.run_steps(2);
-    harness.get_by_label("Loading pods on this node…");
+    open_node_inspector(&mut harness);
 
     let more_actions_position = harness
         .get_by_label("More actions for kind-control-plane")
@@ -263,13 +230,16 @@ fn node_inspector_shell_action_launches_the_selected_preset() {
         .center();
     primary_click(&mut harness, more_actions_position);
     harness.run();
-    let shell_position = harness.get_by_label("Shell ⏵").rect().center();
+    let shell_position = harness.get_by_label("Shell").rect().center();
     primary_click(&mut harness, shell_position);
     harness.run();
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "terminal/node_inspector_shell_action_launches_the_selected_preset/node_shell_presets",
     ));
-    let ubuntu_position = harness.get_by_label("Ubuntu — General").rect().center();
+    let ubuntu_position = harness
+        .get_by_label("Ubuntu (General profile)")
+        .rect()
+        .center();
     primary_click(&mut harness, ubuntu_position);
     harness.run();
 
@@ -390,7 +360,7 @@ fn node_inspector_lists_cross_namespace_pods_in_the_shared_pod_table() {
         ),
     );
     harness.run_steps(2);
-    let configure_columns = harness.get_by_label("Configure columns").rect().center();
+    let configure_columns = harness.get_by_label("Configure columns…").rect().center();
     primary_click(&mut harness, configure_columns);
     harness
         .ctx
@@ -403,4 +373,96 @@ fn node_inspector_lists_cross_namespace_pods_in_the_shared_pod_table() {
     harness.get_by_label("Go back one blade").click();
     harness.run_steps(4);
     harness.get_by_label("Open details for api");
+}
+
+/// Open the inspector of the Node `kind-control-plane` over the oracle
+/// workspace, its detail loaded.
+fn open_node_inspector<L: crate::terminal_launcher::TerminalLauncher>(
+    harness: &mut Harness<MyEguiApp<MockWorker, L>>,
+) {
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    let mut commands = Vec::new();
+    harness.state_mut().ui_state.open_resource_detail(
+        2,
+        crate::resource_handlers::node::api_resource(),
+        "kind-control-plane".into(),
+        None,
+        "node-uid".into(),
+        &mut commands,
+    );
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(Box::new(ResourceDetailUpdated {
+            cluster_key: 2,
+            history_entry_id: 1,
+            detail: Box::new(ResourceDetail {
+                api_resource: crate::resource_handlers::node::api_resource(),
+                name: "kind-control-plane".into(),
+                namespace: None,
+                uid: "node-uid".into(),
+                resource_version: "1".into(),
+                is_deleting: false,
+                finalizers: Vec::new(),
+                creation_timestamp: None,
+                owners: Vec::new(),
+                labels: BTreeMap::new(),
+                annotations: BTreeMap::new(),
+                payload: ResourceDetailPayload::Node(NodeDetail::default()),
+            }),
+        }) as WorkerResultBox);
+    harness.run_steps(2);
+    harness.get_by_label("Loading pods on this node…");
+}
+
+#[test]
+fn configure_presets_from_an_inspector_edits_the_saved_presets_and_returns_to_it() {
+    let mut harness = application_harness::<MockWorker>();
+    let settings = TerminalLaunchSettings {
+        debug_image_presets: vec![DebugImagePreset {
+            name: "Operations".into(),
+            image: "registry.example/ops:v1".into(),
+            profile: DebugProfile::General,
+        }],
+        ..Default::default()
+    };
+    harness.state_mut().terminal_launch_settings = settings.clone();
+    open_node_inspector(&mut harness);
+
+    let more_actions = harness
+        .get_by_label("More actions for kind-control-plane")
+        .rect()
+        .center();
+    primary_click(&mut harness, more_actions);
+    harness.run();
+    let shell = harness.get_by_label("Shell").rect().center();
+    primary_click(&mut harness, shell);
+    harness.run();
+    harness.get_by_label("Operations (General profile)");
+    let configure = harness.get_by_label("Configure presets…").rect().center();
+    primary_click(&mut harness, configure);
+    harness.run();
+    assert_eq!(
+        harness
+            .state()
+            .ui_state
+            .terminal_settings_blade()
+            .expect("Configure presets… opens the terminal settings")
+            .draft,
+        settings,
+        "the settings open with the saved presets"
+    );
+
+    let save = harness.get_by_label("Save changes").rect().center();
+    primary_click(&mut harness, save);
+    harness.run();
+    assert!(harness.state().ui_state.terminal_settings_blade().is_none());
+    assert!(
+        harness.state().ui_state.clusters[&2]
+            .resource_detail_panel
+            .is_some(),
+        "saving returns to the inspector it was opened over"
+    );
+    harness.get_by_label("More actions for kind-control-plane");
 }

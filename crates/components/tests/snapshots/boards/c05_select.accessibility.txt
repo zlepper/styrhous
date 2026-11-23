@@ -1,0 +1,111 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Label value="C05 · COMPONENTS::{SELECT, COMBOBOX}" rect=(x=48.0 y=40.0 width=238.9 height=16.0 center_x=167.5 center_y=48.0)
+            TextRun value="C05 · COMPONENTS::{SELECT, COMBOBOX}" rect=(x=48.0 y=40.0 width=237.8 height=16.0 center_x=166.9 center_y=48.0)
+          Label value="Select & combobox" rect=(x=48.0 y=60.0 width=255.2 height=36.0 center_x=175.6 center_y=78.0)
+            TextRun value="Select & combobox" rect=(x=48.0 y=60.0 width=255.5 height=36.0 center_x=175.7 center_y=78.0)
+          Label value="One trigger, two popover modes: a plain list for short fixed choices and a searchable list (with optional multi-select) for namespaces and anything over eight items. The popover is always at least as wide as its trigger." rect=(x=48.0 y=102.0 width=852.5 height=40.0 center_x=474.2 center_y=122.0)
+            TextRun value="One trigger, two popover modes: a plain list for short fixed choices and a searchable list (with optional multi-select) for namespaces and " rect=(x=48.0 y=102.0 width=852.5 height=20.0 center_x=474.2 center_y=112.0)
+            TextRun value="anything over eight items. The popover is always at least as wide as its trigger." rect=(x=48.0 y=122.0 width=485.9 height=20.0 center_x=291.0 center_y=132.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="CLOSED STATES" rect=(x=48.0 y=168.0 width=87.7 height=16.0 center_x=91.8 center_y=176.0)
+                  TextRun value="CLOSED STATES" rect=(x=48.0 y=168.0 width=86.6 height=16.0 center_x=91.3 center_y=176.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    ComboBox name="Placeholder" rect=(x=48.0 y=196.0 width=260.0 height=32.0 center_x=178.0 center_y=212.0)
+                    Label value="Placeholder" rect=(x=48.0 y=236.0 width=62.7 height=16.0 center_x=79.3 center_y=244.0)
+                      TextRun value="Placeholder" rect=(x=48.0 y=236.0 width=62.7 height=16.0 center_x=79.3 center_y=244.0)
+                  GenericContainer rect=<none>
+                    ComboBox name="Hover" rect=(x=48.0 y=268.0 width=260.0 height=32.0 center_x=178.0 center_y=284.0)
+                    Label value="Hover" rect=(x=48.0 y=308.0 width=32.5 height=16.0 center_x=64.3 center_y=316.0)
+                      TextRun value="Hover" rect=(x=48.0 y=308.0 width=32.5 height=16.0 center_x=64.3 center_y=316.0)
+                  GenericContainer rect=<none>
+                    ComboBox name="Single value" value="kube-system" rect=(x=48.0 y=340.0 width=260.0 height=32.0 center_x=178.0 center_y=356.0)
+                    Label value="Single value with status" rect=(x=48.0 y=380.0 width=126.5 height=16.0 center_x=111.3 center_y=388.0)
+                      TextRun value="Single value with status" rect=(x=48.0 y=380.0 width=126.5 height=16.0 center_x=111.3 center_y=388.0)
+                  GenericContainer rect=<none>
+                    ComboBox name="Multiple values" value="kube-system, monitoring +2" rect=(x=48.0 y=412.0 width=260.0 height=32.0 center_x=178.0 center_y=428.0)
+                    Label value="Multiple values" rect=(x=48.0 y=452.0 width=79.8 height=16.0 center_x=87.9 center_y=460.0)
+                      TextRun value="Multiple values" rect=(x=48.0 y=452.0 width=79.8 height=16.0 center_x=87.9 center_y=460.0)
+                  GenericContainer rect=<none>
+                    ComboBox name="All namespaces" value="All namespaces" rect=(x=48.0 y=484.0 width=260.0 height=32.0 center_x=178.0 center_y=500.0)
+                    Label value="All namespaces" rect=(x=48.0 y=524.0 width=83.4 height=16.0 center_x=89.7 center_y=532.0)
+                      TextRun value="All namespaces" rect=(x=48.0 y=524.0 width=83.4 height=16.0 center_x=89.7 center_y=532.0)
+                  GenericContainer rect=<none>
+                    ComboBox name="Truncated" value="customer-acme-production-eu-west-1-payments" rect=(x=48.0 y=556.0 width=260.0 height=32.0 center_x=178.0 center_y=572.0)
+                    Label value="Truncated — full value in tooltip on hover" rect=(x=48.0 y=650.0 width=221.5 height=16.0 center_x=158.7 center_y=658.0)
+                      TextRun value="Truncated — full value in tooltip on hover" rect=(x=48.0 y=650.0 width=221.5 height=16.0 center_x=158.7 center_y=658.0)
+                  GenericContainer rect=<none>
+                    ComboBox name="Disabled" state=[disabled] rect=(x=48.0 y=682.0 width=260.0 height=32.0 center_x=178.0 center_y=698.0)
+                    Label value="Disabled (no cluster)" rect=(x=48.0 y=722.0 width=110.5 height=16.0 center_x=103.3 center_y=730.0)
+                      TextRun value="Disabled (no cluster)" rect=(x=48.0 y=722.0 width=110.5 height=16.0 center_x=103.3 center_y=730.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="MULTI-SELECT, OPEN" rect=(x=396.0 y=168.0 width=117.7 height=16.0 center_x=454.8 center_y=176.0)
+                  TextRun value="MULTI-SELECT, OPEN" rect=(x=396.0 y=168.0 width=116.6 height=16.0 center_x=454.3 center_y=176.0)
+                ComboBox name="Multi-select" value="kube-system, monitoring" rect=(x=396.0 y=196.0 width=260.0 height=32.0 center_x=526.0 center_y=212.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    TextInput name="Search combobox options" value="" rect=(x=441.0 y=248.0 width=167.0 height=20.0 center_x=524.5 center_y=258.0)
+                      TextRun value="" rect=(x=441.0 y=250.0 width=0.0 height=20.0 center_x=441.0 center_y=260.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      CheckBox name="All namespaces" state=[toggled=Mixed] rect=(x=400.0 y=280.0 width=252.0 height=32.0 center_x=526.0 center_y=296.0)
+                      CheckBox name="default" state=[toggled=False] rect=(x=400.0 y=321.0 width=252.0 height=32.0 center_x=526.0 center_y=337.0)
+                      CheckBox name="kube-system" state=[toggled=True] rect=(x=400.0 y=353.0 width=252.0 height=32.0 center_x=526.0 center_y=369.0)
+                      CheckBox name="monitoring" state=[toggled=True] rect=(x=400.0 y=385.0 width=252.0 height=32.0 center_x=526.0 center_y=401.0)
+                      CheckBox name="payments" state=[toggled=False] rect=(x=400.0 y=417.0 width=252.0 height=32.0 center_x=526.0 center_y=433.0)
+                      CheckBox name="staging" state=[toggled=False] rect=(x=400.0 y=449.0 width=252.0 height=32.0 center_x=526.0 center_y=465.0)
+                  Label value="↑ ↓ move · Space toggle · Enter done" rect=(x=400.0 y=485.0 width=252.0 height=28.0 center_x=526.0 center_y=499.0)
+                Unknown name="Multi-select options" rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="SEARCH NARROWS THE LIST" rect=(x=704.0 y=168.0 width=158.6 height=16.0 center_x=783.3 center_y=176.0)
+                  TextRun value="SEARCH NARROWS THE LIST" rect=(x=704.0 y=168.0 width=157.5 height=16.0 center_x=782.8 center_y=176.0)
+                ComboBox name="Search narrows" value="kube-system" rect=(x=704.0 y=196.0 width=260.0 height=32.0 center_x=834.0 center_y=212.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    TextInput name="Search combobox options" value="m" rect=(x=740.0 y=248.0 width=172.9 height=20.0 center_x=826.4 center_y=258.0)
+                      TextRun value="m" rect=(x=740.0 y=250.0 width=11.1 height=20.0 center_x=745.5 center_y=260.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      CheckBox name="monitoring" state=[toggled=True] rect=(x=708.0 y=280.0 width=252.0 height=32.0 center_x=834.0 center_y=296.0)
+                      CheckBox name="Customer: Acme (payments · matched on label team=money)" state=[toggled=False] rect=(x=708.0 y=312.0 width=252.0 height=44.0 center_x=834.0 center_y=334.0)
+                Unknown name="Search narrows options" rect=<none>
+              GenericContainer rect=<none>
+                Label value="NO RESULTS" rect=(x=704.0 y=388.0 width=68.5 height=16.0 center_x=738.2 center_y=396.0)
+                  TextRun value="NO RESULTS" rect=(x=704.0 y=388.0 width=67.4 height=16.0 center_x=737.7 center_y=396.0)
+                ComboBox name="No results" rect=(x=704.0 y=416.0 width=0.0 height=0.0 center_x=704.0 center_y=416.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    TextInput name="Search combobox options" value="prodd" rect=(x=740.0 y=424.0 width=172.9 height=20.0 center_x=826.4 center_y=434.0)
+                      TextRun value="prodd" rect=(x=740.0 y=426.0 width=34.8 height=20.0 center_x=757.4 center_y=436.0)
+                  Label value="No namespaces match “prodd”" rect=(x=708.0 y=456.0 width=252.0 height=52.0 center_x=834.0 center_y=482.0)
+                    TextRun value="No namespaces match “prodd”" rect=(x=743.9 y=472.0 width=180.1 height=20.0 center_x=834.0 center_y=482.0)
+                Unknown name="No results options" rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="SINGLE SELECT, OPEN" rect=(x=1012.0 y=168.0 width=123.7 height=16.0 center_x=1073.9 center_y=176.0)
+                  TextRun value="SINGLE SELECT, OPEN" rect=(x=1012.0 y=168.0 width=122.6 height=16.0 center_x=1073.3 center_y=176.0)
+                ComboBox name="Debug profile" value="General" rect=(x=1012.0 y=196.0 width=200.0 height=28.0 center_x=1112.0 center_y=210.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      CheckBox name="General" state=[toggled=True] rect=(x=1016.0 y=240.0 width=192.0 height=32.0 center_x=1112.0 center_y=256.0)
+                      CheckBox name="Baseline" state=[toggled=False] rect=(x=1016.0 y=272.0 width=192.0 height=32.0 center_x=1112.0 center_y=288.0)
+                      CheckBox name="Restricted" state=[toggled=False] rect=(x=1016.0 y=304.0 width=192.0 height=32.0 center_x=1112.0 center_y=320.0)
+                      CheckBox name="Network admin" state=[toggled=False] rect=(x=1016.0 y=336.0 width=192.0 height=32.0 center_x=1112.0 center_y=352.0)
+                      CheckBox name="System admin" state=[toggled=False] rect=(x=1016.0 y=368.0 width=192.0 height=32.0 center_x=1112.0 center_y=384.0)
+                Unknown name="Debug profile options" rect=<none>
+              Label value="Keyboard highlight is the neutral row fill; selection is the trailing check. A highlighted row is never a solid accent fill." rect=(x=1012.0 y=428.0 width=218.0 height=64.0 center_x=1121.0 center_y=460.0)
+                TextRun value="Keyboard highlight is the neutral row fill; " rect=(x=1012.0 y=428.0 width=218.0 height=16.0 center_x=1121.0 center_y=436.0)
+                TextRun value="selection is the trailing check. A " rect=(x=1012.0 y=444.0 width=172.0 height=16.0 center_x=1098.0 center_y=452.0)
+                TextRun value="highlighted row is never a solid accent " rect=(x=1012.0 y=460.0 width=208.0 height=16.0 center_x=1116.0 center_y=468.0)
+                TextRun value="fill." rect=(x=1012.0 y=476.0 width=14.5 height=16.0 center_x=1019.2 center_y=484.0)

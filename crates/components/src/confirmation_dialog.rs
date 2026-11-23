@@ -1,58 +1,88 @@
-//! Reusable modal treatment for user-confirmed application actions.
+//! Confirmation dialogs (C11): a question, the action's effect, and a
+//! footer whose confirm button repeats the verb.
+//!
+//! Neutral confirmations (Restart, Run now, Scale) carry an accent tile and
+//! a primary confirm button; destructive ones (Delete, Discard, Remove
+//! finalizers) a danger tile and a solid danger button. A typed confirmation
+//! adds a danger callout listing what is bypassed and a field the resource
+//! name must be typed into.
 
-use egui::{Align, Context, Frame, Id, Key, Margin, Modal, Modifiers};
+use std::cell::{Cell, RefCell};
 
-use crate::design::theme::{self, Theme, ThemeExt, ThemeScope};
-use crate::design::{radius, size, space, stroke, type_scale};
-use crate::frames::overlay_frame;
-use crate::{ButtonSize, TailwindButton};
+use egui::{Context, Id, Key, Ui};
 
-const DIALOG_WIDTH: f32 = 480.0;
+use crate::design::theme::{ThemeExt, Tone};
+use crate::design::{size, space, type_scale};
+use crate::dialog::{Dialog, FocusOnOpen};
+use crate::icons::Icon;
+use crate::prose::Prose;
+use crate::{Button, Callout, Chip, TextInput};
 
 /// Visual emphasis for a confirmation's primary action.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ConfirmationDialogKind {
+    /// An accent tile and a primary confirm button; the confirm button has
+    /// focus when the dialog opens.
     Primary,
+    /// A danger tile and a solid danger confirm button; Cancel has focus
+    /// when the dialog opens.
     Destructive,
+}
+
+impl ConfirmationDialogKind {
+    fn tone(self) -> Tone {
+        match self {
+            Self::Primary => Tone::Accent,
+            Self::Destructive => Tone::Danger,
+        }
+    }
 }
 
 /// Content and actions for a standard application confirmation dialog.
 pub struct ConfirmationDialog<'a> {
     /// Stable identity for the dialog and its input-blocking scrim.
     pub id: Id,
-    /// Small contextual label shown above the title.
-    pub eyebrow: &'a str,
-    /// Clear description of the pending action.
+    /// The glyph on the header tile, naming the action (Trash, ArrowPath).
+    pub icon: Icon,
+    /// The pending action as a question.
     pub title: &'a str,
-    /// Brief explanation of the action's effect.
-    pub message: &'a str,
+    /// The action's effect, naming the resource in bold.
+    pub message: Prose<'a>,
     /// Optional explanation displayed while the primary action is unavailable.
     pub unavailable_message: Option<&'a str>,
     /// Label for the safe dismiss action.
     pub cancel_label: &'a str,
-    /// Label for the action that confirms the operation.
+    /// Label for the action that confirms the operation; repeats the verb.
     pub confirm_label: &'a str,
     /// Semantic emphasis for the confirmation action.
     pub kind: ConfirmationDialogKind,
-    /// Whether the confirmation action may be selected now.
+    /// Whether the confirmation action may be selected now. A typed
+    /// acknowledgement must also match before it is enabled.
     pub confirm_enabled: bool,
-    /// Optional visually prominent warning rendered within the shared dialog treatment.
+    /// Optional danger callout listing what the action bypasses.
     pub warning: Option<ConfirmationDialogWarning<'a>>,
     /// Optional typed acknowledgement shown before the action buttons.
     pub acknowledgement: Option<ConfirmationDialogAcknowledgement<'a>>,
 }
 
-/// A typed acknowledgement required before a confirmation may proceed.
+/// A name that must be typed, exactly, before a confirmation may proceed.
 pub struct ConfirmationDialogAcknowledgement<'a> {
+    /// The field label, "Type important-config to confirm".
     pub label: &'a str,
-    pub hint_text: &'a str,
+    /// The text that enables the confirm button (case-sensitive).
+    pub expected: &'a str,
+    /// The text typed so far.
     pub value: &'a mut String,
 }
 
-/// A high-risk action warning, optionally with a bounded detail list.
+/// A high-risk action warning (`.callout.bad`): what is bypassed, optionally
+/// as chips (finalizers) and a bounded detail list.
 pub struct ConfirmationDialogWarning<'a> {
     pub title: &'a str,
     pub message: &'a str,
+    /// Short identifiers shown as chips under the message.
+    pub chips: &'a [String],
+    /// A longer list, one entry per line, in a scrolling mono block.
     pub details: Option<&'a str>,
 }
 
@@ -64,167 +94,204 @@ pub enum ConfirmationDialogAction {
     Confirm,
 }
 
-impl ConfirmationDialog<'_> {
+/// Gap between the blocks under the header (callout, field, notes).
+const BLOCK_GAP: f32 = space::S12;
+/// Gap between the callout message and its chips.
+const CHIPS_TOP: f32 = space::S8;
+/// Tallest a warning's detail list grows before it scrolls.
+const DETAILS_MAX_HEIGHT: f32 = 96.0;
+
+/// Which control takes focus when the dialog opens.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FocusTarget {
+    Cancel,
+    Confirm,
+    Acknowledgement,
+}
+
+impl<'a> ConfirmationDialog<'a> {
     /// Show the modal dialog and report the selected action for this frame.
+    /// Escape and a click on the scrim cancel.
     pub fn show(self, ctx: &Context) -> ConfirmationDialogAction {
-        self.show_with_body(ctx, DIALOG_WIDTH, |_| {})
+        self.show_with_body(ctx, size::DIALOG_WIDTH, |_| {})
     }
 
     /// Show the dialog `width` points wide, with `body` rendered below the
-    /// message for content the standard fields cannot express.
+    /// header for content the standard fields cannot express.
     pub fn show_with_body(
-        mut self,
+        self,
         ctx: &Context,
         width: f32,
-        body: impl FnOnce(&mut egui::Ui),
+        body: impl FnOnce(&mut Ui),
     ) -> ConfirmationDialogAction {
-        let mut action = ConfirmationDialogAction::None;
-        let response = dialog_modal(ctx, self.id, width).show(ctx, |ui| {
-            theme::scope(ui, ThemeScope::Dialog, |ui| {
-                let tokens = ui.tokens();
-                ui.set_width(width);
-                show_dialog_header(ui, self.eyebrow, self.title, self.message);
-                body(ui);
-                if let Some(warning) = self.warning {
-                    ui.add_space(space::S16);
-                    danger_callout_frame(&tokens).show(ui, |ui| {
-                        ui.set_min_width(ui.available_width());
-                        ui.label(
-                            egui::RichText::new(warning.title)
-                                .font(type_scale::BODY_STRONG.font_id(ui.ctx()))
-                                .color(tokens.danger.text),
-                        );
-                        ui.add_space(space::S4);
-                        ui.label(
-                            egui::RichText::new(warning.message)
-                                .font(type_scale::BODY.font_id(ui.ctx()))
-                                .color(tokens.danger.text_on_tint),
-                        );
-                        if let Some(details) = warning.details {
-                            ui.add_space(space::S8);
-                            egui::ScrollArea::vertical()
-                                .max_height(96.0)
-                                .show(ui, |ui| {
-                                    ui.set_min_width(ui.available_width());
-                                    ui.label(
-                                        egui::RichText::new(details)
-                                            .font(type_scale::MONO.font_id(ui.ctx()))
-                                            .color(tokens.danger.text_on_tint),
-                                    );
-                                });
-                        }
-                    });
-                }
-                if let Some(message) = self.unavailable_message {
-                    ui.add_space(space::S8);
-                    ui.label(
-                        egui::RichText::new(message)
-                            .font(type_scale::META.font_id(ui.ctx()))
-                            .color(tokens.text.muted),
-                    );
-                }
-                if let Some(acknowledgement) = &mut self.acknowledgement {
-                    ui.add_space(space::S16);
-                    let label = ui.label(
-                        egui::RichText::new(acknowledgement.label)
-                            .font(type_scale::META.font_id(ui.ctx()))
-                            .color(tokens.text.secondary),
-                    );
-                    ui.add_space(space::S4);
-                    ui.add(
-                        egui::TextEdit::singleline(acknowledgement.value)
-                            .id_salt("acknowledgement")
-                            .desired_width(f32::INFINITY)
-                            .hint_text(acknowledgement.hint_text)
-                            .margin(size::FIELD_MARGIN_SM),
-                    )
-                    .labelled_by(label.id);
-                }
-
-                ui.add_space(space::S24);
-                ui.separator();
-                ui.add_space(space::S12);
-                ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                    let confirm = match self.kind {
-                        ConfirmationDialogKind::Primary => {
-                            TailwindButton::primary(self.confirm_label)
-                        }
-                        ConfirmationDialogKind::Destructive => {
-                            TailwindButton::danger(self.confirm_label)
-                        }
-                    }
-                    .size(ButtonSize::Md);
-                    if ui
-                        .add_enabled_ui(self.confirm_enabled, |ui| confirm.show(ui))
-                        .inner
-                        .clicked()
-                    {
-                        action = ConfirmationDialogAction::Confirm;
-                    }
-                    if TailwindButton::secondary(self.cancel_label)
-                        .size(ButtonSize::Md)
-                        .show(ui)
-                        .clicked()
-                    {
-                        action = ConfirmationDialogAction::Cancel;
-                    }
-                });
-            })
-        });
-
-        let escape_pressed = response.is_top_modal
-            && !response.any_popup_open
-            && ctx.input_mut(|input| input.consume_key(Modifiers::NONE, Key::Escape));
-        if escape_pressed && action == ConfirmationDialogAction::None {
-            ConfirmationDialogAction::Cancel
-        } else {
-            action
+        let focus = FocusOnOpen::new(ctx, self.id);
+        let (dialog, parts) = self.into_parts(width, focus);
+        let response = dialog.show(ctx, |ui| parts.body(ui, body), |ui| parts.footer(ui));
+        match parts.action(response.inner) {
+            ConfirmationDialogAction::None if response.dismissed => {
+                ConfirmationDialogAction::Cancel
+            }
+            action => action,
         }
+    }
+
+    /// Paint the dialog in place at the cursor (design boards and previews)
+    /// and report the action selected this frame.
+    pub fn show_inline(self, ui: &mut Ui) -> ConfirmationDialogAction {
+        let (dialog, parts) = self.into_parts(size::DIALOG_WIDTH, FocusOnOpen::NEVER);
+        let inner = dialog.show_inline(ui, |ui| parts.body(ui, |_| {}), |ui| parts.footer(ui));
+        parts.action(inner)
+    }
+
+    fn focus_target(&self) -> FocusTarget {
+        if self.acknowledgement.is_some() {
+            FocusTarget::Acknowledgement
+        } else {
+            match self.kind {
+                ConfirmationDialogKind::Primary => FocusTarget::Confirm,
+                ConfirmationDialogKind::Destructive => FocusTarget::Cancel,
+            }
+        }
+    }
+
+    fn into_parts(self, width: f32, focus: FocusOnOpen) -> (Dialog<'a>, Parts<'a>) {
+        let focus_target = self.focus_target();
+        let dialog = Dialog::new(self.id, self.icon, self.kind.tone(), self.title)
+            .description(self.message)
+            .width(width);
+        let matched = self
+            .acknowledgement
+            .as_ref()
+            .is_none_or(|ack| *ack.value == ack.expected);
+        let parts = Parts {
+            unavailable_message: self.unavailable_message,
+            cancel_label: self.cancel_label,
+            confirm_label: self.confirm_label,
+            kind: self.kind,
+            confirm_enabled: self.confirm_enabled,
+            warning: self.warning,
+            acknowledgement: RefCell::new(self.acknowledgement),
+            matched: Cell::new(matched),
+            field_confirmed: Cell::new(false),
+            focus,
+            focus_target,
+        };
+        (dialog, parts)
     }
 }
 
-/// The modal of a standard application dialog (`.dlg`): `surface-panel`
-/// with the overlay shadow and its hairline ring, over the scrim. Show its
-/// contents in [`ThemeScope::Dialog`].
-pub fn dialog_modal(ctx: &Context, id: Id, width: f32) -> Modal {
-    let tokens = ctx.tokens();
-    Modal::new(id)
-        .area(Modal::default_area(id).default_width(width).fade_in(false))
-        .backdrop_color(tokens.shade.scrim)
-        .frame(overlay_frame(&tokens).inner_margin(Margin::same(space::S24 as i8)))
+/// Everything of a [`ConfirmationDialog`] but its header, shared by the
+/// body and footer closures of its [`Dialog`].
+struct Parts<'a> {
+    unavailable_message: Option<&'a str>,
+    cancel_label: &'a str,
+    confirm_label: &'a str,
+    kind: ConfirmationDialogKind,
+    confirm_enabled: bool,
+    warning: Option<ConfirmationDialogWarning<'a>>,
+    acknowledgement: RefCell<Option<ConfirmationDialogAcknowledgement<'a>>>,
+    /// Whether the typed acknowledgement (if any) matches, after this
+    /// frame's typing.
+    matched: Cell<bool>,
+    /// Enter was pressed in a matching acknowledgement field.
+    field_confirmed: Cell<bool>,
+    focus: FocusOnOpen,
+    focus_target: FocusTarget,
 }
 
-/// The eyebrow, title and message that open every application dialog.
-pub fn show_dialog_header(ui: &mut egui::Ui, eyebrow: &str, title: &str, message: &str) {
-    let tokens = ui.tokens();
-    ui.label(
-        egui::RichText::new(eyebrow)
-            .font(type_scale::META.font_id(ui.ctx()))
-            .color(tokens.text.muted),
-    );
-    ui.add_space(space::S8);
-    ui.label(
-        egui::RichText::new(title)
-            .font(type_scale::DIALOG_TITLE.font_id(ui.ctx()))
-            .color(tokens.text.primary),
-    );
-    ui.add_space(space::S12);
-    ui.label(
-        egui::RichText::new(message)
-            .font(type_scale::BODY.font_id(ui.ctx()))
-            .color(tokens.text.secondary),
-    );
-}
+impl Parts<'_> {
+    fn can_confirm(&self) -> bool {
+        self.confirm_enabled && self.matched.get()
+    }
 
-/// A danger banner (`.banner.bad`) for warnings and failure details inside a
-/// dialog. Text on it uses `danger-text` for titles and
-/// `danger-text-on-tint` for body copy.
-pub(crate) fn danger_callout_frame(theme: &Theme) -> Frame {
-    Frame::new()
-        .fill(theme.danger.tint)
-        .stroke(stroke::hairline(theme.danger.outline))
-        .corner_radius(egui::CornerRadius::same(radius::KEY))
-        .inner_margin(Margin::same(space::S12 as i8))
+    /// The blocks under the header, [`BLOCK_GAP`] apart.
+    fn body(&self, ui: &mut Ui, extra: impl FnOnce(&mut Ui)) {
+        ui.spacing_mut().item_spacing.y = BLOCK_GAP;
+        let theme = ui.tokens();
+        extra(ui);
+        if let Some(warning) = &self.warning {
+            Callout::new(Tone::Danger, warning.title)
+                .body(warning.message)
+                .compact()
+                .show_with(ui, |ui| {
+                    if !warning.chips.is_empty() {
+                        ui.add_space(CHIPS_TOP);
+                        crate::chip_flow(ui, |ui| {
+                            for chip in warning.chips {
+                                Chip::new(chip).show(ui);
+                            }
+                        });
+                    }
+                    if let Some(details) = warning.details {
+                        ui.add_space(CHIPS_TOP);
+                        crate::scroll::vertical()
+                            .max_height(DETAILS_MAX_HEIGHT)
+                            .show(ui, |ui| {
+                                ui.set_min_width(ui.available_width());
+                                type_scale::MONO_SMALL.label(ui, details, theme.text.primary);
+                            });
+                    }
+                });
+        }
+        if let Some(acknowledgement) = self.acknowledgement.borrow_mut().as_mut() {
+            ui.scope(|ui| {
+                ui.spacing_mut().item_spacing.y = space::LABEL_TO_CONTROL;
+                let label =
+                    type_scale::FIELD_LABEL.label(ui, acknowledgement.label, theme.text.secondary);
+                let response = TextInput::new(acknowledgement.value)
+                    .id_salt("acknowledgement")
+                    .monospace()
+                    .labelled_by(label.id)
+                    .show(ui);
+                if self.focus_target == FocusTarget::Acknowledgement {
+                    self.focus.apply(ui, &response);
+                }
+                let matched = *acknowledgement.value == acknowledgement.expected;
+                self.matched.set(matched);
+                if response.lost_focus()
+                    && ui.input(|input| input.key_pressed(Key::Enter))
+                    && self.can_confirm()
+                {
+                    self.field_confirmed.set(true);
+                }
+            });
+        }
+        if let Some(message) = self.unavailable_message {
+            type_scale::META.label(ui, message, theme.text.muted);
+        }
+    }
+
+    /// The footer buttons, right to left: confirm, then cancel.
+    fn footer(&self, ui: &mut Ui) -> ConfirmationDialogAction {
+        let confirm = match self.kind {
+            ConfirmationDialogKind::Primary => Button::primary(self.confirm_label),
+            ConfirmationDialogKind::Destructive => Button::danger(self.confirm_label),
+        }
+        .enabled(self.can_confirm())
+        .show(ui);
+        let cancel = Button::secondary(self.cancel_label).show(ui);
+        match self.focus_target {
+            FocusTarget::Confirm if confirm.enabled() => self.focus.apply(ui, &confirm),
+            FocusTarget::Cancel | FocusTarget::Confirm => self.focus.apply(ui, &cancel),
+            FocusTarget::Acknowledgement => {}
+        }
+        if confirm.clicked() {
+            ConfirmationDialogAction::Confirm
+        } else if cancel.clicked() {
+            ConfirmationDialogAction::Cancel
+        } else {
+            ConfirmationDialogAction::None
+        }
+    }
+
+    /// The action of this frame, given the footer's.
+    fn action(&self, footer: ConfirmationDialogAction) -> ConfirmationDialogAction {
+        if footer == ConfirmationDialogAction::None && self.field_confirmed.get() {
+            ConfirmationDialogAction::Confirm
+        } else {
+            footer
+        }
+    }
 }
 
 #[cfg(test)]
@@ -249,19 +316,19 @@ mod tests {
                 }
                 ConfirmationDialog {
                     id: Id::new("confirmation"),
-                    eyebrow: "REMOVE FINALIZERS",
+                    icon: Icon::Trash,
                     title: "Force delete resource?",
-                    message: "This removes every finalizer from the resource.",
+                    message: "This removes every finalizer from the resource.".into(),
                     unavailable_message: (!state.available)
                         .then_some("Remove finalizers will be available in 1 second."),
                     cancel_label: "Cancel",
                     confirm_label: "Remove finalizers",
                     kind: ConfirmationDialogKind::Destructive,
-                    confirm_enabled: state.available && state.acknowledgement == "resource-name",
+                    confirm_enabled: state.available,
                     warning: None,
                     acknowledgement: Some(ConfirmationDialogAcknowledgement {
                         label: "Type the resource name to acknowledge:",
-                        hint_text: "Resource name",
+                        expected: "resource-name",
                         value: &mut state.acknowledgement,
                     }),
                 }

@@ -238,7 +238,7 @@ fn shared_header_controls_navigate_and_close_the_active_blade() {
     let close = harness.get_by_label("Close blade").rect();
     assert_eq!(
         close.right() - back.left(),
-        content_width(WIDTH),
+        WIDTH - 2.0 * chrome::HEADER_PADDING_X,
         "back: {back:?}, close: {close:?}"
     );
 

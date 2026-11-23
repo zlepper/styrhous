@@ -133,12 +133,20 @@ fn export_outcomes_are_shown_in_the_window_header() {
 #[test]
 fn a_long_export_error_is_truncated_before_the_window_status() {
     let mut window = log_window(&LINES);
-    window.export.status = Some(LogExportStatus::Failed(format!(
+    let error = format!(
         "Could not save /home/user/{}/api.log: No space left on device (os error 28)",
         "nested/".repeat(20)
-    )));
+    );
+    window.export.status = Some(LogExportStatus::Failed(error.clone()));
     let mut harness = window_harness(window, LogDisplayOptions::default());
-    // The overlap check proves the error ends before "Following".
+    // The title and the state stay readable, left of the error.
+    let title = harness.get_by_label("api-0").rect();
+    assert!(title.width() > 30.0, "the title is not squeezed: {title:?}");
+    let status = harness.get_by_label("Following").rect();
+    let error_label = harness
+        .get_by_label(&format!("Export failed: {error}"))
+        .rect();
+    assert!(status.right() < error_label.left());
     harness
         .ui_harness("pod_logs/a_long_export_error_is_truncated_before_the_window_status/truncated");
 }

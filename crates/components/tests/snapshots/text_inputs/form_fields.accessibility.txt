@@ -1,0 +1,41 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Label value="Display name" rect=(x=8.0 y=8.0 width=72.7 height=16.0 center_x=44.3 center_y=16.0)
+            TextRun value="Display name" rect=(x=8.0 y=8.0 width=72.7 height=16.0 center_x=44.3 center_y=16.0)
+          GenericContainer rect=<none>
+            TextInput name="Display name" value="Production Europe" rect=(x=8.0 y=30.0 width=360.0 height=32.0 center_x=188.0 center_y=46.0)
+              TextRun value="Production Europe" rect=(x=22.0 y=38.0 width=108.9 height=20.0 center_x=76.5 center_y=48.0)
+          Label value="Leave blank to use the kubeconfig context name." rect=(x=8.0 y=68.0 width=262.6 height=16.0 center_x=139.3 center_y=76.0)
+            TextRun value="Leave blank to use the kubeconfig context name." rect=(x=8.0 y=68.0 width=262.6 height=16.0 center_x=139.3 center_y=76.0)
+        GenericContainer rect=<none>
+          Label value="Badge" rect=(x=8.0 y=104.0 width=34.5 height=16.0 center_x=25.2 center_y=112.0)
+            TextRun value="Badge" rect=(x=8.0 y=104.0 width=34.5 height=16.0 center_x=25.2 center_y=112.0)
+          GenericContainer rect=<none>
+            TextInput name="Badge" value="PRX" rect=(x=8.0 y=126.0 width=120.0 height=32.0 center_x=68.0 center_y=142.0)
+              TextRun value="PRX" rect=(x=22.0 y=134.0 width=23.7 height=20.0 center_x=33.8 center_y=144.0)
+          Label value="Use one or two characters." rect=(x=8.0 y=164.0 width=161.6 height=16.0 center_x=88.8 center_y=172.0)
+            TextRun value="Use one or two characters." rect=(x=26.0 y=164.0 width=143.6 height=16.0 center_x=97.8 center_y=172.0)
+        GenericContainer rect=<none>
+          Label value="Command template" rect=(x=8.0 y=200.0 width=108.6 height=16.0 center_x=62.3 center_y=208.0)
+            TextRun value="Command template" rect=(x=8.0 y=200.0 width=108.6 height=16.0 center_x=62.3 center_y=208.0)
+          GenericContainer rect=<none>
+            MultilineTextInput name="Command template" value="alacritty -e {command}\n--title {name}" rect=(x=8.0 y=222.0 width=360.0 height=60.0 center_x=188.0 center_y=252.0)
+              TextRun value="alacritty -e {command}\n" rect=(x=22.0 y=234.0 width=158.4 height=20.0 center_x=101.2 center_y=244.0)
+              TextRun value="--title {name}" rect=(x=22.0 y=254.0 width=100.8 height=20.0 center_x=72.4 center_y=264.0)
+          Label value="Use {command} as the placeholder." rect=(x=8.0 y=288.0 width=190.3 height=16.0 center_x=103.1 center_y=296.0)
+            TextRun value="Use {command} as the placeholder." rect=(x=8.0 y=288.0 width=190.3 height=16.0 center_x=103.1 center_y=296.0)
+        GenericContainer rect=<none>
+          Label value="Replicas" rect=(x=8.0 y=324.0 width=45.7 height=16.0 center_x=30.8 center_y=332.0)
+            TextRun value="Replicas" rect=(x=8.0 y=324.0 width=45.7 height=16.0 center_x=30.8 center_y=332.0)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              TextInput name="Replicas" value="3" rect=(x=8.0 y=346.0 width=70.0 height=32.0 center_x=43.0 center_y=362.0)
+                TextRun value="3" rect=(x=22.0 y=354.0 width=7.1 height=20.0 center_x=25.5 center_y=364.0)
+            Button name="Decrease" rect=(x=78.0 y=346.0 width=32.0 height=32.0 center_x=94.0 center_y=362.0)
+            Button name="Increase" rect=(x=110.0 y=346.0 width=32.0 height=32.0 center_x=126.0 center_y=362.0)
+          Label value="Current: 2 · Min 0" rect=(x=8.0 y=384.0 width=93.2 height=16.0 center_x=54.6 center_y=392.0)
+            TextRun value="Current: 2 · Min 0" rect=(x=8.0 y=384.0 width=93.2 height=16.0 center_x=54.6 center_y=392.0)

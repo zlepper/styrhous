@@ -5,7 +5,9 @@ use crate::log_store::{LogExportFilter, LogExportFormat, LogExportOptions, LogSt
 use crate::ui::save_file_dialog::{SaveFileAnswer, SaveFileChoice, SaveFileRequest};
 use crate::ui::state::OperationOutcome;
 use crate::ui::widgets::count_noun;
-use components::{ButtonSize, TailwindButton, checkbox_field, popover_frame};
+use components::frames::show_elevated;
+use components::tooltip::truncated_label;
+use components::{Button, ButtonSize, Checkbox, popover_frame};
 use std::path::{Path, PathBuf};
 
 const POPOVER_WIDTH: f32 = 300.0;
@@ -244,7 +246,11 @@ fn status_text(status: &LogExportStatus, theme: &Theme) -> Option<(String, egui:
 }
 
 /// The "Export…" button, its options popover and the latest export's status,
-/// laid out right to left at the end of the header's second row.
+/// at the end of the window header.
+/// Widest the latest export's status grows in the header before it is
+/// truncated (its full text is the tooltip).
+const EXPORT_STATUS_MAX_WIDTH: f32 = 240.0;
+
 pub(super) fn show_export_controls(
     ui: &mut egui::Ui,
     window: &mut PodLogWindowState,
@@ -254,11 +260,10 @@ pub(super) fn show_export_controls(
     // returns must not lock exporting); only one file is written at a time.
     let theme = ui.tokens();
     let writing = window.export.writing_export_id().is_some();
-    // The same control style as the "Current"/"Previous" buttons in this row.
-    let trigger = ui.add_enabled(!writing, egui::Button::new("Export…"));
-    trigger.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, !writing, "Export logs")
-    });
+    let trigger = Button::secondary("Export…")
+        .accessibility_label("Export logs")
+        .enabled(!writing)
+        .show(ui);
     let popup_id = egui::Popup::default_response_id(&trigger);
     if trigger.clicked() && !egui::Popup::is_id_open(ui.ctx(), popup_id) {
         // Start from what the window currently shows.
@@ -277,42 +282,42 @@ pub(super) fn show_export_controls(
         .gap(space::S4)
         .width(POPOVER_WIDTH)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-        .frame(popover_frame(&theme).inner_margin(egui::Margin::same(space::S16 as i8)))
+        .frame(egui::Frame::NONE)
         .show(|ui| {
-            theme::scope(ui, ThemeScope::Popover, |ui| {
-                ui.label(
-                    egui::RichText::new("Export options")
-                        .font(type_scale::BODY_STRONG.font_id(ui.ctx()))
-                        .color(theme.text.primary),
-                );
-                ui.add_space(space::S4);
-                ui.label(
-                    egui::RichText::new("Saves the loaded lines from disk.")
-                        .font(type_scale::META.font_id(ui.ctx()))
-                        .color(theme.text.muted),
-                );
-                ui.add_space(space::S12);
-                let filter_available = window.export_filter().is_some();
-                let choices = &mut window.export.choices;
-                ui.add_enabled_ui(filter_available, |ui| {
-                    checkbox_field(
-                        ui,
-                        &mut choices.only_matching,
-                        "Only lines matching the filter",
+            let frame = popover_frame(&theme).inner_margin(egui::Margin::same(space::S16 as i8));
+            show_elevated(ui, frame, theme.shadow.raised, |ui| {
+                theme::scope(ui, ThemeScope::Popover, |ui| {
+                    ui.label(
+                        egui::RichText::new("Export options")
+                            .font(type_scale::BODY_STRONG.font_id(ui.ctx()))
+                            .color(theme.text.primary),
                     );
-                });
-                let format = &mut choices.format;
-                checkbox_field(ui, &mut format.include_sources, "Include source labels");
-                checkbox_field(ui, &mut format.include_timestamps, "Include timestamps");
-                checkbox_field(ui, &mut format.keep_ansi, "Keep ANSI colour codes");
-                ui.add_space(space::S12);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    save = TailwindButton::primary("Save…")
-                        .size(ButtonSize::Xs)
-                        .show(ui)
-                        .clicked();
-                });
-            })
+                    ui.add_space(space::S4);
+                    ui.label(
+                        egui::RichText::new("Saves the loaded lines from disk.")
+                            .font(type_scale::META.font_id(ui.ctx()))
+                            .color(theme.text.muted),
+                    );
+                    ui.add_space(space::S12);
+                    let filter_available = window.export_filter().is_some();
+                    let choices = &mut window.export.choices;
+                    ui.add_enabled_ui(filter_available, |ui| {
+                        Checkbox::new(&mut choices.only_matching, "Only lines matching the filter")
+                            .show(ui);
+                    });
+                    let format = &mut choices.format;
+                    Checkbox::new(&mut format.include_sources, "Include source labels").show(ui);
+                    Checkbox::new(&mut format.include_timestamps, "Include timestamps").show(ui);
+                    Checkbox::new(&mut format.keep_ansi, "Keep ANSI colour codes").show(ui);
+                    ui.add_space(space::S12);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        save = Button::primary("Save…")
+                            .size(ButtonSize::Sm)
+                            .show(ui)
+                            .clicked();
+                    });
+                })
+            });
         });
     if save {
         egui::Popup::close_id(ui.ctx(), popup_id);
@@ -325,13 +330,16 @@ pub(super) fn show_export_controls(
         .and_then(|status| status_text(status, &theme))
     {
         ui.add_space(space::S8);
-        ui.add(
-            egui::Label::new(
+        // A long error must not crowd out the window's title and state.
+        let width = ui.available_width().min(EXPORT_STATUS_MAX_WIDTH);
+        ui.allocate_ui(egui::vec2(width, ui.available_height()), |ui| {
+            truncated_label(
+                ui,
                 egui::RichText::new(text)
-                    .font(type_scale::BODY.font_id(ui.ctx()))
+                    .font(type_scale::META.font_id(ui.ctx()))
                     .color(color),
-            )
-            .truncate(),
-        );
+                |label| label,
+            );
+        });
     }
 }

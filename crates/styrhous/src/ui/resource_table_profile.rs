@@ -112,7 +112,7 @@ impl ResourceTableProfile {
                 &mut self.ui_state,
                 &mut commands,
                 &mut shell_requests,
-                &[],
+                &crate::terminal_launcher::TerminalLaunchSettings::default(),
                 &mut self.table_preferences,
                 &self.namespace_selector_settings,
             );

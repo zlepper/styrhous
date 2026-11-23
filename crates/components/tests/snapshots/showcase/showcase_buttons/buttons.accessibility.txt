@@ -4,84 +4,160 @@ Window state=[focused] rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
-          Label value="Buttons" rect=(x=696.0 y=64.0 width=142.7 height=48.0 center_x=767.3 center_y=88.0)
+          Label value="SHOWCASE · COMPONENTS::BUTTON" rect=(x=48.0 y=40.0 width=204.7 height=16.0 center_x=150.4 center_y=48.0)
+            TextRun value="SHOWCASE · COMPONENTS::BUTTON" rect=(x=48.0 y=40.0 width=203.6 height=16.0 center_x=149.8 center_y=48.0)
+          Label value="Buttons" rect=(x=48.0 y=60.0 width=105.1 height=36.0 center_x=100.5 center_y=78.0)
+            TextRun value="Buttons" rect=(x=48.0 y=60.0 width=105.4 height=36.0 center_x=100.7 center_y=78.0)
+          Label value="Every variant at every size, with icons, loading and disabled states." rect=(x=48.0 y=102.0 width=412.6 height=20.0 center_x=254.3 center_y=112.0)
+            TextRun value="Every variant at every size, with icons, loading and disabled states." rect=(x=48.0 y=102.0 width=412.6 height=20.0 center_x=254.3 center_y=112.0)
         GenericContainer rect=<none>
-          Label value="Application button styles and sizes" rect=(x=620.0 y=124.0 width=280.6 height=22.0 center_x=760.3 center_y=135.0)
-        GenericContainer rect=<none>
-          Label value="XS" rect=(x=370.5 y=233.0 width=21.2 height=19.0 center_x=381.1 center_y=242.5)
-        GenericContainer rect=<none>
-          Label value="SM" rect=(x=562.7 y=233.0 width=25.4 height=19.0 center_x=575.4 center_y=242.5)
-        GenericContainer rect=<none>
-          Label value="MD" rect=(x=774.0 y=233.0 width=26.2 height=19.0 center_x=787.1 center_y=242.5)
-        GenericContainer rect=<none>
-          Label value="LG" rect=(x=1001.8 y=233.0 width=19.4 height=19.0 center_x=1011.5 center_y=242.5)
-        GenericContainer rect=<none>
-          Label value="XL" rect=(x=1241.0 y=233.0 width=19.2 height=19.0 center_x=1250.6 center_y=242.5)
-        GenericContainer rect=<none>
-          Label value="Primary" rect=(x=141.0 y=310.0 width=70.2 height=22.0 center_x=176.1 center_y=321.0)
-        GenericContainer rect=<none>
-          Button name="Button text" rect=(x=337.1 y=305.0 width=82.0 height=32.0 center_x=378.1 center_y=321.0)
-        GenericContainer rect=<none>
-          Button name="Button text" rect=(x=521.1 y=304.0 width=102.0 height=34.0 center_x=572.1 center_y=321.0)
-        GenericContainer rect=<none>
-          Button name="Button text" rect=(x=725.1 y=302.0 width=118.0 height=38.0 center_x=784.1 center_y=321.0)
-        GenericContainer rect=<none>
-          Button name="Button text" rect=(x=945.1 y=301.0 width=128.0 height=40.0 center_x=1009.1 center_y=321.0)
-        GenericContainer rect=<none>
-          Button name="Button text" rect=(x=1172.1 y=299.0 width=152.0 height=44.0 center_x=1248.1 center_y=321.0)
-        GenericContainer rect=<none>
-          Label value="Secondary" rect=(x=141.0 y=412.0 width=95.1 height=22.0 center_x=188.5 center_y=423.0)
-        GenericContainer rect=<none>
-          Button name="Button text" rect=(x=337.1 y=407.0 width=82.0 height=32.0 center_x=378.1 center_y=423.0)
-        GenericContainer rect=<none>
-          Button name="Button text" rect=(x=521.1 y=406.0 width=102.0 height=34.0 center_x=572.1 center_y=423.0)
-        GenericContainer rect=<none>
-          Button name="Button text" rect=(x=725.1 y=404.0 width=118.0 height=38.0 center_x=784.1 center_y=423.0)
-        GenericContainer rect=<none>
-          Button name="Button text" rect=(x=945.1 y=403.0 width=128.0 height=40.0 center_x=1009.1 center_y=423.0)
-        GenericContainer rect=<none>
-          Button name="Button text" rect=(x=1172.1 y=401.0 width=152.0 height=44.0 center_x=1248.1 center_y=423.0)
-        GenericContainer rect=<none>
-          Label value="Soft" rect=(x=141.0 y=514.0 width=37.1 height=22.0 center_x=159.5 center_y=525.0)
-        GenericContainer rect=<none>
-          Button name="Button text" rect=(x=337.1 y=509.0 width=82.0 height=32.0 center_x=378.1 center_y=525.0)
-        GenericContainer rect=<none>
-          Button name="Button text" rect=(x=521.1 y=508.0 width=102.0 height=34.0 center_x=572.1 center_y=525.0)
-        GenericContainer rect=<none>
-          Button name="Button text" rect=(x=725.1 y=506.0 width=118.0 height=38.0 center_x=784.1 center_y=525.0)
-        GenericContainer rect=<none>
-          Button name="Button text" rect=(x=945.1 y=505.0 width=128.0 height=40.0 center_x=1009.1 center_y=525.0)
-        GenericContainer rect=<none>
-          Button name="Button text" rect=(x=1172.1 y=503.0 width=152.0 height=44.0 center_x=1248.1 center_y=525.0)
-        GenericContainer rect=<none>
-          Label value="Danger" rect=(x=141.0 y=610.0 width=63.0 height=22.0 center_x=172.5 center_y=621.0)
-        GenericContainer rect=<none>
-          Button name="Button text" rect=(x=337.1 y=605.0 width=82.0 height=32.0 center_x=378.1 center_y=621.0)
-        GenericContainer rect=<none>
-          Button name="Button text" rect=(x=521.1 y=604.0 width=102.0 height=34.0 center_x=572.1 center_y=621.0)
-        GenericContainer rect=<none>
-          Button name="Button text" rect=(x=725.1 y=602.0 width=118.0 height=38.0 center_x=784.1 center_y=621.0)
-        GenericContainer rect=<none>
-          Button name="Button text" rect=(x=945.1 y=601.0 width=128.0 height=40.0 center_x=1009.1 center_y=621.0)
-        GenericContainer rect=<none>
-          Button name="Button text" rect=(x=1172.1 y=599.0 width=152.0 height=44.0 center_x=1248.1 center_y=621.0)
-        GenericContainer rect=<none>
-          Label value="Icon buttons" rect=(x=140.0 y=749.0 width=110.6 height=22.0 center_x=195.3 center_y=760.0)
-        GenericContainer rect=<none>
-          Button name="Back" rect=(x=156.0 y=813.0 width=44.0 height=44.0 center_x=178.0 center_y=835.0)
-        GenericContainer rect=<none>
-          Button name="Forward" rect=(x=274.0 y=813.0 width=44.0 height=44.0 center_x=296.0 center_y=835.0)
-        GenericContainer rect=<none>
-          Button name="Edit" rect=(x=389.0 y=813.0 width=44.0 height=44.0 center_x=411.0 center_y=835.0)
-        GenericContainer rect=<none>
-          Button name="Delete" rect=(x=503.0 y=813.0 width=44.0 height=44.0 center_x=525.0 center_y=835.0)
-        GenericContainer rect=<none>
-          Button name="More actions" rect=(x=608.0 y=813.0 width=44.0 height=44.0 center_x=630.0 center_y=835.0)
-        GenericContainer rect=<none>
-          Label value="Corner radius" rect=(x=818.0 y=749.0 width=119.9 height=22.0 center_x=878.0 center_y=760.0)
-        GenericContainer rect=<none>
-          Button name="Default" rect=(x=819.2 y=816.0 width=128.5 height=44.0 center_x=883.5 center_y=838.0)
-        GenericContainer rect=<none>
-          Button name="Rounded" rect=(x=1003.4 y=816.0 width=138.5 height=44.0 center_x=1072.7 center_y=838.0)
-        GenericContainer rect=<none>
-          Button name="Pill" rect=(x=1208.4 y=816.0 width=102.2 height=44.0 center_x=1259.6 center_y=838.0)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="sm · 28" rect=(x=180.0 y=184.0 width=38.8 height=16.0 center_x=199.4 center_y=192.0)
+                  TextRun value="sm · 28" rect=(x=180.0 y=184.0 width=38.8 height=16.0 center_x=199.4 center_y=192.0)
+              GenericContainer rect=<none>
+                Label value="md · 32" rect=(x=380.0 y=184.0 width=39.5 height=16.0 center_x=399.7 center_y=192.0)
+                  TextRun value="md · 32" rect=(x=380.0 y=184.0 width=39.5 height=16.0 center_x=399.7 center_y=192.0)
+              GenericContainer rect=<none>
+                Label value="lg · 36" rect=(x=580.0 y=184.0 width=32.0 height=16.0 center_x=596.0 center_y=192.0)
+                  TextRun value="lg · 36" rect=(x=580.0 y=184.0 width=32.0 height=16.0 center_x=596.0 center_y=192.0)
+              GenericContainer rect=<none>
+                Label value="Leading icon" rect=(x=780.0 y=184.0 width=68.4 height=16.0 center_x=814.2 center_y=192.0)
+                  TextRun value="Leading icon" rect=(x=780.0 y=184.0 width=68.4 height=16.0 center_x=814.2 center_y=192.0)
+              GenericContainer rect=<none>
+                Label value="Icon only" rect=(x=980.0 y=184.0 width=49.0 height=16.0 center_x=1004.5 center_y=192.0)
+                  TextRun value="Icon only" rect=(x=980.0 y=184.0 width=49.0 height=16.0 center_x=1004.5 center_y=192.0)
+              GenericContainer rect=<none>
+                Label value="Loading" rect=(x=1180.0 y=184.0 width=42.9 height=16.0 center_x=1201.4 center_y=192.0)
+                  TextRun value="Loading" rect=(x=1180.0 y=184.0 width=42.9 height=16.0 center_x=1201.4 center_y=192.0)
+              GenericContainer rect=<none>
+                Label value="Disabled" rect=(x=1380.0 y=184.0 width=46.0 height=16.0 center_x=1403.0 center_y=192.0)
+                  TextRun value="Disabled" rect=(x=1380.0 y=184.0 width=46.0 height=16.0 center_x=1403.0 center_y=192.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Primary" rect=(x=48.0 y=230.0 width=44.6 height=20.0 center_x=70.3 center_y=240.0)
+                  TextRun value="Primary" rect=(x=48.0 y=230.0 width=44.6 height=20.0 center_x=70.3 center_y=240.0)
+              GenericContainer rect=<none>
+                Button name="Primary sm · 28" rect=(x=180.0 y=226.0 width=86.1 height=28.0 center_x=223.0 center_y=240.0)
+              GenericContainer rect=<none>
+                Button name="Primary md · 32" rect=(x=380.0 y=224.0 width=97.2 height=32.0 center_x=428.6 center_y=240.0)
+              GenericContainer rect=<none>
+                Button name="Primary lg · 36" rect=(x=580.0 y=222.0 width=106.4 height=36.0 center_x=633.2 center_y=240.0)
+              GenericContainer rect=<none>
+                Button name="Primary with icon" rect=(x=780.0 y=224.0 width=97.7 height=32.0 center_x=828.9 center_y=240.0)
+              GenericContainer rect=<none>
+                Button name="Primary icon" rect=(x=980.0 y=224.0 width=32.0 height=32.0 center_x=996.0 center_y=240.0)
+              GenericContainer rect=<none>
+                Button name="Primary loading" rect=(x=1180.0 y=224.0 width=90.0 height=32.0 center_x=1225.0 center_y=240.0)
+              GenericContainer rect=<none>
+                Button name="Primary disabled" state=[disabled] rect=(x=1380.0 y=224.0 width=97.9 height=32.0 center_x=1429.0 center_y=240.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Secondary" rect=(x=48.0 y=278.0 width=62.9 height=20.0 center_x=79.4 center_y=288.0)
+                  TextRun value="Secondary" rect=(x=48.0 y=278.0 width=62.9 height=20.0 center_x=79.4 center_y=288.0)
+              GenericContainer rect=<none>
+                Button name="Secondary sm · 28" rect=(x=180.0 y=274.0 width=86.1 height=28.0 center_x=223.0 center_y=288.0)
+              GenericContainer rect=<none>
+                Button name="Secondary md · 32" rect=(x=380.0 y=272.0 width=97.2 height=32.0 center_x=428.6 center_y=288.0)
+              GenericContainer rect=<none>
+                Button name="Secondary lg · 36" rect=(x=580.0 y=270.0 width=106.4 height=36.0 center_x=633.2 center_y=288.0)
+              GenericContainer rect=<none>
+                Button name="Secondary with icon" rect=(x=780.0 y=272.0 width=97.7 height=32.0 center_x=828.9 center_y=288.0)
+              GenericContainer rect=<none>
+                Button name="Secondary icon" rect=(x=980.0 y=272.0 width=32.0 height=32.0 center_x=996.0 center_y=288.0)
+              GenericContainer rect=<none>
+                Button name="Secondary loading" rect=(x=1180.0 y=272.0 width=90.0 height=32.0 center_x=1225.0 center_y=288.0)
+              GenericContainer rect=<none>
+                Button name="Secondary disabled" state=[disabled] rect=(x=1380.0 y=272.0 width=97.9 height=32.0 center_x=1429.0 center_y=288.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Soft" rect=(x=48.0 y=326.0 width=25.4 height=20.0 center_x=60.7 center_y=336.0)
+                  TextRun value="Soft" rect=(x=48.0 y=326.0 width=25.4 height=20.0 center_x=60.7 center_y=336.0)
+              GenericContainer rect=<none>
+                Button name="Soft sm · 28" rect=(x=180.0 y=322.0 width=86.1 height=28.0 center_x=223.0 center_y=336.0)
+              GenericContainer rect=<none>
+                Button name="Soft md · 32" rect=(x=380.0 y=320.0 width=97.2 height=32.0 center_x=428.6 center_y=336.0)
+              GenericContainer rect=<none>
+                Button name="Soft lg · 36" rect=(x=580.0 y=318.0 width=106.4 height=36.0 center_x=633.2 center_y=336.0)
+              GenericContainer rect=<none>
+                Button name="Soft with icon" rect=(x=780.0 y=320.0 width=97.7 height=32.0 center_x=828.9 center_y=336.0)
+              GenericContainer rect=<none>
+                Button name="Soft icon" rect=(x=980.0 y=320.0 width=32.0 height=32.0 center_x=996.0 center_y=336.0)
+              GenericContainer rect=<none>
+                Button name="Soft loading" rect=(x=1180.0 y=320.0 width=90.0 height=32.0 center_x=1225.0 center_y=336.0)
+              GenericContainer rect=<none>
+                Button name="Soft disabled" state=[disabled] rect=(x=1380.0 y=320.0 width=97.9 height=32.0 center_x=1429.0 center_y=336.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Ghost" rect=(x=48.0 y=374.0 width=35.7 height=20.0 center_x=65.9 center_y=384.0)
+                  TextRun value="Ghost" rect=(x=48.0 y=374.0 width=35.7 height=20.0 center_x=65.9 center_y=384.0)
+              GenericContainer rect=<none>
+                Button name="Ghost sm · 28" rect=(x=180.0 y=370.0 width=86.1 height=28.0 center_x=223.0 center_y=384.0)
+              GenericContainer rect=<none>
+                Button name="Ghost md · 32" rect=(x=380.0 y=368.0 width=97.2 height=32.0 center_x=428.6 center_y=384.0)
+              GenericContainer rect=<none>
+                Button name="Ghost lg · 36" rect=(x=580.0 y=366.0 width=106.4 height=36.0 center_x=633.2 center_y=384.0)
+              GenericContainer rect=<none>
+                Button name="Ghost with icon" rect=(x=780.0 y=368.0 width=97.7 height=32.0 center_x=828.9 center_y=384.0)
+              GenericContainer rect=<none>
+                Button name="Ghost icon" rect=(x=980.0 y=368.0 width=32.0 height=32.0 center_x=996.0 center_y=384.0)
+              GenericContainer rect=<none>
+                Button name="Ghost loading" rect=(x=1180.0 y=368.0 width=90.0 height=32.0 center_x=1225.0 center_y=384.0)
+              GenericContainer rect=<none>
+                Button name="Ghost disabled" state=[disabled] rect=(x=1380.0 y=368.0 width=97.9 height=32.0 center_x=1429.0 center_y=384.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Danger" rect=(x=48.0 y=422.0 width=42.3 height=20.0 center_x=69.2 center_y=432.0)
+                  TextRun value="Danger" rect=(x=48.0 y=422.0 width=42.3 height=20.0 center_x=69.2 center_y=432.0)
+              GenericContainer rect=<none>
+                Button name="Danger sm · 28" rect=(x=180.0 y=418.0 width=86.1 height=28.0 center_x=223.0 center_y=432.0)
+              GenericContainer rect=<none>
+                Button name="Danger md · 32" rect=(x=380.0 y=416.0 width=97.2 height=32.0 center_x=428.6 center_y=432.0)
+              GenericContainer rect=<none>
+                Button name="Danger lg · 36" rect=(x=580.0 y=414.0 width=106.4 height=36.0 center_x=633.2 center_y=432.0)
+              GenericContainer rect=<none>
+                Button name="Danger with icon" rect=(x=780.0 y=416.0 width=97.7 height=32.0 center_x=828.9 center_y=432.0)
+              GenericContainer rect=<none>
+                Button name="Danger icon" rect=(x=980.0 y=416.0 width=32.0 height=32.0 center_x=996.0 center_y=432.0)
+              GenericContainer rect=<none>
+                Button name="Danger loading" rect=(x=1180.0 y=416.0 width=90.0 height=32.0 center_x=1225.0 center_y=432.0)
+              GenericContainer rect=<none>
+                Button name="Danger disabled" state=[disabled] rect=(x=1380.0 y=416.0 width=97.9 height=32.0 center_x=1429.0 center_y=432.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Danger quiet" rect=(x=48.0 y=470.0 width=75.6 height=20.0 center_x=85.8 center_y=480.0)
+                  TextRun value="Danger quiet" rect=(x=48.0 y=470.0 width=75.6 height=20.0 center_x=85.8 center_y=480.0)
+              GenericContainer rect=<none>
+                Button name="Danger quiet sm · 28" rect=(x=180.0 y=466.0 width=86.1 height=28.0 center_x=223.0 center_y=480.0)
+              GenericContainer rect=<none>
+                Button name="Danger quiet md · 32" rect=(x=380.0 y=464.0 width=97.2 height=32.0 center_x=428.6 center_y=480.0)
+              GenericContainer rect=<none>
+                Button name="Danger quiet lg · 36" rect=(x=580.0 y=462.0 width=106.4 height=36.0 center_x=633.2 center_y=480.0)
+              GenericContainer rect=<none>
+                Button name="Danger quiet with icon" rect=(x=780.0 y=464.0 width=97.7 height=32.0 center_x=828.9 center_y=480.0)
+              GenericContainer rect=<none>
+                Button name="Danger quiet icon" rect=(x=980.0 y=464.0 width=32.0 height=32.0 center_x=996.0 center_y=480.0)
+              GenericContainer rect=<none>
+                Button name="Danger quiet loading" rect=(x=1180.0 y=464.0 width=90.0 height=32.0 center_x=1225.0 center_y=480.0)
+              GenericContainer rect=<none>
+                Button name="Danger quiet disabled" state=[disabled] rect=(x=1380.0 y=464.0 width=97.9 height=32.0 center_x=1429.0 center_y=480.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Link" rect=(x=48.0 y=518.0 width=23.7 height=20.0 center_x=59.9 center_y=528.0)
+                  TextRun value="Link" rect=(x=48.0 y=518.0 width=23.7 height=20.0 center_x=59.9 center_y=528.0)
+              GenericContainer rect=<none>
+                Button name="Link sm · 28" rect=(x=180.0 y=520.0 width=62.1 height=16.0 center_x=211.0 center_y=528.0)
+              GenericContainer rect=<none>
+                Button name="Link md · 32" rect=(x=380.0 y=518.0 width=67.2 height=20.0 center_x=413.6 center_y=528.0)
+              GenericContainer rect=<none>
+                Button name="Link lg · 36" rect=(x=580.0 y=518.0 width=72.4 height=20.0 center_x=616.2 center_y=528.0)
+              GenericContainer rect=<none>
+                Button name="Link with icon" rect=(x=780.0 y=518.0 width=67.7 height=20.0 center_x=813.9 center_y=528.0)
+              GenericContainer rect=<none>
+                Button name="Link icon" rect=(x=980.0 y=520.0 width=16.0 height=16.0 center_x=988.0 center_y=528.0)
+              GenericContainer rect=<none>
+                Button name="Link loading" rect=(x=1180.0 y=518.0 width=60.0 height=20.0 center_x=1210.0 center_y=528.0)
+              GenericContainer rect=<none>
+                Button name="Link disabled" state=[disabled] rect=(x=1380.0 y=518.0 width=67.9 height=20.0 center_x=1414.0 center_y=528.0)

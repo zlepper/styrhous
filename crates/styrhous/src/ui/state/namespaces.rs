@@ -274,7 +274,7 @@ impl UiState {
         let desired = cluster
             .selected_api_resource
             .as_ref()
-            .filter(|resource| resource.group == "core" && resource.kind == "Pod")
+            .filter(|resource| resource.is_pod())
             .filter(|_| cluster.pod_metrics_api_available)
             .map(|_| cluster.namespace_scope().iter().cloned().collect())
             .unwrap_or_default();
@@ -307,7 +307,7 @@ impl UiState {
         let desired = cluster
             .selected_api_resource
             .as_ref()
-            .is_some_and(|resource| resource.group == "core" && resource.kind == "Node")
+            .is_some_and(|resource| resource.is_node())
             && cluster.node_metrics_api_available;
         if desired == cluster.node_metrics_active {
             return;

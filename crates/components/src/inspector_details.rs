@@ -2,15 +2,12 @@
 
 use std::borrow::Cow;
 
-use egui::{Align, Id, Label, Layout, Rect, RichText, Ui, UiBuilder, Vec2, WidgetInfo, WidgetType};
+use egui::{Align, Id, Label, Layout, Rect, RichText, Ui, UiBuilder, WidgetInfo, WidgetType};
 
 use crate::PointingHand;
 use crate::design::theme::{ThemeExt, Tone};
 use crate::design::{space, type_scale};
-use crate::workspace::show_card;
-
-const MIN_COLUMN_WIDTH: f32 = 200.0;
-const COPY_ICON_SIZE: f32 = 14.0;
+use crate::property_grid::{Copyable, FREE_TEXT_MAX_LINES, Property, PropertyGrid};
 
 #[derive(Clone, Debug)]
 pub enum DetailValue<'a> {
@@ -37,6 +34,7 @@ pub struct DetailCell<'a> {
     pub label: Cow<'a, str>,
     pub value: DetailValue<'a>,
     copy_text: Option<Cow<'a, str>>,
+    free_text: bool,
 }
 
 impl<'a> DetailCell<'a> {
@@ -45,15 +43,12 @@ impl<'a> DetailCell<'a> {
             label: label.into(),
             value: value.into(),
             copy_text: None,
+            free_text: false,
         }
     }
 
     pub fn unavailable(label: impl Into<Cow<'a, str>>) -> Self {
-        Self {
-            label: label.into(),
-            value: DetailValue::Unavailable,
-            copy_text: None,
-        }
+        Self::new(label, DetailValue::Unavailable)
     }
 
     pub fn status(
@@ -61,25 +56,31 @@ impl<'a> DetailCell<'a> {
         text: impl Into<Cow<'a, str>>,
         tone: Tone,
     ) -> Self {
-        Self {
-            label: label.into(),
-            value: DetailValue::Status {
+        Self::new(
+            label,
+            DetailValue::Status {
                 text: text.into(),
                 tone,
             },
-            copy_text: None,
-        }
+        )
     }
 
     pub fn link(label: impl Into<Cow<'a, str>>, text: impl Into<Cow<'a, str>>, action: Id) -> Self {
-        Self {
-            label: label.into(),
-            value: DetailValue::Link {
+        Self::new(
+            label,
+            DetailValue::Link {
                 text: text.into(),
                 action,
             },
-            copy_text: None,
-        }
+        )
+    }
+
+    /// Wrap a free-text value (a description) onto up to
+    /// [`crate::property_grid::FREE_TEXT_MAX_LINES`] lines instead of eliding
+    /// it on one.
+    pub fn free_text(mut self) -> Self {
+        self.free_text = true;
+        self
     }
 
     pub fn copyable(mut self) -> Self {
@@ -253,8 +254,8 @@ impl InspectorDetails {
                 .color(egui::Color32::TRANSPARENT),
         ));
         // The title sits in the border, so this card keeps a visible one.
-        let frame = crate::WorkspaceCard::new()
-            .margin(space::S12 as i8)
+        let frame = crate::Card::new()
+            .padding(space::S12 as i8)
             .stroke(crate::design::stroke::divider(&ui.tokens()))
             .show_inner(ui, |ui| show_property_rows(ui, rows, &mut response));
         show_group_title(ui, frame.response.rect, title);

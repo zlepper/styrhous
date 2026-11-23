@@ -32,12 +32,12 @@ fn pod_resource_table_multi_container_logs_menu_snapshot() {
         .click();
     harness.run();
 
-    harness.get_by_label("View logs ⏵");
+    harness.get_by_label("View logs");
     harness.ui_harness(
         "resource_tables/pod_resource_table_multi_container_logs_menu_snapshot/multi_container_logs_menu",
     );
 
-    harness.get_by_label("View logs ⏵").click();
+    harness.get_by_label("View logs").click();
     harness.run();
     harness.get_by_label("coredns — Container");
     harness.get_by_label("dns-autoscaler — Container");
@@ -61,7 +61,7 @@ fn pod_resource_table_multi_container_logs_context_submenu_snapshot() {
         .center();
     secondary_click(&mut harness, row_position);
     harness.run();
-    harness.get_by_label("View logs ⏵").click();
+    harness.get_by_label("View logs").click();
     harness.run();
 
     harness.get_by_label("coredns — Container");
@@ -74,22 +74,18 @@ fn pod_resource_table_multi_container_logs_context_submenu_snapshot() {
 #[test]
 fn resource_table_multi_selection_confirms_and_dispatches_bulk_delete() {
     let mut harness = application_harness::<MockWorker>();
-    harness.state_mut().ui_state = oracle_resource_table_state();
-    harness.run();
-    harness.get_by_label("Apps & Containers").click_accesskit();
-    harness.run();
+    show_apps_resource_table(&mut harness);
 
-    harness.get_by_label("Select row 1").click_accesskit();
-    harness.run();
-    harness.get_by_label("Select row 2").click_accesskit();
-    harness.run();
+    // The bulk bar appears with the first selection and moves the rows down;
+    // each click finds its row where it is now.
+    click_label(&mut harness, "Select row 1");
+    click_label(&mut harness, "Select row 2");
     harness.get_by_label("2 selected");
     harness.ui_harness(
         "resource_tables/resource_table_multi_selection_confirms_and_dispatches_bulk_delete/selected",
     );
 
-    harness.get_by_label("Delete selected").click_accesskit();
-    harness.run();
+    click_label(&mut harness, "Delete selected");
     harness.get_by_label("Delete 2 resources?");
     harness.ui_harness(
         "resource_tables/resource_table_multi_selection_confirms_and_dispatches_bulk_delete/confirmation",
@@ -106,8 +102,7 @@ fn resource_table_multi_selection_confirms_and_dispatches_bulk_delete() {
         .unwrap()
         .confirmation_available_at = std::time::Instant::now();
     harness.run();
-    harness.get_by_label("Delete 2 resources").click_accesskit();
-    harness.run();
+    click_label(&mut harness, "Delete 2 resources");
 
     let commands = &harness.state().worker.commands;
     assert_eq!(commands.len(), 2);
@@ -325,7 +320,7 @@ fn resource_table_row_context_menu_snapshot() {
     secondary_click(&mut harness, click_position);
     harness.run();
 
-    harness.get_by_label("Edit");
+    harness.get_by_label("Edit YAML");
     harness.ui_harness(
         HarnessSnapshotOptions::strict("resource_tables/resource_table_row_context_menu_snapshot/oracle_resource_table_row_context_actions")
             .max_failed_pixels(2),
@@ -347,7 +342,7 @@ fn resource_table_row_context_menu_opens_when_right_clicking_resource_text() {
     secondary_click(&mut harness, text_position);
     harness.run();
 
-    harness.get_by_label("Edit");
+    harness.get_by_label("Edit YAML");
 }
 
 #[test]
@@ -366,7 +361,7 @@ fn context_menu_action_does_not_activate_the_overlapped_resource_button() {
     secondary_click(&mut harness, resource_position);
     harness.run();
 
-    let edit = harness.get_by_label("Edit");
+    let edit = harness.get_by_label("Edit YAML");
     let overlapped_resource = harness
         .get_by_label("Open details for coredns-66bc5c9577-z9gt9")
         .rect();
@@ -392,5 +387,58 @@ fn context_menu_action_does_not_activate_the_overlapped_resource_button() {
             .iter()
             .any(|command| command_is::<StartResourceDetailWatch>(command).is_some()),
         "the context-menu click must not start an underlying detail watch"
+    );
+}
+
+#[test]
+fn the_bulk_bar_opens_the_selected_pods_logs_interleaved_and_clears_the_selection() {
+    let (state, _) = multi_container_pod_table_state();
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = state;
+    harness.run();
+    click_label(&mut harness, "Apps & Containers");
+
+    click_label(&mut harness, "Select row 1");
+    click_label(&mut harness, "Select row 2");
+    harness.get_by_label("2 selected");
+    click_label(&mut harness, "Clear selection");
+    assert!(harness.query_by_label("Delete selected").is_none());
+    assert!(
+        harness.state().ui_state.clusters[&2]
+            .resources
+            .resource_selections
+            .values()
+            .all(HashSet::is_empty),
+        "the selection is cleared"
+    );
+
+    click_label(&mut harness, "Select row 1");
+    click_label(&mut harness, "Select row 2");
+    click_label(&mut harness, "View interleaved logs");
+    assert_eq!(
+        harness.state().ui_state.log_windows.len(),
+        1,
+        "the selected Pods' containers open in one log window"
+    );
+}
+
+#[test]
+fn the_bulk_bar_counts_selected_rows_a_search_hides() {
+    let mut harness = application_harness::<MockWorker>();
+    show_apps_resource_table(&mut harness);
+    click_label(&mut harness, "Select row 1");
+    click_label(&mut harness, "Select row 2");
+
+    type_text(&mut harness, "Search resources", "z9gt9");
+
+    harness.get_by_label("2 selected");
+    harness.get_by_label("1 selected hidden by search");
+    assert!(
+        harness
+            .get_by_label("Selected rows")
+            .accesskit_node()
+            .toggled()
+            == Some(egui::accesskit::Toggled::True),
+        "every row shown is selected"
     );
 }

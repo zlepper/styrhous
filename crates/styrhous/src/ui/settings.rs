@@ -16,31 +16,24 @@ use components::design::stroke;
 use components::design::theme::{Theme, ThemeExt};
 use components::design::{radius, space, type_scale};
 use components::{
-    ButtonSize, ButtonVariant, PointingHand, ReorderHandle, ReorderableTable, TailwindButton,
-    TailwindCombobox, TailwindTextInput, WorkspaceCard, icons,
+    Button, ButtonSize, ButtonVariant, Card, Combobox, FieldSize, FormField, Radio, RadioCard,
+    ReorderableTable, TextInput, icons,
 };
-use egui::AtomExt as _;
 
-const FOOTER_HEIGHT: f32 = 52.0;
-const CHOICE_CONTENT_MIN_HEIGHT: f32 = 44.0;
-const DEBUG_IMAGE_TABLE_HEADER_HEIGHT: f32 = 40.0;
-const DEBUG_IMAGE_TABLE_ROW_HEIGHT: f32 = 44.0;
-const DEBUG_IMAGE_REORDER_COLUMN_WIDTH: f32 = 44.0;
+/// Room the settings blades leave under their form for the blade footer.
+const FOOTER_HEIGHT: f32 = components::BLADE_BODY_FOOTER + space::S16;
 const DEBUG_IMAGE_NAME_COLUMN_WIDTH: f32 = 170.0;
 const DEBUG_IMAGE_PROFILE_COLUMN_WIDTH: f32 = 170.0;
-const DEBUG_IMAGE_ACTIONS_COLUMN_WIDTH: f32 = 52.0;
 const DISCOVERY_ROW_HEIGHT: f32 = 70.0;
 const DISCOVERY_TAGS_EXTRA_HEIGHT: f32 = 18.0;
 const DISCOVERY_COMPACT_ROW_HEIGHT: f32 = 54.0;
 const AWS_PROFILE_ROW_HEIGHT: f32 = 32.0;
 const DISCOVERY_NAME_COLUMN_WIDTH: f32 = 148.0;
-const DISCOVERY_METADATA_COLUMN_WIDTH: f32 = 292.0;
+/// The flexible column: the blade body (720 less 24 points of padding a side)
+/// less the fixed columns.
+const DISCOVERY_METADATA_COLUMN_WIDTH: f32 = 269.0;
 const DISCOVERY_LOCATION_COLUMN_WIDTH: f32 = 94.0;
 const DISCOVERY_ACTION_COLUMN_WIDTH: f32 = 161.0;
-const DISCOVERY_HEADER_TITLE_OFFSET: f32 = 18.0;
-const SETTINGS_DESTINATION_CONTENT_HEIGHT: f32 = 102.0;
-const SETTINGS_DESTINATION_ICON_TILE_SIZE: f32 = 64.0;
-const SETTINGS_DESTINATION_CHEVRON_SIZE: f32 = 24.0;
 
 mod contexts;
 mod debug_images;

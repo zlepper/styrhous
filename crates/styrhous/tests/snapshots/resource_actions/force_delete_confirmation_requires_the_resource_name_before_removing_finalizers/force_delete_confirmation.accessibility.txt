@@ -16,47 +16,45 @@ Window state=[focused] rect=<none>
             Image rect=(x=20.0 y=976.0 width=28.0 height=28.0 center_x=34.0 center_y=990.0)
     GenericContainer rect=<none>
       GenericContainer rect=<none>
+        Label value="dev" rect=(x=82.0 y=22.0 width=35.4 height=28.0 center_x=99.7 center_y=36.0)
+          TextRun value="dev" rect=(x=82.0 y=22.0 width=35.4 height=28.0 center_x=99.7 center_y=36.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
-            GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="dev" rect=(x=92.0 y=29.0 width=35.4 height=24.0 center_x=109.7 center_y=41.0)
-                  TextRun value="dev" rect=(x=92.0 y=29.0 width=35.4 height=24.0 center_x=109.7 center_y=41.0)
     GenericContainer rect=<none>
       GenericContainer rect=<none>
-        GenericContainer rect=<none>
-          GenericContainer rect=<none>
-            GenericContainer rect=<none>
-              Label value="Choose a cluster" rect=(x=883.5 y=490.0 width=128.9 height=19.0 center_x=948.0 center_y=499.5)
-                TextRun value="Choose a cluster" rect=(x=884.0 y=490.0 width=128.9 height=19.0 center_x=948.5 center_y=499.5)
-              Label value="Select a Kubernetes context from the cluster rail to begin exploring." rect=(x=737.1 y=520.0 width=421.9 height=17.0 center_x=948.0 center_y=528.5)
-                TextRun value="Select a Kubernetes context from the cluster rail to begin exploring." rect=(x=737.0 y=520.0 width=421.9 height=17.0 center_x=948.0 center_y=528.5)
+        Label value="Choose a cluster" rect=(x=898.7 y=508.0 width=98.6 height=20.0 center_x=948.0 center_y=518.0)
+          TextRun value="Choose a cluster" rect=(x=898.7 y=508.0 width=98.6 height=20.0 center_x=948.0 center_y=518.0)
+        Label value="Select a Kubernetes context from the cluster rail to begin exploring." rect=(x=795.0 y=532.0 width=306.7 height=32.0 center_x=948.3 center_y=548.0)
+          TextRun value="Select a Kubernetes context from the cluster rail to begin " rect=(x=795.0 y=532.0 width=306.7 height=16.0 center_x=948.3 center_y=540.0)
+          TextRun value="exploring." rect=(x=922.0 y=548.0 width=51.5 height=16.0 center_x=947.8 center_y=556.0)
   GenericContainer rect=<none>
     GenericContainer rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
-        Label value="DANGEROUS: REMOVE FINALIZERS" rect=(x=528.0 y=305.0 width=199.3 height=14.0 center_x=627.6 center_y=312.0)
-          TextRun value="DANGEROUS: REMOVE FINALIZERS" rect=(x=528.0 y=305.0 width=199.3 height=14.0 center_x=627.6 center_y=312.0)
-        Label value="Force delete resource?" rect=(x=528.0 y=330.0 width=283.4 height=31.0 center_x=669.7 center_y=345.5)
-          TextRun value="Force delete resource?" rect=(x=528.0 y=330.0 width=283.4 height=31.0 center_x=669.7 center_y=345.5)
-        Label value="This permanently removes every finalizer from this deleting resource." rect=(x=528.0 y=376.0 width=430.1 height=17.0 center_x=743.0 center_y=384.5)
-          TextRun value="This permanently removes every finalizer from this deleting resource." rect=(x=528.0 y=376.0 width=430.1 height=17.0 center_x=743.0 center_y=384.5)
-        GenericContainer rect=<none>
-          Label value="This bypasses controller cleanup" rect=(x=541.0 y=425.0 width=206.7 height=17.0 center_x=644.4 center_y=433.5)
-            TextRun value="This bypasses controller cleanup" rect=(x=541.0 y=425.0 width=206.7 height=17.0 center_x=644.4 center_y=433.5)
-          Label value="It can orphan external infrastructure, leak data, and corrupt application state. Only continue if you understand why the controllers cannot finish deletion." rect=(x=541.0 y=449.0 width=450.5 height=51.0 center_x=766.2 center_y=474.5)
-            TextRun value="It can orphan external infrastructure, leak data, and corrupt application " rect=(x=541.0 y=449.0 width=442.5 height=17.0 center_x=762.2 center_y=457.5)
-            TextRun value="state. Only continue if you understand why the controllers cannot finish " rect=(x=541.0 y=466.0 width=450.5 height=17.0 center_x=766.2 center_y=474.5)
-            TextRun value="deletion." rect=(x=541.0 y=483.0 width=53.9 height=17.0 center_x=568.0 center_y=491.5)
+        AlertDialog name="Force delete resource?" rect=(x=548.0 y=323.0 width=440.0 height=379.0 center_x=768.0 center_y=512.5)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="• example.com/cleanup" rect=(x=541.0 y=511.0 width=163.8 height=17.0 center_x=622.9 center_y=519.5)
-                TextRun value="• example.com/cleanup" rect=(x=541.0 y=511.0 width=163.8 height=17.0 center_x=622.9 center_y=519.5)
-        Label value="Type important-config to acknowledge that you are bypassing cleanup:" rect=(x=528.0 y=560.0 width=383.0 height=14.0 center_x=719.5 center_y=567.0)
-          TextRun value="Type important-config to acknowledge that you are bypassing cleanup:" rect=(x=528.0 y=560.0 width=383.0 height=14.0 center_x=719.5 center_y=567.0)
-        TextInput name="Type important-config to acknowledge that you are bypassing cleanup:" value="wrong-name" rect=(x=528.0 y=581.0 width=480.0 height=28.0 center_x=768.0 center_y=595.0)
-          TextRun value="wrong-name" rect=(x=540.0 y=587.0 width=74.5 height=16.0 center_x=577.2 center_y=595.0)
-        GenericContainer rect=<none>
+              Label value="Force delete resource?" rect=(x=628.0 y=347.0 width=176.6 height=24.0 center_x=716.3 center_y=359.0)
+                TextRun value="Force delete resource?" rect=(x=628.0 y=347.0 width=176.6 height=24.0 center_x=716.3 center_y=359.0)
+              Label value="Removes every finalizer from important-config." rect=(x=628.0 y=375.0 width=298.8 height=20.0 center_x=777.4 center_y=385.0)
+                TextRun value="Removes every finalizer from important-config." rect=(x=628.0 y=375.0 width=298.8 height=20.0 center_x=777.4 center_y=385.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="This bypasses controller cleanup" rect=(x=614.0 y=423.0 width=192.0 height=20.0 center_x=710.0 center_y=433.0)
+                  TextRun value="This bypasses controller cleanup" rect=(x=614.0 y=423.0 width=192.0 height=20.0 center_x=710.0 center_y=433.0)
+                Label value="Can orphan external infrastructure, leak data and corrupt application state. Only continue if you understand why the controllers cannot finish deletion." rect=(x=614.0 y=445.0 width=316.0 height=60.0 center_x=772.0 center_y=475.0)
+                  TextRun value="Can orphan external infrastructure, leak data and corrupt " rect=(x=614.0 y=445.0 width=306.0 height=20.0 center_x=767.0 center_y=455.0)
+                  TextRun value="application state. Only continue if you understand why the " rect=(x=614.0 y=465.0 width=316.0 height=20.0 center_x=772.0 center_y=475.0)
+                  TextRun value="controllers cannot finish deletion." rect=(x=614.0 y=485.0 width=178.5 height=20.0 center_x=703.2 center_y=495.0)
+                GenericContainer rect=<none>
+                  Label value="example.com/cleanup" rect=(x=614.0 y=513.0 width=149.1 height=22.0 center_x=688.5 center_y=524.0)
+                    TextRun value="example.com/cleanup" rect=(x=623.0 y=516.0 width=131.1 height=16.0 center_x=688.5 center_y=524.0)
+              GenericContainer rect=<none>
+                Label value="Type important-config to confirm" rect=(x=572.0 y=559.0 width=184.1 height=16.0 center_x=664.0 center_y=567.0)
+                  TextRun value="Type important-config to confirm" rect=(x=572.0 y=559.0 width=184.1 height=16.0 center_x=664.0 center_y=567.0)
+                GenericContainer rect=<none>
+                  TextInput name="Type important-config to confirm" value="wrong-name" rect=(x=572.0 y=581.0 width=392.0 height=32.0 center_x=768.0 center_y=597.0)
+                    TextRun value="wrong-name" rect=(x=586.0 y=588.0 width=78.0 height=20.0 center_x=625.0 center_y=598.0)
           GenericContainer rect=<none>
-            Button name="Remove finalizers" state=[disabled] rect=(x=853.9 y=669.5 width=154.1 height=38.0 center_x=931.0 center_y=688.5)
-          Button name="Cancel" rect=(x=753.7 y=669.5 width=92.2 height=38.0 center_x=799.8 center_y=688.5)
+            Button name="Remove finalizers" state=[disabled] rect=(x=829.9 y=654.0 width=134.1 height=32.0 center_x=897.0 center_y=670.0)
+            Button name="Cancel" rect=(x=751.1 y=654.0 width=70.8 height=32.0 center_x=786.5 center_y=670.0)

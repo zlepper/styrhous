@@ -1,0 +1,33 @@
+viewport: width=480.0 height=200.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Label value="Name" rect=(x=40.0 y=40.0 width=32.0 height=16.0 center_x=56.0 center_y=48.0)
+              TextRun value="NAME" rect=(x=40.0 y=40.0 width=30.9 height=16.0 center_x=55.5 center_y=48.0)
+            GenericContainer rect=<none>
+              Label value="coredns-66bc5c9577-ffw2s-with-a-very-long-suffix" rect=(x=40.0 y=56.0 width=187.0 height=20.0 center_x=133.5 center_y=66.0)
+                TextRun value="coredns-66bc5c9577-ffw2s-w…" rect=(x=40.0 y=58.0 width=187.0 height=20.0 center_x=133.5 center_y=68.0)
+            Label value="Node" rect=(x=252.0 y=40.0 width=31.2 height=16.0 center_x=267.6 center_y=48.0)
+              TextRun value="NODE" rect=(x=252.0 y=40.0 width=30.1 height=16.0 center_x=267.1 center_y=48.0)
+            GenericContainer rect=<none>
+              Link name="Open details for Node kind-control-plane" rect=(x=252.0 y=56.0 width=108.1 height=20.0 center_x=306.0 center_y=66.0)
+                TextRun value="kind-control-plane" rect=(x=252.0 y=56.0 width=108.1 height=20.0 center_x=306.0 center_y=66.0)
+            Label value="Pod IP" rect=(x=40.0 y=92.0 width=39.4 height=16.0 center_x=59.7 center_y=100.0)
+              TextRun value="POD IP" rect=(x=40.0 y=92.0 width=38.3 height=16.0 center_x=59.2 center_y=100.0)
+            GenericContainer rect=<none>
+              Label value="Unavailable" rect=(x=40.0 y=108.0 width=66.3 height=20.0 center_x=73.1 center_y=118.0)
+                TextRun value="Unavailable" rect=(x=40.0 y=110.0 width=66.3 height=20.0 center_x=73.1 center_y=120.0)
+            Label value="Status" rect=(x=252.0 y=92.0 width=41.9 height=16.0 center_x=272.9 center_y=100.0)
+              TextRun value="STATUS" rect=(x=252.0 y=92.0 width=40.8 height=16.0 center_x=272.4 center_y=100.0)
+            GenericContainer rect=<none>
+              Label value="Pending" rect=(x=252.0 y=108.0 width=61.3 height=20.0 center_x=282.6 center_y=118.0)
+                TextRun value="Pending" rect=(x=266.0 y=108.0 width=47.3 height=20.0 center_x=289.6 center_y=118.0)
+            Label value="Image" rect=(x=40.0 y=144.0 width=37.0 height=16.0 center_x=58.5 center_y=152.0)
+              TextRun value="IMAGE" rect=(x=40.0 y=144.0 width=35.9 height=16.0 center_x=57.9 center_y=152.0)
+            GenericContainer rect=<none>
+              Button name="Copy Image" rect=(x=40.0 y=160.0 width=188.0 height=20.0 center_x=134.0 center_y=170.0)
+                Label value="registry.k8s.io/coredns/coredns:v1.11.1" rect=(x=40.0 y=160.0 width=186.2 height=20.0 center_x=133.1 center_y=170.0)
+                  TextRun value="registry.k8s.io/coredns/c…" rect=(x=40.0 y=160.0 width=186.2 height=20.0 center_x=133.1 center_y=170.0)

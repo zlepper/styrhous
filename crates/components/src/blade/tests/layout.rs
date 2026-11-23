@@ -84,7 +84,6 @@ fn drawn_blade_frames(harness: &Harness<'_>) -> Vec<Rect> {
     let min_height =
         height(harness.ctx.content_rect()) * HISTORY_SCALES[HISTORY_SCALES.len() - 1] - 1.0;
     let tokens = harness.ctx.tokens();
-    let ring = tokens.shadow.overlay.ring.map(|ring| ring.color);
     let mut frames = Vec::new();
     for clipped in &harness.output().shapes {
         let mut flat = Vec::new();
@@ -92,7 +91,6 @@ fn drawn_blade_frames(harness: &Harness<'_>) -> Vec<Rect> {
         for shape in flat {
             if let egui::Shape::Rect(rect) = shape
                 && rect.fill == tokens.surface.panel
-                && Some(rect.stroke.color) == ring
                 && rect.rect.width() > 100.0
                 && rect.rect.height() >= min_height
             {
@@ -377,4 +375,63 @@ fn tiny_viewports_do_not_panic() {
         let (_, mut harness) = wide_harness("blade-tiny-viewport", &["First", "Second"], size);
         harness.run();
     }
+}
+
+/// Blades are 720 points wide, at most half the window but never under 560,
+/// and never wider than the window allows.
+#[test]
+fn blade_width_follows_the_window() {
+    let viewport = |width: f32| Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, 900.0));
+    assert_eq!(blade_width(viewport(2000.0)), WIDTH);
+    assert_eq!(blade_width(viewport(1200.0)), 600.0);
+    assert_eq!(blade_width(viewport(1000.0)), size::BLADE_MIN);
+    assert_eq!(blade_width(viewport(500.0)), 500.0 - 2.0 * INSET);
+}
+
+/// The body footer runs to the blade's edges and bottom, its buttons centred
+/// in it with the first one on the right.
+#[test]
+fn the_body_footer_spans_the_bottom_of_the_blade() {
+    let mut navigator = BladeNavigator::new(TestBlade {
+        id: 1,
+        title: "Edit",
+    });
+    navigator.clear_transition();
+    let navigator = Rc::new(RefCell::new(navigator));
+    let navigator_for_ui = Rc::clone(&navigator);
+    let stack = BladeStack::new("blade-body-footer");
+    let mut harness = Harness::new_ui(move |ui| {
+        stack.show_with_title(
+            ui.ctx(),
+            &mut navigator_for_ui.borrow_mut(),
+            |blade| blade.title.to_owned(),
+            |ui, _, _| {
+                chrome::blade_body_footer(ui, |ui| {
+                    crate::Button::primary("Save changes").show(ui);
+                    crate::Button::secondary("Cancel").show(ui);
+                });
+            },
+        );
+    });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+
+    let viewport = harness.ctx.content_rect();
+    let blade = transformed_rect(viewport, active_transform(viewport));
+    let save = harness.get_by_label("Save changes").rect();
+    let cancel = harness.get_by_label("Cancel").rect();
+    let footer_top = blade.bottom() - size::BLADE_FOOTER;
+    let row_centre = (footer_top + size::HAIRLINE + blade.bottom()) / 2.0;
+    assert!(
+        (save.center().y - row_centre).abs() <= 0.5,
+        "{save:?} in {blade:?}"
+    );
+    assert!(
+        (save.right() - (blade.right() - space::S24)).abs() <= 0.5,
+        "{save:?}"
+    );
+    assert!(
+        cancel.right() < save.left(),
+        "the primary action is rightmost"
+    );
 }

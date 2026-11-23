@@ -139,7 +139,7 @@ fn context_editor_scrolls_only_its_form_when_needed() {
     let default_spacing = harness.ctx.global_style().spacing.item_spacing.y;
     for (height, item_spacing, form_should_scroll) in [
         (1024.0, default_spacing, false),
-        (800.0, default_spacing, false),
+        (900.0, default_spacing, false),
         (1024.0, default_spacing * 3.0, false),
         (600.0, default_spacing, true),
     ] {
@@ -187,8 +187,9 @@ fn context_editor_scrolls_only_its_form_when_needed() {
         assert_eq!(harness.get_by_label("Edit context").rect(), header);
         assert_eq!(harness.get_by_label("Save changes").rect(), save);
         assert!(
-            save.bottom() <= height - 32.0,
-            "Footer must fit inside blade padding: {save:?}"
+            save.bottom()
+                <= height - components::design::space::BLADE_INSET - components::design::space::S12,
+            "Footer actions must sit inside the blade footer: {save:?}"
         );
         let scrolled_badge = harness
             .get_by_role_and_label(egui::accesskit::Role::TextInput, "Badge")

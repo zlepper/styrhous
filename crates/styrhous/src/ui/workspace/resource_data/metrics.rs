@@ -13,7 +13,7 @@ pub(in crate::ui::workspace) fn resolved_resource_cell(
         return None;
     }
     let is_cpu = column_id == CPU_COLUMN;
-    if api_resource.group == "core" && api_resource.kind == "Node" {
+    if api_resource.is_node() {
         if !metrics.node_metrics_api_available || metrics.node_metrics.error.is_some() {
             return Some(CellValue::Unavailable);
         }
@@ -23,7 +23,7 @@ pub(in crate::ui::workspace) fn resolved_resource_cell(
             .get(&resource.name)
             .map(|usage| usage_cell(is_cpu, usage.cpu_nanocores, usage.memory_bytes));
     }
-    if api_resource.group != "core" || api_resource.kind != "Pod" {
+    if !api_resource.is_pod() {
         return None;
     }
     let namespace = resource.namespace.as_deref()?;

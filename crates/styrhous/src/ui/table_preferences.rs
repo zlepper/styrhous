@@ -3,7 +3,8 @@ use components::SortDirection;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-const MIN_COLUMN_WIDTH: f32 = 80.0;
+// Persisted widths never go below the narrowest a table column can be resized to.
+use components::design::size::TABLE_MIN_COLUMN;
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub(super) struct ResourceTableKey {
@@ -52,6 +53,8 @@ pub(super) struct TableColumnDefinition {
     pub(super) label: String,
     pub(super) default_width: f32,
     pub(super) sortable: bool,
+    /// Holds numbers: right-aligned, header included (S08).
+    pub(super) numeric: bool,
 }
 
 impl TableColumnDefinition {
@@ -61,6 +64,15 @@ impl TableColumnDefinition {
             label: label.to_owned(),
             default_width,
             sortable: true,
+            numeric: false,
+        }
+    }
+
+    /// This column, holding numbers.
+    pub(super) fn numeric(self) -> Self {
+        Self {
+            numeric: true,
+            ..self
         }
     }
 }
@@ -214,7 +226,7 @@ impl PersistedResourceTablePreferences {
                     .get(column.id.as_str())
                     .map(|definition| ResolvedTableColumn {
                         definition: (*definition).clone(),
-                        width: column.width.max(MIN_COLUMN_WIDTH),
+                        width: column.width.max(TABLE_MIN_COLUMN),
                     })
             })
             .collect()
@@ -254,7 +266,7 @@ impl PersistedResourceTablePreferences {
             .iter_mut()
             .find(|column| column.id == id)
         {
-            column.width = width.max(MIN_COLUMN_WIDTH);
+            column.width = width.max(TABLE_MIN_COLUMN);
         }
     }
 
@@ -285,6 +297,15 @@ impl PersistedResourceTablePreferences {
         if let Some(column) = layout.columns.iter_mut().find(|column| column.id == id) {
             column.visible = visible;
         }
+        // Rows sorted by a column nobody can see could not be put back.
+        if !visible
+            && layout
+                .sort
+                .as_ref()
+                .is_some_and(|sort| sort.column_id == id)
+        {
+            layout.sort = None;
+        }
     }
 
     pub(super) fn set_order(
@@ -314,9 +335,9 @@ impl PersistedResourceTablePreferences {
         &mut self,
         key: &ResourceTableKey,
         definitions: &[TableColumnDefinition],
-    ) -> Option<(String, SortDirection)> {
+    ) -> Option<components::SortState> {
         self.layout_mut(key, definitions).sort.as_ref().map(|sort| {
-            (
+            components::SortState::new(
                 sort.column_id.clone(),
                 match sort.direction {
                     PersistedSortDirection::Ascending => SortDirection::Ascending,
@@ -340,6 +361,32 @@ impl PersistedResourceTablePreferences {
                 SortDirection::Descending => PersistedSortDirection::Descending,
             },
         });
+    }
+
+    /// Sort as a click on `column_id`'s header does: ascending, then
+    /// descending, then back to the default order (S08).
+    pub(super) fn sort_after_header_click(
+        &mut self,
+        key: &ResourceTableKey,
+        definitions: &[TableColumnDefinition],
+        column_id: &str,
+    ) {
+        let current = self.sort(key, definitions);
+        match components::SortState::after_click(current.as_ref(), column_id) {
+            Some(next) => self.set_sort(key, definitions, &next.column_id, next.direction),
+            None => self.layout_mut(key, definitions).sort = None,
+        }
+    }
+
+    /// Show every column again (the column menu's "Reset to default").
+    pub(super) fn reset_column_visibility(
+        &mut self,
+        key: &ResourceTableKey,
+        definitions: &[TableColumnDefinition],
+    ) {
+        for column in &mut self.layout_mut(key, definitions).columns {
+            column.visible = true;
+        }
     }
 
     fn layout_mut(

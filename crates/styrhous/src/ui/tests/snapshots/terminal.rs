@@ -23,19 +23,18 @@ fn namespace_popup_option_does_not_activate_the_overlapped_resource_button() {
     harness.get_by_label("Apps & Containers").click_accesskit();
     harness.run();
     harness
-        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace scope")
         .click();
     harness.run();
 
     let namespace_option = harness.get_by_label("default");
-    let overlapped_resource = harness
-        .get_by_label("Open details for coredns-66bc5c9577-ffw2s")
-        .rect();
+    let option_rect = namespace_option.rect();
+    // A click on any cell of a resource row opens the resource.
     assert!(
-        namespace_option.rect().intersects(overlapped_resource),
-        "the namespace option {:?} must overlap resource button {:?} to exercise popup input ownership",
-        namespace_option.rect(),
-        overlapped_resource,
+        harness
+            .query_all_by_label_contains(", row ")
+            .any(|cell| cell.rect().intersects(option_rect)),
+        "the namespace option {option_rect:?} must overlap a resource row to exercise popup input ownership",
     );
 
     namespace_option.click();
@@ -112,7 +111,7 @@ fn namespace_popup_filters_to_an_offscreen_option_before_pointer_click() {
     offscreen_harness.state_mut().ui_state = setup_state();
     offscreen_harness.run();
     offscreen_harness
-        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace scope")
         .click();
     offscreen_harness.run();
     offscreen_harness.get_by_label(target_namespace).click();
@@ -128,7 +127,7 @@ fn namespace_popup_filters_to_an_offscreen_option_before_pointer_click() {
     harness.state_mut().ui_state = setup_state();
     harness.run();
     harness
-        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace scope")
         .click();
     harness.run();
     let search_input = harness
@@ -251,29 +250,32 @@ fn pod_debug_shell_action_launches_configured_and_pod_images_for_the_selected_ta
     let more_actions_position = harness.get_by_label(&more_actions_label).rect().center();
     primary_click(&mut harness, more_actions_position);
     harness.run();
-    let debug_shell_position = harness.get_by_label("Debug shell ⏵").rect().center();
+    let debug_shell_position = harness.get_by_label("Debug shell").rect().center();
     primary_click(&mut harness, debug_shell_position);
     harness.run();
-    let target_position = harness.get_by_label("coredns ⏵").rect().center();
+    let target_position = harness.get_by_label("coredns").rect().center();
     primary_click(&mut harness, target_position);
     harness.run();
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "terminal/pod_debug_shell_action_launches_configured_and_pod_images_for_the_selected_target/debug_images",
     ));
-    let busybox_position = harness.get_by_label("Busybox — General").rect().center();
+    let busybox_position = harness
+        .get_by_label("Busybox (General profile)")
+        .rect()
+        .center();
     primary_click(&mut harness, busybox_position);
     harness.run();
 
     primary_click(&mut harness, more_actions_position);
     harness.run();
-    let debug_shell_position = harness.get_by_label("Debug shell ⏵").rect().center();
+    let debug_shell_position = harness.get_by_label("Debug shell").rect().center();
     primary_click(&mut harness, debug_shell_position);
     harness.run();
-    let target_position = harness.get_by_label("coredns ⏵").rect().center();
+    let target_position = harness.get_by_label("coredns").rect().center();
     primary_click(&mut harness, target_position);
     harness.run();
     let pod_image_position = harness
-        .get_by_label("registry.example/coredns:v1 — General")
+        .get_by_label("registry.example/coredns:v1 (General profile)")
         .rect()
         .center();
     primary_click(&mut harness, pod_image_position);
@@ -281,13 +283,16 @@ fn pod_debug_shell_action_launches_configured_and_pod_images_for_the_selected_ta
 
     primary_click(&mut harness, more_actions_position);
     harness.run();
-    let debug_shell_position = harness.get_by_label("Debug shell ⏵").rect().center();
+    let debug_shell_position = harness.get_by_label("Debug shell").rect().center();
     primary_click(&mut harness, debug_shell_position);
     harness.run();
-    let target_position = harness.get_by_label("sidecar ⏵").rect().center();
+    let target_position = harness.get_by_label("sidecar").rect().center();
     primary_click(&mut harness, target_position);
     harness.run();
-    let busybox_position = harness.get_by_label("Busybox — General").rect().center();
+    let busybox_position = harness
+        .get_by_label("Busybox (General profile)")
+        .rect()
+        .center();
     primary_click(&mut harness, busybox_position);
     harness.run();
 
@@ -369,13 +374,16 @@ fn node_shell_action_launches_the_selected_context_node_and_preset() {
         .center();
     primary_click(&mut harness, more_actions_position);
     harness.run();
-    let shell_position = harness.get_by_label("Shell ⏵").rect().center();
+    let shell_position = harness.get_by_label("Shell").rect().center();
     primary_click(&mut harness, shell_position);
     harness.run();
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "terminal/node_shell_action_launches_the_selected_context_node_and_preset/node_shell_presets",
     ));
-    let busybox_position = harness.get_by_label("Busybox — General").rect().center();
+    let busybox_position = harness
+        .get_by_label("Busybox (General profile)")
+        .rect()
+        .center();
     primary_click(&mut harness, busybox_position);
     harness.run();
 
@@ -428,13 +436,12 @@ fn shell_launch_failure_uses_the_styled_error_modal_and_opens_terminal_settings(
     harness.get_by_label("Shell").click_accesskit();
     harness.run_steps(2);
 
-    harness.get_by_label("SHELL");
     harness.get_by_label("Couldn’t open a terminal");
     harness.get_by_label(
         "No supported terminal launcher was found. Tried: xdg-terminal-exec (No such file or directory (os error 2)).",
     );
     harness.get_by_label("Open settings");
-    harness.get_by_label("Dismiss");
+    harness.get_by_label("Close");
     assert!(harness.state().ui_state.terminal_launch_error.is_some());
     harness.run_steps(2);
     harness.ui_harness(HarnessSnapshotOptions::one_pixel("terminal/shell_launch_failure_uses_the_styled_error_modal_and_opens_terminal_settings/terminal_launch_error"));
@@ -455,7 +462,7 @@ fn terminal_launch_error_dismisses_without_opening_settings() {
     harness.state_mut().ui_state = state;
     harness.run();
 
-    harness.get_by_label("Dismiss").click_accesskit();
+    harness.get_by_label("Close").click_accesskit();
     harness.run();
 
     assert!(harness.state().ui_state.terminal_launch_error.is_none());

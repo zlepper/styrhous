@@ -36,9 +36,22 @@ pub struct ToneColors {
     pub text_on_tint: Color32,
     /// Hairline around a tinted area (`.banner.warn` border).
     pub outline: Color32,
+    /// The soft halo a lit status dot casts (`.dot.ok` `box-shadow`); neutral
+    /// and info dots are unlit.
+    pub glow: Option<Color32>,
 }
 
 impl Theme {
+    /// The fill and text colours of a solid mark in `tone`: count badges and
+    /// status tiles. Neutral marks use the strong control fill with secondary
+    /// text; every other tone uses its fill with dark `text-on-fill`.
+    pub fn solid(&self, tone: Tone) -> (Color32, Color32) {
+        match tone {
+            Tone::Neutral => (self.control.fill_strong, self.text.secondary),
+            tone => (self.tone(tone).fill, self.text.on_fill),
+        }
+    }
+
     /// The colours of `tone`.
     ///
     /// Roles a tone does not define fall back as follows:
@@ -56,6 +69,7 @@ impl Theme {
                 text: self.text.secondary,
                 text_on_tint: self.text.secondary,
                 outline: self.divider.strong,
+                glow: None,
             },
             Tone::Accent => ToneColors {
                 fill: self.accent.fill,
@@ -63,6 +77,7 @@ impl Theme {
                 text: self.accent.text,
                 text_on_tint: self.accent.text,
                 outline: self.accent.outline,
+                glow: Some(self.accent.glow),
             },
             Tone::Info => ToneColors {
                 fill: self.info.fill,
@@ -70,6 +85,7 @@ impl Theme {
                 text: self.info.text,
                 text_on_tint: self.info.text_on_tint,
                 outline: self.info.outline,
+                glow: None,
             },
             Tone::Success => ToneColors {
                 fill: self.success.fill,
@@ -77,6 +93,7 @@ impl Theme {
                 text: self.success.text,
                 text_on_tint: self.success.text,
                 outline: self.success.outline,
+                glow: Some(self.success.glow),
             },
             Tone::Warning => ToneColors {
                 fill: self.warning.fill,
@@ -84,6 +101,7 @@ impl Theme {
                 text: self.warning.text,
                 text_on_tint: self.warning.text_on_tint,
                 outline: self.warning.outline,
+                glow: Some(self.warning.glow),
             },
             Tone::Danger => ToneColors {
                 fill: self.danger.fill,
@@ -91,6 +109,7 @@ impl Theme {
                 text: self.danger.text,
                 text_on_tint: self.danger.text_on_tint,
                 outline: self.danger.outline,
+                glow: Some(self.danger.glow),
             },
         }
     }
@@ -110,8 +129,27 @@ mod tests {
         assert_eq!(danger.text, theme.danger.text);
         assert_eq!(danger.text_on_tint, theme.danger.text_on_tint);
         assert_eq!(danger.outline, theme.danger.outline);
+        assert_eq!(danger.glow, Some(theme.danger.glow));
+        assert_eq!(theme.tone(Tone::Neutral).glow, None);
         assert_eq!(theme.tone(Tone::Info).text_on_tint, theme.info.text_on_tint);
         assert_eq!(theme.tone(Tone::Warning).fill, theme.warning.fill);
+    }
+
+    #[test]
+    fn solid_marks_are_filled_with_dark_text_except_neutral() {
+        let theme = crate::test_support::distinct_role_theme();
+        assert_eq!(
+            theme.solid(Tone::Danger),
+            (theme.danger.fill, theme.text.on_fill)
+        );
+        assert_eq!(
+            theme.solid(Tone::Success),
+            (theme.success.fill, theme.text.on_fill)
+        );
+        assert_eq!(
+            theme.solid(Tone::Neutral),
+            (theme.control.fill_strong, theme.text.secondary)
+        );
     }
 
     #[test]

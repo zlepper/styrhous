@@ -131,6 +131,27 @@ fn illegal_overlap_detection_reports_a_text_run_colliding_with_a_button() {
 }
 
 #[test]
+fn overlap_detection_reports_a_painted_label_colliding_with_a_button() {
+    let mut harness = Harness::new_ui(|ui| {
+        let rect = Rect::from_min_size(ui.min_rect().min, egui::vec2(180.0, 28.0));
+        ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+            crate::design::type_scale::BODY.label(ui, "Painted text", ui.visuals().text_color());
+        });
+        ui.put(rect, egui::Button::new("Colliding button"));
+    });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+
+    let overlaps = harness.illegal_accessibility_overlaps(&AccessibilityTreeOptions::default());
+    let message = illegal_overlaps_message(&overlaps);
+    assert!(message.contains("Painted text"), "{message}");
+    assert!(
+        message.contains("Button name=\"Colliding button\""),
+        "{message}"
+    );
+}
+
+#[test]
 fn overlap_detection_allows_related_text_and_edge_touching_widgets() {
     let harness = Harness::new_ui(|ui| {
         ui.label("A label owns this text run");

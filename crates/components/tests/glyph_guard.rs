@@ -90,8 +90,8 @@ fn every_literal_character_has_a_glyph_in_every_family() {
 
     let characters = literal_characters();
     assert!(
-        characters.contains_key(&'●'),
-        "the scan finds the status dot of the log viewer"
+        characters.contains_key(&'…'),
+        "the scan finds the ellipsis of progress labels such as \"Applying…\""
     );
     let families = families();
     let mut missing = Vec::new();

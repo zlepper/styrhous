@@ -1,0 +1,12 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        ColumnHeader name="Name" rect=(x=48.0 y=8.0 width=332.0 height=36.0 center_x=214.0 center_y=26.0)
+          TextRun value="NAME" rect=(x=60.0 y=18.0 width=30.3 height=16.0 center_x=75.1 center_y=26.0)
+        Unknown name="" rect=(x=380.0 y=8.0 width=48.0 height=36.0 center_x=404.0 center_y=26.0)
+        Label value="Loading pods" rect=(x=8.0 y=44.0 width=420.0 height=120.0 center_x=218.0 center_y=104.0)
+        GenericContainer rect=<none>
+        GenericContainer rect=<none>
+        GenericContainer rect=<none>

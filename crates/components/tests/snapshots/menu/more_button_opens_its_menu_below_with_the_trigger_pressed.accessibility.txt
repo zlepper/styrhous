@@ -1,0 +1,23 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Button name="More actions for coredns" rect=(x=248.0 y=16.0 width=28.0 height=28.0 center_x=262.0 center_y=30.0)
+  Menu name="More actions for coredns menu" rect=(x=76.0 y=48.0 width=200.0 height=218.0 center_x=176.0 center_y=157.0)
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          MenuItem name="Edit YAML" rect=(x=80.0 y=52.0 width=192.0 height=32.0 center_x=176.0 center_y=68.0)
+            TextRun value="Edit YAML" rect=(x=114.0 y=58.0 width=60.9 height=20.0 center_x=144.4 center_y=68.0)
+          MenuItem name="View logs" rect=(x=80.0 y=84.0 width=192.0 height=32.0 center_x=176.0 center_y=100.0)
+            TextRun value="View logs" rect=(x=114.0 y=90.0 width=56.4 height=20.0 center_x=142.2 center_y=100.0)
+          MenuItem name="Shell" rect=(x=80.0 y=116.0 width=192.0 height=32.0 center_x=176.0 center_y=132.0)
+            TextRun value="Shell" rect=(x=114.0 y=122.0 width=28.1 height=20.0 center_x=128.0 center_y=132.0)
+          MenuItem name="Copy name" rect=(x=80.0 y=148.0 width=192.0 height=32.0 center_x=176.0 center_y=164.0)
+            TextRun value="Copy name" rect=(x=114.0 y=154.0 width=66.5 height=20.0 center_x=147.3 center_y=164.0)
+          MenuItem name="Restart rollout" state=[disabled] rect=(x=80.0 y=189.0 width=192.0 height=32.0 center_x=176.0 center_y=205.0)
+            TextRun value="Restart rollout" rect=(x=114.0 y=195.0 width=82.7 height=20.0 center_x=155.3 center_y=205.0)
+          MenuItem name="Delete" rect=(x=80.0 y=230.0 width=192.0 height=32.0 center_x=176.0 center_y=246.0)
+            TextRun value="Delete" rect=(x=114.0 y=236.0 width=38.0 height=20.0 center_x=133.0 center_y=246.0)

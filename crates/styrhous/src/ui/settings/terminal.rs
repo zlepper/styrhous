@@ -116,20 +116,9 @@ pub(super) fn show_debug_image_presets(
     ui.add_space(space::S16);
 
     let mut remove_preset = None;
-    let table_width = ui.available_width();
-    let original_item_spacing = ui.spacing().item_spacing;
-    ui.spacing_mut().item_spacing.y = 0.0;
-    show_debug_image_preset_table_header(ui, table_width);
-    let moved = ReorderableTable::new("debug-image-presets", DEBUG_IMAGE_TABLE_ROW_HEIGHT).show(
-        ui,
-        &mut draft.debug_image_presets,
-        table_width,
-        |ui, preset, index, handle| {
-            show_debug_image_preset_row(ui, table_width, preset, index, handle, &mut remove_preset);
-        },
-        |ui, preset| show_debug_image_preset_preview_row(ui, table_width, preset),
-    );
-    ui.spacing_mut().item_spacing = original_item_spacing;
+    let moved =
+        show_debug_image_preset_table(ui, &mut draft.debug_image_presets, &mut remove_preset);
+    ui.add_space(space::S12);
     if moved {
         *error = None;
     }
@@ -137,16 +126,11 @@ pub(super) fn show_debug_image_presets(
         draft.debug_image_presets.remove(index);
         *error = None;
     }
-    if TailwindButton::icon(
-        icons::plus_icon()
-            .fit_to_exact_size(egui::Vec2::splat(16.0))
-            .tint(theme.accent.text),
-    )
-    .variant(ButtonVariant::Secondary)
-    .size(ButtonSize::Sm)
-    .accessibility_label("Add debug image")
-    .show(ui)
-    .clicked()
+    if Button::icon(icons::Icon::Plus, "Add debug image")
+        .variant(ButtonVariant::Soft)
+        .size(ButtonSize::Sm)
+        .show(ui)
+        .clicked()
     {
         draft.debug_image_presets.push(DebugImagePreset {
             name: String::new(),

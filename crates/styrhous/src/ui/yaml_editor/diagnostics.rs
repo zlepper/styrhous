@@ -84,72 +84,93 @@ pub(super) fn maybe_request_server_validation(
     }
 }
 
+/// What the toolbar says about validation: the words and whether work is
+/// still in progress.
+pub(super) fn validation_status(editor: &YamlEditorWindowState) -> Option<(&'static str, bool)> {
+    let (diagnostics, showing_retained_diagnostics) = diagnostics_to_display(editor);
+    if showing_retained_diagnostics {
+        return Some(("Validating updated YAML…", true));
+    }
+    if !diagnostics.is_empty() {
+        return None;
+    }
+    match &editor.server_validation {
+        ValidationState::Pending => Some(("Validating with cluster…", true)),
+        ValidationState::Valid => Some(("Validated by cluster", false)),
+        ValidationState::Failed(_) => None,
+        ValidationState::Idle => editor
+            .schema_loading
+            .then_some(("Loading Kubernetes schema…", true)),
+    }
+}
+
+/// The 1-based line and column of the editor's caret.
+pub(super) fn cursor_position(
+    ctx: &egui::Context,
+    editor: &YamlEditorWindowState,
+) -> Option<(usize, usize)> {
+    let state =
+        egui::widgets::text_edit::TextEditState::load(ctx, yaml_editor_text_edit_id(editor.id))?;
+    let index = state.cursor.char_range()?.primary.index.0;
+    let before = &editor.edited_yaml[..byte_index(&editor.edited_yaml, index)];
+    let line = before.matches('\n').count() + 1;
+    let column = before
+        .rsplit('\n')
+        .next()
+        .map_or(0, |line| line.chars().count())
+        + 1;
+    Some((line, column))
+}
+
+fn problems_open_id(editor: &YamlEditorWindowState) -> egui::Id {
+    egui::Id::new(("yaml-editor-problems-open", editor.id))
+}
+
+/// Whether the Problems panel is open (it starts open).
+fn problems_open(ctx: &egui::Context, editor: &YamlEditorWindowState) -> bool {
+    ctx.data(|data| data.get_temp::<bool>(problems_open_id(editor)))
+        .unwrap_or(true)
+}
+
+/// Open or close the Problems panel (the status bar's problem count).
+pub(super) fn toggle_problems(ctx: &egui::Context, editor: &YamlEditorWindowState) {
+    let open = problems_open(ctx, editor);
+    ctx.data_mut(|data| data.insert_temp(problems_open_id(editor), !open));
+}
+
+/// The Problems panel: the diagnostics to display; clicking one selects its
+/// range. Diagnostics kept while the updated YAML validates are dimmed and
+/// cannot be followed.
 pub(super) fn show_diagnostics(
     ctx: &egui::Context,
     ui: &mut egui::Ui,
     editor: &mut YamlEditorWindowState,
 ) {
-    let theme = ui.tokens();
     let (diagnostics, showing_retained_diagnostics) = diagnostics_to_display(editor);
-    if let ValidationState::Failed(message) = &editor.server_validation {
-        error_strip(ui, message);
-    }
-    if diagnostics.is_empty() {
-        match &editor.server_validation {
-            ValidationState::Pending => {
-                status_indicator(ui, theme.status.neutral, "Validating with cluster…")
-            }
-            ValidationState::Valid => {
-                status_indicator(ui, theme.success.fill, "Validated by cluster")
-            }
-            ValidationState::Failed(_) => {}
-            ValidationState::Idle => {
-                if editor.schema_loading {
-                    status_indicator(ui, theme.status.neutral, "Loading Kubernetes schema…");
-                }
-            }
-        }
-        return;
-    }
-    let mut range_to_focus = None;
-    egui::CollapsingHeader::new(format!("{} diagnostics", diagnostics.len()))
-        .default_open(true)
-        .show(ui, |ui| {
-            if showing_retained_diagnostics {
-                status_indicator(ui, theme.status.neutral, "Validating updated YAML…");
-            }
-            components::scroll::vertical()
-                .id_salt(("yaml-editor-diagnostic-list", editor.id))
-                .max_height(DIAGNOSTIC_LIST_MAX_HEIGHT)
-                .min_scrolled_height(DIAGNOSTIC_LIST_MAX_HEIGHT)
-                .auto_shrink([false, true])
-                .show(ui, |ui| {
-                    for diagnostic in diagnostics {
-                        let location = diagnostic
-                            .line
-                            .map(|line| format!("Line {line}: "))
-                            .unwrap_or_default();
-                        let button = egui::Button::new(
-                            egui::RichText::new(format!("{location}{}", diagnostic.message))
-                                .font(type_scale::META.font_id(ui.ctx()))
-                                .color(theme.danger.text),
-                        )
-                        .frame(false);
-                        let response = if showing_retained_diagnostics {
-                            ui.add_enabled(false, button).on_hover_text(
-                                "Validating the updated YAML before this diagnostic can be located",
-                            )
-                        } else {
-                            ui.add(button)
-                                .with_pointing_hand()
-                                .on_hover_text("Jump to the highlighted YAML location")
-                        };
-                        if !showing_retained_diagnostics && response.clicked() {
-                            range_to_focus = diagnostic.range.clone();
-                        }
-                    }
-                });
-        });
+    let problems: Vec<Problem<'_>> = diagnostics
+        .iter()
+        .map(|diagnostic| Problem {
+            severity: Severity::Error,
+            line: diagnostic.line,
+            message: &diagnostic.message,
+        })
+        .collect();
+    let open_id = problems_open_id(editor);
+    let mut open = ctx
+        .data(|data| data.get_temp::<bool>(open_id))
+        .unwrap_or(true);
+    let response = ProblemsPanel::new(("yaml-editor", editor.id), &problems)
+        .stale(showing_retained_diagnostics)
+        .row_tooltip(if showing_retained_diagnostics {
+            "Validating the updated YAML before this diagnostic can be located"
+        } else {
+            "Jump to the highlighted YAML location"
+        })
+        .show(ui, &mut open);
+    ctx.data_mut(|data| data.insert_temp(open_id, open));
+    let range_to_focus = response
+        .clicked
+        .and_then(|index| diagnostics[index].range.clone());
     if let Some(range) = range_to_focus {
         focus_diagnostic(ctx, editor, range);
     }
@@ -168,28 +189,50 @@ pub(super) fn diagnostics_to_display(editor: &YamlEditorWindowState) -> (&[YamlD
     }
 }
 
+/// Where a pending request to focus the editor is kept: the pass it was
+/// made in and the range to select.
+fn pending_focus_id(editor_id: u64) -> egui::Id {
+    egui::Id::new(("yaml-editor-pending-focus", editor_id))
+}
+
+/// Focus the editor if a diagnostic asked for it in an earlier pass.
+pub(super) fn apply_pending_focus(ctx: &egui::Context, editor_id: u64) {
+    let id = pending_focus_id(editor_id);
+    let requested = ctx.data(|data| data.get_temp::<(u64, usize, usize)>(id));
+    if let Some((pass, start, end)) = requested
+        && pass < ctx.cumulative_pass_nr()
+    {
+        ctx.data_mut(|data| data.remove::<(u64, usize, usize)>(id));
+        select_range(ctx, editor_id, start, end);
+    }
+}
+
+/// Focus the editor with `start..end` selected.
+fn select_range(ctx: &egui::Context, editor_id: u64, start: usize, end: usize) {
+    let text_edit_id = yaml_editor_text_edit_id(editor_id);
+    ctx.memory_mut(|memory| memory.request_focus(text_edit_id));
+    let mut state =
+        egui::widgets::text_edit::TextEditState::load(ctx, text_edit_id).unwrap_or_default();
+    state.cursor.set_char_range(Some(CCursorRange::two(
+        CCursor::new(start),
+        CCursor::new(end),
+    )));
+    state.store(ctx, text_edit_id);
+}
+
 pub(super) fn focus_diagnostic(
     ctx: &egui::Context,
     editor: &mut YamlEditorWindowState,
     range: SourceRange,
 ) {
-    let text_edit_id = yaml_editor_text_edit_id(editor.id);
-    ctx.memory_mut(|memory| memory.request_focus(text_edit_id));
-    let mut state =
-        egui::widgets::text_edit::TextEditState::load(ctx, text_edit_id).unwrap_or_default();
-    state.cursor.set_char_range(Some(CCursorRange::two(
-        CCursor::new(range.start),
-        CCursor::new(range.end),
-    )));
-    state.store(ctx, text_edit_id);
+    select_range(ctx, editor.id, range.start, range.end);
+    // The click that chose the diagnostic landed outside the editor, which
+    // makes the editor give up focus (and its selection) later in this
+    // pass; select the range again next pass.
+    let pending = (ctx.cumulative_pass_nr(), range.start, range.end);
+    ctx.data_mut(|data| data.insert_temp(pending_focus_id(editor.id), pending));
     editor.scroll_to_diagnostic = Some(range);
     ctx.request_repaint();
-}
-
-pub(super) fn has_diagnostics_feedback(editor: &YamlEditorWindowState) -> bool {
-    !diagnostics_to_display(editor).0.is_empty()
-        || editor.schema_loading
-        || !matches!(editor.server_validation, ValidationState::Idle)
 }
 
 pub(super) fn apply_editor(
@@ -226,9 +269,9 @@ pub(super) fn show_discard_confirmation(ctx: &egui::Context, editor: &mut YamlEd
     }
     match (ConfirmationDialog {
         id: egui::Id::new(("discard-yaml-changes", editor.id)),
-        eyebrow: "Unsaved changes",
+        icon: components::icons::Icon::ExclamationTriangle,
         title: "Discard changes?",
-        message: "Your unsaved edits will be lost.",
+        message: "Your unsaved edits will be lost.".into(),
         unavailable_message: None,
         cancel_label: "Keep editing",
         confirm_label: "Discard changes",

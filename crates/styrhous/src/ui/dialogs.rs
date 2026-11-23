@@ -1,19 +1,15 @@
 use super::state::{BulkDeleteOutcome, BulkDeleteProgress, OperationOutcome, UiState};
 use crate::terminal_launcher::TerminalLaunchSettings;
 use crate::worker::*;
-use components::design::stroke;
-use components::design::theme::{self, ThemeExt, ThemeScope};
-use components::design::{radius, space, type_scale};
+use components::design::theme::ThemeExt;
+use components::design::{space, type_scale};
 use components::{
-    ButtonSize, ConfirmationDialog, ConfirmationDialogAcknowledgement, ConfirmationDialogAction,
-    ConfirmationDialogKind, ConfirmationDialogWarning, ErrorDialog, ErrorDialogAction,
-    PointingHand, TailwindButton,
+    Button, ConfirmationDialog, ConfirmationDialogAcknowledgement, ConfirmationDialogAction,
+    ConfirmationDialogKind, ConfirmationDialogWarning, Dialog, ErrorDialog, ErrorDialogAction,
+    FormField, NumberField, Prose,
 };
-use egui::{Align, Frame, Key, Margin, Modifiers};
 use std::time::Instant;
 use tracing::info;
-
-const SCALE_DIALOG_WIDTH: f32 = 530.0;
 
 impl WorkerResult for ResourceDeleteFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {

@@ -1,4 +1,5 @@
 use super::*;
+use crate::selection::CheckState;
 use crate::test_support::UiHarnessSnapshot;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
@@ -44,10 +45,13 @@ fn test_combobox_flow() {
     let selected_for_ui = selected.clone();
     let mut harness = Harness::new_ui(move |ui| {
         let mut selected = selected_for_ui.borrow_mut();
-        TailwindCombobox::from_label("Assigned to")
+        Combobox::from_label("Assigned to")
             .placeholder("Search...")
             .width(250.0)
-            .select_all(selected.len() == people.len())
+            .select_all(
+                "Select all",
+                CheckState::from(selected.len() == people.len()),
+            )
             .filter_by(|person: &Person| &person.name)
             .show_items(ui, &people, |cb, person| {
                 let is_selected = selected.contains(&person.id);
@@ -104,7 +108,7 @@ fn fuzzy_filter_orders_strongest_matches_first() {
     let selected = Rc::new(RefCell::new(None));
     let selected_for_ui = selected.clone();
     let mut harness = Harness::new_ui(move |ui| {
-        TailwindCombobox::from_label("Resources")
+        Combobox::from_label("Resources")
             .placeholder("Search resources...")
             .width(250.0)
             .filter_by(|resource: &&str| *resource)
@@ -144,7 +148,7 @@ fn fuzzy_filter_orders_strongest_matches_first() {
 fn fuzzy_filter_preserves_source_order_for_equally_scored_matches() {
     let resources = ["z-api", "a-api"];
     let mut harness = Harness::new_ui(move |ui| {
-        TailwindCombobox::from_label("Resources")
+        Combobox::from_label("Resources")
             .placeholder("Search resources...")
             .width(250.0)
             .filter_by(|resource: &&str| *resource)
@@ -178,10 +182,13 @@ fn modifier_click_toggles_without_closing() {
     let select_all_for_ui = select_all_activated.clone();
     let mut harness = Harness::new_ui(move |ui| {
         let mut selected = selected_for_ui.borrow_mut();
-        let response = TailwindCombobox::from_label("People")
+        let response = Combobox::from_label("People")
             .placeholder("Search...")
             .width(250.0)
-            .select_all(selected.len() == people.len())
+            .select_all(
+                "Select all",
+                CheckState::from(selected.len() == people.len()),
+            )
             .filter_by(|person: &Person| &person.name)
             .show_items(ui, &people, |cb, person| {
                 let is_selected = selected.contains(&person.id);
@@ -241,10 +248,10 @@ fn modifier_click_toggles_without_closing() {
 fn select_all_is_hidden_while_searching() {
     let people = test_people();
     let mut harness = Harness::new_ui(move |ui| {
-        TailwindCombobox::from_label("People")
+        Combobox::from_label("People")
             .placeholder("Search...")
             .width(250.0)
-            .select_all(false)
+            .select_all("Select all", CheckState::Off)
             .filter_by(|person: &Person| &person.name)
             .show_items(ui, &people, |cb, person| {
                 cb.item(&person.name, false);
@@ -274,7 +281,7 @@ fn keyboard_navigation_moves_focus_and_selects_the_focused_item() {
     let selected_for_ui = selected.clone();
     let mut harness = Harness::new_ui(move |ui| {
         let mut selected = selected_for_ui.borrow_mut();
-        TailwindCombobox::from_label("People")
+        Combobox::from_label("People")
             .placeholder("Search...")
             .width(250.0)
             .filter_by(|person: &Person| &person.name)
@@ -317,7 +324,7 @@ fn long_namespace_names_are_truncated_without_hiding_selection_affordances() {
     ];
     let selected_namespace = namespaces[0];
     let mut harness = Harness::new_ui(move |ui| {
-        TailwindCombobox::from_label("Namespaces")
+        Combobox::from_label("Namespaces")
             .selected_text(selected_namespace)
             .selected_status(Some(true))
             .width(230.0)
@@ -340,7 +347,7 @@ fn long_namespace_names_are_truncated_without_hiding_selection_affordances() {
         "default",
     ];
     let mut open_harness = Harness::new_ui(move |ui| {
-        TailwindCombobox::from_label("Namespaces")
+        Combobox::from_label("Namespaces")
             .selected_text(selected_namespace)
             .selected_status(Some(true))
             .width(230.0)
@@ -367,7 +374,7 @@ fn keyboard_navigation_does_not_scroll_a_three_item_result_list() {
     let selected = Rc::new(RefCell::new(None));
     let selected_for_ui = selected.clone();
     let mut harness = Harness::new_ui(move |ui| {
-        TailwindCombobox::from_label("Namespaces")
+        Combobox::from_label("Namespaces")
             .placeholder("Search namespaces...")
             .width(250.0)
             .filter_by(|namespace: &&str| *namespace)
@@ -422,7 +429,7 @@ fn keyboard_navigation_scrolls_a_focused_item_into_view() {
     let selected = Rc::new(RefCell::new(None));
     let selected_for_ui = selected.clone();
     let mut harness = Harness::new_ui(move |ui| {
-        TailwindCombobox::from_label("Namespaces")
+        Combobox::from_label("Namespaces")
             .placeholder("Search namespaces...")
             .width(250.0)
             .filter_by(|namespace: &String| namespace)
@@ -463,7 +470,7 @@ fn keyboard_navigation_scrolls_a_focused_item_into_view() {
 fn dropdown_expands_after_backspacing_to_more_search_results() {
     let namespaces = ["system", "staging", "sandbox", "services"];
     let mut harness = Harness::new_ui(move |ui| {
-        TailwindCombobox::from_label("Namespaces")
+        Combobox::from_label("Namespaces")
             .placeholder("Search namespaces...")
             .width(250.0)
             .filter_by(|namespace: &&str| *namespace)
@@ -499,7 +506,7 @@ fn dropdown_with_two_hundred_items_is_capped_to_a_scrollable_height() {
         .map(|index| format!("namespace-{index:03}"))
         .collect::<Vec<_>>();
     let mut harness = Harness::new_ui(move |ui| {
-        TailwindCombobox::from_label("Namespaces")
+        Combobox::from_label("Namespaces")
             .placeholder("Search namespaces...")
             .width(250.0)
             .filter_by(|namespace: &String| namespace)
@@ -542,9 +549,9 @@ impl RankedComboboxHarness {
         let selected_for_ui = selected.clone();
         let select_all_for_ui = select_all_activated.clone();
         let mut harness = Harness::new_ui(move |ui| {
-            let mut combobox = TailwindCombobox::from_label("Resources").width(250.0);
+            let mut combobox = Combobox::from_label("Resources").width(250.0);
             if with_select_all {
-                combobox = combobox.select_all(false);
+                combobox = combobox.select_all("Select all", CheckState::Off);
             }
             let items = items_for_ui.borrow();
             let response = combobox.filter_by(|resource: &&str| *resource).show_items(
@@ -881,7 +888,7 @@ fn dropdown_shows_every_item_when_placed_in_a_ui_without_item_spacing() {
         // Table rows lay out their cells without vertical item spacing, but the popup keeps the
         // default spacing between its items.
         ui.spacing_mut().item_spacing.y = 0.0;
-        TailwindCombobox::from_label("Namespaces")
+        Combobox::from_label("Namespaces")
             .placeholder("Search namespaces...")
             .width(250.0)
             .filter_by(|namespace: &&str| *namespace)
@@ -907,4 +914,187 @@ fn dropdown_shows_every_item_when_placed_in_a_ui_without_item_spacing() {
     harness.ui_harness(
         "comboboxes/dropdown_shows_every_item_when_placed_in_a_ui_without_item_spacing/five_items",
     );
+}
+
+/// A multi-select namespace combobox; the selection is shared with the test.
+fn multi_select_harness(selected: Rc<RefCell<HashSet<&'static str>>>) -> Harness<'static> {
+    const NAMESPACES: [&str; 4] = ["default", "kube-system", "monitoring", "payments"];
+    let mut harness = Harness::new_ui(move |ui| {
+        let mut selected = selected.borrow_mut();
+        let all = CheckState::from_counts(selected.len(), NAMESPACES.len());
+        let response = Combobox::from_label("Namespaces")
+            .placeholder("Select namespaces")
+            .search_placeholder("Search namespaces…")
+            .noun("namespaces")
+            .width(260.0)
+            .multi_select()
+            .select_all("All namespaces", all)
+            .filter_by(|namespace: &&str| namespace)
+            .show_items(ui, &NAMESPACES, |cb, namespace| {
+                let response = cb.item(*namespace, selected.contains(namespace));
+                match response.selection_action() {
+                    Some(SelectionAction::Toggle) => {
+                        if !selected.insert(namespace) {
+                            selected.remove(namespace);
+                        }
+                    }
+                    Some(SelectionAction::Replace) => {
+                        selected.clear();
+                        selected.insert(namespace);
+                    }
+                    None => {}
+                }
+            });
+        if response.select_all_clicked {
+            if all == CheckState::On {
+                selected.clear();
+            } else {
+                selected.extend(NAMESPACES);
+            }
+        }
+    });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespaces")
+        .click();
+    harness.run();
+    harness
+}
+
+#[test]
+fn multi_select_checkboxes_and_space_toggle_without_closing() {
+    let selected = Rc::new(RefCell::new(HashSet::from(["kube-system"])));
+    let mut harness = multi_select_harness(selected.clone());
+    harness.ui_harness("comboboxes/multi_select/open");
+
+    // The row's checkbox toggles; the popover stays open.
+    let row = harness.get_by_label("monitoring").rect();
+    let checkbox = egui::pos2(
+        row.left() + size::OPTION_PADDING_X + size::CHECKBOX / 2.0,
+        row.center().y,
+    );
+    crate::test_support::primary_click(&mut harness, checkbox);
+    harness.run();
+    assert_eq!(
+        *selected.borrow(),
+        HashSet::from(["kube-system", "monitoring"])
+    );
+    harness.get_by_label("All namespaces");
+
+    // Space toggles the highlighted row (the first option after All namespaces).
+    harness.key_press(Key::ArrowDown);
+    harness.run();
+    harness.key_press(Key::Space);
+    harness.run();
+    assert_eq!(
+        *selected.borrow(),
+        HashSet::from(["default", "kube-system", "monitoring"])
+    );
+    harness.get_by_label("All namespaces");
+
+    // A click on the row's name replaces the selection and closes.
+    harness.get_by_label("payments").click();
+    harness.run();
+    assert_eq!(*selected.borrow(), HashSet::from(["payments"]));
+    assert!(harness.query_by_label("All namespaces").is_none());
+}
+
+#[test]
+fn searching_shows_the_match_count_and_an_empty_state() {
+    let selected = Rc::new(RefCell::new(HashSet::new()));
+    let mut harness = multi_select_harness(selected);
+    harness
+        .input_mut()
+        .events
+        .push(egui::Event::Text("m".into()));
+    harness.run();
+    harness.run();
+    harness.ui_harness("comboboxes/multi_select/searching");
+
+    harness
+        .input_mut()
+        .events
+        .push(egui::Event::Text("zz".into()));
+    harness.run();
+    harness.run();
+    harness.get_by_label("No namespaces match “mzz”");
+}
+
+#[test]
+fn a_plain_select_has_no_search_row_and_checks_the_selection() {
+    let selected = Rc::new(RefCell::new("Baseline"));
+    let selected_for_ui = selected.clone();
+    let mut harness = Harness::new_ui(move |ui| {
+        let mut selected = selected_for_ui.borrow_mut();
+        Combobox::new("profile")
+            .accessibility_label("Debug profile")
+            .selected_text(*selected)
+            .size(crate::FieldSize::Sm)
+            .width(200.0)
+            .searchable(false)
+            .filter_by(|profile: &&str| profile)
+            .show_items(ui, &["General", "Baseline", "Restricted"], |cb, profile| {
+                if cb.item(*profile, *profile == *selected).clicked() {
+                    *selected = profile;
+                }
+            });
+    });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Debug profile")
+        .click();
+    harness.run();
+    assert!(
+        harness
+            .query_by_role(egui::accesskit::Role::TextInput)
+            .is_none(),
+        "a plain list has no search row"
+    );
+    harness.ui_harness("comboboxes/plain_select/open");
+    harness.get_by_label("Restricted").click();
+    harness.run();
+    assert_eq!(*selected.borrow(), "Restricted");
+}
+
+#[test]
+fn space_toggles_without_typing_into_the_search_and_enter_closes() {
+    let selected = Rc::new(RefCell::new(HashSet::from(["kube-system"])));
+    let mut harness = multi_select_harness(selected.clone());
+    harness.key_press(Key::ArrowDown);
+    harness.run();
+    // A real Space press also types " " into the focused search row, in the
+    // same frame.
+    let events = &mut harness.input_mut().events;
+    events.push(egui::Event::Key {
+        key: Key::Space,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    events.push(egui::Event::Text(" ".into()));
+    harness.run();
+    assert_eq!(
+        *selected.borrow(),
+        HashSet::from(["default", "kube-system"])
+    );
+    harness.get_by_label("All namespaces");
+    assert_eq!(
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::TextInput, "Search Namespaces")
+            .value()
+            .as_deref(),
+        Some("")
+    );
+
+    // Enter is "done": it closes and keeps the toggles.
+    harness.key_press(Key::Enter);
+    harness.run();
+    assert_eq!(
+        *selected.borrow(),
+        HashSet::from(["default", "kube-system"])
+    );
+    assert!(harness.query_by_label("All namespaces").is_none());
 }

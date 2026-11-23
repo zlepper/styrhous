@@ -291,7 +291,7 @@ pub(super) fn select_namespace(
         10_000,
     );
     harness
-        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace")
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace scope")
         .click();
     let search_label = "Search Namespace";
     wait_for_harness(

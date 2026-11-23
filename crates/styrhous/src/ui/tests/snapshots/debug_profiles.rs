@@ -129,6 +129,31 @@ fn debug_image_preset_table_adds_and_removes_rows() {
 }
 
 #[test]
+fn removing_the_middle_debug_image_preset_removes_only_it() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    open_terminal_settings(&mut state, TerminalLaunchSettings::default());
+    harness.state_mut().ui_state = state;
+    harness.run();
+    let names = |harness: &Harness<MyEguiApp<MockWorker>>| {
+        harness
+            .state()
+            .ui_state
+            .terminal_settings_blade()
+            .unwrap()
+            .draft
+            .debug_image_presets
+            .iter()
+            .map(|preset| preset.name.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(names(&harness), ["Busybox", "Ubuntu", "Netshoot"]);
+
+    click_label(&mut harness, "Remove Ubuntu");
+    assert_eq!(names(&harness), ["Busybox", "Netshoot"]);
+}
+
+#[test]
 fn debug_image_preset_table_reorders_rows_by_dragging_the_handle() {
     let mut harness = application_harness::<MockWorker>();
     let mut state = oracle_resource_table_state();

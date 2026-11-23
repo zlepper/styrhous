@@ -5,7 +5,8 @@
 // Without IDs, every manifest board with a non-empty `snapshot` is compared; named IDs are
 // compared (or reported as missing a snapshot) regardless. Each comparison writes Kineprism's
 // report.json and annotated PNGs to target/design-oracles/<ID>/ (regions to
-// target/design-oracles/<ID>/<region>/), and target/design-oracles/scoreboard.md summarises all.
+// target/design-oracles/<ID>/<region>/), plus a second pass with --ignore-antialiasing in a
+// non-aa/ subdirectory of each, and target/design-oracles/scoreboard.md summarises all.
 // A comparison that fails (Kineprism error, missing report or image) becomes an error row and the
 // others still run, so the scoreboard is always written. Exits 0 when every comparison is
 // equivalent, 1 otherwise, and 2 when the run itself fails (unreadable manifest, unknown ID).
@@ -101,6 +102,9 @@ export function parseManifest(text) {
       if (typeof region.name !== "string" || !region.name) {
         throw new Error(`board ${board.id}: region without a name`);
       }
+      if (safeName(region.name) === NON_AA_DIR) {
+        throw new Error(`board ${board.id}: region name "${region.name}" is reserved for the non-AA pass`);
+      }
       for (const key of ["x", "y", "width", "height"]) {
         if (!Number.isInteger(region[key]) || region[key] < 0) {
           throw new Error(`board ${board.id} region ${region.name}: ${key} must be a non-negative integer`);
@@ -134,7 +138,10 @@ function resolveKineprism() {
   return { command: "npx", prefix: ["--yes", "@zlepper/kineprism@0.0.5"] };
 }
 
-function compareOne(kineprism, board, target) {
+/** Output subdirectory of each comparison's second, antialiasing-insensitive pass. */
+const NON_AA_DIR = "non-aa";
+
+export function compareOne(kineprism, board, target) {
   const row = { board: board.id, region: target.name };
   const expected = repoPath(board.oracle);
   // A pending egui_kittest candidate (<name>.new.png, written when the snapshot test fails) is
@@ -152,39 +159,54 @@ function compareOne(kineprism, board, target) {
     notes.push(`size mismatch: oracle ${fmtSize(expectedSize)}, snapshot ${fmtSize(actualSize)}`);
   }
 
-  mkdirSync(target.dir, { recursive: true });
   const regionArgs = target.name
     ? ["--region-x", target.x, "--region-y", target.y, "--region-width", target.width, "--region-height", target.height].map(String)
     : [];
-  const result = spawnSync(
-    kineprism.command,
-    [...kineprism.prefix, expected, actual, "--output-dir", target.dir, "--force", ...regionArgs],
-    { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 },
-  );
-  if (result.error) return { ...row, status: "error", exit: "", note: `kineprism: ${result.error.message}` };
-  const exit = result.status;
-  if (exit !== 0 && exit !== 1) {
-    const message = (result.stderr || result.stdout || "").trim().split("\n").at(-1);
-    return { ...row, status: "error", exit, note: [...notes, `kineprism: ${message}`].join("; ") };
-  }
-
-  let report;
-  try {
-    report = JSON.parse(readFileSync(join(target.dir, "report.json"), "utf8"));
-  } catch (error) {
-    const note = `kineprism exited ${exit} without a readable report.json: ${error.message}`;
-    return { ...row, status: "error", exit, note: [...notes, note].join("; ") };
-  }
+  const run = runKineprism(kineprism, expected, actual, target.dir, regionArgs);
+  if (run.error) return { ...row, status: "error", exit: run.exit, note: [...notes, run.error].join("; ") };
+  const { exit, report } = run;
+  // The same comparison with antialiased edges treated as equivalent. Raw MAE stays the acceptance
+  // metric (the flag does not change it); what this pass still reports are the differences worth
+  // fixing, without the glyph and curve edge noise that Chromium and egui rasterise differently.
+  const nonAa = runKineprism(kineprism, expected, actual, join(target.dir, NON_AA_DIR), [
+    ...regionArgs,
+    "--ignore-antialiasing",
+  ]);
+  if (nonAa.error) notes.push(`non-AA pass: ${nonAa.error}`);
   return {
     ...row,
     exit,
-    status: report.equivalent && !sizeMismatch ? "equivalent" : sizeMismatch ? "size mismatch" : "different",
+    status: sizeMismatch ? "size mismatch" : report.equivalent ? "equivalent" : "different",
     rawMae: report.metrics?.raw?.mae,
     alignedMae: report.metrics?.global_aligned?.mae,
     summary: report.summary,
-    diff: relative(compareOutDir, join(target.dir, "diff.png")),
+    diff: run.diff,
+    nonAaSummary: nonAa.report?.summary,
+    nonAaDiff: nonAa.diff,
     note: notes.join("; "),
   };
+}
+
+/** Runs Kineprism into `dir`; returns { exit, report, diff } or { exit, error }. */
+function runKineprism(kineprism, expected, actual, dir, extraArgs) {
+  mkdirSync(dir, { recursive: true });
+  const result = spawnSync(
+    kineprism.command,
+    [...kineprism.prefix, expected, actual, "--output-dir", dir, "--force", ...extraArgs],
+    { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 },
+  );
+  if (result.error) return { exit: "", error: `kineprism: ${result.error.message}` };
+  const exit = result.status;
+  if (exit !== 0 && exit !== 1) {
+    const message = (result.stderr || result.stdout || "").trim().split("\n").at(-1);
+    return { exit, error: `kineprism: ${message}` };
+  }
+  try {
+    const report = JSON.parse(readFileSync(join(dir, "report.json"), "utf8"));
+    return { exit, report, diff: relative(compareOutDir, join(dir, "diff.png")) };
+  } catch (error) {
+    return { exit, error: `kineprism exited ${exit} without a readable report.json: ${error.message}` };
+  }
 }
 
 function repoPath(path) {
@@ -221,8 +243,10 @@ export function renderScoreboard(rows, generatedAt = new Date()) {
     "Added",
     "Removed",
     "Changed",
+    "Changed (non-AA)",
     "Canvas size",
     "Diff",
+    "Non-AA diff",
     "Notes",
   ];
   const lines = [
@@ -247,8 +271,10 @@ export function renderScoreboard(rows, generatedAt = new Date()) {
       s.added ?? "",
       s.removed ?? "",
       s.changed ?? "",
+      r.nonAaSummary?.changed ?? "",
       s.canvas_size ?? "",
       r.diff ? `[diff](${r.diff})` : "",
+      r.nonAaDiff ? `[non-AA diff](${r.nonAaDiff})` : "",
       (r.note ?? "").replace(/\|/g, "\\|"),
     ];
     lines.push(`| ${cells.join(" | ")} |`);

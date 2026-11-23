@@ -41,29 +41,15 @@ impl GlobalBladeContent for ManagedClusterDiscoveryBlade {
         _layer: components::BladeLayer,
         context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
-        let theme = ui.tokens();
         let discovery = context.managed_cluster_discovery();
-        ui.horizontal(|ui| {
-            ui.add_space(-DISCOVERY_HEADER_TITLE_OFFSET);
-            ui.label(
-                egui::RichText::new("Cluster discovery")
-                    .font(type_scale::HEADING.font_id(ui.ctx()))
-                    .color(theme.text.primary),
-            );
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui
-                    .add_enabled_ui(
-                        !discovery.loading
-                            && !discovery.aws.account_loading
-                            && !discovery.aws.scan_loading
-                            && discovery.importing.is_none(),
-                        |ui| discovery_refresh_button(ui).clicked(),
-                    )
-                    .inner
-                {
-                    self.pending_action = Some(ManagedDiscoveryAction::Refresh);
-                }
-            });
+        components::blade_title_with_actions(ui, None, "Cluster discovery", |ui| {
+            let idle = !discovery.loading
+                && !discovery.aws.account_loading
+                && !discovery.aws.scan_loading
+                && discovery.importing.is_none();
+            if discovery_refresh_button(ui, idle).clicked() {
+                self.pending_action = Some(ManagedDiscoveryAction::Refresh);
+            }
         });
         GlobalBladeRenderResult::default()
     }
@@ -124,20 +110,11 @@ impl GlobalBladeContent for ManagedClusterDiscoveryBlade {
     }
 }
 
-pub(super) fn discovery_refresh_button(ui: &mut egui::Ui) -> egui::Response {
-    let theme = ui.tokens();
-    ui.add(
-        egui::Button::image_and_text(
-            icons::arrow_path_icon()
-                .fit_to_exact_size(egui::Vec2::splat(16.0))
-                .tint(theme.accent.text),
-            egui::RichText::new("Refresh")
-                .font(type_scale::BODY.font_id(ui.ctx()))
-                .color(theme.accent.text),
-        )
-        .frame(false),
-    )
-    .with_pointing_hand()
+pub(super) fn discovery_refresh_button(ui: &mut egui::Ui, enabled: bool) -> egui::Response {
+    Button::link("Refresh")
+        .leading_icon(icons::Icon::ArrowPath)
+        .enabled(enabled)
+        .show(ui)
 }
 
 impl ManagedClusterDiscoveryBlade {
@@ -201,28 +178,24 @@ impl ManagedClusterDiscoveryBlade {
                                     let scanning_this = aws.scan_loading
                                         && aws.selected_account_id.as_deref() == Some(&account.id)
                                         && aws.selected_profile.as_ref() == Some(profile);
-                                    if ui
-                                        .add_enabled_ui(
-                                            !discovery.loading
-                                                && !aws.scan_loading
-                                                && discovery.importing.is_none(),
-                                            |ui| {
-                                                TailwindButton::secondary(if scanning_this {
-                                                    "Scanning…"
-                                                } else {
-                                                    "Scan clusters"
-                                                })
-                                                .size(ButtonSize::Xs)
-                                                .accessibility_label(format!(
-                                                    "Scan clusters in account {} with profile {}",
-                                                    account.id,
-                                                    profile.label()
-                                                ))
-                                                .show(ui)
-                                                .clicked()
-                                            },
-                                        )
-                                        .inner
+                                    if Button::secondary(if scanning_this {
+                                        "Scanning…"
+                                    } else {
+                                        "Scan clusters"
+                                    })
+                                    .size(ButtonSize::Sm)
+                                    .accessibility_label(format!(
+                                        "Scan clusters in account {} with profile {}",
+                                        account.id,
+                                        profile.label()
+                                    ))
+                                    .enabled(
+                                        !discovery.loading
+                                            && !aws.scan_loading
+                                            && discovery.importing.is_none(),
+                                    )
+                                    .show(ui)
+                                    .clicked()
                                     {
                                         self.pending_action =
                                             Some(ManagedDiscoveryAction::ScanEks {
@@ -329,7 +302,7 @@ impl ManagedClusterDiscoveryBlade {
     ) {
         show_provider_heading(
             ui,
-            icons::azure_icon(),
+            icons::Icon::Azure.image(),
             "Azure Kubernetes Service",
             discovery_count(
                 discovery.loading,
@@ -380,7 +353,7 @@ impl ManagedClusterDiscoveryBlade {
     ) {
         show_provider_heading(
             ui,
-            icons::tailscale_icon(),
+            icons::Icon::Tailscale.image(),
             "Tailscale",
             discovery_count(
                 discovery.loading,

@@ -27,8 +27,8 @@ pub(crate) fn table_definition(api_resource: &ApiResource) -> Option<ResourceTab
         columns: vec![
             column(STATUS_COLUMN, "Status", 108.0),
             column(ROLES_COLUMN, "Roles", 140.0),
-            column(CPU_COLUMN, "CPU", 80.0),
-            column(MEMORY_COLUMN, "Memory", 90.0),
+            column(CPU_COLUMN, "CPU", 80.0).numeric(),
+            column(MEMORY_COLUMN, "Memory", 90.0).numeric(),
             column(VERSION_COLUMN, "Version", 132.0),
         ],
     })

@@ -14,7 +14,7 @@ pub(crate) fn watcher(context: TypedWatcherContext) -> Option<Box<dyn ResourceWa
 
 pub(crate) fn table_definition(api_resource: &ApiResource) -> Option<ResourceTableDefinition> {
     matches_namespaced_api_resource::<ReplicaSet>(api_resource).then(|| ResourceTableDefinition {
-        columns: vec![column(READY_COLUMN, "Ready", 90.0)],
+        columns: vec![column(READY_COLUMN, "Ready", 90.0).numeric()],
     })
 }
 

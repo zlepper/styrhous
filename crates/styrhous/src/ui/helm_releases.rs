@@ -5,9 +5,9 @@ use super::global_blade::{
 use super::state::PendingHelmRollback;
 use crate::api_resource::ApiResource;
 use crate::helm_release::{HelmRelease, HelmReleaseKey};
+use components::design::space;
 use components::design::theme::ThemeExt;
-use components::design::{radius, space, type_scale};
-use components::{BladeLayer, DetailCell, DetailRow, InspectorDetails, WorkspaceCard};
+use components::{BladeLayer, Card, DetailCell, DetailRow, InspectorDetails};
 
 #[derive(Debug)]
 pub(super) struct HelmReleaseDetailBlade {
@@ -86,7 +86,6 @@ impl GlobalBladeContent for HelmReleaseDetailBlade {
         _layer: BladeLayer,
         context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
-        let theme = ui.tokens();
         let releases = context.helm_releases(
             self.cluster_key,
             &self.release.namespace,
@@ -96,29 +95,7 @@ impl GlobalBladeContent for HelmReleaseDetailBlade {
             .selected(&releases)
             .map(|release| release.name.as_str())
             .unwrap_or(&self.release.release_name);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            egui::Frame::new()
-                .fill(theme.accent.tint)
-                .corner_radius(egui::CornerRadius::same(radius::KEY))
-                .inner_margin(egui::Margin::symmetric(space::S8 as i8, space::S4 as i8))
-                .show(ui, |ui| {
-                    ui.label(
-                        egui::RichText::new("Helm Release")
-                            .font(type_scale::BODY.font_id(ui.ctx()))
-                            .color(theme.accent.text),
-                    );
-                });
-            ui.add_space(space::S12);
-            let title = egui::RichText::new(title)
-                .font(type_scale::HEADING.font_id(ui.ctx()))
-                .color(theme.text.primary);
-            ui.add_sized(
-                egui::vec2(ui.available_width().max(0.0), 24.0),
-                egui::Label::new(title)
-                    .truncate()
-                    .halign(egui::Align::RIGHT),
-            );
-        });
+        components::blade_title(ui, Some("Helm Release"), title);
         GlobalBladeRenderResult::default()
     }
 
@@ -142,44 +119,39 @@ impl GlobalBladeContent for HelmReleaseDetailBlade {
             );
             return GlobalBladeRenderResult::default();
         };
-        WorkspaceCard::new()
-            .margin(space::S16 as i8)
-            .show(ui, |ui| {
-                InspectorDetails::show_properties(
-                    ui,
-                    &[
-                        DetailRow::new([
-                            DetailCell::new("Release", release.name.as_str()).copyable(),
-                            DetailCell::new("Namespace", release.namespace.as_str()).copyable(),
-                            DetailCell::status(
-                                "Status",
-                                release.status.as_str(),
-                                helm_status_tone(&release.status),
-                            ),
-                        ]),
-                        DetailRow::new([
-                            DetailCell::new("Chart", release.chart.as_str()).copyable(),
-                            DetailCell::new("Chart version", release.chart_version.as_str())
-                                .copyable(),
-                            DetailCell::new("App version", release.app_version.as_str()).copyable(),
-                        ]),
-                        DetailRow::new([
-                            DetailCell::new("First deployed", release.first_deployed.as_str())
-                                .copyable(),
-                            DetailCell::new("Last deployed", release.last_deployed.as_str())
-                                .copyable(),
-                            DetailCell::new("Description", display_or_dash(&release.description))
-                                .copyable(),
-                        ]),
-                        DetailRow::new([
-                            DetailCell::new("Storage driver", release.storage.to_string())
-                                .copyable(),
-                            DetailCell::new("Storage record", release.storage_name.as_str())
-                                .copyable(),
-                        ]),
-                    ],
-                );
-            });
+        Card::new().show(ui, |ui| {
+            InspectorDetails::show_properties(
+                ui,
+                &[
+                    DetailRow::new([
+                        DetailCell::new("Release", release.name.as_str()).copyable(),
+                        DetailCell::new("Namespace", release.namespace.as_str()).copyable(),
+                        DetailCell::status(
+                            "Status",
+                            release.status.as_str(),
+                            helm_status_tone(&release.status),
+                        ),
+                    ]),
+                    DetailRow::new([
+                        DetailCell::new("Chart", release.chart.as_str()).copyable(),
+                        DetailCell::new("Chart version", release.chart_version.as_str()).copyable(),
+                        DetailCell::new("App version", release.app_version.as_str()).copyable(),
+                    ]),
+                    DetailRow::new([
+                        DetailCell::new("First deployed", release.first_deployed.as_str())
+                            .copyable(),
+                        DetailCell::new("Last deployed", release.last_deployed.as_str()).copyable(),
+                        DetailCell::new("Description", display_or_dash(&release.description))
+                            .copyable()
+                            .free_text(),
+                    ]),
+                    DetailRow::new([
+                        DetailCell::new("Storage driver", release.storage.to_string()).copyable(),
+                        DetailCell::new("Storage record", release.storage_name.as_str()).copyable(),
+                    ]),
+                ],
+            );
+        });
         ui.add_space(space::S12);
         let mut column_settings = None;
         // `releases` is sorted newest first.
@@ -292,9 +264,10 @@ mod manifest;
 mod tables;
 
 pub(super) use manifest::{ManifestResource, manifest_resource_namespace, manifest_resources};
+pub(super) use tables::helm_status_tone;
 use tables::{
-    RevisionRollback, display_or_dash, helm_status_tone, show_manifest_resources,
-    show_release_notes, show_revision_history, show_storage_metadata, show_values_disclosure,
+    RevisionRollback, display_or_dash, show_manifest_resources, show_release_notes,
+    show_revision_history, show_storage_metadata, show_values_disclosure,
 };
 
 #[cfg(test)]

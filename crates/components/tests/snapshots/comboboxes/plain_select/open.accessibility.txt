@@ -1,0 +1,15 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        ComboBox name="Debug profile" value="Baseline" rect=(x=8.0 y=8.0 width=200.0 height=28.0 center_x=108.0 center_y=22.0)
+  Unknown name="Debug profile options" rect=(x=8.0 y=40.0 width=200.0 height=104.0 center_x=108.0 center_y=92.0)
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              CheckBox name="General" state=[toggled=False] rect=(x=12.0 y=44.0 width=192.0 height=32.0 center_x=108.0 center_y=60.0)
+              CheckBox name="Baseline" state=[toggled=True] rect=(x=12.0 y=76.0 width=192.0 height=32.0 center_x=108.0 center_y=92.0)
+              CheckBox name="Restricted" state=[toggled=False] rect=(x=12.0 y=108.0 width=192.0 height=32.0 center_x=108.0 center_y=124.0)

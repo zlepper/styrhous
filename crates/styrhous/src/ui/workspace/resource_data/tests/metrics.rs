@@ -31,7 +31,7 @@ fn pod_metric_results_invalidate_cpu_sort_and_update_cells() {
         false,
         &mut PersistedResourceTablePreferences::default(),
     );
-    configuration.sort_state = Some(components::SortState::new(
+    configuration.layout.sort = Some(components::SortState::new(
         CPU_COLUMN,
         components::SortDirection::Ascending,
     ));
@@ -161,7 +161,7 @@ fn node_metric_results_and_api_unavailable_refresh_cpu_sort_and_cells() {
         false,
         &mut PersistedResourceTablePreferences::default(),
     );
-    configuration.sort_state = Some(components::SortState::new(
+    configuration.layout.sort = Some(components::SortState::new(
         CPU_COLUMN,
         components::SortDirection::Ascending,
     ));
@@ -298,7 +298,7 @@ fn unavailable_usage_sorts_after_available_usage_in_both_directions() {
                 false,
                 &mut PersistedResourceTablePreferences::default(),
             );
-            configuration.sort_state = Some(components::SortState::new(column, direction));
+            configuration.layout.sort = Some(components::SortState::new(column, direction));
             let names = prepared_names(
                 &mut ResourceTableCache::default(),
                 &ui_state.clusters[&1],

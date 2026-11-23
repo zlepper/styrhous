@@ -19,12 +19,7 @@ impl GlobalBladeContent for LicenseSettingsBlade {
         _layer: components::BladeLayer,
         _context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
-        let theme = ui.tokens();
-        ui.label(
-            egui::RichText::new("License & account")
-                .font(type_scale::HEADING.font_id(ui.ctx()))
-                .color(theme.text.primary),
-        );
+        components::blade_title(ui, None, "License & account");
         GlobalBladeRenderResult::default()
     }
 
@@ -103,11 +98,11 @@ impl GlobalBladeContent for LicenseSettingsBlade {
         );
         ui.add_space(space::S8);
         ui.label("Device name");
-        TailwindTextInput::new(&mut self.display_name)
+        TextInput::new(&mut self.display_name)
             .id_salt("license-display-name")
             .accessibility_label("License device display name")
             .show(ui);
-        if TailwindButton::secondary("Save name").show(ui).clicked() {
+        if Button::secondary("Save name").show(ui).clicked() {
             let trimmed = self.display_name.trim();
             if trimmed.is_empty() || trimmed.encode_utf16().count() > 120 {
                 self.name_error = Some("Device name must contain 1 to 120 characters.".into());
@@ -126,12 +121,12 @@ impl GlobalBladeContent for LicenseSettingsBlade {
             .show(ui, |ui| {
                 ui.add_space(space::S16);
                 ui.label("License server");
-                ui.radio_value(&mut self.custom_server, false, "Styrhous cloud");
-                ui.radio_value(&mut self.custom_server, true, "Self-hosted server");
+                Radio::new(&mut self.custom_server, false, "Styrhous cloud").show(ui);
+                Radio::new(&mut self.custom_server, true, "Self-hosted server").show(ui);
                 if self.custom_server {
-                    TailwindTextInput::new(&mut self.custom_origin)
+                    TextInput::new(&mut self.custom_origin)
                         .id_salt("custom-license-origin")
-                        .hint_text("https://licenses.example.com")
+                        .placeholder("https://licenses.example.com")
                         .accessibility_label("Self-hosted license server URL")
                         .show(ui);
                 }
@@ -148,9 +143,7 @@ impl GlobalBladeContent for LicenseSettingsBlade {
                     self.pending_server_switch = None;
                 }
                 if draft_server != current_server
-                    && TailwindButton::secondary("Apply server change")
-                        .show(ui)
-                        .clicked()
+                    && Button::secondary("Apply server change").show(ui).clicked()
                 {
                     match draft_server.origin() {
                         Ok(Some(_)) => {
@@ -175,14 +168,14 @@ impl GlobalBladeContent for LicenseSettingsBlade {
                 .color(theme.warning.text),
             );
                     ui.horizontal(|ui| {
-                        if TailwindButton::danger("Confirm server change")
+                        if Button::danger_quiet("Confirm server change")
                             .show(ui)
                             .clicked()
                         {
                             context.licensing().switch_server(pending_server);
                             self.pending_server_switch = None;
                         }
-                        if TailwindButton::secondary("Cancel").show(ui).clicked() {
+                        if Button::secondary("Cancel").show(ui).clicked() {
                             self.pending_server_switch = None;
                         }
                     });
@@ -225,15 +218,19 @@ fn show_account_actions(
         ));
         ui.add_space(space::S16);
         ui.horizontal(|ui| {
-            if TailwindButton::new("Open approval page").show(ui).clicked() {
+            if Button::primary("Open approval page")
+                .trailing_icon(components::icons::Icon::ArrowTopRightOnSquare)
+                .show(ui)
+                .clicked()
+            {
                 ui.ctx().open_url(egui::OpenUrl::new_tab(
                     authorization.verification_uri_complete.clone(),
                 ));
             }
-            if TailwindButton::secondary("Copy code").show(ui).clicked() {
+            if Button::secondary("Copy code").show(ui).clicked() {
                 ui.ctx().copy_text(authorization.user_code.clone());
             }
-            if TailwindButton::danger("Cancel sign-in").show(ui).clicked() {
+            if Button::danger_quiet("Cancel sign-in").show(ui).clicked() {
                 context.licensing().sign_out();
             }
         });
@@ -254,7 +251,7 @@ fn show_account_actions(
         if matches!(
             status,
             LicenseStatus::SignedOut | LicenseStatus::Revoked | LicenseStatus::Failed { .. }
-        ) && TailwindButton::new("Sign in").show(ui).clicked()
+        ) && Button::primary("Sign in").show(ui).clicked()
         {
             context.licensing().sign_in();
         }
@@ -264,14 +261,16 @@ fn show_account_actions(
                 | LicenseStatus::Offline(_)
                 | LicenseStatus::Evaluation { .. }
                 | LicenseStatus::Failed { .. }
-        ) && TailwindButton::secondary("Refresh license")
+        ) && Button::secondary("Refresh license")
+            .leading_icon(components::icons::Icon::ArrowPath)
             .show(ui)
             .clicked()
         {
             context.licensing().refresh();
         }
         if let Some(url) = account_url
-            && TailwindButton::secondary("Manage account")
+            && Button::secondary("Manage account")
+                .trailing_icon(components::icons::Icon::ArrowTopRightOnSquare)
                 .show(ui)
                 .clicked()
         {
@@ -286,7 +285,7 @@ fn show_account_actions(
                 | LicenseStatus::Evaluation { .. }
                 | LicenseStatus::Revoked
                 | LicenseStatus::Failed { .. }
-        ) && TailwindButton::danger("Sign out").show(ui).clicked()
+        ) && Button::danger_quiet("Sign out").show(ui).clicked()
         {
             context.licensing().sign_out();
         }

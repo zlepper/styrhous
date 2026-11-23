@@ -1,8 +1,8 @@
 use components::design::theme::{ThemeExt, Tone};
 use components::test_support::{UiHarnessSnapshot, setup_egui};
 use components::{
-    DetailCell, DetailColumn, DetailRow, DetailTableCell, DetailTableRow, DetailValue,
-    InspectorDetails, WorkspaceCard,
+    Card, DetailCell, DetailColumn, DetailRow, DetailTableCell, DetailTableRow, DetailValue,
+    InspectorDetails,
 };
 use egui_kittest::{Harness, kittest::Queryable};
 
@@ -24,7 +24,7 @@ fn properties() -> Vec<DetailRow<'static>> {
         DetailRow::new([DetailCell::new(
             "Description",
             "This node runs the control-plane components and is reserved for cluster infrastructure workloads.",
-        )])
+        ).free_text()])
         .framed(),
         DetailRow::new([
             DetailCell::unavailable("External ID"),
@@ -113,7 +113,7 @@ fn inspector_details_showcase() {
                 egui::vec2(694.0, 0.0),
                 egui::Layout::top_down(egui::Align::LEFT),
                 |ui| {
-                    WorkspaceCard::new().show(ui, |ui| {
+                    Card::new().show(ui, |ui| {
                         ui.heading("Properties");
                         ui.add_space(12.0);
                         InspectorDetails::show_properties(ui, &properties());
@@ -125,7 +125,7 @@ fn inspector_details_showcase() {
                 egui::vec2(694.0, 0.0),
                 egui::Layout::top_down(egui::Align::LEFT),
                 |ui| {
-                    WorkspaceCard::new().show(ui, |ui| {
+                    Card::new().show(ui, |ui| {
                         ui.heading("Events & conditions");
                         ui.add_space(12.0);
                         ui.label(egui::RichText::new("Events").strong());
@@ -443,7 +443,7 @@ fn event_table_wraps_messages_without_moving_columns_snapshot() {
     let mut harness = Harness::new_ui(|ui| {
         ui.painter()
             .rect_filled(ui.max_rect(), 0.0, ui.tokens().surface.canvas);
-        WorkspaceCard::new().show(ui, |ui| {
+        Card::new().show(ui, |ui| {
             ui.heading("Events");
             InspectorDetails::show_table(ui, &table_columns(), &wrapping_event_rows());
         });
