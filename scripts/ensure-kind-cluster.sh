@@ -62,9 +62,18 @@ if ! namespace_names="$(kubectl --context "${context_name}" get namespaces \
     echo "Failed to list namespaces before integration test cleanup." >&2
     exit 1
 fi
-mapfile -t test_namespaces < <(
+mapfile -t listed_test_namespaces < <(
     awk -v prefix="${test_namespace_prefix}" 'index($0, prefix) == 1' <<<"${namespace_names}"
 )
+
+# Only namespaces that no running test owns are removed; see scripts/lib/kind-namespace-leases.sh.
+if ! command -v flock >/dev/null; then
+    echo "flock (util-linux) is required to tell leftover test namespaces from running ones." >&2
+    exit 1
+fi
+# shellcheck source=lib/kind-namespace-leases.sh
+source "${script_dir}/lib/kind-namespace-leases.sh"
+take_leftover_namespace_leases "$(kind_lock_dir)/styrhous-kind-namespaces" "${listed_test_namespaces[@]}"
 
 if (( ${#test_namespaces[@]} > 0 )); then
     echo "Removing leftover Styrhous integration test namespaces..."
@@ -100,4 +109,6 @@ if (( ${#test_namespaces[@]} > 0 )); then
         --ignore-not-found --wait=false
     kubectl --context "${context_name}" wait --for=delete "${namespace_resources[@]}" \
         --timeout="${timeout}"
+    # Unlinked while still locked; the locks are released when this script exits.
+    rm -f "${lease_files[@]}"
 fi

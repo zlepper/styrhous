@@ -83,7 +83,12 @@ Whenever an accessibility snapshot changes, take a look at it, and make sure thi
 `test_real_cluster_connection`, `test_resource_watcher_integration`, and
 `test_resource_actions_integration` are regular nextest tests. `.config/nextest.toml`
 runs `scripts/ensure-kind-cluster.sh` once before the matching Kind tests. The
-tests run in parallel; each mutable test owns a unique `styrhous-it-*` namespace.
+tests run in parallel; each mutable test owns a unique `styrhous-it-*` namespace and
+holds a `flock` lease on it (`NamespaceLease`; `scripts/lib/kind-namespace-leases.sh`)
+while it exists. The script removes only test namespaces whose lease it can take, so
+leftovers of crashed runs are cleaned up while concurrent test runs (e.g. from several
+worktrees) keep their namespaces. Create test namespaces only through
+`IntegrationNamespaceFixture` so they get a lease.
 
 When running Kind-backed tests from a sandboxed agent, request command approval
 escalation for the nextest command. Rootless Podman needs to create a user namespace,

@@ -9,56 +9,17 @@ use k8s_openapi::api::core::v1::{ConfigMap, Namespace, Secret};
 use kube::api::Patch;
 use kube::{Api, Client};
 use std::collections::BTreeMap;
-use std::fs::{File, OpenOptions};
-use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+mod locks;
 mod waits;
+pub(super) use locks::KindDiscoveryLock;
+use locks::NamespaceLease;
 pub(super) use waits::*;
 
 const TEST_NAMESPACE_PREFIX: &str = "styrhous-it-";
 const FIXTURE_CLEANUP_TIMEOUT: Duration = Duration::from_secs(30);
 const CLUSTER_DISCOVERY_TIMEOUT_MS: u64 = 30_000;
-const KIND_DISCOVERY_LOCK_FILE: &str = "styrhous-kind-api-discovery.lock";
-
-pub(super) struct KindDiscoveryLock {
-    _file: File,
-}
-
-impl KindDiscoveryLock {
-    pub(super) fn acquire() -> Self {
-        Self::acquire_at(kind_discovery_lock_path())
-    }
-
-    fn acquire_at(path: impl AsRef<Path>) -> Self {
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(path.as_ref())
-            .unwrap_or_else(|error| {
-                panic!(
-                    "Failed to open Kind API discovery lock {}: {error}",
-                    path.as_ref().display()
-                )
-            });
-        file.lock().unwrap_or_else(|error| {
-            panic!(
-                "Failed to acquire Kind API discovery lock {}: {error}",
-                path.as_ref().display()
-            )
-        });
-        Self { _file: file }
-    }
-}
-
-fn kind_discovery_lock_path() -> PathBuf {
-    std::env::var_os("XDG_RUNTIME_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir)
-        .join(KIND_DISCOVERY_LOCK_FILE)
-}
 
 pub(super) struct IntegrationNamespaceFixture {
     pub(super) runtime: tokio::runtime::Runtime,
@@ -67,6 +28,8 @@ pub(super) struct IntegrationNamespaceFixture {
     pub(super) secrets: Api<Secret>,
     pub(super) namespace: String,
     pub(super) name: String,
+    /// Fields drop after `Drop::drop`, so the lease outlives the namespace deletion.
+    _lease: NamespaceLease,
 }
 
 impl IntegrationNamespaceFixture {
@@ -86,6 +49,8 @@ impl IntegrationNamespaceFixture {
                 .expect("system time should be after the Unix epoch")
                 .as_nanos()
         );
+        // Take the lease before the namespace exists, so cleanup never sees it unowned.
+        let lease = NamespaceLease::acquire(&namespace);
         runtime.block_on(async {
             namespaces
                 .create(
@@ -129,6 +94,7 @@ impl IntegrationNamespaceFixture {
             secrets,
             namespace,
             name: name.to_owned(),
+            _lease: lease,
         }
     }
 }
@@ -238,36 +204,6 @@ pub(super) fn wait_for_cluster_data(harness: &mut Harness<MyEguiApp<Worker>>, cl
         |app| cluster_load_state(&app.ui_state, cluster_key),
         CLUSTER_DISCOVERY_TIMEOUT_MS,
     );
-}
-
-#[test]
-fn kind_discovery_lock_is_exclusive_and_released_with_its_guard() {
-    let path = std::env::temp_dir().join(format!(
-        "styrhous-kind-discovery-lock-test-{}-{:x}.lock",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("system time should be after the Unix epoch")
-            .as_nanos()
-    ));
-    let guard = KindDiscoveryLock::acquire_at(&path);
-    let competing_file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(&path)
-        .expect("the competing lock file should open");
-
-    assert!(
-        competing_file.try_lock().is_err(),
-        "a second Kind discovery should not acquire the lock while the guard is alive"
-    );
-
-    drop(guard);
-    competing_file
-        .try_lock()
-        .expect("dropping the guard should release the discovery lock");
-    drop(competing_file);
-    std::fs::remove_file(&path).expect("the temporary discovery lock should be removable");
 }
 
 pub(super) fn select_namespace(
@@ -501,5 +437,47 @@ mod tests {
             current_resource_detail(&harness.state().ui_state, cluster_key, history_entry_id)
                 .expect("the intended Pod inspector should open");
         assert_eq!(entry.resource_name, resource_name);
+    }
+
+    /// The fixture must hold its lease for as long as its namespace exists, and in the directory
+    /// `scripts/ensure-kind-cluster.sh` probes, or a concurrent run's cleanup deletes it.
+    #[test]
+    fn a_namespace_fixture_holds_its_lease_until_its_namespace_is_deleted() {
+        let fixture = IntegrationNamespaceFixture::create("namespace-lease", "anchor", "unused");
+        let lease_path = fixture._lease.path.clone();
+        assert!(
+            lease_path.starts_with(locks::kind_lock_dir()),
+            "the lease should live where the cleanup script looks: {}",
+            lease_path.display()
+        );
+        let lease_is_held = || {
+            !std::process::Command::new("flock")
+                .arg("--nonblock")
+                .arg(&lease_path)
+                .arg("true")
+                .status()
+                .expect("flock (util-linux) should run")
+                .success()
+        };
+        assert!(lease_is_held(), "a live fixture should hold its lease");
+
+        let namespace = fixture.namespace.clone();
+        drop(fixture);
+        assert!(
+            !lease_path.exists(),
+            "the lease should be released once the fixture is gone"
+        );
+        // A fresh client: the fixture's client belonged to its runtime, which is gone now.
+        let runtime = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+        let deleted = runtime.block_on(async {
+            let client = Client::try_default()
+                .await
+                .expect("Failed to create Kubernetes client");
+            Api::<Namespace>::all(client).get_opt(&namespace).await
+        });
+        assert!(
+            matches!(deleted, Ok(None)),
+            "the namespace should be deleted before its lease is released: {deleted:?}"
+        );
     }
 }
