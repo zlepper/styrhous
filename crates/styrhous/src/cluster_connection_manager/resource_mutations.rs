@@ -229,34 +229,26 @@ pub(crate) async fn apply_resource_yaml(
     );
 
     let api = dynamic_api::create(&client, &api_resource, namespace.as_deref())?;
-    let mut current = api.get(&resource_name).await?;
-    let obj = match resource_yaml::prepare_editor_replacement(
-        &original_yaml,
-        &yaml,
-        &resource_version,
-        &resource_uid,
-        &mut current,
-    )? {
-        resource_yaml::ReplacementPreparation::Ready(obj) => obj,
-        resource_yaml::ReplacementPreparation::Conflict => {
-            return Ok(Err(ResourceApplyFailed {
-                editor_id,
-                cluster_key,
-                api_resource,
-                namespace,
-                resource_name,
-                error: resource_version_conflict_error(),
-            }));
-        }
+    let document = resource_yaml::EditorDocument {
+        original_yaml: &original_yaml,
+        edited_yaml: &yaml,
+        resource_version: &resource_version,
+        resource_uid: &resource_uid,
     };
-
-    match api
-        .replace(&resource_name, &kube::api::PostParams::default(), &obj)
-        .await
-    {
-        Ok(mut updated) => {
+    let replacement =
+        resource_yaml::send_editor_replacement(&api, &resource_name, &document, |object| {
+            let (api, resource_name) = (api.clone(), resource_name.clone());
+            async move {
+                Ok(api
+                    .replace(&resource_name, &kube::api::PostParams::default(), &object)
+                    .await?)
+            }
+        })
+        .await?;
+    let error = match replacement {
+        resource_yaml::EditorReplacement::Sent(mut updated) => {
             let (yaml, resource_version, resource_uid) = resource_yaml::editor_yaml(&mut updated)?;
-            Ok(Ok(ResourceApplyCompleted {
+            return Ok(Ok(ResourceApplyCompleted {
                 editor_id,
                 cluster_key,
                 api_resource,
@@ -265,18 +257,19 @@ pub(crate) async fn apply_resource_yaml(
                 yaml,
                 resource_version,
                 resource_uid,
-            }))
+            }));
         }
-        Err(kube::Error::Api(status)) => Ok(Err(ResourceApplyFailed {
-            editor_id,
-            cluster_key,
-            api_resource,
-            namespace,
-            resource_name,
-            error: resource_api_error(&status),
-        })),
-        Err(error) => Err(error.into()),
-    }
+        resource_yaml::EditorReplacement::Conflict => resource_version_conflict_error(),
+        resource_yaml::EditorReplacement::Rejected(status) => resource_api_error(&status),
+    };
+    Ok(Err(ResourceApplyFailed {
+        editor_id,
+        cluster_key,
+        api_resource,
+        namespace,
+        resource_name,
+        error,
+    }))
 }
 
 pub(crate) struct ResourceDataUpdateRequest<'a> {

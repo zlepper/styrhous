@@ -72,10 +72,31 @@ fn roll_back_through_the_inspector(test_name: &str, storage: StorageDriver) {
             .max_by_key(|release| release.revision)
             .map(|release| (release.revision, release.storage))
     };
-    wait_for(
+    // Which of the release watch, the `helm` process and the operation outcome a wait is
+    // still missing.
+    let helm_state = |app: &MyEguiApp<Worker>| {
+        let cluster = &app.ui_state.clusters[&cluster_key];
+        let watch = cluster.helm_release_cache.get(&namespace);
+        Some(format!(
+            "release watch synced={:?}, backend errors={:?}, latest revision={:?}, \
+             rollbacks in flight={}, operations={:?}",
+            watch.map(|watch| watch.is_synced),
+            watch.map(|watch| &watch.backend_errors),
+            latest_revision(app),
+            cluster.helm_rollbacks.ids().len(),
+            cluster
+                .operation_history
+                .iter()
+                .map(|entry| entry.title.as_str())
+                .collect::<Vec<_>>(),
+        ))
+    };
+    wait_for_with_terminal_and_timeout_diagnostic(
         &mut harness,
         "the Helm release watch to show revision 2",
         |app| latest_revision(app).filter(|(revision, _)| *revision == 2),
+        |_| None,
+        helm_state,
         10_000,
     );
     assert_eq!(latest_revision(harness.state()), Some((2, storage)));
@@ -115,7 +136,7 @@ fn roll_back_through_the_inspector(test_name: &str, storage: StorageDriver) {
         |app| latest_operation_failure(app, cluster_key),
         60_000,
     );
-    wait_for(
+    wait_for_with_terminal_and_timeout_diagnostic(
         &mut harness,
         "the rollback outcome and revision 3 to reach the UI",
         |app| {
@@ -128,6 +149,8 @@ fn roll_back_through_the_inspector(test_name: &str, storage: StorageDriver) {
                     .any(|entry| entry.title == "Helm release rolled back"))
             .then_some(())
         },
+        |app| latest_operation_failure(app, cluster_key),
+        helm_state,
         10_000,
     );
 }

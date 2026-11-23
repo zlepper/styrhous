@@ -307,20 +307,10 @@ fn test_resource_actions_integration() {
             .is_some_and(|pending| pending.resource_name == test_configmap_name)
     );
 
-    wait_for(
-        &mut harness,
-        "the resource-delete confirmation delay to elapse",
-        |app| {
-            app.ui_state.clusters[&cluster_key]
-                .pending_delete
-                .as_ref()
-                .filter(|pending| pending.confirmation_available_at <= std::time::Instant::now())
-                .map(|_| ())
-        },
-        5_000,
-    );
-
+    // The button enables once its confirmation delay has elapsed. egui hit-tests a click against
+    // the previous frame, so wait for a frame that rendered it enabled rather than for the delay.
     let confirm_delete_label = format!("Delete {test_configmap_name}");
+    wait_for_settled_clickable(&mut harness, &confirm_delete_label, 5_000);
     harness.get_by_label(&confirm_delete_label).click();
     harness.run_steps(1);
     wait_for_resource_watch(

@@ -203,54 +203,43 @@ pub(crate) async fn validate_resource_yaml(
     } = request;
 
     let api = dynamic_api::create(&client, &api_resource, namespace.as_deref())?;
-    let mut current = api.get(&resource_name).await?;
-    let obj = match resource_yaml::prepare_editor_replacement(
-        &original_yaml,
-        &yaml,
-        &resource_version,
-        &resource_uid,
-        &mut current,
-    )? {
-        resource_yaml::ReplacementPreparation::Ready(obj) => obj,
-        resource_yaml::ReplacementPreparation::Conflict => {
-            return Ok(Err(ResourceYamlValidationFailed {
+    let document = resource_yaml::EditorDocument {
+        original_yaml: &original_yaml,
+        edited_yaml: &yaml,
+        resource_version: &resource_version,
+        resource_uid: &resource_uid,
+    };
+    let replacement =
+        resource_yaml::send_editor_replacement(&api, &resource_name, &document, |object| {
+            let request =
+                strict_dry_run_replace_request(api.resource_url(), &resource_name, &object);
+            let client = client.clone();
+            async move { Ok(client.request::<DynamicObject>(request?).await?) }
+        })
+        .await?;
+    let error = match replacement {
+        resource_yaml::EditorReplacement::Sent(_) => {
+            return Ok(Ok(ResourceYamlValidated {
                 editor_id,
                 revision,
                 cluster_key,
                 api_resource,
                 namespace,
                 resource_name,
-                error: resource_version_conflict_error(),
             }));
         }
+        resource_yaml::EditorReplacement::Conflict => resource_version_conflict_error(),
+        resource_yaml::EditorReplacement::Rejected(status) => resource_api_error(&status),
     };
-    match client
-        .request::<DynamicObject>(strict_dry_run_replace_request(
-            api.resource_url(),
-            &resource_name,
-            &obj,
-        )?)
-        .await
-    {
-        Ok(_) => Ok(Ok(ResourceYamlValidated {
-            editor_id,
-            revision,
-            cluster_key,
-            api_resource,
-            namespace,
-            resource_name,
-        })),
-        Err(kube::Error::Api(status)) => Ok(Err(ResourceYamlValidationFailed {
-            editor_id,
-            revision,
-            cluster_key,
-            api_resource,
-            namespace,
-            resource_name,
-            error: resource_api_error(&status),
-        })),
-        Err(error) => Err(error.into()),
-    }
+    Ok(Err(ResourceYamlValidationFailed {
+        editor_id,
+        revision,
+        cluster_key,
+        api_resource,
+        namespace,
+        resource_name,
+        error,
+    }))
 }
 
 fn strict_dry_run_replace_request(

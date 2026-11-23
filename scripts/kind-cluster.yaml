@@ -1,0 +1,16 @@
+# Kind cluster for the Styrhous integration tests (see ensure-kind-cluster.sh).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+kubeadmConfigPatches:
+  # The single etcd member writes its WAL to the host's filesystem. When builds or the UI test
+  # suite load the host disk, each fdatasync can take seconds, and API writes then fail with
+  # "etcdserver: request timed out". The cluster is disposable, so it does not need to survive a
+  # host crash; without fsync, writes still persist across clean node restarts.
+  - |
+    apiVersion: kubeadm.k8s.io/v1beta4
+    kind: ClusterConfiguration
+    etcd:
+      local:
+        extraArgs:
+          - name: unsafe-no-fsync
+            value: "true"

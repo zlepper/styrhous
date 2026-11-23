@@ -94,6 +94,77 @@ pub(super) fn prepare_editor_replacement(
     Ok(ReplacementPreparation::Ready(Box::new(edited)))
 }
 
+/// How many times the editor's document is prepared and sent while the live object keeps
+/// changing in between. Controllers write status continuously, so a busy object can change
+/// again after it was read.
+const EDITOR_REPLACEMENT_ATTEMPTS: usize = 5;
+
+/// The editor's document and the version and identity of the object it was fetched from.
+pub(super) struct EditorDocument<'a> {
+    pub(super) original_yaml: &'a str,
+    pub(super) edited_yaml: &'a str,
+    pub(super) resource_version: &'a str,
+    pub(super) resource_uid: &'a str,
+}
+
+pub(super) enum EditorReplacement<T> {
+    Sent(T),
+    /// The live object changed beyond its status since the editor fetched it.
+    Conflict,
+    Rejected(Box<kube::core::Status>),
+}
+
+/// Prepares the editor's document against the live object (see `prepare_editor_replacement`)
+/// and sends it with `send`. A status update between reading the object and sending the
+/// replacement still makes the API server reject the stale resource version, so the object is
+/// read and checked again rather than the status update being reported as a conflict. `send`
+/// must return a failed request's `kube::Error` without added context, so a 409 is recognised.
+pub(super) async fn send_editor_replacement<T, Sent>(
+    api: &kube::Api<DynamicObject>,
+    resource_name: &str,
+    document: &EditorDocument<'_>,
+    mut send: impl FnMut(DynamicObject) -> Sent,
+) -> Result<EditorReplacement<T>>
+where
+    Sent: Future<Output = Result<T>>,
+{
+    let mut attempt = 1;
+    loop {
+        let mut current = match api.get(resource_name).await {
+            Ok(current) => current,
+            // Once a replacement was rejected, report the object's new state (it may be gone)
+            // like that rejection.
+            Err(kube::Error::Api(status)) if attempt > 1 => {
+                return Ok(EditorReplacement::Rejected(status));
+            }
+            Err(error) => return Err(error.into()),
+        };
+        let object = match prepare_editor_replacement(
+            document.original_yaml,
+            document.edited_yaml,
+            document.resource_version,
+            document.resource_uid,
+            &mut current,
+        )? {
+            ReplacementPreparation::Ready(object) => *object,
+            ReplacementPreparation::Conflict => return Ok(EditorReplacement::Conflict),
+        };
+        let error = match send(object).await {
+            Ok(sent) => return Ok(EditorReplacement::Sent(sent)),
+            Err(error) => error.downcast::<kube::Error>()?,
+        };
+        match error {
+            kube::Error::Api(status)
+                if status.code == 409 && attempt < EDITOR_REPLACEMENT_ATTEMPTS =>
+            {
+                attempt += 1;
+            }
+            kube::Error::Api(status) => return Ok(EditorReplacement::Rejected(status)),
+            error => return Err(error.into()),
+        }
+    }
+}
+
 fn retain_current_status(edited: &mut DynamicObject, current: &DynamicObject) {
     let Some(edited_data) = edited.data.as_object_mut() else {
         return;
@@ -361,5 +432,212 @@ data:
             prepare_editor_replacement(yaml, yaml, "1", "old-uid", &mut current).unwrap(),
             ReplacementPreparation::Conflict
         ));
+    }
+
+    /// The live ConfigMap as a fake API server returns it: `data.mode` is editable, and
+    /// `status.observed` stands in for a controller-owned status.
+    fn live_settings(resource_version: &str, mode: &str, observed: u32) -> String {
+        k8s_openapi::serde_json::json!({
+            "apiVersion": "v1",
+            "kind": "ConfigMap",
+            "metadata": {
+                "name": "settings",
+                "namespace": "default",
+                "resourceVersion": resource_version,
+                "uid": "uid-1"
+            },
+            "data": { "mode": mode },
+            "status": { "observed": observed }
+        })
+        .to_string()
+    }
+
+    fn conflict_status() -> String {
+        k8s_openapi::serde_json::json!({
+            "kind": "Status",
+            "apiVersion": "v1",
+            "status": "Failure",
+            "message": "Operation cannot be fulfilled on configmaps \"settings\": the object has been modified",
+            "reason": "Conflict",
+            "code": 409
+        })
+        .to_string()
+    }
+
+    /// Each request's start line and body, as the scripted API server received them.
+    type ReceivedRequests = std::sync::Arc<std::sync::Mutex<Vec<(String, String)>>>;
+
+    /// Answers one request per connection with the scripted responses, in order, recording each
+    /// request in `requests`.
+    async fn serve_scripted_api(
+        listener: tokio::net::TcpListener,
+        responses: Vec<(&'static str, String)>,
+        requests: ReceivedRequests,
+    ) -> std::io::Result<()> {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        for (status, body) in responses {
+            let (mut socket, _) = listener.accept().await?;
+            let mut received = Vec::new();
+            let mut buffer = [0_u8; 4_096];
+            let header_end = loop {
+                let read = socket.read(&mut buffer).await?;
+                received.extend_from_slice(&buffer[..read]);
+                if let Some(end) = received.windows(4).position(|window| window == b"\r\n\r\n") {
+                    break end + 4;
+                }
+                if read == 0 {
+                    return Err(std::io::ErrorKind::UnexpectedEof.into());
+                }
+            };
+            let head = String::from_utf8_lossy(&received[..header_end]).into_owned();
+            let content_length = head
+                .lines()
+                .find_map(|line| {
+                    let (name, value) = line.split_once(':')?;
+                    name.eq_ignore_ascii_case("content-length")
+                        .then(|| value.trim().parse::<usize>().ok())?
+                })
+                .unwrap_or(0);
+            while received.len() < header_end + content_length {
+                let read = socket.read(&mut buffer).await?;
+                if read == 0 {
+                    return Err(std::io::ErrorKind::UnexpectedEof.into());
+                }
+                received.extend_from_slice(&buffer[..read]);
+            }
+            requests.lock().unwrap().push((
+                head.lines().next().unwrap_or_default().to_owned(),
+                String::from_utf8_lossy(&received[header_end..]).into_owned(),
+            ));
+            let response = format!(
+                "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            socket.write_all(response.as_bytes()).await?;
+            socket.shutdown().await?;
+        }
+        Ok(())
+    }
+
+    /// Sends the editor's `data.mode: maintenance` edit of the ConfigMap fetched at version 1
+    /// to a fake API server that answers with `responses`.
+    async fn replace_settings(
+        responses: Vec<(&'static str, String)>,
+    ) -> (EditorReplacement<DynamicObject>, Vec<(String, String)>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let requests = ReceivedRequests::default();
+        let server = tokio::spawn(serve_scripted_api(listener, responses, requests.clone()));
+        let config = kube::Config::new(format!("http://{address}").parse().unwrap());
+        let client = kube::Client::try_from(config).unwrap();
+        let api: kube::Api<DynamicObject> = kube::Api::namespaced_with(
+            client,
+            "default",
+            &kube::api::ApiResource::erase::<k8s_openapi::api::core::v1::ConfigMap>(&()),
+        );
+        let original_yaml = "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: settings\n  namespace: default\ndata:\n  mode: production\nstatus:\n  observed: 1\n";
+        let edited_yaml = original_yaml.replace("mode: production", "mode: maintenance");
+        let document = EditorDocument {
+            original_yaml,
+            edited_yaml: &edited_yaml,
+            resource_version: "1",
+            resource_uid: "uid-1",
+        };
+
+        let replacement = send_editor_replacement(&api, "settings", &document, |object| {
+            let api = api.clone();
+            async move {
+                Ok(api
+                    .replace("settings", &kube::api::PostParams::default(), &object)
+                    .await?)
+            }
+        })
+        .await
+        .unwrap();
+        // Responses the replacement did not ask for are left unserved.
+        server.abort();
+        let requests = std::mem::take(&mut *requests.lock().unwrap());
+        (replacement, requests)
+    }
+
+    #[tokio::test]
+    async fn a_status_update_that_races_the_replacement_is_rebased_and_sent_again() {
+        let (replacement, requests) = replace_settings(vec![
+            ("200 OK", live_settings("2", "production", 2)),
+            ("409 Conflict", conflict_status()),
+            ("200 OK", live_settings("3", "production", 3)),
+            ("200 OK", live_settings("4", "maintenance", 3)),
+        ])
+        .await;
+
+        let EditorReplacement::Sent(replaced) = replacement else {
+            panic!("a status-only race should not be reported as a conflict");
+        };
+        assert_eq!(replaced.metadata.resource_version.as_deref(), Some("4"));
+        let methods = requests
+            .iter()
+            .map(|(line, _)| line.split(' ').next().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(methods, ["GET", "PUT", "GET", "PUT"]);
+        let resent: DynamicObject = k8s_openapi::serde_json::from_str(&requests[3].1).unwrap();
+        assert_eq!(resent.metadata.resource_version.as_deref(), Some("3"));
+        assert_eq!(resent.data["data"]["mode"], "maintenance");
+        assert_eq!(resent.data["status"]["observed"], 3);
+    }
+
+    #[tokio::test]
+    async fn an_editable_change_that_races_the_replacement_is_a_conflict() {
+        let (replacement, requests) = replace_settings(vec![
+            ("200 OK", live_settings("2", "production", 2)),
+            ("409 Conflict", conflict_status()),
+            ("200 OK", live_settings("3", "standby", 2)),
+        ])
+        .await;
+
+        assert!(matches!(replacement, EditorReplacement::Conflict));
+        assert_eq!(requests.len(), 3, "a real change must not be overwritten");
+    }
+
+    #[tokio::test]
+    async fn an_invalid_replacement_is_rejected_without_a_retry() {
+        let invalid = k8s_openapi::serde_json::json!({
+            "kind": "Status",
+            "apiVersion": "v1",
+            "status": "Failure",
+            "message": "ConfigMap \"settings\" is invalid",
+            "reason": "Invalid",
+            "code": 422
+        })
+        .to_string();
+        let (replacement, requests) = replace_settings(vec![
+            ("200 OK", live_settings("2", "production", 2)),
+            ("422 Unprocessable Entity", invalid),
+        ])
+        .await;
+
+        let EditorReplacement::Rejected(status) = replacement else {
+            panic!("the validation error should be reported");
+        };
+        assert_eq!(status.code, 422);
+        assert_eq!(requests.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn a_replacement_that_keeps_being_rejected_reports_the_rejection() {
+        let mut responses = Vec::new();
+        for version in 2..2 + EDITOR_REPLACEMENT_ATTEMPTS {
+            responses.push((
+                "200 OK",
+                live_settings(&version.to_string(), "production", 2),
+            ));
+            responses.push(("409 Conflict", conflict_status()));
+        }
+        let (replacement, requests) = replace_settings(responses).await;
+
+        let EditorReplacement::Rejected(status) = replacement else {
+            panic!("the last rejection should be reported");
+        };
+        assert_eq!(status.code, 409);
+        assert_eq!(requests.len(), 2 * EDITOR_REPLACEMENT_ATTEMPTS);
     }
 }

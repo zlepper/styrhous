@@ -5,15 +5,27 @@ set -euo pipefail
 cluster_name="kind"
 context_name="kind-${cluster_name}"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+cluster_config="${script_dir}/kind-cluster.yaml"
 metrics_server_manifest="${script_dir}/kind-metrics-server.yaml"
 timeout="180s"
 timeout_seconds=180
 test_namespace_prefix="styrhous-it-"
 
+# kind-cluster.yaml runs etcd without fsync. Clusters created before that keep fsync; recreating
+# them is the only change that cannot disturb a concurrent test run.
+warn_if_etcd_fsyncs() {
+    if ! docker exec "${cluster_name}-control-plane" \
+        grep -q -- '--unsafe-no-fsync=true' /etc/kubernetes/manifests/etcd.yaml; then
+        echo "Warning: etcd in Kind cluster '${cluster_name}' fsyncs every write, so a busy host disk" \
+            "makes API writes fail with 'etcdserver: request timed out'. Recreate the cluster" \
+            "(kind delete cluster --name ${cluster_name}) to apply scripts/kind-cluster.yaml." >&2
+    fi
+}
+
 clusters="$(kind get clusters)"
 if ! grep -Fxq "${cluster_name}" <<<"${clusters}"; then
     echo "Creating Kind cluster '${cluster_name}'..."
-    kind create cluster --name "${cluster_name}" --wait "${timeout}"
+    kind create cluster --name "${cluster_name}" --config "${cluster_config}" --wait "${timeout}"
 else
     echo "Reusing Kind cluster '${cluster_name}'..."
     mapfile -t nodes < <(kind get nodes --name "${cluster_name}")
@@ -26,6 +38,7 @@ else
     docker start "${nodes[@]}" >/dev/null
     kind export kubeconfig --name "${cluster_name}"
 fi
+warn_if_etcd_fsyncs
 
 echo "Waiting for Kind cluster '${cluster_name}' to be ready..."
 deadline=$((SECONDS + timeout_seconds))

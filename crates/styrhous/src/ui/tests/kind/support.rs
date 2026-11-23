@@ -5,8 +5,8 @@ use crate::sorted_name::SortedName;
 use crate::worker::{Worker, WorkerTrait};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
-use k8s_openapi::api::core::v1::{ConfigMap, Namespace, Secret};
-use kube::api::Patch;
+use k8s_openapi::api::core::v1::{ConfigMap, Namespace, Pod, Secret, ServiceAccount};
+use kube::api::{DeleteParams, ListParams, Patch};
 use kube::{Api, Client};
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
@@ -19,6 +19,9 @@ pub(super) use waits::*;
 
 const TEST_NAMESPACE_PREFIX: &str = "styrhous-it-";
 const FIXTURE_CLEANUP_TIMEOUT: Duration = Duration::from_secs(30);
+/// How long the ServiceAccount controller may take to give a new namespace its `default`
+/// ServiceAccount.
+const DEFAULT_SERVICE_ACCOUNT_TIMEOUT: Duration = Duration::from_secs(30);
 const CLUSTER_DISCOVERY_TIMEOUT_MS: u64 = 30_000;
 
 pub(super) struct IntegrationNamespaceFixture {
@@ -26,6 +29,7 @@ pub(super) struct IntegrationNamespaceFixture {
     namespaces: Api<Namespace>,
     pub(super) configmaps: Api<ConfigMap>,
     pub(super) secrets: Api<Secret>,
+    pods: Api<Pod>,
     pub(super) namespace: String,
     pub(super) name: String,
     /// Fields drop after `Drop::drop`, so the lease outlives the namespace deletion.
@@ -68,7 +72,8 @@ impl IntegrationNamespaceFixture {
         });
 
         let configmaps: Api<ConfigMap> = Api::namespaced(client.clone(), &namespace);
-        let secrets: Api<Secret> = Api::namespaced(client, &namespace);
+        let secrets: Api<Secret> = Api::namespaced(client.clone(), &namespace);
+        let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
         runtime.block_on(async {
             configmaps
                 .create(
@@ -86,16 +91,53 @@ impl IntegrationNamespaceFixture {
                 .await
                 .expect("Failed to create integration ConfigMap");
         });
+        wait_for_default_service_account(&runtime, client, &namespace);
 
         Self {
             runtime,
             namespaces,
             configmaps,
             secrets,
+            pods,
             namespace,
             name: name.to_owned(),
             _lease: lease,
         }
+    }
+}
+
+/// Waits until the ServiceAccount controller has given `namespace` its `default`
+/// ServiceAccount. It does so asynchronously after the namespace is created, and until then
+/// the API server rejects every Pod created in the namespace.
+fn wait_for_default_service_account(
+    runtime: &tokio::runtime::Runtime,
+    client: Client,
+    namespace: &str,
+) {
+    let service_accounts: Api<ServiceAccount> = Api::namespaced(client, namespace);
+    let result = runtime.block_on(async {
+        let deadline = Instant::now() + DEFAULT_SERVICE_ACCOUNT_TIMEOUT;
+        loop {
+            // A busy API server can fail a request transiently, so only the deadline ends the wait.
+            let last_error = match service_accounts.get_opt("default").await {
+                Ok(Some(_)) => return Ok(()),
+                Ok(None) => None,
+                Err(error) => Some(error),
+            };
+            if Instant::now() >= deadline {
+                return Err(last_error);
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    });
+    if let Err(last_error) = result {
+        let last_error = last_error
+            .map(|error| format!("; the last request failed: {error}"))
+            .unwrap_or_default();
+        panic!(
+            "Timed out after {DEFAULT_SERVICE_ACCOUNT_TIMEOUT:?} waiting for the default \
+             ServiceAccount in {namespace}{last_error}"
+        );
     }
 }
 
@@ -119,6 +161,24 @@ impl Drop for IntegrationNamespaceFixture {
                 && !matches!(&error, kube::Error::Api(response) if response.code == 404)
             {
                 return Err(error.into());
+            }
+            // Test Pods need no graceful shutdown. Removing them at once keeps the namespace
+            // deletion from waiting for the container runtime, which tears containers down
+            // slowly while the host is busy; the kubelet still stops them in the background.
+            // The terminating namespace accepts no new Pods, so none replace them.
+            // Only a speed-up: the namespace deletion below removes the Pods regardless.
+            if let Err(error) = self
+                .pods
+                .delete_collection(
+                    &DeleteParams::default().grace_period(0),
+                    &ListParams::default(),
+                )
+                .await
+            {
+                eprintln!(
+                    "Failed to remove the Pods of {} at once: {error:#}",
+                    self.namespace
+                );
             }
 
             let deadline = Instant::now() + FIXTURE_CLEANUP_TIMEOUT;

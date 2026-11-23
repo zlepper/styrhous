@@ -97,7 +97,10 @@ which the Linux sandbox blocks even when its runtime directories are writable.
 The script uses the default cluster/context pair (`kind` / `kind-kind`): it creates a
 missing cluster, starts existing Kind node containers, exports its kubeconfig, and waits
 for the API server, nodes, and CoreDNS. It leaves the cluster running. A pre-existing,
-unhealthy cluster is reported as a failure rather than deleted or recreated.
+unhealthy cluster is reported as a failure rather than deleted or recreated. etcd runs with
+`--unsafe-no-fsync` (`scripts/kind-cluster.yaml`), because fsync stalls on a busy host disk
+make API writes fail with `etcdserver: request timed out`; the script warns about an older
+cluster without the flag, which needs recreating.
 
 These tests use the real local Kubernetes cluster and may create, edit, or delete
 their own test resources. Keep fixtures isolated to their unique namespace and do
