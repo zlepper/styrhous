@@ -72,6 +72,26 @@ impl UiState {
             });
     }
 
+    /// Shows a toast about the application itself, outside any cluster and
+    /// its notification history, for `duration`.
+    pub(crate) fn push_application_toast(
+        &mut self,
+        outcome: OperationOutcome,
+        title: impl Into<String>,
+        target: impl Into<String>,
+        duration: Duration,
+    ) {
+        let sequence = self.next_operation_toast_sequence;
+        self.next_operation_toast_sequence += 1;
+        self.application_toasts.push(TransientOperationToast {
+            outcome,
+            title: title.into(),
+            target: target.into(),
+            sequence,
+            expires_at: Instant::now() + duration,
+        });
+    }
+
     pub(crate) fn safe_operation_detail(api_resource: &ApiResource, error: String) -> String {
         if api_resource.kind.eq_ignore_ascii_case("secret") {
             "Details are hidden for Secret operations. Check the resource state and your Kubernetes permissions.".to_owned()
@@ -135,6 +155,8 @@ impl UiState {
         &mut self,
         now: Instant,
     ) -> Vec<TransientOperationToast> {
+        self.application_toasts
+            .retain(|toast| toast.expires_at > now);
         let mut toasts = self
             .clusters
             .values_mut()
@@ -144,6 +166,7 @@ impl UiState {
                     .retain(|toast| toast.expires_at > now);
                 cluster.transient_operation_toasts.iter().cloned()
             })
+            .chain(self.application_toasts.iter().cloned())
             .collect::<Vec<_>>();
         toasts.sort_by_key(|toast| toast.sequence);
         const MAX_VISIBLE_TOASTS: usize = 3;

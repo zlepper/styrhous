@@ -24,13 +24,13 @@
 use egui::{Color32, Image, Response, Sense, Ui, Vec2};
 
 use crate::PointingHand;
-use crate::colors::{gray, indigo};
-use crate::design::{spacing, typography};
+use crate::design::theme::{Theme, ThemeExt};
+use crate::design::{space, type_scale};
 
 // Constants from Tailwind classes
-const TAB_GAP: f32 = spacing::LG;
+const TAB_GAP: f32 = space::S16;
 const TAB_PADDING_X: f32 = 4.0; // px-1
-const TAB_PADDING_Y: f32 = spacing::MD;
+const TAB_PADDING_Y: f32 = space::S12;
 const ICON_SIZE: f32 = 20.0; // size-5
 const ICON_MARGIN_RIGHT: f32 = 8.0; // mr-2
 const ICON_MARGIN_LEFT: f32 = -2.0; // -ml-0.5
@@ -45,22 +45,22 @@ struct TabColors {
 }
 
 impl TabColors {
-    fn for_state(selected: bool, hovered: bool) -> Self {
+    fn for_state(theme: &Theme, selected: bool, hovered: bool) -> Self {
         match (selected, hovered) {
             (true, _) => Self {
-                text: indigo::_600,
-                border: indigo::_500,
-                icon: indigo::_500,
+                text: theme.accent.text,
+                border: theme.accent.fill,
+                icon: theme.accent.text,
             },
             (false, true) => Self {
-                text: gray::_700,
-                border: gray::_300,
-                icon: gray::_500,
+                text: theme.text.primary,
+                border: theme.divider.strong,
+                icon: theme.text.secondary,
             },
             (false, false) => Self {
-                text: gray::_500,
+                text: theme.text.secondary,
                 border: Color32::TRANSPARENT,
-                icon: gray::_400,
+                icon: theme.text.muted,
             },
         }
     }
@@ -102,7 +102,7 @@ impl Tabs {
         // Calculate header row height based on actual text metrics
         let sample_galley = ui.painter().layout_no_wrap(
             "Xg".to_string(), // Use characters with ascenders/descenders
-            typography::body(),
+            type_scale::BODY.font_id(ui.ctx()),
             Color32::PLACEHOLDER,
         );
         let header_height = TAB_PADDING_Y * 2.0 + sample_galley.size().y.max(ICON_SIZE);
@@ -171,7 +171,8 @@ impl Tabs {
             header_rect.left_bottom(),
             Vec2::new(header_rect.width(), SEPARATOR_HEIGHT),
         );
-        ui.painter().rect_filled(separator_rect, 0.0, gray::_200);
+        ui.painter()
+            .rect_filled(separator_rect, 0.0, ui.tokens().divider.base);
 
         // Persist selection if changed
         if new_selected != selected {
@@ -193,9 +194,11 @@ fn render_tab_header(
     is_selected: bool,
 ) -> Response {
     // Create galley for measurement (use PLACEHOLDER so fallback_color works when painting)
-    let galley =
-        ui.painter()
-            .layout_no_wrap(label.to_string(), typography::body(), Color32::PLACEHOLDER);
+    let galley = ui.painter().layout_no_wrap(
+        label.to_string(),
+        type_scale::BODY.font_id(ui.ctx()),
+        Color32::PLACEHOLDER,
+    );
 
     let icon_width = if icon.is_some() {
         ICON_MARGIN_LEFT + ICON_SIZE + ICON_MARGIN_RIGHT
@@ -214,7 +217,7 @@ fn render_tab_header(
     let response = response.with_pointing_hand();
 
     // Determine colors based on state
-    let colors = TabColors::for_state(is_selected, response.hovered());
+    let colors = TabColors::for_state(&ui.tokens(), is_selected, response.hovered());
 
     // Calculate content vertical center
     let content_center_y = rect.center().y;
@@ -337,9 +340,9 @@ mod tests {
     #[test]
     fn test_tabs_with_icons() {
         let mut harness = Harness::new_ui(|ui| {
-            let home_icon = Image::new(egui::include_image!("icons/home.svg"));
-            let users_icon = Image::new(egui::include_image!("icons/users.svg"));
-            let folder_icon = Image::new(egui::include_image!("icons/folder.svg"));
+            let home_icon = Image::new(egui::include_image!("../assets/icons/home.svg"));
+            let users_icon = Image::new(egui::include_image!("../assets/icons/users.svg"));
+            let folder_icon = Image::new(egui::include_image!("../assets/icons/folder.svg"));
 
             Tabs::new("test_tabs_icons").show(ui, |tabs| {
                 tabs.tab("Home", Some(home_icon), |ui| {

@@ -26,15 +26,16 @@ pub(super) fn show_metrics_api_unavailable(
     requests: PodResourceThresholds,
     limits: PodResourceThresholds,
 ) {
+    let theme = ui.tokens();
     ui.label(
         egui::RichText::new("Metrics API unavailable")
-            .font(typography::body())
-            .color(gray::_700),
+            .font(type_scale::BODY.font_id(ui.ctx()))
+            .color(theme.text.secondary),
     );
     ui.label(
         egui::RichText::new("Live CPU and memory usage requires the Kubernetes Metrics API.")
-            .font(typography::metadata())
-            .color(gray::_500),
+            .font(type_scale::META.font_id(ui.ctx()))
+            .color(theme.text.muted),
     );
     ui.add_space(8.0);
     InspectorDetails::show_properties(
@@ -77,15 +78,16 @@ pub(super) fn show_metrics_api_unavailable(
 }
 
 pub(super) fn show_node_metrics_api_unavailable(ui: &mut egui::Ui) {
+    let theme = ui.tokens();
     ui.label(
         egui::RichText::new("Metrics API unavailable")
-            .font(typography::body())
-            .color(gray::_700),
+            .font(type_scale::BODY.font_id(ui.ctx()))
+            .color(theme.text.secondary),
     );
     ui.label(
         egui::RichText::new("Live CPU and memory usage requires the Kubernetes Metrics API.")
-            .font(typography::metadata())
-            .color(gray::_500),
+            .font(type_scale::META.font_id(ui.ctx()))
+            .color(theme.text.muted),
     );
 }
 
@@ -95,6 +97,7 @@ pub(super) fn show_node_pod_resources(
     pod_resources: Option<&NodePodResources>,
     error: Option<&str>,
 ) {
+    let theme = ui.tokens();
     let unavailable = if error.is_some() || pod_resources.is_some() {
         "Unavailable"
     } else {
@@ -107,9 +110,9 @@ pub(super) fn show_node_pod_resources(
         pod_resources.and_then(|resources| resources.configured_limits.memory_bytes);
     ui.label(
         egui::RichText::new("Pod reservations")
-            .font(typography::body())
+            .font(type_scale::BODY.font_id(ui.ctx()))
             .strong()
-            .color(gray::_800),
+            .color(theme.text.primary),
     );
     ui.label(
         egui::RichText::new(match pod_resources {
@@ -121,8 +124,8 @@ pub(super) fn show_node_pod_resources(
             None if error.is_some() => "Unable to load pod reservations".to_owned(),
             None => "Loading pods on this node…".to_owned(),
         })
-        .font(typography::metadata())
-        .color(gray::_500),
+        .font(type_scale::META.font_id(ui.ctx()))
+        .color(theme.text.muted),
     );
     ui.add_space(8.0);
     InspectorDetails::show_properties(
@@ -205,8 +208,8 @@ pub(super) fn show_node_pod_resources(
                         "{count} pod{} without a {name} limit; usage can exceed the configured total.",
                         if count == 1 { "" } else { "s" }
                     ))
-                    .font(typography::metadata())
-                    .color(gray::_500),
+                    .font(type_scale::META.font_id(ui.ctx()))
+                    .color(theme.text.muted),
                 );
             }
         }
@@ -230,11 +233,15 @@ pub(super) fn format_remaining(
     }
 }
 
+/// The copy icon of a chip.
+const CHIP_COPY_ICON_SIZE: f32 = 14.0;
+
 pub(super) fn chip_row(ui: &mut egui::Ui, label: &str, values: &[String]) {
+    let theme = ui.tokens();
     ui.label(
         egui::RichText::new(label)
-            .font(typography::metadata())
-            .color(gray::_500),
+            .font(type_scale::META.font_id(ui.ctx()))
+            .color(theme.text.muted),
     );
     ui.with_layout(
         egui::Layout::left_to_right(egui::Align::TOP).with_main_wrap(true),
@@ -246,26 +253,33 @@ pub(super) fn chip_row(ui: &mut egui::Ui, label: &str, values: &[String]) {
                     egui::Layout::top_down(egui::Align::LEFT),
                     |ui| {
                         egui::Frame::new()
-                            .fill(gray::_100)
-                            .stroke(egui::Stroke::new(1.0, gray::_200))
-                            .corner_radius(radius::subtle())
-                            .inner_margin(egui::Margin::symmetric((spacing::SM - 3.0) as i8, 0))
+                            .fill(theme.components.well_bg)
+                            .stroke(stroke::subtle_divider(&theme))
+                            .corner_radius(egui::CornerRadius::same(radius::KEY))
+                            .inner_margin(egui::Margin::symmetric((space::S8 - 3.0) as i8, 0))
                             .show(ui, |ui| {
                                 ui.set_max_width(chip_width - 10.0);
                                 ui.horizontal_top(|ui| {
-                                    ui.add(
+                                    let font = type_scale::MONO.font_id(ui.ctx());
+                                    let line_height = ui.fonts_mut(|fonts| fonts.row_height(&font));
+                                    let text = ui.add(
                                         egui::Label::new(
                                             egui::RichText::new(value)
-                                                .monospace()
-                                                .font(typography::monospace())
-                                                .color(gray::_800),
+                                                .font(font)
+                                                .color(theme.text.primary),
                                         )
                                         .wrap(),
                                     );
-                                    let (icon_rect, copy_action) = ui.allocate_exact_size(
-                                        egui::vec2(14.0, 14.0),
-                                        egui::Sense::click(),
+                                    // Centred on the first text line, as inspector copy icons are.
+                                    let icon_rect = egui::Rect::from_center_size(
+                                        egui::pos2(
+                                            ui.cursor().left() + CHIP_COPY_ICON_SIZE / 2.0,
+                                            text.rect.top() + line_height / 2.0,
+                                        ),
+                                        egui::Vec2::splat(CHIP_COPY_ICON_SIZE),
                                     );
+                                    let copy_action =
+                                        ui.allocate_rect(icon_rect, egui::Sense::click());
                                     copy_action.widget_info(|| {
                                         egui::WidgetInfo::labeled(
                                             egui::WidgetType::Button,
@@ -275,8 +289,10 @@ pub(super) fn chip_row(ui: &mut egui::Ui, label: &str, values: &[String]) {
                                     });
                                     if copy_action.hovered() {
                                         components::icons::document_duplicate_icon()
-                                            .fit_to_exact_size(egui::vec2(14.0, 14.0))
-                                            .tint(gray::_700)
+                                            .fit_to_exact_size(egui::Vec2::splat(
+                                                CHIP_COPY_ICON_SIZE,
+                                            ))
+                                            .tint(theme.text.secondary)
                                             .paint_at(ui, icon_rect);
                                     }
                                     if copy_action.clicked() {
@@ -312,10 +328,11 @@ pub(super) fn volume_detail_row(
 }
 
 pub(super) fn error_card(ui: &mut egui::Ui, title: &str, error: &str) {
-    ui.label(egui::RichText::new(title).strong().color(status::DANGER));
+    let theme = ui.tokens();
+    ui.label(egui::RichText::new(title).strong().color(theme.danger.text));
     ui.label(
         egui::RichText::new(error)
-            .font(typography::metadata())
-            .color(gray::_600),
+            .font(type_scale::META.font_id(ui.ctx()))
+            .color(theme.text.secondary),
     );
 }

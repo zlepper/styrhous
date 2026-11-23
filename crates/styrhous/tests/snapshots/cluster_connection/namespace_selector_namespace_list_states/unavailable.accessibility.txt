@@ -22,8 +22,8 @@ Window state=[focused] rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
-                Label value="kind-kind" rect=(x=92.0 y=29.0 width=89.0 height=24.0 center_x=136.5 center_y=41.0)
-                  TextRun value="kind-kind" rect=(x=92.0 y=29.0 width=89.0 height=24.0 center_x=136.5 center_y=41.0)
+                Label value="kind-kind" rect=(x=92.0 y=29.0 width=91.8 height=24.0 center_x=137.9 center_y=41.0)
+                  TextRun value="kind-kind" rect=(x=92.0 y=29.0 width=91.8 height=24.0 center_x=137.9 center_y=41.0)
               Button name="Nodes" state=[toggled=False] rect=(x=68.0 y=73.0 width=291.0 height=36.0 center_x=213.5 center_y=91.0)
               Button name="Apps & Containers" state=[toggled=False] rect=(x=68.0 y=112.0 width=291.0 height=44.0 center_x=213.5 center_y=134.0)
               GenericContainer rect=<none>
@@ -48,16 +48,16 @@ Window state=[focused] rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
-          Label value="Namespace" rect=(x=397.0 y=17.5 width=79.0 height=17.0 center_x=436.5 center_y=26.0)
-            TextRun value="Namespace" rect=(x=397.0 y=17.5 width=79.0 height=17.0 center_x=436.5 center_y=26.0)
-          ComboBox name="Namespace" rect=(x=491.0 y=10.0 width=230.0 height=32.0 center_x=606.0 center_y=26.0)
+          Label value="Namespace" rect=(x=397.0 y=17.5 width=74.7 height=17.0 center_x=434.3 center_y=26.0)
+            TextRun value="Namespace" rect=(x=397.0 y=17.5 width=74.7 height=17.0 center_x=434.3 center_y=26.0)
+          ComboBox name="Namespace" rect=(x=486.7 y=10.0 width=230.0 height=32.0 center_x=601.7 center_y=26.0)
           GenericContainer rect=<none>
-            Image rect=(x=697.0 y=18.0 width=16.0 height=16.0 center_x=705.0 center_y=26.0)
+            Image rect=(x=692.7 y=18.0 width=16.0 height=16.0 center_x=700.7 center_y=26.0)
           GenericContainer rect=<none>
-            Label value="0 items" rect=(x=776.0 y=16.5 width=55.3 height=19.0 center_x=803.6 center_y=26.0)
-              TextRun value="0 items" rect=(x=776.0 y=16.5 width=55.3 height=19.0 center_x=803.6 center_y=26.0)
-            Label value="Namespaces unavailable" rect=(x=851.3 y=18.5 width=141.3 height=15.0 center_x=922.0 center_y=26.0)
-              TextRun value="Namespaces unavailable" rect=(x=851.3 y=18.5 width=141.3 height=15.0 center_x=922.0 center_y=26.0)
+            Label value="0 items" rect=(x=771.7 y=16.5 width=58.1 height=19.0 center_x=800.7 center_y=26.0)
+              TextRun value="0 items" rect=(x=771.7 y=16.5 width=58.1 height=19.0 center_x=800.7 center_y=26.0)
+            Label value="Namespaces unavailable" rect=(x=849.8 y=19.0 width=132.0 height=14.0 center_x=915.7 center_y=26.0)
+              TextRun value="Namespaces unavailable" rect=(x=849.8 y=19.0 width=132.0 height=14.0 center_x=915.7 center_y=26.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
@@ -65,11 +65,11 @@ Window state=[focused] rect=<none>
                   GenericContainer rect=<none>
                     TextInput name="Search resources" value="" rect=(x=1303.0 y=13.0 width=150.0 height=26.0 center_x=1378.0 center_y=26.0)
                       TextRun value="" rect=(x=1307.0 y=15.0 width=0.0 height=17.0 center_x=1307.0 center_y=23.5)
-                  CheckBox name="Use regex search" state=[toggled=Mixed] rect=(x=1475.0 y=16.5 width=19.1 height=19.0 center_x=1484.5 center_y=26.0)
+                  CheckBox name="Use regex search" state=[toggled=Mixed] rect=(x=1475.0 y=17.0 width=15.7 height=18.0 center_x=1482.8 center_y=26.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="Choose a namespace" rect=(x=866.3 y=517.5 width=163.3 height=19.0 center_x=948.0 center_y=527.0)
-                TextRun value="Choose a namespace" rect=(x=866.0 y=517.5 width=163.3 height=19.0 center_x=947.7 center_y=527.0)
-              Label value="Select one or more namespaces to start watching resources." rect=(x=747.0 y=547.5 width=402.0 height=17.0 center_x=948.0 center_y=556.0)
-                TextRun value="Select one or more namespaces to start watching resources." rect=(x=747.0 y=547.5 width=402.0 height=17.0 center_x=948.0 center_y=556.0)
+              Label value="Choose a namespace" rect=(x=865.4 y=517.5 width=165.3 height=19.0 center_x=948.0 center_y=527.0)
+                TextRun value="Choose a namespace" rect=(x=865.0 y=517.5 width=165.3 height=19.0 center_x=947.7 center_y=527.0)
+              Label value="Select one or more namespaces to start watching resources." rect=(x=758.6 y=547.5 width=378.9 height=17.0 center_x=948.0 center_y=556.0)
+                TextRun value="Select one or more namespaces to start watching resources." rect=(x=759.0 y=547.5 width=378.9 height=17.0 center_x=948.5 center_y=556.0)

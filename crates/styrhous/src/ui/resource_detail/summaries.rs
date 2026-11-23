@@ -43,9 +43,9 @@ pub(super) fn show_node_detail(ui: &mut egui::Ui, node: &NodeDetail, usage: Node
                     "Schedulable"
                 },
                 if node.unschedulable {
-                    DetailTone::Warning
+                    Tone::Warning
                 } else {
-                    DetailTone::Success
+                    Tone::Success
                 },
             ),
             DetailCell::new("Provider ID", node.provider_id.as_deref().unwrap_or("-")).copyable(),
@@ -125,6 +125,7 @@ pub(super) fn show_config_map_data(
     editor: &mut super::super::state::ResourceDataEditorState,
     pending_action: &mut Option<ResourceAction>,
 ) {
+    let theme = ui.tokens();
     section_header(
         ui,
         "Data",
@@ -140,7 +141,7 @@ pub(super) fn show_config_map_data(
     );
     if config_map.data.is_empty() {
         detail_message_card(ui, |ui| {
-            ui.label(egui::RichText::new("No text data entries.").color(gray::_500));
+            ui.label(egui::RichText::new("No text data entries.").color(theme.text.muted));
         });
     }
     for key in config_map.data.keys() {
@@ -175,6 +176,7 @@ pub(super) fn show_secret_data(
     editor: &mut super::super::state::ResourceDataEditorState,
     pending_action: &mut Option<ResourceAction>,
 ) {
+    let theme = ui.tokens();
     section_header(
         ui,
         "Data",
@@ -191,7 +193,7 @@ pub(super) fn show_secret_data(
     );
     if secret.data.is_empty() {
         detail_message_card(ui, |ui| {
-            ui.label(egui::RichText::new("No data entries.").color(gray::_500));
+            ui.label(egui::RichText::new("No data entries.").color(theme.text.muted));
         });
     }
     for (key, value) in &secret.data {
@@ -241,7 +243,7 @@ pub(super) fn show_secret_data(
 }
 
 pub(super) fn detail_summary_card(ui: &mut egui::Ui, add_content: impl FnOnce(&mut egui::Ui)) {
-    WorkspaceCard::new().padding(18).show(ui, add_content);
+    WorkspaceCard::new().margin(18).show(ui, add_content);
 }
 
 pub(super) fn detail_item_card(
@@ -250,7 +252,7 @@ pub(super) fn detail_item_card(
     add_content: impl FnOnce(&mut egui::Ui),
 ) {
     WorkspaceCard::new()
-        .padding(CARD_CONTENT_PADDING)
+        .margin(CARD_CONTENT_PADDING)
         .show(ui, |ui| {
             add_header(ui);
             ui.add_space(8.0);
@@ -262,7 +264,7 @@ pub(super) fn detail_item_card(
 
 pub(super) fn detail_message_card(ui: &mut egui::Ui, add_content: impl FnOnce(&mut egui::Ui)) {
     WorkspaceCard::new()
-        .padding(CARD_CONTENT_PADDING)
+        .margin(CARD_CONTENT_PADDING)
         .show(ui, add_content);
 }
 
@@ -273,6 +275,7 @@ pub(super) fn data_entry(
     add_action: impl FnOnce(&mut egui::Ui),
     add_value: impl FnOnce(&mut egui::Ui),
 ) {
+    let theme = ui.tokens();
     detail_item_card(
         ui,
         |ui| {
@@ -281,7 +284,7 @@ pub(super) fn data_entry(
                     egui::RichText::new(key)
                         .monospace()
                         .strong()
-                        .color(gray::_800),
+                        .color(theme.text.primary),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     add_action(ui);
@@ -289,8 +292,8 @@ pub(super) fn data_entry(
                         ui.add_space(8.0);
                         ui.label(
                             egui::RichText::new(format!("{byte_len} bytes"))
-                                .font(typography::metadata())
-                                .color(gray::_500),
+                                .font(type_scale::META.font_id(ui.ctx()))
+                                .color(theme.text.muted),
                         );
                     }
                 });
@@ -324,42 +327,44 @@ pub(super) fn data_value_editor(
 }
 
 pub(super) fn secret_value_mask(ui: &mut egui::Ui) {
+    let theme = ui.tokens();
     egui::Frame::new()
-        .fill(gray::_50)
-        .stroke(egui::Stroke::new(1.0, gray::_200))
-        .corner_radius(radius::control())
+        .fill(theme.components.field_bg)
+        .stroke(stroke::subtle_divider(&theme))
+        .corner_radius(egui::CornerRadius::same(radius::KEY))
         .inner_margin(egui::Margin::symmetric(
-            (spacing::SM + spacing::XS) as i8,
-            spacing::SM as i8,
+            (space::S8 + space::S4) as i8,
+            space::S8 as i8,
         ))
         .show(ui, |ui| {
             ui.label(
                 egui::RichText::new("••••••••••••")
                     .monospace()
-                    .color(gray::_700),
+                    .color(theme.text.secondary),
             );
         });
 }
 
 pub(super) fn unavailable_secret_value(ui: &mut egui::Ui) {
+    let theme = ui.tokens();
     egui::Frame::new()
-        .fill(gray::_50)
-        .stroke(egui::Stroke::new(1.0, gray::_200))
-        .corner_radius(radius::control())
+        .fill(theme.components.field_bg)
+        .stroke(stroke::subtle_divider(&theme))
+        .corner_radius(egui::CornerRadius::same(radius::KEY))
         .inner_margin(egui::Margin::symmetric(
-            (spacing::SM + spacing::XS) as i8,
-            spacing::SM as i8,
+            (space::S8 + space::S4) as i8,
+            space::S8 as i8,
         ))
         .show(ui, |ui| {
             ui.label(
                 egui::RichText::new("Binary data")
                     .strong()
-                    .color(gray::_700),
+                    .color(theme.text.secondary),
             );
             ui.label(
                 egui::RichText::new("This value cannot be edited in the inspector.")
-                    .font(typography::metadata())
-                    .color(gray::_600),
+                    .font(type_scale::META.font_id(ui.ctx()))
+                    .color(theme.text.secondary),
             );
         });
 }
@@ -370,12 +375,15 @@ pub(super) fn data_save_controls(
     immutable: bool,
     pending_action: &mut Option<ResourceAction>,
 ) {
+    let theme = ui.tokens();
     if let Some(error) = &editor.save_error {
-        ui.colored_label(status::DANGER, error);
-        ui.add_space(spacing::SM);
+        ui.colored_label(theme.danger.text, error);
+        ui.add_space(space::S8);
     }
     if immutable {
-        ui.label(egui::RichText::new("Data is immutable and cannot be edited.").color(gray::_500));
+        ui.label(
+            egui::RichText::new("Data is immutable and cannot be edited.").color(theme.text.muted),
+        );
         return;
     }
     let (expected_values, updated_values) = editor.changed_values();

@@ -19,10 +19,11 @@ impl GlobalBladeContent for SettingsHomeBlade {
         _layer: components::BladeLayer,
         _context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
+        let theme = ui.tokens();
         ui.label(
             egui::RichText::new("Settings")
-                .font(typography::page_title())
-                .color(gray::_900),
+                .font(type_scale::HEADING.font_id(ui.ctx()))
+                .color(theme.text.primary),
         );
         GlobalBladeRenderResult::default()
     }
@@ -33,14 +34,15 @@ impl GlobalBladeContent for SettingsHomeBlade {
         _layer: components::BladeLayer,
         context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
+        let theme = ui.tokens();
         ui.label(
             egui::RichText::new("Manage your workspace and application preferences.")
-                .font(typography::body())
-                .color(gray::_600),
+                .font(type_scale::BODY.font_id(ui.ctx()))
+                .color(theme.text.secondary),
         );
-        ui.add_space(spacing::XL);
+        ui.add_space(space::S24);
         ui.separator();
-        ui.add_space(spacing::XL + spacing::XS);
+        ui.add_space(space::S24 + space::S4);
         let context_count = context.contexts().len();
         let count = format!(
             "{context_count} context{}",
@@ -68,7 +70,7 @@ impl GlobalBladeContent for SettingsHomeBlade {
                             title: "Contexts",
                             label: "Open context settings",
                             description: "Customize display names and selector badges.",
-                            icon: icons::settings_destination_contexts_icon(),
+                            icon: icons::circle_stack_icon(),
                             detail: &count,
                         },
                     );
@@ -79,7 +81,7 @@ impl GlobalBladeContent for SettingsHomeBlade {
                             title: "Namespace selector",
                             label: "Open namespace selector settings",
                             description: "Choose how namespaces are displayed.",
-                            icon: icons::settings_destination_namespace_icon(),
+                            icon: icons::adjustments_horizontal_icon(),
                             detail: "",
                         },
                     );
@@ -90,12 +92,12 @@ impl GlobalBladeContent for SettingsHomeBlade {
                             title: "Cluster discovery",
                             label: "Open cluster discovery",
                             description: "Find and add clusters from your cloud accounts.",
-                            icon: icons::settings_destination_discovery_icon(),
+                            icon: icons::share_icon(),
                             detail: "",
                         },
                     );
                 });
-                ui.add_space(spacing::XXL + spacing::SM);
+                ui.add_space(space::S32 + space::S8);
                 settings_destination_group(ui, "APPLICATION", |ui| {
                     application_settings = settings_destination_card(
                         ui,
@@ -103,7 +105,7 @@ impl GlobalBladeContent for SettingsHomeBlade {
                             title: "Application preferences",
                             label: "Open application settings",
                             description: "Terminal, debug images, and updates.",
-                            icon: icons::settings_destination_application_icon(),
+                            icon: icons::wrench_screwdriver_icon(),
                             detail: "",
                         },
                     );
@@ -114,7 +116,7 @@ impl GlobalBladeContent for SettingsHomeBlade {
                             title: "License & account",
                             label: "Open license and account settings",
                             description: &license_description,
-                            icon: icons::settings_destination_account_icon(),
+                            icon: icons::user_circle_icon(),
                             detail: license_status,
                         },
                     );
@@ -176,10 +178,11 @@ impl GlobalBladeContent for TerminalSettingsBlade {
         _layer: components::BladeLayer,
         _context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
+        let theme = ui.tokens();
         ui.label(
             egui::RichText::new("Application settings")
-                .font(typography::page_title())
-                .color(gray::_900),
+                .font(type_scale::HEADING.font_id(ui.ctx()))
+                .color(theme.text.primary),
         );
         GlobalBladeRenderResult::default()
     }
@@ -194,9 +197,9 @@ impl GlobalBladeContent for TerminalSettingsBlade {
         let mut reset = false;
         show_settings_introduction(ui);
         show_update_status(ui, context.update_status());
-        ui.add_space(spacing::XL);
+        ui.add_space(space::S24);
         ui.separator();
-        ui.add_space(spacing::XL);
+        ui.add_space(space::S24);
         let content_height = (ui.available_height() - FOOTER_HEIGHT).max(120.0);
         ui.allocate_ui_with_layout(
             egui::vec2(ui.available_width(), content_height),
@@ -206,15 +209,15 @@ impl GlobalBladeContent for TerminalSettingsBlade {
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         show_terminal_launcher(ui, &mut self.draft, &mut self.error);
-                        ui.add_space(spacing::XL);
+                        ui.add_space(space::S24);
                         ui.separator();
-                        ui.add_space(spacing::XL);
+                        ui.add_space(space::S24);
                         show_debug_image_presets(ui, &mut self.draft, &mut self.error);
                     });
             },
         );
         ui.separator();
-        ui.add_space(spacing::SM);
+        ui.add_space(space::S8);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             save |= TailwindButton::new("Save changes").show(ui).clicked();
             reset |= TailwindButton::secondary("Reset")

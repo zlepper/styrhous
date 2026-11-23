@@ -9,96 +9,93 @@ pub(super) fn launcher_choice(
     template_invalid: bool,
     template_error: Option<&str>,
 ) -> bool {
-    let stroke = if selected {
-        egui::Stroke::new(1.0, indigo::_500)
-    } else {
-        surface::muted_border()
-    };
-    egui::Frame::new()
-        .fill(if selected { indigo::_50 } else { WHITE })
-        .stroke(stroke)
-        .corner_radius(radius::surface())
-        .inner_margin(egui::Margin::same(spacing::XXL as i8))
-        .show(ui, |ui| {
-            ui.set_min_width(ui.available_width());
-            let choice_clicked = ui
-                .allocate_ui_with_layout(
-                    egui::vec2(ui.available_width(), CHOICE_CONTENT_MIN_HEIGHT),
-                    egui::Layout::left_to_right(egui::Align::Center),
-                    |ui| {
-                        ui.spacing_mut().icon_width = 20.0;
-                        ui.spacing_mut().icon_width_inner = 12.0;
-                        let response = ui.radio(selected, "").with_pointing_hand();
-                        response.widget_info(|| {
-                            egui::WidgetInfo::selected(
-                                egui::WidgetType::RadioButton,
-                                ui.is_enabled(),
-                                selected,
-                                title,
-                            )
-                        });
-                        ui.add_space(spacing::SM);
-                        ui.vertical(|ui| {
-                            ui.label(
-                                egui::RichText::new(title)
-                                    .font(typography::semibold(18.0))
-                                    .color(gray::_800),
-                            );
-                            ui.add_space(spacing::XS);
-                            ui.label(
-                                egui::RichText::new(description)
-                                    .font(typography::body())
-                                    .color(gray::_600),
-                            );
-                        });
-                        response.clicked()
-                    },
-                )
-                .inner;
-            if let Some(template) = template {
-                ui.add_space(spacing::XXL);
-                ui.label(
-                    egui::RichText::new("Command template")
-                        .font(typography::body())
-                        .color(gray::_800),
-                );
-                ui.add_space(spacing::SM);
-                show_command_template_input(ui, template, template_invalid);
-                ui.add_space(spacing::MD);
-                egui::Frame::new()
-                    .fill(indigo::_100)
-                    .stroke(egui::Stroke::new(1.0, indigo::_200))
-                    .corner_radius(radius::surface())
-                    .inner_margin(egui::Margin::same(spacing::LG as i8))
-                    .show(ui, |ui| {
-                        ui.set_min_width(ui.available_width());
-                        ui.horizontal_top(|ui| {
-                            let (icon_rect, _) = ui
-                                .allocate_exact_size(egui::Vec2::splat(20.0), egui::Sense::hover());
-                            ui.painter().circle_stroke(
-                                icon_rect.center(),
-                                9.0,
-                                egui::Stroke::new(1.5, indigo::_600),
-                            );
-                            ui.painter().text(
-                                icon_rect.center(),
-                                egui::Align2::CENTER_CENTER,
-                                "i",
-                                typography::semibold(14.0),
-                                indigo::_600,
-                            );
-                            ui.add_space(spacing::SM);
-                            ui.label(template_guidance());
-                        });
+    let theme = ui.tokens();
+    let mut card = WorkspaceCard::new().margin(space::S32 as i8);
+    if selected {
+        card = card
+            .fill(theme.item.selected)
+            .stroke(stroke::hairline(theme.accent.fill));
+    }
+    card.show_inner(ui, |ui| {
+        ui.set_min_width(ui.available_width());
+        let choice_clicked = ui
+            .allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), CHOICE_CONTENT_MIN_HEIGHT),
+                egui::Layout::left_to_right(egui::Align::Center),
+                |ui| {
+                    ui.spacing_mut().icon_width = 20.0;
+                    ui.spacing_mut().icon_width_inner = 12.0;
+                    let response = ui.radio(selected, "").with_pointing_hand();
+                    response.widget_info(|| {
+                        egui::WidgetInfo::selected(
+                            egui::WidgetType::RadioButton,
+                            ui.is_enabled(),
+                            selected,
+                            title,
+                        )
                     });
-                if let Some(error) = template_error {
-                    ui.add_space(spacing::LG);
-                    show_validation_error(ui, "Command template needs attention", error);
-                }
+                    ui.add_space(space::S8);
+                    ui.vertical(|ui| {
+                        ui.label(
+                            egui::RichText::new(title)
+                                .font(type_scale::CARD_TITLE.font_id(ui.ctx()))
+                                .color(theme.text.primary),
+                        );
+                        ui.add_space(space::S4);
+                        ui.label(
+                            egui::RichText::new(description)
+                                .font(type_scale::BODY.font_id(ui.ctx()))
+                                .color(theme.text.secondary),
+                        );
+                    });
+                    response.clicked()
+                },
+            )
+            .inner;
+        if let Some(template) = template {
+            ui.add_space(space::S32);
+            ui.label(
+                egui::RichText::new("Command template")
+                    .font(type_scale::BODY.font_id(ui.ctx()))
+                    .color(theme.text.primary),
+            );
+            ui.add_space(space::S8);
+            show_command_template_input(ui, template, template_invalid);
+            ui.add_space(space::S12);
+            egui::Frame::new()
+                .fill(theme.info.tint)
+                .stroke(stroke::hairline(theme.info.outline))
+                .corner_radius(egui::CornerRadius::same(radius::MENU_ITEM))
+                .inner_margin(egui::Margin::same(space::S16 as i8))
+                .show(ui, |ui| {
+                    ui.set_min_width(ui.available_width());
+                    ui.horizontal_top(|ui| {
+                        let (icon_rect, _) =
+                            ui.allocate_exact_size(egui::Vec2::splat(20.0), egui::Sense::hover());
+                        ui.painter().circle_stroke(
+                            icon_rect.center(),
+                            9.0,
+                            egui::Stroke::new(1.5, theme.info.text),
+                        );
+                        ui.painter().text(
+                            icon_rect.center(),
+                            egui::Align2::CENTER_CENTER,
+                            "i",
+                            type_scale::BODY_STRONG.font_id(ui.ctx()),
+                            theme.info.text,
+                        );
+                        ui.add_space(space::S8);
+                        ui.label(template_guidance(ui.ctx(), &theme));
+                    });
+                });
+            if let Some(error) = template_error {
+                ui.add_space(space::S16);
+                show_validation_error(ui, "Command template needs attention", error);
             }
-            choice_clicked
-        })
-        .inner
+        }
+        choice_clicked
+    })
+    .inner
 }
 
 pub(super) fn show_command_template_input(
@@ -106,23 +103,21 @@ pub(super) fn show_command_template_input(
     template: &mut String,
     invalid: bool,
 ) -> egui::Response {
+    let theme = ui.tokens();
     let id = ui.make_persistent_id("terminal-command-template");
     let focused = ui.memory(|memory| memory.has_focus(id));
     let stroke = if invalid {
-        egui::Stroke::new(1.0, status::DANGER)
+        stroke::hairline(theme.danger.fill)
     } else if focused {
-        egui::Stroke::new(1.0, indigo::_500)
+        stroke::hairline(theme.accent.fill)
     } else {
-        surface::control_border()
+        stroke::control(&theme)
     };
     let response = egui::Frame::new()
-        .fill(WHITE)
+        .fill(theme.components.field_bg)
         .stroke(stroke)
-        .corner_radius(radius::control())
-        .inner_margin(egui::Margin::symmetric(
-            spacing::MD as i8,
-            spacing::SM as i8,
-        ))
+        .corner_radius(egui::CornerRadius::same(radius::KEY))
+        .inner_margin(egui::Margin::symmetric(space::S12 as i8, space::S8 as i8))
         .show(ui, |ui| {
             let full_width = ui.available_width();
             ui.set_min_width(full_width);
@@ -131,8 +126,8 @@ pub(super) fn show_command_template_input(
                 egui::TextEdit::singleline(template)
                     .id(id)
                     .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(4, 2)))
-                    .font(typography::monospace())
-                    .text_color(gray::_800)
+                    .font(type_scale::MONO.font_id(ui.ctx()))
+                    .text_color(theme.text.primary)
                     .hint_text("alacritty -e {command}"),
             )
         })
@@ -147,11 +142,11 @@ pub(super) fn show_command_template_input(
     response
 }
 
-pub(super) fn template_guidance() -> egui::text::LayoutJob {
+pub(super) fn template_guidance(ctx: &egui::Context, theme: &Theme) -> egui::text::LayoutJob {
     let mut guidance = egui::text::LayoutJob::default();
     let text = egui::TextFormat {
-        font_id: typography::body(),
-        color: indigo::_800,
+        font_id: type_scale::BODY.font_id(ctx),
+        color: theme.info.text_on_tint,
         ..Default::default()
     };
     guidance.append("Use ", 0.0, text.clone());
@@ -159,8 +154,8 @@ pub(super) fn template_guidance() -> egui::text::LayoutJob {
         "{command}",
         0.0,
         egui::TextFormat {
-            font_id: typography::monospace(),
-            color: indigo::_900,
+            font_id: type_scale::MONO.font_id(ctx),
+            color: theme.info.text_on_tint,
             ..Default::default()
         },
     );
@@ -173,23 +168,24 @@ pub(super) fn template_guidance() -> egui::text::LayoutJob {
 }
 
 pub(super) fn show_validation_error(ui: &mut egui::Ui, title: &str, error: &str) {
+    let theme = ui.tokens();
     egui::Frame::new()
-        .fill(WHITE)
-        .stroke(egui::Stroke::new(1.0, status::DANGER))
-        .corner_radius(radius::control())
-        .inner_margin(egui::Margin::same(spacing::MD as i8))
+        .fill(theme.danger.tint)
+        .stroke(stroke::hairline(theme.danger.outline))
+        .corner_radius(egui::CornerRadius::same(radius::KEY))
+        .inner_margin(egui::Margin::same(space::S12 as i8))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             ui.label(
                 egui::RichText::new(title)
-                    .font(typography::semibold(typography::BODY_SIZE))
-                    .color(status::DANGER),
+                    .font(type_scale::BODY_STRONG.font_id(ui.ctx()))
+                    .color(theme.danger.text_on_tint),
             );
-            ui.add_space(spacing::XS);
+            ui.add_space(space::S4);
             ui.label(
                 egui::RichText::new(error)
-                    .font(typography::metadata())
-                    .color(gray::_700),
+                    .font(type_scale::META.font_id(ui.ctx()))
+                    .color(theme.text.secondary),
             );
         });
 }

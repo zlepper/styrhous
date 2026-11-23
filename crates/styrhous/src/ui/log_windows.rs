@@ -10,8 +10,9 @@ use crate::worker::{
     StopPodLogStream, WorkerCommandBox, WorkerResult,
 };
 use anstyle::{Ansi256Color, AnsiColor, Color, Effects, RgbColor, Style};
-use components::colors::{SUCCESS, TABLE_BORDER, TOOLBAR_BACKGROUND, gray};
-use components::design::{radius, search, spacing, status, surface, typography};
+use components::design::stroke;
+use components::design::theme::{self, AnsiRoles, Theme, ThemeExt, ThemeScope, Tone};
+use components::design::{radius, space, type_scale};
 use components::{PointingHand, TailwindSearchInput, icons, search_navigation_button};
 use std::time::{Duration, Instant};
 

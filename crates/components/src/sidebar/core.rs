@@ -9,29 +9,26 @@ pub(super) struct SidebarContentCore<'a> {
     pub(super) id: Id,
     pub(super) item_height: f32,
     pub(super) show_text: bool,
-    pub(super) dark: bool,
 }
 
 impl<'a> SidebarContentCore<'a> {
-    pub(super) fn wide(ui: &'a mut Ui, dark: bool) -> Self {
+    pub(super) fn wide(ui: &'a mut Ui) -> Self {
         let id = ui.auto_id_with("wide-sidebar");
         Self {
             ui,
             id,
             item_height: WIDE_ITEM_HEIGHT,
             show_text: true,
-            dark,
         }
     }
 
-    pub(super) fn narrow(ui: &'a mut Ui, dark: bool) -> Self {
+    pub(super) fn narrow(ui: &'a mut Ui) -> Self {
         let id = ui.auto_id_with("narrow-sidebar");
         Self {
             ui,
             id,
             item_height: NARROW_ITEM_HEIGHT,
             show_text: false,
-            dark,
         }
     }
 
@@ -88,7 +85,7 @@ impl<'a> SidebarContentCore<'a> {
         let tooltip = tooltip.unwrap_or(text_str);
 
         let (rect, inner_rect, response) = allocate_item(self.ui, self.item_height);
-        let colors = ItemColors::navigation(selected, response.hovered(), self.dark);
+        let colors = ItemColors::navigation(&self.ui.tokens(), selected, response.hovered());
 
         let background_rect = if self.show_text {
             inner_rect
@@ -158,7 +155,7 @@ impl<'a> SidebarContentCore<'a> {
         let tooltip = tooltip.unwrap_or(text_str);
 
         let (rect, inner_rect, response) = allocate_item(self.ui, self.item_height);
-        let colors = ItemColors::navigation(selected, response.hovered(), self.dark);
+        let colors = ItemColors::navigation(&self.ui.tokens(), selected, response.hovered());
 
         let background_rect = if self.show_text {
             inner_rect
@@ -171,7 +168,7 @@ impl<'a> SidebarContentCore<'a> {
             let avatar_x = CHEVRON_SIZE + CHEVRON_GAP;
             let avatar_center =
                 inner_rect.min + Vec2::new(avatar_x + ICON_SIZE / 2.0, self.item_height / 2.0);
-            paint_avatar(self.ui, avatar_center, initial, self.dark, ICON_SIZE);
+            paint_avatar(self.ui, avatar_center, initial, ICON_SIZE);
             let text_is_truncated = render_text(
                 self.ui.painter(),
                 text_pos_after_icon(inner_rect, self.item_height),
@@ -184,13 +181,7 @@ impl<'a> SidebarContentCore<'a> {
             }
         } else {
             // For narrow mode, center avatar within full rect (not inner_rect)
-            paint_avatar(
-                self.ui,
-                rect.center(),
-                initial,
-                self.dark,
-                NARROW_AVATAR_SIZE,
-            );
+            paint_avatar(self.ui, rect.center(), initial, NARROW_AVATAR_SIZE);
             response.clone().on_hover_text(tooltip);
         }
 
@@ -208,7 +199,7 @@ impl<'a> SidebarContentCore<'a> {
         let line_rect = rect.shrink2(Vec2::new(ITEM_PADDING_X, 0.0));
         self.ui.painter().line_segment(
             [line_rect.left_center(), line_rect.right_center()],
-            Stroke::new(1.0, if self.dark { gray::_800 } else { gray::_200 }),
+            stroke::hairline(self.ui.tokens().nav.divider),
         );
         self.ui.add_space(8.0);
     }
@@ -238,6 +229,18 @@ pub(super) fn render_sidebar<R>(
 }
 
 pub(super) fn render_sidebar_with_footer<R>(
+    ui: &mut Ui,
+    layout: SidebarLayout,
+    footer_height: f32,
+    add_contents: impl FnOnce(&mut Ui) -> R,
+    add_footer: impl FnOnce(&mut Ui),
+) -> R {
+    theme::scope(ui, ThemeScope::Sidebar, |ui| {
+        render_sidebar_frame(ui, layout, footer_height, add_contents, add_footer)
+    })
+}
+
+fn render_sidebar_frame<R>(
     ui: &mut Ui,
     layout: SidebarLayout,
     footer_height: f32,
@@ -295,8 +298,9 @@ pub(super) struct SidebarLayout {
     pub(super) top_padding: f32,
 }
 
-fn paint_avatar(ui: &Ui, center: egui::Pos2, text: &str, dark: bool, size: f32) {
-    let avatar = crate::TextAvatar::new(text).size(size);
-    let avatar = if dark { avatar.dark() } else { avatar };
-    avatar.paint(ui, center);
+fn paint_avatar(ui: &Ui, center: egui::Pos2, text: &str, size: f32) {
+    crate::TextAvatar::new(text)
+        .identity()
+        .size(size)
+        .paint(ui, center);
 }

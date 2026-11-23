@@ -1,4 +1,4 @@
-use components::design::spacing;
+use components::design::space;
 use components::test_support::{UiHarnessSnapshot, setup_egui};
 use components::{ChecklistStep, ChecklistStepState, ProgressChecklist};
 use egui_kittest::{Harness, kittest::Queryable};
@@ -22,9 +22,9 @@ fn every_step_state_has_an_icon_label_and_detail() {
     let mut harness = Harness::builder()
         .with_size(egui::vec2(400.0, 220.0))
         .build_ui(move |ui| {
-            ui.add_space(spacing::LG);
+            ui.add_space(space::S16);
             ui.horizontal(|ui| {
-                ui.add_space(spacing::LG);
+                ui.add_space(space::S16);
                 ProgressChecklist::new("Connecting to dev", &steps).show(ui);
             });
         });

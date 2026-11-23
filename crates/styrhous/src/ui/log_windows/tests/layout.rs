@@ -1,4 +1,5 @@
 use super::*;
+use components::test_support::distinct_role_theme;
 
 #[test]
 fn horizontal_fragment_uses_byte_boundaries_for_utf8_text() {
@@ -106,6 +107,7 @@ fn layout_highlights_only_matching_segments() {
             show_line_numbers: true,
             ..Default::default()
         },
+        &Theme::default(),
     );
     assert_eq!(job.sections.len(), 4);
     assert_eq!(job.text, "     4  http http");
@@ -113,6 +115,7 @@ fn layout_highlights_only_matching_segments() {
 
 #[test]
 fn layout_preserves_ansi_style_while_highlighting_matches() {
+    let theme = distinct_role_theme();
     let style = Style::new()
         .fg_color(Some(AnsiColor::Red.into()))
         .underline();
@@ -130,19 +133,15 @@ fn layout_preserves_ansi_style_while_highlighting_matches() {
             show_line_numbers: true,
             ..Default::default()
         },
+        &theme,
     );
 
     assert_eq!(job.text, "     0  error");
     assert_eq!(job.sections.len(), 4);
-    assert_eq!(
-        job.sections[1].format.color,
-        ansi_palette_color(AnsiColor::Red)
-    );
+    assert_eq!(job.sections[1].format.color, theme.ansi.red);
     assert!(!job.sections[1].format.underline.is_empty());
-    assert_eq!(
-        job.sections[2].format.background,
-        egui::Color32::from_rgb(120, 53, 15)
-    );
+    assert_eq!(job.sections[2].format.background, theme.code.match_bg);
+    assert_eq!(job.sections[2].format.color, theme.ansi.red);
 }
 
 #[test]
@@ -193,4 +192,75 @@ fn wide_log_rows_are_not_wrapped_and_need_horizontal_scrolling() {
             .x
             > 0.0
     );
+}
+
+#[test]
+fn ansi_palette_follows_the_theme_while_the_xterm_cube_stays_fixed() {
+    let theme = Theme::from_file_str(
+        r#"
+        name = "Teal errors"
+        [terminal]
+        ansi-red = "teal-400"
+        "#,
+    )
+    .expect("the theme file is valid");
+    assert_ne!(theme.ansi.red, Theme::default().ansi.red);
+
+    assert_eq!(
+        ansi_color(Color::Ansi(AnsiColor::Red), &theme.ansi),
+        theme.ansi.red
+    );
+    assert_eq!(ansi_256_color(1, &theme.ansi), theme.ansi.red);
+    assert_eq!(ansi_256_color(15, &theme.ansi), theme.ansi.bright_white);
+    // The 6×6×6 cube and the grey ramp are defined by xterm, not the theme.
+    assert_eq!(
+        ansi_256_color(196, &theme.ansi).to_array(),
+        [255, 0, 0, 255]
+    );
+    assert_eq!(ansi_256_color(232, &theme.ansi).to_array(), [8, 8, 8, 255]);
+}
+
+#[test]
+fn inverted_ansi_text_without_a_background_uses_the_code_surface() {
+    let theme = distinct_role_theme();
+    let style = Style::new()
+        .fg_color(Some(AnsiColor::Green.into()))
+        .invert();
+    let default = egui::TextFormat {
+        color: theme.code.text,
+        ..Default::default()
+    };
+
+    let format = ansi_text_format(style, &default, &theme);
+
+    assert_eq!(format.color, theme.code.surface);
+    assert_eq!(format.background, theme.ansi.green);
+}
+
+#[test]
+fn the_sixteen_ansi_colours_map_to_their_own_roles() {
+    let theme = distinct_role_theme();
+    let ansi = &theme.ansi;
+    let expected = [
+        (AnsiColor::Black, ansi.black),
+        (AnsiColor::Red, ansi.red),
+        (AnsiColor::Green, ansi.green),
+        (AnsiColor::Yellow, ansi.yellow),
+        (AnsiColor::Blue, ansi.blue),
+        (AnsiColor::Magenta, ansi.magenta),
+        (AnsiColor::Cyan, ansi.cyan),
+        (AnsiColor::White, ansi.white),
+        (AnsiColor::BrightBlack, ansi.bright_black),
+        (AnsiColor::BrightRed, ansi.bright_red),
+        (AnsiColor::BrightGreen, ansi.bright_green),
+        (AnsiColor::BrightYellow, ansi.bright_yellow),
+        (AnsiColor::BrightBlue, ansi.bright_blue),
+        (AnsiColor::BrightMagenta, ansi.bright_magenta),
+        (AnsiColor::BrightCyan, ansi.bright_cyan),
+        (AnsiColor::BrightWhite, ansi.bright_white),
+    ];
+    for (index, (color, role)) in expected.into_iter().enumerate() {
+        assert_eq!(ansi_color(Color::Ansi(color), ansi), role, "{color:?}");
+        assert_eq!(ansi_256_color(index as u8, ansi), role, "index {index}");
+    }
 }

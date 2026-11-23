@@ -72,7 +72,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
                             STATUS_COLUMN.to_owned(),
                             CellValue::Status {
                                 label: "Running".into(),
-                                tone: StatusTone::Success,
+                                tone: Tone::Success,
                             },
                         ),
                         (RESTARTS_COLUMN.to_owned(), CellValue::Number(0)),
@@ -172,7 +172,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
                         STATUS_COLUMN.to_owned(),
                         CellValue::Status {
                             label: "Running".into(),
-                            tone: StatusTone::Success,
+                            tone: Tone::Success,
                         },
                     ),
                     (RESTARTS_COLUMN.to_owned(), CellValue::Number(0)),

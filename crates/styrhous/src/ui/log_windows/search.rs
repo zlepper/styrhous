@@ -20,6 +20,7 @@ pub(super) fn initial_spool_is_pending(window: &PodLogWindowState) -> bool {
 }
 
 pub(super) fn show_initial_spool_state(ui: &mut egui::Ui, total_lines: usize) {
+    let theme = ui.tokens();
     let state_rect = egui::Rect::from_center_size(
         ui.available_rect_before_wrap().center(),
         egui::vec2(280.0, 64.0),
@@ -30,22 +31,22 @@ pub(super) fn show_initial_spool_state(ui: &mut egui::Ui, total_lines: usize) {
             .layout(egui::Layout::top_down(egui::Align::Center)),
         |ui| {
             ui.horizontal_centered(|ui| {
-                ui.add(egui::Spinner::new().size(20.0).color(gray::_200));
-                ui.add_space(spacing::SM);
+                ui.add(egui::Spinner::new().size(20.0).color(theme.code.text_muted));
+                ui.add_space(space::S8);
                 ui.label(
                     egui::RichText::new("Spooling logs…")
-                        .font(typography::section_heading())
-                        .color(gray::_200),
+                        .font(type_scale::TITLE.font_id(ui.ctx()))
+                        .color(theme.code.text_muted),
                 );
             });
-            ui.add_space(spacing::SM);
+            ui.add_space(space::S8);
             ui.label(
                 egui::RichText::new(format!(
                     "{total_lines} {} received",
                     if total_lines == 1 { "line" } else { "lines" }
                 ))
-                .font(typography::body())
-                .color(gray::_500),
+                .font(type_scale::BODY.font_id(ui.ctx()))
+                .color(theme.text.muted),
             );
         },
     );
@@ -82,6 +83,7 @@ pub(super) fn show_log_search_controls(
     display_options: &mut LogDisplayOptions,
     log_store: &LogStoreService,
 ) {
+    let theme = ui.tokens();
     let invalid = window.search.error.is_some();
     let focus_search =
         ctx.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::F));
@@ -114,16 +116,16 @@ pub(super) fn show_log_search_controls(
         ctx.request_repaint_after(Duration::from_millis(150));
     }
 
-    ui.add_space(spacing::SM);
+    ui.add_space(space::S8);
     let navigation = ui
         .allocate_ui_with_layout(
             egui::vec2(158.0, 34.0),
             egui::Layout::left_to_right(egui::Align::Center),
             |ui| {
                 egui::Frame::new()
-                    .fill(egui::Color32::WHITE)
-                    .stroke(egui::Stroke::new(1.0, gray::_300))
-                    .corner_radius(radius::control())
+                    .fill(theme.components.well_bg)
+                    .stroke(stroke::subtle_divider(&theme))
+                    .corner_radius(egui::CornerRadius::same(radius::KEY))
                     .inner_margin(egui::Margin::symmetric(2, 2))
                     .show(ui, |ui| {
                         ui.spacing_mut().item_spacing.x = 0.0;
@@ -161,16 +163,16 @@ pub(super) fn show_log_search_controls(
             },
         )
         .inner;
-    ui.add_space(spacing::SM);
+    ui.add_space(space::S8);
     let display_controls = ui
         .allocate_ui_with_layout(
             egui::vec2(160.0, 34.0),
             egui::Layout::left_to_right(egui::Align::Center),
             |ui| {
                 egui::Frame::new()
-                    .fill(egui::Color32::WHITE)
-                    .stroke(egui::Stroke::new(1.0, gray::_300))
-                    .corner_radius(radius::control())
+                    .fill(theme.components.well_bg)
+                    .stroke(stroke::subtle_divider(&theme))
+                    .corner_radius(egui::CornerRadius::same(radius::KEY))
                     .inner_margin(egui::Margin::symmetric(2, 2))
                     .show(ui, |ui| {
                         ui.spacing_mut().item_spacing.x = 0.0;
@@ -313,12 +315,13 @@ pub(super) fn log_display_toggle_button(
     active: bool,
     label: &str,
 ) -> bool {
+    let theme = ui.tokens();
     let response = ui
         .add_sized(
             egui::Vec2::splat(28.0),
             egui::Button::image(
                 icon.fit_to_exact_size(egui::Vec2::splat(14.0))
-                    .tint(gray::_700),
+                    .tint(theme.text.secondary),
             )
             .frame(false),
         )
@@ -328,14 +331,13 @@ pub(super) fn log_display_toggle_button(
     });
     if active {
         let center = response.rect.right_bottom() - egui::vec2(3.5, 3.5);
-        ui.painter()
-            .circle_filled(center, 5.5, components::colors::SUCCESS);
+        ui.painter().circle_filled(center, 5.5, theme.success.fill);
         ui.painter().text(
             center,
             egui::Align2::CENTER_CENTER,
             "✓",
             egui::FontId::proportional(8.0),
-            egui::Color32::WHITE,
+            theme.text.on_fill,
         );
     }
     response.on_hover_text(label).clicked()

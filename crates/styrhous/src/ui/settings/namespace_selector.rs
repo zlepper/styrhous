@@ -59,10 +59,11 @@ impl GlobalBladeContent for NamespaceSelectorSettingsBlade {
         _layer: components::BladeLayer,
         _context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
+        let theme = ui.tokens();
         ui.label(
             egui::RichText::new("Namespace selector")
-                .font(typography::page_title())
-                .color(gray::_900),
+                .font(type_scale::HEADING.font_id(ui.ctx()))
+                .color(theme.text.primary),
         );
         GlobalBladeRenderResult::default()
     }
@@ -73,23 +74,24 @@ impl GlobalBladeContent for NamespaceSelectorSettingsBlade {
         _layer: components::BladeLayer,
         context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
+        let theme = ui.tokens();
         let namespaces = context.namespaces();
         let mut save = false;
         let mut reset = false;
         ui.label(
             egui::RichText::new("NAMESPACE SELECTOR")
-                .font(typography::metadata())
-                .color(gray::_500),
+                .font(type_scale::META.font_id(ui.ctx()))
+                .color(theme.text.muted),
         );
-        ui.add_space(spacing::XS);
+        ui.add_space(space::S4);
         ui.label(
             egui::RichText::new(
                 "Create meaningful namespace identities from labels and annotations. These settings apply to every cluster on this device.",
             )
-            .font(typography::body())
-            .color(gray::_600),
+            .font(type_scale::BODY.font_id(ui.ctx()))
+            .color(theme.text.secondary),
         );
-        ui.add_space(spacing::XL);
+        ui.add_space(space::S24);
         ui.separator();
         ui.add_space(if self.editing_field.is_some() {
             12.0
@@ -114,15 +116,15 @@ impl GlobalBladeContent for NamespaceSelectorSettingsBlade {
                         ui.add_space(if self.editing_field.is_some() {
                             14.0
                         } else {
-                            spacing::XL
+                            space::S24
                         });
                         show_templates(ui, &mut self.draft);
                         if let Some(namespace) = namespaces.first() {
-                            ui.add_space(spacing::SM);
+                            ui.add_space(space::S8);
                             show_preview(ui, namespace, &self.draft);
                         }
                         if let Some(error) = &self.error {
-                            ui.add_space(spacing::LG);
+                            ui.add_space(space::S16);
                             show_validation_error(
                                 ui,
                                 "Namespace selector settings need attention",
@@ -133,7 +135,7 @@ impl GlobalBladeContent for NamespaceSelectorSettingsBlade {
             },
         );
         ui.separator();
-        ui.add_space(spacing::SM);
+        ui.add_space(space::S8);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             save |= TailwindButton::new("Save changes").show(ui).clicked();
             reset |= TailwindButton::secondary("Reset")
@@ -163,11 +165,12 @@ impl GlobalBladeContent for NamespaceSelectorSettingsBlade {
 }
 
 fn show_fields(ui: &mut egui::Ui, blade: &mut NamespaceSelectorSettingsBlade) {
+    let theme = ui.tokens();
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new("Metadata fields")
-                .font(typography::section_heading())
-                .color(gray::_900),
+                .font(type_scale::TITLE.font_id(ui.ctx()))
+                .color(theme.text.primary),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if TailwindButton::primary("Add field")
@@ -180,57 +183,53 @@ fn show_fields(ui: &mut egui::Ui, blade: &mut NamespaceSelectorSettingsBlade) {
             }
         });
     });
-    ui.add_space(spacing::SM);
+    ui.add_space(space::S8);
     if blade.editing_field.is_none() {
-        ui.add_space(spacing::SM);
+        ui.add_space(space::S8);
     }
     let mut remove = None;
     let mut edit = None;
     let mut close_editor = false;
-    egui::Frame::new()
-        .fill(WHITE)
-        .stroke(surface::muted_border())
-        .corner_radius(radius::surface())
-        .show(ui, |ui| {
-            // Measured inside the frame so its stroke is already excluded.
-            let table_width = ui.available_width();
-            let original_item_spacing = ui.spacing().item_spacing;
-            ui.spacing_mut().item_spacing.y = 0.0;
-            if blade.editing_field.is_some() {
-                for index in 0..blade.draft.fields.len() {
-                    let is_editing = blade.editing_field == Some(index);
-                    let row_actions = {
-                        let field = &mut blade.draft.fields[index];
-                        show_metadata_field_row(ui, field, index, is_editing, None, 64.0)
-                    };
-                    remove = remove.or(row_actions.remove);
-                    edit = edit.or(row_actions.edit);
-                    close_editor |= row_actions.close_editor;
-                    if is_editing {
-                        show_field_form(ui, blade);
-                    }
-                }
-                if blade.editing_field == Some(blade.draft.fields.len()) {
+    WorkspaceCard::new().margin(0).show_inner(ui, |ui| {
+        // Measured inside the frame so its stroke is already excluded.
+        let table_width = ui.available_width();
+        let original_item_spacing = ui.spacing().item_spacing;
+        ui.spacing_mut().item_spacing.y = 0.0;
+        if blade.editing_field.is_some() {
+            for index in 0..blade.draft.fields.len() {
+                let is_editing = blade.editing_field == Some(index);
+                let row_actions = {
+                    let field = &mut blade.draft.fields[index];
+                    show_metadata_field_row(ui, field, index, is_editing, None, 64.0)
+                };
+                remove = remove.or(row_actions.remove);
+                edit = edit.or(row_actions.edit);
+                close_editor |= row_actions.close_editor;
+                if is_editing {
                     show_field_form(ui, blade);
                 }
-            } else {
-                ReorderableTable::new("namespace-metadata-fields", 84.0).show(
-                    ui,
-                    &mut blade.draft.fields,
-                    table_width,
-                    |ui, field, index, handle| {
-                        let row_actions =
-                            show_metadata_field_row(ui, field, index, false, Some(handle), 84.0);
-                        remove = remove.or(row_actions.remove);
-                        edit = edit.or(row_actions.edit);
-                    },
-                    |ui, field| {
-                        ui.label(&field.alias);
-                    },
-                );
             }
-            ui.spacing_mut().item_spacing = original_item_spacing;
-        });
+            if blade.editing_field == Some(blade.draft.fields.len()) {
+                show_field_form(ui, blade);
+            }
+        } else {
+            ReorderableTable::new("namespace-metadata-fields", 84.0).show(
+                ui,
+                &mut blade.draft.fields,
+                table_width,
+                |ui, field, index, handle| {
+                    let row_actions =
+                        show_metadata_field_row(ui, field, index, false, Some(handle), 84.0);
+                    remove = remove.or(row_actions.remove);
+                    edit = edit.or(row_actions.edit);
+                },
+                |ui, field| {
+                    ui.label(&field.alias);
+                },
+            );
+        }
+        ui.spacing_mut().item_spacing = original_item_spacing;
+    });
     if close_editor {
         blade.editing_field = None;
     }
@@ -270,6 +269,7 @@ fn show_metadata_field_row(
     handle: Option<&components::ReorderHandle>,
     row_height: f32,
 ) -> MetadataFieldRowActions {
+    let theme = ui.tokens();
     let mut actions = MetadataFieldRowActions::default();
     let (row_rect, _) = ui.allocate_exact_size(
         egui::vec2(ui.available_width(), row_height),
@@ -277,7 +277,7 @@ fn show_metadata_field_row(
     );
     if index > 0 {
         ui.painter()
-            .hline(row_rect.x_range(), row_rect.top(), surface::muted_border());
+            .hline(row_rect.x_range(), row_rect.top(), stroke::divider(&theme));
     }
     let mut row_ui = ui.new_child(
         egui::UiBuilder::new()
@@ -309,15 +309,15 @@ fn show_metadata_field_row(
             .max_rect(icon_rect)
             .layout(egui::Layout::left_to_right(egui::Align::Center)),
     );
-    icons::bars_3(&mut handle_ui, 16.0, gray::_500);
+    icons::bars_3(&mut handle_ui, 16.0, theme.text.muted);
     row_ui.add_space(11.0);
     row_ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new(format!("{}: {}", source_label(field.source), field.key))
-                .font(typography::body())
-                .color(gray::_600),
+                .font(type_scale::BODY.font_id(ui.ctx()))
+                .color(theme.text.secondary),
         );
-        ui.add_space(spacing::MD);
+        ui.add_space(space::S12);
         metadata_key_pill(ui, &field.alias);
     });
     row_ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -331,7 +331,7 @@ fn show_metadata_field_row(
         {
             actions.remove = Some(index);
         }
-        ui.add_space(spacing::SM);
+        ui.add_space(space::S8);
         let (icon, label) = if is_editing {
             (
                 icons::arrow_up_icon(),
@@ -358,13 +358,11 @@ fn show_metadata_field_row(
 }
 
 fn show_field_form(ui: &mut egui::Ui, blade: &mut NamespaceSelectorSettingsBlade) {
-    ui.add_space(spacing::XS);
-    egui::Frame::new()
-        .fill(WHITE)
-        .stroke(surface::muted_border())
-        .corner_radius(radius::control())
-        .inner_margin(egui::Margin::same(spacing::LG as i8))
-        .show(ui, |ui| {
+    let theme = ui.tokens();
+    ui.add_space(space::S4);
+    WorkspaceCard::new()
+        .margin(space::S16 as i8)
+        .show_inner(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new(if blade.editing_field == Some(blade.draft.fields.len()) {
@@ -372,8 +370,8 @@ fn show_field_form(ui: &mut egui::Ui, blade: &mut NamespaceSelectorSettingsBlade
                     } else {
                         "Edit metadata field"
                     })
-                    .font(typography::section_heading())
-                    .color(gray::_900),
+                    .font(type_scale::TITLE.font_id(ui.ctx()))
+                    .color(theme.text.primary),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if TailwindButton::primary("Save field")
@@ -392,28 +390,29 @@ fn show_field_form(ui: &mut egui::Ui, blade: &mut NamespaceSelectorSettingsBlade
                     }
                 });
             });
-            ui.add_space(spacing::MD);
+            ui.add_space(space::S12);
             show_metadata_source_options(ui, &mut blade.field_draft.source, "Source");
-            ui.add_space(spacing::MD);
+            ui.add_space(space::S12);
             labeled_input(
                 ui,
                 "Selector",
                 &mut blade.field_draft.key,
                 "company.example/customer",
             );
-            ui.add_space(spacing::SM);
+            ui.add_space(space::S8);
             labeled_input(ui, "Template key", &mut blade.field_draft.alias, "customer");
-            ui.add_space(spacing::LG);
+            ui.add_space(space::S16);
         });
-    ui.add_space(spacing::XS);
+    ui.add_space(space::S4);
 }
 
 fn show_templates(ui: &mut egui::Ui, settings: &mut NamespaceSelectorSettings) {
+    let theme = ui.tokens();
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new("Identity templates")
-                .font(typography::section_heading())
-                .color(gray::_900),
+                .font(type_scale::TITLE.font_id(ui.ctx()))
+                .color(theme.text.primary),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if TailwindButton::primary("Add template")
@@ -427,117 +426,109 @@ fn show_templates(ui: &mut egui::Ui, settings: &mut NamespaceSelectorSettings) {
             }
         });
     });
-    ui.add_space(spacing::SM);
+    ui.add_space(space::S8);
     ui.label(
         egui::RichText::new("The first template with all its values available is used.")
-            .font(typography::body())
-            .color(gray::_600),
+            .font(type_scale::BODY.font_id(ui.ctx()))
+            .color(theme.text.secondary),
     );
-    ui.add_space(spacing::SM);
+    ui.add_space(space::S8);
     let mut remove = None;
     ui.add_space(3.0);
-    egui::Frame::new()
-        .fill(WHITE)
-        .stroke(surface::muted_border())
-        .corner_radius(radius::surface())
-        .show(ui, |ui| {
-            // Measured inside the frame so its stroke is already excluded.
-            let table_width = ui.available_width();
-            let original_item_spacing = ui.spacing().item_spacing;
-            ui.spacing_mut().item_spacing.y = 0.0;
-            let reordered = ReorderableTable::new("namespace-identity-templates", 72.0).show(
-                ui,
-                &mut settings.templates,
-                table_width,
-                |ui, template, index, handle| {
-                    let (row_rect, _) = ui.allocate_exact_size(
-                        egui::vec2(ui.available_width(), 72.0),
-                        egui::Sense::hover(),
-                    );
-                    if index > 0 {
-                        ui.painter().hline(
-                            row_rect.x_range(),
-                            row_rect.top(),
-                            surface::muted_border(),
-                        );
-                    }
-                    let center_y = row_rect.center().y;
-                    let handle_rect = egui::Rect::from_center_size(
-                        egui::pos2(row_rect.left() + 35.0, center_y),
-                        egui::Vec2::splat(32.0),
-                    );
-                    let remove_rect = egui::Rect::from_center_size(
-                        egui::pos2(row_rect.right() - 43.0, center_y),
-                        egui::Vec2::splat(36.0),
-                    );
-                    let input_rect = egui::Rect::from_min_max(
-                        egui::pos2(row_rect.left() + 67.0, center_y - 14.0),
-                        egui::pos2(remove_rect.left() - spacing::LG, center_y + 14.0),
-                    );
+    WorkspaceCard::new().margin(0).show_inner(ui, |ui| {
+        // Measured inside the frame so its stroke is already excluded.
+        let table_width = ui.available_width();
+        let original_item_spacing = ui.spacing().item_spacing;
+        ui.spacing_mut().item_spacing.y = 0.0;
+        let reordered = ReorderableTable::new("namespace-identity-templates", 72.0).show(
+            ui,
+            &mut settings.templates,
+            table_width,
+            |ui, template, index, handle| {
+                let (row_rect, _) = ui.allocate_exact_size(
+                    egui::vec2(ui.available_width(), 72.0),
+                    egui::Sense::hover(),
+                );
+                if index > 0 {
+                    ui.painter()
+                        .hline(row_rect.x_range(), row_rect.top(), stroke::divider(&theme));
+                }
+                let center_y = row_rect.center().y;
+                let handle_rect = egui::Rect::from_center_size(
+                    egui::pos2(row_rect.left() + 35.0, center_y),
+                    egui::Vec2::splat(32.0),
+                );
+                let remove_rect = egui::Rect::from_center_size(
+                    egui::pos2(row_rect.right() - 43.0, center_y),
+                    egui::Vec2::splat(36.0),
+                );
+                let input_rect = egui::Rect::from_min_max(
+                    egui::pos2(row_rect.left() + 67.0, center_y - 14.0),
+                    egui::pos2(remove_rect.left() - space::S16, center_y + 14.0),
+                );
 
-                    let response = ui.interact(
-                        handle_rect,
-                        ui.id().with(("reorder-template", index)),
-                        egui::Sense::drag(),
-                    );
-                    let icon_rect =
-                        egui::Rect::from_center_size(handle_rect.center(), egui::Vec2::splat(16.0));
-                    let mut handle_ui = ui.new_child(
-                        egui::UiBuilder::new()
-                            .max_rect(icon_rect)
-                            .layout(egui::Layout::left_to_right(egui::Align::Center)),
-                    );
-                    response.widget_info(|| {
-                        egui::WidgetInfo::labeled(
-                            egui::WidgetType::Button,
-                            handle_ui.is_enabled(),
-                            format!("Reorder identity template {}", index + 1),
-                        )
-                    });
-                    icons::bars_3(&mut handle_ui, 16.0, gray::_500);
-                    handle.register(&response.with_pointing_hand());
-
-                    let mut input_ui =
-                        ui.new_child(egui::UiBuilder::new().max_rect(input_rect).layout(
-                            egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
-                        ));
-                    TailwindTextInput::new(&mut template.template)
-                        .id_salt(("namespace-identity-template", index))
-                        .hint_text("Customer: {{customer}}")
-                        .accessibility_label(format!("Identity template {}", index + 1))
-                        .show(&mut input_ui);
-
-                    let mut remove_ui =
-                        ui.new_child(egui::UiBuilder::new().max_rect(remove_rect).layout(
-                            egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
-                        ));
-                    if TailwindButton::icon(
-                        icons::trash_icon().fit_to_exact_size(egui::Vec2::splat(16.0)),
+                let response = ui.interact(
+                    handle_rect,
+                    ui.id().with(("reorder-template", index)),
+                    egui::Sense::drag(),
+                );
+                let icon_rect =
+                    egui::Rect::from_center_size(handle_rect.center(), egui::Vec2::splat(16.0));
+                let mut handle_ui = ui.new_child(
+                    egui::UiBuilder::new()
+                        .max_rect(icon_rect)
+                        .layout(egui::Layout::left_to_right(egui::Align::Center)),
+                );
+                response.widget_info(|| {
+                    egui::WidgetInfo::labeled(
+                        egui::WidgetType::Button,
+                        handle_ui.is_enabled(),
+                        format!("Reorder identity template {}", index + 1),
                     )
-                    .variant(ButtonVariant::Secondary)
-                    .size(ButtonSize::Md)
-                    .accessibility_label(format!("Remove identity template {}", index + 1))
-                    .show(&mut remove_ui)
-                    .clicked()
-                    {
-                        remove = Some(index);
-                    }
-                },
-                |ui, template| {
-                    ui.label(&template.template);
-                },
-            );
-            if reordered {
-                ui.ctx().memory_mut(|memory| {
-                    for index in 0..settings.templates.len() {
-                        memory
-                            .surrender_focus(egui::Id::new(("namespace-identity-template", index)));
-                    }
                 });
-            }
-            show_namespace_name_fallback(ui, table_width);
-            ui.spacing_mut().item_spacing = original_item_spacing;
-        });
+                icons::bars_3(&mut handle_ui, 16.0, theme.text.muted);
+                handle.register(&response.with_pointing_hand());
+
+                let mut input_ui =
+                    ui.new_child(egui::UiBuilder::new().max_rect(input_rect).layout(
+                        egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+                    ));
+                TailwindTextInput::new(&mut template.template)
+                    .id_salt(("namespace-identity-template", index))
+                    .hint_text("Customer: {{customer}}")
+                    .accessibility_label(format!("Identity template {}", index + 1))
+                    .show(&mut input_ui);
+
+                let mut remove_ui =
+                    ui.new_child(egui::UiBuilder::new().max_rect(remove_rect).layout(
+                        egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+                    ));
+                if TailwindButton::icon(
+                    icons::trash_icon().fit_to_exact_size(egui::Vec2::splat(16.0)),
+                )
+                .variant(ButtonVariant::Secondary)
+                .size(ButtonSize::Md)
+                .accessibility_label(format!("Remove identity template {}", index + 1))
+                .show(&mut remove_ui)
+                .clicked()
+                {
+                    remove = Some(index);
+                }
+            },
+            |ui, template| {
+                ui.label(&template.template);
+            },
+        );
+        if reordered {
+            ui.ctx().memory_mut(|memory| {
+                for index in 0..settings.templates.len() {
+                    memory.surrender_focus(egui::Id::new(("namespace-identity-template", index)));
+                }
+            });
+        }
+        show_namespace_name_fallback(ui, table_width);
+        ui.spacing_mut().item_spacing = original_item_spacing;
+    });
     if let Some(index) = remove {
         settings.templates.remove(index);
     }
@@ -548,59 +539,57 @@ fn show_preview(
     namespace: &crate::minimal_namespace::MinimalNamespace,
     settings: &NamespaceSelectorSettings,
 ) {
+    let theme = ui.tokens();
     let display = presentation(namespace, settings);
-    egui::Frame::new()
-        .fill(WHITE)
-        .stroke(egui::Stroke::new(1.0, indigo::_200))
-        .corner_radius(radius::surface())
-        .inner_margin(egui::Margin::same(spacing::LG as i8))
-        .show(ui, |ui| {
+    WorkspaceCard::new()
+        .stroke(stroke::hairline(theme.accent.outline))
+        .margin(space::S16 as i8)
+        .show_inner(ui, |ui| {
             ui.set_min_width(ui.available_width());
             ui.set_min_height(96.0);
             ui.label(
                 egui::RichText::new("Preview")
-                    .font(typography::section_heading())
-                    .color(indigo::_600),
+                    .font(type_scale::TITLE.font_id(ui.ctx()))
+                    .color(theme.accent.text),
             );
-            ui.add_space(spacing::MD);
+            ui.add_space(space::S12);
             ui.label(
                 egui::RichText::new(display.primary)
-                    .font(typography::section_heading())
-                    .color(gray::_900),
+                    .font(type_scale::TITLE.font_id(ui.ctx()))
+                    .color(theme.text.primary),
             );
-            ui.add_space(spacing::XS);
+            ui.add_space(space::S4);
             ui.label(
                 egui::RichText::new(display.secondary)
-                    .font(typography::body())
-                    .color(gray::_600),
+                    .font(type_scale::BODY.font_id(ui.ctx()))
+                    .color(theme.text.secondary),
             );
         });
 }
 
 fn metadata_key_pill(ui: &mut egui::Ui, key: &str) {
+    let theme = ui.tokens();
     egui::Frame::new()
-        .fill(gray::_100)
-        .corner_radius(radius::control())
-        .inner_margin(egui::Margin::symmetric(
-            spacing::SM as i8,
-            spacing::XS as i8,
-        ))
+        .fill(theme.components.well_bg)
+        .corner_radius(egui::CornerRadius::same(radius::KEY))
+        .inner_margin(egui::Margin::symmetric(space::S8 as i8, space::S4 as i8))
         .show(ui, |ui| {
             ui.label(
                 egui::RichText::new(key)
-                    .font(typography::metadata())
-                    .color(gray::_600),
+                    .font(type_scale::META.font_id(ui.ctx()))
+                    .color(theme.text.secondary),
             );
         });
 }
 
 fn show_namespace_name_fallback(ui: &mut egui::Ui, table_width: f32) {
+    let theme = ui.tokens();
     let (row_rect, _) = ui.allocate_exact_size(egui::vec2(table_width, 72.0), egui::Sense::hover());
     ui.painter()
-        .hline(row_rect.x_range(), row_rect.top(), surface::muted_border());
+        .hline(row_rect.x_range(), row_rect.top(), stroke::divider(&theme));
     let input_rect = egui::Rect::from_min_max(
         egui::pos2(row_rect.left() + 67.0, row_rect.center().y - 14.0),
-        egui::pos2(row_rect.right() - spacing::LG, row_rect.center().y + 14.0),
+        egui::pos2(row_rect.right() - space::S16, row_rect.center().y + 14.0),
     );
     let mut fallback_ui = ui.new_child(
         egui::UiBuilder::new()
@@ -608,29 +597,27 @@ fn show_namespace_name_fallback(ui: &mut egui::Ui, table_width: f32) {
             .layout(egui::Layout::left_to_right(egui::Align::Center)),
     );
     egui::Frame::new()
-        .fill(gray::_50)
-        .stroke(surface::control_border())
-        .corner_radius(radius::control())
-        .inner_margin(egui::Margin::symmetric(
-            spacing::SM as i8,
-            spacing::XS as i8,
-        ))
+        .fill(theme.control.fill_disabled)
+        .stroke(stroke::control(&theme))
+        .corner_radius(egui::CornerRadius::same(radius::KEY))
+        .inner_margin(egui::Margin::symmetric(space::S8 as i8, space::S4 as i8))
         .show(&mut fallback_ui, |ui| {
             ui.label(
                 egui::RichText::new("Namespace name")
-                    .font(typography::body())
-                    .color(gray::_500),
+                    .font(type_scale::BODY.font_id(ui.ctx()))
+                    .color(theme.text.muted),
             );
         });
 }
 
 fn labeled_input(ui: &mut egui::Ui, label: &str, value: &mut String, hint: &str) {
+    let theme = ui.tokens();
     ui.label(
         egui::RichText::new(label)
-            .font(typography::body())
-            .color(gray::_800),
+            .font(type_scale::BODY.font_id(ui.ctx()))
+            .color(theme.text.primary),
     );
-    ui.add_space(spacing::XS);
+    ui.add_space(space::S4);
     TailwindTextInput::new(value)
         .hint_text(hint)
         .accessibility_label(label)

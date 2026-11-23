@@ -1,9 +1,10 @@
 //! Reusable modal treatment for user-confirmed application actions.
 
-use egui::{Align, Color32, Context, Frame, Id, Key, Margin, Modal, Modifiers, Shadow, Stroke};
+use egui::{Align, Context, Frame, Id, Key, Margin, Modal, Modifiers};
 
-use crate::colors::{WHITE, gray};
-use crate::design::{radius, spacing, status, surface, typography};
+use crate::design::theme::{self, Theme, ThemeExt, ThemeScope};
+use crate::design::{radius, size, space, stroke, type_scale};
+use crate::frames::overlay_frame;
 use crate::{ButtonSize, TailwindButton};
 
 const DIALOG_WIDTH: f32 = 480.0;
@@ -78,109 +79,71 @@ impl ConfirmationDialog<'_> {
         body: impl FnOnce(&mut egui::Ui),
     ) -> ConfirmationDialogAction {
         let mut action = ConfirmationDialogAction::None;
-        let response = Modal::new(self.id)
-            .area(
-                Modal::default_area(self.id)
-                    .default_width(width)
-                    .fade_in(false),
-            )
-            .backdrop_color(Color32::from_black_alpha(122))
-            .frame(
-                Frame::new()
-                    .fill(WHITE)
-                    .stroke(surface::muted_border())
-                    .corner_radius(radius::surface())
-                    .shadow(Shadow {
-                        offset: [0, 4],
-                        blur: 18,
-                        spread: 0,
-                        color: Color32::BLACK.gamma_multiply(0.16),
-                    })
-                    .inner_margin(Margin::same(spacing::XL as i8)),
-            )
-            .show(ctx, |ui| {
+        let response = dialog_modal(ctx, self.id, width).show(ctx, |ui| {
+            theme::scope(ui, ThemeScope::Dialog, |ui| {
+                let tokens = ui.tokens();
                 ui.set_width(width);
-                ui.label(
-                    egui::RichText::new(self.eyebrow)
-                        .font(typography::metadata())
-                        .color(gray::_500),
-                );
-                ui.add_space(spacing::SM);
-                ui.label(
-                    egui::RichText::new(self.title)
-                        .font(typography::semibold(24.0))
-                        .color(gray::_900),
-                );
-                ui.add_space(spacing::MD);
-                ui.label(
-                    egui::RichText::new(self.message)
-                        .font(typography::body())
-                        .color(gray::_600),
-                );
+                show_dialog_header(ui, self.eyebrow, self.title, self.message);
                 body(ui);
                 if let Some(warning) = self.warning {
-                    ui.add_space(spacing::LG);
-                    Frame::new()
-                        .fill(gray::_50)
-                        .stroke(Stroke::new(1.0, status::DANGER))
-                        .corner_radius(radius::control())
-                        .inner_margin(Margin::same(spacing::MD as i8))
-                        .show(ui, |ui| {
-                            ui.set_min_width(ui.available_width());
-                            ui.label(
-                                egui::RichText::new(warning.title)
-                                    .font(typography::semibold(14.0))
-                                    .color(status::DANGER),
-                            );
-                            ui.add_space(spacing::XS);
-                            ui.label(
-                                egui::RichText::new(warning.message)
-                                    .font(typography::body())
-                                    .color(gray::_800),
-                            );
-                            if let Some(details) = warning.details {
-                                ui.add_space(spacing::SM);
-                                egui::ScrollArea::vertical()
-                                    .max_height(96.0)
-                                    .show(ui, |ui| {
-                                        ui.set_min_width(ui.available_width());
-                                        ui.label(
-                                            egui::RichText::new(details)
-                                                .font(typography::monospace())
-                                                .color(gray::_800),
-                                        );
-                                    });
-                            }
-                        });
+                    ui.add_space(space::S16);
+                    danger_callout_frame(&tokens).show(ui, |ui| {
+                        ui.set_min_width(ui.available_width());
+                        ui.label(
+                            egui::RichText::new(warning.title)
+                                .font(type_scale::BODY_STRONG.font_id(ui.ctx()))
+                                .color(tokens.danger.text),
+                        );
+                        ui.add_space(space::S4);
+                        ui.label(
+                            egui::RichText::new(warning.message)
+                                .font(type_scale::BODY.font_id(ui.ctx()))
+                                .color(tokens.danger.text_on_tint),
+                        );
+                        if let Some(details) = warning.details {
+                            ui.add_space(space::S8);
+                            egui::ScrollArea::vertical()
+                                .max_height(96.0)
+                                .show(ui, |ui| {
+                                    ui.set_min_width(ui.available_width());
+                                    ui.label(
+                                        egui::RichText::new(details)
+                                            .font(type_scale::MONO.font_id(ui.ctx()))
+                                            .color(tokens.danger.text_on_tint),
+                                    );
+                                });
+                        }
+                    });
                 }
                 if let Some(message) = self.unavailable_message {
-                    ui.add_space(spacing::SM);
+                    ui.add_space(space::S8);
                     ui.label(
                         egui::RichText::new(message)
-                            .font(typography::metadata())
-                            .color(gray::_500),
+                            .font(type_scale::META.font_id(ui.ctx()))
+                            .color(tokens.text.muted),
                     );
                 }
                 if let Some(acknowledgement) = &mut self.acknowledgement {
-                    ui.add_space(spacing::LG);
+                    ui.add_space(space::S16);
                     let label = ui.label(
                         egui::RichText::new(acknowledgement.label)
-                            .font(typography::metadata())
-                            .color(gray::_700),
+                            .font(type_scale::META.font_id(ui.ctx()))
+                            .color(tokens.text.secondary),
                     );
-                    ui.add_space(spacing::XS);
+                    ui.add_space(space::S4);
                     ui.add(
                         egui::TextEdit::singleline(acknowledgement.value)
                             .id_salt("acknowledgement")
                             .desired_width(f32::INFINITY)
-                            .hint_text(acknowledgement.hint_text),
+                            .hint_text(acknowledgement.hint_text)
+                            .margin(size::FIELD_MARGIN_SM),
                     )
                     .labelled_by(label.id);
                 }
 
-                ui.add_space(spacing::XL);
+                ui.add_space(space::S24);
                 ui.separator();
-                ui.add_space(spacing::MD);
+                ui.add_space(space::S12);
                 ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
                     let confirm = match self.kind {
                         ConfirmationDialogKind::Primary => {
@@ -206,7 +169,8 @@ impl ConfirmationDialog<'_> {
                         action = ConfirmationDialogAction::Cancel;
                     }
                 });
-            });
+            })
+        });
 
         let escape_pressed = response.is_top_modal
             && !response.any_popup_open
@@ -217,6 +181,50 @@ impl ConfirmationDialog<'_> {
             action
         }
     }
+}
+
+/// The modal of a standard application dialog (`.dlg`): `surface-panel`
+/// with the overlay shadow and its hairline ring, over the scrim. Show its
+/// contents in [`ThemeScope::Dialog`].
+pub fn dialog_modal(ctx: &Context, id: Id, width: f32) -> Modal {
+    let tokens = ctx.tokens();
+    Modal::new(id)
+        .area(Modal::default_area(id).default_width(width).fade_in(false))
+        .backdrop_color(tokens.shade.scrim)
+        .frame(overlay_frame(&tokens).inner_margin(Margin::same(space::S24 as i8)))
+}
+
+/// The eyebrow, title and message that open every application dialog.
+pub fn show_dialog_header(ui: &mut egui::Ui, eyebrow: &str, title: &str, message: &str) {
+    let tokens = ui.tokens();
+    ui.label(
+        egui::RichText::new(eyebrow)
+            .font(type_scale::META.font_id(ui.ctx()))
+            .color(tokens.text.muted),
+    );
+    ui.add_space(space::S8);
+    ui.label(
+        egui::RichText::new(title)
+            .font(type_scale::DIALOG_TITLE.font_id(ui.ctx()))
+            .color(tokens.text.primary),
+    );
+    ui.add_space(space::S12);
+    ui.label(
+        egui::RichText::new(message)
+            .font(type_scale::BODY.font_id(ui.ctx()))
+            .color(tokens.text.secondary),
+    );
+}
+
+/// A danger banner (`.banner.bad`) for warnings and failure details inside a
+/// dialog. Text on it uses `danger-text` for titles and
+/// `danger-text-on-tint` for body copy.
+pub(crate) fn danger_callout_frame(theme: &Theme) -> Frame {
+    Frame::new()
+        .fill(theme.danger.tint)
+        .stroke(stroke::hairline(theme.danger.outline))
+        .corner_radius(egui::CornerRadius::same(radius::KEY))
+        .inner_margin(Margin::same(space::S12 as i8))
 }
 
 #[cfg(test)]

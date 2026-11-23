@@ -15,6 +15,7 @@ pub(super) fn show_managed_resources_for(
         &mut Option<super::super::resource_table_settings::ResourceTableSettingsTarget>,
     >,
 ) {
+    let theme = ui.tokens();
     let table_kinds = managed_resource_table_kinds(api_resource);
     if table_kinds.is_empty() {
         return;
@@ -39,7 +40,7 @@ pub(super) fn show_managed_resources_for(
         );
         if rows.is_empty() {
             ui.add_space(8.0);
-            ui.label(egui::RichText::new(format!("No {title} found.")).color(gray::_500));
+            ui.label(egui::RichText::new(format!("No {title} found.")).color(theme.text.muted));
         }
     }
 
@@ -65,6 +66,7 @@ pub(super) fn show_managed_resource_table(
         &mut Option<super::super::resource_table_settings::ResourceTableSettingsTarget>,
     >,
 ) {
+    let theme = ui.tokens();
     let definition = managed_resource_table_definition(kind, show_namespace_column);
     if let (Some(table_preferences), Some(column_settings)) = (table_preferences, column_settings) {
         let mut column_definitions = vec![TableColumnDefinition {
@@ -162,7 +164,7 @@ pub(super) fn show_managed_resource_table(
                     if TableRowBuilder::clickable_text(
                         ui,
                         &row.name,
-                        gray::_900,
+                        theme.text.primary,
                         format!("Open details for {}", row.name),
                     )
                     .clicked()
@@ -220,7 +222,7 @@ pub(super) fn show_managed_resource_table(
                     if TableRowBuilder::clickable_text(
                         ui,
                         &row.name,
-                        gray::_900,
+                        theme.text.primary,
                         format!("Open details for {}", row.name),
                     )
                     .clicked()

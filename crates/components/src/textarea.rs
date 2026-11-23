@@ -4,8 +4,9 @@ use std::hash::Hash;
 
 use egui::{Id, Response, TextBuffer, TextEdit, TextStyle, Ui};
 
-use crate::colors::{WHITE, gray, indigo};
-use crate::design::{radius, spacing};
+use crate::design::theme::ThemeExt;
+use crate::design::{radius, space};
+use crate::text_input::field_stroke;
 
 /// A bordered multiline text area with Tailwind-inspired input states.
 pub struct TailwindTextArea<'a> {
@@ -65,27 +66,27 @@ impl<'a> TailwindTextArea<'a> {
         let id = self.id_salt.unwrap_or_else(|| ui.next_auto_id());
         let accessibility_label = self.accessibility_label;
         let focused = ui.memory(|memory| memory.has_focus(id));
-        let (fill, stroke) = if !self.enabled {
-            (gray::_100, egui::Stroke::new(1.0, gray::_200))
-        } else if focused {
-            (WHITE, egui::Stroke::new(1.0, indigo::_500))
+        let tokens = ui.tokens();
+        let (fill, text_color) = if self.enabled {
+            (tokens.components.field_bg, tokens.text.primary)
         } else {
-            (gray::_50, egui::Stroke::new(1.0, gray::_300))
+            (tokens.control.fill_disabled, tokens.text.disabled)
         };
+        let stroke = field_stroke(&tokens, fill, focused && self.enabled, false);
 
         egui::Frame::new()
             .fill(fill)
             .stroke(stroke)
-            .corner_radius(radius::control())
+            .corner_radius(egui::CornerRadius::same(radius::KEY))
             .inner_margin(egui::Margin::symmetric(
-                (spacing::SM + spacing::XS) as i8,
-                spacing::SM as i8,
+                (space::S8 + space::S4) as i8,
+                space::S8 as i8,
             ))
             .show(ui, |ui| {
                 let mut editor = TextEdit::multiline(self.text)
                     .id(id)
                     .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(4, 2)))
-                    .text_color(gray::_800)
+                    .text_color(text_color)
                     .desired_width(f32::INFINITY)
                     .desired_rows(self.desired_rows);
                 if self.monospace {

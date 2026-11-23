@@ -100,7 +100,7 @@ impl TailwindTable {
                 // Checkbox column header (select all)
                 header.col(|ui| {
                     let rect = ui.max_rect();
-                    paint_table_cell(ui, rect, HEADER_BG);
+                    paint_header_cell(ui, rect);
                     ui.horizontal_centered(|ui| {
                         ui.add_space(cell_padding_x);
                         let response = render_checkbox(ui, select_all_state, "Select all rows");
@@ -120,15 +120,10 @@ impl TailwindTable {
                 for col in &self.columns {
                     header.col(|ui| {
                         let rect = ui.max_rect();
-                        paint_table_cell(ui, rect, HEADER_BG);
+                        paint_header_cell(ui, rect);
                         ui.horizontal(|ui| {
                             ui.add_space(cell_padding_x);
-                            ui.label(
-                                egui::RichText::new(&col.header)
-                                    .font(typography::body())
-                                    .color(gray::_900)
-                                    .strong(),
-                            );
+                            header_label(ui, &col.header);
                         });
                     });
                 }
@@ -139,12 +134,11 @@ impl TailwindTable {
                     let item = &items[row_index];
                     let item_key = key_fn(item);
                     let is_selected = item_key.as_ref().is_some_and(|key| selection.contains(key));
-                    let bg_color = WHITE;
 
                     // Checkbox column
                     row.col(|ui| {
                         let rect = ui.max_rect();
-                        paint_table_cell(ui, rect, bg_color);
+                        paint_row_cell(ui, rect);
                         ui.horizontal_centered(|ui| {
                             ui.add_space(cell_padding_x);
                             if let Some(key) = item_key.as_ref() {
@@ -182,7 +176,7 @@ impl TailwindTable {
                                 col_index,
                                 &self.columns[col_index].header,
                             ));
-                            paint_table_cell(ui, rect, bg_color);
+                            paint_row_cell(ui, rect);
                             ui.horizontal(|ui| {
                                 ui.add_space(cell_padding_x);
                                 render_cell(ui, item, col_index);
@@ -261,7 +255,6 @@ impl TailwindTable {
                 for col in &self.columns {
                     header.col(|ui| {
                         let rect = ui.max_rect();
-                        ui.painter().rect_filled(rect, 0.0, HEADER_BG);
 
                         let is_sorted = sort_state
                             .as_ref()
@@ -305,12 +298,7 @@ impl TailwindTable {
                         ui.horizontal(|ui| {
                             ui.add_space(CELL_PADDING_X);
 
-                            ui.label(
-                                egui::RichText::new(&col.header)
-                                    .font(typography::body())
-                                    .color(gray::_900)
-                                    .strong(),
-                            );
+                            header_label(ui, &col.header);
 
                             // Sort indicator for sortable columns
                             if col.sortable {
@@ -327,12 +315,12 @@ impl TailwindTable {
                 body.rows(ROW_HEIGHT, items.len(), |mut row| {
                     let row_index = row.index();
                     let item = &items[row_index];
-                    let bg_color = WHITE;
 
                     for col_index in 0..num_columns {
                         row.col(|ui| {
                             let rect = ui.max_rect();
-                            ui.painter().rect_filled(rect, 0.0, bg_color);
+                            ui.painter()
+                                .rect_filled(rect, 0.0, ui.tokens().components.row_bg);
                             ui.horizontal(|ui| {
                                 ui.add_space(CELL_PADDING_X);
                                 render_cell(ui, item, col_index);

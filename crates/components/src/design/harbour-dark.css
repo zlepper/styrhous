@@ -1,0 +1,54 @@
+/* Harbour Dark theme tokens, copied verbatim from the design board "C00b · Theme layers".
+   design::theme parity tests assert that the Rust palette, roles, overrides, shadows and
+   scope re-pointing match this file exactly. Update both together when the design changes. */
+:root{
+/* 1 · palette */
+--sand-50:#F5EFE6;--sand-100:#E7DED3;--sand-200:#BDB2A6;--sand-300:#9C9184;--sand-400:#8A7F74;--sand-500:#6B6157;--sand-600:#5A4F47;--sand-700:#4A4039;--sand-750:#3A322C;--sand-800:#352E29;--sand-825:#2F2925;--sand-850:#2C2622;--sand-875:#26211E;--sand-900:#221D1A;--sand-950:#1C1917;--sand-975:#171412;
+--coral-200:#FFB59C;--coral-300:#FF9F80;--coral-400:#FF8A65;--coral-500:#F2764F;--coral-700:#9A5541;--coral-800:#553A30;--coral-850:#45302A;--coral-900:#3A2A23;
+--red-100:#FFCDC8;--red-300:#FF8F8F;--red-350:#FF8282;--red-400:#FF6B6B;--red-500:#F25555;--red-700:#8C3F3B;--red-850:#472A27;--red-900:#3A2422;
+--amber-100:#FBE3A6;--amber-400:#F2C14E;--amber-700:#7A6128;--amber-850:#4A3A1C;--amber-900:#3A2F1A;
+--mint-200:#A7F3D0;--mint-400:#6EE7B7;--mint-700:#2F6B53;--mint-900:#1F322A;
+--sky-100:#CDE8FD;--sky-300:#A9D8FC;--sky-400:#7CC4FA;--sky-700:#335A78;--sky-900:#1F2E3A;
+--violet-400:#B39DFF;--pink-200:#F8B4CB;--pink-400:#F48FB1;--teal-200:#7FE0D4;--teal-400:#4DD0C1;--lime-300:#C3E88D;--green-300:#9ADBA0;
+--black-a55:rgba(0,0,0,.55);--black-a45:rgba(0,0,0,.45);--black-a32:rgba(0,0,0,.32);--black-a18:rgba(0,0,0,.18);--white-a04:rgba(255,255,255,.04);--sand-950-a60:rgba(18,15,13,.6);--sand-950-a25:rgba(28,25,23,.25);--sand-950-a18:rgba(28,25,23,.18);--coral-a55:rgba(255,138,101,.55);--coral-a16:rgba(255,138,101,.16);--red-a55:rgba(255,107,107,.55);--red-a14:rgba(255,107,107,.14);--mint-a55:rgba(110,231,183,.55);--amber-a55:rgba(242,193,78,.55);--amber-a22:rgba(242,193,78,.22);
+/* 2 · semantic roles — named by purpose; the only layer components read */
+--surface-canvas:var(--sand-950);--surface-sunken:var(--sand-900);--surface-panel:var(--sand-875);--surface-panel-hover:var(--sand-850);--surface-raised:var(--sand-825);--surface-raised-hover:var(--sand-800);
+--control-fill:var(--sand-825);--control-fill-hover:var(--sand-750);--control-fill-active:var(--sand-700);--control-fill-strong:var(--sand-750);--control-fill-strong-hover:var(--sand-700);--control-fill-strong-active:var(--sand-600);--control-fill-disabled:var(--sand-900);--control-border:var(--sand-400);--control-border-hover:var(--sand-300);
+--item-highlight:var(--sand-750);--item-selected:var(--sand-750);
+--divider:var(--sand-750);--divider-subtle:var(--sand-825);--divider-strong:var(--sand-700);
+--text-primary:var(--sand-50);--text-secondary:var(--sand-200);--text-muted:var(--sand-300);--text-disabled:var(--sand-500);--text-on-fill:var(--sand-950);
+--inverse-surface:var(--sand-50);--inverse-surface-hover:var(--sand-100);--inverse-text:var(--sand-950);--inverse-text-muted:var(--sand-500);--tint-on-fill:var(--sand-950-a18);--track-on-fill:var(--sand-950-a25);
+--accent-fill:var(--coral-400);--accent-fill-hover:var(--coral-300);--accent-fill-active:var(--coral-500);--accent-tint:var(--coral-900);--accent-tint-hover:var(--coral-850);--accent-tint-active:var(--coral-800);--accent-text:var(--coral-400);--accent-outline:var(--coral-700);--accent-glow:var(--coral-a55);
+--focus-ring:var(--coral-200);--focus-ring-neutral:var(--sand-200);--focus-ring-danger:var(--red-300);--focus-halo:var(--coral-a16);
+--danger-fill:var(--red-400);--danger-fill-hover:var(--red-350);--danger-fill-active:var(--red-500);--danger-tint:var(--red-900);--danger-tint-hover:var(--red-850);--danger-text:var(--red-300);--danger-text-on-tint:var(--red-100);--danger-outline:var(--red-700);--danger-halo:var(--red-a14);--danger-glow:var(--red-a55);
+--success-fill:var(--mint-400);--success-tint:var(--mint-900);--success-text:var(--mint-400);--success-outline:var(--mint-700);--success-glow:var(--mint-a55);
+--warning-fill:var(--amber-400);--warning-tint:var(--amber-900);--warning-text:var(--amber-400);--warning-text-on-tint:var(--amber-100);--warning-outline:var(--amber-700);--warning-halo:var(--amber-a22);--warning-glow:var(--amber-a55);
+--info-fill:var(--sky-400);--info-tint:var(--sky-900);--info-text:var(--sky-400);--info-text-on-tint:var(--sky-100);--info-outline:var(--sky-700);
+--status-neutral:var(--sand-600);
+--category-1:var(--violet-400);--category-2:var(--teal-400);--category-3:var(--amber-400);--category-4:var(--coral-400);--category-5:var(--sky-400);--category-6:var(--green-300);
+--shadow-raised:0 24px 60px var(--black-a55),0 0 0 1px var(--white-a04);--shadow-overlay:0 30px 70px var(--black-a55),0 0 0 1px var(--white-a04);--shadow-tooltip:0 8px 24px var(--black-a45);--shadow-drag:0 16px 40px var(--black-a55);--scrim:var(--sand-950-a60);--shade-strong:var(--black-a32);--shade-soft:var(--black-a18);
+--nav-rail:var(--sand-975);--nav-surface:var(--sand-875);--nav-item-hover:var(--sand-850);--nav-item-active:var(--sand-800);--nav-item-selected:var(--sand-750);--nav-divider:var(--sand-750);--nav-text:var(--sand-100);--nav-text-secondary:var(--sand-200);--nav-text-muted:var(--sand-300);--nav-accent:var(--coral-400);
+/* 2b · code & terminal roles (log viewer, YAML editor) */
+--code-surface:var(--sand-975);--code-line-highlight:var(--sand-900);--code-divider:var(--sand-825);--code-gutter:var(--sand-400);--code-text:var(--sand-50);--code-text-muted:var(--sand-200);--code-selection:var(--coral-850);--code-match:var(--amber-850);--code-match-text:var(--amber-100);--code-match-active:var(--coral-400);--code-match-active-text:var(--sand-950);--code-caret:var(--coral-400);
+--code-error:var(--red-300);--code-warning:var(--amber-400);--code-info:var(--teal-200);--code-debug:var(--sand-300);--log-row-error:var(--red-900);--log-row-warn:var(--amber-900);--log-source-1:var(--teal-200);--log-source-2:var(--pink-400);
+--syntax-key:var(--coral-400);--syntax-string:var(--lime-300);--syntax-number:var(--violet-400);--syntax-bool:var(--pink-400);--syntax-punctuation:var(--sand-300);--syntax-comment:var(--sand-400);
+--ansi-black:var(--sand-750);--ansi-red:var(--red-400);--ansi-green:var(--mint-400);--ansi-yellow:var(--amber-400);--ansi-blue:var(--sky-400);--ansi-magenta:var(--pink-400);--ansi-cyan:var(--teal-400);--ansi-white:var(--sand-100);
+--ansi-bright-black:var(--sand-400);--ansi-bright-red:var(--red-300);--ansi-bright-green:var(--mint-200);--ansi-bright-yellow:var(--amber-100);--ansi-bright-blue:var(--sky-300);--ansi-bright-magenta:var(--pink-200);--ansi-bright-cyan:var(--teal-200);--ansi-bright-white:var(--sand-50);
+/* 3 · component overrides — optional, each defaults to a role */
+--well-bg:var(--control-fill);--field-bg:var(--surface-raised);--field-bg-hover:var(--surface-raised-hover);--row-bg:var(--surface-panel);--row-bg-hover:var(--surface-panel-hover);
+--btn-secondary-bg:var(--control-fill-strong);--btn-secondary-hover:var(--control-fill-strong-hover);--btn-secondary-press:var(--control-fill-strong-active);
+--pill-on-bg:var(--inverse-surface);--pill-on-bg-hover:var(--inverse-surface-hover);--pill-on-text:var(--inverse-text);
+--tooltip-bg:var(--inverse-surface);--tooltip-text:var(--inverse-text);--tooltip-key:var(--inverse-text-muted);
+--avatar-text:var(--text-on-fill);--av-1:var(--category-1);--av-2:var(--category-2);--av-3:var(--category-3);--av-4:var(--category-4);--av-5:var(--category-5);--av-6:var(--category-6);
+--key-bg:var(--control-fill-strong);--key-on-fill-bg:var(--tint-on-fill);--spinner-on-fill-track:var(--track-on-fill);--spinner-on-fill-head:var(--text-on-fill);
+--peek-shade-1:var(--shade-strong);--peek-shade-2:var(--shade-soft);
+--chart-cpu:var(--accent-fill);--chart-request:var(--warning-text);--chart-memory:var(--success-fill);--chart-limit:var(--danger-text);--chart-grid:var(--divider)}
+/* Context re-pointing: scoped custom properties, copied verbatim from the same board. */
+.pop{font-family:Figtree,system-ui,sans-serif;font-size:13px;line-height:20px;color:var(--text-primary);background:var(--surface-raised);border:0;border-radius:14px;box-shadow:var(--shadow-raised);padding:4px;--field-bg:var(--surface-panel);--field-bg-hover:var(--surface-panel-hover)}
+.card{border:0;border-radius:16px;background:var(--surface-panel);--row-bg:var(--surface-raised);--row-bg-hover:var(--surface-raised-hover)}
+.blade .card,.dlg .card,.pop .card{background:var(--surface-raised);--well-bg:var(--surface-panel);--field-bg:var(--surface-panel);--field-bg-hover:var(--surface-panel-hover);--row-bg:var(--surface-panel);--row-bg-hover:var(--surface-panel-hover)}
+.blade{position:absolute;top:8px;bottom:8px;background:var(--surface-panel);border-radius:22px;box-shadow:var(--shadow-overlay);display:flex;flex-direction:column;overflow:hidden;--row-bg:var(--surface-raised);--row-bg-hover:var(--surface-raised-hover)}
+.dlg{background:var(--surface-panel);border-radius:22px;box-shadow:var(--shadow-overlay);overflow:hidden;--row-bg:var(--surface-raised);--row-bg-hover:var(--surface-raised-hover)}
+.side{position:absolute;left:12px;top:12px;bottom:12px;width:268px;background:var(--nav-surface);border-radius:20px;overflow:hidden;display:flex;flex-direction:column;padding:14px;color:var(--nav-text);--field-bg:var(--surface-raised);--field-bg-hover:var(--surface-raised-hover)}
+.palette{position:absolute;background:var(--surface-raised);border-radius:22px;box-shadow:var(--shadow-overlay);padding:24px;--field-bg:var(--surface-panel);--field-bg-hover:var(--surface-panel-hover);--well-bg:var(--surface-panel)}
+.ftool{position:absolute;display:flex;align-items:center;gap:6px;padding:6px;border-radius:999px;background:var(--surface-raised);box-shadow:var(--shadow-raised);--field-bg:var(--surface-panel);--field-bg-hover:var(--surface-panel-hover);--well-bg:var(--surface-panel)}

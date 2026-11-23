@@ -1,13 +1,13 @@
 use super::operation_outcome::show_status_tile;
 use super::state::{TransientOperationToast, UiState};
-use components::colors::{WHITE, gray};
-use components::design::{radius, spacing, surface, typography};
-use egui::{Align2, Area, Color32, Frame, Id, Margin, Order, Shadow};
+use components::design::theme::ThemeExt;
+use components::design::{space, type_scale};
+use egui::{Align2, Area, Id, Margin, Order};
 use std::time::Instant;
 
 const TOAST_WIDTH: f32 = 360.0;
 const TOAST_INSET: f32 = 24.0;
-const TOAST_GAP: f32 = spacing::MD;
+const TOAST_GAP: f32 = space::S12;
 const TOAST_STATUS_TILE_SIZE: f32 = 40.0;
 const TOAST_CONTENT_MIN_HEIGHT: f32 = 48.0;
 
@@ -35,24 +35,16 @@ pub(super) fn show(ctx: &egui::Context, ui_state: &mut UiState) {
 }
 
 fn toast_card(ui: &mut egui::Ui, toast: &TransientOperationToast) {
-    Frame::new()
-        .fill(WHITE)
-        .stroke(surface::muted_border())
-        .corner_radius(radius::surface())
-        .shadow(Shadow {
-            offset: [0, 3],
-            blur: 12,
-            spread: 0,
-            color: Color32::BLACK.gamma_multiply(0.12),
-        })
-        .inner_margin(Margin::same(spacing::LG as i8))
+    let theme = ui.tokens();
+    components::popover_frame(&theme)
+        .inner_margin(Margin::same(space::S16 as i8))
         .show(ui, |ui| {
-            ui.set_min_width(TOAST_WIDTH - 2.0 * spacing::LG);
+            ui.set_min_width(TOAST_WIDTH - 2.0 * space::S16);
             ui.set_min_height(TOAST_CONTENT_MIN_HEIGHT);
             ui.horizontal_top(|ui| {
                 let row_origin = ui.cursor().min;
                 let item_spacing = ui.spacing().item_spacing.x;
-                ui.add_space(TOAST_STATUS_TILE_SIZE + spacing::MD + item_spacing);
+                ui.add_space(TOAST_STATUS_TILE_SIZE + space::S12 + item_spacing);
                 let text_rect = ui
                     .scope_builder(
                         egui::UiBuilder::new().layout(
@@ -63,14 +55,14 @@ fn toast_card(ui: &mut egui::Ui, toast: &TransientOperationToast) {
                             ui.set_min_height(TOAST_STATUS_TILE_SIZE);
                             ui.label(
                                 egui::RichText::new(&toast.title)
-                                    .font(typography::semibold(typography::BODY_SIZE))
-                                    .color(gray::_900),
+                                    .font(type_scale::BODY_STRONG.font_id(ui.ctx()))
+                                    .color(theme.text.primary),
                             );
                             ui.add_space(2.0);
                             ui.label(
                                 egui::RichText::new(&toast.target)
-                                    .font(typography::metadata())
-                                    .color(gray::_500),
+                                    .font(type_scale::META.font_id(ui.ctx()))
+                                    .color(theme.text.muted),
                             );
                         },
                     )

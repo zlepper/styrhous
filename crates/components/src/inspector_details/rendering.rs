@@ -8,36 +8,40 @@ pub(super) fn show_property_rows(
     let mut rows = rows.iter().filter(|row| !row.cells.is_empty()).peekable();
     while let Some(row) = rows.next() {
         if row.framed {
-            Frame::new()
-                .fill(WHITE)
-                .stroke(surface::muted_border())
-                .corner_radius(radius::surface())
-                .inner_margin(Margin::same(spacing::MD as i8))
-                .show(ui, |ui| show_property_row(ui, row, response));
+            show_card(ui, space::S12 as i8, |ui| {
+                show_property_row(ui, row, response)
+            });
         } else {
             show_property_row(ui, row, response);
         }
         if rows.peek().is_some() {
-            ui.add_space(spacing::SM);
+            ui.add_space(space::S8);
         }
     }
 }
 
 pub(super) fn show_group_title(ui: &mut Ui, group_rect: Rect, title: &str) {
-    let title_galley =
-        ui.painter()
-            .layout_no_wrap(title.to_owned(), typography::section_heading(), gray::_800);
+    let tokens = ui.tokens();
+    let title_galley = ui.painter().layout_no_wrap(
+        title.to_owned(),
+        type_scale::TITLE.font_id(ui.ctx()),
+        tokens.text.primary,
+    );
     let title_rect = Rect::from_min_size(
         egui::pos2(
-            group_rect.left() + spacing::MD,
+            group_rect.left() + space::S12,
             group_rect.top() - title_galley.size().y / 2.0,
         ),
         title_galley.size(),
     );
+    // Cut the title into the card's border, like a fieldset legend.
+    ui.painter().rect_filled(
+        title_rect.expand2(egui::vec2(space::S4, 2.0)),
+        0.0,
+        tokens.card_fill(),
+    );
     ui.painter()
-        .rect_filled(title_rect.expand2(egui::vec2(spacing::XS, 2.0)), 0.0, WHITE);
-    ui.painter()
-        .galley(title_rect.min, title_galley, gray::_800);
+        .galley(title_rect.min, title_galley, tokens.text.primary);
 }
 
 pub(super) fn show_property_row(
@@ -56,14 +60,14 @@ pub(super) fn show_property_row(
             }
         });
         if cells.len() < row.cells.len() {
-            ui.add_space(spacing::SM);
+            ui.add_space(space::S8);
         }
     }
 }
 
 pub(super) fn column_capacity(available_width: f32) -> usize {
     for columns in (2..=3).rev() {
-        let gaps = spacing::SM * (columns - 1) as f32;
+        let gaps = space::S8 * (columns - 1) as f32;
         if (available_width - gaps) / columns as f32 >= MIN_COLUMN_WIDTH {
             return columns;
         }
@@ -78,8 +82,8 @@ pub(super) fn show_property_cell(
 ) {
     ui.label(
         RichText::new(cell.label.as_ref())
-            .font(typography::metadata())
-            .color(gray::_500),
+            .font(type_scale::META.font_id(ui.ctx()))
+            .color(ui.tokens().text.muted),
     );
     show_value(
         ui,
@@ -100,12 +104,15 @@ pub(super) fn show_value(
     response: &mut InspectorDetailsResponse,
 ) {
     match value {
-        DetailValue::Text(text) => show_text_value(ui, text, gray::_900, copy, response),
+        DetailValue::Text(text) => {
+            let color = ui.tokens().text.primary;
+            show_text_value(ui, text, color, copy, response);
+        }
         DetailValue::Unavailable => {
             let unavailable = ui.label(
                 RichText::new("Unavailable")
-                    .font(typography::metadata())
-                    .color(gray::_500),
+                    .font(type_scale::META.font_id(ui.ctx()))
+                    .color(ui.tokens().text.muted),
             );
             let accessibility_label = field_label.map_or_else(
                 || "Unavailable".to_owned(),
@@ -123,15 +130,15 @@ pub(super) fn show_value(
                 let label = ui.add(
                     Label::new(
                         RichText::new(text.as_ref())
-                            .font(typography::metadata())
-                            .color(gray::_900),
+                            .font(type_scale::META.font_id(ui.ctx()))
+                            .color(ui.tokens().text.primary),
                     )
                     .wrap(),
                 );
                 ui.painter().circle_filled(
                     egui::pos2(marker_rect.center().x, label.rect.center().y),
                     4.0,
-                    tone_color(*tone),
+                    ui.tokens().tone(*tone).fill,
                 );
             });
         }
@@ -140,8 +147,8 @@ pub(super) fn show_value(
                 .add(
                     Label::new(
                         RichText::new(text.as_ref())
-                            .font(typography::metadata())
-                            .color(crate::colors::indigo::_600),
+                            .font(type_scale::META.font_id(ui.ctx()))
+                            .color(ui.tokens().accent.text),
                     )
                     .wrap()
                     .sense(egui::Sense::click()),
@@ -173,7 +180,8 @@ pub(super) fn show_text_value(
     response: &mut InspectorDetailsResponse,
 ) {
     if let Some((label, copy_text)) = copy {
-        let metadata_line_height = ui.fonts_mut(|fonts| fonts.row_height(&typography::metadata()));
+        let metadata_font = type_scale::META.font_id(ui.ctx());
+        let metadata_line_height = ui.fonts_mut(|fonts| fonts.row_height(&metadata_font));
         ui.horizontal_top(|ui| {
             let text_layout = ui.allocate_ui_with_layout(
                 egui::vec2(
@@ -185,7 +193,7 @@ pub(super) fn show_text_value(
                     ui.add(
                         Label::new(
                             RichText::new(text)
-                                .font(typography::metadata())
+                                .font(type_scale::META.font_id(ui.ctx()))
                                 .color(color),
                         )
                         .wrap(),
@@ -212,7 +220,7 @@ pub(super) fn show_text_value(
             if copy_action.hovered() {
                 crate::icons::document_duplicate_icon()
                     .fit_to_exact_size(Vec2::splat(COPY_ICON_SIZE))
-                    .tint(gray::_700)
+                    .tint(ui.tokens().text.secondary)
                     .paint_at(ui, icon_rect);
             }
             if copy_action.clicked() {
@@ -224,20 +232,11 @@ pub(super) fn show_text_value(
         ui.add(
             Label::new(
                 RichText::new(text)
-                    .font(typography::metadata())
+                    .font(type_scale::META.font_id(ui.ctx()))
                     .color(color),
             )
             .wrap(),
         );
-    }
-}
-
-pub(super) fn tone_color(tone: DetailTone) -> egui::Color32 {
-    match tone {
-        DetailTone::Neutral => gray::_400,
-        DetailTone::Success => status::SUCCESS,
-        DetailTone::Warning => status::WARNING,
-        DetailTone::Danger => status::DANGER,
     }
 }
 
@@ -249,7 +248,7 @@ pub(super) fn show_table_row(
     // Repeated values (for example, kubelet in every event) still need distinct copy IDs.
     ui.push_id(ui.next_auto_id(), |ui| {
         ui.horizontal_top(|ui| {
-            ui.spacing_mut().item_spacing.x = spacing::SM;
+            ui.spacing_mut().item_spacing.x = space::S8;
             for (index, &width) in widths.iter().enumerate() {
                 ui.allocate_ui_with_layout(
                     egui::vec2(width, 0.0),

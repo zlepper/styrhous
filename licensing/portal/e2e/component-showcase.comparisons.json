@@ -8,7 +8,7 @@
   "comparisons": [
     {
       "name": "button-showcase",
-      "expected": "crates/components/tests/snapshots/showcase/showcase_buttons/buttons.png",
+      "expected": "licensing/portal/e2e/native-references/button-showcase.png",
       "actual": "licensing/portal/e2e/component-showcase.spec.ts-snapshots/button-showcase-showcase-chromium-linux.png",
       "expectedSha256": "10da1ba0c2186b1aced2480e4a7b1e32abfa9c76f6283bee94c525c114f7c0c9",
       "actualSha256": "e11420662948a37e032ec3f618531ccaab7c8164d188a46a1abe9179643ce952",
@@ -18,7 +18,7 @@
     },
     {
       "name": "text-inputs-focused",
-      "expected": "crates/components/tests/snapshots/text_inputs/snapshots_empty_filled_and_focused_inputs/focused.png",
+      "expected": "licensing/portal/e2e/native-references/text-inputs-focused.png",
       "actual": "licensing/portal/e2e/component-showcase.spec.ts-snapshots/text-inputs-focused-showcase-chromium-linux.png",
       "expectedSha256": "64d4bc73678aca28bd1c14e37ee88d6cf9315a1a4cea7abea8fdead21ba45bed",
       "actualSha256": "2242a5cfa2d1be1b12a7d4afafeeea382b8925e3b359b863234e0a01c92bf758",
@@ -28,7 +28,7 @@
     },
     {
       "name": "text-inputs-unfocused",
-      "expected": "crates/components/tests/snapshots/text_inputs/snapshots_empty_filled_and_focused_inputs/unfocused.png",
+      "expected": "licensing/portal/e2e/native-references/text-inputs-unfocused.png",
       "actual": "licensing/portal/e2e/component-showcase.spec.ts-snapshots/text-inputs-unfocused-showcase-chromium-linux.png",
       "expectedSha256": "607d36669777a9f8a15214553f7b7a29e716458a2bfc8c5f8b0168188636e0e1",
       "actualSha256": "1f2e5c59ca36fbb82809869272f492aa6e901cbdc4ae5fd48db417e91c002734",
@@ -38,7 +38,7 @@
     },
     {
       "name": "select-unfocused",
-      "expected": "crates/components/tests/snapshots/comboboxes/test_combobox_flow/closed.png",
+      "expected": "licensing/portal/e2e/native-references/select-unfocused.png",
       "actual": "licensing/portal/e2e/component-showcase.spec.ts-snapshots/select-unfocused-showcase-chromium-linux.png",
       "expectedSha256": "673277759f26227eb4d964e630b81a8b9a726666eba4a29c9db7ba109663fcfb",
       "actualSha256": "c967703afcaacbea7d1d6b0a4ff825cb116806c9f9d8486b1f00d270a0aab424",
@@ -48,7 +48,7 @@
     },
     {
       "name": "primary-hovered",
-      "expected": "crates/components/tests/snapshots/buttons/test_button_interaction_states/primary_hovered.png",
+      "expected": "licensing/portal/e2e/native-references/primary-hovered.png",
       "actual": "licensing/portal/e2e/component-showcase.spec.ts-snapshots/primary-hovered-showcase-chromium-linux.png",
       "expectedSha256": "6b305b5e723e03aa32755e9f9a1885e952f120ca0c367e2e2c026c01fcc9f675",
       "actualSha256": "a3a6bed930838b7b9181f1614f098572ee09fb1c53590f9d9bd0ed65a801c5c2",
@@ -58,7 +58,7 @@
     },
     {
       "name": "primary-pressed",
-      "expected": "crates/components/tests/snapshots/buttons/test_button_interaction_states/primary_pressed.png",
+      "expected": "licensing/portal/e2e/native-references/primary-pressed.png",
       "actual": "licensing/portal/e2e/component-showcase.spec.ts-snapshots/primary-pressed-showcase-chromium-linux.png",
       "expectedSha256": "30ab57ebd6f092042307513156bf94c7f2cece56caacee40d71369e0c70199a5",
       "actualSha256": "33b2dbee28f22efadb8247eee698c9fb7ceea307cf117d626b409b3c0a65cd58",
@@ -68,7 +68,7 @@
     },
     {
       "name": "secondary-hovered",
-      "expected": "crates/components/tests/snapshots/buttons/test_button_interaction_states/secondary_hovered.png",
+      "expected": "licensing/portal/e2e/native-references/secondary-hovered.png",
       "actual": "licensing/portal/e2e/component-showcase.spec.ts-snapshots/secondary-hovered-showcase-chromium-linux.png",
       "expectedSha256": "ac9710a60f88f29343df4b23590eb7ee2df75ad7479db5458557ee959aa489f4",
       "actualSha256": "6968b9d26c320c7d37a4c8622aff061a4e5adac0e4f307009d7c0d67d878d7f8",
@@ -78,7 +78,7 @@
     },
     {
       "name": "secondary-pressed",
-      "expected": "crates/components/tests/snapshots/buttons/test_button_interaction_states/secondary_pressed.png",
+      "expected": "licensing/portal/e2e/native-references/secondary-pressed.png",
       "actual": "licensing/portal/e2e/component-showcase.spec.ts-snapshots/secondary-pressed-showcase-chromium-linux.png",
       "expectedSha256": "c0461ca9bb4965cae188296563c134e9961e83014842f7d093b96f0084fe9dc3",
       "actualSha256": "26f17e206be3792d4f42bd049fdbc54f87e82e152c8ff54cab76a02a642e8687",
@@ -88,7 +88,7 @@
     },
     {
       "name": "soft-hovered",
-      "expected": "crates/components/tests/snapshots/buttons/test_button_interaction_states/soft_hovered.png",
+      "expected": "licensing/portal/e2e/native-references/soft-hovered.png",
       "actual": "licensing/portal/e2e/component-showcase.spec.ts-snapshots/soft-hovered-showcase-chromium-linux.png",
       "expectedSha256": "2d4c89e4944697edd6640759a8d3cb3c5a170ccd9573f9572f7c156254cf3d6a",
       "actualSha256": "aa9b03711379104ae90114d511ae3458bf789b6ddfaca1e55631d751ef98dc58",
@@ -98,7 +98,7 @@
     },
     {
       "name": "soft-pressed",
-      "expected": "crates/components/tests/snapshots/buttons/test_button_interaction_states/soft_pressed.png",
+      "expected": "licensing/portal/e2e/native-references/soft-pressed.png",
       "actual": "licensing/portal/e2e/component-showcase.spec.ts-snapshots/soft-pressed-showcase-chromium-linux.png",
       "expectedSha256": "ce74db7de436679fbf6f4d0a0f5c53186ec06f971d7bc4ad91b2e740b24a1f7d",
       "actualSha256": "39ed9683e1201a5ec4a7f66d9e5dccd408b2fbb0ba3a4f3ee7f743b371ebd380",
@@ -108,7 +108,7 @@
     },
     {
       "name": "danger-hovered",
-      "expected": "crates/components/tests/snapshots/buttons/test_button_interaction_states/danger_hovered.png",
+      "expected": "licensing/portal/e2e/native-references/danger-hovered.png",
       "actual": "licensing/portal/e2e/component-showcase.spec.ts-snapshots/danger-hovered-showcase-chromium-linux.png",
       "expectedSha256": "5329c6d08b9590da5d14a99e8eb840f9ceec7b978ae7d58e92dec1841baf471d",
       "actualSha256": "dd2a9d869eb51ba074dfc4fcdaab13b6a18a8d1589460e5872184c64a26428f8",
@@ -118,7 +118,7 @@
     },
     {
       "name": "danger-pressed",
-      "expected": "crates/components/tests/snapshots/buttons/test_button_interaction_states/danger_pressed.png",
+      "expected": "licensing/portal/e2e/native-references/danger-pressed.png",
       "actual": "licensing/portal/e2e/component-showcase.spec.ts-snapshots/danger-pressed-showcase-chromium-linux.png",
       "expectedSha256": "c6fea6a6fc75a19e433a77d80f16505aa1b8c2407cd933d514dabbe056697193",
       "actualSha256": "38c31a0e09e2a40820eb389852da5438db9ce555d93808500bf7f52fcfb7a332",

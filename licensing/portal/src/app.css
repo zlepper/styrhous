@@ -1,6 +1,6 @@
 @font-face {
   font-family: "Inter";
-  src: url("../../../crates/components/assets/fonts/inter/Inter-Regular.ttf") format("truetype");
+  src: url("./fonts/inter/Inter-Regular.ttf") format("truetype");
   font-style: normal;
   font-weight: 400;
   font-display: block;
@@ -8,7 +8,7 @@
 
 @font-face {
   font-family: "Inter";
-  src: url("../../../crates/components/assets/fonts/inter/Inter-SemiBold.ttf") format("truetype");
+  src: url("./fonts/inter/Inter-SemiBold.ttf") format("truetype");
   font-style: normal;
   font-weight: 600 800;
   font-display: block;

@@ -26,10 +26,8 @@ use std::collections::HashSet;
 use std::hash::Hash;
 
 use crate::PointingHand;
-use crate::colors::{
-    CONTENT_BACKGROUND, TABLE_BORDER, TABLE_HEADER_BACKGROUND, WHITE, gray, indigo,
-};
-use crate::design::{radius, spacing, typography};
+use crate::design::theme::ThemeExt;
+use crate::design::{radius, space, stroke, type_scale};
 use crate::icons;
 
 fn egui_column(column: &TableColumn) -> Column {
@@ -49,11 +47,10 @@ fn egui_column(column: &TableColumn) -> Column {
 // sidebars, while keeping a comfortable row target for pointer interactions.
 const ROW_HEIGHT: f32 = 44.0;
 const HEADER_HEIGHT: f32 = 40.0;
-const CELL_PADDING_X: f32 = spacing::LG;
+const CELL_PADDING_X: f32 = space::S16;
 const ROOMY_ROW_HEIGHT: f32 = 81.25;
 const ROOMY_HEADER_HEIGHT: f32 = 64.0;
 const ROOMY_CELL_PADDING_X: f32 = 30.0;
-const HEADER_BG: egui::Color32 = TABLE_HEADER_BACKGROUND;
 const CHECKBOX_SIZE: f32 = 16.0;
 const CHECKBOX_COL_WIDTH: f32 = 48.0;
 const SORT_ICON_SIZE: f32 = 12.0;
@@ -160,8 +157,8 @@ mod standard;
 
 use column_toggle::render_sort_indicator;
 use rows::{
-    CheckboxState, handle_column_resize, paint_table_cell, render_checkbox,
-    row_context_menu_response, set_accessibility_label,
+    CheckboxState, handle_column_resize, header_label, paint_header_cell, paint_row_cell,
+    render_checkbox, row_context_menu_response, set_accessibility_label,
 };
 pub use rows::{TableRowBuilder, checkbox_field, tailwind_checkbox};
 

@@ -5,6 +5,7 @@ pub(crate) fn show_scale_dialog(
     ui_state: &mut UiState,
     commands_to_send: &mut Vec<WorkerCommandBox>,
 ) {
+    let theme = ctx.tokens();
     let Some(cluster_id) = ui_state.selected_cluster else {
         return;
     };
@@ -17,59 +18,30 @@ pub(crate) fn show_scale_dialog(
 
     let mut cancel = false;
     let mut scale_request = None;
-    let response = Modal::new(egui::Id::new("resource-scale-dialog"))
-        .area(
-            Modal::default_area(egui::Id::new("resource-scale-dialog"))
-                .default_width(SCALE_DIALOG_WIDTH)
-                .fade_in(false),
-        )
-        .backdrop_color(Color32::from_black_alpha(122))
-        .frame(
-            Frame::new()
-                .fill(WHITE)
-                .stroke(surface::muted_border())
-                .corner_radius(radius::surface())
-                .shadow(Shadow {
-                    offset: [0, 4],
-                    blur: 18,
-                    spread: 0,
-                    color: Color32::BLACK.gamma_multiply(0.16),
-                })
-                .inner_margin(Margin::same(spacing::XL as i8)),
-        )
-        .show(ctx, |ui| {
+    let dialog_id = egui::Id::new("resource-scale-dialog");
+    let response = components::dialog_modal(ctx, dialog_id, SCALE_DIALOG_WIDTH).show(ctx, |ui| {
+        theme::scope(ui, ThemeScope::Dialog, |ui| {
             ui.set_width(SCALE_DIALOG_WIDTH);
-            ui.label(
-                egui::RichText::new(pending.api_resource.kind.to_ascii_uppercase())
-                    .font(typography::metadata())
-                    .color(gray::_500),
-            );
-            ui.add_space(spacing::SM);
-            ui.label(
-                egui::RichText::new(format!("Scale {}", pending.resource_name))
-                    .font(typography::semibold(24.0))
-                    .color(gray::_900),
-            );
-            ui.add_space(spacing::MD);
             let scope = pending.namespace.as_deref().map_or_else(
                 || "the cluster".to_owned(),
                 |namespace| format!("the {namespace} namespace"),
             );
-            ui.label(
-                egui::RichText::new(format!(
+            components::show_dialog_header(
+                ui,
+                &pending.api_resource.kind.to_ascii_uppercase(),
+                &format!("Scale {}", pending.resource_name),
+                &format!(
                     "Set the desired replica count for this {} in {scope}.",
                     pending.api_resource.kind
-                ))
-                .font(typography::body())
-                .color(gray::_600),
+                ),
             );
-            ui.add_space(spacing::LG);
+            ui.add_space(space::S16);
             ui.label(
                 egui::RichText::new("Desired replicas")
-                    .font(typography::semibold(14.0))
-                    .color(gray::_800),
+                    .font(type_scale::BODY_STRONG.font_id(ui.ctx()))
+                    .color(theme.text.primary),
             );
-            ui.add_space(spacing::XS);
+            ui.add_space(space::S4);
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
                 let field_width = ui.available_width() - 60.0;
@@ -79,12 +51,12 @@ pub(crate) fn show_scale_dialog(
                         .id(egui::Id::new("desired-replicas"))
                         .frame(
                             Frame::new()
-                                .fill(WHITE)
-                                .stroke(surface::control_border())
-                                .corner_radius(radius::control())
-                                .inner_margin(Margin::symmetric(spacing::SM as i8, 2)),
+                                .fill(theme.components.field_bg)
+                                .stroke(stroke::control(&theme))
+                                .corner_radius(egui::CornerRadius::same(radius::KEY))
+                                .inner_margin(Margin::symmetric(space::S8 as i8, 2)),
                         )
-                        .font(typography::body())
+                        .font(type_scale::BODY.font_id(ui.ctx()))
                         .vertical_align(Align::Center),
                 );
                 ui.ctx()
@@ -92,9 +64,9 @@ pub(crate) fn show_scale_dialog(
                         builder.set_label("Desired replicas");
                     });
                 Frame::new()
-                    .fill(WHITE)
-                    .stroke(surface::control_border())
-                    .corner_radius(radius::control())
+                    .fill(theme.control.fill)
+                    .stroke(stroke::control(&theme))
+                    .corner_radius(egui::CornerRadius::same(radius::KEY))
                     .show(ui, |ui| {
                         ui.spacing_mut().item_spacing.x = 0.0;
                         let parsed = pending.desired_replicas.parse::<i32>().ok();
@@ -123,26 +95,26 @@ pub(crate) fn show_scale_dialog(
                 .parse::<i32>()
                 .ok()
                 .filter(|replicas| *replicas >= 0);
-            ui.add_space(spacing::SM);
+            ui.add_space(space::S8);
             ui.label(
                 egui::RichText::new(format!(
                     "Current desired replicas: {}",
                     pending.current_replicas
                 ))
-                .font(typography::body())
-                .color(gray::_500),
+                .font(type_scale::BODY.font_id(ui.ctx()))
+                .color(theme.text.muted),
             );
             if replicas.is_none() {
-                ui.add_space(spacing::XS);
+                ui.add_space(space::S4);
                 ui.label(
                     egui::RichText::new("Enter a whole number of zero or greater.")
-                        .font(typography::metadata())
-                        .color(components::design::status::DANGER),
+                        .font(type_scale::META.font_id(ui.ctx()))
+                        .color(theme.danger.text),
                 );
             }
-            ui.add_space(spacing::XL);
+            ui.add_space(space::S24);
             ui.separator();
-            ui.add_space(spacing::MD);
+            ui.add_space(space::S12);
             ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
                 if ui
                     .add_enabled_ui(replicas.is_some(), |ui| {
@@ -170,7 +142,8 @@ pub(crate) fn show_scale_dialog(
                     cancel = true;
                 }
             });
-        });
+        })
+    });
 
     let escape_pressed = response.is_top_modal
         && !response.any_popup_open
@@ -190,20 +163,28 @@ pub(crate) fn show_scale_dialog(
 }
 
 fn show_scale_stepper_button(ui: &mut egui::Ui, glyph: &str, label: &str, enabled: bool) -> bool {
+    let theme = ui.tokens();
     let response = ui
         .add_enabled_ui(enabled, |ui| {
             let (rect, response) =
                 ui.allocate_exact_size(egui::Vec2::splat(28.0), egui::Sense::click());
             if response.hovered() {
-                ui.painter()
-                    .rect_filled(rect, radius::subtle(), components::colors::gray::_50);
+                ui.painter().rect_filled(
+                    rect,
+                    egui::CornerRadius::same(radius::KEY),
+                    theme.control.fill_hover,
+                );
             }
             ui.painter().text(
                 rect.center(),
                 egui::Align2::CENTER_CENTER,
                 glyph,
-                typography::body(),
-                if enabled { gray::_700 } else { gray::_400 },
+                type_scale::BODY.font_id(ui.ctx()),
+                if enabled {
+                    theme.text.secondary
+                } else {
+                    theme.text.disabled
+                },
             );
             response
         })

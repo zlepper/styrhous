@@ -100,6 +100,7 @@ pub(super) fn show_resource_table(
     options: ResourceTableOptions<'_>,
     controls: ResourceTableControls<'_>,
 ) -> Option<ResourceAction> {
+    let theme = ui.tokens();
     let pending_action = RefCell::new(None);
     let ResourceTableConfiguration {
         definition,
@@ -194,7 +195,7 @@ pub(super) fn show_resource_table(
                             let response = TableRowBuilder::clickable_text(
                                 ui,
                                 &resource.name,
-                                gray::_900,
+                                theme.text.primary,
                                 format!("Open details for {}", resource.name),
                             );
                             if response.clicked() && pending_action.borrow().is_none() {
@@ -207,6 +208,7 @@ pub(super) fn show_resource_table(
                             MoreButton::show_context_menu(&response, |menu| {
                                 show_resource_action_items(
                                     menu,
+                                    &theme,
                                     api_resource,
                                     resource,
                                     &resource.log_containers,
@@ -239,7 +241,7 @@ pub(super) fn show_resource_table(
                                     let response = TableRowBuilder::clickable_text(
                                         ui,
                                         &label,
-                                        components::colors::indigo::_600,
+                                        theme.accent.text,
                                         format!("Open details for {label}"),
                                     );
                                     response.clone().on_hover_text(&label);
@@ -255,8 +257,8 @@ pub(super) fn show_resource_table(
                             } else {
                                 ui.label(
                                     egui::RichText::new(label)
-                                        .font(typography::body())
-                                        .color(components::colors::gray::_500),
+                                        .font(type_scale::BODY.font_id(ui.ctx()))
+                                        .color(theme.text.muted),
                                 )
                                 .on_hover_text(resource_owner::unavailable_tooltip(owner));
                             }
@@ -287,7 +289,7 @@ pub(super) fn show_resource_table(
                                     let response = TableRowBuilder::clickable_text(
                                         ui,
                                         node_name,
-                                        components::colors::indigo::_600,
+                                        theme.accent.text,
                                         format!("Open details for Node {node_name}"),
                                     );
                                     if response.clicked() && pending_action.borrow().is_none() {
@@ -303,6 +305,7 @@ pub(super) fn show_resource_table(
                                     MoreButton::show_context_menu(&response, |menu| {
                                         show_resource_action_items(
                                             menu,
+                                            &theme,
                                             api_resource,
                                             resource,
                                             &resource.log_containers,
@@ -383,6 +386,7 @@ pub(super) fn show_resource_table(
                     MoreButton::show_context_menu(row_response, |menu| {
                         show_resource_action_items(
                             menu,
+                            &theme,
                             api_resource,
                             resource,
                             &resource.log_containers,
@@ -406,6 +410,7 @@ pub(super) fn show_resource_actions(
     debug_image_presets: &[DebugImagePreset],
     pending_action: &mut Option<ResourceAction>,
 ) {
+    let theme = ui.tokens();
     let mut action_ui = ui.new_child(
         egui::UiBuilder::new()
             // The table cell's content cursor sits below the row centre after
@@ -423,6 +428,7 @@ pub(super) fn show_resource_actions(
     MoreButton::new(format!("More actions for {}", resource.name)).show(&mut action_ui, |menu| {
         show_resource_action_items(
             menu,
+            &theme,
             api_resource,
             resource,
             &resource.log_containers,
@@ -487,11 +493,12 @@ pub(super) fn resource_metadata_value<'a>(
 }
 
 pub(super) fn show_metadata_cell(ui: &mut egui::Ui, value: &str) {
+    let theme = ui.tokens();
     ui.add(
         egui::Label::new(
             egui::RichText::new(value)
-                .font(typography::body())
-                .color(gray::_500),
+                .font(type_scale::BODY.font_id(ui.ctx()))
+                .color(theme.text.muted),
         )
         .truncate(),
     )

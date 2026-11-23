@@ -33,7 +33,11 @@ resources = [
   { src = "../../legal/THIRD_PARTY_NOTICES.md", target = "THIRD_PARTY_NOTICES.md" },
   { src = "../../target/legal/THIRD_PARTY_LICENSES.html", target = "THIRD_PARTY_LICENSES.html" },
   { src = "../../target/legal/THIRD_PARTY_SOURCE.tar.gz", target = "THIRD_PARTY_SOURCE.tar.gz" },
-  { src = "../components/assets/fonts/inter/LICENSE.txt", target = "Inter-OFL-1.1.txt" },
+  { src = "../components/assets/fonts/figtree/OFL.txt", target = "Figtree-OFL-1.1.txt" },
+  { src = "../components/assets/fonts/bricolagegrotesque/OFL.txt", target = "BricolageGrotesque-OFL-1.1.txt" },
+  { src = "../components/assets/fonts/ibmplexmono/OFL.txt", target = "IBMPlexMono-OFL-1.1.txt" },
+  { src = "../components/assets/fonts/ibmplexsanscondensed/OFL.txt", target = "IBMPlexSansCondensed-OFL-1.1.txt" },
+  { src = "../components/assets/fonts/dejavu/LICENSE", target = "DejaVu-LICENSE.txt" },
   { src = "../../target/legal/appimage-native-licenses/*", target = "APPIMAGE_NATIVE_LICENSES" },
 ]
 formats = ["app", "dmg", "nsis", "appimage", "deb"]
@@ -56,7 +60,7 @@ depends = ["libxkbcommon-x11-0"]
 [dependencies]
 eframe = { version = "0.36.1", features = ["persistence"] }
 egui = "0.36.1"
-egui_extras = { version = "0.36.1", features = ["syntect"] }
+egui_extras = "0.36.1"
 components = { path = "../components" }
 kube = { version = "3.1", features = ["runtime", "gzip"] }
 tracing = "0.1"

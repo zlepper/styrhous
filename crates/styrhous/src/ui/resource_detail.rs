@@ -30,20 +30,21 @@ use crate::worker::{
     ResourceDataUpdate, ResourceDataUpdateCompleted, ResourceDataUpdateFailed, UpdateResourceData,
     WorkerCommandBox, WorkerResult,
 };
-use components::colors::{WHITE, gray, indigo};
-use components::design::{radius, spacing, status, surface, typography};
+use components::design::stroke;
+use components::design::theme::{Theme, ThemeExt, Tone};
+use components::design::{radius, space, type_scale};
 use components::{
-    ButtonSize, DetailCell, DetailColumn, DetailRow, DetailTableCell, DetailTableRow, DetailTone,
-    DetailValue, InspectorDetails, MoreButton, PointingHand, TableRowBuilder, TailwindButton,
-    TailwindTable, TailwindTextArea, WorkspaceCard,
+    ButtonSize, DetailCell, DetailColumn, DetailRow, DetailTableCell, DetailTableRow, DetailValue,
+    InspectorDetails, MoreButton, PointingHand, TableRowBuilder, TailwindButton, TailwindTable,
+    TailwindTextArea, WorkspaceCard,
 };
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
-const CARD_CONTENT_PADDING: i8 = spacing::MD as i8;
+const CARD_CONTENT_PADDING: i8 = space::S12 as i8;
 const CARD_HEADER_HEIGHT: f32 = 40.0;
-const CARD_HEADER_PADDING: f32 = spacing::LG;
-const CARD_GAP: f32 = spacing::MD;
+const CARD_HEADER_PADDING: f32 = space::S16;
+const CARD_GAP: f32 = space::S12;
 const USAGE_CHART_HEIGHT: f32 = 80.0;
 const USAGE_CHART_LEFT_INSET: f32 = 30.0;
 const USAGE_CHART_TOP_INSET: f32 = 3.0;
@@ -495,7 +496,7 @@ mod tests {
             egui::pos2(30.0, 24.0),
         ];
         let baseline = 40.0;
-        let mesh = usage_area_mesh(&points, baseline, indigo::_600);
+        let mesh = usage_area_mesh(&points, baseline, Theme::default().components.chart_cpu);
 
         assert_eq!(mesh.vertices.len(), 4 * (points.len() - 1));
         assert_eq!(mesh.indices.len(), 6 * (points.len() - 1));
@@ -514,18 +515,18 @@ mod tests {
 
     #[test]
     fn inspector_status_tones_reflect_kubernetes_status_values() {
-        assert_eq!(pod_phase_tone("Running"), DetailTone::Success);
-        assert_eq!(pod_phase_tone("Pending"), DetailTone::Warning);
-        assert_eq!(pod_phase_tone("Failed"), DetailTone::Danger);
-        assert_eq!(pod_phase_tone("Unknown"), DetailTone::Neutral);
+        assert_eq!(pod_phase_tone("Running"), Tone::Success);
+        assert_eq!(pod_phase_tone("Pending"), Tone::Warning);
+        assert_eq!(pod_phase_tone("Failed"), Tone::Danger);
+        assert_eq!(pod_phase_tone("Unknown"), Tone::Neutral);
 
-        assert_eq!(event_tone("Normal"), DetailTone::Success);
-        assert_eq!(event_tone("Warning"), DetailTone::Warning);
-        assert_eq!(event_tone("Other"), DetailTone::Neutral);
+        assert_eq!(event_tone("Normal"), Tone::Success);
+        assert_eq!(event_tone("Warning"), Tone::Warning);
+        assert_eq!(event_tone("Other"), Tone::Neutral);
 
-        assert_eq!(condition_tone("True"), DetailTone::Success);
-        assert_eq!(condition_tone("False"), DetailTone::Neutral);
-        assert_eq!(condition_tone("Unknown"), DetailTone::Warning);
+        assert_eq!(condition_tone("True"), Tone::Success);
+        assert_eq!(condition_tone("False"), Tone::Neutral);
+        assert_eq!(condition_tone("Unknown"), Tone::Warning);
     }
 
     #[test]

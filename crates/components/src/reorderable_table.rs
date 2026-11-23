@@ -2,7 +2,7 @@
 
 use egui::{Id, LayerId, Order, Response, Ui};
 
-use crate::colors::indigo;
+use crate::design::theme::ThemeExt;
 
 #[derive(Clone)]
 struct DragPayload {
@@ -173,11 +173,12 @@ fn drop_index(
 
 fn placeholder(ui: &mut Ui, width: f32, height: f32) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
-    ui.painter().rect_filled(rect, 0.0, indigo::_50);
+    let tokens = ui.tokens();
+    ui.painter().rect_filled(rect, 0.0, tokens.accent.tint);
     ui.painter().rect_stroke(
         rect.shrink(1.0),
         0.0,
-        egui::Stroke::new(2.0, indigo::_500),
+        egui::Stroke::new(2.0, tokens.accent.outline),
         egui::StrokeKind::Inside,
     );
 }

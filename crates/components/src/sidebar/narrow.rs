@@ -4,8 +4,6 @@ use super::*;
 /// A compact icon-only sidebar
 pub struct NarrowSidebar {
     width: Option<f32>,
-    dark: bool,
-    background: Option<Color32>,
     footer_items: usize,
 }
 
@@ -20,8 +18,6 @@ impl NarrowSidebar {
     pub fn new() -> Self {
         Self {
             width: None,
-            dark: false,
-            background: None,
             footer_items: 1,
         }
     }
@@ -29,19 +25,6 @@ impl NarrowSidebar {
     /// Override the default width (72px)
     pub fn width(mut self, width: f32) -> Self {
         self.width = Some(width);
-        self
-    }
-
-    /// Use the dark navigation treatment intended for application shells.
-    pub fn dark(mut self) -> Self {
-        self.dark = true;
-        self
-    }
-
-    /// Use a distinct dark surface while preserving dark navigation affordances.
-    pub fn dark_background(mut self, background: Color32) -> Self {
-        self.dark = true;
-        self.background = Some(background);
         self
     }
 
@@ -58,18 +41,10 @@ impl NarrowSidebar {
         ui: &mut Ui,
         add_contents: impl FnOnce(&mut NarrowSidebarContent<'_>) -> R,
     ) -> R {
-        render_sidebar(
-            ui,
-            self.width,
-            NARROW_WIDTH,
-            self.background.unwrap_or(if self.dark {
-                NAVIGATION_BACKGROUND
-            } else {
-                WHITE
-            }),
-            9.0,
-            |child_ui| show_narrow_content(child_ui, self.dark, add_contents),
-        )
+        let background = ui.tokens().nav.rail;
+        render_sidebar(ui, self.width, NARROW_WIDTH, background, 9.0, |child_ui| {
+            show_narrow_content(child_ui, add_contents)
+        })
     }
 
     /// Show the sidebar with a footer anchored below its scrollable navigation items.
@@ -84,18 +59,14 @@ impl NarrowSidebar {
             SidebarLayout {
                 width: self.width,
                 default_width: NARROW_WIDTH,
-                background: self.background.unwrap_or(if self.dark {
-                    NAVIGATION_BACKGROUND
-                } else {
-                    WHITE
-                }),
+                background: ui.tokens().nav.rail,
                 top_padding: 9.0,
             },
-            NARROW_ITEM_HEIGHT * self.footer_items as f32 + spacing::SM,
-            |child_ui| show_narrow_content(child_ui, self.dark, add_contents),
+            NARROW_ITEM_HEIGHT * self.footer_items as f32 + space::S8,
+            |child_ui| show_narrow_content(child_ui, add_contents),
             |footer_ui| {
-                show_narrow_content(footer_ui, self.dark, add_footer);
-                footer_ui.add_space(spacing::SM);
+                show_narrow_content(footer_ui, add_footer);
+                footer_ui.add_space(space::S8);
             },
         )
     }
@@ -103,12 +74,11 @@ impl NarrowSidebar {
 
 fn show_narrow_content<R>(
     ui: &mut Ui,
-    dark: bool,
     add_contents: impl FnOnce(&mut NarrowSidebarContent<'_>) -> R,
 ) -> R {
     ui.spacing_mut().item_spacing.y = 0.0;
     let mut content = NarrowSidebarContent {
-        core: SidebarContentCore::narrow(ui, dark),
+        core: SidebarContentCore::narrow(ui),
     };
     add_contents(&mut content)
 }

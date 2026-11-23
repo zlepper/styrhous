@@ -1,14 +1,15 @@
 use super::state::{BulkDeleteOutcome, BulkDeleteProgress, OperationOutcome, UiState};
 use crate::terminal_launcher::TerminalLaunchSettings;
 use crate::worker::*;
-use components::colors::{WHITE, gray};
-use components::design::{radius, spacing, surface, typography};
+use components::design::stroke;
+use components::design::theme::{self, ThemeExt, ThemeScope};
+use components::design::{radius, space, type_scale};
 use components::{
     ButtonSize, ConfirmationDialog, ConfirmationDialogAcknowledgement, ConfirmationDialogAction,
     ConfirmationDialogKind, ConfirmationDialogWarning, ErrorDialog, ErrorDialogAction,
     PointingHand, TailwindButton,
 };
-use egui::{Align, Color32, Frame, Key, Margin, Modal, Modifiers, Shadow};
+use egui::{Align, Frame, Key, Margin, Modifiers};
 use std::time::Instant;
 use tracing::info;
 

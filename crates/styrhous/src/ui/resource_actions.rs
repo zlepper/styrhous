@@ -3,13 +3,14 @@ use crate::api_resource::ApiResource;
 use crate::minimal_resource::{MinimalResource, PodLogContainer};
 use crate::resource_table::ContainerKind;
 use crate::terminal_launcher::DebugImagePreset;
-use components::colors::gray;
-use components::design::status;
+use components::design::theme::Theme;
 use components::{MoreMenu, icons};
 
 /// Render the shared resource-level actions used by table rows and inspectors.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn show_resource_action_items(
     menu: &mut MoreMenu<'_>,
+    theme: &Theme,
     api_resource: &ApiResource,
     resource: &MinimalResource,
     log_containers: &[PodLogContainer],
@@ -124,7 +125,7 @@ pub(super) fn show_resource_action_items(
             "Edit",
             icons::document_icon()
                 .fit_to_exact_size(egui::Vec2::splat(16.0))
-                .tint(gray::_500),
+                .tint(theme.text.muted),
         )
         .clicked()
         && pending_action.is_none()
@@ -181,7 +182,7 @@ pub(super) fn show_resource_action_items(
             "Delete",
             icons::trash_icon()
                 .fit_to_exact_size(egui::Vec2::splat(16.0))
-                .tint(status::DANGER),
+                .tint(theme.danger.text),
         )
         .clicked()
         && pending_action.is_none()

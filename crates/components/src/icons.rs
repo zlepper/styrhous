@@ -1,11 +1,15 @@
-//! SVG icons for the components library
+//! SVG icons for the components library.
 //!
-//! Uses Heroicons (https://heroicons.com/) for consistent iconography.
-//! Icons are embedded as SVG and rendered via egui_extras image loaders.
+//! The outline icons are the design's own set — Heroicons outline, stroke
+//! width 1.5 — extracted byte for byte from the Harbour stylesheet by
+//! `scripts/design-oracles/extract-icons.mjs` into `assets/icons/`, so egui
+//! and the design oracles rasterize identical paths. They are drawn in white
+//! and tinted with a theme role. A few app-only icons (Heroicons the design
+//! does not use, and provider brand marks) live next to them.
 //!
-//! # Setup
-//!
-//! The consuming application must install the image loaders once at startup:
+//! Icons render through the egui_extras SVG loader, which rasterizes at the
+//! exact pixel size the image is shown at. The consuming application must
+//! install the image loaders once at startup:
 //! ```ignore
 //! egui_extras::install_image_loaders(&cc.egui_ctx);
 //! ```
@@ -13,304 +17,173 @@
 //! # Usage
 //!
 //! ```ignore
-//! icons::chevron_right(ui, 16.0, gray::_400);
+//! icons::chevron_right(ui, 16.0, ui.tokens().text.muted);
 //! ```
 
-use egui::{Color32, Image, Response, Ui, Vec2, include_image};
+use egui::{Color32, CornerRadius, Image, Painter, Rect, Response, Ui, Vec2, include_image};
 
 use crate::PointingHand;
+use crate::design::theme::{Theme, Tone};
 
-/// Render a chevron-right icon
-///
-/// # Arguments
-/// * `ui` - The UI to render into
-/// * `size` - Icon size in pixels
-/// * `color` - Icon color (applied as tint)
+macro_rules! icons {
+    ($($(#[$doc:meta])* $name:ident => $file:literal;)+) => {
+        $(
+            $(#[$doc])*
+            pub fn $name() -> Image<'static> {
+                Image::new(include_image!(concat!("../assets/icons/", $file)))
+            }
+        )+
+    };
+}
+
+icons! {
+    /// Home.
+    home_icon => "home.svg";
+    /// Users.
+    users_icon => "users.svg";
+    /// Folder.
+    folder_icon => "folder.svg";
+    /// Calendar.
+    calendar_icon => "calendar.svg";
+    /// Document.
+    document_icon => "document.svg";
+    /// Code bracket, for literal values.
+    code_bracket_icon => "code-bracket.svg";
+    /// Key, for secret-backed values.
+    key_icon => "key.svg";
+    /// Document text, for Kubernetes field references.
+    document_text_icon => "document-text.svg";
+    /// Question mark, for unknown or unspecified values.
+    question_mark_circle_icon => "question-mark-circle.svg";
+    /// Bar chart.
+    chart_bar_icon => "chart-bar.svg";
+    /// Horizontal ellipsis, for compact action menus.
+    ellipsis_horizontal_icon => "ellipsis-horizontal.svg";
+    /// Left arrow, for backwards navigation.
+    arrow_left_icon => "arrow-left.svg";
+    /// Right arrow, for forwards navigation.
+    arrow_right_icon => "arrow-right.svg";
+    /// Up arrow.
+    arrow_up_icon => "arrow-up.svg";
+    /// Down arrow.
+    arrow_down_icon => "arrow-down.svg";
+    /// Circular arrow, for reload actions.
+    arrow_path_icon => "arrow-path.svg";
+    /// Chevron right, for navigation affordances.
+    chevron_right_icon => "chevron-right.svg";
+    /// Chevron down.
+    chevron_down_icon => "chevron-down.svg";
+    /// Funnel, for filtering controls.
+    funnel_icon => "funnel.svg";
+    /// Numbered list, for line-number visibility controls.
+    numbered_list_icon => "numbered-list.svg";
+    /// Calendar days, for timestamp visibility controls.
+    calendar_days_icon => "calendar-days.svg";
+    /// Swatch, for ANSI styling controls.
+    swatch_icon => "swatch.svg";
+    /// X mark, for dismissing overlays and panels.
+    x_mark_icon => "x-mark.svg";
+    /// Trash, for destructive actions.
+    trash_icon => "trash.svg";
+    /// Pencil, for edit actions.
+    pencil_icon => "pencil.svg";
+    /// Plus, for add controls.
+    plus_icon => "plus.svg";
+    /// Cog, for application settings.
+    settings_icon => "cog-6-tooth.svg";
+    /// Bell, for the session operation history.
+    bell_icon => "bell.svg";
+    /// Document duplicate, for copy actions.
+    document_duplicate_icon => "document-duplicate.svg";
+    /// Magnifying glass.
+    magnifying_glass_icon => "magnifying-glass.svg";
+    /// Check mark.
+    check_icon => "check.svg";
+    /// Cube, a Kubernetes resource.
+    cube_icon => "cube.svg";
+    /// Globe.
+    globe_alt_icon => "globe-alt.svg";
+    /// Circle stack: contexts and clusters.
+    circle_stack_icon => "circle-stack.svg";
+    /// Horizontal adjustments: presentation settings.
+    adjustments_horizontal_icon => "adjustments-horizontal.svg";
+    /// Share: cluster discovery.
+    share_icon => "share.svg";
+    /// Wrench and screwdriver: application preferences.
+    wrench_screwdriver_icon => "wrench-screwdriver.svg";
+    /// User circle: license and account.
+    user_circle_icon => "user-circle.svg";
+    /// The bundled Microsoft Azure brand mark for Azure provider surfaces.
+    azure_icon => "azure.svg";
+    /// The bundled Tailscale brand mark for Tailscale provider surfaces.
+    tailscale_icon => "tailscale.svg";
+}
+
+/// Show `image` at `size` points, tinted `color`.
+fn show(ui: &mut Ui, image: Image<'static>, size: f32, color: Color32) -> Response {
+    ui.add(image.fit_to_exact_size(Vec2::splat(size)).tint(color))
+}
+
+/// Render a chevron-right icon `size` points square, tinted `color`.
 pub fn chevron_right(ui: &mut Ui, size: f32, color: Color32) -> Response {
-    let image = Image::new(include_image!("icons/chevron-right.svg"))
-        .fit_to_exact_size(Vec2::splat(size))
-        .tint(color);
-    ui.add(image)
+    show(ui, chevron_right_icon(), size, color)
 }
 
-/// Render a chevron-down icon
-///
-/// # Arguments
-/// * `ui` - The UI to render into
-/// * `size` - Icon size in pixels
-/// * `color` - Icon color (applied as tint)
+/// Render a chevron-down icon `size` points square, tinted `color`.
 pub fn chevron_down(ui: &mut Ui, size: f32, color: Color32) -> Response {
-    let image = Image::new(include_image!("icons/chevron-down.svg"))
-        .fit_to_exact_size(Vec2::splat(size))
-        .tint(color);
-    ui.add(image)
+    show(ui, chevron_down_icon(), size, color)
 }
 
-/// Render a chevron-up icon
-///
-/// # Arguments
-/// * `ui` - The UI to render into
-/// * `size` - Icon size in pixels
-/// * `color` - Icon color (applied as tint)
+/// Render a chevron-up icon `size` points square, tinted `color`.
 pub fn chevron_up(ui: &mut Ui, size: f32, color: Color32) -> Response {
-    let image = Image::new(include_image!("icons/chevron-up.svg"))
-        .fit_to_exact_size(Vec2::splat(size))
-        .tint(color);
-    ui.add(image)
+    show(
+        ui,
+        Image::new(include_image!("../assets/icons/chevron-up.svg")),
+        size,
+        color,
+    )
 }
 
-/// Render a bars-3 (hamburger menu) icon
-///
-/// # Arguments
-/// * `ui` - The UI to render into
-/// * `size` - Icon size in pixels
-/// * `color` - Icon color (applied as tint)
+/// Render a bars-3 (hamburger menu) icon `size` points square, tinted `color`.
 pub fn bars_3(ui: &mut Ui, size: f32, color: Color32) -> Response {
-    let image = Image::new(include_image!("icons/bars-3.svg"))
-        .fit_to_exact_size(Vec2::splat(size))
-        .tint(color);
-    ui.add(image)
+    show(
+        ui,
+        Image::new(include_image!("../assets/icons/bars-3.svg")),
+        size,
+        color,
+    )
 }
 
-// Icon factory functions - return unsized Image for use in components
-
-/// Returns a home icon image
-pub fn home_icon() -> Image<'static> {
-    Image::new(include_image!("icons/home.svg"))
-}
-
-/// Returns a users icon image
-pub fn users_icon() -> Image<'static> {
-    Image::new(include_image!("icons/users.svg"))
-}
-
-/// Returns a folder icon image
-pub fn folder_icon() -> Image<'static> {
-    Image::new(include_image!("icons/folder.svg"))
-}
-
-/// Returns a calendar icon image
-pub fn calendar_icon() -> Image<'static> {
-    Image::new(include_image!("icons/calendar.svg"))
-}
-
-/// Returns a document icon image
-pub fn document_icon() -> Image<'static> {
-    Image::new(include_image!("icons/document.svg"))
-}
-
-/// Returns a code-bracket icon for literal values.
-pub fn code_bracket_icon() -> Image<'static> {
-    Image::new(include_image!("icons/code-bracket.svg"))
-}
-
-/// Returns a key icon for secret-backed values.
-pub fn key_icon() -> Image<'static> {
-    Image::new(include_image!("icons/key.svg"))
-}
-
-/// Returns a document-text icon for Kubernetes field references.
-pub fn document_text_icon() -> Image<'static> {
-    Image::new(include_image!("icons/document-text.svg"))
-}
-
-/// Returns a question-mark icon for unknown or unspecified values.
-pub fn question_mark_circle_icon() -> Image<'static> {
-    Image::new(include_image!("icons/question-mark-circle.svg"))
-}
-
-/// Returns a chart bar icon image
-pub fn chart_bar_icon() -> Image<'static> {
-    Image::new(include_image!("icons/chart-bar.svg"))
-}
-
-/// Returns a horizontal ellipsis icon image for compact action menus.
-pub fn ellipsis_horizontal_icon() -> Image<'static> {
-    Image::new(include_image!("icons/ellipsis-horizontal.svg"))
-}
-
-/// Returns a left arrow icon for backwards navigation.
-pub fn arrow_left_icon() -> Image<'static> {
-    Image::new(include_image!("icons/arrow-left.svg"))
-}
-
-/// Returns a right arrow icon for forwards navigation.
-pub fn arrow_right_icon() -> Image<'static> {
-    Image::new(include_image!("icons/arrow-right.svg"))
-}
-
-/// Returns a chevron-right icon for navigation affordances.
-pub fn chevron_right_icon() -> Image<'static> {
-    Image::new(include_image!("icons/chevron-right.svg"))
-}
-
-/// Returns an up arrow icon for upward navigation.
-pub fn arrow_up_icon() -> Image<'static> {
-    Image::new(include_image!("icons/arrow-up.svg"))
-}
-
-/// Returns a down arrow icon for downward navigation.
-pub fn arrow_down_icon() -> Image<'static> {
-    Image::new(include_image!("icons/arrow-down.svg"))
-}
-
-/// Returns a circular arrow icon for reload actions.
-pub fn arrow_path_icon() -> Image<'static> {
-    Image::new(include_image!("icons/arrow-path.svg"))
-}
-
-/// Returns the settings-home application destination tile.
-pub fn settings_destination_application_icon() -> Image<'static> {
-    Image::new(include_image!("icons/settings-destination-application.svg"))
-}
-
-/// Returns the settings-home cluster-discovery destination tile.
-pub fn settings_destination_discovery_icon() -> Image<'static> {
-    Image::new(include_image!("icons/settings-destination-discovery.svg"))
-}
-
-/// Returns a funnel icon for filtering controls.
-pub fn funnel_icon() -> Image<'static> {
-    Image::new(include_image!("icons/funnel.svg"))
-}
-
-/// Returns a numbered-list icon for line-number visibility controls.
-pub fn numbered_list_icon() -> Image<'static> {
-    Image::new(include_image!("icons/numbered-list.svg"))
-}
-
-/// Returns a calendar icon for timestamp visibility controls.
-pub fn calendar_days_icon() -> Image<'static> {
-    Image::new(include_image!("icons/calendar-days.svg"))
-}
-
-/// Returns a swatch icon for ANSI styling controls.
-pub fn swatch_icon() -> Image<'static> {
-    Image::new(include_image!("icons/swatch.svg"))
-}
-
-/// Returns an X-mark icon for dismissing overlays and panels.
-pub fn x_mark_icon() -> Image<'static> {
-    Image::new(include_image!("icons/x-mark.svg"))
-}
-
-/// Returns a trash icon image for destructive menu actions.
-pub fn trash_icon() -> Image<'static> {
-    Image::new(include_image!("icons/trash.svg"))
-}
-
-/// Returns a pencil icon image for edit actions.
-pub fn pencil_icon() -> Image<'static> {
-    Image::new(include_image!("icons/pencil.svg"))
-}
-
-/// Returns a plus icon for add controls.
-pub fn plus_icon() -> Image<'static> {
-    Image::new(include_image!("icons/plus.svg"))
-}
-
-/// Returns a cog icon for application settings.
-pub fn settings_icon() -> Image<'static> {
-    Image::new(include_image!("icons/settings.svg"))
-}
-
-/// Returns a bell icon for the session operation history.
-pub fn bell_icon() -> Image<'static> {
-    Image::new(include_image!("icons/bell.svg"))
-}
-
-/// Returns the bundled Microsoft Azure brand mark for Azure provider surfaces.
-pub fn azure_icon() -> Image<'static> {
-    Image::new(include_image!("icons/azure.svg"))
-}
-
-/// Returns the bundled Tailscale brand mark for Tailscale provider surfaces.
-pub fn tailscale_icon() -> Image<'static> {
-    Image::new(include_image!("icons/tailscale.svg"))
-}
-
-/// Returns the Heroicons document-duplicate image used for copy actions.
-pub fn document_duplicate_icon() -> Image<'static> {
-    Image::new(include_image!("icons/document-duplicate.svg"))
-}
-
-/// Render a trash (delete) icon (non-interactive)
-///
-/// For a clickable button version, use `trash_button()` instead.
-///
-/// # Arguments
-/// * `ui` - The UI to render into
-/// * `size` - Icon size in pixels
-/// * `color` - Icon color (applied as tint)
+/// Render a trash (delete) icon (non-interactive). For a clickable version,
+/// use [`trash_button`].
 pub fn trash(ui: &mut Ui, size: f32, color: Color32) -> Response {
-    let image = Image::new(include_image!("icons/trash.svg"))
-        .fit_to_exact_size(Vec2::splat(size))
-        .tint(color);
-    ui.add(image)
+    show(ui, trash_icon(), size, color)
 }
 
-/// Render a pencil (edit) icon (non-interactive)
-///
-/// For a clickable button version, use `pencil_button()` instead.
-///
-/// # Arguments
-/// * `ui` - The UI to render into
-/// * `size` - Icon size in pixels
-/// * `color` - Icon color (applied as tint)
+/// Render a pencil (edit) icon (non-interactive). For a clickable version,
+/// use [`pencil_button`].
 pub fn pencil(ui: &mut Ui, size: f32, color: Color32) -> Response {
-    let image = Image::new(include_image!("icons/pencil.svg"))
-        .fit_to_exact_size(Vec2::splat(size))
-        .tint(color);
-    ui.add(image)
+    show(ui, pencil_icon(), size, color)
 }
 
-/// Render a clickable trash (delete) icon button using native egui Button
-///
-/// Uses Button::image_and_text() with zero-width space for proper accessibility.
-/// The label appears in screen readers and kittest but not visually.
-///
-/// # Arguments
-/// * `ui` - The UI to render into
-/// * `size` - Icon size in pixels
-/// * `color` - Icon color (applied as tint)
-/// * `label` - Accessibility label for the button (e.g., "Delete my-resource")
+/// A clickable, frameless trash (delete) icon button labelled `label` for
+/// assistive technologies.
 pub fn trash_button(ui: &mut Ui, size: f32, color: Color32, label: &str) -> Response {
-    icon_button(
-        ui,
-        Image::new(include_image!("icons/trash.svg")),
-        size,
-        color,
-        label,
-    )
+    icon_button(ui, trash_icon(), size, color, label)
 }
 
-/// Render a clickable pencil (edit) icon button using native egui Button
-///
-/// Uses Button::image_and_text() with zero-width space for proper accessibility.
-/// The label appears in screen readers and kittest but not visually.
-///
-/// # Arguments
-/// * `ui` - The UI to render into
-/// * `size` - Icon size in pixels
-/// * `color` - Icon color (applied as tint)
-/// * `label` - Accessibility label for the button (e.g., "Edit my-resource")
+/// A clickable, frameless pencil (edit) icon button labelled `label` for
+/// assistive technologies.
 pub fn pencil_button(ui: &mut Ui, size: f32, color: Color32, label: &str) -> Response {
-    icon_button(
-        ui,
-        Image::new(include_image!("icons/pencil.svg")),
-        size,
-        color,
-        label,
-    )
+    icon_button(ui, pencil_icon(), size, color, label)
 }
 
-/// Render a clickable eye icon button using native egui Button.
-///
-/// The label is exposed to assistive technologies while the button remains icon-only.
+/// A clickable, frameless eye icon button labelled `label` for assistive
+/// technologies.
 pub fn eye_button(ui: &mut Ui, size: f32, color: Color32, label: &str) -> Response {
     icon_button(
         ui,
-        Image::new(include_image!("icons/eye.svg")),
+        Image::new(include_image!("../assets/icons/eye.svg")),
         size,
         color,
         label,
@@ -328,29 +201,44 @@ fn icon_button(
     let response = ui
         .add(egui::Button::image(image).frame(false))
         .with_pointing_hand();
-    decorate_icon_button(ui, response, label)
-}
-
-fn decorate_icon_button(ui: &Ui, response: Response, label: &str) -> Response {
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label)
     });
     response
 }
 
-/// Context identity tile for the Settings overview.
-pub fn settings_destination_contexts_icon() -> Image<'static> {
-    Image::new(include_image!("icons/settings-destination-contexts.svg"))
+/// The fill and glyph colours of an icon tile in `tone` (the design's
+/// `.tile` variants): accent and info tiles are tinted with a coloured glyph
+/// (`.tile`), neutral tiles use the strong control fill with a secondary
+/// glyph (`.tile.gray`), and status tiles are solid with a dark glyph
+/// (`.tile.ok`, `.tile.warn`, `.tile.bad`).
+pub fn tile_colors(theme: &Theme, tone: Tone) -> (Color32, Color32) {
+    let colors = theme.tone(tone);
+    match tone {
+        Tone::Accent | Tone::Info => (colors.tint, colors.text),
+        Tone::Neutral => (theme.control.fill_strong, theme.text.secondary),
+        Tone::Success | Tone::Warning | Tone::Danger => (colors.fill, theme.text.on_fill),
+    }
 }
 
-/// Namespace presentation tile for the Settings overview.
-pub fn settings_destination_namespace_icon() -> Image<'static> {
-    Image::new(include_image!("icons/settings-destination-namespace.svg"))
-}
+/// Glyph size relative to the tile: a 20 point glyph on a 36 point tile.
+const TILE_GLYPH_RATIO: f32 = 20.0 / 36.0;
 
-/// Account tile for the Settings overview.
-pub fn settings_destination_account_icon() -> Image<'static> {
-    Image::new(include_image!("icons/settings-destination-account.svg"))
+/// Paint an icon tile into `rect`: a rounded square in `tone` with `glyph`
+/// centred on it, tinted to match.
+pub fn paint_tile(
+    ui: &Ui,
+    painter: &Painter,
+    rect: Rect,
+    glyph: Image<'static>,
+    tone: Tone,
+    corner_radius: impl Into<CornerRadius>,
+) {
+    let (fill, glyph_color) = tile_colors(&crate::design::theme::ThemeExt::tokens(ui), tone);
+    painter.rect_filled(rect, corner_radius, fill);
+    let glyph_size = (rect.height() * TILE_GLYPH_RATIO).round();
+    let glyph_rect = Rect::from_center_size(rect.center(), Vec2::splat(glyph_size));
+    glyph.tint(glyph_color).paint_at(ui, glyph_rect);
 }
 
 /// Paints a check mark `width` points wide centred on `center`, as drawn for selected

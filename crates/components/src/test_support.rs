@@ -24,9 +24,31 @@ pub const DEFAULT_PIXEL_THRESHOLD: f32 = 2.1;
 
 /// Configure a test harness for component tests and snapshots.
 pub fn setup_egui<State>(harness: &mut Harness<'_, State>) {
-    crate::apply_light_theme(&harness.ctx);
+    crate::design::theme::configure_default(&harness.ctx);
     egui_extras::install_image_loaders(&harness.ctx);
     harness.set_size(EGUI_TEST_SIZE);
+}
+
+/// A theme in which every role and every component override has its own
+/// colour.
+///
+/// Harbour Dark points many roles at the same palette entry (`accent-fill`,
+/// `code-caret` and `syntax-key` are all coral-400), so a test that checks a
+/// painted colour against the built-in theme cannot tell those roles apart.
+/// Install this with [`crate::design::theme::switch`] in tests that assert
+/// which role a widget paints with.
+pub fn distinct_role_theme() -> std::sync::Arc<crate::design::theme::Theme> {
+    use crate::design::palette::distinct;
+    use crate::design::theme::{Role, Theme};
+    std::sync::Arc::new(Theme::from_colors(
+        |role| distinct(role.index()),
+        |component| distinct(Role::COUNT + component.index()),
+    ))
+}
+
+/// Install [`distinct_role_theme`] in `ctx`.
+pub fn install_distinct_role_theme(ctx: &egui::Context) {
+    crate::design::theme::switch(ctx, distinct_role_theme());
 }
 
 /// Options controlling accessibility-tree text snapshots.

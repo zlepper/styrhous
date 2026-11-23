@@ -1,13 +1,18 @@
 use super::*;
 
 pub(super) fn metadata_maps(ui: &mut egui::Ui, detail: &ResourceDetail) {
+    let theme = ui.tokens();
     disclosure_card(
         ui,
         "labels-and-annotations-open",
         "Labels & annotations",
         false,
         |ui| {
-            ui.label(egui::RichText::new("Labels").strong().color(gray::_800));
+            ui.label(
+                egui::RichText::new("Labels")
+                    .strong()
+                    .color(theme.text.primary),
+            );
             InspectorDetails::show_properties(
                 ui,
                 &[DetailRow::new(detail.labels.iter().map(|(key, value)| {
@@ -19,7 +24,7 @@ pub(super) fn metadata_maps(ui: &mut egui::Ui, detail: &ResourceDetail) {
             ui.label(
                 egui::RichText::new("Annotations")
                     .strong()
-                    .color(gray::_800),
+                    .color(theme.text.primary),
             );
             InspectorDetails::show_properties(
                 ui,
@@ -35,7 +40,8 @@ pub(super) fn metadata_maps(ui: &mut egui::Ui, detail: &ResourceDetail) {
 }
 
 pub(super) fn show_events(ui: &mut egui::Ui, events: &[ResourceEvent], error: Option<&str>) {
-    WorkspaceCard::new().padding(0).show(ui, |ui| {
+    let theme = ui.tokens();
+    WorkspaceCard::new().margin(0).show(ui, |ui| {
         ui.allocate_ui_with_layout(
             egui::vec2(ui.available_width(), CARD_HEADER_HEIGHT),
             egui::Layout::left_to_right(egui::Align::Center),
@@ -44,8 +50,8 @@ pub(super) fn show_events(ui: &mut egui::Ui, events: &[ResourceEvent], error: Op
                 ui.label(
                     egui::RichText::new("Events")
                         .strong()
-                        .font(typography::section_heading())
-                        .color(gray::_800),
+                        .font(type_scale::TITLE.font_id(ui.ctx()))
+                        .color(theme.text.primary),
                 );
             },
         );
@@ -56,7 +62,7 @@ pub(super) fn show_events(ui: &mut egui::Ui, events: &[ResourceEvent], error: Op
                 if let Some(error) = error {
                     error_card(ui, "Unable to load events", error);
                 } else if events.is_empty() {
-                    ui.label(egui::RichText::new("No events recorded.").color(gray::_500));
+                    ui.label(egui::RichText::new("No events recorded.").color(theme.text.muted));
                 } else {
                     let rows = events
                         .iter()
@@ -106,10 +112,11 @@ pub(super) fn show_additional_sections(
     resource_navigation: &ResourceNavigation,
     pending_action: &mut Option<ResourceAction>,
 ) {
+    let theme = ui.tokens();
     if let ResourceDetailPayload::Pod(pod) = &detail.payload {
         disclosure_card(ui, "conditions", "Conditions", false, |ui| {
             if pod.conditions.is_empty() {
-                ui.label(egui::RichText::new("No conditions reported.").color(gray::_500));
+                ui.label(egui::RichText::new("No conditions reported.").color(theme.text.muted));
             } else {
                 let rows = pod
                     .conditions
@@ -150,7 +157,7 @@ pub(super) fn show_additional_sections(
     }
     disclosure_card(ui, "owner-references", "Owner references", false, |ui| {
         if detail.owners.is_empty() {
-            ui.label(egui::RichText::new("No owner references.").color(gray::_500));
+            ui.label(egui::RichText::new("No owner references.").color(theme.text.muted));
         } else {
             for owner in &detail.owners {
                 let label = owner.label();
@@ -163,8 +170,8 @@ pub(super) fn show_additional_sections(
                         .add(
                             egui::Label::new(
                                 egui::RichText::new(&label)
-                                    .font(typography::metadata())
-                                    .color(indigo::_600),
+                                    .font(type_scale::META.font_id(ui.ctx()))
+                                    .color(theme.accent.text),
                             )
                             .truncate()
                             .sense(egui::Sense::click()),
@@ -185,8 +192,8 @@ pub(super) fn show_additional_sections(
                     ui.add(
                         egui::Label::new(
                             egui::RichText::new(&label)
-                                .font(typography::metadata())
-                                .color(gray::_900),
+                                .font(type_scale::META.font_id(ui.ctx()))
+                                .color(theme.text.primary),
                         )
                         .truncate(),
                     )
@@ -222,29 +229,29 @@ pub(super) fn show_additional_sections(
     }
 }
 
-pub(super) fn pod_phase_tone(phase: &str) -> DetailTone {
+pub(super) fn pod_phase_tone(phase: &str) -> Tone {
     match phase {
-        "Running" | "Succeeded" => DetailTone::Success,
-        "Pending" => DetailTone::Warning,
-        "Failed" => DetailTone::Danger,
-        _ => DetailTone::Neutral,
+        "Running" | "Succeeded" => Tone::Success,
+        "Pending" => Tone::Warning,
+        "Failed" => Tone::Danger,
+        _ => Tone::Neutral,
     }
 }
 
-pub(super) fn event_tone(event_type: &str) -> DetailTone {
+pub(super) fn event_tone(event_type: &str) -> Tone {
     match event_type {
-        "Normal" => DetailTone::Success,
-        "Warning" => DetailTone::Warning,
-        _ => DetailTone::Neutral,
+        "Normal" => Tone::Success,
+        "Warning" => Tone::Warning,
+        _ => Tone::Neutral,
     }
 }
 
-pub(super) fn condition_tone(condition_status: &str) -> DetailTone {
+pub(super) fn condition_tone(condition_status: &str) -> Tone {
     match condition_status {
-        "True" => DetailTone::Success,
-        "False" => DetailTone::Neutral,
-        "Unknown" => DetailTone::Warning,
-        _ => DetailTone::Neutral,
+        "True" => Tone::Success,
+        "False" => Tone::Neutral,
+        "Unknown" => Tone::Warning,
+        _ => Tone::Neutral,
     }
 }
 
@@ -255,7 +262,8 @@ pub(crate) fn disclosure_card(
     default_open: bool,
     add_content: impl FnOnce(&mut egui::Ui),
 ) {
-    WorkspaceCard::new().padding(0).show(ui, |ui| {
+    let theme = ui.tokens();
+    WorkspaceCard::new().margin(0).show(ui, |ui| {
         let id = ui.id().with(id_source);
         let mut open = ui
             .data(|data| data.get_temp::<bool>(id))
@@ -282,15 +290,15 @@ pub(crate) fn disclosure_card(
             header.left_center() + egui::vec2(CARD_HEADER_PADDING, 0.0),
             egui::Align2::LEFT_CENTER,
             title,
-            typography::body(),
-            gray::_800,
+            type_scale::BODY.font_id(ui.ctx()),
+            theme.text.primary,
         );
         painter.text(
             header.right_center() - egui::vec2(CARD_HEADER_PADDING, 0.0),
             egui::Align2::RIGHT_CENTER,
             if open { "⌃" } else { "⌄" },
-            typography::section_heading(),
-            gray::_700,
+            type_scale::TITLE.font_id(ui.ctx()),
+            theme.text.secondary,
         );
         if open {
             ui.separator();
@@ -302,18 +310,19 @@ pub(crate) fn disclosure_card(
 }
 
 pub(super) fn section_header(ui: &mut egui::Ui, title: &str, detail: Option<String>) {
+    let theme = ui.tokens();
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new(title)
                 .strong()
-                .font(typography::section_heading())
-                .color(gray::_800),
+                .font(type_scale::TITLE.font_id(ui.ctx()))
+                .color(theme.text.primary),
         );
         if let Some(detail) = detail {
             ui.label(
                 egui::RichText::new(detail)
-                    .font(typography::body())
-                    .color(gray::_600),
+                    .font(type_scale::BODY.font_id(ui.ctx()))
+                    .color(theme.text.secondary),
             );
         }
     });

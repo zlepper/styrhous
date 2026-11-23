@@ -7,10 +7,11 @@ impl GlobalBladeContent for ResourceTableSettingsTarget {
         _layer: components::BladeLayer,
         _context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
+        let theme = ui.tokens();
         ui.label(
             egui::RichText::new("Configure columns")
-                .font(components::design::typography::page_title())
-                .color(components::colors::gray::_900),
+                .font(components::design::type_scale::HEADING.font_id(ui.ctx()))
+                .color(theme.text.primary),
         );
         GlobalBladeRenderResult::default()
     }
@@ -35,21 +36,18 @@ pub(super) fn show_column_row(
     column: &mut EditableColumn,
     handle: &ReorderHandle,
 ) {
+    let theme = ui.tokens();
     let (rect, _) =
         ui.allocate_exact_size(egui::vec2(ui.available_width(), 44.0), egui::Sense::hover());
+    ui.painter().rect_filled(rect, 0.0, theme.components.row_bg);
     ui.painter()
-        .rect_filled(rect, 0.0, components::colors::WHITE);
-    ui.painter().hline(
-        rect.x_range(),
-        rect.bottom(),
-        egui::Stroke::new(1.0, components::colors::TABLE_BORDER),
-    );
+        .hline(rect.x_range(), rect.bottom(), stroke::divider(&theme));
     let mut row = ui.new_child(
         egui::UiBuilder::new()
             .max_rect(rect)
             .layout(egui::Layout::left_to_right(egui::Align::Center)),
     );
-    row.add_space(components::design::spacing::LG);
+    row.add_space(components::design::space::S16);
     let (handle_rect, _) = row.allocate_exact_size(egui::Vec2::splat(18.0), egui::Sense::hover());
     let response = row.interact(
         handle_rect,
@@ -63,17 +61,17 @@ pub(super) fn show_column_row(
     components::icons::bars_3(
         &mut row.new_child(egui::UiBuilder::new().max_rect(handle_rect)),
         16.0,
-        components::colors::gray::_500,
+        theme.text.muted,
     );
-    row.add_space(components::design::spacing::MD);
+    row.add_space(components::design::space::S12);
     if components::tailwind_checkbox(&mut row, column.visible, &column.definition.label).clicked() {
         column.visible = !column.visible;
     }
-    row.add_space(components::design::spacing::MD);
+    row.add_space(components::design::space::S12);
     row.label(
         egui::RichText::new(&column.definition.label)
-            .font(components::design::typography::body())
-            .color(components::colors::gray::_900),
+            .font(components::design::type_scale::BODY.font_id(ui.ctx()))
+            .color(theme.text.primary),
     );
     if column.custom_column.is_some() {
         row.with_layout(egui::Layout::right_to_left(egui::Align::Center), |row| {
@@ -98,16 +96,16 @@ pub(super) fn show_column_row(
 }
 
 pub(super) fn show_column_preview(ui: &mut egui::Ui, column: &EditableColumn) {
+    let theme = ui.tokens();
     let (rect, _) =
         ui.allocate_exact_size(egui::vec2(ui.available_width(), 44.0), egui::Sense::hover());
-    ui.painter()
-        .rect_filled(rect, 0.0, components::colors::WHITE);
+    ui.painter().rect_filled(rect, 0.0, theme.components.row_bg);
     ui.painter().text(
         rect.left_center() + egui::vec2(48.0, 0.0),
         egui::Align2::LEFT_CENTER,
         &column.definition.label,
-        components::design::typography::body(),
-        components::colors::gray::_900,
+        components::design::type_scale::BODY.font_id(ui.ctx()),
+        theme.text.primary,
     );
 }
 
@@ -119,24 +117,22 @@ pub(super) fn show_custom_column_form(
     key: &ResourceTableKey,
     columns: &mut Vec<EditableColumn>,
 ) -> bool {
+    let theme = ui.tokens();
     let mut close = false;
-    ui.add_space(components::design::spacing::XL);
-    egui::Frame::new()
-        .fill(components::colors::gray::_50)
-        .stroke(components::design::surface::muted_border())
-        .corner_radius(components::design::radius::surface())
-        .inner_margin(egui::Margin::same(components::design::spacing::LG as i8))
-        .show(ui, |ui| {
+    ui.add_space(components::design::space::S24);
+    WorkspaceCard::new()
+        .margin(components::design::space::S16 as i8)
+        .show_inner(ui, |ui| {
             ui.label(
                 egui::RichText::new(if draft.editing_id.is_some() {
                     "Edit custom column"
                 } else {
                     "Add custom column"
                 })
-                .font(components::design::typography::section_heading())
-                .color(components::colors::gray::_900),
+                .font(components::design::type_scale::TITLE.font_id(ui.ctx()))
+                .color(theme.text.primary),
             );
-            ui.add_space(components::design::spacing::MD);
+            ui.add_space(components::design::space::S12);
             if draft.editing_id.is_none() {
                 if let Some(selected) = super::super::metadata_fields::show_metadata_key_picker(
                     ui,
@@ -155,18 +151,18 @@ pub(super) fn show_custom_column_form(
                         metadata_source_label(draft.source),
                         draft.key
                     ))
-                    .font(components::design::typography::body())
-                    .color(components::colors::gray::_600),
+                    .font(components::design::type_scale::BODY.font_id(ui.ctx()))
+                    .color(theme.text.secondary),
                 );
             }
-            ui.add_space(components::design::spacing::MD);
+            ui.add_space(components::design::space::S12);
             labeled_text_edit(
                 ui,
                 "Column header",
                 &mut draft.label,
                 "For example: Application",
             );
-            ui.add_space(components::design::spacing::LG);
+            ui.add_space(components::design::space::S16);
             ui.horizontal(|ui| {
                 let duplicate = draft.editing_id.is_none()
                     && preferences.custom_columns(key).iter().any(|column| {
@@ -249,11 +245,11 @@ pub(super) fn show_custom_column_form(
                     .iter()
                     .any(|column| column.source == draft.source && column.key == draft.key.trim())
             {
-                ui.add_space(components::design::spacing::SM);
+                ui.add_space(components::design::space::S8);
                 ui.label(
                     egui::RichText::new("This metadata key is already a column.")
-                        .font(components::design::typography::body())
-                        .color(components::design::status::DANGER),
+                        .font(components::design::type_scale::BODY.font_id(ui.ctx()))
+                        .color(theme.danger.text),
                 );
             }
         });
@@ -261,10 +257,11 @@ pub(super) fn show_custom_column_form(
 }
 
 fn labeled_text_edit(ui: &mut egui::Ui, label: &str, value: &mut String, hint: &str) {
+    let theme = ui.tokens();
     ui.label(
         egui::RichText::new(label)
-            .font(components::design::typography::body())
-            .color(components::colors::gray::_700),
+            .font(components::design::type_scale::BODY.font_id(ui.ctx()))
+            .color(theme.text.secondary),
     );
     TailwindTextInput::new(value)
         .id_salt(("resource-table-custom-column-input", label))

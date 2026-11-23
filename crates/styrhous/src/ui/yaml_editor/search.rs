@@ -1,13 +1,10 @@
 use super::*;
 
-pub(super) fn toolbar_frame() -> egui::Frame {
+pub(super) fn toolbar_frame(theme: &Theme) -> egui::Frame {
     egui::Frame::new()
-        .fill(TOOLBAR_BACKGROUND)
-        .stroke(egui::Stroke::new(1.0, TABLE_BORDER))
-        .inner_margin(egui::Margin::symmetric(
-            spacing::XL as i8,
-            spacing::SM as i8,
-        ))
+        .fill(theme.surface.panel)
+        .stroke(stroke::divider(theme))
+        .inner_margin(egui::Margin::symmetric(space::S24 as i8, space::S8 as i8))
 }
 
 pub(super) fn show_search_controls(
@@ -29,6 +26,7 @@ pub(super) fn show_search_controls(
             )
         })
     });
+    let theme = ui.tokens();
     let invalid = search_matches.is_err();
     let response = ui
         .allocate_ui_with_layout(
@@ -53,13 +51,17 @@ pub(super) fn show_search_controls(
     let matches = search_matches.as_ref().ok();
     let match_count = matches.map_or(0, Vec::len);
 
-    ui.add_space(spacing::SM);
+    ui.add_space(space::S8);
     ui.label(
         egui::RichText::new(match_count_label(editor, match_count))
-            .font(typography::metadata())
-            .color(if invalid { status::DANGER } else { gray::_600 }),
+            .font(type_scale::META.font_id(ui.ctx()))
+            .color(if invalid {
+                theme.danger.text
+            } else {
+                theme.text.secondary
+            }),
     );
-    ui.add_space(spacing::XS);
+    ui.add_space(space::S4);
     let (previous_clicked, next_clicked) = ui
         .allocate_ui_with_layout(
             egui::vec2(
@@ -184,47 +186,47 @@ pub(super) fn resource_scope(editor: &YamlEditorWindowState) -> String {
 }
 
 pub(super) fn status_indicator(ui: &mut egui::Ui, color: egui::Color32, label: &str) {
+    let label_color = ui.tokens().text.secondary;
     ui.label(
         egui::RichText::new("●")
-            .font(typography::body())
+            .font(type_scale::BODY.font_id(ui.ctx()))
             .color(color),
     );
     ui.label(
         egui::RichText::new(label)
-            .font(typography::body())
-            .color(gray::_600),
+            .font(type_scale::BODY.font_id(ui.ctx()))
+            .color(label_color),
     );
 }
 
 pub(super) fn error_strip(ui: &mut egui::Ui, error: &str) {
+    let theme = ui.tokens();
     egui::Frame::new()
-        .fill(egui::Color32::from_rgb(69, 10, 10))
-        .stroke(egui::Stroke::new(1.0, status::DANGER))
-        .inner_margin(egui::Margin::symmetric(
-            spacing::LG as i8,
-            spacing::SM as i8,
-        ))
+        .fill(theme.danger.tint)
+        .stroke(stroke::hairline(theme.danger.outline))
+        .inner_margin(egui::Margin::symmetric(space::S16 as i8, space::S8 as i8))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             let response = ui.label(
                 egui::RichText::new(error)
-                    .font(typography::body())
-                    .color(egui::Color32::from_rgb(254, 202, 202)),
+                    .font(type_scale::BODY.font_id(ui.ctx()))
+                    .color(theme.danger.text_on_tint),
             );
             ui.ctx().accesskit_node_builder(response.id, |builder| {
                 builder.set_role(egui::accesskit::Role::Alert);
                 builder.set_label(error);
             });
         });
-    ui.add_space(spacing::SM);
+    ui.add_space(space::S8);
 }
 
 pub(super) fn editor_error(ui: &mut egui::Ui, error: &str) {
+    let color = ui.tokens().danger.text;
     ui.centered_and_justified(|ui| {
         ui.label(
             egui::RichText::new(error)
-                .font(typography::body())
-                .color(egui::Color32::from_rgb(254, 202, 202)),
+                .font(type_scale::BODY.font_id(ui.ctx()))
+                .color(color),
         );
     });
 }

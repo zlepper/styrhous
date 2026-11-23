@@ -5,7 +5,7 @@ use crate::log_store::{LogExportFilter, LogExportFormat, LogExportOptions, LogSt
 use crate::ui::save_file_dialog::{SaveFileAnswer, SaveFileChoice, SaveFileRequest};
 use crate::ui::state::OperationOutcome;
 use crate::ui::widgets::count_noun;
-use components::{ButtonSize, TailwindButton, checkbox_field, menu_frame};
+use components::{ButtonSize, TailwindButton, checkbox_field, popover_frame};
 use std::path::{Path, PathBuf};
 
 const POPOVER_WIDTH: f32 = 300.0;
@@ -222,21 +222,24 @@ impl PodLogWindowState {
     }
 }
 
-fn status_text(status: &LogExportStatus) -> Option<(String, egui::Color32)> {
+fn status_text(status: &LogExportStatus, theme: &Theme) -> Option<(String, egui::Color32)> {
     match status {
         LogExportStatus::ChoosingFile { .. } => None,
-        LogExportStatus::Writing { path, .. } => {
-            Some((format!("Exporting to {}…", file_name(path)), gray::_600))
-        }
+        LogExportStatus::Writing { path, .. } => Some((
+            format!("Exporting to {}…", file_name(path)),
+            theme.text.secondary,
+        )),
         LogExportStatus::Done { path, lines } => Some((
             format!(
                 "Exported {} to {}",
                 count_noun(*lines, "line"),
                 file_name(path)
             ),
-            gray::_600,
+            theme.text.secondary,
         )),
-        LogExportStatus::Failed(error) => Some((format!("Export failed: {error}"), status::DANGER)),
+        LogExportStatus::Failed(error) => {
+            Some((format!("Export failed: {error}"), theme.danger.text))
+        }
     }
 }
 
@@ -249,6 +252,7 @@ pub(super) fn show_export_controls(
 ) {
     // Asking again while a dialog is open is allowed (a dialog that never
     // returns must not lock exporting); only one file is written at a time.
+    let theme = ui.tokens();
     let writing = window.export.writing_export_id().is_some();
     // The same control style as the "Current"/"Previous" buttons in this row.
     let trigger = ui.add_enabled(!writing, egui::Button::new("Export…"));
@@ -270,54 +274,61 @@ pub(super) fn show_export_controls(
     let mut save = false;
     egui::Popup::menu(&trigger)
         .align(egui::RectAlign::BOTTOM_END)
-        .gap(spacing::XS)
+        .gap(space::S4)
         .width(POPOVER_WIDTH)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-        .frame(menu_frame().inner_margin(egui::Margin::same(spacing::LG as i8)))
+        .frame(popover_frame(&theme).inner_margin(egui::Margin::same(space::S16 as i8)))
         .show(|ui| {
-            ui.label(
-                egui::RichText::new("Export options")
-                    .font(typography::semibold(typography::BODY_SIZE))
-                    .color(gray::_900),
-            );
-            ui.add_space(spacing::XS);
-            ui.label(
-                egui::RichText::new("Saves the loaded lines from disk.")
-                    .font(typography::metadata())
-                    .color(gray::_500),
-            );
-            ui.add_space(spacing::MD);
-            let filter_available = window.export_filter().is_some();
-            let choices = &mut window.export.choices;
-            ui.add_enabled_ui(filter_available, |ui| {
-                checkbox_field(
-                    ui,
-                    &mut choices.only_matching,
-                    "Only lines matching the filter",
+            theme::scope(ui, ThemeScope::Popover, |ui| {
+                ui.label(
+                    egui::RichText::new("Export options")
+                        .font(type_scale::BODY_STRONG.font_id(ui.ctx()))
+                        .color(theme.text.primary),
                 );
-            });
-            let format = &mut choices.format;
-            checkbox_field(ui, &mut format.include_sources, "Include source labels");
-            checkbox_field(ui, &mut format.include_timestamps, "Include timestamps");
-            checkbox_field(ui, &mut format.keep_ansi, "Keep ANSI colour codes");
-            ui.add_space(spacing::MD);
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                save = TailwindButton::primary("Save…")
-                    .size(ButtonSize::Xs)
-                    .show(ui)
-                    .clicked();
-            });
+                ui.add_space(space::S4);
+                ui.label(
+                    egui::RichText::new("Saves the loaded lines from disk.")
+                        .font(type_scale::META.font_id(ui.ctx()))
+                        .color(theme.text.muted),
+                );
+                ui.add_space(space::S12);
+                let filter_available = window.export_filter().is_some();
+                let choices = &mut window.export.choices;
+                ui.add_enabled_ui(filter_available, |ui| {
+                    checkbox_field(
+                        ui,
+                        &mut choices.only_matching,
+                        "Only lines matching the filter",
+                    );
+                });
+                let format = &mut choices.format;
+                checkbox_field(ui, &mut format.include_sources, "Include source labels");
+                checkbox_field(ui, &mut format.include_timestamps, "Include timestamps");
+                checkbox_field(ui, &mut format.keep_ansi, "Keep ANSI colour codes");
+                ui.add_space(space::S12);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    save = TailwindButton::primary("Save…")
+                        .size(ButtonSize::Xs)
+                        .show(ui)
+                        .clicked();
+                });
+            })
         });
     if save {
         egui::Popup::close_id(ui.ctx(), popup_id);
         window.start_export();
     }
-    if let Some((text, color)) = window.export.status.as_ref().and_then(status_text) {
-        ui.add_space(spacing::SM);
+    if let Some((text, color)) = window
+        .export
+        .status
+        .as_ref()
+        .and_then(|status| status_text(status, &theme))
+    {
+        ui.add_space(space::S8);
         ui.add(
             egui::Label::new(
                 egui::RichText::new(text)
-                    .font(typography::body())
+                    .font(type_scale::BODY.font_id(ui.ctx()))
                     .color(color),
             )
             .truncate(),

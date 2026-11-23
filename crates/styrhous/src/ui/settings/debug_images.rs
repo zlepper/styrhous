@@ -35,6 +35,7 @@ pub(super) fn show_debug_image_preset_row(
     drag_handle: &ReorderHandle,
     remove_preset: &mut Option<usize>,
 ) -> egui::Response {
+    let theme = ui.tokens();
     let image_column_width = debug_image_column_width(table_width);
     let original_item_spacing = ui.spacing().item_spacing;
     ui.spacing_mut().item_spacing.x = 0.0;
@@ -51,7 +52,7 @@ pub(super) fn show_debug_image_preset_row(
                             .max_rect(handle_rect)
                             .layout(egui::Layout::left_to_right(egui::Align::Center)),
                     );
-                    icons::bars_3(&mut handle_ui, 16.0, gray::_500);
+                    icons::bars_3(&mut handle_ui, 16.0, theme.text.muted);
                     let response = ui
                         .interact(
                             handle_rect,
@@ -111,7 +112,7 @@ pub(super) fn show_debug_image_preset_row(
                     if TailwindButton::icon(
                         icons::trash_icon()
                             .fit_to_exact_size(egui::Vec2::splat(16.0))
-                            .tint(status::DANGER),
+                            .tint(theme.danger.text),
                     )
                     .variant(ButtonVariant::Secondary)
                     .size(ButtonSize::Sm)
@@ -136,6 +137,7 @@ pub(super) fn show_debug_image_preset_preview_row(
     table_width: f32,
     preset: &DebugImagePreset,
 ) {
+    let theme = ui.tokens();
     let image_column_width = debug_image_column_width(table_width);
     let original_item_spacing = ui.spacing().item_spacing;
     ui.spacing_mut().item_spacing.x = 0.0;
@@ -144,7 +146,7 @@ pub(super) fn show_debug_image_preset_preview_row(
         egui::Layout::left_to_right(egui::Align::Center),
         |ui| {
             show_debug_image_table_cell(ui, DEBUG_IMAGE_REORDER_COLUMN_WIDTH, |ui| {
-                icons::bars_3(ui, 16.0, gray::_500);
+                icons::bars_3(ui, 16.0, theme.text.muted);
             });
             show_debug_image_table_cell(ui, DEBUG_IMAGE_NAME_COLUMN_WIDTH, |ui| {
                 show_debug_image_preview_text_input(ui, &preset.name);
@@ -164,55 +166,70 @@ pub(super) fn show_debug_image_preset_preview_row(
 }
 
 pub(super) fn show_debug_image_preview_text_input(ui: &mut egui::Ui, value: &str) {
+    let theme = ui.tokens();
     let (rect, _) =
         ui.allocate_exact_size(egui::vec2(ui.available_width(), 21.0), egui::Sense::hover());
-    ui.painter().rect_filled(rect, radius::control(), WHITE);
+    ui.painter().rect_filled(
+        rect,
+        egui::CornerRadius::same(radius::KEY),
+        theme.components.field_bg,
+    );
     ui.painter().rect_stroke(
         rect,
-        radius::control(),
-        surface::control_border(),
+        egui::CornerRadius::same(radius::KEY),
+        stroke::control(&theme),
         egui::StrokeKind::Inside,
     );
     ui.painter().text(
         rect.left_center() + egui::vec2(4.0, 0.0),
         egui::Align2::LEFT_CENTER,
         value,
-        typography::body(),
-        gray::_800,
+        type_scale::BODY.font_id(ui.ctx()),
+        theme.text.primary,
     );
 }
 
 pub(super) fn show_debug_image_preview_combobox(ui: &mut egui::Ui, label: &str) {
+    let theme = ui.tokens();
     let (rect, _) = ui.allocate_exact_size(egui::vec2(150.0, 32.0), egui::Sense::hover());
-    ui.painter().rect_filled(rect, radius::control(), WHITE);
+    ui.painter().rect_filled(
+        rect,
+        egui::CornerRadius::same(radius::KEY),
+        theme.components.field_bg,
+    );
     ui.painter().rect_stroke(
         rect,
-        radius::control(),
-        surface::control_border(),
+        egui::CornerRadius::same(radius::KEY),
+        stroke::control(&theme),
         egui::StrokeKind::Inside,
     );
     ui.painter().text(
-        rect.left_center() + egui::vec2(spacing::MD, 0.0),
+        rect.left_center() + egui::vec2(space::S12, 0.0),
         egui::Align2::LEFT_CENTER,
         label,
-        typography::metadata(),
-        gray::_800,
+        type_scale::META.font_id(ui.ctx()),
+        theme.text.primary,
     );
     let icon_rect = egui::Rect::from_center_size(
-        rect.right_center() - egui::vec2(spacing::MD, 0.0),
+        rect.right_center() - egui::vec2(space::S12, 0.0),
         egui::Vec2::splat(16.0),
     );
     let mut icon_ui = ui.new_child(egui::UiBuilder::new().max_rect(icon_rect));
-    icons::chevron_down(&mut icon_ui, 16.0, gray::_400);
+    icons::chevron_down(&mut icon_ui, 16.0, theme.text.muted);
 }
 
 pub(super) fn show_debug_image_preview_remove_button(ui: &mut egui::Ui) {
+    let theme = ui.tokens();
     let (rect, _) = ui.allocate_exact_size(egui::Vec2::splat(32.0), egui::Sense::hover());
-    ui.painter().rect_filled(rect, radius::control(), WHITE);
+    ui.painter().rect_filled(
+        rect,
+        egui::CornerRadius::same(radius::KEY),
+        theme.components.field_bg,
+    );
     ui.painter().rect_stroke(
         rect,
-        radius::control(),
-        surface::control_border(),
+        egui::CornerRadius::same(radius::KEY),
+        stroke::control(&theme),
         egui::StrokeKind::Inside,
     );
     let icon_rect = egui::Rect::from_center_size(rect.center(), egui::Vec2::splat(16.0));
@@ -220,7 +237,7 @@ pub(super) fn show_debug_image_preview_remove_button(ui: &mut egui::Ui) {
     icon_ui.add(
         icons::trash_icon()
             .fit_to_exact_size(egui::Vec2::splat(16.0))
-            .tint(status::DANGER),
+            .tint(theme.danger.text),
     );
 }
 
@@ -234,26 +251,24 @@ pub(super) fn debug_image_column_width(table_width: f32) -> f32 {
 }
 
 pub(super) fn show_debug_image_table_header_cell(ui: &mut egui::Ui, width: f32, label: &str) {
+    let theme = ui.tokens();
     let (rect, _) = ui.allocate_exact_size(
         egui::vec2(width, DEBUG_IMAGE_TABLE_HEADER_HEIGHT),
         egui::Sense::hover(),
     );
-    ui.painter().rect_filled(rect, 0.0, TABLE_HEADER_BACKGROUND);
-    ui.painter().hline(
-        rect.x_range(),
-        rect.bottom(),
-        egui::Stroke::new(1.0, TABLE_BORDER),
-    );
+    ui.painter().rect_filled(rect, 0.0, theme.surface.panel);
+    ui.painter()
+        .hline(rect.x_range(), rect.bottom(), stroke::divider(&theme));
     let mut cell_ui = ui.new_child(
         egui::UiBuilder::new()
             .max_rect(rect)
             .layout(egui::Layout::left_to_right(egui::Align::Center)),
     );
-    cell_ui.add_space(spacing::LG);
+    cell_ui.add_space(space::S16);
     cell_ui.label(
         egui::RichText::new(label)
-            .font(typography::body())
-            .color(gray::_900)
+            .font(type_scale::BODY.font_id(ui.ctx()))
+            .color(theme.text.primary)
             .strong(),
     );
 }
@@ -267,17 +282,15 @@ pub(super) fn show_debug_image_table_cell(
         egui::vec2(width, DEBUG_IMAGE_TABLE_ROW_HEIGHT),
         egui::Sense::hover(),
     );
-    ui.painter().rect_filled(rect, 0.0, CONTENT_BACKGROUND);
-    ui.painter().hline(
-        rect.x_range(),
-        rect.bottom(),
-        egui::Stroke::new(1.0, TABLE_BORDER),
-    );
+    let theme = ui.tokens();
+    ui.painter().rect_filled(rect, 0.0, theme.components.row_bg);
+    ui.painter()
+        .hline(rect.x_range(), rect.bottom(), stroke::divider(&theme));
     let mut cell_ui = ui.new_child(
         egui::UiBuilder::new()
             .max_rect(rect)
             .layout(egui::Layout::left_to_right(egui::Align::Center)),
     );
-    cell_ui.add_space(spacing::LG);
+    cell_ui.add_space(space::S16);
     content(&mut cell_ui);
 }

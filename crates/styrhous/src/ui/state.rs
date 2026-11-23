@@ -61,6 +61,9 @@ pub(crate) struct UiState {
     pub(super) api_discovery_cache: PersistedApiDiscovery,
     pub(super) resource_navigation_expansion: ResourceNavigationExpansion,
     pub(super) next_operation_toast_sequence: u64,
+    /// Toasts about the application rather than one cluster, such as an
+    /// invalid theme file.
+    pub(super) application_toasts: Vec<TransientOperationToast>,
     pub(super) next_scale_request_id: u64,
     pub(super) awaited_scale_lookup: Option<AwaitedScaleLookup>,
     pub(super) managed_cluster_discovery: ManagedClusterDiscoveryState,

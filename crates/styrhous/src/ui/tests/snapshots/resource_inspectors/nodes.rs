@@ -354,7 +354,7 @@ fn node_inspector_lists_cross_namespace_pods_in_the_shared_pod_table() {
                         STATUS_COLUMN.into(),
                         CellValue::Status {
                             label: "Running".into(),
-                            tone: StatusTone::Success,
+                            tone: Tone::Success,
                         },
                     ),
                     (RESTARTS_COLUMN.into(), CellValue::Number(0)),

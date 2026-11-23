@@ -19,10 +19,11 @@ impl GlobalBladeContent for LicenseSettingsBlade {
         _layer: components::BladeLayer,
         _context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
+        let theme = ui.tokens();
         ui.label(
             egui::RichText::new("License & account")
-                .font(typography::page_title())
-                .color(gray::_900),
+                .font(type_scale::HEADING.font_id(ui.ctx()))
+                .color(theme.text.primary),
         );
         GlobalBladeRenderResult::default()
     }
@@ -33,6 +34,7 @@ impl GlobalBladeContent for LicenseSettingsBlade {
         _layer: components::BladeLayer,
         context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
+        let theme = ui.tokens();
         if !self.initialized {
             let settings = context.licensing().settings().clone();
             self.custom_server = matches!(settings.server, LicenseServer::Custom(_));
@@ -55,51 +57,51 @@ impl GlobalBladeContent for LicenseSettingsBlade {
         };
 
         let headline_color = if status.shows_warning() {
-            status::WARNING_TEXT
+            theme.warning.text
         } else if matches!(status, LicenseStatus::Licensed(_)) {
-            status::SUCCESS
+            theme.success.text
         } else {
-            gray::_700
+            theme.text.secondary
         };
         ui.label(
             egui::RichText::new(status.summary())
-                .font(typography::body())
+                .font(type_scale::BODY.font_id(ui.ctx()))
                 .color(headline_color),
         );
         if let Some(note) = status.free_use_note() {
-            ui.add_space(spacing::SM);
+            ui.add_space(space::S8);
             ui.label(
                 egui::RichText::new(note)
-                    .font(typography::body())
-                    .color(gray::_500),
+                    .font(type_scale::BODY.font_id(ui.ctx()))
+                    .color(theme.text.muted),
             );
         }
         if let Some(lease) = status.lease() {
-            ui.add_space(spacing::SM);
+            ui.add_space(space::S8);
             ui.label(format!("Available offline until: {}", lease.expiry_label()));
         }
         if keychain_warning {
-            ui.add_space(spacing::SM);
+            ui.add_space(space::S8);
             ui.label(
                 egui::RichText::new(
                     "Secure credential storage is unavailable. This sign-in lasts only for this session.",
                 )
-                .color(status::WARNING_TEXT),
+                .color(theme.warning.text),
             );
         }
 
-        ui.add_space(spacing::LG);
+        ui.add_space(space::S16);
         show_account_actions(ui, context, &status, account_url);
 
-        ui.add_space(spacing::XL);
+        ui.add_space(space::S24);
         ui.separator();
-        ui.add_space(spacing::LG);
+        ui.add_space(space::S16);
         ui.label(
             egui::RichText::new("INSTALLATION")
-                .font(typography::semibold(typography::BODY_SIZE))
-                .color(gray::_500),
+                .font(type_scale::BODY_STRONG.font_id(ui.ctx()))
+                .color(theme.text.muted),
         );
-        ui.add_space(spacing::SM);
+        ui.add_space(space::S8);
         ui.label("Device name");
         TailwindTextInput::new(&mut self.display_name)
             .id_salt("license-display-name")
@@ -115,14 +117,14 @@ impl GlobalBladeContent for LicenseSettingsBlade {
             }
         }
 
-        ui.add_space(spacing::LG);
+        ui.add_space(space::S16);
         if let Some(error) = &self.name_error {
-            ui.label(egui::RichText::new(error).color(status::DANGER));
+            ui.label(egui::RichText::new(error).color(theme.danger.text));
         }
         egui::CollapsingHeader::new("Advanced")
             .default_open(matches!(status, LicenseStatus::Unconfigured))
             .show(ui, |ui| {
-                ui.add_space(spacing::LG);
+                ui.add_space(space::S16);
                 ui.label("License server");
                 ui.radio_value(&mut self.custom_server, false, "Styrhous cloud");
                 ui.radio_value(&mut self.custom_server, true, "Self-hosted server");
@@ -165,12 +167,12 @@ impl GlobalBladeContent for LicenseSettingsBlade {
                     }
                 }
                 if let Some(pending_server) = self.pending_server_switch.clone() {
-                    ui.add_space(spacing::SM);
+                    ui.add_space(space::S8);
                     ui.label(
                 egui::RichText::new(
                     "Changing server signs out this installation and clears its cached lease.",
                 )
-                .color(status::WARNING_TEXT),
+                .color(theme.warning.text),
             );
                     ui.horizontal(|ui| {
                         if TailwindButton::danger("Confirm server change")
@@ -186,11 +188,11 @@ impl GlobalBladeContent for LicenseSettingsBlade {
                     });
                 }
                 if let Some(error) = &self.input_error {
-                    ui.label(egui::RichText::new(error).color(status::DANGER));
+                    ui.label(egui::RichText::new(error).color(theme.danger.text));
                 }
 
                 if let Some(lease) = status.lease() {
-                    ui.add_space(spacing::LG);
+                    ui.add_space(space::S16);
                     ui.label(format!(
                         "License details: {} ({})",
                         lease.state, lease.reason_code
@@ -207,20 +209,21 @@ fn show_account_actions(
     status: &LicenseStatus,
     account_url: Option<String>,
 ) {
+    let theme = ui.tokens();
     if let LicenseStatus::AwaitingApproval(authorization) = status {
         ui.label("Enter this code in your browser:");
-        ui.add_space(spacing::XS);
+        ui.add_space(space::S4);
         ui.label(
             egui::RichText::new(&authorization.user_code)
-                .font(egui::FontId::monospace(typography::PAGE_TITLE_SIZE))
-                .color(gray::_900),
+                .font(egui::FontId::monospace(type_scale::HEADING.size()))
+                .color(theme.text.primary),
         );
-        ui.add_space(spacing::XS);
+        ui.add_space(space::S4);
         ui.label(format!(
             "This request expires in {} minutes.",
             authorization.expires_in / 60
         ));
-        ui.add_space(spacing::LG);
+        ui.add_space(space::S16);
         ui.horizontal(|ui| {
             if TailwindButton::new("Open approval page").show(ui).clicked() {
                 ui.ctx().open_url(egui::OpenUrl::new_tab(
@@ -234,14 +237,14 @@ fn show_account_actions(
                 context.licensing().sign_out();
             }
         });
-        ui.add_space(spacing::SM);
+        ui.add_space(space::S8);
         ui.label(
             egui::RichText::new(format!(
                 "Approval server: {}",
                 authorization.verification_uri
             ))
-            .font(typography::metadata())
-            .color(gray::_500),
+            .font(type_scale::META.font_id(ui.ctx()))
+            .color(theme.text.muted),
         );
         return;
     }

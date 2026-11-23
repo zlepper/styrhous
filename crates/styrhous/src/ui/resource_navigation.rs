@@ -2,8 +2,8 @@ use super::state::UiState;
 use crate::api_resource::ApiResource;
 use crate::resource_catalog::CuratedNavigationEntry;
 use components::WideSidebar;
-use components::colors::{NAVIGATION_BACKGROUND, WHITE};
-use components::design::typography;
+use components::design::theme::ThemeExt;
+use components::design::type_scale;
 
 pub(super) fn show(ui: &mut egui::Ui, ui_state: &mut UiState) -> Option<ApiResource> {
     let selected_cluster_id = ui_state.selected_cluster?;
@@ -17,20 +17,21 @@ pub(super) fn show(ui: &mut egui::Ui, ui_state: &mut UiState) -> Option<ApiResou
             super::state::ClusterConnectionState::Failed(_)
         );
     let mut clicked_api_resource = None;
+    let nav = ui.tokens().nav;
 
     egui::Panel::left("api-selector")
         .exact_size(292.0)
         .resizable(false)
-        .frame(egui::Frame::NONE.fill(NAVIGATION_BACKGROUND))
+        .frame(egui::Frame::NONE.fill(nav.surface))
         .show(ui, |ui| {
-            WideSidebar::new().dark().show(ui, |sidebar| {
+            WideSidebar::new().show(ui, |sidebar| {
                 sidebar.ui_mut().add_space(23.0);
                 sidebar.ui_mut().horizontal(|ui| {
                     ui.add_space(24.0);
                     ui.label(
                         egui::RichText::new(&cluster_name)
-                            .font(typography::page_title())
-                            .color(WHITE),
+                            .font(type_scale::HEADING.font_id(ui.ctx()))
+                            .color(nav.text),
                     );
                 });
                 sidebar.ui_mut().add_space(17.0);

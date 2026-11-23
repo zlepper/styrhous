@@ -265,31 +265,33 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             .width(width)
             .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
             .show(|ui| {
-                ui.set_min_height(dropdown_height);
-                crate::scroll::vertical()
-                    .max_height(dropdown_height)
-                    .min_scrolled_height(dropdown_height)
-                    .show(ui, |ui| {
-                        let mut cb = ComboboxUi {
-                            ui,
-                            focused_index: state.focused_index,
-                            current_index: 0,
-                            popup_id,
-                            enter_pressed: keyboard.enter_pressed,
-                            scroll_to_focused,
-                            item_height,
-                        };
+                theme::scope(ui, ThemeScope::Popover, |ui| {
+                    ui.set_min_height(dropdown_height);
+                    crate::scroll::vertical()
+                        .max_height(dropdown_height)
+                        .min_scrolled_height(dropdown_height)
+                        .show(ui, |ui| {
+                            let mut cb = ComboboxUi {
+                                ui,
+                                focused_index: state.focused_index,
+                                current_index: 0,
+                                popup_id,
+                                enter_pressed: keyboard.enter_pressed,
+                                scroll_to_focused,
+                                item_height,
+                            };
 
-                        if let Some(all_selected) = select_all.filter(|_| select_all_visible)
-                            && cb.select_all_item(all_selected).clicked()
-                        {
-                            select_all_clicked = true;
-                        }
+                            if let Some(all_selected) = select_all.filter(|_| select_all_visible)
+                                && cb.select_all_item(all_selected).clicked()
+                            {
+                                select_all_clicked = true;
+                            }
 
-                        for (_, item) in &filtered_items {
-                            render(&mut cb, item);
-                        }
-                    });
+                            for (_, item) in &filtered_items {
+                                render(&mut cb, item);
+                            }
+                        });
+                })
             })
         {
             ui.ctx()
@@ -328,7 +330,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             selected_status,
             size,
         } = input;
-        let corner_radius = radius::control();
+        let corner_radius = egui::CornerRadius::same(radius::KEY);
         let (rect, response) =
             ui.allocate_exact_size(Vec2::new(width, size.input_height()), Sense::click());
         let response = response.with_pointing_hand();
@@ -336,17 +338,22 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             || ui.memory(|memory| memory.has_focus(response.id.with("input")))
             || is_open;
 
+        let tokens = ui.tokens();
         if ui.is_rect_visible(rect) {
-            ui.painter().rect_filled(rect, corner_radius, WHITE);
-            ui.painter().rect_stroke(
-                rect,
-                corner_radius,
-                Stroke::new(
-                    if has_focus { 2.0 } else { 1.0 },
-                    if has_focus { indigo::_500 } else { gray::_300 },
-                ),
-                StrokeKind::Inside,
-            );
+            let fill = if response.hovered() && !has_focus {
+                tokens.components.field_bg_hover
+            } else {
+                tokens.components.field_bg
+            };
+            ui.painter().rect_filled(rect, corner_radius, fill);
+            if has_focus {
+                ui.painter().rect_stroke(
+                    rect,
+                    corner_radius,
+                    Stroke::new(2.0, tokens.accent.fill),
+                    StrokeKind::Inside,
+                );
+            }
 
             let icon_rect = Rect::from_center_size(
                 rect.right_center() - Vec2::new(size.icon_size() / 2.0 + 8.0, 0.0),
@@ -355,7 +362,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             let mut icon_ui = ui.new_child(egui::UiBuilder::new().max_rect(icon_rect).layout(
                 egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
             ));
-            icons::chevron_down(&mut icon_ui, size.icon_size(), gray::_400);
+            icons::chevron_down(&mut icon_ui, size.icon_size(), tokens.text.muted);
         }
 
         let input_rect = Rect::from_min_max(
@@ -369,18 +376,24 @@ impl<F> TailwindCombobox<WithFilter<F>> {
                     ui.painter().circle_filled(
                         input_rect.left_center() + Vec2::new(5.0, 0.0),
                         5.0,
-                        if is_active { SUCCESS } else { gray::_200 },
+                        status_marker_color(&tokens, is_active),
                     );
                 }
                 let text_pos = input_rect.left_center()
                     + Vec2::new(if selected_status.is_some() { 20.0 } else { 0.0 }, 0.0);
-                let galley =
-                    layout_truncated_text(ui, text, size.font(), gray::_900, input_rect.width());
+                let text_color = tokens.text.primary;
+                let galley = layout_truncated_text(
+                    ui,
+                    text,
+                    size.font(ui.ctx()),
+                    text_color,
+                    input_rect.width(),
+                );
                 let is_truncated = galley.elided;
                 ui.painter().galley(
                     text_pos - Vec2::new(0.0, galley.size().y / 2.0),
                     galley,
-                    gray::_900,
+                    text_color,
                 );
                 return if is_truncated {
                     response.on_hover_text(text)
@@ -393,8 +406,8 @@ impl<F> TailwindCombobox<WithFilter<F>> {
                     input_rect.left_center(),
                     Align2::LEFT_CENTER,
                     placeholder,
-                    size.font(),
-                    gray::_400,
+                    size.font(ui.ctx()),
+                    tokens.text.muted,
                 );
             }
             return response;
@@ -411,7 +424,7 @@ impl<F> TailwindCombobox<WithFilter<F>> {
             .vertical_align(egui::Align::Center)
             .id(response.id.with("input"));
         if matches!(size, ComboboxSize::Compact) {
-            text_edit = text_edit.font(size.font());
+            text_edit = text_edit.font(size.font(ui.ctx()));
         }
         if let Some(placeholder) = placeholder {
             text_edit = text_edit.hint_text(placeholder);

@@ -81,15 +81,15 @@ pub(super) fn compact_line_count(lines: usize) -> String {
     }
 }
 
-pub(super) fn status_color(window: &PodLogWindowState) -> egui::Color32 {
+/// The tone of the window's status dot.
+pub(super) fn status_tone(window: &PodLogWindowState) -> Tone {
     if all_sources_are_reconnecting(window) {
-        return status::WARNING;
+        return Tone::Warning;
     }
     match &window.status {
-        PodLogStatus::Connecting | PodLogStatus::Loading => gray::_400,
-        PodLogStatus::Following => SUCCESS,
-        PodLogStatus::Finished => gray::_400,
-        PodLogStatus::Failed(_) => status::DANGER,
+        PodLogStatus::Connecting | PodLogStatus::Loading | PodLogStatus::Finished => Tone::Neutral,
+        PodLogStatus::Following => Tone::Success,
+        PodLogStatus::Failed(_) => Tone::Danger,
     }
 }
 

@@ -45,24 +45,15 @@ impl TailwindTable {
                 // Data column headers
                 for (_, col) in &visible_columns {
                     header.col(|ui| {
-                        let rect = ui.max_rect();
-                        ui.painter().rect_filled(rect, 0.0, HEADER_BG);
                         ui.horizontal(|ui| {
                             ui.add_space(CELL_PADDING_X);
-                            ui.label(
-                                egui::RichText::new(&col.header)
-                                    .font(typography::body())
-                                    .color(gray::_900)
-                                    .strong(),
-                            );
+                            header_label(ui, &col.header);
                         });
                     });
                 }
 
                 // Settings column header (gear icon placeholder)
                 header.col(|ui| {
-                    let rect = ui.max_rect();
-                    ui.painter().rect_filled(rect, 0.0, HEADER_BG);
                     ui.centered_and_justified(|ui| {
                         render_settings_icon(ui);
                     });
@@ -72,13 +63,13 @@ impl TailwindTable {
                 body.rows(ROW_HEIGHT, items.len(), |mut row| {
                     let row_index = row.index();
                     let item = &items[row_index];
-                    let bg_color = WHITE;
 
                     // Visible data columns
                     for (original_index, _) in &visible_columns {
                         row.col(|ui| {
                             let rect = ui.max_rect();
-                            ui.painter().rect_filled(rect, 0.0, bg_color);
+                            ui.painter()
+                                .rect_filled(rect, 0.0, ui.tokens().components.row_bg);
                             ui.horizontal(|ui| {
                                 ui.add_space(CELL_PADDING_X);
                                 render_cell(ui, item, *original_index);
@@ -89,7 +80,8 @@ impl TailwindTable {
                     // Empty settings column for rows
                     row.col(|ui| {
                         let rect = ui.max_rect();
-                        ui.painter().rect_filled(rect, 0.0, bg_color);
+                        ui.painter()
+                            .rect_filled(rect, 0.0, ui.tokens().components.row_bg);
                     });
                 });
             });
@@ -104,21 +96,23 @@ impl TailwindTable {
 
 /// Render a settings/menu icon using SVG
 fn render_settings_icon(ui: &mut Ui) -> egui::Response {
-    icons::bars_3(ui, 16.0, gray::_500)
+    let color = ui.tokens().text.muted;
+    icons::bars_3(ui, 16.0, color)
 }
 
 /// Render sort indicator using SVG icons
 pub(super) fn render_sort_indicator(ui: &mut Ui, direction: Option<SortDirection>) {
+    let tokens = ui.tokens();
     match direction {
         Some(SortDirection::Ascending) => {
-            icons::chevron_up(ui, SORT_ICON_SIZE, gray::_700);
+            icons::chevron_up(ui, SORT_ICON_SIZE, tokens.accent.text);
         }
         Some(SortDirection::Descending) => {
-            icons::chevron_down(ui, SORT_ICON_SIZE, gray::_700);
+            icons::chevron_down(ui, SORT_ICON_SIZE, tokens.accent.text);
         }
         None => {
             // Show subtle unsorted indicator - just use a lighter chevron down
-            icons::chevron_down(ui, SORT_ICON_SIZE, gray::_300);
+            icons::chevron_down(ui, SORT_ICON_SIZE, tokens.text.disabled);
         }
     }
 }

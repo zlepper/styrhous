@@ -1,21 +1,18 @@
 //! A compact, Tailwind-inspired action menu for table rows and other dense UI.
 
 use egui::{
-    Button, Color32, Frame, Image, InnerResponse, Margin, Popup, PopupCloseBehavior, Response,
-    SetOpenCommand, Shadow, Stroke, Ui, Vec2,
+    Button, Color32, Image, InnerResponse, Popup, PopupCloseBehavior, Response, SetOpenCommand,
+    Stroke, Ui, Vec2,
 };
 
-use crate::design::{radius, spacing, status, typography};
-use crate::{
-    ButtonSize, ButtonVariant, PointingHand, TailwindButton,
-    colors::{BLACK, WHITE, gray},
-    icons,
-};
+use crate::design::theme::{self, ThemeExt, ThemeScope};
+use crate::design::{radius, space, stroke, type_scale};
+use crate::frames::popover_frame;
+use crate::{ButtonSize, ButtonVariant, PointingHand, TailwindButton, icons};
 
 const MENU_WIDTH: f32 = 192.0;
 const MENU_ITEM_HEIGHT: f32 = 32.0;
-const MENU_ITEM_PADDING: Vec2 = Vec2::new(spacing::MD, spacing::SM);
-const DESTRUCTIVE: Color32 = status::DANGER;
+const MENU_ITEM_PADDING: Vec2 = Vec2::new(space::S12, space::S8);
 
 /// A compact action-menu trigger styled as a secondary icon-only button.
 pub struct MoreButton {
@@ -40,7 +37,7 @@ impl MoreButton {
         let trigger = TailwindButton::icon(
             icons::ellipsis_horizontal_icon()
                 .fit_to_exact_size(Vec2::splat(16.0))
-                .tint(gray::_700),
+                .tint(ui.tokens().text.primary),
         )
         .variant(ButtonVariant::Secondary)
         .size(ButtonSize::Md)
@@ -52,10 +49,12 @@ impl MoreButton {
             .align(egui::RectAlign::BOTTOM_END)
             .width(MENU_WIDTH)
             .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
-            .frame(menu_frame())
+            .frame(popover_frame(&ui.tokens()))
             .show(|ui| {
-                let mut menu = MoreMenu { ui, popup_id };
-                add_contents(&mut menu);
+                theme::scope(ui, ThemeScope::Popover, |ui| {
+                    let mut menu = MoreMenu { ui, popup_id };
+                    add_contents(&mut menu);
+                })
             })
         {
             ui.ctx()
@@ -85,10 +84,12 @@ impl MoreButton {
             .gap(4.0)
             .width(MENU_WIDTH)
             .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
-            .frame(menu_frame())
+            .frame(popover_frame(&response.ctx.tokens()))
             .show(|ui| {
-                let mut menu = MoreMenu { ui, popup_id };
-                add_contents(&mut menu);
+                theme::scope(ui, ThemeScope::Popover, |ui| {
+                    let mut menu = MoreMenu { ui, popup_id };
+                    add_contents(&mut menu);
+                })
             })
         {
             response
@@ -109,12 +110,14 @@ pub struct MoreMenu<'a> {
 impl MoreMenu<'_> {
     /// Add a standard action and return its response.
     pub fn action(&mut self, label: impl Into<String>) -> Response {
-        self.menu_button(label.into(), None, gray::_700)
+        let color = self.ui.tokens().text.primary;
+        self.menu_button(label.into(), None, color)
     }
 
     /// Add a standard action with a leading icon and return its response.
     pub fn action_with_icon(&mut self, label: impl Into<String>, icon: Image<'static>) -> Response {
-        self.menu_button(label.into(), Some(icon), gray::_700)
+        let color = self.ui.tokens().text.primary;
+        self.menu_button(label.into(), Some(icon), color)
     }
 
     /// Add a nested menu for actions that require a further choice.
@@ -124,13 +127,14 @@ impl MoreMenu<'_> {
         add_contents: impl FnOnce(&mut MoreMenu<'_>) -> R,
     ) -> InnerResponse<Option<R>> {
         let popup_id = self.popup_id;
-        self.with_menu_item_style(gray::_700, |ui| {
+        let color = self.ui.tokens().text.primary;
+        self.with_menu_item_style(color, |ui| {
             let label = egui::RichText::new(label.into())
-                .font(typography::body())
-                .color(gray::_700);
+                .font(type_scale::BODY.font_id(ui.ctx()))
+                .color(color);
             let button = Button::new(label)
                 .right_text(
-                    egui::RichText::new(egui::menu::SubMenuButton::RIGHT_ARROW).color(gray::_700),
+                    egui::RichText::new(egui::menu::SubMenuButton::RIGHT_ARROW).color(color),
                 )
                 .min_size(Vec2::new(MENU_WIDTH, MENU_ITEM_HEIGHT));
             let (response, inner) = egui::menu::SubMenuButton::from_button(button).ui(ui, |ui| {
@@ -151,7 +155,8 @@ impl MoreMenu<'_> {
 
     /// Add a destructive action and return its response.
     pub fn destructive_action(&mut self, label: impl Into<String>) -> Response {
-        self.menu_button(label.into(), None, DESTRUCTIVE)
+        let color = self.ui.tokens().danger.text;
+        self.menu_button(label.into(), None, color)
     }
 
     /// Add a destructive action with a leading icon and return its response.
@@ -160,7 +165,8 @@ impl MoreMenu<'_> {
         label: impl Into<String>,
         icon: Image<'static>,
     ) -> Response {
-        self.menu_button(label.into(), Some(icon), DESTRUCTIVE)
+        let color = self.ui.tokens().danger.text;
+        self.menu_button(label.into(), Some(icon), color)
     }
 
     /// Add a horizontal rule between related action groups.
@@ -170,7 +176,7 @@ impl MoreMenu<'_> {
         let (_, rect) = self.ui.allocate_space(Vec2::new(width, 1.0));
         self.ui.painter().line_segment(
             [rect.left_center(), rect.right_center()],
-            Stroke::new(1.0, gray::_200),
+            stroke::divider(&self.ui.tokens()),
         );
         self.ui.add_space(3.0);
     }
@@ -183,7 +189,7 @@ impl MoreMenu<'_> {
     ) -> Response {
         let response = self.with_menu_item_style(color, |ui| {
             let text = egui::RichText::new(label)
-                .font(typography::body())
+                .font(type_scale::BODY.font_id(ui.ctx()))
                 .color(color);
             let button = match icon {
                 Some(icon) => Button::image_and_text(icon, text),
@@ -207,27 +213,20 @@ impl MoreMenu<'_> {
         let saved_widgets = self.ui.visuals().widgets.clone();
         let saved_padding = self.ui.spacing().button_padding;
 
-        let visuals = &mut self.ui.visuals_mut().widgets;
-        visuals.inactive.weak_bg_fill = WHITE;
-        visuals.inactive.bg_fill = WHITE;
-        visuals.inactive.bg_stroke = Stroke::NONE;
-        visuals.inactive.fg_stroke = Stroke::new(1.0, color);
-        visuals.inactive.corner_radius = radius::control();
-        visuals.hovered.weak_bg_fill = gray::_100;
-        visuals.hovered.bg_fill = gray::_100;
-        visuals.hovered.bg_stroke = Stroke::NONE;
-        visuals.hovered.fg_stroke = Stroke::new(1.0, color);
-        visuals.hovered.corner_radius = radius::control();
-        visuals.active.weak_bg_fill = gray::_200;
-        visuals.active.bg_fill = gray::_200;
-        visuals.active.bg_stroke = Stroke::NONE;
-        visuals.active.fg_stroke = Stroke::new(1.0, color);
-        visuals.active.corner_radius = radius::control();
-        visuals.open.weak_bg_fill = gray::_100;
-        visuals.open.bg_fill = gray::_100;
-        visuals.open.bg_stroke = Stroke::NONE;
-        visuals.open.fg_stroke = Stroke::new(1.0, color);
-        visuals.open.corner_radius = radius::control();
+        let tokens = self.ui.tokens();
+        let widgets = &mut self.ui.visuals_mut().widgets;
+        for (visuals, fill) in [
+            (&mut widgets.inactive, Color32::TRANSPARENT),
+            (&mut widgets.hovered, tokens.item.highlight),
+            (&mut widgets.active, tokens.control.fill_active),
+            (&mut widgets.open, tokens.item.highlight),
+        ] {
+            visuals.weak_bg_fill = fill;
+            visuals.bg_fill = fill;
+            visuals.bg_stroke = Stroke::NONE;
+            visuals.fg_stroke = Stroke::new(1.0, color);
+            visuals.corner_radius = egui::CornerRadius::same(radius::KEY);
+        }
         self.ui.spacing_mut().button_padding = MENU_ITEM_PADDING;
 
         let response = add_contents(self.ui);
@@ -236,21 +235,6 @@ impl MoreMenu<'_> {
         self.ui.spacing_mut().button_padding = saved_padding;
         response
     }
-}
-
-/// The frame of menus and popovers anchored to a control.
-pub fn menu_frame() -> Frame {
-    Frame::new()
-        .fill(WHITE)
-        .stroke(Stroke::new(1.0, gray::_200))
-        .corner_radius(radius::surface())
-        .inner_margin(Margin::same(spacing::XS as i8))
-        .shadow(Shadow {
-            offset: [0, 2],
-            blur: 8,
-            spread: 0,
-            color: BLACK.gamma_multiply(0.12),
-        })
 }
 
 #[cfg(test)]

@@ -9,8 +9,8 @@ const INPUT_HEIGHT: f32 = 36.0;
 const ICON_SIZE: f32 = 16.0;
 const DROPDOWN_MAX_HEIGHT: f32 = 300.0;
 const DEFAULT_WIDTH: f32 = 256.0;
-const ITEM_PADDING_X: f32 = crate::design::spacing::MD;
-const INPUT_PADDING_X: f32 = crate::design::spacing::MD;
+const ITEM_PADDING_X: f32 = crate::design::space::S12;
+const INPUT_PADDING_X: f32 = crate::design::space::S12;
 const ICON_AREA_WIDTH: f32 = 36.0;
 const COMPACT_INPUT_HEIGHT: f32 = 32.0;
 
@@ -21,8 +21,8 @@ use egui::{
 use std::sync::Arc;
 
 use crate::PointingHand;
-use crate::colors::{SUCCESS, WHITE, gray, indigo};
-use crate::design::{radius, typography};
+use crate::design::theme::{self, Theme, ThemeExt, ThemeScope};
+use crate::design::{radius, type_scale};
 use crate::fuzzy::{fuzzy_match_score, normalize_for_search};
 use crate::icons;
 
@@ -36,6 +36,15 @@ fn layout_truncated_text(
     let mut job = egui::text::LayoutJob::simple_singleline(text.to_owned(), font_id, color);
     job.wrap = egui::text::TextWrapping::truncate_at_width(max_width.max(0.0));
     ui.fonts_mut(|fonts| fonts.layout_job(job))
+}
+
+/// The status dot beside an option or the selected value.
+fn status_marker_color(theme: &Theme, is_active: bool) -> Color32 {
+    if is_active {
+        theme.success.fill
+    } else {
+        theme.status.neutral
+    }
 }
 
 /// Internal state persisted across frames via egui memory.
@@ -214,25 +223,21 @@ impl<'a> ComboboxUi<'a> {
 
         let mut is_truncated = false;
         if self.ui.is_rect_visible(rect) {
-            let (background, text_color) = if is_focused {
-                (indigo::_600, WHITE)
+            let tokens = self.ui.tokens();
+            let text_color = tokens.text.primary;
+            let background = if is_focused {
+                tokens.item.highlight
             } else if response.hovered() {
-                (gray::_50, gray::_900)
+                tokens.surface.raised_hover
             } else {
-                (Color32::TRANSPARENT, gray::_900)
+                Color32::TRANSPARENT
             };
             if background != Color32::TRANSPARENT {
                 self.ui.painter().rect_filled(rect, 0.0, background);
             }
 
             if let Some(is_active) = status {
-                let marker_color = if is_focused {
-                    WHITE
-                } else if is_active {
-                    SUCCESS
-                } else {
-                    gray::_200
-                };
+                let marker_color = status_marker_color(&tokens, is_active);
                 self.ui.painter().circle_filled(
                     rect.left_center() + Vec2::new(ITEM_PADDING_X + 5.0, 0.0),
                     5.0,
@@ -247,9 +252,9 @@ impl<'a> ComboboxUi<'a> {
                 self.ui,
                 &label_text,
                 if is_selected {
-                    typography::semibold(typography::BODY_SIZE)
+                    type_scale::BODY_STRONG.font_id(self.ui.ctx())
                 } else {
-                    typography::body()
+                    type_scale::BODY.font_id(self.ui.ctx())
                 },
                 text_color,
                 text_width,
@@ -263,11 +268,11 @@ impl<'a> ComboboxUi<'a> {
                 text_color,
             );
             if let Some(detail) = detail {
-                let detail_color = if is_focused { WHITE } else { gray::_500 };
+                let detail_color = tokens.text.muted;
                 let detail_galley = layout_truncated_text(
                     self.ui,
                     detail,
-                    typography::metadata(),
+                    type_scale::META.font_id(self.ui.ctx()),
                     detail_color,
                     text_width,
                 );
@@ -281,7 +286,7 @@ impl<'a> ComboboxUi<'a> {
             }
 
             if is_selected {
-                let check_color = if is_focused { WHITE } else { indigo::_600 };
+                let check_color = tokens.accent.text;
                 let check_center = rect.right_center() - Vec2::new(22.0, 0.0);
                 crate::icons::paint_check_mark(
                     self.ui.painter(),
@@ -342,10 +347,10 @@ impl ComboboxSize {
         }
     }
 
-    fn font(self) -> FontId {
+    fn font(self, ctx: &egui::Context) -> FontId {
         match self {
-            Self::Default => typography::body(),
-            Self::Compact => typography::metadata(),
+            Self::Default => type_scale::BODY.font_id(ctx),
+            Self::Compact => type_scale::META.font_id(ctx),
         }
     }
 

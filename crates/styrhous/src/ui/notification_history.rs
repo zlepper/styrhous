@@ -1,10 +1,10 @@
 use super::global_blade::{GlobalBladeContent, GlobalBladeRenderContext, GlobalBladeRenderResult};
 use super::operation_outcome::show_status_tile;
 use super::state::OperationHistoryDisplayEntry;
-use components::BladeLayer;
-use components::colors::{WHITE, gray};
-use components::design::{radius, spacing, surface, typography};
-use egui::{Align, Frame, Margin};
+use components::design::theme::ThemeExt;
+use components::design::{space, type_scale};
+use components::{BladeLayer, WorkspaceCard};
+use egui::Align;
 
 const HISTORY_STATUS_TILE_SIZE: f32 = 64.0;
 const HISTORY_CARD_CONTENT_HEIGHT: f32 = 76.0;
@@ -24,10 +24,11 @@ impl GlobalBladeContent for NotificationHistoryBlade {
         _layer: BladeLayer,
         _context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
+        let theme = ui.tokens();
         ui.label(
             egui::RichText::new("Notifications")
-                .font(typography::page_title())
-                .color(gray::_900),
+                .font(type_scale::HEADING.font_id(ui.ctx()))
+                .color(theme.text.primary),
         );
         GlobalBladeRenderResult::default()
     }
@@ -38,33 +39,34 @@ impl GlobalBladeContent for NotificationHistoryBlade {
         _layer: BladeLayer,
         context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
+        let theme = ui.tokens();
         ui.label(
             egui::RichText::new("Recent resource operation outcomes from this session.")
-                .font(typography::body())
-                .color(gray::_600),
+                .font(type_scale::BODY.font_id(ui.ctx()))
+                .color(theme.text.secondary),
         );
-        ui.add_space(spacing::XL);
+        ui.add_space(space::S24);
         ui.separator();
-        ui.add_space(spacing::XL);
+        ui.add_space(space::S24);
         ui.label(
             egui::RichText::new("TODAY")
-                .font(typography::semibold(typography::BODY_SIZE))
-                .color(gray::_500),
+                .font(type_scale::BODY_STRONG.font_id(ui.ctx()))
+                .color(theme.text.muted),
         );
-        ui.add_space(spacing::MD);
+        ui.add_space(space::S12);
 
         let entries = context.operation_history_entries();
         if entries.is_empty() {
             ui.label(
                 egui::RichText::new("Resource operation outcomes will appear here.")
-                    .font(typography::body())
-                    .color(gray::_500),
+                    .font(type_scale::BODY.font_id(ui.ctx()))
+                    .color(theme.text.muted),
             );
         } else {
             for (index, entry) in entries.iter().enumerate() {
                 notification_card(ui, entry);
                 if index + 1 < entries.len() {
-                    ui.add_space(spacing::SM + 6.0);
+                    ui.add_space(space::S8 + 6.0);
                 }
             }
         }
@@ -74,12 +76,10 @@ impl GlobalBladeContent for NotificationHistoryBlade {
 
 fn notification_card(ui: &mut egui::Ui, display: &OperationHistoryDisplayEntry) {
     let entry = &display.entry;
-    Frame::new()
-        .fill(WHITE)
-        .stroke(surface::muted_border())
-        .corner_radius(radius::surface())
-        .inner_margin(Margin::same(spacing::LG as i8))
-        .show(ui, |ui| {
+    let theme = ui.tokens();
+    WorkspaceCard::new()
+        .margin(space::S16 as i8)
+        .show_inner(ui, |ui| {
             let content_rect = egui::Rect::from_min_size(
                 ui.cursor().min,
                 egui::vec2(ui.available_width(), HISTORY_CARD_CONTENT_HEIGHT),
@@ -91,7 +91,7 @@ fn notification_card(ui: &mut egui::Ui, display: &OperationHistoryDisplayEntry) 
                     .layout(egui::Layout::left_to_right(Align::Center)),
             );
             show_status_tile(&mut content_ui, entry.outcome, HISTORY_STATUS_TILE_SIZE);
-            content_ui.add_space(spacing::SM);
+            content_ui.add_space(space::S8);
             let text_rect = egui::Rect::from_min_size(
                 content_ui.cursor().min,
                 egui::vec2(content_ui.available_width(), HISTORY_CARD_CONTENT_HEIGHT),
@@ -113,11 +113,15 @@ fn notification_card(ui: &mut egui::Ui, display: &OperationHistoryDisplayEntry) 
             let metadata = format!("{} · Just now", display.cluster_name);
             let metadata_width = ui
                 .painter()
-                .layout_no_wrap(metadata.clone(), typography::metadata(), gray::_500)
+                .layout_no_wrap(
+                    metadata.clone(),
+                    type_scale::META.font_id(ui.ctx()),
+                    theme.text.muted,
+                )
                 .size()
                 .x
                 .min(header_width * 0.45);
-            let title_width = (header_width - metadata_width - spacing::SM).max(0.0);
+            let title_width = (header_width - metadata_width - space::S8).max(0.0);
             let title_response = ui
                 .allocate_ui_with_layout(
                     egui::vec2(header_width, 0.0),
@@ -130,8 +134,8 @@ fn notification_card(ui: &mut egui::Ui, display: &OperationHistoryDisplayEntry) 
                                 ui.add(
                                     egui::Label::new(
                                         egui::RichText::new(&entry.title)
-                                            .font(typography::semibold(typography::BODY_SIZE))
-                                            .color(gray::_900),
+                                            .font(type_scale::BODY_STRONG.font_id(ui.ctx()))
+                                            .color(theme.text.primary),
                                     )
                                     .truncate()
                                     .halign(Align::LEFT),
@@ -139,7 +143,7 @@ fn notification_card(ui: &mut egui::Ui, display: &OperationHistoryDisplayEntry) 
                                 .on_hover_text(&entry.title)
                             },
                         );
-                        ui.add_space(spacing::SM + metadata_width);
+                        ui.add_space(space::S8 + metadata_width);
                         title_response.inner
                     },
                 )
@@ -160,8 +164,8 @@ fn notification_card(ui: &mut egui::Ui, display: &OperationHistoryDisplayEntry) 
                 .add(
                     egui::Label::new(
                         egui::RichText::new(&metadata)
-                            .font(typography::metadata())
-                            .color(gray::_500),
+                            .font(type_scale::META.font_id(ui.ctx()))
+                            .color(theme.text.muted),
                     )
                     .truncate()
                     .halign(Align::RIGHT),
@@ -175,8 +179,8 @@ fn notification_card(ui: &mut egui::Ui, display: &OperationHistoryDisplayEntry) 
                     ui.add(
                         egui::Label::new(
                             egui::RichText::new(&entry.target)
-                                .font(typography::metadata())
-                                .color(gray::_500),
+                                .font(type_scale::META.font_id(ui.ctx()))
+                                .color(theme.text.muted),
                         )
                         .truncate()
                         .halign(Align::LEFT),
@@ -185,7 +189,7 @@ fn notification_card(ui: &mut egui::Ui, display: &OperationHistoryDisplayEntry) 
                 },
             );
             if let Some(details) = &entry.details {
-                ui.add_space(spacing::XS);
+                ui.add_space(space::S4);
                 let summary = details.lines().next().unwrap_or_default();
                 ui.allocate_ui_with_layout(
                     egui::vec2(ui.available_width(), 0.0),
@@ -194,8 +198,8 @@ fn notification_card(ui: &mut egui::Ui, display: &OperationHistoryDisplayEntry) 
                         ui.add(
                             egui::Label::new(
                                 egui::RichText::new(summary)
-                                    .font(typography::metadata())
-                                    .color(gray::_600),
+                                    .font(type_scale::META.font_id(ui.ctx()))
+                                    .color(theme.text.secondary),
                             )
                             .truncate()
                             .halign(Align::LEFT),

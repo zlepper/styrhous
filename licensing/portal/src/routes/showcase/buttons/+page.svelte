@@ -1,10 +1,10 @@
 <script lang="ts">
   import { buttonVariants } from '#lib/buttonStyles.js';
-  import arrowLeftIcon from '../../../../../../crates/components/src/icons/arrow-left.svg?url&no-inline';
-  import arrowRightIcon from '../../../../../../crates/components/src/icons/arrow-right.svg?url&no-inline';
-  import ellipsisIcon from '../../../../../../crates/components/src/icons/ellipsis-horizontal.svg?url&no-inline';
-  import pencilIcon from '../../../../../../crates/components/src/icons/pencil.svg?url&no-inline';
-  import trashIcon from '../../../../../../crates/components/src/icons/trash.svg?url&no-inline';
+  import arrowLeftIcon from '../../../icons/arrow-left.svg?url&no-inline';
+  import arrowRightIcon from '../../../icons/arrow-right.svg?url&no-inline';
+  import ellipsisIcon from '../../../icons/ellipsis-horizontal.svg?url&no-inline';
+  import pencilIcon from '../../../icons/pencil.svg?url&no-inline';
+  import trashIcon from '../../../icons/trash.svg?url&no-inline';
   import '../showcase.css';
 
   const columns = [

@@ -12,15 +12,14 @@ use crate::worker::{
     ResourceYamlFetched, ResourceYamlValidated, ResourceYamlValidationCommandFailed,
     ResourceYamlValidationFailed, ValidateResourceYaml, WorkerCommandBox, WorkerResult,
 };
-use components::colors::{TABLE_BORDER, TOOLBAR_BACKGROUND, gray, indigo};
-use components::design::{search, spacing, status, surface, typography};
+use components::design::theme::{self, Theme, ThemeExt, ThemeScope, Tone, ToneColors};
+use components::design::{space, stroke, type_scale};
 use components::{
     ConfirmationDialog, ConfirmationDialogAction, ConfirmationDialogKind, PointingHand,
     SEARCH_NAVIGATION_BUTTON_SIZE, TailwindButton, TailwindSearchInput, icons,
     search_navigation_button,
 };
 use egui::text::{CCursor, CCursorRange};
-use egui_extras::syntax_highlighting::{CodeTheme, highlight};
 use std::collections::HashSet;
 use std::ops::Range;
 use std::time::{Duration, Instant};
@@ -312,6 +311,7 @@ impl Default for YamlEditorScrollMetrics {
 mod completion;
 mod diagnostics;
 mod editor;
+mod highlight;
 mod layout;
 #[path = "yaml_editor/search.rs"]
 mod search_controls;
@@ -320,6 +320,7 @@ mod window;
 use completion::*;
 use diagnostics::*;
 use editor::*;
+use highlight::*;
 use layout::*;
 use search_controls::*;
 use window::*;

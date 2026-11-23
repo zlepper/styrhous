@@ -20,12 +20,12 @@ macro_rules! test_icon {
     };
 }
 
-test_icon!(home_icon, "../icons/home.svg");
-test_icon!(users_icon, "../icons/users.svg");
-test_icon!(folder_icon, "../icons/folder.svg");
-test_icon!(calendar_icon, "../icons/calendar.svg");
-test_icon!(document_icon, "../icons/document.svg");
-test_icon!(chart_icon, "../icons/chart-bar.svg");
+test_icon!(home_icon, "../../assets/icons/home.svg");
+test_icon!(users_icon, "../../assets/icons/users.svg");
+test_icon!(folder_icon, "../../assets/icons/folder.svg");
+test_icon!(calendar_icon, "../../assets/icons/calendar.svg");
+test_icon!(document_icon, "../../assets/icons/document.svg");
+test_icon!(chart_icon, "../../assets/icons/chart-bar.svg");
 
 #[test]
 fn test_sidebar_wide_mode() {
@@ -81,7 +81,7 @@ fn test_sidebar_narrow_avatars() {
 #[test]
 fn test_sidebar_dark_mode() {
     let mut harness = create_harness(|ui| {
-        WideSidebar::new().dark().show(ui, |sidebar| {
+        WideSidebar::new().show(ui, |sidebar| {
             sidebar.section_header("Resources");
             sidebar.expandable("core", folder_icon(), true, |sidebar| {
                 sidebar.child_item("pods", true);
@@ -97,7 +97,7 @@ fn test_sidebar_dark_mode() {
 #[test]
 fn test_sidebar_primary_text_item() {
     let mut harness = create_harness(|ui| {
-        WideSidebar::new().dark().show(ui, |sidebar| {
+        WideSidebar::new().show(ui, |sidebar| {
             sidebar.primary_text_item("nodes", true);
             sidebar.primary_text_item("namespaces", false);
         });
@@ -177,7 +177,7 @@ fn test_sidebar_expandable_toggle() {
 #[test]
 fn test_sidebar_parent_hover_is_a_full_rounded_row() {
     let mut harness = create_harness(|ui| {
-        WideSidebar::new().dark().show(ui, |sidebar| {
+        WideSidebar::new().show(ui, |sidebar| {
             sidebar.expandable_text("Apps & Containers", true, |sidebar| {
                 sidebar.child_item("pods", false);
                 sidebar.child_item("deployments", false);
@@ -198,7 +198,7 @@ fn test_sidebar_open_resource_parent_keeps_the_closed_row_height() {
     let heights = Rc::new(RefCell::new((0.0, 0.0)));
     let heights_for_ui = heights.clone();
     let _harness = create_harness(move |ui| {
-        WideSidebar::new().dark().show(ui, |sidebar| {
+        WideSidebar::new().show(ui, |sidebar| {
             let open = sidebar.expandable_text("Open resources", true, |_sidebar| {});
             heights_for_ui.borrow_mut().0 = open.header.rect.height();
 
@@ -215,7 +215,7 @@ fn test_sidebar_open_resource_parent_keeps_the_closed_row_height() {
 #[test]
 fn test_sidebar_full_text_tooltips_only_appear_when_truncated() {
     let mut visible_label = create_harness(|ui| {
-        WideSidebar::new().dark().show(ui, |sidebar| {
+        WideSidebar::new().show(ui, |sidebar| {
             sidebar.child_item("pods", false);
         });
     });
@@ -226,7 +226,7 @@ fn test_sidebar_full_text_tooltips_only_appear_when_truncated() {
     );
 
     let mut truncated_label = create_harness(|ui| {
-        WideSidebar::new().width(160.0).dark().show(ui, |sidebar| {
+        WideSidebar::new().width(160.0).show(ui, |sidebar| {
             sidebar.child_item("very-long-resource-name-that-needs-truncation", false);
         });
     });
@@ -271,11 +271,9 @@ fn test_sidebar_child_item_click() {
 
 #[test]
 fn test_sidebar_loading_item_lines_up_with_section_labels() {
-    for (dark, snapshot) in [(false, "light"), (true, "dark")] {
+    {
         let mut harness = Harness::new_ui(move |ui| {
-            let sidebar = WideSidebar::new().width(240.0);
-            let sidebar = if dark { sidebar.dark() } else { sidebar };
-            sidebar.show(ui, |sidebar| {
+            WideSidebar::new().width(240.0).show(ui, |sidebar| {
                 sidebar.expandable_text("Section", false, |_| ());
                 sidebar.loading_item("Discovering API groups...");
             });
@@ -297,6 +295,6 @@ fn test_sidebar_loading_item_lines_up_with_section_labels() {
             label_left,
             "the text starts where section labels do"
         );
-        harness.ui_harness(format!("sidebars/test_sidebar_loading_item/{snapshot}").as_str());
+        harness.ui_harness("sidebars/test_sidebar_loading_item/dark");
     }
 }

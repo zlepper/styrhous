@@ -4,7 +4,6 @@ use crate::cluster_connection_manager::{
 };
 use crate::minimal_resource::format_age;
 use crate::ui::state::{DeploymentKey, DeploymentRevisionsLoad};
-use components::design::status;
 use components::{DetailColumn, DetailTableRow, InspectorDetails, TailwindCombobox};
 
 /// Wide enough for image references in the change table.
@@ -40,12 +39,13 @@ fn change_rows(changes: &[TemplateChange]) -> Vec<DetailTableRow<'_>> {
 }
 
 fn show_changes(ui: &mut egui::Ui, revision: &DeploymentRevision) {
+    let theme = ui.tokens();
     ui.label(
         egui::RichText::new("Changes")
-            .font(typography::semibold(typography::BODY_SIZE))
-            .color(gray::_900),
+            .font(type_scale::BODY_STRONG.font_id(ui.ctx()))
+            .color(theme.text.primary),
     );
-    ui.add_space(spacing::SM);
+    ui.add_space(space::S8);
     if revision.changes.is_empty() {
         ui.label(
             egui::RichText::new(if revision.other_changes {
@@ -53,8 +53,8 @@ fn show_changes(ui: &mut egui::Ui, revision: &DeploymentRevision) {
             } else {
                 "The pod template is identical to the current one."
             })
-            .font(typography::body())
-            .color(gray::_600),
+            .font(type_scale::BODY.font_id(ui.ctx()))
+            .color(theme.text.secondary),
         );
     } else {
         components::scroll::vertical()
@@ -74,11 +74,11 @@ fn show_changes(ui: &mut egui::Ui, revision: &DeploymentRevision) {
             });
     }
     if revision.other_changes {
-        ui.add_space(spacing::SM);
+        ui.add_space(space::S8);
         ui.label(
             egui::RichText::new("Other pod template fields differ as well.")
-                .font(typography::metadata())
-                .color(gray::_500),
+                .font(type_scale::META.font_id(ui.ctx()))
+                .color(theme.text.muted),
         );
     }
 }
@@ -89,6 +89,7 @@ fn show_revisions(
     history: &DeploymentRevisionHistory,
     selected_revision: &mut Option<i64>,
 ) {
+    let theme = ui.tokens();
     let candidates = history
         .revisions
         .iter()
@@ -100,8 +101,8 @@ fn show_revisions(
     else {
         ui.label(
             egui::RichText::new("This Deployment has no earlier revision to roll back to.")
-                .font(typography::body())
-                .color(gray::_600),
+                .font(type_scale::BODY.font_id(ui.ctx()))
+                .color(theme.text.secondary),
         );
         return;
     };
@@ -124,25 +125,26 @@ fn show_revisions(
                 *selected_revision = Some(*revision);
             }
         });
-    ui.add_space(spacing::MD);
+    ui.add_space(space::S12);
     show_changes(ui, selected);
 }
 
 fn show_body(ui: &mut egui::Ui, revisions: &mut DeploymentRevisionsLoad) {
-    ui.add_space(spacing::LG);
+    let theme = ui.tokens();
+    ui.add_space(space::S16);
     match revisions {
         DeploymentRevisionsLoad::Loading => {
             ui.label(
                 egui::RichText::new("Loading revisions…")
-                    .font(typography::body())
-                    .color(gray::_600),
+                    .font(type_scale::BODY.font_id(ui.ctx()))
+                    .color(theme.text.secondary),
             );
         }
         DeploymentRevisionsLoad::Failed(error) => {
             ui.label(
                 egui::RichText::new(format!("Couldn’t load revisions: {error}"))
-                    .font(typography::body())
-                    .color(status::DANGER),
+                    .font(type_scale::BODY.font_id(ui.ctx()))
+                    .color(theme.danger.text),
             );
         }
         DeploymentRevisionsLoad::Loaded { history, selected } => {

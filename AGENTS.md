@@ -65,6 +65,11 @@ primary comparison report and its generated artifacts. Use
 supplementary ImageMagick/Codex CLI visual review tooling; do not use their metrics
 as the acceptance criterion.
 
+Harbour oracles are rendered from the design HTML by `scripts/design-oracles/` (see its README);
+`scripts/design-oracles/compare.sh [ID…]` runs Kineprism for the boards in
+`docs/design-oracles/harbour/manifest.toml` (preferring a pending `.new.png`) and writes
+`target/design-oracles/scoreboard.md`. The `CAL` calibration board sets the pixel-match bar.
+
 Whenever an accessibility snapshot changes, take a look at it, and make sure things actually line up. For example:
 * Check that things that are "together" shares the same height or are centered properly with each other
 * Check that icons and text in boxes is actually positions the expected way in those boxes, usually vertically centered
@@ -108,12 +113,34 @@ Use a real `Worker` only when testing the Kind integration path.
 
 ## Project conventions
 
-- For egui UI work, use the existing Tailwind-inspired components and palette (`TailwindButton`,
-  `WorkspaceCard`, and `components::colors`) whenever they fit. Follow Tailwind UI surface,
-  spacing, typography, and control patterns rather than introducing one-off widget styling.
-- Use `components::design` for shared typography, spacing, radii, surfaces, and fixed semantic
-  status colors. Do not hardcode reusable visual constants in screens or components; keep only
-  feature-specific geometry (for example, animation or panel dimensions) local to its owner.
+- The UI follows the Harbour design (`docs/design-oracles/harbour/`). Reuse the components in
+  `crates/components` whenever they fit instead of one-off widget styling.
+- Colours come from theme roles: read them with `ui.tokens()` (`design::theme::ThemeExt`), never
+  from literals. Colour values exist only in `design::palette`; a guard test
+  (`crates/components/tests/colour_guard.rs`) rejects them anywhere else. Wrap blades, dialogs,
+  popovers, cards and sidebars in `theme::scope(ui, ThemeScope::…, …)` so overrides re-point.
+  Change the theme only with `theme::switch(ctx, theme)`, which updates egui's visuals too.
+  Use `Theme::tone(Tone::…)` for status colours, `design::stroke` for strokes, and
+  `raised_frame`/`overlay_frame`/`popover_frame`/`WorkspaceCard` for elevated surfaces and cards.
+  In tests that assert which role something paints with, install
+  `test_support::distinct_role_theme()` so roles that share a palette entry are told apart.
+- Set text with `design::type_scale` roles (`BODY`, `UI`, `META`, `CAPTION`, `TITLE`, `MONO`, …):
+  `role.text(ctx, …, color)` for widget text, `role.rich_text(ctx, …)` for single centred lines,
+  `role.galley(…)`/`role.label(…)` for CSS line boxes, and `role.label_on_baseline(…)` for rows
+  that mix roles on one baseline. Display sizes are `const` roles (`DIALOG_TITLE`, `CARD_TITLE`).
+  Fonts are Figtree, Bricolage Grotesque (one optical-size instance per display size), IBM Plex
+  Mono and IBM Plex Sans Condensed (`design::fonts`); never synthesise bold.
+  DejaVu Sans (Mono) is the fallback for other symbols and scripts; `tests/glyph_guard.rs` fails
+  on a literal character no family can draw.
+- Users can theme the app with an optional `theme.toml` in the eframe data directory
+  (`~/.local/share/styrhous/theme.toml` on Linux), polled once a second by
+  `ui/theme_file.rs`. It extends a built-in theme and overrides `[palette]` hex colours,
+  `[roles]`/`[terminal]` palette names and `[components]` role names; see `docs/theming.md`,
+  whose key reference is generated and checked by a test. The design's example is
+  `crates/components/src/design/theme/harbour-dark-hc.toml`.
+- Use `design::{space, radius, size, elevation}` for spacing, radii, dimensions and shadows. Do
+  not hardcode reusable visual constants in screens or components; keep only feature-specific
+  geometry (for example, animation or panel dimensions) local to its owner.
 - Prefer behavior-focused tests and real interactions; mock only external, uncontrollable
   processes.
 - Keep UI and Kubernetes operations separated through the worker commands/results.

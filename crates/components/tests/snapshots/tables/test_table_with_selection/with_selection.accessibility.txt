@@ -9,12 +9,12 @@ Window state=[focused] rect=<none>
               CheckBox name="Select all rows" state=[toggled=False] rect=(x=24.0 y=20.0 width=16.0 height=16.0 center_x=32.0 center_y=28.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="Name" rect=(x=72.0 y=19.5 width=38.8 height=17.0 center_x=91.4 center_y=28.0)
-                TextRun value="Name" rect=(x=72.0 y=19.5 width=38.8 height=17.0 center_x=91.4 center_y=28.0)
+              Label value="Name" rect=(x=72.0 y=19.5 width=37.5 height=17.0 center_x=90.8 center_y=28.0)
+                TextRun value="Name" rect=(x=72.0 y=19.5 width=37.5 height=17.0 center_x=90.8 center_y=28.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="Title" rect=(x=222.0 y=19.5 width=28.6 height=17.0 center_x=236.3 center_y=28.0)
-                TextRun value="Title" rect=(x=222.0 y=19.5 width=28.6 height=17.0 center_x=236.3 center_y=28.0)
+              Label value="Title" rect=(x=222.0 y=19.5 width=27.0 height=17.0 center_x=235.5 center_y=28.0)
+                TextRun value="Title" rect=(x=222.0 y=19.5 width=27.0 height=17.0 center_x=235.5 center_y=28.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
@@ -24,75 +24,75 @@ Window state=[focused] rect=<none>
               GenericContainer rect=<none>
                 Unknown name="Name, row 1" rect=(x=56.0 y=51.0 width=150.0 height=44.0 center_x=131.0 center_y=73.0)
                 GenericContainer rect=<none>
-                  Label value="Lindsay Walton" rect=(x=72.0 y=64.5 width=100.7 height=17.0 center_x=122.3 center_y=73.0)
-                    TextRun value="Lindsay Walton" rect=(x=72.0 y=64.5 width=100.7 height=17.0 center_x=122.3 center_y=73.0)
+                  Label value="Lindsay Walton" rect=(x=72.0 y=64.5 width=95.2 height=17.0 center_x=119.6 center_y=73.0)
+                    TextRun value="Lindsay Walton" rect=(x=72.0 y=64.5 width=95.2 height=17.0 center_x=119.6 center_y=73.0)
               GenericContainer rect=<none>
                 Unknown name="Title, row 1" rect=(x=206.0 y=51.0 width=150.0 height=44.0 center_x=281.0 center_y=73.0)
                 GenericContainer rect=<none>
-                  Label value="Front-end Developer" rect=(x=222.0 y=64.5 width=126.1 height=17.0 center_x=285.0 center_y=73.0)
-                    TextRun value="Front-end Develo…" rect=(x=222.0 y=64.5 width=126.1 height=17.0 center_x=285.0 center_y=73.0)
+                  Label value="Front-end Developer" rect=(x=222.0 y=64.5 width=130.1 height=17.0 center_x=287.0 center_y=73.0)
+                    TextRun value="Front-end Developer" rect=(x=222.0 y=64.5 width=130.1 height=17.0 center_x=287.0 center_y=73.0)
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   CheckBox name="Select row 2" state=[toggled=False] rect=(x=24.0 y=112.0 width=16.0 height=16.0 center_x=32.0 center_y=120.0)
               GenericContainer rect=<none>
                 Unknown name="Name, row 2" rect=(x=56.0 y=98.0 width=150.0 height=44.0 center_x=131.0 center_y=120.0)
                 GenericContainer rect=<none>
-                  Label value="Courtney Henry" rect=(x=72.0 y=111.5 width=105.1 height=17.0 center_x=124.6 center_y=120.0)
-                    TextRun value="Courtney Henry" rect=(x=72.0 y=111.5 width=105.1 height=17.0 center_x=124.6 center_y=120.0)
+                  Label value="Courtney Henry" rect=(x=72.0 y=111.5 width=100.2 height=17.0 center_x=122.1 center_y=120.0)
+                    TextRun value="Courtney Henry" rect=(x=72.0 y=111.5 width=100.2 height=17.0 center_x=122.1 center_y=120.0)
               GenericContainer rect=<none>
                 Unknown name="Title, row 2" rect=(x=206.0 y=98.0 width=150.0 height=44.0 center_x=281.0 center_y=120.0)
                 GenericContainer rect=<none>
-                  Label value="Designer" rect=(x=222.0 y=111.5 width=59.3 height=17.0 center_x=251.7 center_y=120.0)
-                    TextRun value="Designer" rect=(x=222.0 y=111.5 width=59.3 height=17.0 center_x=251.7 center_y=120.0)
+                  Label value="Designer" rect=(x=222.0 y=111.5 width=55.5 height=17.0 center_x=249.7 center_y=120.0)
+                    TextRun value="Designer" rect=(x=222.0 y=111.5 width=55.5 height=17.0 center_x=249.7 center_y=120.0)
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   CheckBox name="Select row 3" state=[toggled=False] rect=(x=24.0 y=159.0 width=16.0 height=16.0 center_x=32.0 center_y=167.0)
               GenericContainer rect=<none>
                 Unknown name="Name, row 3" rect=(x=56.0 y=145.0 width=150.0 height=44.0 center_x=131.0 center_y=167.0)
                 GenericContainer rect=<none>
-                  Label value="Tom Cook" rect=(x=72.0 y=158.5 width=67.2 height=17.0 center_x=105.6 center_y=167.0)
-                    TextRun value="Tom Cook" rect=(x=72.0 y=158.5 width=67.2 height=17.0 center_x=105.6 center_y=167.0)
+                  Label value="Tom Cook" rect=(x=72.0 y=158.5 width=63.5 height=17.0 center_x=103.7 center_y=167.0)
+                    TextRun value="Tom Cook" rect=(x=72.0 y=158.5 width=63.5 height=17.0 center_x=103.7 center_y=167.0)
               GenericContainer rect=<none>
                 Unknown name="Title, row 3" rect=(x=206.0 y=145.0 width=150.0 height=44.0 center_x=281.0 center_y=167.0)
                 GenericContainer rect=<none>
-                  Label value="Director of Product" rect=(x=222.0 y=158.5 width=126.1 height=17.0 center_x=285.0 center_y=167.0)
-                    TextRun value="Director of Product" rect=(x=222.0 y=158.5 width=126.1 height=17.0 center_x=285.0 center_y=167.0)
+                  Label value="Director of Product" rect=(x=222.0 y=158.5 width=120.9 height=17.0 center_x=282.5 center_y=167.0)
+                    TextRun value="Director of Product" rect=(x=222.0 y=158.5 width=120.9 height=17.0 center_x=282.5 center_y=167.0)
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   CheckBox name="Select row 4" state=[toggled=False] rect=(x=24.0 y=206.0 width=16.0 height=16.0 center_x=32.0 center_y=214.0)
               GenericContainer rect=<none>
                 Unknown name="Name, row 4" rect=(x=56.0 y=192.0 width=150.0 height=44.0 center_x=131.0 center_y=214.0)
                 GenericContainer rect=<none>
-                  Label value="Whitney Francis" rect=(x=72.0 y=205.5 width=106.0 height=17.0 center_x=125.0 center_y=214.0)
-                    TextRun value="Whitney Francis" rect=(x=72.0 y=205.5 width=106.0 height=17.0 center_x=125.0 center_y=214.0)
+                  Label value="Whitney Francis" rect=(x=72.0 y=205.5 width=100.4 height=17.0 center_x=122.2 center_y=214.0)
+                    TextRun value="Whitney Francis" rect=(x=72.0 y=205.5 width=100.4 height=17.0 center_x=122.2 center_y=214.0)
               GenericContainer rect=<none>
                 Unknown name="Title, row 4" rect=(x=206.0 y=192.0 width=150.0 height=44.0 center_x=281.0 center_y=214.0)
                 GenericContainer rect=<none>
-                  Label value="Copywriter" rect=(x=222.0 y=205.5 width=72.9 height=17.0 center_x=258.5 center_y=214.0)
-                    TextRun value="Copywriter" rect=(x=222.0 y=205.5 width=72.9 height=17.0 center_x=258.5 center_y=214.0)
+                  Label value="Copywriter" rect=(x=222.0 y=205.5 width=70.2 height=17.0 center_x=257.1 center_y=214.0)
+                    TextRun value="Copywriter" rect=(x=222.0 y=205.5 width=70.2 height=17.0 center_x=257.1 center_y=214.0)
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   CheckBox name="Select row 5" state=[toggled=False] rect=(x=24.0 y=253.0 width=16.0 height=16.0 center_x=32.0 center_y=261.0)
               GenericContainer rect=<none>
                 Unknown name="Name, row 5" rect=(x=56.0 y=239.0 width=150.0 height=44.0 center_x=131.0 center_y=261.0)
                 GenericContainer rect=<none>
-                  Label value="Leonard Krasner" rect=(x=72.0 y=252.5 width=109.8 height=17.0 center_x=126.9 center_y=261.0)
-                    TextRun value="Leonard Krasner" rect=(x=72.0 y=252.5 width=109.8 height=17.0 center_x=126.9 center_y=261.0)
+                  Label value="Leonard Krasner" rect=(x=72.0 y=252.5 width=101.5 height=17.0 center_x=122.8 center_y=261.0)
+                    TextRun value="Leonard Krasner" rect=(x=72.0 y=252.5 width=101.5 height=17.0 center_x=122.8 center_y=261.0)
               GenericContainer rect=<none>
                 Unknown name="Title, row 5" rect=(x=206.0 y=239.0 width=150.0 height=44.0 center_x=281.0 center_y=261.0)
                 GenericContainer rect=<none>
-                  Label value="Senior Designer" rect=(x=222.0 y=252.5 width=105.8 height=17.0 center_x=274.9 center_y=261.0)
-                    TextRun value="Senior Designer" rect=(x=222.0 y=252.5 width=105.8 height=17.0 center_x=274.9 center_y=261.0)
+                  Label value="Senior Designer" rect=(x=222.0 y=252.5 width=99.1 height=17.0 center_x=271.5 center_y=261.0)
+                    TextRun value="Senior Designer" rect=(x=222.0 y=252.5 width=99.1 height=17.0 center_x=271.5 center_y=261.0)
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   CheckBox name="Select row 6" state=[toggled=False] rect=(x=24.0 y=300.0 width=16.0 height=16.0 center_x=32.0 center_y=308.0)
               GenericContainer rect=<none>
                 Unknown name="Name, row 6" rect=(x=56.0 y=286.0 width=150.0 height=44.0 center_x=131.0 center_y=308.0)
                 GenericContainer rect=<none>
-                  Label value="Floyd Miles" rect=(x=72.0 y=299.5 width=74.9 height=17.0 center_x=109.4 center_y=308.0)
-                    TextRun value="Floyd Miles" rect=(x=72.0 y=299.5 width=74.9 height=17.0 center_x=109.4 center_y=308.0)
+                  Label value="Floyd Miles" rect=(x=72.0 y=299.5 width=69.8 height=17.0 center_x=106.9 center_y=308.0)
+                    TextRun value="Floyd Miles" rect=(x=72.0 y=299.5 width=69.8 height=17.0 center_x=106.9 center_y=308.0)
               GenericContainer rect=<none>
                 Unknown name="Title, row 6" rect=(x=206.0 y=286.0 width=150.0 height=44.0 center_x=281.0 center_y=308.0)
                 GenericContainer rect=<none>
-                  Label value="Principal Designer" rect=(x=222.0 y=299.5 width=120.6 height=17.0 center_x=282.3 center_y=308.0)
-                    TextRun value="Principal Designer" rect=(x=222.0 y=299.5 width=120.6 height=17.0 center_x=282.3 center_y=308.0)
+                  Label value="Principal Designer" rect=(x=222.0 y=299.5 width=112.1 height=17.0 center_x=278.0 center_y=308.0)
+                    TextRun value="Principal Designer" rect=(x=222.0 y=299.5 width=112.1 height=17.0 center_x=278.0 center_y=308.0)

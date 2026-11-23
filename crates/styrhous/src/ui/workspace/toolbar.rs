@@ -47,6 +47,7 @@ pub(super) fn show_toolbar(
     namespace_selection: &mut Option<NamespaceSelection>,
     selection_controls: ResourceSelectionControls<'_>,
 ) {
+    let theme = ui.tokens();
     let selected_namespaces = cluster.namespace_scope();
     let selected_text =
         namespace_selector_text(cluster, selection_controls.namespace_selector_settings);
@@ -89,20 +90,20 @@ pub(super) fn show_toolbar(
             if selected_api_resource.is_some_and(|resource| !resource.namespaced) {
                 ui.label(
                     egui::RichText::new("Scope")
-                        .font(typography::body())
-                        .color(gray::_700),
+                        .font(type_scale::BODY.font_id(ui.ctx()))
+                        .color(theme.text.secondary),
                 );
                 ui.add_space(7.0);
                 ui.label(
                     egui::RichText::new("Cluster-wide")
-                        .font(typography::body())
-                        .color(gray::_700),
+                        .font(type_scale::BODY.font_id(ui.ctx()))
+                        .color(theme.text.secondary),
                 );
             } else {
                 ui.label(
                     egui::RichText::new("Namespace")
-                        .font(typography::body())
-                        .color(gray::_700),
+                        .font(type_scale::BODY.font_id(ui.ctx()))
+                        .color(theme.text.secondary),
                 );
                 ui.add_space(7.0);
                 let namespace_response = TailwindCombobox::new("namespace-selector")
@@ -174,8 +175,8 @@ pub(super) fn show_toolbar(
                                         resource_counts.visible,
                                         !resource_search.query.is_empty(),
                                     ))
-                                    .font(typography::section_heading())
-                                    .color(gray::_500),
+                                    .font(type_scale::TITLE.font_id(ui.ctx()))
+                                    .color(theme.text.muted),
                                 );
                             } else {
                                 ui.label(
@@ -183,10 +184,10 @@ pub(super) fn show_toolbar(
                                         "{} selected",
                                         selection_controls.selected_count
                                     ))
-                                    .font(typography::section_heading())
-                                    .color(gray::_700),
+                                    .font(type_scale::TITLE.font_id(ui.ctx()))
+                                    .color(theme.text.secondary),
                                 );
-                                ui.add_space(spacing::MD);
+                                ui.add_space(space::S12);
                                 if TailwindButton::secondary("Clear selection")
                                     .size(ButtonSize::Xs)
                                     .show(ui)
@@ -238,11 +239,11 @@ pub(super) fn show_toolbar(
                                 _ => None,
                             };
                             if let Some((label, hover)) = namespace_problem {
-                                ui.add_space(spacing::MD);
+                                ui.add_space(space::S12);
                                 ui.label(
                                     egui::RichText::new(label)
-                                        .font(typography::metadata())
-                                        .color(components::design::status::WARNING_TEXT),
+                                        .font(type_scale::META.font_id(ui.ctx()))
+                                        .color(theme.warning.text),
                                 )
                                 .on_hover_text(hover);
                             }

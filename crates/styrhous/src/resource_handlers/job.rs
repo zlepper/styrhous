@@ -114,7 +114,7 @@ pub(crate) fn extract(resource: &Job) -> MinimalResource {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::resource_table::StatusTone;
+    use crate::resource_table::Tone;
     use k8s_openapi::serde_json::{Value, json};
 
     fn job(spec: Value, status: Value) -> Job {
@@ -132,7 +132,7 @@ mod tests {
         extract(job).cells[column].clone()
     }
 
-    fn status_of(job: &Job) -> (String, StatusTone) {
+    fn status_of(job: &Job) -> (String, Tone) {
         match cell(job, STATUS_COLUMN) {
             CellValue::Status { label, tone } => (label, tone),
             other => panic!("expected status cell, got {other:?}"),
@@ -150,10 +150,7 @@ mod tests {
             json!({"failed": 1, "succeeded": 1, "conditions": [condition("Complete")]}),
         );
 
-        assert_eq!(
-            status_of(&job),
-            ("Succeeded".to_owned(), StatusTone::Success)
-        );
+        assert_eq!(status_of(&job), ("Succeeded".to_owned(), Tone::Success));
         assert_eq!(
             cell(&job, COMPLETIONS_COLUMN),
             CellValue::Text("1/1".to_owned())
@@ -167,7 +164,7 @@ mod tests {
             json!({"failed": 1, "active": 1}),
         );
 
-        assert_eq!(status_of(&job), ("Running".to_owned(), StatusTone::Success));
+        assert_eq!(status_of(&job), ("Running".to_owned(), Tone::Success));
     }
 
     #[test]
@@ -187,7 +184,7 @@ mod tests {
             json!({"failed": 2, "conditions": [condition("Failed")]}),
         );
 
-        assert_eq!(status_of(&job), ("Failed".to_owned(), StatusTone::Danger));
+        assert_eq!(status_of(&job), ("Failed".to_owned(), Tone::Danger));
     }
 
     #[test]
@@ -219,7 +216,7 @@ mod tests {
     fn no_pods_yet_is_pending() {
         let job = job(json!({"completions": 1}), json!({}));
 
-        assert_eq!(status_of(&job), ("Pending".to_owned(), StatusTone::Warning));
+        assert_eq!(status_of(&job), ("Pending".to_owned(), Tone::Warning));
         assert_eq!(
             cell(&job, COMPLETIONS_COLUMN),
             CellValue::Text("0/1".to_owned())
@@ -231,10 +228,7 @@ mod tests {
         let by_spec = job(json!({"suspend": true}), json!({}));
         let by_condition = job(json!({}), json!({"conditions": [condition("Suspended")]}));
 
-        assert_eq!(
-            status_of(&by_spec),
-            ("Suspended".to_owned(), StatusTone::Neutral)
-        );
+        assert_eq!(status_of(&by_spec), ("Suspended".to_owned(), Tone::Neutral));
         assert_eq!(status_of(&by_condition).0, "Suspended");
     }
 

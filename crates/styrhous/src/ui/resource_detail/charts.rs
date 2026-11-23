@@ -1,5 +1,8 @@
 use super::*;
 
+/// Axis labels: Figtree at 10 points, kept from the previous chart geometry.
+const CHART_AXIS: type_scale::TextRole = type_scale::META.with_size(10.0, 14.0);
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn usage_chart(
     ui: &mut egui::Ui,
@@ -10,6 +13,7 @@ pub(super) fn usage_chart(
     metrics_unavailable: bool,
     references: &UsageReferences,
 ) {
+    let theme = ui.tokens();
     let max_value = samples
         .iter()
         .map(|(_, value)| *value)
@@ -58,8 +62,8 @@ pub(super) fn usage_chart(
             rect.center(),
             egui::Align2::CENTER_CENTER,
             status_message,
-            typography::metadata(),
-            gray::_500,
+            type_scale::META.font_id(ui.ctx()),
+            theme.text.muted,
         );
         return;
     }
@@ -125,8 +129,8 @@ pub(super) fn usage_chart(
             rect.center(),
             egui::Align2::CENTER_CENTER,
             status_message,
-            typography::metadata(),
-            gray::_500,
+            type_scale::META.font_id(ui.ctx()),
+            theme.text.muted,
         );
     }
     if let Some(pointer) = response
@@ -197,25 +201,27 @@ pub(super) fn usage_references(
     request: Option<i64>,
     limit: Option<i64>,
     labels: [&'static str; 2],
+    theme: &Theme,
 ) -> UsageReferences {
     [
         request.map(|value| UsageReference {
             label: labels[0],
             value,
-            color: status::WARNING,
+            color: theme.components.chart_request,
         }),
         limit.map(|value| UsageReference {
             label: labels[1],
             value,
-            color: status::CRITICAL,
+            color: theme.components.chart_limit,
         }),
     ]
 }
 
 pub(super) fn usage_chart_pair_labels(ui: &mut egui::Ui) {
+    let theme = ui.tokens();
     ui.columns(2, |columns| {
-        columns[0].label(egui::RichText::new("CPU").color(gray::_500));
-        columns[1].label(egui::RichText::new("Memory").color(gray::_500));
+        columns[0].label(egui::RichText::new("CPU").color(theme.text.muted));
+        columns[1].label(egui::RichText::new("Memory").color(theme.text.muted));
     });
 }
 
@@ -248,20 +254,21 @@ pub(super) fn draw_chart_axes(
     format: &impl Fn(i64) -> String,
     max: f32,
 ) {
-    let tick_color = gray::_300;
+    let theme = painter.ctx().tokens();
+    let tick_color = theme.components.chart_grid;
     dashed_grid_line(painter, plot.left(), plot.right(), plot.center().y);
     for fraction in [0.0, 1.0] {
         let y = egui::lerp(plot.bottom()..=plot.top(), fraction);
         painter.line_segment(
             [egui::pos2(plot.left() - 3.0, y), egui::pos2(plot.left(), y)],
-            egui::Stroke::new(1.0, tick_color),
+            stroke::hairline(tick_color),
         );
         painter.line_segment(
             [
                 egui::pos2(plot.right(), y),
                 egui::pos2(plot.right() + 3.0, y),
             ],
-            egui::Stroke::new(1.0, tick_color),
+            stroke::hairline(tick_color),
         );
         let value = (max * fraction).round() as i64;
         painter.text(
@@ -272,8 +279,8 @@ pub(super) fn draw_chart_axes(
             } else {
                 format(value)
             },
-            typography::chart_axis(),
-            gray::_500,
+            CHART_AXIS.font_id(painter.ctx()),
+            theme.text.muted,
         );
     }
     let time_labels = history_axis_labels();
@@ -287,14 +294,14 @@ pub(super) fn draw_chart_axes(
                 egui::pos2(x, plot.bottom()),
                 egui::pos2(x, plot.bottom() + 3.0),
             ],
-            egui::Stroke::new(1.0, tick_color),
+            stroke::hairline(tick_color),
         );
         painter.text(
             egui::pos2(x, plot.bottom() + 4.0),
             align,
             label,
-            typography::chart_axis(),
-            gray::_500,
+            CHART_AXIS.font_id(painter.ctx()),
+            theme.text.muted,
         );
     }
 }
@@ -305,7 +312,7 @@ pub(super) fn dashed_grid_line(painter: &egui::Painter, left: f32, right: f32, y
         left,
         right,
         y,
-        egui::Stroke::new(1.0, gray::_200),
+        stroke::hairline(painter.ctx().tokens().components.chart_grid),
         2.0,
         2.0,
     );

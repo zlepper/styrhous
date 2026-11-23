@@ -271,8 +271,8 @@ impl BladeStack {
             |ui, entry, _| {
                 ui.label(
                     egui::RichText::new(title(entry))
-                        .font(crate::design::typography::page_title())
-                        .color(gray::_900),
+                        .font(crate::design::type_scale::HEADING.font_id(ui.ctx()))
+                        .color(ui.tokens().text.primary),
                 );
             },
             render_content,

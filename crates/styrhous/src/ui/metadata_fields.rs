@@ -1,8 +1,8 @@
 use super::table_preferences::MetadataColumnSource;
 use components::{
     TailwindCombobox, TailwindTextInput,
-    colors::{gray, indigo},
-    design::{spacing, typography},
+    design::theme::ThemeExt,
+    design::{space, stroke, type_scale},
 };
 
 /// Metadata keys observed in the current UI data, grouped by Kubernetes source.
@@ -21,11 +21,12 @@ pub(super) fn show_metadata_key_picker(
     suggestions: &MetadataKeySuggestions,
     suggestion_placeholder: &str,
 ) -> Option<String> {
+    let theme = ui.tokens();
     ui.horizontal(|ui| {
         ui.radio_value(source, MetadataColumnSource::Label, "Label");
         ui.radio_value(source, MetadataColumnSource::Annotation, "Annotation");
     });
-    ui.add_space(spacing::MD);
+    ui.add_space(space::S12);
     let source_keys = match source {
         MetadataColumnSource::Label => &suggestions.labels,
         MetadataColumnSource::Annotation => &suggestions.annotations,
@@ -49,12 +50,12 @@ pub(super) fn show_metadata_key_picker(
                     selected = Some(value.clone());
                 }
             });
-        ui.add_space(spacing::SM);
+        ui.add_space(space::S8);
     }
     ui.label(
         egui::RichText::new("Metadata key")
-            .font(typography::body())
-            .color(gray::_800),
+            .font(type_scale::BODY.font_id(ui.ctx()))
+            .color(theme.text.primary),
     );
     TailwindTextInput::new(key)
         .hint_text("Enter an exact metadata key")
@@ -69,15 +70,16 @@ pub(super) fn show_metadata_source_options(
     source: &mut MetadataColumnSource,
     label: &str,
 ) {
+    let theme = ui.tokens();
     ui.label(
         egui::RichText::new(label)
-            .font(typography::body())
-            .color(gray::_800),
+            .font(type_scale::BODY.font_id(ui.ctx()))
+            .color(theme.text.primary),
     );
-    ui.add_space(spacing::XS);
+    ui.add_space(space::S4);
     ui.horizontal(|ui| {
         metadata_source_radio(ui, source, MetadataColumnSource::Label, "Label");
-        ui.add_space(spacing::SM);
+        ui.add_space(space::S8);
         metadata_source_radio(ui, source, MetadataColumnSource::Annotation, "Annotation");
     });
 }
@@ -88,15 +90,16 @@ fn metadata_source_radio(
     value: MetadataColumnSource,
     label: &str,
 ) {
+    let theme = ui.tokens();
     ui.horizontal(|ui| {
         let (circle_rect, radio_response) =
             ui.allocate_exact_size(egui::Vec2::splat(18.0), egui::Sense::click());
-        ui.add_space(spacing::XS);
+        ui.add_space(space::S4);
         let label_response = ui.add(
             egui::Label::new(
                 egui::RichText::new(label)
-                    .font(typography::body())
-                    .color(gray::_800),
+                    .font(type_scale::BODY.font_id(ui.ctx()))
+                    .color(theme.text.primary),
             )
             .sense(egui::Sense::click()),
         );
@@ -114,15 +117,11 @@ fn metadata_source_radio(
         });
         let painter = ui.painter();
         if selected {
-            painter.circle_filled(circle_rect.center(), 9.0, indigo::_600);
-            painter.circle_filled(circle_rect.center(), 3.0, gray::_50);
+            painter.circle_filled(circle_rect.center(), 9.0, theme.accent.fill);
+            painter.circle_filled(circle_rect.center(), 3.0, theme.text.on_fill);
         } else {
-            painter.circle_filled(circle_rect.center(), 8.0, gray::_50);
-            painter.circle_stroke(
-                circle_rect.center(),
-                8.0,
-                egui::Stroke::new(1.0, gray::_300),
-            );
+            painter.circle_filled(circle_rect.center(), 8.0, egui::Color32::TRANSPARENT);
+            painter.circle_stroke(circle_rect.center(), 8.0, stroke::control(&theme));
         }
     });
 }

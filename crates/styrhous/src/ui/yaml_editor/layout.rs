@@ -3,35 +3,44 @@ use super::*;
 pub(super) fn yaml_editor_layout_job(
     ui: &egui::Ui,
     cache: &mut YamlEditorHighlightCache,
-    theme: &CodeTheme,
     yaml: &str,
     search_query: &str,
     search_regex_mode: bool,
     active_match: Option<&Range<usize>>,
 ) -> egui::text::LayoutJob {
-    let key = YamlEditorHighlightCacheKey::new(search_query, search_regex_mode, active_match);
+    let key = YamlEditorHighlightCacheKey::new(
+        components::design::theme::generation(ui.ctx()),
+        search_query,
+        search_regex_mode,
+        active_match,
+    );
     if let Some(job) = cache.layout_job(&key, yaml) {
         return (*job).clone();
     }
 
-    let mut job = highlight(ui.ctx(), ui.style(), theme, yaml, "yaml");
+    let theme = ui.tokens();
+    let mut job = yaml_layout_job(yaml, &type_scale::MONO.font_id(ui.ctx()), &theme);
     if let Ok(matches) = find_matches(yaml, search_query, search_regex_mode) {
-        apply_search_highlights(&mut job, &matches, active_match);
+        apply_search_highlights(&mut job, &matches, active_match, &theme);
     }
     cache.store(key, job.clone());
     job
 }
 
 pub(super) fn line_number_layout_job(
+    ctx: &egui::Context,
     line_count: usize,
     diagnostics: &[YamlDiagnostic],
+    theme: &Theme,
 ) -> egui::text::LayoutJob {
     let diagnostic_lines: HashSet<_> = diagnostics
         .iter()
         .filter_map(|diagnostic| diagnostic.line)
         .collect();
-    let normal_format = egui::text::TextFormat::simple(typography::monospace(), gray::_500);
-    let diagnostic_format = egui::text::TextFormat::simple(typography::monospace(), status::DANGER);
+    let normal_format =
+        egui::text::TextFormat::simple(type_scale::MONO.font_id(ctx), theme.code.gutter);
+    let diagnostic_format =
+        egui::text::TextFormat::simple(type_scale::MONO.font_id(ctx), theme.code.error);
     let mut job = egui::text::LayoutJob::default();
     for line in 1..=line_count {
         let format = if diagnostic_lines.contains(&line) {
@@ -54,6 +63,7 @@ pub(super) fn show_diagnostic_underlines(
     galley_pos: egui::Pos2,
     diagnostics: &[YamlDiagnostic],
 ) {
+    let theme = ui.tokens();
     for (diagnostic_index, diagnostic) in diagnostics.iter().enumerate() {
         let Some(range) = &diagnostic.range else {
             continue;
@@ -80,7 +90,7 @@ pub(super) fn show_diagnostic_underlines(
                 )
             });
             response.on_hover_text(&diagnostic.message);
-            paint_diagnostic_squiggle(ui.painter(), rect);
+            paint_diagnostic_squiggle(ui.painter(), rect, theme.code.error);
         }
     }
 }
@@ -89,6 +99,7 @@ pub(super) fn apply_search_highlights(
     layout_job: &mut egui::text::LayoutJob,
     matches: &[Range<usize>],
     active_match: Option<&Range<usize>>,
+    theme: &Theme,
 ) {
     if matches.is_empty() {
         return;
@@ -118,12 +129,13 @@ pub(super) fn apply_search_highlights(
                 .iter()
                 .find(|range| range.start <= start && end <= range.end)
             {
-                let is_active = active_match == Some(matched);
-                format.background = if is_active {
-                    search::ACTIVE_MATCH_BACKGROUND
+                let (background, color) = if active_match == Some(matched) {
+                    (theme.code.match_active_bg, theme.code.match_active_text)
                 } else {
-                    search::MATCH_BACKGROUND
+                    (theme.code.match_bg, theme.code.match_text)
                 };
+                format.background = background;
+                format.color = color;
             }
             layout_job.sections.push(egui::text::LayoutSection {
                 leading_space: if index == 0 {
@@ -179,7 +191,11 @@ pub(super) fn diagnostic_rects(
     rects
 }
 
-pub(super) fn paint_diagnostic_squiggle(painter: &egui::Painter, rect: egui::Rect) {
+pub(super) fn paint_diagnostic_squiggle(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    color: egui::Color32,
+) {
     let wavelength = 4.0;
     let amplitude = 1.5;
     let baseline = rect.bottom() - 2.0;
@@ -191,10 +207,7 @@ pub(super) fn paint_diagnostic_squiggle(painter: &egui::Painter, rect: egui::Rec
             egui::pos2(x, y)
         })
         .collect();
-    painter.add(egui::Shape::line(
-        points,
-        egui::Stroke::new(1.5, status::DANGER),
-    ));
+    painter.add(egui::Shape::line(points, egui::Stroke::new(1.5, color)));
 }
 
 pub(super) fn yaml_editor_text_edit_id(editor_id: u64) -> egui::Id {

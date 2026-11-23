@@ -39,7 +39,7 @@ fn pod_extractor_populates_ready_status_and_restarts() {
         resource.cells.get(STATUS_COLUMN),
         Some(&CellValue::Status {
             label: "Running".to_owned(),
-            tone: crate::resource_table::StatusTone::Success,
+            tone: crate::resource_table::Tone::Success,
         })
     );
     assert_eq!(

@@ -1,0 +1,17 @@
+# ~/.config/styrhous/themes/harbour-dark-hc.toml
+name    = "Harbour Dark · high contrast"
+extends = "harbour-dark"   # built-in themes only
+
+[palette]
+sand-300 = "#B3A89B"       # lighter muted text
+
+[roles]
+text-muted  = "sand-200"
+focus-ring  = "sky-300"
+accent-fill = "coral-300"
+
+[components]
+pill-on-bg = "accent-tint"
+
+[terminal]
+ansi-blue = "sky-300"

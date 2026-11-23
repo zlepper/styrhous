@@ -3,7 +3,6 @@ use super::transforms::{
     transformed_rect,
 };
 use super::*;
-use crate::colors::{WHITE, gray};
 
 const WIDE_ROW_WIDTH: f32 = 600.0;
 const WIDE_ROW_LABEL: &str = "Wide row action with a label long enough to straddle the blade edge";
@@ -53,6 +52,20 @@ fn wide_harness(
     (navigator, harness)
 }
 
+/// [`wide_harness`] with every role in its own colour, so painted frames
+/// are found by their role rather than a colour several roles share.
+#[allow(clippy::type_complexity)]
+fn wide_role_harness(
+    id: &'static str,
+    titles: &[&'static str],
+    size: egui::Vec2,
+) -> (Rc<RefCell<BladeNavigator<TestBlade>>>, Harness<'static>) {
+    let (navigator, mut harness) = wide_harness(id, titles, size);
+    crate::test_support::install_distinct_role_theme(&harness.ctx);
+    harness.run();
+    (navigator, harness)
+}
+
 fn flatten<'a>(shape: &'a egui::Shape, out: &mut Vec<&'a egui::Shape>) {
     if let egui::Shape::Vec(shapes) = shape {
         for shape in shapes {
@@ -70,14 +83,16 @@ fn flatten<'a>(shape: &'a egui::Shape, out: &mut Vec<&'a egui::Shape>) {
 fn drawn_blade_frames(harness: &Harness<'_>) -> Vec<Rect> {
     let min_height =
         height(harness.ctx.content_rect()) * HISTORY_SCALES[HISTORY_SCALES.len() - 1] - 1.0;
+    let tokens = harness.ctx.tokens();
+    let ring = tokens.shadow.overlay.ring.map(|ring| ring.color);
     let mut frames = Vec::new();
     for clipped in &harness.output().shapes {
         let mut flat = Vec::new();
         flatten(&clipped.shape, &mut flat);
         for shape in flat {
             if let egui::Shape::Rect(rect) = shape
-                && rect.fill == WHITE
-                && rect.stroke.color == gray::_200
+                && rect.fill == tokens.surface.panel
+                && Some(rect.stroke.color) == ring
                 && rect.rect.width() > 100.0
                 && rect.rect.height() >= min_height
             {
@@ -155,7 +170,7 @@ fn click_nearest_history_strip(harness: &mut Harness<'_>) {
 
 #[test]
 fn wide_non_wrapping_content_does_not_resize_the_blade() {
-    let (_, harness) = wide_harness(
+    let (_, harness) = wide_role_harness(
         "blade-wide-active",
         &["Only"],
         crate::test_support::EGUI_TEST_SIZE,
@@ -173,7 +188,7 @@ fn wide_non_wrapping_content_does_not_resize_the_blade() {
 
 #[test]
 fn wide_content_in_active_and_history_blades_keeps_their_transforms() {
-    let (navigator, mut harness) = wide_harness(
+    let (navigator, mut harness) = wide_role_harness(
         "blade-wide-history",
         &["First", "Second", "Third"],
         crate::test_support::EGUI_TEST_SIZE,
@@ -190,7 +205,7 @@ fn wide_content_in_active_and_history_blades_keeps_their_transforms() {
 
 #[test]
 fn blades_shrink_to_fit_a_viewport_narrower_than_a_full_blade() {
-    let (navigator, mut harness) = wide_harness(
+    let (navigator, mut harness) = wide_role_harness(
         "blade-narrow-viewport",
         &["First", "Second", "Third"],
         egui::vec2(500.0, 600.0),
@@ -303,7 +318,7 @@ fn assert_a_frame_matches(harness: &Harness<'_>, expected: Rect, what: &str) {
 
 #[test]
 fn wide_content_keeps_the_active_blade_on_its_interpolated_transform_mid_transition() {
-    let (navigator, mut harness) = wide_harness(
+    let (navigator, mut harness) = wide_role_harness(
         "blade-wide-transitions",
         &["First"],
         crate::test_support::EGUI_TEST_SIZE,

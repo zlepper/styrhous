@@ -21,7 +21,7 @@ git diff --cached --name-only --no-renames -z >"$staged_paths_file"
 
 while IFS= read -r -d '' staged_path; do
   case "$staged_path" in
-    assets/icons/kubernetes-dev-ui.svg | crates/components/src/icons/* | crates/components/assets/fonts/* | crates/components/tests/snapshots/buttons/test_button_interaction_states/* | crates/components/tests/snapshots/comboboxes/test_combobox_flow/closed.png | crates/components/tests/snapshots/showcase/showcase_buttons/buttons.png | crates/components/tests/snapshots/text_inputs/snapshots_empty_filled_and_focused_inputs/*)
+    assets/icons/kubernetes-dev-ui.svg | crates/components/assets/icons/* | crates/components/assets/fonts/* | crates/components/tests/snapshots/buttons/test_button_interaction_states/* | crates/components/tests/snapshots/comboboxes/test_combobox_flow/closed.png | crates/components/tests/snapshots/showcase/showcase_buttons/buttons.png | crates/components/tests/snapshots/text_inputs/snapshots_empty_filled_and_focused_inputs/*)
       run_rust_checks=true
       run_portal_checks=true
       ;;

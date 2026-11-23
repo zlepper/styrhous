@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import chevronDownIcon from '../../../../../crates/components/src/icons/chevron-down.svg?url&no-inline';
+  import chevronDownIcon from '../../icons/chevron-down.svg?url&no-inline';
 
   let { children }: { children: Snippet } = $props();
 </script>

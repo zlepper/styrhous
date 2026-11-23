@@ -1,7 +1,7 @@
-use components::colors::WHITE;
+use components::design::theme::{ThemeExt, Tone};
 use components::test_support::{UiHarnessSnapshot, setup_egui};
 use components::{
-    DetailCell, DetailColumn, DetailRow, DetailTableCell, DetailTableRow, DetailTone, DetailValue,
+    DetailCell, DetailColumn, DetailRow, DetailTableCell, DetailTableRow, DetailValue,
     InspectorDetails, WorkspaceCard,
 };
 use egui_kittest::{Harness, kittest::Queryable};
@@ -13,7 +13,7 @@ fn properties() -> Vec<DetailRow<'static>> {
         DetailRow::new([
             DetailCell::new("Namespace", "Cluster-wide"),
             DetailCell::new("Age", "132d"),
-            DetailCell::status("Scheduling", "Schedulable", DetailTone::Success),
+            DetailCell::status("Scheduling", "Schedulable", Tone::Success),
         ]),
         DetailRow::new([
             DetailCell::new("Provider ID", "kind://docker/kind/kind-control-plane").copyable(),
@@ -49,7 +49,7 @@ fn table_rows() -> Vec<DetailTableRow<'static>> {
         DetailTableRow::new([
             DetailValue::Status {
                 text: "Normal".into(),
-                tone: DetailTone::Success,
+                tone: Tone::Success,
             },
             DetailValue::Text("Pulled".into()),
             DetailValue::Text("Successfully pulled image".into()),
@@ -59,7 +59,7 @@ fn table_rows() -> Vec<DetailTableRow<'static>> {
         DetailTableRow::new([
             DetailValue::Status {
                 text: "Warning".into(),
-                tone: DetailTone::Warning,
+                tone: Tone::Warning,
             },
             DetailValue::Text("BackOff".into()),
             DetailValue::Text("Back-off restarting failed container".into()),
@@ -84,7 +84,7 @@ fn condition_rows() -> Vec<DetailTableRow<'static>> {
             DetailValue::Text("Ready".into()),
             DetailValue::Status {
                 text: "True".into(),
-                tone: DetailTone::Success,
+                tone: Tone::Success,
             },
             DetailValue::Text("KubeletReady".into()),
             DetailValue::Text("kubelet is posting ready status".into()),
@@ -93,7 +93,7 @@ fn condition_rows() -> Vec<DetailTableRow<'static>> {
             DetailValue::Text("MemoryPressure".into()),
             DetailValue::Status {
                 text: "False".into(),
-                tone: DetailTone::Neutral,
+                tone: Tone::Neutral,
             },
             DetailValue::Text("KubeletHasSufficientMemory".into()),
             DetailValue::Text("kubelet has sufficient memory".into()),
@@ -104,7 +104,8 @@ fn condition_rows() -> Vec<DetailTableRow<'static>> {
 #[test]
 fn inspector_details_showcase() {
     let mut harness = Harness::new_ui(|ui| {
-        ui.painter().rect_filled(ui.max_rect(), 0.0, WHITE);
+        ui.painter()
+            .rect_filled(ui.max_rect(), 0.0, ui.tokens().surface.canvas);
         ui.add_space(24.0);
         ui.horizontal_top(|ui| {
             ui.add_space(24.0);
@@ -144,7 +145,8 @@ fn inspector_details_showcase() {
 
 fn reflow_harness(width: f32) -> Harness<'static> {
     let mut harness = Harness::new_ui(move |ui| {
-        ui.painter().rect_filled(ui.max_rect(), 0.0, WHITE);
+        ui.painter()
+            .rect_filled(ui.max_rect(), 0.0, ui.tokens().surface.canvas);
         ui.add_space(24.0);
         ui.add_space(24.0);
         ui.allocate_ui_with_layout(
@@ -193,7 +195,8 @@ fn inspector_details_copy_hover_preserves_narrow_value_layout() {
 #[test]
 fn inspector_details_titled_group_keeps_its_label_in_the_border() {
     let mut harness = Harness::new_ui(|ui| {
-        ui.painter().rect_filled(ui.max_rect(), 0.0, WHITE);
+        ui.painter()
+            .rect_filled(ui.max_rect(), 0.0, ui.tokens().surface.canvas);
         ui.add_space(32.0);
         ui.add_space(32.0);
         ui.allocate_ui_with_layout(
@@ -204,7 +207,7 @@ fn inspector_details_titled_group_keeps_its_label_in_the_border() {
                     ui,
                     "Spec",
                     &[DetailRow::new([
-                        DetailCell::status("Scheduling", "Schedulable", DetailTone::Success),
+                        DetailCell::status("Scheduling", "Schedulable", Tone::Success),
                         DetailCell::new("Provider ID", "kind://docker/kind/kind-control-plane"),
                         DetailCell::new("Pod CIDRs", "10.244.0.0/24, fd00:10:244::/56"),
                         DetailCell::new("Taints", "None"),
@@ -288,7 +291,8 @@ fn inspector_details_table_copy_button_emits_the_full_value() {
 #[test]
 fn inspector_details_tables_wrap_at_narrow_width() {
     let mut harness = Harness::new_ui(|ui| {
-        ui.painter().rect_filled(ui.max_rect(), 0.0, WHITE);
+        ui.painter()
+            .rect_filled(ui.max_rect(), 0.0, ui.tokens().surface.canvas);
         ui.add_space(24.0);
         ui.add_space(24.0);
         ui.allocate_ui_with_layout(
@@ -329,9 +333,9 @@ fn wrapping_event_rows() -> Vec<DetailTableRow<'static>> {
             DetailTableCell::new(DetailValue::Status {
                 text: kind.into(),
                 tone: if kind == "Warning" {
-                    DetailTone::Warning
+                    Tone::Warning
                 } else {
-                    DetailTone::Success
+                    Tone::Success
                 },
             }),
             DetailTableCell::new(reason).copyable(),
@@ -437,7 +441,8 @@ fn event_table_keeps_narrow_columns_aligned_and_width_bounded() {
 #[test]
 fn event_table_wraps_messages_without_moving_columns_snapshot() {
     let mut harness = Harness::new_ui(|ui| {
-        ui.painter().rect_filled(ui.max_rect(), 0.0, WHITE);
+        ui.painter()
+            .rect_filled(ui.max_rect(), 0.0, ui.tokens().surface.canvas);
         WorkspaceCard::new().show(ui, |ui| {
             ui.heading("Events");
             InspectorDetails::show_table(ui, &table_columns(), &wrapping_event_rows());

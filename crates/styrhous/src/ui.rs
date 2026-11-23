@@ -25,6 +25,7 @@ mod save_file_dialog;
 mod settings;
 pub(crate) mod state;
 mod table_preferences;
+mod theme_file;
 mod widgets;
 mod workspace;
 mod yaml_editor;
@@ -38,7 +39,9 @@ use crate::terminal_launcher::{
     ShellRequest, SystemTerminalLauncher, TerminalLaunchSettings, TerminalLauncher,
 };
 use crate::worker::{Worker, WorkerTrait};
-use components::{apply_light_theme, scroll};
+use components::design::stroke;
+use components::design::theme::{self, ThemeExt, configure_default};
+use components::scroll;
 use dialogs::{
     show_bulk_delete_confirmation, show_cron_job_run_confirmation, show_delete_confirmation,
     show_deployment_restart_confirmation, show_deployment_rollback_dialog,
@@ -52,6 +55,7 @@ use state::{
     ResourceNavigationExpansion, UiState,
 };
 use table_preferences::PersistedResourceTablePreferences;
+use theme_file::{ThemeFileChange, ThemeFileWatcher};
 
 const CLUSTER_SELECTIONS_STORAGE_KEY: &str = "cluster_selections";
 const API_DISCOVERY_CACHE_STORAGE_KEY: &str = "api_discovery_cache";
@@ -73,6 +77,9 @@ pub struct MyEguiApp<W: WorkerTrait = Worker, L: TerminalLauncher = SystemTermin
     log_store: LogStoreService,
     updater: crate::updater::UpdaterService,
     licensing: LicensingService,
+    /// The user theme file, or `None` in tests and on platforms without a
+    /// data directory.
+    theme_file: Option<ThemeFileWatcher>,
 }
 
 impl<W: WorkerTrait, L: TerminalLauncher> Default for MyEguiApp<W, L> {
@@ -91,6 +98,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> Default for MyEguiApp<W, L> {
             log_store,
             updater: crate::updater::UpdaterService::default(),
             licensing: LicensingService::default(),
+            theme_file: None,
         }
     }
 }
@@ -116,6 +124,8 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
                 save_file_dialog::SaveFileChoice::Cancelled,
             ),
         );
+        // Never read the user's theme file from a test.
+        app.theme_file = None;
         app.licensing
             .set_status_for_test(crate::licensing::LicenseStatus::Licensed(
                 test_commercial_lease(),
@@ -148,6 +158,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
             log_store,
             updater,
             licensing: LicensingService::start(licensing_settings, cc.egui_ctx.clone()),
+            theme_file: ThemeFileWatcher::in_data_dir(crate::APP_NAME),
         };
         app.load_persisted_state(cc.storage);
         app
@@ -207,15 +218,58 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
     }
 }
 
+/// How long an invalid theme file's error stays on screen.
+const THEME_FILE_ERROR_TOAST_DURATION: std::time::Duration = std::time::Duration::from_secs(12);
+
+impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
+    /// Apply changes to the user theme file, and keep polling it.
+    fn poll_theme_file(&mut self, ctx: &egui::Context) {
+        let Some(watcher) = &mut self.theme_file else {
+            return;
+        };
+        let now = std::time::Instant::now();
+        match watcher.poll(now) {
+            Some(ThemeFileChange::Loaded(loaded) | ThemeFileChange::Removed(loaded)) => {
+                tracing::info!(
+                    "Using theme \"{}\" from {}",
+                    loaded.name(),
+                    watcher.path().display()
+                );
+                theme::switch(ctx, loaded);
+            }
+            Some(ThemeFileChange::Failed(message)) => {
+                tracing::warn!(
+                    "Ignoring theme file {}: {message}",
+                    watcher.path().display()
+                );
+                self.ui_state.push_application_toast(
+                    state::OperationOutcome::Failure,
+                    "Couldn’t apply the theme file",
+                    message,
+                    THEME_FILE_ERROR_TOAST_DURATION,
+                );
+            }
+            None => {}
+        }
+        ctx.request_repaint_after(watcher.time_until_next_check(now));
+    }
+
+    #[cfg(test)]
+    pub(crate) fn watch_theme_file(&mut self, path: impl Into<std::path::PathBuf>) {
+        self.theme_file = Some(ThemeFileWatcher::new(path));
+    }
+}
+
 /// Configure the one egui context shared by the main and child native windows.
 fn configure_egui_context(ctx: &egui::Context) {
     egui_extras::install_image_loaders(ctx);
-    apply_light_theme(ctx);
+    configure_default(ctx);
     scroll::configure_input(ctx);
 }
 
 impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.poll_theme_file(ctx);
         self.updater.poll();
         self.licensing.poll(ctx);
         self.worker.start();
@@ -395,17 +449,18 @@ fn show_license_banner(
     if !licensing.status().shows_warning() {
         return;
     }
+    let theme = ui.tokens();
     let summary = licensing.status().summary();
     let mut open = false;
     egui::Panel::top("license-status-banner")
         .exact_size(40.0)
         .frame(
             egui::Frame::new()
-                .fill(components::design::surface::warning_fill())
-                .stroke(components::design::surface::warning_border())
+                .fill(theme.warning.tint)
+                .stroke(stroke::hairline(theme.warning.outline))
                 .inner_margin(egui::Margin::symmetric(
-                    components::design::spacing::LG as i8,
-                    components::design::spacing::SM as i8,
+                    components::design::space::S16 as i8,
+                    components::design::space::S8 as i8,
                 )),
         )
         .show(ui, |ui| {
@@ -413,10 +468,10 @@ fn show_license_banner(
                 .horizontal_centered(|ui| {
                     ui.label(
                         egui::RichText::new(&summary)
-                            .font(components::design::typography::body())
-                            .color(components::design::status::WARNING_TEXT),
+                            .font(components::design::type_scale::BODY.font_id(ui.ctx()))
+                            .color(theme.warning.text_on_tint),
                     );
-                    ui.add_space(components::design::spacing::SM);
+                    ui.add_space(components::design::space::S8);
                     ui.link("Manage license")
                 })
                 .inner;

@@ -1,9 +1,11 @@
 use super::*;
 use crate::ui::log_state::{source_label_columns, source_label_prefix};
 use crate::worker::PodLogStreamTarget;
+use components::test_support::distinct_role_theme;
 
 #[test]
 fn layout_toggles_metadata_and_ansi_styling_independently() {
+    let theme = distinct_role_theme();
     let style = Style::new().fg_color(Some(AnsiColor::Red.into()));
     let job = log_line_layout_job(
         4,
@@ -20,12 +22,13 @@ fn layout_toggles_metadata_and_ansi_styling_independently() {
             show_timestamps: true,
             render_ansi: false,
         },
+        &theme,
     );
 
     assert_eq!(job.text, "     4  2026-08-08T15:22:17.143Z  error");
     assert_eq!(
         job.sections.last().expect("message section").format.color,
-        egui::Color32::from_rgb(229, 231, 235)
+        theme.code.text
     );
 }
 
@@ -96,6 +99,7 @@ fn source_labels_are_rendered_as_metadata_and_can_be_hidden() {
         &[],
         &[],
         LogDisplayOptions::default(),
+        &Theme::default(),
     );
     let long = log_line_layout_job(
         1,
@@ -105,6 +109,7 @@ fn source_labels_are_rendered_as_metadata_and_can_be_hidden() {
         &[],
         &[],
         LogDisplayOptions::default(),
+        &Theme::default(),
     );
     let hidden = log_line_layout_job(
         0,
@@ -114,6 +119,7 @@ fn source_labels_are_rendered_as_metadata_and_can_be_hidden() {
         &[],
         &[],
         LogDisplayOptions::default(),
+        &Theme::default(),
     );
 
     assert_eq!(shown.text, format!("{short_prefix}ready"));
@@ -628,5 +634,5 @@ fn status_label_and_color_reflect_when_every_source_is_reconnecting() {
         .insert(window.targets[0].clone(), "connection reset".into());
 
     assert_eq!(status_label(&window), "Reconnecting…");
-    assert_eq!(status_color(&window), status::WARNING);
+    assert_eq!(status_tone(&window), Tone::Warning);
 }

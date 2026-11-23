@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import ellipsisIcon from '../../../../../crates/components/src/icons/ellipsis-horizontal.svg?url&no-inline';
+  import ellipsisIcon from '../../icons/ellipsis-horizontal.svg?url&no-inline';
 
   let {
     id,

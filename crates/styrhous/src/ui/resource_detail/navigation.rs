@@ -69,6 +69,7 @@ pub(super) fn show_resource_detail_header(
     supports_scale: bool,
     debug_image_presets: &[DebugImagePreset],
 ) -> BladeResult {
+    let theme = ui.tokens();
     let mut result = BladeResult::default();
     let log_containers = entry
         .detail
@@ -109,6 +110,7 @@ pub(super) fn show_resource_detail_header(
         MoreButton::new(more_label).show(ui, |menu| {
             show_resource_action_items(
                 menu,
+                &theme,
                 &entry.api_resource,
                 &resource,
                 &resource.log_containers,
@@ -117,30 +119,30 @@ pub(super) fn show_resource_detail_header(
                 &mut result.action,
             );
         });
-        ui.add_space(spacing::MD);
+        ui.add_space(space::S12);
         let kind_width = ui
             .painter()
             .layout_no_wrap(
                 entry.api_resource.kind.clone(),
-                typography::body(),
-                indigo::_600,
+                type_scale::BODY.font_id(ui.ctx()),
+                theme.accent.text,
             )
             .size()
             .x
-            + spacing::SM * 2.0;
-        let available_name_width = (ui.available_width() - kind_width - spacing::MD).max(0.0);
+            + space::S8 * 2.0;
+        let available_name_width = (ui.available_width() - kind_width - space::S12).max(0.0);
         let natural_name_width = ui
             .painter()
             .layout_no_wrap(
                 entry.resource_name.clone(),
-                typography::page_title(),
-                gray::_900,
+                type_scale::HEADING.font_id(ui.ctx()),
+                theme.text.primary,
             )
             .size()
             .x;
         let name = egui::RichText::new(&entry.resource_name)
-            .font(typography::page_title())
-            .color(gray::_900);
+            .font(type_scale::HEADING.font_id(ui.ctx()))
+            .color(theme.text.primary);
         if natural_name_width <= available_name_width {
             ui.label(name);
         } else {
@@ -149,19 +151,16 @@ pub(super) fn show_resource_detail_header(
                 egui::Label::new(name).truncate().halign(egui::Align::RIGHT),
             );
         }
-        ui.add_space(spacing::MD);
+        ui.add_space(space::S12);
         egui::Frame::new()
-            .fill(indigo::_50)
-            .corner_radius(radius::control())
-            .inner_margin(egui::Margin::symmetric(
-                spacing::SM as i8,
-                spacing::XS as i8,
-            ))
+            .fill(theme.accent.tint)
+            .corner_radius(egui::CornerRadius::same(radius::KEY))
+            .inner_margin(egui::Margin::symmetric(space::S8 as i8, space::S4 as i8))
             .show(ui, |ui| {
                 ui.label(
                     egui::RichText::new(&entry.api_resource.kind)
-                        .font(typography::body())
-                        .color(indigo::_600),
+                        .font(type_scale::BODY.font_id(ui.ctx()))
+                        .color(theme.accent.text),
                 );
             });
     });
@@ -200,6 +199,7 @@ pub(super) fn show_resource_detail_blade(
         &mut Option<super::super::resource_table_settings::ResourceTableSettingsTarget>,
     >,
 ) -> BladeResult {
+    let theme = ui.tokens();
     let mut result = BladeResult::default();
     ui.set_max_width(ui.available_width() - 9.0);
     if let Some(error) = detail_error {
@@ -230,7 +230,7 @@ pub(super) fn show_resource_detail_blade(
         metadata_maps(ui, detail);
     } else {
         ui.spinner();
-        ui.label(egui::RichText::new("Loading resource details…").color(gray::_500));
+        ui.label(egui::RichText::new("Loading resource details…").color(theme.text.muted));
     }
     ui.add_space(20.0);
     show_managed_resources_for(

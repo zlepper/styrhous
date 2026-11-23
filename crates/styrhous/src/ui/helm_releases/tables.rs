@@ -7,10 +7,10 @@ use super::{ManifestNavigation, ManifestResource, manifest_resource_namespace};
 use crate::api_resource::ApiResource;
 use crate::helm_release::HelmRelease;
 use crate::resource_detail::ResourceOwner;
-use components::colors::{gray, indigo};
-use components::design::spacing;
+use components::design::space;
+use components::design::theme::{ThemeExt, Tone};
 use components::{
-    ButtonSize, DetailCell, DetailRow, DetailTone, InspectorDetails, MoreButton, TableRowBuilder,
+    ButtonSize, DetailCell, DetailRow, InspectorDetails, MoreButton, TableRowBuilder,
     TailwindButton, TailwindTable, WorkspaceCard,
 };
 use std::cell::RefCell;
@@ -44,6 +44,7 @@ pub(super) fn show_revision_history(
         super::super::resource_table_settings::ResourceTableSettingsTarget,
     >,
 ) -> RevisionHistoryResponse {
+    let theme = ui.tokens();
     let mut rollback_requested = false;
     // Reserve the button's height whether or not it is shown, so the table does
     // not jump when another revision is selected, and centre the row on it.
@@ -54,7 +55,7 @@ pub(super) fn show_revision_history(
             ui.heading("Revision history");
             ui.label(
                 egui::RichText::new(format!("Revision {selected_revision} selected"))
-                    .color(gray::_600),
+                    .color(theme.text.secondary),
             );
             if rollback != RevisionRollback::Unavailable {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -149,7 +150,7 @@ pub(super) fn show_revision_history(
                         let response = TableRowBuilder::clickable_text(
                             ui,
                             &label,
-                            indigo::_600,
+                            theme.accent.text,
                             format!("Select revision {}", release.revision),
                         );
                         response.widget_info(|| {
@@ -198,6 +199,7 @@ pub(super) fn show_manifest_resources(
         super::super::resource_table_settings::ResourceTableSettingsTarget,
     >,
 ) {
+    let theme = ui.tokens();
     ui.horizontal(|ui| {
         ui.heading("Manifest resources");
         ui.label(
@@ -205,13 +207,13 @@ pub(super) fn show_manifest_resources(
                 1 => "1 resource".to_owned(),
                 count => format!("{count} resources"),
             })
-            .color(gray::_600),
+            .color(theme.text.secondary),
         );
     });
     if resources.is_empty() {
         ui.label(
             egui::RichText::new("No Kubernetes objects were found in this revision's manifest.")
-                .color(gray::_500),
+                .color(theme.text.muted),
         );
         return;
     }
@@ -316,7 +318,7 @@ pub(super) fn show_manifest_resources(
                             && TableRowBuilder::clickable_text(
                                 ui,
                                 &row.resource.name,
-                                indigo::_600,
+                                theme.accent.text,
                                 format!("Open details for {}", row.resource.name),
                             )
                             .clicked()
@@ -359,6 +361,7 @@ pub(super) fn show_manifest_resources(
 }
 
 pub(super) fn show_values_disclosure(ui: &mut egui::Ui, values: &str) {
+    let theme = ui.tokens();
     super::super::resource_detail::disclosure_card(
         ui,
         "helm-release-values-open",
@@ -367,29 +370,31 @@ pub(super) fn show_values_disclosure(ui: &mut egui::Ui, values: &str) {
         |ui| {
             ui.label(
                 egui::RichText::new("Treat this content like a Kubernetes Secret.")
-                    .color(gray::_700),
+                    .color(theme.text.secondary),
             );
-            ui.add_space(spacing::SM);
+            ui.add_space(space::S8);
             show_read_only_code(ui, values, 8, "Helm release values");
         },
     );
 }
 
 pub(super) fn show_release_notes(ui: &mut egui::Ui, notes: &str) {
+    let theme = ui.tokens();
     WorkspaceCard::new().show(ui, |ui| {
         ui.heading("Release notes");
         if notes.is_empty() {
             ui.label(
-                egui::RichText::new("This chart did not provide release notes.").color(gray::_500),
+                egui::RichText::new("This chart did not provide release notes.")
+                    .color(theme.text.muted),
             );
         } else {
             ui.label(
                 egui::RichText::new(
                     "These are the notes Helm printed after deploying this revision.",
                 )
-                .color(gray::_700),
+                .color(theme.text.secondary),
             );
-            ui.add_space(spacing::SM);
+            ui.add_space(space::S8);
             show_read_only_code(ui, notes, 6, "Helm release notes");
         }
     });
@@ -410,13 +415,18 @@ fn show_read_only_code(ui: &mut egui::Ui, content: &str, desired_rows: usize, la
 }
 
 pub(super) fn show_storage_metadata(ui: &mut egui::Ui, release: &HelmRelease) {
+    let theme = ui.tokens();
     if release.storage_labels.is_empty() && release.storage_annotations.is_empty() {
         return;
     }
     WorkspaceCard::new().show(ui, |ui| {
         ui.heading("Storage metadata");
         if !release.storage_labels.is_empty() {
-            ui.label(egui::RichText::new("Labels").strong().color(gray::_800));
+            ui.label(
+                egui::RichText::new("Labels")
+                    .strong()
+                    .color(theme.text.primary),
+            );
             InspectorDetails::show_properties(
                 ui,
                 &[DetailRow::new(release.storage_labels.iter().map(
@@ -429,12 +439,12 @@ pub(super) fn show_storage_metadata(ui: &mut egui::Ui, release: &HelmRelease) {
         }
         if !release.storage_annotations.is_empty() {
             if !release.storage_labels.is_empty() {
-                ui.add_space(spacing::SM);
+                ui.add_space(space::S8);
             }
             ui.label(
                 egui::RichText::new("Annotations")
                     .strong()
-                    .color(gray::_800),
+                    .color(theme.text.primary),
             );
             InspectorDetails::show_properties(
                 ui,
@@ -505,14 +515,14 @@ fn apply_sort_direction(
     }
 }
 
-pub(super) fn helm_status_tone(status: &str) -> DetailTone {
+pub(super) fn helm_status_tone(status: &str) -> Tone {
     match status {
-        "deployed" => DetailTone::Success,
+        "deployed" => Tone::Success,
         "pending-install" | "pending-upgrade" | "pending-rollback" | "uninstalling" => {
-            DetailTone::Warning
+            Tone::Warning
         }
-        "failed" | "uninstalled" => DetailTone::Danger,
-        _ => DetailTone::Neutral,
+        "failed" | "uninstalled" => Tone::Danger,
+        _ => Tone::Neutral,
     }
 }
 
@@ -521,12 +531,8 @@ pub(super) fn display_or_dash(value: &str) -> &str {
 }
 
 fn show_status_cell(ui: &mut egui::Ui, status: &str) {
-    let color = match helm_status_tone(status) {
-        DetailTone::Success => components::design::status::SUCCESS,
-        DetailTone::Warning => components::design::status::WARNING,
-        DetailTone::Danger => components::design::status::DANGER,
-        DetailTone::Neutral => gray::_400,
-    };
+    let theme = ui.tokens();
+    let color = theme.tone(helm_status_tone(status)).fill;
     ui.horizontal(|ui| {
         let (marker, _) = ui.allocate_exact_size(egui::vec2(12.0, 16.0), egui::Sense::hover());
         ui.painter().circle_filled(marker.center(), 4.0, color);

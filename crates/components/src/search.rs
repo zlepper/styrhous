@@ -1,9 +1,10 @@
 //! Compact search control shared by resource and log toolbars.
 
 use crate::PointingHand;
-use crate::colors::{WHITE, gray};
-use crate::design::{radius, spacing, status, typography};
-use egui::{Id, Margin, Response, Stroke, Ui, Vec2};
+use crate::design::theme::ThemeExt;
+use crate::design::{radius, space, type_scale};
+use crate::text_input::field_stroke;
+use egui::{Id, Margin, Response, Ui, Vec2};
 
 const INPUT_WIDTH: f32 = 150.0;
 /// Square size for compact previous/next buttons shown beside a search result count.
@@ -26,8 +27,11 @@ pub fn search_navigation_button(ui: &mut Ui, icon: egui::Image<'static>, label: 
     let response = ui
         .add_sized(
             Vec2::splat(SEARCH_NAVIGATION_BUTTON_SIZE),
-            egui::Button::image(icon.fit_to_exact_size(Vec2::splat(14.0)).tint(gray::_700))
-                .frame(false),
+            egui::Button::image(
+                icon.fit_to_exact_size(Vec2::splat(14.0))
+                    .tint(ui.tokens().text.secondary),
+            )
+            .frame(false),
         )
         .with_pointing_hand();
     response.widget_info(|| {
@@ -88,16 +92,13 @@ impl<'a> TailwindSearchInput<'a> {
 
     pub fn show(self, ui: &mut Ui) -> SearchInputResponse {
         let accessibility_label = self.accessibility_label;
-        let stroke_color = if self.invalid {
-            status::DANGER
-        } else {
-            gray::_300
-        };
+        let tokens = ui.tokens();
+        let fill = tokens.components.field_bg;
         egui::Frame::new()
-            .fill(WHITE)
-            .stroke(Stroke::new(1.0, stroke_color))
-            .corner_radius(radius::control())
-            .inner_margin(Margin::symmetric(spacing::SM as i8, spacing::XS as i8))
+            .fill(fill)
+            .stroke(field_stroke(&tokens, fill, false, self.invalid))
+            .corner_radius(egui::CornerRadius::same(radius::KEY))
+            .inner_margin(Margin::symmetric(space::S8 as i8, space::S4 as i8))
             .show(ui, |ui| {
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                     let text = ui.add_sized(
@@ -105,7 +106,7 @@ impl<'a> TailwindSearchInput<'a> {
                         egui::TextEdit::singleline(self.query)
                             .hint_text(self.hint_text)
                             .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(4, 2)))
-                            .font(typography::body())
+                            .font(type_scale::BODY.font_id(ui.ctx()))
                             .id_salt(self.input_id),
                     );
                     if self.focus {
@@ -120,10 +121,14 @@ impl<'a> TailwindSearchInput<'a> {
                     });
 
                     ui.separator();
+                    // The inline toggle sits inside the field, so it keeps egui's
+                    // compact padding rather than the stock small-button padding.
+                    ui.spacing_mut().button_padding =
+                        egui::style::Spacing::default().button_padding;
                     let regex = ui
                         .toggle_value(
                             self.regex_mode,
-                            egui::RichText::new(".*").font(typography::body()),
+                            egui::RichText::new(".*").font(type_scale::BODY.font_id(ui.ctx())),
                         )
                         .with_pointing_hand();
                     regex.widget_info(|| {

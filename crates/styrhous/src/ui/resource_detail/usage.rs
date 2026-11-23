@@ -57,6 +57,7 @@ pub(super) fn show_pod_summary(
 }
 
 pub(super) fn show_pod_detail(ui: &mut egui::Ui, pod: &PodDetail, usage: PodUsageDisplay<'_>) {
+    let theme = ui.tokens();
     let pod_requests =
         total_resource_thresholds(&pod.containers, |container| container.resource_requests);
     let pod_limits =
@@ -71,7 +72,7 @@ pub(super) fn show_pod_detail(ui: &mut egui::Ui, pod: &PodDetail, usage: PodUsag
                 ui.label(
                     egui::RichText::new(format!("⌃   {}", container.name))
                         .strong()
-                        .color(gray::_800),
+                        .color(theme.text.primary),
                 );
             },
             |ui| {
@@ -153,7 +154,7 @@ pub(super) fn show_pod_detail(ui: &mut egui::Ui, pod: &PodDetail, usage: PodUsag
                     ui.label(
                         egui::RichText::new(format!("⌄   {}", volume.name))
                             .strong()
-                            .color(gray::_800),
+                            .color(theme.text.primary),
                     );
                 },
                 |ui| volume_detail_row(ui, volume),
@@ -171,6 +172,7 @@ pub(super) fn show_pod_usage(
     requests: PodResourceThresholds,
     limits: PodResourceThresholds,
 ) {
+    let theme = ui.tokens();
     section_header(ui, "Resource usage", None);
     WorkspaceCard::new().show(ui, |ui| {
         if usage.metrics_api_unavailable {
@@ -181,11 +183,13 @@ pub(super) fn show_pod_usage(
             requests.cpu_nanocores,
             limits.cpu_nanocores,
             ["Request", "Limit"],
+            &theme,
         );
         let memory_references = usage_references(
             requests.memory_bytes,
             limits.memory_bytes,
             ["Request", "Limit"],
+            &theme,
         );
         let displayed_usage = displayed_usage_values(
             usage
@@ -213,9 +217,9 @@ pub(super) fn show_pod_usage(
                         .collect(),
                     format_cpu,
                     if usage.error.is_some() {
-                        gray::_400
+                        theme.status.neutral
                     } else {
-                        indigo::_600
+                        theme.components.chart_cpu
                     },
                     usage.error.is_some(),
                     &cpu_references,
@@ -230,9 +234,9 @@ pub(super) fn show_pod_usage(
                         .collect(),
                     format_memory,
                     if usage.error.is_some() {
-                        gray::_400
+                        theme.status.neutral
                     } else {
-                        status::SUCCESS
+                        theme.components.chart_memory
                     },
                     usage.error.is_some(),
                     &memory_references,
@@ -247,6 +251,7 @@ pub(super) fn show_node_usage(
     usage: NodeUsageDisplay<'_>,
     allocatable: PodResourceThresholds,
 ) {
+    let theme = ui.tokens();
     section_header(ui, "Resource usage", None);
     WorkspaceCard::new().show(ui, |ui| {
         if usage.metrics_api_unavailable {
@@ -272,9 +277,10 @@ pub(super) fn show_node_usage(
         if usage.metrics_api_unavailable {
             return;
         }
-        let cpu_references = usage_references(allocatable.cpu_nanocores, None, ["Allocatable", ""]);
+        let cpu_references =
+            usage_references(allocatable.cpu_nanocores, None, ["Allocatable", ""], &theme);
         let memory_references =
-            usage_references(allocatable.memory_bytes, None, ["Allocatable", ""]);
+            usage_references(allocatable.memory_bytes, None, ["Allocatable", ""], &theme);
         if !usage.history.is_empty()
             || has_usage_references(&cpu_references)
             || has_usage_references(&memory_references)
@@ -294,9 +300,9 @@ pub(super) fn show_node_usage(
                         .collect(),
                     format_cpu,
                     if usage.error.is_some() {
-                        gray::_400
+                        theme.status.neutral
                     } else {
-                        indigo::_600
+                        theme.components.chart_cpu
                     },
                     usage.error.is_some(),
                     &cpu_references,
@@ -311,9 +317,9 @@ pub(super) fn show_node_usage(
                         .collect(),
                     format_memory,
                     if usage.error.is_some() {
-                        gray::_400
+                        theme.status.neutral
                     } else {
-                        status::SUCCESS
+                        theme.components.chart_memory
                     },
                     usage.error.is_some(),
                     &memory_references,
@@ -335,6 +341,7 @@ pub(super) fn show_container_usage(
     metrics_api_unavailable: bool,
     error: Option<&str>,
 ) {
+    let theme = ui.tokens();
     ui.add_space(10.0);
     if metrics_api_unavailable {
         show_metrics_api_unavailable(ui, requests, limits);
@@ -344,11 +351,13 @@ pub(super) fn show_container_usage(
         requests.cpu_nanocores,
         limits.cpu_nanocores,
         ["Request", "Limit"],
+        &theme,
     );
     let memory_references = usage_references(
         requests.memory_bytes,
         limits.memory_bytes,
         ["Request", "Limit"],
+        &theme,
     );
     let displayed_usage = displayed_usage_values(
         usage.map(|usage| (usage.cpu_nanocores, usage.memory_bytes)),
@@ -380,9 +389,9 @@ pub(super) fn show_container_usage(
                     .collect(),
                 format_cpu,
                 if error.is_some() {
-                    gray::_400
+                    theme.status.neutral
                 } else {
-                    indigo::_600
+                    theme.components.chart_cpu
                 },
                 error.is_some(),
                 &cpu_references,
@@ -401,9 +410,9 @@ pub(super) fn show_container_usage(
                     .collect(),
                 format_memory,
                 if error.is_some() {
-                    gray::_400
+                    theme.status.neutral
                 } else {
-                    status::SUCCESS
+                    theme.components.chart_memory
                 },
                 error.is_some(),
                 &memory_references,

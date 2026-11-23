@@ -13,7 +13,7 @@ use crate::resource_detail::{
 use crate::resource_handlers::{matches_namespaced_api_resource, matches_namespaced_resource};
 use crate::resource_table::{
     CONTAINERS_COLUMN, CPU_COLUMN, CellValue, ContainerIndicator, ContainerKind, MEMORY_COLUMN,
-    NODE_COLUMN, READY_COLUMN, RESTARTS_COLUMN, ResourceTableDefinition, STATUS_COLUMN, StatusTone,
+    NODE_COLUMN, READY_COLUMN, RESTARTS_COLUMN, ResourceTableDefinition, STATUS_COLUMN, Tone,
     column, status_tone,
 };
 use k8s_openapi::api::core::v1::{ContainerStatus, Pod};
@@ -394,9 +394,9 @@ fn container_indicator(status: &ContainerStatus, kind: ContainerKind) -> Contain
             None,
             None,
             if status.ready {
-                StatusTone::Success
+                Tone::Success
             } else {
-                StatusTone::Warning
+                Tone::Warning
             },
         ),
         Some(state) if state.waiting.is_some() => {
@@ -405,7 +405,7 @@ fn container_indicator(status: &ContainerStatus, kind: ContainerKind) -> Contain
                 "Waiting".to_owned(),
                 waiting.reason.clone(),
                 waiting.message.clone(),
-                StatusTone::Warning,
+                Tone::Warning,
             )
         }
         Some(state) if state.terminated.is_some() => {
@@ -415,13 +415,13 @@ fn container_indicator(status: &ContainerStatus, kind: ContainerKind) -> Contain
                 terminated.reason.clone(),
                 terminated.message.clone(),
                 if terminated.exit_code == 0 {
-                    StatusTone::Success
+                    Tone::Success
                 } else {
-                    StatusTone::Danger
+                    Tone::Danger
                 },
             )
         }
-        _ => ("Unknown".to_owned(), None, None, StatusTone::Neutral),
+        _ => ("Unknown".to_owned(), None, None, Tone::Neutral),
     };
 
     ContainerIndicator {

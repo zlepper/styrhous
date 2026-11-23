@@ -30,13 +30,13 @@
 //! ```
 
 use egui::{
-    Color32, Id, Image, Response, RichText, Sense, Stroke, Ui, UiBuilder, Vec2, WidgetText,
+    Color32, Id, Image, Response, RichText, Sense, Ui, UiBuilder, Vec2, WidgetText,
     collapsing_header::CollapsingState,
 };
 
 use crate::PointingHand;
-use crate::colors::{NAVIGATION_BACKGROUND, WHITE, gray, indigo};
-use crate::design::{radius, spacing, typography};
+use crate::design::theme::{self, Theme, ThemeExt, ThemeScope};
+use crate::design::{radius, space, stroke, type_scale};
 
 const WIDE_WIDTH: f32 = 292.0;
 const NARROW_WIDTH: f32 = 68.0;
@@ -47,9 +47,9 @@ const WIDE_ITEM_HEIGHT: f32 = 36.0;
 const WIDE_GROUP_HEIGHT: f32 = 44.0;
 const NARROW_ITEM_HEIGHT: f32 = 52.0;
 const NARROW_AVATAR_SIZE: f32 = 28.0;
-const ITEM_PADDING_X: f32 = spacing::SM;
+const ITEM_PADDING_X: f32 = space::S8;
 const ICON_SIZE: f32 = 16.0;
-const ICON_TEXT_SPACING: f32 = spacing::SM;
+const ICON_TEXT_SPACING: f32 = space::S8;
 const CHEVRON_SIZE: f32 = 16.0;
 const CHEVRON_GAP: f32 = 8.0;
 /// Distance from an expandable item's padded edge to its disclosure chevron.
@@ -70,59 +70,56 @@ impl ItemColors {
         }
     }
 
-    fn navigation(selected: bool, hovered: bool, dark: bool) -> Self {
-        if dark {
-            return match (selected, hovered) {
-                (true, _) => Self::new(indigo::_600, WHITE, WHITE),
-                (_, true) => Self::new(gray::_800, gray::_100, gray::_300),
-                _ => Self::new(Color32::TRANSPARENT, gray::_300, gray::_400),
-            };
-        }
+    /// The selected treatment shared by every item kind (`.nv.is-on`).
+    fn selected(theme: &Theme) -> Self {
+        Self::new(
+            theme.nav.item_selected,
+            theme.text.primary,
+            theme.nav.accent,
+        )
+    }
+
+    fn navigation(theme: &Theme, selected: bool, hovered: bool) -> Self {
         match (selected, hovered) {
-            (true, _) => Self::new(indigo::_50, indigo::_600, indigo::_600),
-            (_, true) => Self::new(gray::_50, gray::_700, gray::_500),
-            _ => Self::new(Color32::TRANSPARENT, gray::_700, gray::_500),
+            (true, _) => Self::selected(theme),
+            (_, true) => Self::new(theme.nav.item_hover, theme.nav.text, theme.nav.text),
+            _ => Self::new(Color32::TRANSPARENT, theme.nav.text, theme.nav.text_muted),
         }
     }
 
-    fn child(selected: bool, hovered: bool, dark: bool) -> Self {
-        if dark {
-            return match (selected, hovered) {
-                (true, _) => Self::new(indigo::_600, WHITE, WHITE),
-                (_, true) => Self::new(gray::_800, gray::_100, gray::_300),
-                _ => Self::new(Color32::TRANSPARENT, gray::_200, gray::_400),
-            };
-        }
+    fn child(theme: &Theme, selected: bool, hovered: bool) -> Self {
         match (selected, hovered) {
-            (true, _) => Self::new(gray::_100, gray::_900, gray::_600),
-            (_, true) => Self::new(gray::_50, gray::_700, gray::_500),
-            _ => Self::new(Color32::TRANSPARENT, gray::_600, gray::_500),
+            (true, _) => Self::selected(theme),
+            (_, true) => Self::new(theme.nav.item_hover, theme.nav.text, theme.nav.text_muted),
+            _ => Self::new(
+                Color32::TRANSPARENT,
+                theme.nav.text_secondary,
+                theme.nav.text_muted,
+            ),
         }
     }
 
-    fn expandable(hovered: bool, pressed: bool, dark: bool) -> Self {
-        if dark {
-            return match (pressed, hovered) {
-                (true, _) | (_, true) => Self::new(gray::_800, gray::_100, gray::_300),
-                _ => Self::new(Color32::TRANSPARENT, gray::_200, gray::_400),
-            };
-        }
+    fn expandable(theme: &Theme, hovered: bool, pressed: bool) -> Self {
         match (pressed, hovered) {
-            (true, _) => Self::new(gray::_100, gray::_700, gray::_500),
-            (_, true) => Self::new(gray::_50, gray::_700, gray::_500),
-            _ => Self::new(Color32::TRANSPARENT, gray::_700, gray::_500),
+            (true, _) => Self::new(theme.nav.item_active, theme.nav.text, theme.nav.text_muted),
+            (_, true) => Self::new(theme.nav.item_hover, theme.nav.text, theme.nav.text_muted),
+            _ => Self::new(
+                Color32::TRANSPARENT,
+                theme.nav.text_secondary,
+                theme.nav.text_muted,
+            ),
         }
     }
 }
 
 /// Secondary text such as section headers and loading notes.
-fn muted_text_color(dark: bool) -> Color32 {
-    if dark { gray::_400 } else { gray::_500 }
+fn muted_text_color(ui: &Ui) -> Color32 {
+    ui.tokens().nav.text_muted
 }
 
 /// The tint of disclosure chevrons.
-fn chevron_tint(dark: bool) -> Color32 {
-    if dark { gray::_500 } else { gray::_400 }
+fn chevron_tint(ui: &Ui) -> Color32 {
+    ui.tokens().nav.text_muted
 }
 
 fn allocate_item(ui: &mut Ui, height: f32) -> (egui::Rect, egui::Rect, Response) {
@@ -136,7 +133,7 @@ fn allocate_item(ui: &mut Ui, height: f32) -> (egui::Rect, egui::Rect, Response)
 
 fn draw_background(painter: &egui::Painter, rect: egui::Rect, color: Color32) {
     if color != Color32::TRANSPARENT {
-        painter.rect_filled(rect, radius::control(), color);
+        painter.rect_filled(rect, egui::CornerRadius::same(radius::KEY), color);
     }
 }
 
@@ -148,7 +145,7 @@ fn render_icon(ui: &mut Ui, rect: egui::Rect, icon: Image<'_>, tint: Color32, si
 }
 
 fn truncate_text(painter: &egui::Painter, text: &str, color: Color32, max_width: f32) -> String {
-    let font = typography::body();
+    let font = type_scale::BODY.font_id(painter.ctx());
     if painter
         .layout_no_wrap(text.to_owned(), font.clone(), color)
         .size()
@@ -187,7 +184,7 @@ fn render_text(
         pos,
         egui::Align2::LEFT_TOP,
         &rendered_text,
-        typography::body(),
+        type_scale::BODY.font_id(painter.ctx()),
         color,
     );
     rendered_text != text
@@ -229,12 +226,12 @@ fn icon_rect_centered(inner_rect: egui::Rect, size: f32) -> egui::Rect {
 
 fn text_pos_after_icon(inner_rect: egui::Rect, item_height: f32) -> egui::Pos2 {
     let text_x = CHEVRON_SIZE + CHEVRON_GAP + ICON_SIZE + ICON_TEXT_SPACING;
-    inner_rect.min + Vec2::new(text_x, (item_height - typography::BODY_SIZE) / 2.0)
+    inner_rect.min + Vec2::new(text_x, (item_height - type_scale::BODY.size()) / 2.0)
 }
 
 fn text_pos_after_chevron(inner_rect: egui::Rect, item_height: f32) -> egui::Pos2 {
     let text_x = CHEVRON_SIZE + CHEVRON_GAP + 24.0;
-    inner_rect.min + Vec2::new(text_x, (item_height - typography::BODY_SIZE) / 2.0)
+    inner_rect.min + Vec2::new(text_x, (item_height - type_scale::BODY.size()) / 2.0)
 }
 
 mod core;

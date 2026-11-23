@@ -10,37 +10,39 @@ pub(super) fn show_editor_window_inner(
     if ctx.input(|input| input.viewport().close_requested()) {
         request_close(&ctx, editor);
     }
+    let theme = ui.tokens();
     let search_matches = yaml_search_matches(editor);
     reconcile_search_state(editor, search_matches.as_ref().ok());
 
     egui::Panel::top("yaml-editor-header")
         .exact_size(TOOLBAR_HEIGHT)
-        .frame(toolbar_frame())
+        .frame(toolbar_frame(&theme))
         .show(ui, |ui| {
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                ui.label(
-                    egui::RichText::new("Edit")
-                        .font(typography::section_heading())
-                        .color(gray::_900),
+                // The title and the scope share the title's baseline.
+                let baseline = type_scale::TITLE
+                    .centred_baseline(ui.available_height(), ui.ctx().pixels_per_point());
+                type_scale::TITLE.label_on_baseline(ui, "Edit", theme.text.primary, baseline);
+                ui.add_space(space::S16);
+                type_scale::TITLE.label_on_baseline(
+                    ui,
+                    &editor.resource_name,
+                    theme.text.primary,
+                    baseline,
                 );
-                ui.add_space(spacing::LG);
-                ui.label(
-                    egui::RichText::new(&editor.resource_name)
-                        .font(typography::section_heading())
-                        .color(gray::_900),
-                );
-                ui.add_space(spacing::MD);
-                ui.label(
-                    egui::RichText::new(resource_scope(editor))
-                        .font(typography::body())
-                        .color(gray::_600),
+                ui.add_space(space::S12);
+                type_scale::BODY.label_on_baseline(
+                    ui,
+                    &resource_scope(editor),
+                    theme.text.secondary,
+                    baseline,
                 );
                 if editor.saving {
-                    ui.add_space(spacing::MD);
-                    status_indicator(ui, gray::_400, "Applying…");
+                    ui.add_space(space::S12);
+                    status_indicator(ui, theme.status.neutral, "Applying…");
                 } else if editor.is_modified() {
-                    ui.add_space(spacing::MD);
-                    status_indicator(ui, status::WARNING, "Modified");
+                    ui.add_space(space::S12);
+                    status_indicator(ui, theme.warning.fill, "Modified");
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let apply_clicked = ui
@@ -66,7 +68,7 @@ pub(super) fn show_editor_window_inner(
                     {
                         request_close(&ctx, editor);
                     }
-                    ui.add_space(spacing::MD);
+                    ui.add_space(space::S12);
                     show_search_controls(&ctx, ui, editor, &search_matches);
                 });
             });
@@ -74,28 +76,28 @@ pub(super) fn show_editor_window_inner(
 
     egui::Panel::bottom("yaml-editor-footer")
         .exact_size(40.0)
-        .frame(toolbar_frame())
+        .frame(toolbar_frame(&theme))
         .show(ui, |ui| {
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 ui.label(
                     egui::RichText::new("Changes apply directly to the cluster")
-                        .font(typography::body())
-                        .color(gray::_600),
+                        .font(type_scale::BODY.font_id(ui.ctx()))
+                        .color(theme.text.secondary),
                 );
             });
         });
 
     if has_diagnostics_feedback(editor) {
         egui::Panel::bottom("yaml-editor-diagnostics")
-            .frame(toolbar_frame())
+            .frame(toolbar_frame(&theme))
             .show(ui, |ui| show_diagnostics(&ctx, ui, editor));
     }
 
     egui::CentralPanel::default()
         .frame(
             egui::Frame::new()
-                .fill(surface::TERMINAL_BACKGROUND)
-                .inner_margin(egui::Margin::same(spacing::LG as i8)),
+                .fill(theme.code.surface)
+                .inner_margin(egui::Margin::same(space::S16 as i8)),
         )
         .show(ui, |ui| {
             if editor.loading {

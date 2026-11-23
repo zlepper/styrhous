@@ -1,0 +1,13 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Label value="Restart" rect=(x=40.0 y=816.0 width=120.0 height=32.0 center_x=100.0 center_y=832.0)
+        GenericContainer rect=<none>
+          Label value="Apply changes" rect=(x=176.0 y=816.0 width=120.0 height=32.0 center_x=236.0 center_y=832.0)
+        GenericContainer rect=<none>
+          Label value="Cancel" rect=(x=312.0 y=818.0 width=96.0 height=28.0 center_x=360.0 center_y=832.0)
+        GenericContainer rect=<none>
+          Label value="⌘K" rect=(x=424.0 y=823.0 width=26.0 height=18.0 center_x=437.0 center_y=832.0)

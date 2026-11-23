@@ -5,20 +5,30 @@ use egui::{
 };
 
 use crate::PointingHand;
-use crate::colors::{WHITE, gray, indigo};
-use crate::design::{button, radius, typography};
+use crate::design::theme::{Theme, ThemeExt};
+use crate::design::{radius, type_scale};
+
+/// Theme colours of one button variant.
+struct ButtonColors {
+    fill: Color32,
+    fill_hovered: Color32,
+    fill_active: Color32,
+    text: Color32,
+    /// Width of the outline, which is painted in the current fill.
+    stroke_width: f32,
+}
 
 /// Button color variant
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ButtonVariant {
-    /// Solid indigo background with white text
+    /// Solid accent fill with on-fill text
     #[default]
     Primary,
-    /// White background with gray border and dark text
+    /// Neutral secondary fill with primary text
     Secondary,
-    /// Light indigo background with indigo text
+    /// Accent tint with accent text
     Soft,
-    /// Solid danger background with white text
+    /// Solid danger fill with on-fill text
     Danger,
 }
 
@@ -123,17 +133,17 @@ impl<'a> TailwindButton<'a> {
         }
     }
 
-    /// Create a primary button (solid indigo background)
+    /// Create a primary button (solid accent fill)
     pub fn primary(text: impl Into<WidgetText>) -> Self {
         Self::new(text).variant(ButtonVariant::Primary)
     }
 
-    /// Create a secondary button (white background with border)
+    /// Create a secondary button (neutral fill)
     pub fn secondary(text: impl Into<WidgetText>) -> Self {
         Self::new(text).variant(ButtonVariant::Secondary)
     }
 
-    /// Create a soft button (light indigo background)
+    /// Create a soft button (accent tint)
     pub fn soft(text: impl Into<WidgetText>) -> Self {
         Self::new(text).variant(ButtonVariant::Soft)
     }
@@ -169,7 +179,7 @@ impl<'a> TailwindButton<'a> {
 
     /// Show the button and return the response
     pub fn show(self, ui: &mut Ui) -> Response {
-        let (fill, fill_hovered, fill_active, text_color, stroke) = self.variant_colors();
+        let colors = self.variant_colors(&ui.tokens());
         let (text_padding, control_height) = self.size_metrics();
         let (padding, min_size) = if matches!(&self.content, ButtonContent::Icon(_)) {
             // Icon-only buttons share the text-button height ladder. They only
@@ -187,33 +197,29 @@ impl<'a> TailwindButton<'a> {
         // Save current widget visuals
         let saved_style = ui.style().clone();
 
+        // The theme sets `override_text_color`, which egui prefers over a
+        // widget's foreground stroke; point it at the variant's text colour.
+        ui.visuals_mut().override_text_color = Some(colors.text);
+
         // Apply custom visuals for all button states
-        let visuals = &mut ui.visuals_mut().widgets;
-
-        // Inactive state (not hovered)
-        visuals.inactive.weak_bg_fill = fill;
-        visuals.inactive.bg_fill = fill;
-        visuals.inactive.bg_stroke = stroke;
-        visuals.inactive.fg_stroke = Stroke::new(1.0, text_color);
-        visuals.inactive.corner_radius = corner_radius;
-
-        // Hovered state
-        visuals.hovered.weak_bg_fill = fill_hovered;
-        visuals.hovered.bg_fill = fill_hovered;
-        visuals.hovered.bg_stroke = stroke;
-        visuals.hovered.fg_stroke = Stroke::new(1.0, text_color);
-        visuals.hovered.corner_radius = corner_radius;
-
-        // Active/pressed state
-        visuals.active.weak_bg_fill = fill_active;
-        visuals.active.bg_fill = fill_active;
-        visuals.active.bg_stroke = stroke;
-        visuals.active.fg_stroke = Stroke::new(1.0, text_color);
-        visuals.active.corner_radius = corner_radius;
+        let widgets = &mut ui.visuals_mut().widgets;
+        for (visuals, fill) in [
+            (&mut widgets.inactive, colors.fill),
+            (&mut widgets.hovered, colors.fill_hovered),
+            (&mut widgets.active, colors.fill_active),
+        ] {
+            visuals.weak_bg_fill = fill;
+            visuals.bg_fill = fill;
+            // Harbour separates controls by tone: the stroke keeps the
+            // control's footprint but always matches its fill.
+            visuals.bg_stroke = Stroke::new(colors.stroke_width, fill);
+            visuals.fg_stroke = Stroke::new(1.0, colors.text);
+            visuals.corner_radius = corner_radius;
+        }
 
         // Apply custom padding
         ui.spacing_mut().button_padding = padding;
-        let button_font = typography::semibold_or_proportional(ui.ctx(), typography::BODY_SIZE);
+        let button_font = type_scale::BODY_STRONG.font_id(ui.ctx());
         ui.style_mut()
             .text_styles
             .insert(TextStyle::Button, button_font);
@@ -242,36 +248,36 @@ impl<'a> TailwindButton<'a> {
     }
 
     /// Get colors for the current variant
-    fn variant_colors(&self) -> (Color32, Color32, Color32, Color32, Stroke) {
+    fn variant_colors(&self, theme: &Theme) -> ButtonColors {
         match self.variant {
-            ButtonVariant::Primary => (
-                button::PRIMARY, // fill
-                indigo::_700,    // fill_hovered
-                indigo::_800,    // fill_active
-                WHITE,           // text_color
-                Stroke::NONE,    // stroke
-            ),
-            ButtonVariant::Secondary => (
-                button::SECONDARY,            // fill
-                gray::_50,                    // fill_hovered
-                gray::_100,                   // fill_active
-                gray::_700,                   // text_color
-                Stroke::new(1.0, gray::_300), // stroke
-            ),
-            ButtonVariant::Soft => (
-                button::SOFT, // fill
-                indigo::_100, // fill_hovered
-                indigo::_200, // fill_active
-                indigo::_600, // text_color
-                Stroke::NONE, // stroke
-            ),
-            ButtonVariant::Danger => (
-                button::DANGER,
-                button::DANGER.gamma_multiply(0.9),
-                button::DANGER.gamma_multiply(0.8),
-                WHITE,
-                Stroke::NONE,
-            ),
+            ButtonVariant::Primary => ButtonColors {
+                fill: theme.accent.fill,
+                fill_hovered: theme.accent.fill_hover,
+                fill_active: theme.accent.fill_active,
+                text: theme.text.on_fill,
+                stroke_width: 0.0,
+            },
+            ButtonVariant::Secondary => ButtonColors {
+                fill: theme.components.btn_secondary_bg,
+                fill_hovered: theme.components.btn_secondary_hover,
+                fill_active: theme.components.btn_secondary_press,
+                text: theme.text.primary,
+                stroke_width: 1.0,
+            },
+            ButtonVariant::Soft => ButtonColors {
+                fill: theme.accent.tint,
+                fill_hovered: theme.accent.tint_hover,
+                fill_active: theme.accent.tint_active,
+                text: theme.accent.text,
+                stroke_width: 0.0,
+            },
+            ButtonVariant::Danger => ButtonColors {
+                fill: theme.danger.fill,
+                fill_hovered: theme.danger.fill_hover,
+                fill_active: theme.danger.fill_active,
+                text: theme.text.on_fill,
+                stroke_width: 0.0,
+            },
         }
     }
 
@@ -290,8 +296,8 @@ impl<'a> TailwindButton<'a> {
     /// Get corner radius for the current rounding style
     fn corner_radius(&self) -> CornerRadius {
         match self.rounding {
-            ButtonRounding::Default => radius::control(),
-            ButtonRounding::Rounded => radius::surface(),
+            ButtonRounding::Default => egui::CornerRadius::same(radius::KEY),
+            ButtonRounding::Rounded => egui::CornerRadius::same(radius::MENU_ITEM),
             ButtonRounding::Pill => CornerRadius::same(255), // max u8 for pill shape
         }
     }

@@ -8,6 +8,7 @@ pub(super) fn show_log_window_with_scroll_state(
     _close_requested: &mut bool,
 ) -> egui::scroll_area::ScrollAreaOutput<()> {
     let ctx = ui.ctx().clone();
+    let theme = ui.tokens();
     sync_search(&ctx, window, log_store);
     if let Some(text) = window.copied_text.take() {
         ctx.copy_text(text);
@@ -17,12 +18,9 @@ pub(super) fn show_log_window_with_scroll_state(
         .exact_size(90.0)
         .frame(
             egui::Frame::new()
-                .fill(TOOLBAR_BACKGROUND)
-                .stroke(egui::Stroke::new(1.0, TABLE_BORDER))
-                .inner_margin(egui::Margin::symmetric(
-                    spacing::XL as i8,
-                    spacing::SM as i8,
-                )),
+                .fill(theme.surface.panel)
+                .stroke(stroke::divider(&theme))
+                .inner_margin(egui::Margin::symmetric(space::S24 as i8, space::S8 as i8)),
         )
         .show(ui, |ui| {
             ui.vertical(|ui| {
@@ -31,57 +29,51 @@ pub(super) fn show_log_window_with_scroll_state(
                     egui::vec2(header_width, 36.0),
                     egui::Layout::left_to_right(egui::Align::Center),
                     |ui| {
-                        ui.label(
-                            egui::RichText::new("Logs")
-                                .font(typography::section_heading())
-                                .color(gray::_900),
-                        );
-                        ui.add_space(spacing::LG);
-                        if window.has_multiple_sources() {
-                            ui.label(
-                                egui::RichText::new(format!("{} sources", window.targets.len()))
-                                    .font(typography::section_heading())
-                                    .color(gray::_900),
-                            );
-                            ui.add_space(spacing::MD);
-                            ui.label(
-                                egui::RichText::new("Interleaved Pod logs")
-                                    .font(typography::body())
-                                    .color(gray::_600),
-                            );
+                        // The title and the subtitle share the title's baseline.
+                        let baseline = type_scale::TITLE
+                            .centred_baseline(ui.available_height(), ui.ctx().pixels_per_point());
+                        let (title, subtitle) = if window.has_multiple_sources() {
+                            (
+                                format!("{} sources", window.targets.len()),
+                                "Interleaved Pod logs".to_owned(),
+                            )
                         } else {
                             let target = window
                                 .targets
                                 .first()
                                 .expect("log windows always contain one source");
-                            ui.label(
-                                egui::RichText::new(&target.pod_name)
-                                    .font(typography::section_heading())
-                                    .color(gray::_900),
-                            );
-                            ui.add_space(spacing::MD);
-                            ui.label(
-                                egui::RichText::new(format!("Container: {}", target.container))
-                                    .font(typography::body())
-                                    .color(gray::_600),
-                            );
-                        }
+                            (
+                                target.pod_name.clone(),
+                                format!("Container: {}", target.container),
+                            )
+                        };
+                        let primary = theme.text.primary;
+                        type_scale::TITLE.label_on_baseline(ui, "Logs", primary, baseline);
+                        ui.add_space(space::S16);
+                        type_scale::TITLE.label_on_baseline(ui, &title, primary, baseline);
+                        ui.add_space(space::S12);
+                        type_scale::BODY.label_on_baseline(
+                            ui,
+                            &subtitle,
+                            theme.text.secondary,
+                            baseline,
+                        );
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             show_log_search_controls(&ctx, ui, window, display_options, log_store)
                         });
                     },
                 );
-                ui.add_space(spacing::SM);
+                ui.add_space(space::S8);
                 ui.allocate_ui_with_layout(
                     egui::vec2(header_width, 28.0),
                     egui::Layout::left_to_right(egui::Align::Center),
                     |ui| {
                         ui.label(
                             egui::RichText::new("Container start")
-                                .font(typography::body())
-                                .color(gray::_600),
+                                .font(type_scale::BODY.font_id(ui.ctx()))
+                                .color(theme.text.secondary),
                         );
-                        ui.add_space(spacing::SM);
+                        ui.add_space(space::S8);
                         for (instance, label) in [
                             (PodLogInstance::Current, "Current"),
                             (PodLogInstance::Previous, "Previous"),
@@ -98,11 +90,11 @@ pub(super) fn show_log_window_with_scroll_state(
                                 window.requested_instance = Some(instance);
                             }
                         }
-                        ui.add_space(spacing::LG);
+                        ui.add_space(space::S16);
                         ui.label(
                             egui::RichText::new("●")
-                                .font(typography::body())
-                                .color(status_color(window)),
+                                .font(type_scale::BODY.font_id(ui.ctx()))
+                                .color(theme.tone(status_tone(window)).fill),
                         );
                         let all_sources_reconnecting = all_sources_are_reconnecting(window);
                         if !all_sources_reconnecting {
@@ -111,8 +103,8 @@ pub(super) fn show_log_window_with_scroll_state(
                         show_source_issue(ui, &window.source_failures, "unavailable");
                         let status = ui.label(
                             egui::RichText::new(status_label(window))
-                                .font(typography::body())
-                                .color(gray::_600),
+                                .font(type_scale::BODY.font_id(ui.ctx()))
+                                .color(theme.text.secondary),
                         );
                         if all_sources_reconnecting {
                             status.on_hover_text(source_issue_details(&window.source_reconnects));
@@ -128,14 +120,14 @@ pub(super) fn show_log_window_with_scroll_state(
     egui::CentralPanel::default()
         .frame(
             egui::Frame::new()
-                .fill(surface::TERMINAL_BACKGROUND)
-                .inner_margin(egui::Margin::same(spacing::LG as i8)),
+                .fill(theme.code.surface)
+                .inner_margin(egui::Margin::same(space::S16 as i8)),
         )
         .show(ui, |ui| {
             // Egui also applies `bar_outer_margin` while it paints floating
             // tracks. Moving those tracks keeps the existing content bounds,
             // virtual-scroll viewport, and panel gutter intact.
-            ui.spacing_mut().scroll.bar_outer_margin = -spacing::LG;
+            ui.spacing_mut().scroll.bar_outer_margin = -space::S16;
             let pixels_per_point = ui.pixels_per_point();
             let font_row_height =
                 ui.fonts_mut(|fonts| fonts.row_height(&egui::FontId::monospace(LOG_FONT_SIZE)));
@@ -353,6 +345,7 @@ pub(super) fn show_log_window_with_scroll_state(
                                             &row.style_spans,
                                             &highlight_ranges,
                                             *display_options,
+                                            &theme,
                                         ))
                                         .extend()
                                         .selectable(false)
@@ -377,7 +370,7 @@ pub(super) fn show_log_window_with_scroll_state(
                                         ui.add(egui::Label::new(
                                             egui::RichText::new(prefix)
                                                 .font(egui::FontId::monospace(LOG_FONT_SIZE))
-                                                .color(egui::Color32::from_rgb(156, 163, 175)),
+                                                .color(theme.code.gutter),
                                         ));
                                     }
                                     ui.add_space(fragment.start_x);
@@ -396,6 +389,7 @@ pub(super) fn show_log_window_with_scroll_state(
                                             ),
                                             highlight_ranges,
                                             *display_options,
+                                            &theme,
                                         ))
                                         .extend()
                                         .selectable(false)
@@ -538,18 +532,19 @@ fn show_source_issue(
     issues: &std::collections::HashMap<crate::worker::PodLogStreamTarget, String>,
     state: &str,
 ) {
+    let theme = ui.tokens();
     if issues.is_empty() {
         return;
     }
-    ui.add_space(spacing::MD);
+    ui.add_space(space::S12);
     ui.label(
         egui::RichText::new(format!(
             "{} source{} {state}",
             issues.len(),
             if issues.len() == 1 { "" } else { "s" }
         ))
-        .font(typography::body())
-        .color(status::WARNING),
+        .font(type_scale::BODY.font_id(ui.ctx()))
+        .color(theme.warning.text),
     )
     .on_hover_text(source_issue_details(issues));
 }

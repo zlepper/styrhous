@@ -1,0 +1,17 @@
+{
+  "name": "styrhous-design-oracles",
+  "private": true,
+  "type": "module",
+  "description": "Extracts the Harbour design artboards into plain HTML and renders them into oracle PNGs.",
+  "scripts": {
+    "extract": "node extract.mjs",
+    "render": "node render.mjs",
+    "audit-fonts": "node audit-fonts.mjs",
+    "extract-icons": "node extract-icons.mjs",
+    "compare": "node compare.mjs",
+    "test": "node --test \"test/*.test.mjs\""
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1"
+  }
+}

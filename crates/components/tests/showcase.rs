@@ -6,8 +6,8 @@
 
 use std::collections::HashSet;
 
-use components::colors::{WHITE, gray};
-use components::design::{radius, surface, typography};
+use components::design::theme::ThemeExt;
+use components::design::{radius, type_scale};
 use components::icons::{
     arrow_left_icon, arrow_right_icon, calendar_icon, document_icon, ellipsis_horizontal_icon,
     folder_icon, home_icon, pencil_icon, trash_icon, users_icon,
@@ -17,7 +17,7 @@ use components::{
     ButtonRounding, ButtonSize, ButtonVariant, SortDirection, SortState, TableRowBuilder, Tabs,
     TailwindButton, TailwindCombobox, TailwindTable, WideSidebar,
 };
-use egui::{Align, Color32, Label, Layout, Pos2, Rect, RichText, Ui, UiBuilder, Vec2};
+use egui::{Align, Label, Layout, Pos2, Rect, RichText, Ui, UiBuilder, Vec2};
 use egui_kittest::{Harness, kittest::Queryable};
 
 struct Person {
@@ -50,7 +50,8 @@ const PEOPLE: [Person; 4] = [
 ];
 
 fn showcase_title(ui: &mut egui::Ui, title: &str) {
-    ui.painter().rect_filled(ui.max_rect(), 0.0, WHITE);
+    ui.painter()
+        .rect_filled(ui.max_rect(), 0.0, ui.tokens().surface.canvas);
     ui.heading(title);
     ui.add_space(12.0);
 }
@@ -100,29 +101,34 @@ fn show_buttons_showcase(ui: &mut Ui) {
     ui.ctx().layer_painter(ui.layer_id()).rect_filled(
         Rect::from_min_size(Pos2::ZERO, Vec2::new(1536.0, 1024.0)),
         0.0,
-        Color32::from_rgb(245, 245, 247),
+        ui.tokens().surface.canvas,
     );
 
     showcase_text(
         ui,
         Rect::from_min_size(Pos2::new(696.0, 62.0), Vec2::new(160.0, 52.0)),
         RichText::new("Buttons")
-            .font(typography::semibold_or_proportional(ui.ctx(), 40.0))
-            .color(gray::_900),
+            .font(
+                type_scale::UI
+                    .with_weight(type_scale::Weight::SemiBold)
+                    .with_size(40.0, 48.0)
+                    .font_id(ui.ctx()),
+            )
+            .color(ui.tokens().text.primary),
     );
     showcase_text(
         ui,
         Rect::from_min_size(Pos2::new(620.0, 120.0), Vec2::new(320.0, 30.0)),
         RichText::new("Application button styles and sizes")
             .font(egui::FontId::proportional(18.0))
-            .color(gray::_600),
+            .color(ui.tokens().text.secondary),
     );
 
     ui.painter().rect(
         BUTTON_SHOWCASE_CARD,
-        radius::surface(),
-        Color32::from_rgb(253, 253, 253),
-        surface::control_border(),
+        egui::CornerRadius::same(radius::MENU_ITEM),
+        ui.tokens().surface.panel,
+        egui::Stroke::new(1.0, ui.tokens().divider.base),
         egui::StrokeKind::Inside,
     );
 
@@ -142,8 +148,8 @@ fn show_buttons_showcase(ui: &mut Ui) {
                 Vec2::new(40.0, 24.0),
             ),
             RichText::new(label)
-                .font(typography::semibold_or_proportional(ui.ctx(), 16.0))
-                .color(gray::_950),
+                .font(type_scale::TITLE.font_id(ui.ctx()))
+                .color(ui.tokens().text.primary),
         );
     }
 
@@ -157,8 +163,8 @@ fn show_buttons_showcase(ui: &mut Ui) {
             ui,
             Rect::from_center_size(Pos2::new(188.0, center_y), Vec2::new(96.0, 30.0)),
             RichText::new(label)
-                .font(typography::semibold_or_proportional(ui.ctx(), 18.0))
-                .color(gray::_950),
+                .font(type_scale::TITLE.with_size(18.0, 26.0).font_id(ui.ctx()))
+                .color(ui.tokens().text.primary),
         );
         for (size, _, center_x) in BUTTON_SHOWCASE_COLUMNS {
             showcase_matrix_button(
@@ -171,17 +177,23 @@ fn show_buttons_showcase(ui: &mut Ui) {
         }
     }
 
-    ui.painter()
-        .hline(140.0..=1396.0, 698.0, egui::Stroke::new(1.0, gray::_200));
-    ui.painter()
-        .vline(764.0, 735.0..=885.0, egui::Stroke::new(1.0, gray::_200));
+    ui.painter().hline(
+        140.0..=1396.0,
+        698.0,
+        egui::Stroke::new(1.0, ui.tokens().divider.base),
+    );
+    ui.painter().vline(
+        764.0,
+        735.0..=885.0,
+        egui::Stroke::new(1.0, ui.tokens().divider.base),
+    );
 
     showcase_text(
         ui,
         Rect::from_min_size(Pos2::new(140.0, 746.0), Vec2::new(160.0, 28.0)),
         RichText::new("Icon buttons")
-            .font(typography::semibold_or_proportional(ui.ctx(), 18.0))
-            .color(gray::_950),
+            .font(type_scale::TITLE.with_size(18.0, 26.0).font_id(ui.ctx()))
+            .color(ui.tokens().text.primary),
     );
     for (label, icon, center_x) in [
         ("Back", arrow_left_icon(), 178.0),
@@ -193,10 +205,13 @@ fn show_buttons_showcase(ui: &mut Ui) {
         showcase_button(
             ui,
             Rect::from_center_size(Pos2::new(center_x, 835.0), Vec2::splat(44.0)),
-            TailwindButton::icon(icon.fit_to_exact_size(Vec2::splat(16.0)).tint(gray::_800))
-                .variant(ButtonVariant::Secondary)
-                .size(ButtonSize::Xl)
-                .accessibility_label(label),
+            TailwindButton::icon(
+                icon.fit_to_exact_size(Vec2::splat(16.0))
+                    .tint(ui.tokens().text.primary),
+            )
+            .variant(ButtonVariant::Secondary)
+            .size(ButtonSize::Xl)
+            .accessibility_label(label),
         );
     }
 
@@ -204,8 +219,8 @@ fn show_buttons_showcase(ui: &mut Ui) {
         ui,
         Rect::from_min_size(Pos2::new(818.0, 746.0), Vec2::new(180.0, 28.0)),
         RichText::new("Corner radius")
-            .font(typography::semibold_or_proportional(ui.ctx(), 18.0))
-            .color(gray::_950),
+            .font(type_scale::TITLE.with_size(18.0, 26.0).font_id(ui.ctx()))
+            .color(ui.tokens().text.primary),
     );
     for (label, rounding, center_x) in [
         ("Default", ButtonRounding::Default, 886.0),

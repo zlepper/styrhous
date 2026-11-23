@@ -42,7 +42,8 @@ pub(crate) struct YamlEditorWindowState {
 
 /// A syntax-highlighted job, independent of egui's font atlas.
 ///
-/// The job is invalidated whenever its source or search state differs. Egui
+/// The job is invalidated whenever its source, search state or the installed
+/// theme (see [`components::design::theme::generation`]) differs. Egui
 /// continues to own the `Galley` cache, so glyph-atlas and font changes remain
 /// handled by its normal lifecycle.
 #[derive(Debug, Clone, Default)]
@@ -52,6 +53,7 @@ pub(crate) struct YamlEditorHighlightCache {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct YamlEditorHighlightCacheKey {
+    theme_generation: u64,
     search_query: String,
     search_regex_mode: bool,
     active_match: Option<Range<usize>>,
@@ -59,11 +61,13 @@ pub(crate) struct YamlEditorHighlightCacheKey {
 
 impl YamlEditorHighlightCacheKey {
     pub(crate) fn new(
+        theme_generation: u64,
         search_query: &str,
         search_regex_mode: bool,
         active_match: Option<&Range<usize>>,
     ) -> Self {
         Self {
+            theme_generation,
             search_query: search_query.to_owned(),
             search_regex_mode,
             active_match: active_match.cloned(),

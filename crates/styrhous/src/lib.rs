@@ -89,12 +89,15 @@ fn native_options() -> eframe::NativeOptions {
     }
 }
 
+/// The eframe application name, which also names its data directory.
+pub(crate) const APP_NAME: &str = "Styrhous";
+
 pub fn run_native() {
     tracing_subscriber::fmt().init();
     updater::apply_staged_update();
 
     eframe::run_native(
-        "Styrhous",
+        APP_NAME,
         native_options(),
         Box::new(|cc| Ok(Box::new(MyEguiApp::<worker::Worker>::new(cc)))),
     )

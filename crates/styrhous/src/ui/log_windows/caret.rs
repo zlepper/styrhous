@@ -383,7 +383,7 @@ pub(super) fn paint_log_caret(
     );
     ui.painter().line_segment(
         [cursor_rect.center_top(), cursor_rect.center_bottom()],
-        egui::Stroke::new(2.0, egui::Color32::WHITE),
+        egui::Stroke::new(2.0, ui.tokens().code.caret),
     );
 }
 

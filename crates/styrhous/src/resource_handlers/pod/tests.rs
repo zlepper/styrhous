@@ -131,11 +131,11 @@ fn extract_includes_all_container_categories_with_state_aware_tones() {
             .map(|indicator| (indicator.name.as_str(), indicator.kind, indicator.tone))
             .collect::<Vec<_>>(),
         vec![
-            ("setup", ContainerKind::Init, StatusTone::Success),
-            ("api", ContainerKind::App, StatusTone::Success),
-            ("worker", ContainerKind::App, StatusTone::Warning),
-            ("sidecar", ContainerKind::App, StatusTone::Warning),
-            ("debugger", ContainerKind::Ephemeral, StatusTone::Danger),
+            ("setup", ContainerKind::Init, Tone::Success),
+            ("api", ContainerKind::App, Tone::Success),
+            ("worker", ContainerKind::App, Tone::Warning),
+            ("sidecar", ContainerKind::App, Tone::Warning),
+            ("debugger", ContainerKind::Ephemeral, Tone::Danger),
         ]
     );
     assert_eq!(
@@ -198,7 +198,7 @@ fn container_without_a_reported_state_is_neutral() {
     );
 
     assert_eq!(indicator.state, "Unknown");
-    assert_eq!(indicator.tone, StatusTone::Neutral);
+    assert_eq!(indicator.tone, Tone::Neutral);
 }
 
 #[test]

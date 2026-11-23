@@ -14,7 +14,6 @@ pub struct ExpandableResponse<R> {
 /// A full-featured sidebar with icons, text, and expandable sections
 pub struct WideSidebar {
     width: Option<f32>,
-    dark: bool,
 }
 
 impl Default for WideSidebar {
@@ -26,21 +25,12 @@ impl Default for WideSidebar {
 impl WideSidebar {
     /// Create a new wide sidebar with default settings
     pub fn new() -> Self {
-        Self {
-            width: None,
-            dark: false,
-        }
+        Self { width: None }
     }
 
     /// Override the default width (256px)
     pub fn width(mut self, width: f32) -> Self {
         self.width = Some(width);
-        self
-    }
-
-    /// Use the dark navigation treatment intended for application shells.
-    pub fn dark(mut self) -> Self {
-        self.dark = true;
         self
     }
 
@@ -50,23 +40,13 @@ impl WideSidebar {
         ui: &mut Ui,
         add_contents: impl FnOnce(&mut WideSidebarContent<'_>) -> R,
     ) -> R {
-        render_sidebar(
-            ui,
-            self.width,
-            WIDE_WIDTH,
-            if self.dark {
-                NAVIGATION_BACKGROUND
-            } else {
-                WHITE
-            },
-            6.0,
-            |child_ui| {
-                let mut content = WideSidebarContent {
-                    core: SidebarContentCore::wide(child_ui, self.dark),
-                };
-                add_contents(&mut content)
-            },
-        )
+        let background = ui.tokens().nav.surface;
+        render_sidebar(ui, self.width, WIDE_WIDTH, background, 6.0, |child_ui| {
+            let mut content = WideSidebarContent {
+                core: SidebarContentCore::wide(child_ui),
+            };
+            add_contents(&mut content)
+        })
     }
 }
 
@@ -106,13 +86,13 @@ impl<'a> WideSidebarContent<'a> {
         let text = text.into();
         let text_str = text.text();
         let (rect, inner_rect, response) = allocate_item(self.core.ui, WIDE_ITEM_HEIGHT);
-        let colors = ItemColors::navigation(selected, response.hovered(), self.core.dark);
+        let colors = ItemColors::navigation(&self.core.ui.tokens(), selected, response.hovered());
         draw_background(self.core.ui.painter(), inner_rect, colors.background);
 
         let text_pos = inner_rect.min
             + Vec2::new(
-                spacing::XL,
-                (WIDE_ITEM_HEIGHT - typography::BODY_SIZE) / 2.0,
+                space::S24,
+                (WIDE_ITEM_HEIGHT - type_scale::BODY.size()) / 2.0,
             );
         let text_is_truncated = render_text(
             self.core.ui.painter(),
@@ -133,12 +113,13 @@ impl<'a> WideSidebarContent<'a> {
     pub fn section_header(&mut self, text: &str) {
         self.core.ui.add_space(12.0);
         let padding_x = ITEM_PADDING_X + 4.0;
+        let color = muted_text_color(self.core.ui);
         self.core.ui.horizontal(|ui| {
             ui.add_space(padding_x);
             ui.label(
                 RichText::new(text.to_uppercase())
-                    .font(typography::metadata())
-                    .color(muted_text_color(self.core.dark)),
+                    .font(type_scale::META.font_id(ui.ctx()))
+                    .color(color),
             );
         });
         self.core.ui.add_space(2.0);
@@ -162,19 +143,19 @@ impl<'a> WideSidebarContent<'a> {
 
         // Chevron
         let chevron = if is_open {
-            Image::new(egui::include_image!("../icons/chevron-down.svg"))
+            crate::icons::chevron_down_icon()
         } else {
-            Image::new(egui::include_image!("../icons/chevron-right.svg"))
+            crate::icons::chevron_right_icon()
         };
         let chevron = chevron
             .fit_to_exact_size(Vec2::splat(CHEVRON_SIZE))
-            .tint(chevron_tint(self.core.dark));
+            .tint(chevron_tint(self.core.ui));
 
         let (rect, inner_rect, response) = allocate_item(self.core.ui, WIDE_GROUP_HEIGHT);
         let colors = ItemColors::expandable(
+            &self.core.ui.tokens(),
             response.hovered(),
             response.is_pointer_button_down_on(),
-            self.core.dark,
         );
 
         draw_background(self.core.ui.painter(), rect, colors.background);
@@ -195,7 +176,7 @@ impl<'a> WideSidebarContent<'a> {
         // Icon
         render_icon(
             self.core.ui,
-            icon_rect_wide(inner_rect, WIDE_ITEM_HEIGHT, ICON_SIZE),
+            icon_rect_wide(inner_rect, WIDE_GROUP_HEIGHT, ICON_SIZE),
             icon,
             colors.icon,
             ICON_SIZE,
@@ -280,19 +261,19 @@ impl<'a> WideSidebarContent<'a> {
             CollapsingState::load_with_default_open(self.core.ui.ctx(), id, default_open);
         let is_open = state.is_open();
         let chevron = if is_open {
-            Image::new(egui::include_image!("../icons/chevron-down.svg"))
+            crate::icons::chevron_down_icon()
         } else {
-            Image::new(egui::include_image!("../icons/chevron-right.svg"))
+            crate::icons::chevron_right_icon()
         }
         .fit_to_exact_size(Vec2::splat(CHEVRON_SIZE))
-        .tint(chevron_tint(self.core.dark));
+        .tint(chevron_tint(self.core.ui));
 
         let group_height = WIDE_GROUP_HEIGHT;
         let (rect, inner_rect, response) = allocate_item(self.core.ui, group_height);
         let colors = ItemColors::expandable(
+            &self.core.ui.tokens(),
             response.hovered(),
             response.is_pointer_button_down_on(),
-            self.core.dark,
         );
         draw_background(self.core.ui.painter(), rect, colors.background);
 
@@ -362,7 +343,7 @@ impl<'a> WideSidebarContent<'a> {
         let text_str = text.text();
 
         let (rect, _, response) = allocate_item(self.core.ui, WIDE_ITEM_HEIGHT);
-        let colors = ItemColors::child(selected, response.hovered(), self.core.dark);
+        let colors = ItemColors::child(&self.core.ui.tokens(), selected, response.hovered());
 
         // Child text aligns with the parent disclosure control. The absence of a
         // chevron communicates that it is a leaf without spending width on a gutter.
@@ -376,7 +357,7 @@ impl<'a> WideSidebarContent<'a> {
         draw_background(self.core.ui.painter(), bg_rect, colors.background);
 
         let text_pos =
-            rect.min + Vec2::new(text_x, (WIDE_ITEM_HEIGHT - typography::BODY_SIZE) / 2.0);
+            rect.min + Vec2::new(text_x, (WIDE_ITEM_HEIGHT - type_scale::BODY.size()) / 2.0);
         let text_is_truncated = render_text(
             self.core.ui.painter(),
             text_pos,
@@ -400,10 +381,10 @@ impl<'a> WideSidebarContent<'a> {
             Vec2::new(ui.available_width(), WIDE_ITEM_HEIGHT),
             Sense::hover(),
         );
-        let color = muted_text_color(self.core.dark);
+        let color = muted_text_color(ui);
         // The spinner sits where a section's chevron does, and the text where its label does.
         let inner_rect = rect.shrink2(Vec2::new(ITEM_PADDING_X, 0.0));
-        let spinner_size = typography::META_SIZE;
+        let spinner_size = type_scale::META.size();
         let spinner_rect = egui::Rect::from_center_size(
             egui::pos2(
                 inner_rect.left() + CHEVRON_INSET + CHEVRON_SIZE / 2.0,
@@ -430,7 +411,7 @@ impl<'a> WideSidebarContent<'a> {
                 ui.add(
                     egui::Label::new(
                         RichText::new(text)
-                            .font(typography::metadata())
+                            .font(type_scale::META.font_id(ui.ctx()))
                             .color(color),
                     )
                     .truncate(),

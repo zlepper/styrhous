@@ -6,7 +6,7 @@ use crate::api_resource::ApiResource;
 use crate::minimal_namespace::MinimalNamespace;
 use crate::minimal_resource::MinimalResource;
 use crate::resource_catalog::build_resource_navigation;
-use crate::resource_table::{CellValue, READY_COLUMN, RESTARTS_COLUMN, STATUS_COLUMN, StatusTone};
+use crate::resource_table::{CellValue, READY_COLUMN, RESTARTS_COLUMN, STATUS_COLUMN, Tone};
 use crate::terminal_launcher::TerminalLauncher;
 use crate::worker::WorkerTrait;
 use egui_kittest::Harness;
@@ -88,7 +88,7 @@ pub(super) fn fixture_resource(index: usize, name: &str) -> MinimalResource {
                 STATUS_COLUMN.to_owned(),
                 CellValue::Status {
                     label: "Running".into(),
-                    tone: StatusTone::Success,
+                    tone: Tone::Success,
                 },
             ),
             (RESTARTS_COLUMN.to_owned(), CellValue::Number(0)),

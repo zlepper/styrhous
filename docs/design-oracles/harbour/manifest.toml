@@ -1,0 +1,298 @@
+# Harbour design oracles: one [[board]] per artboard.
+#
+# Fields (paths are relative to the repository root):
+#   id        Board ID, also the oracle file stem (docs/design-oracles/harbour/<id>.png).
+#   title     The artboard title from the design source.
+#   oracle    Rendered design PNG (scripts/design-oracles: npm run render).
+#   snapshot  egui snapshot PNG written by the board's oracle test; "" until that test exists.
+#             scripts/design-oracles/compare.sh only compares boards with a snapshot.
+#   [[board.regions]]  Optional crops compared on their own (component boards), each with
+#             name, x, y, width, height in board pixels, e.g.
+#               [[board.regions]]
+#               name = "primary-button"
+#               x = 180
+#               y = 240
+#               width = 104
+#               height = 32
+
+[[board]]
+id = "CAL"
+title = "Calibration (hand-written; sets the pixel-match bar)"
+oracle = "docs/design-oracles/harbour/CAL.png"
+snapshot = "crates/components/tests/snapshots/calibration/harbour_calibration.png"
+
+[[board]]
+id = "Main"
+title = "Styrhous design system"
+oracle = "docs/design-oracles/harbour/Main.png"
+snapshot = ""
+
+[[board]]
+id = "C00"
+title = "Foundations"
+oracle = "docs/design-oracles/harbour/C00.png"
+snapshot = ""
+
+[[board]]
+id = "C00b"
+title = "Theme layers"
+oracle = "docs/design-oracles/harbour/C00b.png"
+snapshot = ""
+
+[[board]]
+id = "C01"
+title = "Icons & status"
+oracle = "docs/design-oracles/harbour/C01.png"
+snapshot = ""
+
+[[board]]
+id = "C02"
+title = "Buttons"
+oracle = "docs/design-oracles/harbour/C02.png"
+snapshot = ""
+
+[[board]]
+id = "C03"
+title = "Toggles, groups & segmented controls"
+oracle = "docs/design-oracles/harbour/C03.png"
+snapshot = ""
+
+[[board]]
+id = "C04"
+title = "Text inputs & search"
+oracle = "docs/design-oracles/harbour/C04.png"
+snapshot = ""
+
+[[board]]
+id = "C05"
+title = "Select & combobox"
+oracle = "docs/design-oracles/harbour/C05.png"
+snapshot = ""
+
+[[board]]
+id = "C06"
+title = "Checkbox, radio & switch"
+oracle = "docs/design-oracles/harbour/C06.png"
+snapshot = ""
+
+[[board]]
+id = "C07"
+title = "Menu & tooltip"
+oracle = "docs/design-oracles/harbour/C07.png"
+snapshot = ""
+
+[[board]]
+id = "C08"
+title = "Table"
+oracle = "docs/design-oracles/harbour/C08.png"
+snapshot = ""
+
+[[board]]
+id = "C09"
+title = "Sidebar"
+oracle = "docs/design-oracles/harbour/C09.png"
+snapshot = ""
+
+[[board]]
+id = "C10"
+title = "Blade"
+oracle = "docs/design-oracles/harbour/C10.png"
+snapshot = ""
+
+[[board]]
+id = "C11"
+title = "Dialog"
+oracle = "docs/design-oracles/harbour/C11.png"
+snapshot = ""
+
+[[board]]
+id = "C12"
+title = "Feedback"
+oracle = "docs/design-oracles/harbour/C12.png"
+snapshot = ""
+
+[[board]]
+id = "C13"
+title = "Data display"
+oracle = "docs/design-oracles/harbour/C13.png"
+snapshot = ""
+
+[[board]]
+id = "C14"
+title = "Document window chrome"
+oracle = "docs/design-oracles/harbour/C14.png"
+snapshot = ""
+
+[[board]]
+id = "C15"
+title = "Code surface"
+oracle = "docs/design-oracles/harbour/C15.png"
+snapshot = ""
+
+[[board]]
+id = "C16"
+title = "Top bar"
+oracle = "docs/design-oracles/harbour/C16.png"
+snapshot = ""
+
+[[board]]
+id = "C17"
+title = "Grouped table"
+oracle = "docs/design-oracles/harbour/C17.png"
+snapshot = ""
+
+[[board]]
+id = "C18"
+title = "Cluster switcher"
+oracle = "docs/design-oracles/harbour/C18.png"
+snapshot = ""
+
+[[board]]
+id = "C19"
+title = "Readouts and section rail"
+oracle = "docs/design-oracles/harbour/C19.png"
+snapshot = ""
+
+[[board]]
+id = "C20"
+title = "Log viewer parts"
+oracle = "docs/design-oracles/harbour/C20.png"
+snapshot = ""
+
+[[board]]
+id = "A01"
+title = "Workspace — no cluster selected"
+oracle = "docs/design-oracles/harbour/A01.png"
+snapshot = ""
+
+[[board]]
+id = "A02"
+title = "Pods — table with toasts"
+oracle = "docs/design-oracles/harbour/A02.png"
+snapshot = ""
+
+[[board]]
+id = "A03"
+title = "Pods — namespace selector open"
+oracle = "docs/design-oracles/harbour/A03.png"
+snapshot = ""
+
+[[board]]
+id = "A04"
+title = "Nodes — row actions with Shell submenu"
+oracle = "docs/design-oracles/harbour/A04.png"
+snapshot = ""
+
+[[board]]
+id = "A05"
+title = "Pod inspector blade with history"
+oracle = "docs/design-oracles/harbour/A05.png"
+snapshot = ""
+
+[[board]]
+id = "A06"
+title = "Deployments — restart rollout confirmation"
+oracle = "docs/design-oracles/harbour/A06.png"
+snapshot = ""
+
+[[board]]
+id = "A07"
+title = "Force delete — type to confirm"
+oracle = "docs/design-oracles/harbour/A07.png"
+snapshot = ""
+
+[[board]]
+id = "A08"
+title = "Settings blade"
+oracle = "docs/design-oracles/harbour/A08.png"
+snapshot = ""
+
+[[board]]
+id = "A09"
+title = "Settings — edit context"
+oracle = "docs/design-oracles/harbour/A09.png"
+snapshot = ""
+
+[[board]]
+id = "A10"
+title = "Settings — cluster discovery"
+oracle = "docs/design-oracles/harbour/A10.png"
+snapshot = ""
+
+[[board]]
+id = "A11"
+title = "License & account with warning banner"
+oracle = "docs/design-oracles/harbour/A11.png"
+snapshot = ""
+
+[[board]]
+id = "A12"
+title = "Notification history"
+oracle = "docs/design-oracles/harbour/A12.png"
+snapshot = ""
+
+[[board]]
+id = "A13"
+title = "Helm release inspector"
+oracle = "docs/design-oracles/harbour/A13.png"
+snapshot = ""
+
+[[board]]
+id = "A14"
+title = "Application settings — terminal and debug images"
+oracle = "docs/design-oracles/harbour/A14.png"
+snapshot = ""
+
+[[board]]
+id = "A15"
+title = "Pods — narrow window"
+oracle = "docs/design-oracles/harbour/A15.png"
+snapshot = ""
+
+[[board]]
+id = "A16"
+title = "Cluster switcher"
+oracle = "docs/design-oracles/harbour/A16.png"
+snapshot = ""
+
+[[board]]
+id = "L01"
+title = "Logs — following with search"
+oracle = "docs/design-oracles/harbour/L01.png"
+snapshot = ""
+
+[[board]]
+id = "L02"
+title = "Logs — two sources, filtered, reconnecting"
+oracle = "docs/design-oracles/harbour/L02.png"
+snapshot = ""
+
+[[board]]
+id = "L03"
+title = "Logs — previous instance unavailable"
+oracle = "docs/design-oracles/harbour/L03.png"
+snapshot = ""
+
+[[board]]
+id = "L04"
+title = "Logs — spooling, narrow window"
+oracle = "docs/design-oracles/harbour/L04.png"
+snapshot = ""
+
+[[board]]
+id = "Y01"
+title = "YAML editor — modified, searching"
+oracle = "docs/design-oracles/harbour/Y01.png"
+snapshot = ""
+
+[[board]]
+id = "Y02"
+title = "YAML editor — completion and problems"
+oracle = "docs/design-oracles/harbour/Y02.png"
+snapshot = ""
+
+[[board]]
+id = "Y03"
+title = "YAML editor — apply conflict and discard dialog"
+oracle = "docs/design-oracles/harbour/Y03.png"
+snapshot = ""

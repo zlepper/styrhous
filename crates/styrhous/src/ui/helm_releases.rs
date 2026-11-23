@@ -5,8 +5,8 @@ use super::global_blade::{
 use super::state::PendingHelmRollback;
 use crate::api_resource::ApiResource;
 use crate::helm_release::{HelmRelease, HelmReleaseKey};
-use components::colors::{gray, indigo};
-use components::design::{radius, spacing, typography};
+use components::design::theme::ThemeExt;
+use components::design::{radius, space, type_scale};
 use components::{BladeLayer, DetailCell, DetailRow, InspectorDetails, WorkspaceCard};
 
 #[derive(Debug)]
@@ -86,6 +86,7 @@ impl GlobalBladeContent for HelmReleaseDetailBlade {
         _layer: BladeLayer,
         context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
+        let theme = ui.tokens();
         let releases = context.helm_releases(
             self.cluster_key,
             &self.release.namespace,
@@ -97,23 +98,20 @@ impl GlobalBladeContent for HelmReleaseDetailBlade {
             .unwrap_or(&self.release.release_name);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             egui::Frame::new()
-                .fill(indigo::_50)
-                .corner_radius(radius::control())
-                .inner_margin(egui::Margin::symmetric(
-                    spacing::SM as i8,
-                    spacing::XS as i8,
-                ))
+                .fill(theme.accent.tint)
+                .corner_radius(egui::CornerRadius::same(radius::KEY))
+                .inner_margin(egui::Margin::symmetric(space::S8 as i8, space::S4 as i8))
                 .show(ui, |ui| {
                     ui.label(
                         egui::RichText::new("Helm Release")
-                            .font(typography::body())
-                            .color(indigo::_600),
+                            .font(type_scale::BODY.font_id(ui.ctx()))
+                            .color(theme.accent.text),
                     );
                 });
-            ui.add_space(spacing::MD);
+            ui.add_space(space::S12);
             let title = egui::RichText::new(title)
-                .font(typography::page_title())
-                .color(gray::_900);
+                .font(type_scale::HEADING.font_id(ui.ctx()))
+                .color(theme.text.primary);
             ui.add_sized(
                 egui::vec2(ui.available_width().max(0.0), 24.0),
                 egui::Label::new(title)
@@ -130,6 +128,7 @@ impl GlobalBladeContent for HelmReleaseDetailBlade {
         _layer: BladeLayer,
         context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
+        let theme = ui.tokens();
         let mut releases = context.helm_releases(
             self.cluster_key,
             &self.release.namespace,
@@ -138,12 +137,13 @@ impl GlobalBladeContent for HelmReleaseDetailBlade {
         releases.sort_by_key(|release| std::cmp::Reverse(release.revision));
         let Some(release) = self.selected(&releases).cloned() else {
             ui.label(
-                egui::RichText::new("This Helm release is no longer available.").color(gray::_500),
+                egui::RichText::new("This Helm release is no longer available.")
+                    .color(theme.text.muted),
             );
             return GlobalBladeRenderResult::default();
         };
         WorkspaceCard::new()
-            .padding(spacing::LG as i8)
+            .margin(space::S16 as i8)
             .show(ui, |ui| {
                 InspectorDetails::show_properties(
                     ui,
@@ -180,7 +180,7 @@ impl GlobalBladeContent for HelmReleaseDetailBlade {
                     ],
                 );
             });
-        ui.add_space(spacing::MD);
+        ui.add_space(space::S12);
         let mut column_settings = None;
         // `releases` is sorted newest first.
         let current_revision = releases
@@ -211,12 +211,12 @@ impl GlobalBladeContent for HelmReleaseDetailBlade {
                 target_revision: release.revision,
             });
         }
-        ui.add_space(spacing::MD);
+        ui.add_space(space::S12);
         show_release_notes(ui, &release.notes);
-        ui.add_space(spacing::MD);
+        ui.add_space(space::S12);
         let values = release.values_yaml();
         show_values_disclosure(ui, &values);
-        ui.add_space(spacing::MD);
+        ui.add_space(space::S12);
         let resources = ParsedManifest::resources_for(&mut self.parsed_manifest, &release);
         show_manifest_resources(
             ui,
@@ -227,7 +227,7 @@ impl GlobalBladeContent for HelmReleaseDetailBlade {
             context,
             &mut column_settings,
         );
-        ui.add_space(spacing::MD);
+        ui.add_space(space::S12);
         show_storage_metadata(ui, &release);
         GlobalBladeRenderResult {
             next_content: column_settings

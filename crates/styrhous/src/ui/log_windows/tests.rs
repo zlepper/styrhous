@@ -294,6 +294,7 @@ fn show_wide_test_scroll_area(
                     &[],
                     &[],
                     LogDisplayOptions::default(),
+                    &Theme::default(),
                 ))
                 .extend(),
             );

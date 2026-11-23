@@ -89,6 +89,7 @@ pub(super) fn show_diagnostics(
     ui: &mut egui::Ui,
     editor: &mut YamlEditorWindowState,
 ) {
+    let theme = ui.tokens();
     let (diagnostics, showing_retained_diagnostics) = diagnostics_to_display(editor);
     if let ValidationState::Failed(message) = &editor.server_validation {
         error_strip(ui, message);
@@ -96,13 +97,15 @@ pub(super) fn show_diagnostics(
     if diagnostics.is_empty() {
         match &editor.server_validation {
             ValidationState::Pending => {
-                status_indicator(ui, gray::_400, "Validating with cluster…")
+                status_indicator(ui, theme.status.neutral, "Validating with cluster…")
             }
-            ValidationState::Valid => status_indicator(ui, status::SUCCESS, "Validated by cluster"),
+            ValidationState::Valid => {
+                status_indicator(ui, theme.success.fill, "Validated by cluster")
+            }
             ValidationState::Failed(_) => {}
             ValidationState::Idle => {
                 if editor.schema_loading {
-                    status_indicator(ui, gray::_400, "Loading Kubernetes schema…");
+                    status_indicator(ui, theme.status.neutral, "Loading Kubernetes schema…");
                 }
             }
         }
@@ -113,7 +116,7 @@ pub(super) fn show_diagnostics(
         .default_open(true)
         .show(ui, |ui| {
             if showing_retained_diagnostics {
-                status_indicator(ui, gray::_400, "Validating updated YAML…");
+                status_indicator(ui, theme.status.neutral, "Validating updated YAML…");
             }
             components::scroll::vertical()
                 .id_salt(("yaml-editor-diagnostic-list", editor.id))
@@ -128,8 +131,8 @@ pub(super) fn show_diagnostics(
                             .unwrap_or_default();
                         let button = egui::Button::new(
                             egui::RichText::new(format!("{location}{}", diagnostic.message))
-                                .font(typography::metadata())
-                                .color(status::DANGER),
+                                .font(type_scale::META.font_id(ui.ctx()))
+                                .color(theme.danger.text),
                         )
                         .frame(false);
                         let response = if showing_retained_diagnostics {

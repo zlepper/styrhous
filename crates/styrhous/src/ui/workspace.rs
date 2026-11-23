@@ -27,8 +27,8 @@ use crate::terminal_launcher::{DebugImagePreset, ShellRequest};
 use crate::ui::global_blade::resource_detail_entry_ids;
 use crate::ui::namespace_selector::NamespaceSelectorSettings;
 use crate::worker::WorkerCommandBox;
-use components::colors::{TOOLBAR_BACKGROUND, gray};
-use components::design::{spacing, typography};
+use components::design::theme::ThemeExt;
+use components::design::{space, type_scale};
 use components::fuzzy::{fuzzy_match_score, normalize_for_search};
 use components::{
     ButtonSize, MoreButton, SelectionAction, TableRowBuilder, TailwindButton, TailwindCombobox,
@@ -39,7 +39,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
 const RESOURCE_SEARCH_WIDTH: f32 = 210.0;
-const TOOLBAR_RIGHT_INSET: f32 = spacing::XL;
+const TOOLBAR_RIGHT_INSET: f32 = space::S24;
 const TOOLBAR_HEIGHT: f32 = 52.0;
 const TOOLBAR_CONTENT_HEIGHT: f32 = 36.0;
 const TOOLBAR_VERTICAL_PADDING: f32 = (TOOLBAR_HEIGHT - TOOLBAR_CONTENT_HEIGHT) / 2.0;
@@ -266,7 +266,7 @@ pub(super) fn show(
     let mut effects = WorkspaceEffects::default();
     let mut resource_selection_action = None;
     egui::CentralPanel::default()
-        .frame(WorkspacePage::frame())
+        .frame(WorkspacePage::canvas_frame(&ui.tokens()))
         .show(ui, |ui| {
             WorkspacePage::show(ui, |ui| {
                 let toolbar_rect = egui::Rect::from_min_size(
@@ -274,7 +274,7 @@ pub(super) fn show(
                     egui::vec2(ui.available_width(), TOOLBAR_HEIGHT),
                 );
                 ui.painter()
-                    .rect_filled(toolbar_rect, 0.0, TOOLBAR_BACKGROUND);
+                    .rect_filled(toolbar_rect, 0.0, ui.tokens().surface.canvas);
 
                 let Some(selected_cluster_id) = ui_state.selected_cluster else {
                     workspace_empty_state(

@@ -1,9 +1,9 @@
 use super::*;
 
-const SOURCE_COLUMN_WIDTH: f32 = spacing::XXL * 2.0;
-const SOURCE_ICON_SIZE: f32 = spacing::LG;
-const ROW_HEIGHT: f32 = spacing::XXL;
-const HEADER_HEIGHT: f32 = spacing::XL;
+const SOURCE_COLUMN_WIDTH: f32 = space::S32 * 2.0;
+const SOURCE_ICON_SIZE: f32 = space::S16;
+const ROW_HEIGHT: f32 = space::S32;
+const HEADER_HEIGHT: f32 = space::S24;
 
 pub(super) fn environment_variables(
     ui: &mut egui::Ui,
@@ -15,16 +15,10 @@ pub(super) fn environment_variables(
         "Environment variables",
         Some(environment_variable_count_label(variables.len())),
     );
-    ui.add_space(spacing::SM);
-    egui::Frame::new()
-        .fill(WHITE)
-        .stroke(surface::muted_border())
-        .corner_radius(radius::surface())
-        .inner_margin(egui::Margin::symmetric(
-            spacing::LG as i8,
-            spacing::SM as i8,
-        ))
-        .show(ui, |ui| {
+    ui.add_space(space::S8);
+    WorkspaceCard::new()
+        .margin(egui::Margin::symmetric(space::S16 as i8, space::S8 as i8))
+        .show_inner(ui, |ui| {
             environment_variable_header(ui);
             ui.separator();
             for (index, variable) in variables.iter().enumerate() {
@@ -77,6 +71,7 @@ fn environment_variable_text_cell(
     header: bool,
     height: f32,
 ) {
+    let theme = ui.tokens();
     ui.allocate_ui_with_layout(
         egui::vec2(width, height),
         egui::Layout::left_to_right(egui::Align::Center),
@@ -84,14 +79,14 @@ fn environment_variable_text_cell(
             ui.set_min_width(ui.available_width());
             let text = if header {
                 egui::RichText::new(value)
-                    .font(typography::metadata())
-                    .color(gray::_500)
+                    .font(type_scale::META.font_id(ui.ctx()))
+                    .color(theme.text.muted)
             } else {
                 egui::RichText::new(value)
                     .monospace()
-                    .font(typography::monospace())
+                    .font(type_scale::MONO.font_id(ui.ctx()))
                     .strong()
-                    .color(gray::_800)
+                    .color(theme.text.primary)
             };
             ui.add(egui::Label::new(text).selectable(!header).truncate());
         },
@@ -99,14 +94,15 @@ fn environment_variable_text_cell(
 }
 
 fn environment_variable_source_header(ui: &mut egui::Ui) {
+    let theme = ui.tokens();
     ui.allocate_ui_with_layout(
         egui::vec2(SOURCE_COLUMN_WIDTH, HEADER_HEIGHT),
         egui::Layout::left_to_right(egui::Align::Center).with_main_justify(true),
         |ui| {
             ui.label(
                 egui::RichText::new("Source")
-                    .font(typography::metadata())
-                    .color(gray::_500),
+                    .font(type_scale::META.font_id(ui.ctx()))
+                    .color(theme.text.muted),
             );
         },
     );
@@ -118,6 +114,7 @@ pub(super) fn environment_variable_value_cell(
     secret_reveal_scope: egui::Id,
     variable: &crate::resource_detail::PodEnvironmentVariableDetail,
 ) {
+    let theme = ui.tokens();
     let secret = matches!(
         variable.source,
         crate::resource_detail::PodEnvironmentVariableSource::SecretKey { .. }
@@ -137,7 +134,8 @@ pub(super) fn environment_variable_value_cell(
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if secret && variable.value.is_some() {
                     let action = if revealed { "Hide" } else { "Reveal" };
-                    let response = components::icons::eye_button(ui, 14.0, gray::_600, action);
+                    let response =
+                        components::icons::eye_button(ui, 14.0, theme.text.secondary, action);
                     if response.on_hover_text(action).clicked() {
                         ui.data_mut(|data| {
                             data.insert_temp(
@@ -153,8 +151,8 @@ pub(super) fn environment_variable_value_cell(
                         egui::Label::new(
                             egui::RichText::new(value)
                                 .monospace()
-                                .font(typography::monospace())
-                                .color(gray::_700),
+                                .font(type_scale::MONO.font_id(ui.ctx()))
+                                .color(theme.text.secondary),
                         )
                         .selectable(true)
                         .truncate(),
@@ -169,6 +167,7 @@ pub(super) fn environment_variable_source_cell(
     ui: &mut egui::Ui,
     variable: &crate::resource_detail::PodEnvironmentVariableDetail,
 ) {
+    let theme = ui.tokens();
     let source = environment_variable_source_label(variable);
     ui.allocate_ui_with_layout(
         egui::vec2(SOURCE_COLUMN_WIDTH, ROW_HEIGHT),
@@ -177,7 +176,7 @@ pub(super) fn environment_variable_source_cell(
             ui.add(
                 environment_variable_source_icon(variable)
                     .fit_to_exact_size(egui::Vec2::splat(SOURCE_ICON_SIZE))
-                    .tint(gray::_600)
+                    .tint(theme.text.secondary)
                     .alt_text(&source)
                     .sense(egui::Sense::hover()),
             )

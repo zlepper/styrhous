@@ -34,13 +34,14 @@ pub(super) fn show_provider_heading(
     title: &str,
     count: Option<usize>,
 ) {
+    let theme = ui.tokens();
     ui.horizontal(|ui| {
         ui.add(icon.fit_to_exact_size(egui::vec2(24.0, 24.0)));
-        ui.add_space(spacing::SM);
+        ui.add_space(space::S8);
         ui.label(
             egui::RichText::new(title)
-                .font(typography::semibold(typography::SECTION_SIZE))
-                .color(gray::_900),
+                .font(type_scale::TITLE.font_id(ui.ctx()))
+                .color(theme.text.primary),
         );
         if let Some(count) = count {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -49,8 +50,8 @@ pub(super) fn show_provider_heading(
                         "{count} cluster{}",
                         if count == 1 { "" } else { "s" }
                     ))
-                    .font(typography::metadata())
-                    .color(gray::_600),
+                    .font(type_scale::META.font_id(ui.ctx()))
+                    .color(theme.text.secondary),
                 );
             });
         }
@@ -65,6 +66,7 @@ pub(super) fn show_discovery_headers(
     action: &str,
     stack_metadata: bool,
 ) {
+    let theme = ui.tokens();
     let (rect, _) =
         ui.allocate_exact_size(egui::vec2(ui.available_width(), 18.0), egui::Sense::hover());
     let mut header = ui.new_child(
@@ -92,16 +94,17 @@ pub(super) fn show_discovery_headers(
         |ui| {
             ui.label(
                 egui::RichText::new(action)
-                    .font(typography::metadata())
-                    .color(gray::_500),
+                    .font(type_scale::META.font_id(ui.ctx()))
+                    .color(theme.text.muted),
             );
         },
     );
     ui.painter()
-        .hline(rect.x_range(), rect.bottom(), surface::border());
+        .hline(rect.x_range(), rect.bottom(), stroke::divider(&theme));
 }
 
 pub(super) fn discovery_column_label(ui: &mut egui::Ui, width: f32, label: &str) {
+    let theme = ui.tokens();
     discovery_fixed_column(
         ui,
         width,
@@ -110,8 +113,8 @@ pub(super) fn discovery_column_label(ui: &mut egui::Ui, width: f32, label: &str)
         |ui| {
             ui.label(
                 egui::RichText::new(label)
-                    .font(typography::metadata())
-                    .color(gray::_500),
+                    .font(type_scale::META.font_id(ui.ctx()))
+                    .color(theme.text.muted),
             );
         },
     );
@@ -158,6 +161,7 @@ pub(super) struct DiscoveryRow<'a> {
 
 impl DiscoveryRow<'_> {
     pub(super) fn show(self, ui: &mut egui::Ui, on_click: impl FnOnce()) {
+        let theme = ui.tokens();
         let has_tag_line = self.stack_metadata && self.tags.is_some();
         let row_height = self.height
             + if has_tag_line {
@@ -182,9 +186,9 @@ impl DiscoveryRow<'_> {
                 row_height,
                 egui::Layout::left_to_right(egui::Align::Center),
                 |ui| {
-                    if let Some(color) = self.dot_color() {
+                    if let Some(color) = self.dot_color(&theme) {
                         ui.label(egui::RichText::new("●").color(color));
-                        ui.add_space(spacing::SM);
+                        ui.add_space(space::S8);
                     }
                     ui.allocate_ui_with_layout(
                         egui::vec2(ui.available_width(), row_height),
@@ -194,17 +198,22 @@ impl DiscoveryRow<'_> {
                             show_truncated_label(
                                 ui,
                                 self.name,
-                                typography::semibold(14.0),
-                                gray::_900,
+                                type_scale::BODY_STRONG.font_id(ui.ctx()),
+                                theme.text.primary,
                             );
                             show_truncated_label(
                                 ui,
                                 self.metadata,
-                                typography::metadata(),
-                                gray::_600,
+                                type_scale::META.font_id(ui.ctx()),
+                                theme.text.secondary,
                             );
                             if let Some(tags) = self.tags {
-                                show_truncated_label(ui, tags, typography::metadata(), gray::_600);
+                                show_truncated_label(
+                                    ui,
+                                    tags,
+                                    type_scale::META.font_id(ui.ctx()),
+                                    theme.text.secondary,
+                                );
                             }
                         },
                     );
@@ -217,11 +226,16 @@ impl DiscoveryRow<'_> {
                 row_height,
                 egui::Layout::left_to_right(egui::Align::Center),
                 |ui| {
-                    if let Some(color) = self.dot_color() {
+                    if let Some(color) = self.dot_color(&theme) {
                         ui.label(egui::RichText::new("●").color(color));
-                        ui.add_space(spacing::SM);
+                        ui.add_space(space::S8);
                     }
-                    show_truncated_label(ui, self.name, typography::semibold(14.0), gray::_900);
+                    show_truncated_label(
+                        ui,
+                        self.name,
+                        type_scale::BODY_STRONG.font_id(ui.ctx()),
+                        theme.text.primary,
+                    );
                 },
             );
             discovery_fixed_column(
@@ -230,7 +244,12 @@ impl DiscoveryRow<'_> {
                 row_height,
                 egui::Layout::left_to_right(egui::Align::Center),
                 |ui| {
-                    show_truncated_label(ui, self.metadata, typography::metadata(), gray::_600);
+                    show_truncated_label(
+                        ui,
+                        self.metadata,
+                        type_scale::META.font_id(ui.ctx()),
+                        theme.text.secondary,
+                    );
                 },
             );
         }
@@ -240,7 +259,12 @@ impl DiscoveryRow<'_> {
             row_height,
             egui::Layout::left_to_right(egui::Align::Center),
             |ui| {
-                show_truncated_label(ui, self.detail, typography::metadata(), self.detail_color());
+                show_truncated_label(
+                    ui,
+                    self.detail,
+                    type_scale::META.font_id(ui.ctx()),
+                    self.detail_color(&theme),
+                );
             },
         );
         discovery_fixed_column(
@@ -251,22 +275,22 @@ impl DiscoveryRow<'_> {
             |ui| show_import_button(ui, self.import_state, on_click),
         );
         ui.painter()
-            .hline(rect.x_range(), rect.bottom(), surface::border());
+            .hline(rect.x_range(), rect.bottom(), stroke::divider(&theme));
     }
 
-    fn dot_color(self) -> Option<egui::Color32> {
+    fn dot_color(self, theme: &Theme) -> Option<egui::Color32> {
         match self.status {
-            DiscoveryRowStatus::Aks | DiscoveryRowStatus::Eks => Some(status::SUCCESS),
-            DiscoveryRowStatus::Tailscale { online: true } => Some(status::SUCCESS),
-            DiscoveryRowStatus::Tailscale { online: false } => Some(gray::_400),
+            DiscoveryRowStatus::Aks | DiscoveryRowStatus::Eks => Some(theme.success.fill),
+            DiscoveryRowStatus::Tailscale { online: true } => Some(theme.success.fill),
+            DiscoveryRowStatus::Tailscale { online: false } => Some(theme.status.neutral),
         }
     }
 
-    fn detail_color(self) -> egui::Color32 {
+    fn detail_color(self, theme: &Theme) -> egui::Color32 {
         match self.status {
-            DiscoveryRowStatus::Aks | DiscoveryRowStatus::Eks => gray::_600,
-            DiscoveryRowStatus::Tailscale { online: true } => status::SUCCESS,
-            DiscoveryRowStatus::Tailscale { online: false } => gray::_500,
+            DiscoveryRowStatus::Aks | DiscoveryRowStatus::Eks => theme.text.secondary,
+            DiscoveryRowStatus::Tailscale { online: true } => theme.success.text,
+            DiscoveryRowStatus::Tailscale { online: false } => theme.text.muted,
         }
     }
 }
@@ -297,63 +321,65 @@ pub(super) fn show_truncated_label(
 }
 
 pub(super) fn show_discovery_loading(ui: &mut egui::Ui, message: &str) {
+    let theme = ui.tokens();
     ui.horizontal(|ui| {
         ui.add(egui::Spinner::new());
         ui.label(
             egui::RichText::new(message)
-                .font(typography::body())
-                .color(gray::_600),
+                .font(type_scale::BODY.font_id(ui.ctx()))
+                .color(theme.text.secondary),
         );
     });
 }
 
 pub(super) fn show_unavailable_tool(ui: &mut egui::Ui, tool: &str, message: &str) {
+    let theme = ui.tokens();
     ui.label(
         egui::RichText::new(format!("{tool} is not installed"))
-            .font(typography::body())
-            .color(gray::_800),
+            .font(type_scale::BODY.font_id(ui.ctx()))
+            .color(theme.text.primary),
     );
     ui.label(
         egui::RichText::new(message)
-            .font(typography::body())
-            .color(gray::_600),
+            .font(type_scale::BODY.font_id(ui.ctx()))
+            .color(theme.text.secondary),
     );
 }
 
 pub(super) fn show_empty_discovery(ui: &mut egui::Ui, message: &str) {
+    let theme = ui.tokens();
     ui.label(
         egui::RichText::new(message)
-            .font(typography::body())
-            .color(gray::_600),
+            .font(type_scale::BODY.font_id(ui.ctx()))
+            .color(theme.text.secondary),
     );
 }
 
 pub(super) fn show_discovery_error(ui: &mut egui::Ui, error: &str) {
+    let theme = ui.tokens();
     ui.label(
         egui::RichText::new(error)
-            .font(typography::body())
-            .color(status::CRITICAL),
+            .font(type_scale::BODY.font_id(ui.ctx()))
+            .color(theme.danger.text),
     );
 }
 
 pub(super) fn show_discovery_warning(ui: &mut egui::Ui, warning: &str) {
+    let theme = ui.tokens();
     egui::Frame::new()
-        .fill(surface::warning_fill())
-        .stroke(surface::warning_border())
-        .corner_radius(radius::subtle())
-        .inner_margin(egui::Margin::symmetric(
-            spacing::MD as i8,
-            spacing::MD as i8,
-        ))
+        .fill(theme.warning.tint)
+        .stroke(stroke::hairline(theme.warning.outline))
+        .corner_radius(egui::CornerRadius::same(radius::KEY))
+        .inner_margin(egui::Margin::symmetric(space::S12 as i8, space::S12 as i8))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
-            ui.set_min_height(spacing::XL);
+            ui.set_min_height(space::S24);
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("⚠").color(status::WARNING));
+                ui.label(egui::RichText::new("⚠").color(theme.warning.text));
                 ui.label(
                     egui::RichText::new(warning)
-                        .font(typography::metadata())
-                        .color(status::WARNING_TEXT),
+                        .font(type_scale::META.font_id(ui.ctx()))
+                        .color(theme.warning.text_on_tint),
                 );
             });
         });

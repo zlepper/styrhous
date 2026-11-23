@@ -1,11 +1,25 @@
 use std::{fmt::Debug, hash::Hash};
 
-use egui::{self, Id, Margin, Stroke};
+use egui::{self, Color32, Id, Margin, Stroke};
 
-use crate::{
-    colors::{WHITE, gray, indigo},
-    design::{radius, spacing, surface, typography},
-};
+use crate::design::theme::{Theme, ThemeExt};
+use crate::design::{radius, space, stroke, type_scale};
+
+/// The 1 point outline of a text field filled with `fill` (`.inp`).
+///
+/// Harbour fields have no visible border at rest, so the outline matches the
+/// fill and only keeps the control's footprint. Focus draws the accent ring
+/// and an invalid value the danger ring.
+pub(crate) fn field_stroke(theme: &Theme, fill: Color32, focused: bool, invalid: bool) -> Stroke {
+    let color = if invalid {
+        theme.danger.fill
+    } else if focused {
+        theme.accent.fill
+    } else {
+        fill
+    };
+    stroke::hairline(color)
+}
 
 /// A single-line text input styled like the application's standard controls.
 pub struct TailwindTextInput<'a> {
@@ -43,23 +57,21 @@ impl<'a> TailwindTextInput<'a> {
     pub fn show(self, ui: &mut egui::Ui) -> egui::Response {
         let id = self.id.unwrap_or_else(|| ui.next_auto_id());
         let focused = ui.memory(|memory| memory.has_focus(id));
-        let stroke = if focused {
-            Stroke::new(1.0, indigo::_500)
-        } else {
-            surface::control_border()
-        };
+        let tokens = ui.tokens();
+        let fill = tokens.components.field_bg;
+        let stroke = field_stroke(&tokens, fill, focused, false);
         let accessibility_label = self.accessibility_label;
         let mut text_edit = egui::TextEdit::singleline(self.value)
             .id(id)
             .frame(
                 egui::Frame::new()
-                    .fill(WHITE)
+                    .fill(fill)
                     .stroke(stroke)
-                    .corner_radius(radius::control())
-                    .inner_margin(Margin::symmetric(spacing::SM as i8, spacing::XS as i8)),
+                    .corner_radius(egui::CornerRadius::same(radius::KEY))
+                    .inner_margin(Margin::symmetric(space::S8 as i8, space::S4 as i8)),
             )
-            .font(typography::body())
-            .text_color(gray::_800);
+            .font(type_scale::BODY.font_id(ui.ctx()))
+            .text_color(tokens.text.primary);
         if let Some(hint_text) = self.hint_text {
             text_edit = text_edit.hint_text(hint_text);
         }
@@ -93,7 +105,7 @@ mod tests {
                 .hint_text("Enter a metadata key")
                 .accessibility_label("Metadata key")
                 .show(ui);
-            ui.add_space(spacing::MD);
+            ui.add_space(space::S12);
             TailwindTextInput::new(&mut filled_value)
                 .id_salt("filled-input")
                 .accessibility_label("Column header")

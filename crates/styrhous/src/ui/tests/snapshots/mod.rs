@@ -36,7 +36,7 @@ use crate::resource_detail::{
 use crate::resource_schema::ResourceSchema;
 use crate::resource_table::{
     AVAILABLE_COLUMN, CONTAINERS_COLUMN, CellValue, ContainerIndicator, ContainerKind, NODE_COLUMN,
-    READY_COLUMN, RESTARTS_COLUMN, STATUS_COLUMN, StatusTone, UP_TO_DATE_COLUMN,
+    READY_COLUMN, RESTARTS_COLUMN, STATUS_COLUMN, Tone, UP_TO_DATE_COLUMN,
 };
 use crate::terminal_launcher::{
     DebugImagePreset, DebugProfile, ShellRequest, TerminalLaunchSettings, TerminalLauncher,
@@ -485,3 +485,4 @@ mod resource_tables;
 mod selection_and_context;
 mod table_configuration;
 mod terminal;
+mod theme;

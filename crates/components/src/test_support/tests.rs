@@ -410,3 +410,22 @@ fn updating_a_snapshot_preserves_the_previous_text_for_review() {
 
     std::fs::remove_dir_all(output_path).unwrap();
 }
+
+#[test]
+fn the_distinct_role_theme_gives_every_role_and_override_its_own_colour() {
+    use crate::design::theme::{Override, Role, ThemeScope};
+    let theme = distinct_role_theme();
+    let mut colours: Vec<_> = Role::ALL.iter().map(|role| theme.role(*role)).collect();
+    colours.extend(
+        Override::ALL
+            .iter()
+            .map(|component| theme.components.get(*component)),
+    );
+    let unique: std::collections::HashSet<_> = colours.iter().copied().collect();
+    assert_eq!(unique.len(), colours.len());
+
+    // Scopes still re-point overrides at roles and keep the others.
+    let blade = theme.scoped(ThemeScope::Blade);
+    assert_eq!(blade.components.row_bg, theme.surface.raised);
+    assert_eq!(blade.components.well_bg, theme.components.well_bg);
+}

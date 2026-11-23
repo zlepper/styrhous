@@ -41,13 +41,14 @@ impl GlobalBladeContent for ManagedClusterDiscoveryBlade {
         _layer: components::BladeLayer,
         context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
+        let theme = ui.tokens();
         let discovery = context.managed_cluster_discovery();
         ui.horizontal(|ui| {
             ui.add_space(-DISCOVERY_HEADER_TITLE_OFFSET);
             ui.label(
                 egui::RichText::new("Cluster discovery")
-                    .font(typography::page_title())
-                    .color(gray::_900),
+                    .font(type_scale::HEADING.font_id(ui.ctx()))
+                    .color(theme.text.primary),
             );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
@@ -73,44 +74,45 @@ impl GlobalBladeContent for ManagedClusterDiscoveryBlade {
         _layer: components::BladeLayer,
         context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
+        let theme = ui.tokens();
         if !self.initial_load {
             self.initial_load = true;
             self.pending_action = Some(ManagedDiscoveryAction::Refresh);
         }
         let discovery = context.managed_cluster_discovery();
-        ui.add_space(spacing::SM);
+        ui.add_space(space::S8);
         ui.label(
             egui::RichText::new(
                 "Find and add clusters from supported providers to your kubeconfig.",
             )
-            .font(typography::body())
-            .color(gray::_600),
+            .font(type_scale::BODY.font_id(ui.ctx()))
+            .color(theme.text.secondary),
         );
-        ui.add_space(spacing::SM);
+        ui.add_space(space::S8);
         ui.label(
             egui::RichText::new("New clusters appear automatically. Refresh after making changes.")
-                .font(typography::body())
-                .color(gray::_600),
+                .font(type_scale::BODY.font_id(ui.ctx()))
+                .color(theme.text.secondary),
         );
         if let Some(error) = &discovery.error {
-            ui.add_space(spacing::SM);
+            ui.add_space(space::S8);
             ui.label(
                 egui::RichText::new(error)
-                    .font(typography::body())
-                    .color(status::CRITICAL),
+                    .font(type_scale::BODY.font_id(ui.ctx()))
+                    .color(theme.danger.text),
             );
         }
-        ui.add_space(spacing::LG);
+        ui.add_space(space::S16);
         ui.separator();
-        ui.add_space(spacing::XL);
+        ui.add_space(space::S24);
         self.show_azure(ui, discovery);
-        ui.add_space(spacing::SM);
+        ui.add_space(space::S8);
         ui.separator();
-        ui.add_space(spacing::XL);
+        ui.add_space(space::S24);
         self.show_aws(ui, discovery);
-        ui.add_space(spacing::SM);
+        ui.add_space(space::S8);
         ui.separator();
-        ui.add_space(spacing::XL);
+        ui.add_space(space::S24);
         self.show_tailscale(ui, discovery);
         GlobalBladeRenderResult::default()
     }
@@ -123,14 +125,15 @@ impl GlobalBladeContent for ManagedClusterDiscoveryBlade {
 }
 
 pub(super) fn discovery_refresh_button(ui: &mut egui::Ui) -> egui::Response {
+    let theme = ui.tokens();
     ui.add(
         egui::Button::image_and_text(
             icons::arrow_path_icon()
                 .fit_to_exact_size(egui::Vec2::splat(16.0))
-                .tint(indigo::_600),
+                .tint(theme.accent.text),
             egui::RichText::new("Refresh")
-                .font(typography::body())
-                .color(indigo::_600),
+                .font(type_scale::BODY.font_id(ui.ctx()))
+                .color(theme.accent.text),
         )
         .frame(false),
     )
@@ -143,6 +146,7 @@ impl ManagedClusterDiscoveryBlade {
         ui: &mut egui::Ui,
         discovery: &super::super::state::ManagedClusterDiscoveryState,
     ) {
+        let theme = ui.tokens();
         let aws = &discovery.aws;
         show_provider_heading(
             ui,
@@ -157,7 +161,7 @@ impl ManagedClusterDiscoveryBlade {
                 )
             }),
         );
-        ui.add_space(spacing::XL + spacing::XS);
+        ui.add_space(space::S24 + space::S4);
         if aws.account_loading {
             show_discovery_loading(ui, "Resolving AWS CLI accounts…");
         } else if !aws.cli_installed {
@@ -171,15 +175,15 @@ impl ManagedClusterDiscoveryBlade {
         } else {
             ui.label(
                 egui::RichText::new("Choose an account and profile to scan for EKS clusters.")
-                    .font(typography::body())
-                    .color(gray::_600),
+                    .font(type_scale::BODY.font_id(ui.ctx()))
+                    .color(theme.text.secondary),
             );
-            ui.add_space(spacing::MD);
+            ui.add_space(space::S12);
             for account in &aws.accounts {
                 ui.label(
                     egui::RichText::new(format!("AWS account {}", account.id))
-                        .font(typography::semibold(typography::BODY_SIZE))
-                        .color(gray::_900),
+                        .font(type_scale::BODY_STRONG.font_id(ui.ctx()))
+                        .color(theme.text.primary),
                 );
                 for profile in &account.profiles {
                     ui.allocate_ui_with_layout(
@@ -188,8 +192,8 @@ impl ManagedClusterDiscoveryBlade {
                         |ui| {
                             ui.label(
                                 egui::RichText::new(profile.label())
-                                    .font(typography::body())
-                                    .color(gray::_600),
+                                    .font(type_scale::BODY.font_id(ui.ctx()))
+                                    .color(theme.text.secondary),
                             );
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
@@ -231,7 +235,7 @@ impl ManagedClusterDiscoveryBlade {
                         },
                     );
                 }
-                ui.add_space(spacing::SM);
+                ui.add_space(space::S8);
             }
             if let Some(error) = &aws.import_error {
                 show_discovery_error(ui, error);
@@ -243,16 +247,16 @@ impl ManagedClusterDiscoveryBlade {
             } else if let (Some(account_id), Some(profile)) =
                 (&aws.selected_account_id, &aws.selected_profile)
             {
-                ui.add_space(spacing::SM);
+                ui.add_space(space::S8);
                 ui.label(
                     egui::RichText::new(format!(
                         "Results for account {account_id} · {}",
                         profile.label()
                     ))
-                    .font(typography::semibold(typography::BODY_SIZE))
-                    .color(gray::_900),
+                    .font(type_scale::BODY_STRONG.font_id(ui.ctx()))
+                    .color(theme.text.primary),
                 );
-                ui.add_space(spacing::MD);
+                ui.add_space(space::S12);
                 if aws.clusters.is_empty() {
                     show_empty_discovery(ui, "No EKS clusters were found in enabled Regions.");
                 } else {
@@ -271,11 +275,11 @@ impl ManagedClusterDiscoveryBlade {
             }
         }
         if let Some(warning) = &aws.account_warning {
-            ui.add_space(spacing::SM);
+            ui.add_space(space::S8);
             show_discovery_warning(ui, warning);
         }
         if let Some(warning) = &aws.scan_warning {
-            ui.add_space(spacing::SM);
+            ui.add_space(space::S8);
             show_discovery_warning(ui, warning);
         }
     }
@@ -334,7 +338,7 @@ impl ManagedClusterDiscoveryBlade {
                 discovery.aks_clusters.len(),
             ),
         );
-        ui.add_space(spacing::XL + spacing::XS);
+        ui.add_space(space::S24 + space::S4);
         if discovery.loading {
             show_discovery_loading(ui, "Checking Azure subscriptions for AKS clusters…");
         } else if !discovery.tools.azure_cli {
@@ -364,7 +368,7 @@ impl ManagedClusterDiscoveryBlade {
             }
         }
         if let Some(warning) = &discovery.azure_warning {
-            ui.add_space(spacing::SM);
+            ui.add_space(space::S8);
             show_discovery_warning(ui, warning);
         }
     }
@@ -385,7 +389,7 @@ impl ManagedClusterDiscoveryBlade {
                 discovery.tailscale_clusters.len(),
             ),
         );
-        ui.add_space(spacing::XL + spacing::XS);
+        ui.add_space(space::S24 + space::S4);
         if discovery.loading {
             show_discovery_loading(ui, "Checking Tailscale peers for Kubernetes API proxies…");
         } else if !discovery.tools.tailscale {

@@ -14,7 +14,6 @@ struct DataCell<'column, 'item, T> {
     item: &'item T,
     row_index: usize,
     column_index: usize,
-    background: Color32,
 }
 
 impl ConfigurableTableLayout {
@@ -63,7 +62,7 @@ impl ConfigurableTableLayout {
         render_header: &mut impl FnMut(&egui::Response, &str, &str, bool),
     ) {
         let rect = ui.max_rect();
-        paint_table_cell(ui, rect, HEADER_BG);
+        paint_header_cell(ui, rect);
         let resize_rect = egui::Rect::from_min_max(
             egui::pos2(rect.right() - 8.0, rect.top()),
             rect.right_bottom(),
@@ -85,12 +84,7 @@ impl ConfigurableTableLayout {
         set_accessibility_label(ui, &header_response, format!("{} column", column.header));
         ui.horizontal(|ui| {
             ui.add_space(self.cell_padding_x);
-            ui.label(
-                egui::RichText::new(&column.header)
-                    .font(typography::body())
-                    .color(gray::_900)
-                    .strong(),
-            );
+            header_label(ui, &column.header);
             if column.sortable {
                 ui.add_space(4.0);
                 render_sort_indicator(
@@ -125,7 +119,7 @@ impl ConfigurableTableLayout {
             cell.column_index,
             &cell.column.header,
         );
-        paint_table_cell(ui, rect, cell.background);
+        paint_row_cell(ui, rect);
         ui.horizontal(|ui| {
             ui.add_space(self.cell_padding_x);
             render_cell(ui, cell.item, cell.column_index);
@@ -185,7 +179,6 @@ impl TailwindTable {
                                             item,
                                             row_index,
                                             column_index,
-                                            background: CONTENT_BACKGROUND,
                                         },
                                         &mut render_cell,
                                         &mut render_row,
@@ -256,7 +249,7 @@ impl TailwindTable {
                     .header(layout.header_height, |mut header| {
                         header.col(|ui| {
                             let rect = ui.max_rect();
-                            paint_table_cell(ui, rect, HEADER_BG);
+                            paint_header_cell(ui, rect);
                             let mut checkbox_pointer_clicked = false;
                             ui.horizontal_centered(|ui| {
                                 ui.add_space(layout.cell_padding_x);
@@ -334,7 +327,7 @@ impl TailwindTable {
                                 item_key.as_ref().is_some_and(|key| selection.contains(key));
                             row.col(|ui| {
                                 let rect = ui.max_rect();
-                                paint_table_cell(ui, rect, WHITE);
+                                paint_row_cell(ui, rect);
                                 ui.horizontal_centered(|ui| {
                                     ui.add_space(layout.cell_padding_x);
                                     if let Some(key) = item_key.as_ref() {
@@ -366,7 +359,6 @@ impl TailwindTable {
                                             item,
                                             row_index,
                                             column_index,
-                                            background: WHITE,
                                         },
                                         &mut render_cell,
                                         &mut render_row,

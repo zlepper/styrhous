@@ -10,6 +10,7 @@ pub(super) fn show_helm_releases_workspace(
     >,
     namespace_selector_settings: &crate::ui::namespace_selector::NamespaceSelectorSettings,
 ) -> Option<(String, String)> {
+    let theme = ui.tokens();
     let api_resource = crate::api_resource::ApiResource::helm_releases();
     let mut releases = cluster
         .namespace_scope()
@@ -116,7 +117,7 @@ pub(super) fn show_helm_releases_workspace(
                 "Some Helm storage backends could not be read: {}",
                 backend_errors.join(" · ")
             ))
-            .color(gray::_700),
+            .color(theme.text.secondary),
         );
     }
     let selected_ids = filtered
@@ -144,6 +145,7 @@ pub(super) fn show_helm_release_table(
         super::super::resource_table_settings::ResourceTableSettingsTarget,
     >,
 ) -> Option<(String, String)> {
+    let theme = ui.tokens();
     let columns = vec![
         TableColumnDefinition::sortable("name", "Name", 170.0),
         TableColumnDefinition::sortable("namespace", "Namespace", 135.0),
@@ -204,7 +206,7 @@ pub(super) fn show_helm_release_table(
                     let response = TableRowBuilder::clickable_text(
                         ui,
                         &release.name,
-                        gray::_900,
+                        theme.text.primary,
                         format!("Inspect Helm release {}", release.name),
                     );
                     if response.clicked() && pending.borrow().is_none() {

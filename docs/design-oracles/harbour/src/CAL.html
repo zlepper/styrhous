@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Calibration</title>
+<meta name="harbour-board" content='{"id":"CAL","width":1536,"height":1024,"source":"hand-written","calibration":true}'>
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="harbour.css">
+<!--
+  Hand-written calibration board (not a design artboard). It sets the pixel-match bar for every
+  oracle: crates/components/tests/calibration.rs paints the same scene with the theme, type
+  scale, radius and elevation APIs. Every coordinate here is mirrored there; change both together.
+-->
+<style>
+.abs{position:absolute}
+.line{position:absolute;left:40px;width:480px;white-space:nowrap;background:var(--surface-panel)}
+.box{position:absolute;width:120px;height:64px;background:var(--control-fill-strong)}
+.edge{position:absolute;width:120px;height:64px}
+.icons{position:absolute;display:flex;align-items:center;gap:24px;color:var(--text-secondary)}
+</style>
+</head>
+<body>
+<div class="board" style="width: 1536px; height: 1024px; ">
+<!-- Type roles: each line box is filled so the glyph position inside it is visible. -->
+<div class="line t-display" style="top:32px">Display 28/36 Harbour pods</div>
+<div class="line t-h" style="top:84px">Heading 20/28 Workloads</div>
+<div class="line t-title" style="top:128px">Title 16/24 Pod details</div>
+<div class="line t-body" style="top:168px">Body 14/20 The quick brown fox jumps</div>
+<div class="line t-sm" style="top:204px">UI 13/20 Restart deployment</div>
+<div class="line t-sm w5" style="top:236px">UI 13/20 medium Namespaces</div>
+<div class="line t-sm w6" style="top:268px">UI 13/20 semibold Apply changes</div>
+<div class="line t-meta" style="top:300px">Meta 12/16 Updated 2 min ago</div>
+<div class="line t-cap" style="top:328px">Caption 11/16 Namespace</div>
+<div class="line mono" style="top:356px">mono 13/20 kube-system 12.5%</div>
+<div class="line mono" style="top:388px;font-size:12px;line-height:18px">mono 12/18 nginx:1.27.2-alpine</div>
+<div class="line mono w5" style="top:418px;font-size:10.5px;line-height:16px">Plex Mono 10.5/16 medium 1.25 GiB</div>
+<div class="line mono" style="top:446px;font-size:11.5px;line-height:16px">Plex Mono 11.5/16 250m of 500m</div>
+<div class="line mono" style="top:474px;font-size:12.5px;line-height:16px">Plex Mono 12.5/16 0.42 cores</div>
+<div class="line w5" style="top:502px;font-size:13.5px">Figtree 13.5/20 medium Pods</div>
+<div class="line w6" style="top:534px;font-size:13.5px">Figtree 13.5/20 semibold Pods</div>
+<div class="line t-sm" style="top:566px">Return ↵ Command ⌘ Delete ⌫</div>
+<div class="line mono" style="top:598px;font-size:12px;line-height:16px">mono ↵ ⌘ ⌫ fallback</div>
+<div class="line t-body" style="top:626px">Line one of a paragraph<br>Line two continues here<br>Line three ends it.</div>
+<div class="line t-cap" style="top:698px;color:var(--text-primary)">Tracked caption · column head</div>
+<div class="line t-display" style="top:726px;font-size:26px;line-height:32px">Bricolage 26/32 Harbour</div>
+<div class="line t-title" style="top:770px;font-size:18px;line-height:26px">Bricolage 18/26 Harbour</div>
+
+<!-- Pills with centred single-line text (flex centring of the line box). -->
+<div class="abs btn btn-secondary" style="left:40px;top:816px;width:120px">Restart</div>
+<div class="abs btn btn-primary" style="left:176px;top:816px;width:120px">Apply changes</div>
+<div class="abs btn btn-secondary sm" style="left:312px;top:818px;width:96px">Cancel</div>
+<div class="abs kbd" style="left:424px;top:823px">⌘K</div>
+
+<!-- Corner radius scale: 6 / 10 / 12 / 14 / 16 / 22 / full. -->
+<div class="box" style="left:560px;top:40px;border-radius:6px"></div>
+<div class="box" style="left:696px;top:40px;border-radius:10px"></div>
+<div class="box" style="left:832px;top:40px;border-radius:12px"></div>
+<div class="box" style="left:968px;top:40px;border-radius:14px"></div>
+<div class="box" style="left:1104px;top:40px;border-radius:16px"></div>
+<div class="box" style="left:1240px;top:40px;border-radius:22px"></div>
+<div class="box" style="left:1376px;top:40px;border-radius:999px"></div>
+
+<!-- Strokes: 1px and 1.5px borders, an inset 1.5px accent ring, selection controls, hairlines. -->
+<div class="edge" style="left:560px;top:136px;border-radius:12px;border:1px solid var(--divider-strong)"></div>
+<div class="edge" style="left:696px;top:136px;border-radius:12px;border:1.5px solid var(--control-border)"></div>
+<div class="edge" style="left:832px;top:136px;border-radius:16px;background:var(--item-selected);box-shadow:inset 0 0 0 1.5px var(--accent-fill)"></div>
+<div class="abs cb" style="left:984px;top:160px"></div>
+<div class="abs cb is-on" style="left:1016px;top:160px"></div>
+<div class="abs rd" style="left:1048px;top:160px"></div>
+<div class="abs rd is-on" style="left:1080px;top:160px"></div>
+<div class="abs" style="left:1120px;top:152px;width:200px;height:1px;background:var(--divider)"></div>
+<div class="abs" style="left:1120px;top:176px;width:200px;border-top:1.5px solid var(--control-border)"></div>
+<div class="abs" style="left:1344px;top:136px;width:1px;height:64px;background:var(--divider-strong)"></div>
+
+<!-- Elevation: shadow-raised (popover) and shadow-overlay (dialog). -->
+<div class="abs" style="left:600px;top:264px;width:240px;height:140px;border-radius:14px;background:var(--surface-raised);box-shadow:var(--shadow-raised)"></div>
+<div class="abs" style="left:920px;top:264px;width:280px;height:160px;border-radius:22px;background:var(--surface-raised);box-shadow:var(--shadow-overlay)"></div>
+<div class="abs" style="left:1280px;top:264px;width:200px;height:48px;border-radius:10px;background:var(--tooltip-bg);box-shadow:var(--shadow-tooltip)"></div>
+
+<!-- Icons (CSS masks) at 16 and 20 px, and on tiles. -->
+<div class="icons" style="left:560px;top:600px;height:20px"><span class="ic ic-magnifying-glass"></span><span class="ic ic-cog-6-tooth"></span><span class="ic ic-x-mark"></span><span class="ic ic-chevron-down"></span><span class="ic ic-check"></span><span class="ic ic-cube"></span></div>
+<div class="icons" style="left:560px;top:640px;height:20px"><span class="ic ic-magnifying-glass s20"></span><span class="ic ic-cog-6-tooth s20"></span><span class="ic ic-x-mark s20"></span><span class="ic ic-chevron-down s20"></span><span class="ic ic-check s20"></span><span class="ic ic-cube s20"></span></div>
+<div class="abs tile" style="left:560px;top:688px"><span class="ic ic-circle-stack s20"></span></div>
+<div class="abs tile" style="left:612px;top:688px"><span class="ic ic-globe-alt s20"></span></div>
+<div class="abs tile gray" style="left:664px;top:688px"><span class="ic ic-cog-6-tooth s20"></span></div>
+</div>
+</body>
+</html>

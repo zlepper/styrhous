@@ -3,8 +3,8 @@ use crate::licensing::LicenseStatus;
 use crate::terminal_launcher::TerminalLaunchSettings;
 use crate::updater::UpdateStatus;
 use crate::worker::WorkerCommandBox;
-use components::colors::{CLUSTER_RAIL_BACKGROUND, gray, indigo};
-use components::design::{status, typography};
+use components::design::theme::{ThemeExt, Tone};
+use components::design::type_scale;
 use components::{NarrowSidebar, icons};
 use tracing::info;
 
@@ -21,14 +21,14 @@ pub(super) fn show(
     let open_settings = std::cell::Cell::new(false);
     let open_notifications = std::cell::Cell::new(false);
     let unread_count = ui_state.unread_operation_count();
+    let theme = ui.tokens();
     egui::Panel::left("cluster-panel")
         .exact_size(68.0)
         .resizable(false)
         .show_separator_line(false)
-        .frame(egui::Frame::NONE.fill(CLUSTER_RAIL_BACKGROUND))
+        .frame(egui::Frame::NONE.fill(theme.nav.rail))
         .show(ui, |ui| {
             NarrowSidebar::new()
-                .dark_background(CLUSTER_RAIL_BACKGROUND)
                 .footer_items(CLUSTER_RAIL_FOOTER_ITEMS)
                 .show_with_footer(
                     ui,
@@ -43,18 +43,17 @@ pub(super) fn show(
                             let selected = ui_state.selected_cluster == Some(cluster_key);
                             let cluster_name =
                                 cluster.presentation.display_name(&cluster.name).to_owned();
-                            let (status_label, status_color) = match &cluster.connection {
-                                ClusterConnectionState::Connected => ("Connected", status::SUCCESS),
-                                ClusterConnectionState::Connecting => {
-                                    ("Connecting", status::WARNING)
-                                }
+                            let (status_label, status_tone) = match &cluster.connection {
+                                ClusterConnectionState::Connected => ("Connected", Tone::Success),
+                                ClusterConnectionState::Connecting => ("Connecting", Tone::Warning),
                                 ClusterConnectionState::Failed(_) => {
-                                    ("Connection failed", status::CRITICAL)
+                                    ("Connection failed", Tone::Danger)
                                 }
                                 ClusterConnectionState::Disconnected => {
-                                    ("Disconnected", gray::_500)
+                                    ("Disconnected", Tone::Neutral)
                                 }
                             };
+                            let status_color = theme.tone(status_tone).fill;
                             let tooltip = if cluster_name == cluster.name {
                                 format!("{cluster_name} — {status_label}")
                             } else {
@@ -102,15 +101,18 @@ pub(super) fn show(
                         if unread_count > 0 {
                             let center = notifications.rect.center() + egui::vec2(9.0, -9.0);
                             let sidebar_ui = sidebar.ui_mut();
-                            let font = typography::semibold_or_proportional(sidebar_ui.ctx(), 10.0);
+                            let font = type_scale::META
+                                .with_weight(type_scale::Weight::SemiBold)
+                                .with_size(10.0, 12.0)
+                                .font_id(sidebar_ui.ctx());
                             let painter = sidebar_ui.painter();
-                            painter.circle_filled(center, 8.0, indigo::_500);
+                            painter.circle_filled(center, 8.0, theme.accent.fill);
                             painter.text(
                                 center,
                                 egui::Align2::CENTER_CENTER,
                                 unread_badge_text(unread_count),
                                 font,
-                                components::colors::WHITE,
+                                theme.text.on_fill,
                             );
                         }
                         open_notifications.set(notifications.clicked());
@@ -129,7 +131,7 @@ pub(super) fn show(
                             sidebar.ui_mut().painter().circle_filled(
                                 marker_center,
                                 4.0,
-                                status::WARNING,
+                                theme.warning.fill,
                             );
                         }
                         open_settings.set(response.clicked());

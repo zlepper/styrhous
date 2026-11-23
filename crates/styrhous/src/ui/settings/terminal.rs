@@ -1,22 +1,24 @@
 use super::*;
 
 pub(super) fn show_settings_introduction(ui: &mut egui::Ui) {
+    let theme = ui.tokens();
     ui.label(
         egui::RichText::new("APPLICATION")
-            .font(typography::metadata())
-            .color(gray::_500),
+            .font(type_scale::META.font_id(ui.ctx()))
+            .color(theme.text.muted),
     );
-    ui.add_space(spacing::XS);
+    ui.add_space(space::S4);
     ui.label(
         egui::RichText::new(
             "Configure local tools and display preferences.\nThese settings apply only to this application on this device.",
         )
-        .font(typography::body())
-        .color(gray::_600),
+        .font(type_scale::BODY.font_id(ui.ctx()))
+        .color(theme.text.secondary),
     );
 }
 
 pub(super) fn show_update_status(ui: &mut egui::Ui, update_status: &UpdateStatus) {
+    let theme = ui.tokens();
     if matches!(
         update_status,
         UpdateStatus::LocalBuild | UpdateStatus::NotIncluded
@@ -24,17 +26,17 @@ pub(super) fn show_update_status(ui: &mut egui::Ui, update_status: &UpdateStatus
         return;
     }
 
-    ui.add_space(spacing::XL);
+    ui.add_space(space::S24);
     ui.label(
         egui::RichText::new("Application updates")
-            .font(typography::section_heading())
-            .color(gray::_900),
+            .font(type_scale::TITLE.font_id(ui.ctx()))
+            .color(theme.text.primary),
     );
-    ui.add_space(spacing::XS);
+    ui.add_space(space::S4);
     ui.label(
         egui::RichText::new(update_status.summary())
-            .font(typography::body())
-            .color(gray::_600),
+            .font(type_scale::BODY.font_id(ui.ctx()))
+            .color(theme.text.secondary),
     );
 }
 
@@ -43,18 +45,19 @@ pub(super) fn show_terminal_launcher(
     draft: &mut TerminalLaunchSettings,
     error: &mut Option<String>,
 ) {
+    let theme = ui.tokens();
     ui.label(
         egui::RichText::new("Terminal launcher")
-            .font(typography::section_heading())
-            .color(gray::_900),
+            .font(type_scale::TITLE.font_id(ui.ctx()))
+            .color(theme.text.primary),
     );
-    ui.add_space(spacing::SM);
+    ui.add_space(space::S8);
     ui.label(
         egui::RichText::new("Choose how shells open on this computer.")
-            .font(typography::body())
-            .color(gray::_600),
+            .font(type_scale::BODY.font_id(ui.ctx()))
+            .color(theme.text.secondary),
     );
-    ui.add_space(spacing::XL);
+    ui.add_space(space::S24);
 
     let automatic = draft.custom_template.is_none();
     if launcher_choice(
@@ -69,7 +72,7 @@ pub(super) fn show_terminal_launcher(
         draft.custom_template = None;
         *error = None;
     }
-    ui.add_space(spacing::LG);
+    ui.add_space(space::S16);
     let custom_launcher_clicked = {
         let template_error = error.clone();
         let template_error =
@@ -96,20 +99,21 @@ pub(super) fn show_debug_image_presets(
     draft: &mut TerminalLaunchSettings,
     error: &mut Option<String>,
 ) {
+    let theme = ui.tokens();
     ui.label(
         egui::RichText::new("Debug images")
-            .font(typography::section_heading())
-            .color(gray::_900),
+            .font(type_scale::TITLE.font_id(ui.ctx()))
+            .color(theme.text.primary),
     );
-    ui.add_space(spacing::SM);
+    ui.add_space(space::S8);
     ui.label(
         egui::RichText::new(
             "Choose the images and profiles offered for Debug images and Pod debug shells. Node sessions create a debug Pod with the node filesystem available at /host; Pod sessions add an ephemeral debug container.",
         )
-        .font(typography::body())
-        .color(gray::_600),
+        .font(type_scale::BODY.font_id(ui.ctx()))
+        .color(theme.text.secondary),
     );
-    ui.add_space(spacing::LG);
+    ui.add_space(space::S16);
 
     let mut remove_preset = None;
     let table_width = ui.available_width();
@@ -136,7 +140,7 @@ pub(super) fn show_debug_image_presets(
     if TailwindButton::icon(
         icons::plus_icon()
             .fit_to_exact_size(egui::Vec2::splat(16.0))
-            .tint(indigo::_600),
+            .tint(theme.accent.text),
     )
     .variant(ButtonVariant::Secondary)
     .size(ButtonSize::Sm)
@@ -155,7 +159,7 @@ pub(super) fn show_debug_image_presets(
         .as_deref()
         .filter(|error| !error.starts_with("The launcher template"))
     {
-        ui.add_space(spacing::MD);
+        ui.add_space(space::S12);
         show_validation_error(ui, "Debug image settings need attention", error);
     }
 }

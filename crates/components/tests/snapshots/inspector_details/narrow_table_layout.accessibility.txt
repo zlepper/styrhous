@@ -7,65 +7,60 @@ Window state=[focused] rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
-                Label value="Type" rect=(x=8.0 y=56.0 width=28.1 height=15.0 center_x=22.0 center_y=63.5)
-                  TextRun value="Type" rect=(x=8.0 y=56.0 width=28.1 height=15.0 center_x=22.0 center_y=63.5)
+                Label value="Type" rect=(x=8.0 y=56.0 width=26.4 height=14.0 center_x=21.2 center_y=63.0)
+                  TextRun value="Type" rect=(x=8.0 y=56.0 width=26.4 height=14.0 center_x=21.2 center_y=63.0)
               GenericContainer rect=<none>
-                Label value="Reason" rect=(x=57.3 y=56.0 width=34.2 height=30.0 center_x=74.4 center_y=71.0)
-                  TextRun value="Reaso" rect=(x=57.3 y=56.0 width=34.2 height=15.0 center_x=74.4 center_y=63.5)
-                  TextRun value="n" rect=(x=57.3 y=71.0 width=7.1 height=15.0 center_x=60.9 center_y=78.5)
+                Label value="Reason" rect=(x=57.3 y=56.0 width=39.4 height=14.0 center_x=77.1 center_y=63.0)
+                  TextRun value="Reason" rect=(x=57.3 y=56.0 width=39.4 height=14.0 center_x=77.1 center_y=63.0)
               GenericContainer rect=<none>
-                Label value="Message" rect=(x=106.7 y=56.0 width=51.6 height=15.0 center_x=132.5 center_y=63.5)
-                  TextRun value="Message" rect=(x=106.7 y=56.0 width=51.6 height=15.0 center_x=132.5 center_y=63.5)
+                Label value="Message" rect=(x=106.7 y=56.0 width=47.6 height=14.0 center_x=130.5 center_y=63.0)
+                  TextRun value="Message" rect=(x=106.7 y=56.0 width=47.6 height=14.0 center_x=130.5 center_y=63.0)
               GenericContainer rect=<none>
-                Label value="Source" rect=(x=197.3 y=56.0 width=40.2 height=15.0 center_x=217.4 center_y=63.5)
-                  TextRun value="Source" rect=(x=197.3 y=56.0 width=40.2 height=15.0 center_x=217.4 center_y=63.5)
+                Label value="Source" rect=(x=197.3 y=56.0 width=38.1 height=14.0 center_x=216.4 center_y=63.0)
+                  TextRun value="Source" rect=(x=197.3 y=56.0 width=38.1 height=14.0 center_x=216.4 center_y=63.0)
               GenericContainer rect=<none>
-                Label value="Time" rect=(x=246.7 y=56.0 width=28.2 height=15.0 center_x=260.8 center_y=63.5)
-                  TextRun value="Time" rect=(x=246.7 y=56.0 width=28.2 height=15.0 center_x=260.8 center_y=63.5)
+                Label value="Time" rect=(x=246.7 y=56.0 width=26.2 height=14.0 center_x=259.8 center_y=63.0)
+                  TextRun value="Time" rect=(x=246.7 y=56.0 width=26.2 height=14.0 center_x=259.8 center_y=63.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
-                  Label value="Normal" rect=(x=28.0 y=114.0 width=20.7 height=30.0 center_x=38.4 center_y=129.0)
-                    TextRun value="Nor" rect=(x=28.0 y=114.0 width=20.7 height=15.0 center_x=38.4 center_y=121.5)
-                    TextRun value="mal" rect=(x=28.0 y=129.0 width=19.9 height=15.0 center_x=38.0 center_y=136.5)
+                  Label value="Normal" rect=(x=28.0 y=98.0 width=20.1 height=28.0 center_x=38.0 center_y=112.0)
+                    TextRun value="Nor" rect=(x=28.0 y=98.0 width=20.1 height=14.0 center_x=38.0 center_y=105.0)
+                    TextRun value="mal" rect=(x=28.0 y=112.0 width=18.6 height=14.0 center_x=37.3 center_y=119.0)
               GenericContainer rect=<none>
-                Label value="Pulled" rect=(x=57.3 y=114.0 width=34.9 height=15.0 center_x=74.8 center_y=121.5)
-                  TextRun value="Pulled" rect=(x=57.3 y=114.0 width=34.9 height=15.0 center_x=74.8 center_y=121.5)
+                Label value="Pulled" rect=(x=57.3 y=98.0 width=32.5 height=14.0 center_x=73.6 center_y=105.0)
+                  TextRun value="Pulled" rect=(x=57.3 y=98.0 width=32.5 height=14.0 center_x=73.6 center_y=105.0)
               GenericContainer rect=<none>
-                Label value="Successfully pulled image" rect=(x=106.7 y=114.0 width=75.4 height=30.0 center_x=144.4 center_y=129.0)
-                  TextRun value="Successfully " rect=(x=106.7 y=114.0 width=75.4 height=15.0 center_x=144.4 center_y=121.5)
-                  TextRun value="pulled image" rect=(x=106.7 y=129.0 width=73.0 height=15.0 center_x=143.2 center_y=136.5)
+                Label value="Successfully pulled image" rect=(x=106.7 y=98.0 width=70.0 height=28.0 center_x=141.7 center_y=112.0)
+                  TextRun value="Successfully " rect=(x=106.7 y=98.0 width=70.0 height=14.0 center_x=141.7 center_y=105.0)
+                  TextRun value="pulled image" rect=(x=106.7 y=112.0 width=68.6 height=14.0 center_x=141.0 center_y=119.0)
               GenericContainer rect=<none>
-                Label value="kubelet" rect=(x=197.3 y=114.0 width=38.0 height=30.0 center_x=216.3 center_y=129.0)
-                  TextRun value="kubele" rect=(x=197.3 y=114.0 width=38.0 height=15.0 center_x=216.3 center_y=121.5)
-                  TextRun value="t" rect=(x=197.3 y=129.0 width=3.9 height=15.0 center_x=199.3 center_y=136.5)
+                Label value="kubelet" rect=(x=197.3 y=98.0 width=39.8 height=14.0 center_x=217.2 center_y=105.0)
+                  TextRun value="kubelet" rect=(x=197.3 y=98.0 width=39.8 height=14.0 center_x=217.2 center_y=105.0)
               GenericContainer rect=<none>
-                Label value="2m ago" rect=(x=246.7 y=114.0 width=21.2 height=30.0 center_x=257.3 center_y=129.0)
-                  TextRun value="2m " rect=(x=246.7 y=114.0 width=20.4 height=15.0 center_x=256.9 center_y=121.5)
-                  TextRun value="ago" rect=(x=246.7 y=129.0 width=21.2 height=15.0 center_x=257.3 center_y=136.5)
+                Label value="2m ago" rect=(x=246.7 y=98.0 width=40.0 height=14.0 center_x=266.7 center_y=105.0)
+                  TextRun value="2m ago" rect=(x=246.7 y=98.0 width=40.0 height=14.0 center_x=266.7 center_y=105.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
-                  Label value="Warning" rect=(x=28.0 y=172.0 width=21.0 height=45.0 center_x=38.5 center_y=194.5)
-                    TextRun value="Wa" rect=(x=28.0 y=172.0 width=17.8 height=15.0 center_x=36.9 center_y=179.5)
-                    TextRun value="rnin" rect=(x=28.0 y=187.0 width=21.1 height=15.0 center_x=38.5 center_y=194.5)
-                    TextRun value="g" rect=(x=28.0 y=202.0 width=7.4 height=15.0 center_x=31.7 center_y=209.5)
+                  Label value="Warning" rect=(x=28.0 y=154.0 width=21.0 height=42.0 center_x=38.5 center_y=175.0)
+                    TextRun value="War" rect=(x=28.0 y=154.0 width=21.1 height=14.0 center_x=38.5 center_y=161.0)
+                    TextRun value="nin" rect=(x=28.0 y=168.0 width=15.7 height=14.0 center_x=35.8 center_y=175.0)
+                    TextRun value="g" rect=(x=28.0 y=182.0 width=7.0 height=14.0 center_x=31.5 center_y=189.0)
               GenericContainer rect=<none>
-                Label value="BackOff" rect=(x=57.3 y=172.0 width=41.0 height=30.0 center_x=77.8 center_y=187.0)
-                  TextRun value="BackOf" rect=(x=57.3 y=172.0 width=41.0 height=15.0 center_x=77.8 center_y=179.5)
-                  TextRun value="f" rect=(x=57.3 y=187.0 width=4.4 height=15.0 center_x=59.6 center_y=194.5)
+                Label value="BackOff" rect=(x=57.3 y=154.0 width=39.4 height=28.0 center_x=77.1 center_y=168.0)
+                  TextRun value="BackOf" rect=(x=57.3 y=154.0 width=39.4 height=14.0 center_x=77.1 center_y=161.0)
+                  TextRun value="f" rect=(x=57.3 y=168.0 width=4.4 height=14.0 center_x=59.6 center_y=175.0)
               GenericContainer rect=<none>
-                Label value="Back-off restarting failed container" rect=(x=106.7 y=172.0 width=57.4 height=60.0 center_x=135.4 center_y=202.0)
-                  TextRun value="Back-off " rect=(x=106.7 y=172.0 width=51.4 height=15.0 center_x=132.4 center_y=179.5)
-                  TextRun value="restarting " rect=(x=106.7 y=187.0 width=57.4 height=15.0 center_x=135.4 center_y=194.5)
-                  TextRun value="failed " rect=(x=106.7 y=202.0 width=34.4 height=15.0 center_x=123.9 center_y=209.5)
-                  TextRun value="container" rect=(x=106.7 y=217.0 width=53.5 height=15.0 center_x=133.5 center_y=224.5)
+                Label value="Back-off restarting failed container" rect=(x=106.7 y=154.0 width=83.0 height=42.0 center_x=148.2 center_y=175.0)
+                  TextRun value="Back-off " rect=(x=106.7 y=154.0 width=49.0 height=14.0 center_x=131.2 center_y=161.0)
+                  TextRun value="restarting " rect=(x=106.7 y=168.0 width=55.0 height=14.0 center_x=134.2 center_y=175.0)
+                  TextRun value="failed container" rect=(x=106.7 y=182.0 width=83.1 height=14.0 center_x=148.2 center_y=189.0)
               GenericContainer rect=<none>
-                Label value="kubelet" rect=(x=197.3 y=172.0 width=38.0 height=30.0 center_x=216.3 center_y=187.0)
-                  TextRun value="kubele" rect=(x=197.3 y=172.0 width=38.0 height=15.0 center_x=216.3 center_y=179.5)
-                  TextRun value="t" rect=(x=197.3 y=187.0 width=3.9 height=15.0 center_x=199.3 center_y=194.5)
+                Label value="kubelet" rect=(x=197.7 y=154.0 width=39.8 height=14.0 center_x=217.6 center_y=161.0)
+                  TextRun value="kubelet" rect=(x=197.7 y=154.0 width=39.8 height=14.0 center_x=217.6 center_y=161.0)
               GenericContainer rect=<none>
-                Label value="1m ago" rect=(x=246.7 y=172.0 width=40.1 height=15.0 center_x=266.7 center_y=179.5)
-                  TextRun value="1m ago" rect=(x=246.7 y=172.0 width=40.1 height=15.0 center_x=266.7 center_y=179.5)
+                Label value="1m ago" rect=(x=247.0 y=154.0 width=38.2 height=14.0 center_x=266.2 center_y=161.0)
+                  TextRun value="1m ago" rect=(x=247.0 y=154.0 width=38.2 height=14.0 center_x=266.2 center_y=161.0)

@@ -12,13 +12,12 @@ use crate::worker::{
     AddAksCluster, AddEksCluster, AddTailscaleCluster, LoadAwsAccounts,
     LoadManagedClusterDiscovery, ScanEksClusters,
 };
-use components::colors::{
-    CONTENT_BACKGROUND, TABLE_BORDER, TABLE_HEADER_BACKGROUND, WHITE, gray, indigo,
-};
-use components::design::{radius, spacing, status, surface, typography};
+use components::design::stroke;
+use components::design::theme::{Theme, ThemeExt};
+use components::design::{radius, space, type_scale};
 use components::{
     ButtonSize, ButtonVariant, PointingHand, ReorderHandle, ReorderableTable, TailwindButton,
-    TailwindCombobox, TailwindTextInput, icons,
+    TailwindCombobox, TailwindTextInput, WorkspaceCard, icons,
 };
 use egui::AtomExt as _;
 

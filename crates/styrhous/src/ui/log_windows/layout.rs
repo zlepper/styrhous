@@ -85,6 +85,7 @@ pub(super) fn show_loading_row(
     display_row_is_line_index: bool,
     display_options: LogDisplayOptions,
 ) {
+    let theme = ui.tokens();
     ui.allocate_ui_with_layout(
         egui::vec2(ui.available_width(), row_height),
         egui::Layout::left_to_right(egui::Align::Center),
@@ -99,7 +100,7 @@ pub(super) fn show_loading_row(
                             display_options,
                         ))
                         .font(egui::FontId::monospace(LOG_FONT_SIZE))
-                        .color(egui::Color32::from_rgb(156, 163, 175)),
+                        .color(theme.code.gutter),
                     )
                     .selectable(false),
                 );
@@ -108,7 +109,7 @@ pub(super) fn show_loading_row(
                 egui::Label::new(
                     egui::RichText::new("Loading…")
                         .font(egui::FontId::monospace(LOG_FONT_SIZE))
-                        .color(gray::_500),
+                        .color(theme.code.text_muted),
                 )
                 .selectable(false),
             );
@@ -147,6 +148,7 @@ pub(super) fn clipped_ranges(
         .collect()
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn log_line_layout_job(
     line_index: usize,
     timestamp: Option<&str>,
@@ -155,6 +157,7 @@ pub(super) fn log_line_layout_job(
     style_spans: &[AnsiStyleSpan],
     ranges: &[(usize, usize)],
     display_options: LogDisplayOptions,
+    theme: &Theme,
 ) -> egui::text::LayoutJob {
     let mut job = egui::text::LayoutJob {
         wrap: egui::text::TextWrapping::no_max_width(),
@@ -162,7 +165,7 @@ pub(super) fn log_line_layout_job(
     };
     let number = egui::TextFormat {
         font_id: egui::FontId::monospace(LOG_FONT_SIZE),
-        color: egui::Color32::from_rgb(156, 163, 175),
+        color: theme.code.gutter,
         ..Default::default()
     };
     if display_options.show_line_numbers {
@@ -176,7 +179,7 @@ pub(super) fn log_line_layout_job(
     if let Some(source_prefix) = source_prefix {
         job.append(source_prefix, 0.0, number);
     }
-    append_log_line_text(&mut job, line, style_spans, ranges, display_options);
+    append_log_line_text(&mut job, line, style_spans, ranges, display_options, theme);
     job
 }
 
@@ -185,12 +188,20 @@ pub(super) fn log_line_text_layout_job(
     style_spans: Vec<AnsiStyleSpan>,
     ranges: Vec<(usize, usize)>,
     display_options: LogDisplayOptions,
+    theme: &Theme,
 ) -> egui::text::LayoutJob {
     let mut job = egui::text::LayoutJob {
         wrap: egui::text::TextWrapping::no_max_width(),
         ..Default::default()
     };
-    append_log_line_text(&mut job, line, &style_spans, &ranges, display_options);
+    append_log_line_text(
+        &mut job,
+        line,
+        &style_spans,
+        &ranges,
+        display_options,
+        theme,
+    );
     job
 }
 
@@ -200,10 +211,11 @@ pub(super) fn append_log_line_text(
     style_spans: &[AnsiStyleSpan],
     ranges: &[(usize, usize)],
     display_options: LogDisplayOptions,
+    theme: &Theme,
 ) {
     let text = egui::TextFormat {
         font_id: egui::FontId::monospace(LOG_FONT_SIZE),
-        color: egui::Color32::from_rgb(229, 231, 235),
+        color: theme.code.text,
         ..Default::default()
     };
     let mut boundaries = Vec::with_capacity(2 + style_spans.len() * 2 + ranges.len() * 2);
@@ -231,22 +243,30 @@ pub(super) fn append_log_line_text(
                     .map(|span| span.style)
             })
             .flatten();
-        let mut format = style.map_or_else(|| text.clone(), |style| ansi_text_format(style, &text));
+        let mut format = style.map_or_else(
+            || text.clone(),
+            |style| ansi_text_format(style, &text, theme),
+        );
         if ranges
             .iter()
             .any(|&(match_start, match_end)| match_start <= start && end <= match_end)
         {
             if style.is_none() {
-                format.color = egui::Color32::from_rgb(254, 243, 199);
+                format.color = theme.code.match_text;
             }
-            format.background = search::MATCH_BACKGROUND;
+            format.background = theme.code.match_bg;
         }
         job.append(&line[start..end], 0.0, format);
     }
 }
 
-pub(super) fn ansi_text_format(style: Style, default: &egui::TextFormat) -> egui::TextFormat {
-    let default_background = egui::Color32::from_rgb(10, 10, 11);
+pub(super) fn ansi_text_format(
+    style: Style,
+    default: &egui::TextFormat,
+    theme: &Theme,
+) -> egui::TextFormat {
+    let ansi_color = |color| ansi_color(color, &theme.ansi);
+    let default_background = theme.code.surface;
     let mut format = default.clone();
     let foreground = style.get_fg_color().map(ansi_color).unwrap_or(format.color);
     let background = style
@@ -290,17 +310,21 @@ pub(super) fn ansi_text_format(style: Style, default: &egui::TextFormat) -> egui
     format
 }
 
-pub(super) fn ansi_color(color: Color) -> egui::Color32 {
+// colour-guard: allow-begin (xterm 256 / truecolor: the 6×6×6 cube, the grey ramp and 24-bit
+// escapes carry their colour in the log text itself)
+pub(super) fn ansi_color(color: Color, palette: &AnsiRoles) -> egui::Color32 {
     match color {
-        Color::Ansi(color) => ansi_palette_color(color),
-        Color::Ansi256(Ansi256Color(index)) => ansi_256_color(index),
+        Color::Ansi(color) => ansi_palette_color(color, palette),
+        Color::Ansi256(Ansi256Color(index)) => ansi_256_color(index, palette),
         Color::Rgb(RgbColor(red, green, blue)) => egui::Color32::from_rgb(red, green, blue),
     }
 }
 
-pub(super) fn ansi_256_color(index: u8) -> egui::Color32 {
+/// An xterm 256-colour index. Indices 0–15 are the theme's ANSI roles; the
+/// 6×6×6 cube and the grey ramp are fixed by the xterm specification.
+pub(super) fn ansi_256_color(index: u8, palette: &AnsiRoles) -> egui::Color32 {
     if index < 16 {
-        return ansi_palette_color(ansi_color_from_index(index));
+        return ansi_palette_color(ansi_color_from_index(index), palette);
     }
     if index >= 232 {
         let gray = 8 + (index - 232) * 10;
@@ -314,6 +338,7 @@ pub(super) fn ansi_256_color(index: u8) -> egui::Color32 {
         component(color_index % 6),
     )
 }
+// colour-guard: allow-end
 
 pub(super) fn ansi_color_from_index(index: u8) -> AnsiColor {
     match index {
@@ -337,23 +362,23 @@ pub(super) fn ansi_color_from_index(index: u8) -> AnsiColor {
     }
 }
 
-pub(super) fn ansi_palette_color(color: AnsiColor) -> egui::Color32 {
+pub(super) fn ansi_palette_color(color: AnsiColor, palette: &AnsiRoles) -> egui::Color32 {
     match color {
-        AnsiColor::Black => egui::Color32::from_rgb(0, 0, 0),
-        AnsiColor::Red => egui::Color32::from_rgb(239, 68, 68),
-        AnsiColor::Green => egui::Color32::from_rgb(34, 197, 94),
-        AnsiColor::Yellow => egui::Color32::from_rgb(234, 179, 8),
-        AnsiColor::Blue => egui::Color32::from_rgb(59, 130, 246),
-        AnsiColor::Magenta => egui::Color32::from_rgb(217, 70, 239),
-        AnsiColor::Cyan => egui::Color32::from_rgb(6, 182, 212),
-        AnsiColor::White => egui::Color32::from_rgb(229, 231, 235),
-        AnsiColor::BrightBlack => egui::Color32::from_rgb(107, 114, 128),
-        AnsiColor::BrightRed => egui::Color32::from_rgb(248, 113, 113),
-        AnsiColor::BrightGreen => egui::Color32::from_rgb(74, 222, 128),
-        AnsiColor::BrightYellow => egui::Color32::from_rgb(250, 204, 21),
-        AnsiColor::BrightBlue => egui::Color32::from_rgb(96, 165, 250),
-        AnsiColor::BrightMagenta => egui::Color32::from_rgb(232, 121, 249),
-        AnsiColor::BrightCyan => egui::Color32::from_rgb(34, 211, 238),
-        AnsiColor::BrightWhite => egui::Color32::from_rgb(255, 255, 255),
+        AnsiColor::Black => palette.black,
+        AnsiColor::Red => palette.red,
+        AnsiColor::Green => palette.green,
+        AnsiColor::Yellow => palette.yellow,
+        AnsiColor::Blue => palette.blue,
+        AnsiColor::Magenta => palette.magenta,
+        AnsiColor::Cyan => palette.cyan,
+        AnsiColor::White => palette.white,
+        AnsiColor::BrightBlack => palette.bright_black,
+        AnsiColor::BrightRed => palette.bright_red,
+        AnsiColor::BrightGreen => palette.bright_green,
+        AnsiColor::BrightYellow => palette.bright_yellow,
+        AnsiColor::BrightBlue => palette.bright_blue,
+        AnsiColor::BrightMagenta => palette.bright_magenta,
+        AnsiColor::BrightCyan => palette.bright_cyan,
+        AnsiColor::BrightWhite => palette.bright_white,
     }
 }

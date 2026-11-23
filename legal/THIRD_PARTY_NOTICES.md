@@ -16,16 +16,30 @@ packaged `APPIMAGE_NATIVE_LICENSES` directory. The build inventories every
 bundled shared library against `legal/appimage-native-libraries.tsv`; an unreviewed
 library makes packaging fail.
 
-## Inter font
+## Fonts
 
-The bundled Inter font files are copyright © 2016 The Inter Project Authors
-and licensed under the SIL Open Font License 1.1. The complete license is
-distributed as `Inter-OFL-1.1.txt` and is also available in the source tree at
-`crates/components/assets/fonts/inter/LICENSE.txt`.
+The bundled fonts are licensed under the SIL Open Font License 1.1, except the
+DejaVu fonts, which are under the Bitstream Vera / Arev font licenses. Each
+complete license is distributed next to the application and is also available in
+the source tree:
+
+- Figtree — copyright 2022 The Figtree Project Authors; `Figtree-OFL-1.1.txt`
+  (`crates/components/assets/fonts/figtree/OFL.txt`).
+- Bricolage Grotesque (static instances) — copyright 2022 The Bricolage Grotesque
+  Project Authors; `BricolageGrotesque-OFL-1.1.txt`
+  (`crates/components/assets/fonts/bricolagegrotesque/OFL.txt`).
+- IBM Plex Mono — copyright © 2017 IBM Corp., Reserved Font Name "Plex";
+  `IBMPlexMono-OFL-1.1.txt` (`crates/components/assets/fonts/ibmplexmono/OFL.txt`).
+- IBM Plex Sans Condensed — copyright © 2017 IBM Corp., Reserved Font Name "Plex";
+  `IBMPlexSansCondensed-OFL-1.1.txt`
+  (`crates/components/assets/fonts/ibmplexsanscondensed/OFL.txt`).
+- DejaVu Sans and DejaVu Sans Mono (a subset for ↵ ⌘ ⌫ plus the complete fonts as
+  the fallback for other symbols and scripts) — copyright Bitstream, Inc. and
+  Tavmjong Bah; `DejaVu-LICENSE.txt` (`crates/components/assets/fonts/dejavu/LICENSE`).
 
 ## Heroicons
 
-The generic interface icons in `crates/components/src/icons/` are based on
+The generic interface icons in `crates/components/assets/icons/` are based on
 Heroicons by Tailwind Labs, Inc. and are used under the MIT License:
 
 > MIT License
@@ -62,4 +76,4 @@ Heroicons by Tailwind Labs, Inc. and are used under the MIT License:
 
 No trademark license is granted for either provider mark beyond the permission
 given by its owner and applicable law. See
-`crates/components/src/icons/ATTRIBUTION.md` for source details.
+`crates/components/assets/icons/ATTRIBUTION.md` for source details.

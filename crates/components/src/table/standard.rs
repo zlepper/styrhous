@@ -113,9 +113,9 @@ impl TailwindTable {
             .header(header_height, |mut header| {
                 for col in &self.columns {
                     header.col(|ui| {
-                        // White background for header
+                        // Transparent header over the surface, with a divider below.
                         let rect = ui.max_rect();
-                        paint_table_cell(ui, rect, HEADER_BG);
+                        paint_header_cell(ui, rect);
 
                         let mut label_ui = ui.new_child(
                             egui::UiBuilder::new()
@@ -124,12 +124,7 @@ impl TailwindTable {
                         );
                         label_ui.horizontal(|ui| {
                             ui.add_space(cell_padding_x);
-                            ui.label(
-                                egui::RichText::new(&col.header)
-                                    .font(typography::body())
-                                    .color(gray::_900)
-                                    .strong(),
-                            );
+                            header_label(ui, &col.header);
                         });
                     });
                 }
@@ -152,7 +147,7 @@ impl TailwindTable {
                                 col_index,
                                 &self.columns[col_index].header,
                             ));
-                            paint_table_cell(ui, rect, CONTENT_BACKGROUND);
+                            paint_row_cell(ui, rect);
 
                             // Add padding and render cell content
                             ui.horizontal(|ui| {

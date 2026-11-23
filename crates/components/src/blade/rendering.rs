@@ -19,9 +19,9 @@ pub(super) fn show_header<H>(
                 let mut content = None;
                 StripBuilder::new(ui)
                     .size(Size::exact(navigation_width))
-                    .size(Size::exact(spacing::MD))
+                    .size(Size::exact(space::S12))
                     .size(Size::remainder())
-                    .size(Size::exact(spacing::MD))
+                    .size(Size::exact(space::S12))
                     .size(Size::exact(close_width))
                     .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                     .horizontal(|mut strip| {
@@ -31,7 +31,7 @@ pub(super) fn show_header<H>(
                                     TailwindButton::icon(
                                         icons::arrow_left_icon()
                                             .fit_to_exact_size(egui::Vec2::splat(16.0))
-                                            .tint(gray::_700),
+                                            .tint(ui.tokens().text.primary),
                                     )
                                     .variant(ButtonVariant::Secondary)
                                     .size(ButtonSize::Sm)
@@ -52,7 +52,7 @@ pub(super) fn show_header<H>(
                                     TailwindButton::icon(
                                         icons::arrow_right_icon()
                                             .fit_to_exact_size(egui::Vec2::splat(16.0))
-                                            .tint(gray::_700),
+                                            .tint(ui.tokens().text.primary),
                                     )
                                     .variant(ButtonVariant::Secondary)
                                     .size(ButtonSize::Sm)
@@ -79,7 +79,7 @@ pub(super) fn show_header<H>(
                                     if TailwindButton::icon(
                                         icons::x_mark_icon()
                                             .fit_to_exact_size(egui::Vec2::splat(16.0))
-                                            .tint(gray::_700),
+                                            .tint(ui.tokens().text.primary),
                                     )
                                     .variant(ButtonVariant::Secondary)
                                     .size(ButtonSize::Sm)
@@ -101,7 +101,7 @@ pub(super) fn show_header<H>(
             },
         )
         .inner;
-    ui.add_space(spacing::LG);
+    ui.add_space(space::S16);
     (content, action)
 }
 pub(super) fn show_layer<R>(
@@ -138,15 +138,7 @@ pub(super) fn show_layer<R>(
                     .max_height(height(viewport))
                     .show(ui, |ui| {
                         ui.set_width(width);
-                        let frame = egui::Frame::new()
-                            .fill(WHITE)
-                            .stroke(egui::Stroke::new(FRAME_STROKE_WIDTH, gray::_200))
-                            .shadow(egui::Shadow {
-                                offset: [-4, 0],
-                                blur: 16,
-                                spread: 0,
-                                color: Color32::BLACK.gamma_multiply(0.12),
-                            })
+                        let frame = crate::frames::overlay_frame(&ui.tokens())
                             .inner_margin(egui::Margin::same(PADDING));
                         let content_width = content_width(width);
                         let content_height =
@@ -157,7 +149,9 @@ pub(super) fn show_layer<R>(
                                 // draw their body without managing parent widths.
                                 ui.set_width(content_width);
                                 ui.set_min_height(content_height);
-                                show_clipped_body(ui, content_width, add)
+                                theme::scope(ui, ThemeScope::Blade, |ui| {
+                                    show_clipped_body(ui, content_width, add)
+                                })
                             })
                             .inner
                     })
@@ -215,7 +209,7 @@ pub(super) fn paint_scrim(ctx: &egui::Context, id: Id, viewport: Rect, closing: 
             ui.painter().rect_filled(
                 ui.max_rect(),
                 0.0,
-                Color32::BLACK.gamma_multiply(0.58 * (1.0 - closing)),
+                ui.tokens().shade.scrim.gamma_multiply(1.0 - closing),
             );
         });
 }

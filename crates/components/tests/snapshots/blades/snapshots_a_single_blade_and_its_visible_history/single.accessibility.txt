@@ -23,12 +23,12 @@ Window state=[focused] rect=<none>
                   GenericContainer rect=<none>
                     Button name="Forward" state=[disabled] rect=(x=851.0 y=34.0 width=34.0 height=34.0 center_x=868.0 center_y=51.0)
                 GenericContainer rect=<none>
-                  Label value="First" rect=(x=917.0 y=39.0 width=41.3 height=24.0 center_x=937.6 center_y=51.0)
-                    TextRun value="First" rect=(x=917.0 y=39.0 width=41.3 height=24.0 center_x=937.6 center_y=51.0)
+                  Label value="First" rect=(x=917.0 y=39.0 width=44.6 height=24.0 center_x=939.3 center_y=51.0)
+                    TextRun value="First" rect=(x=917.0 y=39.0 width=44.6 height=24.0 center_x=939.3 center_y=51.0)
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
                     Button name="Close blade" rect=(x=1469.0 y=34.0 width=34.0 height=34.0 center_x=1486.0 center_y=51.0)
-              Label value="Active · First" rect=(x=809.0 y=88.0 width=82.2 height=17.0 center_x=850.1 center_y=96.5)
-                TextRun value="Active · First" rect=(x=809.0 y=88.0 width=82.2 height=17.0 center_x=850.1 center_y=96.5)
-              Label value="back: false · forward: false" rect=(x=809.0 y=108.0 width=175.1 height=17.0 center_x=896.6 center_y=116.5)
-                TextRun value="back: false · forward: false" rect=(x=809.0 y=108.0 width=175.1 height=17.0 center_x=896.6 center_y=116.5)
+              Label value="Active · First" rect=(x=809.0 y=88.0 width=72.5 height=16.0 center_x=845.3 center_y=96.0)
+                TextRun value="Active · First" rect=(x=809.0 y=88.0 width=72.5 height=16.0 center_x=845.3 center_y=96.0)
+              Label value="back: false · forward: false" rect=(x=809.0 y=107.0 width=150.5 height=16.0 center_x=884.2 center_y=115.0)
+                TextRun value="back: false · forward: false" rect=(x=809.0 y=107.0 width=150.5 height=16.0 center_x=884.2 center_y=115.0)

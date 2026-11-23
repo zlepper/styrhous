@@ -8,16 +8,17 @@ pub struct TableRowBuilder<'a> {
 impl TableRowBuilder<'_> {
     /// Render text in a cell with appropriate styling
     ///
-    /// First column gets stronger text color (gray-900), others get gray-500.
+    /// The first column uses primary text, the others secondary text.
     pub fn text(ui: &mut Ui, text: &str, is_first_column: bool) {
+        let tokens = ui.tokens();
         let color = if is_first_column {
-            gray::_900
+            tokens.text.primary
         } else {
-            gray::_500
+            tokens.text.secondary
         };
         ui.label(
             egui::RichText::new(text)
-                .font(typography::body())
+                .font(type_scale::BODY.font_id(ui.ctx()))
                 .color(color),
         );
     }
@@ -38,7 +39,7 @@ impl TableRowBuilder<'_> {
             .add(
                 Button::new(
                     egui::RichText::new(text)
-                        .font(typography::body())
+                        .font(type_scale::BODY.font_id(ui.ctx()))
                         .color(color),
                 )
                 .small()
@@ -66,13 +67,14 @@ pub(super) enum CheckboxState {
 }
 
 pub(super) fn paint_resize_handle(ui: &Ui, rect: egui::Rect, response: &egui::Response) {
+    let tokens = ui.tokens();
     let color = if response.hovered() || response.dragged() {
-        indigo::_500
+        tokens.accent.fill
     } else {
-        gray::_300
+        tokens.divider.base
     };
     let x = rect.center().x;
-    let stroke = egui::Stroke::new(1.0, color);
+    let stroke = stroke::hairline(color);
     ui.painter().line_segment(
         [
             egui::pos2(x, rect.top() + 8.0),
@@ -103,11 +105,32 @@ pub(super) fn row_context_menu_response(
     response
 }
 
-pub(super) fn paint_table_cell(ui: &Ui, rect: egui::Rect, background: Color32) {
+/// Paint a body cell: the row tile (`row-bg`) and the divider below it.
+pub(super) fn paint_row_cell(ui: &Ui, rect: egui::Rect) {
+    paint_table_cell(ui, rect, ui.tokens().components.row_bg);
+}
+
+/// Paint a header cell: transparent over the surface, with the divider below it.
+pub(super) fn paint_header_cell(ui: &Ui, rect: egui::Rect) {
+    paint_table_cell(ui, rect, Color32::TRANSPARENT);
+}
+
+fn paint_table_cell(ui: &Ui, rect: egui::Rect, background: Color32) {
+    let tokens = ui.tokens();
     ui.painter().rect_filled(rect, 0.0, background);
     ui.painter().line_segment(
         [rect.left_bottom(), rect.right_bottom()],
-        egui::Stroke::new(1.0, TABLE_BORDER),
+        stroke::divider(&tokens),
+    );
+}
+
+/// A column header label (`.th`).
+pub(super) fn header_label(ui: &mut Ui, text: &str) {
+    let color = ui.tokens().text.muted;
+    ui.label(
+        egui::RichText::new(text)
+            .font(type_scale::BODY.font_id(ui.ctx()))
+            .color(color),
     );
 }
 
@@ -176,13 +199,13 @@ pub fn tailwind_checkbox(ui: &mut Ui, checked: bool, label: &str) -> egui::Respo
 pub fn checkbox_field(ui: &mut Ui, checked: &mut bool, label: &str) -> egui::Response {
     ui.horizontal(|ui| {
         let box_response = tailwind_checkbox(ui, *checked, label);
-        ui.add_space(spacing::SM);
+        ui.add_space(space::S8);
         let label_response = ui
             .add(
                 egui::Label::new(
                     egui::RichText::new(label)
-                        .font(typography::body())
-                        .color(gray::_800),
+                        .font(type_scale::BODY.font_id(ui.ctx()))
+                        .color(ui.tokens().text.primary),
                 )
                 .sense(egui::Sense::click()),
             )
@@ -200,8 +223,9 @@ pub(super) fn render_checkbox(ui: &mut Ui, state: CheckboxState, label: &str) ->
     let response = response.with_pointing_hand();
 
     if ui.is_rect_visible(rect) {
+        let tokens = ui.tokens();
         let painter = ui.painter();
-        let rounding = radius::subtle();
+        let rounding = egui::CornerRadius::same(radius::KEY);
 
         match state {
             CheckboxState::Unchecked => {
@@ -209,15 +233,15 @@ pub(super) fn render_checkbox(ui: &mut Ui, state: CheckboxState, label: &str) ->
                 painter.rect_stroke(
                     rect,
                     rounding,
-                    egui::Stroke::new(1.5, gray::_300),
+                    stroke::control_border(tokens.control.border, painter.pixels_per_point()),
                     egui::StrokeKind::Inside,
                 );
             }
             CheckboxState::Checked => {
                 // Filled background
-                painter.rect_filled(rect, rounding, indigo::_600);
+                painter.rect_filled(rect, rounding, tokens.accent.fill);
                 // Checkmark
-                let check_color = WHITE;
+                let check_color = tokens.text.on_fill;
                 let stroke = egui::Stroke::new(2.0, check_color);
                 let center = rect.center();
                 let size = CHECKBOX_SIZE * 0.35;
@@ -230,9 +254,9 @@ pub(super) fn render_checkbox(ui: &mut Ui, state: CheckboxState, label: &str) ->
             }
             CheckboxState::Indeterminate => {
                 // Filled background
-                painter.rect_filled(rect, rounding, indigo::_600);
+                painter.rect_filled(rect, rounding, tokens.accent.fill);
                 // Horizontal dash
-                let dash_color = WHITE;
+                let dash_color = tokens.text.on_fill;
                 let stroke = egui::Stroke::new(2.0, dash_color);
                 let center = rect.center();
                 let half_width = CHECKBOX_SIZE * 0.25;

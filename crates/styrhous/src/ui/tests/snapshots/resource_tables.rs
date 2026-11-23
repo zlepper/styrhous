@@ -51,7 +51,7 @@ fn pod_resource_table_shows_per_container_status_indicators() {
                                     message: None,
                                     ready: false,
                                     restart_count: 0,
-                                    tone: StatusTone::Success,
+                                    tone: Tone::Success,
                                 },
                                 ContainerIndicator {
                                     name: "api".into(),
@@ -61,7 +61,7 @@ fn pod_resource_table_shows_per_container_status_indicators() {
                                     message: None,
                                     ready: true,
                                     restart_count: 2,
-                                    tone: StatusTone::Success,
+                                    tone: Tone::Success,
                                 },
                                 ContainerIndicator {
                                     name: "sidecar".into(),
@@ -71,7 +71,7 @@ fn pod_resource_table_shows_per_container_status_indicators() {
                                     message: Some("Waiting for volume mount".into()),
                                     ready: false,
                                     restart_count: 3,
-                                    tone: StatusTone::Warning,
+                                    tone: Tone::Warning,
                                 },
                                 ContainerIndicator {
                                     name: "debugger".into(),
@@ -81,7 +81,7 @@ fn pod_resource_table_shows_per_container_status_indicators() {
                                     message: None,
                                     ready: false,
                                     restart_count: 1,
-                                    tone: StatusTone::Danger,
+                                    tone: Tone::Danger,
                                 },
                             ]),
                         ),
@@ -89,7 +89,7 @@ fn pod_resource_table_shows_per_container_status_indicators() {
                             STATUS_COLUMN.to_owned(),
                             CellValue::Status {
                                 label: "Running".into(),
-                                tone: StatusTone::Success,
+                                tone: Tone::Success,
                             },
                         ),
                         (RESTARTS_COLUMN.to_owned(), CellValue::Number(5)),

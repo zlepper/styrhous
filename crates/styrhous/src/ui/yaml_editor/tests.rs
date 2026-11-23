@@ -8,7 +8,7 @@ use components::test_support::{HarnessSnapshotOptions, UiHarnessSnapshot};
 use egui_kittest::{Harness, kittest::Queryable};
 use k8s_openapi::serde_json::json;
 
-const COMPLETION_POPUP_MAX_WIDTH: f32 = COMPLETION_LIST_MAX_WIDTH + 2.0 * spacing::MD;
+const COMPLETION_POPUP_MAX_WIDTH: f32 = COMPLETION_LIST_MAX_WIDTH + 2.0 * space::S12;
 const COMPLETION_POPUP_MAX_HEIGHT: f32 =
     COMPLETION_POPUP_CHROME_HEIGHT + COMPLETION_LIST_MAX_HEIGHT;
 
@@ -107,6 +107,9 @@ fn snapshot_editor(editor: YamlEditorWindowState, name: &str) {
         },
     );
     components::test_support::setup_egui(&mut harness);
+    // The harness renders its first frame before `setup_egui` applies the
+    // theme; one more frame lets the panels measure themselves with it.
+    harness.run_steps(1);
     harness.state_mut().editor.confirm_discard = confirm_discard;
     harness.run();
     harness.ui_harness(name);
@@ -131,6 +134,8 @@ fn editor_harness(editor: YamlEditorWindowState) -> Harness<'static, SnapshotSta
         },
     );
     components::test_support::setup_egui(&mut harness);
+    // See `snapshot_editor`: let the panels measure themselves with the theme.
+    harness.run_steps(1);
     harness.run();
     harness
 }

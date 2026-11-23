@@ -1,44 +1,92 @@
 use super::*;
+use components::test_support::distinct_role_theme;
+use std::sync::Arc;
 
 #[test]
-fn yaml_highlighting_uses_the_yaml_language() {
+fn highlight_cache_recolours_when_a_new_theme_is_installed() {
     let ctx = egui::Context::default();
-    let theme = CodeTheme::dark(typography::MONOSPACE_SIZE);
-    let job = highlight(
-        &ctx,
-        &egui::Style::default(),
-        &theme,
-        "kind: ConfigMap",
-        "yaml",
-    );
+    let distinct = distinct_role_theme();
+    components::design::theme::switch(&ctx, Arc::clone(&distinct));
+    let mut cache = YamlEditorHighlightCache::default();
+    let key_color = |job: &egui::text::LayoutJob| {
+        job.sections
+            .first()
+            .expect("the key has a section")
+            .format
+            .color
+    };
+    let mut highlight = |ctx: &egui::Context| {
+        let mut job = None;
+        let mut output = ctx.run_ui(Default::default(), |ui| {
+            job = Some(yaml_editor_layout_job(
+                ui,
+                &mut cache,
+                "kind: ConfigMap",
+                "",
+                false,
+                None,
+            ));
+        });
+        output.textures_delta.clear();
+        job.expect("the editor laid out the YAML")
+    };
 
-    assert!(!job.sections.is_empty());
+    let default_job = highlight(&ctx);
+    assert_eq!(key_color(&default_job), distinct.syntax.key);
+
+    let recoloured = Arc::new(
+        Theme::from_file_str(
+            r#"
+            name = "Teal keys"
+            [terminal]
+            syntax-key = "teal-400"
+            "#,
+        )
+        .expect("the theme file is valid"),
+    );
+    components::design::theme::switch(&ctx, Arc::clone(&recoloured));
+    let switched_job = highlight(&ctx);
+
+    assert_eq!(key_color(&switched_job), recoloured.syntax.key);
+    assert_ne!(key_color(&switched_job), key_color(&default_job));
 }
 
 #[test]
-fn search_highlights_preserve_syntax_formatting() {
+fn search_highlights_use_match_roles_and_keep_fonts() {
+    let theme = distinct_role_theme();
     let mut job = egui::text::LayoutJob::default();
     let key_format = egui::TextFormat {
-        color: gray::_400,
+        font_id: egui::FontId::monospace(13.0),
+        color: theme.syntax.key,
         ..Default::default()
     };
     let value_format = egui::TextFormat {
-        color: gray::_100,
+        font_id: egui::FontId::monospace(13.0),
+        color: theme.syntax.string,
         ..Default::default()
     };
     job.append("kind: ", 0.0, key_format);
     job.append("ConfigMap", 0.0, value_format.clone());
 
     let matches = [0..4, 6..15];
-    apply_search_highlights(&mut job, &matches, matches.get(1));
+    apply_search_highlights(&mut job, &matches, matches.get(1), &theme);
 
-    let matched = job
-        .sections
-        .iter()
-        .find(|section| section.byte_range.start.0 == 6 && section.byte_range.end.0 == 15)
-        .expect("matching section is present");
-    assert_eq!(matched.format.color, value_format.color);
-    assert_eq!(matched.format.background, search::ACTIVE_MATCH_BACKGROUND);
+    let section = |start: usize, end: usize| {
+        job.sections
+            .iter()
+            .find(|section| section.byte_range.start.0 == start && section.byte_range.end.0 == end)
+            .expect("matching section is present")
+    };
+    let active = section(6, 15);
+    assert_eq!(active.format.font_id, value_format.font_id);
+    assert_eq!(active.format.color, theme.code.match_active_text);
+    assert_eq!(active.format.background, theme.code.match_active_bg);
+    let inactive = section(0, 4);
+    assert_eq!(inactive.format.color, theme.code.match_text);
+    assert_eq!(inactive.format.background, theme.code.match_bg);
+    let unmatched = section(4, 6);
+    assert_eq!(unmatched.format.color, theme.syntax.key);
+    assert_eq!(unmatched.format.background, egui::Color32::TRANSPARENT);
 }
 
 #[test]
@@ -73,7 +121,12 @@ fn line_number_layout_job_numbers_and_marks_diagnostic_lines() {
         range: None,
     }];
 
-    let job = line_number_layout_job(12, &diagnostics);
+    let theme = distinct_role_theme();
+    let ctx = egui::Context::default();
+    ctx.run_ui(Default::default(), |_| {})
+        .textures_delta
+        .clear();
+    let job = line_number_layout_job(&ctx, 12, &diagnostics, &theme);
 
     assert_eq!(job.text, "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12");
     let diagnostic_index = job.text.find("10\n").expect("line 10 is present");
@@ -85,14 +138,14 @@ fn line_number_layout_job_numbers_and_marks_diagnostic_lines() {
                 && diagnostic_index < section.byte_range.end.0
         })
         .expect("line 10 has a layout section");
-    assert_eq!(diagnostic_section.format.color, status::DANGER);
+    assert_eq!(diagnostic_section.format.color, theme.code.error);
 
     let normal_section = job
         .sections
         .iter()
         .find(|section| section.byte_range.start.0 == 0)
         .expect("line 1 has a layout section");
-    assert_eq!(normal_section.format.color, gray::_500);
+    assert_eq!(normal_section.format.color, theme.code.gutter);
 }
 
 #[test]

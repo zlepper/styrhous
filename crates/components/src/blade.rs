@@ -1,22 +1,23 @@
 //! Reusable right-side overlay blades with optional navigation history.
 
-use crate::colors::{WHITE, gray};
-use crate::design::spacing;
+use crate::design::space;
+use crate::design::theme::{self, ThemeExt, ThemeScope};
 use crate::icons;
 use crate::{ButtonSize, ButtonVariant, TailwindButton};
-use egui::{Color32, Id, Order, Pos2, Rect, Sense, Ui, WidgetInfo, WidgetType};
+use egui::{Id, Order, Pos2, Rect, Sense, Ui, WidgetInfo, WidgetType};
 use egui_extras::{Size, StripBuilder};
 
 /// The fixed width used by every foreground and history blade.
 pub const BLADE_WIDTH: f32 = 744.0;
 const WIDTH: f32 = BLADE_WIDTH;
 const INSET: f32 = 8.0;
-const PADDING: i8 = spacing::XL as i8;
-const FRAME_STROKE_WIDTH: f32 = 1.0;
+const PADDING: i8 = space::S24 as i8;
+/// The overlay frame's ring, inside the blade width.
+const FRAME_STROKE_WIDTH: f32 = crate::design::elevation::RING_WIDTH;
 
 /// The width available to a blade's body inside its padding and frame stroke.
 const fn content_width(blade_width: f32) -> f32 {
-    (blade_width - spacing::XL * 2.0 - FRAME_STROKE_WIDTH * 2.0).max(0.0)
+    (blade_width - space::S24 * 2.0 - FRAME_STROKE_WIDTH * 2.0).max(0.0)
 }
 const TRANSITION_DURATION: f32 = 0.25;
 const HISTORY_SCALES: [f32; 2] = [0.9, 0.8];

@@ -54,7 +54,7 @@ pub(crate) enum CellValue {
     Timestamp(OffsetDateTime),
     Status {
         label: String,
-        tone: StatusTone,
+        tone: Tone,
     },
     ContainerIndicators(Vec<ContainerIndicator>),
     List(Vec<String>),
@@ -133,7 +133,7 @@ pub(crate) struct ContainerIndicator {
     pub(crate) message: Option<String>,
     pub(crate) ready: bool,
     pub(crate) restart_count: i32,
-    pub(crate) tone: StatusTone,
+    pub(crate) tone: Tone,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -153,13 +153,8 @@ impl ContainerKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(crate) enum StatusTone {
-    Neutral,
-    Success,
-    Warning,
-    Danger,
-}
+/// The tone of a status cell; see [`Tone`].
+pub(crate) use components::design::theme::Tone;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ResourceColumn {
@@ -200,12 +195,12 @@ pub(crate) fn custom_table_definition(
     }
 }
 
-pub(crate) fn status_tone(status: &str) -> StatusTone {
+pub(crate) fn status_tone(status: &str) -> Tone {
     match status {
-        "Running" | "Succeeded" | "Active" | "Bound" | "Ready" => StatusTone::Success,
-        "Pending" | "ContainerCreating" | "Terminating" => StatusTone::Warning,
-        "Failed" | "Unknown" | "NotReady" => StatusTone::Danger,
-        _ => StatusTone::Neutral,
+        "Running" | "Succeeded" | "Active" | "Bound" | "Ready" => Tone::Success,
+        "Pending" | "ContainerCreating" | "Terminating" => Tone::Warning,
+        "Failed" | "Unknown" | "NotReady" => Tone::Danger,
+        _ => Tone::Neutral,
     }
 }
 

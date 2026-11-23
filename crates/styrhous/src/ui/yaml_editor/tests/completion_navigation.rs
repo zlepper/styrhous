@@ -164,10 +164,10 @@ fn completion_popup_flips_and_clamps_at_each_viewport_edge() {
         bottom_left_position,
         bottom_right_position,
     ] {
-        assert!(position.x >= spacing::MD);
-        assert!(position.x + COMPLETION_POPUP_MAX_WIDTH <= viewport.right() - spacing::MD);
-        assert!(position.y >= spacing::MD);
-        assert!(position.y + COMPLETION_POPUP_MAX_HEIGHT <= viewport.bottom() - spacing::MD);
+        assert!(position.x >= space::S12);
+        assert!(position.x + COMPLETION_POPUP_MAX_WIDTH <= viewport.right() - space::S12);
+        assert!(position.y >= space::S12);
+        assert!(position.y + COMPLETION_POPUP_MAX_HEIGHT <= viewport.bottom() - space::S12);
     }
     assert!(top_left_position.y >= top_left.bottom());
     assert!(top_right_position.x < top_right.left());
@@ -210,5 +210,5 @@ fn completion_documentation_attaches_to_the_selected_row_without_overlapping_the
     let position = completion_documentation_position(viewport, completion_popup, selected_row);
 
     assert_eq!(position.y, selected_row.top());
-    assert!(position.x + COMPLETION_DOCUMENTATION_WIDTH + spacing::SM <= completion_popup.left());
+    assert!(position.x + COMPLETION_DOCUMENTATION_WIDTH + space::S8 <= completion_popup.left());
 }

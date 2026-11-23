@@ -23,11 +23,11 @@
 pub mod avatar;
 pub mod blade;
 pub mod button;
-pub mod colors;
 pub mod combobox;
 pub mod confirmation_dialog;
 pub mod design;
 pub mod error_dialog;
+pub mod frames;
 pub mod fuzzy;
 pub mod icons;
 pub mod inspector_details;
@@ -44,7 +44,6 @@ pub mod tabs;
 pub mod test_support;
 pub mod text_input;
 pub mod textarea;
-pub mod theme;
 pub mod workspace;
 
 pub use avatar::TextAvatar;
@@ -58,15 +57,16 @@ pub use combobox::{
 };
 pub use confirmation_dialog::{
     ConfirmationDialog, ConfirmationDialogAcknowledgement, ConfirmationDialogAction,
-    ConfirmationDialogKind, ConfirmationDialogWarning,
+    ConfirmationDialogKind, ConfirmationDialogWarning, dialog_modal, show_dialog_header,
 };
 pub use error_dialog::{ErrorDialog, ErrorDialogAction};
+pub use frames::{overlay_frame, popover_frame, raised_frame};
 pub use inspector_details::{
-    DetailCell, DetailColumn, DetailRow, DetailTableCell, DetailTableRow, DetailTone, DetailValue,
+    DetailCell, DetailColumn, DetailRow, DetailTableCell, DetailTableRow, DetailValue,
     InspectorDetails, InspectorDetailsResponse,
 };
 pub use interaction::PointingHand;
-pub use more_button::{MoreButton, MoreMenu, menu_frame};
+pub use more_button::{MoreButton, MoreMenu};
 pub use progress_checklist::{ChecklistStep, ChecklistStepState, ProgressChecklist};
 pub use reorderable_table::{ReorderHandle, ReorderableTable, move_item};
 pub use search::{
@@ -83,7 +83,6 @@ pub use table::{
 pub use tabs::{Tabs, TabsContent, TabsResponse};
 pub use text_input::TailwindTextInput;
 pub use textarea::TailwindTextArea;
-pub use theme::{apply_light_theme, semibold_font};
 pub use workspace::{
     WorkspaceCard, WorkspaceDrawer, WorkspaceEmptyState, WorkspacePage, workspace_section_header,
 };

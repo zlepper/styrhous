@@ -4,8 +4,11 @@ use super::table_preferences::{
     CustomMetadataColumn, MetadataColumnSource, PersistedResourceTablePreferences,
     ResourceTableKey, TableColumnDefinition,
 };
+use components::design::stroke;
+use components::design::theme::ThemeExt;
 use components::{
     ButtonSize, MoreMenu, ReorderHandle, ReorderableTable, TailwindButton, TailwindTextInput,
+    WorkspaceCard,
 };
 use std::cell::RefCell;
 
@@ -149,14 +152,15 @@ pub(super) fn show_target(
     target: &mut ResourceTableSettingsTarget,
     preferences: &mut PersistedResourceTablePreferences,
 ) {
+    let theme = ui.tokens();
     ui.label(
         egui::RichText::new(
             "Choose which columns are visible and drag rows to change their order.",
         )
-        .font(components::design::typography::body())
-        .color(components::colors::gray::_600),
+        .font(components::design::type_scale::BODY.font_id(ui.ctx()))
+        .color(theme.text.secondary),
     );
-    ui.add_space(components::design::spacing::XL);
+    ui.add_space(components::design::space::S24);
     if target.supports_custom_columns {
         if TailwindButton::soft("Add custom column")
             .size(ButtonSize::Sm)
@@ -170,7 +174,7 @@ pub(super) fn show_target(
                 label: String::new(),
             });
         }
-        ui.add_space(components::design::spacing::LG);
+        ui.add_space(components::design::space::S16);
     }
     // Keep the active form adjacent to its trigger. Rendering it after the
     // complete column list leaves its submission controls below the blade

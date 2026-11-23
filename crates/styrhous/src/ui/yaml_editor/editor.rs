@@ -48,6 +48,7 @@ pub(super) fn show_code_editor(
         editor.completion_cursor = None;
     }
 
+    let theme = ui.tokens();
     let line_count = editor.edited_yaml.lines().count().max(1);
     let mut changed = false;
     let mut cursor_byte = None;
@@ -76,16 +77,19 @@ pub(super) fn show_code_editor(
                 ui.vertical(|ui| {
                     ui.set_min_width(36.0);
                     ui.add_space(2.0);
-                    ui.label(line_number_layout_job(line_count, &editor.diagnostics));
+                    ui.label(line_number_layout_job(
+                        ui.ctx(),
+                        line_count,
+                        &editor.diagnostics,
+                        &theme,
+                    ));
                 });
                 ui.separator();
-                let theme = CodeTheme::dark(typography::MONOSPACE_SIZE);
                 let mut layouter =
                     |ui: &egui::Ui, buffer: &dyn egui::TextBuffer, wrap_width: f32| {
                         let mut layout_job = yaml_editor_layout_job(
                             ui,
                             &mut editor.highlight_cache,
-                            &theme,
                             buffer.as_str(),
                             &search_query,
                             search_regex_mode,
@@ -94,15 +98,16 @@ pub(super) fn show_code_editor(
                         layout_job.wrap.max_width = wrap_width;
                         ui.fonts_mut(|fonts| fonts.layout_job(layout_job))
                     };
-                ui.style_mut().visuals.text_cursor.stroke = egui::Stroke::new(4.0, indigo::_100);
+                ui.style_mut().visuals.text_cursor.stroke =
+                    egui::Stroke::new(4.0, theme.code.caret);
                 ui.style_mut().visuals.text_cursor.blink = false;
                 let output = egui::TextEdit::multiline(&mut editor.edited_yaml)
                     .id(yaml_editor_text_edit_id(editor.id))
-                    .font(typography::monospace())
+                    .font(type_scale::MONO.font_id(ui.ctx()))
                     .code_editor()
                     .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(4, 2)))
-                    .text_color(gray::_100)
-                    .background_color(surface::TERMINAL_BACKGROUND)
+                    .text_color(theme.code.text)
+                    .background_color(theme.code.surface)
                     .desired_width(f32::INFINITY)
                     .desired_rows(line_count)
                     .layouter(&mut layouter)
@@ -123,7 +128,7 @@ pub(super) fn show_code_editor(
                             .galley
                             .rows
                             .first()
-                            .map_or(typography::MONOSPACE_SIZE, |row| row.rect().height()),
+                            .map_or(type_scale::MONO.size(), |row| row.rect().height()),
                     )
                     .translate(output.galley_pos.to_vec2())
                 });
@@ -205,105 +210,104 @@ pub(super) fn show_code_editor(
         let pointer_pressed = ctx.input(|input| input.pointer.any_pressed());
         let pointer_position = ctx.input(|input| input.pointer.interact_pos());
         let completion_list_width = completion_list_width(&editor.suggestions);
-        let completion_popup_width = completion_list_width + 2.0 * spacing::MD;
+        let completion_popup_width = completion_list_width + 2.0 * space::S12;
         let mut selected_row_rect = None;
         let popup = egui::Area::new(egui::Id::new(("yaml-editor-suggestions", editor.id)))
             .order(egui::Order::Foreground)
             .fixed_pos(completion_position)
             .show(ctx, |ui| {
-                ui.set_width(completion_popup_width);
-                egui::Frame::new()
-                    .fill(TOOLBAR_BACKGROUND)
-                    .stroke(egui::Stroke::new(1.0, gray::_600))
-                    .corner_radius(components::design::radius::surface())
-                    .shadow(egui::epaint::Shadow {
-                        offset: [0, 5],
-                        blur: 12,
-                        spread: 0,
-                        color: egui::Color32::from_black_alpha(100),
-                    })
-                    .inner_margin(egui::Margin::same(spacing::MD as i8))
-                    .show(ui, |ui| {
-                        completion_context_header(ui, editor.completion_context.as_ref());
-                        ui.add_space(spacing::XS);
-                        let mut accepted = accept_suggestion.then_some(editor.suggestion_selection);
-                        let mut hovered = None;
-                        if editor.suggestions.is_empty() {
-                            ui.add_sized(
-                                egui::vec2(completion_list_width, COMPLETION_ROW_HEIGHT),
-                                egui::Label::new(
-                                    egui::RichText::new("No completions available")
-                                        .font(typography::body())
-                                        .color(gray::_500),
-                                ),
-                            );
-                        } else {
-                            components::scroll::vertical()
-                                .id_salt(("yaml-editor-suggestion-list", editor.id))
-                                .max_height(COMPLETION_LIST_MAX_HEIGHT)
-                                .auto_shrink([false, true])
-                                .show(ui, |ui| {
-                                    ui.set_width(completion_list_width);
-                                    for (index, suggestion) in editor.suggestions.iter().enumerate()
-                                    {
-                                        let is_selected = index == editor.suggestion_selection;
-                                        let response = completion_row(
-                                            ui,
-                                            suggestion,
-                                            is_selected,
-                                            completion_list_width,
-                                        );
-                                        if is_selected {
-                                            if selection_changed {
-                                                response.scroll_to_me(Some(egui::Align::Center));
-                                            }
-                                            selected_row_rect = Some(response.rect);
-                                        }
-                                        if response.hovered() {
-                                            hovered = Some((index, response.rect));
-                                        }
-                                        if response.clicked() {
-                                            accepted = Some(index);
-                                        }
-                                    }
-                                });
-                        }
-                        if let Some((index, rect)) = hovered {
-                            editor.suggestion_selection = index;
-                            selected_row_rect = Some(rect);
-                        }
-                        ui.add_space(spacing::XS);
-                        ui.separator();
-                        ui.add_space(spacing::XS);
-                        ui.label(
-                            egui::RichText::new(if editor.suggestions.is_empty() {
-                                "Esc dismiss"
+                theme::scope(ui, ThemeScope::Popover, |ui| {
+                    ui.set_width(completion_popup_width);
+                    components::popover_frame(&theme)
+                        .inner_margin(egui::Margin::same(space::S12 as i8))
+                        .show(ui, |ui| {
+                            completion_context_header(ui, editor.completion_context.as_ref());
+                            ui.add_space(space::S4);
+                            let mut accepted =
+                                accept_suggestion.then_some(editor.suggestion_selection);
+                            let mut hovered = None;
+                            if editor.suggestions.is_empty() {
+                                ui.add_sized(
+                                    egui::vec2(completion_list_width, COMPLETION_ROW_HEIGHT),
+                                    egui::Label::new(
+                                        egui::RichText::new("No completions available")
+                                            .font(type_scale::BODY.font_id(ui.ctx()))
+                                            .color(theme.text.muted),
+                                    ),
+                                );
                             } else {
-                                "↑↓ navigate  ·  Enter apply  ·  Esc dismiss"
-                            })
-                            .font(typography::metadata())
-                            .color(gray::_500),
-                        );
-                        if let Some(index) = accepted
-                            && let Some(suggestion) = editor.suggestions.get(index)
-                            && let (Some(cursor), Some(id)) = (cursor_byte, text_edit_id)
-                        {
-                            let new_cursor = insert_suggestion(
-                                &mut editor.edited_yaml,
-                                cursor,
-                                &suggestion.label,
+                                components::scroll::vertical()
+                                    .id_salt(("yaml-editor-suggestion-list", editor.id))
+                                    .max_height(COMPLETION_LIST_MAX_HEIGHT)
+                                    .auto_shrink([false, true])
+                                    .show(ui, |ui| {
+                                        ui.set_width(completion_list_width);
+                                        for (index, suggestion) in
+                                            editor.suggestions.iter().enumerate()
+                                        {
+                                            let is_selected = index == editor.suggestion_selection;
+                                            let response = completion_row(
+                                                ui,
+                                                suggestion,
+                                                is_selected,
+                                                completion_list_width,
+                                            );
+                                            if is_selected {
+                                                if selection_changed {
+                                                    response
+                                                        .scroll_to_me(Some(egui::Align::Center));
+                                                }
+                                                selected_row_rect = Some(response.rect);
+                                            }
+                                            if response.hovered() {
+                                                hovered = Some((index, response.rect));
+                                            }
+                                            if response.clicked() {
+                                                accepted = Some(index);
+                                            }
+                                        }
+                                    });
+                            }
+                            if let Some((index, rect)) = hovered {
+                                editor.suggestion_selection = index;
+                                selected_row_rect = Some(rect);
+                            }
+                            ui.add_space(space::S4);
+                            ui.separator();
+                            ui.add_space(space::S4);
+                            ui.label(
+                                egui::RichText::new(if editor.suggestions.is_empty() {
+                                    "Esc dismiss"
+                                } else {
+                                    "↑↓ navigate  ·  Enter apply  ·  Esc dismiss"
+                                })
+                                .font(type_scale::META.font_id(ui.ctx()))
+                                .color(theme.text.muted),
                             );
-                            let mut state = egui::widgets::text_edit::TextEditState::load(ctx, id)
-                                .unwrap_or_default();
-                            state
-                                .cursor
-                                .set_char_range(Some(CCursorRange::one(CCursor::new(new_cursor))));
-                            state.store(ctx, id);
-                            editor.suggestions_visible = false;
-                            editor.completion_cursor = None;
-                            changed = true;
-                        }
-                    });
+                            if let Some(index) = accepted
+                                && let Some(suggestion) = editor.suggestions.get(index)
+                                && let (Some(cursor), Some(id)) = (cursor_byte, text_edit_id)
+                            {
+                                let new_cursor = insert_suggestion(
+                                    &mut editor.edited_yaml,
+                                    cursor,
+                                    &suggestion.label,
+                                );
+                                let mut state =
+                                    egui::widgets::text_edit::TextEditState::load(ctx, id)
+                                        .unwrap_or_default();
+                                state
+                                    .cursor
+                                    .set_char_range(Some(CCursorRange::one(CCursor::new(
+                                        new_cursor,
+                                    ))));
+                                state.store(ctx, id);
+                                editor.suggestions_visible = false;
+                                editor.completion_cursor = None;
+                                changed = true;
+                            }
+                        });
+                })
             });
         if pointer_pressed
             && pointer_position.is_some_and(|position| !popup.response.rect.contains(position))

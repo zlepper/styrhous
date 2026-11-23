@@ -2,39 +2,22 @@
 
 use std::borrow::Cow;
 
-use egui::{
-    Align, Frame, Id, Label, Layout, Margin, Rect, RichText, Ui, UiBuilder, Vec2, WidgetInfo,
-    WidgetType,
-};
+use egui::{Align, Id, Label, Layout, Rect, RichText, Ui, UiBuilder, Vec2, WidgetInfo, WidgetType};
 
 use crate::PointingHand;
-use crate::colors::WHITE;
-use crate::colors::gray;
-use crate::design::{radius, spacing, status, surface, typography};
+use crate::design::theme::{ThemeExt, Tone};
+use crate::design::{space, type_scale};
+use crate::workspace::show_card;
 
 const MIN_COLUMN_WIDTH: f32 = 200.0;
 const COPY_ICON_SIZE: f32 = 14.0;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DetailTone {
-    Neutral,
-    Success,
-    Warning,
-    Danger,
-}
 
 #[derive(Clone, Debug)]
 pub enum DetailValue<'a> {
     Text(Cow<'a, str>),
     Unavailable,
-    Status {
-        text: Cow<'a, str>,
-        tone: DetailTone,
-    },
-    Link {
-        text: Cow<'a, str>,
-        action: Id,
-    },
+    Status { text: Cow<'a, str>, tone: Tone },
+    Link { text: Cow<'a, str>, action: Id },
 }
 
 impl<'a> From<&'a str> for DetailValue<'a> {
@@ -76,7 +59,7 @@ impl<'a> DetailCell<'a> {
     pub fn status(
         label: impl Into<Cow<'a, str>>,
         text: impl Into<Cow<'a, str>>,
-        tone: DetailTone,
+        tone: Tone,
     ) -> Self {
         Self {
             label: label.into(),
@@ -248,13 +231,13 @@ impl InspectorDetails {
         let mut response = InspectorDetailsResponse::default();
         let title_galley = ui.painter().layout_no_wrap(
             title.to_owned(),
-            typography::section_heading(),
-            gray::_800,
+            type_scale::TITLE.font_id(ui.ctx()),
+            ui.tokens().text.primary,
         );
         ui.add_space(title_galley.size().y / 2.0);
         let title_rect = Rect::from_min_size(
             egui::pos2(
-                ui.cursor().left() + spacing::MD,
+                ui.cursor().left() + space::S12,
                 ui.cursor().top() - title_galley.size().y / 2.0,
             ),
             title_galley.size(),
@@ -266,15 +249,14 @@ impl InspectorDetails {
         );
         title_semantics_ui.add(Label::new(
             RichText::new(title)
-                .font(typography::section_heading())
+                .font(type_scale::TITLE.font_id(ui.ctx()))
                 .color(egui::Color32::TRANSPARENT),
         ));
-        let frame = Frame::new()
-            .fill(WHITE)
-            .stroke(surface::muted_border())
-            .corner_radius(radius::surface())
-            .inner_margin(Margin::same(spacing::MD as i8))
-            .show(ui, |ui| show_property_rows(ui, rows, &mut response));
+        // The title sits in the border, so this card keeps a visible one.
+        let frame = crate::WorkspaceCard::new()
+            .margin(space::S12 as i8)
+            .stroke(crate::design::stroke::divider(&ui.tokens()))
+            .show_inner(ui, |ui| show_property_rows(ui, rows, &mut response));
         show_group_title(ui, frame.response.rect, title);
         response
     }
@@ -289,7 +271,7 @@ impl InspectorDetails {
             return response;
         }
         // Resolve geometry before any row can expand the parent layout.
-        let gaps = spacing::SM * columns.len().saturating_sub(1) as f32;
+        let gaps = space::S8 * columns.len().saturating_sub(1) as f32;
         let available = (ui.available_width() - gaps).max(0.0);
         let total_weight: f32 = columns.iter().map(|column| column.weight).sum();
         let widths: Vec<f32> = columns
@@ -299,14 +281,14 @@ impl InspectorDetails {
         show_table_row(ui, &widths, |ui, index| {
             ui.label(
                 RichText::new(columns[index].label.as_ref())
-                    .font(typography::metadata())
-                    .color(gray::_500),
+                    .font(type_scale::META.font_id(ui.ctx()))
+                    .color(ui.tokens().text.muted),
             );
         });
-        ui.add_space(spacing::SM);
+        ui.add_space(space::S8);
         ui.separator();
         for row in rows {
-            ui.add_space(spacing::SM);
+            ui.add_space(space::S8);
             show_table_row(ui, &widths, |ui, index| {
                 if let Some(cell) = row.cells.get(index) {
                     let label = columns[index].label.as_ref();
@@ -319,7 +301,7 @@ impl InspectorDetails {
                     );
                 }
             });
-            ui.add_space(spacing::SM);
+            ui.add_space(space::S8);
             ui.separator();
         }
         response
