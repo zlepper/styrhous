@@ -27,6 +27,7 @@ fn connected_state() -> UiState {
         name: "kind".to_owned(),
         is_current: true,
         presentation: Default::default(),
+        server: None,
     }])
     .apply(&mut state, &mut commands);
     state

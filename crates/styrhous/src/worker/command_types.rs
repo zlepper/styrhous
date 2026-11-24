@@ -313,3 +313,30 @@ impl std::fmt::Debug for ValidateResourceYaml {
             .finish_non_exhaustive()
     }
 }
+
+// Node maintenance and the Nodes table's Pod counts.
+/// Cordons (`cordon`) or uncordons a Node.
+#[derive(Debug)]
+pub(crate) struct CordonNode {
+    pub(crate) cluster_key: i32,
+    pub(crate) operation_id: u64,
+    pub(crate) node_name: String,
+    pub(crate) cordon: bool,
+}
+/// Cordons a Node and evicts its Pods in a background task; see `drain_node`.
+#[derive(Debug)]
+pub(crate) struct DrainNode {
+    pub(crate) cluster_key: i32,
+    pub(crate) operation_id: u64,
+    pub(crate) node_name: String,
+}
+#[derive(Debug)]
+pub(crate) struct StartNodePodCountWatch {
+    pub(crate) cluster_key: i32,
+    /// Marks the results of this watch, so those of an earlier one are dropped.
+    pub(crate) generation: u64,
+}
+#[derive(Debug)]
+pub(crate) struct StopNodePodCountWatch {
+    pub(crate) cluster_key: i32,
+}

@@ -17,6 +17,7 @@ pub(super) fn show(ctx: &egui::Context, ui_state: &mut UiState) {
         for toast in &toasts {
             let tone = match toast.outcome {
                 OperationOutcome::Success => Tone::Success,
+                OperationOutcome::Warning => Tone::Warning,
                 OperationOutcome::Failure => Tone::Danger,
             };
             let response = Toast::new(tone, &toast.title)

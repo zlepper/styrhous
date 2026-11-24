@@ -41,7 +41,8 @@ fn test_force_delete_resource_with_finalizer_integration() {
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
     select_namespace(&mut harness, cluster_key, &fixture.namespace);
-    let configmaps_resource = select_resource(&mut harness, "Config", "Config Maps");
+    let configmaps_resource =
+        select_resource(&mut harness, Some("Config & secrets"), "Config Maps");
     wait_for_resource_sync(
         &mut harness,
         cluster_key,
@@ -190,7 +191,7 @@ fn test_deployment_match_labels_completion_integration() {
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
     select_namespace(&mut harness, cluster_key, &fixture.namespace);
-    let deployments_resource = select_resource(&mut harness, "Apps & Containers", "Deployments");
+    let deployments_resource = select_resource(&mut harness, None, "Deployments");
     wait_for_resource_sync(
         &mut harness,
         cluster_key,
@@ -256,7 +257,7 @@ fn test_coredns_deployment_property_completion_integration() {
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
     select_namespace(&mut harness, cluster_key, "kube-system");
-    let deployments_resource = select_resource(&mut harness, "Apps & Containers", "Deployments");
+    let deployments_resource = select_resource(&mut harness, None, "Deployments");
     wait_for_resource_sync(
         &mut harness,
         cluster_key,
@@ -316,7 +317,7 @@ fn test_deployment_rollout_restart_integration() {
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
     select_namespace(&mut harness, cluster_key, &fixture.namespace);
-    let deployments_resource = select_resource(&mut harness, "Apps & Containers", "Deployments");
+    let deployments_resource = select_resource(&mut harness, None, "Deployments");
     wait_for_resource_sync(
         &mut harness,
         cluster_key,
@@ -487,7 +488,7 @@ fn test_deployment_rollback_integration() {
 
     wait_for_cluster_data(&mut harness, cluster_key);
     select_namespace(&mut harness, cluster_key, &fixture.namespace);
-    let deployments_resource = select_resource(&mut harness, "Apps & Containers", "Deployments");
+    let deployments_resource = select_resource(&mut harness, None, "Deployments");
     wait_for_resource_sync(
         &mut harness,
         cluster_key,

@@ -1,6 +1,9 @@
 use time::OffsetDateTime;
 
 pub(crate) const READY_COLUMN: &str = "ready";
+/// A hidden cell of a replicated workload that has fewer ready replicas than it
+/// wants. Its warning tone makes the row a problem row.
+pub(crate) const REPLICAS_UNREADY_CELL: &str = "__replicas-unready";
 pub(crate) const CONTAINERS_COLUMN: &str = "containers";
 pub(crate) const STATUS_COLUMN: &str = "status";
 pub(crate) const RESTARTS_COLUMN: &str = "restarts";
@@ -25,6 +28,8 @@ pub(crate) const ACCESS_MODES_COLUMN: &str = "access-modes";
 pub(crate) const RECLAIM_POLICY_COLUMN: &str = "reclaim-policy";
 pub(crate) const PROVISIONER_COLUMN: &str = "provisioner";
 pub(crate) const BINDING_MODE_COLUMN: &str = "binding-mode";
+/// Non-terminated Pods per Node, filled from the Node Pod count watch.
+pub(crate) const PODS_COLUMN: &str = "pods";
 
 /// A locally rendered CRD printer column. The worker evaluates its JSONPath against
 /// each dynamic object instead of requesting Kubernetes' Table representation.
@@ -50,6 +55,8 @@ pub(crate) enum CellValue {
     Usage {
         label: String,
         value: i64,
+        /// The share of the allocatable amount in use, in permille, when it is known.
+        permille: Option<u16>,
     },
     Timestamp(OffsetDateTime),
     Status {
@@ -216,6 +223,33 @@ pub(crate) fn status_tone(status: &str) -> Tone {
     }
 }
 
+/// The cells of a replicated workload's Ready column: "ready/desired", plus
+/// [`REPLICAS_UNREADY_CELL`] (a warning) while some but not all of the wanted
+/// replicas are ready. Nothing ready yet is a rollout starting from zero, and
+/// a workload scaled to zero (0/0) wants nothing: neither is a problem.
+pub(crate) fn replica_ready_cells(ready: i32, desired: i32) -> Vec<(String, CellValue)> {
+    let mut cells = vec![(
+        READY_COLUMN.to_owned(),
+        CellValue::Text(format!("{ready}/{desired}")),
+    )];
+    // No ready replica at all means the workload is unavailable; some missing ones only degrade it.
+    let unready = match ready {
+        _ if ready >= desired => None,
+        0 => Some(("No replicas ready", Tone::Danger)),
+        _ => Some(("Replicas not ready", Tone::Warning)),
+    };
+    if let Some((label, tone)) = unready {
+        cells.push((
+            REPLICAS_UNREADY_CELL.to_owned(),
+            CellValue::Status {
+                label: label.to_owned(),
+                tone,
+            },
+        ));
+    }
+    cells
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -337,6 +371,52 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod replica_tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    fn cells(ready: i32, desired: i32) -> BTreeMap<String, CellValue> {
+        replica_ready_cells(ready, desired).into_iter().collect()
+    }
+
+    #[test]
+    fn some_but_not_all_replicas_ready_is_a_warning() {
+        let cells = cells(3, 4);
+        assert_eq!(cells[READY_COLUMN], CellValue::Text("3/4".into()));
+        assert!(matches!(
+            cells[REPLICAS_UNREADY_CELL],
+            CellValue::Status {
+                tone: Tone::Warning,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn no_ready_replica_out_of_several_is_a_danger() {
+        let cells = cells(0, 3);
+        assert_eq!(cells[READY_COLUMN], CellValue::Text("0/3".into()));
+        assert!(matches!(
+            cells[REPLICAS_UNREADY_CELL],
+            CellValue::Status {
+                tone: Tone::Danger,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn complete_and_scaled_to_zero_workloads_are_not_problems() {
+        for (ready, desired) in [(2, 2), (0, 0)] {
+            assert!(
+                !cells(ready, desired).contains_key(REPLICAS_UNREADY_CELL),
+                "{ready}/{desired}"
+            );
         }
     }
 }

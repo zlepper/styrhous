@@ -91,6 +91,11 @@ fn the_header_menu_hides_columns_and_resets_them() {
     let mut harness = application_harness::<MockWorker>();
     show_apps_resource_table(&mut harness);
     let header = resource_table_name_header_context_position(&harness);
+    assert!(
+        harness.query_by_label("Owner column").is_none(),
+        "the Owner column is hidden until asked for"
+    );
+    harness.get_by_label("Status column");
 
     secondary_click(&mut harness, header);
     harness.run_steps(2);
@@ -100,19 +105,30 @@ fn the_header_menu_hides_columns_and_resets_them() {
         .center();
     primary_click(&mut harness, owner);
     harness.run();
-    assert!(
-        harness.query_by_label("Owner column").is_none(),
-        "unticking a column hides it"
-    );
+    harness.get_by_label("Owner column");
     assert!(
         harness.query_by_label("Owner").is_some(),
         "a checkbox item keeps the menu open"
+    );
+    let status = harness
+        .get_by_role_and_label(egui::accesskit::Role::CheckBox, "Status")
+        .rect()
+        .center();
+    primary_click(&mut harness, status);
+    harness.run();
+    assert!(
+        harness.query_by_label("Status column").is_none(),
+        "unticking a column hides it"
     );
 
     let reset = harness.get_by_label("Reset to default").rect().center();
     primary_click(&mut harness, reset);
     harness.run();
-    harness.get_by_label("Owner column");
+    harness.get_by_label("Status column");
+    assert!(
+        harness.query_by_label("Owner column").is_none(),
+        "resetting hides the column again"
+    );
 }
 
 #[test]
@@ -201,7 +217,8 @@ fn missing_cells_say_why_they_are_empty() {
         .insert(NODE_COLUMN.into(), CellValue::Text("-".into()));
     harness.state_mut().ui_state = state;
     harness.run();
-    click_label(&mut harness, "Apps & Containers");
+    click_label(&mut harness, "Workloads");
+    show_owner_column(&mut harness);
 
     harness.get_by_label("No creation time reported");
     assert!(

@@ -77,6 +77,12 @@ mod watcher_orchestration;
 mod watcher_scopes;
 mod watcher_types;
 
+// Node maintenance and the Nodes table's Pod counts.
+mod node_maintenance;
+mod node_pod_counts;
+pub(crate) use node_maintenance::*;
+pub(crate) use node_pod_counts::*;
+
 pub(crate) use api_group_retry::*;
 pub(crate) use api_inspection::*;
 pub(crate) use cli::is_cli_not_installed;

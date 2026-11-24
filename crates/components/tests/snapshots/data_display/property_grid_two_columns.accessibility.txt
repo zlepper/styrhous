@@ -9,7 +9,7 @@ Window state=[focused] rect=<none>
               TextRun value="NAME" rect=(x=40.0 y=40.0 width=30.9 height=16.0 center_x=55.5 center_y=48.0)
             GenericContainer rect=<none>
               Label value="coredns-66bc5c9577-ffw2s-with-a-very-long-suffix" rect=(x=40.0 y=56.0 width=187.0 height=20.0 center_x=133.5 center_y=66.0)
-                TextRun value="coredns-66bc5c9577-ffw2s-w…" rect=(x=40.0 y=58.0 width=187.0 height=20.0 center_x=133.5 center_y=68.0)
+                TextRun value="coredns-66bc5c9577-ffw2s-w…" rect=(x=40.0 y=56.0 width=187.0 height=20.0 center_x=133.5 center_y=66.0)
             Label value="Node" rect=(x=252.0 y=40.0 width=31.2 height=16.0 center_x=267.6 center_y=48.0)
               TextRun value="NODE" rect=(x=252.0 y=40.0 width=30.1 height=16.0 center_x=267.1 center_y=48.0)
             GenericContainer rect=<none>
@@ -19,7 +19,7 @@ Window state=[focused] rect=<none>
               TextRun value="POD IP" rect=(x=40.0 y=92.0 width=38.3 height=16.0 center_x=59.2 center_y=100.0)
             GenericContainer rect=<none>
               Label value="Unavailable" rect=(x=40.0 y=108.0 width=66.3 height=20.0 center_x=73.1 center_y=118.0)
-                TextRun value="Unavailable" rect=(x=40.0 y=110.0 width=66.3 height=20.0 center_x=73.1 center_y=120.0)
+                TextRun value="Unavailable" rect=(x=40.0 y=108.0 width=66.3 height=20.0 center_x=73.1 center_y=118.0)
             Label value="Status" rect=(x=252.0 y=92.0 width=41.9 height=16.0 center_x=272.9 center_y=100.0)
               TextRun value="STATUS" rect=(x=252.0 y=92.0 width=40.8 height=16.0 center_x=272.4 center_y=100.0)
             GenericContainer rect=<none>

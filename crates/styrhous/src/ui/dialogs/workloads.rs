@@ -20,7 +20,7 @@ pub(crate) fn show_deployment_restart_confirmation(
         .strong(pending.resource_name.as_str())
         .plain(" in ")
         .strong(pending.namespace.as_str())
-        .plain(".");
+        .plain(". Pods are replaced one at a time according to the rollout strategy.");
     let action = ConfirmationDialog {
         id: egui::Id::new("restart-deployment-rollout-confirmation"),
         icon: components::icons::Icon::ArrowPath,

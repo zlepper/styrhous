@@ -5,6 +5,8 @@ use super::*;
 pub(crate) struct ClusterState {
     pub(crate) name: String,
     pub(crate) presentation: crate::context_presentation::ContextPresentation,
+    /// The API server URL from the kubeconfig, which says where the cluster runs.
+    pub(crate) server: Option<String>,
     pub(crate) cluster_key: i32,
     pub(crate) namespaces: BTreeMap<SortedName, MinimalNamespace>,
     pub(crate) connection: ClusterConnectionState,
@@ -74,6 +76,14 @@ pub(crate) struct ClusterResourceState {
     /// Brief feedback for newly recorded outcomes. This is reset with the
     /// resource session so a previous connection cannot surface a stale toast.
     pub(crate) transient_operation_toasts: Vec<TransientOperationToast>,
+    // Node maintenance and the Nodes table's Pod counts.
+    pub(crate) pending_node_drain: Option<PendingNodeDrain>,
+    /// The Node each submitted drain targets.
+    pub(crate) node_drains: InFlightOperations<String>,
+    /// The Node each submitted cordon or uncordon targets.
+    pub(crate) node_cordons: InFlightOperations<String>,
+    pub(crate) node_pod_counts: NodePodCountsState,
+    pub(crate) node_pod_counts_active: bool,
 }
 
 impl ClusterState {
@@ -81,6 +91,7 @@ impl ClusterState {
         Self {
             name,
             presentation: Default::default(),
+            server: None,
             cluster_key,
             namespaces: BTreeMap::new(),
             connection: ClusterConnectionState::Disconnected,
@@ -292,6 +303,11 @@ impl ClusterResourceState {
             pending_scale: None,
             operation_history: Vec::new(),
             transient_operation_toasts: Vec::new(),
+            pending_node_drain: None,
+            node_drains: InFlightOperations::default(),
+            node_cordons: InFlightOperations::default(),
+            node_pod_counts: NodePodCountsState::default(),
+            node_pod_counts_active: false,
         }
     }
 
@@ -299,6 +315,9 @@ impl ClusterResourceState {
         let cron_job_runs = self.cron_job_runs.restarted();
         let helm_rollbacks = self.helm_rollbacks.restarted();
         let deployment_rollbacks = self.deployment_rollbacks.restarted();
+        let node_drains = self.node_drains.restarted();
+        let node_pod_counts = self.node_pod_counts.restarted();
+        let node_cordons = self.node_cordons.restarted();
         // Like operation ids, request ids continue so a reply that outlives its
         // session cannot fill a dialog opened in the next one.
         let next_deployment_revisions_request_id = self.next_deployment_revisions_request_id;
@@ -307,6 +326,9 @@ impl ClusterResourceState {
             helm_rollbacks,
             deployment_rollbacks,
             next_deployment_revisions_request_id,
+            node_drains,
+            node_cordons,
+            node_pod_counts,
             ..Self::new(false)
         };
     }

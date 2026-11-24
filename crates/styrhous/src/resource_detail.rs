@@ -21,6 +21,9 @@ pub(crate) struct ResourceDetail {
     pub(crate) owners: Vec<ResourceOwner>,
     pub(crate) labels: BTreeMap<String, String>,
     pub(crate) annotations: BTreeMap<String, String>,
+    /// The resource as the YAML editor opens it; none for kinds whose YAML would expose their
+    /// secrets.
+    pub(crate) yaml: Option<String>,
     pub(crate) payload: ResourceDetailPayload,
 }
 

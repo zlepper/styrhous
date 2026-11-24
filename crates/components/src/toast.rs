@@ -19,6 +19,8 @@ pub const TOAST_WIDTH: f32 = 360.0;
 pub const TOAST_GAP: f32 = space::S8;
 /// Distance of the toast stack from the window's right and bottom edges.
 pub const TOAST_INSET: f32 = space::S16;
+/// How far above the window's bottom edge the toast stack ends (A02, A16).
+pub const TOAST_BOTTOM_INSET: f32 = space::S24;
 /// Padding of a toast: 12 points but 16 on the left.
 const PADDING: egui::Margin = egui::Margin {
     left: 16,
@@ -197,16 +199,28 @@ impl<'a> Toast<'a> {
 }
 
 /// Show `add_toasts` as the window's toast stack: [`TOAST_WIDTH`] wide,
-/// [`TOAST_INSET`] from the bottom-right corner, [`TOAST_GAP`] apart, newest
+/// [`TOAST_INSET`] from the right edge and [`TOAST_BOTTOM_INSET`] from the bottom, [`TOAST_GAP`] apart, newest
 /// at the bottom.
 pub fn show_toast_stack<R>(ctx: &Context, id: Id, add_toasts: impl FnOnce(&mut Ui) -> R) -> R {
-    Area::new(id)
+    let shown = Area::new(id)
         .order(Order::Foreground)
-        .anchor(Align2::RIGHT_BOTTOM, vec2(-TOAST_INSET, -TOAST_INSET))
+        .anchor(
+            Align2::RIGHT_BOTTOM,
+            vec2(-TOAST_INSET, -TOAST_BOTTOM_INSET),
+        )
         .show(ctx, |ui| {
             ui.set_width(TOAST_WIDTH);
             ui.spacing_mut().item_spacing = vec2(0.0, TOAST_GAP);
             add_toasts(ui)
-        })
-        .inner
+        });
+    // An anchored area is placed by its previous size: when a toast comes or
+    // goes, draw once more so the stack sits on its corner again.
+    let size_id = id.with("stack-size");
+    let size = shown.response.rect.size();
+    let previous = ctx.data_mut(|data| data.get_temp::<Vec2>(size_id));
+    if previous != Some(size) {
+        ctx.data_mut(|data| data.insert_temp(size_id, size));
+        ctx.request_repaint();
+    }
+    shown.inner
 }

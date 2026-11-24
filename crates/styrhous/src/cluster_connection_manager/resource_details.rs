@@ -282,13 +282,27 @@ pub(crate) async fn resource_detail_from_dynamic(
     api_resource: ApiResource,
     object: DynamicObject,
 ) -> ResourceDetail {
+    let mut detail = resource_detail(api_resource, &object);
+    if let (Some(namespace), ResourceDetailPayload::Pod(pod)) =
+        (detail.namespace.as_deref(), &mut detail.payload)
+    {
+        resolve_pod_environment_variables(client, namespace, pod).await;
+    }
+    detail
+}
+
+/// The detail of `object` as the watch reports it, before the environment
+/// variables a Pod refers to are resolved against the cluster.
+pub(crate) fn resource_detail(api_resource: ApiResource, object: &DynamicObject) -> ResourceDetail {
     let metadata = &object.metadata;
     let creation_timestamp = crate::minimal_resource::creation_time(metadata);
-    let mut detail = ResourceDetail {
+    let yaml = detail_yaml(api_resource.kind.as_str(), object);
+    ResourceDetail {
+        yaml,
         api_resource: api_resource.clone(),
         name: metadata.name.clone().unwrap_or_default(),
         namespace: metadata.namespace.clone(),
-        uid: get_resource_uid(&object),
+        uid: get_resource_uid(object),
         resource_version: metadata.resource_version.clone().unwrap_or_default(),
         is_deleting: metadata.deletion_timestamp.is_some(),
         finalizers: metadata.finalizers.clone().unwrap_or_default(),
@@ -296,14 +310,8 @@ pub(crate) async fn resource_detail_from_dynamic(
         owners: resource_owners(metadata),
         labels: metadata.labels.clone().unwrap_or_default(),
         annotations: metadata.annotations.clone().unwrap_or_default(),
-        payload: resource_handlers::detail_payload(&api_resource, &object),
-    };
-    if let (Some(namespace), ResourceDetailPayload::Pod(pod)) =
-        (detail.namespace.as_deref(), &mut detail.payload)
-    {
-        resolve_pod_environment_variables(client, namespace, pod).await;
+        payload: resource_handlers::detail_payload(&api_resource, object),
     }
-    detail
 }
 
 pub(crate) async fn resolve_pod_environment_variables(
@@ -525,4 +533,48 @@ pub(crate) fn expand_environment_variable_value(
         }
     }
     result
+}
+
+/// The YAML the inspector shows for `object`, as the editor opens it. Secrets
+/// have none: their data is shown (hidden until revealed) by the data section.
+fn detail_yaml(kind: &str, object: &DynamicObject) -> Option<String> {
+    if kind == "Secret" {
+        return None;
+    }
+    resource_yaml::editor_yaml(&mut object.clone())
+        .ok()
+        .map(|(yaml, ..)| yaml)
+}
+
+#[cfg(test)]
+mod yaml_tests {
+    use super::*;
+    use k8s_openapi::serde_json::json;
+
+    fn object(kind: &str) -> DynamicObject {
+        k8s_openapi::serde_json::from_value(json!({
+            "apiVersion": "v1", "kind": kind,
+            "metadata": {
+                "name": "settings", "namespace": "kube-system", "uid": "uid-1",
+                "resourceVersion": "12", "creationTimestamp": "2026-01-01T00:00:00Z",
+            },
+            "data": {"mode": "development"},
+        }))
+        .expect("a valid object")
+    }
+
+    #[test]
+    fn the_inspector_yaml_is_the_editor_document() {
+        let yaml = detail_yaml("ConfigMap", &object("ConfigMap")).expect("YAML");
+        assert!(yaml.contains("mode: development"));
+        assert!(
+            !yaml.contains("resourceVersion"),
+            "server-managed metadata stays out of it"
+        );
+    }
+
+    #[test]
+    fn a_secret_never_carries_its_yaml_into_the_inspector() {
+        assert_eq!(detail_yaml("Secret", &object("Secret")), None);
+    }
 }

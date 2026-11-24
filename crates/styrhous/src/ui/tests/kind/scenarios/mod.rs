@@ -20,6 +20,15 @@ const ACTIONS_SECRET_NAME: &str = "resource-secret-actions";
 const METRICS_LOAD_POD_NAME: &str = "metrics-load";
 const TEST_FINALIZER: &str = "tests.styrhous/finalizer";
 
+/// A container of the pause image, which does nothing.
+fn pause_container() -> Container {
+    Container {
+        name: "pause".to_owned(),
+        image: Some("registry.k8s.io/pause:3.10".to_owned()),
+        ..Default::default()
+    }
+}
+
 /// A one-replica Deployment of the pause image, selected by `app=<name>`.
 fn pause_deployment(name: &str, namespace: &str) -> Deployment {
     let labels = BTreeMap::from([("app".to_owned(), name.to_owned())]);
@@ -41,11 +50,7 @@ fn pause_deployment(name: &str, namespace: &str) -> Deployment {
                     ..Default::default()
                 }),
                 spec: Some(PodSpec {
-                    containers: vec![Container {
-                        name: "pause".to_owned(),
-                        image: Some("registry.k8s.io/pause:3.10".to_owned()),
-                        ..Default::default()
-                    }],
+                    containers: vec![pause_container()],
                     ..Default::default()
                 }),
             },
@@ -84,5 +89,6 @@ mod connection_and_metrics;
 mod deployment_actions;
 mod helm_actions;
 mod inspectors_and_deletes;
+mod node_actions;
 mod resource_actions;
 mod watcher_recovery;

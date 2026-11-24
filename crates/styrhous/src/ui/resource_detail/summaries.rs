@@ -1,102 +1,6 @@
 use super::*;
 use components::tooltip::TooltipExt;
 
-pub(super) fn show_detail(
-    ui: &mut egui::Ui,
-    detail: &ResourceDetail,
-    usage: PodUsageDisplay<'_>,
-    node_usage: NodeUsageDisplay<'_>,
-    pending_action: &mut Option<ResourceAction>,
-) {
-    show_generic_summary(ui, detail);
-    ui.add_space(13.0);
-    if let ResourceDetailPayload::Pod(pod) = &detail.payload {
-        show_pod_summary(ui, detail, pod, pending_action);
-        ui.add_space(13.0);
-        show_pod_detail(ui, pod, usage);
-    } else if let ResourceDetailPayload::Node(node) = &detail.payload {
-        show_node_detail(ui, node, node_usage);
-    } else if let ResourceDetailPayload::Diagnostic(diagnostic) = &detail.payload {
-        show_diagnostic_detail(ui, diagnostic);
-    }
-}
-
-pub(super) fn show_node_detail(ui: &mut egui::Ui, node: &NodeDetail, usage: NodeUsageDisplay<'_>) {
-    let pod_cidrs = if node.pod_cidrs.is_empty() {
-        "-".to_owned()
-    } else {
-        node.pod_cidrs.join(", ")
-    };
-    let taints = if node.taints.is_empty() {
-        "None".to_owned()
-    } else {
-        node.taints.join(", ")
-    };
-    InspectorDetails::show_titled_properties(
-        ui,
-        "Spec",
-        &[DetailRow::new([
-            DetailCell::status(
-                "Scheduling",
-                if node.unschedulable {
-                    "Scheduling disabled"
-                } else {
-                    "Schedulable"
-                },
-                if node.unschedulable {
-                    Tone::Warning
-                } else {
-                    Tone::Success
-                },
-            ),
-            DetailCell::new("Provider ID", node.provider_id.as_deref().unwrap_or("-")).copyable(),
-            DetailCell::new("Pod CIDRs", pod_cidrs.as_str()).copyable(),
-            DetailCell::new("Taints", taints.as_str()).copyable(),
-        ])],
-    );
-    ui.add_space(13.0);
-    show_node_usage(ui, usage, node.allocatable);
-}
-
-pub(super) fn show_generic_summary(ui: &mut egui::Ui, detail: &ResourceDetail) {
-    detail_summary_card(ui, |ui| {
-        InspectorDetails::show_properties(
-            ui,
-            &[
-                DetailRow::new([
-                    DetailCell::new("Kind", detail.api_resource.kind.as_str()).copyable(),
-                    DetailCell::new("Name", detail.name.as_str()).copyable(),
-                    detail.namespace.as_deref().map_or_else(
-                        || DetailCell::new("Namespace", "Cluster-wide"),
-                        |namespace| DetailCell::new("Namespace", namespace).copyable(),
-                    ),
-                ]),
-                DetailRow::new([
-                    DetailCell::new("UID", detail.uid.as_str()).copyable(),
-                    DetailCell::new("Resource version", detail.resource_version.as_str())
-                        .copyable(),
-                    DetailCell::new("Age", format_age(detail.creation_timestamp)),
-                ]),
-            ],
-        );
-    });
-}
-
-pub(super) fn show_diagnostic_detail(ui: &mut egui::Ui, diagnostic: &DiagnosticDetail) {
-    for (index, section) in diagnostic.sections.iter().enumerate() {
-        InspectorDetails::show_titled_properties(
-            ui,
-            section.title.as_str(),
-            &[DetailRow::new(section.fields.iter().map(|field| {
-                DetailCell::new(field.label.as_str(), field.value.as_str()).copyable()
-            }))],
-        );
-        if index + 1 < diagnostic.sections.len() {
-            ui.add_space(CARD_GAP);
-        }
-    }
-}
-
 pub(super) fn show_resource_data(
     ui: &mut egui::Ui,
     detail: &ResourceDetail,
@@ -127,10 +31,10 @@ pub(super) fn show_config_map_data(
     pending_action: &mut Option<ResourceAction>,
 ) {
     let theme = ui.tokens();
-    section_header(
+    components::inspector_section_heading(
         ui,
         "Data",
-        Some(format!(
+        Some(&format!(
             "{} entries · {}",
             config_map.data.len(),
             if config_map.immutable {
@@ -178,10 +82,10 @@ pub(super) fn show_secret_data(
     pending_action: &mut Option<ResourceAction>,
 ) {
     let theme = ui.tokens();
-    section_header(
+    components::inspector_section_heading(
         ui,
         "Data",
-        Some(format!(
+        Some(&format!(
             "{} entries · {} · {}",
             secret.data.len(),
             secret.type_,
@@ -241,10 +145,6 @@ pub(super) fn show_secret_data(
     }
     data_save_controls(ui, editor, secret.immutable, pending_action);
     ui.add_space(16.0);
-}
-
-pub(super) fn detail_summary_card(ui: &mut egui::Ui, add_content: impl FnOnce(&mut egui::Ui)) {
-    Card::new().padding(18).show(ui, add_content);
 }
 
 pub(super) fn detail_item_card(

@@ -185,7 +185,7 @@ fn test_cron_job_run_now_integration() {
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
     select_namespace(&mut harness, cluster_key, &fixture.namespace);
-    let cron_jobs_resource = select_resource(&mut harness, "Apps & Containers", "Cron Jobs");
+    let cron_jobs_resource = select_resource(&mut harness, Some("Workloads"), "Cron Jobs");
     wait_for_resource_sync(
         &mut harness,
         cluster_key,
@@ -297,7 +297,7 @@ fn test_cron_job_run_now_integration() {
                 .iter()
                 .find(|entry| {
                     entry.title == "CronJob started"
-                        && entry.target == format!("{} • {}", cron_job_name, fixture.namespace)
+                        && entry.target == format!("{} · {}", cron_job_name, fixture.namespace)
                 })
                 .and_then(|entry| entry.details.as_deref())
                 .and_then(|details| details.strip_prefix("Created Job "))?;
@@ -360,7 +360,7 @@ fn test_resource_scale_integration() {
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
     select_namespace(&mut harness, cluster_key, &fixture.namespace);
-    let deployments_resource = select_resource(&mut harness, "Apps & Containers", "Deployments");
+    let deployments_resource = select_resource(&mut harness, None, "Deployments");
     wait_for_resource_sync(
         &mut harness,
         cluster_key,
@@ -473,7 +473,7 @@ fn test_yaml_editor_removes_an_externally_owned_cpu_limit_integration() {
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
     select_namespace(&mut harness, cluster_key, &fixture.namespace);
-    let deployments_resource = select_resource(&mut harness, "Apps & Containers", "Deployments");
+    let deployments_resource = select_resource(&mut harness, None, "Deployments");
     wait_for_resource_sync(
         &mut harness,
         cluster_key,

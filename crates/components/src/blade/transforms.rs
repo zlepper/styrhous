@@ -1,9 +1,11 @@
 use super::*;
 
+/// Where a blade is: its top left, and how far it is inset from the full
+/// blade height at the top and the bottom (a history blade steps down).
 #[derive(Clone, Copy, PartialEq)]
 pub(super) struct Transform {
     pub(super) position: Pos2,
-    pub(super) scale: f32,
+    pub(super) inset: f32,
 }
 pub(super) fn duration(ctx: &egui::Context) -> f32 {
     if ctx.global_style().animation_time == 0.0 {
@@ -46,20 +48,21 @@ pub(super) fn active_transform(viewport: Rect) -> Transform {
             viewport.right() - blade_width(viewport) - INSET,
             viewport.top() + INSET,
         ),
-        scale: 1.0,
+        inset: 0.0,
     }
 }
+/// The peek of the history blade `index` steps behind the active one (0 is
+/// the nearest): [`size::BLADE_PEEK`] further left and [`size::BLADE_PEEK_STEP`]
+/// further in from the top and bottom than the one in front of it.
 pub(super) fn history_transform(viewport: Rect, index: usize) -> Transform {
-    let depth = index.min(HISTORY_SCALES.len() - 1);
-    let scale = HISTORY_SCALES[depth];
-    let h = height(viewport);
+    let steps = (index.min(HISTORY_PEEKS - 1) + 1) as f32;
+    let active = active_transform(viewport);
     Transform {
         position: egui::pos2(
-            active_transform(viewport).position.x
-                - blade_width(viewport) * HISTORY_X_TRANSLATIONS[depth],
-            viewport.top() + INSET + (h - h * scale) / 2.0,
+            active.position.x - size::BLADE_PEEK * steps,
+            active.position.y + size::BLADE_PEEK_STEP * steps,
         ),
-        scale,
+        inset: size::BLADE_PEEK_STEP * steps,
     }
 }
 pub(super) fn should_promote_active_blade(
@@ -103,19 +106,22 @@ pub(super) fn closing_transform(viewport: Rect, transform: Transform, progress: 
             egui::lerp(transform.position.x..=viewport.right() + INSET, progress),
             transform.position.y,
         ),
-        scale: transform.scale,
+        inset: transform.inset,
     }
 }
 pub(super) fn interpolate(from: Transform, to: Transform, value: f32) -> Transform {
     Transform {
         position: from.position + (to.position - from.position) * value,
-        scale: from.scale + (to.scale - from.scale) * value,
+        inset: from.inset + (to.inset - from.inset) * value,
     }
 }
 pub(super) fn transformed_rect(viewport: Rect, transform: Transform) -> Rect {
     Rect::from_min_size(
         transform.position,
-        egui::vec2(blade_width(viewport), height(viewport)) * transform.scale,
+        egui::vec2(
+            blade_width(viewport),
+            (height(viewport) - 2.0 * transform.inset).max(0.0),
+        ),
     )
 }
 pub(super) fn history_navigation_label(steps: usize) -> String {

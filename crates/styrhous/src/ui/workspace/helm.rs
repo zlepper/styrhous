@@ -67,9 +67,11 @@ pub(super) fn show_helm_releases_workspace(
         Some(&api_resource),
         ListSummary {
             total: resources.len(),
-            visible: filtered.resources.len(),
+            shown: filtered.resources.len(),
+            namespaces: 0,
             live,
         },
+        None,
         &mut search,
         namespace_selection,
         namespace_selector_settings,

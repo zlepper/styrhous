@@ -299,3 +299,44 @@ fn alert_callouts_are_alerts_named_by_their_title() {
         .get_by_label("Use {command} as the placeholder")
         .accesskit_node();
 }
+
+/// The stack keeps its bottom on the window's corner as toasts arrive: an
+/// anchored area is placed by its previous size, so a new toast must land
+/// where it would have had it been there from the start.
+#[test]
+fn toast_stack_stays_on_its_corner_as_toasts_arrive() {
+    use components::show_toast_stack;
+
+    const WINDOW: egui::Vec2 = vec2(480.0, 320.0);
+    let stack = |toasts: Vec<&'static str>| {
+        let mut harness = Harness::builder().with_size(WINDOW).build_ui_state(
+            |ui, toasts: &mut Vec<&'static str>| {
+                canvas(ui);
+                show_toast_stack(ui.ctx(), egui::Id::new("toasts"), |ui| {
+                    for title in toasts.iter() {
+                        let _ = Toast::new(Tone::Success, title).show(ui);
+                    }
+                });
+            },
+            toasts,
+        );
+        setup_egui(&mut harness);
+        harness.set_size(WINDOW);
+        harness.run();
+        harness
+    };
+    let title_rects = |harness: &Harness<'_, Vec<&'static str>>| {
+        ["Deployment scaled", "CronJob started"].map(|title| {
+            harness
+                .get_by_role_and_label(egui::accesskit::Role::Label, title)
+                .rect()
+        })
+    };
+
+    let expected = title_rects(&stack(vec!["Deployment scaled", "CronJob started"]));
+    let mut arriving = stack(vec!["Deployment scaled"]);
+    arriving.state_mut().push("CronJob started");
+    arriving.run();
+    assert_eq!(title_rects(&arriving), expected);
+    assert!(expected[1].bottom() < WINDOW.y);
+}

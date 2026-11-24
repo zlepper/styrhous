@@ -224,7 +224,7 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
         ..Default::default()
     };
     harness.run();
-    harness.get_by_label("Nodes").click_accesskit();
+    harness.get_by_label("Nodes").click();
     harness.run_steps(1);
 
     assert!(
@@ -232,7 +232,7 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
             .namespace_scope()
             .is_empty()
     );
-    assert_eq!(harness.state().worker.commands.len(), 2);
+    assert_eq!(harness.state().worker.commands.len(), 3);
     assert!(
         harness.state().worker.commands[0]
             .as_ref()
@@ -249,6 +249,14 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
             .downcast_ref::<StartNodeMetricsWatch>()
             .is_some_and(|command| command.cluster_key == 1)
     }));
+    assert!(
+        harness
+            .state()
+            .worker
+            .commands_of::<crate::worker::StartNodePodCountWatch>()
+            .any(|command| command.cluster_key == 1),
+        "the Nodes table counts the Pods on each Node"
+    );
     harness
         .state_mut()
         .worker
@@ -284,6 +292,14 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
                 },
             )]),
         }) as WorkerResultBox);
+    harness
+        .state_mut()
+        .worker
+        .enqueue_result(crate::worker::NodePodCountsUpdated {
+            cluster_key: 1,
+            generation: 1,
+            counts: BTreeMap::from([("kind-control-plane".into(), 14)]),
+        });
     harness.run();
     // A cluster-scoped kind's scope pill says "Cluster-wide" and cannot be
     // opened to choose namespaces.
@@ -297,7 +313,8 @@ fn cluster_scoped_resources_load_once_without_a_namespace_selection() {
             .is_none()
     );
     harness.get_by_label("Open details for kind-control-plane");
-    harness.get_by_label("0.500");
+    harness.get_by_label("500m");
+    harness.get_by_label("14");
     harness.get_by_label("1Gi");
     harness.ui_harness(
         "resource_tables/cluster_scoped_resources_load_once_without_a_namespace_selection/node_metrics",
@@ -457,7 +474,7 @@ fn namespace_selector_searches_configured_identity_values() {
 #[test]
 fn oracle_resource_table_snapshot_uses_injected_cluster_state() {
     let mut harness = application_harness_with_state(oracle_resource_table_state());
-    harness.get_by_label("Apps & Containers").click_accesskit();
+    click_label(&mut harness, "Workloads");
     harness.run();
     harness.ui_harness("resource_tables/oracle_resource_table_snapshot_uses_injected_cluster_state/oracle_resource_table_injected");
 }
@@ -562,7 +579,7 @@ fn helm_release_inspector_selects_a_previous_revision() {
     harness.get_by_label("Select revision 1").click();
     harness.run();
 
-    harness.get_by_label("Revision 1 selected");
+    harness.get_by_label("revision 1 selected");
     harness.ui_harness(
         "helm_releases/helm_release_inspector_selects_a_previous_revision/previous_revision",
     );
@@ -676,7 +693,7 @@ fn rollback_button_enabled(harness: &Harness<'static, MyEguiApp<MockWorker>>) ->
 #[test]
 fn helm_release_rollback_is_confirmed_tracked_and_reported() {
     let mut harness = helm_rollback_harness(|_| {});
-    harness.get_by_label("Revision 1 selected");
+    harness.get_by_label("revision 1 selected");
     open_rollback_confirmation(&mut harness);
     harness.ui_harness(
         "helm_releases/helm_release_rollback_is_confirmed_tracked_and_reported/rollback_confirmation",
@@ -736,7 +753,7 @@ fn helm_release_rollback_is_confirmed_tracked_and_reported() {
             .is_empty()
     );
 
-    let target = "demo • kube-system".to_owned();
+    let target = "demo · kube-system".to_owned();
     assert_eq!(
         history(&harness),
         vec![
@@ -928,14 +945,22 @@ fn helm_release_inspector_expands_values_with_an_accessible_disclosure() {
     harness.state_mut().ui_state = state;
 
     harness.run();
-    harness
-        .get_by_label("Values (sensitive values may be present)")
-        .click();
-    harness.run();
-
-    harness.get_by_label("Treat this content like a Kubernetes Secret.");
+    // The values show open, under a warning, as the design has them.
+    harness.get_by_label("Treat these values like a Kubernetes Secret.");
     harness.ui_harness(
         "helm_releases/helm_release_inspector_expands_values_with_an_accessible_disclosure/values_expanded",
+    );
+
+    harness
+        .get_all_by_label("Values")
+        .find(|node| node.rect().width() > 300.0)
+        .expect("the Values disclosure")
+        .click();
+    harness.run();
+    assert!(
+        harness
+            .query_by_label("Treat these values like a Kubernetes Secret.")
+            .is_none()
     );
 }
 

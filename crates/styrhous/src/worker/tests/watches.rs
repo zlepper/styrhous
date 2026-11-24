@@ -287,3 +287,64 @@ fn stopping_one_cluster_preserves_other_cluster_tasks() {
         assert!(state.log_streams.contains_key(&(2, 11)).await);
     });
 }
+
+#[test]
+fn node_pod_count_watches_and_drains_stop_with_their_cluster() {
+    let runtime = tokio::runtime::Runtime::new().expect("runtime initializes");
+    runtime.block_on(async {
+        let state = worker_state();
+        let probes: [Arc<AtomicUsize>; 4] = Default::default();
+        let [first_count, second_count, first_drain, second_drain] = &probes;
+        for (cluster_key, probe) in [(1, first_count), (2, second_count)] {
+            state
+                .node_pod_count_watches
+                .replace(cluster_key, tokio::spawn(AbortProbe(probe.clone())))
+                .await;
+        }
+        for (cluster_key, probe) in [(1, first_drain), (2, second_drain)] {
+            state
+                .node_drains
+                .replace((cluster_key, 7), tokio::spawn(AbortProbe(probe.clone())))
+                .await;
+        }
+
+        state.stop_cluster(1).await;
+        tokio::task::yield_now().await;
+        let aborted = || probes.each_ref().map(|probe| probe.load(Ordering::Relaxed));
+        assert_eq!(
+            aborted(),
+            [1, 0, 1, 0],
+            "only the stopped cluster's tasks end"
+        );
+        assert!(state.node_pod_count_watches.contains_key(&2).await);
+        assert!(state.node_drains.contains_key(&(2, 7)).await);
+
+        state.stop_all_clusters().await;
+        tokio::task::yield_now().await;
+        assert_eq!(aborted(), [1, 1, 1, 1]);
+        assert!(state.node_pod_count_watches.is_empty().await);
+        assert!(state.node_drains.is_empty().await);
+    });
+}
+
+#[test]
+fn finished_drains_are_pruned_and_running_ones_kept() {
+    let runtime = tokio::runtime::Runtime::new().expect("runtime initializes");
+    runtime.block_on(async {
+        let state = worker_state();
+        let finished = tokio::spawn(async {});
+        while !finished.is_finished() {
+            tokio::task::yield_now().await;
+        }
+        state.node_drains.replace((1, 1), finished).await;
+        state
+            .node_drains
+            .replace((1, 2), tokio::spawn(std::future::pending()))
+            .await;
+
+        state.node_drains.prune_finished().await;
+
+        assert!(!state.node_drains.contains_key(&(1, 1)).await);
+        assert!(state.node_drains.contains_key(&(1, 2)).await);
+    });
+}

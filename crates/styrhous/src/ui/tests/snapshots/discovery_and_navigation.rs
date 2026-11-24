@@ -58,7 +58,7 @@ fn settings_blade_shows_invalid_custom_template_after_save() {
             .as_deref(),
         Some("The launcher template must contain exactly one {command} placeholder.")
     );
-    harness.get_by_label("Command template needs attention");
+    harness.get_by_label("The launcher template must contain exactly one {command} placeholder.");
     harness.ui_harness(HarnessSnapshotOptions::new(
         "terminal/settings_blade_shows_invalid_custom_template_after_save/settings_terminal_launcher_invalid",
     ));
@@ -185,8 +185,8 @@ fn settings_home_navigates_to_cluster_discovery_and_shows_candidates() {
     harness.run_steps(2);
 
     assert_eq!(harness.get_all_by_label("Add to kubeconfig").count(), 6);
-    assert_eq!(harness.get_all_by_label("Already in kubeconfig").count(), 2);
-    harness.get_by_label("Tags: environment=production · team=payments");
+    assert_eq!(harness.get_all_by_label("In kubeconfig").count(), 2);
+    harness.get_by_label("environment=production · team=payments");
     harness.ui_harness(HarnessSnapshotOptions::new(
         "settings/settings_home_navigates_to_cluster_discovery_and_shows_candidates/cluster_discovery",
     ));
@@ -252,11 +252,18 @@ fn cluster_discovery_shows_install_guidance_when_cli_tools_are_unavailable() {
         }) as WorkerResultBox);
     harness.run_steps(2);
 
-    harness.get_by_label("Azure CLI is not installed");
-    harness.get_by_label("Install Azure CLI and sign in with `az login` to discover AKS clusters.");
-    harness.get_by_label("Tailscale is not installed");
-    harness.get_by_label("AWS CLI is not installed");
-    harness.get_by_label("Install and sign in to Tailscale to discover Kubernetes API proxies.");
+    // The Azure and AWS CLIs are missing, as is Tailscale.
+    assert_eq!(harness.query_all_by_label("CLI not installed").count(), 2);
+    harness.get_by_label("Not installed");
+    harness.get_by_label("Install the Azure CLI and run");
+    harness.get_by_label("az login");
+    harness.get_by_label("to discover AKS clusters.");
+    harness.get_by_label("Install the AWS CLI and configure a profile");
+    harness.get_by_label("aws configure");
+    harness.get_by_label("to discover EKS clusters.");
+    harness.get_by_label(
+        "Install Tailscale and sign in to discover Kubernetes API proxies on your tailnet.",
+    );
     assert_eq!(harness.query_all_by_label("Add to kubeconfig").count(), 0);
     harness.ui_harness(HarnessSnapshotOptions::new(
         "settings/cluster_discovery_shows_install_guidance_when_cli_tools_are_unavailable/cli_tools_unavailable",
@@ -291,10 +298,7 @@ fn aws_account_must_be_selected_before_eks_scan_and_can_import_cluster() {
         }) as WorkerResultBox);
     harness.run_steps(2);
 
-    let premature_scan = harness
-        .get_by_label("Scan clusters in account 222222222222 with profile production")
-        .rect()
-        .center();
+    let premature_scan = harness.get_by_label("Scan clusters").rect().center();
     primary_click(&mut harness, premature_scan);
     harness.run_steps(2);
     assert!(
@@ -319,8 +323,9 @@ fn aws_account_must_be_selected_before_eks_scan_and_can_import_cluster() {
         }) as WorkerResultBox);
     harness.run_steps(2);
 
-    harness.get_by_label("Scan clusters in account 222222222222 with profile development");
-    harness.get_by_label("Scan clusters in account 222222222222 with profile production");
+    // The first account and profile are chosen until the user picks another.
+    harness.get_by_label("Scan clusters");
+    harness.get_by_role_and_label(egui::accesskit::Role::ComboBox, "AWS profile");
     harness
         .input_mut()
         .events
@@ -339,10 +344,14 @@ fn aws_account_must_be_selected_before_eks_scan_and_can_import_cluster() {
         "settings/aws_account_must_be_selected_before_eks_scan_and_can_import_cluster/account_picker",
     ));
 
-    let scan_position = harness
-        .get_by_label("Scan clusters in account 222222222222 with profile production")
+    let profile_picker = harness
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "AWS profile")
         .rect()
         .center();
+    primary_click(&mut harness, profile_picker);
+    harness.run_steps(2);
+    click_label(&mut harness, "production");
+    let scan_position = harness.get_by_label("Scan clusters").rect().center();
     primary_click(&mut harness, scan_position);
     harness.run_steps(2);
     let command = harness
@@ -377,7 +386,7 @@ fn aws_account_must_be_selected_before_eks_scan_and_can_import_cluster() {
             warning: None,
         }) as WorkerResultBox);
     harness.run_steps(2);
-    harness.get_by_label("Tags: environment=production · team=payments");
+    harness.get_by_label("environment=production · team=payments");
     harness.ui_harness(HarnessSnapshotOptions::new(
         "settings/aws_account_must_be_selected_before_eks_scan_and_can_import_cluster/eks_results",
     ));
@@ -447,9 +456,10 @@ fn aws_account_must_be_selected_before_eks_scan_and_can_import_cluster() {
             name: "arn:aws:eks:eu-west-1:222222222222:cluster/payments".into(),
             is_current: false,
             presentation: Default::default(),
+            server: None,
         }])) as WorkerResultBox);
     harness.run_steps(2);
-    harness.get_by_label("Already in kubeconfig");
+    harness.get_by_label("In kubeconfig");
     harness
         .state_mut()
         .worker
@@ -473,7 +483,7 @@ fn resource_name_opens_and_closes_a_live_detail_inspector() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = oracle_resource_table_state();
     harness.run();
-    harness.get_by_label("Apps & Containers").click_accesskit();
+    click_label(&mut harness, "Workloads");
     harness.run();
 
     let name = "coredns-66bc5c9577-ffw2s";
@@ -513,6 +523,7 @@ fn resource_name_opens_and_closes_a_live_detail_inspector() {
             cluster_key: 2,
             history_entry_id: 1,
             detail: Box::new(ResourceDetail {
+                yaml: None,
                 api_resource: pods,
                 name: name.into(),
                 namespace: Some("kube-system".into()),
@@ -645,6 +656,7 @@ fn clicking_a_controller_owner_in_the_resource_table_opens_its_inspector() {
     });
     harness.state_mut().ui_state = state;
     harness.run();
+    show_owner_column(&mut harness);
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "resource_tables/controller_owner_link_opens_its_inspector/controller_owner_link",
     ));

@@ -700,7 +700,7 @@ pub(crate) fn paint_selectable_text(
     if !ui.is_rect_visible(galley.rect.translate(pos.to_vec2())) {
         return;
     }
-    expose_text_runs(ui, response, pos, &galley);
+    let original = (pos, galley.clone());
     let pixels_per_point = ui.pixels_per_point();
     let left = (pos.x * pixels_per_point).floor() / pixels_per_point;
     let (pos, galley) = match relayout_with_leading_space(ui.ctx(), &galley, pos.x - left) {
@@ -715,6 +715,9 @@ pub(crate) fn paint_selectable_text(
         color,
         egui::Stroke::NONE,
     );
+    // egui exposes the runs at the glyphs' position; put them back on the CSS line box, as
+    // every other text does.
+    expose_text_runs(ui, response, original.0, &original.1);
 }
 
 /// Expose `galley`, painted at `pos`, as the accessibility text runs of

@@ -43,6 +43,15 @@ where
         self.replace(key, create()).await;
     }
 
+    /// Forget the tasks that have ended by themselves, for registries whose
+    /// keys are never reused (one per operation).
+    pub(super) async fn prune_finished(&self) {
+        self.tasks
+            .lock()
+            .await
+            .retain(|_, task| !task.is_finished());
+    }
+
     pub(super) async fn abort(&self, key: &Key) {
         let task = self.tasks.lock().await.remove(key);
         if let Some(task) = task {

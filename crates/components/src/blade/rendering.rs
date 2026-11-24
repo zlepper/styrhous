@@ -31,40 +31,32 @@ pub(super) fn show_layer<R>(
     interactable: bool,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> R {
-    let origin = active_transform(viewport).position;
     let width = blade_width(viewport);
-    let blade_height = height(viewport);
-    let visual = egui::emath::TSTransform::new(
-        transform.position.to_vec2() - origin.to_vec2() * transform.scale,
-        transform.scale,
-    );
+    let blade_height = (height(viewport) - 2.0 * transform.inset).max(0.0);
     egui::Area::new(id)
         .order(Order::Foreground)
-        .fixed_pos(origin)
+        .fixed_pos(transform.position)
         // Blade positions are computed explicitly. egui's constraint would shift
-        // the area when it is wider than the room to the right of `origin`,
-        // desynchronising the visual transform and history hit targets.
+        // the area when it is wider than the room to the right of its position,
+        // desynchronising it from the history hit targets.
         .constrain(false)
         .fade_in(false)
         .interactable(interactable)
         .show(ctx, |ui| {
             ui.set_width(width);
             ui.set_height(blade_height);
-            ui.with_visual_transform(visual, |ui| {
-                let rect = Rect::from_min_size(ui.cursor().min, egui::vec2(width, blade_height));
-                chrome::paint_surface(ui, rect, ui.tokens().surface.panel);
-                let mut blade = ui.new_child(
-                    egui::UiBuilder::new()
-                        .max_rect(rect)
-                        .layout(egui::Layout::top_down(egui::Align::Min)),
-                );
-                blade.set_clip_rect(rect.intersect(ui.clip_rect()));
-                blade.spacing_mut().item_spacing = egui::Vec2::ZERO;
-                let result = theme::scope(&mut blade, ThemeScope::Blade, add);
-                ui.allocate_rect(rect, Sense::hover());
-                result
-            })
-            .inner
+            let rect = Rect::from_min_size(ui.cursor().min, egui::vec2(width, blade_height));
+            chrome::paint_surface(ui, rect, ui.tokens().surface.panel);
+            let mut blade = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(rect)
+                    .layout(egui::Layout::top_down(egui::Align::Min)),
+            );
+            blade.set_clip_rect(rect.intersect(ui.clip_rect()));
+            blade.spacing_mut().item_spacing = egui::Vec2::ZERO;
+            let result = theme::scope(&mut blade, ThemeScope::Blade, add);
+            ui.allocate_rect(rect, Sense::hover());
+            result
         })
         .inner
 }
@@ -255,4 +247,62 @@ pub(super) fn history_navigation_rect(
         .chain(std::iter::once(active.min.x))
         .fold(rect.max.x, f32::min);
     Rect::from_min_max(rect.min, egui::pos2(right, rect.max.y))
+}
+
+/// Show a history blade as the peek it is: a sunken strip of
+/// [`size::BLADE_PEEK`] points showing its `peek` and shaded by how far back
+/// it is. `depth` 0 is the nearest history blade.
+pub(super) fn show_peek_layer(
+    ctx: &egui::Context,
+    id: Id,
+    viewport: Rect,
+    transform: Transform,
+    depth: usize,
+    peek: &BladePeek,
+) {
+    let rect_size = transformed_rect(viewport, transform).size();
+    egui::Area::new(id)
+        .order(Order::Foreground)
+        .fixed_pos(transform.position)
+        .constrain(false)
+        .fade_in(false)
+        .interactable(false)
+        .show(ctx, |ui| {
+            ui.set_min_size(rect_size);
+            let rect = Rect::from_min_size(ui.min_rect().min, rect_size);
+            let components = &ui.tokens().components;
+            let shade = if depth == 0 {
+                components.peek_shade_2
+            } else {
+                components.peek_shade_1
+            };
+            let mut blade = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+            blade.set_clip_rect(rect.intersect(ui.clip_rect()));
+            theme::scope(&mut blade, ThemeScope::Blade, |ui| {
+                chrome::paint_blade_peek_on(
+                    ui,
+                    rect,
+                    peek.kind
+                        .as_deref()
+                        .map(|kind| (kind, peek.category.map(|nth| ui.tokens().category.nth(nth)))),
+                    &peek.name,
+                    shade,
+                );
+            });
+        });
+}
+
+/// The body of an inspector blade: all of the room under its header, for the
+/// inspector to divide into its section rail and its own scrolling column.
+pub(super) fn show_bare_body<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let rect = ui.available_rect_before_wrap();
+    let mut body = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(rect)
+            .layout(egui::Layout::top_down(egui::Align::Min)),
+    );
+    body.set_clip_rect(rect.intersect(ui.clip_rect()));
+    let result = add(&mut body);
+    ui.allocate_rect(rect, Sense::hover());
+    result
 }

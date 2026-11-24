@@ -1,0 +1,8 @@
+viewport: width=420.0 height=120.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Button name="coredns" state=[toggled=False] rect=(x=8.0 y=8.0 width=380.0 height=44.0 center_x=198.0 center_y=30.0)
+            TextRun value="coredns" rect=(x=62.0 y=20.0 width=54.6 height=20.0 center_x=89.3 center_y=30.0)

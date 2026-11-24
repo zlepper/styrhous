@@ -67,6 +67,7 @@ fn a_namespace_emptied_by_a_relist_invalidates_the_prepared_table() {
         &pods,
         &[],
         true,
+        false,
         &mut PersistedResourceTablePreferences::default(),
     );
     let relist = |state: &mut UiState, resources: Vec<MinimalResource>| {

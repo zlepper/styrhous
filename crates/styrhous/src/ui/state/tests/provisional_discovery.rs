@@ -53,6 +53,7 @@ fn connect(state: &mut UiState) -> Vec<WorkerCommandBox> {
         name: "kind".to_owned(),
         is_current: true,
         presentation: Default::default(),
+        server: None,
     }])
     .apply(state, &mut commands);
     commands
@@ -700,4 +701,35 @@ fn an_inspector_opened_while_discovering_collects_usage_once_the_metrics_api_is_
         .find_map(|entry| entry.resource_detail())
         .unwrap();
     assert!(entry.pod_metrics_watched && !entry.pod_metrics_api_unavailable);
+}
+
+#[test]
+fn a_clusters_server_reaches_its_state_and_is_replaced_by_the_next_update() {
+    let mut state = UiState::default();
+    let update = |server: Option<&str>| {
+        KubernetesClustersUpdated(vec![Cluster {
+            name: "kind".to_owned(),
+            is_current: true,
+            presentation: Default::default(),
+            server: server.map(str::to_owned),
+        }])
+    };
+    update(Some("https://127.0.0.1:6443")).apply(&mut state, &mut Vec::new());
+    assert_eq!(
+        state
+            .clusters
+            .values()
+            .next()
+            .and_then(|c| c.server.as_deref()),
+        Some("https://127.0.0.1:6443")
+    );
+    update(None).apply(&mut state, &mut Vec::new());
+    assert_eq!(
+        state
+            .clusters
+            .values()
+            .next()
+            .and_then(|c| c.server.as_deref()),
+        None
+    );
 }

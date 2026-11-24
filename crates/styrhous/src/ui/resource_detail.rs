@@ -6,7 +6,7 @@ use super::resource_actions::show_resource_action_items;
 use super::resource_owner;
 use super::state::{
     OperationOutcome, PendingCronJobRun, PendingDelete, PendingDeploymentRestart,
-    PendingForceDelete, ResourceAction, ResourceDetailHistoryEntry, UiState,
+    PendingForceDelete, PendingNodeDrain, ResourceAction, ResourceDetailHistoryEntry, UiState,
 };
 use super::table_preferences::{ResourceTableKey, TableColumnDefinition};
 use super::widgets::{age_cell, namespace_cell, show_resource_cell};
@@ -16,9 +16,8 @@ use crate::pod_metrics::{
 };
 use crate::resource_catalog::ResourceNavigation;
 use crate::resource_detail::{
-    ConfigMapDetail, DiagnosticDetail, ManagedResource, NodeDetail, NodePodResources,
-    PodContainerDetail, PodDetail, PodResourceThresholds, ResourceDetail, ResourceDetailPayload,
-    ResourceEvent, SecretDetail,
+    ConfigMapDetail, ManagedResource, NodePodResources, PodContainerDetail, PodDetail,
+    PodResourceThresholds, ResourceDetail, ResourceDetailPayload, ResourceEvent, SecretDetail,
 };
 use crate::resource_handlers::table_definition;
 use crate::resource_table::{
@@ -35,14 +34,12 @@ use components::design::theme::{ThemeExt, Tone};
 use components::design::{radius, space, type_scale};
 use components::{
     Button, ButtonSize, Card, DetailCell, DetailColumn, DetailRow, DetailTableCell, DetailTableRow,
-    DetailValue, InspectorDetails, MoreButton, PointingHand, TableRowBuilder, TextArea,
+    DetailValue, InspectorDetails, MoreButton, TableRowBuilder, TextArea,
 };
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 const CARD_CONTENT_PADDING: i8 = space::S12 as i8;
-const CARD_HEADER_HEIGHT: f32 = 40.0;
-const CARD_HEADER_PADDING: f32 = space::S16;
 const CARD_GAP: f32 = space::S12;
 
 impl WorkerResult for ResourceDataUpdateFailed {
@@ -140,6 +137,17 @@ impl GlobalBladeContent for ResourceDetailHistoryEntry {
         Some(self)
     }
 
+    fn description(&self) -> components::BladeDescription {
+        components::BladeDescription {
+            peek: components::BladePeek {
+                kind: Some(self.api_resource.kind.clone()),
+                category: Some(crate::resource_catalog::kind_category(&self.api_resource)),
+                name: self.resource_name.clone(),
+            },
+            style: components::BladeStyle::Inspector,
+        }
+    }
+
     fn render_header(
         &mut self,
         ui: &mut egui::Ui,
@@ -147,20 +155,20 @@ impl GlobalBladeContent for ResourceDetailHistoryEntry {
         context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
         let supports_scale = context.supports_scale(self.cluster_key, &self.api_resource);
-        let result = show_resource_detail_header(
+        let outcome = inspector::show_header(
             ui,
             self,
-            layer.is_foreground,
+            layer,
             supports_scale,
             context.debug_image_presets(),
         );
         if layer.is_foreground
-            && let Some(action) = result.action
+            && let Some(action) = outcome.action
         {
             self.pending_action = Some(action);
         }
         GlobalBladeRenderResult {
-            close: result.close,
+            header_action: outcome.navigation,
             ..Default::default()
         }
     }
@@ -173,36 +181,15 @@ impl GlobalBladeContent for ResourceDetailHistoryEntry {
     ) -> GlobalBladeRenderResult {
         let resource_navigation = context.resource_navigation(self.cluster_key);
         let mut column_settings = None;
-        let result = show_resource_detail_blade(
+        let result = inspector::show_body(
             ui,
-            &resource_navigation,
-            &self.api_resource,
-            &self.namespace,
-            &self.resource_name,
-            &self.resource_uid,
-            &self.detail,
-            &self.events,
-            self.detail_error.as_deref(),
-            self.events_error.as_deref(),
-            &self.managed_resources,
-            self.managed_resources_error.as_deref(),
-            self.node_pod_resources.as_ref(),
-            self.pod_usage.as_ref(),
-            &self.pod_usage_history,
-            self.pod_usage_missing,
-            self.pod_metrics_api_unavailable,
-            self.pod_usage_error.as_deref(),
-            self.node_usage.as_ref(),
-            &self.node_usage_history,
-            self.node_metrics_api_unavailable,
-            self.node_usage_error.as_deref(),
-            if layer.is_foreground {
-                self.data_editor.as_mut()
-            } else {
-                None
+            self,
+            layer.is_foreground,
+            inspector::BodyContext {
+                resource_navigation: &resource_navigation,
+                table_preferences: context.table_preferences(),
+                column_settings: &mut column_settings,
             },
-            context.table_preferences(),
-            &mut column_settings,
         );
         if let Some(column_settings) = column_settings.as_mut() {
             column_settings.set_resource_detail_owner(self.history_entry_id);
@@ -216,6 +203,7 @@ impl GlobalBladeContent for ResourceDetailHistoryEntry {
             close: result.close,
             next_content: column_settings
                 .map(|target| Box::new(target) as Box<dyn GlobalBladeContent>),
+            ..Default::default()
         }
     }
 
@@ -323,6 +311,20 @@ impl GlobalBladeEffect for ResourceDetailEffect {
                         resource_name: name,
                         namespace,
                     });
+                }
+            }
+            ResourceAction::RequestNodeCordon { name, cordon } => {
+                if let Some(command) =
+                    context
+                        .ui_state
+                        .request_node_cordon(cluster_key, name, cordon)
+                {
+                    navigation.commands_to_send().push(Box::new(command));
+                }
+            }
+            ResourceAction::RequestNodeDrain { name } => {
+                if let Some(cluster) = context.ui_state.clusters.get_mut(&cluster_key) {
+                    cluster.pending_node_drain = Some(PendingNodeDrain { node_name: name });
                 }
             }
             ResourceAction::RequestScale { name, namespace } => {
@@ -682,6 +684,7 @@ mod tests {
 
 mod charts;
 mod environment;
+mod inspector;
 mod managed;
 mod metadata;
 mod misc;

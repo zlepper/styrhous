@@ -3,7 +3,10 @@
 //! filtered by a search pill and provider chips, with a strip reading out
 //! the highlighted cluster before you switch.
 
-use egui::{Align, Key, Layout, Modifiers, Rect, Response, Sense, Ui, UiBuilder, Vec2, pos2, vec2};
+use egui::{
+    Align, Align2, Context, Frame, Id, Key, Layout, Modal, Modifiers, Rect, Response, Sense, Ui,
+    UiBuilder, Vec2, pos2, vec2,
+};
 
 use crate::avatar::Avatar;
 use crate::design::theme::{self, ThemeExt, ThemeScope, Tone};
@@ -56,6 +59,14 @@ const STRIP_GAP: f32 = space::S20;
 const FOOTER_TOP: f32 = 14.0;
 /// Gap between the footer's parts (`.row` gap 6).
 const FOOTER_GAP: f32 = space::S6;
+/// The modal palette's distance from the window's top edge.
+const MODAL_TOP: f32 = 48.0;
+/// The room the modal palette leaves on each side of a narrow window.
+const MODAL_MARGIN: f32 = space::S24;
+/// The height of everything but the sections, until measured.
+const FIXED_ESTIMATE: f32 = 300.0;
+/// The least height the sections get.
+const MIN_SCROLL: f32 = 120.0;
 
 /// One cluster: a kubeconfig context or one found in a cloud account.
 #[derive(Clone, Debug)]
@@ -329,6 +340,31 @@ impl<'s, 'a> ClusterSwitcher<'s, 'a> {
             .collect()
     }
 
+    /// Show the palette as a modal over the scrim, centred and
+    /// [`MODAL_TOP`] below the window's top edge. A click on the scrim
+    /// closes it, like Esc.
+    pub fn show_modal(mut self, ctx: &Context) -> Option<ClusterAction> {
+        let id = Id::new("cluster-switcher-modal");
+        self.width = self
+            .width
+            .min((ctx.content_rect().width() - 2.0 * MODAL_MARGIN).max(0.0));
+        let response = Modal::new(id)
+            .area(
+                Modal::default_area(id)
+                    .anchor(Align2::CENTER_TOP, vec2(0.0, MODAL_TOP))
+                    .fade_in(false),
+            )
+            .backdrop_color(ctx.tokens().shade.scrim)
+            .frame(Frame::NONE)
+            .show(ctx, |ui| self.show(ui));
+        let clicked_away = response.is_top_modal
+            && !response.any_popup_open
+            && response.backdrop_response.clicked();
+        response
+            .inner
+            .or(clicked_away.then_some(ClusterAction::Close))
+    }
+
     /// Add the palette at the cursor.
     pub fn show(mut self, ui: &mut Ui) -> Option<ClusterAction> {
         let theme = ui.tokens();
@@ -386,36 +422,64 @@ impl<'s, 'a> ClusterSwitcher<'s, 'a> {
                 );
 
                 let tile_width = (inner - GRID_GAP * (COLUMNS - 1) as f32) / COLUMNS as f32;
-                let mut flat = 0;
-                for (section_index, entries) in &filtered {
-                    let section = &sections[*section_index];
-                    ui.add_space(SECTION_TOP);
-                    section_heading(ui, section.title, entries.len());
-                    ui.add_space(SECTION_TO_TILES);
-                    for row in entries.chunks(COLUMNS) {
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing = vec2(GRID_GAP, 0.0);
-                            for entry_index in row {
-                                let entry = &section.entries[*entry_index];
-                                let target = ClusterTarget {
-                                    section: *section_index,
-                                    entry: *entry_index,
-                                };
-                                let highlighted = state.highlight == flat;
-                                if ClusterTile::new(entry)
-                                    .highlighted(highlighted)
-                                    .show(ui, tile_width)
-                                    .clicked()
-                                {
-                                    action = Some(ClusterAction::Switch(target));
+                // The sections scroll when the window is too short for them; the
+                // title, search, strip and footer stay.
+                let fixed_id = ui.id().with("cluster-switcher-fixed");
+                let seen_id = ui.id().with("cluster-switcher-highlight");
+                let fixed = ui
+                    .data(|data| data.get_temp::<f32>(fixed_id))
+                    .unwrap_or(FIXED_ESTIMATE);
+                let room = ui.ctx().content_rect().height()
+                    - MODAL_TOP
+                    - MODAL_MARGIN
+                    - 2.0 * size::CLUSTER_SWITCHER_PADDING;
+                let moved =
+                    ui.data(|data| data.get_temp::<usize>(seen_id)) != Some(state.highlight);
+                let scrolled = crate::scroll::vertical()
+                    .id_salt("cluster-switcher-sections")
+                    .max_height((room - fixed).max(MIN_SCROLL))
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        let mut flat = 0;
+                        for (section_index, entries) in &filtered {
+                            let section = &sections[*section_index];
+                            ui.add_space(SECTION_TOP);
+                            section_heading(ui, section.title, entries.len());
+                            ui.add_space(SECTION_TO_TILES);
+                            for (row_index, row) in entries.chunks(COLUMNS).enumerate() {
+                                if row_index > 0 {
+                                    ui.add_space(GRID_GAP);
                                 }
-                                flat += 1;
+                                ui.allocate_ui_with_layout(
+                                    vec2(inner, size::CLUSTER_TILE),
+                                    Layout::left_to_right(Align::Min),
+                                    |ui| {
+                                        ui.spacing_mut().item_spacing = vec2(GRID_GAP, 0.0);
+                                        for entry_index in row {
+                                            let entry = &section.entries[*entry_index];
+                                            let target = ClusterTarget {
+                                                section: *section_index,
+                                                entry: *entry_index,
+                                            };
+                                            let highlighted = state.highlight == flat;
+                                            let tile = ClusterTile::new(entry)
+                                                .highlighted(highlighted)
+                                                .show(ui, tile_width);
+                                            if highlighted && moved {
+                                                tile.scroll_to_me(None);
+                                            }
+                                            if tile.clicked() {
+                                                action = Some(ClusterAction::Switch(target));
+                                            }
+                                            flat += 1;
+                                        }
+                                    },
+                                );
                             }
-                        });
-                        ui.add_space(GRID_GAP);
-                    }
-                    ui.add_space(-GRID_GAP);
-                }
+                        }
+                    });
+                ui.data_mut(|data| data.insert_temp(seen_id, state.highlight));
+                let scroll_height = scrolled.inner_rect.height();
                 let highlighted = targets
                     .get(state.highlight)
                     .map(|target| &sections[target.section].entries[target.entry]);
@@ -432,6 +496,11 @@ impl<'s, 'a> ClusterSwitcher<'s, 'a> {
                     .filter(|entry| entry.status == Some(Tone::Danger))
                     .count();
                 footer(ui, notice, unreachable, inner);
+                let fixed_now = ui.min_rect().height() - scroll_height;
+                if (fixed_now - fixed).abs() > 0.5 {
+                    ui.data_mut(|data| data.insert_temp(fixed_id, fixed_now));
+                    ui.ctx().request_discard("cluster switcher height changed");
+                }
             });
         });
         action
@@ -701,6 +770,10 @@ fn readout_strip(ui: &mut Ui, entry: &ClusterEntry<'_>, summary: &ClusterSummary
     let mut readouts_ui = ui.new_child(UiBuilder::new().max_rect(readouts_rect));
     readouts.show(&mut readouts_ui);
 
+    // No history, no chart (and no empty chart node).
+    if summary.latency.is_empty() {
+        return;
+    }
     let bars: Vec<VolumeBar> = summary
         .latency
         .iter()

@@ -152,17 +152,10 @@ fn lifecycle_command_waits_for_result_capacity_to_preserve_delivery_order() {
         result_channel_sender
             .try_send(Box::new(PodLogStreamEnded { log_window_id: 1 }) as WorkerResultBox)
             .expect("channel starts empty");
-        let state = Arc::new(WorkerState {
-            results: WorkerResultSender::new(result_channel_sender, None),
-            connections: Arc::new(Mutex::new(HashMap::new())),
-            resource_watches: Arc::new(Mutex::new(ResourceWatchRegistry::default())),
-            detail_watches: Arc::new(TaskRegistry::default()),
-            pod_metrics_watches: Arc::new(TaskRegistry::default()),
-            node_metrics_watches: Arc::new(TaskRegistry::default()),
-            log_streams: Arc::new(TaskRegistry::default()),
-            watch_initialization_slots: Arc::new(Mutex::new(HashMap::new())),
-            log_store_appender: None,
-        });
+        let state = Arc::new(WorkerState::new(
+            WorkerResultSender::new(result_channel_sender, None),
+            None,
+        ));
 
         let dispatch = tokio::spawn(dispatch_command(
             Box::new(StopPodLogStream {

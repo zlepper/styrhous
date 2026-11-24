@@ -1,4 +1,5 @@
 use super::*;
+use components::design::theme::Tone;
 
 pub(super) struct SettingsDestination<'a> {
     pub(super) title: &'a str,
@@ -6,7 +7,26 @@ pub(super) struct SettingsDestination<'a> {
     pub(super) description: &'a str,
     /// The glyph drawn on the destination's accent tile.
     pub(super) icon: icons::Icon,
-    pub(super) detail: &'a str,
+    pub(super) detail: SettingsDetail<'a>,
+}
+
+/// What a destination row shows before its chevron.
+#[derive(Clone, Copy)]
+pub(super) enum SettingsDetail<'a> {
+    None,
+    /// Muted meta text: "4 contexts".
+    Meta(&'a str),
+    /// A status pill: "Active".
+    Status(&'a str, Tone),
+}
+
+impl<'a> SettingsDetail<'a> {
+    fn text(self) -> Option<&'a str> {
+        match self {
+            Self::None => None,
+            Self::Meta(text) | Self::Status(text, _) => Some(text),
+        }
+    }
 }
 
 /// A captioned card of settings destinations (C13 navigation list rows).
@@ -15,14 +35,10 @@ pub(super) fn settings_destination_group<R>(
     heading: &str,
     contents: impl FnOnce(&mut components::ListGroup<'_>) -> R,
 ) -> R {
-    let theme = ui.tokens();
-    ui.label(
-        egui::RichText::new(heading)
-            .font(type_scale::BODY_STRONG.font_id(ui.ctx()))
-            .color(theme.text.muted),
-    );
-    ui.add_space(space::S12);
-    components::list_group(ui, contents)
+    crate::ui::blade_text::blade_caption(ui, heading);
+    let result = components::list_group(ui, contents);
+    crate::ui::blade_text::gap(ui, space::S24);
+    result
 }
 
 pub(super) fn settings_destination_divider(ui: &mut egui::Ui) {
@@ -37,19 +53,22 @@ pub(super) fn settings_destination_card(
     group: &mut components::ListGroup<'_>,
     destination: SettingsDestination<'_>,
 ) -> bool {
-    let label = if destination.detail.is_empty() {
-        format!("{}: {}", destination.label, destination.description)
-    } else {
-        format!(
-            "{}: {} ({})",
-            destination.label, destination.description, destination.detail
-        )
+    let label = match destination.detail.text() {
+        None => format!("{}: {}", destination.label, destination.description),
+        Some(detail) => format!(
+            "{}: {} ({detail})",
+            destination.label, destination.description
+        ),
     };
     let mut row = components::ListRow::new(destination.icon, destination.title)
         .description(destination.description)
         .accessibility_label(label);
-    if !destination.detail.is_empty() {
-        row = row.trailing(components::ListRowTrailing::Meta(destination.detail));
-    }
+    row = match destination.detail {
+        SettingsDetail::None => row,
+        SettingsDetail::Meta(text) => row.trailing(components::ListRowTrailing::Meta(text)),
+        SettingsDetail::Status(text, tone) => {
+            row.trailing(components::ListRowTrailing::Status(text, tone))
+        }
+    };
     group.row(row).clicked()
 }

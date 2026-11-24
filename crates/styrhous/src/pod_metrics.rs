@@ -230,25 +230,58 @@ pub(crate) fn format_cpu(cpu_nanocores: i64) -> String {
     }
 }
 
-pub(crate) fn format_cpu_cores(cpu_nanocores: i64) -> String {
-    format!("{:.3}", cpu_nanocores as f64 / NANOCORES_PER_CORE as f64)
+const MEMORY_UNITS: [(&str, i64); 6] = [
+    ("Ei", 1_i64 << 60),
+    ("Pi", 1_i64 << 50),
+    ("Ti", 1_i64 << 40),
+    ("Gi", 1_i64 << 30),
+    ("Mi", 1_i64 << 20),
+    ("Ki", 1_i64 << 10),
+];
+
+/// The largest binary unit `bytes` fills, with its size.
+fn memory_unit(bytes: i64) -> (&'static str, i64) {
+    MEMORY_UNITS
+        .into_iter()
+        .find(|(_, divisor)| bytes >= *divisor)
+        .unwrap_or(("B", 1))
 }
 
 pub(crate) fn format_memory(memory_bytes: i64) -> String {
-    const UNITS: [(&str, i64); 6] = [
-        ("Ei", 1_i64 << 60),
-        ("Pi", 1_i64 << 50),
-        ("Ti", 1_i64 << 40),
-        ("Gi", 1_i64 << 30),
-        ("Mi", 1_i64 << 20),
-        ("Ki", 1_i64 << 10),
-    ];
-    for (suffix, divisor) in UNITS {
-        if memory_bytes >= divisor {
-            return format_decimal(memory_bytes as f64 / divisor as f64, suffix);
-        }
+    let (suffix, divisor) = memory_unit(memory_bytes);
+    format_decimal(memory_bytes as f64 / divisor as f64, suffix)
+}
+
+/// Used CPU of a total in cores, as the Nodes table shows it: "0.82 / 4".
+pub(crate) fn format_cpu_cores_of(used_nanocores: i64, total_nanocores: i64) -> String {
+    format!(
+        "{} / {}",
+        format_cores_compact(used_nanocores),
+        format_cores_compact(total_nanocores)
+    )
+}
+
+/// Cores to two decimals below one core and to one above, without trailing zeros.
+fn format_cores_compact(nanocores: i64) -> String {
+    let cores = nanocores as f64 / NANOCORES_PER_CORE as f64;
+    if cores >= 1.0 {
+        return format_decimal(cores, "");
     }
-    format!("{memory_bytes}B")
+    let formatted = format!("{cores:.2}");
+    formatted
+        .trim_end_matches('0')
+        .trim_end_matches('.')
+        .to_owned()
+}
+
+/// Used memory of a total in the total's unit, written once: "2.1 / 7.8Gi".
+pub(crate) fn format_memory_of(used_bytes: i64, total_bytes: i64) -> String {
+    let (suffix, divisor) = memory_unit(total_bytes);
+    format!(
+        "{} / {}",
+        format_decimal(used_bytes as f64 / divisor as f64, ""),
+        format_decimal(total_bytes as f64 / divisor as f64, suffix)
+    )
 }
 
 fn format_decimal(value: f64, suffix: &str) -> String {
@@ -283,11 +316,11 @@ mod tests {
     }
 
     #[test]
-    fn formats_cpu_cores_with_fixed_three_decimal_precision() {
-        assert_eq!(format_cpu_cores(125_000_000), "0.125");
-        assert_eq!(format_cpu_cores(1_000_000_000), "1.000");
-        assert_eq!(format_cpu_cores(12_500_000_000), "12.500");
-        assert_eq!(format_cpu_cores(999_500_000), "1.000");
+    fn formats_cpu_in_the_unit_it_fills() {
+        assert_eq!(format_cpu(125_000_000), "125m");
+        assert_eq!(format_cpu(1_000_000_000), "1");
+        assert_eq!(format_cpu(12_500_000_000), "12.5");
+        assert_eq!(format_cpu(15_000_000), "15m");
     }
 
     #[test]
@@ -315,5 +348,24 @@ mod tests {
         assert_eq!(name, "worker-a");
         assert_eq!(usage.cpu_nanocores, 1_500_000_000);
         assert_eq!(usage.memory_bytes, 3 * 1024 * 1024 * 1024);
+    }
+
+    #[test]
+    fn formats_used_of_total_like_the_nodes_table() {
+        assert_eq!(format_cpu_cores_of(820_000_000, 4_000_000_000), "0.82 / 4");
+        assert_eq!(format_cpu_cores_of(3_140_000_000, 4_000_000_000), "3.1 / 4");
+        assert_eq!(format_cpu_cores_of(500_000_000, 3_920_000_000), "0.5 / 3.9");
+        assert_eq!(format_cpu_cores_of(0, 2_000_000_000), "0 / 2");
+        let gib = 1_i64 << 30;
+        assert_eq!(
+            format_memory_of(gib * 21 / 10, gib * 78 / 10),
+            "2.1 / 7.8Gi"
+        );
+        assert_eq!(
+            format_memory_of(512 << 20, gib * 2),
+            "0.5 / 2Gi",
+            "the used amount takes the total's unit"
+        );
+        assert_eq!(format_memory_of(100, 900), "100 / 900B");
     }
 }

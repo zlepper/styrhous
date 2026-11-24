@@ -86,8 +86,8 @@ fn partial_api_discovery_readies_the_cluster_and_reports_the_failed_groups() {
 
     let toasts = state.visible_operation_toasts(Instant::now());
     assert_eq!(toasts.len(), 1);
-    assert_eq!(toasts[0].outcome, OperationOutcome::Failure);
-    assert_eq!(toasts[0].title, "2 API groups could not be loaded");
+    assert_eq!(toasts[0].outcome, OperationOutcome::Warning);
+    assert_eq!(toasts[0].title, "2 API groups couldn’t be loaded");
     assert_eq!(
         toasts[0].target,
         "metrics.k8s.io/v1beta1, stuck.example.com/v1"
@@ -448,4 +448,47 @@ fn recovered_api_groups_are_ignored_after_the_session_failed_to_load() {
             .is_empty()
     );
     assert!(state.operation_history_entries().is_empty());
+}
+
+/// The line a failure's toast shows under its title.
+fn failure_toast_line(details: Option<&str>) -> String {
+    let mut state = UiState::default();
+    let mut cluster = ClusterState::for_test(1, "dev");
+    cluster.connection = ClusterConnectionState::Connected;
+    state.clusters.insert(1, cluster);
+    state.record_operation_outcome(
+        1,
+        OperationOutcome::Failure,
+        "Couldn’t run CronJob",
+        Some("kube-system"),
+        "nightly-report",
+        details.map(str::to_owned),
+    );
+    let toasts = state.visible_operation_toasts(Instant::now());
+    assert_eq!(toasts.len(), 1);
+    toasts[0].target.clone()
+}
+
+#[test]
+fn a_failure_toast_says_why_when_the_reason_is_one_short_line() {
+    assert_eq!(
+        failure_toast_line(Some("Forbidden: cannot create jobs")),
+        "Forbidden: cannot create jobs"
+    );
+    assert_eq!(
+        failure_toast_line(None),
+        "nightly-report · kube-system",
+        "without a reason it names its target"
+    );
+    assert_eq!(
+        failure_toast_line(Some("first line\nsecond line")),
+        "nightly-report · kube-system",
+        "a multi-line reason stays in the history"
+    );
+    assert_eq!(
+        failure_toast_line(Some(&"x".repeat(121))),
+        "nightly-report · kube-system",
+        "so does a long one"
+    );
+    assert_eq!(failure_toast_line(Some(&"x".repeat(120))), "x".repeat(120));
 }

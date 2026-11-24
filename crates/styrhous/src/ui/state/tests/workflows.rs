@@ -265,11 +265,13 @@ fn cluster_reload_ignores_resource_events_from_the_retired_cluster_key() {
                 name: "old".into(),
                 is_current: true,
                 presentation: Default::default(),
+                server: None,
             }])) as WorkerResultBox,
             Box::new(KubernetesClustersUpdated(vec![Cluster {
                 name: "new".into(),
                 is_current: true,
                 presentation: Default::default(),
+                server: None,
             }])) as WorkerResultBox,
             Box::new(KubernetesResourceAdded {
                 cluster_key: 1,
@@ -422,6 +424,7 @@ fn resource_data_completion_updates_only_the_initiating_history_entry() {
             name: "kind".into(),
             is_current: true,
             presentation: Default::default(),
+            server: None,
         }])) as WorkerResultBox]),
         commands: Vec::new(),
     };

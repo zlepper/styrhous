@@ -35,7 +35,7 @@ pub(super) use super::log_state::{
 
 pub(super) use super::persistence::{
     PersistedApiDiscovery, PersistedApiResource, PersistedClusterSelection,
-    PersistedClusterSelections, ResourceNavigationExpansion,
+    PersistedClusterSelections, PinnedKinds, ResourceNavigationExpansion,
 };
 
 const DELETE_CONFIRMATION_DELAY: Duration = Duration::from_secs(3);
@@ -70,6 +70,23 @@ pub(crate) struct UiState {
     pub(super) context_presentation_saves: HashMap<String, ContextPresentationSave>,
     /// The time of the frame being processed, in seconds of egui input time.
     pub(super) now: f64,
+    /// The wall clock ages and relative times are measured against.
+    pub(crate) clock: super::clock::WallClock,
+    /// The kinds pinned to the top of the sidebar.
+    pub(super) pinned_kinds: PinnedKinds,
+    /// What the sidebar's kind filter holds.
+    pub(super) kind_filter: String,
+    /// The pinned and recently visited clusters and the node counts last seen.
+    /// Where the kubeconfig contexts come from ("~/.kube/config"); empty until known.
+    pub(super) kubeconfig_source: String,
+    /// The cluster being added from the switcher is switched to once it is in.
+    pub(super) switch_to_imported: bool,
+    pub(super) cluster_roster: super::cluster_roster::ClusterRoster,
+    /// The open cluster switcher (A16), if any.
+    pub(super) cluster_switcher: Option<super::cluster_switcher::SwitcherSession>,
+    /// The licence warning the banner was dismissed for this session; it shows
+    /// again when the warning changes.
+    pub(super) dismissed_license_warning: Option<String>,
 }
 
 #[derive(Debug)]
@@ -183,6 +200,15 @@ pub(crate) struct HelmReleaseWatchState {
 pub(crate) struct ResourceSearchState {
     pub(super) query: String,
     pub(super) regex_mode: bool,
+    /// Only the rows that are doing badly show (the "Problems only" chip).
+    pub(super) problems_only: bool,
+    /// The groups of a grouped table the user collapsed.
+    pub(super) collapsed_groups: std::collections::HashSet<String>,
+    /// The problem row `[` and `]` last stepped to (its uid), which the
+    /// next step goes on from.
+    pub(super) problem_cursor: Option<String>,
+    /// A row (its uid) to scroll into view the next time the table shows.
+    pub(super) scroll_to: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -225,6 +251,8 @@ mod detail_results;
 mod details;
 mod metrics_results;
 mod namespaces;
+mod node_maintenance;
+pub(super) use node_maintenance::*;
 mod openings;
 mod preferences;
 mod resource_results;

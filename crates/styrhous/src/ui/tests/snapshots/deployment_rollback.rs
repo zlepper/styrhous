@@ -95,7 +95,7 @@ fn history(paused: bool) -> DeploymentRevisionHistory {
 fn deployments_table() -> AppHarness {
     let mut harness = application_harness::<MockWorker>();
     harness.seed_ui_state(deployments_state());
-    harness.get_by_label("Apps & Containers").click();
+    harness.get_by_label("Workloads").click();
     harness.run();
     harness.get_by_label("Deployments").click();
     harness.run();
@@ -250,7 +250,7 @@ fn deployment_rollback_loads_revisions_shows_changes_and_rolls_back() {
     );
     assert!(
         harness
-            .query_by_label_contains("web • kube-system")
+            .query_by_label_contains("web · kube-system")
             .is_some()
     );
 }
@@ -495,6 +495,7 @@ fn deployment_rollback_replies_are_scoped_to_their_cluster_and_session() {
 fn deployment_inspector_offers_roll_back() {
     let deployment = fixture_api_resource("apps", "Deployment", "deployments");
     let detail = ResourceDetail {
+        yaml: None,
         api_resource: deployment.clone(),
         name: "web".into(),
         namespace: Some("kube-system".into()),

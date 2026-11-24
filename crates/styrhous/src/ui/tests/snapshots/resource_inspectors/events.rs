@@ -8,7 +8,7 @@ fn pod_events_stay_aligned_and_inside_inspector_as_updates_arrive() {
         .global_style_mut(|style| style.animation_time = 0.0);
     harness.state_mut().ui_state = oracle_resource_table_state();
     harness.run();
-    harness.get_by_label("Apps & Containers").click();
+    harness.get_by_label("Workloads").click();
     harness.run();
     let name = "coredns-66bc5c9577-ffw2s";
     harness
@@ -23,6 +23,7 @@ fn pod_events_stay_aligned_and_inside_inspector_as_updates_arrive() {
             cluster_key: 2,
             history_entry_id: 1,
             detail: Box::new(ResourceDetail {
+                yaml: None,
                 api_resource: fixture_api_resource("core", "Pod", "pods"),
                 name: name.into(),
                 namespace: Some("kube-system".into()),
@@ -62,6 +63,11 @@ fn pod_events_stay_aligned_and_inside_inspector_as_updates_arrive() {
             }).collect(),
         }));
         harness.run();
+        if count == 1 {
+            // Normal events are hidden until asked for.
+            harness.get_by_label_contains("Show ").click();
+            harness.run();
+        }
         harness.get_by_label("Reason").scroll_to_me();
         harness.run();
         let columns = ["Reason", "Message", "Source", "Time"]

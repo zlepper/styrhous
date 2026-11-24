@@ -1,17 +1,26 @@
 use super::destinations::{
-    SettingsDestination, settings_destination_card, settings_destination_group,
+    SettingsDestination, SettingsDetail, settings_destination_card, settings_destination_group,
 };
 use super::terminal::{
-    show_debug_image_presets, show_settings_introduction, show_terminal_launcher,
-    show_update_status,
+    INTRODUCTION, show_debug_image_presets, show_terminal_launcher, show_updates,
 };
 use super::*;
+use components::design::theme::Tone;
+use egui::Align;
 
 #[derive(Debug, Default)]
 
 pub(crate) struct SettingsHomeBlade;
 
 impl GlobalBladeContent for SettingsHomeBlade {
+    fn description(&self) -> components::BladeDescription {
+        components::BladeDescription::named("Settings")
+    }
+
+    fn sidebar_destination(&self) -> Option<crate::ui::global_blade::SidebarDestination> {
+        Some(crate::ui::global_blade::SidebarDestination::Settings)
+    }
+
     fn render_header(
         &mut self,
         ui: &mut egui::Ui,
@@ -28,15 +37,10 @@ impl GlobalBladeContent for SettingsHomeBlade {
         _layer: components::BladeLayer,
         context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
-        let theme = ui.tokens();
-        ui.label(
-            egui::RichText::new("Manage your workspace and application preferences.")
-                .font(type_scale::BODY.font_id(ui.ctx()))
-                .color(theme.text.secondary),
+        crate::ui::blade_text::blade_intro(
+            ui,
+            "Workspace and application preferences. Changes are saved on this device.",
         );
-        ui.add_space(space::S24);
-        ui.separator();
-        ui.add_space(space::S24 + space::S4);
         let context_count = context.contexts().len();
         let count = format!(
             "{context_count} context{}",
@@ -47,12 +51,13 @@ impl GlobalBladeContent for SettingsHomeBlade {
         let mut cluster_discovery = false;
         let mut application_settings = false;
         let mut license = false;
+        let update_ready = matches!(context.update_status(), UpdateStatus::Staged { .. });
         let licensing = context.licensing();
-        let license_description = format!(
-            "Manage your license and account. {}",
-            licensing.settings().server.label()
-        );
+        // The signed-in account is not part of the lease the app holds, so only
+        // the server is named.
+        let license_description = licensing.settings().server.label().to_owned();
         let license_status = licensing.status().short_label();
+        let license_tone = licensing.status().tone();
         components::scroll::vertical()
             .id_salt("settings-destinations")
             .auto_shrink([false, false])
@@ -63,9 +68,9 @@ impl GlobalBladeContent for SettingsHomeBlade {
                         SettingsDestination {
                             title: "Contexts",
                             label: "Open context settings",
-                            description: "Customize display names and selector badges.",
+                            description: "Display names and rail badges",
                             icon: icons::Icon::CircleStack,
-                            detail: &count,
+                            detail: SettingsDetail::Meta(&count),
                         },
                     );
                     namespace_selector = settings_destination_card(
@@ -73,9 +78,9 @@ impl GlobalBladeContent for SettingsHomeBlade {
                         SettingsDestination {
                             title: "Namespace selector",
                             label: "Open namespace selector settings",
-                            description: "Choose how namespaces are displayed.",
+                            description: "How namespaces are labelled and searched",
                             icon: icons::Icon::AdjustmentsHorizontal,
-                            detail: "",
+                            detail: SettingsDetail::None,
                         },
                     );
                     cluster_discovery = settings_destination_card(
@@ -83,22 +88,25 @@ impl GlobalBladeContent for SettingsHomeBlade {
                         SettingsDestination {
                             title: "Cluster discovery",
                             label: "Open cluster discovery",
-                            description: "Find and add clusters from your cloud accounts.",
+                            description: "Find clusters in Azure, AWS and Tailscale",
                             icon: icons::Icon::Share,
-                            detail: "",
+                            detail: SettingsDetail::None,
                         },
                     );
                 });
-                ui.add_space(space::S32 + space::S8);
                 settings_destination_group(ui, "APPLICATION", |group| {
                     application_settings = settings_destination_card(
                         group,
                         SettingsDestination {
                             title: "Application preferences",
                             label: "Open application settings",
-                            description: "Terminal, debug images, and updates.",
+                            description: "Terminal, debug images and updates",
                             icon: icons::Icon::WrenchScrewdriver,
-                            detail: "",
+                            detail: if update_ready {
+                                SettingsDetail::Status("Update ready", Tone::Accent)
+                            } else {
+                                SettingsDetail::None
+                            },
                         },
                     );
                     license = settings_destination_card(
@@ -108,7 +116,7 @@ impl GlobalBladeContent for SettingsHomeBlade {
                             label: "Open license and account settings",
                             description: &license_description,
                             icon: icons::Icon::UserCircle,
-                            detail: license_status,
+                            detail: SettingsDetail::Status(license_status, license_tone),
                         },
                     );
                 });
@@ -192,6 +200,14 @@ impl GlobalBladeEffect for GoBack {
 }
 
 impl GlobalBladeContent for TerminalSettingsBlade {
+    fn description(&self) -> components::BladeDescription {
+        components::BladeDescription::named("Application settings")
+    }
+
+    fn sidebar_destination(&self) -> Option<crate::ui::global_blade::SidebarDestination> {
+        Some(crate::ui::global_blade::SidebarDestination::Settings)
+    }
+
     #[cfg(test)]
     fn terminal_settings(&self) -> Option<&TerminalSettingsBlade> {
         Some(self)
@@ -207,7 +223,9 @@ impl GlobalBladeContent for TerminalSettingsBlade {
         _layer: components::BladeLayer,
         _context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
-        components::blade_title(ui, None, "Application settings");
+        components::blade_title_with_actions(ui, None, "Application settings", |ui| {
+            crate::ui::blade_text::blade_more_actions(ui);
+        });
         GlobalBladeRenderResult::default()
     }
 
@@ -219,11 +237,8 @@ impl GlobalBladeContent for TerminalSettingsBlade {
     ) -> GlobalBladeRenderResult {
         let mut save = false;
         let mut reset = false;
-        show_settings_introduction(ui);
-        show_update_status(ui, context.update_status());
-        ui.add_space(space::S24);
-        ui.separator();
-        ui.add_space(space::S24);
+        let mut cancel = false;
+        crate::ui::blade_text::blade_intro(ui, INTRODUCTION);
         // The form scrolls in whatever room the blade footer leaves.
         let content_height = (ui.available_height() - FOOTER_HEIGHT).max(0.0);
         ui.allocate_ui_with_layout(
@@ -234,17 +249,31 @@ impl GlobalBladeContent for TerminalSettingsBlade {
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         show_terminal_launcher(ui, &mut self.draft, &mut self.error);
-                        ui.add_space(space::S24);
-                        ui.separator();
-                        ui.add_space(space::S24);
+                        crate::ui::blade_text::gap(ui, space::S24);
                         show_debug_image_presets(ui, &mut self.draft, &mut self.error);
+                        crate::ui::blade_text::gap(ui, space::S24);
+                        show_updates(ui, &mut self.draft, context.update_status());
                     });
             },
         );
         components::blade_body_footer(ui, |ui| {
             save |= Button::primary("Save changes").show(ui).clicked();
-            reset |= Button::secondary("Reset").show(ui).clicked();
+            cancel |= Button::secondary("Cancel").show(ui).clicked();
+            // Reset takes the left edge, the buttons the right.
+            ui.with_layout(egui::Layout::left_to_right(Align::Center), |ui| {
+                reset |= Button::ghost("Reset").show(ui).clicked();
+            });
         });
+        if cancel {
+            if self.back_on_save {
+                self.go_back = true;
+                return GlobalBladeRenderResult::default();
+            }
+            return GlobalBladeRenderResult {
+                close: true,
+                ..Default::default()
+            };
+        }
         if reset {
             self.draft = TerminalLaunchSettings::default();
             self.error = None;

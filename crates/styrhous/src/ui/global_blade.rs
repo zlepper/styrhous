@@ -13,7 +13,10 @@ use crate::terminal_launcher::ShellRequest;
 use crate::terminal_launcher::{DebugImagePreset, TerminalLaunchSettings};
 use crate::updater::UpdateStatus;
 use crate::worker::WorkerCommandBox;
-use components::{BladeLayer, BladeNavigator, BladeResponse, BladeStack};
+use components::{
+    BladeDescription, BladeHeader, BladeLayer, BladeNavigator, BladeResponse, BladeStack,
+    HeaderAction,
+};
 use std::cell::RefCell;
 
 /// The application's shared blade renderer.
@@ -64,6 +67,20 @@ impl GlobalBladeCoordinator {
         self.navigator.as_ref()
     }
 
+    /// Keep blades `inset` points below the window's top (under the banner).
+    pub(super) fn set_top_inset(&mut self, inset: f32) {
+        self.stack.set_top_inset(inset);
+    }
+
+    /// Whether a blade of `destination` is open.
+    pub(super) fn shows_destination(&self, destination: SidebarDestination) -> bool {
+        self.navigator.as_ref().is_some_and(|navigator| {
+            navigator
+                .entries()
+                .any(|content| content.sidebar_destination() == Some(destination))
+        })
+    }
+
     pub(super) fn navigator_mut(
         &mut self,
     ) -> Option<&mut BladeNavigator<Box<dyn GlobalBladeContent>>> {
@@ -85,10 +102,15 @@ impl GlobalBladeCoordinator {
         render_context: GlobalBladeRenderContext<'_>,
     ) -> BladeResponse<GlobalBladeRenderResult, GlobalBladeRenderResult> {
         let render_context = RefCell::new(render_context);
-        self.stack.show(
+        self.stack.show_blades(
             ctx,
             navigator,
-            |ui, content, layer| content.render_header(ui, layer, &mut render_context.borrow_mut()),
+            |content| content.description(),
+            |ui, content, layer| {
+                let value = content.render_header(ui, layer, &mut render_context.borrow_mut());
+                let action = value.header_action;
+                BladeHeader { value, action }
+            },
             |ui, content, layer| content.render_body(ui, layer, &mut render_context.borrow_mut()),
         )
     }
@@ -283,6 +305,13 @@ mod tests {
     }
 }
 
+/// A sidebar footer item a blade opens from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum SidebarDestination {
+    Notifications,
+    Settings,
+}
+
 pub(super) trait GlobalBladeContent: std::fmt::Debug {
     /// Render this content's header and body through the one global stack.
     /// New blade types add their own implementation instead of extending the
@@ -300,6 +329,11 @@ pub(super) trait GlobalBladeContent: std::fmt::Debug {
         _layer: BladeLayer,
         _context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult;
+
+    /// How this content lays out and what its history peek shows.
+    fn description(&self) -> BladeDescription {
+        BladeDescription::default()
+    }
 
     /// Return a deferred operation requested during rendering. Effects are
     /// dynamically dispatched after egui releases content borrows.
@@ -322,6 +356,12 @@ pub(super) trait GlobalBladeContent: std::fmt::Debug {
 
     fn is_owned_by_resource_detail(&self, _history_entry_id: u64) -> bool {
         false
+    }
+
+    /// The sidebar footer item this blade belongs to, which shows selected
+    /// while the blade is open (S09).
+    fn sidebar_destination(&self) -> Option<SidebarDestination> {
+        None
     }
 
     #[cfg(test)]
@@ -473,6 +513,15 @@ impl<'a> GlobalBladeRenderContext<'a> {
             .collect()
     }
 
+    /// The offset calendar days are counted by, from the UI clock.
+    pub(super) fn day_offset(&self) -> time::UtcOffset {
+        self.ui_state.clock.day_offset()
+    }
+
+    pub(super) fn unread_operation_count(&self) -> usize {
+        self.ui_state.unread_operation_count()
+    }
+
     pub(super) fn operation_history_entries(
         &self,
     ) -> Vec<super::state::OperationHistoryDisplayEntry> {
@@ -495,6 +544,8 @@ impl<'a> GlobalBladeRenderContext<'a> {
 #[derive(Default)]
 pub(super) struct GlobalBladeRenderResult {
     pub(super) close: bool,
+    /// Back or Forward from an inspector header that draws its own navigation.
+    pub(super) header_action: HeaderAction,
     pub(super) next_content: Option<Box<dyn GlobalBladeContent>>,
 }
 

@@ -1,7 +1,9 @@
 use super::*;
 
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub(super) enum HeaderAction {
+/// What a blade header asked for this frame.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum HeaderAction {
+    #[default]
     None,
     Back,
     Forward,

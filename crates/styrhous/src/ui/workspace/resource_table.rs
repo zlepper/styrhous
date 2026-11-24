@@ -1,16 +1,42 @@
 use super::*;
+use crate::resource_table::{
+    CONTAINERS_COLUMN, CPU_COLUMN, MEMORY_COLUMN, READY_COLUMN, REPLICAS_UNREADY_CELL,
+    RESTARTS_COLUMN, ROLES_COLUMN, VERSION_COLUMN,
+};
 use crate::ui::preference_table::{
     ACTIONS_COLUMN_ID, AGE_COLUMN_ID, ColumnControls, PreferenceTable, actions_column, age_column,
     fill_first_column,
 };
+use crate::ui::resource_table_cache::{Grouping, PreparedGroup};
 use components::design::size;
 use components::tooltip::{TooltipExt, elided_label};
+use components::{GroupHeader, MenuLook, ProblemTicks, TableGroup};
+use components::{SortDirection, SortState};
+use egui::{Rect, pos2};
+use resource_data::CLUSTER_GROUP;
+
+/// The columns a window too narrow for them leaves out (S08): the details
+/// beside a row's name, status and age.
+fn hidden_when_compact(column_id: &str) -> bool {
+    matches!(
+        column_id,
+        CONTAINERS_COLUMN
+            | CPU_COLUMN
+            | MEMORY_COLUMN
+            | NODE_COLUMN
+            | ROLES_COLUMN
+            | VERSION_COLUMN
+    ) || column_id == "owner"
+        || column_id.starts_with("metadata-")
+}
 
 pub(super) struct ResourceTableConfiguration {
     definition: crate::resource_table::ResourceTableDefinition,
     pub(super) metadata_columns: Vec<super::super::table_preferences::CustomMetadataColumn>,
     /// The visible columns, their widths and the sort.
     pub(super) layout: PreferenceTable,
+    /// How the rows group under group headers.
+    pub(super) grouping: Grouping,
 }
 
 impl ResourceTableConfiguration {
@@ -28,6 +54,7 @@ pub(super) fn resource_table_configuration(
     api_resource: &crate::api_resource::ApiResource,
     custom_columns: &[CustomResourceColumn],
     show_namespace_column: bool,
+    compact: bool,
     table_preferences: &mut PersistedResourceTablePreferences,
 ) -> ResourceTableConfiguration {
     let definition = table_definition(api_resource, custom_columns);
@@ -38,10 +65,13 @@ pub(super) fn resource_table_configuration(
         column_definitions.push(TableColumnDefinition::sortable(
             "namespace",
             "Namespace",
-            180.0,
+            size::TABLE_NAMESPACE_COLUMN,
         ));
     }
-    column_definitions.push(TableColumnDefinition::sortable("owner", "Owner", 160.0));
+    column_definitions.push(
+        TableColumnDefinition::sortable("owner", "Owner", size::TABLE_OWNER_COLUMN)
+            .hidden_by_default(),
+    );
     column_definitions.extend(
         definition
             .columns
@@ -57,16 +87,34 @@ pub(super) fn resource_table_configuration(
             .map(|column| TableColumnDefinition::sortable(&column.id(), &column.label, 160.0)),
     );
     column_definitions.extend([age_column(), actions_column()]);
-    fill_first_column(
-        &mut column_definitions,
-        available_width,
-        size::TABLE_CHECKBOX_COLUMN,
-    );
+    // A narrow window leaves out columns, which the name column then fills.
+    let mut filled = column_definitions.clone();
+    if compact {
+        for column in &mut filled {
+            column.default_hidden |= hidden_when_compact(&column.id);
+        }
+    }
+    fill_first_column(&mut filled, available_width, size::TABLE_CHECKBOX_COLUMN);
+    column_definitions[0].default_width = filled[0].default_width;
+    let grouping = if api_resource.is_node() {
+        Grouping::Cluster
+    } else if api_resource.namespaced && table_preferences.groups_by_namespace(&table_key) {
+        Grouping::Namespace
+    } else {
+        Grouping::None
+    };
 
+    let mut layout = PreferenceTable::new(table_preferences, table_key, column_definitions);
+    if compact {
+        layout.compact(hidden_when_compact, |id| {
+            (id == READY_COLUMN).then_some(size::TABLE_READY_COLUMN_COMPACT)
+        });
+    }
     ResourceTableConfiguration {
         definition,
         metadata_columns,
-        layout: PreferenceTable::new(table_preferences, table_key, column_definitions),
+        layout,
+        grouping,
     }
 }
 
@@ -81,6 +129,187 @@ fn missing_metadata_reason(
     }
 }
 
+/// What the resource table did this frame.
+#[derive(Default)]
+pub(super) struct ResourceTableOutcome {
+    pub(super) action: Option<ResourceAction>,
+    /// The group whose header chip was clicked: collapse or expand it.
+    pub(super) toggled_group: Option<String>,
+    /// The problem row whose tick was clicked (its uid): scroll to it.
+    pub(super) clicked_problem: Option<String>,
+}
+
+/// The index of the row `uid` among the data rows the table shows (those of
+/// collapsed groups do not), as [`Table::inspected_row`] counts them.
+pub(super) fn displayed_row_index(
+    prepared: &PreparedResourceTable,
+    collapsed: &HashSet<String>,
+    uid: &str,
+) -> Option<usize> {
+    let mut index = 0;
+    for group in shown_groups(prepared, collapsed) {
+        let rows = &prepared.rows[group.rows.clone()];
+        if let Some(offset) = rows.iter().position(|row| row_uid(row) == Some(uid)) {
+            return Some(index + offset);
+        }
+        index += rows.len();
+    }
+    None
+}
+
+/// The groups whose rows show: those not collapsed.
+fn shown_groups<'a>(
+    prepared: &'a PreparedResourceTable,
+    collapsed: &'a HashSet<String>,
+) -> impl Iterator<Item = &'a PreparedGroup> {
+    prepared.groups.iter().filter(|group| {
+        group
+            .name
+            .as_ref()
+            .is_none_or(|name| !collapsed.contains(name))
+    })
+}
+
+fn row_uid(row: &PreparedResourceTableRow) -> Option<&str> {
+    match row {
+        PreparedResourceTableRow::Resource(identity) => Some(&identity.uid),
+        PreparedResourceTableRow::HiddenBySearch(_) => None,
+    }
+}
+
+/// The problem rows in the order the table shows them: `(uid, group)`, with
+/// those of collapsed groups left out unless `all`.
+pub(super) fn problem_rows<'a>(
+    prepared: &'a PreparedResourceTable,
+    collapsed: &'a HashSet<String>,
+    all: bool,
+) -> Vec<(&'a str, Option<&'a str>)> {
+    prepared
+        .groups
+        .iter()
+        .filter(|group| {
+            all || group
+                .name
+                .as_ref()
+                .is_none_or(|name| !collapsed.contains(name))
+        })
+        .flat_map(|group| {
+            prepared.rows[group.rows.clone()]
+                .iter()
+                .filter_map(|row| match row {
+                    PreparedResourceTableRow::Resource(identity) if identity.problem.is_some() => {
+                        Some((identity.uid.as_str(), group.name.as_deref()))
+                    }
+                    _ => None,
+                })
+        })
+        .collect()
+}
+
+/// Make the problem row after (or before) the one last stepped to the one
+/// to scroll to, expanding its group when it is collapsed.
+pub(super) fn step_to_problem(
+    prepared: &PreparedResourceTable,
+    search: &mut ResourceSearchState,
+    step: ProblemStep,
+) {
+    let rows = problem_rows(prepared, &search.collapsed_groups, true)
+        .into_iter()
+        .map(|(uid, group)| (uid.to_owned(), group.map(str::to_owned)))
+        .collect::<Vec<_>>();
+    let Some(last) = rows.len().checked_sub(1) else {
+        return;
+    };
+    let current = search
+        .problem_cursor
+        .as_deref()
+        .and_then(|cursor| rows.iter().position(|(uid, _)| uid == cursor));
+    let index = match (current, step) {
+        (None, ProblemStep::Next) => 0,
+        (None, ProblemStep::Previous) => last,
+        (Some(current), ProblemStep::Next) if current == last => 0,
+        (Some(current), ProblemStep::Next) => current + 1,
+        (Some(0), ProblemStep::Previous) => last,
+        (Some(current), ProblemStep::Previous) => current - 1,
+    };
+    let (uid, group) = &rows[index];
+    if let Some(group) = group {
+        search.collapsed_groups.remove(group);
+    }
+    search.problem_cursor = Some(uid.clone());
+    search.scroll_to = Some(uid.clone());
+}
+
+/// What a group header says on its end: how much of the group shows, or for
+/// the Nodes their roles.
+fn group_window(
+    group: &PreparedGroup,
+    prepared: &PreparedResourceTable,
+    options: &ResourceTableOptions<'_>,
+) -> Option<String> {
+    let shown = group.rows.len();
+    if group.name.as_deref() == Some(CLUSTER_GROUP) {
+        return Some(node_roles_summary(
+            prepared.rows[group.rows.clone()]
+                .iter()
+                .filter_map(|row| match row {
+                    PreparedResourceTableRow::Resource(identity) => {
+                        resolve_prepared_resource(options.resource_cache, prepared, identity)
+                    }
+                    PreparedResourceTableRow::HiddenBySearch(_) => None,
+                }),
+        ));
+    }
+    if shown < group.total {
+        Some(format!(
+            "{} of {} shown",
+            components::search::format_count(shown),
+            components::search::format_count(group.total)
+        ))
+    } else if prepared
+        .groups
+        .iter()
+        .filter(|group| group.name.is_some())
+        .count()
+        == 1
+    {
+        Some(format!(
+            "all {} shown",
+            components::search::format_count(shown)
+        ))
+    } else {
+        None
+    }
+}
+
+/// "control plane · 2 workers": the roles of the Nodes shown.
+fn node_roles_summary<'a>(nodes: impl Iterator<Item = &'a MinimalResource>) -> String {
+    let (mut control_planes, mut workers) = (0, 0);
+    for node in nodes {
+        let is_control_plane = matches!(
+            node.cells.get(ROLES_COLUMN),
+            Some(CellValue::List(roles))
+                if roles.iter().any(|role| role == "control-plane" || role == "master")
+        );
+        if is_control_plane {
+            control_planes += 1;
+        } else {
+            workers += 1;
+        }
+    }
+    let control_plane = match control_planes {
+        0 => None,
+        1 => Some("control plane".to_owned()),
+        count => Some(format!("{count} control planes")),
+    };
+    let workers = (workers > 0).then(|| components::counted(workers, "worker", "workers"));
+    [control_plane, workers]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
+
 pub(super) fn show_resource_table(
     ui: &mut egui::Ui,
     api_resource: &crate::api_resource::ApiResource,
@@ -88,24 +317,29 @@ pub(super) fn show_resource_table(
     configuration: &ResourceTableConfiguration,
     options: ResourceTableOptions<'_>,
     controls: ResourceTableControls<'_>,
-) -> Option<ResourceAction> {
+) -> ResourceTableOutcome {
     let theme = ui.tokens();
     let pending_action = RefCell::new(None);
     let ResourceTableConfiguration {
         definition,
         metadata_columns,
         layout,
+        ..
     } = configuration;
-    let inspected_row = options.inspected_uid.and_then(|uid| {
-        prepared.rows.iter().position(|row| {
-            matches!(row, PreparedResourceTableRow::Resource(identity) if identity.uid == uid)
-        })
-    });
+    let collapsed = options.collapsed_groups;
+    let inspected_row = options
+        .inspected_uid
+        .or(options.problem_cursor)
+        .and_then(|uid| displayed_row_index(prepared, collapsed, uid));
+    let scroll_row = options
+        .scroll_to
+        .and_then(|uid| displayed_row_index(prepared, collapsed, uid));
     let table = configuration
         .table(api_resource)
         .selectable()
         .fill_available_height()
-        .inspected_row(inspected_row);
+        .inspected_row(inspected_row)
+        .scroll_to_row(scroll_row);
 
     let actions_menu = |menu: &mut components::Menu<'_>, resource: &MinimalResource| {
         show_resource_action_items(
@@ -122,15 +356,48 @@ pub(super) fn show_resource_table(
     let queue = |action: ResourceAction| {
         pending_action.borrow_mut().get_or_insert(action);
     };
-    layout.show_selectable(
+    let singular = singular_of(&api_resource.kind, &api_resource.name);
+    let windows = prepared
+        .groups
+        .iter()
+        .map(|group| group_window(group, prepared, &options))
+        .collect::<Vec<_>>();
+    let groups = prepared
+        .groups
+        .iter()
+        .zip(&windows)
+        .map(|(group, window)| {
+            let rows = &prepared.rows[group.rows.clone()];
+            let Some(name) = &group.name else {
+                return TableGroup::ungrouped(rows);
+            };
+            let mut header = GroupHeader::new(name, group.total)
+                .unit(&singular, &api_resource.name)
+                .failing(group.failing);
+            if let Some(window) = window {
+                header = header.window(window);
+            }
+            TableGroup::new(header, rows).expanded(!collapsed.contains(name))
+        })
+        .collect::<Vec<_>>();
+    let track_area = ui.available_rect_before_wrap();
+    let response = layout.show_grouped(
         ui,
         table,
-        &prepared.rows,
+        groups,
         controls.selection,
         |row| match row {
             PreparedResourceTableRow::Resource(identity) => Some(&identity.uid),
             PreparedResourceTableRow::HiddenBySearch(_) => None,
         },
+        |row| match row {
+            PreparedResourceTableRow::Resource(identity) => identity.problem,
+            PreparedResourceTableRow::HiddenBySearch(_) => None,
+        },
+        // Unsorted rows come in name order, unless a search ranks them.
+        options
+            .name_ordered
+            .then(|| SortState::new("name", SortDirection::Ascending)),
         ColumnControls {
             preferences: controls.table_preferences,
             metadata_key_suggestions: Some(&prepared.metadata_key_suggestions),
@@ -166,7 +433,7 @@ pub(super) fn show_resource_table(
                     if response.clicked() {
                         queue(ResourceAction::open_details(resource));
                     }
-                    MoreButton::show_context_menu(&response, |menu| {
+                    MoreButton::show_context_menu_with(&response, MenuLook::ROW, |menu| {
                         actions_menu(menu, resource);
                     });
                 }
@@ -226,7 +493,7 @@ pub(super) fn show_resource_table(
                             let response = TableRowBuilder::clickable_text(
                                 ui,
                                 node_name,
-                                theme.accent.text,
+                                theme.text.secondary,
                                 format!("Open details for Node {node_name}"),
                             );
                             if response.clicked() {
@@ -237,12 +504,32 @@ pub(super) fn show_resource_table(
                                     uid: node_name.clone(),
                                 });
                             }
-                            MoreButton::show_context_menu(&response, |menu| {
+                            MoreButton::show_context_menu_with(&response, MenuLook::ROW, |menu| {
                                 actions_menu(menu, resource);
                             });
                         } else {
                             TableRowBuilder::text(ui, node_name, false);
                         }
+                    } else if id == RESTARTS_COLUMN
+                        && let Some(CellValue::Number(restarts)) = resource.cells.get(id)
+                    {
+                        // A restart count carries the row's problem.
+                        let tone = if *restarts > 0 {
+                            match row {
+                                PreparedResourceTableRow::Resource(identity) => identity.problem,
+                                PreparedResourceTableRow::HiddenBySearch(_) => None,
+                            }
+                        } else {
+                            None
+                        };
+                        TableRowBuilder::problem_number(ui, &restarts.to_string(), tone);
+                    } else if id == READY_COLUMN
+                        && let Some(CellValue::Text(ready)) = resource.cells.get(id)
+                        && let Some(CellValue::Status { tone, .. }) =
+                            resource.cells.get(REPLICAS_UNREADY_CELL)
+                    {
+                        // Fewer replicas ready than wanted: the count says so.
+                        TableRowBuilder::problem_number(ui, ready, Some(*tone));
                     } else {
                         let resolved =
                             resolved_resource_cell(resource, id, options.metrics, api_resource);
@@ -256,6 +543,7 @@ pub(super) fn show_resource_table(
                 AGE_COLUMN_ID => age_cell(ui, resource.creation_timestamp),
                 ACTIONS_COLUMN_ID if options.actions.enabled => {
                     MoreButton::new(format!("More actions for {}", resource.name))
+                        .look(MenuLook::ROW)
                         .show(ui, |menu| actions_menu(menu, resource));
                 }
                 _ => {}
@@ -276,12 +564,37 @@ pub(super) fn show_resource_table(
             if column_id != ACTIONS_COLUMN_ID && row_response.clicked() {
                 queue(ResourceAction::open_details(resource));
             }
-            MoreButton::show_context_menu(row_response, |menu| {
+            MoreButton::show_context_menu_with(row_response, MenuLook::ROW, |menu| {
                 actions_menu(menu, resource);
             });
         },
     );
-    pending_action.into_inner()
+    let track = Rect::from_min_max(
+        pos2(
+            track_area.right() + size::PROBLEM_TRACK_GAP,
+            track_area.top() + size::PROBLEM_TRACK_TOP_INSET,
+        ),
+        pos2(
+            track_area.right() + size::PROBLEM_TRACK_GAP + size::PROBLEM_TRACK,
+            track_area.bottom() - size::PROBLEM_TRACK_BOTTOM_INSET,
+        ),
+    );
+    let ticks = ProblemTicks::new(&response.ticks)
+        .id_salt(("resource-problem-ticks", &api_resource.name))
+        .thumb(response.visible.0, response.visible.1)
+        .show_in(ui, track);
+    let clicked_problem = ticks.clicked.and_then(|tick| {
+        problem_rows(prepared, collapsed, false)
+            .get(tick)
+            .map(|(uid, _)| (*uid).to_owned())
+    });
+    ResourceTableOutcome {
+        action: pending_action.into_inner(),
+        toggled_group: response
+            .toggled
+            .and_then(|group| prepared.groups.get(group)?.name.clone()),
+        clicked_problem,
+    }
 }
 
 pub(super) fn resource_column_sort_value(

@@ -8,28 +8,16 @@ pub(super) fn launcher_choice(
     title: &str,
     description: &str,
     template: Option<&mut String>,
-    template_invalid: bool,
     template_error: Option<&str>,
 ) -> bool {
     let body = template.map(|template| {
         move |ui: &mut egui::Ui| {
-            FormField::new("Command template").show(ui, |ui| {
-                show_command_template_input(ui, template, template_invalid);
-            });
-            ui.add_space(space::S12);
-            components::Callout::new(
-                components::design::theme::Tone::Info,
-                "Use {command} as the placeholder",
-            )
-            .body(
-                "It is replaced with the complete, already-quoted kubectl command, so do \
-                     not wrap it in quotes.",
-            )
-            .show(ui);
-            if let Some(error) = template_error {
-                ui.add_space(space::S16);
-                show_validation_error(ui, "Command template needs attention", error);
-            }
+            FormField::new("Command template")
+                .help("Use {command} where the kubectl command goes. It is already quoted.")
+                .error(template_error)
+                .show(ui, |ui| {
+                    show_command_template_input(ui, template, template_error.is_some());
+                });
         }
     });
     RadioCard::new(selected, title, description)
@@ -49,6 +37,7 @@ pub(super) fn show_command_template_input(
         .placeholder("alacritty -e {command}")
         .accessibility_label("Command template")
         .invalid(invalid)
+        .width(ui.available_width().min(TEMPLATE_INPUT_WIDTH))
         .show(ui)
 }
 

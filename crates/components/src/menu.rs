@@ -157,15 +157,45 @@ pub struct Menu<'a> {
     /// This menu opened to the left of the item that opened it, so its own
     /// submenus keep cascading left instead of covering its parent.
     opens_left: bool,
+    /// The narrowest this menu and its submenus are.
+    min_width: f32,
+}
+
+/// How a menu sits and how wide it is: the design's default (S07), or the
+/// roomier row menus of the resource tables (A04).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MenuLook {
+    /// The narrowest the menu and its submenus are.
+    pub min_width: f32,
+    /// The gap between the trigger and the menu.
+    pub gap: f32,
+}
+
+impl Default for MenuLook {
+    fn default() -> Self {
+        Self {
+            min_width: size::MENU_MIN_WIDTH,
+            gap: size::POPOVER_GAP,
+        }
+    }
+}
+
+impl MenuLook {
+    /// The look of a resource table's row menu (A04).
+    pub const ROW: Self = Self {
+        min_width: size::MENU_ROW_WIDTH,
+        gap: size::MENU_ROW_GAP,
+    };
 }
 
 impl<'a> Menu<'a> {
-    fn new(ui: &'a mut Ui, popup_id: Option<Id>) -> Self {
+    fn new(ui: &'a mut Ui, popup_id: Option<Id>, min_width: f32) -> Self {
         ui.spacing_mut().item_spacing = Vec2::ZERO;
         Self {
             ui,
             popup_id,
             opens_left: false,
+            min_width,
         }
     }
 
@@ -227,11 +257,12 @@ impl<'a> Menu<'a> {
             anchor.interact_rect.max.x = self.ui.ctx().content_rect().right();
         }
         let item_left = response.rect.left();
+        let min_width = self.min_width;
         let inner = SubMenu::new().show(self.ui, &anchor, |ui| {
             let opens_left = ui.max_rect().right() <= item_left;
             theme::scope(ui, ThemeScope::Popover, |ui| {
-                constrain_width(ui);
-                let mut menu = Menu::new(ui, Some(popup_id));
+                constrain_width(ui, min_width);
+                let mut menu = Menu::new(ui, Some(popup_id), min_width);
                 menu.opens_left = opens_left;
                 add_contents(&mut menu)
             })
@@ -306,9 +337,9 @@ fn row_width(ui: &Ui, content: f32) -> f32 {
 }
 
 /// Keep a menu's contents between the design's minimum and maximum width.
-fn constrain_width(ui: &mut Ui) {
+fn constrain_width(ui: &mut Ui, min_width: f32) {
     let padding = 2.0 * POPOVER_PADDING;
-    ui.set_min_width(size::MENU_MIN_WIDTH - padding);
+    ui.set_min_width(min_width - padding);
     if ui.is_sizing_pass() {
         // Later passes keep the width the sizing pass settled on.
         ui.set_max_width(size::MENU_MAX_WIDTH - padding);
@@ -335,7 +366,7 @@ pub fn preview<R>(
         ui.set_width(width - 2.0 * POPOVER_PADDING);
         ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
             theme::scope(ui, ThemeScope::Popover, |ui| {
-                add_contents(&mut Menu::new(ui, None))
+                add_contents(&mut Menu::new(ui, None, size::MENU_MIN_WIDTH))
             })
         })
         .inner
@@ -350,17 +381,19 @@ pub(crate) fn show_popup<R>(
     popup: Popup<'_>,
     theme: &Theme,
     label: &str,
+    look: MenuLook,
     add_contents: impl FnOnce(&mut Menu<'_>) -> R,
 ) -> Option<InnerResponse<R>> {
     let popup_id = popup.get_id();
     let inner = popup
-        .width(size::MENU_MIN_WIDTH)
+        .width(look.min_width)
+        .gap(look.gap)
         .frame(egui::Frame::NONE)
         .show(|ui| {
             show_anchored_popover(ui, theme, |ui| {
                 theme::scope(ui, ThemeScope::Popover, |ui| {
-                    constrain_width(ui);
-                    add_contents(&mut Menu::new(ui, Some(popup_id)))
+                    constrain_width(ui, look.min_width);
+                    add_contents(&mut Menu::new(ui, Some(popup_id), look.min_width))
                 })
             })
             .inner

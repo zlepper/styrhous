@@ -8,12 +8,9 @@ use crate::cluster_connection_manager::{
 };
 use crate::terminal_launcher::{DebugImagePreset, DebugProfile, TerminalLaunchSettings};
 use crate::updater::UpdateStatus;
-use crate::worker::{
-    AddAksCluster, AddEksCluster, AddTailscaleCluster, LoadAwsAccounts,
-    LoadManagedClusterDiscovery, ScanEksClusters,
-};
+use crate::worker::{LoadAwsAccounts, LoadManagedClusterDiscovery, ScanEksClusters};
 use components::design::stroke;
-use components::design::theme::{Theme, ThemeExt};
+use components::design::theme::ThemeExt;
 use components::design::{radius, space, type_scale};
 use components::{
     Button, ButtonSize, ButtonVariant, Card, Combobox, FieldSize, FormField, Radio, RadioCard,
@@ -22,18 +19,15 @@ use components::{
 
 /// Room the settings blades leave under their form for the blade footer.
 const FOOTER_HEIGHT: f32 = components::BLADE_BODY_FOOTER + space::S16;
-const DEBUG_IMAGE_NAME_COLUMN_WIDTH: f32 = 170.0;
-const DEBUG_IMAGE_PROFILE_COLUMN_WIDTH: f32 = 170.0;
-const DISCOVERY_ROW_HEIGHT: f32 = 70.0;
-const DISCOVERY_TAGS_EXTRA_HEIGHT: f32 = 18.0;
-const DISCOVERY_COMPACT_ROW_HEIGHT: f32 = 54.0;
-const AWS_PROFILE_ROW_HEIGHT: f32 = 32.0;
-const DISCOVERY_NAME_COLUMN_WIDTH: f32 = 148.0;
-/// The flexible column: the blade body (720 less 24 points of padding a side)
-/// less the fixed columns.
-const DISCOVERY_METADATA_COLUMN_WIDTH: f32 = 269.0;
-const DISCOVERY_LOCATION_COLUMN_WIDTH: f32 = 94.0;
-const DISCOVERY_ACTION_COLUMN_WIDTH: f32 = 161.0;
+const DEBUG_IMAGE_NAME_COLUMN_WIDTH: f32 = 150.0;
+const DEBUG_IMAGE_PROFILE_COLUMN_WIDTH: f32 = 164.0;
+/// The custom launcher's command template field.
+/// The debug profile menu, wider than its select.
+const DEBUG_PROFILE_POPUP_WIDTH: f32 = 160.0;
+const TEMPLATE_INPUT_WIDTH: f32 = 596.0;
+const LICENSE_DEVICE_NAME_WIDTH: f32 = 320.0;
+const AWS_ACCOUNT_SELECT_WIDTH: f32 = 280.0;
+const AWS_PROFILE_SELECT_WIDTH: f32 = 200.0;
 
 mod contexts;
 mod debug_images;
@@ -46,10 +40,9 @@ mod navigation;
 mod templates;
 mod terminal;
 
-use contexts::ContextsSettingsBlade;
+pub(super) use contexts::ContextsSettingsBlade;
 use debug_images::*;
 pub(super) use discovery::ManagedClusterDiscoveryBlade;
-use discovery_table::*;
 pub(super) use licensing::LicenseSettingsBlade;
 pub(super) use namespace_selector::NamespaceSelectorSettingsBlade;
 pub(super) use navigation::SettingsHomeBlade;

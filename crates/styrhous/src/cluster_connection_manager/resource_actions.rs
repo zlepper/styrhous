@@ -114,8 +114,15 @@ pub(crate) async fn get_resource_yaml(
         namespace.as_deref().unwrap_or("cluster-wide scope")
     );
 
+    let started = std::time::Instant::now();
     let api = dynamic_api::create(&client, &api_resource, namespace.as_deref())?;
     let mut obj = api.get(&resource_name).await?;
+    info!(
+        "Got YAML for {}/{} {resource_name} after {:?}",
+        api_resource.group,
+        api_resource.name,
+        started.elapsed()
+    );
 
     let (yaml, resource_version, resource_uid) = resource_yaml::editor_yaml(&mut obj)?;
 

@@ -51,6 +51,7 @@ fn terminal_launch_settings_round_trip_through_eframe_storage() {
             image: "registry.example/debug-tools:v1".into(),
             profile: crate::terminal_launcher::DebugProfile::Sysadmin,
         }],
+        check_for_updates: false,
     };
     let mut storage = MemoryStorage::default();
 
@@ -92,6 +93,32 @@ fn namespace_selector_settings_round_trip_through_app_storage() {
 }
 
 #[test]
+fn the_namespace_grouping_choice_round_trips_through_app_storage() {
+    let pods = ApiResource {
+        group: "core".into(),
+        version: "v1".into(),
+        kind: "Pod".into(),
+        name: "pods".into(),
+        namespaced: true,
+    };
+    let key = table_preferences::ResourceTableKey::workspace(&pods);
+    let mut storage = MemoryStorage::default();
+    let mut app = MyEguiApp::<MockWorker>::default();
+    assert!(app.resource_table_preferences.groups_by_namespace(&key));
+    app.resource_table_preferences
+        .set_groups_by_namespace(&key, false);
+    eframe::App::save(&mut app, &mut storage);
+
+    let mut restored = MyEguiApp::<MockWorker>::default();
+    restored.load_persisted_state(Some(&storage));
+    assert!(
+        !restored
+            .resource_table_preferences
+            .groups_by_namespace(&key)
+    );
+}
+
+#[test]
 fn resource_table_preferences_round_trip_through_app_storage() {
     let resource = ApiResource {
         group: "core".into(),
@@ -107,6 +134,7 @@ fn resource_table_preferences_round_trip_through_app_storage() {
         default_width: 160.0,
         sortable: true,
         numeric: false,
+        default_hidden: false,
     }];
     let mut storage = MemoryStorage::default();
     let mut app = MyEguiApp::<MockWorker>::default();
@@ -198,6 +226,7 @@ fn current_dev_cluster() -> WorkerResultBox {
         name: "dev".into(),
         is_current: true,
         presentation: Default::default(),
+        server: None,
     }]))
 }
 
@@ -324,7 +353,7 @@ fn legacy_cluster_selections_without_a_selected_context_remain_loadable() {
 fn resource_navigation_expansion_round_trips_through_app_storage() {
     let expected = ResourceNavigationExpansion {
         expanded_nodes: BTreeSet::from([
-            "section:Apps & Containers".into(),
+            "section:Workloads".into(),
             "other-resources".into(),
             "other-resource-group:apps".into(),
         ]),
@@ -563,5 +592,59 @@ fn a_saved_namespace_that_no_longer_exists_is_watched_until_the_namespace_list_d
             .resource_cache
             .keys()
             .any(|(_, namespace)| namespace.as_deref() == Some("obsolete"))
+    );
+}
+
+#[test]
+fn pinned_kinds_round_trip_through_app_storage_in_their_order() {
+    let jobs = api_resource("batch", "v1", "Job", "jobs");
+    let pods = api_resource("", "v1", "Pod", "pods");
+    let mut app = MyEguiApp::<MockWorker>::default();
+    assert!(
+        app.ui_state.pinned_kinds.contains(&pods),
+        "Pods is pinned by default"
+    );
+    app.ui_state.pinned_kinds.set_pinned(&jobs, true);
+    app.ui_state.pinned_kinds.set_pinned(&pods, false);
+    // Pinning again keeps a single entry.
+    app.ui_state.pinned_kinds.set_pinned(&jobs, true);
+    let expected = app.ui_state.pinned_kinds.clone();
+    assert_eq!(
+        expected
+            .kinds
+            .iter()
+            .map(|kind| kind.name.as_str())
+            .collect::<Vec<_>>(),
+        ["deployments", "nodes", "releases", "jobs"]
+    );
+    let mut storage = MemoryStorage::default();
+
+    eframe::App::save(&mut app, &mut storage);
+
+    let mut restored = MyEguiApp::<MockWorker>::default();
+    restored.load_persisted_state(Some(&storage));
+
+    assert_eq!(restored.ui_state.pinned_kinds, expected);
+    assert!(!restored.ui_state.pinned_kinds.contains(&pods));
+}
+
+#[test]
+fn the_cluster_roster_round_trips_through_app_storage() {
+    let mut app = MyEguiApp::<MockWorker>::default();
+    app.ui_state.cluster_roster.toggle_pin("prod-eu");
+    app.ui_state.cluster_roster.toggle_pin("kind-kind");
+    app.ui_state.cluster_roster.visit("dev-eu");
+    app.ui_state.cluster_roster.note_nodes("dev-eu", 38);
+    let expected = app.ui_state.cluster_roster.clone();
+    let mut storage = MemoryStorage::default();
+
+    eframe::App::save(&mut app, &mut storage);
+
+    let mut restored = MyEguiApp::<MockWorker>::default();
+    restored.load_persisted_state(Some(&storage));
+    assert_eq!(restored.ui_state.cluster_roster, expected);
+    assert_eq!(
+        restored.ui_state.cluster_roster.pinned,
+        ["prod-eu", "kind-kind"]
     );
 }

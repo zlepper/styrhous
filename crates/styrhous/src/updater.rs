@@ -20,6 +20,8 @@ pub(crate) enum UpdateStatus {
     LocalBuild,
     /// The updater feature was omitted from this binary.
     NotIncluded,
+    /// The user turned automatic updates off in the application settings.
+    TurnedOff,
     /// An administrator or package manager owns upgrades.
     ExternallyManaged,
     /// The release binary is resolving the current release manifest.
@@ -46,6 +48,7 @@ impl UpdateStatus {
         match self {
             Self::LocalBuild => "Updates are disabled for local builds.".into(),
             Self::NotIncluded => "This build does not include automatic updates.".into(),
+            Self::TurnedOff => "Automatic updates are turned off.".into(),
             Self::ExternallyManaged => "Updates are managed externally.".into(),
             Self::Checking => "Checking for updates…".into(),
             Self::Downloading { version } => format!("Downloading version {version}…"),
@@ -75,10 +78,18 @@ impl Default for UpdaterService {
 }
 
 impl UpdaterService {
-    pub(crate) fn start() -> Self {
+    /// Start looking for an update, unless the user turned that off
+    /// (`check_for_updates`). A staged update is still installed at launch.
+    pub(crate) fn start(check_for_updates: bool) -> Self {
         #[cfg(feature = "self-updater")]
         {
             let (status, public_key) = updater_activation();
+            if !check_for_updates && public_key.is_some() {
+                return Self {
+                    status: UpdateStatus::TurnedOff,
+                    results: None,
+                };
+            }
             let Some(public_key) = public_key else {
                 return Self {
                     status,
@@ -101,7 +112,10 @@ impl UpdaterService {
         }
 
         #[cfg(not(feature = "self-updater"))]
-        Self::default()
+        {
+            let _ = check_for_updates;
+            Self::default()
+        }
     }
 
     pub(crate) fn poll(&mut self) {

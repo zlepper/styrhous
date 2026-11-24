@@ -46,7 +46,7 @@ pub(crate) struct ResourceDetailHistoryEntry {
 }
 
 impl ResourceDetailHistoryEntry {
-    pub(crate) fn record_pod_usage(&mut self, usage: PodUsage) {
+    pub(crate) fn record_pod_usage(&mut self, usage: PodUsage, now: time::OffsetDateTime) {
         self.pod_usage = Some(usage.clone());
         self.pod_usage_missing = false;
         if let Some(existing) = self
@@ -60,7 +60,7 @@ impl ResourceDetailHistoryEntry {
             self.pod_usage_history
                 .sort_by_key(|sample| sample.timestamp);
         }
-        self.prune_pod_usage_history(time::OffsetDateTime::now_utc());
+        self.prune_pod_usage_history(now);
         self.pod_usage_error = None;
     }
 
@@ -70,7 +70,7 @@ impl ResourceDetailHistoryEntry {
             .retain(|sample| sample.timestamp >= oldest);
     }
 
-    pub(crate) fn record_node_usage(&mut self, usage: NodeUsage) {
+    pub(crate) fn record_node_usage(&mut self, usage: NodeUsage, now: time::OffsetDateTime) {
         self.node_usage = Some(usage.clone());
         if let Some(existing) = self
             .node_usage_history
@@ -83,7 +83,7 @@ impl ResourceDetailHistoryEntry {
             self.node_usage_history
                 .sort_by_key(|sample| sample.timestamp);
         }
-        self.prune_node_usage_history(time::OffsetDateTime::now_utc());
+        self.prune_node_usage_history(now);
         self.node_usage_error = None;
     }
 

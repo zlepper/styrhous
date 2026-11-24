@@ -5,10 +5,11 @@ use super::*;
 #[test]
 fn resource_navigation_uses_the_persisted_expansion_state() {
     let mut state = oracle_resource_table_state();
-    state.set_resource_navigation_node_expanded("section:Apps & Containers", true);
+    state.set_resource_navigation_node_expanded("section:Workloads", true);
     let harness = application_harness_with_state(state);
 
-    harness.get_by_label("Pods");
+    // Jobs is a child of Workloads that is not pinned.
+    harness.get_by_label("Jobs");
 }
 
 #[test]
@@ -19,6 +20,7 @@ fn no_current_context_leaves_cluster_selection_manual() {
         name: "dev".into(),
         is_current: false,
         presentation: Default::default(),
+        server: None,
     }]));
 
     assert_eq!(harness.state().ui_state.selected_cluster, None);

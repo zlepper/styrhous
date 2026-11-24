@@ -3,33 +3,36 @@ use crate::worker::DetailStream;
 
 impl WorkerResult for crate::worker::ResourceDetailPodUsageUpdated {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let now = ui.clock.now();
         if let Some(entry) = ui
             .resource_detail_entry_mut(self.history_entry_id)
             .filter(|entry| entry.cluster_key == self.cluster_key)
         {
-            entry.record_pod_usage(self.usage);
+            entry.record_pod_usage(self.usage, now);
         }
     }
 }
 
 impl WorkerResult for crate::worker::ResourceDetailNodeUsageUpdated {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let now = ui.clock.now();
         if let Some(entry) = ui
             .resource_detail_entry_mut(self.history_entry_id)
             .filter(|entry| entry.cluster_key == self.cluster_key)
         {
-            entry.record_node_usage(self.usage);
+            entry.record_node_usage(self.usage, now);
         }
     }
 }
 
 impl WorkerResult for crate::worker::ResourceDetailNodeUsageFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let now = ui.clock.now();
         if let Some(entry) = ui
             .resource_detail_entry_mut(self.history_entry_id)
             .filter(|entry| entry.cluster_key == self.cluster_key)
         {
-            entry.prune_node_usage_history(time::OffsetDateTime::now_utc());
+            entry.prune_node_usage_history(now);
             entry.node_usage_error = Some(self.error);
         }
     }
@@ -37,11 +40,12 @@ impl WorkerResult for crate::worker::ResourceDetailNodeUsageFailed {
 
 impl WorkerResult for crate::worker::ResourceDetailNodeUsageMissing {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let now = ui.clock.now();
         if let Some(entry) = ui
             .resource_detail_entry_mut(self.history_entry_id)
             .filter(|entry| entry.cluster_key == self.cluster_key)
         {
-            entry.prune_node_usage_history(time::OffsetDateTime::now_utc());
+            entry.prune_node_usage_history(now);
             entry.node_usage = None;
             entry.node_usage_error = None;
         }
@@ -50,11 +54,12 @@ impl WorkerResult for crate::worker::ResourceDetailNodeUsageMissing {
 
 impl WorkerResult for crate::worker::ResourceDetailPodUsageFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let now = ui.clock.now();
         if let Some(entry) = ui
             .resource_detail_entry_mut(self.history_entry_id)
             .filter(|entry| entry.cluster_key == self.cluster_key)
         {
-            entry.prune_pod_usage_history(time::OffsetDateTime::now_utc());
+            entry.prune_pod_usage_history(now);
             entry.pod_usage_error = Some(self.error);
         }
     }
@@ -62,11 +67,12 @@ impl WorkerResult for crate::worker::ResourceDetailPodUsageFailed {
 
 impl WorkerResult for crate::worker::ResourceDetailPodUsageMissing {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        let now = ui.clock.now();
         if let Some(entry) = ui
             .resource_detail_entry_mut(self.history_entry_id)
             .filter(|entry| entry.cluster_key == self.cluster_key)
         {
-            entry.prune_pod_usage_history(time::OffsetDateTime::now_utc());
+            entry.prune_pod_usage_history(now);
             entry.pod_usage = None;
             entry.pod_usage_missing = true;
             entry.pod_usage_error = None;

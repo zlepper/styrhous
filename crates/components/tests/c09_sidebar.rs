@@ -415,3 +415,133 @@ fn sidebar_groups_report_expansion_and_long_labels_elide() {
         "the cut label shows its full text in a tooltip"
     );
 }
+
+/// `G` focuses the kind filter while nothing else has focus, and types into a
+/// focused field instead.
+#[test]
+fn kind_filter_takes_focus_on_g() {
+    use egui_kittest::Harness;
+    use egui_kittest::kittest::{NodeT, Queryable};
+
+    let mut harness = Harness::builder()
+        .with_size(vec2(320.0, 80.0))
+        .build_ui_state(
+            |ui, query: &mut String| {
+                ui.set_width(size::SIDEBAR);
+                let _ = kind_filter(ui, query, "Filter 54 kinds");
+            },
+            String::new(),
+        );
+    components::test_support::setup_egui(&mut harness);
+    harness.set_size(vec2(320.0, 80.0));
+    harness.run();
+    let focused = |harness: &Harness<'_, String>| {
+        harness
+            .get_by_label("Filter kinds")
+            .accesskit_node()
+            .is_focused()
+    };
+    assert!(!focused(&harness));
+
+    harness.key_press(egui::Key::G);
+    harness.run();
+    assert!(focused(&harness), "G focuses the filter");
+    assert!(harness.state().is_empty(), "the shortcut is not typed");
+
+    harness.event(egui::Event::Text("g".into()));
+    harness.run();
+    assert_eq!(harness.state(), "g", "a focused filter takes the letter");
+}
+
+/// A lamp marks an action item that needs attention (Settings with an update
+/// waiting), on the top-right of its icon.
+#[test]
+fn side_item_lamp_marks_its_icon() {
+    use components::test_support::UiHarnessSnapshot;
+    use egui_kittest::Harness;
+
+    let mut harness = Harness::builder()
+        .with_size(vec2(size::SIDEBAR, 60.0))
+        .build_ui(|ui| {
+            components::design::theme::scope(
+                ui,
+                components::design::theme::ThemeScope::Sidebar,
+                |ui| {
+                    ui.horizontal(|ui| {
+                        let _ = side_footer(
+                            ui,
+                            SideItem::action(Icon::Bell, "Notifications"),
+                            SideItem::action(Icon::Cog6Tooth, "Settings").lamp(Tone::Warning),
+                        );
+                    });
+                },
+            );
+        });
+    components::test_support::setup_egui(&mut harness);
+    harness.set_size(vec2(size::SIDEBAR, 60.0));
+    harness.run();
+    harness.ui_harness("c09_sidebar/side_item_lamp");
+}
+
+/// The cluster card opens its menu of clusters below it; choosing one
+/// closes it.
+#[test]
+fn menu_below_a_trigger_opens_and_closes_on_click() {
+    use components::MoreButton;
+    use components::test_support::UiHarnessSnapshot;
+    use egui_kittest::Harness;
+    use egui_kittest::kittest::{NodeT, Queryable};
+
+    let mut harness = Harness::builder()
+        .with_size(vec2(320.0, 220.0))
+        .build_ui_state(
+            |ui, chosen: &mut Option<&'static str>| {
+                ui.set_width(size::SIDEBAR);
+                let card = ClusterCard::new("kind-kind", "2 OF 2", "KK", 1, Tone::Success).show(ui);
+                MoreButton::show_menu_below(&card, "Clusters", |menu| {
+                    for cluster in ["dev-eu", "kind-kind"] {
+                        if menu
+                            .item(components::MenuItem::new(cluster).icon(Icon::ServerStack))
+                            .clicked()
+                        {
+                            *chosen = Some(cluster);
+                        }
+                    }
+                });
+            },
+            None,
+        );
+    components::test_support::setup_egui(&mut harness);
+    harness.set_size(vec2(320.0, 220.0));
+    harness.run();
+    let expanded = |harness: &Harness<'_, Option<&'static str>>| {
+        harness
+            .get_by_label("Switch cluster")
+            .accesskit_node()
+            .data()
+            .is_expanded()
+    };
+    assert_eq!(expanded(&harness), Some(false));
+
+    harness.get_by_label("Switch cluster").click();
+    harness.run();
+    assert_eq!(expanded(&harness), Some(true));
+    let card = harness.get_by_label("Switch cluster").rect();
+    let first = harness
+        .get_by_role_and_label(egui::accesskit::Role::MenuItem, "dev-eu")
+        .rect();
+    assert!(
+        first.top() > card.bottom(),
+        "the menu opens below its trigger"
+    );
+    harness.event(egui::Event::PointerGone);
+    harness.run();
+    harness.ui_harness("c09_sidebar/menu_below_cluster_card");
+
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::MenuItem, "dev-eu")
+        .click();
+    harness.run();
+    assert_eq!(*harness.state(), Some("dev-eu"));
+    assert_eq!(expanded(&harness), Some(false));
+}

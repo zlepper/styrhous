@@ -7,7 +7,7 @@ use egui::{Popup, PopupCloseBehavior, RectAlign, Response, SetOpenCommand, Ui};
 use crate::design::size;
 use crate::design::theme::ThemeExt;
 use crate::interaction::ControlState;
-use crate::menu::{self, Menu};
+use crate::menu::{self, Menu, MenuLook};
 use crate::{ButtonSize, ButtonVariant, icons};
 
 /// A compact action-menu trigger: a small ghost icon button (C02 "Ghost
@@ -16,6 +16,7 @@ use crate::{ButtonSize, ButtonVariant, icons};
 pub struct MoreButton {
     accessibility_label: String,
     forced_state: Option<ControlState>,
+    look: MenuLook,
 }
 
 impl MoreButton {
@@ -24,7 +25,14 @@ impl MoreButton {
         Self {
             accessibility_label: accessibility_label.into(),
             forced_state: None,
+            look: MenuLook::default(),
         }
+    }
+
+    /// Open a menu of this `look` ([`MenuLook::ROW`] for a table row).
+    pub fn look(mut self, look: MenuLook) -> Self {
+        self.look = look;
+        self
     }
 
     /// Paint the trigger in `state` regardless of the pointer (boards and
@@ -55,15 +63,53 @@ impl MoreButton {
 
         let popup = Popup::menu(&trigger)
             .align(RectAlign::BOTTOM_END)
+            .close_behavior(PopupCloseBehavior::CloseOnClickOutside);
+        menu::show_popup(
+            popup,
+            &ui.tokens(),
+            &accessibility_label,
+            self.look,
+            add_contents,
+        );
+        trigger
+    }
+
+    /// Show an action menu labelled `label` under `trigger`, opened and
+    /// closed by clicking it (the sidebar's cluster card).
+    pub fn show_menu_below(
+        trigger: &Response,
+        label: &str,
+        add_contents: impl FnOnce(&mut Menu<'_>),
+    ) {
+        let open = Popup::is_id_open(&trigger.ctx, Popup::default_response_id(trigger));
+        trigger
+            .ctx
+            .accesskit_node_builder(trigger.id, |node| node.set_expanded(open));
+        let popup = Popup::menu(trigger)
+            .align(RectAlign::BOTTOM_START)
             .gap(size::POPOVER_GAP)
             .close_behavior(PopupCloseBehavior::CloseOnClickOutside);
-        menu::show_popup(popup, &ui.tokens(), &accessibility_label, add_contents);
-        trigger
+        menu::show_popup(
+            popup,
+            &trigger.ctx.tokens(),
+            label,
+            MenuLook::default(),
+            add_contents,
+        );
     }
 
     /// Show the same action menu at the pointer when `response` is
     /// right-clicked (a row's context menu).
     pub fn show_context_menu(response: &Response, add_contents: impl FnOnce(&mut Menu<'_>)) {
+        Self::show_context_menu_with(response, MenuLook::default(), add_contents);
+    }
+
+    /// [`Self::show_context_menu`] of a given `look`.
+    pub fn show_context_menu_with(
+        response: &Response,
+        look: MenuLook,
+        add_contents: impl FnOnce(&mut Menu<'_>),
+    ) {
         let set_open = if response.secondary_clicked() {
             Some(SetOpenCommand::Bool(true))
         } else if response.clicked() {
@@ -73,9 +119,8 @@ impl MoreButton {
         };
         let popup = Popup::context_menu(response)
             .open_memory(set_open)
-            .gap(size::POPOVER_GAP)
             .close_behavior(PopupCloseBehavior::CloseOnClickOutside);
-        menu::show_popup(popup, &response.ctx.tokens(), "Context", add_contents);
+        menu::show_popup(popup, &response.ctx.tokens(), "Context", look, add_contents);
     }
 }
 

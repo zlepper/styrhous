@@ -122,11 +122,11 @@ fn force_delete_failure_is_recorded_in_operation_history() {
         .last()
         .expect("force deletion failure is recorded");
     assert_eq!(entry.title, "Couldn’t remove finalizers from ConfigMap");
-    assert_eq!(entry.target, "settings • kube-system");
+    assert_eq!(entry.target, "settings · kube-system");
 }
 
 #[test]
-fn resource_navigation_selects_primary_curated_gateway_and_other_resources() {
+fn sidebar_selects_pinned_grouped_standalone_and_custom_kinds() {
     let mut cluster = fixture_cluster(1, "dev");
     cluster.selected_namespaces = SelectedNamespaces::from(["default"]);
     cluster.resource_navigation = build_resource_navigation(vec![
@@ -147,7 +147,7 @@ fn resource_navigation_selects_primary_curated_gateway_and_other_resources() {
     };
     harness.run();
 
-    harness.get_by_label("Nodes").click_accesskit();
+    harness.get_by_label("Nodes").click();
     harness.run();
     assert_eq!(
         harness.state().ui_state.clusters[&1]
@@ -157,9 +157,9 @@ fn resource_navigation_selects_primary_curated_gateway_and_other_resources() {
         Some("nodes")
     );
 
-    harness.get_by_label("Namespaces").click_accesskit();
+    harness.get_by_label("Namespaces").click();
     harness.run();
-    harness.get_by_label("Events").click_accesskit();
+    harness.get_by_label("Events").click();
     harness.run();
     assert_eq!(
         harness.state().ui_state.clusters[&1]
@@ -169,9 +169,8 @@ fn resource_navigation_selects_primary_curated_gateway_and_other_resources() {
         Some("events")
     );
 
-    harness.get_by_label("Apps & Containers").click_accesskit();
-    harness.run();
-    harness.get_by_label("Pods").click_accesskit();
+    // Pods is pinned, so it shows without opening Workloads.
+    harness.get_by_label("Pods").click();
     harness.run();
     assert_eq!(
         harness.state().ui_state.clusters[&1]
@@ -181,9 +180,8 @@ fn resource_navigation_selects_primary_curated_gateway_and_other_resources() {
         Some("pods")
     );
 
-    harness.get_by_label("Gateway API").click_accesskit();
-    harness.run();
-    harness.get_by_label("HTTP Routes").click_accesskit();
+    click_label(&mut harness, "Network");
+    harness.get_by_label("HTTP Routes").click();
     harness.run();
     assert_eq!(
         harness.state().ui_state.clusters[&1]
@@ -193,11 +191,8 @@ fn resource_navigation_selects_primary_curated_gateway_and_other_resources() {
         Some("httproutes")
     );
 
-    harness.get_by_label("apps").click_accesskit();
-    harness.run();
-    harness
-        .get_by_label("Controller Revisions")
-        .click_accesskit();
+    click_label(&mut harness, "apps");
+    harness.get_by_label("Controller Revisions").click();
     harness.run();
 
     let app = harness.state();
@@ -260,11 +255,13 @@ fn test_ui_flow() {
                 name: "dev".into(),
                 is_current: true,
                 presentation: Default::default(),
+                server: None,
             },
             Cluster {
                 name: "prod".into(),
                 is_current: false,
                 presentation: Default::default(),
+                server: None,
             },
         ])) as WorkerResultBox);
     harness.run_steps(1);
@@ -333,9 +330,9 @@ fn test_ui_flow() {
     harness.run();
 
     select_namespace(&mut harness, "default");
-    harness.get_by_label("Apps & Containers").click_accesskit();
+    click_label(&mut harness, "Workloads");
     harness.run();
-    harness.get_by_label("Pods").click_accesskit();
+    harness.get_by_label("Pods").click();
     harness.run_steps(1);
     harness.run_steps(1);
 
@@ -817,6 +814,7 @@ fn a_restored_table_shows_rows_before_namespaces_and_discovery_arrive() {
         name: "dev".into(),
         is_current: true,
         presentation: Default::default(),
+        server: None,
     }]));
     worker.enqueue_result(KubernetesClusterConnectionCreated { cluster_key: 1 });
     // The restored watch across every namespace answers before anything else.

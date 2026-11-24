@@ -1,4 +1,8 @@
-mod cluster_rail;
+mod blade_text;
+pub(crate) mod clock;
+mod cluster_landing;
+mod cluster_roster;
+mod cluster_switcher;
 mod dialogs;
 mod global_blade;
 mod helm_releases;
@@ -15,7 +19,6 @@ mod persistence;
 mod preference_table;
 mod resource_actions;
 mod resource_detail;
-mod resource_navigation;
 mod resource_owner;
 mod resource_table_cache;
 #[cfg(any(test, feature = "benchmarks"))]
@@ -24,6 +27,7 @@ pub mod resource_table_profile;
 mod resource_table_settings;
 mod save_file_dialog;
 mod settings;
+mod sidebar;
 pub(crate) mod state;
 mod table_preferences;
 mod theme_file;
@@ -40,18 +44,19 @@ use crate::terminal_launcher::{
     ShellRequest, SystemTerminalLauncher, TerminalLaunchSettings, TerminalLauncher,
 };
 use crate::worker::{Worker, WorkerTrait};
+use components::design::size;
 use components::design::theme::{self, configure_default};
 use components::scroll;
 use dialogs::{
     show_bulk_delete_confirmation, show_cron_job_run_confirmation, show_delete_confirmation,
     show_deployment_restart_confirmation, show_deployment_rollback_dialog,
     show_force_delete_confirmation, show_helm_rollback_confirmation, show_log_source_confirmation,
-    show_scale_dialog, show_terminal_launch_error,
+    show_node_drain_confirmation, show_scale_dialog, show_terminal_launch_error,
 };
 use namespace_selector::NamespaceSelectorSettings;
 use save_file_dialog::{SaveFileDialog, SystemSaveFileDialog};
 use state::{
-    LogDisplayOptions, PersistedApiDiscovery, PersistedClusterSelections,
+    LogDisplayOptions, PersistedApiDiscovery, PersistedClusterSelections, PinnedKinds,
     ResourceNavigationExpansion, UiState,
 };
 use table_preferences::PersistedResourceTablePreferences;
@@ -65,6 +70,8 @@ const TERMINAL_LAUNCH_SETTINGS_STORAGE_KEY: &str = "terminal_launch_settings";
 const RESOURCE_TABLE_PREFERENCES_STORAGE_KEY: &str = "resource_table_preferences";
 const NAMESPACE_SELECTOR_SETTINGS_STORAGE_KEY: &str = "namespace_selector_settings";
 const LICENSING_SETTINGS_STORAGE_KEY: &str = "licensing_settings";
+const PINNED_KINDS_STORAGE_KEY: &str = "pinned_kinds";
+const CLUSTER_ROSTER_STORAGE_KEY: &str = "cluster_roster";
 
 pub struct MyEguiApp<W: WorkerTrait = Worker, L: TerminalLauncher = SystemTerminalLauncher> {
     worker: W,
@@ -105,7 +112,18 @@ impl<W: WorkerTrait, L: TerminalLauncher> Default for MyEguiApp<W, L> {
 
 impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        Self::new_with_updater(cc, crate::updater::UpdaterService::start())
+        // The updater starts before the rest of the stored state is read, so it
+        // needs the stored choice to look for updates.
+        let check_for_updates = cc
+            .storage
+            .and_then(|storage| {
+                eframe::get_value::<TerminalLaunchSettings>(
+                    storage,
+                    TERMINAL_LAUNCH_SETTINGS_STORAGE_KEY,
+                )
+            })
+            .is_none_or(|settings| settings.check_for_updates);
+        Self::new_with_updater(cc, crate::updater::UpdaterService::start(check_for_updates))
     }
 
     #[cfg(test)]
@@ -160,6 +178,8 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
             licensing: LicensingService::start(licensing_settings, cc.egui_ctx.clone()),
             theme_file: ThemeFileWatcher::in_data_dir(crate::APP_NAME),
         };
+        app.ui_state.kubeconfig_source =
+            crate::cluster_connection_manager::kubeconfig::kubeconfig_source_label();
         app.load_persisted_state(cc.storage);
         app
     }
@@ -196,6 +216,17 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
                 eframe::get_value::<ResourceNavigationExpansion>(
                     storage,
                     RESOURCE_NAVIGATION_EXPANSION_STORAGE_KEY,
+                )
+            })
+            .unwrap_or_default();
+        self.ui_state.pinned_kinds = storage
+            .and_then(|storage| eframe::get_value::<PinnedKinds>(storage, PINNED_KINDS_STORAGE_KEY))
+            .unwrap_or_default();
+        self.ui_state.cluster_roster = storage
+            .and_then(|storage| {
+                eframe::get_value::<cluster_roster::ClusterRoster>(
+                    storage,
+                    CLUSTER_ROSTER_STORAGE_KEY,
                 )
             })
             .unwrap_or_default();
@@ -303,21 +334,32 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
         let mut shell_requests = Vec::<ShellRequest>::new();
         let debug_image_presets = self.terminal_launch_settings.debug_image_presets.clone();
 
-        cluster_rail::show(
-            ui,
-            &mut self.ui_state,
-            &mut commands_to_send,
-            &self.terminal_launch_settings,
-            self.updater.status(),
-            self.licensing.status(),
-        );
-        show_license_banner(
+        clock::publish(&ctx, self.ui_state.clock);
+        let banner = show_license_banner(
             ui,
             &mut self.ui_state,
             &mut commands_to_send,
             &self.licensing,
         );
-        let clicked_api_resource = resource_navigation::show(ui, &mut self.ui_state);
+        self.ui_state
+            .global_blades
+            .set_top_inset(if banner { size::BANNER } else { 0.0 });
+        cluster_switcher::note_known_nodes(&mut self.ui_state);
+        let other_modal = self.ui_state.cluster_switcher.is_none()
+            && ctx.memory(|memory| memory.top_modal_layer().is_some());
+        if !other_modal
+            && ctx.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::K))
+        {
+            self.ui_state.toggle_cluster_switcher();
+        }
+        cluster_landing::quick_switch(&ctx, &mut self.ui_state, &mut commands_to_send);
+        sidebar::show(
+            ui,
+            &mut self.ui_state,
+            &mut commands_to_send,
+            self.updater.status(),
+            self.licensing.status(),
+        );
         yaml_editor::show(&ctx, &mut self.ui_state, &mut commands_to_send);
         workspace::show(
             ui,
@@ -360,6 +402,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
         show_force_delete_confirmation(&ctx, &mut self.ui_state, &mut commands_to_send);
         show_deployment_restart_confirmation(&ctx, &mut self.ui_state, &mut commands_to_send);
         show_cron_job_run_confirmation(&ctx, &mut self.ui_state, &mut commands_to_send);
+        show_node_drain_confirmation(&ctx, &mut self.ui_state, &mut commands_to_send);
         show_helm_rollback_confirmation(&ctx, &mut self.ui_state, &mut commands_to_send);
         show_deployment_rollback_dialog(&ctx, &mut self.ui_state, &mut commands_to_send);
         show_scale_dialog(&ctx, &mut self.ui_state, &mut commands_to_send);
@@ -370,12 +413,7 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             &mut commands_to_send,
         );
         operation_toasts::show(&ctx, &mut self.ui_state);
-        if let (Some(cluster_key), Some(api_resource)) =
-            (self.ui_state.selected_cluster, clicked_api_resource)
-        {
-            self.ui_state
-                .select_api_resource(cluster_key, api_resource, &mut commands_to_send);
-        }
+        cluster_switcher::show(&ctx, &mut self.ui_state, &mut commands_to_send);
 
         for command in commands_to_send {
             self.worker.send_command(command);
@@ -405,6 +443,16 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             storage,
             RESOURCE_NAVIGATION_EXPANSION_STORAGE_KEY,
             &self.ui_state.resource_navigation_expansion,
+        );
+        eframe::set_value(
+            storage,
+            PINNED_KINDS_STORAGE_KEY,
+            &self.ui_state.pinned_kinds,
+        );
+        eframe::set_value(
+            storage,
+            CLUSTER_ROSTER_STORAGE_KEY,
+            &self.ui_state.cluster_roster,
         );
         eframe::set_value(
             storage,
@@ -440,19 +488,33 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
     }
 }
 
+/// The licence warning (A11) across the window's top until it is dismissed
+/// for the session (it returns when the warning changes). Returns whether it
+/// shows.
 fn show_license_banner(
     ui: &mut egui::Ui,
     ui_state: &mut UiState,
     commands_to_send: &mut Vec<crate::worker::WorkerCommandBox>,
     licensing: &LicensingService,
-) {
+) -> bool {
     if !licensing.status().shows_warning() {
-        return;
+        // A later warning with the same text is a new one; a check in progress
+        // (which every refresh passes through) is neither.
+        if !matches!(
+            licensing.status(),
+            crate::licensing::LicenseStatus::Checking
+        ) {
+            ui_state.dismissed_license_warning = None;
+        }
+        return false;
     }
     let summary = licensing.status().summary();
-    let mut open = false;
+    if ui_state.dismissed_license_warning.as_ref() == Some(&summary) {
+        return false;
+    }
+    let mut response = components::BannerResponse::default();
     egui::Panel::top("license-status-banner")
-        .exact_size(components::design::size::BANNER)
+        .exact_size(size::BANNER)
         .frame(egui::Frame::NONE)
         .show(ui, |ui| {
             // A licence that no longer works outranks one that needs attention soon.
@@ -463,14 +525,18 @@ fn show_license_banner(
                 }
                 _ => components::design::theme::Tone::Warning,
             };
-            open = components::Banner::new(tone, &summary)
+            response = components::Banner::new(tone, &summary)
                 .action("Manage license")
-                .show(ui)
-                .action;
+                .dismissible(true)
+                .show(ui);
         });
-    if open {
+    if response.action {
         ui_state.open_license_settings(commands_to_send);
     }
+    if response.dismissed {
+        ui_state.dismissed_license_warning = Some(summary);
+    }
+    true
 }
 
 #[cfg(test)]

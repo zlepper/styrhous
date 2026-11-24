@@ -191,6 +191,7 @@ fn debug_image_preset_images_reject_surrounding_whitespace() {
             image: " ubuntu ".into(),
             profile: DebugProfile::General,
         }],
+        ..Default::default()
     };
 
     assert_eq!(
@@ -601,4 +602,13 @@ mod windows_cmd_round_trip {
             ]
         );
     }
+}
+
+#[test]
+fn settings_saved_before_the_update_toggle_keep_checking_for_updates() {
+    let settings: TerminalLaunchSettings =
+        serde_json::from_str(r#"{"custom_template":null}"#).expect("old settings still load");
+
+    assert!(settings.check_for_updates);
+    assert_eq!(settings, TerminalLaunchSettings::default());
 }

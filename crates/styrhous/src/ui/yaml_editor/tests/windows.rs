@@ -10,21 +10,18 @@ fn yaml_editor_clean_snapshot() {
 
 #[test]
 fn yaml_editor_search_interaction_snapshot() {
-    let mut harness = editor_harness(editor("kind: ConfigMap\nmetadata:\n  name: map-config"));
+    // Local validation arms a real-time server-validation debounce on the first frame.
+    // The harness advances simulated time, so under load the debounce can elapse mid-test,
+    // run extra frames, and move the snapshot past the transient scroll fade after a match jump.
+    let mut search_editor = editor("kind: ConfigMap\nmetadata:\n  name: map-config");
+    search_editor.validation_revision = 1;
+    let mut harness = editor_harness(search_editor);
 
     harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::F);
     harness.step();
     harness.event(egui::Event::Text("map".into()));
     harness.step();
     harness.key_press(egui::Key::Enter);
-
-    // Keep this interaction snapshot focused on find results rather than
-    // allowing the asynchronous server-validation footer to race the final
-    // rendered frame.
-    let editor = &mut harness.state_mut().editor;
-    editor.validation_revision = editor.validation_revision.saturating_add(1);
-    editor.validation_due = None;
-    editor.server_validation = ValidationState::Idle;
     harness.step();
 
     assert_eq!(harness.state().editor.search.query, "map");

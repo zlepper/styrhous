@@ -105,7 +105,7 @@ fn pod_resource_table_shows_per_container_status_indicators() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = state;
     harness.run();
-    harness.get_by_label("Apps & Containers").click_accesskit();
+    click_label(&mut harness, "Workloads");
     harness.run();
     harness.ui_harness("resource_tables/pod_resource_table_shows_per_container_status_indicators/pod_resource_table_container_indicators");
 
@@ -153,7 +153,7 @@ fn resource_table_snapshot_keeps_namespace_column_readable() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = state;
     harness.run();
-    harness.get_by_label("Apps & Containers").click_accesskit();
+    click_label(&mut harness, "Workloads");
     harness.run();
 
     harness.ui_harness("resource_tables/resource_table_snapshot_keeps_namespace_column_readable/resource_table_multiple_namespaces");
@@ -196,9 +196,9 @@ fn deployment_resource_table_snapshot_uses_typed_columns() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = state;
     harness.run();
-    harness.get_by_label("Apps & Containers").click_accesskit();
+    click_label(&mut harness, "Workloads");
     harness.run();
-    harness.get_by_label("Deployments").click_accesskit();
+    harness.get_by_label("Deployments").click();
     harness.run();
 
     harness.ui_harness("resource_tables/deployment_resource_table_snapshot_uses_typed_columns/deployment_resource_table_typed_columns");
@@ -236,9 +236,9 @@ fn deployment_restart_action_opens_a_confirmation_and_sends_a_worker_command() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = state;
     harness.run();
-    harness.get_by_label("Apps & Containers").click_accesskit();
+    click_label(&mut harness, "Workloads");
     harness.run();
-    harness.get_by_label("Deployments").click_accesskit();
+    harness.get_by_label("Deployments").click();
     harness.run();
     harness
         .get_by_label("More actions for coredns")
@@ -294,7 +294,7 @@ fn cron_job_run_action_opens_a_confirmation_and_sends_a_worker_command() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = state;
     harness.run();
-    harness.get_by_label("Apps & Containers").click();
+    harness.get_by_label("Workloads").click();
     harness.run();
     harness.get_by_label("Cron Jobs").click();
     harness.run();
@@ -508,19 +508,20 @@ fn overlapping_cron_job_runs_started_from_the_ui_keep_the_earlier_failure_visibl
         vec![
             (
                 "CronJob started",
-                "weekly-cleanup • kube-system",
+                "weekly-cleanup · kube-system",
                 Some("Created Job weekly-cleanup-manual-abc12")
             ),
             (
                 "Couldn’t run CronJob",
-                "nightly-report • kube-system",
+                "nightly-report · kube-system",
                 Some("Forbidden: cannot create jobs")
             ),
         ]
     );
     // Both failures (this cluster and the other one) stay visible as toasts.
     assert_eq!(harness.get_all_by_label("Couldn’t run CronJob").count(), 2);
-    harness.get_by_label("nightly-report • kube-system");
+    // A failure's toast says why.
+    harness.get_by_label("Forbidden: cannot create jobs");
 }
 
 #[test]
@@ -663,14 +664,8 @@ fn scalable_resource_action_fetches_and_updates_the_scale() {
     let mut snapshot_harness = application_harness::<MockWorker>();
     snapshot_harness.state_mut().ui_state = setup_state();
     snapshot_harness.run();
-    snapshot_harness
-        .get_by_label("Apps & Containers")
-        .click_accesskit();
-    snapshot_harness.run();
-    snapshot_harness
-        .get_by_label("Deployments")
-        .click_accesskit();
-    snapshot_harness.run();
+    click_label(&mut snapshot_harness, "Workloads");
+    click_label(&mut snapshot_harness, "Deployments");
     snapshot_harness
         .state_mut()
         .ui_state
@@ -690,7 +685,7 @@ fn scalable_resource_action_fetches_and_updates_the_scale() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = setup_state();
     harness.run();
-    harness.get_by_label("Apps & Containers").click();
+    harness.get_by_label("Workloads").click();
     harness.run();
     harness.get_by_label("Deployments").click();
     harness.run();
@@ -819,25 +814,25 @@ fn navigator_groups_open_and_close() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = oracle_resource_table_state();
     harness.run();
-    assert!(harness.query_by_label("Deployments").is_none());
+    assert!(harness.query_by_label("Jobs").is_none());
 
-    harness.get_by_label("Apps & Containers").click();
+    harness.get_by_label("Workloads").click();
     harness.run();
-    harness.get_by_label("Deployments");
+    harness.get_by_label("Jobs");
     assert!(
         harness
             .state()
             .ui_state
-            .resource_navigation_node_is_expanded("section:Apps & Containers")
+            .resource_navigation_node_is_expanded("section:Workloads")
     );
 
-    harness.get_by_label("Apps & Containers").click();
+    harness.get_by_label("Workloads").click();
     harness.run();
-    assert!(harness.query_by_label("Deployments").is_none());
+    assert!(harness.query_by_label("Jobs").is_none());
     assert!(
         !harness
             .state()
             .ui_state
-            .resource_navigation_node_is_expanded("section:Apps & Containers")
+            .resource_navigation_node_is_expanded("section:Workloads")
     );
 }

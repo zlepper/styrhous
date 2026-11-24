@@ -23,6 +23,7 @@ fn prepared_table_uses_production_filter_sort_and_metadata_paths() {
         &deployment,
         &[],
         false,
+        false,
         &mut PersistedResourceTablePreferences::default(),
     );
     let mut cache = ResourceTableCache::default();
@@ -41,6 +42,7 @@ fn prepared_table_uses_production_filter_sort_and_metadata_paths() {
     let fuzzy_search = ResourceSearchState {
         query: "api".to_owned(),
         regex_mode: false,
+        ..Default::default()
     };
     assert_eq!(
         prepared_names(
@@ -105,6 +107,7 @@ fn prepared_table_uses_production_filter_sort_and_metadata_paths() {
     let invalid_regex = ResourceSearchState {
         query: "[".to_owned(),
         regex_mode: true,
+        ..Default::default()
     };
     assert!(
         prepared_names(

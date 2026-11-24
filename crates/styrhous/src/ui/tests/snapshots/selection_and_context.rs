@@ -7,7 +7,7 @@ fn resource_table_more_actions_snapshot() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = oracle_resource_table_state();
     harness.run();
-    harness.get_by_label("Apps & Containers").click_accesskit();
+    click_label(&mut harness, "Workloads");
     harness.run();
     harness
         .get_by_label("More actions for coredns-66bc5c9577-ffw2s")
@@ -25,7 +25,7 @@ fn pod_resource_table_multi_container_logs_menu_snapshot() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = state;
     harness.run();
-    harness.get_by_label("Apps & Containers").click();
+    harness.get_by_label("Workloads").click();
     harness.run();
     harness
         .get_by_label(&format!("More actions for {pod_name}"))
@@ -52,7 +52,7 @@ fn pod_resource_table_multi_container_logs_context_submenu_snapshot() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = state;
     harness.run();
-    harness.get_by_label("Apps & Containers").click();
+    harness.get_by_label("Workloads").click();
     harness.run();
 
     let row_position = harness
@@ -245,13 +245,17 @@ fn bulk_delete_keeps_failed_resources_selected_and_reports_them_together() {
     let history = &harness.state().ui_state.clusters[&1].operation_history;
     let summaries = history
         .iter()
-        .filter(|entry| entry.title == "Bulk delete completed with 1 failure")
+        .filter(|entry| entry.title == "Bulk delete finished with 1 failure")
         .collect::<Vec<_>>();
     assert_eq!(summaries.len(), 1);
-    assert_eq!(summaries[0].target, "2 Pods");
+    assert_eq!(summaries[0].target, "2 Pods · default");
+    assert_eq!(
+        summaries[0].outcome,
+        crate::ui::state::OperationOutcome::Warning
+    );
     assert_eq!(
         summaries[0].details.as_deref(),
-        Some("default/failed-pod: forbidden")
+        Some("1 deleted, 1 failed: forbidden")
     );
 }
 
@@ -301,7 +305,7 @@ fn bulk_delete_success_reports_one_summary_after_every_target_settles() {
     let history = &harness.state().ui_state.clusters[&1].operation_history;
     assert_eq!(history.len(), 1);
     assert_eq!(history[0].title, "Deleted 2 Pods");
-    assert_eq!(history[0].target, "2 Pods");
+    assert_eq!(history[0].target, "2 Pods · default");
     assert!(history[0].details.is_none());
 }
 
@@ -310,7 +314,7 @@ fn resource_table_row_context_menu_snapshot() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = oracle_resource_table_state();
     harness.run();
-    harness.get_by_label("Apps & Containers").click_accesskit();
+    click_label(&mut harness, "Workloads");
     harness.run();
 
     let resource_name_rect = harness
@@ -332,7 +336,7 @@ fn resource_table_row_context_menu_opens_when_right_clicking_resource_text() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = oracle_resource_table_state();
     harness.run();
-    harness.get_by_label("Apps & Containers").click_accesskit();
+    click_label(&mut harness, "Workloads");
     harness.run();
 
     let text_position = harness
@@ -350,7 +354,7 @@ fn context_menu_action_does_not_activate_the_overlapped_resource_button() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = oracle_resource_table_state();
     harness.run();
-    harness.get_by_label("Apps & Containers").click_accesskit();
+    click_label(&mut harness, "Workloads");
     harness.run();
 
     let resource_name = "coredns-66bc5c9577-ffw2s";
@@ -396,7 +400,7 @@ fn the_bulk_bar_opens_the_selected_pods_logs_interleaved_and_clears_the_selectio
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = state;
     harness.run();
-    click_label(&mut harness, "Apps & Containers");
+    click_label(&mut harness, "Workloads");
 
     click_label(&mut harness, "Select row 1");
     click_label(&mut harness, "Select row 2");

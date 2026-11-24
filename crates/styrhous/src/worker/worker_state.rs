@@ -17,6 +17,10 @@ pub(crate) struct WorkerState {
     pub(super) pod_metrics_watches: SharedTaskRegistry<(i32, String)>,
     /// Cluster-scoped Metrics API pollers used only while Nodes are visible.
     pub(super) node_metrics_watches: SharedTaskRegistry<i32>,
+    /// The Pod-per-Node count watch, used only while Nodes are visible.
+    pub(super) node_pod_count_watches: SharedTaskRegistry<i32>,
+    /// Running Node drains, by cluster and operation id.
+    pub(super) node_drains: SharedTaskRegistry<(i32, u64)>,
     /// Native log windows each own one cancellable follow stream.
     pub(super) log_streams: SharedTaskRegistry<(i32, u64)>,
     /// Each connected cluster gets its own bounded pool for initial list/watch
@@ -39,6 +43,8 @@ impl WorkerState {
             detail_watches: Arc::new(TaskRegistry::default()),
             pod_metrics_watches: Arc::new(TaskRegistry::default()),
             node_metrics_watches: Arc::new(TaskRegistry::default()),
+            node_pod_count_watches: Arc::new(TaskRegistry::default()),
+            node_drains: Arc::new(TaskRegistry::default()),
             log_streams: Arc::new(TaskRegistry::default()),
             watch_initialization_slots: Arc::new(Mutex::new(HashMap::new())),
             log_store_appender,
@@ -115,6 +121,10 @@ impl WorkerState {
         self.node_metrics_watches
             .abort_matching(|watch_cluster_key| *watch_cluster_key == cluster_key)
             .await;
+        self.node_pod_count_watches.abort(&cluster_key).await;
+        self.node_drains
+            .abort_matching(|(drain_cluster_key, _)| *drain_cluster_key == cluster_key)
+            .await;
         self.log_streams
             .abort_matching(|(watch_cluster_key, _)| *watch_cluster_key == cluster_key)
             .await;
@@ -130,6 +140,8 @@ impl WorkerState {
         self.detail_watches.abort_all().await;
         self.pod_metrics_watches.abort_all().await;
         self.node_metrics_watches.abort_all().await;
+        self.node_pod_count_watches.abort_all().await;
+        self.node_drains.abort_all().await;
         self.log_streams.abort_all().await;
         self.watch_initialization_slots.lock().await.clear();
     }

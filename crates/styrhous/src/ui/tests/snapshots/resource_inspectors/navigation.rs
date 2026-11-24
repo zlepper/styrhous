@@ -12,6 +12,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
     let replica_set_name = "digizuitecore-configurationmanagementservice-6558ccd787";
     let pod = fixture_api_resource("core", "Pod", "pods");
     let detail = ResourceDetail {
+        yaml: None,
         api_resource: deployment.clone(),
         name: "api".into(),
         namespace: Some("kube-system".into()),
@@ -121,6 +122,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
             cluster_key: 2,
             history_entry_id: 2,
             detail: Box::new(ResourceDetail {
+                yaml: None,
                 api_resource: replica_set.clone(),
                 name: replica_set_name.into(),
                 namespace: Some("kube-system".into()),
@@ -260,6 +262,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
             cluster_key: 2,
             history_entry_id,
             detail: Box::new(ResourceDetail {
+                yaml: None,
                 api_resource: pod.clone(),
                 name: "api-7b948f-pod".into(),
                 namespace: Some("kube-system".into()),
@@ -382,6 +385,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
             cluster_key: 2,
             history_entry_id,
             detail: Box::new(ResourceDetail {
+                yaml: None,
                 api_resource: pod,
                 name: "api-7b948f-pod-debug".into(),
                 namespace: Some("kube-system".into()),

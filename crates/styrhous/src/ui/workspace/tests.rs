@@ -25,6 +25,7 @@ fn fuzzy_search_matches_normalized_resource_names() {
         &ResourceSearchState {
             query: "cfa".into(),
             regex_mode: false,
+            ..Default::default()
         },
     );
 
@@ -51,6 +52,7 @@ fn fuzzy_search_orders_resources_by_match_quality() {
         &ResourceSearchState {
             query: "api".into(),
             regex_mode: false,
+            ..Default::default()
         },
     );
 
@@ -72,6 +74,7 @@ fn fuzzy_search_preserves_source_order_for_equal_or_empty_normalized_matches() {
         &ResourceSearchState {
             query: "api".into(),
             regex_mode: false,
+            ..Default::default()
         },
     );
     let normalized_empty = filter_resources(
@@ -79,6 +82,7 @@ fn fuzzy_search_preserves_source_order_for_equal_or_empty_normalized_matches() {
         &ResourceSearchState {
             query: "\u{301}".into(),
             regex_mode: false,
+            ..Default::default()
         },
     );
     let regex = filter_resources(
@@ -86,6 +90,7 @@ fn fuzzy_search_preserves_source_order_for_equal_or_empty_normalized_matches() {
         &ResourceSearchState {
             query: "api".into(),
             regex_mode: true,
+            ..Default::default()
         },
     );
 
@@ -109,6 +114,7 @@ fn regex_search_matches_normalized_resource_names_case_insensitively() {
         &ResourceSearchState {
             query: "CAFE-.*".into(),
             regex_mode: true,
+            ..Default::default()
         },
     );
 
@@ -121,6 +127,7 @@ fn invalid_regex_has_no_results_and_an_error() {
     let search = ResourceSearchState {
         query: "[".into(),
         regex_mode: true,
+        ..Default::default()
     };
     let filtered = filter_resources(&[resource("pod")], &search);
 

@@ -30,12 +30,12 @@ fn orders_primary_resources_sections_and_fallback_groups() {
             .map(entry_name)
             .collect::<Vec<_>>(),
         vec![
-            "nodes",
-            "Apps & Containers",
-            "Networking",
+            "Workloads",
+            "Network",
+            "Cluster",
             "namespaces",
             "events",
-            "Helm",
+            "releases",
         ]
     );
     assert_eq!(
@@ -96,8 +96,7 @@ fn classifies_every_catalog_entry_into_its_declared_navigation_entry() {
     }
     assert!(matches!(
         navigation.curated_entries.last(),
-        Some(CuratedNavigationEntry::Section(section))
-            if section.name == "Helm" && section.api_resources == vec![ApiResource::helm_releases()]
+        Some(CuratedNavigationEntry::Resource(resource)) if resource.is_helm_releases()
     ));
     assert!(navigation.other_api_groups.is_empty());
 }
@@ -107,16 +106,13 @@ fn omits_catalog_entries_that_the_cluster_does_not_advertise() {
     let navigation = build_resource_navigation(vec![resource("core", "pods")]);
 
     assert_eq!(navigation.curated_entries.len(), 2);
-    assert_eq!(
-        entry_name(&navigation.curated_entries[0]),
-        "Apps & Containers"
-    );
-    assert_eq!(entry_name(&navigation.curated_entries[1]), "Helm");
+    assert_eq!(entry_name(&navigation.curated_entries[0]), "Workloads");
+    assert_eq!(entry_name(&navigation.curated_entries[1]), "releases");
     assert!(navigation.other_api_groups.is_empty());
 }
 
 #[test]
-fn only_shows_gateway_api_when_a_supported_resource_is_discovered() {
+fn gateway_api_resources_join_the_network_group() {
     let navigation =
         build_resource_navigation(vec![resource("gateway.networking.k8s.io", "httproutes")]);
 
@@ -126,7 +122,7 @@ fn only_shows_gateway_api_when_a_supported_resource_is_discovered() {
             .iter()
             .map(entry_name)
             .collect::<Vec<_>>(),
-        vec!["Gateway API", "Helm"]
+        vec!["Network", "releases"]
     );
     assert!(navigation.other_api_groups.is_empty());
 }
@@ -238,4 +234,24 @@ fn the_builtin_baseline_covers_the_curated_built_in_resources_exactly() {
             .iter()
             .any(|resource| resource.name == "deployments")
     );
+}
+
+#[test]
+fn kind_colours_follow_the_design_and_otherwise_the_kinds_group() {
+    let category = |group: &str, name: &str| kind_category(&resource(group, name));
+    // The kinds the design colours by name.
+    assert_eq!(kind_category(&ApiResource::helm_releases()), 0);
+    assert_eq!(category("", "pods"), 3);
+    assert_eq!(category("", "nodes"), 4);
+    assert_eq!(category("", "namespaces"), 5);
+    assert_eq!(category("", "events"), 2);
+    // Other kinds take their group's colour.
+    assert_eq!(category("apps", "deployments"), 1);
+    assert_eq!(category("batch", "cronjobs"), 1);
+    assert_eq!(category("", "services"), 4);
+    assert_eq!(category("", "configmaps"), 2);
+    assert_eq!(category("storage.k8s.io", "storageclasses"), 5);
+    assert_eq!(category("rbac.authorization.k8s.io", "roles"), 0);
+    // Custom resources share the first.
+    assert_eq!(category("cert-manager.io", "certificates"), 0);
 }

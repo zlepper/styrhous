@@ -26,9 +26,6 @@ const DEFAULT_SKELETON_SHARE: f32 = 0.6;
 pub(super) struct Selection<'s, T, K> {
     pub set: &'s mut HashSet<K>,
     pub key: &'s dyn Fn(&T) -> Option<K>,
-    /// The group (of a grouped table) whose rows are being shown: a
-    /// Shift-click selects a range only from an anchor in the same group.
-    pub group: usize,
 }
 
 /// Called with a column's id and its new width.
@@ -115,7 +112,7 @@ where
     let clicked = if horizontal_scroll {
         crate::scroll::horizontal()
             .id_salt(table.id.with("horizontal-scroll"))
-            .auto_shrink([false, false])
+            .auto_shrink([false, !table.fill_available_height])
             .show(ui, |ui| {
                 ui.set_min_width(content_width);
                 draw(ui)
@@ -437,6 +434,8 @@ pub(super) fn show_row<'a, T, K>(
     let hovered = table.forced_row_hover == Some(index) || ui.rect_contains_pointer(tile);
     let look = match (selected, hovered) {
         _ if table.inspected_row == Some(index) => RowLook::Inspected,
+        (_, false) if table.current_row == Some(index) => RowLook::Selected,
+        (_, true) if table.current_row == Some(index) => RowLook::SelectedHovered,
         (true, true) => RowLook::SelectedHovered,
         (true, false) => RowLook::Selected,
         (false, true) => RowLook::Hovered,
@@ -506,12 +505,20 @@ fn toggle_row<T, K>(
     K: Eq + Hash + Clone,
 {
     let anchor_id = table_id.with("selection-anchor");
+    // The anchor is a row's identity, so it survives the rows regrouping or
+    // reordering; a range reaches only from an anchor among these items.
+    let identity = |item: &T| {
+        (selection.key)(item).map(|key| {
+            let mut hasher = std::hash::DefaultHasher::new();
+            key.hash(&mut hasher);
+            std::hash::Hasher::finish(&hasher)
+        })
+    };
     let anchor = ui
-        .data(|data| data.get_temp::<(usize, usize)>(anchor_id))
-        .filter(|(group, _)| *group == selection.group)
-        .map(|(_, anchor)| anchor);
+        .data(|data| data.get_temp::<u64>(anchor_id))
+        .and_then(|anchor| items.iter().position(|item| identity(item) == Some(anchor)));
     let range = match anchor {
-        Some(anchor) if ui.input(|input| input.modifiers.shift) && anchor < items.len() => {
+        Some(anchor) if ui.input(|input| input.modifiers.shift) => {
             anchor.min(index)..=anchor.max(index)
         }
         _ => index..=index,
@@ -526,7 +533,9 @@ fn toggle_row<T, K>(
             selection.set.remove(&row_key);
         }
     }
-    ui.data_mut(|data| data.insert_temp(anchor_id, (selection.group, index)));
+    if let Some(clicked) = identity(&items[index]) {
+        ui.data_mut(|data| data.insert_temp(anchor_id, clicked));
+    }
 }
 
 /// Where the width of a centred cell of column `index` is remembered.

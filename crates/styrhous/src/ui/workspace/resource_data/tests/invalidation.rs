@@ -16,6 +16,7 @@ fn replacing_watch_sources_clears_prepared_rows_before_revisions_restart() {
         &deployment,
         &[],
         false,
+        false,
         &mut PersistedResourceTablePreferences::default(),
     );
     prepare_cluster_table(
@@ -52,6 +53,7 @@ fn resource_results_refresh_cached_rows_for_add_delete_and_replace() {
         1_280.0,
         &deployment,
         &[],
+        false,
         false,
         &mut PersistedResourceTablePreferences::default(),
     );
@@ -149,6 +151,7 @@ fn metric_revisions_only_invalidate_tables_that_render_them() {
         &deployment,
         &[],
         false,
+        false,
         &mut PersistedResourceTablePreferences::default(),
     );
     let mut deployment_cache = ResourceTableCache::default();
@@ -181,6 +184,7 @@ fn metric_revisions_only_invalidate_tables_that_render_them() {
         1_280.0,
         &pod,
         &[],
+        false,
         false,
         &mut PersistedResourceTablePreferences::default(),
     );
@@ -241,6 +245,7 @@ fn metric_revisions_only_invalidate_tables_that_render_them() {
         1_280.0,
         &node,
         &[],
+        false,
         false,
         &mut PersistedResourceTablePreferences::default(),
     );

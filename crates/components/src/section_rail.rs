@@ -1,7 +1,7 @@
 //! The section rail of an inspector (C19 `.srail`): its sections with
 //! their counts, the current one lit, so long resources stay navigable.
 
-use egui::{CornerRadius, Id, Rect, Response, Sense, Ui, pos2, vec2};
+use egui::{CornerRadius, Id, Rect, Response, Sense, Ui, Vec2, pos2, vec2};
 
 use crate::PointingHand;
 use crate::design::theme::ThemeExt;
@@ -104,28 +104,47 @@ impl<'s, 'a> SectionRail<'s, 'a> {
             theme.text.muted,
         );
 
-        let mut top =
+        let list_top =
             content.top() + type_scale::CAPTION.line_height() + CAPTION_PADDING_BOTTOM + ITEM_GAP;
         let ids: Vec<Id> = (0..self.sections.len())
             .map(|index| response.id.with(("section", index)))
             .collect();
         let mut selected = None;
         let mut focused = None;
-        for (index, section) in self.sections.iter().enumerate() {
-            let item = Rect::from_min_size(
-                pos2(content.left(), top),
-                vec2(content.width(), size::SECTION_ITEM),
-            );
-            top += size::SECTION_ITEM + ITEM_GAP;
-            let forced = (self.forced_hover == Some(index)).then_some(ControlState::Hovered);
-            let response = self.item(ui, item, ids[index], index, section, forced);
-            if response.clicked() {
-                selected = Some(index);
-            }
-            if response.has_focus() {
-                focused = Some(index);
-            }
-        }
+        // The sections scroll when there are more than the rail has room for.
+        let list = Rect::from_min_max(pos2(content.left(), list_top), content.max);
+        let mut list_ui = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt("section-list")
+                .max_rect(list),
+        );
+        list_ui.set_clip_rect(list.intersect(ui.clip_rect()));
+        crate::scroll::vertical()
+            .id_salt(response.id.with("list-scroll"))
+            .auto_shrink([false, false])
+            .show(&mut list_ui, |list_ui| {
+                let mut top = list_ui.cursor().top();
+                list_ui.allocate_space(vec2(
+                    content.width(),
+                    self.sections.len() as f32 * (size::SECTION_ITEM + ITEM_GAP),
+                ));
+                for (index, section) in self.sections.iter().enumerate() {
+                    let item = Rect::from_min_size(
+                        pos2(content.left(), top),
+                        vec2(content.width(), size::SECTION_ITEM),
+                    );
+                    top += size::SECTION_ITEM + ITEM_GAP;
+                    let forced =
+                        (self.forced_hover == Some(index)).then_some(ControlState::Hovered);
+                    let response = self.item(list_ui, item, ids[index], index, section, forced);
+                    if response.clicked() {
+                        selected = Some(index);
+                    }
+                    if response.has_focus() {
+                        focused = Some(index);
+                    }
+                }
+            });
         // ↑/↓ move from the focused section once, after every item has
         // run, so the section focus moves to does not step again.
         if let Some(index) = focused {
@@ -215,4 +234,175 @@ impl<'s, 'a> SectionRail<'s, 'a> {
         }
         response
     }
+}
+
+/// Padding of an inspector's scrolling column (`padding: 4px 20px 20px`).
+const COLUMN_PADDING: egui::Margin = egui::Margin {
+    left: 20,
+    right: 20,
+    top: 4,
+    bottom: 20,
+};
+
+/// What [`InspectorBody`] remembers between frames.
+#[derive(Clone, Default)]
+struct BodyState {
+    /// The section a click or key chose: it stays current until the reader scrolls.
+    pinned: Option<usize>,
+    /// The section a click asked to scroll to.
+    scroll_to: Option<usize>,
+    current: usize,
+}
+
+/// The body of an inspector blade (C19): under a divider, the
+/// [`SectionRail`] on the left (from four sections up) and the sections laid
+/// out one after another in a scrolling column. Clicking a section scrolls
+/// there; scrolling lights the section at the top.
+#[must_use = "call `show` to add the body"]
+pub struct InspectorBody<'s, 'a> {
+    id_salt: Id,
+    caption: &'a str,
+    sections: &'s [Section<'a>],
+    scroll_to: Option<usize>,
+}
+
+impl<'s, 'a> InspectorBody<'s, 'a> {
+    pub fn new(
+        id_salt: impl std::hash::Hash + std::fmt::Debug,
+        caption: &'a str,
+        sections: &'s [Section<'a>],
+    ) -> Self {
+        Self {
+            id_salt: Id::new(id_salt),
+            caption,
+            sections,
+            scroll_to: None,
+        }
+    }
+
+    /// Scroll to section `index` this frame (a key or header action that jumps there).
+    pub fn scroll_to(mut self, index: Option<usize>) -> Self {
+        self.scroll_to = index;
+        self
+    }
+
+    /// Fill the room `ui` has left; `add_section` lays section `index` out.
+    pub fn show(self, ui: &mut Ui, mut add_section: impl FnMut(&mut Ui, usize)) {
+        let theme = ui.tokens();
+        let rect = ui.available_rect_before_wrap();
+        let id = ui.id().with(self.id_salt);
+        let mut state = ui
+            .data(|data| data.get_temp::<BodyState>(id))
+            .unwrap_or_default();
+        ui.painter().rect_filled(
+            Rect::from_min_size(rect.min, vec2(rect.width(), size::HAIRLINE)),
+            0,
+            theme.divider.base,
+        );
+        let top = rect.top() + size::HAIRLINE;
+        let mut column = Rect::from_min_max(pos2(rect.left(), top), rect.max);
+        if self.sections.len() >= 4 {
+            let rail = Rect::from_min_size(
+                pos2(rect.left(), top),
+                vec2(size::SECTION_RAIL, rect.bottom() - top),
+            );
+            let mut rail_ui = ui.new_child(
+                egui::UiBuilder::new()
+                    .id_salt("section-rail")
+                    .max_rect(rail),
+            );
+            let mut current = state.current.min(self.sections.len() - 1);
+            if let Some(index) = SectionRail::new(self.caption, self.sections, &mut current)
+                .corner_radius(CornerRadius {
+                    sw: radius::OVERLAY,
+                    ..CornerRadius::ZERO
+                })
+                .show(&mut rail_ui, rail.height())
+            {
+                state.scroll_to = Some(index);
+            }
+            state.current = current;
+            column.min.x = rail.right();
+        }
+        let mut column_ui = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt("section-column")
+                .max_rect(column),
+        );
+        column_ui.set_clip_rect(column.intersect(ui.clip_rect()));
+        let scroll_to = state.scroll_to.take().or(self.scroll_to);
+        if scroll_to.is_some() {
+            state.pinned = scroll_to;
+        }
+        let mut tops = Vec::with_capacity(self.sections.len());
+        let output = crate::scroll::vertical()
+            .id_salt(id.with("scroll"))
+            .auto_shrink([false, false])
+            .show(&mut column_ui, |ui| {
+                egui::Frame::new()
+                    .inner_margin(COLUMN_PADDING)
+                    .show(ui, |ui| {
+                        // Sections set their own gaps; content that relies on the app's item
+                        // spacing asks for it.
+                        ui.spacing_mut().item_spacing = Vec2::ZERO;
+                        let origin = ui.cursor().top();
+                        for index in 0..self.sections.len() {
+                            let section_top = ui.cursor().top();
+                            tops.push(section_top - origin);
+                            if scroll_to == Some(index) {
+                                let target = Rect::from_min_size(
+                                    pos2(ui.cursor().left(), section_top),
+                                    vec2(1.0, 1.0),
+                                );
+                                ui.scroll_to_rect(target, Some(egui::Align::Min));
+                            }
+                            add_section(ui, index);
+                        }
+                    });
+            });
+        ui.allocate_rect(rect, Sense::hover());
+        if self.sections.len() >= 4 {
+            let offset = output.state.offset.y;
+            let max_offset = (output.content_size.y - output.inner_rect.height()).max(0.0);
+            let reached_end = max_offset > 0.0 && offset >= max_offset - 1.0;
+            let lead = COLUMN_PADDING.top as f32;
+            state.current = if reached_end {
+                self.sections.len() - 1
+            } else {
+                tops.iter()
+                    .rposition(|top| *top <= offset + lead + 1.0)
+                    .unwrap_or(0)
+            };
+            // A chosen section stays lit until the reader scrolls on their own.
+            let wheel = ui.input(|input| input.smooth_scroll_delta != Vec2::ZERO)
+                && ui.rect_contains_pointer(column);
+            if wheel {
+                state.pinned = None;
+            }
+            if let Some(index) = state.pinned {
+                state.current = index;
+            }
+        }
+        ui.data_mut(|data| data.insert_temp(id, state));
+    }
+}
+
+/// The title of an inspector section (`.sec`): Bricolage 15/20 with a muted
+/// meta ("metrics.k8s.io · last 10 min") after it on one baseline, 20 points
+/// of room above and 12 below.
+pub fn inspector_section_heading(ui: &mut Ui, title: &str, meta: Option<&str>) {
+    const TITLE: TextRole = type_scale::CARD_TITLE.with_size(15.0, 20.0);
+    let theme = ui.tokens();
+    let ppp = ui.pixels_per_point();
+    ui.add_space(space::S20);
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing = vec2(space::S8, 0.0);
+        ui.set_height(TITLE.line_height());
+        let baseline = TITLE.css_baseline(ppp);
+        TITLE.label_on_baseline(ui, title, theme.text.primary, baseline);
+        if let Some(meta) = meta {
+            type_scale::META.label_on_baseline(ui, meta, theme.text.muted, baseline);
+        }
+    });
+    ui.add_space(space::S12);
 }

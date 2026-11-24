@@ -1,7 +1,7 @@
 use crate::api_resource::ApiResource;
 use crate::ui::state::{
-    ClusterState, NamespaceScope, NodeMetricsState, PodMetricsNamespaceState, ResourceSearchState,
-    ResourceWatchKey, ResourceWatchState,
+    ClusterState, NamespaceScope, NodeMetricsState, NodePodCountsState, PodMetricsNamespaceState,
+    ResourceSearchState, ResourceWatchKey, ResourceWatchState,
 };
 use crate::ui::workspace::resource_table::ResourceTableConfiguration;
 use std::collections::HashMap;
@@ -12,7 +12,8 @@ mod watches;
 
 pub(super) use metrics::resolved_resource_cell;
 use preparation::prepare_resource_table;
-pub(super) use preparation::resolve_prepared_resource;
+pub(super) use preparation::{CLUSTER_GROUP, resolve_prepared_resource};
+pub(in crate::ui) use watches::listed_count;
 pub(super) use watches::{
     awaited_namespace_list, selected_resources, selected_watch_error, selected_watches_are_loading,
 };
@@ -23,6 +24,7 @@ pub(super) struct ResourceMetrics<'a> {
     pub(super) pod_metrics: &'a HashMap<String, PodMetricsNamespaceState>,
     pub(super) node_metrics_api_available: bool,
     pub(super) node_metrics: &'a NodeMetricsState,
+    pub(super) node_pod_counts: &'a NodePodCountsState,
 }
 
 impl<'a> ResourceMetrics<'a> {
@@ -32,12 +34,14 @@ impl<'a> ResourceMetrics<'a> {
         (pod_metrics_api_available, node_metrics_api_available): (bool, bool),
         pod_metrics: &'a HashMap<String, PodMetricsNamespaceState>,
         node_metrics: &'a NodeMetricsState,
+        node_pod_counts: &'a NodePodCountsState,
     ) -> Self {
         Self {
             pod_metrics_api_available,
             pod_metrics,
             node_metrics_api_available,
             node_metrics,
+            node_pod_counts,
         }
     }
 }
@@ -62,6 +66,7 @@ impl<'a> ResourceTableData<'a> {
                 cluster.metrics_shown_as_available(),
                 &cluster.pod_metrics,
                 &cluster.node_metrics,
+                &cluster.node_pod_counts,
             ),
         }
     }

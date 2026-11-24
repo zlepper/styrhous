@@ -3,9 +3,9 @@ use super::{
     resolved_resource_cell,
 };
 use crate::minimal_resource::MinimalResource;
-use crate::pod_metrics::format_cpu_cores;
+use crate::pod_metrics::format_cpu;
 use crate::resource_table::{CPU_COLUMN, CellValue};
-use crate::ui::resource_table_cache::{PreparedResourceTableRow, ResourceTableCache};
+use crate::ui::resource_table_cache::{Grouping, PreparedResourceTableRow, ResourceTableCache};
 use crate::ui::state::{
     ClusterState, PodMetricsNamespaceState, ResourceSearchState, ResourceWatchState,
     SelectedNamespaces, UiState,
@@ -98,6 +98,7 @@ fn pod_usage(cpu_nanocores: i64) -> crate::pod_metrics::PodUsage {
 }
 
 mod every_namespace;
+mod grouping;
 mod invalidation;
 mod metrics;
 mod preparation;

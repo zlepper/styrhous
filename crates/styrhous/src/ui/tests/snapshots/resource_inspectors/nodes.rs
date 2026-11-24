@@ -24,6 +24,7 @@ fn node_inspector_shows_its_spec() {
             cluster_key: 2,
             history_entry_id: 1,
             detail: Box::new(ResourceDetail {
+                yaml: None,
                 api_resource: crate::resource_handlers::node::api_resource(),
                 name: "kind-control-plane".into(),
                 namespace: None,
@@ -127,11 +128,14 @@ fn node_inspector_shows_its_spec() {
         Some(1024 * 1024 * 1024)
     );
 
-    harness.get_by_label("Spec");
     harness.get_by_label("Scheduling disabled");
     harness.get_by_label("10.244.0.0/24");
     harness.get_by_label("node-role.kubernetes.io/control-plane:NoSchedule");
-    harness.get_by_label("Resource usage");
+    assert_eq!(
+        harness.get_all_by_label("Usage").count(),
+        2,
+        "the rail entry and the section heading"
+    );
     assert_eq!(harness.get_all_by_label("500m").count(), 2);
     harness.get_by_label("Pod reservations");
     harness.get_by_label("CPU remaining");
@@ -279,6 +283,7 @@ fn node_inspector_lists_cross_namespace_pods_in_the_shared_pod_table() {
             cluster_key: 2,
             history_entry_id: 1,
             detail: Box::new(ResourceDetail {
+                yaml: None,
                 api_resource: nodes,
                 name: "kind-control-plane".into(),
                 namespace: None,
@@ -398,6 +403,7 @@ fn open_node_inspector<L: crate::terminal_launcher::TerminalLauncher>(
             cluster_key: 2,
             history_entry_id: 1,
             detail: Box::new(ResourceDetail {
+                yaml: None,
                 api_resource: crate::resource_handlers::node::api_resource(),
                 name: "kind-control-plane".into(),
                 namespace: None,

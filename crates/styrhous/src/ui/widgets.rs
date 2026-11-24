@@ -1,6 +1,7 @@
 use crate::minimal_resource::format_age;
 use crate::resource_table::{
-    CONTAINERS_COLUMN, CPU_COLUMN, CellValue, ContainerIndicator, MEMORY_COLUMN,
+    CONTAINERS_COLUMN, CPU_COLUMN, CellValue, ContainerIndicator, MEMORY_COLUMN, PODS_COLUMN,
+    ROLES_COLUMN,
 };
 use components::design::theme::ThemeExt;
 use components::design::{space, type_scale};
@@ -12,6 +13,8 @@ const STATE_MARGIN: i8 = space::S32 as i8;
 
 /// Why a CPU or memory cell has no value (S08).
 pub(super) const METRICS_UNAVAILABLE: &str = "Metrics server not available";
+/// Why a Node's Pods cell has no value.
+const NODE_POD_COUNT_UNAVAILABLE: &str = "Pods across all namespaces could not be listed";
 
 pub(super) fn container_indicators(ui: &mut egui::Ui, indicators: &[ContainerIndicator]) {
     if indicators.is_empty() {
@@ -57,15 +60,44 @@ pub(super) fn show_resource_cell(ui: &mut egui::Ui, column_id: &str, cell: Optio
     match cell.unwrap_or(&CellValue::Empty) {
         CellValue::Text(value) => TableRowBuilder::text(ui, value, false),
         CellValue::Number(value) => TableRowBuilder::number(ui, &value.to_string()),
-        CellValue::Usage { label, .. } => TableRowBuilder::number(ui, label),
-        CellValue::Timestamp(value) => TableRowBuilder::number(ui, &format_age(Some(*value))),
+        CellValue::Usage {
+            label, permille, ..
+        } => TableRowBuilder::usage(
+            ui,
+            label,
+            permille.map(|permille| f32::from(permille) / 1000.0),
+        ),
+        CellValue::Timestamp(value) => TableRowBuilder::number(
+            ui,
+            &format_age(Some(*value), crate::ui::clock::now(ui.ctx())),
+        ),
         CellValue::Status { label, tone } => {
             TableRowBuilder::problem_status(ui, label, *tone);
         }
         CellValue::ContainerIndicators(indicators) => container_indicators(ui, indicators),
-        CellValue::List(values) => TableRowBuilder::text(ui, &values.join(", "), false),
-        CellValue::Unavailable => TableRowBuilder::missing(ui, METRICS_UNAVAILABLE),
+        CellValue::List(values) if values.is_empty() => {
+            TableRowBuilder::missing(ui, empty_reason(column_id))
+        }
+        CellValue::List(values) => {
+            // A Node's roles read as detail beside its name.
+            let theme = ui.tokens();
+            let color = if column_id == ROLES_COLUMN {
+                theme.text.secondary
+            } else {
+                theme.text.primary
+            };
+            TableRowBuilder::text_in(ui, type_scale::UI, &values.join(", "), color)
+        }
+        CellValue::Unavailable => TableRowBuilder::missing(ui, unavailable_reason(column_id)),
         CellValue::Empty => TableRowBuilder::missing(ui, empty_reason(column_id)),
+    }
+}
+
+/// Why the column `column_id` could not be read.
+fn unavailable_reason(column_id: &str) -> &'static str {
+    match column_id {
+        PODS_COLUMN => NODE_POD_COUNT_UNAVAILABLE,
+        _ => METRICS_UNAVAILABLE,
     }
 }
 
@@ -74,6 +106,8 @@ fn empty_reason(column_id: &str) -> &'static str {
     match column_id {
         CPU_COLUMN | MEMORY_COLUMN => "No metrics reported for this resource",
         CONTAINERS_COLUMN => "No container statuses reported yet",
+        PODS_COLUMN => "Counting the Pods on this Node",
+        ROLES_COLUMN => "No roles assigned",
         _ => "Not set",
     }
 }
@@ -330,7 +364,10 @@ pub(super) fn key_value_chips<'a>(
 /// Kubernetes reported no creation time.
 pub(super) fn age_cell(ui: &mut egui::Ui, creation_timestamp: Option<time::OffsetDateTime>) {
     match creation_timestamp {
-        Some(_) => TableRowBuilder::number(ui, &format_age(creation_timestamp)),
+        Some(_) => TableRowBuilder::number(
+            ui,
+            &format_age(creation_timestamp, crate::ui::clock::now(ui.ctx())),
+        ),
         None => TableRowBuilder::missing(ui, "No creation time reported"),
     }
 }

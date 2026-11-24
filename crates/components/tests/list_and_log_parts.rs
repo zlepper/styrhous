@@ -13,15 +13,15 @@ use components::test_support::{UiHarnessSnapshot, setup_egui};
 use components::{
     BladeNavigation, Button, ButtonSize, ClusterAction, ClusterEntry, ClusterSwitcher,
     ClusterSwitcherState, ClusterTarget, ClusterTile, CodeMark, CodeSpan, ControlState, FilterChip,
-    FloatingToolbar, GroupHeader, InspectorHeader, InspectorHeaderResponse, InspectorStatus,
-    LevelBadge, LiveMeta, LogHeader, LogLevel, LogLine, LogStream, ProblemTick, ProblemTicks,
-    Readout, ReadoutRow, ReadoutSize, ReadoutTone, ScopePill, SearchPill, SearchStatus, Section,
-    SectionRail, SourcePill, Table, TableGroup, TableRowBuilder, TopBar, TopBarKeys, VolumeBar,
-    VolumeBars, VolumeStrip,
+    FloatingToolbar, GroupHeader, InspectorBody, InspectorHeader, InspectorHeaderResponse,
+    InspectorStatus, LevelBadge, LiveMeta, LogHeader, LogLevel, LogLine, LogStream, ProblemTick,
+    ProblemTicks, Readout, ReadoutRow, ReadoutSize, ReadoutTone, ScopePill, SearchPill,
+    SearchStatus, Section, SectionRail, SourcePill, Table, TableGroup, TableRowBuilder, TopBar,
+    TopBarKeys, VolumeBar, VolumeBars, VolumeStrip,
 };
 use egui::{Key, Modifiers, Ui, vec2};
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 
 fn harness<'a>(size: egui::Vec2, scene: impl FnMut(&mut Ui) + 'a) -> Harness<'a> {
     let mut harness = Harness::builder().with_size(size).build_ui(scene);
@@ -315,18 +315,18 @@ fn group_chips_toggle_and_problem_rows_become_ticks() {
     let (ticks, height) = response.borrow().clone().expect("the table ran");
     let header = size::GROUP_HEADER;
     assert_eq!(height, 2.0 * header + 3.0 * size::ROW_PITCH);
-    assert_eq!(
-        ticks,
-        vec![
-            ProblemTick {
-                position: (header + size::ROW_PITCH) / height,
-                tone: Tone::Danger,
-            },
-            ProblemTick {
-                position: (2.0 * header + 2.0 * size::ROW_PITCH) / height,
-                tone: Tone::Warning,
-            },
-        ]
+    // The list is shorter than the 400 point window, so its ticks sit at
+    // their rows' heights over the window, not over the list.
+    let tones: Vec<_> = ticks.iter().map(|tick| tick.tone).collect();
+    assert_eq!(tones, [Tone::Danger, Tone::Warning]);
+    let (danger_top, warning_top) = (
+        header + size::ROW_PITCH,
+        2.0 * header + 2.0 * size::ROW_PITCH,
+    );
+    assert!(ticks[0].position < danger_top / height);
+    assert!(
+        (ticks[1].position / ticks[0].position - warning_top / danger_top).abs() < 0.001,
+        "the ticks keep their distances"
     );
     harness.get_by_label("Collapse jobs").click();
     harness.run();
@@ -535,6 +535,7 @@ fn readouts_rail_and_inspector_header_snapshot() {
                 tone: Tone::Success,
                 state: "Running",
                 reason: None,
+                link: None,
             })
             .readouts(&readouts[..3])
             .show(ui, |ui| {
@@ -716,4 +717,277 @@ fn source_pills_report_clicks_and_streams_name_their_state() {
         Tone::Success
     );
     assert_eq!(LogStream::Following.pill().0, "Following");
+}
+
+// WP3c: the inspector body, container disclosures and the compact chart
+
+/// Five sections, each tall enough that the body has to scroll.
+fn tall_sections<'a>() -> [Section<'a>; 5] {
+    [
+        Section::new("Overview"),
+        Section::new("Usage"),
+        Section::new("Containers").count(1),
+        Section::new("Events").count(2),
+        Section::new("YAML"),
+    ]
+}
+
+fn show_tall_body(ui: &mut Ui, sections: &[Section<'_>], tall: f32) {
+    InspectorBody::new("tall-body", "On this pod", sections).show(ui, |ui, index| {
+        components::inspector_section_heading(ui, sections[index].name, None);
+        ui.allocate_space(vec2(1.0, tall));
+    });
+}
+
+#[test]
+fn inspector_body_scrolls_to_a_clicked_section_and_lights_it() {
+    let mut harness = harness(vec2(520.0, 360.0), |ui| {
+        ui.set_height(360.0);
+        show_tall_body(ui, &tall_sections(), 220.0);
+    });
+    harness.get_by_label_contains("Containers, 1").click();
+    harness.run_steps(4);
+
+    let lit = |label: &str| {
+        harness
+            .get_all_by_label(label)
+            .find(|node| node.rect().left() < 200.0)
+            .expect("a rail section")
+            .accesskit_node()
+            .toggled()
+            == Some(egui::accesskit::Toggled::True)
+    };
+    assert!(lit("Containers, 1"), "the clicked section is current");
+    assert!(!lit("Overview"));
+    let heading = harness
+        .get_all_by_label("Containers")
+        .find(|node| node.rect().left() > 200.0)
+        .expect("the section heading");
+    assert!(
+        heading.rect().top() < 200.0,
+        "the body scrolled the section to the top: {:?}",
+        heading.rect()
+    );
+}
+
+#[test]
+fn inspector_body_lights_the_last_section_at_the_end_of_the_scroll() {
+    let mut harness = harness(vec2(520.0, 360.0), |ui| {
+        ui.set_height(360.0);
+        show_tall_body(ui, &tall_sections(), 100.0);
+    });
+    let body = vec2(400.0, 200.0).to_pos2();
+    harness.event(egui::Event::PointerMoved(body));
+    for _ in 0..8 {
+        harness.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: vec2(0.0, -400.0),
+            modifiers: Modifiers::NONE,
+            phase: egui::TouchPhase::Move,
+        });
+        harness.run();
+    }
+    assert_eq!(
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::Button, "YAML")
+            .accesskit_node()
+            .toggled(),
+        Some(egui::accesskit::Toggled::True),
+        "the last section lights even when it is too short to reach the top"
+    );
+}
+
+#[test]
+fn inspector_body_skips_the_rail_below_four_sections() {
+    let sections = [Section::new("Overview"), Section::new("Events")];
+    let harness = harness(vec2(520.0, 240.0), move |ui| {
+        ui.set_height(240.0);
+        show_tall_body(ui, &sections, 40.0);
+    });
+    assert!(harness.query_by_label("On this pod").is_none());
+    assert!(harness.query_by_label("Overview").is_some());
+}
+
+#[test]
+fn disclosure_header_shows_lamp_subtitle_and_trailing_text_with_a_copy_action() {
+    let copied = Rc::new(RefCell::new(0));
+    let count = copied.clone();
+    let mut harness = harness(vec2(520.0, 280.0), move |ui| {
+        column(ui, |ui| {
+            ui.set_width(480.0);
+            components::Disclosure::new(("container", "coredns"), "coredns")
+                .lamp(Tone::Success)
+                .mono_title()
+                .subtitle("coredns:v1.11.1")
+                .trailing("0 restarts")
+                .default_open(true)
+                .session_only()
+                .show(ui, |ui| {
+                    ui.label("Body");
+                });
+            let response = components::Disclosure::new("values", "Values")
+                .meta("user-supplied")
+                .copy_action("Copy")
+                .default_open(true)
+                .session_only()
+                .show(ui, |ui| {
+                    ui.label("Values body");
+                });
+            if response.action_clicked {
+                *count.borrow_mut() += 1;
+            }
+        });
+    });
+    harness.ui_harness("readouts/disclosure_header_looks");
+
+    harness.get_by_label("Copy").click();
+    harness.run();
+    assert_eq!(*copied.borrow(), 1, "Copy reports its click");
+    harness.get_by_label("Values body");
+    harness.get_by_label("Values").click();
+    harness.run();
+    harness.run();
+    assert!(
+        harness.query_by_label("Values body").is_none(),
+        "the rest of the header still toggles the body"
+    );
+}
+
+#[test]
+fn compact_usage_chart_has_no_axis_and_a_mono_value() {
+    let samples = [[0.0, 12.0], [0.5, 15.0], [1.0, 14.0]];
+    let mut harness = harness(vec2(300.0, 140.0), move |ui| {
+        column(ui, |ui| {
+            ui.set_width(260.0);
+            components::UsageChart::new("CPU", components::UsageResource::Cpu, "15m")
+                .samples(&samples)
+                .limit(100.0, "Limit")
+                .compact()
+                .show(ui);
+        });
+    });
+    assert!(harness.query_by_label("now").is_none(), "no time axis");
+    harness.ui_harness("readouts/compact_usage_chart");
+}
+
+#[test]
+fn inspector_status_link_is_clickable() {
+    let clicked = Rc::new(RefCell::new(false));
+    let state = clicked.clone();
+    let mut harness = harness(vec2(720.0, 150.0), move |ui| {
+        let response = InspectorHeader::new(
+            "coredns-66bc5c9577-ffw2s",
+            BladeNavigation::new(false, false),
+        )
+        .kind("Pod", None)
+        .status(InspectorStatus {
+            tone: Tone::Success,
+            state: "Running",
+            reason: Some("on"),
+            link: Some("kind-control-plane"),
+        })
+        .show(ui, |_| {});
+        if response.status_link {
+            *state.borrow_mut() = true;
+        }
+    });
+    harness.get_by_label("kind-control-plane").click();
+    harness.run();
+    assert!(*clicked.borrow());
+}
+
+#[test]
+fn a_clicked_section_stays_lit_when_the_body_cannot_scroll_to_it() {
+    let mut harness = harness(vec2(520.0, 600.0), |ui| {
+        ui.set_height(600.0);
+        show_tall_body(ui, &tall_sections(), 20.0);
+    });
+    harness.get_by_label_contains("Events, 2").click();
+    harness.run_steps(8);
+
+    let lit = harness
+        .get_all_by_label("Events, 2")
+        .find(|node| node.rect().left() < 200.0)
+        .expect("a rail section")
+        .accesskit_node()
+        .toggled();
+    assert_eq!(
+        lit,
+        Some(egui::accesskit::Toggled::True),
+        "the click holds until the reader scrolls"
+    );
+}
+
+#[test]
+fn a_long_disclosure_subtitle_is_elided_clear_of_the_trailing_text() {
+    let mut harness = harness(vec2(420.0, 120.0), |ui| {
+        column(ui, |ui| {
+            ui.set_width(380.0);
+            components::Disclosure::new(("container", "long"), "coredns")
+                .lamp(Tone::Success)
+                .mono_title()
+                .subtitle("registry.example.com/organisation/team/coredns-with-a-long-name:v1.11.1@sha256:0123456789abcdef")
+                .trailing("12 restarts")
+                .default_open(false)
+                .session_only()
+                .show(ui, |_| {});
+        });
+    });
+    // The harness rejects overlapping text runs, so a snapshot is the check.
+    harness.ui_harness("readouts/disclosure_long_subtitle");
+}
+
+#[test]
+fn a_rail_with_more_sections_than_room_scrolls() {
+    let names: Vec<String> = (0..12).map(|index| format!("Section {index}")).collect();
+    let mut harness = harness(vec2(220.0, 240.0), move |ui| {
+        let sections: Vec<Section<'_>> = names.iter().map(|name| Section::new(name)).collect();
+        let mut current = 0;
+        let _ = SectionRail::new("On this pod", &sections, &mut current).show(ui, 220.0);
+    });
+    let last_top = |harness: &Harness<'_>| harness.get_by_label("Section 11").rect().top();
+    assert!(
+        last_top(&harness) > 220.0,
+        "the last section is out of reach"
+    );
+    harness.event(egui::Event::PointerMoved(vec2(100.0, 120.0).to_pos2()));
+    for _ in 0..4 {
+        harness.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: vec2(0.0, -300.0),
+            modifiers: Modifiers::NONE,
+            phase: egui::TouchPhase::Move,
+        });
+        harness.run();
+    }
+    assert!(last_top(&harness) < 220.0, "scrolling brings it into view");
+}
+
+#[test]
+fn plain_and_copyable_property_values_share_one_baseline() {
+    let harness = harness(vec2(520.0, 120.0), |ui| {
+        column(ui, |ui| {
+            ui.set_width(480.0);
+            let properties = [
+                components::Property::text("Namespace", "kube-system").copyable(),
+                components::Property::text("QoS class", "Burstable"),
+            ];
+            components::PropertyGrid::new(&properties)
+                .max_columns(2)
+                .show(ui);
+        });
+    });
+    let run_top = |label: &str| {
+        let node = harness.get_by_label(label);
+        let run = node.children().next().expect("a text run");
+        (node.rect().top(), run.rect().top())
+    };
+    let (copy_label, copy_run) = run_top("kube-system");
+    let (plain_label, plain_run) = run_top("Burstable");
+    assert_eq!(copy_label, plain_label, "both values start on one line");
+    assert_eq!(
+        copy_run, plain_run,
+        "and their text runs sit on one baseline"
+    );
+    assert_eq!(plain_run, plain_label, "the run covers the line box");
 }

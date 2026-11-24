@@ -36,6 +36,7 @@ impl UiState {
         let outcome = BulkDeleteOutcome {
             api_resource: progress.api_resource.clone(),
             target_count: progress.target_count,
+            namespace: progress.namespace.clone(),
             failures,
         };
         cluster.resources.bulk_delete_progress = None;

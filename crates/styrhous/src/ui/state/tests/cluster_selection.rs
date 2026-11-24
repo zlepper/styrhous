@@ -9,11 +9,13 @@ fn selecting_context_remembers_the_latest_user_selection() {
             name: "dev".to_owned(),
             is_current: false,
             presentation: Default::default(),
+            server: None,
         },
         Cluster {
             name: "prod".to_owned(),
             is_current: false,
             presentation: Default::default(),
+            server: None,
         },
     ])
     .apply(&mut state, &mut commands);
@@ -78,9 +80,11 @@ fn reconnect_reset_clears_connection_derived_resource_state() {
     cluster.operation_history.push(OperationHistoryEntry {
         outcome: OperationOutcome::Success,
         title: "Deleted Pod".into(),
-        target: "api • default".into(),
+        target: "api · default".into(),
+        resource: "api".into(),
+        namespace: Some("default".into()),
         details: None,
-        occurred_at: Instant::now(),
+        wall_time: time::OffsetDateTime::UNIX_EPOCH,
         sequence: 0,
         unread: true,
     });
@@ -162,11 +166,13 @@ fn remembered_context_is_preferred_over_current_context_at_startup() {
             name: "dev".to_owned(),
             is_current: true,
             presentation: Default::default(),
+            server: None,
         },
         Cluster {
             name: "prod".to_owned(),
             is_current: false,
             presentation: Default::default(),
+            server: None,
         },
     ])
     .apply(&mut state, &mut commands);
@@ -205,6 +211,7 @@ fn managed_cluster_import_adds_kubeconfig_context_without_disrupting_a_cluster()
         name: "existing".into(),
         is_current: true,
         presentation: Default::default(),
+        server: None,
     };
     KubernetesClustersUpdated(vec![existing_cluster.clone()]).apply(&mut state, &mut commands);
     commands.clear();
@@ -217,6 +224,7 @@ fn managed_cluster_import_adds_kubeconfig_context_without_disrupting_a_cluster()
             name: "imported".into(),
             is_current: true,
             presentation: Default::default(),
+            server: None,
         },
     ])
     .apply(&mut state, &mut commands);
@@ -391,6 +399,7 @@ fn missing_remembered_context_falls_back_without_overwriting_the_preference() {
         name: "dev".to_owned(),
         is_current: true,
         presentation: Default::default(),
+        server: None,
     }])
     .apply(&mut state, &mut commands);
 
@@ -435,6 +444,7 @@ fn missing_remembered_context_without_a_current_context_leaves_selection_manual(
         name: "dev".to_owned(),
         is_current: false,
         presentation: Default::default(),
+        server: None,
     }])
     .apply(&mut state, &mut commands);
 

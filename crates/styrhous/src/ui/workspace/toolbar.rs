@@ -1,6 +1,6 @@
 use super::*;
 use components::tooltip::TooltipExt;
-use components::{LiveMeta, ScopePill, SearchPill, TopBar};
+use components::{FilterChip, LiveMeta, ScopePill, SearchPill, TopBar, TopBarKeys};
 
 struct NamespaceOption<'a> {
     namespace: &'a MinimalNamespace,
@@ -11,7 +11,11 @@ struct NamespaceOption<'a> {
 #[derive(Clone, Copy)]
 pub(super) struct ListSummary {
     pub(super) total: usize,
-    pub(super) visible: usize,
+    /// The resources shown: the search's matches, only the problem ones
+    /// while "Problems only" is on.
+    pub(super) shown: usize,
+    /// The namespaces the rows are grouped under, when several are.
+    pub(super) namespaces: usize,
     /// The list is watched and has its first response.
     pub(super) live: bool,
 }
@@ -50,12 +54,13 @@ pub(super) fn scope_pill(
                 },
             )
     });
-    // The watch lamp is known only for a single namespace.
+    // The watch lamp is lit while every chosen namespace is watched.
     let watching = selected_api_resource
-        .filter(|_| selected_namespaces.len() == 1)
-        .and_then(|api_resource| {
-            let namespace = selected_namespaces.iter().next()?;
-            Some(cluster.is_namespace_watched(api_resource, namespace))
+        .filter(|_| !selected_namespaces.is_empty())
+        .map(|api_resource| {
+            selected_namespaces
+                .iter()
+                .all(|namespace| cluster.is_namespace_watched(api_resource, namespace))
         });
     (ScopePill::namespaces(names, watching), placeholder)
 }
@@ -104,17 +109,46 @@ pub(super) fn singular_of<'a>(kind: &str, plural: &'a str) -> std::borrow::Cow<'
     singular.into()
 }
 
+/// The filter chips of the list's top bar.
+#[derive(Clone, Copy)]
+pub(super) struct ListFilters {
+    /// Whether the rows group by namespace, for a kind that can; `None`
+    /// for one that cannot (no grouping chip).
+    pub(super) grouped_by_namespace: Option<bool>,
+    /// The rows that are doing badly.
+    pub(super) problem_count: usize,
+    pub(super) problems_only: bool,
+}
+
+/// A step through the problem rows (`[` and `]`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ProblemStep {
+    Previous,
+    Next,
+}
+
+/// What the user asked of the list's filters through its top bar.
+#[derive(Default)]
+pub(super) struct ToolbarEffects {
+    pub(super) toggle_grouping: bool,
+    pub(super) toggle_problems_only: bool,
+    pub(super) problem_step: Option<ProblemStep>,
+}
+
 /// The list's top bar (C16): the search pill (disabled until a resource is
-/// selected), the namespace scope pill and the live meta.
+/// selected), the namespace scope pill, the filter chips and the live meta.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn show_toolbar(
     ui: &mut egui::Ui,
     cluster: &super::super::state::ClusterState,
     selected_api_resource: Option<&crate::api_resource::ApiResource>,
     summary: ListSummary,
+    filters: Option<ListFilters>,
     resource_search: &mut ResourceSearchState,
     namespace_selection: &mut Option<NamespaceSelection>,
     namespace_selector_settings: &NamespaceSelectorSettings,
-) {
+) -> ToolbarEffects {
+    let mut effects = ToolbarEffects::default();
     let bar = TopBar::new(ui.ctx().content_rect().width());
     let namespaced = selected_api_resource.is_none_or(|resource| resource.namespaced);
     let selected_namespaces = cluster.namespace_scope();
@@ -144,77 +178,109 @@ pub(super) fn show_toolbar(
     let singular = singular_of(kind, plural);
     let count = resource_count_label(
         summary.total,
-        summary.visible,
-        !resource_search.query.is_empty(),
+        summary.shown,
+        !resource_search.query.is_empty() || filters.is_some_and(|filters| filters.problems_only),
         (&singular, plural),
     );
+    let count = if summary.namespaces > 1 {
+        format!("{count} in {} namespaces", summary.namespaces)
+    } else {
+        count
+    };
     let problem = namespace_problem(cluster);
 
-    egui::Frame::NONE
-        .inner_margin(egui::Margin::symmetric(TOP_BAR_INSET as i8, 0))
-        .show(ui, |ui| {
-            let top_bar = bar.show(
-                ui,
-                |ui| {
-                    ui.add_enabled_ui(selected_api_resource.is_some(), |ui| {
-                        show_resource_search(ui, resource_search, plural, bar.search_width());
+    let top_bar = bar.show(
+        ui,
+        |ui| {
+            ui.add_enabled_ui(selected_api_resource.is_some(), |ui| {
+                show_resource_search(ui, resource_search, plural, bar.search_width());
+            });
+            let mut combobox = scope
+                .id_salt("namespace-selector")
+                .width(bar.scope_width())
+                .combobox()
+                .placeholder(placeholder)
+                .search_placeholder("Search namespaces…")
+                .search_accessibility_label("Search Namespace")
+                .popup_width(components::design::size::NAMESPACE_POPOVER);
+            if namespaced {
+                combobox = combobox.select_all("All namespaces", all_namespaces_state);
+            }
+            let namespace_response = combobox
+                .filter_by(|option: &NamespaceOption| &option.presentation.search_text)
+                .show_items(ui, &namespaces, |cb, ns| {
+                    let status = selected_api_resource.map(|api_resource| {
+                        cluster.is_namespace_watched(api_resource, &ns.namespace.name)
                     });
-                    let mut combobox = scope
-                        .id_salt("namespace-selector")
-                        .width(bar.scope_width())
-                        .combobox()
-                        .placeholder(placeholder)
-                        .search_placeholder("Search namespaces…")
-                        .search_accessibility_label("Search Namespace")
-                        .multiline_items();
-                    if namespaced {
-                        combobox = combobox.select_all("All namespaces", all_namespaces_state);
-                    }
-                    let namespace_response = combobox
-                        .filter_by(|option: &NamespaceOption| &option.presentation.search_text)
-                        .show_items(ui, &namespaces, |cb, ns| {
-                            let status = selected_api_resource.map(|api_resource| {
-                                cluster.is_namespace_watched(api_resource, &ns.namespace.name)
-                            });
-                            if let Some(action) = cb
-                                .item_with_status_detail(
-                                    &ns.presentation.primary,
-                                    &ns.presentation.secondary,
-                                    selected_namespaces.contains(&ns.namespace.name),
-                                    status,
-                                )
-                                .selection_action()
-                            {
-                                *namespace_selection = Some(match action {
-                                    SelectionAction::Replace => {
-                                        NamespaceSelection::Replace(ns.namespace.name.clone())
-                                    }
-                                    SelectionAction::Toggle => {
-                                        NamespaceSelection::Toggle(ns.namespace.name.clone())
-                                    }
-                                });
+                    // The namespace's own name is a second line only when the
+                    // identity template renamed it.
+                    let secondary = Some(ns.presentation.secondary.as_str())
+                        .filter(|secondary| *secondary != ns.presentation.primary)
+                        .unwrap_or_default();
+                    if let Some(action) = cb
+                        .item_with_status_detail(
+                            &ns.presentation.primary,
+                            secondary,
+                            selected_namespaces.contains(&ns.namespace.name),
+                            status,
+                        )
+                        .selection_action()
+                    {
+                        *namespace_selection = Some(match action {
+                            SelectionAction::Replace => {
+                                NamespaceSelection::Replace(ns.namespace.name.clone())
+                            }
+                            SelectionAction::Toggle => {
+                                NamespaceSelection::Toggle(ns.namespace.name.clone())
                             }
                         });
-                    if namespace_response.select_all_clicked {
-                        *namespace_selection = Some(if all_namespaces_selected {
-                            NamespaceSelection::ClearAll
-                        } else {
-                            NamespaceSelection::SelectAll
-                        });
                     }
-                },
-                selected_api_resource.map(|_| {
-                    LiveMeta::new(&count)
-                        .live(summary.live)
-                        .warning(problem.as_ref().map(|(warning, _)| *warning))
-                        // The list cannot step through its problem rows yet.
-                        .problem_keys(false)
-                }),
-            );
-            if let (Some(meta), Some((_, hover))) = (top_bar.meta, &problem) {
-                let _ = meta.tooltip(hover);
+                });
+            if namespace_response.select_all_clicked {
+                *namespace_selection = Some(if all_namespaces_selected {
+                    NamespaceSelection::ClearAll
+                } else {
+                    NamespaceSelection::SelectAll
+                });
             }
-        });
+            let Some(filters) = filters.filter(|_| selected_api_resource.is_some()) else {
+                return;
+            };
+            if let (true, Some(grouped)) = (bar.shows_grouping(), filters.grouped_by_namespace) {
+                let by = grouped.then_some("namespace");
+                effects.toggle_grouping |= FilterChip::grouping(by).show(ui).clicked();
+            }
+            effects.toggle_problems_only |=
+                FilterChip::problems(filters.problem_count, filters.problems_only)
+                    .show(ui)
+                    .clicked();
+        },
+        selected_api_resource.map(|_| {
+            LiveMeta::new(&count)
+                .live(summary.live)
+                .warning(problem.as_ref().map(|(warning, _)| *warning))
+                .problem_keys(filters.is_some_and(|filters| filters.problem_count > 0))
+        }),
+    );
+    if let (Some(meta), Some((_, hover))) = (top_bar.meta, &problem) {
+        let _ = meta.tooltip(hover);
+    }
+    // The list's header follows the band directly (A02).
+    ui.add_space(-ui.spacing().item_spacing.y);
+    if filters.is_some() && selected_api_resource.is_some() {
+        let TopBarKeys {
+            toggle_problems,
+            previous_problem,
+            next_problem,
+        } = TopBar::keys(ui);
+        effects.toggle_problems_only |= toggle_problems;
+        effects.problem_step = match (previous_problem, next_problem) {
+            (_, true) => Some(ProblemStep::Next),
+            (true, false) => Some(ProblemStep::Previous),
+            (false, false) => None,
+        };
+    }
+    effects
 }
 
 /// The search pill over the list of `noun` ("pods"): `/` or Ctrl+F

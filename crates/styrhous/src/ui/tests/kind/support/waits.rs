@@ -521,8 +521,9 @@ fn yaml_editor_state(ui_state: &UiState, resource_name: &str) -> Option<String> 
         return Some(format!("the {resource_name} editor was never opened"));
     };
     Some(format!(
-        "editor loading={}, YAML loaded={}, schema loading={}, schema loaded={}, saving={}, modified={}",
+        "editor loading={}, error={:?}, YAML loaded={}, schema loading={}, schema loaded={}, saving={}, modified={}",
         editor.loading,
+        editor.error,
         editor.original_yaml.is_some(),
         editor.schema_loading,
         editor.schema.is_some(),

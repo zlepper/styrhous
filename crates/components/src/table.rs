@@ -111,8 +111,6 @@ pub struct TableColumn {
     pub(crate) align: CellAlign,
     pub(crate) skeleton_width: Option<f32>,
     pub(crate) tabular: bool,
-    /// The cells hold small fields that inset their own text.
-    pub(crate) holds_fields: bool,
 }
 
 impl TableColumn {
@@ -127,17 +125,12 @@ impl TableColumn {
             align: CellAlign::Start,
             skeleton_width: None,
             tabular: false,
-            holds_fields: false,
         }
     }
 
     /// The horizontal padding of the column's start- or end-aligned cells.
     pub(crate) fn cell_inset(&self) -> f32 {
-        if self.holds_fields {
-            0.0
-        } else {
-            layout::CELL_PADDING_X
-        }
+        layout::CELL_PADDING_X
     }
 
     /// What the column is called to assistive technology: its header, or
@@ -208,14 +201,6 @@ impl TableColumnBuilder {
         self
     }
 
-    /// Cells that hold small fields (inputs, selects) which inset their own
-    /// text by the cell padding: the cells add none, so the fields' text
-    /// lines up with the header's.
-    pub fn fields(mut self) -> Self {
-        self.column.holds_fields = true;
-        self
-    }
-
     /// The width of this column's skeleton bar while the table is loading
     /// ([`Table::show_loading`]).
     pub fn skeleton_width(mut self, width: f32) -> Self {
@@ -240,7 +225,9 @@ pub struct Table {
     pub(super) is_selectable: bool,
     pub(super) fill_available_height: bool,
     pub(super) inspected_row: Option<usize>,
+    pub(super) current_row: Option<usize>,
     pub(super) forced_row_hover: Option<usize>,
+    pub(super) scroll_to_row: Option<usize>,
     pub(super) forced_header: Option<(String, HeaderState)>,
 }
 
@@ -253,7 +240,9 @@ impl Table {
             is_selectable: false,
             fill_available_height: false,
             inspected_row: None,
+            current_row: None,
             forced_row_hover: None,
+            scroll_to_row: None,
             forced_header: None,
         }
     }
@@ -293,10 +282,25 @@ impl Table {
         self
     }
 
+    /// Mark the row at `index` as the current one of a list that picks one
+    /// (the selected revision): the accent tint of a selected row, without a
+    /// checkbox.
+    pub fn current_row(mut self, index: Option<usize>) -> Self {
+        self.current_row = index;
+        self
+    }
+
     /// Paint the row at `index` hovered regardless of the pointer (boards
     /// and snapshots).
     pub fn force_row_hovered(mut self, index: usize) -> Self {
         self.forced_row_hover = Some(index);
+        self
+    }
+
+    /// Scroll a grouped table ([`Self::show_grouped_configurable`]) to the
+    /// data row at `index` (counted across groups), centring it.
+    pub fn scroll_to_row(mut self, index: Option<usize>) -> Self {
+        self.scroll_to_row = index;
         self
     }
 

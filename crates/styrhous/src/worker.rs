@@ -358,6 +358,7 @@ struct ResourceScope {
 mod cluster_commands;
 mod command_types;
 mod log_commands;
+mod node_commands;
 mod resource_commands;
 mod result_types;
 mod results;

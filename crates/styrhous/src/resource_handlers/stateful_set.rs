@@ -3,9 +3,8 @@ use crate::cluster_connection_manager::{
 };
 use crate::minimal_resource::{MinimalResource, from_kubernetes_resource};
 use crate::resource_handlers::{matches_namespaced_api_resource, matches_namespaced_resource};
-use crate::resource_table::{CellValue, READY_COLUMN, ResourceTableDefinition, column};
+use crate::resource_table::{READY_COLUMN, ResourceTableDefinition, column, replica_ready_cells};
 use k8s_openapi::api::apps::v1::StatefulSet;
-use std::collections::BTreeMap;
 
 pub(crate) fn watcher(context: TypedWatcherContext) -> Option<Box<dyn ResourceWatcher>> {
     matches_namespaced_resource::<StatefulSet>(&context)
@@ -24,10 +23,7 @@ fn extract(resource: &StatefulSet) -> MinimalResource {
     let desired = status.map(|status| status.replicas).unwrap_or(0);
     from_kubernetes_resource(
         resource,
-        BTreeMap::from([(
-            READY_COLUMN.to_owned(),
-            CellValue::Text(format!("{ready}/{desired}")),
-        )]),
+        replica_ready_cells(ready, desired).into_iter().collect(),
     )
 }
 use crate::api_resource::ApiResource;

@@ -29,12 +29,12 @@ pub(crate) fn table_definition(api_resource: &ApiResource) -> Option<ResourceTab
     matches_namespaced_api_resource::<Pod>(api_resource).then(|| ResourceTableDefinition {
         columns: vec![
             column(READY_COLUMN, "Ready", 72.0).numeric(),
-            column(CONTAINERS_COLUMN, "Containers", 104.0),
-            column(STATUS_COLUMN, "Status", 120.0),
-            column(CPU_COLUMN, "CPU", 80.0).numeric(),
-            column(MEMORY_COLUMN, "Memory", 88.0).numeric(),
-            column(RESTARTS_COLUMN, "Restarts", 88.0).numeric(),
-            column(NODE_COLUMN, "Node", 95.0),
+            column(CONTAINERS_COLUMN, "Containers", 100.0),
+            column(STATUS_COLUMN, "Status", 116.0),
+            column(RESTARTS_COLUMN, "Restarts", 84.0).numeric(),
+            column(CPU_COLUMN, "CPU", 76.0).numeric(),
+            column(MEMORY_COLUMN, "Memory", 84.0).numeric(),
+            column(NODE_COLUMN, "Node", 156.0),
         ],
     })
 }

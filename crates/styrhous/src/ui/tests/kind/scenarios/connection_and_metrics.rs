@@ -132,7 +132,8 @@ fn test_secret_inspector_actions_integration() {
     let (mut harness, cluster_key) = support::connected_kind_harness();
     support::wait_for_cluster_data(&mut harness, cluster_key);
     support::select_namespace(&mut harness, cluster_key, &fixture.namespace);
-    let secrets_resource = support::select_resource(&mut harness, "Config", "Secrets");
+    let secrets_resource =
+        support::select_resource(&mut harness, Some("Config & secrets"), "Secrets");
     support::wait_for_resource_sync(
         &mut harness,
         cluster_key,
@@ -294,7 +295,8 @@ fn test_resource_watcher_integration() {
             .contains(&fixture.namespace)
     );
 
-    let configmaps_resource = select_resource(&mut harness, "Config", "Config Maps");
+    let configmaps_resource =
+        select_resource(&mut harness, Some("Config & secrets"), "Config Maps");
     wait_for_resource_sync(
         &mut harness,
         cluster_key,
@@ -389,7 +391,7 @@ fn test_pod_metrics_charts_integration() {
     );
     wait_for_cluster_data(&mut harness, cluster_key);
     select_namespace(&mut harness, cluster_key, &fixture.namespace);
-    let pods_resource = select_resource(&mut harness, "Apps & Containers", "Pods");
+    let pods_resource = select_resource(&mut harness, None, "Pods");
     wait_for_resource_sync(
         &mut harness,
         cluster_key,
@@ -522,7 +524,7 @@ fn test_pod_metrics_charts_integration() {
         .max()
         .unwrap_or_default()
         .max(64 * 1024 * 1024);
-    harness.get_by_label("Resource usage");
+    assert_eq!(harness.get_all_by_label("Usage").count(), 2);
     harness.get_by_label(&format!(
         "Pod CPU usage chart; usage history available; 10-minute history; scale from 0 to {}; Request 100m, Limit 100m",
         format_cpu(max_cpu),
@@ -552,7 +554,7 @@ fn test_all_namespaces_watch_includes_namespaces_created_later() {
     harness.run_steps(2);
     harness.key_press(egui::Key::Escape);
     harness.run_steps(1);
-    let configmaps = select_resource(&mut harness, "Config", "Config Maps");
+    let configmaps = select_resource(&mut harness, Some("Config & secrets"), "Config Maps");
     assert!(
         harness.state().ui_state.clusters[&cluster_key].watches_every_namespace(&configmaps),
         "All namespaces is watched across every namespace"

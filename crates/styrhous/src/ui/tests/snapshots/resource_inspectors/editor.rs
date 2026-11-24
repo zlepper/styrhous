@@ -5,7 +5,7 @@ fn pod_resource_detail_inspector_snapshot() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = oracle_resource_table_state();
     harness.run();
-    harness.get_by_label("Apps & Containers").click_accesskit();
+    click_label(&mut harness, "Workloads");
     harness.run();
 
     let name = "coredns-66bc5c9577-ffw2s";
@@ -21,6 +21,7 @@ fn pod_resource_detail_inspector_snapshot() {
             cluster_key: 2,
             history_entry_id: 1,
             detail: Box::new(ResourceDetail {
+                yaml: None,
                 api_resource: pods,
                 name: name.into(),
                 namespace: Some("kube-system".into()),
@@ -216,6 +217,7 @@ fn pod_resource_detail_inspector_snapshot() {
 fn deployment_editor_completes_match_labels_in_a_selector() {
     let deployment = fixture_api_resource("apps", "Deployment", "deployments");
     let detail = ResourceDetail {
+        yaml: None,
         api_resource: deployment.clone(),
         name: "coredns".into(),
         namespace: Some("kube-system".into()),

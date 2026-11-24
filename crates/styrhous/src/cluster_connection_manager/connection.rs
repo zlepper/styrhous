@@ -12,15 +12,31 @@ pub struct Cluster {
     pub name: String,
     pub is_current: bool,
     pub presentation: crate::context_presentation::ContextPresentation,
+    /// The API server URL of the context's cluster, when the kubeconfig names one.
+    pub server: Option<String>,
 }
 
 pub async fn reload_kubeconfig() -> Result<KubernetesClustersUpdated> {
     let cfg = Kubeconfig::read().with_context(|| "Error reading kubeconfig")?;
+    Ok(KubernetesClustersUpdated(clusters_of(cfg)))
+}
+
+/// The contexts of `cfg`, each with the API server its cluster entry names.
+fn clusters_of(cfg: Kubeconfig) -> Vec<Cluster> {
     let current_context = cfg.current_context.clone();
-    let clusters = cfg
-        .contexts
+    let servers = cfg
+        .clusters
+        .iter()
+        .filter_map(|named| Some((named.name.clone(), named.cluster.as_ref()?.server.clone()?)))
+        .collect::<std::collections::HashMap<_, _>>();
+    cfg.contexts
         .into_iter()
         .map(|named_context| Cluster {
+            server: named_context
+                .context
+                .as_ref()
+                .and_then(|context| servers.get(&context.cluster))
+                .cloned(),
             is_current: current_context.as_deref() == Some(named_context.name.as_str()),
             presentation: named_context
                 .context
@@ -40,8 +56,7 @@ pub async fn reload_kubeconfig() -> Result<KubernetesClustersUpdated> {
                 .unwrap_or_default(),
             name: named_context.name,
         })
-        .collect();
-    Ok(KubernetesClustersUpdated(clusters))
+        .collect()
 }
 
 /// Context names and their referenced cluster names, used to match managed
@@ -301,5 +316,54 @@ mod tests {
             .await
             .expect("the retry loop should be aborted with its connection")
             .expect_err("the loop's state is dropped without ever signalling");
+    }
+}
+
+#[cfg(test)]
+mod kubeconfig_tests {
+    use super::*;
+
+    #[test]
+    fn a_context_carries_the_server_of_the_cluster_it_names() {
+        let cfg = Kubeconfig::from_yaml(
+            r#"
+apiVersion: v1
+kind: Config
+current-context: kind-kind
+clusters:
+- name: kind-kind
+  cluster: {server: "https://127.0.0.1:41207"}
+- name: no-server
+  cluster: {}
+contexts:
+- name: kind-kind
+  context: {cluster: kind-kind, user: u}
+- name: bare
+  context: {cluster: no-server, user: u}
+- name: dangling
+  context: {cluster: missing, user: u}
+users:
+- name: u
+  user: {}
+"#,
+        )
+        .expect("a valid kubeconfig");
+
+        let clusters = clusters_of(cfg)
+            .into_iter()
+            .map(|cluster| (cluster.name, cluster.is_current, cluster.server))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            clusters,
+            [
+                (
+                    "kind-kind".to_owned(),
+                    true,
+                    Some("https://127.0.0.1:41207".to_owned())
+                ),
+                ("bare".to_owned(), false, None),
+                ("dangling".to_owned(), false, None),
+            ]
+        );
     }
 }

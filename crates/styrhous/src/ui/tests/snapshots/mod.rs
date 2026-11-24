@@ -56,11 +56,11 @@ mod context_settings;
 mod flows;
 
 const OPEN_APPLICATION_SETTINGS: &str =
-    "Open application settings: Terminal, debug images, and updates.";
+    "Open application settings: Terminal, debug images and updates";
 const OPEN_CLUSTER_DISCOVERY: &str =
-    "Open cluster discovery: Find and add clusters from your cloud accounts.";
+    "Open cluster discovery: Find clusters in Azure, AWS and Tailscale";
 const OPEN_NAMESPACE_SELECTOR_SETTINGS: &str =
-    "Open namespace selector settings: Choose how namespaces are displayed.";
+    "Open namespace selector settings: How namespaces are labelled and searched";
 
 struct YamlEditorSnapshotState {
     editor: YamlEditorWindowState,
@@ -128,6 +128,7 @@ fn open_inspector_with_column_settings(state: &mut UiState, commands: &mut Vec<W
             default_width: 160.0,
             sortable: true,
             numeric: false,
+            default_hidden: false,
         }],
     );
     settings.set_resource_detail_owner(1);
@@ -366,6 +367,7 @@ fn open_typed_detail(
 
 fn config_map_detail(data: BTreeMap<String, String>) -> ResourceDetail {
     ResourceDetail {
+        yaml: None,
         api_resource: fixture_api_resource("core", "ConfigMap", "configmaps"),
         name: "settings".into(),
         namespace: Some("kube-system".into()),
@@ -426,7 +428,7 @@ fn deployment_selector_schema() -> ResourceSchema {
 fn show_apps_resource_table(harness: &mut Harness<MyEguiApp<MockWorker>>) {
     harness.state_mut().ui_state = oracle_resource_table_state();
     harness.run();
-    let apps_and_containers = harness.get_by_label("Apps & Containers").rect().center();
+    let apps_and_containers = harness.get_by_label("Workloads").rect().center();
     primary_click(harness, apps_and_containers);
     harness.run_steps(2);
 }
@@ -445,6 +447,22 @@ fn resource_table_name_header_context_position(
     egui::pos2(header.x + 132.0, header.y)
 }
 
+/// Show the Owner column of the open resource table, which is hidden until
+/// asked for, through the header's column menu.
+fn show_owner_column(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) {
+    let header = resource_table_name_header_context_position(harness);
+    secondary_click(harness, header);
+    harness.run_steps(2);
+    let owner = harness
+        .get_by_role_and_label(egui::accesskit::Role::CheckBox, "Owner")
+        .rect()
+        .center();
+    primary_click(harness, owner);
+    harness.run();
+    harness.key_press(egui::Key::Escape);
+    harness.run();
+}
+
 fn resource_table_name_resize_handle(harness: &Harness<MyEguiApp<MockWorker>>) -> egui::Rect {
     harness
         .get_by_role_and_label(egui::accesskit::Role::Button, "Resize Name column")
@@ -459,6 +477,7 @@ fn resource_table_name_width(harness: &mut Harness<MyEguiApp<MockWorker>>) -> f3
         default_width: 160.0,
         sortable: true,
         numeric: false,
+        default_hidden: false,
     };
     harness
         .state_mut()
@@ -484,16 +503,23 @@ fn open_workspace_column_settings(harness: &mut Harness<MyEguiApp<MockWorker>>) 
 
 mod application_flow;
 mod cluster_and_helm;
+mod clusters;
 mod debug_profiles;
 mod deployment_rollback;
+mod dialogs;
 mod discovery_and_navigation;
 mod global_blades;
+mod grouped_tables;
+mod inspectors;
 mod log_export;
+mod node_maintenance;
 mod resource_details;
 mod resource_inspectors;
 mod resource_menus_and_cells;
 mod resource_tables;
 mod selection_and_context;
+mod settings_boards;
+mod shell;
 mod table_configuration;
 mod terminal;
 mod theme;

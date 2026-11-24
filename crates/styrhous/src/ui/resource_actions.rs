@@ -35,8 +35,9 @@ impl MenuGroups {
 }
 
 /// Render the shared resource-level actions used by table rows and
-/// inspectors, grouped in the S07 order: edit · inspect (logs, shells) ·
-/// copy · lifecycle · destructive.
+/// inspectors, in the S07 order: edit · inspect (logs, shells) · copy, then
+/// the lifecycle actions and the destructive ones, each group set off by a
+/// separator (A04).
 #[allow(clippy::too_many_arguments)]
 pub(super) fn show_resource_action_items(
     menu: &mut Menu<'_>,
@@ -67,10 +68,6 @@ pub(super) fn show_resource_action_items(
     let pod_debug_shell = api_resource.is_pod()
         && !shell_containers.is_empty()
         && (!debug_image_presets.is_empty() || !pod_image_presets.is_empty());
-    // Shell containers are among the log containers.
-    if !log_containers.is_empty() || node_shell || pod_debug_shell {
-        groups.next(menu);
-    }
     show_log_actions(menu, resource, log_containers, pending_action);
     show_shell_actions(menu, resource, &shell_containers, pending_action);
     if pod_debug_shell {
@@ -110,7 +107,6 @@ pub(super) fn show_resource_action_items(
         );
     }
 
-    groups.next(menu);
     let copy = menu.item(MenuItem::new("Copy name").icon(Icon::ClipboardDocument));
     if copy.clicked() {
         copy.ctx.copy_text(resource.name.clone());
@@ -250,7 +246,8 @@ fn show_debug_images(
     });
 }
 
-/// Restart, roll back, scale and run: the actions that change what runs.
+/// Restart, roll back, scale and run, and a Node's cordon and drain: the
+/// actions that change what runs.
 fn show_lifecycle_actions(
     menu: &mut Menu<'_>,
     groups: &mut MenuGroups,
@@ -263,10 +260,14 @@ fn show_lifecycle_actions(
     let cron_job_namespace = crate::resource_handlers::cron_job::supports_manual_run(api_resource)
         .then(|| resource.namespace.clone())
         .flatten();
-    if !(rollout || supports_scale || cron_job_namespace.is_some()) {
+    let node = api_resource.is_node();
+    if !(rollout || supports_scale || cron_job_namespace.is_some() || node) {
         return;
     }
     groups.next(menu);
+    if node {
+        show_node_maintenance_actions(menu, resource, pending_action);
+    }
     if rollout {
         let restart = menu.item(MenuItem::new("Restart rollout").icon(Icon::ArrowPath));
         queue(pending_action, &restart, || {
@@ -301,6 +302,32 @@ fn show_lifecycle_actions(
             })
         });
     }
+}
+
+/// Cordon or Uncordon, whichever changes the Node, then Drain…
+fn show_node_maintenance_actions(
+    menu: &mut Menu<'_>,
+    resource: &MinimalResource,
+    pending_action: &mut Option<ResourceAction>,
+) {
+    let cordoned = crate::resource_handlers::node::is_cordoned(resource);
+    let cordon = menu.item(if cordoned {
+        MenuItem::new("Uncordon").icon(Icon::LockOpen)
+    } else {
+        MenuItem::new("Cordon").icon(Icon::LockClosed)
+    });
+    queue(pending_action, &cordon, || {
+        Some(ResourceAction::RequestNodeCordon {
+            name: resource.name.clone(),
+            cordon: !cordoned,
+        })
+    });
+    let drain = menu.item(MenuItem::new("Drain…").icon(Icon::ArrowDownTray));
+    queue(pending_action, &drain, || {
+        Some(ResourceAction::RequestNodeDrain {
+            name: resource.name.clone(),
+        })
+    });
 }
 
 pub(super) fn log_stream_targets(
@@ -432,7 +459,7 @@ mod tests {
     }
 
     #[test]
-    fn pod_actions_group_edit_inspect_copy_and_delete_in_menu_order() {
+    fn pod_actions_group_edit_inspect_and_copy_before_delete_in_menu_order() {
         let containers = vec![
             container("api", ContainerKind::App, Some("registry.example/api:v1")),
             container("sidecar", ContainerKind::App, None),
@@ -445,9 +472,13 @@ mod tests {
                 false,
             ),
             [
-                vec!["Edit YAML"],
-                vec!["View logs", "Shell", "Debug shell"],
-                vec!["Copy name"],
+                vec![
+                    "Edit YAML",
+                    "View logs",
+                    "Shell",
+                    "Debug shell",
+                    "Copy name"
+                ],
                 vec!["Delete"],
             ]
         );
@@ -463,11 +494,34 @@ mod tests {
                 true,
             ),
             [
-                vec!["Edit YAML"],
-                vec!["Copy name"],
+                vec!["Edit YAML", "Copy name"],
                 vec!["Restart rollout", "Roll back…", "Scale…"],
                 vec!["Delete"],
             ]
+        );
+    }
+
+    #[test]
+    fn node_maintenance_forms_the_lifecycle_group_and_toggles_cordon() {
+        let node = ApiResource {
+            namespaced: false,
+            ..api_resource("core", "Node", "nodes")
+        };
+        let mut schedulable = resource("worker");
+        schedulable.namespace = None;
+        let mut cordoned = schedulable.clone();
+        crate::resource_handlers::node::mark_cordoned(&mut cordoned);
+        assert_eq!(
+            menu_groups(node.clone(), schedulable, Vec::new(), false),
+            [
+                vec!["Edit YAML", "Shell", "Copy name"],
+                vec!["Cordon", "Drain…"],
+                vec!["Delete"],
+            ]
+        );
+        assert_eq!(
+            menu_groups(node, cordoned, Vec::new(), false)[1],
+            ["Uncordon", "Drain…"]
         );
     }
 

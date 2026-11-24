@@ -91,6 +91,17 @@ impl DebugProfile {
     }
 }
 
+/// The terminal the platform default opens, named for the settings blade.
+pub(crate) const fn default_terminal_name() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "Terminal"
+    } else if cfg!(windows) {
+        "Windows Terminal"
+    } else {
+        "x-terminal-emulator"
+    }
+}
+
 pub(crate) fn default_debug_image_presets() -> Vec<DebugImagePreset> {
     vec![
         DebugImagePreset {
@@ -118,6 +129,14 @@ pub(crate) struct TerminalLaunchSettings {
     pub(crate) custom_template: Option<String>,
     #[serde(default = "default_debug_image_presets")]
     pub(crate) debug_image_presets: Vec<DebugImagePreset>,
+    /// Whether the application looks for updates by itself at launch. A
+    /// change applies from the next launch.
+    #[serde(default = "default_check_for_updates")]
+    pub(crate) check_for_updates: bool,
+}
+
+fn default_check_for_updates() -> bool {
+    true
 }
 
 impl Default for TerminalLaunchSettings {
@@ -125,6 +144,7 @@ impl Default for TerminalLaunchSettings {
         Self {
             custom_template: None,
             debug_image_presets: default_debug_image_presets(),
+            check_for_updates: default_check_for_updates(),
         }
     }
 }

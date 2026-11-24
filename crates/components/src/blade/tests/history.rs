@@ -122,10 +122,9 @@ fn restored_history_keeps_focus_and_keyboard_navigation_on_the_active_blade() {
     navigator.borrow_mut().clear_transition();
     harness.run();
 
-    assert_eq!(
-        harness.get_all_by_label("Back in background blade").count(),
-        2,
-        "the restored history blades must not expose foreground controls"
+    assert!(
+        harness.query_by_label("Back in background blade").is_none(),
+        "the restored history blades are peeks without controls"
     );
     harness.get_by_label("Back").focus();
     harness.run();
@@ -305,11 +304,17 @@ fn only_the_two_most_recent_history_blades_are_rendered() {
     rendered.borrow_mut().clear();
     harness.run();
 
+    // History blades are peeks: only the active blade renders its content.
     let rendered = rendered.borrow();
-    assert!(!rendered.contains(&1), "the oldest blade must be hidden");
     assert!(
-        rendered.chunks_exact(3).all(|frame| frame == [2, 3, 4]),
-        "only the two newest history blades and the active blade should render: {rendered:?}"
+        !rendered.is_empty() && rendered.iter().all(|id| *id == 4),
+        "only the active blade should render its content: {rendered:?}"
+    );
+    harness.get_by_label("Second");
+    harness.get_by_label("Third");
+    assert!(
+        harness.query_by_label("First").is_none(),
+        "the oldest blade must be hidden"
     );
 }
 
@@ -399,16 +404,11 @@ fn content_ids_are_synthesized_from_stack_positions() {
     rendered.borrow_mut().clear();
     harness.run();
 
-    let expected = [
-        (1, Id::new(stack_source).with(("blade-content", 0))),
-        (2, Id::new(stack_source).with(("blade-content", 1))),
-        (3, Id::new(stack_source).with(("blade-content", 2))),
-    ];
+    // History blades are peeks, so only the active blade renders content.
+    let expected = [(3, Id::new(stack_source).with(("blade-content", 2)))];
     assert!(
-        rendered
-            .borrow()
-            .chunks_exact(expected.len())
-            .all(|frame| frame == expected),
+        !rendered.borrow().is_empty()
+            && rendered.borrow().iter().all(|entry| *entry == expected[0]),
         "content IDs should be derived from each blade's stack position: {rendered:?}"
     );
 }
@@ -465,4 +465,109 @@ fn hidden_history_blades_restore_their_existing_child_state() {
         &[1, 2, 3, 4],
         "returning to a hidden entry must use its original egui content id"
     );
+}
+
+#[test]
+fn history_blades_peek_with_their_kind_and_name() {
+    let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+        id: 1,
+        title: "coredns",
+    })));
+    for (id, title) in [(2, "coredns-66bc5c9577"), (3, "coredns-66bc5c9577-ffw2s")] {
+        navigator.borrow_mut().push(TestBlade { id, title });
+    }
+    navigator.borrow_mut().clear_transition();
+    let stack = BladeStack::new("blade-peek-names");
+    let navigator_for_ui = Rc::clone(&navigator);
+    let mut harness = Harness::new_ui(move |ui| {
+        stack.show_blades(
+            ui.ctx(),
+            &mut navigator_for_ui.borrow_mut(),
+            |blade| BladeDescription {
+                peek: BladePeek {
+                    kind: Some(
+                        if blade.id == 1 {
+                            "Deployment"
+                        } else {
+                            "ReplicaSet"
+                        }
+                        .to_owned(),
+                    ),
+                    category: Some(1),
+                    name: blade.title.to_owned(),
+                },
+                style: BladeStyle::Standard,
+            },
+            |ui, blade, _| {
+                chrome::blade_title(ui, None, blade.title);
+                BladeHeader {
+                    value: (),
+                    action: HeaderAction::None,
+                }
+            },
+            render_test_blade,
+        );
+    });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+
+    harness.get_by_label("Deployment");
+    harness.get_by_label("ReplicaSet");
+    harness.get_by_label("coredns");
+    harness.get_by_label("coredns-66bc5c9577");
+}
+
+#[test]
+fn inspector_style_blades_draw_their_own_header_and_navigate_through_it() {
+    let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+        id: 1,
+        title: "First",
+    })));
+    navigator.borrow_mut().push(TestBlade {
+        id: 2,
+        title: "Second",
+    });
+    navigator.borrow_mut().clear_transition();
+    let stack = BladeStack::new("blade-inspector-style");
+    let navigator_for_ui = Rc::clone(&navigator);
+    let mut harness = Harness::new_ui(move |ui| {
+        stack.show_blades(
+            ui.ctx(),
+            &mut navigator_for_ui.borrow_mut(),
+            |blade| BladeDescription {
+                peek: BladePeek {
+                    name: blade.title.to_owned(),
+                    ..BladePeek::default()
+                },
+                style: BladeStyle::Inspector,
+            },
+            |ui, blade, layer| {
+                let response = InspectorHeader::new(
+                    blade.title,
+                    BladeNavigation::new(layer.can_go_back, layer.can_go_forward),
+                )
+                .show(ui, |_| {});
+                BladeHeader {
+                    value: (),
+                    action: if response.back {
+                        HeaderAction::Back
+                    } else {
+                        HeaderAction::None
+                    },
+                }
+            },
+            |ui, blade, _| {
+                ui.label(format!("Body of {}", blade.title));
+            },
+        );
+    });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+
+    harness.get_by_label("Body of Second");
+    harness.get_by_label("Back").click();
+    harness.run();
+    navigator.borrow_mut().clear_transition();
+    harness.run();
+    assert_eq!(navigator.borrow().current().id, 1);
 }

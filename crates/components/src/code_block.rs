@@ -16,6 +16,7 @@ const FILENAME: TextRole = type_scale::MONO_ROW_STRONG;
 const HEADER_GAP: f32 = space::S6;
 /// Padding inside the block (`padding: 10px 14px`).
 const PADDING: Margin = Margin::symmetric(14, 10);
+const COMPACT_PADDING: Margin = Margin::symmetric(10, 6);
 
 /// The response of a [`CodeBlock`].
 pub struct CodeBlockResponse {
@@ -30,6 +31,7 @@ pub struct CodeBlock<'a> {
     code: &'a str,
     filename: Option<&'a str>,
     wrap: bool,
+    compact: bool,
 }
 
 impl<'a> CodeBlock<'a> {
@@ -38,6 +40,7 @@ impl<'a> CodeBlock<'a> {
             code,
             filename: None,
             wrap: false,
+            compact: false,
         }
     }
 
@@ -46,6 +49,13 @@ impl<'a> CodeBlock<'a> {
     /// selected, for technical detail such as an error dialog's.
     pub fn wrap(mut self) -> Self {
         self.wrap = true;
+        self
+    }
+
+    /// Pad the block 10 by 6 points instead of 14 by 10, for a single line
+    /// of code beside a button (A09).
+    pub fn compact(mut self) -> Self {
+        self.compact = true;
         self
     }
 
@@ -94,7 +104,11 @@ impl<'a> CodeBlock<'a> {
         egui::Frame::new()
             .fill(theme.code.surface)
             .corner_radius(radius::CODE_BLOCK)
-            .inner_margin(PADDING)
+            .inner_margin(if self.compact {
+                COMPACT_PADDING
+            } else {
+                PADDING
+            })
             .show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
                 if self.wrap {

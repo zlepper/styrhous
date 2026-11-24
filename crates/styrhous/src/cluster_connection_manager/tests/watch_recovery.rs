@@ -5,7 +5,7 @@
 use super::*;
 use crate::cluster_connection_manager::HelmWatchContext;
 use crate::resource_detail::{ResourceDetail, ResourceDetailPayload};
-use futures_util::stream;
+use futures_util::{StreamExt, stream};
 use k8s_openapi::api::core::v1::Namespace;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -268,6 +268,7 @@ fn dynamic_object(name: &str) -> DynamicObject {
 
 async fn detail_for(object: DynamicObject) -> ResourceDetail {
     ResourceDetail {
+        yaml: None,
         api_resource: pod_api_resource(),
         name: object.metadata.name.unwrap_or_default(),
         namespace: None,
@@ -510,6 +511,92 @@ async fn node_pod_watch_retries_and_publishes_only_after_initial_sync() {
     );
 }
 
+fn pod_on(uid: &str, node: &str) -> Pod {
+    let mut pod = owned_pod(uid);
+    pod.spec = Some(k8s_openapi::api::core::v1::PodSpec {
+        node_name: Some(node.to_owned()),
+        ..Default::default()
+    });
+    pod
+}
+
+async fn run_node_pod_counts(events: Stream<Pod>, retry: RetryTracker) -> Vec<WorkerResultBox> {
+    let (sender, receiver) = channel();
+    consume_node_pod_count_stream(5, 9, stream::iter(events), &sender, retry).await;
+    drain(receiver)
+}
+
+fn published_counts(results: &[WorkerResultBox]) -> Vec<BTreeMap<String, usize>> {
+    results
+        .iter()
+        .filter(|result| is::<NodePodCountsUpdated>(result))
+        .map(|result| get::<NodePodCountsUpdated>(result).counts.clone())
+        .collect()
+}
+
+#[tokio::test]
+async fn node_pod_count_watch_publishes_complete_changed_counts_and_reports_streaks() {
+    let counts = |entries: &[(&str, usize)]| {
+        entries
+            .iter()
+            .map(|(node, count)| ((*node).to_owned(), *count))
+            .collect::<BTreeMap<_, _>>()
+    };
+    let events: Stream<Pod> = vec![
+        Ok(Event::Init),
+        Ok(Event::InitApply(pod_on("a", "worker-1"))),
+        Ok(Event::InitApply(pod_on("b", "worker-1"))),
+        Ok(Event::InitDone),
+        // A Pod update that keeps its Node changes no count.
+        Ok(Event::Apply(pod_on("a", "worker-1"))),
+        Ok(Event::Apply(pod_on("c", "worker-2"))),
+        Err("connection lost"),
+        Ok(Event::Init),
+        Ok(Event::InitApply(pod_on("a", "worker-1"))),
+        Ok(Event::InitApply(pod_on("b", "worker-1"))),
+        Ok(Event::InitApply(pod_on("c", "worker-2"))),
+        Ok(Event::InitDone),
+        Ok(Event::Delete(pod_on("b", "worker-1"))),
+    ];
+    let results = run_node_pod_counts(events, impatient()).await;
+
+    assert_eq!(
+        published_counts(&results),
+        [
+            counts(&[("worker-1", 2)]),
+            counts(&[("worker-1", 2), ("worker-2", 1)]),
+            // The recovery republishes unchanged counts to clear the failure.
+            counts(&[("worker-1", 2), ("worker-2", 1)]),
+            counts(&[("worker-1", 1), ("worker-2", 1)]),
+        ],
+        "the relist's Init and InitApply publish no partial counts"
+    );
+    assert_eq!(count::<NodePodCountsWatchFailed>(&results), 1);
+    assert!(
+        results
+            .iter()
+            .position(is::<NodePodCountsWatchFailed>)
+            .is_some_and(|failed| failed == 2),
+        "the failure follows the counts it interrupted"
+    );
+}
+
+#[tokio::test]
+async fn node_pod_count_watch_is_silent_for_short_blips() {
+    let events: Stream<Pod> = vec![
+        Ok(Event::InitApply(pod_on("a", "worker-1"))),
+        Ok(Event::InitDone),
+        Err("blip"),
+        Ok(Event::Init),
+        Ok(Event::InitApply(pod_on("a", "worker-1"))),
+        Ok(Event::InitDone),
+    ];
+    let results = run_node_pod_counts(events, patient()).await;
+
+    assert_eq!(results.len(), 1, "unchanged counts are published once");
+    assert!(is::<NodePodCountsUpdated>(&results[0]));
+}
+
 /// Resource stream that fails on every list attempt: kube-runtime yields
 /// `Init` before each list, so an outage looks like `Err, Init, Err, Init, ...`.
 fn outage<T: 'static>(attempts: usize) -> Stream<T> {
@@ -570,6 +657,9 @@ async fn detail_and_managed_watches_report_outages_that_alternate_errors_and_ini
     .await;
     let results = drain(receiver);
     assert_eq!(count::<ResourceDetailWatchFailed>(&results), 2);
+    let results = run_node_pod_counts(outage::<Pod>(3), impatient()).await;
+    assert_eq!(count::<NodePodCountsWatchFailed>(&results), 1);
+    assert_eq!(count::<NodePodCountsUpdated>(&results), 0);
 
     let (updates_sender, updates_receiver) = tokio::sync::mpsc::unbounded_channel();
     consume_managed_type_stream(
@@ -695,7 +785,20 @@ async fn helm_watch_with_both_backends_failing_initially_still_releases_startup(
 #[tokio::test]
 async fn helm_relist_keeps_releases_visible_until_it_completes() {
     let (sender, receiver) = channel();
-    let secrets: Stream<Secret> = vec![Ok(Event::Init), Ok(Event::InitDone)];
+    // Both streams are always ready and `select!` picks between them at random, so
+    // the ConfigMap stream is held back until the Secret backend has handled its
+    // whole list; otherwise it could relist before anything was ever published.
+    let (secrets_listed, wait_for_secrets) = tokio::sync::oneshot::channel::<()>();
+    let secrets = stream::iter(vec![
+        Ok::<_, &'static str>(Event::<Secret>::Init),
+        Ok(Event::InitDone),
+    ])
+    .chain(
+        stream::once(async move {
+            let _ = secrets_listed.send(());
+        })
+        .filter_map(|()| async { None }),
+    );
     let config_maps: Stream<ConfigMap> = vec![
         Ok(Event::Init),
         Ok(Event::InitApply(helm_config_map("keep"))),
@@ -708,8 +811,12 @@ async fn helm_relist_keeps_releases_visible_until_it_completes() {
         Ok(Event::InitDone),
     ];
     consume_helm_streams(
-        stream::iter(secrets),
-        stream::iter(config_maps),
+        secrets,
+        stream::once(async move {
+            let _ = wait_for_secrets.await;
+        })
+        .filter_map(|()| async { None })
+        .chain(stream::iter(config_maps)),
         &helm_context(sender),
         None,
         [patient(), patient()],

@@ -635,3 +635,49 @@ impl WorkerResult for WorkerError {
         tracing::error!(error = ?self.error, "Worker command failed");
     }
 }
+
+// Node maintenance and the Nodes table's Pod counts.
+#[derive(Debug)]
+pub(crate) struct NodeCordonCompleted {
+    pub(crate) cluster_key: i32,
+    pub(crate) operation_id: u64,
+    pub(crate) node_name: String,
+    pub(crate) cordon: bool,
+}
+#[derive(Debug)]
+pub(crate) struct NodeCordonFailed {
+    pub(crate) cluster_key: i32,
+    pub(crate) operation_id: u64,
+    pub(crate) node_name: String,
+    pub(crate) cordon: bool,
+    pub(crate) error: String,
+}
+/// The Node was cordoned and its Pods were handled as `report` says.
+#[derive(Debug)]
+pub(crate) struct NodeDrainCompleted {
+    pub(crate) cluster_key: i32,
+    pub(crate) operation_id: u64,
+    pub(crate) node_name: String,
+    pub(crate) report: crate::cluster_connection_manager::NodeDrainReport,
+}
+/// The Node could not be cordoned or its Pods could not be listed.
+#[derive(Debug)]
+pub(crate) struct NodeDrainFailed {
+    pub(crate) cluster_key: i32,
+    pub(crate) operation_id: u64,
+    pub(crate) node_name: String,
+    pub(crate) error: String,
+}
+/// Non-terminated Pods per Node name; a Node without Pods is absent.
+#[derive(Debug)]
+pub(crate) struct NodePodCountsUpdated {
+    pub(crate) cluster_key: i32,
+    pub(crate) generation: u64,
+    pub(crate) counts: BTreeMap<String, usize>,
+}
+#[derive(Debug)]
+pub(crate) struct NodePodCountsWatchFailed {
+    pub(crate) cluster_key: i32,
+    pub(crate) generation: u64,
+    pub(crate) error: String,
+}

@@ -178,6 +178,7 @@ pub struct SearchPill<'a> {
     accessibility_label: String,
     width: f32,
     focus_key: bool,
+    key_when_disabled: bool,
     forced_state: Option<ControlState>,
 }
 
@@ -194,6 +195,7 @@ impl<'a> SearchPill<'a> {
             accessibility_label: "Search".to_owned(),
             width: size::SEARCH_PILL,
             focus_key: true,
+            key_when_disabled: false,
             forced_state: None,
         }
     }
@@ -245,6 +247,13 @@ impl<'a> SearchPill<'a> {
         self
     }
 
+    /// Keep the `/` key on the pill while it is disabled (the idle top bar of
+    /// a window with no cluster).
+    pub fn key_when_disabled(mut self) -> Self {
+        self.key_when_disabled = true;
+        self
+    }
+
     /// Paint `state` whatever the pointer and keyboard do (design boards).
     pub fn force_state(mut self, state: ControlState) -> Self {
         self.forced_state = Some(state);
@@ -267,9 +276,12 @@ impl<'a> SearchPill<'a> {
         // The keys show only on a pill that `/` focuses.
         if self.focus_key {
             field = field.key_hint("/", "esc");
+            if self.key_when_disabled {
+                field = field.key_hint_when_disabled();
+            }
         }
         if let Some(regex) = self.regex {
-            field = field.regex(regex);
+            field = field.regex(regex).regex_on_demand();
         }
         field = field.status(self.status);
         if let Some(state) = self.forced_state {

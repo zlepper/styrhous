@@ -1,5 +1,6 @@
 use anyhow::{Context, Result, anyhow, bail};
 use async_trait::async_trait;
+use components::design::theme::Tone;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, decode_header};
 use reqwest::{Client, StatusCode, Url, redirect::Policy};
 use serde::{Deserialize, Serialize};
@@ -161,6 +162,15 @@ impl LicenseStatus {
         }
     }
 
+    /// The tone of the status pill: healthy is green, a problem amber.
+    pub(crate) fn tone(&self) -> Tone {
+        match self {
+            _ if self.shows_warning() => Tone::Warning,
+            Self::Licensed(_) => Tone::Success,
+            _ => Tone::Neutral,
+        }
+    }
+
     /// The free-use explanation, for states where the installation holds no license.
     pub(crate) fn free_use_note(&self) -> Option<&'static str> {
         match self {
@@ -233,15 +243,15 @@ pub(crate) struct VerifiedLease {
 }
 
 impl VerifiedLease {
+    /// The day the lease runs out, as "1 Jan 2100".
     pub(crate) fn expiry_label(&self) -> String {
-        time::OffsetDateTime::from_unix_timestamp(self.expires_at as i64)
-            .ok()
-            .and_then(|value| {
-                value
-                    .format(&time::format_description::well_known::Rfc3339)
-                    .ok()
-            })
-            .unwrap_or_else(|| "an unknown time".into())
+        time::OffsetDateTime::from_unix_timestamp(self.expires_at as i64).map_or_else(
+            |_| "an unknown time".into(),
+            |value| {
+                let month = value.month().to_string();
+                format!("{} {} {}", value.day(), &month[..3], value.year())
+            },
+        )
     }
 }
 
@@ -496,6 +506,11 @@ impl LicensingService {
         self.commands = None;
         self.results = None;
         self.status = status;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_last_check_for_test(&mut self, unix: u64) {
+        self.settings.last_check_unix = Some(unix);
     }
 
     #[cfg(test)]

@@ -331,6 +331,7 @@ pub struct Chip<'a> {
     value: &'a str,
     copy_label: Option<&'a str>,
     copy_text: Option<&'a str>,
+    quiet_copy: bool,
     forced_state: Option<crate::interaction::ControlState>,
 }
 
@@ -342,6 +343,7 @@ impl<'a> Chip<'a> {
             value,
             copy_label: None,
             copy_text: None,
+            quiet_copy: false,
             forced_state: None,
         }
     }
@@ -358,6 +360,14 @@ impl<'a> Chip<'a> {
     /// room for a copy icon that shows on hover, and a click copies the value.
     pub fn copyable(mut self, label: &'a str) -> Self {
         self.copy_label = Some(label);
+        self
+    }
+
+    /// [`Self::copyable`] without the room for a copy icon: the chip keeps its size,
+    /// a click copies and the tooltip says "Copy".
+    pub fn copyable_quietly(mut self, label: &'a str) -> Self {
+        self.copy_label = Some(label);
+        self.quiet_copy = true;
         self
     }
 
@@ -391,7 +401,10 @@ impl<'a> Chip<'a> {
             role.text_format(ui.ctx(), theme.text.primary),
         );
         // C13: one chip truncates at its maximum width, with a tooltip.
-        let icon_slot = self.copy_label.map_or(0.0, |_| space::S4 + size::ICON_SM);
+        let icon_slot = self
+            .copy_label
+            .filter(|_| !self.quiet_copy)
+            .map_or(0.0, |_| space::S4 + size::ICON_SM);
         job.wrap.max_width = size::CHIP_MAX_WIDTH - 2.0 * size::PILL_PADDING_X - icon_slot;
         job.wrap.max_rows = 1;
         job.wrap.break_anywhere = true;
@@ -423,10 +436,10 @@ impl<'a> Chip<'a> {
                     capsule.fill
                 };
                 Capsule { fill, ..capsule }.paint(ui, rect, Some(&label));
-                if active && ui.is_rect_visible(rect) {
+                if active && !self.quiet_copy && ui.is_rect_visible(rect) {
                     crate::copy::paint_copy_icon(ui, rect, size::PILL_PADDING_X, rect.height());
                 }
-                full
+                full.or_else(|| self.quiet_copy.then(|| format!("Copy {words}")))
             },
         )
     }
@@ -463,8 +476,19 @@ pub fn chip_flow<R>(ui: &mut Ui, add_chips: impl FnOnce(&mut Ui) -> R) -> R {
 /// A [`chip_flow`] led by a caption [`size::CHIP_ROW_LABEL`] wide, centred
 /// on the first row of chips: "COMMAND  /coredns" (C13 "Chips & code").
 pub fn labelled_chips<R>(ui: &mut Ui, label: &str, add_chips: impl FnOnce(&mut Ui) -> R) -> R {
+    labelled_chips_with_label_width(ui, label, size::CHIP_ROW_LABEL, add_chips)
+}
+
+/// A [`labelled_chips`] row whose caption is `label_width` wide (the
+/// inspector's container rows are narrower than the data-display board's).
+pub fn labelled_chips_with_label_width<R>(
+    ui: &mut Ui,
+    label: &str,
+    label_width: f32,
+    add_chips: impl FnOnce(&mut Ui) -> R,
+) -> R {
     chip_flow(ui, |ui| {
-        let size = vec2(size::CHIP_ROW_LABEL, size::PILL_HEIGHT);
+        let size = vec2(label_width, size::PILL_HEIGHT);
         let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
         let role = type_scale::CAPTION;
         let color = ui.tokens().text.muted;

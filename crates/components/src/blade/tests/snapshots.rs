@@ -156,15 +156,13 @@ fn overlap_detection_ignores_intentionally_stacked_blade_layers() {
     navigator.borrow_mut().clear_transition();
     harness.run();
 
-    let background_buttons: Vec<_> = harness
-        .get_all_by_label("Back in background blade")
-        .collect();
-    assert_eq!(background_buttons.len(), 2);
+    // The history blades are peeks that show only their names, stacked behind
+    // the active blade.
+    harness.get_by_label("First");
+    harness.get_by_label("Second");
     assert!(
-        background_buttons[0]
-            .rect()
-            .intersects(background_buttons[1].rect()),
-        "the test must exercise intentional blade overlap"
+        harness.query_by_label("Back in background blade").is_none(),
+        "a peek has no controls"
     );
     assert!(
         harness

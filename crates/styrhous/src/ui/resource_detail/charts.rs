@@ -21,7 +21,7 @@ pub(super) fn usage_chart_pair(
     stale: bool,
 ) {
     ui.scope(|ui| {
-        ui.spacing_mut().item_spacing.x = space::S24;
+        ui.spacing_mut().item_spacing.x = space::S20;
         ui.columns(2, |columns| {
             usage_chart(
                 &mut columns[0],
@@ -91,7 +91,7 @@ fn usage_chart(
         .iter()
         .map(|(timestamp, _)| *timestamp)
         .max()
-        .unwrap_or_else(time::OffsetDateTime::now_utc);
+        .unwrap_or_else(|| crate::ui::clock::now(ui.ctx()));
     let start = end - POD_USAGE_HISTORY_WINDOW;
     let points: Vec<[f32; 2]> = samples
         .iter()
@@ -131,6 +131,7 @@ fn usage_chart(
         .tooltip(&tooltip)
         .accessibility_label(chart_summary)
         .stale(stale)
+        .compact()
         .empty_text(if stale {
             "Unavailable"
         } else {

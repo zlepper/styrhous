@@ -8,7 +8,7 @@
 use egui::{Color32, Context, Frame, Margin, RichText, Ui};
 
 use crate::design::theme::{Theme, ThemeExt};
-use crate::design::{space, stroke, type_scale};
+use crate::design::{size, space, stroke, type_scale};
 
 const DRAWER_MARGIN: i8 = space::S12 as i8;
 
@@ -16,11 +16,14 @@ const DRAWER_MARGIN: i8 = space::S12 as i8;
 pub struct WorkspacePage;
 
 impl WorkspacePage {
-    /// Frame for the central panel, filled with `surface-canvas`.
+    /// Frame for the central panel beside the sidebar, filled with
+    /// `surface-canvas`; its end keeps [`size::WORKSPACE_END_GUTTER`] for a
+    /// list's scroll track (A02 `.main`).
     pub fn canvas_frame(theme: &Theme) -> Frame {
-        Frame::NONE
-            .fill(theme.surface.canvas)
-            .inner_margin(Margin::ZERO)
+        Frame::NONE.fill(theme.surface.canvas).inner_margin(Margin {
+            right: size::WORKSPACE_END_GUTTER as i8,
+            ..Margin::ZERO
+        })
     }
 
     pub fn show<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R {

@@ -56,3 +56,43 @@ impl PersistedApiResource {
         api_resource.identity() == (self.group.as_str(), self.name.as_str())
     }
 }
+
+/// The kinds pinned to the top of the sidebar (S09), in the order they show.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub(super) struct PinnedKinds {
+    #[serde(default)]
+    pub(super) kinds: Vec<PersistedApiResource>,
+}
+
+impl Default for PinnedKinds {
+    /// Pods, Deployments, Nodes and Helm releases, as the design pins them.
+    fn default() -> Self {
+        let kind = |group: &str, name: &str| PersistedApiResource {
+            group: group.to_owned(),
+            name: name.to_owned(),
+        };
+        Self {
+            kinds: vec![
+                kind(crate::api_resource::CORE_GROUP, "pods"),
+                kind("apps", "deployments"),
+                kind(crate::api_resource::CORE_GROUP, "nodes"),
+                kind(crate::helm_release::GROUP, crate::helm_release::NAME),
+            ],
+        }
+    }
+}
+
+impl PinnedKinds {
+    pub(super) fn contains(&self, api_resource: &ApiResource) -> bool {
+        self.kinds.iter().any(|kind| kind.matches(api_resource))
+    }
+
+    /// Pin `api_resource` after the pinned kinds, or unpin it.
+    pub(super) fn set_pinned(&mut self, api_resource: &ApiResource, pinned: bool) {
+        self.kinds.retain(|kind| !kind.matches(api_resource));
+        if pinned {
+            self.kinds
+                .push(PersistedApiResource::from_api_resource(api_resource));
+        }
+    }
+}

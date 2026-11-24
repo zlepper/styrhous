@@ -19,7 +19,7 @@ fn notification_history_blade_shows_session_outcomes_and_marks_them_read() {
     state.record_operation_outcome(
         2,
         OperationOutcome::Failure,
-        "Bulk delete completed with 1 failure",
+        "Bulk delete finished with 1 failure",
         None,
         "3 Pods",
         Some("2 deleted, 1 failed".into()),
@@ -51,16 +51,14 @@ fn notification_history_blade_shows_session_outcomes_and_marks_them_read() {
         4
     );
     harness.ui_harness("notifications/notification_history_unread_badge");
-    let notifications_position = harness
-        .get_by_label("Notifications, 4 unread")
-        .rect()
-        .center();
+    let notifications_position = harness.get_by_label("Notifications").rect().center();
     primary_click(&mut harness, notifications_position);
     harness.run_steps(2);
 
-    harness.get_by_label("Recent resource operation outcomes from this session.");
+    harness.get_by_label("Outcomes of actions from this session.");
     harness.get_by_label("Couldn’t run CronJob");
-    assert_eq!(harness.state().ui_state.unread_operation_count(), 0);
+    // Opening the history clears the toasts but leaves the entries unread.
+    assert_eq!(harness.state().ui_state.unread_operation_count(), 4);
     assert!(
         harness
             .state()
@@ -68,6 +66,18 @@ fn notification_history_blade_shows_session_outcomes_and_marks_them_read() {
             .clusters
             .values()
             .all(|cluster| cluster.transient_operation_toasts.is_empty())
+    );
+    harness.ui_harness("notifications/notification_history_blade_shows_unread_outcomes");
+
+    click_label(&mut harness, "Mark all read");
+    assert_eq!(harness.state().ui_state.unread_operation_count(), 0);
+    harness.get_by_label("Couldn’t run CronJob");
+    assert!(
+        harness
+            .get_by_label("Mark all read")
+            .accesskit_node()
+            .is_disabled(),
+        "with nothing left to read, there is nothing to mark"
     );
     harness.ui_harness(
         "notifications/notification_history_blade_shows_session_outcomes_and_marks_them_read",
@@ -103,7 +113,7 @@ fn partial_api_discovery_shows_a_toast_naming_the_failed_groups() {
         }) as WorkerResultBox);
     harness.run();
 
-    harness.get_by_label("2 API groups could not be loaded");
+    harness.get_by_label("2 API groups couldn’t be loaded");
     harness.ui_harness("notifications/partial_api_discovery_toast");
 }
 
@@ -140,9 +150,9 @@ fn recovered_api_groups_appear_in_the_sidebar_with_a_success_toast() {
             }],
         }) as WorkerResultBox);
     run_with_pinned_toasts(&mut harness);
-    harness.get_by_label("Apps & Containers").click();
+    harness.get_by_label("Workloads").click();
     harness.run();
-    harness.get_by_label("1 API group could not be loaded");
+    harness.get_by_label("1 API group couldn’t be loaded");
     assert!(harness.query_by_label("Jobs").is_none());
     harness.ui_harness("notifications/api_group_recovery_before");
 
@@ -200,7 +210,7 @@ fn partial_api_discovery_toast_summarises_many_failed_groups() {
         }) as WorkerResultBox);
     harness.run();
 
-    harness.get_by_label("5 API groups could not be loaded");
+    harness.get_by_label("5 API groups couldn’t be loaded");
     harness.ui_harness("notifications/partial_api_discovery_toast_many_groups");
 }
 
@@ -229,10 +239,7 @@ fn notification_history_includes_every_cluster_and_marks_all_entries_read() {
     harness.run();
     assert_eq!(harness.state().ui_state.unread_operation_count(), 2);
 
-    let notifications_position = harness
-        .get_by_label("Notifications, 2 unread")
-        .rect()
-        .center();
+    let notifications_position = harness.get_by_label("Notifications").rect().center();
     primary_click(&mut harness, notifications_position);
     harness.run_steps(2);
 
@@ -245,6 +252,9 @@ fn notification_history_includes_every_cluster_and_marks_all_entries_read() {
             .collect::<Vec<_>>(),
         vec!["kind-kind", "dev"]
     );
+    // Looking at the history does not read it; "Mark all read" does.
+    assert_eq!(harness.state().ui_state.unread_operation_count(), 2);
+    click_label(&mut harness, "Mark all read");
     assert_eq!(harness.state().ui_state.unread_operation_count(), 0);
 }
 
@@ -378,7 +388,7 @@ fn open_license_settings(harness: &mut Harness<MyEguiApp<MockWorker>>, entry: Li
             );
             open_settings(harness);
             let card = format!(
-                "Open license and account settings: Manage your license and account. Custom compatible server ({card_detail})"
+                "Open license and account settings: Custom compatible server ({card_detail})"
             );
             let license_position = harness.get_by_label(&card).rect().center();
             primary_click(harness, license_position);
@@ -389,7 +399,7 @@ fn open_license_settings(harness: &mut Harness<MyEguiApp<MockWorker>>, entry: Li
 }
 
 /// A lease far in the future, so snapshot text never depends on the current time.
-fn fixed_lease(state: &str, reason_code: &str) -> VerifiedLease {
+pub(super) fn fixed_lease(state: &str, reason_code: &str) -> VerifiedLease {
     VerifiedLease {
         user_id: uuid::Uuid::from_u128(1),
         seat_id: uuid::Uuid::from_u128(2),
@@ -428,9 +438,9 @@ fn licensed_commercial_account_actions_show_license_details() {
         },
     );
 
-    harness.get_by_label("Commercial license active.");
+    harness.get_by_label("Commercial");
     assert!(harness.query_by_label(FREE_USE_NOTE).is_none());
-    harness.get_by_label("Available offline until: 2100-01-01T00:00:00Z");
+    harness.get_by_label("1 Jan 2100");
     assert!(harness.query_by_label("Sign in").is_none());
     harness.get_by_label("Refresh license");
     harness.get_by_label("Manage account");
@@ -447,10 +457,10 @@ fn grace_lease_warns_but_keeps_the_license_details() {
         "grace",
         "subscription_past_due",
     )));
-    harness.get_by_label("License grace period active until 2100-01-01T00:00:00Z.");
+    harness.get_by_label("License grace period active until 1 Jan 2100.");
     open_license_settings(&mut harness, LicenseEntry::Warning);
 
-    harness.get_by_label("Available offline until: 2100-01-01T00:00:00Z");
+    harness.get_by_label("1 Jan 2100");
     assert!(
         harness
             .query_by_label_contains("Styrhous is free")
@@ -480,11 +490,10 @@ fn offline_lease_account_actions_warn_about_session_only_credentials() {
     );
 
     harness.get_by_label(
-        "Licensing service is unreachable; offline trial lease is valid until 2100-01-01T00:00:00Z.",
+        "Licensing service is unreachable; offline trial lease is valid until 1 Jan 2100.",
     );
-    harness.get_by_label(
-        "Secure credential storage is unavailable. This sign-in lasts only for this session.",
-    );
+    harness.get_by_label("Secure credential storage is unavailable");
+    harness.get_by_label("This sign-in lasts only for this session.");
     assert!(harness.query_by_label("Sign in").is_none());
     harness.get_by_label("Refresh license");
     harness.get_by_label("Sign out");
@@ -666,7 +675,7 @@ fn settings_shows_that_application_updates_are_being_checked() {
     primary_click(&mut harness, application_settings_position);
     harness.run();
 
-    harness.get_by_label("Application updates");
+    harness.get_by_label("Updates");
     harness.get_by_label("Checking for updates…");
     harness.ui_harness(HarnessSnapshotOptions::new(
         "updater/settings_shows_that_application_updates_are_being_checked/checking",
@@ -689,13 +698,13 @@ fn settings_shows_a_staged_application_update() {
     primary_click(&mut harness, settings_position);
     harness.run();
     let application_settings_position = harness
-        .get_by_label(OPEN_APPLICATION_SETTINGS)
+        .get_by_label(&format!("{OPEN_APPLICATION_SETTINGS} (Update ready)"))
         .rect()
         .center();
     primary_click(&mut harness, application_settings_position);
     harness.run();
 
-    harness.get_by_label("Application updates");
+    harness.get_by_label("Updates");
     harness.get_by_label("Version 0.2.0 is ready and will be installed on the next launch.");
     harness.ui_harness(HarnessSnapshotOptions::new(
         "updater/settings_shows_a_staged_application_update/staged_update",
@@ -878,6 +887,7 @@ fn refreshing_clusters_discards_open_inspectors_and_stops_their_watches() {
         name: "refreshed".into(),
         is_current: true,
         presentation: Default::default(),
+        server: None,
     }])
     .apply(&mut state, &mut commands);
 
@@ -889,7 +899,7 @@ fn refreshing_clusters_discards_open_inspectors_and_stops_their_watches() {
 }
 
 #[test]
-fn clicking_the_selected_cluster_rail_button_dismisses_inspector_without_reconnecting() {
+fn clicking_the_cluster_card_under_an_inspector_dismisses_it_without_reconnecting() {
     let mut harness = application_harness::<MockWorker>();
     let mut state = oracle_resource_table_state();
     let mut commands = Vec::new();
@@ -909,11 +919,8 @@ fn clicking_the_selected_cluster_rail_button_dismisses_inspector_without_reconne
     harness.run_steps(2);
     let commands_before = harness.state().worker.commands.len();
 
-    let cluster_position = harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "kind-kind")
-        .rect()
-        .center();
-    primary_click(&mut harness, cluster_position);
+    let card = harness.get_by_label("Switch cluster").rect().center();
+    primary_click(&mut harness, card);
     harness
         .ctx
         .global_style_mut(|style| style.animation_time = 0.0);

@@ -10,6 +10,9 @@ metrics_server_manifest="${script_dir}/kind-metrics-server.yaml"
 timeout="180s"
 timeout_seconds=180
 test_namespace_prefix="styrhous-it-"
+# Kubelet-less Node objects the node maintenance tests create, labelled with their test namespace;
+# see `IntegrationNamespaceFixture::create_fake_node`.
+fake_node_namespace_label="styrhous.dev/test-namespace"
 
 # kind-cluster.yaml runs etcd without fsync. Clusters created before that keep fsync; recreating
 # them is the only change that cannot disturb a concurrent test run.
@@ -51,7 +54,9 @@ until kubectl --context "${context_name}" get --raw=/readyz >/dev/null 2>&1; do
     sleep 2
 done
 
-kubectl --context "${context_name}" wait --for=condition=Ready nodes --all --timeout="${timeout}"
+# Fake test Nodes never become ready.
+kubectl --context "${context_name}" wait --for=condition=Ready nodes \
+    --selector="!${fake_node_namespace_label}" --timeout="${timeout}"
 kubectl --context "${context_name}" --namespace kube-system rollout status deployment/coredns --timeout="${timeout}"
 
 echo "Ensuring metrics-server is available..."
@@ -78,6 +83,19 @@ fi
 mapfile -t listed_test_namespaces < <(
     awk -v prefix="${test_namespace_prefix}" 'index($0, prefix) == 1' <<<"${namespace_names}"
 )
+# A fake Node outlives its namespace when a test dies between deleting the two; the lease of the
+# namespace it is labelled with owns it all the same.
+if ! fake_node_namespaces="$(kubectl --context "${context_name}" get nodes \
+    --selector="${fake_node_namespace_label}" \
+    --output=jsonpath="{range .items[*]}{.metadata.labels.${fake_node_namespace_label//./\\.}}{\"\\n\"}{end}")"; then
+    echo "Failed to list fake test Nodes before integration test cleanup." >&2
+    exit 1
+fi
+mapfile -t fake_node_namespaces < <(
+    awk -v prefix="${test_namespace_prefix}" 'NR == FNR { listed[$0] = 1; next }
+        index($0, prefix) == 1 && !($0 in listed)' \
+        <(printf '%s\n' "${listed_test_namespaces[@]}") - <<<"${fake_node_namespaces}"
+)
 
 # Only namespaces that no running test owns are removed; see scripts/lib/kind-namespace-leases.sh.
 if ! command -v flock >/dev/null; then
@@ -86,12 +104,18 @@ if ! command -v flock >/dev/null; then
 fi
 # shellcheck source=lib/kind-namespace-leases.sh
 source "${script_dir}/lib/kind-namespace-leases.sh"
-take_leftover_namespace_leases "$(kind_lock_dir)/styrhous-kind-namespaces" "${listed_test_namespaces[@]}"
+take_leftover_namespace_leases "$(kind_lock_dir)/styrhous-kind-namespaces" \
+    "${listed_test_namespaces[@]}" "${fake_node_namespaces[@]}"
 
 if (( ${#test_namespaces[@]} > 0 )); then
     echo "Removing leftover Styrhous integration test namespaces..."
     namespace_resources=()
     for namespace in "${test_namespaces[@]}"; do
+        kubectl --context "${context_name}" delete nodes \
+            --selector="${fake_node_namespace_label}=${namespace}" --ignore-not-found --wait=false
+        if ! grep -Fxq "${namespace}" <<<"${namespace_names}"; then
+            continue
+        fi
         namespace_resources+=("namespace/${namespace}")
         # The force-delete integration test is the only suite test that deliberately
         # adds finalizers, and it adds them to a ConfigMap. Clear them so an
@@ -120,8 +144,16 @@ if (( ${#test_namespaces[@]} > 0 )); then
     done
     kubectl --context "${context_name}" delete namespace "${test_namespaces[@]}" \
         --ignore-not-found --wait=false
-    kubectl --context "${context_name}" wait --for=delete "${namespace_resources[@]}" \
-        --timeout="${timeout}"
+    # Pods on a fake Node never finish terminating and would keep their namespace terminating.
+    # The terminating namespaces accept no new Pods, so none replace these.
+    for namespace_resource in "${namespace_resources[@]}"; do
+        kubectl --context "${context_name}" --namespace "${namespace_resource#namespace/}" \
+            delete pods --all --grace-period=0 --force --wait=false
+    done
+    if (( ${#namespace_resources[@]} > 0 )); then
+        kubectl --context "${context_name}" wait --for=delete "${namespace_resources[@]}" \
+            --timeout="${timeout}"
+    fi
     # Unlinked while still locked; the locks are released when this script exits.
     rm -f "${lease_files[@]}"
 fi

@@ -193,6 +193,7 @@ impl SearchFieldStyle {
 pub struct SearchField<'a> {
     query: &'a mut String,
     regex: Option<&'a mut bool>,
+    regex_on_demand: bool,
     id_salt: Id,
     placeholder: String,
     accessibility_label: String,
@@ -205,6 +206,7 @@ pub struct SearchField<'a> {
     size: FieldSize,
     height: Option<f32>,
     key_hint: Option<(String, String)>,
+    key_hint_when_disabled: bool,
     clear_button: bool,
 }
 
@@ -214,6 +216,7 @@ impl<'a> SearchField<'a> {
         Self {
             query,
             regex: None,
+            regex_on_demand: false,
             id_salt: Id::new("search-field"),
             placeholder: "Search…".to_owned(),
             accessibility_label: "Search".to_owned(),
@@ -226,6 +229,7 @@ impl<'a> SearchField<'a> {
             size: FieldSize::Md,
             height: None,
             key_hint: None,
+            key_hint_when_disabled: false,
             clear_button: true,
         }
     }
@@ -244,6 +248,14 @@ impl<'a> SearchField<'a> {
     /// Show the regex toggle, reading and writing `regex`.
     pub fn regex(mut self, regex: &'a mut bool) -> Self {
         self.regex = Some(regex);
+        self
+    }
+
+    /// Show the regex toggle only while the field has focus or the pointer
+    /// is over it, and while regex matching is on (a field at rest then
+    /// shows just its key, as the top bars of the design do).
+    pub fn regex_on_demand(mut self) -> Self {
+        self.regex_on_demand = true;
         self
     }
 
@@ -321,6 +333,12 @@ impl<'a> SearchField<'a> {
         self
     }
 
+    /// Keep the key hint while the field is disabled (A01's idle top bar).
+    pub fn key_hint_when_disabled(mut self) -> Self {
+        self.key_hint_when_disabled = true;
+        self
+    }
+
     /// Show the clear button while there is a query (on by default).
     pub fn clear_button(mut self, clear_button: bool) -> Self {
         self.clear_button = clear_button;
@@ -332,6 +350,7 @@ impl<'a> SearchField<'a> {
         let Self {
             query,
             regex,
+            regex_on_demand,
             id_salt,
             placeholder,
             accessibility_label,
@@ -344,6 +363,7 @@ impl<'a> SearchField<'a> {
             size,
             height,
             key_hint,
+            key_hint_when_disabled,
             clear_button,
         } = self;
         let metrics = style.metrics(size);
@@ -355,6 +375,9 @@ impl<'a> SearchField<'a> {
         let theme = ui.tokens();
         let had_focus = ui.data(|data| data.get_temp::<bool>(id).unwrap_or_default());
         let has_focus = ui.memory(|memory| memory.has_focus(editor_id));
+        let regex = regex.filter(|regex| {
+            !regex_on_demand || has_focus || **regex || ui.rect_contains_pointer(rect)
+        });
 
         // Keys the editor must not see. Enter moves between matches while
         // there are any; otherwise it leaves the field as in any text edit.
@@ -395,7 +418,7 @@ impl<'a> SearchField<'a> {
         let design_caret = forced_state == Some(ControlState::Focused);
         let keycap = key_hint
             .as_ref()
-            .filter(|_| enabled)
+            .filter(|_| enabled || key_hint_when_disabled)
             .map(|(rest, focused)| {
                 Keycap::new(if has_focus || design_caret {
                     focused
@@ -737,6 +760,48 @@ mod tests {
         harness.get_by_label("Previous match").click();
         harness.run();
         assert_eq!((events.borrow().next, events.borrow().previous), (1, 1));
+    }
+
+    #[test]
+    fn an_on_demand_regex_toggle_shows_while_focused_hovered_or_on() {
+        let regex = Rc::new(std::cell::Cell::new(false));
+        let regex_ui = regex.clone();
+        let mut query = String::new();
+        let mut harness = Harness::new_ui(move |ui| {
+            let mut on = regex_ui.get();
+            SearchField::pill(&mut query)
+                .width(300.0)
+                .accessibility_label("Search pods")
+                .regex(&mut on)
+                .regex_on_demand()
+                .show(ui);
+            regex_ui.set(on);
+        });
+        crate::test_support::setup_egui(&mut harness);
+        harness.run();
+        assert!(
+            harness.query_by_label("Regular expression").is_none(),
+            "a field at rest shows no toggle"
+        );
+
+        harness.get_by_label("Search pods").focus();
+        harness.run();
+        harness.get_by_label("Regular expression").click();
+        harness.run();
+        assert!(regex.get(), "the toggle works once it is there");
+
+        harness.event(egui::Event::PointerGone);
+        harness.run();
+        harness.run();
+        harness.get_by_label("Regular expression");
+        assert_eq!(
+            harness
+                .get_by_label("Regular expression")
+                .accesskit_node()
+                .toggled(),
+            Some(Toggled::True),
+            "regex matching stays visible while on"
+        );
     }
 
     #[test]

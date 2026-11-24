@@ -14,13 +14,11 @@ pub(super) fn show_debug_image_preset_table(
 ) -> bool {
     ReorderableTable::new("debug-image-presets")
         .column("name", "Name", |column| {
-            column.initial_width(DEBUG_IMAGE_NAME_COLUMN_WIDTH).fields()
+            column.initial_width(DEBUG_IMAGE_NAME_COLUMN_WIDTH)
         })
-        .column("image", "Image", |column| column.fill_remaining().fields())
+        .column("image", "Image", |column| column.fill_remaining())
         .column("profile", "Debug profile", |column| {
-            column
-                .initial_width(DEBUG_IMAGE_PROFILE_COLUMN_WIDTH)
-                .fields()
+            column.initial_width(DEBUG_IMAGE_PROFILE_COLUMN_WIDTH)
         })
         .column("actions", "", |column| {
             column
@@ -43,13 +41,14 @@ pub(super) fn show_debug_image_preset_table(
                     TextInput::new(&mut preset.image)
                         .size(FieldSize::Sm)
                         .id_salt(("debug-image-image", index))
+                        .monospace()
                         .accessibility_label(format!("Debug image {} image", index + 1))
                         .show(ui);
                 }
                 2 => show_profile_select(ui, preset, index),
                 _ => {
                     if Button::icon(icons::Icon::Trash, format!("Remove {}", preset.name))
-                        .variant(ButtonVariant::DangerQuiet)
+                        .variant(ButtonVariant::Ghost)
                         .size(ButtonSize::Sm)
                         .show(ui)
                         .clicked()
@@ -67,6 +66,7 @@ fn show_profile_select(ui: &mut egui::Ui, preset: &mut DebugImagePreset, index: 
         .accessibility_label(label.clone())
         .selected_text(preset.profile.label())
         .width(ui.available_width())
+        .popup_width(DEBUG_PROFILE_POPUP_WIDTH)
         .size(FieldSize::Sm)
         .searchable(false)
         .filter_by(|profile: &DebugProfile| profile.label())

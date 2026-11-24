@@ -268,13 +268,14 @@ impl WorkerResult for ResourceScaleUpdateFailed {
 
 fn record_bulk_delete_outcome(ui: &mut UiState, cluster_key: i32, outcome: BulkDeleteOutcome) {
     let resource_label = outcome.api_resource.display_name();
+    let namespace = outcome.namespace.as_deref();
     let target = format!("{} {resource_label}", outcome.target_count);
     if outcome.failures.is_empty() {
         ui.record_operation_outcome(
             cluster_key,
             OperationOutcome::Success,
             format!("Deleted {target}"),
-            None,
+            namespace,
             target,
             None,
         );
@@ -282,26 +283,39 @@ fn record_bulk_delete_outcome(ui: &mut UiState, cluster_key: i32, outcome: BulkD
     }
 
     let failure_count = outcome.failures.len();
+    let single_failure = failure_count == 1;
     let details = outcome
         .failures
         .into_iter()
         .map(|(target, error)| {
-            format!(
-                "{}: {}",
-                target.display_name(),
-                UiState::safe_operation_detail(&outcome.api_resource, error)
-            )
+            let error = UiState::safe_operation_detail(&outcome.api_resource, error);
+            // One failure is the whole story; several need telling apart.
+            if single_failure {
+                error
+            } else {
+                format!("{}: {error}", target.display_name())
+            }
         })
         .collect::<Vec<_>>()
         .join("\n");
+    // Some objects went; the rest is a warning, not a failed operation.
+    let deleted_count = outcome.target_count.saturating_sub(failure_count);
+    let (outcome_kind, details) = if deleted_count > 0 {
+        (
+            OperationOutcome::Warning,
+            format!("{deleted_count} deleted, {failure_count} failed: {details}"),
+        )
+    } else {
+        (OperationOutcome::Failure, details)
+    };
     ui.record_operation_outcome(
         cluster_key,
-        OperationOutcome::Failure,
+        outcome_kind,
         format!(
-            "Bulk delete completed with {failure_count} failure{}",
+            "Bulk delete finished with {failure_count} failure{}",
             if failure_count == 1 { "" } else { "s" }
         ),
-        None,
+        namespace,
         target,
         Some(details),
     );
@@ -311,6 +325,7 @@ mod deletes;
 mod deployment_rollback;
 mod helm;
 mod logs;
+mod nodes;
 mod scale;
 mod terminal;
 mod workloads;
@@ -319,6 +334,7 @@ pub(super) use deletes::*;
 pub(super) use deployment_rollback::*;
 pub(super) use helm::*;
 pub(super) use logs::*;
+pub(super) use nodes::*;
 pub(super) use scale::*;
 pub(super) use terminal::*;
 pub(super) use workloads::*;

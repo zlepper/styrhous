@@ -104,7 +104,6 @@ impl Table {
             Some(Selection {
                 set: selection,
                 key: &key_fn,
-                group: 0,
             }),
             HeaderOptions::default(),
             &mut render_cell,
@@ -212,7 +211,6 @@ impl Table {
             Some(Selection {
                 set: selection,
                 key: &key,
-                group: 0,
             }),
             HeaderOptions {
                 sort: sort_state,

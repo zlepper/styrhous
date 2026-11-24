@@ -6,6 +6,7 @@ use super::*;
 fn deployment_inspector_exposes_the_shared_restart_action() {
     let deployment = fixture_api_resource("apps", "Deployment", "deployments");
     let detail = ResourceDetail {
+        yaml: None,
         api_resource: deployment.clone(),
         name: "coredns".into(),
         namespace: Some("kube-system".into()),
@@ -43,6 +44,7 @@ fn deployment_inspector_exposes_the_shared_restart_action() {
 fn cron_job_inspector_run_action_sends_a_worker_command() {
     let cron_job = fixture_api_resource("batch", "CronJob", "cronjobs");
     let detail = ResourceDetail {
+        yaml: None,
         api_resource: cron_job.clone(),
         name: "nightly-report".into(),
         namespace: Some("kube-system".into()),
@@ -213,6 +215,7 @@ fn secret_inspector_masks_values_and_prompts_for_a_real_external_change() {
     harness.state_mut().ui_state = oracle_resource_table_state();
     let secrets = fixture_api_resource("core", "Secret", "secrets");
     let detail = ResourceDetail {
+        yaml: None,
         api_resource: secrets.clone(),
         name: "credentials".into(),
         namespace: Some("kube-system".into()),
@@ -271,6 +274,7 @@ fn secret_inspector_masks_values_and_prompts_for_a_real_external_change() {
             cluster_key: 2,
             history_entry_id: 1,
             detail: Box::new(ResourceDetail {
+                yaml: None,
                 payload: ResourceDetailPayload::Secret(SecretDetail {
                     data: BTreeMap::from([(
                         "password".into(),
@@ -309,6 +313,7 @@ fn secret_resource_detail_inspector_snapshot() {
     harness.state_mut().ui_state = oracle_resource_table_state();
     let secrets = fixture_api_resource("core", "Secret", "secrets");
     let detail = ResourceDetail {
+        yaml: None,
         api_resource: secrets.clone(),
         name: "api-credentials".into(),
         namespace: Some("kube-system".into()),
@@ -360,7 +365,7 @@ fn resource_table_reflows_after_viewport_resize() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = oracle_resource_table_state();
     harness.run();
-    harness.get_by_label("Apps & Containers").click_accesskit();
+    click_label(&mut harness, "Workloads");
     harness.run();
 
     harness.set_size(egui::vec2(1024.0, 1024.0));
@@ -380,6 +385,7 @@ fn resource_table_reflows_after_viewport_resize() {
 fn labels_and_annotations_open_as_chips_that_copy_key_and_value() {
     let deployment = fixture_api_resource("apps", "Deployment", "deployments");
     let detail = ResourceDetail {
+        yaml: None,
         api_resource: deployment.clone(),
         name: "api".into(),
         namespace: Some("kube-system".into()),
@@ -403,8 +409,8 @@ fn labels_and_annotations_open_as_chips_that_copy_key_and_value() {
     harness.state_mut().ui_state = oracle_resource_table_state();
     open_typed_detail(&mut harness, deployment, detail);
 
-    harness.get_by_label("Labels & annotations").click();
-    harness.run();
+    harness.get_by_label("Labels, 2").click();
+    harness.run_steps(3);
     assert!(
         harness
             .query_by_label("Copy Labels app.kubernetes.io/name=api")

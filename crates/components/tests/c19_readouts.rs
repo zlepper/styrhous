@@ -116,6 +116,7 @@ fn inspector_header(ui: &mut Ui) {
                 tone: Tone::Warning,
                 state: "Degraded",
                 reason: Some("warmup container crash-looping"),
+                link: None,
             })
             .readouts(&HEADER_READOUTS)
             .show(ui, |ui| {

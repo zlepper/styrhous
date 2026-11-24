@@ -1,92 +1,46 @@
 use super::*;
+use crate::ui::blade_text::{blade_section, gap};
+use components::Switch;
 
-pub(super) fn show_settings_introduction(ui: &mut egui::Ui) {
-    let theme = ui.tokens();
-    ui.label(
-        egui::RichText::new("APPLICATION")
-            .font(type_scale::META.font_id(ui.ctx()))
-            .color(theme.text.muted),
-    );
-    ui.add_space(space::S4);
-    ui.label(
-        egui::RichText::new(
-            "Configure local tools and display preferences.\nThese settings apply only to this application on this device.",
-        )
-        .font(type_scale::BODY.font_id(ui.ctx()))
-        .color(theme.text.secondary),
-    );
-}
+/// The opening sentence of the Application settings blade.
+pub(super) const INTRODUCTION: &str = "Local tools used by Styrhous on this device.";
 
-pub(super) fn show_update_status(ui: &mut egui::Ui, update_status: &UpdateStatus) {
-    let theme = ui.tokens();
-    if matches!(
-        update_status,
-        UpdateStatus::LocalBuild | UpdateStatus::NotIncluded
-    ) {
-        return;
-    }
-
-    ui.add_space(space::S24);
-    ui.label(
-        egui::RichText::new("Application updates")
-            .font(type_scale::TITLE.font_id(ui.ctx()))
-            .color(theme.text.primary),
-    );
-    ui.add_space(space::S4);
-    ui.label(
-        egui::RichText::new(update_status.summary())
-            .font(type_scale::BODY.font_id(ui.ctx()))
-            .color(theme.text.secondary),
-    );
-}
-
+/// The "Terminal launcher" section: the system terminal or a custom command
+/// template, as two radio cards.
 pub(super) fn show_terminal_launcher(
     ui: &mut egui::Ui,
     draft: &mut TerminalLaunchSettings,
     error: &mut Option<String>,
 ) {
-    let theme = ui.tokens();
-    ui.label(
-        egui::RichText::new("Terminal launcher")
-            .font(type_scale::TITLE.font_id(ui.ctx()))
-            .color(theme.text.primary),
-    );
-    ui.add_space(space::S8);
-    ui.label(
-        egui::RichText::new("Choose how shells open on this computer.")
-            .font(type_scale::BODY.font_id(ui.ctx()))
-            .color(theme.text.secondary),
-    );
-    ui.add_space(space::S24);
-
+    blade_section(ui, "Terminal launcher", Some("where shells open"));
     let automatic = draft.custom_template.is_none();
+    let automatic_description = format!(
+        "Use your system’s preferred terminal ({}).",
+        crate::terminal_launcher::default_terminal_name()
+    );
     if launcher_choice(
         ui,
         automatic,
         "Automatic",
-        "Use your system’s preferred terminal.",
+        &automatic_description,
         None,
-        false,
         None,
     ) {
         draft.custom_template = None;
         *error = None;
     }
-    ui.add_space(space::S16);
+    gap(ui, space::S8);
     let custom_launcher_clicked = {
-        let template_error = error.clone();
-        let template_error =
-            template_error.filter(|error| error.starts_with("The launcher template"));
-        let template_invalid = template_error.is_some();
-        let template = draft.custom_template.as_mut();
+        let template_error = error
+            .as_deref()
+            .filter(|error| error.starts_with("The launcher template"));
         launcher_choice(
             ui,
             !automatic,
             "Custom launcher",
             "Use a command template for your preferred terminal.",
-            template,
-            template_invalid,
-            template_error.as_deref(),
+            draft.custom_template.as_mut(),
+            template_error,
         )
     };
     if custom_launcher_clicked && draft.custom_template.is_none() {
@@ -94,31 +48,21 @@ pub(super) fn show_terminal_launcher(
     }
 }
 
+/// The "Debug images" section: the presets offered for node and Pod debug
+/// shells, as a reorderable table with an "Add image" button.
 pub(super) fn show_debug_image_presets(
     ui: &mut egui::Ui,
     draft: &mut TerminalLaunchSettings,
     error: &mut Option<String>,
 ) {
-    let theme = ui.tokens();
-    ui.label(
-        egui::RichText::new("Debug images")
-            .font(type_scale::TITLE.font_id(ui.ctx()))
-            .color(theme.text.primary),
+    blade_section(
+        ui,
+        "Debug images",
+        Some("offered for node and pod debug shells"),
     );
-    ui.add_space(space::S8);
-    ui.label(
-        egui::RichText::new(
-            "Choose the images and profiles offered for Debug images and Pod debug shells. Node sessions create a debug Pod with the node filesystem available at /host; Pod sessions add an ephemeral debug container.",
-        )
-        .font(type_scale::BODY.font_id(ui.ctx()))
-        .color(theme.text.secondary),
-    );
-    ui.add_space(space::S16);
-
     let mut remove_preset = None;
     let moved =
         show_debug_image_preset_table(ui, &mut draft.debug_image_presets, &mut remove_preset);
-    ui.add_space(space::S12);
     if moved {
         *error = None;
     }
@@ -126,8 +70,11 @@ pub(super) fn show_debug_image_presets(
         draft.debug_image_presets.remove(index);
         *error = None;
     }
-    if Button::icon(icons::Icon::Plus, "Add debug image")
-        .variant(ButtonVariant::Soft)
+    // The table's last row keeps its 4 point gap, then the button follows
+    // (the table itself keeps a point under its rows).
+    gap(ui, space::S12 - 1.0);
+    if Button::soft("Add image")
+        .leading_icon(icons::Icon::Plus)
         .size(ButtonSize::Sm)
         .show(ui)
         .clicked()
@@ -146,4 +93,27 @@ pub(super) fn show_debug_image_presets(
         ui.add_space(space::S12);
         show_validation_error(ui, "Debug image settings need attention", error);
     }
+}
+
+/// The "Updates" section: whether the application checks for updates on its
+/// own, and how the current check went.
+pub(super) fn show_updates(
+    ui: &mut egui::Ui,
+    draft: &mut TerminalLaunchSettings,
+    update_status: &UpdateStatus,
+) {
+    blade_section(ui, "Updates", None);
+    Switch::new(
+        &mut draft.check_for_updates,
+        "Check for updates automatically",
+    )
+    .show(ui);
+    if matches!(
+        update_status,
+        UpdateStatus::LocalBuild | UpdateStatus::NotIncluded
+    ) {
+        return;
+    }
+    gap(ui, space::S8);
+    type_scale::META.label(ui, &update_status.summary(), ui.tokens().text.muted);
 }

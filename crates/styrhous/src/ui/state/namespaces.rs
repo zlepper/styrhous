@@ -96,7 +96,7 @@ impl UiState {
                 Self::request_selected_resource_watches(cluster, &api_resource, commands_to_send);
             } else {
                 Self::reconcile_pod_metrics(cluster, commands_to_send);
-                Self::reconcile_node_metrics(cluster, commands_to_send);
+                Self::reconcile_node_watches(cluster, commands_to_send);
             }
         }
         self.remember_selected_namespaces(cluster_key);
@@ -229,7 +229,7 @@ impl UiState {
             }
         }
         Self::reconcile_pod_metrics(cluster, commands_to_send);
-        Self::reconcile_node_metrics(cluster, commands_to_send);
+        Self::reconcile_node_watches(cluster, commands_to_send);
     }
 
     /// Stops every watch of `api_resource` and drops its rows, for a resource that turned
@@ -309,18 +309,43 @@ impl UiState {
             .as_ref()
             .is_some_and(|resource| resource.is_node())
             && cluster.node_metrics_api_available;
-        if desired == cluster.node_metrics_active {
-            return;
-        }
-        cluster.node_metrics_active = desired;
-        if desired {
-            commands_to_send.push(Box::new(crate::worker::StartNodeMetricsWatch {
-                cluster_key: cluster.cluster_key,
-            }));
-        } else {
-            commands_to_send.push(Box::new(crate::worker::StopNodeMetricsWatch {
-                cluster_key: cluster.cluster_key,
-            }));
-        }
+        let cluster_key = cluster.cluster_key;
+        toggle_watch(
+            &mut cluster.node_metrics_active,
+            desired,
+            commands_to_send,
+            |start| {
+                if start {
+                    Box::new(crate::worker::StartNodeMetricsWatch { cluster_key })
+                } else {
+                    Box::new(crate::worker::StopNodeMetricsWatch { cluster_key })
+                }
+            },
+        );
     }
+
+    /// Runs the watches only the Nodes table needs, or stops them.
+    pub(crate) fn reconcile_node_watches(
+        cluster: &mut ClusterState,
+        commands_to_send: &mut Vec<WorkerCommandBox>,
+    ) {
+        Self::reconcile_node_metrics(cluster, commands_to_send);
+        Self::reconcile_node_pod_counts(cluster, commands_to_send);
+    }
+}
+
+/// Makes a watch that is `active` match `desired`: when they differ, flips `active`, queues the
+/// command `command(desired)` builds (a start or a stop) and returns true.
+pub(super) fn toggle_watch(
+    active: &mut bool,
+    desired: bool,
+    commands_to_send: &mut Vec<WorkerCommandBox>,
+    command: impl FnOnce(bool) -> WorkerCommandBox,
+) -> bool {
+    if desired == *active {
+        return false;
+    }
+    *active = desired;
+    commands_to_send.push(command(desired));
+    true
 }

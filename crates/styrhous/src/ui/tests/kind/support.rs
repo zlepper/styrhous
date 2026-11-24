@@ -5,7 +5,9 @@ use crate::sorted_name::SortedName;
 use crate::worker::{Worker, WorkerTrait};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
-use k8s_openapi::api::core::v1::{ConfigMap, Namespace, Pod, Secret, ServiceAccount};
+use k8s_openapi::api::core::v1::{
+    ConfigMap, Namespace, Node, NodeSpec, Pod, Secret, ServiceAccount, Taint,
+};
 use kube::api::{DeleteParams, ListParams, Patch};
 use kube::{Api, Client};
 use std::collections::BTreeMap;
@@ -18,6 +20,11 @@ use locks::NamespaceLease;
 pub(super) use waits::*;
 
 const TEST_NAMESPACE_PREFIX: &str = "styrhous-it-";
+/// Labels a fake Node with the test namespace whose lease owns it; `scripts/ensure-kind-cluster.sh`
+/// removes leftover fake Nodes by it and does not wait for them to become ready.
+const FAKE_NODE_NAMESPACE_LABEL: &str = "styrhous.dev/test-namespace";
+/// Keeps every Pod but the tests' own, which are bound to the Node directly, off a fake Node.
+pub(super) const FAKE_NODE_TAINT: &str = "styrhous.dev/fake-node";
 const FIXTURE_CLEANUP_TIMEOUT: Duration = Duration::from_secs(30);
 /// How long the ServiceAccount controller may take to give a new namespace its `default`
 /// ServiceAccount.
@@ -26,12 +33,17 @@ const CLUSTER_DISCOVERY_TIMEOUT_MS: u64 = 30_000;
 
 pub(super) struct IntegrationNamespaceFixture {
     pub(super) runtime: tokio::runtime::Runtime,
+    /// A client of the fixture's runtime, for the test's own requests.
+    pub(super) client: Client,
     namespaces: Api<Namespace>,
     pub(super) configmaps: Api<ConfigMap>,
     pub(super) secrets: Api<Secret>,
     pods: Api<Pod>,
     pub(super) namespace: String,
     pub(super) name: String,
+    nodes: Api<Node>,
+    /// The Node `create_fake_node` made, deleted with the namespace.
+    fake_node: Option<String>,
     /// Fields drop after `Drop::drop`, so the lease outlives the namespace deletion.
     _lease: NamespaceLease,
 }
@@ -74,6 +86,7 @@ impl IntegrationNamespaceFixture {
         let configmaps: Api<ConfigMap> = Api::namespaced(client.clone(), &namespace);
         let secrets: Api<Secret> = Api::namespaced(client.clone(), &namespace);
         let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
+        let nodes: Api<Node> = Api::all(client.clone());
         runtime.block_on(async {
             configmaps
                 .create(
@@ -91,19 +104,70 @@ impl IntegrationNamespaceFixture {
                 .await
                 .expect("Failed to create integration ConfigMap");
         });
-        wait_for_default_service_account(&runtime, client, &namespace);
+        wait_for_default_service_account(&runtime, client.clone(), &namespace);
 
         Self {
             runtime,
+            client,
             namespaces,
             configmaps,
             secrets,
             pods,
             namespace,
             name: name.to_owned(),
+            nodes,
+            fake_node: None,
             _lease: lease,
         }
     }
+}
+
+impl IntegrationNamespaceFixture {
+    /// Creates a Node object without a kubelet, named after the namespace, for tests that cordon
+    /// or drain a Node: doing that to the cluster's real Node would break every concurrent test.
+    /// Its taint keeps the scheduler away, and the lack of a `kubernetes.io/os` label keeps Kind's
+    /// DaemonSets away (they tolerate every taint), so it only ever runs the Pods a test binds to
+    /// it through `spec.nodeName`; never give it that label. Those never start and, once deleted, never
+    /// finish terminating; the fixture force-deletes them and then the Node.
+    pub(super) fn create_fake_node(&mut self) -> String {
+        assert!(
+            self.fake_node.is_none(),
+            "the fixture has a fake Node already"
+        );
+        let node_name = format!("{}-node", self.namespace);
+        let node = Node {
+            metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                name: Some(node_name.clone()),
+                labels: Some(BTreeMap::from([
+                    (FAKE_NODE_NAMESPACE_LABEL.to_owned(), self.namespace.clone()),
+                    ("kubernetes.io/hostname".to_owned(), node_name.clone()),
+                ])),
+                ..Default::default()
+            },
+            spec: Some(NodeSpec {
+                taints: Some(vec![Taint {
+                    key: FAKE_NODE_TAINT.to_owned(),
+                    effect: "NoSchedule".to_owned(),
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            }),
+            status: None,
+        };
+        // Recorded first, so a failed create still cleans up a Node the request did make.
+        self.fake_node = Some(node_name.clone());
+        self.runtime.block_on(async {
+            self.nodes
+                .create(&Default::default(), &node)
+                .await
+                .expect("Failed to create the fake Node")
+        });
+        node_name
+    }
+}
+
+fn is_not_found(error: &kube::Error) -> bool {
+    matches!(error, kube::Error::Api(response) if response.code == 404)
 }
 
 /// Waits until the ServiceAccount controller has given `namespace` its `default`
@@ -158,7 +222,7 @@ impl Drop for IntegrationNamespaceFixture {
                 .namespaces
                 .delete(&self.namespace, &Default::default())
                 .await
-                && !matches!(&error, kube::Error::Api(response) if response.code == 404)
+                && !is_not_found(&error)
             {
                 return Err(error.into());
             }
@@ -179,6 +243,13 @@ impl Drop for IntegrationNamespaceFixture {
                     "Failed to remove the Pods of {} at once: {error:#}",
                     self.namespace
                 );
+            }
+            if let Some(node_name) = &self.fake_node
+                && let Err(error) = self.nodes.delete(node_name, &Default::default()).await
+                && !is_not_found(&error)
+            {
+                return Err(anyhow::Error::from(error)
+                    .context(format!("Failed to delete the fake Node {node_name}")));
             }
 
             let deadline = Instant::now() + FIXTURE_CLEANUP_TIMEOUT;
@@ -225,8 +296,16 @@ pub(super) fn connected_kind_harness() -> (Harness<'static, MyEguiApp<Worker>>, 
         |app| (!app.ui_state.clusters.is_empty()).then_some(()),
         5_000,
     );
+    // The cluster card opens the switcher, which lists the contexts as tiles.
+    harness.get_by_label("Switch cluster").click();
+    harness.run_steps(2);
     harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "kind-kind")
+        .get_by(|node| {
+            node.role() == egui::accesskit::Role::Button
+                && node
+                    .label()
+                    .is_some_and(|label| label.starts_with("kind-kind, "))
+        })
         .click();
     harness.run_steps(1);
     let cluster_key = harness
@@ -336,12 +415,14 @@ pub(super) fn select_namespace(
 
 pub(super) fn select_resource(
     harness: &mut Harness<MyEguiApp<Worker>>,
-    section: &str,
+    group: Option<&str>,
     resource_name: &str,
 ) -> ApiResource {
-    harness.get_by_label(section).click_accesskit();
-    harness.run_steps(2);
-    harness.get_by_label(resource_name).click_accesskit();
+    if let Some(group) = group {
+        harness.get_by_label(group).click();
+        harness.run_steps(2);
+    }
+    harness.get_by_label(resource_name).click();
     harness.run_steps(1);
     let cluster_key = harness
         .state()

@@ -1,5 +1,5 @@
 use crate::resource_detail::ResourceOwner;
-use crate::resource_table::{CellValue, ContainerKind};
+use crate::resource_table::{CellValue, ContainerKind, Tone};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use kube::Resource;
 use std::cmp::Ordering;
@@ -56,6 +56,20 @@ impl PartialOrd for MinimalResource {
 }
 
 impl MinimalResource {
+    /// How badly the resource is doing, when it is not well: the worst tone
+    /// among its status cells, if that is a warning or danger (the problem
+    /// rows of the tables, S17).
+    pub(crate) fn problem_tone(&self) -> Option<Tone> {
+        self.cells
+            .values()
+            .filter_map(|cell| match cell {
+                CellValue::Status { tone, .. } => Some(*tone),
+                _ => None,
+            })
+            .filter(|tone| matches!(tone, Tone::Warning | Tone::Danger))
+            .max_by_key(|tone| matches!(tone, Tone::Danger))
+    }
+
     pub(crate) fn with_lifecycle_metadata(
         mut self,
         is_deleting: bool,
@@ -149,13 +163,13 @@ pub(crate) fn creation_time(metadata: &ObjectMeta) -> Option<OffsetDateTime> {
     .ok()
 }
 
-pub(crate) fn format_age(creation_timestamp: Option<OffsetDateTime>) -> String {
+/// How long before `now` an object was created ("220d", "3h"), or "Unknown".
+pub(crate) fn format_age(
+    creation_timestamp: Option<OffsetDateTime>,
+    now: OffsetDateTime,
+) -> String {
     match creation_timestamp {
-        Some(ts) => {
-            let now = OffsetDateTime::now_utc();
-            let duration = now - ts;
-            format_duration(duration)
-        }
+        Some(ts) => format_duration(now - ts),
         None => "Unknown".to_string(),
     }
 }
@@ -187,6 +201,49 @@ mod tests {
     use super::*;
     use k8s_openapi::api::core::v1::Pod;
 
+    fn resource_with_statuses(tones: &[Tone]) -> MinimalResource {
+        MinimalResource {
+            uid: "uid".into(),
+            name: "pod".into(),
+            namespace: Some("default".into()),
+            creation_timestamp: None,
+            controller_owner: None,
+            labels: BTreeMap::new(),
+            annotations: BTreeMap::new(),
+            cells: tones
+                .iter()
+                .enumerate()
+                .map(|(index, tone)| {
+                    (
+                        format!("status-{index}"),
+                        CellValue::Status {
+                            label: "Status".into(),
+                            tone: *tone,
+                        },
+                    )
+                })
+                .collect(),
+            log_containers: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_resource_has_a_problem_only_when_a_status_warns_and_the_worst_wins() {
+        assert_eq!(resource_with_statuses(&[]).problem_tone(), None);
+        assert_eq!(
+            resource_with_statuses(&[Tone::Success, Tone::Neutral]).problem_tone(),
+            None
+        );
+        assert_eq!(
+            resource_with_statuses(&[Tone::Warning]).problem_tone(),
+            Some(Tone::Warning)
+        );
+        assert_eq!(
+            resource_with_statuses(&[Tone::Warning, Tone::Danger, Tone::Success]).problem_tone(),
+            Some(Tone::Danger)
+        );
+    }
+
     #[test]
     fn test_age_formatting() {
         let now = OffsetDateTime::now_utc();
@@ -203,7 +260,7 @@ mod tests {
             cells: BTreeMap::new(),
             log_containers: Vec::new(),
         };
-        assert_eq!(format_age(resource.creation_timestamp), "2h");
+        assert_eq!(format_age(resource.creation_timestamp, now), "2h");
 
         // 3 days ago
         let resource = MinimalResource {
@@ -217,7 +274,7 @@ mod tests {
             cells: BTreeMap::new(),
             log_containers: Vec::new(),
         };
-        assert_eq!(format_age(resource.creation_timestamp), "3d");
+        assert_eq!(format_age(resource.creation_timestamp, now), "3d");
 
         // 45 minutes ago
         let resource = MinimalResource {
@@ -231,7 +288,7 @@ mod tests {
             cells: BTreeMap::new(),
             log_containers: Vec::new(),
         };
-        assert_eq!(format_age(resource.creation_timestamp), "45m");
+        assert_eq!(format_age(resource.creation_timestamp, now), "45m");
 
         // 30 seconds ago
         let resource = MinimalResource {
@@ -245,7 +302,7 @@ mod tests {
             cells: BTreeMap::new(),
             log_containers: Vec::new(),
         };
-        assert_eq!(format_age(resource.creation_timestamp), "30s");
+        assert_eq!(format_age(resource.creation_timestamp, now), "30s");
     }
 
     #[test]
@@ -261,7 +318,10 @@ mod tests {
             cells: BTreeMap::new(),
             log_containers: Vec::new(),
         };
-        assert_eq!(format_age(resource.creation_timestamp), "Unknown");
+        assert_eq!(
+            format_age(resource.creation_timestamp, OffsetDateTime::now_utc()),
+            "Unknown"
+        );
     }
 
     #[test]

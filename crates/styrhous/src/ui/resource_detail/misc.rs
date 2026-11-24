@@ -233,19 +233,34 @@ pub(super) fn format_remaining(
     }
 }
 
-/// Captioned rows of container values (command, arguments, ports) as
-/// chips, [`space::S12`] apart; clicking one copies its value. Empty rows
-/// are left out.
+/// The width of the caption of a container's chip rows (A05: `width: 52px`, enough for "Args").
+const CHIP_LABEL_WIDTH: f32 = 52.0;
+/// The caption width when a row is captioned "Command", which does not fit in 52 points.
+const CHIP_LABEL_WIDTH_WITH_COMMAND: f32 = components::design::size::CHIP_ROW_LABEL;
+
+/// Captioned rows of container values (command, arguments) as chips,
+/// [`space::S12`] apart. Empty rows are left out.
 pub(super) fn chip_rows<'a>(
     ui: &mut egui::Ui,
     rows: impl IntoIterator<Item = (&'a str, &'a Vec<String>)>,
 ) {
+    let rows: Vec<_> = rows
+        .into_iter()
+        .filter(|(_, values)| !values.is_empty())
+        .collect();
+    let label_width = if rows.iter().any(|(label, _)| *label == "Command") {
+        CHIP_LABEL_WIDTH_WITH_COMMAND
+    } else {
+        CHIP_LABEL_WIDTH
+    };
     ui.vertical(|ui| {
         ui.spacing_mut().item_spacing.y = space::S12;
-        for (label, values) in rows.into_iter().filter(|(_, values)| !values.is_empty()) {
-            components::labelled_chips(ui, label, |ui| {
+        for (label, values) in rows {
+            components::labelled_chips_with_label_width(ui, label, label_width, |ui| {
                 for value in values {
-                    components::Chip::new(value).copyable(label).show(ui);
+                    components::Chip::new(value)
+                        .copyable_quietly(label)
+                        .show(ui);
                 }
             });
         }

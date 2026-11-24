@@ -84,6 +84,7 @@ pub struct SideItem<'a> {
     count: Option<usize>,
     count_tone: Option<Tone>,
     alert_count: Option<usize>,
+    lamp: Option<Tone>,
     selected: bool,
     forced_state: Option<ControlState>,
     width: Width,
@@ -108,6 +109,7 @@ impl<'a> SideItem<'a> {
             count: None,
             count_tone: None,
             alert_count: None,
+            lamp: None,
             selected: false,
             forced_state: None,
             width: Width::Fill,
@@ -172,6 +174,13 @@ impl<'a> SideItem<'a> {
     /// An unread count in a danger count badge at the right (Notifications).
     pub fn alert_count(mut self, count: usize) -> Self {
         self.alert_count = Some(count);
+        self
+    }
+
+    /// A status lamp on the top-right corner of a footer item's icon (an
+    /// update or licence that needs attention on Settings).
+    pub fn lamp(mut self, tone: Tone) -> Self {
+        self.lamp = Some(tone);
         self
     }
 
@@ -370,6 +379,11 @@ impl<'a> SideItem<'a> {
                     Vec2::splat(size::ICON_SM),
                 );
                 icon.paint(ui, glyph, lead_color);
+                if let Some(tone) = self.lamp {
+                    let lamp =
+                        Rect::from_center_size(glyph.right_top(), Vec2::splat(size::STATUS_DOT));
+                    crate::paint_status_dot(ui.painter(), &theme, lamp, tone);
+                }
             }
             Lead::Indent | Lead::Blank => {}
         }
@@ -528,7 +542,6 @@ impl<'a> ClusterCard<'a> {
                 Avatar::new(initials)
                     .category(*index)
                     .status(*status)
-                    .surface(fill)
                     .paint(ui, avatar.center());
                 let chevron = Rect::from_center_size(
                     pos2(inner.right() - size::ICON_SM / 2.0, inner.center().y),
@@ -582,10 +595,17 @@ impl<'a> ClusterCard<'a> {
 }
 
 /// The sidebar's kind filter: a 34 point field with a funnel, a placeholder
-/// naming how many kinds there are and the `G` shortcut.
+/// naming how many kinds there are and the `G` shortcut, which focuses it
+/// while nothing else has focus (S09).
 pub fn kind_filter(ui: &mut Ui, query: &mut String, placeholder: &str) -> Response {
+    let focus = ui.is_enabled()
+        && ui.memory(|memory| memory.focused().is_none())
+        && ui.input_mut(|input| {
+            crate::interaction::consume_key_with_text(input, egui::Modifiers::NONE, egui::Key::G)
+        });
     ui.add_space(FILTER_TOP);
     TextInput::new(query)
+        .request_focus(focus)
         .id_salt("sidebar-kind-filter")
         .accessibility_label("Filter kinds")
         .placeholder(placeholder)

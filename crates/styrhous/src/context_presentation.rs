@@ -11,6 +11,21 @@ pub struct ContextPresentation {
     pub display_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub badge: Option<String>,
+    /// The avatar colour as an index into the six category colours, or
+    /// `None` to take the colour from the context's place in the list.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub colour: Option<u8>,
+}
+
+/// How many avatar colours a context can pick from (`av-1` to `av-6`).
+pub const COLOUR_COUNT: u8 = 6;
+
+/// The colour of a context that has not picked one: the design hands the
+/// colours out in turn down the list of contexts (dev-eu, kind-kind,
+/// kind-legacy, prod-eu are 1 to 4 on the boards), so it is the context's
+/// place there. The sidebar and the context editor both use it.
+pub(crate) fn automatic_colour(position: usize) -> usize {
+    position % usize::from(COLOUR_COUNT)
 }
 
 impl ContextPresentation {
@@ -45,9 +60,13 @@ impl ContextPresentation {
         }) {
             return Err("Use one or two characters without spaces for the badge.".into());
         }
+        if self.colour.is_some_and(|colour| colour >= COLOUR_COUNT) {
+            return Err("Pick one of the six colours.".into());
+        }
         Ok(Self {
             display_name,
             badge,
+            colour: self.colour,
         })
     }
 
@@ -73,9 +92,15 @@ impl ContextPresentation {
         .normalized()
         .unwrap_or_default()
         .badge;
+        let colour = value
+            .get("colour")
+            .and_then(|v| v.as_u64())
+            .and_then(|colour| u8::try_from(colour).ok())
+            .filter(|colour| *colour < COLOUR_COUNT);
         Self {
             display_name,
             badge,
+            colour,
         }
     }
 }
@@ -127,11 +152,13 @@ mod tests {
         let mut presentation = ContextPresentation {
             display_name: Some(" Cloudstorage Prod ".into()),
             badge: Some(" pR ".into()),
+            colour: Some(4),
         }
         .normalized()
         .unwrap();
         assert_eq!(presentation.display_name("original"), "Cloudstorage Prod");
         assert_eq!(presentation.badge("original"), "pR");
+        assert_eq!(presentation.colour, Some(4));
         presentation.badge = Some(" ".into());
         presentation = presentation.normalized().unwrap();
         assert_eq!(presentation.badge("original"), "CP");
@@ -154,5 +181,28 @@ mod tests {
             .badge("original"),
             "FR"
         );
+        for colour in [json_colour(6), json_colour(-1), json_colour(2.5)] {
+            assert_eq!(
+                ContextPresentation::from_extension(&colour).colour,
+                None,
+                "{colour}"
+            );
+        }
+        assert_eq!(
+            ContextPresentation::from_extension(&json_colour(5)).colour,
+            Some(5)
+        );
+        assert!(
+            ContextPresentation {
+                colour: Some(COLOUR_COUNT),
+                ..Default::default()
+            }
+            .normalized()
+            .is_err()
+        );
+    }
+
+    fn json_colour(colour: impl serde::Serialize) -> serde_json::Value {
+        serde_json::json!({ "colour": colour })
     }
 }

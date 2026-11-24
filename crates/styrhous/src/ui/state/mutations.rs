@@ -38,6 +38,8 @@ pub(crate) struct BulkDeleteProgress {
     pub(crate) id: u64,
     pub(crate) api_resource: ApiResource,
     pub(crate) target_count: usize,
+    /// The namespace every target is in, when they share one.
+    pub(crate) namespace: Option<String>,
     pub(crate) remaining_targets: HashSet<BulkDeleteTarget>,
     pub(crate) failures: Vec<(BulkDeleteTarget, String)>,
 }
@@ -45,10 +47,19 @@ pub(crate) struct BulkDeleteProgress {
 impl BulkDeleteProgress {
     pub(crate) fn new(id: u64, api_resource: ApiResource, targets: Vec<BulkDeleteTarget>) -> Self {
         let target_count = targets.len();
+        let namespace = targets
+            .first()
+            .and_then(|first| first.namespace.clone())
+            .filter(|namespace| {
+                targets
+                    .iter()
+                    .all(|target| target.namespace.as_ref() == Some(namespace))
+            });
         Self {
             id,
             api_resource,
             target_count,
+            namespace,
             remaining_targets: targets.into_iter().collect(),
             failures: Vec::new(),
         }
@@ -174,16 +185,32 @@ pub(crate) struct PendingHelmRollback {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum OperationOutcome {
     Success,
+    /// Partly done: some of a bulk operation failed, or a background retry
+    /// is still under way.
+    Warning,
     Failure,
+}
+
+impl OperationOutcome {
+    /// Whether the outcome is a problem (a warning or a failure).
+    pub(crate) fn is_problem(self) -> bool {
+        !matches!(self, Self::Success)
+    }
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct OperationHistoryEntry {
     pub(crate) outcome: OperationOutcome,
     pub(crate) title: String,
+    /// The resource and namespace as one line (the toast's), read by tests.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) target: String,
+    /// The resource the outcome is about, without its namespace.
+    pub(crate) resource: String,
+    pub(crate) namespace: Option<String>,
     pub(crate) details: Option<String>,
-    pub(crate) occurred_at: Instant,
+    /// When it happened on the UI clock, for relative times.
+    pub(crate) wall_time: time::OffsetDateTime,
     pub(crate) sequence: u64,
     pub(crate) unread: bool,
 }
@@ -201,6 +228,7 @@ pub(crate) struct TransientOperationToast {
 pub(crate) struct BulkDeleteOutcome {
     pub(crate) api_resource: ApiResource,
     pub(crate) target_count: usize,
+    pub(crate) namespace: Option<String>,
     pub(crate) failures: Vec<(BulkDeleteTarget, String)>,
 }
 

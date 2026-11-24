@@ -5,6 +5,7 @@ use crate::minimal_resource::{MinimalResource, from_kubernetes_resource};
 use crate::resource_handlers::{matches_namespaced_api_resource, matches_namespaced_resource};
 use crate::resource_table::{
     AVAILABLE_COLUMN, CellValue, READY_COLUMN, ResourceTableDefinition, UP_TO_DATE_COLUMN, column,
+    replica_ready_cells,
 };
 use k8s_openapi::api::apps::v1::Deployment;
 use std::collections::BTreeMap;
@@ -42,11 +43,7 @@ pub(crate) fn extract(deployment: &Deployment) -> MinimalResource {
 
     from_kubernetes_resource(
         deployment,
-        BTreeMap::from([
-            (
-                READY_COLUMN.to_owned(),
-                CellValue::Text(format!("{ready}/{desired}")),
-            ),
+        BTreeMap::from_iter(replica_ready_cells(ready, desired).into_iter().chain([
             (
                 UP_TO_DATE_COLUMN.to_owned(),
                 CellValue::Number(i64::from(updated)),
@@ -55,7 +52,7 @@ pub(crate) fn extract(deployment: &Deployment) -> MinimalResource {
                 AVAILABLE_COLUMN.to_owned(),
                 CellValue::Number(i64::from(available)),
             ),
-        ]),
+        ])),
     )
 }
 use crate::api_resource::ApiResource;

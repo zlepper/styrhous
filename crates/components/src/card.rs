@@ -5,9 +5,14 @@
 //! (`.card-b`) is padded [`space::S16`]; a header row (`.card-h`) is
 //! [`size::CARD_HEADER`] tall with a divider between it and the body.
 
-use egui::{Color32, Galley, Margin, Rect, Response, Sense, Stroke, Ui, Vec2, pos2, vec2};
+use egui::{
+    Align, Color32, Galley, Layout, Margin, Rect, Response, Sense, Stroke, Ui, UiBuilder, Vec2,
+    pos2, vec2,
+};
 
-use crate::design::theme::{self, ThemeExt, ThemeScope};
+use crate::{Button, ButtonSize};
+
+use crate::design::theme::{self, ThemeExt, ThemeScope, Tone};
 use crate::design::type_scale::{self, TextRole};
 use crate::design::{radius, size, space, stroke};
 use crate::icons::Icon;
@@ -103,6 +108,8 @@ impl Card {
 pub struct DisclosureResponse<R> {
     /// The header, the disclosure's toggle.
     pub header: Response,
+    /// The [`Disclosure::copy_action`] button was clicked.
+    pub action_clicked: bool,
     /// Whether the body is shown.
     pub open: bool,
     /// What the body returned, when shown.
@@ -124,6 +131,17 @@ pub struct Disclosure<'a> {
     default_open: bool,
     forced_open: Option<bool>,
     persist: bool,
+    look: HeaderLook<'a>,
+}
+
+/// How a disclosure header differs from the plain "chevron, title, meta" one.
+#[derive(Clone, Copy, Default)]
+struct HeaderLook<'a> {
+    lamp: Option<Tone>,
+    mono_title: bool,
+    subtitle: Option<&'a str>,
+    trailing: Option<&'a str>,
+    action: Option<&'a str>,
 }
 
 impl<'a> Disclosure<'a> {
@@ -136,12 +154,44 @@ impl<'a> Disclosure<'a> {
             default_open: false,
             forced_open: None,
             persist: true,
+            look: HeaderLook::default(),
         }
     }
 
     /// Muted text after the title, such as "6 labels · 3 annotations".
     pub fn meta(mut self, meta: &'a str) -> Self {
         self.meta = Some(meta);
+        self
+    }
+
+    /// A status lamp in `tone` between the chevron and the title.
+    pub fn lamp(mut self, tone: Tone) -> Self {
+        self.look.lamp = Some(tone);
+        self
+    }
+
+    /// Set the title in mono (a container's name).
+    pub fn mono_title(mut self) -> Self {
+        self.look.mono_title = true;
+        self
+    }
+
+    /// Muted mono text after the title (an image reference).
+    pub fn subtitle(mut self, subtitle: &'a str) -> Self {
+        self.look.subtitle = Some(subtitle);
+        self
+    }
+
+    /// Muted text at the header's end ("0 restarts").
+    pub fn trailing(mut self, trailing: &'a str) -> Self {
+        self.look.trailing = Some(trailing);
+        self
+    }
+
+    /// A ghost button with a copy icon at the header's end ("Copy"); its click is
+    /// [`DisclosureResponse::action_clicked`].
+    pub fn copy_action(mut self, label: &'a str) -> Self {
+        self.look.action = Some(label);
         self
     }
 
@@ -184,7 +234,7 @@ impl<'a> Disclosure<'a> {
         let forced = self.forced_open.is_some();
         let inner = Card::new().padding(0).show(ui, |ui| {
             ui.spacing_mut().item_spacing = Vec2::ZERO;
-            let header = header_row(ui, self.title, self.meta, open);
+            let (header, action_clicked) = header_row(ui, self.title, self.meta, open, self.look);
             let open = if header.clicked() { !open } else { open };
             if open != stored && !forced {
                 ui.data_mut(|data| {
@@ -212,11 +262,12 @@ impl<'a> Disclosure<'a> {
                     })
                     .inner
             });
-            (header, open, body)
+            (header, action_clicked, open, body)
         });
-        let (header, open, inner) = inner;
+        let (header, action_clicked, open, inner) = inner;
         DisclosureResponse {
             header,
+            action_clicked,
             open: self.forced_open.unwrap_or(open),
             inner,
         }
@@ -225,13 +276,36 @@ impl<'a> Disclosure<'a> {
 
 /// The clickable header row of a disclosure: chevron, title and meta,
 /// [`HEADER_GAP`] apart and centred, [`space::S16`] in from the edges.
-fn header_row(ui: &mut Ui, title: &str, meta: Option<&str>, open: bool) -> Response {
+fn header_row(
+    ui: &mut Ui,
+    title: &str,
+    meta: Option<&str>,
+    open: bool,
+    look: HeaderLook<'_>,
+) -> (Response, bool) {
     let theme = ui.tokens();
-    let (rect, response) = ui.allocate_exact_size(
+    let (rect, hover) = ui.allocate_exact_size(
         vec2(ui.available_width(), size::CARD_HEADER),
-        Sense::click(),
+        Sense::hover(),
     );
-    let response = response.with_pointing_hand();
+    let mut toggle_rect = rect;
+    let mut action_clicked = false;
+    if let Some(label) = look.action {
+        let mut action_ui = ui.new_child(
+            UiBuilder::new()
+                .max_rect(rect.shrink2(vec2(space::S16, 0.0)))
+                .layout(Layout::right_to_left(Align::Center)),
+        );
+        let button = Button::ghost(label)
+            .size(ButtonSize::Sm)
+            .leading_icon(Icon::ClipboardDocument)
+            .show(&mut action_ui);
+        action_clicked = button.clicked();
+        toggle_rect.max.x = button.rect.left() - HEADER_GAP;
+    }
+    let response = ui
+        .interact(toggle_rect, hover.id.with("toggle"), Sense::click())
+        .with_pointing_hand();
     // Read as its title, the meta count as its description; the words are
     // the header's own, not labels of their own.
     response.widget_info(|| {
@@ -261,8 +335,40 @@ fn header_row(ui: &mut Ui, title: &str, meta: Option<&str>, open: bool) -> Respo
         );
     }
     x += size::ICON_SM + HEADER_GAP;
+    if let Some(tone) = look.lamp {
+        if ui.is_rect_visible(rect) {
+            crate::status::paint_status_dot(
+                ui.painter(),
+                &theme,
+                crate::status::lamp_rect(x, center_y),
+                tone,
+            );
+        }
+        x += size::STATUS_DOT + HEADER_GAP;
+    }
     let centred = |galley: &Galley, x: f32| pos2(x, center_y - galley.rect.height() / 2.0);
-    let title_galley = HEADER_TITLE.galley(ui.ctx(), title, theme.text.primary, f32::INFINITY);
+    let title_role = if look.mono_title {
+        type_scale::MONO.with_weight(type_scale::Weight::SemiBold)
+    } else {
+        HEADER_TITLE
+    };
+    // Everything before the trailing text is elided to the room it leaves.
+    let trailing_width = look.trailing.map_or(0.0, |trailing| {
+        type_scale::META
+            .galley(ui.ctx(), trailing, theme.text.muted, f32::INFINITY)
+            .rect
+            .width()
+            + HEADER_GAP
+    });
+    let limit = toggle_rect.right()
+        - if look.action.is_some() {
+            0.0
+        } else {
+            space::S16
+        }
+        - trailing_width;
+    let title_galley =
+        title_role.galley_elided(ui.ctx(), title, theme.text.primary, (limit - x).max(0.0), 1);
     let title_pos = centred(&title_galley, x);
     x += title_galley.rect.width() + HEADER_GAP;
     type_scale::paint_text_as(
@@ -273,6 +379,21 @@ fn header_row(ui: &mut Ui, title: &str, meta: Option<&str>, open: bool) -> Respo
         theme.text.primary,
         egui::accesskit::Role::Button,
     );
+    if let Some(subtitle) = look.subtitle
+        && ui.is_rect_visible(rect)
+    {
+        let role = type_scale::MONO_HINT.with_size(11.0, 16.0);
+        let galley = role.galley_elided(
+            ui.ctx(),
+            subtitle,
+            theme.text.muted,
+            (limit - x).max(0.0),
+            1,
+        );
+        let pos = centred(&galley, x);
+        x += galley.rect.width() + HEADER_GAP;
+        type_scale::paint_galley(ui.painter(), pos, galley, theme.text.muted);
+    }
     if let Some(meta) = meta
         && ui.is_rect_visible(rect)
     {
@@ -280,7 +401,14 @@ fn header_row(ui: &mut Ui, title: &str, meta: Option<&str>, open: bool) -> Respo
         let pos = centred(&galley, x);
         type_scale::paint_galley(ui.painter(), pos, galley, theme.text.muted);
     }
-    response
+    if let Some(trailing) = look.trailing
+        && ui.is_rect_visible(rect)
+    {
+        let galley = type_scale::META.galley(ui.ctx(), trailing, theme.text.muted, f32::INFINITY);
+        let pos = centred(&galley, rect.right() - space::S16 - galley.rect.width());
+        type_scale::paint_galley(ui.painter(), pos, galley, theme.text.muted);
+    }
+    (response, action_clicked)
 }
 
 /// A single-line label whose CSS line box is centred in the row.

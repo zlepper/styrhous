@@ -10,6 +10,7 @@ fn owner_reference_card_lists_every_owner_and_navigates_resolved_links() {
         &mut harness,
         pod.clone(),
         ResourceDetail {
+            yaml: None,
             api_resource: pod,
             name: "api-pod".into(),
             namespace: Some("kube-system".into()),
@@ -40,14 +41,12 @@ fn owner_reference_card_lists_every_owner_and_navigates_resolved_links() {
         },
     );
 
-    harness.get_by_label("Owner references").click_accesskit();
-    harness.run();
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "resource_inspectors/owner_reference_card_lists_every_owner_and_navigates_resolved_links/owner_references",
     ));
-    harness.get_by_label("Widget / api-widget");
+    harness.get_by_label("Widget api-widget");
     let owner_position = harness
-        .get_by_label("Open details for Deployment / api")
+        .get_by_label("Open details for Controlled by Deployment api")
         .rect()
         .center();
     primary_click(&mut harness, owner_position);
@@ -84,6 +83,7 @@ fn owner_reference_with_a_very_long_name_does_not_widen_the_inspector_blade() {
         &mut harness,
         pod.clone(),
         ResourceDetail {
+            yaml: None,
             api_resource: pod,
             name: "api-pod".into(),
             namespace: Some("kube-system".into()),
@@ -105,8 +105,6 @@ fn owner_reference_with_a_very_long_name_does_not_widen_the_inspector_blade() {
         },
     );
 
-    harness.get_by_label("Owner references").click_accesskit();
-    harness.run();
     harness.run();
 
     let viewport = harness.ctx.content_rect();
@@ -114,10 +112,12 @@ fn owner_reference_with_a_very_long_name_does_not_widen_the_inspector_blade() {
     let close = harness.get_by_label("Close blade").rect();
     assert_eq!(
         close.right(),
-        blade_left + components::BLADE_WIDTH - components::design::space::S12,
+        blade_left + components::BLADE_WIDTH
+            - components::design::size::INSPECTOR_HEADER_PADDING.right as f32,
         "the inspector must keep its fixed width and position"
     );
-    let link = harness.get_by_label_contains("Open details for Deployment / a-deployment-with");
+    let link = harness
+        .get_by_label_contains("Open details for Controlled by Deployment a-deployment-with");
     let link_position = link.rect().center();
     assert!(
         egui_kittest::kittest::NodeT::accesskit_node(&link)
@@ -135,7 +135,7 @@ fn owner_reference_with_a_very_long_name_does_not_widen_the_inspector_blade() {
         "resource_inspectors/owner_reference_with_a_very_long_name_does_not_widen_the_inspector_blade/long_owner",
     ));
 
-    let full_label = format!("Deployment / {long_name}");
+    let full_label = format!("Deployment {long_name}");
     assert_eq!(harness.query_all_by_label(&full_label).count(), 0);
     harness.event(egui::Event::PointerMoved(link_position));
     harness.run_steps(3);
@@ -183,6 +183,7 @@ fn clicking_a_pod_node_in_the_inspector_navigates_to_the_node_inspector() {
             cluster_key: 2,
             history_entry_id: 1,
             detail: Box::new(ResourceDetail {
+                yaml: None,
                 api_resource: pods,
                 name: "api".into(),
                 namespace: Some("kube-system".into()),
@@ -235,6 +236,7 @@ fn unresolvable_owner_explains_why_its_details_are_unavailable_on_hover() {
         &mut harness,
         pod.clone(),
         ResourceDetail {
+            yaml: None,
             api_resource: pod,
             name: "api-pod".into(),
             namespace: Some("kube-system".into()),
@@ -256,9 +258,8 @@ fn unresolvable_owner_explains_why_its_details_are_unavailable_on_hover() {
         },
     );
 
-    harness.get_by_label("Owner references").click_accesskit();
     harness.run();
-    let position = harness.get_by_label("Gadget / gadget").rect().center();
+    let position = harness.get_by_label("Gadget gadget").rect().center();
     harness.event(egui::Event::PointerMoved(position));
     harness.run_steps(3);
     harness.get_by_label(

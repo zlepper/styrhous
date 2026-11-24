@@ -39,6 +39,14 @@ pub(crate) enum ResourceAction {
         name: String,
         namespace: Option<String>,
     },
+    /// Cordon (`cordon`) or uncordon a Node, without confirmation.
+    RequestNodeCordon {
+        name: String,
+        cordon: bool,
+    },
+    RequestNodeDrain {
+        name: String,
+    },
     SaveData {
         expected_values: BTreeMap<String, String>,
         updated_values: BTreeMap<String, String>,
@@ -124,6 +132,8 @@ impl ResourceAction {
             | Self::RequestDeploymentRollback { .. }
             | Self::RequestCronJobRun { .. }
             | Self::RequestScale { .. }
+            | Self::RequestNodeCordon { .. }
+            | Self::RequestNodeDrain { .. }
             | Self::SaveData { .. }
             | Self::ViewLogs { .. }
             | Self::NavigateDetails { .. }

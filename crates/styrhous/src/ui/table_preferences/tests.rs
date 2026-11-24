@@ -16,6 +16,7 @@ fn columns() -> Vec<TableColumnDefinition> {
             default_width: 180.0,
             sortable: true,
             numeric: false,
+            default_hidden: false,
         },
         TableColumnDefinition {
             id: "age".into(),
@@ -23,9 +24,48 @@ fn columns() -> Vec<TableColumnDefinition> {
             default_width: 77.0,
             sortable: true,
             numeric: false,
+            default_hidden: false,
         },
     ]
 }
+#[test]
+fn tables_group_by_namespace_until_turned_off() {
+    let key = ResourceTableKey::workspace(&resource("", "pods"));
+    let other = ResourceTableKey::workspace(&resource("apps", "deployments"));
+    let mut preferences = PersistedResourceTablePreferences::default();
+    assert!(preferences.groups_by_namespace(&key));
+
+    preferences.set_groups_by_namespace(&key, false);
+    assert!(!preferences.groups_by_namespace(&key));
+    assert!(preferences.groups_by_namespace(&other), "per table");
+    assert!(
+        !preferences.clone().groups_by_namespace(&key),
+        "the choice is kept"
+    );
+}
+
+#[test]
+fn columns_hidden_by_default_stay_out_until_shown_and_reset_hides_them_again() {
+    let key = ResourceTableKey::workspace(&resource("", "pods"));
+    let mut definitions = columns();
+    definitions.push(TableColumnDefinition::sortable("owner", "Owner", 160.0).hidden_by_default());
+    let mut preferences = PersistedResourceTablePreferences::default();
+    let visible = |preferences: &mut PersistedResourceTablePreferences| {
+        preferences
+            .resolved_columns(&key, &definitions)
+            .into_iter()
+            .map(|column| column.definition.id)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(visible(&mut preferences), ["name", "age"]);
+
+    preferences.set_visible(&key, &definitions, "owner", true);
+    assert_eq!(visible(&mut preferences), ["name", "age", "owner"]);
+
+    preferences.reset_column_visibility(&key, &definitions);
+    assert_eq!(visible(&mut preferences), ["name", "age"]);
+}
+
 #[test]
 fn workspace_key_ignores_cluster_and_version() {
     let mut first = resource("", "pods");
@@ -51,6 +91,7 @@ fn layout_merges_new_columns_and_keeps_one_visible() {
         default_width: 100.0,
         sortable: true,
         numeric: false,
+        default_hidden: false,
     });
     assert_eq!(preferences.all_columns(&key, &extended).len(), 3);
 }
@@ -66,6 +107,7 @@ fn stale_columns_do_not_allow_hiding_every_available_column() {
         default_width: 120.0,
         sortable: true,
         numeric: false,
+        default_hidden: false,
     });
     preferences.all_columns(&key, &wide_columns);
 
@@ -85,6 +127,7 @@ fn actions_column_cannot_be_resized_below_the_readable_minimum() {
         default_width: 104.0,
         sortable: false,
         numeric: false,
+        default_hidden: false,
     };
 
     preferences.set_width(&key, std::slice::from_ref(&actions), "actions", 12.0);
@@ -130,6 +173,7 @@ fn custom_columns_preserve_layout_state_and_can_be_renamed_or_removed() {
         default_width: 160.0,
         sortable: true,
         numeric: false,
+        default_hidden: false,
     });
     preferences.set_width(&key, &definitions, &id, 240.0);
     preferences.set_sort(&key, &definitions, &id, SortDirection::Ascending);

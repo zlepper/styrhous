@@ -55,6 +55,8 @@ pub(super) struct TableColumnDefinition {
     pub(super) sortable: bool,
     /// Holds numbers: right-aligned, header included (S08).
     pub(super) numeric: bool,
+    /// Hidden until the user shows it.
+    pub(super) default_hidden: bool,
 }
 
 impl TableColumnDefinition {
@@ -65,6 +67,15 @@ impl TableColumnDefinition {
             default_width,
             sortable: true,
             numeric: false,
+            default_hidden: false,
+        }
+    }
+
+    /// This column, hidden until the user shows it.
+    pub(super) fn hidden_by_default(self) -> Self {
+        Self {
+            default_hidden: true,
+            ..self
         }
     }
 
@@ -122,6 +133,9 @@ struct PersistedTableLayout {
     custom_columns: Vec<CustomMetadataColumn>,
     #[serde(default)]
     sort: Option<PersistedSort>,
+    /// Whether the rows show under a header per namespace; on until turned off.
+    #[serde(default)]
+    group_by_namespace: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -144,6 +158,21 @@ enum PersistedSortDirection {
 }
 
 impl PersistedResourceTablePreferences {
+    /// Whether the table of `key` groups its rows by namespace (on by default).
+    pub(super) fn groups_by_namespace(&self, key: &ResourceTableKey) -> bool {
+        self.tables
+            .get(key)
+            .and_then(|layout| layout.group_by_namespace)
+            .unwrap_or(true)
+    }
+
+    pub(super) fn set_groups_by_namespace(&mut self, key: &ResourceTableKey, group: bool) {
+        self.tables
+            .entry(key.clone())
+            .or_default()
+            .group_by_namespace = Some(group);
+    }
+
     pub(super) fn custom_columns(&mut self, key: &ResourceTableKey) -> Vec<CustomMetadataColumn> {
         self.tables
             .entry(key.clone())
@@ -378,14 +407,17 @@ impl PersistedResourceTablePreferences {
         }
     }
 
-    /// Show every column again (the column menu's "Reset to default").
+    /// Show the columns that show by default (the column menu's "Reset to default").
     pub(super) fn reset_column_visibility(
         &mut self,
         key: &ResourceTableKey,
         definitions: &[TableColumnDefinition],
     ) {
         for column in &mut self.layout_mut(key, definitions).columns {
-            column.visible = true;
+            column.visible = definitions
+                .iter()
+                .find(|definition| definition.id == column.id)
+                .is_none_or(|definition| !definition.default_hidden);
         }
     }
 
@@ -403,7 +435,7 @@ impl PersistedResourceTablePreferences {
             {
                 let column = PersistedTableColumn {
                     id: definition.id.clone(),
-                    visible: true,
+                    visible: !definition.default_hidden,
                     width: definition.default_width,
                 };
                 if definition.id.starts_with("metadata-")

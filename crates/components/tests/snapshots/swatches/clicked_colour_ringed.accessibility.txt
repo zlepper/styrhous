@@ -1,0 +1,12 @@
+viewport: width=220.0 height=64.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          RadioButton name="Colour 1" state=[toggled=False] rect=(x=24.0 y=28.0 width=24.0 height=24.0 center_x=36.0 center_y=40.0)
+          RadioButton name="Colour 2" state=[toggled=True] rect=(x=54.0 y=28.0 width=24.0 height=24.0 center_x=66.0 center_y=40.0)
+          RadioButton name="Colour 3" state=[toggled=False] rect=(x=84.0 y=28.0 width=24.0 height=24.0 center_x=96.0 center_y=40.0)
+          RadioButton name="Colour 4" state=[toggled=False] rect=(x=114.0 y=28.0 width=24.0 height=24.0 center_x=126.0 center_y=40.0)
+          RadioButton name="Colour 5" state=[toggled=False] rect=(x=144.0 y=28.0 width=24.0 height=24.0 center_x=156.0 center_y=40.0)
+          RadioButton name="Colour 6" state=[toggled=False] rect=(x=174.0 y=28.0 width=24.0 height=24.0 center_x=186.0 center_y=40.0)

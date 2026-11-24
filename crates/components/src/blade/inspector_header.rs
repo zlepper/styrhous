@@ -9,6 +9,7 @@ use super::interaction::HeaderAction;
 use crate::design::theme::{ThemeExt, Tone};
 use crate::design::type_scale::{self, TextRole, Weight};
 use crate::design::{size, space};
+use crate::interaction::PointingHand;
 use crate::readout::{Readout, ReadoutRow};
 use crate::status::StatusLabel;
 use crate::tooltip::{TooltipExt, elided_label};
@@ -32,6 +33,8 @@ pub struct InspectorHeaderResponse {
     pub back: bool,
     pub forward: bool,
     pub close: bool,
+    /// The link of the status line was clicked.
+    pub status_link: bool,
 }
 
 /// The status line under an inspector's title: a lamp, the state word in
@@ -42,6 +45,8 @@ pub struct InspectorStatus<'a> {
     pub tone: Tone,
     pub state: &'a str,
     pub reason: Option<&'a str>,
+    /// A reference ending the line in `accent-text` ("· on kind-control-plane").
+    pub link: Option<&'a str>,
 }
 
 /// An inspector blade's header (C19, about 150 points): row one is Back ·
@@ -152,7 +157,7 @@ impl<'a> InspectorHeader<'a> {
         let actions_left = actions_right - actions_width;
         let title_left = row_ui.cursor().left();
         let title_width = (actions_left - ROW_GAP - title_left).max(0.0);
-        self.title_block(
+        result.status_link = self.title_block(
             &mut row_ui,
             Rect::from_min_size(pos2(title_left, row.top()), vec2(title_width, row.height())),
         );
@@ -179,7 +184,7 @@ impl<'a> InspectorHeader<'a> {
     }
 
     /// The title over the status line in `rect`.
-    fn title_block(&self, ui: &mut Ui, rect: Rect) {
+    fn title_block(&self, ui: &mut Ui, rect: Rect) -> bool {
         let theme = ui.tokens();
         let block_height =
             TITLE_ROLE.line_height() + self.status.map_or(0.0, |_| type_scale::META.line_height());
@@ -203,7 +208,7 @@ impl<'a> InspectorHeader<'a> {
             let _ = title_response.tooltip(self.title);
         }
         let Some(status) = self.status else {
-            return;
+            return false;
         };
         // The status line: the lamp and state word, then "· reason",
         // elided to the room left.
@@ -225,12 +230,36 @@ impl<'a> InspectorHeader<'a> {
             .color(theme.tone(status.tone).text)
             .show(&mut line_ui);
         if let Some(reason) = status.reason {
-            elided_label(
-                &mut line_ui,
-                type_scale::META,
-                &format!("· {reason}"),
-                theme.text.muted,
-            );
+            if status.link.is_some() {
+                type_scale::META.label(&mut line_ui, &format!("· {reason}"), theme.text.muted);
+            } else {
+                elided_label(
+                    &mut line_ui,
+                    type_scale::META,
+                    &format!("· {reason}"),
+                    theme.text.muted,
+                );
+            }
         }
+        let Some(link) = status.link else {
+            return false;
+        };
+        let galley = type_scale::META.galley(
+            line_ui.ctx(),
+            link,
+            theme.accent.text,
+            line_ui.available_width(),
+        );
+        let (link_rect, response) =
+            type_scale::allocate_text(&mut line_ui, galley.rect.size(), link);
+        let response = response.interact(Sense::click()).with_pointing_hand();
+        type_scale::paint_text(
+            &line_ui,
+            &response,
+            link_rect.min,
+            galley,
+            theme.accent.text,
+        );
+        response.clicked()
     }
 }

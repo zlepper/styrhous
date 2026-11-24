@@ -168,6 +168,7 @@ pub struct Button {
     label: Option<String>,
     accessibility_label: Option<String>,
     icon: Option<Icon>,
+    small_icon: bool,
     trailing_icon: Option<Icon>,
     shortcut: Option<String>,
     variant: ButtonVariant,
@@ -188,6 +189,7 @@ impl Button {
             label: Some(label.into()),
             accessibility_label: None,
             icon: None,
+            small_icon: false,
             trailing_icon: None,
             shortcut: None,
             variant: ButtonVariant::default(),
@@ -272,6 +274,14 @@ impl Button {
     /// Lead the label with `icon`, when it adds recognition (Refresh, Edit).
     pub fn leading_icon(mut self, icon: Icon) -> Self {
         self.icon = Some(icon);
+        self
+    }
+
+    /// [`Self::leading_icon`] at [`size::ICON_SM`] (`.ic.s14`), as the inspector's primary
+    /// actions have it.
+    pub fn leading_small_icon(mut self, icon: Icon) -> Self {
+        self.icon = Some(icon);
+        self.small_icon = true;
         self
     }
 
@@ -360,7 +370,13 @@ impl Button {
                 on_fill: self.variant.is_solid(),
             })
         } else {
-            self.icon.map(Leading::Icon)
+            self.icon.map(|icon| {
+                if self.small_icon {
+                    Leading::SmallIcon(icon)
+                } else {
+                    Leading::Icon(icon)
+                }
+            })
         };
         Content {
             leading,

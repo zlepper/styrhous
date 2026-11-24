@@ -1057,3 +1057,237 @@ fn a_grouped_table_selects_the_rows_it_shows_and_ranges_within_a_group() {
     shift_click(&mut harness, b_0);
     assert_eq!(*selected.borrow(), HashSet::from(["a-2", "b-0", "b-1"]));
 }
+
+// WP3b
+mod grouped_configurable {
+    use super::*;
+    use crate::design::size;
+    use crate::design::theme::Tone;
+    use crate::{GroupHeader, GroupedTableResponse, TableGroup};
+
+    type Row = (&'static str, Option<Tone>);
+
+    const ROWS: [Row; 4] = [
+        ("healthy", None),
+        ("pending", Some(Tone::Warning)),
+        ("steady", None),
+        ("failed", Some(Tone::Danger)),
+    ];
+
+    fn table() -> Table {
+        Table::new("grouped-configurable")
+            .column("name", "Name", |col| col.sortable().initial_width(200.0))
+            .column("status", "Status", |col| col.initial_width(100.0))
+            .selectable()
+            .fill_available_height()
+    }
+
+    /// The grouped table of `groups` of rows, reporting each frame's response.
+    /// It is not run: a table told to scroll to a row keeps asking for
+    /// another frame.
+    fn harness(
+        groups: impl Fn() -> Vec<Vec<Row>> + 'static,
+        grouped: bool,
+        height: f32,
+        scroll_to: Option<usize>,
+        responses: Rc<RefCell<Vec<GroupedTableResponse>>>,
+    ) -> Harness<'static> {
+        let groups = Rc::new(groups());
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(400.0, height))
+            .build_ui(move |ui| {
+                ui.set_max_height(height);
+                let table_groups = groups
+                    .iter()
+                    .enumerate()
+                    .map(|(index, rows)| {
+                        if grouped {
+                            let name: &'static str = ["first", "second"][index];
+                            TableGroup::new(GroupHeader::new(name, rows.len()), &rows[..])
+                        } else {
+                            TableGroup::ungrouped(&rows[..])
+                        }
+                    })
+                    .collect();
+                let mut selected = HashSet::<&str>::new();
+                let response = table().scroll_to_row(scroll_to).show_grouped_configurable(
+                    ui,
+                    table_groups,
+                    Some(&mut selected),
+                    |row: &Row| Some(row.0),
+                    None,
+                    |row| row.1,
+                    |_, _, _, _| {},
+                    |_, _| {},
+                    |ui, row, column| match column {
+                        0 => TableRowBuilder::text(ui, row.0, true),
+                        _ => TableRowBuilder::text(ui, "status", false),
+                    },
+                    |_, _, _| {},
+                );
+                responses.borrow_mut().push(response);
+            });
+        crate::test_support::setup_egui(&mut harness);
+        harness
+    }
+
+    #[test]
+    fn it_reports_a_clicked_sort_and_ticks_against_the_viewport_when_the_list_is_short() {
+        let responses = Rc::new(RefCell::new(Vec::new()));
+        let mut harness = harness(|| vec![ROWS.to_vec()], true, 400.0, None, responses.clone());
+        harness.run();
+        harness.get_by_label("Name column").click();
+        harness.run();
+
+        let responses = responses.borrow();
+        assert!(
+            responses
+                .iter()
+                .any(|response| response.sort_clicked.as_deref() == Some("name"))
+        );
+        let last = responses.last().expect("a frame");
+        assert_eq!(last.ticks.len(), 2, "one tick per problem row");
+        assert_eq!(last.ticks[0].tone, Tone::Warning);
+        assert_eq!(last.ticks[1].tone, Tone::Danger);
+        // The viewport is taller than the 34 + 4 × 40 point list, so a tick
+        // sits at its row's height over the viewport, not over the list.
+        let (first, second) = (
+            size::GROUP_HEADER + size::ROW_PITCH,
+            size::GROUP_HEADER + 3.0 * size::ROW_PITCH,
+        );
+        assert!(last.ticks[0].position < first / last.content_height);
+        assert!((last.ticks[1].position / last.ticks[0].position - second / first).abs() < 0.01);
+        assert_eq!(last.visible.0, 0.0);
+        assert!(
+            (last.visible.1 - 1.0).abs() < f32::EPSILON,
+            "the thumb fills the track"
+        );
+    }
+
+    #[test]
+    fn ungrouped_rows_have_no_header_row_and_still_tick() {
+        let responses = Rc::new(RefCell::new(Vec::new()));
+        let mut harness = harness(
+            || vec![ROWS.to_vec()],
+            false,
+            400.0,
+            None,
+            responses.clone(),
+        );
+        harness.run();
+        assert!(harness.query_by_label_contains("Collapse").is_none());
+        assert!(harness.query_by_label_contains("Expand").is_none());
+        let responses = responses.borrow();
+        let last = responses.last().expect("a frame");
+        assert_eq!(last.ticks.len(), 2);
+        assert!(
+            (last.content_height - 4.0 * size::ROW_PITCH).abs() < f32::EPSILON,
+            "no header rows in the height"
+        );
+        assert!(
+            (last.ticks[1].position / last.ticks[0].position - 3.0).abs() < 0.01,
+            "ticks sit at the rows 1 and 3 of the list"
+        );
+    }
+
+    #[test]
+    fn it_scrolls_the_requested_row_into_view_across_groups() {
+        let many = |name: &'static str| vec![(name, None); 20];
+        let responses = Rc::new(RefCell::new(Vec::new()));
+        let mut harness = harness(
+            move || vec![many("first-row"), many("second-row")],
+            true,
+            240.0,
+            Some(30),
+            responses,
+        );
+        harness.run_steps(4);
+        // Row 30 counts across groups: the eleventh row of the second group.
+        let row = harness.get_by_label("Select row 31").rect();
+        assert!(
+            row.top() >= 0.0 && row.bottom() <= 240.0,
+            "the row is within the window: {row:?}"
+        );
+        assert!(
+            harness.query_by_label("Select row 1").is_none(),
+            "the top of the list scrolled away"
+        );
+    }
+}
+
+#[test]
+fn usage_cells_show_their_figures_and_a_bar_that_warns_as_it_fills() {
+    let usage = [
+        ("0.82 / 4", Some(0.21)),
+        ("3.1 / 4", Some(0.78)),
+        ("3.9 / 4", Some(0.96)),
+        ("15m", None),
+    ];
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(420.0, 200.0))
+        .build_ui(|ui| {
+            ui.set_max_width(420.0);
+            Table::new("usage")
+                .column("name", "Name", |col| col.initial_width(120.0))
+                .column("cpu", "CPU", |col| col.numeric().initial_width(140.0))
+                .show(ui, &usage, |ui, (figures, fraction), column| match column {
+                    0 => TableRowBuilder::text(ui, "node", true),
+                    _ => TableRowBuilder::usage(ui, figures, *fraction),
+                });
+        });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+    harness.get_by_label("21% in use");
+    harness.get_by_label("78% in use");
+    harness.get_by_label("96% in use");
+    assert_eq!(
+        harness.query_all_by_label_contains("% in use").count(),
+        3,
+        "a cell without a fraction has no bar"
+    );
+    harness.ui_harness("tables/usage_cells_show_their_figures_and_a_bar_that_warns_as_it_fills");
+}
+
+#[test]
+fn a_shift_click_range_follows_the_anchor_row_when_the_groups_reorder() {
+    let selected = Rc::new(RefCell::new(HashSet::<&str>::new()));
+    let swapped = Rc::new(std::cell::Cell::new(false));
+    let (set, swap) = (selected.clone(), swapped.clone());
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(400.0, 400.0))
+        .build_ui(move |ui| {
+            let a = crate::TableGroup::new(crate::GroupHeader::new("a", 3), &GROUP_A[..]);
+            let b = crate::TableGroup::new(crate::GroupHeader::new("b", 2), &GROUP_B[..]);
+            let groups = if swap.get() { vec![b, a] } else { vec![a, b] };
+            let _ = Table::new("anchors")
+                .column("name", "Name", |col| col.initial_width(200.0))
+                .selectable()
+                .show_grouped(
+                    ui,
+                    groups,
+                    Some(&mut set.borrow_mut()),
+                    |name: &&str| Some(*name),
+                    None,
+                    |_| None,
+                    |ui, name, _| TableRowBuilder::text(ui, name, true),
+                );
+        });
+    crate::test_support::setup_egui(&mut harness);
+    harness.run();
+
+    harness.get_by_label("Select row 2").click();
+    harness.run();
+    assert_eq!(*selected.borrow(), HashSet::from(["a-1"]));
+
+    // The groups trade places: "a-1" is now the fourth row.
+    selected.borrow_mut().clear();
+    swapped.set(true);
+    harness.run();
+    let a_2 = harness.get_by_label("Select row 5").rect().center();
+    shift_click(&mut harness, a_2);
+    assert_eq!(
+        *selected.borrow(),
+        HashSet::from(["a-1", "a-2"]),
+        "the range runs from the anchor row, wherever its group went"
+    );
+}

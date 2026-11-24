@@ -1,6 +1,10 @@
 use super::*;
 
 impl GlobalBladeContent for ResourceTableSettingsTarget {
+    fn description(&self) -> components::BladeDescription {
+        components::BladeDescription::named("Configure columns")
+    }
+
     fn render_header(
         &mut self,
         ui: &mut egui::Ui,
@@ -147,6 +151,7 @@ pub(super) fn show_custom_column_form(
                                 default_width: 160.0,
                                 sortable: true,
                                 numeric: false,
+                                default_hidden: false,
                             },
                             visible: true,
                             custom_column: Some(custom_column),

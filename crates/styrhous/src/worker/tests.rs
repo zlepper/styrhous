@@ -21,17 +21,7 @@ impl Drop for AbortProbe {
 
 pub(super) fn worker_state() -> WorkerState {
     let (sender, _receiver) = mpsc::channel(1);
-    WorkerState {
-        results: WorkerResultSender::new(sender, None),
-        connections: Arc::new(Mutex::new(HashMap::new())),
-        resource_watches: Arc::new(Mutex::new(ResourceWatchRegistry::default())),
-        detail_watches: Arc::new(TaskRegistry::default()),
-        pod_metrics_watches: Arc::new(TaskRegistry::default()),
-        node_metrics_watches: Arc::new(TaskRegistry::default()),
-        log_streams: Arc::new(TaskRegistry::default()),
-        watch_initialization_slots: Arc::new(Mutex::new(HashMap::new())),
-        log_store_appender: None,
-    }
+    WorkerState::new(WorkerResultSender::new(sender, None), None)
 }
 
 fn pod_resource() -> ApiResource {

@@ -2,8 +2,7 @@ use super::*;
 use crate::context_presentation::ContextPresentation;
 use egui_kittest::kittest::NodeT;
 
-const OPEN_CONTEXT_SETTINGS: &str =
-    "Open context settings: Customize display names and selector badges.";
+const OPEN_CONTEXT_SETTINGS: &str = "Open context settings: Display names and rail badges";
 const PRODUCTION: &str = "cloudstorage-production-eu";
 
 fn context_state(count: usize) -> UiState {
@@ -70,8 +69,23 @@ fn replace_context_field(harness: &mut Harness<MyEguiApp<MockWorker>>, field: &s
     harness.run();
 }
 
+/// The centre of the editor's save button, which names what it saves.
+fn save_button(harness: &Harness<MyEguiApp<MockWorker>>) -> egui::Pos2 {
+    [
+        "Save changes",
+        "Save display name",
+        "Save badge",
+        "Save colour",
+    ]
+    .into_iter()
+    .find_map(|label| harness.query_by_label(label))
+    .expect("the editor has a save button")
+    .rect()
+    .center()
+}
+
 fn save_context(harness: &mut Harness<MyEguiApp<MockWorker>>) {
-    let position = harness.get_by_label("Save changes").rect().center();
+    let position = save_button(harness);
     primary_click(harness, position);
     harness.run();
 }
@@ -127,7 +141,7 @@ fn context_settings_editor_shows_live_custom_badge_preview() {
     open_contexts(&mut harness);
     open_context_editor(&mut harness, PRODUCTION);
     replace_context_field(&mut harness, "Badge", "PR");
-    harness.get_by_label("Automatic badge: CP");
+    harness.get_by_label("1–2 characters. Automatic: CP");
     harness.ui_harness("settings/contexts/editor");
 }
 
@@ -141,7 +155,7 @@ fn context_editor_scrolls_only_its_form_when_needed() {
         (1024.0, default_spacing, false),
         (900.0, default_spacing, false),
         (1024.0, default_spacing * 3.0, false),
-        (600.0, default_spacing, true),
+        (460.0, default_spacing, true),
     ] {
         harness
             .ctx
@@ -216,7 +230,20 @@ fn context_editor_preserves_keyboard_order_and_saves_the_latest_input() {
             .get_by_role_and_label(egui::accesskit::Role::TextInput, "Badge")
             .is_focused()
     );
-    for label in ["Save changes", "Cancel"] {
+    // The colour swatches are one tab stop between the badge and the footer.
+    harness.key_press(egui::Key::Tab);
+    harness.run();
+    assert_eq!(
+        (1..=6)
+            .filter(|n| harness
+                .get_by_label(&format!("Colour {n}"))
+                .accesskit_node()
+                .is_focused())
+            .count(),
+        1,
+        "one swatch holds the focus"
+    );
+    for label in ["Save display name", "Cancel"] {
         harness.key_press(egui::Key::Tab);
         harness.run();
         assert!(
@@ -232,7 +259,7 @@ fn context_editor_preserves_keyboard_order_and_saves_the_latest_input() {
     harness.run();
     // Typing and clicking Save can arrive in the same native frame.
     harness.event(egui::Event::Text("PR".into()));
-    let save = harness.get_by_label("Save changes").rect().center();
+    let save = save_button(&harness);
     primary_click(&mut harness, save);
     harness.run();
     let command = harness
@@ -375,13 +402,16 @@ fn context_settings_save_and_clear_preserve_the_active_workspace() {
             .badge(PRODUCTION),
         "PR"
     );
-    harness.get_by_role_and_label(
-        egui::accesskit::Role::Button,
-        &format!("Production Europe ({PRODUCTION})"),
+    let card = harness.get_by_label("Switch cluster");
+    assert!(
+        card.accesskit_node()
+            .description()
+            .is_some_and(|description| description.starts_with("Production Europe, ")),
+        "the cluster card names the context by its display name"
     );
     assert!(
-        harness.get_all_by_label("Production Europe").count() >= 2,
-        "updated name should appear in resource heading and context list"
+        harness.get_all_by_label("Production Europe").count() >= 1,
+        "updated name should appear in the context list"
     );
     open_context_editor(&mut harness, PRODUCTION);
     replace_context_field(&mut harness, "Display name", " ");
@@ -484,7 +514,7 @@ fn context_settings_reopening_a_pending_save_uses_the_submitted_values() {
     replace_context_field(&mut harness, "Display name", "Production Europe");
     replace_context_field(&mut harness, "Badge", "PR");
     // Two clicks queued at the same position still submit only one save.
-    let position = harness.get_by_label("Save changes").rect().center();
+    let position = save_button(&harness);
     primary_click(&mut harness, position);
     primary_click(&mut harness, position);
     harness.run();

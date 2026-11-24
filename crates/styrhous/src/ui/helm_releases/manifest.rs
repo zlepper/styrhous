@@ -2,7 +2,7 @@ use crate::api_resource::ApiResource;
 use serde::Deserialize;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct ManifestResource {
     pub(crate) api_version: String,
     pub(crate) kind: String,

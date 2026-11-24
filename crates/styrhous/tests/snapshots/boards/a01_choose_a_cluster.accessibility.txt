@@ -1,0 +1,45 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        Navigation name="Workspace" rect=(x=12.0 y=12.0 width=268.0 height=1000.0 center_x=146.0 center_y=512.0)
+          GenericContainer rect=<none>
+            Button name="Switch cluster" rect=(x=26.0 y=26.0 width=240.0 height=60.0 center_x=146.0 center_y=56.0)
+              TextRun value="Choose a cluster" rect=(x=88.0 y=39.0 width=121.8 height=20.0 center_x=148.9 center_y=49.0)
+            Label value="RESOURCES" rect=(x=34.0 y=100.0 width=66.6 height=14.0 center_x=67.3 center_y=107.0)
+              TextRun value="RESOURCES" rect=(x=34.0 y=100.0 width=65.5 height=14.0 center_x=66.8 center_y=107.0)
+            GenericContainer rect=<none>
+              Label value="Pick a cluster to see its resource kinds." rect=(x=34.0 y=124.0 width=205.9 height=16.0 center_x=136.9 center_y=132.0)
+                TextRun value="Pick a cluster to see its resource kinds." rect=(x=34.0 y=124.0 width=205.9 height=16.0 center_x=136.9 center_y=132.0)
+          GenericContainer rect=<none>
+            Button name="Notifications" state=[toggled=False] rect=(x=26.0 y=964.0 width=144.9 height=34.0 center_x=98.4 center_y=981.0)
+              TextRun value="Notifications" rect=(x=58.0 y=971.0 width=79.4 height=20.0 center_x=97.7 center_y=981.0)
+            Button name="Settings" state=[toggled=False] rect=(x=174.9 y=964.0 width=91.1 height=34.0 center_x=220.4 center_y=981.0)
+              TextRun value="Settings" rect=(x=206.9 y=971.0 width=51.1 height=20.0 center_x=232.4 center_y=981.0)
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              TextInput name="Search" value="" state=[disabled] rect=(x=304.0 y=20.0 width=260.0 height=38.0 center_x=434.0 center_y=39.0)
+                TextRun value="" rect=(x=340.0 y=31.0 width=0.0 height=20.0 center_x=340.0 center_y=41.0)
+            ComboBox name="Namespace scope" state=[disabled] rect=(x=612.0 y=20.0 width=240.0 height=38.0 center_x=732.0 center_y=39.0)
+        GenericContainer rect=<none>
+          Label value="Choose a cluster" rect=(x=796.2 y=200.0 width=219.6 height=36.0 center_x=906.0 center_y=218.0)
+            TextRun value="Choose a cluster" rect=(x=796.2 y=200.0 width=219.8 height=36.0 center_x=906.1 center_y=218.0)
+          Label value="4 contexts in ~/.kube/config. Pick one to start, or find more in your cloud accounts." rect=(x=647.4 y=242.0 width=517.1 height=20.0 center_x=906.0 center_y=252.0)
+            TextRun value="4 contexts in ~/.kube/config. Pick one to start, or find more in your cloud accounts." rect=(x=647.4 y=242.0 width=517.1 height=20.0 center_x=906.0 center_y=252.0)
+          GenericContainer rect=<none>
+            Button name="dev-eu, EKS · EU-WEST-1, 38 nodes" state=[toggled=False] rect=(x=586.0 y=292.0 width=315.0 height=60.0 center_x=743.5 center_y=322.0)
+            Button name="kind-kind, KIND · LOCAL, 3 nodes" state=[toggled=False] rect=(x=911.0 y=292.0 width=315.0 height=60.0 center_x=1068.5 center_y=322.0)
+          GenericContainer rect=<none>
+            Button name="kind-legacy, KIND · LOCAL, 1 node" state=[toggled=False] rect=(x=586.0 y=362.0 width=315.0 height=60.0 center_x=743.5 center_y=392.0)
+            Button name="prod-eu, AKS · WESTEUROPE, 62 nodes" state=[toggled=False] rect=(x=911.0 y=362.0 width=315.0 height=60.0 center_x=1068.5 center_y=392.0)
+          GenericContainer rect=<none>
+            Button name="Find clusters" rect=(x=746.8 y=448.0 width=127.1 height=32.0 center_x=810.3 center_y=464.0)
+            Button name="Open kubeconfig settings" rect=(x=881.8 y=448.0 width=183.4 height=32.0 center_x=973.5 center_y=464.0)
+          GenericContainer rect=<none>
+            Label value="⌘K" rect=(x=807.8 y=501.0 width=26.0 height=18.0 center_x=820.8 center_y=510.0)
+            Label value="switch clusters from anywhere" rect=(x=839.8 y=502.0 width=164.4 height=16.0 center_x=922.0 center_y=510.0)
+              TextRun value="switch clusters from anywhere" rect=(x=839.8 y=502.0 width=164.4 height=16.0 center_x=922.0 center_y=510.0)

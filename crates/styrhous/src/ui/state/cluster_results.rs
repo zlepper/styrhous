@@ -30,6 +30,7 @@ impl WorkerResult for crate::worker::ImportedKubernetesClusters {
         for cluster in &mut ui.managed_cluster_discovery.aws.clusters {
             cluster.configured |= context_names.contains(cluster.arn().as_str());
         }
+        let mut added = None;
         for cluster in clusters {
             if ui
                 .clusters
@@ -40,8 +41,15 @@ impl WorkerResult for crate::worker::ImportedKubernetesClusters {
             }
             ui.next_cluster_key += 1;
             let cluster_key = ui.next_cluster_key;
+            added.get_or_insert(cluster_key);
             ui.clusters
                 .insert(cluster_key, cluster_state(cluster_key, cluster));
+        }
+        // A cluster added from the switcher is switched to, as S18 has Enter do.
+        if std::mem::take(&mut ui.switch_to_imported)
+            && let Some(cluster_key) = added
+        {
+            ui.switch_cluster(cluster_key, commands);
         }
         commands.push(Box::new(crate::worker::LoadManagedClusterDiscovery));
     }
@@ -92,6 +100,7 @@ impl WorkerResult for crate::worker::EksDiscoveryFailed {
 
 impl WorkerResult for crate::worker::EksImportFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        ui.switch_to_imported = false;
         if !matches!(
             ui.managed_cluster_discovery.importing.as_ref(),
             Some(ManagedClusterImport::Eks { .. })
@@ -139,6 +148,7 @@ fn apply_kubernetes_clusters(
 fn cluster_state(cluster_key: i32, cluster: Cluster) -> ClusterState {
     let mut state = ClusterState::new(cluster_key, cluster.name);
     state.presentation = cluster.presentation;
+    state.server = cluster.server;
     state
 }
 
@@ -166,6 +176,7 @@ impl WorkerResult for crate::worker::ManagedClusterImported {
 
 impl WorkerResult for crate::worker::ManagedClusterDiscoveryFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
+        ui.switch_to_imported = false;
         ui.managed_cluster_discovery.loading = false;
         ui.managed_cluster_discovery.importing = None;
         ui.managed_cluster_discovery.error = Some(self.error);
@@ -285,7 +296,7 @@ fn name_api_groups<'a>(group_versions: impl ExactSizeIterator<Item = &'a str>) -
 
 /// Ends the title of the outcome recorded when API groups could not be
 /// discovered; they are retried in the background.
-pub(crate) const FAILED_API_GROUPS_TITLE_SUFFIX: &str = "could not be loaded";
+pub(crate) const FAILED_API_GROUPS_TITLE_SUFFIX: &str = "couldn’t be loaded";
 
 fn describe_failed_api_groups(
     failed_api_groups: &[crate::worker::FailedApiGroup],
@@ -347,7 +358,7 @@ impl WorkerResult for crate::worker::KubernetesApiDiscoveryCompleted {
             let summary = describe_failed_api_groups(&failed_api_groups);
             ui.push_operation_outcome(
                 cluster_key,
-                OperationOutcome::Failure,
+                OperationOutcome::Warning,
                 summary.title,
                 None,
                 summary.target,
@@ -526,6 +537,49 @@ impl WorkerResult for crate::worker::ContextPresentationSaveFailed {
     }
 }
 
+impl UiState {
+    /// Start adding a cluster found in a cloud account to the kubeconfig; the
+    /// worker answers with `ManagedClusterImported` (or a failure).
+    pub(in crate::ui) fn begin_managed_import(
+        &mut self,
+        import: ManagedClusterImport,
+        commands: &mut Vec<WorkerCommandBox>,
+    ) {
+        let discovery = &mut self.managed_cluster_discovery;
+        discovery.error = None;
+        discovery.importing = Some(import.clone());
+        commands.push(match import {
+            ManagedClusterImport::Aks {
+                subscription_id,
+                resource_group,
+                cluster_name,
+            } => Box::new(crate::worker::AddAksCluster {
+                subscription_id,
+                resource_group,
+                cluster_name,
+            }),
+            ManagedClusterImport::Tailscale { host_name } => {
+                Box::new(crate::worker::AddTailscaleCluster { host_name })
+            }
+            ManagedClusterImport::Eks {
+                account_id,
+                region,
+                name,
+                profile,
+            } => {
+                discovery.aws.import_error = None;
+                Box::new(crate::worker::AddEksCluster {
+                    request_id: discovery.aws.request_id,
+                    account_id,
+                    region,
+                    name,
+                    profile,
+                })
+            }
+        });
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -542,16 +596,16 @@ mod tests {
     #[test]
     fn failed_api_group_summary_names_at_most_three_groups_but_details_list_all() {
         for (count, title, target) in [
-            (1, "1 API group could not be loaded", "g1/v1"),
-            (3, "3 API groups could not be loaded", "g1/v1, g2/v1, g3/v1"),
+            (1, "1 API group couldn’t be loaded", "g1/v1"),
+            (3, "3 API groups couldn’t be loaded", "g1/v1, g2/v1, g3/v1"),
             (
                 4,
-                "4 API groups could not be loaded",
+                "4 API groups couldn’t be loaded",
                 "g1/v1, g2/v1, g3/v1 and 1 more",
             ),
             (
                 5,
-                "5 API groups could not be loaded",
+                "5 API groups couldn’t be loaded",
                 "g1/v1, g2/v1, g3/v1 and 2 more",
             ),
         ] {

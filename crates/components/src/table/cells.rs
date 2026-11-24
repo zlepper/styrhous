@@ -1,14 +1,19 @@
 //! The contents of table cells (`.td`): text, numbers, missing values,
 //! status, container squares and navigable text.
 
-use egui::{Button, Color32, Ui, WidgetText};
+use egui::{Button, Color32, Rect, Ui, WidgetText};
 
+use super::layout::CELL_GAP;
 use crate::PointingHand;
-use crate::design::size;
 use crate::design::theme::{ThemeExt, Tone};
 use crate::design::type_scale::{self, TextRole};
+use crate::design::{radius, size};
 use crate::tooltip::{TooltipContent, TooltipExt, elided_label};
 
+/// The share of the allocatable amount from which a usage bar warns.
+const USAGE_WARNING_FROM: f32 = 0.7;
+/// The share of the allocatable amount from which a usage bar is danger.
+const USAGE_DANGER_FROM: f32 = 0.9;
 /// The em dash of a missing value.
 const MISSING: &str = "—";
 // C17
@@ -86,6 +91,40 @@ impl TableRowBuilder<'_> {
             type_scale::UI
         };
         Self::text_in(ui, role, text, color);
+    }
+
+    /// Render a usage cell (A04): the figures ("0.82 / 4") and a small bar
+    /// of the `fraction` of the allocatable amount in use, in the accent
+    /// colour, then warning and danger as it fills. Without
+    /// a fraction only the figures show.
+    pub fn usage(ui: &mut Ui, text: &str, fraction: Option<f32>) {
+        // The bar comes after the figures; the cell is right-to-left.
+        if let Some(fraction) = fraction.map(|fraction| fraction.clamp(0.0, 1.0)) {
+            let theme = ui.tokens();
+            let fill = match fraction {
+                f if f >= USAGE_DANGER_FROM => theme.danger.fill,
+                f if f >= USAGE_WARNING_FROM => theme.warning.fill,
+                _ => theme.accent.fill,
+            };
+            let (rect, response) = ui.allocate_exact_size(
+                egui::vec2(size::USAGE_BAR_WIDTH, size::USAGE_BAR_HEIGHT),
+                egui::Sense::hover(),
+            );
+            response.widget_info(|| {
+                egui::WidgetInfo::labeled(
+                    egui::WidgetType::ProgressIndicator,
+                    true,
+                    format!("{:.0}% in use", fraction * 100.0),
+                )
+            });
+            let radius = radius::USAGE_BAR;
+            ui.painter().rect_filled(rect, radius, theme.control.fill);
+            let filled =
+                Rect::from_min_size(rect.min, egui::vec2(rect.width() * fraction, rect.height()));
+            ui.painter().rect_filled(filled, radius, fill);
+            ui.add_space(size::USAGE_BAR_GAP - CELL_GAP);
+        }
+        Self::number(ui, text);
     }
 
     /// Render monospaced text (image references, hashes).

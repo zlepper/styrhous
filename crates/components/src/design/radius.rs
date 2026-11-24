@@ -107,3 +107,7 @@ pub const LOG_MATCH: u8 = 4;
 // C18 · cluster switcher
 /// Cluster tiles (`.ctile`).
 pub const CLUSTER_TILE: u8 = POPOVER;
+
+// A04 · usage cells
+/// The bar of a table's used / allocatable cell.
+pub const USAGE_BAR: u8 = 2;

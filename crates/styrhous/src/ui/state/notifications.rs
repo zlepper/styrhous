@@ -1,5 +1,8 @@
 use super::*;
 
+/// The longest failure reason a toast shows in place of its target.
+const TOAST_REASON_MAX: usize = 120;
+
 impl UiState {
     pub(crate) fn record_operation_outcome(
         &mut self,
@@ -47,17 +50,30 @@ impl UiState {
         let sequence = self.next_operation_toast_sequence;
         self.next_operation_toast_sequence += 1;
         let resource_name = resource_name.into();
+        let wall_time = self.clock.now();
         let target = namespace.map_or(resource_name.clone(), |namespace| {
-            format!("{resource_name} • {namespace}")
+            format!("{resource_name} · {namespace}")
         });
         let title = title.into();
+        // A failure's toast says why, as the design's toast does, when the
+        // reason is a line of its own; the history keeps the target beside it.
+        let toast_detail = match (outcome, &details) {
+            (OperationOutcome::Failure, Some(details))
+                if !details.contains('\n') && details.chars().count() <= TOAST_REASON_MAX =>
+            {
+                details.clone()
+            }
+            _ => target.clone(),
+        };
         let occurred_at = Instant::now();
         cluster.operation_history.push(OperationHistoryEntry {
             outcome,
             title: title.clone(),
             target: target.clone(),
+            resource: resource_name,
+            namespace: namespace.map(str::to_owned),
             details,
-            occurred_at,
+            wall_time,
             sequence,
             unread: true,
         });
@@ -66,7 +82,7 @@ impl UiState {
             .push(TransientOperationToast {
                 outcome,
                 title,
-                target,
+                target: toast_detail,
                 sequence,
                 expires_at: occurred_at + Duration::from_secs(5),
             });
@@ -208,8 +224,8 @@ impl UiState {
         entries.sort_by(|left, right| {
             right
                 .entry
-                .occurred_at
-                .cmp(&left.entry.occurred_at)
+                .wall_time
+                .cmp(&left.entry.wall_time)
                 .then_with(|| right.entry.sequence.cmp(&left.entry.sequence))
         });
         entries

@@ -1,18 +1,18 @@
 use super::{ResourceTableData, watches::resource_watch_namespaces_for};
 use crate::api_resource::ApiResource;
 use crate::minimal_resource::MinimalResource;
-use crate::resource_table::{CPU_COLUMN, MEMORY_COLUMN, SortValue};
+use crate::resource_table::{CPU_COLUMN, MEMORY_COLUMN, PODS_COLUMN, SortValue};
 use crate::ui::metadata_fields::MetadataKeySuggestions;
 use crate::ui::resource_table_cache::{
-    PreparedResourceIdentity, PreparedResourceTable, PreparedResourceTableRow, ResourceTableCache,
-    ResourceTableCacheKey,
+    Grouping, PreparedGroup, PreparedResourceIdentity, PreparedResourceTable,
+    PreparedResourceTableRow, ResourceTableCache, ResourceTableCacheKey,
 };
 use crate::ui::state::{ResourceSearchState, ResourceWatchKey, ResourceWatchState};
 use crate::ui::workspace::resource_table::{
     ResourceTableConfiguration, resource_column_sort_value,
 };
 use components::fuzzy::{FuzzyMatchScore, fuzzy_match_score, normalize_for_search};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 pub(in crate::ui::workspace) fn prepare_resource_table<'a>(
     cache: &'a mut ResourceTableCache,
@@ -52,6 +52,9 @@ pub(in crate::ui::workspace) fn prepare_resource_table<'a>(
     let is_metric_sort = sort
         .as_ref()
         .is_some_and(|(column, _)| column == CPU_COLUMN || column == MEMORY_COLUMN);
+    let is_pod_count_sort = sort
+        .as_ref()
+        .is_some_and(|(column, _)| column == PODS_COLUMN);
     let mut pod_metric_revisions = if is_pod && is_metric_sort {
         data.selected_namespaces
             .iter()
@@ -84,9 +87,16 @@ pub(in crate::ui::workspace) fn prepare_resource_table<'a>(
         node_metrics_api_available: is_node
             && is_metric_sort
             && data.metrics.node_metrics_api_available,
+        node_pod_count_revision: if is_node && is_pod_count_sort {
+            data.metrics.node_pod_counts.revision
+        } else {
+            0
+        },
         search_query: resource_search.query.clone(),
         regex_mode: resource_search.regex_mode,
         sort,
+        grouping: configuration.grouping,
+        problems_only: resource_search.problems_only,
     };
 
     if !cache.matches(&key) {
@@ -103,12 +113,16 @@ pub(in crate::ui::workspace) fn prepare_resource_table<'a>(
     cache.prepared()
 }
 
+/// The name of the one group of a cluster-scoped kind's rows.
+pub(in crate::ui::workspace) const CLUSTER_GROUP: &str = "cluster";
+
 struct ResourceCandidate {
     identity: PreparedResourceIdentity,
     name: String,
     default_name: String,
     sort_value: Option<SortValue>,
     fuzzy_score: Option<FuzzyMatchScore>,
+    namespace: Option<String>,
 }
 
 fn build_prepared_resource_table(
@@ -134,7 +148,9 @@ fn build_prepared_resource_table(
                 identity: PreparedResourceIdentity {
                     watch_index,
                     uid: resource.uid.clone(),
+                    problem: resource.problem_tone(),
                 },
+                namespace: resource.namespace.clone(),
                 name: resource.name.clone(),
                 default_name: resource.name.to_lowercase(),
                 sort_value: configuration.layout.sort.as_ref().map(|sort| {
@@ -205,22 +221,34 @@ fn build_prepared_resource_table(
     }
 
     let visible_resource_count = candidates.len();
-    let mut rows = candidates
-        .into_iter()
-        .map(|candidate| PreparedResourceTableRow::Resource(candidate.identity))
-        .collect::<Vec<_>>();
+    let problem_count = candidates
+        .iter()
+        .filter(|candidate| candidate.identity.problem.is_some())
+        .count();
+    let (mut rows, mut groups) = group_candidates(candidates, &key);
+    let shown_count = rows.len();
     if resource_count > visible_resource_count && regex_error.is_none() {
+        let start = rows.len();
         rows.push(PreparedResourceTableRow::HiddenBySearch(
             resource_count - visible_resource_count,
         ));
+        groups.push(PreparedGroup {
+            name: None,
+            total: 0,
+            failing: 0,
+            rows: start..rows.len(),
+        });
     }
 
     PreparedResourceTable {
         key,
         watch_keys,
         rows,
+        groups,
         resource_count,
         visible_resource_count,
+        problem_count,
+        shown_count,
         regex_error,
         metadata_key_suggestions: MetadataKeySuggestions {
             labels: labels.into_iter().collect(),
@@ -228,6 +256,57 @@ fn build_prepared_resource_table(
         },
         generation,
     }
+}
+
+/// The rows of `candidates` (in their order) grouped as `key` says, with the
+/// problem rows only while `key.problems_only`; groups without a row are
+/// left out.
+fn group_candidates(
+    candidates: Vec<ResourceCandidate>,
+    key: &ResourceTableCacheKey,
+) -> (Vec<PreparedResourceTableRow>, Vec<PreparedGroup>) {
+    #[derive(Default)]
+    struct Accumulator {
+        total: usize,
+        failing: usize,
+        rows: Vec<PreparedResourceIdentity>,
+    }
+    let mut accumulators: BTreeMap<Option<String>, Accumulator> = BTreeMap::new();
+    for candidate in candidates {
+        let name = match key.grouping {
+            Grouping::None => None,
+            Grouping::Namespace => Some(candidate.namespace.unwrap_or_default()),
+            Grouping::Cluster => Some(CLUSTER_GROUP.to_owned()),
+        };
+        let accumulator = accumulators.entry(name).or_default();
+        accumulator.total += 1;
+        let problem = candidate.identity.problem.is_some();
+        accumulator.failing += usize::from(problem);
+        if problem || !key.problems_only {
+            accumulator.rows.push(candidate.identity);
+        }
+    }
+    let mut rows = Vec::new();
+    let mut groups = Vec::new();
+    for (name, accumulator) in accumulators {
+        if accumulator.rows.is_empty() {
+            continue;
+        }
+        let start = rows.len();
+        rows.extend(
+            accumulator
+                .rows
+                .into_iter()
+                .map(PreparedResourceTableRow::Resource),
+        );
+        groups.push(PreparedGroup {
+            name,
+            total: accumulator.total,
+            failing: accumulator.failing,
+            rows: start..rows.len(),
+        });
+    }
+    (rows, groups)
 }
 
 pub(in crate::ui::workspace) fn resolve_prepared_resource<'a>(

@@ -3,78 +3,80 @@ Window state=[focused] rect=<none>
   GenericContainer rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
+        Navigation name="Workspace" rect=(x=12.0 y=12.0 width=268.0 height=1000.0 center_x=146.0 center_y=512.0)
+          GenericContainer rect=<none>
+            Button name="Switch cluster" rect=(x=26.0 y=26.0 width=240.0 height=60.0 center_x=146.0 center_y=56.0)
+              TextRun value="dev" rect=(x=88.0 y=39.0 width=26.7 height=20.0 center_x=101.3 center_y=49.0)
+            GenericContainer rect=<none>
+              TextInput name="Filter kinds" value="" rect=(x=26.0 y=98.0 width=240.0 height=34.0 center_x=146.0 center_y=115.0)
+                TextRun value="" rect=(x=62.0 y=107.0 width=0.0 height=20.0 center_x=62.0 center_y=117.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="PINNED" rect=(x=34.0 y=146.0 width=43.9 height=14.0 center_x=55.9 center_y=153.0)
+                  TextRun value="PINNED" rect=(x=34.0 y=146.0 width=42.8 height=14.0 center_x=55.4 center_y=153.0)
+                Button name="Pods" state=[toggled=True] rect=(x=26.0 y=166.0 width=240.0 height=34.0 center_x=146.0 center_y=183.0)
+                  TextRun value="Pods" rect=(x=62.0 y=173.0 width=30.0 height=20.0 center_x=77.0 center_y=183.0)
+                Button name="Deployments" state=[toggled=False] rect=(x=26.0 y=200.0 width=240.0 height=34.0 center_x=146.0 center_y=217.0)
+                  TextRun value="Deployments" rect=(x=62.0 y=207.0 width=80.7 height=20.0 center_x=102.4 center_y=217.0)
+                Button name="Helm releases" state=[toggled=False] rect=(x=26.0 y=234.0 width=240.0 height=34.0 center_x=146.0 center_y=251.0)
+                  TextRun value="Helm releases" rect=(x=62.0 y=241.0 width=85.0 height=20.0 center_x=104.5 center_y=251.0)
+                Label value="KUBERNETES" rect=(x=34.0 y=282.0 width=73.9 height=14.0 center_x=70.9 center_y=289.0)
+                  TextRun value="KUBERNETES" rect=(x=34.0 y=282.0 width=72.8 height=14.0 center_x=70.4 center_y=289.0)
+                Label value="7" rect=(x=251.0 y=282.0 width=7.0 height=14.0 center_x=254.5 center_y=289.0)
+                  TextRun value="7" rect=(x=251.0 y=282.0 width=5.9 height=14.0 center_x=253.9 center_y=289.0)
+                Button name="Workloads" state=[toggled=False] rect=(x=26.0 y=302.0 width=240.0 height=30.0 center_x=146.0 center_y=317.0)
+                  TextRun value="Workloads" rect=(x=56.0 y=307.0 width=61.5 height=20.0 center_x=86.8 center_y=317.0)
+                Button name="StatefulSets" state=[toggled=False] rect=(x=26.0 y=332.0 width=240.0 height=30.0 center_x=146.0 center_y=347.0)
+                  TextRun value="StatefulSets" rect=(x=56.0 y=337.0 width=72.9 height=20.0 center_x=92.5 center_y=347.0)
+                Button name="Network" state=[toggled=False] rect=(x=26.0 y=362.0 width=240.0 height=30.0 center_x=146.0 center_y=377.0)
+                  TextRun value="Network" rect=(x=56.0 y=367.0 width=51.0 height=20.0 center_x=81.5 center_y=377.0)
+                Button name="Config & secrets" state=[toggled=False] rect=(x=26.0 y=392.0 width=240.0 height=30.0 center_x=146.0 center_y=407.0)
+                  TextRun value="Config & secrets" rect=(x=56.0 y=397.0 width=97.6 height=20.0 center_x=104.8 center_y=407.0)
+          GenericContainer rect=<none>
+            Button name="Notifications" state=[toggled=False] rect=(x=26.0 y=964.0 width=144.9 height=34.0 center_x=98.4 center_y=981.0)
+              TextRun value="Notifications" rect=(x=58.0 y=971.0 width=79.4 height=20.0 center_x=97.7 center_y=981.0)
+            Button name="Settings" state=[toggled=False] rect=(x=174.9 y=964.0 width=91.1 height=34.0 center_x=220.4 center_y=981.0)
+              TextRun value="Settings" rect=(x=206.9 y=971.0 width=51.1 height=20.0 center_x=232.4 center_y=981.0)
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Button name="dev" state=[toggled=True] rect=(x=0.0 y=9.0 width=68.0 height=52.0 center_x=34.0 center_y=35.0)
-              Button name="prod" state=[toggled=False] rect=(x=0.0 y=61.0 width=68.0 height=52.0 center_x=34.0 center_y=87.0)
-        GenericContainer rect=<none>
-          Button name="Notifications" rect=(x=0.0 y=912.0 width=68.0 height=52.0 center_x=34.0 center_y=938.0)
-          GenericContainer rect=<none>
-            Image rect=(x=20.0 y=924.0 width=28.0 height=28.0 center_x=34.0 center_y=938.0)
-          Button name="Settings" rect=(x=0.0 y=964.0 width=68.0 height=52.0 center_x=34.0 center_y=990.0)
-          GenericContainer rect=<none>
-            Image rect=(x=20.0 y=976.0 width=28.0 height=28.0 center_x=34.0 center_y=990.0)
-    GenericContainer rect=<none>
-      GenericContainer rect=<none>
-        Label value="dev" rect=(x=82.0 y=22.0 width=35.4 height=28.0 center_x=99.7 center_y=36.0)
-          TextRun value="dev" rect=(x=82.0 y=22.0 width=35.4 height=28.0 center_x=99.7 center_y=36.0)
+              TextInput name="Search resources" value="" rect=(x=304.0 y=20.0 width=260.0 height=38.0 center_x=434.0 center_y=39.0)
+                TextRun value="" rect=(x=340.0 y=31.0 width=0.0 height=20.0 center_x=340.0 center_y=41.0)
+          ComboBox name="Namespace scope" value="default" rect=(x=612.0 y=20.0 width=240.0 height=38.0 center_x=732.0 center_y=39.0)
+          Button name="Group: namespace" state=[toggled=True] rect=(x=860.0 y=23.0 width=134.5 height=32.0 center_x=927.2 center_y=39.0)
+          Button name="Problems only 0" state=[toggled=False] rect=(x=1002.5 y=23.0 width=132.1 height=32.0 center_x=1068.5 center_y=39.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
-            Button name="Apps & Containers" state=[toggled=False] rect=(x=82.0 y=62.0 width=263.0 height=30.0 center_x=213.5 center_y=77.0)
-              TextRun value="Apps & Containers" rect=(x=112.0 y=67.0 width=109.2 height=20.0 center_x=166.6 center_y=77.0)
-            Button name="Pods" state=[toggled=True] rect=(x=82.0 y=92.0 width=263.0 height=30.0 center_x=213.5 center_y=107.0)
-              TextRun value="Pods" rect=(x=112.0 y=97.0 width=28.9 height=20.0 center_x=126.4 center_y=107.0)
-            Button name="Deployments" state=[toggled=False] rect=(x=82.0 y=122.0 width=263.0 height=30.0 center_x=213.5 center_y=137.0)
-              TextRun value="Deployments" rect=(x=112.0 y=127.0 width=77.8 height=20.0 center_x=150.9 center_y=137.0)
-            Button name="Stateful Sets" state=[toggled=False] rect=(x=82.0 y=152.0 width=263.0 height=30.0 center_x=213.5 center_y=167.0)
-              TextRun value="Stateful Sets" rect=(x=112.0 y=157.0 width=76.1 height=20.0 center_x=150.0 center_y=167.0)
-            Button name="Config" state=[toggled=False] rect=(x=82.0 y=182.0 width=263.0 height=30.0 center_x=213.5 center_y=197.0)
-              TextRun value="Config" rect=(x=112.0 y=187.0 width=39.9 height=20.0 center_x=132.0 center_y=197.0)
-            Button name="Networking" state=[toggled=False] rect=(x=82.0 y=212.0 width=263.0 height=30.0 center_x=213.5 center_y=227.0)
-              TextRun value="Networking" rect=(x=112.0 y=217.0 width=69.1 height=20.0 center_x=146.5 center_y=227.0)
-            Button name="Helm" state=[toggled=False] rect=(x=82.0 y=242.0 width=263.0 height=30.0 center_x=213.5 center_y=257.0)
-              TextRun value="Helm" rect=(x=112.0 y=247.0 width=31.0 height=20.0 center_x=127.5 center_y=257.0)
-    GenericContainer rect=<none>
-      GenericContainer rect=<none>
+            Label value="0 pods" rect=(x=1470.7 y=29.0 width=37.3 height=20.0 center_x=1489.3 center_y=39.0)
+              TextRun value="0 pods" rect=(x=1470.7 y=29.0 width=37.3 height=20.0 center_x=1489.3 center_y=39.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
-                TextInput name="Search resources" value="" rect=(x=376.0 y=20.0 width=228.0 height=38.0 center_x=490.0 center_y=39.0)
-                  TextRun value="" rect=(x=412.0 y=31.0 width=0.0 height=20.0 center_x=412.0 center_y=41.0)
-              CheckBox name="Regular expression" state=[toggled=False] rect=(x=612.0 y=27.0 width=24.0 height=24.0 center_x=624.0 center_y=39.0)
-            ComboBox name="Namespace scope" value="default" rect=(x=684.0 y=20.0 width=240.0 height=38.0 center_x=804.0 center_y=39.0)
-          GenericContainer rect=<none>
-            GenericContainer rect=<none>
-              Label value="0 pods" rect=(x=1482.7 y=29.0 width=37.3 height=20.0 center_x=1501.3 center_y=39.0)
-                TextRun value="0 pods" rect=(x=1482.7 y=29.0 width=37.3 height=20.0 center_x=1501.3 center_y=39.0)
-        GenericContainer rect=<none>
-          GenericContainer rect=<none>
-            GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Label value="Unable to load resources" rect=(x=648.0 y=353.5 width=194.2 height=24.0 center_x=745.1 center_y=365.5)
-                  TextRun value="Unable to load resources" rect=(x=648.0 y=353.5 width=194.2 height=24.0 center_x=745.1 center_y=365.5)
+                Label value="Unable to load resources" rect=(x=606.0 y=352.0 width=194.2 height=24.0 center_x=703.1 center_y=364.0)
+                  TextRun value="Unable to load resources" rect=(x=606.0 y=352.0 width=194.2 height=24.0 center_x=703.1 center_y=364.0)
                 GenericContainer rect=<none>
-                  Label value="Error details" rect=(x=648.0 y=393.5 width=75.2 height=20.0 center_x=685.6 center_y=403.5)
-                    TextRun value="Error details" rect=(x=648.0 y=393.5 width=75.2 height=20.0 center_x=685.6 center_y=403.5)
+                  Label value="Error details" rect=(x=606.0 y=392.0 width=75.2 height=20.0 center_x=643.6 center_y=402.0)
+                    TextRun value="Error details" rect=(x=606.0 y=392.0 width=75.2 height=20.0 center_x=643.6 center_y=402.0)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
-                      Label value="InitialListFailed(\n    Service(\n        hyper_util::client::legacy::Error(\n            Connect,\n            ConnectError(\n                \"dns error\",\n                Custom {\n                    kind: Uncategorized,\n                    error: \"failed to lookup address information: Name or service not known\",\n                },\n            ),\n        ),\n    ),\n)" rect=(x=662.0 y=427.5 width=532.2 height=270.0 center_x=928.1 center_y=562.5)
-                        TextRun value="InitialListFailed(\n" rect=(x=662.0 y=428.5 width=129.6 height=18.0 center_x=726.8 center_y=437.5)
-                        TextRun value="    Service(\n" rect=(x=662.0 y=446.5 width=86.4 height=18.0 center_x=705.2 center_y=455.5)
-                        TextRun value="        hyper_util::client::legacy::Error(\n" rect=(x=662.0 y=464.5 width=302.4 height=18.0 center_x=813.2 center_y=473.5)
-                        TextRun value="            Connect,\n" rect=(x=662.0 y=482.5 width=144.0 height=18.0 center_x=734.0 center_y=491.5)
-                        TextRun value="            ConnectError(\n" rect=(x=662.0 y=500.5 width=180.0 height=18.0 center_x=752.0 center_y=509.5)
-                        TextRun value="                \"dns error\",\n" rect=(x=662.0 y=518.5 width=201.6 height=18.0 center_x=762.8 center_y=527.5)
-                        TextRun value="                Custom {\n" rect=(x=662.0 y=536.5 width=172.8 height=18.0 center_x=748.4 center_y=545.5)
-                        TextRun value="                    kind: Uncategorized,\n" rect=(x=662.0 y=554.5 width=288.0 height=18.0 center_x=806.0 center_y=563.5)
-                        TextRun value="                    error: \"failed to lookup address information: Name or " rect=(x=662.0 y=572.5 width=532.2 height=18.0 center_x=928.1 center_y=581.5)
-                        TextRun value="service not known\",\n" rect=(x=662.0 y=590.5 width=137.2 height=18.0 center_x=730.6 center_y=599.5)
-                        TextRun value="                },\n" rect=(x=662.0 y=608.5 width=129.6 height=18.0 center_x=726.8 center_y=617.5)
-                        TextRun value="            ),\n" rect=(x=662.0 y=626.5 width=100.8 height=18.0 center_x=712.4 center_y=635.5)
-                        TextRun value="        ),\n" rect=(x=662.0 y=644.5 width=72.0 height=18.0 center_x=698.0 center_y=653.5)
-                        TextRun value="    ),\n" rect=(x=662.0 y=662.5 width=43.2 height=18.0 center_x=683.6 center_y=671.5)
-                        TextRun value=")" rect=(x=662.0 y=680.5 width=7.2 height=18.0 center_x=665.6 center_y=689.5)
+                      Label value="InitialListFailed(\n    Service(\n        hyper_util::client::legacy::Error(\n            Connect,\n            ConnectError(\n                \"dns error\",\n                Custom {\n                    kind: Uncategorized,\n                    error: \"failed to lookup address information: Name or service not known\",\n                },\n            ),\n        ),\n    ),\n)" rect=(x=620.0 y=426.0 width=532.2 height=270.0 center_x=886.1 center_y=561.0)
+                        TextRun value="InitialListFailed(\n" rect=(x=620.0 y=427.0 width=129.6 height=18.0 center_x=684.8 center_y=436.0)
+                        TextRun value="    Service(\n" rect=(x=620.0 y=445.0 width=86.4 height=18.0 center_x=663.2 center_y=454.0)
+                        TextRun value="        hyper_util::client::legacy::Error(\n" rect=(x=620.0 y=463.0 width=302.4 height=18.0 center_x=771.2 center_y=472.0)
+                        TextRun value="            Connect,\n" rect=(x=620.0 y=481.0 width=144.0 height=18.0 center_x=692.0 center_y=490.0)
+                        TextRun value="            ConnectError(\n" rect=(x=620.0 y=499.0 width=180.0 height=18.0 center_x=710.0 center_y=508.0)
+                        TextRun value="                \"dns error\",\n" rect=(x=620.0 y=517.0 width=201.6 height=18.0 center_x=720.8 center_y=526.0)
+                        TextRun value="                Custom {\n" rect=(x=620.0 y=535.0 width=172.8 height=18.0 center_x=706.4 center_y=544.0)
+                        TextRun value="                    kind: Uncategorized,\n" rect=(x=620.0 y=553.0 width=288.0 height=18.0 center_x=764.0 center_y=562.0)
+                        TextRun value="                    error: \"failed to lookup address information: Name or " rect=(x=620.0 y=571.0 width=532.2 height=18.0 center_x=886.1 center_y=580.0)
+                        TextRun value="service not known\",\n" rect=(x=620.0 y=589.0 width=137.2 height=18.0 center_x=688.6 center_y=598.0)
+                        TextRun value="                },\n" rect=(x=620.0 y=607.0 width=129.6 height=18.0 center_x=684.8 center_y=616.0)
+                        TextRun value="            ),\n" rect=(x=620.0 y=625.0 width=100.8 height=18.0 center_x=670.4 center_y=634.0)
+                        TextRun value="        ),\n" rect=(x=620.0 y=643.0 width=72.0 height=18.0 center_x=656.0 center_y=652.0)
+                        TextRun value="    ),\n" rect=(x=620.0 y=661.0 width=43.2 height=18.0 center_x=641.6 center_y=670.0)
+                        TextRun value=")" rect=(x=620.0 y=679.0 width=7.2 height=18.0 center_x=623.6 center_y=688.0)
                 GenericContainer rect=<none>
-                  Button name="Retry" rect=(x=916.8 y=719.5 width=62.5 height=32.0 center_x=948.0 center_y=735.5)
+                  Button name="Retry" rect=(x=874.8 y=718.0 width=62.5 height=32.0 center_x=906.0 center_y=734.0)

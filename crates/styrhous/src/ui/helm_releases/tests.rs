@@ -124,3 +124,22 @@ fn manifest_inventory_survives_consecutive_unknown_aliases_between_valid_documen
 
     assert_eq!(names, ["first", "last"]);
 }
+
+#[test]
+fn helm_timestamps_read_as_the_design_prints_them() {
+    assert_eq!(super::helm_time("2026-08-15T12:00:00Z", false), "15 Aug");
+    assert_eq!(
+        super::helm_time("2026-08-01T12:00:00Z", true),
+        "1 Aug 2026, 12:00"
+    );
+    // Whatever Helm recorded that is not a timestamp shows as it is.
+    assert_eq!(super::helm_time("yesterday", true), "yesterday");
+    assert_eq!(super::helm_time("", false), "");
+}
+
+#[test]
+fn helm_status_words_start_with_a_capital() {
+    assert_eq!(super::status_word("deployed"), "Deployed");
+    assert_eq!(super::status_word("pending-upgrade"), "Pending-upgrade");
+    assert_eq!(super::status_word(""), "");
+}

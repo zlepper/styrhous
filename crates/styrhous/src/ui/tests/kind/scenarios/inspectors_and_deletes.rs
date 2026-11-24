@@ -27,7 +27,7 @@ fn test_managed_resource_inspector_integration() {
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
     select_namespace(&mut harness, cluster_key, &fixture.namespace);
-    let deployments_resource = select_resource(&mut harness, "Apps & Containers", "Deployments");
+    let deployments_resource = select_resource(&mut harness, None, "Deployments");
     wait_for_resource_sync(
         &mut harness,
         cluster_key,
@@ -163,7 +163,7 @@ fn test_node_inspector_lists_scheduled_pods_integration() {
         10_000,
     );
     wait_for_cluster_data(&mut harness, cluster_key);
-    harness.get_by_label("Nodes").click_accesskit();
+    harness.get_by_label("Nodes").click();
     let node_resource = crate::resource_handlers::node::api_resource();
     wait_for_resource_sync(&mut harness, cluster_key, &node_resource, None);
     let history_entry_id = open_resource_detail(&mut harness, cluster_key, &node_name, None);
@@ -239,7 +239,8 @@ fn test_resource_actions_integration() {
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
     select_namespace(&mut harness, cluster_key, &fixture.namespace);
-    let configmaps_resource = select_resource(&mut harness, "Config", "Config Maps");
+    let configmaps_resource =
+        select_resource(&mut harness, Some("Config & secrets"), "Config Maps");
     wait_for_resource_sync(
         &mut harness,
         cluster_key,
@@ -374,7 +375,8 @@ fn test_bulk_resource_delete_integration() {
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
     select_namespace(&mut harness, cluster_key, &fixture.namespace);
-    let configmaps_resource = select_resource(&mut harness, "Config", "Config Maps");
+    let configmaps_resource =
+        select_resource(&mut harness, Some("Config & secrets"), "Config Maps");
     wait_for_resource_sync(
         &mut harness,
         cluster_key,

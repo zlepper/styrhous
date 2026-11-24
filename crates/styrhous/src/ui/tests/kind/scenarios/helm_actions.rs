@@ -55,7 +55,7 @@ fn roll_back_through_the_inspector(test_name: &str, storage: StorageDriver) {
     let (mut harness, cluster_key) = connected_kind_harness();
     wait_for_cluster_data(&mut harness, cluster_key);
     select_namespace(&mut harness, cluster_key, &namespace);
-    select_resource(&mut harness, "Helm", "Helm Release");
+    select_resource(&mut harness, None, "Helm releases");
     assert_eq!(
         harness.state().ui_state.clusters[&cluster_key].selected_api_resource,
         Some(ApiResource::helm_releases())

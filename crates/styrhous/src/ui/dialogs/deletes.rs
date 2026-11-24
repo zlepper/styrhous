@@ -209,7 +209,7 @@ pub(crate) fn show_force_delete_confirmation(
         message: Prose::new()
             .plain("Removes every finalizer from ")
             .strong(resource_name.as_str())
-            .plain("."),
+            .plain(" so it is deleted immediately."),
         unavailable_message: unavailable_message.as_deref(),
         cancel_label: "Cancel",
         confirm_label: "Remove finalizers",

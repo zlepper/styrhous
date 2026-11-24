@@ -100,6 +100,10 @@ pub const POPOVER_FOOTER: f32 = 32.0;
 pub const MENU_MIN_WIDTH: f32 = 200.0;
 /// Widest a menu grows before its labels elide.
 pub const MENU_MAX_WIDTH: f32 = 320.0;
+/// The narrowest a resource table's row menu is (A04).
+pub const MENU_ROW_WIDTH: f32 = 220.0;
+/// The gap between a row's "…" button and its menu (A04).
+pub const MENU_ROW_GAP: f32 = 12.0;
 /// The section heading of a menu (`.mlabel`): 8 points above and 4 below
 /// a 16 point caption line.
 pub const MENU_HEADING: f32 = 28.0;
@@ -201,6 +205,13 @@ pub const COUNT_BADGE_RING: f32 = 2.0;
 pub const CONTAINER_SQUARE: f32 = 8.0;
 /// Gap between container state squares.
 pub const CONTAINER_SQUARE_GAP: f32 = 3.0;
+// A04 · usage cells
+/// The bar of a table's used / allocatable cell: its width.
+pub const USAGE_BAR_WIDTH: f32 = 48.0;
+/// The bar of a table's used / allocatable cell: its height.
+pub const USAGE_BAR_HEIGHT: f32 = 4.0;
+/// Gap between a usage cell's figures and its bar.
+pub const USAGE_BAR_GAP: f32 = 8.0;
 /// Small spinner diameter, beside 12 point status text.
 pub const SPINNER_SM: f32 = 12.0;
 /// Spinner (`.spin`) diameter.
@@ -223,6 +234,10 @@ pub const AVATAR_STATUS_OVERHANG: f32 = 3.0;
 pub const AVATAR_RING_GAP: f32 = FOCUS_RING_GAP;
 /// Width of the selected avatar ring.
 pub const AVATAR_RING: f32 = FOCUS_RING;
+
+// A09
+/// A colour swatch's side (`Swatches`).
+pub const SWATCH: f32 = 24.0;
 
 // C11
 /// Width of a dialog (`.dlg`).
@@ -248,6 +263,8 @@ pub const PROPERTY_GRID_THREE_COLUMNS: f32 = 600.0;
 pub const PROPERTY_GRID_TWO_COLUMNS: f32 = 400.0;
 /// The plot of a usage chart.
 pub const CHART_PLOT: f32 = 72.0;
+/// Height of the plot of a compact usage chart (A05).
+pub const CHART_PLOT_COMPACT: f32 = 56.0;
 /// Inset of a usage chart's limit line from the top of its plot.
 pub const CHART_LIMIT_INSET: f32 = 8.0;
 /// Inset of a usage chart's baseline from the bottom of its plot.
@@ -377,6 +394,17 @@ pub const CLUSTER_CARD_PADDING: f32 = 10.0;
 /// Height of the fade over the sidebar's last items above its footer.
 pub const SIDEBAR_FADE: f32 = 48.0;
 
+// A02 · workspace shell
+/// How far the floating sidebar stays off the window's edges (`.side`).
+pub const SIDEBAR_INSET: f32 = 12.0;
+/// Gap between the floating sidebar and the workspace (`.main` left 304).
+pub const WORKSPACE_GAP: f32 = 24.0;
+/// The band left of the workspace: the sidebar with its inset and gap.
+pub const WORKSPACE_LEFT: f32 = SIDEBAR_INSET + SIDEBAR + WORKSPACE_GAP;
+/// The gutter after the workspace that holds a list's scroll track
+/// (`.main` ends 28 points short of the window).
+pub const WORKSPACE_END_GUTTER: f32 = 28.0;
+
 // C16 · top bar
 /// The band above a resource list holding its top bar (`.topbar`).
 pub const TOP_BAR: f32 = 78.0;
@@ -413,6 +441,22 @@ pub const GROUP_CHIP_PADDING_RIGHT: f32 = 10.0;
 pub const PROBLEM_TRACK: f32 = 6.0;
 /// Height of a problem tick (`.tk`).
 pub const PROBLEM_TICK: f32 = 3.0;
+// A02 / A03 · resource tables
+/// The Namespace column of a resource table.
+pub const TABLE_NAMESPACE_COLUMN: f32 = 132.0;
+/// The Owner column of a resource table.
+pub const TABLE_OWNER_COLUMN: f32 = 160.0;
+/// The Ready column of a resource table in a narrow window.
+pub const TABLE_READY_COLUMN_COMPACT: f32 = 64.0;
+/// The popover of the namespace scope pill, which its search row and key
+/// hints need more room for than the pill.
+pub const NAMESPACE_POPOVER: f32 = 300.0;
+/// The gap between a list's rows and its problem track (A02 `.main` to `.sticks`).
+pub const PROBLEM_TRACK_GAP: f32 = 6.0;
+/// How far below its list's header band a problem track starts.
+pub const PROBLEM_TRACK_TOP_INSET: f32 = 14.0;
+/// How far above the window's bottom edge a problem track ends.
+pub const PROBLEM_TRACK_BOTTOM_INSET: f32 = 12.0;
 /// How far a problem tick reaches past each side of its track.
 pub const PROBLEM_TICK_OVERHANG: f32 = 1.0;
 

@@ -1,6 +1,7 @@
 mod ansi;
 mod api_resource;
 mod cluster_connection_manager;
+mod cluster_provider;
 mod context_presentation;
 mod helm_release;
 mod helpers;

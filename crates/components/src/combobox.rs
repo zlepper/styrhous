@@ -191,7 +191,8 @@ impl ComboboxUi<'_> {
     }
 
     /// Render an option with a secondary detail line (`.opt.two`): an
-    /// alias or why it matched the search.
+    /// alias or why it matched the search. An empty `detail` makes it a
+    /// one-line option.
     pub fn item_with_status_detail(
         &mut self,
         label: impl Into<WidgetText>,
@@ -202,7 +203,7 @@ impl ComboboxUi<'_> {
         let label = label.into();
         self.row(RowContent {
             label: label.text(),
-            detail: Some(detail.as_ref()),
+            detail: Some(detail.as_ref()).filter(|detail| !detail.is_empty()),
             check: is_selected.into(),
             status,
             close_on_replace: true,
@@ -409,6 +410,7 @@ pub struct Combobox<Filter> {
     lead: Option<Lead>,
     more: usize,
     width: Option<f32>,
+    popup_width: Option<f32>,
     size: FieldSize,
     select_all: Option<SelectAll>,
     item_height: f32,

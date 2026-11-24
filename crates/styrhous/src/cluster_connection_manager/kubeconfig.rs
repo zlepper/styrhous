@@ -30,6 +30,26 @@ pub(super) fn kubeconfig_paths() -> Result<Vec<PathBuf>> {
     }
 }
 
+/// Where the contexts come from, for the landing page: the one file with the
+/// home directory written as `~`, or how many files `KUBECONFIG` names.
+pub(crate) fn kubeconfig_source_label() -> String {
+    let home = std::env::home_dir();
+    kubeconfig_paths().map_or_else(
+        |_| "your kubeconfig".to_owned(),
+        |paths| describe_sources(&paths, home.as_deref()),
+    )
+}
+
+fn describe_sources(paths: &[PathBuf], home: Option<&Path>) -> String {
+    match paths {
+        [path] => match home.and_then(|home| path.strip_prefix(home).ok()) {
+            Some(rest) => Path::new("~").join(rest).display().to_string(),
+            None => path.display().to_string(),
+        },
+        paths => format!("{} kubeconfig files", paths.len()),
+    }
+}
+
 pub(super) fn resolve_kubeconfig_path(path: &Path) -> Result<PathBuf> {
     let path = if let Ok(suffix) = path.strip_prefix("~") {
         std::env::home_dir()
@@ -202,6 +222,15 @@ fn patch_presentation(context: &mut Mapping, presentation: &ContextPresentation)
             None => {
                 values.remove(&key);
             }
+        }
+    }
+    let colour_key = Value::String("colour".into());
+    match presentation.colour {
+        Some(colour) => {
+            values.insert(colour_key, Value::Number(colour.into()));
+        }
+        None => {
+            values.remove(&colour_key);
         }
     }
     if values.is_empty() {

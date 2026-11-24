@@ -46,6 +46,7 @@ fn resource_search_filters_rows_and_restores_its_mode_per_resource_type() {
             super::super::super::super::state::ResourceSearchState {
                 query: "COREDNS.*Z9".into(),
                 regex_mode: true,
+                ..Default::default()
             },
         );
     harness.run();
@@ -53,11 +54,11 @@ fn resource_search_filters_rows_and_restores_its_mode_per_resource_type() {
     harness.get_by_label("7 resources hidden by search");
     harness.ui_harness("resource_tables/resource_search_filters_rows_and_restores_its_mode_per_resource_type/resource_search_filtered");
 
-    harness.get_by_label("Nodes").click_accesskit();
+    harness.get_by_label("Nodes").click();
     harness.run();
-    harness.get_by_label("Apps & Containers").click_accesskit();
+    click_label(&mut harness, "Workloads");
     harness.run();
-    harness.get_by_label("Pods").click_accesskit();
+    harness.get_by_label("Pods").click();
     harness.run();
     assert_eq!(
         harness.state().ui_state.clusters[&2].resource_searches[&pods].query,
@@ -80,6 +81,7 @@ fn invalid_resource_search_regex_is_shown_in_workspace() {
             super::super::super::super::state::ResourceSearchState {
                 query: "coredns[a-z".into(),
                 regex_mode: true,
+                ..Default::default()
             },
         );
 
@@ -107,6 +109,7 @@ fn a_filter_that_hides_every_row_can_be_cleared() {
             super::super::super::super::state::ResourceSearchState {
                 query: "no-such-pod".into(),
                 regex_mode: false,
+                ..Default::default()
             },
         );
 

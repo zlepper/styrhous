@@ -1,6 +1,7 @@
 use super::*;
 
 impl UiState {
+    #[cfg(test)]
     pub(crate) fn resource_navigation_node_is_expanded(&self, node_id: &str) -> bool {
         self.resource_navigation_expansion
             .expanded_nodes
@@ -149,6 +150,7 @@ impl UiState {
                 if let Some(cluster) = self.clusters.get_mut(&cluster_key) {
                     Self::stop_resource_watches(cluster, &selected, commands_to_send);
                     cluster.selected_api_resource = None;
+                    Self::reconcile_node_watches(cluster, commands_to_send);
                 }
                 match replacement {
                     Some(replacement) => {

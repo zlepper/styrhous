@@ -166,6 +166,7 @@ impl ResourceTableProfile {
                 ResourceSearchState {
                     query: query.to_owned(),
                     regex_mode: false,
+                    ..Default::default()
                 },
             );
         self.run_frame()

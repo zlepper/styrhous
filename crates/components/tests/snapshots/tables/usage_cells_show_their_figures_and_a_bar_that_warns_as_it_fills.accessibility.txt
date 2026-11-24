@@ -1,0 +1,47 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        ColumnHeader name="Name" rect=(x=8.0 y=8.0 width=120.0 height=36.0 center_x=68.0 center_y=26.0)
+          TextRun value="NAME" rect=(x=20.0 y=18.0 width=30.3 height=16.0 center_x=35.1 center_y=26.0)
+        ColumnHeader name="CPU" rect=(x=128.0 y=8.0 width=140.0 height=36.0 center_x=198.0 center_y=26.0)
+          TextRun value="CPU" rect=(x=234.0 y=18.0 width=21.1 height=16.0 center_x=244.6 center_y=26.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Unknown name="Name, row 1" rect=(x=8.0 y=44.0 width=120.0 height=36.0 center_x=68.0 center_y=62.0)
+              GenericContainer rect=<none>
+                Label value="node" rect=(x=20.0 y=52.0 width=29.6 height=20.0 center_x=34.8 center_y=62.0)
+                  TextRun value="node" rect=(x=20.0 y=52.0 width=29.6 height=20.0 center_x=34.8 center_y=62.0)
+              Unknown name="CPU, row 1" rect=(x=128.0 y=44.0 width=140.0 height=36.0 center_x=198.0 center_y=62.0)
+              GenericContainer rect=<none>
+                ProgressIndicator name="21% in use" rect=(x=208.0 y=60.0 width=48.0 height=4.0 center_x=232.0 center_y=62.0)
+                Label value="0.82 / 4" rect=(x=154.2 y=52.0 width=45.8 height=20.0 center_x=177.1 center_y=62.0)
+                  TextRun value="0.82 / 4" rect=(x=154.2 y=52.0 width=45.8 height=20.0 center_x=177.1 center_y=62.0)
+              Unknown name="Name, row 2" rect=(x=8.0 y=84.0 width=120.0 height=36.0 center_x=68.0 center_y=102.0)
+              GenericContainer rect=<none>
+                Label value="node" rect=(x=20.0 y=92.0 width=29.6 height=20.0 center_x=34.8 center_y=102.0)
+                  TextRun value="node" rect=(x=20.0 y=92.0 width=29.6 height=20.0 center_x=34.8 center_y=102.0)
+              Unknown name="CPU, row 2" rect=(x=128.0 y=84.0 width=140.0 height=36.0 center_x=198.0 center_y=102.0)
+              GenericContainer rect=<none>
+                ProgressIndicator name="78% in use" rect=(x=208.0 y=100.0 width=48.0 height=4.0 center_x=232.0 center_y=102.0)
+                Label value="3.1 / 4" rect=(x=165.3 y=92.0 width=34.7 height=20.0 center_x=182.7 center_y=102.0)
+                  TextRun value="3.1 / 4" rect=(x=165.3 y=92.0 width=34.7 height=20.0 center_x=182.7 center_y=102.0)
+              Unknown name="Name, row 3" rect=(x=8.0 y=124.0 width=120.0 height=36.0 center_x=68.0 center_y=142.0)
+              GenericContainer rect=<none>
+                Label value="node" rect=(x=20.0 y=132.0 width=29.6 height=20.0 center_x=34.8 center_y=142.0)
+                  TextRun value="node" rect=(x=20.0 y=132.0 width=29.6 height=20.0 center_x=34.8 center_y=142.0)
+              Unknown name="CPU, row 3" rect=(x=128.0 y=124.0 width=140.0 height=36.0 center_x=198.0 center_y=142.0)
+              GenericContainer rect=<none>
+                ProgressIndicator name="96% in use" rect=(x=208.0 y=140.0 width=48.0 height=4.0 center_x=232.0 center_y=142.0)
+                Label value="3.9 / 4" rect=(x=163.3 y=132.0 width=36.7 height=20.0 center_x=181.7 center_y=142.0)
+                  TextRun value="3.9 / 4" rect=(x=163.3 y=132.0 width=36.7 height=20.0 center_x=181.7 center_y=142.0)
+              Unknown name="Name, row 4" rect=(x=8.0 y=164.0 width=120.0 height=36.0 center_x=68.0 center_y=182.0)
+              GenericContainer rect=<none>
+                Label value="node" rect=(x=20.0 y=172.0 width=29.6 height=20.0 center_x=34.8 center_y=182.0)
+                  TextRun value="node" rect=(x=20.0 y=172.0 width=29.6 height=20.0 center_x=34.8 center_y=182.0)
+              Unknown name="CPU, row 4" rect=(x=128.0 y=164.0 width=140.0 height=36.0 center_x=198.0 center_y=182.0)
+              GenericContainer rect=<none>
+                Label value="15m" rect=(x=232.1 y=172.0 width=23.9 height=20.0 center_x=244.0 center_y=182.0)
+                  TextRun value="15m" rect=(x=232.1 y=172.0 width=23.9 height=20.0 center_x=244.0 center_y=182.0)

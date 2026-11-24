@@ -26,6 +26,10 @@ const VALUE: TextRole = type_scale::UI
     .tabular();
 /// Gap between the rows of a chart.
 const ROW_GAP: f32 = space::S4;
+/// The value of a compact chart (`.mono` 20/26).
+const COMPACT_VALUE: TextRole = type_scale::MONO.with_size(20.0, 26.0);
+/// Gap between the rows of a compact chart (`gap: 2px`).
+const COMPACT_ROW_GAP: f32 = space::S2;
 /// Opacity of the area under the series (`fill-opacity: .16`).
 const AREA_OPACITY: f32 = 0.16;
 /// The time window a chart covers, in minutes.
@@ -68,6 +72,7 @@ pub struct UsageChart<'a> {
     format: Option<&'a dyn Fn(f32) -> String>,
     tooltip: Option<&'a dyn Fn(usize) -> String>,
     accessibility_label: Option<String>,
+    compact: bool,
 }
 
 impl<'a> UsageChart<'a> {
@@ -87,6 +92,7 @@ impl<'a> UsageChart<'a> {
             format: None,
             tooltip: None,
             accessibility_label: None,
+            compact: false,
         }
     }
 
@@ -151,6 +157,13 @@ impl<'a> UsageChart<'a> {
         self
     }
 
+    /// The inspector's chart: the value in mono 20/26, a [`size::CHART_PLOT_COMPACT`]
+    /// plot and no time axis (A05).
+    pub fn compact(mut self) -> Self {
+        self.compact = true;
+        self
+    }
+
     /// Show that metrics are unavailable, for `reason`: "—" and "Metrics
     /// unavailable" with the reason as a tooltip, and no axes.
     pub fn unavailable(mut self, reason: &'a str) -> Self {
@@ -167,6 +180,16 @@ impl<'a> UsageChart<'a> {
     /// or the top of the scale when there are none ("max 120m"), so the
     /// plot's scale is always readable.
     fn caption(&self) -> Option<String> {
+        // A compact chart names the limit alone; the request is its dashed line.
+        if self.compact
+            && let Some(limit) = self.limit
+        {
+            return Some(format!(
+                "{} {}",
+                limit.name.to_lowercase(),
+                self.format_value(limit.value)
+            ));
+        }
         let references: Vec<String> = [self.request, self.limit]
             .into_iter()
             .flatten()
@@ -227,6 +250,11 @@ impl<'a> UsageChart<'a> {
         let theme = ui.tokens();
         let width = ui.available_width();
         let muted = theme.text.muted;
+        let (value_role, plot_height, row_gap) = if self.compact {
+            (COMPACT_VALUE, size::CHART_PLOT_COMPACT, COMPACT_ROW_GAP)
+        } else {
+            (VALUE, size::CHART_PLOT, ROW_GAP)
+        };
 
         // Header: caption and limit on one 16 point row.
         let header_height = type_scale::CAPTION.line_height();
@@ -244,21 +272,20 @@ impl<'a> UsageChart<'a> {
             let room = width - label_width - space::S8;
             row_text(ui, type_scale::META, &caption, header, Align::Max, room);
         }
-        ui.add_space(ROW_GAP);
+        ui.add_space(row_gap);
 
         if let Some(reason) = self.unavailable {
-            VALUE.label(ui, NO_VALUE, theme.text.primary);
-            ui.add_space(ROW_GAP);
+            value_role.label(ui, NO_VALUE, theme.text.primary);
+            ui.add_space(row_gap);
             return type_scale::META
                 .label(ui, "Metrics unavailable", muted)
                 .tooltip(reason);
         }
 
-        VALUE.label(ui, self.value, theme.text.primary);
-        ui.add_space(ROW_GAP);
+        value_role.label(ui, self.value, theme.text.primary);
+        ui.add_space(row_gap);
 
-        let (plot, response) =
-            ui.allocate_exact_size(vec2(width, size::CHART_PLOT), Sense::hover());
+        let (plot, response) = ui.allocate_exact_size(vec2(width, plot_height), Sense::hover());
         let name = self
             .accessibility_label
             .clone()
@@ -321,7 +348,10 @@ impl<'a> UsageChart<'a> {
             }
             _ => response,
         };
-        ui.add_space(ROW_GAP);
+        if self.compact {
+            return response;
+        }
+        ui.add_space(row_gap);
 
         let (axis, _) =
             ui.allocate_exact_size(vec2(width, type_scale::META.line_height()), Sense::hover());

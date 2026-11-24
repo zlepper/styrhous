@@ -88,7 +88,7 @@ pub use badge::{
 pub use blade::{
     BLADE_BODY_FOOTER, BLADE_WIDTH, BladeFrame, BladeLayer, BladeNavigation, BladeNavigator,
     BladeResponse, BladeStack, BladeTransition, blade_body_footer, blade_footer, blade_title,
-    blade_title_with_actions, paint_blade_peek,
+    blade_title_with_actions, paint_blade_peek, paint_blade_peek_on,
 };
 pub use button::{Button, ButtonSize, ButtonVariant};
 pub use combobox::{
@@ -131,7 +131,7 @@ pub use text_input::TextInput;
 pub use textarea::TextArea;
 pub use toggle::{ButtonGroup, Segmented, SegmentedSize, ToggleButton};
 // C07
-pub use menu::{Menu, MenuItem};
+pub use menu::{Menu, MenuItem, MenuLook};
 pub use tooltip::{TooltipContent, TooltipExt};
 pub use workspace::{WorkspaceDrawer, WorkspacePage, workspace_section_header};
 
@@ -154,11 +154,12 @@ pub use banner::{Banner, BannerResponse};
 pub use empty_state::{EMPTY_STATE_MAX_WIDTH, EmptyState};
 pub use mini_button::{MINI_BUTTON, MiniButton};
 pub use toast::{
-    TOAST_GAP, TOAST_INSET, TOAST_WIDTH, Toast, ToastResponse, show_toast_stack, toast_icon,
+    TOAST_BOTTOM_INSET, TOAST_GAP, TOAST_INSET, TOAST_WIDTH, Toast, ToastResponse,
+    show_toast_stack, toast_icon,
 };
 
 // C13
-pub use badge::{CHIP_GAP, chip_flow, labelled_chips};
+pub use badge::{CHIP_GAP, chip_flow, labelled_chips, labelled_chips_with_label_width};
 pub use card::{Card, Disclosure, DisclosureResponse};
 pub use code_block::{CodeBlock, CodeBlockResponse};
 pub use list_row::{ListGroup, ListRow, ListRowTrailing, list_group};
@@ -200,9 +201,12 @@ pub mod readout;
 pub mod section_rail;
 
 pub use badge::kind_badge_on;
-pub use blade::{InspectorHeader, InspectorHeaderResponse, InspectorStatus};
+pub use blade::{
+    BladeDescription, BladeHeader, BladePeek, BladeStyle, HeaderAction, InspectorHeader,
+    InspectorHeaderResponse, InspectorStatus,
+};
 pub use readout::{Readout, ReadoutRow, ReadoutSize, ReadoutTone};
-pub use section_rail::{Section, SectionRail};
+pub use section_rail::{InspectorBody, Section, SectionRail, inspector_section_heading};
 
 // C20
 pub mod log_viewer;
@@ -219,3 +223,8 @@ pub use cluster_switcher::{
     ClusterAction, ClusterEntry, ClusterSection, ClusterSummary, ClusterSwitcher,
     ClusterSwitcherState, ClusterTarget, ClusterTile, ProviderFilter,
 };
+
+// A09
+pub mod swatches;
+
+pub use swatches::Swatches;

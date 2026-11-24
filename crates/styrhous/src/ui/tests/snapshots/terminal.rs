@@ -20,7 +20,7 @@ fn namespace_popup_option_does_not_activate_the_overlapped_resource_button() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = state;
     harness.run();
-    harness.get_by_label("Apps & Containers").click_accesskit();
+    click_label(&mut harness, "Workloads");
     harness.run();
     harness
         .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Namespace scope")

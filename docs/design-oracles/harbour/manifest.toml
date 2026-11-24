@@ -163,97 +163,335 @@ snapshot = "crates/components/tests/snapshots/boards/c20_log_parts.png"
 id = "A01"
 title = "Workspace — no cluster selected"
 oracle = "docs/design-oracles/harbour/A01.png"
-snapshot = ""
+snapshot = "crates/styrhous/tests/snapshots/boards/a01_choose_a_cluster.png"
 
 [[board]]
 id = "A02"
 title = "Pods — table with toasts"
 oracle = "docs/design-oracles/harbour/A02.png"
-snapshot = ""
+snapshot = "crates/styrhous/tests/snapshots/boards/a02_pods_table_with_toasts.png"
+
+[[board.regions]]
+name = "sidebar"
+x = 12
+y = 12
+width = 268
+height = 788
+
+[[board.regions]]
+name = "sidebar-footer"
+x = 12
+y = 950
+width = 268
+height = 62
+
+[[board.regions]]
+name = "workspace"
+x = 292
+y = 0
+width = 1244
+height = 1024
+
+[[board.regions]]
+name = "top-bar"
+x = 292
+y = 0
+width = 1244
+height = 78
+
+[[board.regions]]
+name = "table-head"
+x = 292
+y = 78
+width = 1244
+height = 70
+
+[[board.regions]]
+name = "toasts"
+x = 1140
+y = 830
+width = 396
+height = 194
 
 [[board]]
 id = "A03"
 title = "Pods — namespace selector open"
 oracle = "docs/design-oracles/harbour/A03.png"
-snapshot = ""
+snapshot = "crates/styrhous/tests/snapshots/boards/a03_namespace_selector_open.png"
+
+[[board.regions]]
+name = "sidebar"
+x = 12
+y = 12
+width = 268
+height = 788
+
+[[board.regions]]
+name = "sidebar-footer"
+x = 12
+y = 950
+width = 268
+height = 62
+
+[[board.regions]]
+name = "workspace"
+x = 292
+y = 0
+width = 1244
+height = 1024
+
+[[board.regions]]
+name = "top-bar"
+x = 292
+y = 0
+width = 1244
+height = 78
+
+[[board.regions]]
+name = "table-head"
+x = 292
+y = 78
+width = 1244
+height = 70
 
 [[board]]
 id = "A04"
 title = "Nodes — row actions with Shell submenu"
 oracle = "docs/design-oracles/harbour/A04.png"
-snapshot = ""
+snapshot = "crates/styrhous/tests/snapshots/boards/a04_nodes.png"
+
+[[board.regions]]
+name = "sidebar"
+x = 12
+y = 12
+width = 268
+height = 788
+
+[[board.regions]]
+name = "sidebar-footer"
+x = 12
+y = 950
+width = 268
+height = 62
+
+[[board.regions]]
+name = "workspace"
+x = 292
+y = 0
+width = 1244
+height = 1024
+
+[[board.regions]]
+name = "top-bar"
+x = 292
+y = 0
+width = 1244
+height = 78
+
+[[board.regions]]
+name = "table"
+x = 292
+y = 78
+width = 1244
+height = 200
+
+[[board.regions]]
+name = "row-menu"
+x = 1040
+y = 215
+width = 480
+height = 280
 
 [[board]]
 id = "A05"
 title = "Pod inspector blade with history"
 oracle = "docs/design-oracles/harbour/A05.png"
-snapshot = ""
+snapshot = "crates/styrhous/tests/snapshots/boards/a05_pod_inspector_with_history.png"
+
+[[board.regions]]
+name = "blade"
+x = 808
+y = 8
+width = 720
+height = 1008
+
+[[board.regions]]
+name = "blade-through-containers"
+x = 808
+y = 8
+width = 720
+height = 806
+
+[[board.regions]]
+name = "peeks"
+x = 616
+y = 24
+width = 192
+height = 976
 
 [[board]]
 id = "A06"
 title = "Deployments — restart rollout confirmation"
 oracle = "docs/design-oracles/harbour/A06.png"
-snapshot = ""
+snapshot = "crates/styrhous/tests/snapshots/boards/a06_restart_rollout.png"
+
+[[board.regions]]
+name = "dialog"
+x = 548
+y = 417
+width = 440
+height = 201
 
 [[board]]
 id = "A07"
 title = "Force delete — type to confirm"
 oracle = "docs/design-oracles/harbour/A07.png"
-snapshot = ""
+snapshot = "crates/styrhous/tests/snapshots/boards/a07_force_delete.png"
+
+[[board.regions]]
+name = "dialog"
+x = 548
+y = 292
+width = 440
+height = 427
 
 [[board]]
 id = "A08"
 title = "Settings blade"
 oracle = "docs/design-oracles/harbour/A08.png"
-snapshot = ""
+snapshot = "crates/styrhous/tests/snapshots/boards/a08_settings.png"
+
+[[board.regions]]
+name = "blade"
+x = 808
+y = 8
+width = 720
+height = 1008
 
 [[board]]
 id = "A09"
 title = "Settings — edit context"
 oracle = "docs/design-oracles/harbour/A09.png"
-snapshot = ""
+snapshot = "crates/styrhous/tests/snapshots/boards/a09_edit_context.png"
+
+[[board.regions]]
+name = "blade"
+x = 808
+y = 8
+width = 720
+height = 1008
 
 [[board]]
 id = "A10"
 title = "Settings — cluster discovery"
 oracle = "docs/design-oracles/harbour/A10.png"
-snapshot = ""
+snapshot = "crates/styrhous/tests/snapshots/boards/a10_cluster_discovery.png"
+
+[[board.regions]]
+name = "blade"
+x = 808
+y = 8
+width = 720
+height = 1008
 
 [[board]]
 id = "A11"
 title = "License & account with warning banner"
 oracle = "docs/design-oracles/harbour/A11.png"
-snapshot = ""
+snapshot = "crates/styrhous/tests/snapshots/boards/a11_license_account.png"
+
+[[board.regions]]
+name = "blade"
+x = 808
+y = 44
+width = 720
+height = 972
 
 [[board]]
 id = "A12"
 title = "Notification history"
 oracle = "docs/design-oracles/harbour/A12.png"
-snapshot = ""
+snapshot = "crates/styrhous/tests/snapshots/boards/a12_notifications.png"
+
+[[board.regions]]
+name = "blade"
+x = 808
+y = 8
+width = 720
+height = 1008
 
 [[board]]
 id = "A13"
 title = "Helm release inspector"
 oracle = "docs/design-oracles/harbour/A13.png"
-snapshot = ""
+snapshot = "crates/styrhous/tests/snapshots/boards/a13_helm_release_inspector.png"
+
+[[board.regions]]
+name = "blade"
+x = 808
+y = 8
+width = 720
+height = 1008
 
 [[board]]
 id = "A14"
 title = "Application settings — terminal and debug images"
 oracle = "docs/design-oracles/harbour/A14.png"
-snapshot = ""
+snapshot = "crates/styrhous/tests/snapshots/boards/a14_application_settings.png"
+
+[[board.regions]]
+name = "blade"
+x = 808
+y = 8
+width = 720
+height = 1008
 
 [[board]]
 id = "A15"
 title = "Pods — narrow window"
 oracle = "docs/design-oracles/harbour/A15.png"
-snapshot = ""
+snapshot = "crates/styrhous/tests/snapshots/boards/a15_pods_narrow_window.png"
+
+[[board.regions]]
+name = "sidebar"
+x = 12
+y = 12
+width = 268
+height = 788
+
+[[board.regions]]
+name = "sidebar-footer"
+x = 12
+y = 950
+width = 268
+height = 62
+
+[[board.regions]]
+name = "workspace"
+x = 292
+y = 0
+width = 732
+height = 1024
+
+[[board.regions]]
+name = "top-bar"
+x = 292
+y = 0
+width = 732
+height = 78
+
+[[board.regions]]
+name = "table-head"
+x = 292
+y = 78
+width = 732
+height = 70
 
 [[board]]
 id = "A16"
 title = "Cluster switcher"
 oracle = "docs/design-oracles/harbour/A16.png"
-snapshot = ""
+snapshot = "crates/styrhous/tests/snapshots/boards/a16_cluster_switcher.png"
 
 [[board]]
 id = "L01"

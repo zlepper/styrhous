@@ -8,12 +8,12 @@ Window state=[focused] rect=<none>
             TextRun value="NAMESPACE" rect=(x=8.0 y=56.0 width=66.5 height=16.0 center_x=41.2 center_y=64.0)
           GenericContainer rect=<none>
             Label value="Cluster-wide" rect=(x=8.0 y=72.0 width=75.2 height=20.0 center_x=45.6 center_y=82.0)
-              TextRun value="Cluster-wide" rect=(x=8.0 y=74.0 width=75.2 height=20.0 center_x=45.6 center_y=84.0)
+              TextRun value="Cluster-wide" rect=(x=8.0 y=72.0 width=75.2 height=20.0 center_x=45.6 center_y=82.0)
           Label value="Age" rect=(x=8.0 y=108.0 width=22.5 height=16.0 center_x=19.3 center_y=116.0)
             TextRun value="AGE" rect=(x=8.0 y=108.0 width=21.4 height=16.0 center_x=18.7 center_y=116.0)
           GenericContainer rect=<none>
             Label value="132d" rect=(x=8.0 y=124.0 width=27.3 height=20.0 center_x=21.7 center_y=134.0)
-              TextRun value="132d" rect=(x=8.0 y=126.0 width=27.3 height=20.0 center_x=21.7 center_y=136.0)
+              TextRun value="132d" rect=(x=8.0 y=124.0 width=27.3 height=20.0 center_x=21.7 center_y=134.0)
           Label value="Scheduling" rect=(x=8.0 y=160.0 width=73.1 height=16.0 center_x=44.6 center_y=168.0)
             TextRun value="SCHEDULING" rect=(x=8.0 y=160.0 width=72.0 height=16.0 center_x=44.0 center_y=168.0)
           GenericContainer rect=<none>
@@ -30,7 +30,7 @@ Window state=[focused] rect=<none>
               TextRun value="POD CIDRS" rect=(x=20.0 y=279.0 width=60.9 height=16.0 center_x=50.4 center_y=287.0)
             GenericContainer rect=<none>
               Label value="10.244.0.0/24, fd00:10:244::/56" rect=(x=20.0 y=295.0 width=187.7 height=20.0 center_x=113.8 center_y=305.0)
-                TextRun value="10.244.0.0/24, fd00:10:244::/56" rect=(x=20.0 y=297.0 width=187.7 height=20.0 center_x=113.8 center_y=307.0)
+                TextRun value="10.244.0.0/24, fd00:10:244::/56" rect=(x=20.0 y=295.0 width=187.7 height=20.0 center_x=113.8 center_y=305.0)
           GenericContainer rect=<none>
             Label value="UID" rect=(x=20.0 y=358.0 width=21.0 height=16.0 center_x=30.5 center_y=366.0)
               TextRun value="UID" rect=(x=20.0 y=358.0 width=19.9 height=16.0 center_x=30.0 center_y=366.0)
@@ -43,20 +43,20 @@ Window state=[focused] rect=<none>
               TextRun value="DESCRIPTION" rect=(x=20.0 y=437.0 width=76.8 height=16.0 center_x=58.4 center_y=445.0)
             GenericContainer rect=<none>
               Label value="This node runs the control-plane components and is reserved for cluster infrastructure workloads." rect=(x=20.0 y=453.0 width=230.2 height=60.0 center_x=135.1 center_y=483.0)
-                TextRun value="This node runs the control-plane " rect=(x=20.0 y=455.0 width=191.2 height=20.0 center_x=115.6 center_y=465.0)
-                TextRun value="components and is reserved for cluster " rect=(x=20.0 y=475.0 width=230.2 height=20.0 center_x=135.1 center_y=485.0)
-                TextRun value="infrastructure workloads." rect=(x=20.0 y=495.0 width=144.7 height=20.0 center_x=92.4 center_y=505.0)
+                TextRun value="This node runs the control-plane " rect=(x=20.0 y=453.0 width=191.2 height=20.0 center_x=115.6 center_y=463.0)
+                TextRun value="components and is reserved for cluster " rect=(x=20.0 y=473.0 width=230.2 height=20.0 center_x=135.1 center_y=483.0)
+                TextRun value="infrastructure workloads." rect=(x=20.0 y=493.0 width=144.7 height=20.0 center_x=92.4 center_y=503.0)
           GenericContainer rect=<none>
             Label value="External ID" rect=(x=20.0 y=556.0 width=74.5 height=16.0 center_x=57.3 center_y=564.0)
               TextRun value="EXTERNAL ID" rect=(x=20.0 y=556.0 width=73.4 height=16.0 center_x=56.7 center_y=564.0)
             GenericContainer rect=<none>
               Label value="Unavailable" rect=(x=20.0 y=572.0 width=66.3 height=20.0 center_x=53.1 center_y=582.0)
-                TextRun value="Unavailable" rect=(x=20.0 y=574.0 width=66.3 height=20.0 center_x=53.1 center_y=584.0)
+                TextRun value="Unavailable" rect=(x=20.0 y=572.0 width=66.3 height=20.0 center_x=53.1 center_y=582.0)
             Label value="Architecture" rect=(x=20.0 y=608.0 width=86.5 height=16.0 center_x=63.3 center_y=616.0)
               TextRun value="ARCHITECTURE" rect=(x=20.0 y=608.0 width=85.4 height=16.0 center_x=62.7 center_y=616.0)
             GenericContainer rect=<none>
               Label value="amd64" rect=(x=20.0 y=624.0 width=40.8 height=20.0 center_x=40.4 center_y=634.0)
-                TextRun value="amd64" rect=(x=20.0 y=626.0 width=40.8 height=20.0 center_x=40.4 center_y=636.0)
+                TextRun value="amd64" rect=(x=20.0 y=624.0 width=40.8 height=20.0 center_x=40.4 center_y=634.0)
   GenericContainer rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>

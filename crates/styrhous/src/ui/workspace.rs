@@ -1,10 +1,11 @@
 use super::resource_actions::{log_stream_targets, show_resource_action_items};
 use super::resource_owner;
-use super::resource_table_cache::{PreparedResourceTable, PreparedResourceTableRow};
+use super::resource_table_cache::{Grouping, PreparedResourceTable, PreparedResourceTableRow};
 use super::state::{
     BulkDeleteTarget, ClusterConnectionState, ClusterLoadState, NamespaceListWait,
     PendingBulkDelete, PendingCronJobRun, PendingDelete, PendingDeploymentRestart,
-    PendingForceDelete, ResourceAction, ResourceSearchState, SelectedNamespaces, UiState,
+    PendingForceDelete, PendingNodeDrain, ResourceAction, ResourceSearchState, SelectedNamespaces,
+    UiState,
 };
 use super::table_preferences::{
     MetadataColumnSource, PersistedResourceTablePreferences, ResourceTableKey,
@@ -34,13 +35,11 @@ use components::fuzzy::{fuzzy_match_score, normalize_for_search};
 use components::icons::Icon;
 use components::{
     BulkSelectionBar, Button, ButtonSize, CheckState, MoreButton, SearchStatus, SelectionAction,
-    Table, TableRowBuilder, WorkspacePage,
+    Table, TableRowBuilder, TopBar, WorkspacePage,
 };
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
-/// How far the top bar stays off the workspace's edges.
-const TOP_BAR_INSET: f32 = space::S16;
 /// Skeleton rows shown while a resource list first loads (S08).
 const LOADING_ROWS: usize = 3;
 /// Around the bulk selection bar, between the toolbar and the table header (C08).
@@ -64,6 +63,14 @@ struct ResourceTableOptions<'a> {
     debug_image_presets: &'a [DebugImagePreset],
     /// The uid of the resource whose inspector blade is open.
     inspected_uid: Option<&'a str>,
+    /// The groups of the table the user collapsed.
+    collapsed_groups: &'a HashSet<String>,
+    /// The problem row (its uid) the keys last stepped to.
+    problem_cursor: Option<&'a str>,
+    /// A row (its uid) to scroll into view.
+    scroll_to: Option<&'a str>,
+    /// Unsorted, the rows come in name order (no search ranks them).
+    name_ordered: bool,
 }
 
 struct ResourceTableControls<'a> {
@@ -101,6 +108,8 @@ struct WorkspaceEffects {
     deployment_rollback_to_request: Option<(String, String)>,
     /// The terminal settings, opened from a debug image menu.
     terminal_settings_to_open: Option<TerminalLaunchSettings>,
+    /// A Node of the table to cordon or uncordon.
+    node_cordon: Option<(i32, String, bool)>,
 }
 
 struct ResourceDetailTarget {
@@ -230,6 +239,11 @@ impl WorkspaceEffects {
         {
             ui_state.retry_selected_load(cluster_key, commands_to_send);
         }
+        if let Some((cluster_key, node_name, cordon)) = self.node_cordon
+            && let Some(command) = ui_state.request_node_cordon(cluster_key, node_name, cordon)
+        {
+            commands_to_send.push(Box::new(command));
+        }
         // Last, so the lookup records the view as it is after this frame.
         if let (Some(cluster_key), Some(target)) =
             (ui_state.selected_cluster, self.scale_to_request)
@@ -280,12 +294,14 @@ pub(super) fn show(
         .frame(WorkspacePage::canvas_frame(&ui.tokens()))
         .show(ui, |ui| {
             WorkspacePage::show(ui, |ui| {
-                let Some(selected_cluster_id) = ui_state.selected_cluster else {
-                    choose_cluster_state(ui);
+                if super::cluster_landing::is_shown(ui_state) {
+                    super::cluster_landing::show(ui, ui_state, commands_to_send);
                     return;
-                };
-                let Some(cluster) = ui_state.clusters.get_mut(&selected_cluster_id) else {
-                    choose_cluster_state(ui);
+                }
+                let Some(cluster) = ui_state
+                    .selected_cluster
+                    .and_then(|key| ui_state.clusters.get_mut(&key))
+                else {
                     return;
                 };
 
@@ -300,10 +316,7 @@ pub(super) fn show(
                         show_connection_progress(ui, cluster);
                         return;
                     }
-                    ClusterConnectionState::Disconnected => {
-                        choose_cluster_state(ui);
-                        return;
-                    }
+                    ClusterConnectionState::Disconnected => return,
                     ClusterConnectionState::Connecting | ClusterConnectionState::Connected => {}
                 }
 
@@ -334,7 +347,8 @@ pub(super) fn show(
                     .and_then(|api_resource| cluster.resource_searches.get(api_resource))
                     .cloned()
                     .unwrap_or_default();
-                let (table_configuration, resource_count, visible_count) =
+                let compact = TopBar::new(ui.ctx().content_rect().width()).is_narrow();
+                let (table_configuration, summary_counts) =
                     if let Some(api_resource) = &selected_api_resource {
                         let configuration = resource_table_configuration(
                             ui.available_width(),
@@ -347,6 +361,7 @@ pub(super) fn show(
                             api_resource.namespaced
                                 && (cluster.watches_every_namespace(api_resource)
                                     || cluster.namespace_scope().len() > 1),
+                            compact,
                             table_preferences,
                         );
                         prepare_cluster_table(
@@ -356,18 +371,37 @@ pub(super) fn show(
                             &configuration,
                         );
                         let prepared = cluster.resource_table_cache.prepared();
-                        let counts = (prepared.resource_count, prepared.visible_resource_count);
-                        (Some(configuration), counts.0, counts.1)
+                        let counts = (
+                            prepared.resource_count,
+                            prepared.shown_count,
+                            prepared.problem_count,
+                            prepared
+                                .groups
+                                .iter()
+                                .filter(|group| group.name.is_some())
+                                .count(),
+                        );
+                        (Some(configuration), counts)
                     } else {
-                        (None, 0, 0)
+                        (None, (0, 0, 0, 0))
                     };
-                show_toolbar(
+                let (resource_count, shown_count, problem_count, group_count) =
+                    summary_counts;
+                let toolbar_effects = show_toolbar(
                     ui,
                     cluster,
                     selected_api_resource.as_ref(),
                     ListSummary {
                         total: resource_count,
-                        visible: visible_count,
+                        shown: shown_count,
+                        namespaces: if selected_api_resource
+                            .as_ref()
+                            .is_some_and(|api_resource| api_resource.namespaced)
+                        {
+                            group_count
+                        } else {
+                            0
+                        },
                         live: selected_api_resource.as_ref().is_some_and(|api_resource| {
                             // Nothing is watched until a namespace is chosen.
                             !(api_resource.namespaced
@@ -376,11 +410,37 @@ pub(super) fn show(
                                 && selected_watch_error(cluster, api_resource).is_none()
                         }),
                     },
+                    Some(ListFilters {
+                        grouped_by_namespace: selected_api_resource
+                            .as_ref()
+                            .filter(|api_resource| api_resource.namespaced)
+                            .map(|_| {
+                                table_configuration
+                                    .as_ref()
+                                    .is_some_and(|configuration| {
+                                        configuration.grouping == Grouping::Namespace
+                                    })
+                            }),
+                        problem_count,
+                        problems_only: resource_search.problems_only,
+                    }),
                     &mut resource_search,
                     &mut effects.namespace_selection,
                     namespace_selector_settings,
                 );
                 if let Some(api_resource) = &selected_api_resource {
+                    if toolbar_effects.toggle_grouping {
+                        let key = ResourceTableKey::workspace(api_resource);
+                        let grouped = table_preferences.groups_by_namespace(&key);
+                        table_preferences.set_groups_by_namespace(&key, !grouped);
+                        resource_search.problem_cursor = None;
+                        // The table is configured before the toolbar: lay it out again.
+                        ui.ctx().request_repaint();
+                    }
+                    if toolbar_effects.toggle_problems_only {
+                        resource_search.problems_only = !resource_search.problems_only;
+                        resource_search.problem_cursor = None;
+                    }
                     cluster
                         .resource_searches
                         .insert(api_resource.clone(), resource_search);
@@ -412,6 +472,17 @@ pub(super) fn show(
                     .expect("selected resource search was just stored")
                     .clone();
                 prepare_cluster_table(cluster, api_resource, &resource_search, table_configuration);
+                if let Some(step) = toolbar_effects.problem_step {
+                    let resources = &mut cluster.resources;
+                    if let Some(search) = resources.resource_searches.get_mut(api_resource) {
+                        step_to_problem(resources.resource_table_cache.prepared(), search, step);
+                    }
+                }
+                let resource_search = cluster
+                    .resource_searches
+                    .get(api_resource)
+                    .expect("selected resource search was just stored")
+                    .clone();
                 let inspected_uid = inspected
                     .as_ref()
                     .filter(|(cluster_key, resource, _)| {
@@ -425,8 +496,11 @@ pub(super) fn show(
                     metrics_shown,
                     &resources.pod_metrics,
                     &resources.node_metrics,
+                    &resources.node_pod_counts,
                 );
                 let mut clear_filter = false;
+                let mut show_every_row = false;
+                let mut table_shown = false;
                 // The bar stays above every state while rows are selected, so the
                 // selection can always be cleared or acted on.
                 if selected_resource_count > 0 {
@@ -487,8 +561,17 @@ pub(super) fn show(
                     ) {
                         clear_filter = true;
                     }
-                } else if let Some(action) = {
-                    show_resource_table(
+                } else if prepared.shown_count == 0 {
+                    if workspace_filtered_empty_state(
+                        ui,
+                        "No problems",
+                        "Every matching resource is doing well.",
+                    ) {
+                        show_every_row = true;
+                    }
+                } else {
+                    table_shown = true;
+                    let outcome = show_resource_table(
                         ui,
                         api_resource,
                         prepared,
@@ -505,6 +588,10 @@ pub(super) fn show(
                             },
                             debug_image_presets,
                             inspected_uid: inspected_uid.as_deref(),
+                            collapsed_groups: &resource_search.collapsed_groups,
+                            problem_cursor: resource_search.problem_cursor.as_deref(),
+                            scroll_to: resource_search.scroll_to.as_deref(),
+                            name_ordered: resource_search.query.is_empty(),
                         },
                         ResourceTableControls {
                             selection: resources
@@ -514,14 +601,30 @@ pub(super) fn show(
                             table_preferences,
                             column_settings_to_open: &mut effects.column_settings_to_open,
                         },
-                    )
-                } {
+                    );
+                    if let Some(search) = resources.resource_searches.get_mut(api_resource) {
+                        search.scroll_to = None;
+                        if let Some(group) = outcome.toggled_group
+                            && !search.collapsed_groups.remove(&group)
+                        {
+                            search.collapsed_groups.insert(group);
+                        }
+                        if let Some(uid) = outcome.clicked_problem {
+                            search.problem_cursor = Some(uid.clone());
+                            search.scroll_to = Some(uid);
+                            ui.ctx().request_repaint();
+                        }
+                    }
+                    if let Some(action) = outcome.action {
                     match action {
                         ResourceAction::OpenDetails {
                             name,
                             namespace,
                             uid,
                         } => {
+                            if let Some(search) = resources.resource_searches.get_mut(api_resource) {
+                                search.problem_cursor = None;
+                            }
                             effects.detail_to_open = Some(ResourceDetailTarget {
                                 api_resource: api_resource.clone(),
                                 name,
@@ -577,6 +680,13 @@ pub(super) fn show(
                                 namespace,
                             });
                         }
+                        ResourceAction::RequestNodeCordon { name, cordon } => {
+                            effects.node_cordon = Some((cluster.cluster_key, name, cordon));
+                        }
+                        ResourceAction::RequestNodeDrain { name } => {
+                            resources.pending_node_drain =
+                                Some(PendingNodeDrain { node_name: name });
+                        }
                         ResourceAction::ViewLogs { targets } => {
                             effects.log_sources_to_open = Some(LogSourcesTarget {
                                 cluster_key: cluster.cluster_key,
@@ -608,6 +718,7 @@ pub(super) fn show(
                                 uid,
                             });
                         }
+                    }
                     }
                 }
 
@@ -674,10 +785,17 @@ pub(super) fn show(
                 if (selected_resource_count > 0) != (selected_after > 0) {
                     ui.ctx().request_discard("the bulk selection bar appeared or went");
                 }
-                if clear_filter
-                    && let Some(search) = cluster.resource_searches.get_mut(api_resource)
-                {
-                    search.query.clear();
+                if let Some(search) = cluster.resource_searches.get_mut(api_resource) {
+                    if clear_filter {
+                        search.query.clear();
+                    }
+                    if clear_filter || show_every_row {
+                        search.problems_only = false;
+                    }
+                    // A scroll that found no table to scroll must not linger.
+                    if !table_shown {
+                        search.scroll_to = None;
+                    }
                 }
             });
         });
@@ -693,19 +811,10 @@ mod toolbar;
 
 use connection_progress::show_connection_progress;
 use helm::*;
+pub(super) use resource_data::listed_count;
 use resource_data::*;
 use resource_table::*;
 use toolbar::*;
 
 #[cfg(test)]
 mod tests;
-
-/// No cluster is selected or connected: point at the cluster rail.
-fn choose_cluster_state(ui: &mut egui::Ui) {
-    workspace_empty_state(
-        ui,
-        Icon::ServerStack,
-        "Choose a cluster",
-        "Select a Kubernetes context from the cluster rail to begin exploring.",
-    );
-}

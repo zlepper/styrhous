@@ -87,7 +87,15 @@ impl ApiResource {
     /// Kubernetes discovery gives resource names as lowercase plurals, but its Kind retains
     /// the word boundaries and casing needed for a readable label.
     pub fn display_name(&self) -> String {
-        let mut display_name = split_kind_words(&self.kind);
+        if self.is_helm_releases() {
+            return "Helm releases".to_owned();
+        }
+        // The workload controllers keep their Kubernetes spelling.
+        let mut display_name = if ONE_WORD_KINDS.contains(&self.kind.as_str()) {
+            self.kind.clone()
+        } else {
+            split_kind_words(&self.kind)
+        };
 
         match plural_suffix(&self.kind, &self.name) {
             Some("ies") => {
@@ -147,6 +155,9 @@ impl ApiResourceSet {
         self.scalable_api_resources.contains(api_resource)
     }
 }
+
+/// Kinds whose name reads as one word in a label.
+const ONE_WORD_KINDS: [&str; 3] = ["StatefulSet", "DaemonSet", "ReplicaSet"];
 
 fn split_kind_words(kind: &str) -> String {
     let mut display_name = String::with_capacity(kind.len() + 4);

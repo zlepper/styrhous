@@ -12,6 +12,7 @@ fn refreshing_clusters_preserves_a_non_resource_global_blade() {
         name: "refreshed".into(),
         is_current: true,
         presentation: Default::default(),
+        server: None,
     }])
     .apply(&mut state, &mut commands);
 
@@ -57,6 +58,7 @@ fn saving_debug_image_presets_applies_the_settings_draft() {
                 image: "registry.example/debug-tools:v1".into(),
                 profile: DebugProfile::Sysadmin,
             }],
+            ..Default::default()
         },
     );
     harness.state_mut().ui_state = state;
@@ -90,6 +92,7 @@ fn debug_image_preset_table_adds_and_removes_rows() {
                 image: "registry.example/debug-tools:v1".into(),
                 profile: DebugProfile::Sysadmin,
             }],
+            ..Default::default()
         },
     );
     harness.state_mut().ui_state = state;
@@ -109,7 +112,7 @@ fn debug_image_preset_table_adds_and_removes_rows() {
             .is_empty()
     );
 
-    let add_position = harness.get_by_label("Add debug image").rect().center();
+    let add_position = harness.get_by_label("Add image").rect().center();
     primary_click(&mut harness, add_position);
     harness.run();
     assert_eq!(
@@ -249,6 +252,7 @@ fn debug_image_preset_table_edits_and_saves_a_profile() {
                 image: String::new(),
                 profile: DebugProfile::General,
             }],
+            ..Default::default()
         },
     );
     harness.state_mut().ui_state = state;

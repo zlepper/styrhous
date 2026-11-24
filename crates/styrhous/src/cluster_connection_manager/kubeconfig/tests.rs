@@ -34,6 +34,7 @@ fn preferences(name: &str, badge: &str) -> ContextPresentation {
     ContextPresentation {
         display_name: Some(name.into()),
         badge: Some(badge.into()),
+        colour: Some(3),
     }
 }
 
@@ -98,7 +99,7 @@ fn editing_uses_first_definition_and_preserves_credentials_extensions_and_relati
         saved["contexts"][0]["context"]["extensions"][1]["extension"]["future-setting"],
         "keep"
     );
-    // Only the two owned presentation properties may have changed.
+    // Only the three owned presentation properties may have changed.
     saved["contexts"][0]["context"]["extensions"][1]["extension"]
         .as_mapping_mut()
         .unwrap()
@@ -107,6 +108,10 @@ fn editing_uses_first_definition_and_preserves_credentials_extensions_and_relati
         .as_mapping_mut()
         .unwrap()
         .remove(Value::String("badge".into()));
+    saved["contexts"][0]["context"]["extensions"][1]["extension"]
+        .as_mapping_mut()
+        .unwrap()
+        .remove(Value::String("colour".into()));
     assert_eq!(saved, original);
 
     // Save reads the current source, including independent edits since it was first loaded.
@@ -123,6 +128,7 @@ fn editing_uses_first_definition_and_preserves_credentials_extensions_and_relati
     let extension = &cleared["contexts"][0]["context"]["extensions"][1]["extension"];
     assert_eq!(extension["future-setting"], "keep");
     assert!(extension.get("badge").is_none());
+    assert!(extension.get("colour").is_none());
     assert!(extension.get("display-name").is_none());
 }
 
@@ -250,4 +256,32 @@ fn saves_preserve_symlinks_and_permissions_and_report_read_only_files() {
     assert!(save_context_in_paths(&[link], "shared", &preferences("Other", "OT")).is_err());
     assert_eq!(std::fs::read(&target).unwrap(), original);
     assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 2);
+}
+
+#[test]
+fn the_source_label_abbreviates_the_home_directory_and_counts_several_files() {
+    let home = Path::new("/home/rasmus");
+    assert_eq!(
+        describe_sources(&[PathBuf::from("/home/rasmus/.kube/config")], Some(home)),
+        "~/.kube/config"
+    );
+    assert_eq!(
+        describe_sources(&[PathBuf::from("/etc/kube/config")], Some(home)),
+        "/etc/kube/config"
+    );
+    assert_eq!(
+        describe_sources(&[PathBuf::from("/home/rasmus/.kube/config")], None),
+        "/home/rasmus/.kube/config"
+    );
+    assert_eq!(
+        describe_sources(
+            &[
+                PathBuf::from("/a"),
+                PathBuf::from("/b"),
+                PathBuf::from("/c")
+            ],
+            Some(home)
+        ),
+        "3 kubeconfig files"
+    );
 }

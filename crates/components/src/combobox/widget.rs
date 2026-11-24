@@ -14,6 +14,7 @@ impl Combobox<NoFilter> {
             lead: None,
             more: 0,
             width: None,
+            popup_width: None,
             size: FieldSize::Md,
             select_all: None,
             item_height: size::OPTION,
@@ -55,6 +56,7 @@ impl Combobox<NoFilter> {
             lead: self.lead,
             more: self.more,
             width: self.width,
+            popup_width: self.popup_width,
             size: self.size,
             select_all: self.select_all,
             item_height: self.item_height,
@@ -144,6 +146,13 @@ impl<Filter> Combobox<Filter> {
     /// The width of the trigger and its popover.
     pub fn width(mut self, width: f32) -> Self {
         self.width = Some(width.max(0.0));
+        self
+    }
+
+    /// The width of the popover where its content needs more than the
+    /// trigger's: it is as wide as the wider of the two.
+    pub fn popup_width(mut self, width: f32) -> Self {
+        self.popup_width = Some(width.max(0.0));
         self
     }
 
@@ -269,6 +278,7 @@ impl<F> Combobox<WithFilter<F>> {
             lead,
             more,
             width,
+            popup_width,
             size,
             select_all,
             item_height,
@@ -357,7 +367,8 @@ impl<F> Combobox<WithFilter<F>> {
         let popup_id = Popup::default_response_id(&trigger);
         let items: Vec<&T> = items.into_iter().collect();
         let theme = ui.tokens();
-        let inner_width = width - 2.0 * crate::frames::POPOVER_PADDING;
+        let popup_width = popup_width.map_or(width, |popup| popup.max(width));
+        let inner_width = popup_width - 2.0 * crate::frames::POPOVER_PADDING;
         let mut select_all_clicked = false;
         let popup_label = format!("{accessibility_label} options");
         let search_label = search_accessibility_label.unwrap_or_else(|| {
@@ -549,7 +560,7 @@ impl<F> Combobox<WithFilter<F>> {
                 builder.set_label(popup_label);
             });
         } else if let Some(popup) = Popup::menu(&trigger)
-            .width(width)
+            .width(popup_width)
             .gap(size::POPOVER_GAP)
             .frame(egui::Frame::NONE)
             .close_behavior(PopupCloseBehavior::CloseOnClickOutside)

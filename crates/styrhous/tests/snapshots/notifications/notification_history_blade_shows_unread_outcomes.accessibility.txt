@@ -1,0 +1,507 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        Navigation name="Workspace" rect=(x=12.0 y=12.0 width=268.0 height=1000.0 center_x=146.0 center_y=512.0)
+          GenericContainer rect=<none>
+            Button name="Switch cluster" rect=(x=26.0 y=26.0 width=240.0 height=60.0 center_x=146.0 center_y=56.0)
+              TextRun value="kind-kind" rect=(x=88.0 y=39.0 width=69.3 height=20.0 center_x=122.7 center_y=49.0)
+            GenericContainer rect=<none>
+              TextInput name="Filter kinds" value="" rect=(x=26.0 y=98.0 width=240.0 height=34.0 center_x=146.0 center_y=115.0)
+                TextRun value="" rect=(x=62.0 y=107.0 width=0.0 height=20.0 center_x=62.0 center_y=117.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="PINNED" rect=(x=34.0 y=146.0 width=43.9 height=14.0 center_x=55.9 center_y=153.0)
+                  TextRun value="PINNED" rect=(x=34.0 y=146.0 width=42.8 height=14.0 center_x=55.4 center_y=153.0)
+                Button name="Pods" state=[toggled=True] rect=(x=26.0 y=166.0 width=240.0 height=34.0 center_x=146.0 center_y=183.0)
+                  TextRun value="Pods" rect=(x=62.0 y=173.0 width=30.0 height=20.0 center_x=77.0 center_y=183.0)
+                Button name="Deployments" state=[toggled=False] rect=(x=26.0 y=200.0 width=240.0 height=34.0 center_x=146.0 center_y=217.0)
+                  TextRun value="Deployments" rect=(x=62.0 y=207.0 width=80.7 height=20.0 center_x=102.4 center_y=217.0)
+                Button name="Nodes" state=[toggled=False] rect=(x=26.0 y=234.0 width=240.0 height=34.0 center_x=146.0 center_y=251.0)
+                  TextRun value="Nodes" rect=(x=62.0 y=241.0 width=39.9 height=20.0 center_x=82.0 center_y=251.0)
+                Button name="Helm releases" state=[toggled=False] rect=(x=26.0 y=268.0 width=240.0 height=34.0 center_x=146.0 center_y=285.0)
+                  TextRun value="Helm releases" rect=(x=62.0 y=275.0 width=85.0 height=20.0 center_x=104.5 center_y=285.0)
+                Label value="KUBERNETES" rect=(x=34.0 y=316.0 width=73.9 height=14.0 center_x=70.9 center_y=323.0)
+                  TextRun value="KUBERNETES" rect=(x=34.0 y=316.0 width=72.8 height=14.0 center_x=70.4 center_y=323.0)
+                Label value="19" rect=(x=243.9 y=316.0 width=14.1 height=14.0 center_x=251.0 center_y=323.0)
+                  TextRun value="19" rect=(x=243.9 y=316.0 width=13.0 height=14.0 center_x=250.4 center_y=323.0)
+                Button name="Workloads" state=[toggled=False] rect=(x=26.0 y=336.0 width=240.0 height=30.0 center_x=146.0 center_y=351.0)
+                  TextRun value="Workloads" rect=(x=56.0 y=341.0 width=61.5 height=20.0 center_x=86.8 center_y=351.0)
+                Button name="Network" state=[toggled=False] rect=(x=26.0 y=366.0 width=240.0 height=30.0 center_x=146.0 center_y=381.0)
+                  TextRun value="Network" rect=(x=56.0 y=371.0 width=51.0 height=20.0 center_x=81.5 center_y=381.0)
+                Button name="Config & secrets" state=[toggled=False] rect=(x=26.0 y=396.0 width=240.0 height=30.0 center_x=146.0 center_y=411.0)
+                  TextRun value="Config & secrets" rect=(x=56.0 y=401.0 width=97.6 height=20.0 center_x=104.8 center_y=411.0)
+                Button name="Storage" state=[toggled=False] rect=(x=26.0 y=426.0 width=240.0 height=30.0 center_x=146.0 center_y=441.0)
+                  TextRun value="Storage" rect=(x=56.0 y=431.0 width=46.5 height=20.0 center_x=79.2 center_y=441.0)
+                Button name="Cluster" state=[toggled=False] rect=(x=26.0 y=456.0 width=240.0 height=30.0 center_x=146.0 center_y=471.0)
+                  TextRun value="Cluster" rect=(x=56.0 y=461.0 width=42.3 height=20.0 center_x=77.1 center_y=471.0)
+                Button name="Namespaces" state=[toggled=False] rect=(x=26.0 y=486.0 width=240.0 height=34.0 center_x=146.0 center_y=503.0)
+                  TextRun value="Namespaces" rect=(x=62.0 y=493.0 width=78.7 height=20.0 center_x=101.3 center_y=503.0)
+                Button name="Events" state=[toggled=False] rect=(x=26.0 y=520.0 width=240.0 height=34.0 center_x=146.0 center_y=537.0)
+                  TextRun value="Events" rect=(x=62.0 y=527.0 width=41.4 height=20.0 center_x=82.7 center_y=537.0)
+                Label value="CUSTOM RESOURCES" rect=(x=34.0 y=568.0 width=116.2 height=14.0 center_x=92.1 center_y=575.0)
+                  TextRun value="CUSTOM RESOURCES" rect=(x=34.0 y=568.0 width=115.1 height=14.0 center_x=91.5 center_y=575.0)
+                Label value="1 GROUP" rect=(x=208.5 y=568.0 width=49.5 height=14.0 center_x=233.2 center_y=575.0)
+                  TextRun value="1 GROUP" rect=(x=208.5 y=568.0 width=48.4 height=14.0 center_x=232.7 center_y=575.0)
+                Button name="core" state=[toggled=False] rect=(x=26.0 y=588.0 width=240.0 height=30.0 center_x=146.0 center_y=603.0)
+                  TextRun value="core" rect=(x=56.0 y=593.0 width=27.6 height=20.0 center_x=69.8 center_y=603.0)
+          GenericContainer rect=<none>
+            Button name="Notifications" state=[toggled=True] rect=(x=26.0 y=964.0 width=144.9 height=34.0 center_x=98.4 center_y=981.0)
+              TextRun value="Notificatio…" rect=(x=58.0 y=971.0 width=74.1 height=20.0 center_x=95.0 center_y=981.0)
+            Button name="Settings" state=[toggled=False] rect=(x=174.9 y=964.0 width=91.1 height=34.0 center_x=220.4 center_y=981.0)
+              TextRun value="Settings" rect=(x=206.9 y=971.0 width=51.1 height=20.0 center_x=232.4 center_y=981.0)
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              TextInput name="Search resources" value="" rect=(x=304.0 y=20.0 width=260.0 height=38.0 center_x=434.0 center_y=39.0)
+                TextRun value="" rect=(x=340.0 y=31.0 width=0.0 height=20.0 center_x=340.0 center_y=41.0)
+          ComboBox name="Namespace scope" value="kube-system" rect=(x=612.0 y=20.0 width=240.0 height=38.0 center_x=732.0 center_y=39.0)
+          Button name="Group: namespace" state=[toggled=True] rect=(x=860.0 y=23.0 width=134.5 height=32.0 center_x=927.2 center_y=39.0)
+          Button name="Problems only 0" state=[toggled=False] rect=(x=1002.5 y=23.0 width=132.1 height=32.0 center_x=1068.5 center_y=39.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Label value="8 pods · live" rect=(x=1443.9 y=29.0 width=64.1 height=20.0 center_x=1476.0 center_y=39.0)
+              TextRun value="8 pods · live" rect=(x=1443.9 y=29.0 width=64.1 height=20.0 center_x=1476.0 center_y=39.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Unknown name="Selection column" rect=(x=304.0 y=78.0 width=40.0 height=36.0 center_x=324.0 center_y=96.0)
+            GenericContainer rect=<none>
+              CheckBox name="Select all rows" state=[toggled=False] rect=(x=316.0 y=88.0 width=16.0 height=16.0 center_x=324.0 center_y=96.0)
+            ColumnHeader name="Name column" rect=(x=344.0 y=78.0 width=356.0 height=36.0 center_x=522.0 center_y=96.0)
+              TextRun value="NAME" rect=(x=356.0 y=88.0 width=30.3 height=16.0 center_x=371.1 center_y=96.0)
+            Button name="Resize Name column" rect=(x=700.0 y=78.0 width=8.0 height=36.0 center_x=704.0 center_y=96.0)
+            ColumnHeader name="Ready column" rect=(x=708.0 y=78.0 width=64.0 height=36.0 center_x=740.0 center_y=96.0)
+              TextRun value="READY" rect=(x=732.1 y=88.0 width=35.0 height=16.0 center_x=749.6 center_y=96.0)
+            Button name="Resize Ready column" rect=(x=772.0 y=78.0 width=8.0 height=36.0 center_x=776.0 center_y=96.0)
+            ColumnHeader name="Containers column" rect=(x=780.0 y=78.0 width=92.0 height=36.0 center_x=826.0 center_y=96.0)
+              TextRun value="CONTAINERS" rect=(x=792.0 y=88.0 width=69.5 height=16.0 center_x=826.7 center_y=96.0)
+            Button name="Resize Containers column" rect=(x=872.0 y=78.0 width=8.0 height=36.0 center_x=876.0 center_y=96.0)
+            ColumnHeader name="Status column" rect=(x=880.0 y=78.0 width=108.0 height=36.0 center_x=934.0 center_y=96.0)
+              TextRun value="STATUS" rect=(x=892.0 y=88.0 width=39.7 height=16.0 center_x=911.8 center_y=96.0)
+            Button name="Resize Status column" rect=(x=988.0 y=78.0 width=8.0 height=36.0 center_x=992.0 center_y=96.0)
+            ColumnHeader name="Restarts column" rect=(x=996.0 y=78.0 width=76.0 height=36.0 center_x=1034.0 center_y=96.0)
+              TextRun value="RESTARTS" rect=(x=1013.2 y=88.0 width=53.9 height=16.0 center_x=1040.2 center_y=96.0)
+            Button name="Resize Restarts column" rect=(x=1072.0 y=78.0 width=8.0 height=36.0 center_x=1076.0 center_y=96.0)
+            ColumnHeader name="CPU column" rect=(x=1080.0 y=78.0 width=68.0 height=36.0 center_x=1114.0 center_y=96.0)
+              TextRun value="CPU" rect=(x=1122.0 y=88.0 width=21.1 height=16.0 center_x=1132.6 center_y=96.0)
+            Button name="Resize CPU column" rect=(x=1148.0 y=78.0 width=8.0 height=36.0 center_x=1152.0 center_y=96.0)
+            ColumnHeader name="Memory column" rect=(x=1156.0 y=78.0 width=76.0 height=36.0 center_x=1194.0 center_y=96.0)
+              TextRun value="MEMORY" rect=(x=1181.3 y=88.0 width=45.8 height=16.0 center_x=1204.2 center_y=96.0)
+            Button name="Resize Memory column" rect=(x=1232.0 y=78.0 width=8.0 height=36.0 center_x=1236.0 center_y=96.0)
+            ColumnHeader name="Node column" rect=(x=1240.0 y=78.0 width=148.0 height=36.0 center_x=1314.0 center_y=96.0)
+              TextRun value="NODE" rect=(x=1252.0 y=88.0 width=29.5 height=16.0 center_x=1266.7 center_y=96.0)
+            Button name="Resize Node column" rect=(x=1388.0 y=78.0 width=8.0 height=36.0 center_x=1392.0 center_y=96.0)
+            ColumnHeader name="Age column" rect=(x=1396.0 y=78.0 width=56.0 height=36.0 center_x=1424.0 center_y=96.0)
+              TextRun value="AGE" rect=(x=1426.1 y=88.0 width=21.0 height=16.0 center_x=1436.6 center_y=96.0)
+            Button name="Resize Age column" rect=(x=1452.0 y=78.0 width=8.0 height=36.0 center_x=1456.0 center_y=96.0)
+            Unknown name="actions column" rect=(x=1460.0 y=78.0 width=48.0 height=36.0 center_x=1484.0 center_y=96.0)
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Button name="Collapse kube-system" rect=(x=310.0 y=118.0 width=115.2 height=26.0 center_x=367.6 center_y=131.0)
+                Label value="8 pods" rect=(x=435.2 y=121.0 width=43.2 height=20.0 center_x=456.8 center_y=131.0)
+                  TextRun value="8 pods" rect=(x=435.2 y=121.0 width=43.2 height=20.0 center_x=456.8 center_y=131.0)
+                Label value="all 8 shown" rect=(x=1442.1 y=121.0 width=59.9 height=20.0 center_x=1472.0 center_y=131.0)
+                  TextRun value="all 8 shown" rect=(x=1442.1 y=121.0 width=59.9 height=20.0 center_x=1472.0 center_y=131.0)
+                GenericContainer rect=<none>
+                  CheckBox name="Select row 1" state=[toggled=False] rect=(x=316.0 y=158.0 width=16.0 height=16.0 center_x=324.0 center_y=166.0)
+                Unknown name="Name, row 1" rect=(x=344.0 y=148.0 width=364.0 height=36.0 center_x=526.0 center_y=166.0)
+                GenericContainer rect=<none>
+                  Button name="Open details for coredns-66bc5c9577-ffw2s" rect=(x=356.0 y=158.0 width=165.8 height=16.0 center_x=438.9 center_y=166.0)
+                Unknown name="Ready, row 1" rect=(x=708.0 y=148.0 width=72.0 height=36.0 center_x=744.0 center_y=166.0)
+                GenericContainer rect=<none>
+                  Label value="1/1" rect=(x=752.2 y=156.0 width=15.8 height=20.0 center_x=760.1 center_y=166.0)
+                    TextRun value="1/1" rect=(x=752.2 y=156.0 width=15.8 height=20.0 center_x=760.1 center_y=166.0)
+                Unknown name="Containers, row 1" rect=(x=780.0 y=148.0 width=100.0 height=36.0 center_x=830.0 center_y=166.0)
+                GenericContainer rect=<none>
+                  Label value="No container statuses reported yet" rect=(x=792.0 y=156.0 width=14.3 height=20.0 center_x=799.2 center_y=166.0)
+                    TextRun value="—" rect=(x=792.0 y=156.0 width=14.3 height=20.0 center_x=799.2 center_y=166.0)
+                Unknown name="Status, row 1" rect=(x=880.0 y=148.0 width=116.0 height=36.0 center_x=938.0 center_y=166.0)
+                GenericContainer rect=<none>
+                  Label value="Running" rect=(x=892.0 y=156.0 width=61.8 height=20.0 center_x=922.9 center_y=166.0)
+                    TextRun value="Running" rect=(x=906.0 y=156.0 width=47.8 height=20.0 center_x=929.9 center_y=166.0)
+                Unknown name="Restarts, row 1" rect=(x=996.0 y=148.0 width=84.0 height=36.0 center_x=1038.0 center_y=166.0)
+                GenericContainer rect=<none>
+                  Label value="0" rect=(x=1059.7 y=156.0 width=8.3 height=20.0 center_x=1063.8 center_y=166.0)
+                    TextRun value="0" rect=(x=1059.7 y=156.0 width=8.3 height=20.0 center_x=1063.8 center_y=166.0)
+                Unknown name="CPU, row 1" rect=(x=1080.0 y=148.0 width=76.0 height=36.0 center_x=1118.0 center_y=166.0)
+                GenericContainer rect=<none>
+                  Label value="No metrics reported for this resource" rect=(x=1129.7 y=156.0 width=14.3 height=20.0 center_x=1136.8 center_y=166.0)
+                    TextRun value="—" rect=(x=1129.7 y=156.0 width=14.3 height=20.0 center_x=1136.8 center_y=166.0)
+                Unknown name="Memory, row 1" rect=(x=1156.0 y=148.0 width=84.0 height=36.0 center_x=1198.0 center_y=166.0)
+                GenericContainer rect=<none>
+                  Label value="No metrics reported for this resource" rect=(x=1213.7 y=156.0 width=14.3 height=20.0 center_x=1220.8 center_y=166.0)
+                    TextRun value="—" rect=(x=1213.7 y=156.0 width=14.3 height=20.0 center_x=1220.8 center_y=166.0)
+                Unknown name="Node, row 1" rect=(x=1240.0 y=148.0 width=156.0 height=36.0 center_x=1318.0 center_y=166.0)
+                GenericContainer rect=<none>
+                  Label value="Not set" rect=(x=1252.0 y=156.0 width=14.3 height=20.0 center_x=1259.2 center_y=166.0)
+                    TextRun value="—" rect=(x=1252.0 y=156.0 width=14.3 height=20.0 center_x=1259.2 center_y=166.0)
+                Unknown name="Age, row 1" rect=(x=1396.0 y=148.0 width=64.0 height=36.0 center_x=1428.0 center_y=166.0)
+                GenericContainer rect=<none>
+                  Label value="220d" rect=(x=1417.5 y=156.0 width=30.5 height=20.0 center_x=1432.8 center_y=166.0)
+                    TextRun value="220d" rect=(x=1417.5 y=156.0 width=30.5 height=20.0 center_x=1432.8 center_y=166.0)
+                Unknown name="actions, row 1" rect=(x=1460.0 y=148.0 width=48.0 height=36.0 center_x=1484.0 center_y=166.0)
+                GenericContainer rect=<none>
+                  Button name="More actions for coredns-66bc5c9577-ffw2s" rect=(x=1470.0 y=152.0 width=28.0 height=28.0 center_x=1484.0 center_y=166.0)
+                GenericContainer rect=<none>
+                  CheckBox name="Select row 2" state=[toggled=False] rect=(x=316.0 y=198.0 width=16.0 height=16.0 center_x=324.0 center_y=206.0)
+                Unknown name="Name, row 2" rect=(x=344.0 y=188.0 width=364.0 height=36.0 center_x=526.0 center_y=206.0)
+                GenericContainer rect=<none>
+                  Button name="Open details for coredns-66bc5c9577-z9gt9" rect=(x=356.0 y=198.0 width=165.8 height=16.0 center_x=438.9 center_y=206.0)
+                Unknown name="Ready, row 2" rect=(x=708.0 y=188.0 width=72.0 height=36.0 center_x=744.0 center_y=206.0)
+                GenericContainer rect=<none>
+                  Label value="1/1" rect=(x=752.2 y=196.0 width=15.8 height=20.0 center_x=760.1 center_y=206.0)
+                    TextRun value="1/1" rect=(x=752.2 y=196.0 width=15.8 height=20.0 center_x=760.1 center_y=206.0)
+                Unknown name="Containers, row 2" rect=(x=780.0 y=188.0 width=100.0 height=36.0 center_x=830.0 center_y=206.0)
+                GenericContainer rect=<none>
+                  Label value="No container statuses reported yet" rect=(x=792.0 y=196.0 width=14.3 height=20.0 center_x=799.2 center_y=206.0)
+                    TextRun value="—" rect=(x=792.0 y=196.0 width=14.3 height=20.0 center_x=799.2 center_y=206.0)
+                Unknown name="Status, row 2" rect=(x=880.0 y=188.0 width=116.0 height=36.0 center_x=938.0 center_y=206.0)
+                GenericContainer rect=<none>
+                  Label value="Running" rect=(x=892.0 y=196.0 width=61.8 height=20.0 center_x=922.9 center_y=206.0)
+                    TextRun value="Running" rect=(x=906.0 y=196.0 width=47.8 height=20.0 center_x=929.9 center_y=206.0)
+                Unknown name="Restarts, row 2" rect=(x=996.0 y=188.0 width=84.0 height=36.0 center_x=1038.0 center_y=206.0)
+                GenericContainer rect=<none>
+                  Label value="0" rect=(x=1059.7 y=196.0 width=8.3 height=20.0 center_x=1063.8 center_y=206.0)
+                    TextRun value="0" rect=(x=1059.7 y=196.0 width=8.3 height=20.0 center_x=1063.8 center_y=206.0)
+                Unknown name="CPU, row 2" rect=(x=1080.0 y=188.0 width=76.0 height=36.0 center_x=1118.0 center_y=206.0)
+                GenericContainer rect=<none>
+                  Label value="No metrics reported for this resource" rect=(x=1129.7 y=196.0 width=14.3 height=20.0 center_x=1136.8 center_y=206.0)
+                    TextRun value="—" rect=(x=1129.7 y=196.0 width=14.3 height=20.0 center_x=1136.8 center_y=206.0)
+                Unknown name="Memory, row 2" rect=(x=1156.0 y=188.0 width=84.0 height=36.0 center_x=1198.0 center_y=206.0)
+                GenericContainer rect=<none>
+                  Label value="No metrics reported for this resource" rect=(x=1213.7 y=196.0 width=14.3 height=20.0 center_x=1220.8 center_y=206.0)
+                    TextRun value="—" rect=(x=1213.7 y=196.0 width=14.3 height=20.0 center_x=1220.8 center_y=206.0)
+                Unknown name="Node, row 2" rect=(x=1240.0 y=188.0 width=156.0 height=36.0 center_x=1318.0 center_y=206.0)
+                GenericContainer rect=<none>
+                  Label value="Not set" rect=(x=1252.0 y=196.0 width=14.3 height=20.0 center_x=1259.2 center_y=206.0)
+                    TextRun value="—" rect=(x=1252.0 y=196.0 width=14.3 height=20.0 center_x=1259.2 center_y=206.0)
+                Unknown name="Age, row 2" rect=(x=1396.0 y=188.0 width=64.0 height=36.0 center_x=1428.0 center_y=206.0)
+                GenericContainer rect=<none>
+                  Label value="220d" rect=(x=1417.5 y=196.0 width=30.5 height=20.0 center_x=1432.8 center_y=206.0)
+                    TextRun value="220d" rect=(x=1417.5 y=196.0 width=30.5 height=20.0 center_x=1432.8 center_y=206.0)
+                Unknown name="actions, row 2" rect=(x=1460.0 y=188.0 width=48.0 height=36.0 center_x=1484.0 center_y=206.0)
+                GenericContainer rect=<none>
+                  Button name="More actions for coredns-66bc5c9577-z9gt9" rect=(x=1470.0 y=192.0 width=28.0 height=28.0 center_x=1484.0 center_y=206.0)
+                GenericContainer rect=<none>
+                  CheckBox name="Select row 3" state=[toggled=False] rect=(x=316.0 y=238.0 width=16.0 height=16.0 center_x=324.0 center_y=246.0)
+                Unknown name="Name, row 3" rect=(x=344.0 y=228.0 width=364.0 height=36.0 center_x=526.0 center_y=246.0)
+                GenericContainer rect=<none>
+                  Button name="Open details for etcd-kind-control-plane" rect=(x=356.0 y=238.0 width=142.5 height=16.0 center_x=427.2 center_y=246.0)
+                Unknown name="Ready, row 3" rect=(x=708.0 y=228.0 width=72.0 height=36.0 center_x=744.0 center_y=246.0)
+                GenericContainer rect=<none>
+                  Label value="1/1" rect=(x=752.2 y=236.0 width=15.8 height=20.0 center_x=760.1 center_y=246.0)
+                    TextRun value="1/1" rect=(x=752.2 y=236.0 width=15.8 height=20.0 center_x=760.1 center_y=246.0)
+                Unknown name="Containers, row 3" rect=(x=780.0 y=228.0 width=100.0 height=36.0 center_x=830.0 center_y=246.0)
+                GenericContainer rect=<none>
+                  Label value="No container statuses reported yet" rect=(x=792.0 y=236.0 width=14.3 height=20.0 center_x=799.2 center_y=246.0)
+                    TextRun value="—" rect=(x=792.0 y=236.0 width=14.3 height=20.0 center_x=799.2 center_y=246.0)
+                Unknown name="Status, row 3" rect=(x=880.0 y=228.0 width=116.0 height=36.0 center_x=938.0 center_y=246.0)
+                GenericContainer rect=<none>
+                  Label value="Running" rect=(x=892.0 y=236.0 width=61.8 height=20.0 center_x=922.9 center_y=246.0)
+                    TextRun value="Running" rect=(x=906.0 y=236.0 width=47.8 height=20.0 center_x=929.9 center_y=246.0)
+                Unknown name="Restarts, row 3" rect=(x=996.0 y=228.0 width=84.0 height=36.0 center_x=1038.0 center_y=246.0)
+                GenericContainer rect=<none>
+                  Label value="0" rect=(x=1059.7 y=236.0 width=8.3 height=20.0 center_x=1063.8 center_y=246.0)
+                    TextRun value="0" rect=(x=1059.7 y=236.0 width=8.3 height=20.0 center_x=1063.8 center_y=246.0)
+                Unknown name="CPU, row 3" rect=(x=1080.0 y=228.0 width=76.0 height=36.0 center_x=1118.0 center_y=246.0)
+                GenericContainer rect=<none>
+                  Label value="No metrics reported for this resource" rect=(x=1129.7 y=236.0 width=14.3 height=20.0 center_x=1136.8 center_y=246.0)
+                    TextRun value="—" rect=(x=1129.7 y=236.0 width=14.3 height=20.0 center_x=1136.8 center_y=246.0)
+                Unknown name="Memory, row 3" rect=(x=1156.0 y=228.0 width=84.0 height=36.0 center_x=1198.0 center_y=246.0)
+                GenericContainer rect=<none>
+                  Label value="No metrics reported for this resource" rect=(x=1213.7 y=236.0 width=14.3 height=20.0 center_x=1220.8 center_y=246.0)
+                    TextRun value="—" rect=(x=1213.7 y=236.0 width=14.3 height=20.0 center_x=1220.8 center_y=246.0)
+                Unknown name="Node, row 3" rect=(x=1240.0 y=228.0 width=156.0 height=36.0 center_x=1318.0 center_y=246.0)
+                GenericContainer rect=<none>
+                  Label value="Not set" rect=(x=1252.0 y=236.0 width=14.3 height=20.0 center_x=1259.2 center_y=246.0)
+                    TextRun value="—" rect=(x=1252.0 y=236.0 width=14.3 height=20.0 center_x=1259.2 center_y=246.0)
+                Unknown name="Age, row 3" rect=(x=1396.0 y=228.0 width=64.0 height=36.0 center_x=1428.0 center_y=246.0)
+                GenericContainer rect=<none>
+                  Label value="220d" rect=(x=1417.5 y=236.0 width=30.5 height=20.0 center_x=1432.8 center_y=246.0)
+                    TextRun value="220d" rect=(x=1417.5 y=236.0 width=30.5 height=20.0 center_x=1432.8 center_y=246.0)
+                Unknown name="actions, row 3" rect=(x=1460.0 y=228.0 width=48.0 height=36.0 center_x=1484.0 center_y=246.0)
+                GenericContainer rect=<none>
+                  Button name="More actions for etcd-kind-control-plane" rect=(x=1470.0 y=232.0 width=28.0 height=28.0 center_x=1484.0 center_y=246.0)
+                GenericContainer rect=<none>
+                  CheckBox name="Select row 4" state=[toggled=False] rect=(x=316.0 y=278.0 width=16.0 height=16.0 center_x=324.0 center_y=286.0)
+                Unknown name="Name, row 4" rect=(x=344.0 y=268.0 width=364.0 height=36.0 center_x=526.0 center_y=286.0)
+                GenericContainer rect=<none>
+                  Button name="Open details for kindnet-9qrlh" rect=(x=356.0 y=278.0 width=80.2 height=16.0 center_x=396.1 center_y=286.0)
+                Unknown name="Ready, row 4" rect=(x=708.0 y=268.0 width=72.0 height=36.0 center_x=744.0 center_y=286.0)
+                GenericContainer rect=<none>
+                  Label value="1/1" rect=(x=752.2 y=276.0 width=15.8 height=20.0 center_x=760.1 center_y=286.0)
+                    TextRun value="1/1" rect=(x=752.2 y=276.0 width=15.8 height=20.0 center_x=760.1 center_y=286.0)
+                Unknown name="Containers, row 4" rect=(x=780.0 y=268.0 width=100.0 height=36.0 center_x=830.0 center_y=286.0)
+                GenericContainer rect=<none>
+                  Label value="No container statuses reported yet" rect=(x=792.0 y=276.0 width=14.3 height=20.0 center_x=799.2 center_y=286.0)
+                    TextRun value="—" rect=(x=792.0 y=276.0 width=14.3 height=20.0 center_x=799.2 center_y=286.0)
+                Unknown name="Status, row 4" rect=(x=880.0 y=268.0 width=116.0 height=36.0 center_x=938.0 center_y=286.0)
+                GenericContainer rect=<none>
+                  Label value="Running" rect=(x=892.0 y=276.0 width=61.8 height=20.0 center_x=922.9 center_y=286.0)
+                    TextRun value="Running" rect=(x=906.0 y=276.0 width=47.8 height=20.0 center_x=929.9 center_y=286.0)
+                Unknown name="Restarts, row 4" rect=(x=996.0 y=268.0 width=84.0 height=36.0 center_x=1038.0 center_y=286.0)
+                GenericContainer rect=<none>
+                  Label value="0" rect=(x=1059.7 y=276.0 width=8.3 height=20.0 center_x=1063.8 center_y=286.0)
+                    TextRun value="0" rect=(x=1059.7 y=276.0 width=8.3 height=20.0 center_x=1063.8 center_y=286.0)
+                Unknown name="CPU, row 4" rect=(x=1080.0 y=268.0 width=76.0 height=36.0 center_x=1118.0 center_y=286.0)
+                GenericContainer rect=<none>
+                  Label value="No metrics reported for this resource" rect=(x=1129.7 y=276.0 width=14.3 height=20.0 center_x=1136.8 center_y=286.0)
+                    TextRun value="—" rect=(x=1129.7 y=276.0 width=14.3 height=20.0 center_x=1136.8 center_y=286.0)
+                Unknown name="Memory, row 4" rect=(x=1156.0 y=268.0 width=84.0 height=36.0 center_x=1198.0 center_y=286.0)
+                GenericContainer rect=<none>
+                  Label value="No metrics reported for this resource" rect=(x=1213.7 y=276.0 width=14.3 height=20.0 center_x=1220.8 center_y=286.0)
+                    TextRun value="—" rect=(x=1213.7 y=276.0 width=14.3 height=20.0 center_x=1220.8 center_y=286.0)
+                Unknown name="Node, row 4" rect=(x=1240.0 y=268.0 width=156.0 height=36.0 center_x=1318.0 center_y=286.0)
+                GenericContainer rect=<none>
+                  Label value="Not set" rect=(x=1252.0 y=276.0 width=14.3 height=20.0 center_x=1259.2 center_y=286.0)
+                    TextRun value="—" rect=(x=1252.0 y=276.0 width=14.3 height=20.0 center_x=1259.2 center_y=286.0)
+                Unknown name="Age, row 4" rect=(x=1396.0 y=268.0 width=64.0 height=36.0 center_x=1428.0 center_y=286.0)
+                GenericContainer rect=<none>
+                  Label value="220d" rect=(x=1417.5 y=276.0 width=30.5 height=20.0 center_x=1432.8 center_y=286.0)
+                    TextRun value="220d" rect=(x=1417.5 y=276.0 width=30.5 height=20.0 center_x=1432.8 center_y=286.0)
+                Unknown name="actions, row 4" rect=(x=1460.0 y=268.0 width=48.0 height=36.0 center_x=1484.0 center_y=286.0)
+                GenericContainer rect=<none>
+                  Button name="More actions for kindnet-9qrlh" rect=(x=1470.0 y=272.0 width=28.0 height=28.0 center_x=1484.0 center_y=286.0)
+                GenericContainer rect=<none>
+                  CheckBox name="Select row 5" state=[toggled=False] rect=(x=316.0 y=318.0 width=16.0 height=16.0 center_x=324.0 center_y=326.0)
+                Unknown name="Name, row 5" rect=(x=344.0 y=308.0 width=364.0 height=36.0 center_x=526.0 center_y=326.0)
+                GenericContainer rect=<none>
+                  Button name="Open details for kube-apiserver-kind-control-plane" rect=(x=356.0 y=318.0 width=204.3 height=16.0 center_x=458.2 center_y=326.0)
+                Unknown name="Ready, row 5" rect=(x=708.0 y=308.0 width=72.0 height=36.0 center_x=744.0 center_y=326.0)
+                GenericContainer rect=<none>
+                  Label value="1/1" rect=(x=752.2 y=316.0 width=15.8 height=20.0 center_x=760.1 center_y=326.0)
+                    TextRun value="1/1" rect=(x=752.2 y=316.0 width=15.8 height=20.0 center_x=760.1 center_y=326.0)
+                Unknown name="Containers, row 5" rect=(x=780.0 y=308.0 width=100.0 height=36.0 center_x=830.0 center_y=326.0)
+                GenericContainer rect=<none>
+                  Label value="No container statuses reported yet" rect=(x=792.0 y=316.0 width=14.3 height=20.0 center_x=799.2 center_y=326.0)
+                    TextRun value="—" rect=(x=792.0 y=316.0 width=14.3 height=20.0 center_x=799.2 center_y=326.0)
+                Unknown name="Status, row 5" rect=(x=880.0 y=308.0 width=116.0 height=36.0 center_x=938.0 center_y=326.0)
+                GenericContainer rect=<none>
+                  Label value="Running" rect=(x=892.0 y=316.0 width=61.8 height=20.0 center_x=922.9 center_y=326.0)
+                    TextRun value="Running" rect=(x=906.0 y=316.0 width=47.8 height=20.0 center_x=929.9 center_y=326.0)
+                Unknown name="Restarts, row 5" rect=(x=996.0 y=308.0 width=84.0 height=36.0 center_x=1038.0 center_y=326.0)
+                GenericContainer rect=<none>
+                  Label value="0" rect=(x=1059.7 y=316.0 width=8.3 height=20.0 center_x=1063.8 center_y=326.0)
+                    TextRun value="0" rect=(x=1059.7 y=316.0 width=8.3 height=20.0 center_x=1063.8 center_y=326.0)
+                Unknown name="CPU, row 5" rect=(x=1080.0 y=308.0 width=76.0 height=36.0 center_x=1118.0 center_y=326.0)
+                GenericContainer rect=<none>
+                  Label value="No metrics reported for this resource" rect=(x=1129.7 y=316.0 width=14.3 height=20.0 center_x=1136.8 center_y=326.0)
+                    TextRun value="—" rect=(x=1129.7 y=316.0 width=14.3 height=20.0 center_x=1136.8 center_y=326.0)
+                Unknown name="Memory, row 5" rect=(x=1156.0 y=308.0 width=84.0 height=36.0 center_x=1198.0 center_y=326.0)
+                GenericContainer rect=<none>
+                  Label value="No metrics reported for this resource" rect=(x=1213.7 y=316.0 width=14.3 height=20.0 center_x=1220.8 center_y=326.0)
+                    TextRun value="—" rect=(x=1213.7 y=316.0 width=14.3 height=20.0 center_x=1220.8 center_y=326.0)
+                Unknown name="Node, row 5" rect=(x=1240.0 y=308.0 width=156.0 height=36.0 center_x=1318.0 center_y=326.0)
+                GenericContainer rect=<none>
+                  Label value="Not set" rect=(x=1252.0 y=316.0 width=14.3 height=20.0 center_x=1259.2 center_y=326.0)
+                    TextRun value="—" rect=(x=1252.0 y=316.0 width=14.3 height=20.0 center_x=1259.2 center_y=326.0)
+                Unknown name="Age, row 5" rect=(x=1396.0 y=308.0 width=64.0 height=36.0 center_x=1428.0 center_y=326.0)
+                GenericContainer rect=<none>
+                  Label value="220d" rect=(x=1417.5 y=316.0 width=30.5 height=20.0 center_x=1432.8 center_y=326.0)
+                    TextRun value="220d" rect=(x=1417.5 y=316.0 width=30.5 height=20.0 center_x=1432.8 center_y=326.0)
+                Unknown name="actions, row 5" rect=(x=1460.0 y=308.0 width=48.0 height=36.0 center_x=1484.0 center_y=326.0)
+                GenericContainer rect=<none>
+                  Button name="More actions for kube-apiserver-kind-control-plane" rect=(x=1470.0 y=312.0 width=28.0 height=28.0 center_x=1484.0 center_y=326.0)
+                GenericContainer rect=<none>
+                  CheckBox name="Select row 6" state=[toggled=False] rect=(x=316.0 y=358.0 width=16.0 height=16.0 center_x=324.0 center_y=366.0)
+                Unknown name="Name, row 6" rect=(x=344.0 y=348.0 width=364.0 height=36.0 center_x=526.0 center_y=366.0)
+                GenericContainer rect=<none>
+                  Button name="Open details for kube-controller-manager-kind-control-plane" rect=(x=356.0 y=358.0 width=264.3 height=16.0 center_x=488.2 center_y=366.0)
+                Unknown name="Ready, row 6" rect=(x=708.0 y=348.0 width=72.0 height=36.0 center_x=744.0 center_y=366.0)
+                GenericContainer rect=<none>
+                  Label value="1/1" rect=(x=752.2 y=356.0 width=15.8 height=20.0 center_x=760.1 center_y=366.0)
+                    TextRun value="1/1" rect=(x=752.2 y=356.0 width=15.8 height=20.0 center_x=760.1 center_y=366.0)
+                Unknown name="Containers, row 6" rect=(x=780.0 y=348.0 width=100.0 height=36.0 center_x=830.0 center_y=366.0)
+                GenericContainer rect=<none>
+                  Label value="No container statuses reported yet" rect=(x=792.0 y=356.0 width=14.3 height=20.0 center_x=799.2 center_y=366.0)
+                    TextRun value="—" rect=(x=792.0 y=356.0 width=14.3 height=20.0 center_x=799.2 center_y=366.0)
+                Unknown name="Status, row 6" rect=(x=880.0 y=348.0 width=116.0 height=36.0 center_x=938.0 center_y=366.0)
+                GenericContainer rect=<none>
+                  Label value="Running" rect=(x=892.0 y=356.0 width=61.8 height=20.0 center_x=922.9 center_y=366.0)
+                    TextRun value="Running" rect=(x=906.0 y=356.0 width=47.8 height=20.0 center_x=929.9 center_y=366.0)
+                Unknown name="Restarts, row 6" rect=(x=996.0 y=348.0 width=84.0 height=36.0 center_x=1038.0 center_y=366.0)
+                GenericContainer rect=<none>
+                  Label value="0" rect=(x=1059.7 y=356.0 width=8.3 height=20.0 center_x=1063.8 center_y=366.0)
+                    TextRun value="0" rect=(x=1059.7 y=356.0 width=8.3 height=20.0 center_x=1063.8 center_y=366.0)
+                Unknown name="CPU, row 6" rect=(x=1080.0 y=348.0 width=76.0 height=36.0 center_x=1118.0 center_y=366.0)
+                GenericContainer rect=<none>
+                  Label value="No metrics reported for this resource" rect=(x=1129.7 y=356.0 width=14.3 height=20.0 center_x=1136.8 center_y=366.0)
+                    TextRun value="—" rect=(x=1129.7 y=356.0 width=14.3 height=20.0 center_x=1136.8 center_y=366.0)
+                Unknown name="Memory, row 6" rect=(x=1156.0 y=348.0 width=84.0 height=36.0 center_x=1198.0 center_y=366.0)
+                GenericContainer rect=<none>
+                  Label value="No metrics reported for this resource" rect=(x=1213.7 y=356.0 width=14.3 height=20.0 center_x=1220.8 center_y=366.0)
+                    TextRun value="—" rect=(x=1213.7 y=356.0 width=14.3 height=20.0 center_x=1220.8 center_y=366.0)
+                Unknown name="Node, row 6" rect=(x=1240.0 y=348.0 width=156.0 height=36.0 center_x=1318.0 center_y=366.0)
+                GenericContainer rect=<none>
+                  Label value="Not set" rect=(x=1252.0 y=356.0 width=14.3 height=20.0 center_x=1259.2 center_y=366.0)
+                    TextRun value="—" rect=(x=1252.0 y=356.0 width=14.3 height=20.0 center_x=1259.2 center_y=366.0)
+                Unknown name="Age, row 6" rect=(x=1396.0 y=348.0 width=64.0 height=36.0 center_x=1428.0 center_y=366.0)
+                GenericContainer rect=<none>
+                  Label value="220d" rect=(x=1417.5 y=356.0 width=30.5 height=20.0 center_x=1432.8 center_y=366.0)
+                    TextRun value="220d" rect=(x=1417.5 y=356.0 width=30.5 height=20.0 center_x=1432.8 center_y=366.0)
+                Unknown name="actions, row 6" rect=(x=1460.0 y=348.0 width=48.0 height=36.0 center_x=1484.0 center_y=366.0)
+                GenericContainer rect=<none>
+                  Button name="More actions for kube-controller-manager-kind-control-plane" rect=(x=1470.0 y=352.0 width=28.0 height=28.0 center_x=1484.0 center_y=366.0)
+                GenericContainer rect=<none>
+                  CheckBox name="Select row 7" state=[toggled=False] rect=(x=316.0 y=398.0 width=16.0 height=16.0 center_x=324.0 center_y=406.0)
+                Unknown name="Name, row 7" rect=(x=344.0 y=388.0 width=364.0 height=36.0 center_x=526.0 center_y=406.0)
+                GenericContainer rect=<none>
+                  Button name="Open details for kube-proxy-v86gd" rect=(x=356.0 y=398.0 width=111.2 height=16.0 center_x=411.6 center_y=406.0)
+                Unknown name="Ready, row 7" rect=(x=708.0 y=388.0 width=72.0 height=36.0 center_x=744.0 center_y=406.0)
+                GenericContainer rect=<none>
+                  Label value="1/1" rect=(x=752.2 y=396.0 width=15.8 height=20.0 center_x=760.1 center_y=406.0)
+                    TextRun value="1/1" rect=(x=752.2 y=396.0 width=15.8 height=20.0 center_x=760.1 center_y=406.0)
+                Unknown name="Containers, row 7" rect=(x=780.0 y=388.0 width=100.0 height=36.0 center_x=830.0 center_y=406.0)
+                GenericContainer rect=<none>
+                  Label value="No container statuses reported yet" rect=(x=792.0 y=396.0 width=14.3 height=20.0 center_x=799.2 center_y=406.0)
+                    TextRun value="—" rect=(x=792.0 y=396.0 width=14.3 height=20.0 center_x=799.2 center_y=406.0)
+                Unknown name="Status, row 7" rect=(x=880.0 y=388.0 width=116.0 height=36.0 center_x=938.0 center_y=406.0)
+                GenericContainer rect=<none>
+                  Label value="Running" rect=(x=892.0 y=396.0 width=61.8 height=20.0 center_x=922.9 center_y=406.0)
+                    TextRun value="Running" rect=(x=906.0 y=396.0 width=47.8 height=20.0 center_x=929.9 center_y=406.0)
+                Unknown name="Restarts, row 7" rect=(x=996.0 y=388.0 width=84.0 height=36.0 center_x=1038.0 center_y=406.0)
+                GenericContainer rect=<none>
+                  Label value="0" rect=(x=1059.7 y=396.0 width=8.3 height=20.0 center_x=1063.8 center_y=406.0)
+                    TextRun value="0" rect=(x=1059.7 y=396.0 width=8.3 height=20.0 center_x=1063.8 center_y=406.0)
+                Unknown name="CPU, row 7" rect=(x=1080.0 y=388.0 width=76.0 height=36.0 center_x=1118.0 center_y=406.0)
+                GenericContainer rect=<none>
+                  Label value="No metrics reported for this resource" rect=(x=1129.7 y=396.0 width=14.3 height=20.0 center_x=1136.8 center_y=406.0)
+                    TextRun value="—" rect=(x=1129.7 y=396.0 width=14.3 height=20.0 center_x=1136.8 center_y=406.0)
+                Unknown name="Memory, row 7" rect=(x=1156.0 y=388.0 width=84.0 height=36.0 center_x=1198.0 center_y=406.0)
+                GenericContainer rect=<none>
+                  Label value="No metrics reported for this resource" rect=(x=1213.7 y=396.0 width=14.3 height=20.0 center_x=1220.8 center_y=406.0)
+                    TextRun value="—" rect=(x=1213.7 y=396.0 width=14.3 height=20.0 center_x=1220.8 center_y=406.0)
+                Unknown name="Node, row 7" rect=(x=1240.0 y=388.0 width=156.0 height=36.0 center_x=1318.0 center_y=406.0)
+                GenericContainer rect=<none>
+                  Label value="Not set" rect=(x=1252.0 y=396.0 width=14.3 height=20.0 center_x=1259.2 center_y=406.0)
+                    TextRun value="—" rect=(x=1252.0 y=396.0 width=14.3 height=20.0 center_x=1259.2 center_y=406.0)
+                Unknown name="Age, row 7" rect=(x=1396.0 y=388.0 width=64.0 height=36.0 center_x=1428.0 center_y=406.0)
+                GenericContainer rect=<none>
+                  Label value="220d" rect=(x=1417.5 y=396.0 width=30.5 height=20.0 center_x=1432.8 center_y=406.0)
+                    TextRun value="220d" rect=(x=1417.5 y=396.0 width=30.5 height=20.0 center_x=1432.8 center_y=406.0)
+                Unknown name="actions, row 7" rect=(x=1460.0 y=388.0 width=48.0 height=36.0 center_x=1484.0 center_y=406.0)
+                GenericContainer rect=<none>
+                  Button name="More actions for kube-proxy-v86gd" rect=(x=1470.0 y=392.0 width=28.0 height=28.0 center_x=1484.0 center_y=406.0)
+                GenericContainer rect=<none>
+                  CheckBox name="Select row 8" state=[toggled=False] rect=(x=316.0 y=438.0 width=16.0 height=16.0 center_x=324.0 center_y=446.0)
+                Unknown name="Name, row 8" rect=(x=344.0 y=428.0 width=364.0 height=36.0 center_x=526.0 center_y=446.0)
+                GenericContainer rect=<none>
+                  Button name="Open details for kube-scheduler-kind-control-plane" rect=(x=356.0 y=438.0 width=207.4 height=16.0 center_x=459.7 center_y=446.0)
+                Unknown name="Ready, row 8" rect=(x=708.0 y=428.0 width=72.0 height=36.0 center_x=744.0 center_y=446.0)
+                GenericContainer rect=<none>
+                  Label value="1/1" rect=(x=752.2 y=436.0 width=15.8 height=20.0 center_x=760.1 center_y=446.0)
+                    TextRun value="1/1" rect=(x=752.2 y=436.0 width=15.8 height=20.0 center_x=760.1 center_y=446.0)
+                Unknown name="Containers, row 8" rect=(x=780.0 y=428.0 width=100.0 height=36.0 center_x=830.0 center_y=446.0)
+                GenericContainer rect=<none>
+                  Label value="No container statuses reported yet" rect=(x=792.0 y=436.0 width=14.3 height=20.0 center_x=799.2 center_y=446.0)
+                    TextRun value="—" rect=(x=792.0 y=436.0 width=14.3 height=20.0 center_x=799.2 center_y=446.0)
+                Unknown name="Status, row 8" rect=(x=880.0 y=428.0 width=116.0 height=36.0 center_x=938.0 center_y=446.0)
+                GenericContainer rect=<none>
+                  Label value="Running" rect=(x=892.0 y=436.0 width=61.8 height=20.0 center_x=922.9 center_y=446.0)
+                    TextRun value="Running" rect=(x=906.0 y=436.0 width=47.8 height=20.0 center_x=929.9 center_y=446.0)
+                Unknown name="Restarts, row 8" rect=(x=996.0 y=428.0 width=84.0 height=36.0 center_x=1038.0 center_y=446.0)
+                GenericContainer rect=<none>
+                  Label value="0" rect=(x=1059.7 y=436.0 width=8.3 height=20.0 center_x=1063.8 center_y=446.0)
+                    TextRun value="0" rect=(x=1059.7 y=436.0 width=8.3 height=20.0 center_x=1063.8 center_y=446.0)
+                Unknown name="CPU, row 8" rect=(x=1080.0 y=428.0 width=76.0 height=36.0 center_x=1118.0 center_y=446.0)
+                GenericContainer rect=<none>
+                  Label value="No metrics reported for this resource" rect=(x=1129.7 y=436.0 width=14.3 height=20.0 center_x=1136.8 center_y=446.0)
+                    TextRun value="—" rect=(x=1129.7 y=436.0 width=14.3 height=20.0 center_x=1136.8 center_y=446.0)
+                Unknown name="Memory, row 8" rect=(x=1156.0 y=428.0 width=84.0 height=36.0 center_x=1198.0 center_y=446.0)
+                GenericContainer rect=<none>
+                  Label value="No metrics reported for this resource" rect=(x=1213.7 y=436.0 width=14.3 height=20.0 center_x=1220.8 center_y=446.0)
+                    TextRun value="—" rect=(x=1213.7 y=436.0 width=14.3 height=20.0 center_x=1220.8 center_y=446.0)
+                Unknown name="Node, row 8" rect=(x=1240.0 y=428.0 width=156.0 height=36.0 center_x=1318.0 center_y=446.0)
+                GenericContainer rect=<none>
+                  Label value="Not set" rect=(x=1252.0 y=436.0 width=14.3 height=20.0 center_x=1259.2 center_y=446.0)
+                    TextRun value="—" rect=(x=1252.0 y=436.0 width=14.3 height=20.0 center_x=1259.2 center_y=446.0)
+                Unknown name="Age, row 8" rect=(x=1396.0 y=428.0 width=64.0 height=36.0 center_x=1428.0 center_y=446.0)
+                GenericContainer rect=<none>
+                  Label value="220d" rect=(x=1417.5 y=436.0 width=30.5 height=20.0 center_x=1432.8 center_y=446.0)
+                    TextRun value="220d" rect=(x=1417.5 y=436.0 width=30.5 height=20.0 center_x=1432.8 center_y=446.0)
+                Unknown name="actions, row 8" rect=(x=1460.0 y=428.0 width=48.0 height=36.0 center_x=1484.0 center_y=446.0)
+                GenericContainer rect=<none>
+                  Button name="More actions for kube-scheduler-kind-control-plane" rect=(x=1470.0 y=432.0 width=28.0 height=28.0 center_x=1484.0 center_y=446.0)
+        Button name="0 problems" rect=(x=1514.0 y=92.0 width=6.0 height=920.0 center_x=1517.0 center_y=552.0)
+  GenericContainer rect=<none>
+  GenericContainer rect=<none>
+    Unknown name="Dismiss blade" rect=(x=0.0 y=0.0 width=808.0 height=1024.0 center_x=404.0 center_y=512.0)
+  GenericContainer rect=<none>
+    Unknown name="Dismiss blade" rect=(x=808.0 y=1016.0 width=720.0 height=8.0 center_x=1168.0 center_y=1020.0)
+  GenericContainer rect=<none>
+    Unknown name="Dismiss blade" rect=(x=1528.0 y=0.0 width=8.0 height=1024.0 center_x=1532.0 center_y=512.0)
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Button name="Back" state=[disabled] rect=(x=820.0 y=21.5 width=28.0 height=28.0 center_x=834.0 center_y=35.5)
+          Button name="Forward" state=[disabled] rect=(x=850.0 y=21.5 width=28.0 height=28.0 center_x=864.0 center_y=35.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Button name="Mark all read" rect=(x=1366.8 y=21.5 width=113.2 height=28.0 center_x=1423.4 center_y=35.5)
+          Label value="Notifications" rect=(x=903.0 y=24.0 width=455.8 height=24.0 center_x=1130.9 center_y=36.0)
+            TextRun value="Notifications" rect=(x=903.0 y=24.0 width=101.3 height=24.0 center_x=953.6 center_y=36.0)
+        GenericContainer rect=<none>
+          Button name="Close blade" rect=(x=1488.0 y=21.5 width=28.0 height=28.0 center_x=1502.0 center_y=35.5)
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Group name="Show" rect=<none>
+                  Button name="All" state=[toggled=True] rect=(x=1395.9 y=86.0 width=33.7 height=24.0 center_x=1412.8 center_y=98.0)
+                  Button name="Problems" state=[toggled=False] rect=(x=1431.6 y=86.0 width=70.4 height=24.0 center_x=1466.8 center_y=98.0)
+                GenericContainer rect=<none>
+                  Label value="Outcomes of actions from this session." rect=(x=832.0 y=88.0 width=244.1 height=20.0 center_x=954.0 center_y=98.0)
+                    TextRun value="Outcomes of actions from this session." rect=(x=832.0 y=88.0 width=244.1 height=20.0 center_x=954.0 center_y=98.0)
+              Label value="TODAY" rect=(x=832.0 y=128.0 width=36.4 height=16.0 center_x=850.2 center_y=136.0)
+                TextRun value="TODAY" rect=(x=832.0 y=128.0 width=35.3 height=16.0 center_x=849.7 center_y=136.0)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Label value="Couldn’t run CronJob" rect=(x=888.0 y=166.0 width=127.0 height=20.0 center_x=951.5 center_y=176.0)
+                    TextRun value="Couldn’t run CronJob" rect=(x=888.0 y=166.0 width=127.0 height=20.0 center_x=951.5 center_y=176.0)
+                GenericContainer rect=<none>
+                  Label value="Just now" rect=(x=1439.1 y=168.0 width=48.9 height=16.0 center_x=1463.6 center_y=176.0)
+                    TextRun value="Just now" rect=(x=1439.1 y=168.0 width=48.9 height=16.0 center_x=1463.6 center_y=176.0)
+                GenericContainer rect=<none>
+                  Label value="nightly-report · kube-system · kind-kind" rect=(x=888.0 y=186.0 width=212.4 height=16.0 center_x=994.2 center_y=194.0)
+                    TextRun value="nightly-report · kube-system · kind-kind" rect=(x=888.0 y=186.0 width=212.4 height=16.0 center_x=994.2 center_y=194.0)
+                GenericContainer rect=<none>
+                  Label value="Forbidden: cannot create jobs" rect=(x=888.0 y=206.0 width=161.1 height=16.0 center_x=968.5 center_y=214.0)
+                    TextRun value="Forbidden: cannot create jobs" rect=(x=888.0 y=206.0 width=161.1 height=16.0 center_x=968.5 center_y=214.0)
+                GenericContainer rect=<none>
+                  Label value="CronJob started" rect=(x=888.0 y=251.0 width=96.9 height=20.0 center_x=936.4 center_y=261.0)
+                    TextRun value="CronJob started" rect=(x=888.0 y=251.0 width=96.9 height=20.0 center_x=936.4 center_y=261.0)
+                GenericContainer rect=<none>
+                  Label value="Just now" rect=(x=1439.1 y=253.0 width=48.9 height=16.0 center_x=1463.6 center_y=261.0)
+                    TextRun value="Just now" rect=(x=1439.1 y=253.0 width=48.9 height=16.0 center_x=1463.6 center_y=261.0)
+                GenericContainer rect=<none>
+                  Label value="nightly-report · kube-system · kind-kind" rect=(x=888.0 y=271.0 width=212.4 height=16.0 center_x=994.2 center_y=279.0)
+                    TextRun value="nightly-report · kube-system · kind-kind" rect=(x=888.0 y=271.0 width=212.4 height=16.0 center_x=994.2 center_y=279.0)
+                GenericContainer rect=<none>
+                  Label value="Created Job nightly-report-manual-x7k2p" rect=(x=888.0 y=291.0 width=224.8 height=16.0 center_x=1000.4 center_y=299.0)
+                    TextRun value="Created Job nightly-report-manual-x7k2p" rect=(x=888.0 y=291.0 width=224.8 height=16.0 center_x=1000.4 center_y=299.0)
+                GenericContainer rect=<none>
+                  Label value="Bulk delete finished with 1 failure" rect=(x=888.0 y=336.0 width=194.1 height=20.0 center_x=985.0 center_y=346.0)
+                    TextRun value="Bulk delete finished with 1 failure" rect=(x=888.0 y=336.0 width=194.1 height=20.0 center_x=985.0 center_y=346.0)
+                GenericContainer rect=<none>
+                  Label value="Just now" rect=(x=1439.1 y=338.0 width=48.9 height=16.0 center_x=1463.6 center_y=346.0)
+                    TextRun value="Just now" rect=(x=1439.1 y=338.0 width=48.9 height=16.0 center_x=1463.6 center_y=346.0)
+                GenericContainer rect=<none>
+                  Label value="3 Pods · kind-kind" rect=(x=888.0 y=356.0 width=94.6 height=16.0 center_x=935.3 center_y=364.0)
+                    TextRun value="3 Pods · kind-kind" rect=(x=888.0 y=356.0 width=94.6 height=16.0 center_x=935.3 center_y=364.0)
+                GenericContainer rect=<none>
+                  Label value="2 deleted, 1 failed" rect=(x=888.0 y=376.0 width=93.7 height=16.0 center_x=934.8 center_y=384.0)
+                    TextRun value="2 deleted, 1 failed" rect=(x=888.0 y=376.0 width=93.7 height=16.0 center_x=934.8 center_y=384.0)
+                GenericContainer rect=<none>
+                  Label value="Deployment scaled to 4 replicas" rect=(x=888.0 y=421.0 width=189.4 height=20.0 center_x=982.7 center_y=431.0)
+                    TextRun value="Deployment scaled to 4 replicas" rect=(x=888.0 y=421.0 width=189.4 height=20.0 center_x=982.7 center_y=431.0)
+                GenericContainer rect=<none>
+                  Label value="Just now" rect=(x=1439.1 y=423.0 width=48.9 height=16.0 center_x=1463.6 center_y=431.0)
+                    TextRun value="Just now" rect=(x=1439.1 y=423.0 width=48.9 height=16.0 center_x=1463.6 center_y=431.0)
+                GenericContainer rect=<none>
+                  Label value="coredns · kube-system · kind-kind" rect=(x=888.0 y=441.0 width=180.9 height=16.0 center_x=978.4 center_y=449.0)
+                    TextRun value="coredns · kube-system · kind-kind" rect=(x=888.0 y=441.0 width=180.9 height=16.0 center_x=978.4 center_y=449.0)

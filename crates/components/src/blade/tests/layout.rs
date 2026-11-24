@@ -81,8 +81,9 @@ fn flatten<'a>(shape: &'a egui::Shape, out: &mut Vec<&'a egui::Shape>) {
 /// Accessibility bounds ignore visual transforms, so the painted shapes are the
 /// only observable record of where a history blade is drawn.
 fn drawn_blade_frames(harness: &Harness<'_>) -> Vec<Rect> {
-    let min_height =
-        height(harness.ctx.content_rect()) * HISTORY_SCALES[HISTORY_SCALES.len() - 1] - 1.0;
+    let min_height = height(harness.ctx.content_rect())
+        - 2.0 * size::BLADE_PEEK_STEP * HISTORY_PEEKS as f32
+        - 1.0;
     let tokens = harness.ctx.tokens();
     let mut frames = Vec::new();
     for clipped in &harness.output().shapes {
@@ -90,7 +91,7 @@ fn drawn_blade_frames(harness: &Harness<'_>) -> Vec<Rect> {
         flatten(&clipped.shape, &mut flat);
         for shape in flat {
             if let egui::Shape::Rect(rect) = shape
-                && rect.fill == tokens.surface.panel
+                && (rect.fill == tokens.surface.panel || rect.fill == tokens.surface.sunken)
                 && rect.rect.width() > 100.0
                 && rect.rect.height() >= min_height
             {

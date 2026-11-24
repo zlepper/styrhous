@@ -8,6 +8,7 @@ use components::icons::Icon;
 pub(super) fn status_tile(outcome: OperationOutcome) -> Tile {
     let (tone, icon) = match outcome {
         OperationOutcome::Success => (Tone::Success, Icon::CheckCircle),
+        OperationOutcome::Warning => (Tone::Warning, Icon::ExclamationTriangle),
         OperationOutcome::Failure => (Tone::Danger, Icon::XCircle),
     };
     Tile::new(icon).tone(tone)

@@ -214,6 +214,8 @@ icons! {
         Azure => "azure";
         /// The bundled Tailscale brand mark for Tailscale provider surfaces.
         Tailscale => "tailscale";
+        /// Open lock, for uncordoning a Node.
+        LockOpen => "lock-open";
     }
 }
 

@@ -6,52 +6,6 @@ use crate::ui::resource_table_settings::ResourceTableSettingsTarget;
 use crate::ui::table_preferences::PersistedResourceTablePreferences;
 
 #[allow(clippy::too_many_arguments)]
-pub(super) fn show_managed_resources_for(
-    ui: &mut egui::Ui,
-    api_resource: &crate::api_resource::ApiResource,
-    resource_uid: &str,
-    managed_resources: &[ManagedResource],
-    managed_resources_error: Option<&str>,
-    pending_action: &mut Option<ResourceAction>,
-    table_preferences: &mut PersistedResourceTablePreferences,
-    column_settings: &mut Option<ResourceTableSettingsTarget>,
-) {
-    let theme = ui.tokens();
-    let table_kinds = managed_resource_table_kinds(api_resource);
-    if table_kinds.is_empty() {
-        return;
-    }
-
-    for (index, (title, kind)) in table_kinds.iter().enumerate() {
-        if index > 0 {
-            ui.add_space(16.0);
-        }
-        let rows = managed_resource_rows(managed_resources, kind);
-        section_header(ui, title, Some(format!("{} resources", rows.len())));
-        show_managed_resource_table(
-            ui,
-            api_resource,
-            resource_uid,
-            kind,
-            &rows,
-            api_resource.is_node(),
-            pending_action,
-            table_preferences,
-            column_settings,
-        );
-        if rows.is_empty() {
-            ui.add_space(8.0);
-            ui.label(egui::RichText::new(format!("No {title} found.")).color(theme.text.muted));
-        }
-    }
-
-    if let Some(error) = managed_resources_error {
-        ui.add_space(8.0);
-        error_card(ui, "Unable to load all managed resources", error);
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
 pub(super) fn show_managed_resource_table(
     ui: &mut egui::Ui,
     detail_api_resource: &crate::api_resource::ApiResource,

@@ -112,3 +112,31 @@ pub(super) fn resource_watch_namespaces_for(
         selected_namespaces.iter().cloned().map(Some).collect()
     }
 }
+
+/// How many objects of `api_resource` its list shows in the selected namespaces,
+/// once every watch behind them has listed them; `None` while a watch is missing
+/// (a kind not opened this session) or still listing.
+pub(in crate::ui) fn listed_count(
+    cluster: &ClusterState,
+    api_resource: &ApiResource,
+) -> Option<usize> {
+    if selected_watches_are_loading(cluster, api_resource) {
+        return None;
+    }
+    let namespaces = resource_watch_namespaces(cluster, api_resource);
+    // No namespace selected: nothing is listed, which is not a count of zero.
+    if namespaces.is_empty() {
+        return None;
+    }
+    let mut total = 0;
+    for namespace in namespaces {
+        let Some(watch) = cluster
+            .resource_cache
+            .get(&(api_resource.clone(), namespace))
+        else {
+            continue;
+        };
+        total += watch.resources.len();
+    }
+    Some(total)
+}

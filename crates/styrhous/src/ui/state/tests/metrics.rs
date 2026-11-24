@@ -17,9 +17,9 @@ fn pod_usage_history_replaces_duplicates_and_prunes_against_the_current_time() {
 
     entry.pod_usage_history.clear();
     let timestamp = now - time::Duration::seconds(1);
-    entry.record_pod_usage(pod_usage(timestamp, 3));
+    entry.record_pod_usage(pod_usage(timestamp, 3), now);
     entry.pod_usage_error = Some("temporary outage".to_owned());
-    entry.record_pod_usage(pod_usage(timestamp, 4));
+    entry.record_pod_usage(pod_usage(timestamp, 4), now);
 
     assert_eq!(entry.pod_usage_history.len(), 1);
     assert_eq!(entry.pod_usage_history[0].cpu_nanocores, 4);
@@ -43,17 +43,23 @@ fn node_usage_history_replaces_duplicates_and_prunes_against_the_current_time() 
     assert!(entry.node_usage_history.is_empty());
 
     let timestamp = now - time::Duration::seconds(1);
-    entry.record_node_usage(NodeUsage {
-        timestamp,
-        cpu_nanocores: 2,
-        memory_bytes: 2,
-    });
+    entry.record_node_usage(
+        NodeUsage {
+            timestamp,
+            cpu_nanocores: 2,
+            memory_bytes: 2,
+        },
+        now,
+    );
     entry.node_usage_error = Some("temporary outage".to_owned());
-    entry.record_node_usage(NodeUsage {
-        timestamp,
-        cpu_nanocores: 3,
-        memory_bytes: 3,
-    });
+    entry.record_node_usage(
+        NodeUsage {
+            timestamp,
+            cpu_nanocores: 3,
+            memory_bytes: 3,
+        },
+        now,
+    );
 
     assert_eq!(entry.node_usage_history.len(), 1);
     assert_eq!(entry.node_usage_history[0].cpu_nanocores, 3);
@@ -86,6 +92,7 @@ fn pod_metrics_watches_follow_pod_selection_and_namespace_scope() {
         name: "kind".to_owned(),
         is_current: true,
         presentation: Default::default(),
+        server: None,
     }])
     .apply(&mut state, &mut commands);
     state
@@ -146,6 +153,7 @@ fn helm_release_selection_watches_each_selected_namespace() {
         name: "kind".to_owned(),
         is_current: true,
         presentation: Default::default(),
+        server: None,
     }])
     .apply(&mut state, &mut commands);
     state.clusters.get_mut(&1).unwrap().selected_namespaces = SelectedNamespaces::from(["apps"]);
@@ -175,6 +183,7 @@ fn helm_release_watch_start_failure_unblocks_the_namespace_with_an_error() {
         name: "kind".to_owned(),
         is_current: true,
         presentation: Default::default(),
+        server: None,
     }])
     .apply(&mut state, &mut commands);
 
@@ -216,6 +225,7 @@ fn node_metrics_watch_follows_node_selection_and_stops_independently() {
         name: "kind".to_owned(),
         is_current: true,
         presentation: Default::default(),
+        server: None,
     }])
     .apply(&mut state, &mut commands);
     state
@@ -257,6 +267,7 @@ fn unavailable_metrics_api_from_discovery_does_not_start_metrics_watches() {
         name: "kind".to_owned(),
         is_current: true,
         presentation: Default::default(),
+        server: None,
     }])
     .apply(&mut state, &mut commands);
 
@@ -300,6 +311,7 @@ fn unavailable_metrics_api_stops_namespace_watches_and_marks_pod_details() {
         name: "kind".to_owned(),
         is_current: true,
         presentation: Default::default(),
+        server: None,
     }])
     .apply(&mut state, &mut commands);
     let cluster = state.clusters.get_mut(&1).unwrap();
@@ -338,6 +350,7 @@ fn unavailable_node_metrics_do_not_disable_pod_metrics() {
         name: "kind".to_owned(),
         is_current: true,
         presentation: Default::default(),
+        server: None,
     }])
     .apply(&mut state, &mut commands);
     let cluster = state.clusters.get_mut(&1).unwrap();
@@ -363,5 +376,224 @@ fn unavailable_node_metrics_do_not_disable_pod_metrics() {
         commands
             .iter()
             .any(|command| command.as_ref().as_any().is::<StopNodeMetricsWatch>())
+    );
+}
+
+#[test]
+fn node_pod_count_watch_follows_the_nodes_table_and_ignores_counts_after_it_stops() {
+    let node = crate::resource_handlers::node::api_resource();
+    let config_map = ApiResource {
+        group: "core".to_owned(),
+        version: "v1".to_owned(),
+        kind: "ConfigMap".to_owned(),
+        name: "configmaps".to_owned(),
+        namespaced: true,
+    };
+    let starts = |commands: &[WorkerCommandBox]| {
+        commands
+            .iter()
+            .filter(|command| {
+                command
+                    .as_ref()
+                    .as_any()
+                    .is::<crate::worker::StartNodePodCountWatch>()
+            })
+            .count()
+    };
+    let stops = |commands: &[WorkerCommandBox]| {
+        commands
+            .iter()
+            .filter(|command| {
+                command
+                    .as_ref()
+                    .as_any()
+                    .is::<crate::worker::StopNodePodCountWatch>()
+            })
+            .count()
+    };
+    let mut state = UiState::default();
+    let mut commands = Vec::new();
+    KubernetesClustersUpdated(vec![Cluster {
+        name: "kind".to_owned(),
+        is_current: true,
+        presentation: Default::default(),
+        server: None,
+    }])
+    .apply(&mut state, &mut commands);
+    commands.clear();
+
+    state.select_api_resource(1, node.clone(), &mut commands);
+    assert!(state.clusters[&1].node_pod_counts_active);
+    assert_eq!((starts(&commands), stops(&commands)), (1, 0));
+    let generation = state.clusters[&1].node_pod_counts.generation;
+    assert!(
+        commands.iter().any(|command| command
+            .as_ref()
+            .as_any()
+            .downcast_ref::<crate::worker::StartNodePodCountWatch>()
+            .is_some_and(|start| start.generation == generation)),
+        "the watch is started with the generation its results are matched to"
+    );
+    assert_eq!(
+        state.clusters[&1].node_pod_counts.count("worker"),
+        Ok(None),
+        "the count loads until the first list completes"
+    );
+    crate::worker::NodePodCountsUpdated {
+        cluster_key: 1,
+        generation,
+        counts: BTreeMap::from([("worker".to_owned(), 4)]),
+    }
+    .apply(&mut state, &mut commands);
+    let counts = &state.clusters[&1].node_pod_counts;
+    assert_eq!(counts.count("worker"), Ok(Some(4)));
+    assert_eq!(
+        counts.count("idle"),
+        Ok(Some(0)),
+        "a Node without Pods counts 0"
+    );
+    crate::worker::NodePodCountsWatchFailed {
+        cluster_key: 1,
+        generation,
+        error: "forbidden".to_owned(),
+    }
+    .apply(&mut state, &mut commands);
+    assert_eq!(
+        state.clusters[&1].node_pod_counts.count("worker"),
+        Err("forbidden")
+    );
+    let revision_while_shown = state.clusters[&1].node_pod_counts.revision;
+
+    commands.clear();
+    state.select_api_resource(1, config_map, &mut commands);
+    assert!(!state.clusters[&1].node_pod_counts_active);
+    assert_eq!((starts(&commands), stops(&commands)), (0, 1));
+    crate::worker::NodePodCountsUpdated {
+        cluster_key: 1,
+        generation,
+        counts: BTreeMap::from([("worker".to_owned(), 9)]),
+    }
+    .apply(&mut state, &mut commands);
+    let counts = &state.clusters[&1].node_pod_counts;
+    assert_eq!(
+        counts.counts, None,
+        "a stopped watch's late counts are dropped"
+    );
+    assert_eq!(counts.error, None);
+    assert!(
+        counts.revision > revision_while_shown,
+        "the revision keeps increasing so cached sorts go stale"
+    );
+
+    commands.clear();
+    state.select_api_resource(1, node, &mut commands);
+    assert_eq!((starts(&commands), stops(&commands)), (1, 0));
+    assert_eq!(
+        state.clusters[&1].node_pod_counts.count("worker"),
+        Ok(None),
+        "showing the Nodes again counts afresh"
+    );
+}
+
+#[test]
+fn node_pod_counts_of_an_earlier_watch_are_dropped_after_switching_away_and_back() {
+    let node = crate::resource_handlers::node::api_resource();
+    let config_map = ApiResource {
+        group: "core".to_owned(),
+        version: "v1".to_owned(),
+        kind: "ConfigMap".to_owned(),
+        name: "configmaps".to_owned(),
+        namespaced: true,
+    };
+    let mut state = UiState::default();
+    let mut commands = Vec::new();
+    KubernetesClustersUpdated(vec![Cluster {
+        name: "kind".to_owned(),
+        is_current: true,
+        presentation: Default::default(),
+        server: None,
+    }])
+    .apply(&mut state, &mut commands);
+    state.select_api_resource(1, node.clone(), &mut commands);
+    let first = state.clusters[&1].node_pod_counts.generation;
+    state.select_api_resource(1, config_map, &mut commands);
+    state.select_api_resource(1, node, &mut commands);
+    let second = state.clusters[&1].node_pod_counts.generation;
+    assert!(
+        second > first,
+        "every start of the watch is a new generation"
+    );
+
+    crate::worker::NodePodCountsUpdated {
+        cluster_key: 1,
+        generation: first,
+        counts: BTreeMap::from([("worker".to_owned(), 9)]),
+    }
+    .apply(&mut state, &mut commands);
+    crate::worker::NodePodCountsWatchFailed {
+        cluster_key: 1,
+        generation: first,
+        error: "stale".to_owned(),
+    }
+    .apply(&mut state, &mut commands);
+    assert_eq!(
+        state.clusters[&1].node_pod_counts.count("worker"),
+        Ok(None),
+        "results queued by the first watch do not show in the second"
+    );
+
+    crate::worker::NodePodCountsUpdated {
+        cluster_key: 1,
+        generation: second,
+        counts: BTreeMap::from([("worker".to_owned(), 2)]),
+    }
+    .apply(&mut state, &mut commands);
+    assert_eq!(
+        state.clusters[&1].node_pod_counts.count("worker"),
+        Ok(Some(2))
+    );
+}
+
+#[test]
+fn node_watches_stop_when_the_selected_nodes_resource_leaves_discovery() {
+    let node = crate::resource_handlers::node::api_resource();
+    let mut state = UiState::default();
+    let mut commands = Vec::new();
+    KubernetesClustersUpdated(vec![Cluster {
+        name: "kind".to_owned(),
+        is_current: true,
+        presentation: Default::default(),
+        server: None,
+    }])
+    .apply(&mut state, &mut commands);
+    state
+        .clusters
+        .get_mut(&1)
+        .unwrap()
+        .node_metrics_api_available = true;
+    state.select_api_resource(1, node, &mut commands);
+    let cluster = state.clusters.get_mut(&1).unwrap();
+    assert!(cluster.node_pod_counts_active && cluster.node_metrics_active);
+
+    // What the discovery reconciliation does once the selected resource is gone for good.
+    commands.clear();
+    cluster.selected_api_resource = None;
+    UiState::reconcile_node_watches(cluster, &mut commands);
+
+    assert!(!cluster.node_pod_counts_active && !cluster.node_metrics_active);
+    let stopped = |is: fn(&WorkerCommandBox) -> bool| commands.iter().filter(|c| is(c)).count();
+    assert_eq!(
+        stopped(|c| c
+            .as_ref()
+            .as_any()
+            .is::<crate::worker::StopNodePodCountWatch>()),
+        1
+    );
+    assert_eq!(
+        stopped(|c| c
+            .as_ref()
+            .as_any()
+            .is::<crate::worker::StopNodeMetricsWatch>()),
+        1
     );
 }

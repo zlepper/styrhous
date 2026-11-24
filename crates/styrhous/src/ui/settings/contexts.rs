@@ -1,8 +1,10 @@
 use super::*;
 use crate::context_presentation::{ContextPresentation, automatic_badge};
+use crate::ui::blade_text;
 use crate::ui::state::ContextPresentationSave;
 use crate::worker::SaveContextPresentation;
 use components::Avatar;
+use components::design::size;
 use components::tooltip::elided_label;
 use uuid::Uuid;
 
@@ -12,11 +14,12 @@ const CONTEXT_ACTION_WIDTH: f32 = 96.0;
 /// The display name over the context name, [`context_identity`]'s block.
 const CONTEXT_ROW_TEXT_HEIGHT: f32 =
     type_scale::TITLE.line_height() + space::S4 + type_scale::MONO.line_height();
-const CONTEXT_BADGE_INPUT_WIDTH: f32 = 184.0;
-const CONTEXT_PREVIEW_RAIL_HEIGHT: f32 = 112.0;
+const CONTEXT_BADGE_INPUT_WIDTH: f32 = 96.0;
+/// The badge column: the input and room for its help line.
+const CONTEXT_BADGE_COLUMN_WIDTH: f32 = 160.0;
 
 #[derive(Debug)]
-pub(super) struct ContextsSettingsBlade;
+pub(crate) struct ContextsSettingsBlade;
 
 fn introduction(ui: &mut egui::Ui, text: &str) {
     let theme = ui.tokens();
@@ -52,6 +55,14 @@ fn context_identity(ui: &mut egui::Ui, name: &str, presentation: &ContextPresent
 }
 
 impl GlobalBladeContent for ContextsSettingsBlade {
+    fn description(&self) -> components::BladeDescription {
+        components::BladeDescription::named("Contexts")
+    }
+
+    fn sidebar_destination(&self) -> Option<crate::ui::global_blade::SidebarDestination> {
+        Some(crate::ui::global_blade::SidebarDestination::Settings)
+    }
+
     fn render_header(
         &mut self,
         ui: &mut egui::Ui,
@@ -191,19 +202,31 @@ impl GlobalBladeContent for ContextsSettingsBlade {
 #[derive(Debug)]
 struct ContextEditorBlade {
     context_name: String,
+    /// What the context had when the editor opened, to tell what changed.
+    original: ContextPresentation,
     display_name: String,
     badge: String,
-    error: Option<String>,
+    colour: Option<u8>,
+    error: Option<ContextEditorError>,
     request_id: Option<Uuid>,
     effect: Option<ContextEditorEffect>,
+}
+
+/// Why the editor shows a danger callout.
+#[derive(Debug)]
+struct ContextEditorError {
+    title: &'static str,
+    message: String,
 }
 
 impl ContextEditorBlade {
     fn new(context_name: String, presentation: ContextPresentation) -> Self {
         Self {
             context_name,
-            display_name: presentation.display_name.unwrap_or_default(),
-            badge: presentation.badge.unwrap_or_default(),
+            display_name: presentation.display_name.clone().unwrap_or_default(),
+            badge: presentation.badge.clone().unwrap_or_default(),
+            colour: presentation.colour,
+            original: presentation,
             error: None,
             request_id: None,
             effect: None,
@@ -214,95 +237,136 @@ impl ContextEditorBlade {
         ContextPresentation {
             display_name: Some(self.display_name.clone()),
             badge: Some(self.badge.clone()),
+            colour: self.colour,
         }
     }
 
-    fn form(&mut self, ui: &mut egui::Ui) {
+    /// The save button's words: what it saves when only one thing changed.
+    fn save_label(&self, saving: bool) -> &'static str {
+        if saving {
+            return "Saving…";
+        }
+        let draft = self.presentation().normalized().ok();
+        let original = &self.original;
+        let changed = draft.map(|draft| {
+            // A badge typed as the automatic one asks for nothing new.
+            let automatic = automatic_badge(draft.display_name(&self.context_name));
+            let badge_changed =
+                draft.badge != original.badge && draft.badge.as_deref() != Some(&automatic);
+            [
+                draft.display_name != original.display_name,
+                badge_changed,
+                draft.colour != original.colour,
+            ]
+        });
+        match changed {
+            Some([true, false, false]) => "Save display name",
+            Some([false, true, false]) => "Save badge",
+            Some([false, false, true]) => "Save colour",
+            _ => "Save changes",
+        }
+    }
+
+    fn form(&mut self, ui: &mut egui::Ui, automatic_colour: usize) {
         let theme = ui.tokens();
-        Card::new().show_inner(ui, |ui| {
-            ui.set_width((ui.available_width()).max(0.0));
-            ui.label(
-                egui::RichText::new("KUBECONFIG CONTEXT")
-                    .font(type_scale::META.font_id(ui.ctx()))
-                    .color(theme.text.muted),
-            );
-            ui.add_space(space::S4);
-            elided_label(
-                ui,
-                type_scale::MONO,
-                &self.context_name,
-                theme.text.secondary,
-            );
-        });
-        ui.add_space(space::S24);
-        ui.separator();
-        ui.add_space(space::S24);
-        ui.label(
-            egui::RichText::new("Appearance")
-                .font(type_scale::TITLE.font_id(ui.ctx()))
-                .color(theme.text.primary),
-        );
-        ui.add_space(space::S24);
-        ui.label("Display name");
-        TextInput::new(&mut self.display_name)
-            .id_salt(("context-display-name", &self.context_name))
-            .accessibility_label("Display name")
-            .placeholder(&self.context_name)
-            .show(ui);
-        ui.add_space(space::S4);
-        supporting_text(ui, "Leave blank to use the kubeconfig context name.");
-        ui.add_space(space::S24);
-        ui.label("Badge");
-        ui.horizontal(|ui| {
-            ui.allocate_ui_with_layout(
-                egui::vec2(
-                    CONTEXT_BADGE_INPUT_WIDTH,
-                    components::FieldSize::Md.height(),
-                ),
-                egui::Layout::top_down(egui::Align::Min),
-                |ui| {
-                    TextInput::new(&mut self.badge)
-                        .id_salt(("context-badge", &self.context_name))
-                        .accessibility_label("Badge")
-                        .placeholder("Automatic")
+        ui.spacing_mut().item_spacing.y = 0.0;
+        blade_text::blade_caption_with_gap(ui, "Kubeconfig context", space::S6);
+        // As tall as the code block, so the Copy button centres on it.
+        let row_height = type_scale::MONO_SMALL.line_height() + 12.0;
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width(), row_height),
+            egui::Layout::right_to_left(egui::Align::Center),
+            |ui| {
+                ui.spacing_mut().item_spacing.x = space::S8;
+                if Button::ghost("Copy")
+                    .size(ButtonSize::Sm)
+                    .leading_icon(icons::Icon::ClipboardDocument)
+                    .accessibility_label(format!("Copy {}", self.context_name))
+                    .show(ui)
+                    .clicked()
+                {
+                    ui.ctx().copy_text(self.context_name.clone());
+                }
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    components::code_block::CodeBlock::new(&self.context_name)
+                        .compact()
                         .show(ui);
-                },
-            );
-            ui.add_space(space::S8);
-            supporting_text(ui, &format!("{} / 2", self.badge.trim().chars().count()));
-        });
-        ui.add_space(space::S4);
-        supporting_text(
-            ui,
-            "One or two characters. Leave blank for automatic initials.",
+                });
+            },
         );
-        ui.add_space(space::S24);
+        if let Some(error) = &self.error {
+            blade_text::gap(ui, space::S20);
+            components::Callout::new(components::design::theme::Tone::Danger, error.title)
+                .body(&error.message)
+                .show(ui);
+        }
+        blade_text::gap(ui, space::S24);
+        blade_text::blade_section(ui, "Appearance", None);
+        blade_text::gap(ui, space::S8);
+        FormField::new("Display name")
+            .help("Leave blank to use the context name.")
+            .show(ui, |ui| {
+                TextInput::new(&mut self.display_name)
+                    .id_salt(("context-display-name", &self.context_name))
+                    .accessibility_label("Display name")
+                    .placeholder(&self.context_name)
+                    .show(ui);
+            });
+        blade_text::gap(ui, space::S20);
         let presentation =
             self.presentation()
                 .normalized()
                 .unwrap_or_else(|_| ContextPresentation {
                     display_name: (!self.display_name.trim().is_empty())
                         .then(|| self.display_name.trim().to_owned()),
-                    badge: None,
+                    ..Default::default()
                 });
-        self.preview(ui, &presentation);
-        ui.add_space(space::S8);
-        supporting_text(
-            ui,
-            &format!(
-                "Automatic badge: {}",
-                automatic_badge(presentation.display_name(&self.context_name))
-            ),
+        let automatic_badge = automatic_badge(presentation.display_name(&self.context_name));
+        let colours = theme.components.avatars();
+        let shown_colour = self.colour.map_or(automatic_colour, usize::from);
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width(), 0.0),
+            egui::Layout::left_to_right(egui::Align::Min),
+            |ui| {
+                ui.spacing_mut().item_spacing.x = space::S24;
+                let help = format!("1–2 characters. Automatic: {automatic_badge}");
+                ui.allocate_ui_with_layout(
+                    egui::vec2(CONTEXT_BADGE_COLUMN_WIDTH, 0.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        ui.set_width(CONTEXT_BADGE_COLUMN_WIDTH);
+                        FormField::new("Badge").help(&help).show(ui, |ui| {
+                            TextInput::new(&mut self.badge)
+                                .width(CONTEXT_BADGE_INPUT_WIDTH)
+                                .id_salt(("context-badge", &self.context_name))
+                                .accessibility_label("Badge")
+                                .placeholder("Automatic")
+                                .show(ui);
+                        });
+                    },
+                );
+                let help = if self.colour.is_some() {
+                    "Click the chosen colour again for automatic"
+                } else {
+                    "Automatic: follows the context's place in the list"
+                };
+                FormField::new("Colour").help(help).show(ui, |ui| {
+                    if let Some(clicked) =
+                        components::Swatches::new(&colours, Some(shown_colour), "Colour").show(ui)
+                    {
+                        // Choosing the chosen colour again returns to automatic.
+                        self.colour = (self.colour != Some(clicked as u8)).then_some(clicked as u8);
+                    }
+                });
+            },
         );
-        if let Some(error) = &self.error {
-            ui.add_space(space::S16);
-            super::templates::show_validation_error(ui, "Context settings need attention", error);
-        }
+        blade_text::gap(ui, space::S20);
+        self.preview(ui, &presentation, shown_colour);
     }
 
-    fn footer(ui: &mut egui::Ui, saving: bool) -> (bool, bool) {
+    fn footer(&self, ui: &mut egui::Ui, saving: bool) -> (bool, bool) {
         components::blade_body_footer(ui, |ui| {
-            let save = Button::primary(if saving { "Saving…" } else { "Save changes" })
+            let save = Button::primary(self.save_label(saving))
                 .enabled(!saving)
                 .show(ui)
                 .clicked();
@@ -314,58 +378,75 @@ impl ContextEditorBlade {
         })
     }
 
-    fn preview(&self, ui: &mut egui::Ui, presentation: &ContextPresentation) {
+    /// How the context will look in the cluster card (A09 "Preview").
+    fn preview(&self, ui: &mut egui::Ui, presentation: &ContextPresentation, colour: usize) {
         let theme = ui.tokens();
-        Card::new().show_inner(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.label(
-                egui::RichText::new("PREVIEW")
-                    .font(type_scale::META.font_id(ui.ctx()))
-                    .color(theme.text.muted),
+        blade_text::blade_caption_with_gap(ui, "Preview", space::S6);
+        let height = size::AVATAR + space::S12 * 2.0;
+        let (row, _) = ui.allocate_exact_size(
+            egui::vec2(ui.available_width(), height),
+            egui::Sense::hover(),
+        );
+        ui.painter()
+            .rect_filled(row, egui::CornerRadius::same(radius::CARD), theme.nav.rail);
+        let avatar = egui::Rect::from_min_size(
+            row.min + egui::vec2(space::S16, space::S12),
+            egui::Vec2::splat(size::AVATAR),
+        );
+        Avatar::new(&presentation.badge(&self.context_name))
+            .category(colour)
+            .status(components::design::theme::Tone::Success)
+            .selected(true)
+            .paint(ui, avatar.center());
+        let text_left = avatar.right() + space::S12;
+        let name_role = type_scale::UI_STRONG;
+        let mono_role = type_scale::MONO.with_size(11.0, 16.0);
+        let top = row.center().y - (name_role.line_height() + mono_role.line_height()) / 2.0;
+        for (role, text, colour, top) in [
+            (
+                name_role,
+                presentation.display_name(&self.context_name),
+                theme.text.primary,
+                top,
+            ),
+            (
+                mono_role,
+                self.context_name.as_str(),
+                theme.nav.text_muted,
+                top + name_role.line_height(),
+            ),
+        ] {
+            let rect = egui::Rect::from_min_size(
+                egui::pos2(text_left, top),
+                egui::vec2(
+                    (row.right() - space::S16 - text_left).max(0.0),
+                    role.line_height(),
+                ),
             );
-            ui.add_space(space::S12);
-            ui.horizontal(|ui| {
-                let (rail, _) = ui.allocate_exact_size(
-                    egui::vec2(68.0, CONTEXT_PREVIEW_RAIL_HEIGHT),
-                    egui::Sense::hover(),
-                );
-                ui.painter().rect_filled(
-                    rail,
-                    egui::CornerRadius::same(radius::KEY),
-                    theme.nav.rail,
-                );
-                let selected = egui::Rect::from_center_size(rail.center(), egui::vec2(52.0, 48.0));
-                ui.painter().rect_filled(
-                    selected,
-                    egui::CornerRadius::same(radius::KEY),
-                    theme.nav.item_selected,
-                );
-                Avatar::new(&presentation.badge(&self.context_name))
-                    .identity()
-                    .paint(ui, rail.center());
-                ui.add_space(space::S16);
-                let width = ui.available_width();
-                ui.allocate_ui_with_layout(
-                    egui::vec2(width, CONTEXT_ROW_TEXT_HEIGHT),
-                    egui::Layout::top_down(egui::Align::Min),
-                    |ui| {
-                        ui.set_min_size(egui::vec2(width, CONTEXT_ROW_TEXT_HEIGHT));
-                        context_identity(ui, &self.context_name, presentation);
-                    },
-                );
-            });
-        });
+            let mut line = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+            elided_label(&mut line, role, text, colour);
+        }
     }
 }
 
 impl GlobalBladeContent for ContextEditorBlade {
+    fn description(&self) -> components::BladeDescription {
+        components::BladeDescription::named("Edit context")
+    }
+
+    fn sidebar_destination(&self) -> Option<crate::ui::global_blade::SidebarDestination> {
+        Some(crate::ui::global_blade::SidebarDestination::Settings)
+    }
+
     fn render_header(
         &mut self,
         ui: &mut egui::Ui,
         _layer: components::BladeLayer,
         _context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
-        components::blade_title(ui, None, "Edit context");
+        components::blade_title_with_actions(ui, None, "Edit context", |ui| {
+            blade_text::blade_more_actions(ui);
+        });
         GlobalBladeRenderResult::default()
     }
 
@@ -375,7 +456,6 @@ impl GlobalBladeContent for ContextEditorBlade {
         layer: components::BladeLayer,
         context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult {
-        let theme = ui.tokens();
         let status = context.context_presentation_save(&self.context_name);
         let saving = status.is_some_and(|save| save.result.is_none());
         // Reopened editors join the pending save rather than capturing its older values.
@@ -384,6 +464,7 @@ impl GlobalBladeContent for ContextEditorBlade {
         {
             self.display_name = save.presentation.display_name.clone().unwrap_or_default();
             self.badge = save.presentation.badge.clone().unwrap_or_default();
+            self.colour = save.presentation.colour;
             self.request_id = Some(save.request_id);
         }
 
@@ -395,15 +476,27 @@ impl GlobalBladeContent for ContextEditorBlade {
             self.request_id = None;
             match result {
                 Ok(()) => self.effect = Some(ContextEditorEffect::Back),
-                Err(error) => self.error = Some(error.clone()),
+                Err(error) => {
+                    self.error = Some(ContextEditorError {
+                        title: "Changes can’t be saved",
+                        message: error.clone(),
+                    });
+                }
             }
         }
-        ui.label(
-            egui::RichText::new("Customize how this context appears in your workspace.")
-                .font(type_scale::BODY.font_id(ui.ctx()))
-                .color(theme.text.secondary),
-        );
-        ui.add_space(space::S24);
+        // A context without a chosen colour wears the one of its place.
+        // The sidebar counts contexts by lower-cased name, then key.
+        let mut names = context
+            .contexts()
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect::<Vec<_>>();
+        names.sort_by_cached_key(|name| name.to_lowercase());
+        let automatic_colour = names
+            .iter()
+            .position(|name| *name == self.context_name)
+            .unwrap_or_default();
+        let automatic_colour = crate::context_presentation::automatic_colour(automatic_colour);
         // The form scrolls above the blade footer, before it in keyboard order.
         let form_height = (ui.available_height() - super::FOOTER_HEIGHT).max(0.0);
         ui.allocate_ui_with_layout(
@@ -414,11 +507,11 @@ impl GlobalBladeContent for ContextEditorBlade {
                     .id_salt(("context-editor", &self.context_name))
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        ui.add_enabled_ui(!saving, |ui| self.form(ui));
+                        ui.add_enabled_ui(!saving, |ui| self.form(ui, automatic_colour));
                     });
             },
         );
-        let (save, cancel) = Self::footer(ui, saving);
+        let (save, cancel) = self.footer(ui, saving);
         if cancel {
             // Discard cancelled drafts even if the user later navigates Forward.
             if let Some((_, presentation)) = context
@@ -428,6 +521,7 @@ impl GlobalBladeContent for ContextEditorBlade {
             {
                 self.display_name = presentation.display_name.clone().unwrap_or_default();
                 self.badge = presentation.badge.clone().unwrap_or_default();
+                self.colour = presentation.colour;
             }
             self.error = None;
             self.request_id = None;
@@ -444,7 +538,12 @@ impl GlobalBladeContent for ContextEditorBlade {
                         presentation,
                     }));
                 }
-                Err(error) => self.error = Some(error),
+                Err(message) => {
+                    self.error = Some(ContextEditorError {
+                        title: "Context settings need attention",
+                        message,
+                    });
+                }
             }
         }
         GlobalBladeRenderResult::default()

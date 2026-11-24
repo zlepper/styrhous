@@ -18,16 +18,77 @@ pub struct BladeResponse<H, R> {
     pub close_finished: bool,
 }
 
+/// What a history blade shows of itself in the strip that peeks out from
+/// behind the next blade: its kind badge and name.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct BladePeek {
+    pub kind: Option<String>,
+    /// The kind badge's category colour (`category.nth`); the accent when unset.
+    pub category: Option<usize>,
+    pub name: String,
+}
+
+/// How a blade lays its header and body out.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BladeStyle {
+    /// The shared 56 point header (Back, Forward, content, Close) over a
+    /// padded, scrolling body.
+    #[default]
+    Standard,
+    /// The blade draws its own header, navigation included (an
+    /// [`InspectorHeader`]), and divides the whole body itself.
+    Inspector,
+}
+
+/// What the stack needs to know of a blade besides its content.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct BladeDescription {
+    pub peek: BladePeek,
+    pub style: BladeStyle,
+}
+
+impl BladeDescription {
+    /// A standard blade peeking out as `name`.
+    pub fn named(name: impl Into<String>) -> Self {
+        Self {
+            peek: BladePeek {
+                kind: None,
+                category: None,
+                name: name.into(),
+            },
+            style: BladeStyle::Standard,
+        }
+    }
+}
+
+/// The result of a blade's header and the navigation it asked for. A
+/// [`BladeStyle::Standard`] header's `action` is ignored: the shared chrome
+/// reports it.
+pub struct BladeHeader<H> {
+    pub value: H,
+    pub action: HeaderAction,
+}
+
 #[derive(Clone)]
 pub struct BladeStack {
     id: Id,
+    /// Window chrome above the blades (a banner): blades stay below it,
+    /// while the scrim still dims it.
+    top_inset: f32,
 }
 
 impl BladeStack {
     pub fn new(id_source: impl std::hash::Hash + std::fmt::Debug) -> Self {
         Self {
             id: Id::new(id_source),
+            top_inset: 0.0,
         }
+    }
+
+    /// Keep the blades `inset` points below the window's top, under chrome
+    /// such as a banner (A11); the scrim still covers the whole window.
+    pub fn set_top_inset(&mut self, inset: f32) {
+        self.top_inset = inset;
     }
 
     pub fn seed_transition<T>(&self, ctx: &egui::Context, navigator: &mut BladeNavigator<T>) {
@@ -35,15 +96,61 @@ impl BladeStack {
     }
 
     /// Render a blade with caller-provided header content. The shared chrome
-    /// always supplies Back, Forward, and Close controls around that content.
+    /// always supplies Back, Forward, and Close controls around that content,
+    /// and history blades peek out unnamed.
     pub fn show<T, H, R>(
         &self,
         ctx: &egui::Context,
         navigator: &mut BladeNavigator<T>,
         mut render_header: impl FnMut(&mut Ui, &mut T, BladeLayer) -> H,
+        render_content: impl FnMut(&mut Ui, &mut T, BladeLayer) -> R,
+    ) -> BladeResponse<H, R> {
+        self.show_blades(
+            ctx,
+            navigator,
+            |_| BladeDescription::default(),
+            |ui, entry, layer| BladeHeader {
+                value: render_header(ui, entry, layer),
+                action: HeaderAction::None,
+            },
+            render_content,
+        )
+    }
+
+    /// Render blades of any [`BladeStyle`]: `describe` says how each lays out
+    /// and what its history peek shows, `render_header` draws a header (the
+    /// whole of an inspector's, the content of a standard one's).
+    pub fn show_blades<T, H, R>(
+        &self,
+        ctx: &egui::Context,
+        navigator: &mut BladeNavigator<T>,
+        describe: impl Fn(&T) -> BladeDescription,
+        mut render_header: impl FnMut(&mut Ui, &mut T, BladeLayer) -> BladeHeader<H>,
         mut render_content: impl FnMut(&mut Ui, &mut T, BladeLayer) -> R,
     ) -> BladeResponse<H, R> {
-        let viewport = ctx.content_rect();
+        // One blade's header and body, in the style it asks for.
+        let mut show_entry = |ui: &mut Ui, entry: &mut T, layer: BladeLayer| {
+            let style = describe(entry).style;
+            let (header, action) = match style {
+                BladeStyle::Standard => {
+                    show_header(ui, layer, |ui| render_header(ui, entry, layer).value)
+                }
+                BladeStyle::Inspector => {
+                    let header = render_header(ui, entry, layer);
+                    (header.value, header.action)
+                }
+            };
+            let body = match style {
+                BladeStyle::Standard => show_body(ui, |ui| render_content(ui, entry, layer)),
+                BladeStyle::Inspector => show_bare_body(ui, |ui| render_content(ui, entry, layer)),
+            };
+            (header, body, action)
+        };
+        let window = ctx.content_rect();
+        let viewport = egui::Rect::from_min_max(
+            egui::pos2(window.left(), window.top() + self.top_inset),
+            window.max,
+        );
         navigator.seed_transition(ctx);
         let transition = navigator
             .transition
@@ -59,9 +166,9 @@ impl BladeStack {
         let closing_progress = matches!(transition, Some((BladeTransition::Closing, _)))
             .then(|| transition.expect("transition exists").1)
             .unwrap_or_default();
-        paint_scrim(ctx, self.id, viewport, closing_progress);
+        paint_scrim(ctx, self.id, window, closing_progress);
 
-        let first_history = history_len.saturating_sub(HISTORY_SCALES.len());
+        let first_history = history_len.saturating_sub(HISTORY_PEEKS);
         for stack_index in 0..first_history {
             retain_hidden_layer(ctx, self.layer_id(stack_index), viewport);
         }
@@ -69,25 +176,15 @@ impl BladeStack {
             && value < 1.0
             && first_history > 0
         {
+            // The blade pushed out of the peeks slides in behind them.
             let stack_index = first_history - 1;
-            let content_id = self.content_id(stack_index);
-            let entry = &mut navigator.back_stack_mut()[stack_index];
-            show_layer(
+            show_peek_layer(
                 ctx,
                 self.layer_id(stack_index),
                 viewport,
-                history_transform(viewport, HISTORY_SCALES.len() - 1),
-                false,
-                |ui| {
-                    let layer = BladeLayer {
-                        content_id,
-                        is_foreground: false,
-                        can_go_back: stack_index > 0,
-                        can_go_forward: true,
-                    };
-                    let _ = show_header(ui, layer, |ui| render_header(ui, entry, layer));
-                    show_body(ui, |ui| render_content(ui, entry, layer));
-                },
+                history_transform(viewport, HISTORY_PEEKS - 1),
+                HISTORY_PEEKS - 1,
+                &describe(&navigator.back_stack()[stack_index]).peek,
             );
         }
 
@@ -105,23 +202,37 @@ impl BladeStack {
             if active_interactable {
                 history_targets.push((content_id, transformed_rect(viewport, transform), steps));
             }
-            show_layer(
-                ctx,
-                self.layer_id(stack_index),
-                viewport,
-                transform,
-                false,
-                |ui| {
-                    let layer = BladeLayer {
-                        content_id,
-                        is_foreground: false,
-                        can_go_back: first_history + index > 0,
-                        can_go_forward: true,
-                    };
-                    let _ = show_header(ui, layer, |ui| render_header(ui, entry, layer));
-                    show_body(ui, |ui| render_content(ui, entry, layer));
-                },
-            );
+            // The blade that has just stepped back shows its content while
+            // it slides into its peek.
+            let stepping_back = depth == 0
+                && matches!(transition, Some((BladeTransition::Forward, value)) if value < 1.0);
+            if stepping_back {
+                show_layer(
+                    ctx,
+                    self.layer_id(stack_index),
+                    viewport,
+                    transform,
+                    false,
+                    |ui| {
+                        let layer = BladeLayer {
+                            content_id,
+                            is_foreground: false,
+                            can_go_back: first_history + index > 0,
+                            can_go_forward: true,
+                        };
+                        let _ = show_entry(ui, entry, layer);
+                    },
+                );
+            } else {
+                show_peek_layer(
+                    ctx,
+                    self.layer_id(stack_index),
+                    viewport,
+                    transform,
+                    depth,
+                    &describe(entry).peek,
+                );
+            }
         }
 
         if let Some((BladeTransition::Back, value)) = transition
@@ -155,8 +266,7 @@ impl BladeStack {
                             can_go_back: true,
                             can_go_forward,
                         };
-                        let _ = show_header(ui, layer, |ui| render_header(ui, entry, layer));
-                        show_body(ui, |ui| render_content(ui, entry, layer));
+                        let _ = show_entry(ui, entry, layer);
                     },
                 );
             }
@@ -166,7 +276,7 @@ impl BladeStack {
             Some((BladeTransition::Opening | BladeTransition::Forward, value)) => Transform {
                 position: active_transform(viewport).position
                     + egui::vec2((1.0 - value) * blade_width(viewport), 0.0),
-                scale: 1.0,
+                inset: 0.0,
             },
             Some((BladeTransition::Back, value)) => interpolate(
                 history_transform(viewport, transition_back_steps - 1),
@@ -212,11 +322,7 @@ impl BladeStack {
                     can_go_back,
                     can_go_forward,
                 };
-                let (header, header_action) = show_header(ui, layer, |ui| {
-                    render_header(ui, navigator.current_mut(), layer)
-                });
-                let active = show_body(ui, |ui| render_content(ui, navigator.current_mut(), layer));
-                (header, active, header_action)
+                show_entry(ui, navigator.current_mut(), layer)
             },
         );
         // The input scrim keeps workspace and history layers from receiving a
@@ -265,11 +371,16 @@ impl BladeStack {
         title: impl Fn(&T) -> String,
         render_content: impl FnMut(&mut Ui, &mut T, BladeLayer) -> R,
     ) -> BladeResponse<(), R> {
-        self.show(
+        self.show_blades(
             ctx,
             navigator,
+            |entry| BladeDescription::named(title(entry)),
             |ui, entry, _| {
                 chrome::blade_title(ui, None, &title(entry));
+                BladeHeader {
+                    value: (),
+                    action: HeaderAction::None,
+                }
             },
             render_content,
         )

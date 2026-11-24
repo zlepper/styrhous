@@ -30,6 +30,7 @@ impl UiState {
         };
         if remember_selection {
             self.cluster_selections.last_selected_context = Some(cluster.name.clone());
+            self.cluster_roster.visit(&cluster.name);
         }
         // Re-selecting a live connection must leave its inspector and watches alone.
         if matches!(
@@ -100,5 +101,20 @@ impl UiState {
             Self::request_selected_resource_watches(cluster, &api_resource, commands_to_send);
         }
         self.remember_selected_api_resource(cluster_key, &api_resource);
+    }
+}
+
+impl UiState {
+    /// Switch to a cluster from the sidebar or the switcher: the inspectors of
+    /// the cluster being left close first.
+    pub(crate) fn switch_cluster(
+        &mut self,
+        cluster_key: i32,
+        commands_to_send: &mut Vec<WorkerCommandBox>,
+    ) {
+        if self.selected_cluster != Some(cluster_key) {
+            self.close_all_resource_details(commands_to_send);
+        }
+        self.select_cluster(cluster_key, commands_to_send);
     }
 }

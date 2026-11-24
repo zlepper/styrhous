@@ -33,28 +33,30 @@ Window state=[focused] rect=<none>
                 Button name="EKS 1" state=[toggled=False] rect=(x=902.1 y=243.0 width=56.3 height=32.0 center_x=930.2 center_y=259.0)
                 Button name="AKS 1" state=[toggled=False] rect=(x=966.4 y=243.0 width=57.6 height=32.0 center_x=995.2 center_y=259.0)
               GenericContainer rect=<none>
-                Label value="Pinned" rect=(x=72.0 y=296.0 width=51.1 height=20.0 center_x=97.5 center_y=306.0)
-                  TextRun value="Pinned" rect=(x=72.0 y=296.0 width=51.1 height=20.0 center_x=97.5 center_y=306.0)
-                Label value="2" rect=(x=131.1 y=299.0 width=7.0 height=16.0 center_x=134.6 center_y=307.0)
-                  TextRun value="2" rect=(x=131.1 y=299.0 width=5.9 height=16.0 center_x=134.0 center_y=307.0)
-              GenericContainer rect=<none>
-                Button name="kind-kind, KIND · LOCAL, 3 nodes" state=[toggled=True] rect=(x=72.0 y=326.0 width=312.0 height=60.0 center_x=228.0 center_y=356.0)
-                Button name="prod-eu, AKS · WESTEUROPE, unreachable" state=[toggled=False] rect=(x=392.0 y=326.0 width=312.0 height=60.0 center_x=548.0 center_y=356.0)
-              GenericContainer rect=<none>
-                Label value="Recent" rect=(x=72.0 y=404.0 width=51.5 height=20.0 center_x=97.8 center_y=414.0)
-                  TextRun value="Recent" rect=(x=72.0 y=404.0 width=51.5 height=20.0 center_x=97.8 center_y=414.0)
-                Label value="2" rect=(x=131.5 y=407.0 width=7.0 height=16.0 center_x=135.0 center_y=415.0)
-                  TextRun value="2" rect=(x=131.5 y=407.0 width=5.9 height=16.0 center_x=134.5 center_y=415.0)
-              GenericContainer rect=<none>
-                Button name="dev-eu, EKS · EU-WEST-1, 38 nodes" state=[toggled=False] rect=(x=72.0 y=434.0 width=312.0 height=60.0 center_x=228.0 center_y=464.0)
-                Button name="kind-legacy, KIND · LOCAL, 1 node" state=[toggled=False] rect=(x=392.0 y=434.0 width=312.0 height=60.0 center_x=548.0 center_y=464.0)
-              GenericContainer rect=<none>
-                Label value="Found in cloud accounts" rect=(x=72.0 y=512.0 width=178.4 height=20.0 center_x=161.2 center_y=522.0)
-                  TextRun value="Found in cloud accounts" rect=(x=72.0 y=512.0 width=178.4 height=20.0 center_x=161.2 center_y=522.0)
-                Label value="1" rect=(x=258.4 y=515.0 width=7.0 height=16.0 center_x=262.0 center_y=523.0)
-                  TextRun value="1" rect=(x=258.4 y=515.0 width=5.9 height=16.0 center_x=261.4 center_y=523.0)
-              GenericContainer rect=<none>
-                Button name="payments, EKS · NOT IN KUBECONFIG, add" state=[toggled=False] rect=(x=72.0 y=542.0 width=312.0 height=60.0 center_x=228.0 center_y=572.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="Pinned" rect=(x=72.0 y=296.0 width=51.1 height=20.0 center_x=97.5 center_y=306.0)
+                      TextRun value="Pinned" rect=(x=72.0 y=296.0 width=51.1 height=20.0 center_x=97.5 center_y=306.0)
+                    Label value="2" rect=(x=131.1 y=299.0 width=7.0 height=16.0 center_x=134.6 center_y=307.0)
+                      TextRun value="2" rect=(x=131.1 y=299.0 width=5.9 height=16.0 center_x=134.0 center_y=307.0)
+                  GenericContainer rect=<none>
+                    Button name="kind-kind, KIND · LOCAL, 3 nodes" state=[toggled=True] rect=(x=72.0 y=326.0 width=312.0 height=60.0 center_x=228.0 center_y=356.0)
+                    Button name="prod-eu, AKS · WESTEUROPE, unreachable" state=[toggled=False] rect=(x=392.0 y=326.0 width=312.0 height=60.0 center_x=548.0 center_y=356.0)
+                  GenericContainer rect=<none>
+                    Label value="Recent" rect=(x=72.0 y=404.0 width=51.5 height=20.0 center_x=97.8 center_y=414.0)
+                      TextRun value="Recent" rect=(x=72.0 y=404.0 width=51.5 height=20.0 center_x=97.8 center_y=414.0)
+                    Label value="2" rect=(x=131.5 y=407.0 width=7.0 height=16.0 center_x=135.0 center_y=415.0)
+                      TextRun value="2" rect=(x=131.5 y=407.0 width=5.9 height=16.0 center_x=134.5 center_y=415.0)
+                  GenericContainer rect=<none>
+                    Button name="dev-eu, EKS · EU-WEST-1, 38 nodes" state=[toggled=False] rect=(x=72.0 y=434.0 width=312.0 height=60.0 center_x=228.0 center_y=464.0)
+                    Button name="kind-legacy, KIND · LOCAL, 1 node" state=[toggled=False] rect=(x=392.0 y=434.0 width=312.0 height=60.0 center_x=548.0 center_y=464.0)
+                  GenericContainer rect=<none>
+                    Label value="Found in cloud accounts" rect=(x=72.0 y=512.0 width=178.4 height=20.0 center_x=161.2 center_y=522.0)
+                      TextRun value="Found in cloud accounts" rect=(x=72.0 y=512.0 width=178.4 height=20.0 center_x=161.2 center_y=522.0)
+                    Label value="1" rect=(x=258.4 y=515.0 width=7.0 height=16.0 center_x=262.0 center_y=523.0)
+                      TextRun value="1" rect=(x=258.4 y=515.0 width=5.9 height=16.0 center_x=261.4 center_y=523.0)
+                  GenericContainer rect=<none>
+                    Button name="payments, EKS · NOT IN KUBECONFIG, add" state=[toggled=False] rect=(x=72.0 y=542.0 width=312.0 height=60.0 center_x=228.0 center_y=572.0)
               Label value="kind-kind" rect=(x=148.0 y=643.0 width=55.3 height=20.0 center_x=175.7 center_y=653.0)
                 TextRun value="kind-kind" rect=(x=148.0 y=643.0 width=55.3 height=20.0 center_x=175.7 center_y=653.0)
               Label value="KIND · LOCAL · KUBERNETES 1.31" rect=(x=148.0 y=663.0 width=176.1 height=16.0 center_x=236.1 center_y=671.0)

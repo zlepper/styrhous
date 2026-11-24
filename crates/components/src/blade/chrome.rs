@@ -368,6 +368,17 @@ impl<'a> BladeFrame<'a> {
 /// `name` (cut to [`size::BLADE_PEEK_NAME`]), with `shade` laid over the
 /// [`size::BLADE_PEEK`] points that show.
 pub fn paint_blade_peek(ui: &mut Ui, rect: Rect, kind: Option<&str>, name: &str, shade: Color32) {
+    paint_blade_peek_on(ui, rect, kind.map(|kind| (kind, None)), name, shade);
+}
+
+/// A [`paint_blade_peek`] whose kind badge is on the kind's category `fill`.
+pub fn paint_blade_peek_on(
+    ui: &mut Ui,
+    rect: Rect,
+    kind: Option<(&str, Option<Color32>)>,
+    name: &str,
+    shade: Color32,
+) {
     let theme = ui.tokens();
     paint_surface(ui, rect, theme.surface.sunken);
     let header = Rect::from_min_size(rect.min, vec2(rect.width(), size::BLADE_PEEK_HEADER));
@@ -398,8 +409,11 @@ pub fn paint_blade_peek(ui: &mut Ui, rect: Rect, kind: Option<&str>, name: &str,
             .layout(Layout::top_down(Align::Min)),
     );
     column.spacing_mut().item_spacing = vec2(0.0, PEEK_GAP);
-    if let Some(kind) = kind {
-        kind_badge(&mut column, kind);
+    if let Some((kind, fill)) = kind {
+        match fill {
+            Some(fill) => crate::badge::kind_badge_on(&mut column, kind, fill),
+            None => kind_badge(&mut column, kind),
+        };
     }
     let (name_rect, response) = type_scale::allocate_text(
         &mut column,

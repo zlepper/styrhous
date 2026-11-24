@@ -63,6 +63,7 @@ pub struct Property<'a> {
     copy: Option<Cow<'a, str>>,
     forced_state: Option<ControlState>,
     max_lines: usize,
+    hint: Option<Cow<'a, str>>,
 }
 
 impl<'a> Property<'a> {
@@ -73,6 +74,7 @@ impl<'a> Property<'a> {
             copy: None,
             forced_state: None,
             max_lines: 1,
+            hint: None,
         }
     }
 
@@ -134,6 +136,12 @@ impl<'a> Property<'a> {
     /// boards and snapshots).
     pub fn force_state(mut self, state: ControlState) -> Self {
         self.forced_state = Some(state);
+        self
+    }
+
+    /// Explain a plain text value on hover (why a reference is not a link).
+    pub fn hint(mut self, hint: impl Into<Cow<'a, str>>) -> Self {
+        self.hint = Some(hint.into());
         self
     }
 
@@ -307,7 +315,10 @@ fn show_cell(
             selectable_text(value_ui, galley, text);
         }
         PropertyValue::Text(text) => {
-            value_text(value_ui, type_scale::UI, text, theme.text.primary);
+            let value = value_text(value_ui, type_scale::UI, text, theme.text.primary);
+            if let Some(hint) = &property.hint {
+                value.tooltip(hint.as_ref());
+            }
         }
         PropertyValue::Mono(text) => {
             value_text(value_ui, type_scale::MONO_ROW, text, theme.text.primary);

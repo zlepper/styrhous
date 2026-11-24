@@ -11,7 +11,7 @@ const DIALOG_WIDTH: f32 = 640.0;
 /// Keeps Cancel and Confirm on screen however long the diff is.
 const CHANGES_MAX_HEIGHT: f32 = 280.0;
 
-fn revision_label(revision: &DeploymentRevision) -> String {
+fn revision_label(revision: &DeploymentRevision, now: time::OffsetDateTime) -> String {
     let images = if revision.images.is_empty() {
         "no images".to_owned()
     } else {
@@ -20,7 +20,7 @@ fn revision_label(revision: &DeploymentRevision) -> String {
     format!(
         "Revision {} · {images} · {}",
         revision.revision,
-        format_age(revision.created)
+        format_age(revision.created, now)
     )
 }
 
@@ -106,15 +106,16 @@ fn show_revisions(
         );
         return;
     };
+    let now = crate::ui::clock::now(ui.ctx());
     let options = candidates
         .iter()
-        .map(|revision| (revision.revision, revision_label(revision)))
+        .map(|revision| (revision.revision, revision_label(revision, now)))
         .collect::<Vec<_>>();
     Combobox::new("deployment-rollback-revision")
         .accessibility_label("Revision")
         .placeholder("Search revisions...")
         .search_accessibility_label("Search revisions")
-        .selected_text(revision_label(selected))
+        .selected_text(revision_label(selected, now))
         .width(ui.available_width())
         .filter_by(|(_, label): &(i64, String)| label)
         .show_items(ui, &options, |combobox, (revision, label)| {
