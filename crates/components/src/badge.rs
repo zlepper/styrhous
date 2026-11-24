@@ -227,7 +227,7 @@ pub fn kind_badge_width(ui: &Ui, kind: &str) -> f32 {
     kind_capsule(ui, kind).size().x
 }
 
-/// The resource kind badge (`.kind`) before a blade or peek title:
+/// The resource kind badge (`.kind`) before a blade title:
 /// "Deployment" on the accent fill. Never clickable.
 pub fn kind_badge(ui: &mut Ui, kind: &str) -> Response {
     kind_capsule(ui, kind).show(ui)

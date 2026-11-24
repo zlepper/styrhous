@@ -12,18 +12,19 @@ Window state=[focused] rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
-          Button name="Back" state=[disabled] rect=(x=1180.0 y=21.5 width=28.0 height=28.0 center_x=1194.0 center_y=35.5)
-          Button name="Forward" state=[disabled] rect=(x=1210.0 y=21.5 width=28.0 height=28.0 center_x=1224.0 center_y=35.5)
-        GenericContainer rect=<none>
-          Label value="First" rect=(x=1263.0 y=24.0 width=577.0 height=24.0 center_x=1551.5 center_y=36.0)
-            TextRun value="First" rect=(x=1263.0 y=24.0 width=35.8 height=24.0 center_x=1280.9 center_y=36.0)
-        GenericContainer rect=<none>
-          Button name="Close blade" rect=(x=1848.0 y=21.5 width=28.0 height=28.0 center_x=1862.0 center_y=35.5)
-      GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Button name="Back" state=[disabled] rect=(x=820.0 y=21.5 width=28.0 height=28.0 center_x=834.0 center_y=35.5)
+            Button name="Forward" state=[disabled] rect=(x=850.0 y=21.5 width=28.0 height=28.0 center_x=864.0 center_y=35.5)
+          GenericContainer rect=<none>
+            Label value="First" rect=(x=903.0 y=24.0 width=577.0 height=24.0 center_x=1191.5 center_y=36.0)
+              TextRun value="First" rect=(x=903.0 y=24.0 width=35.8 height=24.0 center_x=920.9 center_y=36.0)
+          GenericContainer rect=<none>
+            Button name="Close blade" rect=(x=1488.0 y=21.5 width=28.0 height=28.0 center_x=1502.0 center_y=35.5)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="Active · First" rect=(x=1192.0 y=84.0 width=72.5 height=16.0 center_x=1228.3 center_y=92.0)
-                TextRun value="Active · First" rect=(x=1192.0 y=84.0 width=72.5 height=16.0 center_x=1228.3 center_y=92.0)
-              Label value="back: false · forward: false" rect=(x=1192.0 y=103.0 width=150.5 height=16.0 center_x=1267.2 center_y=111.0)
-                TextRun value="back: false · forward: false" rect=(x=1192.0 y=103.0 width=150.5 height=16.0 center_x=1267.2 center_y=111.0)
+              GenericContainer rect=<none>
+                Label value="Active · First" rect=(x=832.0 y=84.0 width=72.5 height=16.0 center_x=868.3 center_y=92.0)
+                  TextRun value="Active · First" rect=(x=832.0 y=84.0 width=72.5 height=16.0 center_x=868.3 center_y=92.0)
+                Label value="back: false · forward: false" rect=(x=832.0 y=103.0 width=150.5 height=16.0 center_x=907.2 center_y=111.0)
+                  TextRun value="back: false · forward: false" rect=(x=832.0 y=103.0 width=150.5 height=16.0 center_x=907.2 center_y=111.0)

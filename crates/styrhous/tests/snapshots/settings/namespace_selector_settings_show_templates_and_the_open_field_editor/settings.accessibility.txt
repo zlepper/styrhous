@@ -430,11 +430,44 @@ Window state=[focused] rect=<none>
   GenericContainer rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
-        Label value="Settings" rect=(x=724.0 y=51.5 width=45.4 height=16.0 center_x=746.7 center_y=59.5)
-          TextRun value="Settings" rect=(x=724.0 y=51.5 width=45.4 height=16.0 center_x=746.7 center_y=59.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Button name="Back in background blade" state=[disabled] rect=(x=820.0 y=21.5 width=28.0 height=28.0 center_x=834.0 center_y=35.5)
+            Button name="Forward in background blade" rect=(x=850.0 y=21.5 width=28.0 height=28.0 center_x=864.0 center_y=35.5)
+          GenericContainer rect=<none>
+            Label value="Settings" rect=(x=903.0 y=24.0 width=577.0 height=24.0 center_x=1191.5 center_y=36.0)
+              TextRun value="Settings" rect=(x=903.0 y=24.0 width=65.3 height=24.0 center_x=935.7 center_y=36.0)
+          GenericContainer rect=<none>
+            Button name="Close background blade" rect=(x=1488.0 y=21.5 width=28.0 height=28.0 center_x=1502.0 center_y=35.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Workspace and application preferences. Changes are saved on this device." rect=(x=832.0 y=84.0 width=465.8 height=20.0 center_x=1064.9 center_y=94.0)
+                  TextRun value="Workspace and application preferences. Changes are saved on this device." rect=(x=832.0 y=84.0 width=465.8 height=20.0 center_x=1064.9 center_y=94.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="KUBERNETES" rect=(x=832.0 y=128.0 width=73.9 height=16.0 center_x=868.9 center_y=136.0)
+                      TextRun value="KUBERNETES" rect=(x=832.0 y=128.0 width=72.8 height=16.0 center_x=868.4 center_y=136.0)
+                    GenericContainer rect=<none>
+                      Button name="Open context settings: Display names and rail badges (3 contexts)" rect=(x=832.0 y=152.0 width=672.0 height=64.0 center_x=1168.0 center_y=184.0)
+                        GenericContainer rect=<none>
+                      Button name="Open namespace selector settings: How namespaces are labelled and searched" rect=(x=832.0 y=216.0 width=672.0 height=64.0 center_x=1168.0 center_y=248.0)
+                        GenericContainer rect=<none>
+                      Button name="Open cluster discovery: Find clusters in Azure, AWS and Tailscale" rect=(x=832.0 y=280.0 width=672.0 height=64.0 center_x=1168.0 center_y=312.0)
+                        GenericContainer rect=<none>
+                    Label value="APPLICATION" rect=(x=832.0 y=368.0 width=76.5 height=16.0 center_x=870.3 center_y=376.0)
+                      TextRun value="APPLICATION" rect=(x=832.0 y=368.0 width=75.4 height=16.0 center_x=869.7 center_y=376.0)
+                    GenericContainer rect=<none>
+                      Button name="Open application settings: Terminal, debug images and updates" rect=(x=832.0 y=392.0 width=672.0 height=64.0 center_x=1168.0 center_y=424.0)
+                        GenericContainer rect=<none>
+                      Button name="Open license and account settings: Hosted Styrhous service (Active)" rect=(x=832.0 y=456.0 width=672.0 height=64.0 center_x=1168.0 center_y=488.0)
+                        GenericContainer rect=<none>
+                          Label value="Active" rect=(x=1394.5 y=477.5 width=67.5 height=22.0 center_x=1428.3 center_y=488.5)
+                            TextRun value="Active" rect=(x=1417.5 y=480.5 width=35.5 height=16.0 center_x=1435.3 center_y=488.5)
   GenericContainer rect=<none>
     Unknown name="Dismiss blade" rect=(x=0.0 y=0.0 width=808.0 height=1024.0 center_x=404.0 center_y=512.0)
-    Button name="Go back one blade" rect=(x=712.0 y=24.0 width=96.0 height=976.0 center_x=760.0 center_y=512.0)
+    Button name="Go back one blade" rect=(x=568.0 y=58.4 width=240.0 height=907.2 center_x=688.0 center_y=512.0)
   GenericContainer rect=<none>
     Unknown name="Dismiss blade" rect=(x=808.0 y=1016.0 width=720.0 height=8.0 center_x=1168.0 center_y=1020.0)
   GenericContainer rect=<none>
@@ -443,84 +476,85 @@ Window state=[focused] rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
-          Button name="Back" rect=(x=820.0 y=21.5 width=28.0 height=28.0 center_x=834.0 center_y=35.5)
-          Button name="Forward" state=[disabled] rect=(x=850.0 y=21.5 width=28.0 height=28.0 center_x=864.0 center_y=35.5)
-        GenericContainer rect=<none>
-          Label value="Namespace selector" rect=(x=903.0 y=24.0 width=577.0 height=24.0 center_x=1191.5 center_y=36.0)
-            TextRun value="Namespace selector" rect=(x=903.0 y=24.0 width=160.2 height=24.0 center_x=983.1 center_y=36.0)
-        GenericContainer rect=<none>
-          Button name="Close blade" rect=(x=1488.0 y=21.5 width=28.0 height=28.0 center_x=1502.0 center_y=35.5)
-      GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Button name="Back" rect=(x=820.0 y=21.5 width=28.0 height=28.0 center_x=834.0 center_y=35.5)
+            Button name="Forward" state=[disabled] rect=(x=850.0 y=21.5 width=28.0 height=28.0 center_x=864.0 center_y=35.5)
+          GenericContainer rect=<none>
+            Label value="Namespace selector" rect=(x=903.0 y=24.0 width=577.0 height=24.0 center_x=1191.5 center_y=36.0)
+              TextRun value="Namespace selector" rect=(x=903.0 y=24.0 width=160.2 height=24.0 center_x=983.1 center_y=36.0)
+          GenericContainer rect=<none>
+            Button name="Close blade" rect=(x=1488.0 y=21.5 width=28.0 height=28.0 center_x=1502.0 center_y=35.5)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="NAMESPACE SELECTOR" rect=(x=832.0 y=84.0 width=135.5 height=14.0 center_x=899.7 center_y=91.0)
-                TextRun value="NAMESPACE SELECTOR" rect=(x=832.0 y=84.0 width=135.5 height=14.0 center_x=899.7 center_y=91.0)
-              Label value="Create meaningful namespace identities from labels and annotations. These settings apply to every cluster on this device." rect=(x=832.0 y=105.0 width=668.5 height=34.0 center_x=1166.2 center_y=122.0)
-                TextRun value="Create meaningful namespace identities from labels and annotations. These settings apply to every cluster " rect=(x=832.0 y=105.0 width=668.5 height=17.0 center_x=1166.2 center_y=113.5)
-                TextRun value="on this device." rect=(x=832.0 y=122.0 width=90.9 height=17.0 center_x=877.5 center_y=130.5)
               GenericContainer rect=<none>
+                Label value="NAMESPACE SELECTOR" rect=(x=832.0 y=84.0 width=135.5 height=14.0 center_x=899.7 center_y=91.0)
+                  TextRun value="NAMESPACE SELECTOR" rect=(x=832.0 y=84.0 width=135.5 height=14.0 center_x=899.7 center_y=91.0)
+                Label value="Create meaningful namespace identities from labels and annotations. These settings apply to every cluster on this device." rect=(x=832.0 y=105.0 width=668.5 height=34.0 center_x=1166.2 center_y=122.0)
+                  TextRun value="Create meaningful namespace identities from labels and annotations. These settings apply to every cluster " rect=(x=832.0 y=105.0 width=668.5 height=17.0 center_x=1166.2 center_y=113.5)
+                  TextRun value="on this device." rect=(x=832.0 y=122.0 width=90.9 height=17.0 center_x=877.5 center_y=130.5)
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
-                      Label value="Metadata fields" rect=(x=832.0 y=205.0 width=122.2 height=19.0 center_x=893.1 center_y=214.5)
-                        TextRun value="Metadata fields" rect=(x=832.0 y=205.0 width=122.2 height=19.0 center_x=893.1 center_y=214.5)
                       GenericContainer rect=<none>
-                        Button name="Add field" rect=(x=1430.5 y=205.0 width=73.5 height=28.0 center_x=1467.2 center_y=219.0)
-                    GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        Button name="Reorder customer field" rect=(x=850.0 y=278.0 width=32.0 height=32.0 center_x=866.0 center_y=294.0)
+                        Label value="Metadata fields" rect=(x=832.0 y=205.0 width=122.2 height=19.0 center_x=893.1 center_y=214.5)
+                          TextRun value="Metadata fields" rect=(x=832.0 y=205.0 width=122.2 height=19.0 center_x=893.1 center_y=214.5)
                         GenericContainer rect=<none>
-                          Label value="Label: company.example/customer" rect=(x=901.0 y=285.5 width=218.6 height=17.0 center_x=1010.3 center_y=294.0)
-                            TextRun value="Label: company.example/customer" rect=(x=901.0 y=285.5 width=218.6 height=17.0 center_x=1010.3 center_y=294.0)
-                          Label value="customer" rect=(x=1139.6 y=283.0 width=73.2 height=22.0 center_x=1176.2 center_y=294.0)
-                            TextRun value="customer" rect=(x=1148.6 y=286.0 width=55.2 height=16.0 center_x=1176.2 center_y=294.0)
-                        GenericContainer rect=<none>
-                          Button name="Remove customer field" rect=(x=1442.0 y=278.0 width=32.0 height=32.0 center_x=1458.0 center_y=294.0)
-                          Button name="Edit customer field" rect=(x=1394.0 y=278.0 width=32.0 height=32.0 center_x=1410.0 center_y=294.0)
-                      GenericContainer rect=<none>
-                        Button name="Reorder environment field" rect=(x=850.0 y=362.0 width=32.0 height=32.0 center_x=866.0 center_y=378.0)
-                        GenericContainer rect=<none>
-                          Label value="Annotation: company.example/environment" rect=(x=901.0 y=369.5 width=274.9 height=17.0 center_x=1038.5 center_y=378.0)
-                            TextRun value="Annotation: company.example/environment" rect=(x=901.0 y=369.5 width=274.9 height=17.0 center_x=1038.5 center_y=378.0)
-                          Label value="environment" rect=(x=1195.9 y=367.0 width=93.9 height=22.0 center_x=1242.9 center_y=378.0)
-                            TextRun value="environment" rect=(x=1204.9 y=370.0 width=75.9 height=16.0 center_x=1242.9 center_y=378.0)
-                        GenericContainer rect=<none>
-                          Button name="Remove environment field" rect=(x=1442.0 y=362.0 width=32.0 height=32.0 center_x=1458.0 center_y=378.0)
-                          Button name="Edit environment field" rect=(x=1394.0 y=362.0 width=32.0 height=32.0 center_x=1410.0 center_y=378.0)
-                    GenericContainer rect=<none>
-                      Label value="Identity templates" rect=(x=832.0 y=484.0 width=143.4 height=19.0 center_x=903.7 center_y=493.5)
-                        TextRun value="Identity templates" rect=(x=832.0 y=484.0 width=143.4 height=19.0 center_x=903.7 center_y=493.5)
-                      GenericContainer rect=<none>
-                        Button name="Add template" rect=(x=1405.5 y=484.0 width=98.5 height=28.0 center_x=1454.7 center_y=498.0)
-                    Label value="The first template with all its values available is used." rect=(x=832.0 y=523.0 width=327.0 height=17.0 center_x=995.5 center_y=531.5)
-                      TextRun value="The first template with all its values available is used." rect=(x=832.0 y=523.0 width=327.0 height=17.0 center_x=995.5 center_y=531.5)
-                    GenericContainer rect=<none>
-                      Button name="Reorder identity template 1" rect=(x=851.0 y=574.0 width=32.0 height=32.0 center_x=867.0 center_y=590.0)
+                          Button name="Add field" rect=(x=1430.5 y=205.0 width=73.5 height=28.0 center_x=1467.2 center_y=219.0)
                       GenericContainer rect=<none>
                         GenericContainer rect=<none>
-                          TextInput name="Identity template 1" value="Customer: {{customer}} · Environment: {{environment}}" rect=(x=899.0 y=574.0 width=528.0 height=32.0 center_x=1163.0 center_y=590.0)
-                            TextRun value="Customer: {{customer}} · Environment: {{environment}}" rect=(x=913.0 y=582.0 width=323.4 height=20.0 center_x=1074.7 center_y=592.0)
-                      GenericContainer rect=<none>
-                        Button name="Remove identity template 1" rect=(x=1443.0 y=574.0 width=32.0 height=32.0 center_x=1459.0 center_y=590.0)
-                      Button name="Reorder identity template 2" rect=(x=851.0 y=646.0 width=32.0 height=32.0 center_x=867.0 center_y=662.0)
-                      GenericContainer rect=<none>
+                          Button name="Reorder customer field" rect=(x=850.0 y=278.0 width=32.0 height=32.0 center_x=866.0 center_y=294.0)
+                          GenericContainer rect=<none>
+                            Label value="Label: company.example/customer" rect=(x=901.0 y=285.5 width=218.6 height=17.0 center_x=1010.3 center_y=294.0)
+                              TextRun value="Label: company.example/customer" rect=(x=901.0 y=285.5 width=218.6 height=17.0 center_x=1010.3 center_y=294.0)
+                            Label value="customer" rect=(x=1139.6 y=283.0 width=73.2 height=22.0 center_x=1176.2 center_y=294.0)
+                              TextRun value="customer" rect=(x=1148.6 y=286.0 width=55.2 height=16.0 center_x=1176.2 center_y=294.0)
+                          GenericContainer rect=<none>
+                            Button name="Remove customer field" rect=(x=1442.0 y=278.0 width=32.0 height=32.0 center_x=1458.0 center_y=294.0)
+                            Button name="Edit customer field" rect=(x=1394.0 y=278.0 width=32.0 height=32.0 center_x=1410.0 center_y=294.0)
                         GenericContainer rect=<none>
-                          TextInput name="Identity template 2" value="Customer: {{customer}}" rect=(x=899.0 y=646.0 width=528.0 height=32.0 center_x=1163.0 center_y=662.0)
-                            TextRun value="Customer: {{customer}}" rect=(x=913.0 y=654.0 width=139.5 height=20.0 center_x=982.8 center_y=664.0)
+                          Button name="Reorder environment field" rect=(x=850.0 y=362.0 width=32.0 height=32.0 center_x=866.0 center_y=378.0)
+                          GenericContainer rect=<none>
+                            Label value="Annotation: company.example/environment" rect=(x=901.0 y=369.5 width=274.9 height=17.0 center_x=1038.5 center_y=378.0)
+                              TextRun value="Annotation: company.example/environment" rect=(x=901.0 y=369.5 width=274.9 height=17.0 center_x=1038.5 center_y=378.0)
+                            Label value="environment" rect=(x=1195.9 y=367.0 width=93.9 height=22.0 center_x=1242.9 center_y=378.0)
+                              TextRun value="environment" rect=(x=1204.9 y=370.0 width=75.9 height=16.0 center_x=1242.9 center_y=378.0)
+                          GenericContainer rect=<none>
+                            Button name="Remove environment field" rect=(x=1442.0 y=362.0 width=32.0 height=32.0 center_x=1458.0 center_y=378.0)
+                            Button name="Edit environment field" rect=(x=1394.0 y=362.0 width=32.0 height=32.0 center_x=1410.0 center_y=378.0)
                       GenericContainer rect=<none>
-                        Button name="Remove identity template 2" rect=(x=1443.0 y=646.0 width=32.0 height=32.0 center_x=1459.0 center_y=662.0)
-                      GenericContainer rect=<none>
+                        Label value="Identity templates" rect=(x=832.0 y=484.0 width=143.4 height=19.0 center_x=903.7 center_y=493.5)
+                          TextRun value="Identity templates" rect=(x=832.0 y=484.0 width=143.4 height=19.0 center_x=903.7 center_y=493.5)
                         GenericContainer rect=<none>
-                          Label value="Namespace name" rect=(x=908.0 y=725.5 width=112.7 height=17.0 center_x=964.3 center_y=734.0)
-                            TextRun value="Namespace name" rect=(x=908.0 y=725.5 width=112.7 height=17.0 center_x=964.3 center_y=734.0)
-                    GenericContainer rect=<none>
-                      Label value="Preview" rect=(x=848.0 y=797.0 width=62.8 height=19.0 center_x=879.4 center_y=806.5)
-                        TextRun value="Preview" rect=(x=848.0 y=797.0 width=62.8 height=19.0 center_x=879.4 center_y=806.5)
-                      Label value="Customer: Acme Corp · Environment: Production" rect=(x=848.0 y=831.0 width=376.2 height=19.0 center_x=1036.1 center_y=840.5)
-                        TextRun value="Customer: Acme Corp · Environment: Production" rect=(x=848.0 y=831.0 width=376.2 height=19.0 center_x=1036.1 center_y=840.5)
-                      Label value="acme-corp-a1b2c3d4" rect=(x=848.0 y=857.0 width=135.7 height=17.0 center_x=915.8 center_y=865.5)
-                        TextRun value="acme-corp-a1b2c3d4" rect=(x=848.0 y=857.0 width=135.7 height=17.0 center_x=915.8 center_y=865.5)
-              GenericContainer rect=<none>
-                Button name="Save changes" rect=(x=1392.7 y=968.5 width=111.3 height=32.0 center_x=1448.4 center_y=984.5)
-                Button name="Reset" rect=(x=1320.9 y=968.5 width=63.8 height=32.0 center_x=1352.8 center_y=984.5)
+                          Button name="Add template" rect=(x=1405.5 y=484.0 width=98.5 height=28.0 center_x=1454.7 center_y=498.0)
+                      Label value="The first template with all its values available is used." rect=(x=832.0 y=523.0 width=327.0 height=17.0 center_x=995.5 center_y=531.5)
+                        TextRun value="The first template with all its values available is used." rect=(x=832.0 y=523.0 width=327.0 height=17.0 center_x=995.5 center_y=531.5)
+                      GenericContainer rect=<none>
+                        Button name="Reorder identity template 1" rect=(x=851.0 y=574.0 width=32.0 height=32.0 center_x=867.0 center_y=590.0)
+                        GenericContainer rect=<none>
+                          GenericContainer rect=<none>
+                            TextInput name="Identity template 1" value="Customer: {{customer}} · Environment: {{environment}}" rect=(x=899.0 y=574.0 width=528.0 height=32.0 center_x=1163.0 center_y=590.0)
+                              TextRun value="Customer: {{customer}} · Environment: {{environment}}" rect=(x=913.0 y=582.0 width=323.4 height=20.0 center_x=1074.7 center_y=592.0)
+                        GenericContainer rect=<none>
+                          Button name="Remove identity template 1" rect=(x=1443.0 y=574.0 width=32.0 height=32.0 center_x=1459.0 center_y=590.0)
+                        Button name="Reorder identity template 2" rect=(x=851.0 y=646.0 width=32.0 height=32.0 center_x=867.0 center_y=662.0)
+                        GenericContainer rect=<none>
+                          GenericContainer rect=<none>
+                            TextInput name="Identity template 2" value="Customer: {{customer}}" rect=(x=899.0 y=646.0 width=528.0 height=32.0 center_x=1163.0 center_y=662.0)
+                              TextRun value="Customer: {{customer}}" rect=(x=913.0 y=654.0 width=139.5 height=20.0 center_x=982.8 center_y=664.0)
+                        GenericContainer rect=<none>
+                          Button name="Remove identity template 2" rect=(x=1443.0 y=646.0 width=32.0 height=32.0 center_x=1459.0 center_y=662.0)
+                        GenericContainer rect=<none>
+                          GenericContainer rect=<none>
+                            Label value="Namespace name" rect=(x=908.0 y=725.5 width=112.7 height=17.0 center_x=964.3 center_y=734.0)
+                              TextRun value="Namespace name" rect=(x=908.0 y=725.5 width=112.7 height=17.0 center_x=964.3 center_y=734.0)
+                      GenericContainer rect=<none>
+                        Label value="Preview" rect=(x=848.0 y=797.0 width=62.8 height=19.0 center_x=879.4 center_y=806.5)
+                          TextRun value="Preview" rect=(x=848.0 y=797.0 width=62.8 height=19.0 center_x=879.4 center_y=806.5)
+                        Label value="Customer: Acme Corp · Environment: Production" rect=(x=848.0 y=831.0 width=376.2 height=19.0 center_x=1036.1 center_y=840.5)
+                          TextRun value="Customer: Acme Corp · Environment: Production" rect=(x=848.0 y=831.0 width=376.2 height=19.0 center_x=1036.1 center_y=840.5)
+                        Label value="acme-corp-a1b2c3d4" rect=(x=848.0 y=857.0 width=135.7 height=17.0 center_x=915.8 center_y=865.5)
+                          TextRun value="acme-corp-a1b2c3d4" rect=(x=848.0 y=857.0 width=135.7 height=17.0 center_x=915.8 center_y=865.5)
+                GenericContainer rect=<none>
+                  Button name="Save changes" rect=(x=1392.7 y=968.5 width=111.3 height=32.0 center_x=1448.4 center_y=984.5)
+                  Button name="Reset" rect=(x=1320.9 y=968.5 width=63.8 height=32.0 center_x=1352.8 center_y=984.5)

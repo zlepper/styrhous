@@ -443,249 +443,250 @@ Window state=[focused] rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
-          Button name="Back" state=[disabled] rect=(x=824.0 y=28.0 width=28.0 height=28.0 center_x=838.0 center_y=42.0)
-          Button name="Forward" state=[disabled] rect=(x=854.0 y=28.0 width=28.0 height=28.0 center_x=868.0 center_y=42.0)
-        Label value="Pod" rect=(x=907.0 y=31.0 width=37.3 height=22.0 center_x=925.7 center_y=42.0)
-          TextRun value="Pod" rect=(x=916.0 y=34.0 width=19.3 height=16.0 center_x=925.7 center_y=42.0)
-        Label value="coredns-66bc5c9577-ffw2s" rect=(x=954.3 y=22.0 width=281.2 height=24.0 center_x=1094.9 center_y=34.0)
-          TextRun value="coredns-66bc5c9577-ffw2s" rect=(x=954.3 y=22.0 width=242.2 height=24.0 center_x=1075.4 center_y=34.0)
-        GenericContainer rect=<none>
-          Label value="Running" rect=(x=954.3 y=46.0 width=58.9 height=16.0 center_x=983.8 center_y=54.0)
-            TextRun value="Running" rect=(x=968.3 y=46.0 width=44.9 height=16.0 center_x=990.8 center_y=54.0)
-          Label value="· on" rect=(x=1019.2 y=46.0 width=19.7 height=16.0 center_x=1029.0 center_y=54.0)
-            TextRun value="· on" rect=(x=1019.2 y=46.0 width=19.7 height=16.0 center_x=1029.0 center_y=54.0)
-          Label value="kind-control-plane" rect=(x=1044.8 y=46.0 width=99.8 height=16.0 center_x=1094.7 center_y=54.0)
-            TextRun value="kind-control-plane" rect=(x=1044.8 y=46.0 width=99.8 height=16.0 center_x=1094.7 center_y=54.0)
-      GenericContainer rect=<none>
-        Button name="Logs" rect=(x=1245.6 y=28.0 width=90.1 height=28.0 center_x=1290.6 center_y=42.0)
-        Button name="Shell" rect=(x=1345.6 y=28.0 width=90.4 height=28.0 center_x=1390.8 center_y=42.0)
-        Button name="More actions for coredns-66bc5c9577-ffw2s" rect=(x=1446.0 y=28.0 width=28.0 height=28.0 center_x=1460.0 center_y=42.0)
-      GenericContainer rect=<none>
-        Button name="Close blade" rect=(x=1484.0 y=28.0 width=28.0 height=28.0 center_x=1498.0 center_y=42.0)
-      GenericContainer rect=<none>
-        Label value="Ready: 1 / 1" rect=(x=828.0 y=76.0 width=129.6 height=55.0 center_x=892.8 center_y=103.5)
-        Label value="Restarts: 0" rect=(x=965.6 y=76.0 width=129.6 height=55.0 center_x=1030.4 center_y=103.5)
-        Label value="CPU: — / 100m" rect=(x=1103.2 y=76.0 width=129.6 height=55.0 center_x=1168.0 center_y=103.5)
-        Label value="Memory: — / 170Mi" rect=(x=1240.8 y=76.0 width=129.6 height=55.0 center_x=1305.6 center_y=103.5)
-        Label value="Age: 396d" rect=(x=1378.4 y=76.0 width=129.6 height=55.0 center_x=1443.2 center_y=103.5)
-      GenericContainer rect=<none>
-        GenericContainer rect=<none>
-          Label value="On this pod" rect=(x=828.0 y=162.0 width=73.8 height=16.0 center_x=864.9 center_y=170.0)
-            TextRun value="ON THIS POD" rect=(x=828.0 y=162.0 width=72.8 height=16.0 center_x=864.4 center_y=170.0)
           GenericContainer rect=<none>
-            GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                Button name="Overview" state=[toggled=True] rect=(x=818.0 y=188.0 width=156.0 height=32.0 center_x=896.0 center_y=204.0)
-                  TextRun value="Overview" rect=(x=828.0 y=194.0 width=56.7 height=20.0 center_x=856.4 center_y=204.0)
-                Button name="Usage" state=[toggled=False] rect=(x=818.0 y=222.0 width=156.0 height=32.0 center_x=896.0 center_y=238.0)
-                  TextRun value="Usage" rect=(x=828.0 y=228.0 width=36.6 height=20.0 center_x=846.3 center_y=238.0)
-                Button name="Containers, 1" state=[toggled=False] rect=(x=818.0 y=256.0 width=156.0 height=32.0 center_x=896.0 center_y=272.0)
-                  TextRun value="Containers" rect=(x=828.0 y=262.0 width=63.5 height=20.0 center_x=859.8 center_y=272.0)
-                Button name="Labels, 3" state=[toggled=False] rect=(x=818.0 y=290.0 width=156.0 height=32.0 center_x=896.0 center_y=306.0)
-                  TextRun value="Labels" rect=(x=828.0 y=296.0 width=37.0 height=20.0 center_x=846.5 center_y=306.0)
-                Button name="Annotations, 1" state=[toggled=False] rect=(x=818.0 y=324.0 width=156.0 height=32.0 center_x=896.0 center_y=340.0)
-                  TextRun value="Annotations" rect=(x=828.0 y=330.0 width=71.1 height=20.0 center_x=863.6 center_y=340.0)
-                Button name="Events, 5, 2 problems" state=[toggled=False] rect=(x=818.0 y=358.0 width=156.0 height=32.0 center_x=896.0 center_y=374.0)
-                  TextRun value="Events" rect=(x=828.0 y=364.0 width=39.6 height=20.0 center_x=847.8 center_y=374.0)
-                Button name="YAML" state=[toggled=False] rect=(x=818.0 y=392.0 width=156.0 height=32.0 center_x=896.0 center_y=408.0)
-                  TextRun value="YAML" rect=(x=828.0 y=398.0 width=34.4 height=20.0 center_x=845.2 center_y=408.0)
+            Button name="Back" state=[disabled] rect=(x=824.0 y=28.0 width=28.0 height=28.0 center_x=838.0 center_y=42.0)
+            Button name="Forward" state=[disabled] rect=(x=854.0 y=28.0 width=28.0 height=28.0 center_x=868.0 center_y=42.0)
+          Label value="Pod" rect=(x=907.0 y=31.0 width=37.3 height=22.0 center_x=925.7 center_y=42.0)
+            TextRun value="Pod" rect=(x=916.0 y=34.0 width=19.3 height=16.0 center_x=925.7 center_y=42.0)
+          Label value="coredns-66bc5c9577-ffw2s" rect=(x=954.3 y=22.0 width=281.2 height=24.0 center_x=1094.9 center_y=34.0)
+            TextRun value="coredns-66bc5c9577-ffw2s" rect=(x=954.3 y=22.0 width=242.2 height=24.0 center_x=1075.4 center_y=34.0)
+          GenericContainer rect=<none>
+            Label value="Running" rect=(x=954.3 y=46.0 width=58.9 height=16.0 center_x=983.8 center_y=54.0)
+              TextRun value="Running" rect=(x=968.3 y=46.0 width=44.9 height=16.0 center_x=990.8 center_y=54.0)
+            Label value="· on" rect=(x=1019.2 y=46.0 width=19.7 height=16.0 center_x=1029.0 center_y=54.0)
+              TextRun value="· on" rect=(x=1019.2 y=46.0 width=19.7 height=16.0 center_x=1029.0 center_y=54.0)
+            Label value="kind-control-plane" rect=(x=1044.8 y=46.0 width=99.8 height=16.0 center_x=1094.7 center_y=54.0)
+              TextRun value="kind-control-plane" rect=(x=1044.8 y=46.0 width=99.8 height=16.0 center_x=1094.7 center_y=54.0)
+        GenericContainer rect=<none>
+          Button name="Logs" rect=(x=1245.6 y=28.0 width=90.1 height=28.0 center_x=1290.6 center_y=42.0)
+          Button name="Shell" rect=(x=1345.6 y=28.0 width=90.4 height=28.0 center_x=1390.8 center_y=42.0)
+          Button name="More actions for coredns-66bc5c9577-ffw2s" rect=(x=1446.0 y=28.0 width=28.0 height=28.0 center_x=1460.0 center_y=42.0)
+        GenericContainer rect=<none>
+          Button name="Close blade" rect=(x=1484.0 y=28.0 width=28.0 height=28.0 center_x=1498.0 center_y=42.0)
+        GenericContainer rect=<none>
+          Label value="Ready: 1 / 1" rect=(x=828.0 y=76.0 width=129.6 height=55.0 center_x=892.8 center_y=103.5)
+          Label value="Restarts: 0" rect=(x=965.6 y=76.0 width=129.6 height=55.0 center_x=1030.4 center_y=103.5)
+          Label value="CPU: — / 100m" rect=(x=1103.2 y=76.0 width=129.6 height=55.0 center_x=1168.0 center_y=103.5)
+          Label value="Memory: — / 170Mi" rect=(x=1240.8 y=76.0 width=129.6 height=55.0 center_x=1305.6 center_y=103.5)
+          Label value="Age: 396d" rect=(x=1378.4 y=76.0 width=129.6 height=55.0 center_x=1443.2 center_y=103.5)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
+            Label value="On this pod" rect=(x=828.0 y=162.0 width=73.8 height=16.0 center_x=864.9 center_y=170.0)
+              TextRun value="ON THIS POD" rect=(x=828.0 y=162.0 width=72.8 height=16.0 center_x=864.4 center_y=170.0)
             GenericContainer rect=<none>
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
-                  Label value="Overview" rect=(x=1004.0 y=172.0 width=69.1 height=20.0 center_x=1038.6 center_y=182.0)
-                    TextRun value="Overview" rect=(x=1004.0 y=172.0 width=69.1 height=20.0 center_x=1038.6 center_y=182.0)
-                GenericContainer rect=<none>
-                  Label value="Namespace" rect=(x=1020.0 y=220.0 width=67.6 height=16.0 center_x=1053.8 center_y=228.0)
-                    TextRun value="NAMESPACE" rect=(x=1020.0 y=220.0 width=66.5 height=16.0 center_x=1053.2 center_y=228.0)
-                  GenericContainer rect=<none>
-                    Button name="Copy Namespace" rect=(x=1020.0 y=236.0 width=224.0 height=20.0 center_x=1132.0 center_y=246.0)
-                      Label value="kube-system" rect=(x=1020.0 y=236.0 width=75.7 height=20.0 center_x=1057.8 center_y=246.0)
-                        TextRun value="kube-system" rect=(x=1020.0 y=236.0 width=75.7 height=20.0 center_x=1057.8 center_y=246.0)
-                  Label value="QoS class" rect=(x=1268.0 y=220.0 width=62.1 height=16.0 center_x=1299.0 center_y=228.0)
-                    TextRun value="QOS CLASS" rect=(x=1268.0 y=220.0 width=61.0 height=16.0 center_x=1298.5 center_y=228.0)
-                  GenericContainer rect=<none>
-                    Label value="Burstable" rect=(x=1268.0 y=236.0 width=54.7 height=20.0 center_x=1295.4 center_y=246.0)
-                      TextRun value="Burstable" rect=(x=1268.0 y=236.0 width=54.7 height=20.0 center_x=1295.4 center_y=246.0)
-                  Label value="Pod IP" rect=(x=1020.0 y=272.0 width=39.4 height=16.0 center_x=1039.7 center_y=280.0)
-                    TextRun value="POD IP" rect=(x=1020.0 y=272.0 width=38.3 height=16.0 center_x=1039.2 center_y=280.0)
-                  GenericContainer rect=<none>
-                    Button name="Copy Pod IP" rect=(x=1020.0 y=288.0 width=224.0 height=20.0 center_x=1132.0 center_y=298.0)
-                      Label value="10.244.0.3" rect=(x=1020.0 y=288.0 width=72.0 height=20.0 center_x=1056.0 center_y=298.0)
-                        TextRun value="10.244.0.3" rect=(x=1020.0 y=288.0 width=72.0 height=20.0 center_x=1056.0 center_y=298.0)
-                  Label value="Host IP" rect=(x=1268.0 y=272.0 width=46.1 height=16.0 center_x=1291.0 center_y=280.0)
-                    TextRun value="HOST IP" rect=(x=1268.0 y=272.0 width=45.0 height=16.0 center_x=1290.5 center_y=280.0)
-                  GenericContainer rect=<none>
-                    Button name="Copy Host IP" rect=(x=1268.0 y=288.0 width=224.0 height=20.0 center_x=1380.0 center_y=298.0)
-                      Label value="172.18.0.2" rect=(x=1268.0 y=288.0 width=72.0 height=20.0 center_x=1304.0 center_y=298.0)
-                        TextRun value="172.18.0.2" rect=(x=1268.0 y=288.0 width=72.0 height=20.0 center_x=1304.0 center_y=298.0)
-                  Label value="Controlled by" rect=(x=1020.0 y=324.0 width=91.5 height=16.0 center_x=1065.8 center_y=332.0)
-                    TextRun value="CONTROLLED BY" rect=(x=1020.0 y=324.0 width=90.4 height=16.0 center_x=1065.2 center_y=332.0)
-                  GenericContainer rect=<none>
-                    Label value="ReplicaSet coredns-66bc5c9577" rect=(x=1020.0 y=340.0 width=190.8 height=20.0 center_x=1115.4 center_y=350.0)
-                      TextRun value="ReplicaSet coredns-66bc5c9577" rect=(x=1020.0 y=340.0 width=190.8 height=20.0 center_x=1115.4 center_y=350.0)
-                  Label value="Service account" rect=(x=1268.0 y=324.0 width=105.1 height=16.0 center_x=1320.5 center_y=332.0)
-                    TextRun value="SERVICE ACCOUNT" rect=(x=1268.0 y=324.0 width=104.0 height=16.0 center_x=1320.0 center_y=332.0)
-                  GenericContainer rect=<none>
-                    Label value="coredns" rect=(x=1268.0 y=340.0 width=47.0 height=20.0 center_x=1291.5 center_y=350.0)
-                      TextRun value="coredns" rect=(x=1268.0 y=340.0 width=47.0 height=20.0 center_x=1291.5 center_y=350.0)
-                  Label value="Node" rect=(x=1020.0 y=376.0 width=31.2 height=16.0 center_x=1035.6 center_y=384.0)
-                    TextRun value="NODE" rect=(x=1020.0 y=376.0 width=30.1 height=16.0 center_x=1035.1 center_y=384.0)
-                  GenericContainer rect=<none>
-                    Link name="Open details for Node kind-control-plane" rect=(x=1020.0 y=392.0 width=108.1 height=20.0 center_x=1074.0 center_y=402.0)
-                      TextRun value="kind-control-plane" rect=(x=1020.0 y=392.0 width=108.1 height=20.0 center_x=1074.0 center_y=402.0)
-                  Label value="UID" rect=(x=1268.0 y=376.0 width=21.0 height=16.0 center_x=1278.5 center_y=384.0)
-                    TextRun value="UID" rect=(x=1268.0 y=376.0 width=19.9 height=16.0 center_x=1278.0 center_y=384.0)
-                  GenericContainer rect=<none>
-                    Button name="Copy UID" rect=(x=1268.0 y=392.0 width=224.0 height=20.0 center_x=1380.0 center_y=402.0)
-                      Label value="d1f2c3a4-b5e6-47f8" rect=(x=1268.0 y=392.0 width=129.6 height=20.0 center_x=1332.8 center_y=402.0)
-                        TextRun value="d1f2c3a4-b5e6-47f8" rect=(x=1268.0 y=392.0 width=129.6 height=20.0 center_x=1332.8 center_y=402.0)
-                GenericContainer rect=<none>
-                  Label value="Usage" rect=(x=1004.0 y=448.0 width=45.4 height=20.0 center_x=1026.7 center_y=458.0)
-                    TextRun value="Usage" rect=(x=1004.0 y=448.0 width=45.4 height=20.0 center_x=1026.7 center_y=458.0)
-                  Label value="metrics.k8s.io · last 10 min" rect=(x=1057.4 y=451.0 width=139.9 height=16.0 center_x=1127.3 center_y=459.0)
-                    TextRun value="metrics.k8s.io · last 10 min" rect=(x=1057.4 y=451.0 width=139.9 height=16.0 center_x=1127.3 center_y=459.0)
+                  Button name="Overview" state=[toggled=True] rect=(x=818.0 y=188.0 width=156.0 height=32.0 center_x=896.0 center_y=204.0)
+                    TextRun value="Overview" rect=(x=828.0 y=194.0 width=56.7 height=20.0 center_x=856.4 center_y=204.0)
+                  Button name="Usage" state=[toggled=False] rect=(x=818.0 y=222.0 width=156.0 height=32.0 center_x=896.0 center_y=238.0)
+                    TextRun value="Usage" rect=(x=828.0 y=228.0 width=36.6 height=20.0 center_x=846.3 center_y=238.0)
+                  Button name="Containers, 1" state=[toggled=False] rect=(x=818.0 y=256.0 width=156.0 height=32.0 center_x=896.0 center_y=272.0)
+                    TextRun value="Containers" rect=(x=828.0 y=262.0 width=63.5 height=20.0 center_x=859.8 center_y=272.0)
+                  Button name="Labels, 3" state=[toggled=False] rect=(x=818.0 y=290.0 width=156.0 height=32.0 center_x=896.0 center_y=306.0)
+                    TextRun value="Labels" rect=(x=828.0 y=296.0 width=37.0 height=20.0 center_x=846.5 center_y=306.0)
+                  Button name="Annotations, 1" state=[toggled=False] rect=(x=818.0 y=324.0 width=156.0 height=32.0 center_x=896.0 center_y=340.0)
+                    TextRun value="Annotations" rect=(x=828.0 y=330.0 width=71.1 height=20.0 center_x=863.6 center_y=340.0)
+                  Button name="Events, 5, 2 problems" state=[toggled=False] rect=(x=818.0 y=358.0 width=156.0 height=32.0 center_x=896.0 center_y=374.0)
+                    TextRun value="Events" rect=(x=828.0 y=364.0 width=39.6 height=20.0 center_x=847.8 center_y=374.0)
+                  Button name="YAML" state=[toggled=False] rect=(x=818.0 y=392.0 width=156.0 height=32.0 center_x=896.0 center_y=408.0)
+                    TextRun value="YAML" rect=(x=828.0 y=398.0 width=34.4 height=20.0 center_x=845.2 center_y=408.0)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
+                    Label value="Overview" rect=(x=1004.0 y=172.0 width=69.1 height=20.0 center_x=1038.6 center_y=182.0)
+                      TextRun value="Overview" rect=(x=1004.0 y=172.0 width=69.1 height=20.0 center_x=1038.6 center_y=182.0)
+                  GenericContainer rect=<none>
+                    Label value="Namespace" rect=(x=1020.0 y=220.0 width=67.6 height=16.0 center_x=1053.8 center_y=228.0)
+                      TextRun value="NAMESPACE" rect=(x=1020.0 y=220.0 width=66.5 height=16.0 center_x=1053.2 center_y=228.0)
                     GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        Label value="CPU" rect=(x=1020.0 y=494.0 width=22.7 height=16.0 center_x=1031.3 center_y=502.0)
-                          TextRun value="CPU" rect=(x=1020.0 y=494.0 width=21.6 height=16.0 center_x=1030.8 center_y=502.0)
-                        Label value="limit 100m" rect=(x=1189.5 y=494.0 width=56.5 height=16.0 center_x=1217.8 center_y=502.0)
-                          TextRun value="limit 100m" rect=(x=1189.5 y=494.0 width=56.5 height=16.0 center_x=1217.8 center_y=502.0)
-                        Label value="Unavailable" rect=(x=1020.0 y=512.0 width=226.0 height=26.0 center_x=1133.0 center_y=525.0)
-                          TextRun value="Unavailable" rect=(x=1020.0 y=512.0 width=132.0 height=26.0 center_x=1086.0 center_y=525.0)
-                        Image name="Pod CPU usage chart; collecting samples; 10-minute history; scale from 0 to 100m; Request 100m, Limit 100m" rect=(x=1020.0 y=540.0 width=226.0 height=56.0 center_x=1133.0 center_y=568.0)
+                      Button name="Copy Namespace" rect=(x=1020.0 y=236.0 width=224.0 height=20.0 center_x=1132.0 center_y=246.0)
+                        Label value="kube-system" rect=(x=1020.0 y=236.0 width=75.7 height=20.0 center_x=1057.8 center_y=246.0)
+                          TextRun value="kube-system" rect=(x=1020.0 y=236.0 width=75.7 height=20.0 center_x=1057.8 center_y=246.0)
+                    Label value="QoS class" rect=(x=1268.0 y=220.0 width=62.1 height=16.0 center_x=1299.0 center_y=228.0)
+                      TextRun value="QOS CLASS" rect=(x=1268.0 y=220.0 width=61.0 height=16.0 center_x=1298.5 center_y=228.0)
                     GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        Label value="Memory" rect=(x=1266.0 y=494.0 width=48.0 height=16.0 center_x=1290.0 center_y=502.0)
-                          TextRun value="MEMORY" rect=(x=1266.0 y=494.0 width=46.9 height=16.0 center_x=1289.5 center_y=502.0)
-                        Label value="limit 170Mi" rect=(x=1434.1 y=494.0 width=57.9 height=16.0 center_x=1463.0 center_y=502.0)
-                          TextRun value="limit 170Mi" rect=(x=1434.1 y=494.0 width=57.9 height=16.0 center_x=1463.0 center_y=502.0)
-                        Label value="Unavailable" rect=(x=1266.0 y=512.0 width=226.0 height=26.0 center_x=1379.0 center_y=525.0)
-                          TextRun value="Unavailable" rect=(x=1266.0 y=512.0 width=132.0 height=26.0 center_x=1332.0 center_y=525.0)
-                        Image name="Pod memory usage chart; collecting samples; 10-minute history; scale from 0 to 170Mi; Request 70Mi, Limit 170Mi" rect=(x=1266.0 y=540.0 width=226.0 height=56.0 center_x=1379.0 center_y=568.0)
-                GenericContainer rect=<none>
-                  Label value="Containers" rect=(x=1004.0 y=630.0 width=80.4 height=20.0 center_x=1044.2 center_y=640.0)
-                    TextRun value="Containers" rect=(x=1004.0 y=630.0 width=80.4 height=20.0 center_x=1044.2 center_y=640.0)
-                  Label value="1 container" rect=(x=1092.4 y=633.0 width=58.8 height=16.0 center_x=1121.8 center_y=641.0)
-                    TextRun value="1 container" rect=(x=1092.4 y=633.0 width=58.8 height=16.0 center_x=1121.8 center_y=641.0)
-                GenericContainer rect=<none>
-                  Button name="coredns" state=[toggled=True] rect=(x=1004.0 y=662.0 width=504.0 height=44.0 center_x=1256.0 center_y=684.0)
-                    TextRun value="coredns" rect=(x=1058.0 y=674.0 width=54.6 height=20.0 center_x=1085.3 center_y=684.0)
+                      Label value="Burstable" rect=(x=1268.0 y=236.0 width=54.7 height=20.0 center_x=1295.4 center_y=246.0)
+                        TextRun value="Burstable" rect=(x=1268.0 y=236.0 width=54.7 height=20.0 center_x=1295.4 center_y=246.0)
+                    Label value="Pod IP" rect=(x=1020.0 y=272.0 width=39.4 height=16.0 center_x=1039.7 center_y=280.0)
+                      TextRun value="POD IP" rect=(x=1020.0 y=272.0 width=38.3 height=16.0 center_x=1039.2 center_y=280.0)
+                    GenericContainer rect=<none>
+                      Button name="Copy Pod IP" rect=(x=1020.0 y=288.0 width=224.0 height=20.0 center_x=1132.0 center_y=298.0)
+                        Label value="10.244.0.3" rect=(x=1020.0 y=288.0 width=72.0 height=20.0 center_x=1056.0 center_y=298.0)
+                          TextRun value="10.244.0.3" rect=(x=1020.0 y=288.0 width=72.0 height=20.0 center_x=1056.0 center_y=298.0)
+                    Label value="Host IP" rect=(x=1268.0 y=272.0 width=46.1 height=16.0 center_x=1291.0 center_y=280.0)
+                      TextRun value="HOST IP" rect=(x=1268.0 y=272.0 width=45.0 height=16.0 center_x=1290.5 center_y=280.0)
+                    GenericContainer rect=<none>
+                      Button name="Copy Host IP" rect=(x=1268.0 y=288.0 width=224.0 height=20.0 center_x=1380.0 center_y=298.0)
+                        Label value="172.18.0.2" rect=(x=1268.0 y=288.0 width=72.0 height=20.0 center_x=1304.0 center_y=298.0)
+                          TextRun value="172.18.0.2" rect=(x=1268.0 y=288.0 width=72.0 height=20.0 center_x=1304.0 center_y=298.0)
+                    Label value="Controlled by" rect=(x=1020.0 y=324.0 width=91.5 height=16.0 center_x=1065.8 center_y=332.0)
+                      TextRun value="CONTROLLED BY" rect=(x=1020.0 y=324.0 width=90.4 height=16.0 center_x=1065.2 center_y=332.0)
+                    GenericContainer rect=<none>
+                      Label value="ReplicaSet coredns-66bc5c9577" rect=(x=1020.0 y=340.0 width=190.8 height=20.0 center_x=1115.4 center_y=350.0)
+                        TextRun value="ReplicaSet coredns-66bc5c9577" rect=(x=1020.0 y=340.0 width=190.8 height=20.0 center_x=1115.4 center_y=350.0)
+                    Label value="Service account" rect=(x=1268.0 y=324.0 width=105.1 height=16.0 center_x=1320.5 center_y=332.0)
+                      TextRun value="SERVICE ACCOUNT" rect=(x=1268.0 y=324.0 width=104.0 height=16.0 center_x=1320.0 center_y=332.0)
+                    GenericContainer rect=<none>
+                      Label value="coredns" rect=(x=1268.0 y=340.0 width=47.0 height=20.0 center_x=1291.5 center_y=350.0)
+                        TextRun value="coredns" rect=(x=1268.0 y=340.0 width=47.0 height=20.0 center_x=1291.5 center_y=350.0)
+                    Label value="Node" rect=(x=1020.0 y=376.0 width=31.2 height=16.0 center_x=1035.6 center_y=384.0)
+                      TextRun value="NODE" rect=(x=1020.0 y=376.0 width=30.1 height=16.0 center_x=1035.1 center_y=384.0)
+                    GenericContainer rect=<none>
+                      Link name="Open details for Node kind-control-plane" rect=(x=1020.0 y=392.0 width=108.1 height=20.0 center_x=1074.0 center_y=402.0)
+                        TextRun value="kind-control-plane" rect=(x=1020.0 y=392.0 width=108.1 height=20.0 center_x=1074.0 center_y=402.0)
+                    Label value="UID" rect=(x=1268.0 y=376.0 width=21.0 height=16.0 center_x=1278.5 center_y=384.0)
+                      TextRun value="UID" rect=(x=1268.0 y=376.0 width=19.9 height=16.0 center_x=1278.0 center_y=384.0)
+                    GenericContainer rect=<none>
+                      Button name="Copy UID" rect=(x=1268.0 y=392.0 width=224.0 height=20.0 center_x=1380.0 center_y=402.0)
+                        Label value="d1f2c3a4-b5e6-47f8" rect=(x=1268.0 y=392.0 width=129.6 height=20.0 center_x=1332.8 center_y=402.0)
+                          TextRun value="d1f2c3a4-b5e6-47f8" rect=(x=1268.0 y=392.0 width=129.6 height=20.0 center_x=1332.8 center_y=402.0)
                   GenericContainer rect=<none>
-                    GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        Label value="REQUESTS / LIMITS" rect=(x=1020.0 y=723.0 width=110.0 height=16.0 center_x=1075.0 center_y=731.0)
-                          TextRun value="REQUESTS / LIMITS" rect=(x=1020.0 y=723.0 width=108.9 height=16.0 center_x=1074.5 center_y=731.0)
-                        Label value="100m · 70Mi / 100m · 170Mi" rect=(x=1020.0 y=739.0 width=161.2 height=20.0 center_x=1100.6 center_y=749.0)
-                          TextRun value="100m · 70Mi / 100m · 170Mi" rect=(x=1020.0 y=739.0 width=161.2 height=20.0 center_x=1100.6 center_y=749.0)
-                    GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        Label value="PORTS" rect=(x=1268.0 y=723.0 width=36.7 height=16.0 center_x=1286.3 center_y=731.0)
-                          TextRun value="PORTS" rect=(x=1268.0 y=723.0 width=35.6 height=16.0 center_x=1285.8 center_y=731.0)
-                        GenericContainer rect=<none>
-                          Button name="Copy Port 53/UDP" rect=(x=1268.0 y=739.0 width=59.4 height=22.0 center_x=1297.7 center_y=750.0)
-                            Label value="53/UDP" rect=(x=1268.0 y=739.0 width=59.4 height=22.0 center_x=1297.7 center_y=750.0)
-                              TextRun value="53/UDP" rect=(x=1277.0 y=742.0 width=41.4 height=16.0 center_x=1297.7 center_y=750.0)
-                          Button name="Copy Port 53/TCP" rect=(x=1333.4 y=739.0 width=59.4 height=22.0 center_x=1363.1 center_y=750.0)
-                            Label value="53/TCP" rect=(x=1333.4 y=739.0 width=59.4 height=22.0 center_x=1363.1 center_y=750.0)
-                              TextRun value="53/TCP" rect=(x=1342.4 y=742.0 width=41.4 height=16.0 center_x=1363.1 center_y=750.0)
-                          Button name="Copy Port 9153/TCP" rect=(x=1398.8 y=739.0 width=73.2 height=22.0 center_x=1435.4 center_y=750.0)
-                            Label value="9153/TCP" rect=(x=1398.8 y=739.0 width=73.2 height=22.0 center_x=1435.4 center_y=750.0)
-                              TextRun value="9153/TCP" rect=(x=1407.8 y=742.0 width=55.2 height=16.0 center_x=1435.4 center_y=750.0)
-                    GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        Label value="Args" rect=(x=1020.0 y=776.0 width=30.3 height=16.0 center_x=1035.2 center_y=784.0)
-                          TextRun value="ARGS" rect=(x=1020.0 y=776.0 width=29.2 height=16.0 center_x=1034.6 center_y=784.0)
-                        Button name="Copy Args -conf" rect=(x=1078.0 y=773.0 width=52.5 height=22.0 center_x=1104.2 center_y=784.0)
-                          Label value="-conf" rect=(x=1078.0 y=773.0 width=52.5 height=22.0 center_x=1104.2 center_y=784.0)
-                            TextRun value="-conf" rect=(x=1087.0 y=776.0 width=34.5 height=16.0 center_x=1104.2 center_y=784.0)
-                        Button name="Copy Args /etc/coredns/Corefile" rect=(x=1136.5 y=773.0 width=162.9 height=22.0 center_x=1218.0 center_y=784.0)
-                          Label value="/etc/coredns/Corefile" rect=(x=1136.5 y=773.0 width=162.9 height=22.0 center_x=1218.0 center_y=784.0)
-                            TextRun value="/etc/coredns/Corefile" rect=(x=1145.5 y=776.0 width=144.9 height=16.0 center_x=1218.0 center_y=784.0)
-                GenericContainer rect=<none>
-                  Label value="Labels" rect=(x=1004.0 y=831.0 width=47.0 height=20.0 center_x=1027.5 center_y=841.0)
-                    TextRun value="Labels" rect=(x=1004.0 y=831.0 width=47.0 height=20.0 center_x=1027.5 center_y=841.0)
-                GenericContainer rect=<none>
-                  GenericContainer rect=<none>
-                    Button name="Copy Labels k8s-app=kube-dns" rect=(x=1020.0 y=879.0 width=150.4 height=22.0 center_x=1095.2 center_y=890.0)
-                      Label value="k8s-app=kube-dns" rect=(x=1020.0 y=879.0 width=150.4 height=22.0 center_x=1095.2 center_y=890.0)
-                        TextRun value="k8s-app=kube-dns" rect=(x=1029.0 y=882.0 width=114.4 height=16.0 center_x=1086.2 center_y=890.0)
-                    Button name="Copy Labels pod-template-hash=66bc5c9577" rect=(x=1176.4 y=879.0 width=233.2 height=22.0 center_x=1293.0 center_y=890.0)
-                      Label value="pod-template-hash=66bc5c9577" rect=(x=1176.4 y=879.0 width=233.2 height=22.0 center_x=1293.0 center_y=890.0)
-                        TextRun value="pod-template-hash=66bc5c9577" rect=(x=1185.4 y=882.0 width=197.2 height=16.0 center_x=1284.0 center_y=890.0)
-                    Button name="Copy Labels tier=control-plane" rect=(x=1020.0 y=907.0 width=164.2 height=22.0 center_x=1102.1 center_y=918.0)
-                      Label value="tier=control-plane" rect=(x=1020.0 y=907.0 width=164.2 height=22.0 center_x=1102.1 center_y=918.0)
-                        TextRun value="tier=control-plane" rect=(x=1029.0 y=910.0 width=128.2 height=16.0 center_x=1093.1 center_y=918.0)
-                GenericContainer rect=<none>
-                  Label value="Annotations" rect=(x=1004.0 y=965.0 width=90.0 height=20.0 center_x=1049.0 center_y=975.0)
-                    TextRun value="Annotations" rect=(x=1004.0 y=965.0 width=90.0 height=20.0 center_x=1049.0 center_y=975.0)
-                GenericContainer rect=<none>
-                  GenericContainer rect=<none>
-                    Button name="Copy Annotations cluster-autoscaler.kubernetes.io/safe-to-evict=true" rect=(x=1020.0 y=1013.0 width=318.9 height=22.0 center_x=1179.5 center_y=1024.0)
-                      Label value="cluster-autoscaler.kubernetes.io/safe-to-evict=true" rect=(x=1020.0 y=1013.0 width=318.9 height=22.0 center_x=1179.5 center_y=1024.0)
-                        TextRun value="cluster-autoscaler.kubernetes.io/safe-to…" rect=(x=1029.0 y=1016.0 width=282.9 height=16.0 center_x=1170.5 center_y=1024.0)
-                GenericContainer rect=<none>
-                  Label value="Events" rect=(x=1004.0 y=1071.0 width=49.9 height=20.0 center_x=1028.9 center_y=1081.0)
-                GenericContainer rect=<none>
+                    Label value="Usage" rect=(x=1004.0 y=448.0 width=45.4 height=20.0 center_x=1026.7 center_y=458.0)
+                      TextRun value="Usage" rect=(x=1004.0 y=448.0 width=45.4 height=20.0 center_x=1026.7 center_y=458.0)
+                    Label value="metrics.k8s.io · last 10 min" rect=(x=1057.4 y=451.0 width=139.9 height=16.0 center_x=1127.3 center_y=459.0)
+                      TextRun value="metrics.k8s.io · last 10 min" rect=(x=1057.4 y=451.0 width=139.9 height=16.0 center_x=1127.3 center_y=459.0)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
                       GenericContainer rect=<none>
                         GenericContainer rect=<none>
-                          Label value="Type" rect=(x=1020.0 y=1119.0 width=26.4 height=14.0 center_x=1033.2 center_y=1126.0)
-                        GenericContainer rect=<none>
-                          Label value="Reason" rect=(x=1101.3 y=1119.0 width=39.4 height=14.0 center_x=1121.1 center_y=1126.0)
-                        GenericContainer rect=<none>
-                          Label value="Message" rect=(x=1182.7 y=1119.0 width=47.6 height=14.0 center_x=1206.5 center_y=1126.0)
-                        GenericContainer rect=<none>
-                          Label value="Source" rect=(x=1337.3 y=1119.0 width=38.1 height=14.0 center_x=1356.4 center_y=1126.0)
-                        GenericContainer rect=<none>
-                          Label value="Time" rect=(x=1418.7 y=1119.0 width=26.2 height=14.0 center_x=1431.8 center_y=1126.0)
-                    GenericContainer rect=<none>
+                          Label value="CPU" rect=(x=1020.0 y=494.0 width=22.7 height=16.0 center_x=1031.3 center_y=502.0)
+                            TextRun value="CPU" rect=(x=1020.0 y=494.0 width=21.6 height=16.0 center_x=1030.8 center_y=502.0)
+                          Label value="limit 100m" rect=(x=1189.5 y=494.0 width=56.5 height=16.0 center_x=1217.8 center_y=502.0)
+                            TextRun value="limit 100m" rect=(x=1189.5 y=494.0 width=56.5 height=16.0 center_x=1217.8 center_y=502.0)
+                          Label value="Unavailable" rect=(x=1020.0 y=512.0 width=226.0 height=26.0 center_x=1133.0 center_y=525.0)
+                            TextRun value="Unavailable" rect=(x=1020.0 y=512.0 width=132.0 height=26.0 center_x=1086.0 center_y=525.0)
+                          Image name="Pod CPU usage chart; collecting samples; 10-minute history; scale from 0 to 100m; Request 100m, Limit 100m" rect=(x=1020.0 y=540.0 width=226.0 height=56.0 center_x=1133.0 center_y=568.0)
                       GenericContainer rect=<none>
                         GenericContainer rect=<none>
-                          Label value="Warning" rect=(x=1020.0 y=1161.0 width=58.4 height=14.0 center_x=1049.2 center_y=1168.0)
-                        GenericContainer rect=<none>
-                          Button name="Copy Reason" rect=(x=1101.3 y=1161.0 width=73.3 height=32.0 center_x=1138.0 center_y=1177.0)
-                            Label value="EventReason0" rect=(x=1101.3 y=1161.0 width=44.6 height=32.0 center_x=1123.6 center_y=1177.0)
-                        GenericContainer rect=<none>
-                          Button name="Copy Message" rect=(x=1182.7 y=1161.0 width=146.7 height=16.0 center_x=1256.0 center_y=1169.0)
-                            Label value="Something happened" rect=(x=1182.7 y=1161.0 width=115.7 height=16.0 center_x=1240.5 center_y=1169.0)
-                        GenericContainer rect=<none>
-                          Button name="Copy Source" rect=(x=1337.3 y=1161.0 width=73.3 height=16.0 center_x=1374.0 center_y=1169.0)
-                            Label value="kubelet" rect=(x=1337.3 y=1161.0 width=39.8 height=16.0 center_x=1357.2 center_y=1169.0)
-                        GenericContainer rect=<none>
-                          Label value="Unknown ago" rect=(x=1418.7 y=1161.0 width=73.0 height=14.0 center_x=1455.2 center_y=1168.0)
-                    GenericContainer rect=<none>
-                      GenericContainer rect=<none>
-                        GenericContainer rect=<none>
-                          Label value="Warning" rect=(x=1020.0 y=1221.0 width=58.4 height=14.0 center_x=1049.2 center_y=1228.0)
-                        GenericContainer rect=<none>
-                          Button name="Copy Reason" rect=(x=1101.3 y=1221.0 width=73.3 height=32.0 center_x=1138.0 center_y=1237.0)
-                            Label value="EventReason2" rect=(x=1101.3 y=1221.0 width=44.6 height=32.0 center_x=1123.6 center_y=1237.0)
-                        GenericContainer rect=<none>
-                          Button name="Copy Message" rect=(x=1182.7 y=1221.0 width=146.7 height=16.0 center_x=1256.0 center_y=1229.0)
-                            Label value="Something happened" rect=(x=1182.7 y=1221.0 width=115.7 height=16.0 center_x=1240.5 center_y=1229.0)
-                        GenericContainer rect=<none>
-                          Button name="Copy Source" rect=(x=1337.3 y=1221.0 width=73.3 height=16.0 center_x=1374.0 center_y=1229.0)
-                            Label value="kubelet" rect=(x=1337.3 y=1221.0 width=39.8 height=16.0 center_x=1357.2 center_y=1229.0)
-                        GenericContainer rect=<none>
-                          Label value="Unknown ago" rect=(x=1418.7 y=1221.0 width=73.0 height=14.0 center_x=1455.2 center_y=1228.0)
-                    Button name="Show 3 normal events" rect=(x=1020.0 y=1281.0 width=129.9 height=20.0 center_x=1085.0 center_y=1291.0)
-                GenericContainer rect=<none>
-                  Label value="YAML" rect=(x=1004.0 y=1337.0 width=40.5 height=20.0 center_x=1024.2 center_y=1347.0)
-                  Label value="read-only" rect=(x=1052.5 y=1340.0 width=51.4 height=16.0 center_x=1078.2 center_y=1348.0)
-                GenericContainer rect=<none>
+                          Label value="Memory" rect=(x=1266.0 y=494.0 width=48.0 height=16.0 center_x=1290.0 center_y=502.0)
+                            TextRun value="MEMORY" rect=(x=1266.0 y=494.0 width=46.9 height=16.0 center_x=1289.5 center_y=502.0)
+                          Label value="limit 170Mi" rect=(x=1434.1 y=494.0 width=57.9 height=16.0 center_x=1463.0 center_y=502.0)
+                            TextRun value="limit 170Mi" rect=(x=1434.1 y=494.0 width=57.9 height=16.0 center_x=1463.0 center_y=502.0)
+                          Label value="Unavailable" rect=(x=1266.0 y=512.0 width=226.0 height=26.0 center_x=1379.0 center_y=525.0)
+                            TextRun value="Unavailable" rect=(x=1266.0 y=512.0 width=132.0 height=26.0 center_x=1332.0 center_y=525.0)
+                          Image name="Pod memory usage chart; collecting samples; 10-minute history; scale from 0 to 170Mi; Request 70Mi, Limit 170Mi" rect=(x=1266.0 y=540.0 width=226.0 height=56.0 center_x=1379.0 center_y=568.0)
                   GenericContainer rect=<none>
-                    Label value="coredns-66bc5c9577-ffw2s.yaml" rect=(x=1020.0 y=1389.0 width=208.8 height=20.0 center_x=1124.4 center_y=1399.0)
+                    Label value="Containers" rect=(x=1004.0 y=630.0 width=80.4 height=20.0 center_x=1044.2 center_y=640.0)
+                      TextRun value="Containers" rect=(x=1004.0 y=630.0 width=80.4 height=20.0 center_x=1044.2 center_y=640.0)
+                    Label value="1 container" rect=(x=1092.4 y=633.0 width=58.8 height=16.0 center_x=1121.8 center_y=641.0)
+                      TextRun value="1 container" rect=(x=1092.4 y=633.0 width=58.8 height=16.0 center_x=1121.8 center_y=641.0)
+                  GenericContainer rect=<none>
+                    Button name="coredns" state=[toggled=True] rect=(x=1004.0 y=662.0 width=504.0 height=44.0 center_x=1256.0 center_y=684.0)
+                      TextRun value="coredns" rect=(x=1058.0 y=674.0 width=54.6 height=20.0 center_x=1085.3 center_y=684.0)
                     GenericContainer rect=<none>
-                      Button name="Copy coredns-66bc5c9577-ffw2s.yaml" rect=(x=1418.8 y=1385.0 width=73.2 height=28.0 center_x=1455.4 center_y=1399.0)
-                    GenericContainer rect=<none>
-                      Label value="apiVersion: v1\nkind: Pod\nmetadata:\n  annotations:\n    cluster-autoscaler.kubernetes.io/safe-to-evict: 'true'\n  labels:\n    k8s-app: kube-dns\n    pod-template-hash: 66bc5c9577\n    tier: control-plane\n  name: coredns-66bc5c9577-ffw2s\n  namespace: kube-system\n  ownerReferences:\n  - apiVersion: apps/v1\n    controller: true\n    kind: ReplicaSet\n    name: coredns-66bc5c9577\n    uid: uid-coredns-replica-set\nspec:\n  containers:\n  - args:\n    - -conf\n    - /etc/coredns/Corefile\n    image: coredns:v1.11.1\n    name: coredns\n    ports:\n    - containerPort: 53\n      protocol: UDP\n    - containerPort: 53\n      protocol: TCP\n    - containerPort: 9153\n      protocol: TCP\n    resources:\n      limits:\n        cpu: 100m\n        memory: 170Mi\n      requests:\n        cpu: 100m\n        memory: 70Mi\n  nodeName: kind-control-plane\n  serviceAccountName: coredns\nstatus:\n  containerStatuses:\n  - image: coredns:v1.11.1\n    imageID: ''\n    name: coredns\n    ready: true\n    restartCount: 0\n    state:\n      running:\n        startedAt: 2026-05-31T12:00:00Z\n  hostIP: 172.18.0.2\n  phase: Running\n  podIP: 10.244.0.3\n  qosClass: Burstable" rect=(x=1034.0 y=1429.0 width=417.6 height=972.0 center_x=1242.8 center_y=1915.0)
                       GenericContainer rect=<none>
+                        GenericContainer rect=<none>
+                          Label value="REQUESTS / LIMITS" rect=(x=1020.0 y=723.0 width=110.0 height=16.0 center_x=1075.0 center_y=731.0)
+                            TextRun value="REQUESTS / LIMITS" rect=(x=1020.0 y=723.0 width=108.9 height=16.0 center_x=1074.5 center_y=731.0)
+                          Label value="100m · 70Mi / 100m · 170Mi" rect=(x=1020.0 y=739.0 width=161.2 height=20.0 center_x=1100.6 center_y=749.0)
+                            TextRun value="100m · 70Mi / 100m · 170Mi" rect=(x=1020.0 y=739.0 width=161.2 height=20.0 center_x=1100.6 center_y=749.0)
+                      GenericContainer rect=<none>
+                        GenericContainer rect=<none>
+                          Label value="PORTS" rect=(x=1268.0 y=723.0 width=36.7 height=16.0 center_x=1286.3 center_y=731.0)
+                            TextRun value="PORTS" rect=(x=1268.0 y=723.0 width=35.6 height=16.0 center_x=1285.8 center_y=731.0)
+                          GenericContainer rect=<none>
+                            Button name="Copy Port 53/UDP" rect=(x=1268.0 y=739.0 width=59.4 height=22.0 center_x=1297.7 center_y=750.0)
+                              Label value="53/UDP" rect=(x=1268.0 y=739.0 width=59.4 height=22.0 center_x=1297.7 center_y=750.0)
+                                TextRun value="53/UDP" rect=(x=1277.0 y=742.0 width=41.4 height=16.0 center_x=1297.7 center_y=750.0)
+                            Button name="Copy Port 53/TCP" rect=(x=1333.4 y=739.0 width=59.4 height=22.0 center_x=1363.1 center_y=750.0)
+                              Label value="53/TCP" rect=(x=1333.4 y=739.0 width=59.4 height=22.0 center_x=1363.1 center_y=750.0)
+                                TextRun value="53/TCP" rect=(x=1342.4 y=742.0 width=41.4 height=16.0 center_x=1363.1 center_y=750.0)
+                            Button name="Copy Port 9153/TCP" rect=(x=1398.8 y=739.0 width=73.2 height=22.0 center_x=1435.4 center_y=750.0)
+                              Label value="9153/TCP" rect=(x=1398.8 y=739.0 width=73.2 height=22.0 center_x=1435.4 center_y=750.0)
+                                TextRun value="9153/TCP" rect=(x=1407.8 y=742.0 width=55.2 height=16.0 center_x=1435.4 center_y=750.0)
+                      GenericContainer rect=<none>
+                        GenericContainer rect=<none>
+                          Label value="Args" rect=(x=1020.0 y=776.0 width=30.3 height=16.0 center_x=1035.2 center_y=784.0)
+                            TextRun value="ARGS" rect=(x=1020.0 y=776.0 width=29.2 height=16.0 center_x=1034.6 center_y=784.0)
+                          Button name="Copy Args -conf" rect=(x=1078.0 y=773.0 width=52.5 height=22.0 center_x=1104.2 center_y=784.0)
+                            Label value="-conf" rect=(x=1078.0 y=773.0 width=52.5 height=22.0 center_x=1104.2 center_y=784.0)
+                              TextRun value="-conf" rect=(x=1087.0 y=776.0 width=34.5 height=16.0 center_x=1104.2 center_y=784.0)
+                          Button name="Copy Args /etc/coredns/Corefile" rect=(x=1136.5 y=773.0 width=162.9 height=22.0 center_x=1218.0 center_y=784.0)
+                            Label value="/etc/coredns/Corefile" rect=(x=1136.5 y=773.0 width=162.9 height=22.0 center_x=1218.0 center_y=784.0)
+                              TextRun value="/etc/coredns/Corefile" rect=(x=1145.5 y=776.0 width=144.9 height=16.0 center_x=1218.0 center_y=784.0)
+                  GenericContainer rect=<none>
+                    Label value="Labels" rect=(x=1004.0 y=831.0 width=47.0 height=20.0 center_x=1027.5 center_y=841.0)
+                      TextRun value="Labels" rect=(x=1004.0 y=831.0 width=47.0 height=20.0 center_x=1027.5 center_y=841.0)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
-                      Button name="Edit YAML" rect=(x=1388.7 y=2423.0 width=103.3 height=28.0 center_x=1440.4 center_y=2437.0)
-          ScrollBar rect=(x=1518.0 y=148.0 width=10.0 height=868.0 center_x=1523.0 center_y=582.0)
+                      Button name="Copy Labels k8s-app=kube-dns" rect=(x=1020.0 y=879.0 width=150.4 height=22.0 center_x=1095.2 center_y=890.0)
+                        Label value="k8s-app=kube-dns" rect=(x=1020.0 y=879.0 width=150.4 height=22.0 center_x=1095.2 center_y=890.0)
+                          TextRun value="k8s-app=kube-dns" rect=(x=1029.0 y=882.0 width=114.4 height=16.0 center_x=1086.2 center_y=890.0)
+                      Button name="Copy Labels pod-template-hash=66bc5c9577" rect=(x=1176.4 y=879.0 width=233.2 height=22.0 center_x=1293.0 center_y=890.0)
+                        Label value="pod-template-hash=66bc5c9577" rect=(x=1176.4 y=879.0 width=233.2 height=22.0 center_x=1293.0 center_y=890.0)
+                          TextRun value="pod-template-hash=66bc5c9577" rect=(x=1185.4 y=882.0 width=197.2 height=16.0 center_x=1284.0 center_y=890.0)
+                      Button name="Copy Labels tier=control-plane" rect=(x=1020.0 y=907.0 width=164.2 height=22.0 center_x=1102.1 center_y=918.0)
+                        Label value="tier=control-plane" rect=(x=1020.0 y=907.0 width=164.2 height=22.0 center_x=1102.1 center_y=918.0)
+                          TextRun value="tier=control-plane" rect=(x=1029.0 y=910.0 width=128.2 height=16.0 center_x=1093.1 center_y=918.0)
+                  GenericContainer rect=<none>
+                    Label value="Annotations" rect=(x=1004.0 y=965.0 width=90.0 height=20.0 center_x=1049.0 center_y=975.0)
+                      TextRun value="Annotations" rect=(x=1004.0 y=965.0 width=90.0 height=20.0 center_x=1049.0 center_y=975.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      Button name="Copy Annotations cluster-autoscaler.kubernetes.io/safe-to-evict=true" rect=(x=1020.0 y=1013.0 width=318.9 height=22.0 center_x=1179.5 center_y=1024.0)
+                        Label value="cluster-autoscaler.kubernetes.io/safe-to-evict=true" rect=(x=1020.0 y=1013.0 width=318.9 height=22.0 center_x=1179.5 center_y=1024.0)
+                          TextRun value="cluster-autoscaler.kubernetes.io/safe-to…" rect=(x=1029.0 y=1016.0 width=282.9 height=16.0 center_x=1170.5 center_y=1024.0)
+                  GenericContainer rect=<none>
+                    Label value="Events" rect=(x=1004.0 y=1071.0 width=49.9 height=20.0 center_x=1028.9 center_y=1081.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        GenericContainer rect=<none>
+                          GenericContainer rect=<none>
+                            Label value="Type" rect=(x=1020.0 y=1119.0 width=26.4 height=14.0 center_x=1033.2 center_y=1126.0)
+                          GenericContainer rect=<none>
+                            Label value="Reason" rect=(x=1101.3 y=1119.0 width=39.4 height=14.0 center_x=1121.1 center_y=1126.0)
+                          GenericContainer rect=<none>
+                            Label value="Message" rect=(x=1182.7 y=1119.0 width=47.6 height=14.0 center_x=1206.5 center_y=1126.0)
+                          GenericContainer rect=<none>
+                            Label value="Source" rect=(x=1337.3 y=1119.0 width=38.1 height=14.0 center_x=1356.4 center_y=1126.0)
+                          GenericContainer rect=<none>
+                            Label value="Time" rect=(x=1418.7 y=1119.0 width=26.2 height=14.0 center_x=1431.8 center_y=1126.0)
+                      GenericContainer rect=<none>
+                        GenericContainer rect=<none>
+                          GenericContainer rect=<none>
+                            Label value="Warning" rect=(x=1020.0 y=1161.0 width=58.4 height=14.0 center_x=1049.2 center_y=1168.0)
+                          GenericContainer rect=<none>
+                            Button name="Copy Reason" rect=(x=1101.3 y=1161.0 width=73.3 height=32.0 center_x=1138.0 center_y=1177.0)
+                              Label value="EventReason0" rect=(x=1101.3 y=1161.0 width=44.6 height=32.0 center_x=1123.6 center_y=1177.0)
+                          GenericContainer rect=<none>
+                            Button name="Copy Message" rect=(x=1182.7 y=1161.0 width=146.7 height=16.0 center_x=1256.0 center_y=1169.0)
+                              Label value="Something happened" rect=(x=1182.7 y=1161.0 width=115.7 height=16.0 center_x=1240.5 center_y=1169.0)
+                          GenericContainer rect=<none>
+                            Button name="Copy Source" rect=(x=1337.3 y=1161.0 width=73.3 height=16.0 center_x=1374.0 center_y=1169.0)
+                              Label value="kubelet" rect=(x=1337.3 y=1161.0 width=39.8 height=16.0 center_x=1357.2 center_y=1169.0)
+                          GenericContainer rect=<none>
+                            Label value="Unknown ago" rect=(x=1418.7 y=1161.0 width=73.0 height=14.0 center_x=1455.2 center_y=1168.0)
+                      GenericContainer rect=<none>
+                        GenericContainer rect=<none>
+                          GenericContainer rect=<none>
+                            Label value="Warning" rect=(x=1020.0 y=1221.0 width=58.4 height=14.0 center_x=1049.2 center_y=1228.0)
+                          GenericContainer rect=<none>
+                            Button name="Copy Reason" rect=(x=1101.3 y=1221.0 width=73.3 height=32.0 center_x=1138.0 center_y=1237.0)
+                              Label value="EventReason2" rect=(x=1101.3 y=1221.0 width=44.6 height=32.0 center_x=1123.6 center_y=1237.0)
+                          GenericContainer rect=<none>
+                            Button name="Copy Message" rect=(x=1182.7 y=1221.0 width=146.7 height=16.0 center_x=1256.0 center_y=1229.0)
+                              Label value="Something happened" rect=(x=1182.7 y=1221.0 width=115.7 height=16.0 center_x=1240.5 center_y=1229.0)
+                          GenericContainer rect=<none>
+                            Button name="Copy Source" rect=(x=1337.3 y=1221.0 width=73.3 height=16.0 center_x=1374.0 center_y=1229.0)
+                              Label value="kubelet" rect=(x=1337.3 y=1221.0 width=39.8 height=16.0 center_x=1357.2 center_y=1229.0)
+                          GenericContainer rect=<none>
+                            Label value="Unknown ago" rect=(x=1418.7 y=1221.0 width=73.0 height=14.0 center_x=1455.2 center_y=1228.0)
+                      Button name="Show 3 normal events" rect=(x=1020.0 y=1281.0 width=129.9 height=20.0 center_x=1085.0 center_y=1291.0)
+                  GenericContainer rect=<none>
+                    Label value="YAML" rect=(x=1004.0 y=1337.0 width=40.5 height=20.0 center_x=1024.2 center_y=1347.0)
+                    Label value="read-only" rect=(x=1052.5 y=1340.0 width=51.4 height=16.0 center_x=1078.2 center_y=1348.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      Label value="coredns-66bc5c9577-ffw2s.yaml" rect=(x=1020.0 y=1389.0 width=208.8 height=20.0 center_x=1124.4 center_y=1399.0)
+                      GenericContainer rect=<none>
+                        Button name="Copy coredns-66bc5c9577-ffw2s.yaml" rect=(x=1418.8 y=1385.0 width=73.2 height=28.0 center_x=1455.4 center_y=1399.0)
+                      GenericContainer rect=<none>
+                        Label value="apiVersion: v1\nkind: Pod\nmetadata:\n  annotations:\n    cluster-autoscaler.kubernetes.io/safe-to-evict: 'true'\n  labels:\n    k8s-app: kube-dns\n    pod-template-hash: 66bc5c9577\n    tier: control-plane\n  name: coredns-66bc5c9577-ffw2s\n  namespace: kube-system\n  ownerReferences:\n  - apiVersion: apps/v1\n    controller: true\n    kind: ReplicaSet\n    name: coredns-66bc5c9577\n    uid: uid-coredns-replica-set\nspec:\n  containers:\n  - args:\n    - -conf\n    - /etc/coredns/Corefile\n    image: coredns:v1.11.1\n    name: coredns\n    ports:\n    - containerPort: 53\n      protocol: UDP\n    - containerPort: 53\n      protocol: TCP\n    - containerPort: 9153\n      protocol: TCP\n    resources:\n      limits:\n        cpu: 100m\n        memory: 170Mi\n      requests:\n        cpu: 100m\n        memory: 70Mi\n  nodeName: kind-control-plane\n  serviceAccountName: coredns\nstatus:\n  containerStatuses:\n  - image: coredns:v1.11.1\n    imageID: ''\n    name: coredns\n    ready: true\n    restartCount: 0\n    state:\n      running:\n        startedAt: 2026-05-31T12:00:00Z\n  hostIP: 172.18.0.2\n  phase: Running\n  podIP: 10.244.0.3\n  qosClass: Burstable" rect=(x=1034.0 y=1429.0 width=417.6 height=972.0 center_x=1242.8 center_y=1915.0)
+                        GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        Button name="Edit YAML" rect=(x=1388.7 y=2423.0 width=103.3 height=28.0 center_x=1440.4 center_y=2437.0)
+            ScrollBar rect=(x=1518.0 y=148.0 width=10.0 height=868.0 center_x=1523.0 center_y=582.0)

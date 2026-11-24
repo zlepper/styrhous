@@ -55,10 +55,6 @@ fn context_identity(ui: &mut egui::Ui, name: &str, presentation: &ContextPresent
 }
 
 impl GlobalBladeContent for ContextsSettingsBlade {
-    fn description(&self) -> components::BladeDescription {
-        components::BladeDescription::named("Contexts")
-    }
-
     fn sidebar_destination(&self) -> Option<crate::ui::global_blade::SidebarDestination> {
         Some(crate::ui::global_blade::SidebarDestination::Settings)
     }
@@ -430,10 +426,6 @@ impl ContextEditorBlade {
 }
 
 impl GlobalBladeContent for ContextEditorBlade {
-    fn description(&self) -> components::BladeDescription {
-        components::BladeDescription::named("Edit context")
-    }
-
     fn sidebar_destination(&self) -> Option<crate::ui::global_blade::SidebarDestination> {
         Some(crate::ui::global_blade::SidebarDestination::Settings)
     }

@@ -81,9 +81,8 @@ fn flatten<'a>(shape: &'a egui::Shape, out: &mut Vec<&'a egui::Shape>) {
 /// Accessibility bounds ignore visual transforms, so the painted shapes are the
 /// only observable record of where a history blade is drawn.
 fn drawn_blade_frames(harness: &Harness<'_>) -> Vec<Rect> {
-    let min_height = height(harness.ctx.content_rect())
-        - 2.0 * size::BLADE_PEEK_STEP * HISTORY_PEEKS as f32
-        - 1.0;
+    let min_height =
+        height(harness.ctx.content_rect()) * HISTORY_SCALES[HISTORY_SCALES.len() - 1] - 1.0;
     let tokens = harness.ctx.tokens();
     let mut frames = Vec::new();
     for clipped in &harness.output().shapes {
@@ -91,7 +90,7 @@ fn drawn_blade_frames(harness: &Harness<'_>) -> Vec<Rect> {
         flatten(&clipped.shape, &mut flat);
         for shape in flat {
             if let egui::Shape::Rect(rect) = shape
-                && (rect.fill == tokens.surface.panel || rect.fill == tokens.surface.sunken)
+                && rect.fill == tokens.surface.panel
                 && rect.rect.width() > 100.0
                 && rect.rect.height() >= min_height
             {
@@ -297,6 +296,95 @@ fn click_at(harness: &mut Harness<'_>, position: egui::Pos2) {
     }
 }
 
+/// Click in the part of the blade `depth` steps back that the blades in front
+/// of it leave visible, halfway between its left edge and the next blade's.
+fn click_history_blade(harness: &mut Harness<'_>, depth: usize) {
+    let viewport = harness.ctx.content_rect();
+    let this = transformed_rect(viewport, history_transform(viewport, depth));
+    let in_front = if depth == 0 {
+        transformed_rect(viewport, active_transform(viewport))
+    } else {
+        transformed_rect(viewport, history_transform(viewport, depth - 1))
+    };
+    click_at(
+        harness,
+        egui::pos2((this.left() + in_front.left()) / 2.0, this.center().y),
+    );
+}
+
+#[test]
+fn clicking_the_visible_part_of_each_back_blade_goes_back_to_it() {
+    for (depth, expected) in [(0, 2), (1, 1)] {
+        let (navigator, mut harness) = wide_role_harness(
+            "blade-click-each-back-blade",
+            &["First", "Second", "Third"],
+            crate::test_support::EGUI_TEST_SIZE,
+        );
+        click_history_blade(&mut harness, depth);
+        assert_eq!(
+            navigator.borrow().current().id,
+            expected,
+            "clicking the back blade at depth {depth}"
+        );
+    }
+}
+
+#[test]
+fn back_blades_show_their_content_and_are_not_dimmed_by_the_scrim() {
+    let (_, harness) = wide_role_harness(
+        "blade-scrim-behind-stack",
+        &["First", "Second", "Third"],
+        crate::test_support::EGUI_TEST_SIZE,
+    );
+    // The back blades render their real content, not a placeholder.
+    harness.get_by_label("History · First");
+    harness.get_by_label("History · Second");
+    harness.get_by_label("Active · Third");
+
+    let viewport = harness.ctx.content_rect();
+    let scrim = harness.ctx.tokens().shade.scrim;
+    let panel = harness.ctx.tokens().surface.panel;
+    let mut scrim_at = None;
+    let mut blade_surfaces = Vec::new();
+    let mut texts = Vec::new();
+    for (index, clipped) in harness.output().shapes.iter().enumerate() {
+        let mut flat = Vec::new();
+        flatten(&clipped.shape, &mut flat);
+        for shape in flat {
+            match shape {
+                egui::Shape::Rect(rect) if rect.fill == scrim && rect.rect == viewport => {
+                    scrim_at = Some(index);
+                }
+                egui::Shape::Rect(rect)
+                    if rect.fill == panel
+                        && rect.rect.width() > 100.0
+                        && rect.rect.height() > 100.0 =>
+                {
+                    blade_surfaces.push(index);
+                }
+                egui::Shape::Text(text)
+                    if text.galley.text().contains("History ·")
+                        || text.galley.text().contains("Active ·") =>
+                {
+                    texts.push(index);
+                }
+                _ => {}
+            }
+        }
+    }
+    let scrim_at = scrim_at.expect("the scrim is painted");
+    assert_eq!(blade_surfaces.len(), 3, "every blade of the stack is drawn");
+    assert_eq!(texts.len(), 3, "every blade draws its content");
+    assert!(
+        blade_surfaces
+            .iter()
+            .chain(&texts)
+            .all(|index| *index > scrim_at),
+        "the scrim dims the workspace only: it is painted before every blade \
+         (scrim {scrim_at}, blades {blade_surfaces:?}, content {texts:?})"
+    );
+}
+
 fn step_to_transition_midpoint(harness: &mut Harness<'_>, start: f64) {
     harness.input_mut().time = Some(start);
     harness.step();
@@ -434,5 +522,22 @@ fn the_body_footer_spans_the_bottom_of_the_blade() {
     assert!(
         cancel.right() < save.left(),
         "the primary action is rightmost"
+    );
+}
+
+#[test]
+fn only_the_two_nearest_of_many_back_blades_are_drawn_and_clickable() {
+    let (navigator, mut harness) = wide_role_harness(
+        "blade-click-many-back-blades",
+        &["First", "Second", "Third", "Fourth", "Fifth"],
+        crate::test_support::EGUI_TEST_SIZE,
+    );
+    assert_eq!(drawn_blade_frames(&harness).len(), 3);
+    assert!(harness.query_by_label("History · First").is_none());
+    click_history_blade(&mut harness, 1);
+    assert_eq!(
+        navigator.borrow().current().id,
+        3,
+        "the second visible back blade is two steps back"
     );
 }

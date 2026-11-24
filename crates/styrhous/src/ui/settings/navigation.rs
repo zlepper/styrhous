@@ -13,10 +13,6 @@ use egui::Align;
 pub(crate) struct SettingsHomeBlade;
 
 impl GlobalBladeContent for SettingsHomeBlade {
-    fn description(&self) -> components::BladeDescription {
-        components::BladeDescription::named("Settings")
-    }
-
     fn sidebar_destination(&self) -> Option<crate::ui::global_blade::SidebarDestination> {
         Some(crate::ui::global_blade::SidebarDestination::Settings)
     }
@@ -200,10 +196,6 @@ impl GlobalBladeEffect for GoBack {
 }
 
 impl GlobalBladeContent for TerminalSettingsBlade {
-    fn description(&self) -> components::BladeDescription {
-        components::BladeDescription::named("Application settings")
-    }
-
     fn sidebar_destination(&self) -> Option<crate::ui::global_blade::SidebarDestination> {
         Some(crate::ui::global_blade::SidebarDestination::Settings)
     }

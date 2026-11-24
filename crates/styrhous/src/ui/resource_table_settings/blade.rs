@@ -1,10 +1,6 @@
 use super::*;
 
 impl GlobalBladeContent for ResourceTableSettingsTarget {
-    fn description(&self) -> components::BladeDescription {
-        components::BladeDescription::named("Configure columns")
-    }
-
     fn render_header(
         &mut self,
         ui: &mut egui::Ui,

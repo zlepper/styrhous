@@ -443,75 +443,76 @@ Window state=[focused] rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
-          Button name="Back" state=[disabled] rect=(x=820.0 y=21.5 width=28.0 height=28.0 center_x=834.0 center_y=35.5)
-          Button name="Forward" state=[disabled] rect=(x=850.0 y=21.5 width=28.0 height=28.0 center_x=864.0 center_y=35.5)
-        GenericContainer rect=<none>
-          Label value="Configure columns" rect=(x=903.0 y=24.0 width=577.0 height=24.0 center_x=1191.5 center_y=36.0)
-            TextRun value="Configure columns" rect=(x=903.0 y=24.0 width=147.7 height=24.0 center_x=976.9 center_y=36.0)
-        GenericContainer rect=<none>
-          Button name="Close blade" rect=(x=1488.0 y=21.5 width=28.0 height=28.0 center_x=1502.0 center_y=35.5)
-      GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Button name="Back" state=[disabled] rect=(x=820.0 y=21.5 width=28.0 height=28.0 center_x=834.0 center_y=35.5)
+            Button name="Forward" state=[disabled] rect=(x=850.0 y=21.5 width=28.0 height=28.0 center_x=864.0 center_y=35.5)
+          GenericContainer rect=<none>
+            Label value="Configure columns" rect=(x=903.0 y=24.0 width=577.0 height=24.0 center_x=1191.5 center_y=36.0)
+              TextRun value="Configure columns" rect=(x=903.0 y=24.0 width=147.7 height=24.0 center_x=976.9 center_y=36.0)
+          GenericContainer rect=<none>
+            Button name="Close blade" rect=(x=1488.0 y=21.5 width=28.0 height=28.0 center_x=1502.0 center_y=35.5)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="Choose which columns are visible and drag rows to change their order." rect=(x=832.0 y=84.0 width=441.6 height=17.0 center_x=1052.8 center_y=92.5)
-                TextRun value="Choose which columns are visible and drag rows to change their order." rect=(x=832.0 y=84.0 width=441.6 height=17.0 center_x=1052.8 center_y=92.5)
-              Button name="Add custom column" rect=(x=832.0 y=128.0 width=133.3 height=28.0 center_x=898.7 center_y=142.0)
-              ColumnHeader name="Column" rect=(x=864.0 y=175.0 width=480.0 height=36.0 center_x=1104.0 center_y=193.0)
-                TextRun value="COLUMN" rect=(x=876.0 y=185.0 width=44.6 height=16.0 center_x=898.3 center_y=193.0)
-              Unknown name="" rect=(x=1344.0 y=175.0 width=160.0 height=36.0 center_x=1424.0 center_y=193.0)
-              Button name="Reorder Name column" rect=(x=832.0 y=211.0 width=32.0 height=36.0 center_x=848.0 center_y=229.0)
               GenericContainer rect=<none>
-                CheckBox name="Name" state=[toggled=True] rect=(x=876.0 y=219.0 width=58.8 height=20.0 center_x=905.4 center_y=229.0)
-                  TextRun value="Name" rect=(x=900.0 y=219.0 width=34.8 height=20.0 center_x=917.4 center_y=229.0)
-              GenericContainer rect=<none>
-              Button name="Reorder Owner column" rect=(x=832.0 y=251.0 width=32.0 height=36.0 center_x=848.0 center_y=269.0)
-              GenericContainer rect=<none>
-                CheckBox name="Owner" state=[toggled=False] rect=(x=876.0 y=259.0 width=63.0 height=20.0 center_x=907.5 center_y=269.0)
-                  TextRun value="Owner" rect=(x=900.0 y=259.0 width=39.0 height=20.0 center_x=919.5 center_y=269.0)
-              GenericContainer rect=<none>
-              Button name="Reorder Ready column" rect=(x=832.0 y=291.0 width=32.0 height=36.0 center_x=848.0 center_y=309.0)
-              GenericContainer rect=<none>
-                CheckBox name="Ready" state=[toggled=True] rect=(x=876.0 y=299.0 width=60.3 height=20.0 center_x=906.2 center_y=309.0)
-                  TextRun value="Ready" rect=(x=900.0 y=299.0 width=36.3 height=20.0 center_x=918.2 center_y=309.0)
-              GenericContainer rect=<none>
-              Button name="Reorder Containers column" rect=(x=832.0 y=331.0 width=32.0 height=36.0 center_x=848.0 center_y=349.0)
-              GenericContainer rect=<none>
-                CheckBox name="Containers" state=[toggled=True] rect=(x=876.0 y=339.0 width=87.5 height=20.0 center_x=919.8 center_y=349.0)
-                  TextRun value="Containers" rect=(x=900.0 y=339.0 width=63.5 height=20.0 center_x=931.8 center_y=349.0)
-              GenericContainer rect=<none>
-              Button name="Reorder Status column" rect=(x=832.0 y=371.0 width=32.0 height=36.0 center_x=848.0 center_y=389.0)
-              GenericContainer rect=<none>
-                CheckBox name="Status" state=[toggled=True] rect=(x=876.0 y=379.0 width=61.7 height=20.0 center_x=906.9 center_y=389.0)
-                  TextRun value="Status" rect=(x=900.0 y=379.0 width=37.7 height=20.0 center_x=918.9 center_y=389.0)
-              GenericContainer rect=<none>
-              Button name="Reorder Restarts column" rect=(x=832.0 y=411.0 width=32.0 height=36.0 center_x=848.0 center_y=429.0)
-              GenericContainer rect=<none>
-                CheckBox name="Restarts" state=[toggled=True] rect=(x=876.0 y=419.0 width=72.2 height=20.0 center_x=912.1 center_y=429.0)
-                  TextRun value="Restarts" rect=(x=900.0 y=419.0 width=48.2 height=20.0 center_x=924.1 center_y=429.0)
-              GenericContainer rect=<none>
-              Button name="Reorder CPU column" rect=(x=832.0 y=451.0 width=32.0 height=36.0 center_x=848.0 center_y=469.0)
-              GenericContainer rect=<none>
-                CheckBox name="CPU" state=[toggled=True] rect=(x=876.0 y=459.0 width=50.1 height=20.0 center_x=901.0 center_y=469.0)
-                  TextRun value="CPU" rect=(x=900.0 y=459.0 width=26.1 height=20.0 center_x=913.0 center_y=469.0)
-              GenericContainer rect=<none>
-              Button name="Reorder Memory column" rect=(x=832.0 y=491.0 width=32.0 height=36.0 center_x=848.0 center_y=509.0)
-              GenericContainer rect=<none>
-                CheckBox name="Memory" state=[toggled=True] rect=(x=876.0 y=499.0 width=71.9 height=20.0 center_x=912.0 center_y=509.0)
-                  TextRun value="Memory" rect=(x=900.0 y=499.0 width=47.9 height=20.0 center_x=924.0 center_y=509.0)
-              GenericContainer rect=<none>
-              Button name="Reorder Node column" rect=(x=832.0 y=531.0 width=32.0 height=36.0 center_x=848.0 center_y=549.0)
-              GenericContainer rect=<none>
-                CheckBox name="Node" state=[toggled=True] rect=(x=876.0 y=539.0 width=56.3 height=20.0 center_x=904.2 center_y=549.0)
-                  TextRun value="Node" rect=(x=900.0 y=539.0 width=32.3 height=20.0 center_x=916.2 center_y=549.0)
-              GenericContainer rect=<none>
-              Button name="Reorder Age column" rect=(x=832.0 y=571.0 width=32.0 height=36.0 center_x=848.0 center_y=589.0)
-              GenericContainer rect=<none>
-                CheckBox name="Age" state=[toggled=True] rect=(x=876.0 y=579.0 width=47.4 height=20.0 center_x=899.7 center_y=589.0)
-                  TextRun value="Age" rect=(x=900.0 y=579.0 width=23.4 height=20.0 center_x=911.7 center_y=589.0)
-              GenericContainer rect=<none>
-              Button name="Reorder Actions column" rect=(x=832.0 y=611.0 width=32.0 height=36.0 center_x=848.0 center_y=629.0)
-              GenericContainer rect=<none>
-                CheckBox name="Actions" state=[toggled=True] rect=(x=876.0 y=619.0 width=68.5 height=20.0 center_x=910.3 center_y=629.0)
-                  TextRun value="Actions" rect=(x=900.0 y=619.0 width=44.5 height=20.0 center_x=922.3 center_y=629.0)
-              GenericContainer rect=<none>
+                Label value="Choose which columns are visible and drag rows to change their order." rect=(x=832.0 y=84.0 width=441.6 height=17.0 center_x=1052.8 center_y=92.5)
+                  TextRun value="Choose which columns are visible and drag rows to change their order." rect=(x=832.0 y=84.0 width=441.6 height=17.0 center_x=1052.8 center_y=92.5)
+                Button name="Add custom column" rect=(x=832.0 y=128.0 width=133.3 height=28.0 center_x=898.7 center_y=142.0)
+                ColumnHeader name="Column" rect=(x=864.0 y=175.0 width=480.0 height=36.0 center_x=1104.0 center_y=193.0)
+                  TextRun value="COLUMN" rect=(x=876.0 y=185.0 width=44.6 height=16.0 center_x=898.3 center_y=193.0)
+                Unknown name="" rect=(x=1344.0 y=175.0 width=160.0 height=36.0 center_x=1424.0 center_y=193.0)
+                Button name="Reorder Name column" rect=(x=832.0 y=211.0 width=32.0 height=36.0 center_x=848.0 center_y=229.0)
+                GenericContainer rect=<none>
+                  CheckBox name="Name" state=[toggled=True] rect=(x=876.0 y=219.0 width=58.8 height=20.0 center_x=905.4 center_y=229.0)
+                    TextRun value="Name" rect=(x=900.0 y=219.0 width=34.8 height=20.0 center_x=917.4 center_y=229.0)
+                GenericContainer rect=<none>
+                Button name="Reorder Owner column" rect=(x=832.0 y=251.0 width=32.0 height=36.0 center_x=848.0 center_y=269.0)
+                GenericContainer rect=<none>
+                  CheckBox name="Owner" state=[toggled=False] rect=(x=876.0 y=259.0 width=63.0 height=20.0 center_x=907.5 center_y=269.0)
+                    TextRun value="Owner" rect=(x=900.0 y=259.0 width=39.0 height=20.0 center_x=919.5 center_y=269.0)
+                GenericContainer rect=<none>
+                Button name="Reorder Ready column" rect=(x=832.0 y=291.0 width=32.0 height=36.0 center_x=848.0 center_y=309.0)
+                GenericContainer rect=<none>
+                  CheckBox name="Ready" state=[toggled=True] rect=(x=876.0 y=299.0 width=60.3 height=20.0 center_x=906.2 center_y=309.0)
+                    TextRun value="Ready" rect=(x=900.0 y=299.0 width=36.3 height=20.0 center_x=918.2 center_y=309.0)
+                GenericContainer rect=<none>
+                Button name="Reorder Containers column" rect=(x=832.0 y=331.0 width=32.0 height=36.0 center_x=848.0 center_y=349.0)
+                GenericContainer rect=<none>
+                  CheckBox name="Containers" state=[toggled=True] rect=(x=876.0 y=339.0 width=87.5 height=20.0 center_x=919.8 center_y=349.0)
+                    TextRun value="Containers" rect=(x=900.0 y=339.0 width=63.5 height=20.0 center_x=931.8 center_y=349.0)
+                GenericContainer rect=<none>
+                Button name="Reorder Status column" rect=(x=832.0 y=371.0 width=32.0 height=36.0 center_x=848.0 center_y=389.0)
+                GenericContainer rect=<none>
+                  CheckBox name="Status" state=[toggled=True] rect=(x=876.0 y=379.0 width=61.7 height=20.0 center_x=906.9 center_y=389.0)
+                    TextRun value="Status" rect=(x=900.0 y=379.0 width=37.7 height=20.0 center_x=918.9 center_y=389.0)
+                GenericContainer rect=<none>
+                Button name="Reorder Restarts column" rect=(x=832.0 y=411.0 width=32.0 height=36.0 center_x=848.0 center_y=429.0)
+                GenericContainer rect=<none>
+                  CheckBox name="Restarts" state=[toggled=True] rect=(x=876.0 y=419.0 width=72.2 height=20.0 center_x=912.1 center_y=429.0)
+                    TextRun value="Restarts" rect=(x=900.0 y=419.0 width=48.2 height=20.0 center_x=924.1 center_y=429.0)
+                GenericContainer rect=<none>
+                Button name="Reorder CPU column" rect=(x=832.0 y=451.0 width=32.0 height=36.0 center_x=848.0 center_y=469.0)
+                GenericContainer rect=<none>
+                  CheckBox name="CPU" state=[toggled=True] rect=(x=876.0 y=459.0 width=50.1 height=20.0 center_x=901.0 center_y=469.0)
+                    TextRun value="CPU" rect=(x=900.0 y=459.0 width=26.1 height=20.0 center_x=913.0 center_y=469.0)
+                GenericContainer rect=<none>
+                Button name="Reorder Memory column" rect=(x=832.0 y=491.0 width=32.0 height=36.0 center_x=848.0 center_y=509.0)
+                GenericContainer rect=<none>
+                  CheckBox name="Memory" state=[toggled=True] rect=(x=876.0 y=499.0 width=71.9 height=20.0 center_x=912.0 center_y=509.0)
+                    TextRun value="Memory" rect=(x=900.0 y=499.0 width=47.9 height=20.0 center_x=924.0 center_y=509.0)
+                GenericContainer rect=<none>
+                Button name="Reorder Node column" rect=(x=832.0 y=531.0 width=32.0 height=36.0 center_x=848.0 center_y=549.0)
+                GenericContainer rect=<none>
+                  CheckBox name="Node" state=[toggled=True] rect=(x=876.0 y=539.0 width=56.3 height=20.0 center_x=904.2 center_y=549.0)
+                    TextRun value="Node" rect=(x=900.0 y=539.0 width=32.3 height=20.0 center_x=916.2 center_y=549.0)
+                GenericContainer rect=<none>
+                Button name="Reorder Age column" rect=(x=832.0 y=571.0 width=32.0 height=36.0 center_x=848.0 center_y=589.0)
+                GenericContainer rect=<none>
+                  CheckBox name="Age" state=[toggled=True] rect=(x=876.0 y=579.0 width=47.4 height=20.0 center_x=899.7 center_y=589.0)
+                    TextRun value="Age" rect=(x=900.0 y=579.0 width=23.4 height=20.0 center_x=911.7 center_y=589.0)
+                GenericContainer rect=<none>
+                Button name="Reorder Actions column" rect=(x=832.0 y=611.0 width=32.0 height=36.0 center_x=848.0 center_y=629.0)
+                GenericContainer rect=<none>
+                  CheckBox name="Actions" state=[toggled=True] rect=(x=876.0 y=619.0 width=68.5 height=20.0 center_x=910.3 center_y=629.0)
+                    TextRun value="Actions" rect=(x=900.0 y=619.0 width=44.5 height=20.0 center_x=922.3 center_y=629.0)
+                GenericContainer rect=<none>

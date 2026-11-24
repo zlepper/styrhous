@@ -430,11 +430,44 @@ Window state=[focused] rect=<none>
   GenericContainer rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
-        Label value="Settings" rect=(x=724.0 y=51.5 width=45.4 height=16.0 center_x=746.7 center_y=59.5)
-          TextRun value="Settings" rect=(x=724.0 y=51.5 width=45.4 height=16.0 center_x=746.7 center_y=59.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Button name="Back in background blade" state=[disabled] rect=(x=820.0 y=21.5 width=28.0 height=28.0 center_x=834.0 center_y=35.5)
+            Button name="Forward in background blade" rect=(x=850.0 y=21.5 width=28.0 height=28.0 center_x=864.0 center_y=35.5)
+          GenericContainer rect=<none>
+            Label value="Settings" rect=(x=903.0 y=24.0 width=577.0 height=24.0 center_x=1191.5 center_y=36.0)
+              TextRun value="Settings" rect=(x=903.0 y=24.0 width=65.3 height=24.0 center_x=935.7 center_y=36.0)
+          GenericContainer rect=<none>
+            Button name="Close background blade" rect=(x=1488.0 y=21.5 width=28.0 height=28.0 center_x=1502.0 center_y=35.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Workspace and application preferences. Changes are saved on this device." rect=(x=832.0 y=84.0 width=465.8 height=20.0 center_x=1064.9 center_y=94.0)
+                  TextRun value="Workspace and application preferences. Changes are saved on this device." rect=(x=832.0 y=84.0 width=465.8 height=20.0 center_x=1064.9 center_y=94.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="KUBERNETES" rect=(x=832.0 y=128.0 width=73.9 height=16.0 center_x=868.9 center_y=136.0)
+                      TextRun value="KUBERNETES" rect=(x=832.0 y=128.0 width=72.8 height=16.0 center_x=868.4 center_y=136.0)
+                    GenericContainer rect=<none>
+                      Button name="Open context settings: Display names and rail badges (3 contexts)" rect=(x=832.0 y=152.0 width=672.0 height=64.0 center_x=1168.0 center_y=184.0)
+                        GenericContainer rect=<none>
+                      Button name="Open namespace selector settings: How namespaces are labelled and searched" rect=(x=832.0 y=216.0 width=672.0 height=64.0 center_x=1168.0 center_y=248.0)
+                        GenericContainer rect=<none>
+                      Button name="Open cluster discovery: Find clusters in Azure, AWS and Tailscale" rect=(x=832.0 y=280.0 width=672.0 height=64.0 center_x=1168.0 center_y=312.0)
+                        GenericContainer rect=<none>
+                    Label value="APPLICATION" rect=(x=832.0 y=368.0 width=76.5 height=16.0 center_x=870.3 center_y=376.0)
+                      TextRun value="APPLICATION" rect=(x=832.0 y=368.0 width=75.4 height=16.0 center_x=869.7 center_y=376.0)
+                    GenericContainer rect=<none>
+                      Button name="Open application settings: Terminal, debug images and updates" rect=(x=832.0 y=392.0 width=672.0 height=64.0 center_x=1168.0 center_y=424.0)
+                        GenericContainer rect=<none>
+                      Button name="Open license and account settings: Custom compatible server (No subscription)" rect=(x=832.0 y=456.0 width=672.0 height=64.0 center_x=1168.0 center_y=488.0)
+                        GenericContainer rect=<none>
+                          Label value="No subscription" rect=(x=1343.3 y=477.5 width=118.7 height=22.0 center_x=1402.6 center_y=488.5)
+                            TextRun value="No subscription" rect=(x=1366.3 y=480.5 width=86.7 height=16.0 center_x=1409.6 center_y=488.5)
   GenericContainer rect=<none>
     Unknown name="Dismiss blade" rect=(x=0.0 y=0.0 width=808.0 height=1024.0 center_x=404.0 center_y=512.0)
-    Button name="Go back one blade" rect=(x=712.0 y=24.0 width=96.0 height=976.0 center_x=760.0 center_y=512.0)
+    Button name="Go back one blade" rect=(x=568.0 y=58.4 width=240.0 height=907.2 center_x=688.0 center_y=512.0)
   GenericContainer rect=<none>
     Unknown name="Dismiss blade" rect=(x=808.0 y=1016.0 width=720.0 height=8.0 center_x=1168.0 center_y=1020.0)
   GenericContainer rect=<none>
@@ -443,47 +476,48 @@ Window state=[focused] rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
-          Button name="Back" rect=(x=820.0 y=21.5 width=28.0 height=28.0 center_x=834.0 center_y=35.5)
-          Button name="Forward" state=[disabled] rect=(x=850.0 y=21.5 width=28.0 height=28.0 center_x=864.0 center_y=35.5)
-        GenericContainer rect=<none>
           GenericContainer rect=<none>
-            Button name="More actions" state=[disabled] rect=(x=1452.0 y=21.5 width=28.0 height=28.0 center_x=1466.0 center_y=35.5)
-          Label value="License & account" rect=(x=903.0 y=24.0 width=541.0 height=24.0 center_x=1173.5 center_y=36.0)
-            TextRun value="License & account" rect=(x=903.0 y=24.0 width=141.8 height=24.0 center_x=973.9 center_y=36.0)
-        GenericContainer rect=<none>
-          Button name="Close blade" rect=(x=1488.0 y=21.5 width=28.0 height=28.0 center_x=1502.0 center_y=35.5)
-      GenericContainer rect=<none>
+            Button name="Back" rect=(x=820.0 y=21.5 width=28.0 height=28.0 center_x=834.0 center_y=35.5)
+            Button name="Forward" state=[disabled] rect=(x=850.0 y=21.5 width=28.0 height=28.0 center_x=864.0 center_y=35.5)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Button name="More actions" state=[disabled] rect=(x=1452.0 y=21.5 width=28.0 height=28.0 center_x=1466.0 center_y=35.5)
+            Label value="License & account" rect=(x=903.0 y=24.0 width=541.0 height=24.0 center_x=1173.5 center_y=36.0)
+              TextRun value="License & account" rect=(x=903.0 y=24.0 width=141.8 height=24.0 center_x=973.9 center_y=36.0)
+          GenericContainer rect=<none>
+            Button name="Close blade" rect=(x=1488.0 y=21.5 width=28.0 height=28.0 center_x=1502.0 center_y=35.5)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
-                Label value="Your organization's trial has ended." rect=(x=874.0 y=96.0 width=205.3 height=20.0 center_x=976.7 center_y=106.0)
-                  TextRun value="Your organization's trial has ended." rect=(x=874.0 y=96.0 width=205.3 height=20.0 center_x=976.7 center_y=106.0)
-                Label value="Styrhous is free for personal use, education, non-commercial open source, and organizations with fewer than 250 people and less than €10M in annual revenue." rect=(x=874.0 y=118.0 width=605.2 height=40.0 center_x=1176.6 center_y=138.0)
-                  TextRun value="Styrhous is free for personal use, education, non-commercial open source, and organizations with fewer " rect=(x=874.0 y=118.0 width=605.2 height=20.0 center_x=1176.6 center_y=128.0)
-                  TextRun value="than 250 people and less than €10M in annual revenue." rect=(x=874.0 y=138.0 width=317.7 height=20.0 center_x=1032.9 center_y=148.0)
-              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  Label value="Your organization's trial has ended." rect=(x=874.0 y=96.0 width=205.3 height=20.0 center_x=976.7 center_y=106.0)
+                    TextRun value="Your organization's trial has ended." rect=(x=874.0 y=96.0 width=205.3 height=20.0 center_x=976.7 center_y=106.0)
+                  Label value="Styrhous is free for personal use, education, non-commercial open source, and organizations with fewer than 250 people and less than €10M in annual revenue." rect=(x=874.0 y=118.0 width=605.2 height=40.0 center_x=1176.6 center_y=138.0)
+                    TextRun value="Styrhous is free for personal use, education, non-commercial open source, and organizations with fewer " rect=(x=874.0 y=118.0 width=605.2 height=20.0 center_x=1176.6 center_y=128.0)
+                    TextRun value="than 250 people and less than €10M in annual revenue." rect=(x=874.0 y=138.0 width=317.7 height=20.0 center_x=1032.9 center_y=148.0)
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Button name="Sign out" rect=(x=1408.6 y=198.0 width=79.4 height=32.0 center_x=1448.3 center_y=214.0)
                     GenericContainer rect=<none>
-                      Button name="Refresh license" rect=(x=848.0 y=198.0 width=142.0 height=32.0 center_x=919.0 center_y=214.0)
-                      Button name="Manage account" rect=(x=998.0 y=198.0 width=148.4 height=32.0 center_x=1072.2 center_y=214.0)
-              GenericContainer rect=<none>
-                Label value="Installation" rect=(x=832.0 y=266.0 width=70.1 height=20.0 center_x=867.0 center_y=276.0)
-                  TextRun value="Installation" rect=(x=832.0 y=266.0 width=70.1 height=20.0 center_x=867.0 center_y=276.0)
-              GenericContainer rect=<none>
+                      Button name="Sign out" rect=(x=1408.6 y=198.0 width=79.4 height=32.0 center_x=1448.3 center_y=214.0)
+                      GenericContainer rect=<none>
+                        Button name="Refresh license" rect=(x=848.0 y=198.0 width=142.0 height=32.0 center_x=919.0 center_y=214.0)
+                        Button name="Manage account" rect=(x=998.0 y=198.0 width=148.4 height=32.0 center_x=1072.2 center_y=214.0)
+                GenericContainer rect=<none>
+                  Label value="Installation" rect=(x=832.0 y=266.0 width=70.1 height=20.0 center_x=867.0 center_y=276.0)
+                    TextRun value="Installation" rect=(x=832.0 y=266.0 width=70.1 height=20.0 center_x=867.0 center_y=276.0)
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Label value="Device name" rect=(x=832.0 y=298.0 width=70.3 height=16.0 center_x=867.1 center_y=306.0)
-                      TextRun value="Device name" rect=(x=832.0 y=298.0 width=70.3 height=16.0 center_x=867.1 center_y=306.0)
                     GenericContainer rect=<none>
-                      TextInput name="License device display name" value="Styrhous on linux" rect=(x=832.0 y=320.0 width=320.0 height=32.0 center_x=992.0 center_y=336.0)
-                        TextRun value="Styrhous on linux" rect=(x=846.0 y=328.0 width=100.0 height=20.0 center_x=896.0 center_y=338.0)
-                    Label value="Shown in your account’s device list." rect=(x=832.0 y=358.0 width=189.7 height=16.0 center_x=926.8 center_y=366.0)
-                      TextRun value="Shown in your account’s device list." rect=(x=832.0 y=358.0 width=189.7 height=16.0 center_x=926.8 center_y=366.0)
+                      Label value="Device name" rect=(x=832.0 y=298.0 width=70.3 height=16.0 center_x=867.1 center_y=306.0)
+                        TextRun value="Device name" rect=(x=832.0 y=298.0 width=70.3 height=16.0 center_x=867.1 center_y=306.0)
+                      GenericContainer rect=<none>
+                        TextInput name="License device display name" value="Styrhous on linux" rect=(x=832.0 y=320.0 width=320.0 height=32.0 center_x=992.0 center_y=336.0)
+                          TextRun value="Styrhous on linux" rect=(x=846.0 y=328.0 width=100.0 height=20.0 center_x=896.0 center_y=338.0)
+                      Label value="Shown in your account’s device list." rect=(x=832.0 y=358.0 width=189.7 height=16.0 center_x=926.8 center_y=366.0)
+                        TextRun value="Shown in your account’s device list." rect=(x=832.0 y=358.0 width=189.7 height=16.0 center_x=926.8 center_y=366.0)
+                  GenericContainer rect=<none>
+                    Button name="Save name" rect=(x=1160.0 y=320.0 width=94.3 height=32.0 center_x=1207.2 center_y=336.0)
                 GenericContainer rect=<none>
-                  Button name="Save name" rect=(x=1160.0 y=320.0 width=94.3 height=32.0 center_x=1207.2 center_y=336.0)
-              GenericContainer rect=<none>
-                Button name="Advanced" state=[toggled=False] rect=(x=832.0 y=394.0 width=672.0 height=44.0 center_x=1168.0 center_y=416.0)
-                  TextRun value="Advanced" rect=(x=870.0 y=406.0 width=59.6 height=20.0 center_x=899.8 center_y=416.0)
+                  Button name="Advanced" state=[toggled=False] rect=(x=832.0 y=394.0 width=672.0 height=44.0 center_x=1168.0 center_y=416.0)
+                    TextRun value="Advanced" rect=(x=870.0 y=406.0 width=59.6 height=20.0 center_x=899.8 center_y=416.0)

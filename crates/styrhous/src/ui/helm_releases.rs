@@ -10,9 +10,9 @@ use crate::resource_catalog::kind_category;
 use components::design::theme::{ThemeExt, Tone};
 use components::icons::Icon;
 use components::{
-    BladeDescription, BladeLayer, BladeNavigation, BladePeek, BladeStyle, Button, ButtonSize, Card,
-    HeaderAction, InspectorBody, InspectorHeader, InspectorStatus, MenuItem, MoreButton, Property,
-    PropertyGrid, Readout, ReadoutTone, Section, inspector_section_heading,
+    BladeDescription, BladeLayer, BladeStyle, Button, ButtonSize, Card, HeaderAction,
+    InspectorBody, InspectorHeader, InspectorStatus, MenuItem, MoreButton, Property, PropertyGrid,
+    Readout, ReadoutTone, Section, inspector_section_heading,
 };
 
 #[derive(Debug)]
@@ -139,11 +139,6 @@ fn status_readout_tone(status: &str) -> ReadoutTone {
 impl GlobalBladeContent for HelmReleaseDetailBlade {
     fn description(&self) -> BladeDescription {
         BladeDescription {
-            peek: BladePeek {
-                kind: Some("Helm release".to_owned()),
-                category: Some(kind_category(&ApiResource::helm_releases())),
-                name: self.release.release_name.clone(),
-            },
             style: BladeStyle::Inspector,
         }
     }
@@ -168,7 +163,7 @@ impl GlobalBladeContent for HelmReleaseDetailBlade {
             .tokens()
             .category
             .nth(kind_category(&ApiResource::helm_releases()));
-        let navigation = BladeNavigation::new(layer.can_go_back, layer.can_go_forward);
+        let navigation = layer.navigation();
         let state = release.map(|release| status_word(&release.status));
         let reason = release.map(|release| {
             format!(

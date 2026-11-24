@@ -8,9 +8,9 @@ Window state=[focused] rect=<none>
             TextRun value="C10 · COMPONENTS::{BLADE, BLADESTACK}" rect=(x=48.0 y=40.0 width=242.7 height=16.0 center_x=169.3 center_y=48.0)
           Label value="Blade" rect=(x=48.0 y=60.0 width=74.5 height=36.0 center_x=85.3 center_y=78.0)
             TextRun value="Blade" rect=(x=48.0 y=60.0 width=74.8 height=36.0 center_x=85.4 center_y=78.0)
-          Label value="Right-anchored panel stack for inspecting and editing. Width 720 px (min 560, max 50% of the window), inset 8 px. Up to two history peeks show 96 px each and step down 16 px." rect=(x=48.0 y=102.0 width=875.5 height=40.0 center_x=485.7 center_y=122.0)
-            TextRun value="Right-anchored panel stack for inspecting and editing. Width 720 px (min 560, max 50% of the window), inset 8 px. Up to two history peeks " rect=(x=48.0 y=102.0 width=875.5 height=20.0 center_x=485.7 center_y=112.0)
-            TextRun value="show 96 px each and step down 16 px." rect=(x=48.0 y=122.0 width=238.9 height=20.0 center_x=167.5 center_y=132.0)
+          Label value="Right-anchored panel stack for inspecting and editing. Width 720 px (min 560, max 50% of the window), inset 8 px. Up to two history blades fan out behind it, at 90% and 80% scale, showing their real content." rect=(x=48.0 y=102.0 width=879.5 height=40.0 center_x=487.7 center_y=122.0)
+            TextRun value="Right-anchored panel stack for inspecting and editing. Width 720 px (min 560, max 50% of the window), inset 8 px. Up to two history blades " rect=(x=48.0 y=102.0 width=879.5 height=20.0 center_x=487.7 center_y=112.0)
+            TextRun value="fan out behind it, at 90% and 80% scale, showing their real content." rect=(x=48.0 y=122.0 width=419.9 height=20.0 center_x=258.0 center_y=132.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
@@ -46,30 +46,55 @@ Window state=[focused] rect=<none>
               GenericContainer rect=<none>
                 Button name="Save changes" rect=(x=373.7 y=787.5 width=111.3 height=32.0 center_x=429.4 center_y=803.5)
                 Button name="Cancel" rect=(x=294.9 y=787.5 width=70.8 height=32.0 center_x=330.3 center_y=803.5)
-            GenericContainer rect=<none>
-              Label value="Deployment" rect=(x=661.0 y=231.5 width=79.2 height=22.0 center_x=700.6 center_y=242.5)
-                TextRun value="Deployment" rect=(x=670.0 y=234.5 width=61.2 height=16.0 center_x=700.6 center_y=242.5)
-              Label value="coredns" rect=(x=661.0 y=257.5 width=43.6 height=16.0 center_x=682.8 center_y=265.5)
-                TextRun value="coredns" rect=(x=661.0 y=257.5 width=43.6 height=16.0 center_x=682.8 center_y=265.5)
-            GenericContainer rect=<none>
-              Label value="ReplicaSet" rect=(x=757.0 y=215.5 width=71.8 height=22.0 center_x=792.9 center_y=226.5)
-                TextRun value="ReplicaSet" rect=(x=766.0 y=218.5 width=53.8 height=16.0 center_x=792.9 center_y=226.5)
-              Label value="coredns-66bc5c9577" rect=(x=757.0 y=241.5 width=68.7 height=16.0 center_x=791.3 center_y=249.5)
-                TextRun value="coredns-66…" rect=(x=757.0 y=241.5 width=68.7 height=16.0 center_x=791.3 center_y=249.5)
-            Dialog name="coredns-66bc5c9577-ffw2s" rect=(x=841.0 y=185.0 width=640.0 height=682.0 center_x=1161.0 center_y=526.0)
-              GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Button name="Back" rect=(x=853.0 y=198.5 width=28.0 height=28.0 center_x=867.0 center_y=212.5)
-                  Button name="Forward" state=[disabled] rect=(x=883.0 y=198.5 width=28.0 height=28.0 center_x=897.0 center_y=212.5)
-                GenericContainer rect=<none>
-                  GenericContainer rect=<none>
-                    Button name="More actions" rect=(x=1405.0 y=198.5 width=28.0 height=28.0 center_x=1419.0 center_y=212.5)
-                  Label value="Pod" rect=(x=936.0 y=201.5 width=37.3 height=22.0 center_x=954.7 center_y=212.5)
-                    TextRun value="Pod" rect=(x=945.0 y=204.5 width=19.3 height=16.0 center_x=954.7 center_y=212.5)
-                  Label value="coredns-66bc5c9577-ffw2s" rect=(x=981.3 y=201.0 width=415.7 height=24.0 center_x=1189.2 center_y=213.0)
-                    TextRun value="coredns-66bc5c9577-ffw2s" rect=(x=981.3 y=201.0 width=215.7 height=24.0 center_x=1089.2 center_y=213.0)
-                GenericContainer rect=<none>
-                  Button name="Close blade" rect=(x=1441.0 y=198.5 width=28.0 height=28.0 center_x=1455.0 center_y=212.5)
-              GenericContainer rect=<none>
-                Label value="Active blade. Back returns to ReplicaSet; the peeks behind are clickable history entries." rect=(x=865.0 y=261.0 width=540.9 height=20.0 center_x=1135.4 center_y=271.0)
-                  TextRun value="Active blade. Back returns to ReplicaSet; the peeks behind are clickable history entries." rect=(x=865.0 y=261.0 width=540.9 height=20.0 center_x=1135.4 center_y=271.0)
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      Dialog name="coredns" rect=(x=438.0 y=185.0 width=640.0 height=682.0 center_x=758.0 center_y=526.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Button name="Back" state=[disabled] rect=(x=450.0 y=198.5 width=28.0 height=28.0 center_x=464.0 center_y=212.5)
+            Button name="Forward" rect=(x=480.0 y=198.5 width=28.0 height=28.0 center_x=494.0 center_y=212.5)
+          GenericContainer rect=<none>
+            Label value="Deployment" rect=(x=533.0 y=201.5 width=79.2 height=22.0 center_x=572.7 center_y=212.5)
+              TextRun value="Deployment" rect=(x=542.0 y=204.5 width=61.2 height=16.0 center_x=572.7 center_y=212.5)
+            Label value="coredns" rect=(x=620.3 y=201.0 width=409.8 height=24.0 center_x=825.2 center_y=213.0)
+              TextRun value="coredns" rect=(x=620.3 y=201.0 width=64.0 height=24.0 center_x=652.3 center_y=213.0)
+          GenericContainer rect=<none>
+            Button name="Close blade" rect=(x=1038.0 y=198.5 width=28.0 height=28.0 center_x=1052.0 center_y=212.5)
+        GenericContainer rect=<none>
+          Label value="Deployment coredns keeps two replicas running." rect=(x=462.0 y=261.0 width=304.0 height=20.0 center_x=614.0 center_y=271.0)
+            TextRun value="Deployment coredns keeps two replicas running." rect=(x=462.0 y=261.0 width=304.0 height=20.0 center_x=614.0 center_y=271.0)
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      Dialog name="coredns-66bc5c9577" rect=(x=627.7 y=185.0 width=640.0 height=682.0 center_x=947.7 center_y=526.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Button name="Back" rect=(x=639.7 y=198.5 width=28.0 height=28.0 center_x=653.7 center_y=212.5)
+            Button name="Forward" rect=(x=669.7 y=198.5 width=28.0 height=28.0 center_x=683.7 center_y=212.5)
+          GenericContainer rect=<none>
+            Label value="ReplicaSet" rect=(x=722.7 y=201.5 width=71.8 height=22.0 center_x=758.6 center_y=212.5)
+              TextRun value="ReplicaSet" rect=(x=731.7 y=204.5 width=53.8 height=16.0 center_x=758.6 center_y=212.5)
+            Label value="coredns-66bc5c9577" rect=(x=802.5 y=201.0 width=417.2 height=24.0 center_x=1011.1 center_y=213.0)
+              TextRun value="coredns-66bc5c9577" rect=(x=802.5 y=201.0 width=165.7 height=24.0 center_x=885.3 center_y=213.0)
+          GenericContainer rect=<none>
+            Button name="Close blade" rect=(x=1227.7 y=198.5 width=28.0 height=28.0 center_x=1241.7 center_y=212.5)
+        GenericContainer rect=<none>
+          Label value="ReplicaSet coredns-66bc5c9577 owns the pod." rect=(x=651.7 y=261.0 width=297.3 height=20.0 center_x=800.3 center_y=271.0)
+            TextRun value="ReplicaSet coredns-66bc5c9577 owns the pod." rect=(x=651.7 y=261.0 width=297.3 height=20.0 center_x=800.3 center_y=271.0)
+  GenericContainer rect=<none>
+    Dialog name="coredns-66bc5c9577-ffw2s" rect=(x=841.0 y=185.0 width=640.0 height=682.0 center_x=1161.0 center_y=526.0)
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Button name="Back" rect=(x=853.0 y=198.5 width=28.0 height=28.0 center_x=867.0 center_y=212.5)
+          Button name="Forward" state=[disabled] rect=(x=883.0 y=198.5 width=28.0 height=28.0 center_x=897.0 center_y=212.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Button name="More actions" rect=(x=1405.0 y=198.5 width=28.0 height=28.0 center_x=1419.0 center_y=212.5)
+          Label value="Pod" rect=(x=936.0 y=201.5 width=37.3 height=22.0 center_x=954.7 center_y=212.5)
+            TextRun value="Pod" rect=(x=945.0 y=204.5 width=19.3 height=16.0 center_x=954.7 center_y=212.5)
+          Label value="coredns-66bc5c9577-ffw2s" rect=(x=981.3 y=201.0 width=415.7 height=24.0 center_x=1189.2 center_y=213.0)
+            TextRun value="coredns-66bc5c9577-ffw2s" rect=(x=981.3 y=201.0 width=215.7 height=24.0 center_x=1089.2 center_y=213.0)
+        GenericContainer rect=<none>
+          Button name="Close blade" rect=(x=1441.0 y=198.5 width=28.0 height=28.0 center_x=1455.0 center_y=212.5)
+      GenericContainer rect=<none>
+        Label value="Active blade. Back returns to ReplicaSet; the blades behind are clickable history entries." rect=(x=865.0 y=261.0 width=544.8 height=20.0 center_x=1137.4 center_y=271.0)
+          TextRun value="Active blade. Back returns to ReplicaSet; the blades behind are clickable history entries." rect=(x=865.0 y=261.0 width=544.8 height=20.0 center_x=1137.4 center_y=271.0)

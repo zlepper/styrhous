@@ -43,10 +43,6 @@ pub(super) enum ManagedDiscoveryAction {
 }
 
 impl GlobalBladeContent for ManagedClusterDiscoveryBlade {
-    fn description(&self) -> components::BladeDescription {
-        components::BladeDescription::named("Cluster discovery")
-    }
-
     fn sidebar_destination(&self) -> Option<crate::ui::global_blade::SidebarDestination> {
         Some(crate::ui::global_blade::SidebarDestination::Settings)
     }

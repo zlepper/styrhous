@@ -430,11 +430,44 @@ Window state=[focused] rect=<none>
   GenericContainer rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
-        Label value="Settings" rect=(x=724.0 y=51.5 width=45.4 height=16.0 center_x=746.7 center_y=59.5)
-          TextRun value="Settings" rect=(x=724.0 y=51.5 width=45.4 height=16.0 center_x=746.7 center_y=59.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Button name="Back in background blade" state=[disabled] rect=(x=820.0 y=21.5 width=28.0 height=28.0 center_x=834.0 center_y=35.5)
+            Button name="Forward in background blade" rect=(x=850.0 y=21.5 width=28.0 height=28.0 center_x=864.0 center_y=35.5)
+          GenericContainer rect=<none>
+            Label value="Settings" rect=(x=903.0 y=24.0 width=577.0 height=24.0 center_x=1191.5 center_y=36.0)
+              TextRun value="Settings" rect=(x=903.0 y=24.0 width=65.3 height=24.0 center_x=935.7 center_y=36.0)
+          GenericContainer rect=<none>
+            Button name="Close background blade" rect=(x=1488.0 y=21.5 width=28.0 height=28.0 center_x=1502.0 center_y=35.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Workspace and application preferences. Changes are saved on this device." rect=(x=832.0 y=84.0 width=465.8 height=20.0 center_x=1064.9 center_y=94.0)
+                  TextRun value="Workspace and application preferences. Changes are saved on this device." rect=(x=832.0 y=84.0 width=465.8 height=20.0 center_x=1064.9 center_y=94.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="KUBERNETES" rect=(x=832.0 y=128.0 width=73.9 height=16.0 center_x=868.9 center_y=136.0)
+                      TextRun value="KUBERNETES" rect=(x=832.0 y=128.0 width=72.8 height=16.0 center_x=868.4 center_y=136.0)
+                    GenericContainer rect=<none>
+                      Button name="Open context settings: Display names and rail badges (3 contexts)" rect=(x=832.0 y=152.0 width=672.0 height=64.0 center_x=1168.0 center_y=184.0)
+                        GenericContainer rect=<none>
+                      Button name="Open namespace selector settings: How namespaces are labelled and searched" rect=(x=832.0 y=216.0 width=672.0 height=64.0 center_x=1168.0 center_y=248.0)
+                        GenericContainer rect=<none>
+                      Button name="Open cluster discovery: Find clusters in Azure, AWS and Tailscale" rect=(x=832.0 y=280.0 width=672.0 height=64.0 center_x=1168.0 center_y=312.0)
+                        GenericContainer rect=<none>
+                    Label value="APPLICATION" rect=(x=832.0 y=368.0 width=76.5 height=16.0 center_x=870.3 center_y=376.0)
+                      TextRun value="APPLICATION" rect=(x=832.0 y=368.0 width=75.4 height=16.0 center_x=869.7 center_y=376.0)
+                    GenericContainer rect=<none>
+                      Button name="Open application settings: Terminal, debug images and updates" rect=(x=832.0 y=392.0 width=672.0 height=64.0 center_x=1168.0 center_y=424.0)
+                        GenericContainer rect=<none>
+                      Button name="Open license and account settings: Hosted Styrhous service (Active)" rect=(x=832.0 y=456.0 width=672.0 height=64.0 center_x=1168.0 center_y=488.0)
+                        GenericContainer rect=<none>
+                          Label value="Active" rect=(x=1394.5 y=477.5 width=67.5 height=22.0 center_x=1428.3 center_y=488.5)
+                            TextRun value="Active" rect=(x=1417.5 y=480.5 width=35.5 height=16.0 center_x=1435.3 center_y=488.5)
   GenericContainer rect=<none>
     Unknown name="Dismiss blade" rect=(x=0.0 y=0.0 width=808.0 height=1024.0 center_x=404.0 center_y=512.0)
-    Button name="Go back one blade" rect=(x=712.0 y=24.0 width=96.0 height=976.0 center_x=760.0 center_y=512.0)
+    Button name="Go back one blade" rect=(x=568.0 y=58.4 width=240.0 height=907.2 center_x=688.0 center_y=512.0)
   GenericContainer rect=<none>
     Unknown name="Dismiss blade" rect=(x=808.0 y=1016.0 width=720.0 height=8.0 center_x=1168.0 center_y=1020.0)
   GenericContainer rect=<none>
@@ -443,164 +476,165 @@ Window state=[focused] rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
-          Button name="Back" rect=(x=820.0 y=21.5 width=28.0 height=28.0 center_x=834.0 center_y=35.5)
-          Button name="Forward" state=[disabled] rect=(x=850.0 y=21.5 width=28.0 height=28.0 center_x=864.0 center_y=35.5)
-        GenericContainer rect=<none>
           GenericContainer rect=<none>
-            Button name="More actions" state=[disabled] rect=(x=1452.0 y=21.5 width=28.0 height=28.0 center_x=1466.0 center_y=35.5)
-            Button name="Refresh" rect=(x=1357.8 y=21.5 width=86.2 height=28.0 center_x=1400.9 center_y=35.5)
-          Label value="Cluster discovery" rect=(x=903.0 y=24.0 width=446.8 height=24.0 center_x=1126.4 center_y=36.0)
-            TextRun value="Cluster discovery" rect=(x=903.0 y=24.0 width=136.8 height=24.0 center_x=971.4 center_y=36.0)
-        GenericContainer rect=<none>
-          Button name="Close blade" rect=(x=1488.0 y=21.5 width=28.0 height=28.0 center_x=1502.0 center_y=35.5)
-      GenericContainer rect=<none>
+            Button name="Back" rect=(x=820.0 y=21.5 width=28.0 height=28.0 center_x=834.0 center_y=35.5)
+            Button name="Forward" state=[disabled] rect=(x=850.0 y=21.5 width=28.0 height=28.0 center_x=864.0 center_y=35.5)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Button name="More actions" state=[disabled] rect=(x=1452.0 y=21.5 width=28.0 height=28.0 center_x=1466.0 center_y=35.5)
+              Button name="Refresh" rect=(x=1357.8 y=21.5 width=86.2 height=28.0 center_x=1400.9 center_y=35.5)
+            Label value="Cluster discovery" rect=(x=903.0 y=24.0 width=446.8 height=24.0 center_x=1126.4 center_y=36.0)
+              TextRun value="Cluster discovery" rect=(x=903.0 y=24.0 width=136.8 height=24.0 center_x=971.4 center_y=36.0)
+          GenericContainer rect=<none>
+            Button name="Close blade" rect=(x=1488.0 y=21.5 width=28.0 height=28.0 center_x=1502.0 center_y=35.5)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="Find clusters in your cloud accounts and add them to your kubeconfig. New clusters appear in the rail automatically." rect=(x=832.0 y=84.0 width=635.5 height=40.0 center_x=1149.7 center_y=104.0)
-                TextRun value="Find clusters in your cloud accounts and add them to your kubeconfig. New clusters appear in the rail " rect=(x=832.0 y=84.0 width=635.5 height=20.0 center_x=1149.7 center_y=94.0)
-                TextRun value="automatically." rect=(x=832.0 y=104.0 width=86.9 height=20.0 center_x=875.5 center_y=114.0)
               GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Label value="5 clusters" rect=(x=1417.2 y=155.0 width=70.8 height=22.0 center_x=1452.6 center_y=166.0)
-                    TextRun value="5 clusters" rect=(x=1426.2 y=158.0 width=52.8 height=16.0 center_x=1452.6 center_y=166.0)
-                GenericContainer rect=<none>
-                  Label value="Azure Kubernetes Service" rect=(x=884.0 y=156.0 width=153.2 height=20.0 center_x=960.6 center_y=166.0)
-                    TextRun value="Azure Kubernetes Service" rect=(x=884.0 y=156.0 width=153.2 height=20.0 center_x=960.6 center_y=166.0)
+                Label value="Find clusters in your cloud accounts and add them to your kubeconfig. New clusters appear in the rail automatically." rect=(x=832.0 y=84.0 width=635.5 height=40.0 center_x=1149.7 center_y=104.0)
+                  TextRun value="Find clusters in your cloud accounts and add them to your kubeconfig. New clusters appear in the rail " rect=(x=832.0 y=84.0 width=635.5 height=20.0 center_x=1149.7 center_y=94.0)
+                  TextRun value="automatically." rect=(x=832.0 y=104.0 width=86.9 height=20.0 center_x=875.5 center_y=114.0)
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Label value="CLUSTER" rect=(x=860.0 y=215.0 width=49.7 height=16.0 center_x=884.8 center_y=223.0)
-                      TextRun value="CLUSTER" rect=(x=860.0 y=215.0 width=48.6 height=16.0 center_x=884.3 center_y=223.0)
+                    Label value="5 clusters" rect=(x=1417.2 y=155.0 width=70.8 height=22.0 center_x=1452.6 center_y=166.0)
+                      TextRun value="5 clusters" rect=(x=1426.2 y=158.0 width=52.8 height=16.0 center_x=1452.6 center_y=166.0)
                   GenericContainer rect=<none>
-                    Label value="LOCATION" rect=(x=1040.0 y=215.0 width=56.7 height=16.0 center_x=1068.3 center_y=223.0)
-                      TextRun value="LOCATION" rect=(x=1040.0 y=215.0 width=55.6 height=16.0 center_x=1067.8 center_y=223.0)
-                  GenericContainer rect=<none>
-                    Label value="TAGS" rect=(x=1152.0 y=215.0 width=28.8 height=16.0 center_x=1166.4 center_y=223.0)
-                      TextRun value="TAGS" rect=(x=1152.0 y=215.0 width=27.7 height=16.0 center_x=1165.8 center_y=223.0)
-                  GenericContainer rect=<none>
-                    Label value="payments-prod" rect=(x=860.0 y=249.0 width=90.1 height=20.0 center_x=905.0 center_y=259.0)
-                      TextRun value="payments-prod" rect=(x=860.0 y=249.0 width=90.1 height=20.0 center_x=905.0 center_y=259.0)
-                  GenericContainer rect=<none>
-                    Label value="westeurope" rect=(x=1040.0 y=249.0 width=69.1 height=20.0 center_x=1074.6 center_y=259.0)
-                      TextRun value="westeurope" rect=(x=1040.0 y=249.0 width=69.1 height=20.0 center_x=1074.6 center_y=259.0)
-                  GenericContainer rect=<none>
-                    Label value="environment=production · team=payments" rect=(x=1152.0 y=249.0 width=153.0 height=20.0 center_x=1228.5 center_y=259.0)
-                      TextRun value="environment=production…" rect=(x=1152.0 y=249.0 width=153.0 height=20.0 center_x=1228.5 center_y=259.0)
-                  GenericContainer rect=<none>
-                    Button name="Add to kubeconfig" rect=(x=1330.4 y=245.0 width=145.6 height=28.0 center_x=1403.2 center_y=259.0)
-                  GenericContainer rect=<none>
-                    Label value="payments-staging" rect=(x=860.0 y=289.0 width=105.9 height=20.0 center_x=913.0 center_y=299.0)
-                      TextRun value="payments-staging" rect=(x=860.0 y=289.0 width=105.9 height=20.0 center_x=913.0 center_y=299.0)
-                  GenericContainer rect=<none>
-                    Label value="westeurope" rect=(x=1040.0 y=289.0 width=69.1 height=20.0 center_x=1074.6 center_y=299.0)
-                      TextRun value="westeurope" rect=(x=1040.0 y=289.0 width=69.1 height=20.0 center_x=1074.6 center_y=299.0)
-                  GenericContainer rect=<none>
-                    Label value="" rect=(x=1152.0 y=289.0 width=0.0 height=20.0 center_x=1152.0 center_y=299.0)
-                      TextRun value="" rect=(x=1152.0 y=289.0 width=0.0 height=20.0 center_x=1152.0 center_y=299.0)
+                    Label value="Azure Kubernetes Service" rect=(x=884.0 y=156.0 width=153.2 height=20.0 center_x=960.6 center_y=166.0)
+                      TextRun value="Azure Kubernetes Service" rect=(x=884.0 y=156.0 width=153.2 height=20.0 center_x=960.6 center_y=166.0)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
-                      Label value="In kubeconfig" rect=(x=1402.6 y=291.0 width=73.0 height=16.0 center_x=1439.1 center_y=299.0)
-                        TextRun value="In kubeconfig" rect=(x=1402.6 y=291.0 width=73.4 height=16.0 center_x=1439.3 center_y=299.0)
-                  GenericContainer rect=<none>
-                    Label value="catalog-prod" rect=(x=860.0 y=329.0 width=75.8 height=20.0 center_x=897.9 center_y=339.0)
-                      TextRun value="catalog-prod" rect=(x=860.0 y=329.0 width=75.8 height=20.0 center_x=897.9 center_y=339.0)
-                  GenericContainer rect=<none>
-                    Label value="northeurope" rect=(x=1040.0 y=329.0 width=72.4 height=20.0 center_x=1076.2 center_y=339.0)
-                      TextRun value="northeurope" rect=(x=1040.0 y=329.0 width=72.4 height=20.0 center_x=1076.2 center_y=339.0)
-                  GenericContainer rect=<none>
-                    Label value="" rect=(x=1152.0 y=329.0 width=0.0 height=20.0 center_x=1152.0 center_y=339.0)
-                      TextRun value="" rect=(x=1152.0 y=329.0 width=0.0 height=20.0 center_x=1152.0 center_y=339.0)
-                  GenericContainer rect=<none>
-                    Button name="Add to kubeconfig" rect=(x=1330.4 y=325.0 width=145.6 height=28.0 center_x=1403.2 center_y=339.0)
-                  GenericContainer rect=<none>
-                    Label value="catalog-dev" rect=(x=860.0 y=369.0 width=69.9 height=20.0 center_x=895.0 center_y=379.0)
-                      TextRun value="catalog-dev" rect=(x=860.0 y=369.0 width=69.9 height=20.0 center_x=895.0 center_y=379.0)
-                  GenericContainer rect=<none>
-                    Label value="eastus" rect=(x=1040.0 y=369.0 width=38.0 height=20.0 center_x=1059.0 center_y=379.0)
-                      TextRun value="eastus" rect=(x=1040.0 y=369.0 width=38.0 height=20.0 center_x=1059.0 center_y=379.0)
-                  GenericContainer rect=<none>
-                    Label value="" rect=(x=1152.0 y=369.0 width=0.0 height=20.0 center_x=1152.0 center_y=379.0)
-                      TextRun value="" rect=(x=1152.0 y=369.0 width=0.0 height=20.0 center_x=1152.0 center_y=379.0)
-                  GenericContainer rect=<none>
-                    Button name="Add to kubeconfig" rect=(x=1330.4 y=365.0 width=145.6 height=28.0 center_x=1403.2 center_y=379.0)
-                  GenericContainer rect=<none>
-                    Label value="observability" rect=(x=860.0 y=409.0 width=74.2 height=20.0 center_x=897.1 center_y=419.0)
-                      TextRun value="observability" rect=(x=860.0 y=409.0 width=74.2 height=20.0 center_x=897.1 center_y=419.0)
-                  GenericContainer rect=<none>
-                    Label value="westeurope" rect=(x=1040.0 y=409.0 width=69.1 height=20.0 center_x=1074.6 center_y=419.0)
-                      TextRun value="westeurope" rect=(x=1040.0 y=409.0 width=69.1 height=20.0 center_x=1074.6 center_y=419.0)
-                  GenericContainer rect=<none>
-                    Label value="" rect=(x=1152.0 y=409.0 width=0.0 height=20.0 center_x=1152.0 center_y=419.0)
-                      TextRun value="" rect=(x=1152.0 y=409.0 width=0.0 height=20.0 center_x=1152.0 center_y=419.0)
-                  GenericContainer rect=<none>
-                    Button name="Add to kubeconfig" rect=(x=1330.4 y=405.0 width=145.6 height=28.0 center_x=1403.2 center_y=419.0)
-                  GenericContainer rect=<none>
-                    Label value="Could not inspect 1 subscription. Refresh discovery to retry." rect=(x=890.0 y=461.0 width=353.1 height=20.0 center_x=1066.5 center_y=471.0)
-                      TextRun value="Could not inspect 1 subscription. Refresh discovery to retry." rect=(x=890.0 y=461.0 width=353.1 height=20.0 center_x=1066.5 center_y=471.0)
-              GenericContainer rect=<none>
+                      Label value="CLUSTER" rect=(x=860.0 y=215.0 width=49.7 height=16.0 center_x=884.8 center_y=223.0)
+                        TextRun value="CLUSTER" rect=(x=860.0 y=215.0 width=48.6 height=16.0 center_x=884.3 center_y=223.0)
+                    GenericContainer rect=<none>
+                      Label value="LOCATION" rect=(x=1040.0 y=215.0 width=56.7 height=16.0 center_x=1068.3 center_y=223.0)
+                        TextRun value="LOCATION" rect=(x=1040.0 y=215.0 width=55.6 height=16.0 center_x=1067.8 center_y=223.0)
+                    GenericContainer rect=<none>
+                      Label value="TAGS" rect=(x=1152.0 y=215.0 width=28.8 height=16.0 center_x=1166.4 center_y=223.0)
+                        TextRun value="TAGS" rect=(x=1152.0 y=215.0 width=27.7 height=16.0 center_x=1165.8 center_y=223.0)
+                    GenericContainer rect=<none>
+                      Label value="payments-prod" rect=(x=860.0 y=249.0 width=90.1 height=20.0 center_x=905.0 center_y=259.0)
+                        TextRun value="payments-prod" rect=(x=860.0 y=249.0 width=90.1 height=20.0 center_x=905.0 center_y=259.0)
+                    GenericContainer rect=<none>
+                      Label value="westeurope" rect=(x=1040.0 y=249.0 width=69.1 height=20.0 center_x=1074.6 center_y=259.0)
+                        TextRun value="westeurope" rect=(x=1040.0 y=249.0 width=69.1 height=20.0 center_x=1074.6 center_y=259.0)
+                    GenericContainer rect=<none>
+                      Label value="environment=production · team=payments" rect=(x=1152.0 y=249.0 width=153.0 height=20.0 center_x=1228.5 center_y=259.0)
+                        TextRun value="environment=production…" rect=(x=1152.0 y=249.0 width=153.0 height=20.0 center_x=1228.5 center_y=259.0)
+                    GenericContainer rect=<none>
+                      Button name="Add to kubeconfig" rect=(x=1330.4 y=245.0 width=145.6 height=28.0 center_x=1403.2 center_y=259.0)
+                    GenericContainer rect=<none>
+                      Label value="payments-staging" rect=(x=860.0 y=289.0 width=105.9 height=20.0 center_x=913.0 center_y=299.0)
+                        TextRun value="payments-staging" rect=(x=860.0 y=289.0 width=105.9 height=20.0 center_x=913.0 center_y=299.0)
+                    GenericContainer rect=<none>
+                      Label value="westeurope" rect=(x=1040.0 y=289.0 width=69.1 height=20.0 center_x=1074.6 center_y=299.0)
+                        TextRun value="westeurope" rect=(x=1040.0 y=289.0 width=69.1 height=20.0 center_x=1074.6 center_y=299.0)
+                    GenericContainer rect=<none>
+                      Label value="" rect=(x=1152.0 y=289.0 width=0.0 height=20.0 center_x=1152.0 center_y=299.0)
+                        TextRun value="" rect=(x=1152.0 y=289.0 width=0.0 height=20.0 center_x=1152.0 center_y=299.0)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        Label value="In kubeconfig" rect=(x=1402.6 y=291.0 width=73.0 height=16.0 center_x=1439.1 center_y=299.0)
+                          TextRun value="In kubeconfig" rect=(x=1402.6 y=291.0 width=73.4 height=16.0 center_x=1439.3 center_y=299.0)
+                    GenericContainer rect=<none>
+                      Label value="catalog-prod" rect=(x=860.0 y=329.0 width=75.8 height=20.0 center_x=897.9 center_y=339.0)
+                        TextRun value="catalog-prod" rect=(x=860.0 y=329.0 width=75.8 height=20.0 center_x=897.9 center_y=339.0)
+                    GenericContainer rect=<none>
+                      Label value="northeurope" rect=(x=1040.0 y=329.0 width=72.4 height=20.0 center_x=1076.2 center_y=339.0)
+                        TextRun value="northeurope" rect=(x=1040.0 y=329.0 width=72.4 height=20.0 center_x=1076.2 center_y=339.0)
+                    GenericContainer rect=<none>
+                      Label value="" rect=(x=1152.0 y=329.0 width=0.0 height=20.0 center_x=1152.0 center_y=339.0)
+                        TextRun value="" rect=(x=1152.0 y=329.0 width=0.0 height=20.0 center_x=1152.0 center_y=339.0)
+                    GenericContainer rect=<none>
+                      Button name="Add to kubeconfig" rect=(x=1330.4 y=325.0 width=145.6 height=28.0 center_x=1403.2 center_y=339.0)
+                    GenericContainer rect=<none>
+                      Label value="catalog-dev" rect=(x=860.0 y=369.0 width=69.9 height=20.0 center_x=895.0 center_y=379.0)
+                        TextRun value="catalog-dev" rect=(x=860.0 y=369.0 width=69.9 height=20.0 center_x=895.0 center_y=379.0)
+                    GenericContainer rect=<none>
+                      Label value="eastus" rect=(x=1040.0 y=369.0 width=38.0 height=20.0 center_x=1059.0 center_y=379.0)
+                        TextRun value="eastus" rect=(x=1040.0 y=369.0 width=38.0 height=20.0 center_x=1059.0 center_y=379.0)
+                    GenericContainer rect=<none>
+                      Label value="" rect=(x=1152.0 y=369.0 width=0.0 height=20.0 center_x=1152.0 center_y=379.0)
+                        TextRun value="" rect=(x=1152.0 y=369.0 width=0.0 height=20.0 center_x=1152.0 center_y=379.0)
+                    GenericContainer rect=<none>
+                      Button name="Add to kubeconfig" rect=(x=1330.4 y=365.0 width=145.6 height=28.0 center_x=1403.2 center_y=379.0)
+                    GenericContainer rect=<none>
+                      Label value="observability" rect=(x=860.0 y=409.0 width=74.2 height=20.0 center_x=897.1 center_y=419.0)
+                        TextRun value="observability" rect=(x=860.0 y=409.0 width=74.2 height=20.0 center_x=897.1 center_y=419.0)
+                    GenericContainer rect=<none>
+                      Label value="westeurope" rect=(x=1040.0 y=409.0 width=69.1 height=20.0 center_x=1074.6 center_y=419.0)
+                        TextRun value="westeurope" rect=(x=1040.0 y=409.0 width=69.1 height=20.0 center_x=1074.6 center_y=419.0)
+                    GenericContainer rect=<none>
+                      Label value="" rect=(x=1152.0 y=409.0 width=0.0 height=20.0 center_x=1152.0 center_y=419.0)
+                        TextRun value="" rect=(x=1152.0 y=409.0 width=0.0 height=20.0 center_x=1152.0 center_y=419.0)
+                    GenericContainer rect=<none>
+                      Button name="Add to kubeconfig" rect=(x=1330.4 y=405.0 width=145.6 height=28.0 center_x=1403.2 center_y=419.0)
+                    GenericContainer rect=<none>
+                      Label value="Could not inspect 1 subscription. Refresh discovery to retry." rect=(x=890.0 y=461.0 width=353.1 height=20.0 center_x=1066.5 center_y=471.0)
+                        TextRun value="Could not inspect 1 subscription. Refresh discovery to retry." rect=(x=890.0 y=461.0 width=353.1 height=20.0 center_x=1066.5 center_y=471.0)
                 GenericContainer rect=<none>
-                  Label value="CLI not installed" rect=(x=1381.7 y=532.0 width=106.3 height=22.0 center_x=1434.8 center_y=543.0)
-                    TextRun value="CLI not installed" rect=(x=1390.7 y=535.0 width=88.3 height=16.0 center_x=1434.8 center_y=543.0)
-                GenericContainer rect=<none>
-                  Label value="Amazon Elastic Kubernetes Service" rect=(x=884.0 y=533.0 width=209.0 height=20.0 center_x=988.5 center_y=543.0)
-                    TextRun value="Amazon Elastic Kubernetes Service" rect=(x=884.0 y=533.0 width=209.0 height=20.0 center_x=988.5 center_y=543.0)
-                GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Label value="Install the AWS CLI and configure a profile" rect=(x=848.0 y=583.0 width=245.8 height=20.0 center_x=970.9 center_y=593.0)
-                      TextRun value="Install the AWS CLI and configure a profile" rect=(x=848.0 y=583.0 width=245.8 height=20.0 center_x=970.9 center_y=593.0)
-                    Label value="aws configure" rect=(x=1097.8 y=582.0 width=107.7 height=22.0 center_x=1151.7 center_y=593.0)
-                      TextRun value="aws configure" rect=(x=1106.8 y=585.0 width=89.7 height=16.0 center_x=1151.7 center_y=593.0)
-                    Label value="to discover EKS clusters." rect=(x=1209.5 y=583.0 width=143.2 height=20.0 center_x=1281.1 center_y=593.0)
-                      TextRun value="to discover EKS clusters." rect=(x=1209.5 y=583.0 width=143.2 height=20.0 center_x=1281.1 center_y=593.0)
-              GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Label value="3 clusters" rect=(x=1417.6 y=643.0 width=70.4 height=22.0 center_x=1452.8 center_y=654.0)
-                    TextRun value="3 clusters" rect=(x=1426.6 y=646.0 width=52.4 height=16.0 center_x=1452.8 center_y=654.0)
-                GenericContainer rect=<none>
-                  Label value="Tailscale" rect=(x=884.0 y=644.0 width=49.9 height=20.0 center_x=909.0 center_y=654.0)
-                    TextRun value="Tailscale" rect=(x=884.0 y=644.0 width=49.9 height=20.0 center_x=909.0 center_y=654.0)
-                GenericContainer rect=<none>
+                    Label value="CLI not installed" rect=(x=1381.7 y=532.0 width=106.3 height=22.0 center_x=1434.8 center_y=543.0)
+                      TextRun value="CLI not installed" rect=(x=1390.7 y=535.0 width=88.3 height=16.0 center_x=1434.8 center_y=543.0)
                   GenericContainer rect=<none>
-                    Label value="CLUSTER" rect=(x=860.0 y=703.0 width=49.7 height=16.0 center_x=884.8 center_y=711.0)
-                      TextRun value="CLUSTER" rect=(x=860.0 y=703.0 width=48.6 height=16.0 center_x=884.3 center_y=711.0)
-                  GenericContainer rect=<none>
-                    Label value="CONNECTION" rect=(x=1040.0 y=703.0 width=74.6 height=16.0 center_x=1077.3 center_y=711.0)
-                      TextRun value="CONNECTION" rect=(x=1040.0 y=703.0 width=73.5 height=16.0 center_x=1076.7 center_y=711.0)
-                  GenericContainer rect=<none>
-                    Label value="HOSTNAME" rect=(x=1152.0 y=703.0 width=62.1 height=16.0 center_x=1183.0 center_y=711.0)
-                      TextRun value="HOSTNAME" rect=(x=1152.0 y=703.0 width=61.0 height=16.0 center_x=1182.5 center_y=711.0)
-                  GenericContainer rect=<none>
-                    Label value="k8s-prod" rect=(x=860.0 y=737.0 width=53.0 height=20.0 center_x=886.5 center_y=747.0)
-                      TextRun value="k8s-prod" rect=(x=860.0 y=737.0 width=53.0 height=20.0 center_x=886.5 center_y=747.0)
-                  GenericContainer rect=<none>
-                    Label value="Online" rect=(x=1040.0 y=737.0 width=37.6 height=20.0 center_x=1058.8 center_y=747.0)
-                      TextRun value="Online" rect=(x=1040.0 y=737.0 width=37.6 height=20.0 center_x=1058.8 center_y=747.0)
-                  GenericContainer rect=<none>
-                    Label value="k8s-prod.tailnet.ts.net" rect=(x=1152.0 y=737.0 width=128.0 height=20.0 center_x=1216.0 center_y=747.0)
-                      TextRun value="k8s-prod.tailnet.ts.net" rect=(x=1152.0 y=737.0 width=128.0 height=20.0 center_x=1216.0 center_y=747.0)
+                    Label value="Amazon Elastic Kubernetes Service" rect=(x=884.0 y=533.0 width=209.0 height=20.0 center_x=988.5 center_y=543.0)
+                      TextRun value="Amazon Elastic Kubernetes Service" rect=(x=884.0 y=533.0 width=209.0 height=20.0 center_x=988.5 center_y=543.0)
                   GenericContainer rect=<none>
                     GenericContainer rect=<none>
-                      Label value="In kubeconfig" rect=(x=1402.6 y=739.0 width=73.0 height=16.0 center_x=1439.1 center_y=747.0)
-                        TextRun value="In kubeconfig" rect=(x=1402.6 y=739.0 width=73.4 height=16.0 center_x=1439.3 center_y=747.0)
+                      Label value="Install the AWS CLI and configure a profile" rect=(x=848.0 y=583.0 width=245.8 height=20.0 center_x=970.9 center_y=593.0)
+                        TextRun value="Install the AWS CLI and configure a profile" rect=(x=848.0 y=583.0 width=245.8 height=20.0 center_x=970.9 center_y=593.0)
+                      Label value="aws configure" rect=(x=1097.8 y=582.0 width=107.7 height=22.0 center_x=1151.7 center_y=593.0)
+                        TextRun value="aws configure" rect=(x=1106.8 y=585.0 width=89.7 height=16.0 center_x=1151.7 center_y=593.0)
+                      Label value="to discover EKS clusters." rect=(x=1209.5 y=583.0 width=143.2 height=20.0 center_x=1281.1 center_y=593.0)
+                        TextRun value="to discover EKS clusters." rect=(x=1209.5 y=583.0 width=143.2 height=20.0 center_x=1281.1 center_y=593.0)
+                GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Label value="k8s-staging" rect=(x=860.0 y=777.0 width=68.9 height=20.0 center_x=894.4 center_y=787.0)
-                      TextRun value="k8s-staging" rect=(x=860.0 y=777.0 width=68.9 height=20.0 center_x=894.4 center_y=787.0)
+                    Label value="3 clusters" rect=(x=1417.6 y=643.0 width=70.4 height=22.0 center_x=1452.8 center_y=654.0)
+                      TextRun value="3 clusters" rect=(x=1426.6 y=646.0 width=52.4 height=16.0 center_x=1452.8 center_y=654.0)
                   GenericContainer rect=<none>
-                    Label value="Offline" rect=(x=1040.0 y=777.0 width=39.9 height=20.0 center_x=1060.0 center_y=787.0)
-                      TextRun value="Offline" rect=(x=1040.0 y=777.0 width=39.9 height=20.0 center_x=1060.0 center_y=787.0)
+                    Label value="Tailscale" rect=(x=884.0 y=644.0 width=49.9 height=20.0 center_x=909.0 center_y=654.0)
+                      TextRun value="Tailscale" rect=(x=884.0 y=644.0 width=49.9 height=20.0 center_x=909.0 center_y=654.0)
                   GenericContainer rect=<none>
-                    Label value="k8s-staging.tailnet.ts.net" rect=(x=1152.0 y=777.0 width=143.8 height=20.0 center_x=1223.9 center_y=787.0)
-                      TextRun value="k8s-staging.tailnet.ts.net" rect=(x=1152.0 y=777.0 width=143.8 height=20.0 center_x=1223.9 center_y=787.0)
-                  GenericContainer rect=<none>
-                    Button name="Add to kubeconfig" rect=(x=1330.4 y=773.0 width=145.6 height=28.0 center_x=1403.2 center_y=787.0)
-                  GenericContainer rect=<none>
-                    Label value="edge-cluster" rect=(x=860.0 y=817.0 width=74.4 height=20.0 center_x=897.2 center_y=827.0)
-                      TextRun value="edge-cluster" rect=(x=860.0 y=817.0 width=74.4 height=20.0 center_x=897.2 center_y=827.0)
-                  GenericContainer rect=<none>
-                    Label value="Online" rect=(x=1040.0 y=817.0 width=37.6 height=20.0 center_x=1058.8 center_y=827.0)
-                      TextRun value="Online" rect=(x=1040.0 y=817.0 width=37.6 height=20.0 center_x=1058.8 center_y=827.0)
-                  GenericContainer rect=<none>
-                    Label value="edge-cluster.tailnet.ts.net" rect=(x=1152.0 y=817.0 width=149.4 height=20.0 center_x=1226.7 center_y=827.0)
-                      TextRun value="edge-cluster.tailnet.ts.net" rect=(x=1152.0 y=817.0 width=149.4 height=20.0 center_x=1226.7 center_y=827.0)
-                  GenericContainer rect=<none>
-                    Button name="Add to kubeconfig" rect=(x=1330.4 y=813.0 width=145.6 height=28.0 center_x=1403.2 center_y=827.0)
+                    GenericContainer rect=<none>
+                      Label value="CLUSTER" rect=(x=860.0 y=703.0 width=49.7 height=16.0 center_x=884.8 center_y=711.0)
+                        TextRun value="CLUSTER" rect=(x=860.0 y=703.0 width=48.6 height=16.0 center_x=884.3 center_y=711.0)
+                    GenericContainer rect=<none>
+                      Label value="CONNECTION" rect=(x=1040.0 y=703.0 width=74.6 height=16.0 center_x=1077.3 center_y=711.0)
+                        TextRun value="CONNECTION" rect=(x=1040.0 y=703.0 width=73.5 height=16.0 center_x=1076.7 center_y=711.0)
+                    GenericContainer rect=<none>
+                      Label value="HOSTNAME" rect=(x=1152.0 y=703.0 width=62.1 height=16.0 center_x=1183.0 center_y=711.0)
+                        TextRun value="HOSTNAME" rect=(x=1152.0 y=703.0 width=61.0 height=16.0 center_x=1182.5 center_y=711.0)
+                    GenericContainer rect=<none>
+                      Label value="k8s-prod" rect=(x=860.0 y=737.0 width=53.0 height=20.0 center_x=886.5 center_y=747.0)
+                        TextRun value="k8s-prod" rect=(x=860.0 y=737.0 width=53.0 height=20.0 center_x=886.5 center_y=747.0)
+                    GenericContainer rect=<none>
+                      Label value="Online" rect=(x=1040.0 y=737.0 width=37.6 height=20.0 center_x=1058.8 center_y=747.0)
+                        TextRun value="Online" rect=(x=1040.0 y=737.0 width=37.6 height=20.0 center_x=1058.8 center_y=747.0)
+                    GenericContainer rect=<none>
+                      Label value="k8s-prod.tailnet.ts.net" rect=(x=1152.0 y=737.0 width=128.0 height=20.0 center_x=1216.0 center_y=747.0)
+                        TextRun value="k8s-prod.tailnet.ts.net" rect=(x=1152.0 y=737.0 width=128.0 height=20.0 center_x=1216.0 center_y=747.0)
+                    GenericContainer rect=<none>
+                      GenericContainer rect=<none>
+                        Label value="In kubeconfig" rect=(x=1402.6 y=739.0 width=73.0 height=16.0 center_x=1439.1 center_y=747.0)
+                          TextRun value="In kubeconfig" rect=(x=1402.6 y=739.0 width=73.4 height=16.0 center_x=1439.3 center_y=747.0)
+                    GenericContainer rect=<none>
+                      Label value="k8s-staging" rect=(x=860.0 y=777.0 width=68.9 height=20.0 center_x=894.4 center_y=787.0)
+                        TextRun value="k8s-staging" rect=(x=860.0 y=777.0 width=68.9 height=20.0 center_x=894.4 center_y=787.0)
+                    GenericContainer rect=<none>
+                      Label value="Offline" rect=(x=1040.0 y=777.0 width=39.9 height=20.0 center_x=1060.0 center_y=787.0)
+                        TextRun value="Offline" rect=(x=1040.0 y=777.0 width=39.9 height=20.0 center_x=1060.0 center_y=787.0)
+                    GenericContainer rect=<none>
+                      Label value="k8s-staging.tailnet.ts.net" rect=(x=1152.0 y=777.0 width=143.8 height=20.0 center_x=1223.9 center_y=787.0)
+                        TextRun value="k8s-staging.tailnet.ts.net" rect=(x=1152.0 y=777.0 width=143.8 height=20.0 center_x=1223.9 center_y=787.0)
+                    GenericContainer rect=<none>
+                      Button name="Add to kubeconfig" rect=(x=1330.4 y=773.0 width=145.6 height=28.0 center_x=1403.2 center_y=787.0)
+                    GenericContainer rect=<none>
+                      Label value="edge-cluster" rect=(x=860.0 y=817.0 width=74.4 height=20.0 center_x=897.2 center_y=827.0)
+                        TextRun value="edge-cluster" rect=(x=860.0 y=817.0 width=74.4 height=20.0 center_x=897.2 center_y=827.0)
+                    GenericContainer rect=<none>
+                      Label value="Online" rect=(x=1040.0 y=817.0 width=37.6 height=20.0 center_x=1058.8 center_y=827.0)
+                        TextRun value="Online" rect=(x=1040.0 y=817.0 width=37.6 height=20.0 center_x=1058.8 center_y=827.0)
+                    GenericContainer rect=<none>
+                      Label value="edge-cluster.tailnet.ts.net" rect=(x=1152.0 y=817.0 width=149.4 height=20.0 center_x=1226.7 center_y=827.0)
+                        TextRun value="edge-cluster.tailnet.ts.net" rect=(x=1152.0 y=817.0 width=149.4 height=20.0 center_x=1226.7 center_y=827.0)
+                    GenericContainer rect=<none>
+                      Button name="Add to kubeconfig" rect=(x=1330.4 y=813.0 width=145.6 height=28.0 center_x=1403.2 center_y=827.0)

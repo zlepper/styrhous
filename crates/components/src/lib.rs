@@ -90,7 +90,7 @@ pub use badge::{
 pub use blade::{
     BLADE_BODY_FOOTER, BLADE_WIDTH, BladeFrame, BladeLayer, BladeNavigation, BladeNavigator,
     BladeResponse, BladeStack, BladeTransition, blade_body_footer, blade_footer, blade_title,
-    blade_title_with_actions, paint_blade_peek, paint_blade_peek_on,
+    blade_title_with_actions,
 };
 pub use button::{Button, ButtonSize, ButtonVariant};
 pub use combobox::{
@@ -208,7 +208,7 @@ pub mod section_rail;
 
 pub use badge::kind_badge_on;
 pub use blade::{
-    BladeDescription, BladeHeader, BladePeek, BladeStyle, HeaderAction, InspectorHeader,
+    BladeDescription, BladeHeader, BladeStyle, HeaderAction, InspectorHeader,
     InspectorHeaderResponse, InspectorStatus,
 };
 pub use readout::{Readout, ReadoutRow, ReadoutSize, ReadoutTone};

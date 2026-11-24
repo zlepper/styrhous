@@ -41,7 +41,6 @@
 --tooltip-bg:var(--inverse-surface);--tooltip-text:var(--inverse-text);--tooltip-key:var(--inverse-text-muted);
 --avatar-text:var(--text-on-fill);--av-1:var(--category-1);--av-2:var(--category-2);--av-3:var(--category-3);--av-4:var(--category-4);--av-5:var(--category-5);--av-6:var(--category-6);
 --key-bg:var(--control-fill-strong);--key-on-fill-bg:var(--tint-on-fill);--spinner-on-fill-track:var(--track-on-fill);--spinner-on-fill-head:var(--text-on-fill);
---peek-shade-1:var(--shade-strong);--peek-shade-2:var(--shade-soft);
 --chart-cpu:var(--accent-fill);--chart-request:var(--warning-text);--chart-memory:var(--success-fill);--chart-limit:var(--danger-text);--chart-grid:var(--divider)}
 /* Context re-pointing: scoped custom properties, copied verbatim from the same board. */
 .pop{font-family:Figtree,system-ui,sans-serif;font-size:13px;line-height:20px;color:var(--text-primary);background:var(--surface-raised);border:0;border-radius:14px;box-shadow:var(--shadow-raised);padding:4px;--field-bg:var(--surface-panel);--field-bg-hover:var(--surface-panel-hover)}

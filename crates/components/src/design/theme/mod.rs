@@ -553,9 +553,6 @@ overrides! {
     // Spinner on filled buttons.
     spinner_on_fill_track / SpinnerOnFillTrack = "spinner-on-fill-track" => TrackOnFill,
     spinner_on_fill_head / SpinnerOnFillHead = "spinner-on-fill-head" => TextOnFill,
-    // Blade history peeks.
-    peek_shade_1 / PeekShade1 = "peek-shade-1" => ShadeStrong,
-    peek_shade_2 / PeekShade2 = "peek-shade-2" => ShadeSoft,
     // Usage charts.
     chart_cpu / ChartCpu = "chart-cpu" => AccentFill,
     chart_request / ChartRequest = "chart-request" => WarningText,

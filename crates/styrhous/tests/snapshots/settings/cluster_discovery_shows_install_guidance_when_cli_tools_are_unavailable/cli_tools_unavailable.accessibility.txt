@@ -430,11 +430,44 @@ Window state=[focused] rect=<none>
   GenericContainer rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
-        Label value="Settings" rect=(x=724.0 y=51.5 width=45.4 height=16.0 center_x=746.7 center_y=59.5)
-          TextRun value="Settings" rect=(x=724.0 y=51.5 width=45.4 height=16.0 center_x=746.7 center_y=59.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Button name="Back in background blade" state=[disabled] rect=(x=820.0 y=21.5 width=28.0 height=28.0 center_x=834.0 center_y=35.5)
+            Button name="Forward in background blade" rect=(x=850.0 y=21.5 width=28.0 height=28.0 center_x=864.0 center_y=35.5)
+          GenericContainer rect=<none>
+            Label value="Settings" rect=(x=903.0 y=24.0 width=577.0 height=24.0 center_x=1191.5 center_y=36.0)
+              TextRun value="Settings" rect=(x=903.0 y=24.0 width=65.3 height=24.0 center_x=935.7 center_y=36.0)
+          GenericContainer rect=<none>
+            Button name="Close background blade" rect=(x=1488.0 y=21.5 width=28.0 height=28.0 center_x=1502.0 center_y=35.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Workspace and application preferences. Changes are saved on this device." rect=(x=832.0 y=84.0 width=465.8 height=20.0 center_x=1064.9 center_y=94.0)
+                  TextRun value="Workspace and application preferences. Changes are saved on this device." rect=(x=832.0 y=84.0 width=465.8 height=20.0 center_x=1064.9 center_y=94.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="KUBERNETES" rect=(x=832.0 y=128.0 width=73.9 height=16.0 center_x=868.9 center_y=136.0)
+                      TextRun value="KUBERNETES" rect=(x=832.0 y=128.0 width=72.8 height=16.0 center_x=868.4 center_y=136.0)
+                    GenericContainer rect=<none>
+                      Button name="Open context settings: Display names and rail badges (3 contexts)" rect=(x=832.0 y=152.0 width=672.0 height=64.0 center_x=1168.0 center_y=184.0)
+                        GenericContainer rect=<none>
+                      Button name="Open namespace selector settings: How namespaces are labelled and searched" rect=(x=832.0 y=216.0 width=672.0 height=64.0 center_x=1168.0 center_y=248.0)
+                        GenericContainer rect=<none>
+                      Button name="Open cluster discovery: Find clusters in Azure, AWS and Tailscale" rect=(x=832.0 y=280.0 width=672.0 height=64.0 center_x=1168.0 center_y=312.0)
+                        GenericContainer rect=<none>
+                    Label value="APPLICATION" rect=(x=832.0 y=368.0 width=76.5 height=16.0 center_x=870.3 center_y=376.0)
+                      TextRun value="APPLICATION" rect=(x=832.0 y=368.0 width=75.4 height=16.0 center_x=869.7 center_y=376.0)
+                    GenericContainer rect=<none>
+                      Button name="Open application settings: Terminal, debug images and updates" rect=(x=832.0 y=392.0 width=672.0 height=64.0 center_x=1168.0 center_y=424.0)
+                        GenericContainer rect=<none>
+                      Button name="Open license and account settings: Hosted Styrhous service (Active)" rect=(x=832.0 y=456.0 width=672.0 height=64.0 center_x=1168.0 center_y=488.0)
+                        GenericContainer rect=<none>
+                          Label value="Active" rect=(x=1394.5 y=477.5 width=67.5 height=22.0 center_x=1428.3 center_y=488.5)
+                            TextRun value="Active" rect=(x=1417.5 y=480.5 width=35.5 height=16.0 center_x=1435.3 center_y=488.5)
   GenericContainer rect=<none>
     Unknown name="Dismiss blade" rect=(x=0.0 y=0.0 width=808.0 height=1024.0 center_x=404.0 center_y=512.0)
-    Button name="Go back one blade" rect=(x=712.0 y=24.0 width=96.0 height=976.0 center_x=760.0 center_y=512.0)
+    Button name="Go back one blade" rect=(x=568.0 y=58.4 width=240.0 height=907.2 center_x=688.0 center_y=512.0)
   GenericContainer rect=<none>
     Unknown name="Dismiss blade" rect=(x=808.0 y=1016.0 width=720.0 height=8.0 center_x=1168.0 center_y=1020.0)
   GenericContainer rect=<none>
@@ -443,60 +476,61 @@ Window state=[focused] rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
-          Button name="Back" rect=(x=820.0 y=21.5 width=28.0 height=28.0 center_x=834.0 center_y=35.5)
-          Button name="Forward" state=[disabled] rect=(x=850.0 y=21.5 width=28.0 height=28.0 center_x=864.0 center_y=35.5)
-        GenericContainer rect=<none>
           GenericContainer rect=<none>
-            Button name="More actions" state=[disabled] rect=(x=1452.0 y=21.5 width=28.0 height=28.0 center_x=1466.0 center_y=35.5)
-            Button name="Refresh" rect=(x=1357.8 y=21.5 width=86.2 height=28.0 center_x=1400.9 center_y=35.5)
-          Label value="Cluster discovery" rect=(x=903.0 y=24.0 width=446.8 height=24.0 center_x=1126.4 center_y=36.0)
-            TextRun value="Cluster discovery" rect=(x=903.0 y=24.0 width=136.8 height=24.0 center_x=971.4 center_y=36.0)
-        GenericContainer rect=<none>
-          Button name="Close blade" rect=(x=1488.0 y=21.5 width=28.0 height=28.0 center_x=1502.0 center_y=35.5)
-      GenericContainer rect=<none>
+            Button name="Back" rect=(x=820.0 y=21.5 width=28.0 height=28.0 center_x=834.0 center_y=35.5)
+            Button name="Forward" state=[disabled] rect=(x=850.0 y=21.5 width=28.0 height=28.0 center_x=864.0 center_y=35.5)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Button name="More actions" state=[disabled] rect=(x=1452.0 y=21.5 width=28.0 height=28.0 center_x=1466.0 center_y=35.5)
+              Button name="Refresh" rect=(x=1357.8 y=21.5 width=86.2 height=28.0 center_x=1400.9 center_y=35.5)
+            Label value="Cluster discovery" rect=(x=903.0 y=24.0 width=446.8 height=24.0 center_x=1126.4 center_y=36.0)
+              TextRun value="Cluster discovery" rect=(x=903.0 y=24.0 width=136.8 height=24.0 center_x=971.4 center_y=36.0)
+          GenericContainer rect=<none>
+            Button name="Close blade" rect=(x=1488.0 y=21.5 width=28.0 height=28.0 center_x=1502.0 center_y=35.5)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="Find clusters in your cloud accounts and add them to your kubeconfig. New clusters appear in the rail automatically." rect=(x=832.0 y=84.0 width=635.5 height=40.0 center_x=1149.7 center_y=104.0)
-                TextRun value="Find clusters in your cloud accounts and add them to your kubeconfig. New clusters appear in the rail " rect=(x=832.0 y=84.0 width=635.5 height=20.0 center_x=1149.7 center_y=94.0)
-                TextRun value="automatically." rect=(x=832.0 y=104.0 width=86.9 height=20.0 center_x=875.5 center_y=114.0)
               GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Label value="CLI not installed" rect=(x=1381.7 y=155.0 width=106.3 height=22.0 center_x=1434.8 center_y=166.0)
-                    TextRun value="CLI not installed" rect=(x=1390.7 y=158.0 width=88.3 height=16.0 center_x=1434.8 center_y=166.0)
-                GenericContainer rect=<none>
-                  Label value="Azure Kubernetes Service" rect=(x=884.0 y=156.0 width=153.2 height=20.0 center_x=960.6 center_y=166.0)
-                    TextRun value="Azure Kubernetes Service" rect=(x=884.0 y=156.0 width=153.2 height=20.0 center_x=960.6 center_y=166.0)
+                Label value="Find clusters in your cloud accounts and add them to your kubeconfig. New clusters appear in the rail automatically." rect=(x=832.0 y=84.0 width=635.5 height=40.0 center_x=1149.7 center_y=104.0)
+                  TextRun value="Find clusters in your cloud accounts and add them to your kubeconfig. New clusters appear in the rail " rect=(x=832.0 y=84.0 width=635.5 height=20.0 center_x=1149.7 center_y=94.0)
+                  TextRun value="automatically." rect=(x=832.0 y=104.0 width=86.9 height=20.0 center_x=875.5 center_y=114.0)
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Label value="Install the Azure CLI and run" rect=(x=848.0 y=206.0 width=163.4 height=20.0 center_x=929.7 center_y=216.0)
-                      TextRun value="Install the Azure CLI and run" rect=(x=848.0 y=206.0 width=163.4 height=20.0 center_x=929.7 center_y=216.0)
-                    Label value="az login" rect=(x=1015.4 y=205.0 width=73.2 height=22.0 center_x=1052.0 center_y=216.0)
-                      TextRun value="az login" rect=(x=1024.4 y=208.0 width=55.2 height=16.0 center_x=1052.0 center_y=216.0)
-                    Label value="to discover AKS clusters." rect=(x=1092.6 y=206.0 width=144.3 height=20.0 center_x=1164.7 center_y=216.0)
-                      TextRun value="to discover AKS clusters." rect=(x=1092.6 y=206.0 width=144.3 height=20.0 center_x=1164.7 center_y=216.0)
-              GenericContainer rect=<none>
-                GenericContainer rect=<none>
-                  Label value="CLI not installed" rect=(x=1381.7 y=266.0 width=106.3 height=22.0 center_x=1434.8 center_y=277.0)
-                    TextRun value="CLI not installed" rect=(x=1390.7 y=269.0 width=88.3 height=16.0 center_x=1434.8 center_y=277.0)
-                GenericContainer rect=<none>
-                  Label value="Amazon Elastic Kubernetes Service" rect=(x=884.0 y=267.0 width=209.0 height=20.0 center_x=988.5 center_y=277.0)
-                    TextRun value="Amazon Elastic Kubernetes Service" rect=(x=884.0 y=267.0 width=209.0 height=20.0 center_x=988.5 center_y=277.0)
+                    Label value="CLI not installed" rect=(x=1381.7 y=155.0 width=106.3 height=22.0 center_x=1434.8 center_y=166.0)
+                      TextRun value="CLI not installed" rect=(x=1390.7 y=158.0 width=88.3 height=16.0 center_x=1434.8 center_y=166.0)
+                  GenericContainer rect=<none>
+                    Label value="Azure Kubernetes Service" rect=(x=884.0 y=156.0 width=153.2 height=20.0 center_x=960.6 center_y=166.0)
+                      TextRun value="Azure Kubernetes Service" rect=(x=884.0 y=156.0 width=153.2 height=20.0 center_x=960.6 center_y=166.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      Label value="Install the Azure CLI and run" rect=(x=848.0 y=206.0 width=163.4 height=20.0 center_x=929.7 center_y=216.0)
+                        TextRun value="Install the Azure CLI and run" rect=(x=848.0 y=206.0 width=163.4 height=20.0 center_x=929.7 center_y=216.0)
+                      Label value="az login" rect=(x=1015.4 y=205.0 width=73.2 height=22.0 center_x=1052.0 center_y=216.0)
+                        TextRun value="az login" rect=(x=1024.4 y=208.0 width=55.2 height=16.0 center_x=1052.0 center_y=216.0)
+                      Label value="to discover AKS clusters." rect=(x=1092.6 y=206.0 width=144.3 height=20.0 center_x=1164.7 center_y=216.0)
+                        TextRun value="to discover AKS clusters." rect=(x=1092.6 y=206.0 width=144.3 height=20.0 center_x=1164.7 center_y=216.0)
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Label value="Install the AWS CLI and configure a profile" rect=(x=848.0 y=317.0 width=245.8 height=20.0 center_x=970.9 center_y=327.0)
-                      TextRun value="Install the AWS CLI and configure a profile" rect=(x=848.0 y=317.0 width=245.8 height=20.0 center_x=970.9 center_y=327.0)
-                    Label value="aws configure" rect=(x=1097.8 y=316.0 width=107.7 height=22.0 center_x=1151.7 center_y=327.0)
-                      TextRun value="aws configure" rect=(x=1106.8 y=319.0 width=89.7 height=16.0 center_x=1151.7 center_y=327.0)
-                    Label value="to discover EKS clusters." rect=(x=1209.5 y=317.0 width=143.2 height=20.0 center_x=1281.1 center_y=327.0)
-                      TextRun value="to discover EKS clusters." rect=(x=1209.5 y=317.0 width=143.2 height=20.0 center_x=1281.1 center_y=327.0)
-              GenericContainer rect=<none>
+                    Label value="CLI not installed" rect=(x=1381.7 y=266.0 width=106.3 height=22.0 center_x=1434.8 center_y=277.0)
+                      TextRun value="CLI not installed" rect=(x=1390.7 y=269.0 width=88.3 height=16.0 center_x=1434.8 center_y=277.0)
+                  GenericContainer rect=<none>
+                    Label value="Amazon Elastic Kubernetes Service" rect=(x=884.0 y=267.0 width=209.0 height=20.0 center_x=988.5 center_y=277.0)
+                      TextRun value="Amazon Elastic Kubernetes Service" rect=(x=884.0 y=267.0 width=209.0 height=20.0 center_x=988.5 center_y=277.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      Label value="Install the AWS CLI and configure a profile" rect=(x=848.0 y=317.0 width=245.8 height=20.0 center_x=970.9 center_y=327.0)
+                        TextRun value="Install the AWS CLI and configure a profile" rect=(x=848.0 y=317.0 width=245.8 height=20.0 center_x=970.9 center_y=327.0)
+                      Label value="aws configure" rect=(x=1097.8 y=316.0 width=107.7 height=22.0 center_x=1151.7 center_y=327.0)
+                        TextRun value="aws configure" rect=(x=1106.8 y=319.0 width=89.7 height=16.0 center_x=1151.7 center_y=327.0)
+                      Label value="to discover EKS clusters." rect=(x=1209.5 y=317.0 width=143.2 height=20.0 center_x=1281.1 center_y=327.0)
+                        TextRun value="to discover EKS clusters." rect=(x=1209.5 y=317.0 width=143.2 height=20.0 center_x=1281.1 center_y=327.0)
                 GenericContainer rect=<none>
-                  Label value="Not installed" rect=(x=1400.5 y=377.0 width=87.5 height=22.0 center_x=1444.2 center_y=388.0)
-                    TextRun value="Not installed" rect=(x=1409.5 y=380.0 width=69.5 height=16.0 center_x=1444.2 center_y=388.0)
-                GenericContainer rect=<none>
-                  Label value="Tailscale" rect=(x=884.0 y=378.0 width=49.9 height=20.0 center_x=909.0 center_y=388.0)
-                    TextRun value="Tailscale" rect=(x=884.0 y=378.0 width=49.9 height=20.0 center_x=909.0 center_y=388.0)
-                GenericContainer rect=<none>
-                  Label value="Install Tailscale and sign in to discover Kubernetes API proxies on your tailnet." rect=(x=848.0 y=427.0 width=446.9 height=20.0 center_x=1071.5 center_y=437.0)
-                    TextRun value="Install Tailscale and sign in to discover Kubernetes API proxies on your tailnet." rect=(x=848.0 y=427.0 width=446.9 height=20.0 center_x=1071.5 center_y=437.0)
+                  GenericContainer rect=<none>
+                    Label value="Not installed" rect=(x=1400.5 y=377.0 width=87.5 height=22.0 center_x=1444.2 center_y=388.0)
+                      TextRun value="Not installed" rect=(x=1409.5 y=380.0 width=69.5 height=16.0 center_x=1444.2 center_y=388.0)
+                  GenericContainer rect=<none>
+                    Label value="Tailscale" rect=(x=884.0 y=378.0 width=49.9 height=20.0 center_x=909.0 center_y=388.0)
+                      TextRun value="Tailscale" rect=(x=884.0 y=378.0 width=49.9 height=20.0 center_x=909.0 center_y=388.0)
+                  GenericContainer rect=<none>
+                    Label value="Install Tailscale and sign in to discover Kubernetes API proxies on your tailnet." rect=(x=848.0 y=427.0 width=446.9 height=20.0 center_x=1071.5 center_y=437.0)
+                      TextRun value="Install Tailscale and sign in to discover Kubernetes API proxies on your tailnet." rect=(x=848.0 y=427.0 width=446.9 height=20.0 center_x=1071.5 center_y=437.0)

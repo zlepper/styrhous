@@ -14,8 +14,14 @@ const fn content_width(blade_width: f32) -> f32 {
     (blade_width - (chrome::BODY_PADDING.left + chrome::BODY_PADDING.right) as f32).max(0.0)
 }
 const TRANSITION_DURATION: f32 = 0.25;
-/// How many history blades show as peeks behind the active one.
-const HISTORY_PEEKS: usize = 2;
+/// The scale of each history blade behind the active one, nearest first.
+const HISTORY_SCALES: [f32; 2] = size::BLADE_HISTORY_SCALES;
+/// Horizontal recession as a share of the blade width; every blade further
+/// back recedes in proportion to the scale of the ones before it.
+const HISTORY_X_TRANSLATIONS: [f32; 2] = [
+    size::BLADE_HISTORY_RECESSION,
+    size::BLADE_HISTORY_RECESSION * (1.0 + HISTORY_SCALES[1] / HISTORY_SCALES[0]),
+];
 
 mod chrome;
 // C19
@@ -28,15 +34,13 @@ mod transforms;
 
 pub use chrome::{
     BLADE_BODY_FOOTER, BladeFrame, BladeNavigation, blade_body_footer, blade_footer, blade_title,
-    blade_title_with_actions, paint_blade_peek, paint_blade_peek_on,
+    blade_title_with_actions,
 };
 // C19
 pub use inspector_header::{InspectorHeader, InspectorHeaderResponse, InspectorStatus};
 pub use interaction::HeaderAction;
 pub use navigation::{BladeNavigator, BladeTransition};
-pub use stack::{
-    BladeDescription, BladeHeader, BladeLayer, BladePeek, BladeResponse, BladeStack, BladeStyle,
-};
+pub use stack::{BladeDescription, BladeHeader, BladeLayer, BladeResponse, BladeStack, BladeStyle};
 
 #[cfg(test)]
 mod tests;

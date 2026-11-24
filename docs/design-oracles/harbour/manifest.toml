@@ -322,13 +322,6 @@ y = 8
 width = 720
 height = 806
 
-[[board.regions]]
-name = "peeks"
-x = 616
-y = 24
-width = 192
-height = 976
-
 [[board]]
 id = "A06"
 title = "Deployments — restart rollout confirmation"

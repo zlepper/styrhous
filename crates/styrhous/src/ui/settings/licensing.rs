@@ -16,10 +16,6 @@ pub(crate) struct LicenseSettingsBlade {
 }
 
 impl GlobalBladeContent for LicenseSettingsBlade {
-    fn description(&self) -> components::BladeDescription {
-        components::BladeDescription::named("License & account")
-    }
-
     fn sidebar_destination(&self) -> Option<crate::ui::global_blade::SidebarDestination> {
         Some(crate::ui::global_blade::SidebarDestination::Settings)
     }

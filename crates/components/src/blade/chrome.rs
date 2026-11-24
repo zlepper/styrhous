@@ -1,18 +1,15 @@
-//! The blade's own surface (C10): header, body and footer, and the compact
-//! peek a history blade shows behind the active one.
+//! The blade's own surface (C10): header, body and footer.
 //!
 //! [`BladeStack`](super::BladeStack) lays its layers out with these; design
 //! boards and previews paint them in place with [`BladeFrame`].
 
-use egui::{
-    Align, Color32, CornerRadius, Layout, Rect, Response, Sense, Ui, UiBuilder, pos2, vec2,
-};
+use egui::{Align, Color32, Layout, Rect, Response, Sense, Ui, UiBuilder, pos2, vec2};
 
 use super::interaction::HeaderAction;
 use crate::a11y::{Name, describe_container};
 use crate::control::with_opacity;
 use crate::design::theme::{self, ThemeExt, ThemeScope};
-use crate::design::type_scale::{self, Weight};
+use crate::design::type_scale;
 use crate::design::{radius, size, space};
 use crate::icons::Icon;
 use crate::{Button, ButtonSize, ButtonVariant, kind_badge};
@@ -31,10 +28,6 @@ const NAV_UNAVAILABLE_OPACITY: f32 = 0.35;
 pub const BODY_PADDING: egui::Margin = egui::Margin::symmetric(24, 20);
 /// Horizontal padding of the footer.
 const FOOTER_PADDING_X: f32 = space::S24;
-/// Horizontal padding of a peek's header.
-const PEEK_PADDING_X: f32 = space::S12;
-/// Gap between a peek's kind badge and name.
-const PEEK_GAP: f32 = space::S4;
 
 /// The Back and Forward state of a blade header, and the names its buttons
 /// are read by.
@@ -361,78 +354,4 @@ impl<'a> BladeFrame<'a> {
             }
         });
     }
-}
-
-/// A history blade peeking out from behind the next one (`.blade.peek`): a
-/// sunken blade at `rect` whose compact header shows its `kind` badge and
-/// `name` (cut to [`size::BLADE_PEEK_NAME`]), with `shade` laid over the
-/// [`size::BLADE_PEEK`] points that show.
-pub fn paint_blade_peek(ui: &mut Ui, rect: Rect, kind: Option<&str>, name: &str, shade: Color32) {
-    paint_blade_peek_on(ui, rect, kind.map(|kind| (kind, None)), name, shade);
-}
-
-/// A [`paint_blade_peek`] whose kind badge is on the kind's category `fill`.
-pub fn paint_blade_peek_on(
-    ui: &mut Ui,
-    rect: Rect,
-    kind: Option<(&str, Option<Color32>)>,
-    name: &str,
-    shade: Color32,
-) {
-    let theme = ui.tokens();
-    paint_surface(ui, rect, theme.surface.sunken);
-    let header = Rect::from_min_size(rect.min, vec2(rect.width(), size::BLADE_PEEK_HEADER));
-    ui.painter().rect_filled(
-        Rect::from_min_max(
-            pos2(header.left(), header.bottom() - size::HAIRLINE),
-            header.max,
-        ),
-        0,
-        theme.divider.base,
-    );
-    let name_role = type_scale::META.with_weight(Weight::Medium);
-    let name_galley =
-        name_role.galley_elided(ui.ctx(), name, theme.text.primary, size::BLADE_PEEK_NAME, 1);
-    let badge_height = if kind.is_some() {
-        size::PILL_HEIGHT + PEEK_GAP
-    } else {
-        0.0
-    };
-    let content_height = badge_height + name_role.line_height();
-    let top = header.top() + (header.height() - size::HAIRLINE - content_height) / 2.0;
-    let mut column = ui.new_child(
-        UiBuilder::new()
-            .max_rect(Rect::from_min_max(
-                pos2(header.left() + PEEK_PADDING_X, top),
-                pos2(header.right() - PEEK_PADDING_X, header.bottom()),
-            ))
-            .layout(Layout::top_down(Align::Min)),
-    );
-    column.spacing_mut().item_spacing = vec2(0.0, PEEK_GAP);
-    if let Some((kind, fill)) = kind {
-        match fill {
-            Some(fill) => crate::badge::kind_badge_on(&mut column, kind, fill),
-            None => kind_badge(&mut column, kind),
-        };
-    }
-    let (name_rect, response) = type_scale::allocate_text(
-        &mut column,
-        vec2(name_galley.rect.width(), name_role.line_height()),
-        name,
-    );
-    type_scale::paint_text(
-        &column,
-        &response,
-        name_rect.min,
-        name_galley,
-        theme.text.primary,
-    );
-
-    let strip = Rect::from_min_size(rect.min, vec2(size::BLADE_PEEK, rect.height()));
-    let corner = CornerRadius {
-        nw: radius::OVERLAY,
-        sw: radius::OVERLAY,
-        ..CornerRadius::ZERO
-    };
-    ui.painter().rect_filled(strip, corner, shade);
 }

@@ -139,11 +139,6 @@ impl GlobalBladeContent for ResourceDetailHistoryEntry {
 
     fn description(&self) -> components::BladeDescription {
         components::BladeDescription {
-            peek: components::BladePeek {
-                kind: Some(self.api_resource.kind.clone()),
-                category: Some(crate::resource_catalog::kind_category(&self.api_resource)),
-                name: self.resource_name.clone(),
-            },
             style: components::BladeStyle::Inspector,
         }
     }

@@ -312,8 +312,6 @@ when it is out of date.
 | `key-on-fill-bg` | `tint-on-fill` |
 | `spinner-on-fill-track` | `track-on-fill` |
 | `spinner-on-fill-head` | `text-on-fill` |
-| `peek-shade-1` | `shade-strong` |
-| `peek-shade-2` | `shade-soft` |
 | `chart-cpu` | `accent-fill` |
 | `chart-request` | `warning-text` |
 | `chart-memory` | `success-fill` |

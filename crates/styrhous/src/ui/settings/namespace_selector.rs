@@ -53,10 +53,6 @@ impl NamespaceSelectorSettingsBlade {
 }
 
 impl GlobalBladeContent for NamespaceSelectorSettingsBlade {
-    fn description(&self) -> components::BladeDescription {
-        components::BladeDescription::named("Namespace selector")
-    }
-
     fn sidebar_destination(&self) -> Option<crate::ui::global_blade::SidebarDestination> {
         Some(crate::ui::global_blade::SidebarDestination::Settings)
     }

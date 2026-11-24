@@ -57,10 +57,6 @@ impl GlobalBladeEffect for MarkAllRead {
 }
 
 impl GlobalBladeContent for NotificationHistoryBlade {
-    fn description(&self) -> components::BladeDescription {
-        components::BladeDescription::named("Notifications")
-    }
-
     fn sidebar_destination(&self) -> Option<crate::ui::global_blade::SidebarDestination> {
         Some(crate::ui::global_blade::SidebarDestination::Notifications)
     }

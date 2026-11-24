@@ -333,7 +333,7 @@ pub(super) trait GlobalBladeContent: std::fmt::Debug {
         _context: &mut GlobalBladeRenderContext<'_>,
     ) -> GlobalBladeRenderResult;
 
-    /// How this content lays out and what its history peek shows.
+    /// How this content lays out.
     fn description(&self) -> BladeDescription {
         BladeDescription::default()
     }

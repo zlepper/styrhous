@@ -7,8 +7,8 @@ use crate::resource_table::ContainerKind;
 use crate::ui::clock::frame_age;
 use components::design::theme::Tone as ThemeTone;
 use components::{
-    BladeNavigation, CodeBlock, Disclosure, InspectorBody, InspectorHeader, InspectorStatus,
-    Property, PropertyGrid, Readout, ReadoutTone, Section, inspector_section_heading,
+    CodeBlock, Disclosure, InspectorBody, InspectorHeader, InspectorStatus, Property, PropertyGrid,
+    Readout, ReadoutTone, Section, inspector_section_heading,
 };
 
 /// Lines of YAML the inspector shows before it sends the reader to the editor.
@@ -317,17 +317,7 @@ pub(super) fn show_header(
     let phase = pod.map(|pod| pod.phase.as_str());
     let problem = pod.and_then(pod_problem);
     let node = pod.and_then(|pod| pod.node_name.as_deref());
-    let navigation = if layer.is_foreground {
-        BladeNavigation::new(layer.can_go_back, layer.can_go_forward)
-    } else {
-        BladeNavigation {
-            back_label: "Back in background blade",
-            forward_label: "Forward in background blade",
-            close_label: "Close background blade",
-            ..BladeNavigation::new(layer.can_go_back, layer.can_go_forward)
-        }
-    };
-    let mut header = InspectorHeader::new(&entry.resource_name, navigation)
+    let mut header = InspectorHeader::new(&entry.resource_name, layer.navigation())
         .kind(&entry.api_resource.kind, Some(category))
         .readouts(&readouts);
     if let Some(phase) = phase {

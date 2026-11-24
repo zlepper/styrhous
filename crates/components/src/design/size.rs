@@ -356,14 +356,12 @@ pub const BLADE_MIN: f32 = 560.0;
 pub const BLADE_HEADER: f32 = 56.0;
 /// Blade footer (`.blade-f`), its top divider included.
 pub const BLADE_FOOTER: f32 = 64.0;
-/// How much of a history blade peeks out from behind the next one.
-pub const BLADE_PEEK: f32 = 96.0;
-/// How far each history peek steps down (and up from the bottom).
-pub const BLADE_PEEK_STEP: f32 = 16.0;
-/// The compact header of a history peek.
-pub const BLADE_PEEK_HEADER: f32 = 72.0;
-/// Widest a history peek's name runs before it is truncated.
-pub const BLADE_PEEK_NAME: f32 = 72.0;
+/// The scale of each history blade behind the front one, nearest first: the
+/// further back, the smaller the blade, centred on the front blade's height.
+pub const BLADE_HISTORY_SCALES: [f32; 2] = [0.9, 0.8];
+/// How far the nearest history blade sits left of the front one, as a share of
+/// the blade width; blades further back step in proportion to their scales.
+pub const BLADE_HISTORY_RECESSION: f32 = 1.0 / 3.0;
 /// The vertical rule between a header's navigation and its title (`.vr`).
 pub const VERTICAL_RULE: f32 = 20.0;
 

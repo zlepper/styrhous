@@ -606,11 +606,44 @@ Window state=[focused] rect=<none>
   GenericContainer rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
-        Label value="Settings" rect=(x=724.0 y=87.5 width=45.4 height=16.0 center_x=746.7 center_y=95.5)
-          TextRun value="Settings" rect=(x=724.0 y=87.5 width=45.4 height=16.0 center_x=746.7 center_y=95.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Button name="Back in background blade" state=[disabled] rect=(x=820.0 y=57.5 width=28.0 height=28.0 center_x=834.0 center_y=71.5)
+            Button name="Forward in background blade" rect=(x=850.0 y=57.5 width=28.0 height=28.0 center_x=864.0 center_y=71.5)
+          GenericContainer rect=<none>
+            Label value="Settings" rect=(x=903.0 y=60.0 width=577.0 height=24.0 center_x=1191.5 center_y=72.0)
+              TextRun value="Settings" rect=(x=903.0 y=60.0 width=65.3 height=24.0 center_x=935.7 center_y=72.0)
+          GenericContainer rect=<none>
+            Button name="Close background blade" rect=(x=1488.0 y=57.5 width=28.0 height=28.0 center_x=1502.0 center_y=71.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Workspace and application preferences. Changes are saved on this device." rect=(x=832.0 y=120.0 width=465.8 height=20.0 center_x=1064.9 center_y=130.0)
+                  TextRun value="Workspace and application preferences. Changes are saved on this device." rect=(x=832.0 y=120.0 width=465.8 height=20.0 center_x=1064.9 center_y=130.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Label value="KUBERNETES" rect=(x=832.0 y=164.0 width=73.9 height=16.0 center_x=868.9 center_y=172.0)
+                      TextRun value="KUBERNETES" rect=(x=832.0 y=164.0 width=72.8 height=16.0 center_x=868.4 center_y=172.0)
+                    GenericContainer rect=<none>
+                      Button name="Open context settings: Display names and rail badges (4 contexts)" rect=(x=832.0 y=188.0 width=672.0 height=64.0 center_x=1168.0 center_y=220.0)
+                        GenericContainer rect=<none>
+                      Button name="Open namespace selector settings: How namespaces are labelled and searched" rect=(x=832.0 y=252.0 width=672.0 height=64.0 center_x=1168.0 center_y=284.0)
+                        GenericContainer rect=<none>
+                      Button name="Open cluster discovery: Find clusters in Azure, AWS and Tailscale" rect=(x=832.0 y=316.0 width=672.0 height=64.0 center_x=1168.0 center_y=348.0)
+                        GenericContainer rect=<none>
+                    Label value="APPLICATION" rect=(x=832.0 y=404.0 width=76.5 height=16.0 center_x=870.3 center_y=412.0)
+                      TextRun value="APPLICATION" rect=(x=832.0 y=404.0 width=75.4 height=16.0 center_x=869.7 center_y=412.0)
+                    GenericContainer rect=<none>
+                      Button name="Open application settings: Terminal, debug images and updates" rect=(x=832.0 y=428.0 width=672.0 height=64.0 center_x=1168.0 center_y=460.0)
+                        GenericContainer rect=<none>
+                      Button name="Open license and account settings: Hosted Styrhous service (Needs attention)" rect=(x=832.0 y=492.0 width=672.0 height=64.0 center_x=1168.0 center_y=524.0)
+                        GenericContainer rect=<none>
+                          Label value="Needs attention" rect=(x=1341.4 y=513.5 width=120.6 height=22.0 center_x=1401.7 center_y=524.5)
+                            TextRun value="Needs attention" rect=(x=1364.4 y=516.5 width=88.6 height=16.0 center_x=1408.7 center_y=524.5)
   GenericContainer rect=<none>
     Unknown name="Dismiss blade" rect=(x=0.0 y=36.0 width=808.0 height=988.0 center_x=404.0 center_y=530.0)
-    Button name="Go back one blade" rect=(x=712.0 y=60.0 width=96.0 height=940.0 center_x=760.0 center_y=530.0)
+    Button name="Go back one blade" rect=(x=568.0 y=92.6 width=240.0 height=874.8 center_x=688.0 center_y=530.0)
   GenericContainer rect=<none>
     Unknown name="Dismiss blade" rect=(x=808.0 y=1016.0 width=720.0 height=8.0 center_x=1168.0 center_y=1020.0)
   GenericContainer rect=<none>
@@ -619,76 +652,77 @@ Window state=[focused] rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
-          Button name="Back" rect=(x=820.0 y=57.5 width=28.0 height=28.0 center_x=834.0 center_y=71.5)
-          Button name="Forward" state=[disabled] rect=(x=850.0 y=57.5 width=28.0 height=28.0 center_x=864.0 center_y=71.5)
-        GenericContainer rect=<none>
           GenericContainer rect=<none>
-            Button name="More actions" state=[disabled] rect=(x=1452.0 y=57.5 width=28.0 height=28.0 center_x=1466.0 center_y=71.5)
-          Label value="License & account" rect=(x=903.0 y=60.0 width=541.0 height=24.0 center_x=1173.5 center_y=72.0)
-            TextRun value="License & account" rect=(x=903.0 y=60.0 width=141.8 height=24.0 center_x=973.9 center_y=72.0)
-        GenericContainer rect=<none>
-          Button name="Close blade" rect=(x=1488.0 y=57.5 width=28.0 height=28.0 center_x=1502.0 center_y=71.5)
-      GenericContainer rect=<none>
+            Button name="Back" rect=(x=820.0 y=57.5 width=28.0 height=28.0 center_x=834.0 center_y=71.5)
+            Button name="Forward" state=[disabled] rect=(x=850.0 y=57.5 width=28.0 height=28.0 center_x=864.0 center_y=71.5)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Button name="More actions" state=[disabled] rect=(x=1452.0 y=57.5 width=28.0 height=28.0 center_x=1466.0 center_y=71.5)
+            Label value="License & account" rect=(x=903.0 y=60.0 width=541.0 height=24.0 center_x=1173.5 center_y=72.0)
+              TextRun value="License & account" rect=(x=903.0 y=60.0 width=141.8 height=24.0 center_x=973.9 center_y=72.0)
+          GenericContainer rect=<none>
+            Button name="Close blade" rect=(x=1488.0 y=57.5 width=28.0 height=28.0 center_x=1502.0 center_y=71.5)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
-                Label value="Grace period until 1 January 2100" rect=(x=874.0 y=132.0 width=197.7 height=20.0 center_x=972.9 center_y=142.0)
-                  TextRun value="Grace period until 1 January 2100" rect=(x=874.0 y=132.0 width=197.7 height=20.0 center_x=972.9 center_y=142.0)
-                Label value="The licensing service couldn’t be reached. Styrhous keeps working offline until the grace period ends." rect=(x=874.0 y=154.0 width=585.8 height=20.0 center_x=1166.9 center_y=164.0)
-                  TextRun value="The licensing service couldn’t be reached. Styrhous keeps working offline until the grace period ends." rect=(x=874.0 y=154.0 width=585.8 height=20.0 center_x=1166.9 center_y=164.0)
-              GenericContainer rect=<none>
                 GenericContainer rect=<none>
-                  Label value="Plan" rect=(x=848.0 y=218.0 width=29.5 height=16.0 center_x=862.8 center_y=226.0)
-                    TextRun value="PLAN" rect=(x=848.0 y=218.0 width=28.4 height=16.0 center_x=862.2 center_y=226.0)
-                  GenericContainer rect=<none>
-                    Label value="Commercial" rect=(x=848.0 y=234.0 width=70.1 height=20.0 center_x=883.0 center_y=244.0)
-                      TextRun value="Commercial" rect=(x=848.0 y=234.0 width=70.1 height=20.0 center_x=883.0 center_y=244.0)
-                  Label value="Seats" rect=(x=1069.3 y=218.0 width=34.8 height=16.0 center_x=1086.7 center_y=226.0)
-                    TextRun value="SEATS" rect=(x=1069.3 y=218.0 width=33.7 height=16.0 center_x=1086.2 center_y=226.0)
-                  GenericContainer rect=<none>
-                    Label value="Unavailable" rect=(x=1069.3 y=234.0 width=66.3 height=20.0 center_x=1102.5 center_y=244.0)
-                      TextRun value="Unavailable" rect=(x=1069.3 y=234.0 width=66.3 height=20.0 center_x=1102.5 center_y=244.0)
-                  Label value="Account" rect=(x=1290.7 y=218.0 width=53.2 height=16.0 center_x=1317.2 center_y=226.0)
-                    TextRun value="ACCOUNT" rect=(x=1290.7 y=218.0 width=52.1 height=16.0 center_x=1316.7 center_y=226.0)
-                  GenericContainer rect=<none>
-                    Label value="Unavailable" rect=(x=1290.7 y=234.0 width=66.3 height=20.0 center_x=1323.8 center_y=244.0)
-                      TextRun value="Unavailable" rect=(x=1290.7 y=234.0 width=66.3 height=20.0 center_x=1323.8 center_y=244.0)
-                  Label value="Last check" rect=(x=848.0 y=270.0 width=68.8 height=16.0 center_x=882.4 center_y=278.0)
-                    TextRun value="LAST CHECK" rect=(x=848.0 y=270.0 width=67.7 height=16.0 center_x=881.9 center_y=278.0)
-                  GenericContainer rect=<none>
-                    Label value="2 days ago" rect=(x=848.0 y=286.0 width=62.5 height=20.0 center_x=879.3 center_y=296.0)
-                      TextRun value="2 days ago" rect=(x=848.0 y=286.0 width=62.5 height=20.0 center_x=879.3 center_y=296.0)
-                  Label value="Offline until" rect=(x=1069.3 y=270.0 width=86.1 height=16.0 center_x=1112.4 center_y=278.0)
-                    TextRun value="OFFLINE UNTIL" rect=(x=1069.3 y=270.0 width=85.0 height=16.0 center_x=1111.8 center_y=278.0)
-                  GenericContainer rect=<none>
-                    Label value="1 Jan 2100" rect=(x=1069.3 y=286.0 width=61.7 height=20.0 center_x=1100.2 center_y=296.0)
-                      TextRun value="1 Jan 2100" rect=(x=1069.3 y=286.0 width=61.7 height=20.0 center_x=1100.2 center_y=296.0)
-                  Label value="Server" rect=(x=1290.7 y=270.0 width=43.4 height=16.0 center_x=1312.4 center_y=278.0)
-                    TextRun value="SERVER" rect=(x=1290.7 y=270.0 width=42.3 height=16.0 center_x=1311.8 center_y=278.0)
-                  GenericContainer rect=<none>
-                    Label value="Styrhous cloud" rect=(x=1290.7 y=286.0 width=87.8 height=20.0 center_x=1334.5 center_y=296.0)
-                      TextRun value="Styrhous cloud" rect=(x=1290.7 y=286.0 width=87.8 height=20.0 center_x=1334.5 center_y=296.0)
+                  Label value="Grace period until 1 January 2100" rect=(x=874.0 y=132.0 width=197.7 height=20.0 center_x=972.9 center_y=142.0)
+                    TextRun value="Grace period until 1 January 2100" rect=(x=874.0 y=132.0 width=197.7 height=20.0 center_x=972.9 center_y=142.0)
+                  Label value="The licensing service couldn’t be reached. Styrhous keeps working offline until the grace period ends." rect=(x=874.0 y=154.0 width=585.8 height=20.0 center_x=1166.9 center_y=164.0)
+                    TextRun value="The licensing service couldn’t be reached. Styrhous keeps working offline until the grace period ends." rect=(x=874.0 y=154.0 width=585.8 height=20.0 center_x=1166.9 center_y=164.0)
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Button name="Sign out" rect=(x=1408.6 y=335.0 width=79.4 height=32.0 center_x=1448.3 center_y=351.0)
+                    Label value="Plan" rect=(x=848.0 y=218.0 width=29.5 height=16.0 center_x=862.8 center_y=226.0)
+                      TextRun value="PLAN" rect=(x=848.0 y=218.0 width=28.4 height=16.0 center_x=862.2 center_y=226.0)
                     GenericContainer rect=<none>
-                      Button name="Refresh license" rect=(x=848.0 y=335.0 width=142.0 height=32.0 center_x=919.0 center_y=351.0)
-              GenericContainer rect=<none>
-                Label value="Installation" rect=(x=832.0 y=403.0 width=70.1 height=20.0 center_x=867.0 center_y=413.0)
-                  TextRun value="Installation" rect=(x=832.0 y=403.0 width=70.1 height=20.0 center_x=867.0 center_y=413.0)
-              GenericContainer rect=<none>
+                      Label value="Commercial" rect=(x=848.0 y=234.0 width=70.1 height=20.0 center_x=883.0 center_y=244.0)
+                        TextRun value="Commercial" rect=(x=848.0 y=234.0 width=70.1 height=20.0 center_x=883.0 center_y=244.0)
+                    Label value="Seats" rect=(x=1069.3 y=218.0 width=34.8 height=16.0 center_x=1086.7 center_y=226.0)
+                      TextRun value="SEATS" rect=(x=1069.3 y=218.0 width=33.7 height=16.0 center_x=1086.2 center_y=226.0)
+                    GenericContainer rect=<none>
+                      Label value="Unavailable" rect=(x=1069.3 y=234.0 width=66.3 height=20.0 center_x=1102.5 center_y=244.0)
+                        TextRun value="Unavailable" rect=(x=1069.3 y=234.0 width=66.3 height=20.0 center_x=1102.5 center_y=244.0)
+                    Label value="Account" rect=(x=1290.7 y=218.0 width=53.2 height=16.0 center_x=1317.2 center_y=226.0)
+                      TextRun value="ACCOUNT" rect=(x=1290.7 y=218.0 width=52.1 height=16.0 center_x=1316.7 center_y=226.0)
+                    GenericContainer rect=<none>
+                      Label value="Unavailable" rect=(x=1290.7 y=234.0 width=66.3 height=20.0 center_x=1323.8 center_y=244.0)
+                        TextRun value="Unavailable" rect=(x=1290.7 y=234.0 width=66.3 height=20.0 center_x=1323.8 center_y=244.0)
+                    Label value="Last check" rect=(x=848.0 y=270.0 width=68.8 height=16.0 center_x=882.4 center_y=278.0)
+                      TextRun value="LAST CHECK" rect=(x=848.0 y=270.0 width=67.7 height=16.0 center_x=881.9 center_y=278.0)
+                    GenericContainer rect=<none>
+                      Label value="2 days ago" rect=(x=848.0 y=286.0 width=62.5 height=20.0 center_x=879.3 center_y=296.0)
+                        TextRun value="2 days ago" rect=(x=848.0 y=286.0 width=62.5 height=20.0 center_x=879.3 center_y=296.0)
+                    Label value="Offline until" rect=(x=1069.3 y=270.0 width=86.1 height=16.0 center_x=1112.4 center_y=278.0)
+                      TextRun value="OFFLINE UNTIL" rect=(x=1069.3 y=270.0 width=85.0 height=16.0 center_x=1111.8 center_y=278.0)
+                    GenericContainer rect=<none>
+                      Label value="1 Jan 2100" rect=(x=1069.3 y=286.0 width=61.7 height=20.0 center_x=1100.2 center_y=296.0)
+                        TextRun value="1 Jan 2100" rect=(x=1069.3 y=286.0 width=61.7 height=20.0 center_x=1100.2 center_y=296.0)
+                    Label value="Server" rect=(x=1290.7 y=270.0 width=43.4 height=16.0 center_x=1312.4 center_y=278.0)
+                      TextRun value="SERVER" rect=(x=1290.7 y=270.0 width=42.3 height=16.0 center_x=1311.8 center_y=278.0)
+                    GenericContainer rect=<none>
+                      Label value="Styrhous cloud" rect=(x=1290.7 y=286.0 width=87.8 height=20.0 center_x=1334.5 center_y=296.0)
+                        TextRun value="Styrhous cloud" rect=(x=1290.7 y=286.0 width=87.8 height=20.0 center_x=1334.5 center_y=296.0)
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      Button name="Sign out" rect=(x=1408.6 y=335.0 width=79.4 height=32.0 center_x=1448.3 center_y=351.0)
+                      GenericContainer rect=<none>
+                        Button name="Refresh license" rect=(x=848.0 y=335.0 width=142.0 height=32.0 center_x=919.0 center_y=351.0)
+                GenericContainer rect=<none>
+                  Label value="Installation" rect=(x=832.0 y=403.0 width=70.1 height=20.0 center_x=867.0 center_y=413.0)
+                    TextRun value="Installation" rect=(x=832.0 y=403.0 width=70.1 height=20.0 center_x=867.0 center_y=413.0)
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Label value="Device name" rect=(x=832.0 y=435.0 width=70.3 height=16.0 center_x=867.1 center_y=443.0)
-                      TextRun value="Device name" rect=(x=832.0 y=435.0 width=70.3 height=16.0 center_x=867.1 center_y=443.0)
                     GenericContainer rect=<none>
-                      TextInput name="License device display name" value="Styrhous on linux" rect=(x=832.0 y=457.0 width=320.0 height=32.0 center_x=992.0 center_y=473.0)
-                        TextRun value="Styrhous on linux" rect=(x=846.0 y=465.0 width=100.0 height=20.0 center_x=896.0 center_y=475.0)
-                    Label value="Shown in your account’s device list." rect=(x=832.0 y=495.0 width=189.7 height=16.0 center_x=926.8 center_y=503.0)
-                      TextRun value="Shown in your account’s device list." rect=(x=832.0 y=495.0 width=189.7 height=16.0 center_x=926.8 center_y=503.0)
+                      Label value="Device name" rect=(x=832.0 y=435.0 width=70.3 height=16.0 center_x=867.1 center_y=443.0)
+                        TextRun value="Device name" rect=(x=832.0 y=435.0 width=70.3 height=16.0 center_x=867.1 center_y=443.0)
+                      GenericContainer rect=<none>
+                        TextInput name="License device display name" value="Styrhous on linux" rect=(x=832.0 y=457.0 width=320.0 height=32.0 center_x=992.0 center_y=473.0)
+                          TextRun value="Styrhous on linux" rect=(x=846.0 y=465.0 width=100.0 height=20.0 center_x=896.0 center_y=475.0)
+                      Label value="Shown in your account’s device list." rect=(x=832.0 y=495.0 width=189.7 height=16.0 center_x=926.8 center_y=503.0)
+                        TextRun value="Shown in your account’s device list." rect=(x=832.0 y=495.0 width=189.7 height=16.0 center_x=926.8 center_y=503.0)
+                  GenericContainer rect=<none>
+                    Button name="Save name" rect=(x=1160.0 y=457.0 width=94.3 height=32.0 center_x=1207.2 center_y=473.0)
                 GenericContainer rect=<none>
-                  Button name="Save name" rect=(x=1160.0 y=457.0 width=94.3 height=32.0 center_x=1207.2 center_y=473.0)
-              GenericContainer rect=<none>
-                Button name="Advanced" state=[toggled=False] rect=(x=832.0 y=531.0 width=672.0 height=44.0 center_x=1168.0 center_y=553.0)
-                  TextRun value="Advanced" rect=(x=870.0 y=543.0 width=59.6 height=20.0 center_x=899.8 center_y=553.0)
+                  Button name="Advanced" state=[toggled=False] rect=(x=832.0 y=531.0 width=672.0 height=44.0 center_x=1168.0 center_y=553.0)
+                    TextRun value="Advanced" rect=(x=870.0 y=543.0 width=59.6 height=20.0 center_x=899.8 center_y=553.0)

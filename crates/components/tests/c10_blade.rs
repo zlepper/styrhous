@@ -9,7 +9,7 @@ use components::icons::Icon;
 use components::test_support::board::{BoardHeader, board, snapshot_board};
 use components::{
     BladeFrame, BladeNavigation, Button, ButtonSize, ButtonVariant, blade_title,
-    blade_title_with_actions, paint_blade_peek,
+    blade_title_with_actions,
 };
 use egui::{Rect, Ui, pos2, vec2};
 
@@ -17,8 +17,8 @@ const HEADER: BoardHeader<'static> = BoardHeader {
     eyebrow: "C10 · components::{Blade, BladeStack}",
     title: "Blade",
     description: "Right-anchored panel stack for inspecting and editing. Width 720 px (min 560, \
-                  max 50% of the window), inset 8 px. Up to two history peeks show 96 px each \
-                  and step down 16 px.",
+                  max 50% of the window), inset 8 px. Up to two history blades fan out behind it, \
+                  at 90% and 80% scale, showing their real content.",
 };
 
 /// The stage's top below the board's content top (the board puts it at 176).
@@ -31,9 +31,9 @@ const NOTE_GAP: f32 = 6.0;
 const NOTE_PADDING: f32 = space::S16;
 /// The footer demo blade: its top within the stage.
 const EDIT_TOP: f32 = 300.0;
-/// The stack: peeks and active blade, 640 wide on this stage.
+/// The stack: back blades and the active blade, 640 wide on this stage.
 const STACK_BLADE_WIDTH: f32 = 640.0;
-const FIRST_PEEK_LEFT: f32 = 600.0;
+const ACTIVE_LEFT: f32 = 792.0;
 
 const NOTES: [(&str, &str); 3] = [
     (
@@ -82,6 +82,19 @@ fn ghost(icon: Icon, label: &str) -> Button {
 
 fn body_text(ui: &mut Ui, text: &str) {
     type_scale::BODY.label(ui, text, ui.tokens().text.secondary);
+}
+
+/// Draw one blade of the stack in a layer of its own, as the live stack does: the
+/// blades overlap by design, and the demo blade behind them is another layer.
+fn stack_layer(ui: &Ui, clip: Rect, index: usize, add: impl FnOnce(&mut Ui)) {
+    egui::Area::new(egui::Id::new(("c10-stack", index)))
+        .order(egui::Order::Foreground)
+        .fixed_pos(clip.min)
+        .interactable(false)
+        .show(ui.ctx(), |ui| {
+            ui.set_clip_rect(clip);
+            add(ui);
+        });
 }
 
 fn c10_scene(ui: &mut Ui) {
@@ -135,52 +148,93 @@ fn c10_scene(ui: &mut Ui) {
             }),
         );
 
-        let shades = [theme.components.peek_shade_1, theme.components.peek_shade_2];
-        let peeks = [
-            ("Deployment", "coredns"),
-            ("ReplicaSet", "coredns-66bc5c9577"),
+        let back_blades = [
+            (
+                "Deployment",
+                "coredns",
+                "Deployment coredns keeps two replicas running.",
+            ),
+            (
+                "ReplicaSet",
+                "coredns-66bc5c9577",
+                "ReplicaSet coredns-66bc5c9577 owns the pod.",
+            ),
         ];
-        for (depth, ((kind, name), shade)) in peeks.into_iter().zip(shades).enumerate() {
-            let step = (peeks.len() - depth) as f32 * size::BLADE_PEEK_STEP + space::BLADE_INSET;
-            let left = FIRST_PEEK_LEFT + depth as f32 * size::BLADE_PEEK;
-            let rect = Rect::from_min_max(
-                at(left, step),
-                pos2(
-                    inner.left() + left + STACK_BLADE_WIDTH,
-                    inner.bottom() - step,
+        // The nearest back blade is the last one; each sits further left and is smaller,
+        // so the furthest is painted first.
+        let height = inner.height() - 2.0 * space::BLADE_INSET;
+        for (depth, (kind, name, body)) in back_blades
+            .into_iter()
+            .rev()
+            .enumerate()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+        {
+            let scale = size::BLADE_HISTORY_SCALES[depth];
+            let recession: f32 = (0..=depth)
+                .map(|step| {
+                    size::BLADE_HISTORY_RECESSION
+                        * size::BLADE_HISTORY_SCALES[step]
+                        * (1.0 / size::BLADE_HISTORY_SCALES[0])
+                })
+                .sum();
+            let natural = Rect::from_min_size(
+                at(
+                    ACTIVE_LEFT - STACK_BLADE_WIDTH * recession,
+                    space::BLADE_INSET,
                 ),
+                vec2(STACK_BLADE_WIDTH, height),
             );
-            paint_blade_peek(ui, rect, Some(kind), name, shade);
+            let visible_top = natural.top() + height * (1.0 - scale) / 2.0;
+            let transform = egui::emath::TSTransform::new(
+                pos2(natural.left(), visible_top).to_vec2() - natural.min.to_vec2() * scale,
+                scale,
+            );
+            stack_layer(ui, inner, depth, |ui| {
+                ui.with_visual_transform(transform, |ui| {
+                    BladeFrame::new(natural, name, BladeNavigation::new(depth == 0, true)).show(
+                        ui,
+                        |ui| {
+                            blade_title(ui, Some(kind), name);
+                        },
+                        |ui| body_text(ui, body),
+                        None,
+                    );
+                });
+            });
         }
 
-        let left = FIRST_PEEK_LEFT + peeks.len() as f32 * size::BLADE_PEEK;
-        BladeFrame::new(
-            Rect::from_min_max(
-                at(left, space::BLADE_INSET),
-                pos2(
-                    inner.left() + left + STACK_BLADE_WIDTH,
-                    inner.bottom() - space::BLADE_INSET,
+        let left = ACTIVE_LEFT;
+        stack_layer(ui, inner, back_blades.len(), |ui| {
+            BladeFrame::new(
+                Rect::from_min_max(
+                    at(left, space::BLADE_INSET),
+                    pos2(
+                        inner.left() + left + STACK_BLADE_WIDTH,
+                        inner.bottom() - space::BLADE_INSET,
+                    ),
                 ),
-            ),
-            "coredns-66bc5c9577-ffw2s",
-            BladeNavigation::new(true, false),
-        )
-        .show(
-            ui,
-            |ui| {
-                blade_title_with_actions(ui, Some("Pod"), "coredns-66bc5c9577-ffw2s", |ui| {
-                    ghost(Icon::EllipsisHorizontal, "More actions").show(ui);
-                });
-            },
-            |ui| {
-                body_text(
-                    ui,
-                    "Active blade. Back returns to ReplicaSet; the peeks behind are clickable \
+                "coredns-66bc5c9577-ffw2s",
+                BladeNavigation::new(true, false),
+            )
+            .show(
+                ui,
+                |ui| {
+                    blade_title_with_actions(ui, Some("Pod"), "coredns-66bc5c9577-ffw2s", |ui| {
+                        ghost(Icon::EllipsisHorizontal, "More actions").show(ui);
+                    });
+                },
+                |ui| {
+                    body_text(
+                        ui,
+                        "Active blade. Back returns to ReplicaSet; the blades behind are clickable \
                      history entries.",
-                );
-            },
-            None,
-        );
+                    );
+                },
+                None,
+            );
+        });
     });
 }
 
