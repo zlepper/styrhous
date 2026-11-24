@@ -91,3 +91,65 @@ fn pod_events_stay_aligned_and_inside_inspector_as_updates_arrive() {
         }
     }
 }
+
+/// The Events entry of the section rail counts every event and, in the danger
+/// colour, how many of them are warnings; with none it shows the total only.
+#[test]
+fn the_events_rail_entry_counts_the_warning_events_beside_the_total() {
+    let mut harness = application_harness::<MockWorker>();
+    harness
+        .ctx
+        .global_style_mut(|style| style.animation_time = 0.0);
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness.run();
+    harness.get_by_label("Workloads").click();
+    harness.run();
+    harness
+        .get_by_label("Open details for coredns-66bc5c9577-ffw2s")
+        .click();
+    harness.run_steps(1);
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(Box::new(ResourceDetailUpdated {
+            cluster_key: 2,
+            history_entry_id: 1,
+            detail: Box::new(crate::ui::tests::design_fixtures::coredns_pod_detail()),
+        }));
+    harness.run();
+    let events = |types: &[&str]| {
+        Box::new(ResourceEventsReplaced {
+            cluster_key: 2,
+            history_entry_id: 1,
+            events: types
+                .iter()
+                .enumerate()
+                .map(|(index, type_)| ResourceEvent {
+                    uid: format!("event-{index}"),
+                    type_: (*type_).into(),
+                    reason: format!("EventReason{index}"),
+                    message: "Something happened".into(),
+                    source: Some("kubelet".into()),
+                    count: 1,
+                    last_timestamp: None,
+                })
+                .collect(),
+        })
+    };
+
+    harness
+        .state_mut()
+        .worker
+        .results
+        .push_back(events(&["Normal", "Normal"]));
+    harness.run();
+    harness.get_by_label("Events, 2");
+
+    harness.state_mut().worker.results.push_back(events(&[
+        "Warning", "Normal", "Warning", "Normal", "Normal",
+    ]));
+    harness.run();
+    harness.get_by_label("Events, 5, 2 problems");
+    harness.ui_harness("resource_inspectors/events/the_events_rail_entry_counts_warnings");
+}

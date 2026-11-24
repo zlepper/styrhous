@@ -8,10 +8,9 @@
 //! objects arrive as worker results built from real Kubernetes objects by the
 //! app's own resource handlers.
 
-use super::super::MyEguiApp;
 use super::super::clock::WallClock;
 use super::super::state::{ClusterConnectionState, ClusterState, SelectedNamespaces, UiState};
-use super::fixtures::application_harness;
+use super::fixtures::{AppHarness, application_harness};
 use super::harness::MockUiHarnessExt;
 use crate::api_resource::ApiResource;
 use crate::helm_release::{HelmRelease, StorageDriver};
@@ -23,7 +22,6 @@ use crate::worker::{
     CronJobRunFailed, HelmReleasesReplaced, KubernetesResourcesReplaced, MockWorker,
     NodeMetricsUpdated, NodePodCountsUpdated, PodMetricsUpdated, ResourceScaleUpdated,
 };
-use egui_kittest::Harness;
 use k8s_openapi::api::core::v1::{Node, Pod};
 use k8s_openapi::serde_json::{Value, json};
 use std::collections::{BTreeMap, HashMap};
@@ -455,7 +453,7 @@ fn helm_release(name: &str, chart: &str) -> HelmRelease {
 /// Deliver the objects of `kind-kind` as its watches list them: the twelve
 /// pods and their metrics, the nodes, and the kinds the sidebar counts
 /// (opened earlier in the session, so their watches still run).
-pub(super) fn deliver_design_objects(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) {
+pub(super) fn deliver_design_objects(harness: &mut AppHarness) {
     let design_pods = design_pods();
     harness.deliver_worker_result(KubernetesResourcesReplaced {
         cluster_key: KIND_KIND,
@@ -529,7 +527,7 @@ pub(super) fn deliver_design_objects(harness: &mut Harness<'static, MyEguiApp<Mo
 
 /// The one failed CronJob run that A04 and A15 keep unread in Notifications
 /// (their toasts are gone by then).
-pub(super) fn deliver_design_unread_failure(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) {
+pub(super) fn deliver_design_unread_failure(harness: &mut AppHarness) {
     let operation_id = harness
         .state_mut()
         .ui_state
@@ -549,7 +547,7 @@ pub(super) fn deliver_design_unread_failure(harness: &mut Harness<'static, MyEgu
 
 /// The outcomes A02's toasts report: a Deployment scaled, a CronJob that
 /// could not run.
-pub(super) fn deliver_design_outcomes(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) {
+pub(super) fn deliver_design_outcomes(harness: &mut AppHarness) {
     harness.deliver_worker_result(ResourceScaleUpdated {
         cluster_key: KIND_KIND,
         api_resource: deployments(),
@@ -578,7 +576,7 @@ pub(super) fn deliver_design_outcomes(harness: &mut Harness<'static, MyEguiApp<M
 
 /// The application on `kind-kind`'s `kube-system` Pods with every design
 /// object delivered, in a window `size` points large.
-pub(super) fn design_harness(size: egui::Vec2) -> Harness<'static, MyEguiApp<MockWorker>> {
+pub(super) fn design_harness(size: egui::Vec2) -> AppHarness {
     let mut harness = application_harness::<MockWorker>();
     harness.set_size(size);
     harness.seed_ui_state(design_state());
@@ -589,7 +587,7 @@ pub(super) fn design_harness(size: egui::Vec2) -> Harness<'static, MyEguiApp<Moc
 /// A04's node usage: the Ready nodes report CPU and memory and count their
 /// Pods; the NotReady one has no sample. Delivered once the Nodes table
 /// watches node metrics.
-pub(super) fn deliver_design_node_metrics(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) {
+pub(super) fn deliver_design_node_metrics(harness: &mut AppHarness) {
     const GIB: f64 = 1024.0 * 1024.0 * 1024.0;
     let generation = harness.cluster(KIND_KIND).node_pod_counts.generation;
     harness.deliver_worker_result(NodePodCountsUpdated {
@@ -672,9 +670,7 @@ const A03_PODS: [(&str, [usize; 4]); 3] = [
 
 /// The application on `kind-kind`'s Pods of `kube-system`, `monitoring`
 /// and `payments`, four each, in a window `size` points large.
-pub(super) fn design_namespaces_harness(
-    size: egui::Vec2,
-) -> Harness<'static, MyEguiApp<MockWorker>> {
+pub(super) fn design_namespaces_harness(size: egui::Vec2) -> AppHarness {
     let mut harness = application_harness::<MockWorker>();
     harness.set_size(size);
     harness.seed_ui_state(namespaces_state());
@@ -854,7 +850,7 @@ pub(in crate::ui) fn coredns_pod_events() -> Vec<ResourceEvent> {
 
 /// Open Deployment `coredns`, its ReplicaSet and the pod, the way a reader
 /// follows owners down to a pod, and deliver what each watch reports.
-pub(super) fn open_coredns_inspector_stack(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) {
+pub(super) fn open_coredns_inspector_stack(harness: &mut AppHarness) {
     // Discovery knows ReplicaSets, so the pod's owner is a link.
     let cluster = harness
         .state_mut()
@@ -965,7 +961,7 @@ pub(super) fn demo_helm_releases() -> Vec<HelmRelease> {
 /// context runs (the servers its kubeconfig names), how each is connected,
 /// the pins and visits the user made, the nodes last seen of the clusters
 /// not connected, and the EKS cluster a scan found.
-pub(super) fn seed_design_clusters(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) {
+pub(super) fn seed_design_clusters(harness: &mut AppHarness) {
     use crate::cluster_connection_manager::{AvailableEksCluster, AwsProfile};
     let profile = AwsProfile::Named("production".into());
     let request_id = {
@@ -1058,7 +1054,7 @@ fn design_deployments() -> Vec<MinimalResource> {
 }
 
 /// Deliver A06's Deployments of `kube-system`.
-pub(super) fn deliver_design_deployments(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) {
+pub(super) fn deliver_design_deployments(harness: &mut AppHarness) {
     harness.deliver_worker_result(KubernetesResourcesReplaced {
         cluster_key: KIND_KIND,
         api_resource: deployments(),
@@ -1069,7 +1065,7 @@ pub(super) fn deliver_design_deployments(harness: &mut Harness<'static, MyEguiAp
 
 /// A07's pod: `job-nightly-report-28xk2` is being deleted and held back by two
 /// finalizers. Replaces the pod the design objects delivered.
-pub(super) fn deliver_design_stuck_pod(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) {
+pub(super) fn deliver_design_stuck_pod(harness: &mut AppHarness) {
     let resources = design_pods()
         .iter()
         .map(|pod| {

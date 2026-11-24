@@ -190,3 +190,17 @@ fn only_the_awaited_answer_and_result_settle_an_export() {
     assert!(window.settle_export(&stale_result).is_none());
     assert!(window.export.writing_export_id() == Some(2));
 }
+
+#[test]
+fn the_suggested_export_name_carries_the_local_date_and_time() {
+    let instant = time::OffsetDateTime::UNIX_EPOCH + time::Duration::days(20_000);
+    let east = crate::ui::clock::Zone::Fixed(time::UtcOffset::from_hms(2, 0, 0).unwrap());
+    let local = east.local(instant + time::Duration::hours(22) + time::Duration::minutes(30));
+    let mut window = log_window(&[]);
+    window.instance = PodLogInstance::Previous;
+    // 2024-10-04 22:30:00 UTC, 00:30 on the 5th at +02:00.
+    assert_eq!(
+        window.export_name_at(local),
+        "api-0-api-previous-20241005-003000.log"
+    );
+}

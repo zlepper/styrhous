@@ -92,6 +92,20 @@ impl LevelBadge {
     }
 }
 
+/// The [`size::LOG_PILL`] high rect of a pill `width` wide starting at `left`,
+/// centred on `center_y`.
+fn log_pill_rect(left: f32, center_y: f32, width: f32) -> Rect {
+    Rect::from_min_size(
+        pos2(left, center_y - size::LOG_PILL / 2.0),
+        vec2(width, size::LOG_PILL),
+    )
+}
+
+/// Fill a pill `rect` with `fill`: the fully rounded frame every pill shares.
+fn paint_pill_frame(ui: &Ui, rect: Rect, fill: Color32) {
+    ui.painter().rect_filled(rect, radius::FULL, fill);
+}
+
 /// Paint `text` in `role` centred on a pill `rect` filled with `fill`,
 /// exposed as `response`'s label.
 fn paint_centred_pill(
@@ -228,8 +242,7 @@ impl<'a> SourcePill<'a> {
         if !ui.is_rect_visible(rect.expand(size::LAMP_RING + elevation::GLOW_BLUR)) {
             return response;
         }
-        ui.painter()
-            .rect_filled(rect, radius::FULL, theme.components.well_bg);
+        paint_pill_frame(ui, rect, theme.components.well_bg);
         let center_y = rect.center().y;
         let mut left = rect.left() + size::SOURCE_PILL_PADDING_X;
         let lamp = crate::status::lamp_rect(left, center_y);
@@ -437,7 +450,7 @@ impl<'a> VolumeStrip<'a> {
         self
     }
 
-    /// Muted words before the source pills ("7 of 23 matches · UTC").
+    /// Muted words before the source pills ("7 of 23 matches · local time").
     pub fn meta(mut self, meta: &'a str) -> Self {
         self.meta = Some(meta);
         self
@@ -704,10 +717,7 @@ impl<'a> LogLine<'a> {
         }
         if let Some(source) = self.source {
             let width = self.source_pill_width(ui, source.name);
-            let pill = Rect::from_min_size(
-                pos2(left, center_y - size::LOG_PILL / 2.0),
-                vec2(width, size::LOG_PILL),
-            );
+            let pill = log_pill_rect(left, center_y, width);
             let fill = [theme.log.source_1, theme.log.source_2][source.color % 2];
             let label = type_scale::interact_text(ui, pill, id.with("source"), source.name);
             paint_centred_pill(
@@ -722,10 +732,7 @@ impl<'a> LogLine<'a> {
             left += width + LINE_GAP;
         }
         if let Some(level) = self.level {
-            let badge = Rect::from_min_size(
-                pos2(left, center_y - size::LOG_PILL / 2.0),
-                vec2(size::LEVEL_BADGE, size::LOG_PILL),
-            );
+            let badge = log_pill_rect(left, center_y, size::LEVEL_BADGE);
             let label = type_scale::interact_text(ui, badge, id.with("level"), level.word());
             LevelBadge(level).paint(ui, badge, &label);
             left += size::LEVEL_BADGE + LINE_GAP;

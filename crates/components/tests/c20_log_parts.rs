@@ -11,9 +11,9 @@ use components::test_support::board::{
     section_caption, snapshot_board,
 };
 use components::{
-    CodeMark, CodeSpan, ControlState, FloatingToolbar, LevelBadge, LogHeader, LogLevel, LogLine,
-    LogStream, SearchField, SearchStatus, Segmented, SourcePill, ToggleButton, VolumeBar,
-    VolumeBars, VolumeStrip,
+    ButtonGroup, CodeMark, CodeSpan, ControlState, FloatingToolbar, LevelBadge, LogHeader,
+    LogLevel, LogLine, LogStream, SearchField, SearchStatus, Segmented, SourcePill, ToggleButton,
+    VolumeBar, VolumeBars, VolumeStrip,
 };
 use egui::{Align, Ui, pos2, vec2};
 
@@ -33,7 +33,7 @@ const SECTION_GAP: f32 = 22.0;
 /// Padding above and below the lines of the log panel (`padding: 10px 0`).
 const PANEL_PADDING: f32 = 10.0;
 /// The search of the floating toolbar.
-const TOOLBAR_SEARCH_WIDTH: f32 = 300.0;
+const TOOLBAR_SEARCH_WIDTH: f32 = size::LOG_SEARCH_WIDTH;
 /// The visible window of the volume strip, in bars.
 const WINDOW: (f32, f32) = (80.0, 20.0);
 /// Gap between the badges and pills of the right column (`.row` gap 8).
@@ -274,6 +274,10 @@ fn floating_toolbar(ui: &mut Ui) {
             })
             .accessibility_label("Search logs")
             .force_state(ControlState::Focused)
+            .show(ui);
+        ButtonGroup::new("Line navigation")
+            .toggle(ToggleButton::action(Icon::ArrowUp, "Previous line"))
+            .toggle(ToggleButton::action(Icon::ArrowDown, "Next line"))
             .show(ui);
         ToggleButton::text("Only matches", true).show(ui);
         ToggleButton::text("Line no.", false).show(ui);

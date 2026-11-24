@@ -243,15 +243,17 @@ pub(crate) struct VerifiedLease {
 }
 
 impl VerifiedLease {
-    /// The day the lease runs out, as "1 Jan 2100".
+    /// The day the lease runs out in the local time zone, as "1 Jan 2100".
     pub(crate) fn expiry_label(&self) -> String {
-        time::OffsetDateTime::from_unix_timestamp(self.expires_at as i64).map_or_else(
-            |_| "an unknown time".into(),
-            |value| {
-                let month = value.month().to_string();
-                format!("{} {} {}", value.day(), &month[..3], value.year())
-            },
-        )
+        crate::ui::clock::Zone::System
+            .local_unix(self.expires_at as i64)
+            .map_or_else(
+                || "an unknown time".into(),
+                |value| {
+                    let month = value.month().to_string();
+                    format!("{} {} {}", value.day(), &month[..3], value.year())
+                },
+            )
     }
 }
 

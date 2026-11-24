@@ -11,9 +11,10 @@ use super::super::table_preferences::{
     PersistedResourceTablePreferences, ResourceTableKey, TableColumnDefinition,
 };
 use super::fixtures::{
-    application_harness, application_harness_with_cluster, application_harness_with_state,
-    application_harness_with_terminal, fixture_api_resource, fixture_cluster,
-    fixture_cluster_scoped_api_resource, fixture_resource, oracle_resource_table_state,
+    AppHarness, application_harness, application_harness_with_cluster,
+    application_harness_with_state, application_harness_with_terminal, fixture_api_resource,
+    fixture_cluster, fixture_cluster_scoped_api_resource, fixture_resource,
+    oracle_resource_table_state,
 };
 use super::harness::{MockUiHarnessExt, command_is};
 use crate::api_resource::ApiResourceSet;
@@ -56,9 +57,6 @@ use time::OffsetDateTime;
 
 mod context_settings;
 mod flows;
-
-/// The application under test, driven by a scripted worker.
-type AppHarness = Harness<'static, MyEguiApp<MockWorker>>;
 
 const OPEN_APPLICATION_SETTINGS: &str =
     "Open application settings: Terminal, debug images and updates";
@@ -427,7 +425,7 @@ fn resource_table_name_header_context_position(
 
 /// Show the Owner column of the open resource table, which is hidden until
 /// asked for, through the header's column menu.
-fn show_owner_column(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) {
+fn show_owner_column(harness: &mut AppHarness) {
     let header = resource_table_name_header_context_position(harness);
     secondary_click(harness, header);
     harness.run_steps(2);

@@ -1,3 +1,4 @@
+use super::clock;
 use super::global_blade::{
     GlobalBladeContent, GlobalBladeEffect, GlobalBladeEffectContext, GlobalBladeNavigation,
     GlobalBladeRenderContext, GlobalBladeRenderResult,
@@ -98,9 +99,9 @@ enum Part {
     Storage,
 }
 
-/// "15 Aug" / "1 Aug 2026, 12:00": a Helm timestamp as the design prints it,
-/// or the recorded text when it is not a timestamp.
-fn helm_time(recorded: &str, with_year_and_time: bool) -> String {
+/// "15 Aug" / "1 Aug 2026, 12:00": a Helm timestamp as the design prints it in
+/// `zone`, or the recorded text when it is not a timestamp.
+fn helm_time(recorded: &str, with_year_and_time: bool, zone: clock::Zone) -> String {
     let format = if with_year_and_time {
         "[day padding:none] [month repr:short] [year], [hour]:[minute]"
     } else {
@@ -109,6 +110,7 @@ fn helm_time(recorded: &str, with_year_and_time: bool) -> String {
     time::OffsetDateTime::parse(recorded, &time::format_description::well_known::Rfc3339)
         .ok()
         .and_then(|time| {
+            let time = zone.local(time);
             time::format_description::parse(format)
                 .ok()
                 .and_then(|format| time.format(&format).ok())
@@ -178,6 +180,7 @@ impl GlobalBladeContent for HelmReleaseDetailBlade {
                 release.namespace
             )
         });
+        let zone = clock::zone(ui.ctx());
         let readout_texts = release.map(|release| {
             [
                 (
@@ -198,7 +201,7 @@ impl GlobalBladeContent for HelmReleaseDetailBlade {
                 ),
                 (
                     "Updated",
-                    helm_time(&release.last_deployed, false),
+                    helm_time(&release.last_deployed, false, zone),
                     ReadoutTone::Neutral,
                 ),
             ]
@@ -420,7 +423,7 @@ impl GlobalBladeContent for HelmReleaseDetailBlade {
 
 /// The overview card: where the release lives and how it is stored.
 fn show_overview(ui: &mut egui::Ui, release: &HelmRelease) {
-    let first_deployed = helm_time(&release.first_deployed, true);
+    let first_deployed = helm_time(&release.first_deployed, true, clock::zone(ui.ctx()));
     let properties = [
         Property::text("Namespace", release.namespace.as_str()),
         Property::text("First deployed", first_deployed.as_str()),

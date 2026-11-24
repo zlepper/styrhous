@@ -15,8 +15,8 @@ use components::design::theme::{ThemeExt, Tone};
 use components::icons::Icon;
 use components::tooltip::TooltipExt;
 use components::{
-    ClusterCard, FloatingSidebar, MenuItem, MoreButton, SideItem, StatusLabel, kind_filter,
-    side_caption, side_footer,
+    ClusterCard, FloatingSidebar, MenuItem, MoreButton, SideItem, StatusLabel,
+    kind_filter_with_key, side_caption, side_footer,
 };
 use kinds::{KindList, KindListItem, KindRow};
 
@@ -113,11 +113,10 @@ pub(super) fn connection(cluster: &ClusterState) -> (Tone, &'static str) {
     }
 }
 
-/// The card's meta line: where the cluster runs when the kubeconfig says so,
-/// the connection while it is not connected, and where the context sits among
-/// the others. Upper case, as `.ccard .mt` sets it.
+/// The card's meta line: the connection while it is neither connected nor
+/// disconnected, and where the context sits among the others. Upper case, as
+/// `.ccard .mt` sets it.
 fn card_meta(cluster: &ClusterState, position: usize, contexts: usize) -> String {
-    let provider = crate::cluster_provider::describe(&cluster.name, cluster.server.as_deref());
     let state = match &cluster.connection {
         ClusterConnectionState::Connected | ClusterConnectionState::Disconnected => None,
         ClusterConnectionState::Connecting | ClusterConnectionState::Failed(_) => {
@@ -125,13 +124,11 @@ fn card_meta(cluster: &ClusterState, position: usize, contexts: usize) -> String
         }
     };
     let place = format!("{position} of {contexts}");
-    provider
-        .into_iter()
-        .chain(state)
-        .chain([place])
-        .collect::<Vec<_>>()
-        .join(" · ")
-        .to_uppercase()
+    match state {
+        Some(state) => format!("{state} · {place}"),
+        None => place,
+    }
+    .to_uppercase()
 }
 
 fn body(ui: &mut egui::Ui, ui_state: &UiState, filter: &mut String, effects: &mut SidebarEffects) {
@@ -194,7 +191,7 @@ fn body(ui: &mut egui::Ui, ui_state: &UiState, filter: &mut String, effects: &mu
         0 => "Filter kinds".to_owned(),
         count => format!("Filter {count} kinds"),
     };
-    let field = kind_filter(ui, filter, &placeholder);
+    let field = kind_filter_with_key(ui, filter, &placeholder, !ui_state.surface_in_front());
     if field.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)) {
         // Enter on an empty filter has nothing to open, and one that matches
         // nothing keeps what was typed.

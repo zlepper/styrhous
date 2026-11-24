@@ -160,9 +160,23 @@ fn force_delete_waits_for_the_typed_name_and_lists_the_finalizers() {
 }
 
 #[test]
-fn escape_in_the_confirmation_field_cancels_the_force_delete() {
+fn escape_in_the_confirmation_field_leaves_it_and_a_second_escape_cancels_the_force_delete() {
     let mut harness = open_force_delete_confirmation();
     type_name(&mut harness, "job-");
+    harness.key_press(egui::Key::Escape);
+    harness.run();
+    assert!(
+        harness.cluster(KIND_KIND).pending_force_delete.is_some(),
+        "one Esc only leaves the field, it must not also cancel"
+    );
+    assert!(
+        !harness
+            .get_by_role_and_label(
+                egui::accesskit::Role::TextInput,
+                &format!("Type {STUCK_POD} to confirm")
+            )
+            .is_focused()
+    );
     harness.key_press(egui::Key::Escape);
     harness.run();
     assert!(harness.cluster(KIND_KIND).pending_force_delete.is_none());
@@ -221,6 +235,21 @@ fn enter_in_the_confirmation_field_confirms_only_the_exact_name() {
 fn a_click_on_the_scrim_cancels_the_force_delete() {
     let mut harness = open_force_delete_confirmation();
     primary_click(&mut harness, egui::pos2(1200.0, 900.0));
+    harness.run();
+    assert!(harness.cluster(KIND_KIND).pending_force_delete.is_none());
+}
+
+/// A field that lost focus frames ago does not swallow the Esc that cancels.
+#[test]
+fn escape_cancels_when_the_confirmation_field_lost_focus_earlier() {
+    let mut harness = open_force_delete_confirmation();
+    type_name(&mut harness, "job-");
+    harness.key_press(egui::Key::Escape);
+    harness.run();
+    assert!(harness.cluster(KIND_KIND).pending_force_delete.is_some());
+    // Several quiet frames pass before the next Esc.
+    harness.run_steps(5);
+    harness.key_press(egui::Key::Escape);
     harness.run();
     assert!(harness.cluster(KIND_KIND).pending_force_delete.is_none());
 }

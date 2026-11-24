@@ -381,7 +381,7 @@ fn cluster(
         name,
         initials: "CL",
         category: 1,
-        meta: "KIND · LOCAL",
+        meta: None,
         detail: "3 nodes",
         status,
         key,
@@ -423,7 +423,6 @@ fn the_switcher_moves_its_highlight_switches_pins_and_closes_by_key() {
         let mut state = switcher_state.borrow_mut();
         let action = ClusterSwitcher::new(&mut state)
             .width(1000.0)
-            .provider("All", 4)
             .section(
                 "Pinned",
                 vec![

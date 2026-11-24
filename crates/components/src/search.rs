@@ -200,8 +200,8 @@ impl SearchFieldStyle {
 /// surface searches the same way.
 ///
 /// Enter and Shift+Enter move to the next and previous match, Alt+R
-/// toggles regex, and the first Esc clears the query (the second leaves
-/// the field). The caller runs the search (debounced as its surface needs)
+/// toggles regex, and Esc only leaves the field (the query and its
+/// filtering stay). The caller runs the search (debounced as its surface needs)
 /// and reports progress with [`Self::status`].
 #[must_use = "call `show` to add the search field"]
 pub struct SearchField<'a> {
@@ -250,13 +250,12 @@ impl<'a> SearchField<'a> {
 
     // C16
     /// A large pill search (`.inp.lg[role=search]`) editing `query`: no
-    /// previous / next match buttons and no clear button (Esc clears).
+    /// previous / next match buttons.
     pub fn pill(query: &'a mut String) -> Self {
         Self::new(query)
             .style(SearchFieldStyle::Pill)
             .size(FieldSize::Lg)
             .navigation(false)
-            .clear_button(false)
     }
 
     /// Show the regex toggle, reading and writing `regex`.
@@ -387,7 +386,6 @@ impl<'a> SearchField<'a> {
         let editor_id = id.with("query");
         let enabled = ui.is_enabled();
         let theme = ui.tokens();
-        let had_focus = ui.data(|data| data.get_temp::<bool>(id).unwrap_or_default());
         let has_focus = ui.memory(|memory| memory.has_focus(editor_id));
         let regex = regex.filter(|regex| {
             !regex_on_demand || has_focus || **regex || ui.rect_contains_pointer(rect)
@@ -408,18 +406,6 @@ impl<'a> SearchField<'a> {
                     regex.is_some() && consume_key_with_text(input, Modifiers::ALT, Key::R);
             });
         }
-        // egui drops focus on Esc before any widget runs; the first Esc
-        // clears the query and keeps the field focused.
-        if had_focus
-            && !has_focus
-            && !query.is_empty()
-            && ui.input_mut(|input| input.consume_key(Modifiers::NONE, Key::Escape))
-        {
-            query.clear();
-            cleared = true;
-            ui.memory_mut(|memory| memory.request_focus(editor_id));
-        }
-
         let count = status.count_text();
         let count_role = match status {
             SearchStatus::Label(_) => type_scale::META,
@@ -532,6 +518,7 @@ impl<'a> SearchField<'a> {
         {
             query.clear();
             cleared = true;
+            ui.memory_mut(|memory| memory.request_focus(editor_id));
         }
         if let Some(left) = divider_left {
             let divider = Rect::from_center_size(
@@ -597,8 +584,6 @@ impl<'a> SearchField<'a> {
             }
         }
 
-        let has_focus_now = ui.memory(|memory| memory.has_focus(editor_id));
-        ui.data_mut(|data| data.insert_temp(id, has_focus_now));
         let changed = text.changed() || cleared || regex_toggled;
         SearchFieldResponse {
             text,
@@ -659,7 +644,7 @@ mod tests {
     }
 
     #[test]
-    fn enter_moves_between_matches_and_escape_clears_then_leaves() {
+    fn enter_moves_between_matches_and_escape_only_leaves_the_field() {
         let events = Rc::new(RefCell::new(Events {
             query: "http".to_owned(),
             status: SearchStatus::Matches {
@@ -679,14 +664,11 @@ mod tests {
         assert_eq!((events.borrow().next, events.borrow().previous), (1, 1));
         assert!(harness.get_by_label("Search logs").is_focused());
 
+        // Esc only leaves the field: the query stays, and so does its filtering.
         harness.key_press(egui::Key::Escape);
         harness.run();
         harness.run();
-        assert_eq!(events.borrow().query, "");
-        assert!(harness.get_by_label("Search logs").is_focused());
-
-        harness.key_press(egui::Key::Escape);
-        harness.run();
+        assert_eq!(events.borrow().query, "http");
         assert!(!harness.get_by_label("Search logs").is_focused());
     }
 
@@ -851,6 +833,32 @@ mod tests {
         assert_eq!(events.borrow().query, "");
         assert_eq!(events.borrow().changed, 3, "regex click, Alt+R and clear");
         harness.run();
+        assert!(harness.query_by_label("Clear search").is_none());
+    }
+
+    /// A pill with text shows the clear button (Esc no longer clears); a click
+    /// empties the query and keeps the focus in the field.
+    #[test]
+    fn the_pill_has_a_clear_button_that_keeps_the_focus() {
+        let query = Rc::new(RefCell::new("pod".to_owned()));
+        let shared = Rc::clone(&query);
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(360.0, 48.0))
+            .build_ui(move |ui| {
+                SearchField::pill(&mut shared.borrow_mut())
+                    .accessibility_label("Search pods")
+                    .show(ui);
+            });
+        setup_egui(&mut harness);
+        harness.run();
+        harness.get_by_label("Search pods").focus();
+        harness.run();
+
+        harness.get_by_label("Clear search").click();
+        harness.run();
+        harness.run();
+        assert_eq!(*query.borrow(), "");
+        assert!(harness.get_by_label("Search pods").is_focused());
         assert!(harness.query_by_label("Clear search").is_none());
     }
 

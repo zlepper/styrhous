@@ -21,7 +21,7 @@ const DESCRIPTION: [Run; 3] = [
     Run::Text("Opened from the cluster card or "),
     Run::Key("⌘K"),
     Run::Text(
-        ". Type to filter, provider chips narrow it, Enter switches. The strip at the bottom \
+        ". Type to filter, Enter switches. The strip at the bottom \
          reads out the highlighted cluster before you switch.",
     ),
 ];
@@ -41,12 +41,11 @@ fn kind_kind(summary: bool) -> ClusterEntry<'static> {
         name: "kind-kind",
         initials: "KK",
         category: 1,
-        meta: "KIND · LOCAL",
+        meta: None,
         detail: "3 nodes",
         status: Some(Tone::Success),
         key: Some("⌘1"),
         summary: summary.then(|| ClusterSummary {
-            meta: "KIND · LOCAL · KUBERNETES 1.31",
             readouts: vec![
                 Readout::new("Nodes", "3"),
                 Readout::new("Pods", "18"),
@@ -68,7 +67,7 @@ fn prod_eu(key: bool) -> ClusterEntry<'static> {
         name: "prod-eu",
         initials: "PR",
         category: 3,
-        meta: "AKS · WESTEUROPE",
+        meta: None,
         detail: "unreachable",
         status: Some(Tone::Danger),
         key: key.then_some("⌘2"),
@@ -81,7 +80,7 @@ fn payments() -> ClusterEntry<'static> {
         name: "payments",
         initials: "PA",
         category: 4,
-        meta: "EKS · NOT IN KUBECONFIG",
+        meta: Some("EKS · NOT IN KUBECONFIG"),
         detail: "add",
         status: None,
         key: None,
@@ -96,7 +95,7 @@ fn switcher(ui: &mut Ui) {
             name: "dev-eu",
             initials: "DE",
             category: 0,
-            meta: "EKS · EU-WEST-1",
+            meta: None,
             detail: "38 nodes",
             status: Some(Tone::Success),
             key: None,
@@ -106,7 +105,7 @@ fn switcher(ui: &mut Ui) {
             name: "kind-legacy",
             initials: "KL",
             category: 2,
-            meta: "KIND · LOCAL",
+            meta: None,
             detail: "1 node",
             status: Some(Tone::Neutral),
             key: None,
@@ -115,10 +114,6 @@ fn switcher(ui: &mut Ui) {
     ];
     let _ = ClusterSwitcher::new(&mut state)
         .width(SWITCHER_WIDTH)
-        .provider("All", 4)
-        .provider("Kind", 2)
-        .provider("EKS", 1)
-        .provider("AKS", 1)
         .section("Pinned", vec![kind_kind(true), prod_eu(true)])
         .section("Recent", recent)
         .section("Found in cloud accounts", vec![payments()])

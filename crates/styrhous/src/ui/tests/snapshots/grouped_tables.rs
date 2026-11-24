@@ -202,3 +202,103 @@ fn typing_p_in_the_search_field_types_it_instead_of_toggling_problems_only() {
     assert_eq!(search.query, "p");
     assert!(!search.problems_only, "the key went to the field");
 }
+
+/// A blade grabs the keyboard: none of the workspace's shortcuts reach the
+/// list, the kind filter or the cluster switcher behind it.
+#[test]
+fn a_blade_in_front_grabs_every_workspace_shortcut() {
+    use super::super::design_fixtures::KIND_KIND;
+    let mut harness = namespaces_harness(SHORT_WINDOW);
+    click_label(&mut harness, "Problems only 2");
+    harness.state_mut().ui_state.open_resource_detail(
+        KIND_KIND,
+        pods(),
+        "coredns-66bc5c9577-ffw2s".into(),
+        Some("kube-system".into()),
+        "coredns-uid".into(),
+        &mut Vec::new(),
+    );
+    harness.run();
+    let on_screen = |harness: &AppHarness| has_label(harness, &row("api-7b948f-pod"));
+    let before = on_screen(&harness);
+
+    // `[` and `]` do not step through the problems behind the blade.
+    harness.key_press(egui::Key::CloseBracket);
+    harness.run();
+    harness.key_press(egui::Key::CloseBracket);
+    harness.run();
+    assert_eq!(on_screen(&harness), before, "`]` scrolled the list");
+    // `P` does not toggle the problems chip.
+    harness.key_press(egui::Key::P);
+    harness.run();
+    harness.get_by_label("Problems only 2");
+    // `G` does not focus the kind filter, Ctrl+F not the search.
+    harness.key_press(egui::Key::G);
+    harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::F);
+    harness.run();
+    assert!(!harness.get_by_label("Filter kinds").is_focused());
+    assert!(!harness.get_by_label("Search resources").is_focused());
+    // Ctrl+K does not open the switcher, Ctrl+1 does not switch cluster.
+    let selected = harness.state().ui_state.selected_cluster;
+    harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::K);
+    harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Num1);
+    harness.run();
+    assert!(harness.state().ui_state.cluster_switcher.is_none());
+    assert_eq!(harness.state().ui_state.selected_cluster, selected);
+
+    // Escape still closes the blade, and the shortcuts work again.
+    harness.key_press(egui::Key::Escape);
+    harness.run();
+    harness.key_press(egui::Key::G);
+    harness.run();
+    assert!(harness.get_by_label("Filter kinds").is_focused());
+}
+
+/// A log window or a YAML window in front grabs the keyboard too.
+#[test]
+fn a_log_or_yaml_window_in_front_grabs_the_workspace_shortcuts() {
+    use super::super::design_fixtures::KIND_KIND;
+    for surface in ["log", "yaml"] {
+        let mut harness = namespaces_harness(SHORT_WINDOW);
+        click_label(&mut harness, "Problems only 2");
+        let ctx = harness.ctx.clone();
+        let ui_state = &mut harness.state_mut().ui_state;
+        if surface == "log" {
+            ui_state.open_pod_log_window(
+                KIND_KIND,
+                "coredns-66bc5c9577-ffw2s".into(),
+                Some("kube-system".into()),
+                PodLogContainer {
+                    name: "coredns".into(),
+                    kind: ContainerKind::App,
+                    image: None,
+                },
+                &mut Vec::new(),
+            );
+        } else {
+            ui_state.open_yaml_editor(
+                &ctx,
+                KIND_KIND,
+                pods(),
+                Some("kube-system".into()),
+                "coredns-66bc5c9577-ffw2s".into(),
+                &mut Vec::new(),
+            );
+        }
+        harness.run();
+        let selected = harness.state().ui_state.selected_cluster;
+
+        harness.key_press(egui::Key::P);
+        harness.key_press(egui::Key::G);
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::K);
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Num1);
+        harness.run();
+        harness.get_by_label("Problems only 2");
+        assert!(
+            !harness.get_by_label("Filter kinds").is_focused(),
+            "G reached the sidebar behind the {surface} window"
+        );
+        assert!(harness.state().ui_state.cluster_switcher.is_none());
+        assert_eq!(harness.state().ui_state.selected_cluster, selected);
+    }
+}

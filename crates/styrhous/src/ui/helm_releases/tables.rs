@@ -103,7 +103,11 @@ pub(super) fn show_revision_history(
                 }
                 "deployed" => TableRowBuilder::text_or_missing(
                     ui,
-                    Some(&super::helm_time(&release.last_deployed, true)),
+                    Some(&super::helm_time(
+                        &release.last_deployed,
+                        true,
+                        crate::ui::clock::zone(ui.ctx()),
+                    )),
                     "Helm recorded no deployment time",
                 ),
                 "description" => TableRowBuilder::text_or_missing(

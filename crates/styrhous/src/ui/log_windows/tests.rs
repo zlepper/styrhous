@@ -1,6 +1,7 @@
 use super::*;
 use crate::log_store::{LOG_PAGE_SIZE, LogPageRow, LogStoreConfig, LogStoreResult, LogSummary};
 use crate::resource_table::ContainerKind;
+use crate::ui::clock::{self, WallClock};
 use crate::ui::log_state::apply_store_result;
 use crate::worker::{MockWorker, PodLogStreamTarget};
 use components::test_support::UiHarnessSnapshot;
@@ -24,6 +25,28 @@ fn window_harness(
     Shared<PodLogWindowState>,
     Shared<LogDisplayOptions>,
 ) {
+    window_harness_at(
+        window,
+        display_options,
+        size,
+        log_store,
+        WallClock::Fixed(time::OffsetDateTime::UNIX_EPOCH),
+    )
+}
+
+/// [`window_harness`] with the UI clock (and so the time zone of the times)
+/// `clock`.
+fn window_harness_at(
+    window: PodLogWindowState,
+    display_options: LogDisplayOptions,
+    size: egui::Vec2,
+    log_store: Rc<LogStoreService>,
+    clock: WallClock,
+) -> (
+    Harness<'static>,
+    Shared<PodLogWindowState>,
+    Shared<LogDisplayOptions>,
+) {
     let window = Rc::new(RefCell::new(window));
     let display_options = Rc::new(RefCell::new(display_options));
     let (window_for_ui, options_for_ui) = (window.clone(), display_options.clone());
@@ -32,6 +55,7 @@ fn window_harness(
         .with_size(size)
         .with_step_dt(0.05)
         .build_ui(move |ui| {
+            clock::publish(ui.ctx(), clock);
             let screen = ui.ctx().content_rect();
             let mut board = ui.new_child(egui::UiBuilder::new().max_rect(screen));
             show_log_window(
@@ -339,6 +363,7 @@ mod filtering;
 mod keyboard_basic;
 mod keyboard_document;
 mod layout;
+mod line_steps;
 mod navigation;
 mod pointer;
 mod rebase;

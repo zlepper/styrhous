@@ -39,8 +39,9 @@ Window state=[focused] rect=<none>
                 TextRun value="Rest · / focuses" rect=(x=48.0 y=384.0 width=83.1 height=16.0 center_x=89.5 center_y=392.0)
             GenericContainer rect=<none>
               GenericContainer rect=<none>
-                TextInput name="Search" value="app=ranker" rect=(x=48.0 y=414.0 width=250.0 height=38.0 center_x=173.0 center_y=433.0)
+                TextInput name="Search" value="app=ranker" rect=(x=48.0 y=414.0 width=218.0 height=38.0 center_x=157.0 center_y=433.0)
                   TextRun value="app=ranker" rect=(x=84.0 y=426.0 width=66.0 height=20.0 center_x=117.0 center_y=436.0)
+              Button name="Clear search" rect=(x=274.0 y=421.0 width=24.0 height=24.0 center_x=286.0 center_y=433.0)
               Label value="Typing · label selector" rect=(x=48.0 y=458.0 width=116.7 height=16.0 center_x=106.3 center_y=466.0)
                 TextRun value="Typing · label selector" rect=(x=48.0 y=458.0 width=116.7 height=16.0 center_x=106.3 center_y=466.0)
             GenericContainer rect=<none>

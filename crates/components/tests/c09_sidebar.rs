@@ -57,14 +57,8 @@ fn sidebar(ui: &mut Ui) {
             FloatingSidebar::new(rect).show(
                 ui,
                 |ui| {
-                    let _ = ClusterCard::new(
-                        "kind-kind",
-                        "KIND · LOCAL · 2 of 4",
-                        "KK",
-                        1,
-                        Tone::Success,
-                    )
-                    .show(ui);
+                    let _ =
+                        ClusterCard::new("kind-kind", "2 of 4", "KK", 1, Tone::Success).show(ui);
                     kind_filter(ui, &mut String::new(), "Filter 54 kinds");
                     side_caption(ui, "Pinned", None);
                     let kinds = [
@@ -131,27 +125,15 @@ fn cluster_cards(ui: &mut Ui) {
             ui.add_space(DEMO_GAP);
             column(ui, DEMO_GAP, |ui| {
                 demo(ui, "Connected", |ui| {
-                    let _ = ClusterCard::new(
-                        "kind-kind",
-                        "KIND · LOCAL · 2 OF 4",
-                        "KK",
-                        1,
-                        Tone::Success,
-                    )
-                    .show(ui);
+                    let _ =
+                        ClusterCard::new("kind-kind", "2 OF 4", "KK", 1, Tone::Success).show(ui);
                 });
                 demo(ui, "Connecting — lamp warn", |ui| {
-                    let _ = ClusterCard::new(
-                        "dev-eu",
-                        "EKS · EU-WEST-1 · CONNECTING",
-                        "DE",
-                        0,
-                        Tone::Warning,
-                    )
-                    .show(ui);
+                    let _ =
+                        ClusterCard::new("dev-eu", "CONNECTING", "DE", 0, Tone::Warning).show(ui);
                 });
                 demo(ui, "Unreachable — lamp bad", |ui| {
-                    let _ = ClusterCard::new("prod-eu", "AKS · UNREACHABLE", "PR", 3, Tone::Danger)
+                    let _ = ClusterCard::new("prod-eu", "UNREACHABLE", "PR", 3, Tone::Danger)
                         .force_state(ControlState::Hovered)
                         .show(ui);
                 });
@@ -309,7 +291,7 @@ fn sidebar_items_report_clicks_and_describe_their_counts() {
         .build_ui_state(
             |ui, clicked: &mut Vec<&'static str>| {
                 ui.set_width(size::SIDEBAR);
-                if ClusterCard::new("kind-kind", "KIND · LOCAL", "KK", 1, Tone::Success)
+                if ClusterCard::new("kind-kind", "2 of 4", "KK", 1, Tone::Success)
                     .show(ui)
                     .clicked()
                 {
@@ -361,7 +343,7 @@ fn sidebar_items_report_clicks_and_describe_their_counts() {
             .accesskit_node()
             .description()
             .as_deref(),
-        Some("kind-kind, KIND · LOCAL")
+        Some("kind-kind, 2 of 4")
     );
     harness.get_by_label("Switch cluster").click();
     harness.get_by_label("Pods").click();

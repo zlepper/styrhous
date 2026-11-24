@@ -419,7 +419,7 @@ fn hovering_a_row_shows_its_full_timestamp() {
     );
     harness.get_by_label("Pod log line 1").hover();
     harness.run_steps(30);
-    harness.get_by_label("2026-08-08 15:22:17.143 UTC");
+    harness.get_by_label("2026-08-08 15:22:17.143 +00:00");
 }
 
 #[test]

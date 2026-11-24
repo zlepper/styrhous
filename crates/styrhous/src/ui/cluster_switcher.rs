@@ -1,6 +1,6 @@
 //! The cluster switcher (A16, C18) and the facts about the clusters that it
-//! and the landing page (A01) show: what each context is, where it runs, how
-//! it is connected and what is known of it.
+//! and the landing page (A01) show: what each context is, how it is
+//! connected and what is known of it.
 
 use super::cluster_roster::ClusterRoster;
 use super::sidebar::{connection, contexts};
@@ -52,10 +52,11 @@ pub(super) struct ClusterChoice {
     pub(super) name: String,
     pub(super) initials: String,
     pub(super) category: usize,
-    /// Provider and region, upper case ("KIND · LOCAL").
-    pub(super) meta: String,
-    /// The provider's chip label ("Kind").
-    pub(super) provider: String,
+    /// The line under the name: only for a cluster discovery found
+    /// ("EKS · NOT IN KUBECONFIG"); a context is its name alone.
+    pub(super) meta: Option<String>,
+    /// The cloud a found cluster lives in, for the footer's notice.
+    cloud: Option<&'static str>,
     pub(super) detail: String,
     pub(super) status: Option<Tone>,
     pub(super) key: Option<String>,
@@ -66,7 +67,6 @@ pub(super) struct ClusterChoice {
 /// The readout strip of a connected cluster.
 #[derive(Clone, Debug)]
 struct Summary {
-    meta: String,
     readouts: Vec<(&'static str, String, ReadoutTone)>,
 }
 
@@ -77,12 +77,11 @@ impl ClusterChoice {
             name: &self.name,
             initials: &self.initials,
             category: self.category,
-            meta: &self.meta,
+            meta: self.meta.as_deref(),
             detail: &self.detail,
             status: self.status,
             key: self.key.as_deref(),
             summary: self.summary.as_ref().map(|summary| ClusterSummary {
-                meta: &summary.meta,
                 readouts: summary
                     .readouts
                     .iter()
@@ -126,33 +125,6 @@ pub(super) fn note_known_nodes(ui_state: &mut UiState) {
     }
 }
 
-/// The chip label of a provider: acronyms stay, words get capitals.
-fn provider_label(provider: &str) -> String {
-    if matches!(provider, "EKS" | "AKS" | "GKE") {
-        return provider.to_owned();
-    }
-    provider
-        .split(' ')
-        .map(|word| {
-            let mut letters = word.chars();
-            letters
-                .next()
-                .map(|first| first.to_string() + &letters.as_str().to_lowercase())
-                .unwrap_or_default()
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-const OTHER_PROVIDER: &str = "Other";
-
-fn provider_of(meta: &str) -> String {
-    meta.split(" · ")
-        .next()
-        .filter(|provider| !provider.is_empty())
-        .map_or_else(|| OTHER_PROVIDER.to_owned(), provider_label)
-}
-
 /// The node count the app has seen of the cluster, live or last time.
 fn known_nodes(cluster: &ClusterState, roster: &ClusterRoster) -> Option<String> {
     node_count(cluster)
@@ -170,7 +142,7 @@ fn detail(cluster: &ClusterState, nodes: Option<String>) -> String {
 }
 
 /// The readouts of a connected cluster, as far as the app knows them.
-fn summary(cluster: &ClusterState, meta: &str) -> Option<Summary> {
+fn summary(cluster: &ClusterState) -> Option<Summary> {
     if !matches!(cluster.connection, ClusterConnectionState::Connected) || !cluster.reachable() {
         return None;
     }
@@ -200,7 +172,6 @@ fn summary(cluster: &ClusterState, meta: &str) -> Option<Summary> {
     });
     let pods = watching_pods.then_some(pods.len());
     Some(Summary {
-        meta: meta.to_owned(),
         readouts: vec![
             ("Nodes", show(node_count(cluster)), ReadoutTone::Neutral),
             ("Pods", show(pods), ReadoutTone::Neutral),
@@ -238,15 +209,7 @@ pub(super) fn context_choices(ui_state: &UiState) -> Vec<ClusterChoice> {
         .enumerate()
         .map(|(position, cluster)| {
             let (status, _) = connection(cluster);
-            let provider_meta =
-                crate::cluster_provider::describe(&cluster.name, cluster.server.as_deref())
-                    .unwrap_or_default();
             let name = cluster.presentation.display_name(&cluster.name).to_owned();
-            let strip_meta = if provider_meta.is_empty() {
-                "KUBECONFIG CONTEXT".to_owned()
-            } else {
-                provider_meta.clone()
-            };
             let nodes = known_nodes(cluster, &ui_state.cluster_roster);
             ClusterChoice {
                 target: ChoiceTarget::Context {
@@ -258,12 +221,12 @@ pub(super) fn context_choices(ui_state: &UiState) -> Vec<ClusterChoice> {
                     || crate::context_presentation::automatic_colour(position),
                     usize::from,
                 ),
-                provider: provider_of(&provider_meta),
-                meta: provider_meta,
+                meta: None,
+                cloud: None,
                 detail: detail(cluster, nodes),
                 status: Some(status),
                 key: None,
-                summary: summary(cluster, &strip_meta),
+                summary: summary(cluster),
                 is_current: ui_state.selected_cluster == Some(cluster.cluster_key),
                 name,
             }
@@ -283,7 +246,7 @@ fn found_choices(ui_state: &UiState, first_category: usize) -> Vec<ClusterChoice
         .map(|cluster| {
             (
                 cluster.name.clone(),
-                "EKS",
+                ("EKS", "AWS"),
                 ManagedClusterImport::Eks {
                     account_id: cluster.account_id.clone(),
                     region: cluster.region.clone(),
@@ -300,7 +263,7 @@ fn found_choices(ui_state: &UiState, first_category: usize) -> Vec<ClusterChoice
                 .map(|cluster| {
                     (
                         cluster.name.clone(),
-                        "AKS",
+                        ("AKS", "Azure"),
                         ManagedClusterImport::Aks {
                             subscription_id: cluster.subscription_id.clone(),
                             resource_group: cluster.resource_group.clone(),
@@ -317,7 +280,7 @@ fn found_choices(ui_state: &UiState, first_category: usize) -> Vec<ClusterChoice
                 .map(|cluster| {
                     (
                         cluster.host_name.clone(),
-                        "Tailscale",
+                        ("Tailscale", "Tailscale"),
                         ManagedClusterImport::Tailscale {
                             host_name: cluster.host_name.clone(),
                         },
@@ -326,12 +289,12 @@ fn found_choices(ui_state: &UiState, first_category: usize) -> Vec<ClusterChoice
         );
     imports
         .enumerate()
-        .map(|(index, (name, provider, import))| ClusterChoice {
+        .map(|(index, (name, (provider, cloud), import))| ClusterChoice {
             target: ChoiceTarget::Found(import),
             initials: crate::context_presentation::automatic_badge(&name),
             category: crate::context_presentation::automatic_colour(first_category + index),
-            meta: format!("{} · NOT IN KUBECONFIG", provider.to_uppercase()),
-            provider: provider.to_owned(),
+            meta: Some(format!("{} · NOT IN KUBECONFIG", provider.to_uppercase())),
+            cloud: Some(cloud),
             detail: "add".to_owned(),
             status: None,
             key: None,
@@ -349,7 +312,6 @@ fn build_sections(
     ui_state: &UiState,
     mut contexts: Vec<ClusterChoice>,
     query: &str,
-    provider: Option<&str>,
 ) -> Vec<(String, Vec<ClusterChoice>)> {
     let roster = &ui_state.cluster_roster;
     let found = found_choices(ui_state, contexts.len());
@@ -388,30 +350,8 @@ fn build_sections(
         sections.push((format!("Matching “{}”", query.trim()), matching));
     }
     sections.push((FOUND_TITLE.to_owned(), found));
-    for (_, choices) in &mut sections {
-        choices.retain(|choice| provider.is_none_or(|wanted| choice.provider == wanted));
-    }
     sections.retain(|(_, choices)| !choices.is_empty());
     sections
-}
-
-/// The provider chips: "All" and each provider of the contexts with its
-/// count, the most common first.
-fn provider_chips(contexts: &[ClusterChoice]) -> Vec<(String, usize)> {
-    let mut chips: Vec<(String, usize)> = Vec::new();
-    for choice in contexts {
-        match chips
-            .iter_mut()
-            .find(|(label, _)| *label == choice.provider)
-        {
-            Some((_, count)) => *count += 1,
-            None => chips.push((choice.provider.clone(), 1)),
-        }
-    }
-    // Stable, so providers with as many contexts keep their first appearance.
-    chips.sort_by_key(|(_, count)| std::cmp::Reverse(*count));
-    chips.insert(0, ("All".to_owned(), contexts.len()));
-    chips
 }
 
 impl UiState {
@@ -476,10 +416,7 @@ pub(super) fn show(
         return;
     };
     let contexts = context_choices(ui_state);
-    let chips = provider_chips(&contexts);
-    session.state.provider = session.state.provider.min(chips.len() - 1);
-    let provider = (session.state.provider > 0).then(|| chips[session.state.provider].0.as_str());
-    let sections = build_sections(ui_state, contexts, &session.state.query, provider);
+    let sections = build_sections(ui_state, contexts, &session.state.query);
     if session.fresh {
         // The current cluster is highlighted on open.
         session.state.highlight = sections
@@ -494,9 +431,6 @@ pub(super) fn show(
         .collect();
     let notice = found_notice(&sections);
     let mut switcher = ClusterSwitcher::new(&mut session.state).focus_search(session.fresh);
-    for (label, count) in &chips {
-        switcher = switcher.provider(label, *count);
-    }
     for ((title, _), entries) in sections.iter().zip(entries) {
         switcher = switcher.section(title, entries);
     }
@@ -525,12 +459,8 @@ pub(super) fn show(
             ui_state.toggle_cluster_pin(choice);
             // The tile moves between sections; keep the highlight on it.
             if let ChoiceTarget::Context { name, .. } = &choice.target {
-                let moved = build_sections(
-                    ui_state,
-                    context_choices(ui_state),
-                    &session.state.query,
-                    provider,
-                );
+                let moved =
+                    build_sections(ui_state, context_choices(ui_state), &session.state.query);
                 if let Some(at) = moved.iter().flat_map(|(_, choices)| choices).position(
                     |c| matches!(&c.target, ChoiceTarget::Context { name: n, .. } if n == name),
                 ) {
@@ -555,10 +485,8 @@ fn found_notice(sections: &[(String, Vec<ClusterChoice>)]) -> Option<String> {
         .map(|(_, choices)| choices)?;
     let mut clouds: Vec<&str> = Vec::new();
     for choice in found {
-        let cloud = match choice.provider.as_str() {
-            "EKS" => "AWS",
-            "AKS" => "Azure",
-            other => other,
+        let Some(cloud) = choice.cloud else {
+            continue;
         };
         if !clouds.contains(&cloud) {
             clouds.push(cloud);

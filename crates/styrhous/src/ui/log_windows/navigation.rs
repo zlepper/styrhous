@@ -78,6 +78,24 @@ pub(super) fn step_problem(window: &mut PodLogWindowState, forward: bool) -> boo
     true
 }
 
+/// Step to the next or previous displayed line from the active one, wrapping at
+/// the ends (the last or the first without an active line). Returns whether
+/// there was a line to go to.
+pub(super) fn step_line(window: &mut PodLogWindowState, forward: bool) -> bool {
+    let count = displayed_line_count(window);
+    if count == 0 {
+        return false;
+    }
+    let next = match (window.search.active_display_row, forward) {
+        (Some(row), true) => (row + 1) % count,
+        (Some(row), false) => (row + count - 1) % count,
+        (None, true) => 0,
+        (None, false) => count - 1,
+    };
+    jump_to_display_row(window, next);
+    true
+}
+
 pub(super) fn status_label(window: &PodLogWindowState) -> String {
     let status = if !window.search.query.is_empty() && !window.search.search_complete {
         format!("Searching… {} matches", window.search.match_count)

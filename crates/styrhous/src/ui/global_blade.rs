@@ -175,7 +175,10 @@ impl GlobalBladeCoordinator {
         // Escape belongs to a confirmation dialog shown over the blade; it is
         // drawn later in the frame, so the blade would otherwise see it first.
         let modal_open = ctx.memory(|memory| memory.top_modal_layer().is_some());
-        let mut close = !modal_open && ctx.input(|input| input.key_pressed(egui::Key::Escape));
+        // Esc in one of the blade's text fields only leaves the field.
+        let mut close = !modal_open
+            && !components::interaction::escape_left_text_field(ctx)
+            && ctx.input(|input| input.key_pressed(egui::Key::Escape));
         close |= (resource_detail_cluster_keys.is_empty() || dismiss_on_outside_click)
             && response.dismissed;
         close |= response.header.close || response.active.close;
@@ -511,11 +514,6 @@ impl<'a> GlobalBladeRenderContext<'a> {
             .values()
             .flat_map(|cluster| cluster.namespaces.values().cloned())
             .collect()
-    }
-
-    /// The offset calendar days are counted by, from the UI clock.
-    pub(super) fn day_offset(&self) -> time::UtcOffset {
-        self.ui_state.clock.day_offset()
     }
 
     pub(super) fn unread_operation_count(&self) -> usize {

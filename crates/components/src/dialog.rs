@@ -103,9 +103,13 @@ impl<'a> Dialog<'a> {
             .frame(Frame::NONE)
             .show(ctx, |ui| self.show_inline(ui, body, footer));
         let on_top = response.is_top_modal && !response.any_popup_open;
+        // Esc in a text field of the dialog only leaves the field.
         let dismissed = on_top
-            && (response.backdrop_response.clicked()
-                || ctx.input_mut(|input| input.consume_key(Modifiers::NONE, Key::Escape)));
+            && (response.backdrop_response.clicked() || {
+                let left_field = crate::interaction::escape_left_text_field(ctx);
+                ctx.input_mut(|input| input.consume_key(Modifiers::NONE, Key::Escape))
+                    && !left_field
+            });
         DialogResponse {
             inner: response.inner,
             dismissed,

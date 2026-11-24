@@ -12,6 +12,9 @@ use crate::worker::WorkerTrait;
 use egui_kittest::Harness;
 use std::collections::{BTreeMap, HashMap};
 
+/// The application under test, driven by a scripted worker.
+pub(super) type AppHarness = Harness<'static, MyEguiApp<crate::worker::MockWorker>>;
+
 pub(super) fn application_harness<W: WorkerTrait + 'static>() -> Harness<'static, MyEguiApp<W>> {
     let mut harness = Harness::builder().build_eframe(|cc| MyEguiApp::<W>::new_for_test(cc));
     components::test_support::setup_egui(&mut harness);

@@ -631,14 +631,10 @@ Window rect=<none>
             Button name="Close" rect=(x=1304.0 y=74.0 width=28.0 height=28.0 center_x=1318.0 center_y=88.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              TextInput name="Find a cluster" value="" state=[focused] rect=(x=204.0 y=120.0 width=791.9 height=38.0 center_x=599.9 center_y=139.0)
+              TextInput name="Find a cluster" value="" state=[focused] rect=(x=204.0 y=120.0 width=1048.6 height=38.0 center_x=728.3 center_y=139.0)
                 TextRun value="" rect=(x=240.0 y=131.0 width=0.0 height=20.0 center_x=240.0 center_y=141.0)
-            Label value="4 contexts" rect=(x=1003.9 y=131.0 width=57.4 height=16.0 center_x=1032.6 center_y=139.0)
-              TextRun value="4 contexts" rect=(x=1003.9 y=131.0 width=57.4 height=16.0 center_x=1032.6 center_y=139.0)
-            Button name="All 4" state=[toggled=True] rect=(x=1083.2 y=123.0 width=50.1 height=32.0 center_x=1108.3 center_y=139.0)
-            Button name="Kind 2" state=[toggled=False] rect=(x=1141.4 y=123.0 width=60.7 height=32.0 center_x=1171.7 center_y=139.0)
-            Button name="EKS 1" state=[toggled=False] rect=(x=1210.1 y=123.0 width=56.3 height=32.0 center_x=1238.2 center_y=139.0)
-            Button name="AKS 1" state=[toggled=False] rect=(x=1274.4 y=123.0 width=57.6 height=32.0 center_x=1303.2 center_y=139.0)
+            Label value="4 contexts" rect=(x=1260.6 y=131.0 width=57.4 height=16.0 center_x=1289.3 center_y=139.0)
+              TextRun value="4 contexts" rect=(x=1260.6 y=131.0 width=57.4 height=16.0 center_x=1289.3 center_y=139.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
@@ -647,16 +643,16 @@ Window rect=<none>
                 Label value="2" rect=(x=263.1 y=179.0 width=7.0 height=16.0 center_x=266.6 center_y=187.0)
                   TextRun value="2" rect=(x=263.1 y=179.0 width=5.9 height=16.0 center_x=266.0 center_y=187.0)
               GenericContainer rect=<none>
-                Button name="kind-kind, KIND · LOCAL, 3 nodes" state=[toggled=True] rect=(x=204.0 y=206.0 width=370.7 height=60.0 center_x=389.3 center_y=236.0)
-                Button name="prod-eu, AKS · WESTEUROPE, unreachable" state=[toggled=False] rect=(x=582.7 y=206.0 width=370.7 height=60.0 center_x=768.0 center_y=236.0)
+                Button name="kind-kind, 3 nodes" state=[toggled=True] rect=(x=204.0 y=206.0 width=370.7 height=60.0 center_x=389.3 center_y=236.0)
+                Button name="prod-eu, unreachable" state=[toggled=False] rect=(x=582.7 y=206.0 width=370.7 height=60.0 center_x=768.0 center_y=236.0)
               GenericContainer rect=<none>
                 Label value="Recent" rect=(x=204.0 y=284.0 width=51.5 height=20.0 center_x=229.8 center_y=294.0)
                   TextRun value="Recent" rect=(x=204.0 y=284.0 width=51.5 height=20.0 center_x=229.8 center_y=294.0)
                 Label value="2" rect=(x=263.5 y=287.0 width=7.0 height=16.0 center_x=267.0 center_y=295.0)
                   TextRun value="2" rect=(x=263.5 y=287.0 width=5.9 height=16.0 center_x=266.5 center_y=295.0)
               GenericContainer rect=<none>
-                Button name="dev-eu, EKS · EU-WEST-1, 38 nodes" state=[toggled=False] rect=(x=204.0 y=314.0 width=370.7 height=60.0 center_x=389.3 center_y=344.0)
-                Button name="kind-legacy, KIND · LOCAL, 1 node" state=[toggled=False] rect=(x=582.7 y=314.0 width=370.7 height=60.0 center_x=768.0 center_y=344.0)
+                Button name="dev-eu, 38 nodes" state=[toggled=False] rect=(x=204.0 y=314.0 width=370.7 height=60.0 center_x=389.3 center_y=344.0)
+                Button name="kind-legacy, 1 node" state=[toggled=False] rect=(x=582.7 y=314.0 width=370.7 height=60.0 center_x=768.0 center_y=344.0)
               GenericContainer rect=<none>
                 Label value="Found in cloud accounts" rect=(x=204.0 y=392.0 width=178.4 height=20.0 center_x=293.2 center_y=402.0)
                   TextRun value="Found in cloud accounts" rect=(x=204.0 y=392.0 width=178.4 height=20.0 center_x=293.2 center_y=402.0)
@@ -664,10 +660,8 @@ Window rect=<none>
                   TextRun value="1" rect=(x=390.4 y=395.0 width=5.9 height=16.0 center_x=393.4 center_y=403.0)
               GenericContainer rect=<none>
                 Button name="payments, EKS · NOT IN KUBECONFIG, add" state=[toggled=False] rect=(x=204.0 y=422.0 width=370.7 height=60.0 center_x=389.3 center_y=452.0)
-          Label value="kind-kind" rect=(x=280.0 y=523.0 width=55.3 height=20.0 center_x=307.7 center_y=533.0)
-            TextRun value="kind-kind" rect=(x=280.0 y=523.0 width=55.3 height=20.0 center_x=307.7 center_y=533.0)
-          Label value="KIND · LOCAL" rect=(x=280.0 y=543.0 width=70.3 height=16.0 center_x=315.1 center_y=551.0)
-            TextRun value="KIND · LOCAL" rect=(x=280.0 y=543.0 width=69.6 height=16.0 center_x=314.8 center_y=551.0)
+          Label value="kind-kind" rect=(x=280.0 y=531.0 width=55.3 height=20.0 center_x=307.7 center_y=541.0)
+            TextRun value="kind-kind" rect=(x=280.0 y=531.0 width=55.3 height=20.0 center_x=307.7 center_y=541.0)
           GenericContainer rect=<none>
             Label value="Nodes: 3" rect=(x=480.0 y=514.0 width=106.0 height=54.0 center_x=533.0 center_y=541.0)
             Label value="Pods: 12" rect=(x=594.0 y=514.0 width=106.0 height=54.0 center_x=647.0 center_y=541.0)

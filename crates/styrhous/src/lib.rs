@@ -1,7 +1,6 @@
 mod ansi;
 mod api_resource;
 mod cluster_connection_manager;
-mod cluster_provider;
 mod context_presentation;
 mod fake_kube_api;
 mod helm_release;
@@ -96,6 +95,8 @@ fn native_options() -> eframe::NativeOptions {
 pub(crate) const APP_NAME: &str = "Styrhous";
 
 pub fn run_native() {
+    // Before anything starts a thread: the local time zone cannot be read after.
+    ui::clock::init_system_zone();
     tracing_subscriber::fmt().init();
     updater::apply_staged_update();
 

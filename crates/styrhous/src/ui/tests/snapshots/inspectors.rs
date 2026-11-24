@@ -112,7 +112,7 @@ fn pod_inspector_shows_warning_events_and_hides_normal_ones_until_asked() {
         history_entry_id: 3,
         events,
     });
-    harness.get_by_label("Events, 3").click();
+    harness.get_by_label("Events, 3, 1 problem").click();
     harness.run_steps(6);
 
     harness.get_by_label("BackOff");

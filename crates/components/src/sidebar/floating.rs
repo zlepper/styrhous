@@ -471,8 +471,8 @@ pub struct ClusterCard<'a> {
 }
 
 impl<'a> ClusterCard<'a> {
-    /// The card of cluster `name` with its `meta` line ("KIND · LOCAL · 2 of
-    /// 4"), its `initials` on avatar colour `avatar` and a `status` lamp.
+    /// The card of cluster `name` with its `meta` line ("2 of 4"), its
+    /// `initials` on avatar colour `avatar` and a `status` lamp.
     pub fn new(
         name: &'a str,
         meta: &'a str,
@@ -598,7 +598,19 @@ impl<'a> ClusterCard<'a> {
 /// naming how many kinds there are and the `G` shortcut, which focuses it
 /// while nothing else has focus (S09).
 pub fn kind_filter(ui: &mut Ui, query: &mut String, placeholder: &str) -> Response {
+    kind_filter_with_key(ui, query, placeholder, true)
+}
+
+/// [`kind_filter`] where `G` focuses the field only while `key_active`
+/// (not while a surface in front of the sidebar owns the keyboard).
+pub fn kind_filter_with_key(
+    ui: &mut Ui,
+    query: &mut String,
+    placeholder: &str,
+    key_active: bool,
+) -> Response {
     let focus = ui.is_enabled()
+        && key_active
         && ui.memory(|memory| memory.focused().is_none())
         && ui.input_mut(|input| {
             crate::interaction::consume_key_with_text(input, egui::Modifiers::NONE, egui::Key::G)

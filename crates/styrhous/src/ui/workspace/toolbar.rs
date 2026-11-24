@@ -267,7 +267,10 @@ pub(super) fn show_toolbar(
     }
     // The list's header follows the band directly (A02).
     ui.add_space(-ui.spacing().item_spacing.y);
-    if filters.is_some() && selected_api_resource.is_some() {
+    if filters.is_some()
+        && selected_api_resource.is_some()
+        && crate::ui::keyboard_surface::workspace_owns_keys(ui.ctx())
+    {
         let TopBarKeys {
             toggle_problems,
             previous_problem,
@@ -292,6 +295,7 @@ pub(super) fn show_resource_search(
     width: f32,
 ) {
     let focus_search = ui.is_enabled()
+        && crate::ui::keyboard_surface::workspace_owns_keys(ui.ctx())
         && ui
             .ctx()
             .input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::F));
@@ -307,6 +311,7 @@ pub(super) fn show_resource_search(
         .status(status)
         .width(width)
         .request_focus(focus_search)
+        .key_active(crate::ui::keyboard_surface::workspace_owns_keys(ui.ctx()))
         .show(ui);
 }
 

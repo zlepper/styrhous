@@ -246,7 +246,7 @@ fn show_status_callout(ui: &mut egui::Ui, status: &LicenseStatus) {
         {
             (
                 Tone::Warning,
-                format!("Grace period until {}", long_date(lease.expires_at)),
+                format!("Grace period until {}", long_date(crate::ui::clock::zone(ui.ctx()), lease.expires_at)),
                 "The licensing service couldn’t be reached. Styrhous keeps working offline until the grace period ends."
                     .to_owned(),
             )
@@ -322,10 +322,10 @@ fn plan_label(state: &str) -> String {
         .unwrap_or_default()
 }
 
-/// `unix` as "1 January 2100".
-fn long_date(unix: u64) -> String {
-    time::OffsetDateTime::from_unix_timestamp(unix as i64).map_or_else(
-        |_| "an unknown time".into(),
+/// `unix` as the date in `zone`, "1 January 2100".
+fn long_date(zone: crate::ui::clock::Zone, unix: u64) -> String {
+    zone.local_unix(unix as i64).map_or_else(
+        || "an unknown time".into(),
         |value| format!("{} {} {}", value.day(), value.month(), value.year()),
     )
 }

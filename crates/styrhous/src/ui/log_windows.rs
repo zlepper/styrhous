@@ -16,7 +16,8 @@ use components::design::size;
 use components::design::theme::{self, AnsiRoles, Theme, ThemeExt, ThemeScope, Tone};
 use components::design::{space, type_scale};
 use components::{
-    FloatingToolbar, LogLevel, SearchField, SearchStatus, Segmented, ToggleButton, icons,
+    ButtonGroup, FloatingToolbar, LogLevel, SearchField, SearchStatus, Segmented, ToggleButton,
+    icons,
 };
 
 const HORIZONTAL_OVERSCAN_POINTS: f32 = 120.0;

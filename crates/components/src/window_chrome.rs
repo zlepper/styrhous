@@ -379,32 +379,63 @@ pub fn status_icon(ui: &mut Ui, icon: Icon) -> Response {
     response
 }
 
-/// A status bar item that reports success: a check in `success-fill` before muted
-/// words ("Valid").
-pub fn status_ok(ui: &mut Ui, text: &str) -> Response {
-    let theme = ui.tokens();
-    let galley = STATUS_TEXT.galley(ui.ctx(), text, theme.text.muted, f32::INFINITY);
+/// What the status bar's icon-and-words items paint with.
+struct IconText<'a> {
+    icon: Icon,
+    icon_color: Color32,
+    text: &'a str,
+    text_color: Color32,
+    sense: Sense,
+    role: egui::accesskit::Role,
+}
+
+/// A [`size::ICON_SM` icon](status_icon) and its words, one item
+/// ([`PROBLEMS_GAP`] apart); the words are `STATUS_TEXT`.
+fn icon_text(ui: &mut Ui, item: IconText<'_>) -> Response {
+    let galley = STATUS_TEXT.galley(ui.ctx(), item.text, item.text_color, f32::INFINITY);
     let size = vec2(
         size::ICON_SM + PROBLEMS_GAP + galley.rect.width(),
         galley.rect.height(),
     );
-    let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
+    let (rect, response) = ui.allocate_exact_size(size, item.sense);
+    if item.sense.senses_click() {
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), item.text)
+        });
+    }
     if ui.is_rect_visible(rect) {
         let icon = Rect::from_min_size(
             pos2(rect.left(), rect.center().y - size::ICON_SM / 2.0),
             Vec2::splat(size::ICON_SM),
         );
-        Icon::CheckCircle.paint(ui, icon, theme.success.fill);
+        item.icon.paint(ui, icon, item.icon_color);
     }
     type_scale::paint_text_as(
         ui,
         &response,
         pos2(rect.left() + size::ICON_SM + PROBLEMS_GAP, rect.top()),
         galley,
-        theme.text.muted,
-        egui::accesskit::Role::Label,
+        item.text_color,
+        item.role,
     );
     response
+}
+
+/// A status bar item that reports success: a check in `success-fill` before muted
+/// words ("Valid").
+pub fn status_ok(ui: &mut Ui, text: &str) -> Response {
+    let theme = ui.tokens();
+    icon_text(
+        ui,
+        IconText {
+            icon: Icon::CheckCircle,
+            icon_color: theme.success.fill,
+            text,
+            text_color: theme.text.muted,
+            sense: Sense::hover(),
+            role: egui::accesskit::Role::Label,
+        },
+    )
 }
 
 /// The problems count of the status bar, in `danger-text` with its icon.
@@ -416,30 +447,17 @@ pub fn problems_toggle(ui: &mut Ui, count: usize) -> Response {
     } else {
         format!("{count} problems")
     };
-    let galley = STATUS_TEXT.galley(ui.ctx(), &text, theme.danger.text, f32::INFINITY);
-    let size = vec2(
-        size::ICON_SM + PROBLEMS_GAP + galley.rect.width(),
-        galley.rect.height(),
-    );
-    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
-    let response = response.with_pointing_hand();
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), &text)
-    });
-    if ui.is_rect_visible(rect) {
-        let icon = Rect::from_min_size(
-            pos2(rect.left(), rect.center().y - size::ICON_SM / 2.0),
-            Vec2::splat(size::ICON_SM),
-        );
-        Icon::XCircle.paint(ui, icon, theme.danger.fill);
-    }
-    type_scale::paint_text_as(
+    icon_text(
         ui,
-        &response,
-        pos2(rect.left() + size::ICON_SM + PROBLEMS_GAP, rect.top()),
-        galley,
-        theme.danger.text,
-        egui::accesskit::Role::Button,
-    );
-    response.tooltip("Show problems")
+        IconText {
+            icon: Icon::XCircle,
+            icon_color: theme.danger.fill,
+            text: &text,
+            text_color: theme.danger.text,
+            sense: Sense::click(),
+            role: egui::accesskit::Role::Button,
+        },
+    )
+    .with_pointing_hand()
+    .tooltip("Show problems")
 }

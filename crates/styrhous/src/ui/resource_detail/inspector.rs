@@ -37,6 +37,8 @@ struct SectionInfo {
     part: Part,
     name: String,
     count: Option<usize>,
+    /// How many of the counted items are problems.
+    alerts: usize,
 }
 
 impl SectionInfo {
@@ -45,7 +47,13 @@ impl SectionInfo {
             part,
             name: name.into(),
             count,
+            alerts: 0,
         }
+    }
+
+    fn alerts(mut self, alerts: usize) -> Self {
+        self.alerts = alerts;
+        self
     }
 }
 
@@ -127,11 +135,15 @@ fn sections(entry: &ResourceDetailHistoryEntry) -> Vec<SectionInfo> {
         "Annotations",
         Some(detail.annotations.len()),
     ));
-    sections.push(SectionInfo::new(
-        Part::Events,
-        "Events",
-        Some(entry.events.len()),
-    ));
+    sections.push(
+        SectionInfo::new(Part::Events, "Events", Some(entry.events.len())).alerts(
+            entry
+                .events
+                .iter()
+                .filter(|event| event.type_ == "Warning")
+                .count(),
+        ),
+    );
     if detail.yaml.is_some() {
         sections.push(SectionInfo::new(Part::Yaml, "YAML", None));
     }
@@ -485,7 +497,7 @@ pub(super) fn show_body(
     let rail: Vec<Section<'_>> = infos
         .iter()
         .map(|info| match info.count {
-            Some(count) => Section::new(&info.name).count(count),
+            Some(count) => Section::new(&info.name).count(count).alerts(info.alerts),
             None => Section::new(&info.name),
         })
         .collect();

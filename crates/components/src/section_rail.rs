@@ -13,22 +13,37 @@ use crate::interaction::{ControlState, Interaction, step_index, vertical_arrow_s
 const ITEM_ROLE: TextRole = type_scale::UI;
 /// A section's count (`.si .c`): Plex Mono 10.5 in the item's line box.
 const COUNT_ROLE: TextRole = type_scale::MONO_COUNT;
+/// Gap between a section's problem count and "/ count".
+const ALERT_GAP: f32 = space::S4;
 /// The caption above the sections ("On this pod"), with its bottom padding.
 const CAPTION_PADDING_BOTTOM: f32 = space::S8;
 /// Gap between the items (`.srail` gap 2).
 const ITEM_GAP: f32 = space::S2;
 
 /// One section of a [`SectionRail`]: its name and, when it lists things,
-/// how many.
+/// how many, and how many of them are a problem.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Section<'a> {
     pub name: &'a str,
     pub count: Option<usize>,
+    /// How many of the `count` are problems; shown in `danger-text` before
+    /// "/ count" while above zero ("2 / 37").
+    pub alerts: usize,
 }
 
 impl<'a> Section<'a> {
     pub const fn new(name: &'a str) -> Self {
-        Self { name, count: None }
+        Self {
+            name,
+            count: None,
+            alerts: 0,
+        }
+    }
+
+    /// How many of the section's items are problems.
+    pub const fn alerts(mut self, alerts: usize) -> Self {
+        self.alerts = alerts;
+        self
     }
 
     pub const fn count(mut self, count: usize) -> Self {
@@ -174,9 +189,11 @@ impl<'s, 'a> SectionRail<'s, 'a> {
         let theme = ui.tokens();
         let current = *self.current == index;
         let response = ui.interact(rect, id, Sense::click()).with_pointing_hand();
-        let label = match section.count {
-            Some(count) => format!("{}, {count}", section.name),
-            None => section.name.to_owned(),
+        let label = match (section.count, section.alerts) {
+            (Some(count), 0) => format!("{}, {count}", section.name),
+            (Some(count), 1) => format!("{}, {count}, 1 problem", section.name),
+            (Some(count), alerts) => format!("{}, {count}, {alerts} problems", section.name),
+            (None, _) => section.name.to_owned(),
         };
         response.widget_info(|| {
             egui::WidgetInfo::selected(egui::WidgetType::Button, ui.is_enabled(), current, &label)
@@ -203,12 +220,30 @@ impl<'s, 'a> SectionRail<'s, 'a> {
             (ITEM_ROLE, theme.nav.text, theme.text.muted)
         };
         let inner = rect.shrink2(vec2(size::SECTION_ITEM_PADDING_X, 0.0));
+        let alerting = section.count.is_some() && section.alerts > 0;
         let count = section.count.map(|count| {
-            COUNT_ROLE.galley(ui.ctx(), &count.to_string(), count_color, f32::INFINITY)
+            let text = if alerting {
+                format!("/ {count}")
+            } else {
+                count.to_string()
+            };
+            COUNT_ROLE.galley(ui.ctx(), &text, count_color, f32::INFINITY)
         });
-        let count_width = count
-            .as_ref()
-            .map_or(0.0, |count| count.rect.width() + space::S8);
+        let alerts = alerting.then(|| {
+            COUNT_ROLE.galley(
+                ui.ctx(),
+                &section.alerts.to_string(),
+                theme.danger.text,
+                f32::INFINITY,
+            )
+        });
+        let count_width = count.as_ref().map_or(0.0, |count| {
+            count.rect.width()
+                + alerts
+                    .as_ref()
+                    .map_or(0.0, |alerts| alerts.rect.width() + ALERT_GAP)
+                + space::S8
+        });
         let name = role.galley_elided(
             ui.ctx(),
             section.name,
@@ -226,11 +261,14 @@ impl<'s, 'a> SectionRail<'s, 'a> {
             egui::accesskit::Role::Button,
         );
         if let Some(count) = count {
-            let pos = pos2(
-                inner.right() - count.rect.width(),
-                center_y - count.rect.height() / 2.0,
-            );
+            let mut right = inner.right() - count.rect.width();
+            let pos = pos2(right, center_y - count.rect.height() / 2.0);
             type_scale::paint_galley(ui.painter(), pos, count, count_color);
+            if let Some(alerts) = alerts {
+                right -= ALERT_GAP + alerts.rect.width();
+                let pos = pos2(right, center_y - alerts.rect.height() / 2.0);
+                type_scale::paint_galley(ui.painter(), pos, alerts, theme.danger.text);
+            }
         }
         response
     }

@@ -3,6 +3,7 @@
 use super::*;
 use crate::ansi::AnsiStyleSpan;
 use crate::log_level::leading_level_len;
+use crate::ui::clock::{self, Zone};
 use components::{CodeColor, CodeDecoration, CodeMark, CodeSpan, LogLine};
 use std::ops::Range;
 use time::format_description::well_known::Rfc3339;
@@ -18,6 +19,7 @@ pub(super) struct RowLayout {
     pub(super) show_numbers: bool,
     pub(super) number_width: f32,
     show_times: bool,
+    zone: Zone,
     pub(super) source_width: Option<f32>,
     level_column: bool,
 }
@@ -43,6 +45,7 @@ impl RowLayout {
             show_numbers: display_options.show_line_numbers,
             number_width: digits as f32 * character_width,
             show_times: display_options.show_timestamps,
+            zone: clock::zone(ui.ctx()),
             source_width,
             level_column: window.level_column,
         }
@@ -58,9 +61,17 @@ impl RowLayout {
         self.show_times.then(|| {
             row.timestamp
                 .as_deref()
-                .map(format_time)
+                .map(|timestamp| format_time(timestamp, self.zone))
                 .unwrap_or_default()
         })
+    }
+
+    /// The date, time and offset of `row`, for its tooltip: it has them where
+    /// it has a timestamp, whether or not the time column is shown.
+    pub(super) fn full_time(&self, row: &LogPageRow) -> Option<String> {
+        row.timestamp
+            .as_deref()
+            .and_then(|timestamp| format_full_time(timestamp, self.zone))
     }
 
     /// The row `row` as a [`LogLine`] with these columns, its `message`
@@ -140,12 +151,12 @@ pub(super) fn log_character_width(ctx: &egui::Context) -> f32 {
         .width()
 }
 
-/// A Kubernetes timestamp as the time of day in UTC, "15:22:10.000".
-pub(super) fn format_time(timestamp: &str) -> String {
+/// A Kubernetes timestamp as the time of day in `zone`, "17:22:10.000".
+pub(super) fn format_time(timestamp: &str, zone: Zone) -> String {
     let Ok(time) = time::OffsetDateTime::parse(timestamp, &Rfc3339) else {
         return String::new();
     };
-    let time = time.to_offset(time::UtcOffset::UTC);
+    let time = zone.local(time);
     format!(
         "{:02}:{:02}:{:02}.{:03}",
         time.hour(),
@@ -155,22 +166,12 @@ pub(super) fn format_time(timestamp: &str) -> String {
     )
 }
 
-/// A Kubernetes timestamp with its date, "2026-08-08 15:22:10.123 UTC", for
-/// the tooltip of a row (the time column leaves the date out).
-pub(super) fn format_full_time(timestamp: &str) -> Option<String> {
-    let time = time::OffsetDateTime::parse(timestamp, &Rfc3339)
-        .ok()?
-        .to_offset(time::UtcOffset::UTC);
-    Some(format!(
-        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:03} UTC",
-        time.year(),
-        u8::from(time.month()),
-        time.day(),
-        time.hour(),
-        time.minute(),
-        time.second(),
-        time.millisecond()
-    ))
+/// A Kubernetes timestamp with its date and offset in `zone`,
+/// "2026-08-08 17:22:10.123 +02:00", for the tooltip of a row (the time
+/// column leaves the date out).
+pub(super) fn format_full_time(timestamp: &str, zone: Zone) -> Option<String> {
+    let time = time::OffsetDateTime::parse(timestamp, &Rfc3339).ok()?;
+    Some(clock::format_date_time(zone.local(time), true))
 }
 
 /// The look of a run of text with its ANSI styling.
@@ -251,16 +252,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn times_read_as_utc_time_of_day() {
-        assert_eq!(format_time("2026-08-08T15:22:10.000Z"), "15:22:10.000");
-        assert_eq!(format_time("2026-08-08T15:22:10.1234567Z"), "15:22:10.123");
-        assert_eq!(format_time("2026-08-08T17:22:10+02:00"), "15:22:10.000");
-        assert_eq!(format_time("not a time"), "");
+    fn times_read_in_the_zone_with_their_offset() {
+        let utc = Zone::Fixed(time::UtcOffset::UTC);
+        let east = Zone::Fixed(time::UtcOffset::from_hms(2, 0, 0).unwrap());
+        assert_eq!(format_time("2026-08-08T15:22:10.000Z", utc), "15:22:10.000");
         assert_eq!(
-            format_full_time("2026-08-08T17:22:10.5+02:00").as_deref(),
-            Some("2026-08-08 15:22:10.500 UTC")
+            format_time("2026-08-08T15:22:10.1234567Z", utc),
+            "15:22:10.123"
         );
-        assert_eq!(format_full_time("not a time"), None);
+        assert_eq!(
+            format_time("2026-08-08T17:22:10+02:00", utc),
+            "15:22:10.000"
+        );
+        assert_eq!(
+            format_time("2026-08-08T15:22:10.000Z", east),
+            "17:22:10.000"
+        );
+        assert_eq!(format_time("2026-08-08T23:30:00Z", east), "01:30:00.000");
+        assert_eq!(format_time("not a time", east), "");
+        assert_eq!(
+            format_full_time("2026-08-08T17:22:10.5+02:00", utc).as_deref(),
+            Some("2026-08-08 15:22:10.500 +00:00")
+        );
+        assert_eq!(
+            format_full_time("2026-08-08T23:30:00.25Z", east).as_deref(),
+            Some("2026-08-09 01:30:00.250 +02:00"),
+            "the date moves with the time"
+        );
+        assert_eq!(format_full_time("not a time", east), None);
     }
 
     #[test]

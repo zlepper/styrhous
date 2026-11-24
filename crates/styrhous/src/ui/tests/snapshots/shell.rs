@@ -111,7 +111,7 @@ fn cluster_card_reports_a_connecting_or_unreachable_cluster() {
             .accesskit_node()
             .description()
             .as_deref(),
-        Some("kind-kind, KIND · LOCAL · CONNECTING · 2 OF 4")
+        Some("kind-kind, CONNECTING · 2 OF 4")
     );
 
     harness

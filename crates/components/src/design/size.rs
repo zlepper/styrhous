@@ -555,18 +555,22 @@ pub const LOG_TICKS_INSET: f32 = 12.0;
 pub const LOG_UNAVAILABLE_TOP: f32 = 208.0;
 /// How far down the panel the empty state of a spooling log starts.
 pub const LOG_SPOOLING_TOP: f32 = 228.0;
-/// The search field of a narrow log window's toolbar.
-pub const LOG_SEARCH_NARROW: f32 = 220.0;
+/// The search field of a narrow log window's toolbar: room for the query
+/// minimum, the count of a 3 digit result and the field's chrome.
+pub const LOG_SEARCH_WIDTH: f32 = 390.0;
+/// The least width the query text of a log search keeps, about 20 characters
+/// before it scrolls.
+pub const LOG_SEARCH_QUERY_MIN: f32 = 160.0;
 /// How wide a log window's toolbar floats: the search field takes what the
-/// toggles leave, up to the 300 points of its design.
-pub const LOG_TOOLBAR: f32 = 640.0;
+/// toggles leave, which holds the query minimum beside a short count.
+pub const LOG_TOOLBAR: f32 = 876.0;
 /// The toolbar of an interleaved log, which has one more toggle.
-pub const LOG_TOOLBAR_INTERLEAVED: f32 = 664.0;
+pub const LOG_TOOLBAR_INTERLEAVED: f32 = 890.0;
 /// The toolbar of a narrow window, which folds the toggles away.
-pub const LOG_TOOLBAR_NARROW: f32 = 500.0;
+pub const LOG_TOOLBAR_NARROW: f32 = 738.0;
 /// What the search field needs besides its query and count: the magnifier,
-/// the match and expression buttons and their gaps and margins.
-pub const LOG_SEARCH_CHROME: f32 = 154.0;
+/// the clear, match and expression buttons and their gaps and margins.
+pub const LOG_SEARCH_CHROME: f32 = 186.0;
 /// Height of an empty volume bar, as a fraction of the chart.
 pub const VOLUME_BAR_EMPTY: f32 = 0.06;
 /// Height of the quietest ordinary volume bar, as a fraction of the chart.

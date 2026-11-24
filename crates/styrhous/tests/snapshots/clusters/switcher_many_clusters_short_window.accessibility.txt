@@ -560,15 +560,10 @@ Window rect=<none>
             Button name="Close" rect=(x=1304.0 y=74.0 width=28.0 height=28.0 center_x=1318.0 center_y=88.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              TextInput name="Find a cluster" value="" state=[focused] rect=(x=204.0 y=120.0 width=696.8 height=38.0 center_x=552.4 center_y=139.0)
+              TextInput name="Find a cluster" value="" state=[focused] rect=(x=204.0 y=120.0 width=1042.7 height=38.0 center_x=725.3 center_y=139.0)
                 TextRun value="" rect=(x=240.0 y=131.0 width=0.0 height=20.0 center_x=240.0 center_y=141.0)
-            Label value="22 contexts" rect=(x=908.8 y=131.0 width=63.3 height=16.0 center_x=940.4 center_y=139.0)
-              TextRun value="22 contexts" rect=(x=908.8 y=131.0 width=63.3 height=16.0 center_x=940.4 center_y=139.0)
-            Button name="All 22" state=[toggled=True] rect=(x=994.1 y=123.0 width=56.7 height=32.0 center_x=1022.4 center_y=139.0)
-            Button name="Other 18" state=[toggled=False] rect=(x=1058.8 y=123.0 width=74.6 height=32.0 center_x=1096.1 center_y=139.0)
-            Button name="Kind 2" state=[toggled=False] rect=(x=1141.4 y=123.0 width=60.7 height=32.0 center_x=1171.7 center_y=139.0)
-            Button name="EKS 1" state=[toggled=False] rect=(x=1210.1 y=123.0 width=56.3 height=32.0 center_x=1238.2 center_y=139.0)
-            Button name="AKS 1" state=[toggled=False] rect=(x=1274.4 y=123.0 width=57.6 height=32.0 center_x=1303.2 center_y=139.0)
+            Label value="22 contexts" rect=(x=1254.7 y=131.0 width=63.3 height=16.0 center_x=1286.3 center_y=139.0)
+              TextRun value="22 contexts" rect=(x=1254.7 y=131.0 width=63.3 height=16.0 center_x=1286.3 center_y=139.0)
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
@@ -577,53 +572,51 @@ Window rect=<none>
                 Label value="2" rect=(x=263.1 y=179.0 width=7.0 height=16.0 center_x=266.6 center_y=187.0)
                   TextRun value="2" rect=(x=263.1 y=179.0 width=5.9 height=16.0 center_x=266.0 center_y=187.0)
               GenericContainer rect=<none>
-                Button name="kind-kind, KIND · LOCAL, 3 nodes" state=[toggled=True] rect=(x=204.0 y=206.0 width=370.7 height=60.0 center_x=389.3 center_y=236.0)
-                Button name="prod-eu, AKS · WESTEUROPE, 62 nodes" state=[toggled=False] rect=(x=582.7 y=206.0 width=370.7 height=60.0 center_x=768.0 center_y=236.0)
+                Button name="kind-kind, 3 nodes" state=[toggled=True] rect=(x=204.0 y=206.0 width=370.7 height=60.0 center_x=389.3 center_y=236.0)
+                Button name="prod-eu, 62 nodes" state=[toggled=False] rect=(x=582.7 y=206.0 width=370.7 height=60.0 center_x=768.0 center_y=236.0)
               GenericContainer rect=<none>
                 Label value="Recent" rect=(x=204.0 y=284.0 width=51.5 height=20.0 center_x=229.8 center_y=294.0)
                   TextRun value="Recent" rect=(x=204.0 y=284.0 width=51.5 height=20.0 center_x=229.8 center_y=294.0)
                 Label value="2" rect=(x=263.5 y=287.0 width=7.0 height=16.0 center_x=267.0 center_y=295.0)
                   TextRun value="2" rect=(x=263.5 y=287.0 width=5.9 height=16.0 center_x=266.5 center_y=295.0)
               GenericContainer rect=<none>
-                Button name="dev-eu, EKS · EU-WEST-1, 38 nodes" state=[toggled=False] rect=(x=204.0 y=314.0 width=370.7 height=60.0 center_x=389.3 center_y=344.0)
-                Button name="kind-legacy, KIND · LOCAL, 1 node" state=[toggled=False] rect=(x=582.7 y=314.0 width=370.7 height=60.0 center_x=768.0 center_y=344.0)
+                Button name="dev-eu, 38 nodes" state=[toggled=False] rect=(x=204.0 y=314.0 width=370.7 height=60.0 center_x=389.3 center_y=344.0)
+                Button name="kind-legacy, 1 node" state=[toggled=False] rect=(x=582.7 y=314.0 width=370.7 height=60.0 center_x=768.0 center_y=344.0)
               GenericContainer rect=<none>
                 Label value="Other clusters" rect=(x=204.0 y=392.0 width=104.3 height=20.0 center_x=256.1 center_y=402.0)
                 Label value="18" rect=(x=316.3 y=395.0 width=14.1 height=16.0 center_x=323.3 center_y=403.0)
               GenericContainer rect=<none>
-                Button name="staging-00, , not connected" state=[toggled=False] rect=(x=204.0 y=422.0 width=370.7 height=60.0 center_x=389.3 center_y=452.0)
-                Button name="staging-01, , not connected" state=[toggled=False] rect=(x=582.7 y=422.0 width=370.7 height=60.0 center_x=768.0 center_y=452.0)
-                Button name="staging-02, , not connected" state=[toggled=False] rect=(x=961.3 y=422.0 width=370.7 height=60.0 center_x=1146.6 center_y=452.0)
+                Button name="staging-00, not connected" state=[toggled=False] rect=(x=204.0 y=422.0 width=370.7 height=60.0 center_x=389.3 center_y=452.0)
+                Button name="staging-01, not connected" state=[toggled=False] rect=(x=582.7 y=422.0 width=370.7 height=60.0 center_x=768.0 center_y=452.0)
+                Button name="staging-02, not connected" state=[toggled=False] rect=(x=961.3 y=422.0 width=370.7 height=60.0 center_x=1146.6 center_y=452.0)
               GenericContainer rect=<none>
-                Button name="staging-03, , not connected" state=[toggled=False] rect=(x=204.0 y=490.0 width=370.7 height=60.0 center_x=389.3 center_y=520.0)
-                Button name="staging-04, , not connected" state=[toggled=False] rect=(x=582.7 y=490.0 width=370.7 height=60.0 center_x=768.0 center_y=520.0)
-                Button name="staging-05, , not connected" state=[toggled=False] rect=(x=961.3 y=490.0 width=370.7 height=60.0 center_x=1146.6 center_y=520.0)
+                Button name="staging-03, not connected" state=[toggled=False] rect=(x=204.0 y=490.0 width=370.7 height=60.0 center_x=389.3 center_y=520.0)
+                Button name="staging-04, not connected" state=[toggled=False] rect=(x=582.7 y=490.0 width=370.7 height=60.0 center_x=768.0 center_y=520.0)
+                Button name="staging-05, not connected" state=[toggled=False] rect=(x=961.3 y=490.0 width=370.7 height=60.0 center_x=1146.6 center_y=520.0)
               GenericContainer rect=<none>
-                Button name="staging-06, , not connected" state=[toggled=False] rect=(x=204.0 y=558.0 width=370.7 height=60.0 center_x=389.3 center_y=588.0)
-                Button name="staging-07, , not connected" state=[toggled=False] rect=(x=582.7 y=558.0 width=370.7 height=60.0 center_x=768.0 center_y=588.0)
-                Button name="staging-08, , not connected" state=[toggled=False] rect=(x=961.3 y=558.0 width=370.7 height=60.0 center_x=1146.6 center_y=588.0)
+                Button name="staging-06, not connected" state=[toggled=False] rect=(x=204.0 y=558.0 width=370.7 height=60.0 center_x=389.3 center_y=588.0)
+                Button name="staging-07, not connected" state=[toggled=False] rect=(x=582.7 y=558.0 width=370.7 height=60.0 center_x=768.0 center_y=588.0)
+                Button name="staging-08, not connected" state=[toggled=False] rect=(x=961.3 y=558.0 width=370.7 height=60.0 center_x=1146.6 center_y=588.0)
               GenericContainer rect=<none>
-                Button name="staging-09, , not connected" state=[toggled=False] rect=(x=204.0 y=626.0 width=370.7 height=60.0 center_x=389.3 center_y=656.0)
-                Button name="staging-10, , not connected" state=[toggled=False] rect=(x=582.7 y=626.0 width=370.7 height=60.0 center_x=768.0 center_y=656.0)
-                Button name="staging-11, , not connected" state=[toggled=False] rect=(x=961.3 y=626.0 width=370.7 height=60.0 center_x=1146.6 center_y=656.0)
+                Button name="staging-09, not connected" state=[toggled=False] rect=(x=204.0 y=626.0 width=370.7 height=60.0 center_x=389.3 center_y=656.0)
+                Button name="staging-10, not connected" state=[toggled=False] rect=(x=582.7 y=626.0 width=370.7 height=60.0 center_x=768.0 center_y=656.0)
+                Button name="staging-11, not connected" state=[toggled=False] rect=(x=961.3 y=626.0 width=370.7 height=60.0 center_x=1146.6 center_y=656.0)
               GenericContainer rect=<none>
-                Button name="staging-12, , not connected" state=[toggled=False] rect=(x=204.0 y=694.0 width=370.7 height=60.0 center_x=389.3 center_y=724.0)
-                Button name="staging-13, , not connected" state=[toggled=False] rect=(x=582.7 y=694.0 width=370.7 height=60.0 center_x=768.0 center_y=724.0)
-                Button name="staging-14, , not connected" state=[toggled=False] rect=(x=961.3 y=694.0 width=370.7 height=60.0 center_x=1146.6 center_y=724.0)
+                Button name="staging-12, not connected" state=[toggled=False] rect=(x=204.0 y=694.0 width=370.7 height=60.0 center_x=389.3 center_y=724.0)
+                Button name="staging-13, not connected" state=[toggled=False] rect=(x=582.7 y=694.0 width=370.7 height=60.0 center_x=768.0 center_y=724.0)
+                Button name="staging-14, not connected" state=[toggled=False] rect=(x=961.3 y=694.0 width=370.7 height=60.0 center_x=1146.6 center_y=724.0)
               GenericContainer rect=<none>
-                Button name="staging-15, , not connected" state=[toggled=False] rect=(x=204.0 y=762.0 width=370.7 height=60.0 center_x=389.3 center_y=792.0)
-                Button name="staging-16, , not connected" state=[toggled=False] rect=(x=582.7 y=762.0 width=370.7 height=60.0 center_x=768.0 center_y=792.0)
-                Button name="staging-17, , not connected" state=[toggled=False] rect=(x=961.3 y=762.0 width=370.7 height=60.0 center_x=1146.6 center_y=792.0)
+                Button name="staging-15, not connected" state=[toggled=False] rect=(x=204.0 y=762.0 width=370.7 height=60.0 center_x=389.3 center_y=792.0)
+                Button name="staging-16, not connected" state=[toggled=False] rect=(x=582.7 y=762.0 width=370.7 height=60.0 center_x=768.0 center_y=792.0)
+                Button name="staging-17, not connected" state=[toggled=False] rect=(x=961.3 y=762.0 width=370.7 height=60.0 center_x=1146.6 center_y=792.0)
               GenericContainer rect=<none>
                 Label value="Found in cloud accounts" rect=(x=204.0 y=840.0 width=178.4 height=20.0 center_x=293.2 center_y=850.0)
                 Label value="1" rect=(x=390.4 y=843.0 width=7.0 height=16.0 center_x=394.0 center_y=851.0)
               GenericContainer rect=<none>
                 Button name="payments, EKS · NOT IN KUBECONFIG, add" state=[toggled=False] rect=(x=204.0 y=870.0 width=370.7 height=60.0 center_x=389.3 center_y=900.0)
           ScrollBar rect=(x=1322.0 y=158.0 width=10.0 height=224.0 center_x=1327.0 center_y=270.0)
-          Label value="kind-kind" rect=(x=280.0 y=423.0 width=55.3 height=20.0 center_x=307.7 center_y=433.0)
-            TextRun value="kind-kind" rect=(x=280.0 y=423.0 width=55.3 height=20.0 center_x=307.7 center_y=433.0)
-          Label value="KIND · LOCAL" rect=(x=280.0 y=443.0 width=70.3 height=16.0 center_x=315.1 center_y=451.0)
-            TextRun value="KIND · LOCAL" rect=(x=280.0 y=443.0 width=69.6 height=16.0 center_x=314.8 center_y=451.0)
+          Label value="kind-kind" rect=(x=280.0 y=431.0 width=55.3 height=20.0 center_x=307.7 center_y=441.0)
+            TextRun value="kind-kind" rect=(x=280.0 y=431.0 width=55.3 height=20.0 center_x=307.7 center_y=441.0)
           GenericContainer rect=<none>
             Label value="Nodes: 3" rect=(x=480.0 y=414.0 width=106.0 height=54.0 center_x=533.0 center_y=441.0)
             Label value="Pods: 12" rect=(x=594.0 y=414.0 width=106.0 height=54.0 center_x=647.0 center_y=441.0)

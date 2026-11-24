@@ -6,6 +6,7 @@ mod cluster_switcher;
 mod dialogs;
 mod global_blade;
 mod helm_releases;
+mod keyboard_surface;
 mod log_state;
 #[doc(hidden)]
 pub mod log_viewer_profile;
@@ -345,8 +346,10 @@ impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
             .global_blades
             .set_top_inset(if banner { size::BANNER } else { 0.0 });
         cluster_switcher::note_known_nodes(&mut self.ui_state);
+        keyboard_surface::publish(&ctx, &self.ui_state);
         let other_modal = self.ui_state.cluster_switcher.is_none()
-            && ctx.memory(|memory| memory.top_modal_layer().is_some());
+            && (self.ui_state.surface_in_front()
+                || ctx.memory(|memory| memory.top_modal_layer().is_some()));
         if !other_modal
             && ctx.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::K))
         {

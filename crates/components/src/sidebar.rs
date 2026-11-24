@@ -4,5 +4,6 @@
 mod floating;
 
 pub use floating::{
-    ClusterCard, FloatingSidebar, SideItem, kind_filter, side_caption, side_footer,
+    ClusterCard, FloatingSidebar, SideItem, kind_filter, kind_filter_with_key, side_caption,
+    side_footer,
 };

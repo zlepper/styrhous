@@ -178,6 +178,7 @@ pub struct SearchPill<'a> {
     accessibility_label: String,
     width: f32,
     focus_key: bool,
+    key_active: bool,
     key_when_disabled: bool,
     forced_state: Option<ControlState>,
 }
@@ -195,6 +196,7 @@ impl<'a> SearchPill<'a> {
             accessibility_label: "Search".to_owned(),
             width: size::SEARCH_PILL,
             focus_key: true,
+            key_active: true,
             key_when_disabled: false,
             forced_state: None,
         }
@@ -247,6 +249,14 @@ impl<'a> SearchPill<'a> {
         self
     }
 
+    /// Whether `/` focuses the pill right now (on by default). The hint stays
+    /// on the pill when it is off: another surface owns the keyboard, such as
+    /// a blade or a window in front of the list.
+    pub fn key_active(mut self, key_active: bool) -> Self {
+        self.key_active = key_active;
+        self
+    }
+
     /// Keep the `/` key on the pill while it is disabled (the idle top bar of
     /// a window with no cluster).
     pub fn key_when_disabled(mut self) -> Self {
@@ -264,6 +274,7 @@ impl<'a> SearchPill<'a> {
     pub fn show(self, ui: &mut Ui) -> SearchFieldResponse {
         let focus = self.request_focus
             || self.focus_key
+                && self.key_active
                 && ui.is_enabled()
                 && ui.memory(|memory| memory.focused().is_none())
                 && ui.input_mut(|input| consume_key_with_text(input, Modifiers::NONE, Key::Slash));

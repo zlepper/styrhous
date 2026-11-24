@@ -119,6 +119,7 @@ impl GlobalBladeContent for NotificationHistoryBlade {
         gap(ui, space::S16);
 
         let now = super::clock::now(ui.ctx());
+        let zone = super::clock::zone(ui.ctx());
         let all_entries = context.operation_history_entries();
         let entries = all_entries
             .iter()
@@ -136,10 +137,9 @@ impl GlobalBladeContent for NotificationHistoryBlade {
             return GlobalBladeRenderResult::default();
         }
 
-        let offset = context.day_offset();
         let (recent, earlier): (Vec<_>, Vec<_>) = entries
             .into_iter()
-            .partition(|display| is_today(now, display.entry.wall_time, offset));
+            .partition(|display| zone.same_day(now, display.entry.wall_time));
         for (caption, group, first) in [("Today", recent, true), ("Earlier", earlier, false)] {
             if group.is_empty() {
                 continue;
@@ -285,12 +285,6 @@ fn notification_row(
     }
 }
 
-/// Whether `then` falls on the same calendar day as `now`, where days start
-/// by `offset`.
-fn is_today(now: OffsetDateTime, then: OffsetDateTime, offset: time::UtcOffset) -> bool {
-    now.to_offset(offset).date() == then.to_offset(offset).date()
-}
-
 /// How long ago `then` was: "Just now", "2 min", "1 h", "3 d".
 fn relative_time(now: OffsetDateTime, then: OffsetDateTime) -> String {
     let elapsed = now - then;
@@ -308,29 +302,6 @@ fn relative_time(now: OffsetDateTime, then: OffsetDateTime) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn today_is_the_calendar_day_not_the_last_day() {
-        let utc = time::UtcOffset::UTC;
-        let now = time::Date::from_calendar_date(2026, time::Month::June, 1)
-            .unwrap()
-            .with_hms(0, 30, 0)
-            .unwrap()
-            .assume_utc();
-        assert!(is_today(now, now, utc));
-        assert!(
-            is_today(now, now - Duration::minutes(30), utc),
-            "00:00 is today"
-        );
-        assert!(
-            !is_today(now, now - Duration::minutes(31), utc),
-            "23:59 is yesterday"
-        );
-        assert!(!is_today(now, now - Duration::days(1), utc));
-        // The same instants fall on other days an hour east.
-        let east = time::UtcOffset::from_hms(1, 0, 0).unwrap();
-        assert!(is_today(now, now - Duration::minutes(90), east));
-    }
 
     #[test]
     fn relative_times_use_the_largest_whole_unit() {

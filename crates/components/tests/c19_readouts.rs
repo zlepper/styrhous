@@ -71,7 +71,7 @@ const SECTIONS: [Section<'static>; 7] = [
     Section::new("Containers").count(6),
     Section::new("Environment").count(63),
     Section::new("Volumes").count(14),
-    Section::new("Events").count(37),
+    Section::new("Events").count(37).alerts(3),
     Section::new("YAML"),
 ];
 

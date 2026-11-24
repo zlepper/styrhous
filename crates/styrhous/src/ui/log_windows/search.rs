@@ -58,6 +58,8 @@ struct ToolbarActions {
     ansi: bool,
     source_labels: bool,
     follow: bool,
+    previous_line: bool,
+    next_line: bool,
 }
 
 /// The floating toolbar: search, the view toggles and Follow. In a narrow
@@ -72,7 +74,6 @@ pub(super) fn show_log_toolbar(
         ctx.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::F));
     let narrow = ctx.content_rect().width() < NARROW_WINDOW_WIDTH;
     let status = log_search_status(&window.search);
-    let query = window.search.query.clone();
     let toggles = ViewToggles {
         filter: window.filter_is_active(),
         line_numbers: display_options.show_line_numbers,
@@ -83,6 +84,14 @@ pub(super) fn show_log_toolbar(
     };
     let following = window.tail.is_following();
     let unavailable = log_is_unavailable(window);
+    let lines = LineSteps {
+        available: !unavailable && displayed_line_count(window) > 0,
+        reason: if unavailable {
+            "The log is unavailable"
+        } else {
+            "There are no lines to step through"
+        },
+    };
     let window_id = window.id;
     let search = &mut window.search;
     let (width, layout) = if narrow {
@@ -130,15 +139,21 @@ pub(super) fn show_log_toolbar(
                 .clicked()
         };
         if narrow {
-            search_field(ui, size::LOG_SEARCH_NARROW, &mut actions);
+            search_field(
+                ui,
+                search_width(ui, size::LOG_SEARCH_WIDTH, &status),
+                &mut actions,
+            );
+            line_step_buttons(ui, &lines, &mut actions);
             view_options_menu(ui, &toggles, unavailable, &mut actions);
             actions.follow = follow(ui);
         } else {
             // Laid out from the end, so the search field takes the rest.
             actions.follow = follow(ui);
             view_toggles(ui, &toggles, unavailable, &mut actions);
+            line_step_buttons(ui, &lines, &mut actions);
             let room = ui.available_width() - ui.spacing().item_spacing.x;
-            search_field(ui, search_width(ui, room, &query, &status), &mut actions);
+            search_field(ui, search_width(ui, room, &status), &mut actions);
         }
         actions
     });
@@ -146,18 +161,40 @@ pub(super) fn show_log_toolbar(
 }
 
 /// The width of the search field: the room the toggles leave it, or more when
-/// the query and the count would not fit (up to its 300 point design width).
-fn search_width(ui: &egui::Ui, room: f32, query: &str, status: &SearchStatus) -> f32 {
-    let measure = |role: components::design::type_scale::TextRole, text: &str| {
-        role.galley(ui.ctx(), text, egui::Color32::PLACEHOLDER, f32::INFINITY)
+/// the count is wide enough to leave the query less than its minimum width.
+fn search_width(ui: &egui::Ui, room: f32, status: &SearchStatus) -> f32 {
+    let count = status.count_text().map_or(0.0, |count| {
+        type_scale::MONO_COUNT
+            .galley(ui.ctx(), &count, egui::Color32::PLACEHOLDER, f32::INFINITY)
             .rect
             .width()
+    });
+    room.max(size::LOG_SEARCH_CHROME + count + size::LOG_SEARCH_QUERY_MIN)
+}
+
+/// Whether the displayed lines can be stepped through, and the reason when not.
+struct LineSteps {
+    available: bool,
+    reason: &'static str,
+}
+
+/// The previous / next displayed line buttons (the arrows of the line
+/// cursor, Alt+Up and Alt+Down), a group beside the search field. The
+/// match buttons inside the field step through the search matches instead.
+fn line_step_buttons(ui: &mut egui::Ui, lines: &LineSteps, actions: &mut ToolbarActions) {
+    let button = |icon, name: &str, shortcut: &str| {
+        ToggleButton::action(icon, name)
+            .tooltip(format!("{name} ({shortcut})"))
+            .disabled_reason(lines.reason)
+            .enabled(lines.available)
     };
-    let count = status
-        .count_text()
-        .map_or(0.0, |count| measure(type_scale::MONO_COUNT, &count));
-    let needed = size::LOG_SEARCH_CHROME + count + measure(type_scale::UI, query);
-    room.max(needed.min(300.0))
+    let responses = ButtonGroup::new("Line navigation")
+        .toggle(button(icons::Icon::ArrowUp, "Previous line", "Alt+Up"))
+        .toggle(button(icons::Icon::ArrowDown, "Next line", "Alt+Down"))
+        .show(ui);
+    let clicked = |index: usize| responses.get(index).is_some_and(egui::Response::clicked);
+    actions.previous_line = clicked(0);
+    actions.next_line = clicked(1);
 }
 
 /// The view toggles' state.
@@ -292,6 +329,12 @@ fn apply_toolbar_actions(
     }
     if next {
         navigated |= advance_log_match(window, log_store, true);
+    }
+    if actions.previous_line {
+        navigated |= step_line(window, false);
+    }
+    if actions.next_line {
+        navigated |= step_line(window, true);
     }
     if navigated && window.tail.release() {
         // The active indicator was rendered before the navigation click was

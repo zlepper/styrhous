@@ -2,6 +2,7 @@
 //! start from, and the ways to find more.
 
 use super::cluster_switcher::{ChoiceTarget, ClusterChoice, KEYED, context_choices, key_label};
+use super::keyboard_surface;
 use super::state::{ClusterConnectionState, UiState};
 use super::widgets::count_noun;
 use crate::worker::WorkerCommandBox;
@@ -44,6 +45,7 @@ pub(super) fn quick_switch(
     commands: &mut Vec<WorkerCommandBox>,
 ) {
     if ui_state.cluster_switcher.is_some()
+        || ui_state.surface_in_front()
         || ctx.memory(|memory| memory.top_modal_layer().is_some())
     {
         return;
@@ -99,6 +101,7 @@ fn idle_top_bar(ui: &mut Ui) {
                 SearchPill::new(&mut query)
                     .id_salt("landing-search")
                     .key_when_disabled()
+                    .key_active(keyboard_surface::workspace_owns_keys(ui.ctx()))
                     .width(bar.search_width())
                     .show(ui);
                 ScopePill::namespaces(Vec::<String>::new(), None)

@@ -102,15 +102,14 @@ fn usage_chart(
             [fraction, *sample as f32]
         })
         .collect();
+    let zone = crate::ui::clock::zone(ui.ctx());
     let format_value = |value: f32| format(value.round() as i64);
     let tooltip = |index: usize| {
         let (timestamp, sample) = samples[index];
         let mut tooltip = format!(
             "{}\n{}",
             format(sample),
-            timestamp
-                .format(&time::format_description::well_known::Rfc3339)
-                .unwrap_or_default()
+            crate::ui::clock::format_date_time(zone.local(timestamp), false)
         );
         for reference in references.iter().flatten() {
             tooltip.push_str(&format!(

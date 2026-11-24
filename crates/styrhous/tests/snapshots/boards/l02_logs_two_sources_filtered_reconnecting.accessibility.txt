@@ -26,8 +26,8 @@ Window rect=<none>
               GenericContainer rect=<none>
                 Button name="worker-0 · 4,502 · reconnecting" rect=(x=1274.2 y=110.0 width=215.8 height=24.0 center_x=1382.1 center_y=122.0)
                 Button name="api-0 · 4,410" rect=(x=1165.8 y=110.0 width=100.4 height=24.0 center_x=1216.0 center_y=122.0)
-                Label value="backfill 2.1k · UTC" rect=(x=1064.2 y=114.0 width=93.5 height=16.0 center_x=1111.0 center_y=122.0)
-                  TextRun value="backfill 2.1k · UTC" rect=(x=1064.2 y=114.0 width=93.5 height=16.0 center_x=1111.0 center_y=122.0)
+                Label value="backfill 2.1k · local time" rect=(x=1036.0 y=114.0 width=121.8 height=16.0 center_x=1096.9 center_y=122.0)
+                  TextRun value="backfill 2.1k · local time" rect=(x=1036.0 y=114.0 width=121.8 height=16.0 center_x=1096.9 center_y=122.0)
               GenericContainer rect=<none>
                 Unknown name="Log volume" rect=(x=46.0 y=148.0 width=1437.0 height=36.0 center_x=764.5 center_y=166.0)
                 Unknown name="Visible window" rect=(x=627.8 y=144.0 width=13.2 height=44.0 center_x=634.4 center_y=166.0)
@@ -136,19 +136,23 @@ Window rect=<none>
   GenericContainer rect=<none>
     GenericContainer rect=<none>
       GenericContainer rect=<none>
-        Button name="Lock to bottom" state=[toggled=False] rect=(x=1011.8 y=962.0 width=82.2 height=32.0 center_x=1052.9 center_y=978.0)
-        Button name="Show log source labels" state=[toggled=True] rect=(x=940.3 y=962.0 width=65.5 height=32.0 center_x=973.1 center_y=978.0)
-        Button name="Show Kubernetes log timestamps" state=[toggled=True] rect=(x=881.7 y=962.0 width=52.7 height=32.0 center_x=908.0 center_y=978.0)
-        Button name="Show log line numbers" state=[toggled=True] rect=(x=806.5 y=962.0 width=69.2 height=32.0 center_x=841.1 center_y=978.0)
-        Button name="Filter to matching lines" state=[toggled=True] rect=(x=695.6 y=962.0 width=104.9 height=32.0 center_x=748.0 center_y=978.0)
+        Button name="Lock to bottom" state=[toggled=False] rect=(x=1124.8 y=962.0 width=82.2 height=32.0 center_x=1165.9 center_y=978.0)
+        Button name="Show log source labels" state=[toggled=True] rect=(x=1053.3 y=962.0 width=65.5 height=32.0 center_x=1086.1 center_y=978.0)
+        Button name="Show Kubernetes log timestamps" state=[toggled=True] rect=(x=994.7 y=962.0 width=52.7 height=32.0 center_x=1021.0 center_y=978.0)
+        Button name="Show log line numbers" state=[toggled=True] rect=(x=919.5 y=962.0 width=69.2 height=32.0 center_x=954.1 center_y=978.0)
+        Button name="Filter to matching lines" state=[toggled=True] rect=(x=808.6 y=962.0 width=104.9 height=32.0 center_x=861.0 center_y=978.0)
+        Group name="Line navigation" rect=<none>
+          Button name="Previous line" rect=(x=742.6 y=964.0 width=28.0 height=28.0 center_x=756.6 center_y=978.0)
+          Button name="Next line" rect=(x=772.6 y=964.0 width=28.0 height=28.0 center_x=786.6 center_y=978.0)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
-            TextInput name="Search logs" value="worker" state=[focused] rect=(x=448.0 y=960.0 width=87.6 height=36.0 center_x=491.8 center_y=978.0)
-              TextRun value="worker" rect=(x=484.0 y=970.0 width=39.6 height=20.0 center_x=503.8 center_y=980.0)
-          Label value="3 / 8" rect=(x=543.6 y=970.0 width=36.0 height=16.0 center_x=561.6 center_y=978.0)
-            TextRun value="3 / 8" rect=(x=543.6 y=970.0 width=36.0 height=16.0 center_x=561.6 center_y=978.0)
-          Button name="Previous match" rect=(x=587.6 y=966.0 width=24.0 height=24.0 center_x=599.6 center_y=978.0)
-          Button name="Next match" rect=(x=619.6 y=966.0 width=24.0 height=24.0 center_x=631.6 center_y=978.0)
-          CheckBox name="Regular expression" state=[toggled=False] rect=(x=651.6 y=966.0 width=24.0 height=24.0 center_x=663.6 center_y=978.0)
+            TextInput name="Search logs" value="worker" state=[focused] rect=(x=335.0 y=960.0 width=213.6 height=36.0 center_x=441.8 center_y=978.0)
+              TextRun value="worker" rect=(x=371.0 y=970.0 width=39.6 height=20.0 center_x=390.8 center_y=980.0)
+          Label value="3 / 8" rect=(x=556.6 y=970.0 width=36.0 height=16.0 center_x=574.6 center_y=978.0)
+            TextRun value="3 / 8" rect=(x=556.6 y=970.0 width=36.0 height=16.0 center_x=574.6 center_y=978.0)
+          Button name="Clear search" rect=(x=600.6 y=966.0 width=24.0 height=24.0 center_x=612.6 center_y=978.0)
+          Button name="Previous match" rect=(x=632.6 y=966.0 width=24.0 height=24.0 center_x=644.6 center_y=978.0)
+          Button name="Next match" rect=(x=664.6 y=966.0 width=24.0 height=24.0 center_x=676.6 center_y=978.0)
+          CheckBox name="Regular expression" state=[toggled=False] rect=(x=696.6 y=966.0 width=24.0 height=24.0 center_x=708.6 center_y=978.0)
   GenericContainer rect=<none>
     Button name="1 problem" rect=(x=1490.0 y=228.0 width=6.0 height=688.0 center_x=1493.0 center_y=572.0)

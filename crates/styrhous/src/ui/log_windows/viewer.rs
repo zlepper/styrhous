@@ -18,6 +18,7 @@ pub(super) fn show_log_window_with_scroll_state(
     }
     request_copy(&ctx, window, log_store);
     show_log_toolbar(&ctx, window, display_options, log_store);
+    step_lines_with_keys(&ctx, window);
     step_problems_with_keys(&ctx, window);
 
     let frame = egui::Frame::new()
@@ -73,6 +74,23 @@ pub(super) fn show_log_window_with_scroll_state(
 /// The focus id of the window's text canvas, which the caret lives on.
 fn caret_focus_id(window_id: u64) -> egui::Id {
     egui::Id::new(("pod-log-caret", window_id))
+}
+
+/// Alt+Up and Alt+Down step to the previous and next displayed line, from
+/// wherever the focus is (they are no text input).
+fn step_lines_with_keys(ctx: &egui::Context, window: &mut PodLogWindowState) {
+    let (previous, next) = ctx.input_mut(|input| {
+        (
+            input.consume_key(egui::Modifiers::ALT, egui::Key::ArrowUp),
+            input.consume_key(egui::Modifiers::ALT, egui::Key::ArrowDown),
+        )
+    });
+    if previous {
+        step_line(window, false);
+    }
+    if next {
+        step_line(window, true);
+    }
 }
 
 /// `[` and `]` step back and forth through the errors and warnings.
@@ -273,15 +291,18 @@ fn show_log_lines(
     let row_step = (size::LOG_ROW * pixels_per_point).round() / pixels_per_point;
     let row_height = row_step;
     let scroll_area_salt = egui::Id::new(("pod-log-lines", window.id));
-    if initial_spool_is_pending(window) {
+    // A log with no lines to show says why, over an empty scroll area.
+    let empty_state = if initial_spool_is_pending(window) {
         request_page_for_display_row(window, log_store, window.total_lines.saturating_sub(1));
         show_spooling_state(ui, window.total_lines);
-        return components::scroll::both()
-            .id_salt(scroll_area_salt)
-            .show_rows(ui, row_height, 0, |_ui, _rows| {});
-    }
-    if log_is_unavailable(window) {
+        true
+    } else if log_is_unavailable(window) {
         show_unavailable_state(ui, window);
+        true
+    } else {
+        false
+    };
+    if empty_state {
         return components::scroll::both()
             .id_salt(scroll_area_salt)
             .show_rows(ui, row_height, 0, |_ui, _rows| {});
@@ -472,8 +493,7 @@ fn show_log_lines(
                         egui::Sense::click_and_drag(),
                     )
                     .on_hover_cursor(egui::CursorIcon::Text);
-                let interaction_response = match row.timestamp.as_deref().and_then(format_full_time)
-                {
+                let interaction_response = match layout.full_time(row) {
                     Some(full) => interaction_response.tooltip(full),
                     None => interaction_response,
                 };

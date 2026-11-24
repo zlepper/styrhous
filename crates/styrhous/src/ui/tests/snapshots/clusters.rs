@@ -129,18 +129,25 @@ fn typing_filters_and_enter_switches_and_connects() {
     );
 }
 
-/// A provider chip narrows every section to its provider.
+/// The app does not guess where a cluster runs: a context's tile is its name,
+/// its node count and its state, and there are no provider chips. Only a
+/// cluster discovery found says which cloud account it came from.
 #[test]
-fn a_provider_chip_narrows_the_clusters() {
+fn tiles_do_not_guess_a_provider_or_locality() {
     let mut harness = switcher_harness();
     press_command(&mut harness, egui::Key::K);
-    click_label(&mut harness, "EKS 1");
-    assert!(has_tile(&harness, "dev-eu"));
-    assert!(has_tile(&harness, "payments"));
-    for hidden in ["kind-kind", "kind-legacy", "prod-eu"] {
+    assert!(has_tile(&harness, "kind-kind, 3 nodes"));
+    assert!(has_tile(&harness, "dev-eu, 38 nodes"));
+    assert!(has_tile(&harness, "payments, EKS · NOT IN KUBECONFIG, add"));
+    let buttons: Vec<String> = harness
+        .query_all(By::new().role(egui::accesskit::Role::Button))
+        .filter_map(|node| node.accesskit_node().label())
+        .map(|label| label.to_string())
+        .collect();
+    for guess in ["LOCAL", "WESTEUROPE", "EU-WEST-1", "Kind 2", "EKS 1"] {
         assert!(
-            !has_tile(&harness, hidden),
-            "{hidden} is not an EKS cluster"
+            !buttons.iter().any(|label| label.contains(guess)),
+            "nothing says {guess}: {buttons:?}"
         );
     }
 }
@@ -326,7 +333,7 @@ fn the_switcher_scrolls_its_tiles_in_a_short_window() {
 fn a_failed_cluster_keeps_its_last_seen_node_count() {
     let mut harness = switcher_harness();
     press_command(&mut harness, egui::Key::K);
-    assert!(has_tile(&harness, "prod-eu, AKS · WESTEUROPE, 62 nodes"));
+    assert!(has_tile(&harness, "prod-eu, 62 nodes"));
     harness
         .state_mut()
         .ui_state
@@ -334,7 +341,7 @@ fn a_failed_cluster_keeps_its_last_seen_node_count() {
         .known_nodes
         .remove("prod-eu");
     harness.run();
-    assert!(has_tile(&harness, "prod-eu, AKS · WESTEUROPE, unreachable"));
+    assert!(has_tile(&harness, "prod-eu, unreachable"));
 }
 
 /// Enter on a found cluster adds it; once it is in the kubeconfig the window

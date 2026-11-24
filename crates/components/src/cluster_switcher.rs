@@ -1,6 +1,6 @@
 //! The cluster switcher (C18): a palette of the kubeconfig's contexts as
 //! [`ClusterTile`]s in sections (Pinned, Recent, Found in cloud accounts),
-//! filtered by a search pill and provider chips, with a strip reading out
+//! filtered by a search pill, with a strip reading out
 //! the highlighted cluster before you switch.
 
 use egui::{
@@ -16,15 +16,14 @@ use crate::frames::show_elevated;
 use crate::interaction::{ControlState, Interaction, consume_key_with_text};
 use crate::keycap::Keycap;
 use crate::log_viewer::{VolumeBar, VolumeBars};
-use crate::measured::{remember_width, remembered_width};
+use crate::measured::{remember_height, remembered_height};
 use crate::readout::{Readout, ReadoutRow};
 use crate::search::{SearchField, SearchStatus};
-use crate::toggle::ToggleButton;
 use crate::{Button, PointingHand};
 
 /// A tile's cluster name (`.ctile .nm`): UI 13/20 · 600.
 const NAME_ROLE: TextRole = type_scale::UI_STRONG;
-/// A tile's provider and region (`.ctile .mt`): condensed 11/14 caps, +0.06 em.
+/// A tile's second line (`.ctile .mt`): condensed 11/14 caps, +0.06 em.
 const META_ROLE: TextRole = type_scale::CAPTION_SM.with_letter_spacing(0.06);
 /// A tile's node count or state (`.ctile .nn`): Plex Mono 11 in a 20 point line.
 const DETAIL_ROLE: TextRole = type_scale::MONO_HINT;
@@ -32,8 +31,6 @@ const DETAIL_ROLE: TextRole = type_scale::MONO_HINT;
 const TITLE_ROLE: TextRole = type_scale::DIALOG_TITLE;
 /// A section heading (`.palette .ps`): Bricolage 15/20.
 const SECTION_ROLE: TextRole = type_scale::TITLE.with_size(15.0, 20.0);
-/// The readout strip's context line: caption caps at +0.06 em.
-const STRIP_META_ROLE: TextRole = type_scale::CAPTION.with_letter_spacing(0.06);
 /// Gap between the parts of a tile (`.ctile` gap 12).
 const TILE_GAP: f32 = space::S12;
 /// Columns of tiles per row (S18).
@@ -42,8 +39,6 @@ const COLUMNS: usize = 3;
 const GRID_GAP: f32 = space::S8;
 /// Gap between the title row's items (`.row` gap 12).
 const TITLE_GAP: f32 = space::S12;
-/// Gap between the search pill and the provider chips (`.row` gap 8).
-const FILTER_GAP: f32 = space::S8;
 /// Space above the filter row.
 const FILTER_TOP: f32 = space::S16;
 /// Space above a section heading.
@@ -77,8 +72,9 @@ pub struct ClusterEntry<'a> {
     pub initials: &'a str,
     /// The avatar's category colour (`av-(n + 1)`).
     pub category: usize,
-    /// Provider and region ("KIND · LOCAL", "EKS · NOT IN KUBECONFIG").
-    pub meta: &'a str,
+    /// A line under the name ("EKS · NOT IN KUBECONFIG"); `None` shows the
+    /// name alone, centred.
+    pub meta: Option<&'a str>,
     /// The node count or state ("3 nodes", "unreachable", "add").
     pub detail: &'a str,
     /// The connection lamp; `None` for a cluster not in the kubeconfig.
@@ -92,15 +88,13 @@ pub struct ClusterEntry<'a> {
 /// The readout strip of a highlighted cluster.
 #[derive(Clone, Debug)]
 pub struct ClusterSummary<'a> {
-    /// Provider, region and version ("KIND · LOCAL · KUBERNETES 1.31").
-    pub meta: &'a str,
     pub readouts: Vec<Readout<'a>>,
     /// The latency history, newest last, as fractions of the chart.
     pub latency: Vec<f32>,
 }
 
-/// A cluster tile (`.ctile`): avatar with its lamp, name over provider ·
-/// region, node count or state and the pinned key, 60 points tall on
+/// A cluster tile (`.ctile`): avatar with its lamp, name (over its meta line
+/// when it has one), node count or state and the pinned key, 60 points tall on
 /// `surface-panel`. The highlighted (or current) tile is `item-selected`
 /// with an accent ring. An unreachable cluster stays selectable.
 #[must_use = "call `show` to add the tile"]
@@ -136,7 +130,10 @@ impl<'e, 'a> ClusterTile<'e, 'a> {
         let (rect, response) =
             ui.allocate_exact_size(vec2(width, size::CLUSTER_TILE), Sense::click());
         let response = response.with_pointing_hand();
-        let label = format!("{}, {}, {}", entry.name, entry.meta, entry.detail);
+        let label = match entry.meta {
+            Some(meta) => format!("{}, {meta}, {}", entry.name, entry.detail),
+            None => format!("{}, {}", entry.name, entry.detail),
+        };
         let highlighted = self.highlighted;
         response.widget_info(|| {
             egui::WidgetInfo::selected(
@@ -189,17 +186,19 @@ impl<'e, 'a> ClusterTile<'e, 'a> {
         right -= TILE_GAP;
 
         let text_width = (right - left).max(0.0);
-        let block = NAME_ROLE.line_height() + META_ROLE.line_height();
+        let block = NAME_ROLE.line_height() + entry.meta.map_or(0.0, |_| META_ROLE.line_height());
         let top = center_y - block / 2.0;
         let name = NAME_ROLE.galley_elided(ui.ctx(), entry.name, theme.text.primary, text_width, 1);
         type_scale::paint_galley(ui.painter(), pos2(left, top), name, theme.text.primary);
-        let meta = META_ROLE.galley_elided(ui.ctx(), entry.meta, theme.text.muted, text_width, 1);
-        type_scale::paint_galley(
-            ui.painter(),
-            pos2(left, top + NAME_ROLE.line_height()),
-            meta,
-            theme.text.muted,
-        );
+        if let Some(meta) = entry.meta {
+            let meta = META_ROLE.galley_elided(ui.ctx(), meta, theme.text.muted, text_width, 1);
+            type_scale::paint_galley(
+                ui.painter(),
+                pos2(left, top + NAME_ROLE.line_height()),
+                meta,
+                theme.text.muted,
+            );
+        }
         response
     }
 }
@@ -209,13 +208,6 @@ impl<'e, 'a> ClusterTile<'e, 'a> {
 pub struct ClusterSection<'a> {
     pub title: &'a str,
     pub entries: Vec<ClusterEntry<'a>>,
-}
-
-/// A provider chip: "Kind 2".
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ProviderFilter<'a> {
-    pub label: &'a str,
-    pub count: usize,
 }
 
 /// A cluster of the switcher: its section and its place in it.
@@ -239,29 +231,25 @@ pub enum ClusterAction {
     Close,
 }
 
-/// What the switcher remembers between frames: the query, the provider
-/// chip and the highlighted cluster (counted across the shown sections).
+/// What the switcher remembers between frames: the query and the
+/// highlighted cluster (counted across the shown sections).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ClusterSwitcherState {
     pub query: String,
-    pub provider: usize,
     pub highlight: usize,
 }
 
 /// The cluster switcher palette (`.palette`): "Clusters" with its context
-/// count and Close; the search pill (focused on open) and the provider
-/// chips; the sections of tiles, three per row; the readout strip of the
+/// count and Close; the search pill (focused on open); the sections of tiles, three per row; the readout strip of the
 /// highlighted cluster; and a footer with a notice, the unreachable count
 /// and the keys.
 ///
-/// Typing filters by name, provider and region; ↑ ↓ ← → move the
+/// Typing filters by name and meta line; ↑ ↓ ← → move the
 /// highlight, Enter switches, ⌘↵ opens a new window, ⌘P pins, ⌘1…9 switch
-/// to a pinned cluster and Esc closes (S18). The caller narrows the
-/// sections to the chosen provider ([`ClusterSwitcherState::provider`]).
+/// to a pinned cluster and Esc closes (S18).
 #[must_use = "call `show` to add the switcher"]
 pub struct ClusterSwitcher<'s, 'a> {
     state: &'s mut ClusterSwitcherState,
-    providers: Vec<ProviderFilter<'a>>,
     sections: Vec<ClusterSection<'a>>,
     notice: Option<&'a str>,
     width: f32,
@@ -273,18 +261,12 @@ impl<'s, 'a> ClusterSwitcher<'s, 'a> {
     pub fn new(state: &'s mut ClusterSwitcherState) -> Self {
         Self {
             state,
-            providers: Vec::new(),
             sections: Vec::new(),
             notice: None,
             width: size::CLUSTER_SWITCHER_MAX_WIDTH,
             focus_search: false,
             forced_search_focus: false,
         }
-    }
-
-    pub fn provider(mut self, label: &'a str, count: usize) -> Self {
-        self.providers.push(ProviderFilter { label, count });
-        self
     }
 
     pub fn section(mut self, title: &'a str, entries: Vec<ClusterEntry<'a>>) -> Self {
@@ -317,7 +299,7 @@ impl<'s, 'a> ClusterSwitcher<'s, 'a> {
         self
     }
 
-    /// The sections narrowed to the query: name, provider or region.
+    /// The sections narrowed to the query: name or meta line.
     fn filtered(&self) -> Vec<(usize, Vec<usize>)> {
         let query = self.state.query.to_lowercase();
         self.sections
@@ -331,7 +313,9 @@ impl<'s, 'a> ClusterSwitcher<'s, 'a> {
                     .filter(|(_, entry)| {
                         query.is_empty()
                             || entry.name.to_lowercase().contains(&query)
-                            || entry.meta.to_lowercase().contains(&query)
+                            || entry
+                                .meta
+                                .is_some_and(|meta| meta.to_lowercase().contains(&query))
                     })
                     .map(|(index, _)| index)
                     .collect::<Vec<_>>();
@@ -389,7 +373,6 @@ impl<'s, 'a> ClusterSwitcher<'s, 'a> {
             .inner_margin(egui::Margin::same(size::CLUSTER_SWITCHER_PADDING as i8));
         let Self {
             state,
-            providers,
             sections,
             notice,
             width,
@@ -412,10 +395,9 @@ impl<'s, 'a> ClusterSwitcher<'s, 'a> {
                     action = Some(ClusterAction::Close);
                 }
                 ui.add_space(FILTER_TOP);
-                filter_row(
+                search_row(
                     ui,
                     state,
-                    &providers,
                     &contexts,
                     inner,
                     focus_search,
@@ -427,9 +409,7 @@ impl<'s, 'a> ClusterSwitcher<'s, 'a> {
                 // title, search, strip and footer stay.
                 let fixed_id = ui.id().with("cluster-switcher-fixed");
                 let seen_id = ui.id().with("cluster-switcher-highlight");
-                let fixed = ui
-                    .data(|data| data.get_temp::<f32>(fixed_id))
-                    .unwrap_or(FIXED_ESTIMATE);
+                let fixed = remembered_height(ui, fixed_id).unwrap_or(FIXED_ESTIMATE);
                 let room = ui.ctx().content_rect().height()
                     - MODAL_TOP
                     - MODAL_MARGIN
@@ -498,10 +478,7 @@ impl<'s, 'a> ClusterSwitcher<'s, 'a> {
                     .count();
                 footer(ui, notice, unreachable, inner);
                 let fixed_now = ui.min_rect().height() - scroll_height;
-                if (fixed_now - fixed).abs() > 0.5 {
-                    ui.data_mut(|data| data.insert_temp(fixed_id, fixed_now));
-                    ui.ctx().request_discard("cluster switcher height changed");
-                }
+                remember_height(ui, fixed_id, fixed_now, "cluster switcher height changed");
             });
         });
         action
@@ -636,41 +613,25 @@ fn title_row(ui: &mut Ui, contexts: &str) -> bool {
     Button::close("Close").show(&mut close).clicked()
 }
 
-/// The search pill and the provider chips.
-fn filter_row(
+/// The search pill.
+fn search_row(
     ui: &mut Ui,
     state: &mut ClusterSwitcherState,
-    providers: &[ProviderFilter<'_>],
     contexts: &str,
     width: f32,
     focus: bool,
     forced_focus: bool,
 ) {
-    let chips: Vec<ToggleButton> = providers
-        .iter()
-        .enumerate()
-        .map(|(index, provider)| {
-            ToggleButton::text(
-                format!("{} {}", provider.label, provider.count),
-                state.provider == index,
-            )
-        })
-        .collect();
-    // The chips' width from the previous pass: the search pill fills the rest.
-    let chips_id = ui.id().with("cluster-switcher-chips");
-    let chips_width = remembered_width(ui, chips_id).unwrap_or(0.0);
     let (rect, _) = ui.allocate_exact_size(vec2(width, size::TOP_BAR_CONTROL), Sense::hover());
     let mut row = ui.new_child(
         UiBuilder::new()
             .max_rect(rect)
             .layout(Layout::left_to_right(Align::Center)),
     );
-    row.spacing_mut().item_spacing = vec2(FILTER_GAP, 0.0);
-    let search_width = (width - chips_width - FILTER_GAP).max(0.0);
     let mut search = SearchField::pill(&mut state.query)
-        .width(search_width)
+        .width(width)
         .id_salt("cluster-switcher-search")
-        .placeholder("Find a cluster, provider or region")
+        .placeholder("Find a cluster")
         .accessibility_label("Find a cluster")
         .status(SearchStatus::Label(contexts.to_owned()))
         .request_focus(focus);
@@ -680,20 +641,6 @@ fn filter_row(
     if search.show(&mut row).changed {
         state.highlight = 0;
     }
-    let chips_left = row.cursor().left();
-    for (index, chip) in chips.into_iter().enumerate() {
-        if chip.show(&mut row).clicked() {
-            state.provider = index;
-            state.highlight = 0;
-        }
-    }
-    let measured = (row.min_rect().right() - chips_left).max(0.0);
-    remember_width(
-        ui,
-        chips_id,
-        measured,
-        "cluster switcher chips changed width",
-    );
 }
 
 /// "Pinned 2": the heading with its count on one baseline.
@@ -727,8 +674,7 @@ fn readout_strip(ui: &mut Ui, entry: &ClusterEntry<'_>, summary: &ClusterSummary
         .paint(ui, pos2(left + size::AVATAR / 2.0, center_y));
     left += size::AVATAR + STRIP_GAP;
 
-    let block = type_scale::UI.line_height() + STRIP_META_ROLE.line_height();
-    let top = center_y - block / 2.0;
+    let top = center_y - type_scale::UI.line_height() / 2.0;
     let name = NAME_ROLE.galley_elided(
         ui.ctx(),
         entry.name,
@@ -744,21 +690,6 @@ fn readout_strip(ui: &mut Ui, entry: &ClusterEntry<'_>, summary: &ClusterSummary
         name,
         entry.name,
         theme.text.primary,
-    );
-    let meta = STRIP_META_ROLE.galley_elided(
-        ui.ctx(),
-        summary.meta,
-        theme.text.muted,
-        size::CLUSTER_STRIP_NAME,
-        1,
-    );
-    type_scale::text_at(
-        ui,
-        id.with("meta"),
-        pos2(left, top + type_scale::UI.line_height()),
-        meta,
-        summary.meta,
-        theme.text.muted,
     );
     left += size::CLUSTER_STRIP_NAME + STRIP_GAP;
 

@@ -293,16 +293,18 @@ fn show_measured_state_area<R>(
     add_contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
     let id = ui.id().with(id_salt);
-    let measured = ui.ctx().data(|data| data.get_temp::<f32>(id));
-    let (result, height) = show_state_area(ui, measured.unwrap_or(estimate), |ui| {
-        let result = add_contents(ui);
-        (result, ui.min_rect().height())
-    });
-    if measured != Some(height) {
-        ui.ctx().data_mut(|data| data.insert_temp(id, height));
-        ui.ctx().request_repaint();
-    }
-    result
+    components::measured::with_measured_height(
+        ui,
+        id,
+        estimate,
+        "state area changed height",
+        |ui, height| {
+            show_state_area(ui, height, |ui| {
+                let result = add_contents(ui);
+                (result, ui.min_rect().height())
+            })
+        },
+    )
 }
 
 fn show_state_area<R>(

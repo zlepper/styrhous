@@ -319,6 +319,9 @@ pub(crate) fn show_editor(
         egui::Layout::centered_and_justified(egui::Direction::TopDown),
     ));
     let response = editor_ui.add(editor);
+    if response.has_focus() {
+        crate::interaction::note_text_focus(ui.ctx());
+    }
 
     let content = Rect::from_min_max(
         rect.min + vec2(spec.margin.leftf(), spec.margin.topf()),

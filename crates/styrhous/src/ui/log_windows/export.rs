@@ -111,6 +111,12 @@ fn file_name(path: &Path) -> String {
 impl PodLogWindowState {
     /// A file name describing what the window shows, unique per second.
     fn suggested_export_name(&self) -> String {
+        let now = crate::ui::clock::Zone::System.local(time::OffsetDateTime::now_utc());
+        self.export_name_at(now)
+    }
+
+    /// [`Self::suggested_export_name`] for the local time `now`.
+    pub(super) fn export_name_at(&self, now: time::OffsetDateTime) -> String {
         let source = match self.targets.as_slice() {
             [target] => format!("{}-{}", target.pod_name, target.container),
             targets => format!("interleaved-{}-sources", targets.len()),
@@ -120,7 +126,6 @@ impl PodLogWindowState {
         } else {
             ""
         };
-        let now = time::OffsetDateTime::now_utc();
         format!(
             "{source}{previous}-{:04}{:02}{:02}-{:02}{:02}{:02}.log",
             now.year(),

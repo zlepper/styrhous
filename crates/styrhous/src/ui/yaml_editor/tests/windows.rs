@@ -653,3 +653,18 @@ fn yaml_editor_gutter_snapshots_with_three_and_four_digit_line_numbers() {
         );
     }
 }
+
+#[test]
+fn escape_leaves_the_find_field_but_keeps_its_text_and_the_bar() {
+    let mut harness = editor_harness(editor("kind: ConfigMap\nmetadata:\n  name: map-config"));
+    harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::F);
+    harness.step();
+    harness.event(egui::Event::Text("map".into()));
+    harness.step();
+    assert!(harness.get_by_label("Search YAML").is_focused());
+
+    harness.key_press(egui::Key::Escape);
+    harness.run();
+    assert!(!harness.get_by_label("Search YAML").is_focused());
+    assert_eq!(harness.state().editor.search.query, "map");
+}

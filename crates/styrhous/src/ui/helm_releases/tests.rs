@@ -127,14 +127,24 @@ fn manifest_inventory_survives_consecutive_unknown_aliases_between_valid_documen
 
 #[test]
 fn helm_timestamps_read_as_the_design_prints_them() {
-    assert_eq!(super::helm_time("2026-08-15T12:00:00Z", false), "15 Aug");
+    let utc = crate::ui::clock::Zone::Fixed(time::UtcOffset::UTC);
+    let east = crate::ui::clock::Zone::Fixed(time::UtcOffset::from_hms(2, 0, 0).unwrap());
     assert_eq!(
-        super::helm_time("2026-08-01T12:00:00Z", true),
+        super::helm_time("2026-08-15T12:00:00Z", false, utc),
+        "15 Aug"
+    );
+    assert_eq!(
+        super::helm_time("2026-08-01T12:00:00Z", true, utc),
         "1 Aug 2026, 12:00"
     );
+    // Local time moves the day with the clock.
+    assert_eq!(
+        super::helm_time("2026-08-01T23:30:00Z", true, east),
+        "2 Aug 2026, 01:30"
+    );
     // Whatever Helm recorded that is not a timestamp shows as it is.
-    assert_eq!(super::helm_time("yesterday", true), "yesterday");
-    assert_eq!(super::helm_time("", false), "");
+    assert_eq!(super::helm_time("yesterday", true, utc), "yesterday");
+    assert_eq!(super::helm_time("", false, utc), "");
 }
 
 #[test]

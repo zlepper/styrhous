@@ -121,7 +121,10 @@ pub use selection::{
     BoxLook, CheckState, Checkbox, Radio, RadioCard, RadioCardResponse, Switch, paint_box,
     paint_checkbox, paint_radio, paint_switch,
 };
-pub use sidebar::{ClusterCard, FloatingSidebar, SideItem, kind_filter, side_caption, side_footer};
+pub use sidebar::{
+    ClusterCard, FloatingSidebar, SideItem, kind_filter, kind_filter_with_key, side_caption,
+    side_footer,
+};
 pub use status::{StatusLabel, container_square, paint_status_dot, status_dot};
 pub use table::{
     BulkSelectionBar, BulkSelectionResponse, CellAlign, ColumnVisibilityResponse, HeaderState,
@@ -225,7 +228,7 @@ pub mod cluster_switcher;
 
 pub use cluster_switcher::{
     ClusterAction, ClusterEntry, ClusterSection, ClusterSummary, ClusterSwitcher,
-    ClusterSwitcherState, ClusterTarget, ClusterTile, ProviderFilter,
+    ClusterSwitcherState, ClusterTarget, ClusterTile,
 };
 
 // A09

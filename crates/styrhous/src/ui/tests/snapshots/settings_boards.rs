@@ -444,3 +444,52 @@ fn context_colour_is_picked_saved_and_cleared_by_picking_it_again() {
     assert_eq!(command.context_name, "prod-eu");
     assert_eq!(command.presentation.colour, Some(4));
 }
+
+/// "Today" is the calendar day of the user's time zone: at 00:30 at +02:00,
+/// an outcome from 00:10 is today and one from 23:50 is from yesterday, though
+/// in UTC they fall on the same day as now.
+#[test]
+fn notifications_group_by_the_local_calendar_day() {
+    let east = time::UtcOffset::from_hms(2, 0, 0).unwrap();
+    // 2026-06-01 22:30 UTC is 00:30 on the 2nd at +02:00.
+    let now =
+        design_now().date().midnight().assume_utc() + Duration::hours(22) + Duration::minutes(30);
+    let scale = |harness: &mut AppHarness, minutes_ago: i64, replicas: i32| {
+        harness.state_mut().ui_state.clock =
+            WallClock::Fixed((now - Duration::minutes(minutes_ago)).to_offset(east));
+        harness.deliver_worker_result(ResourceScaleUpdated {
+            cluster_key: KIND_KIND,
+            api_resource: ApiResource {
+                group: "apps".into(),
+                version: "v1".into(),
+                kind: "Deployment".into(),
+                name: "deployments".into(),
+                namespaced: true,
+            },
+            namespace: Some(KUBE_SYSTEM.into()),
+            resource_name: "coredns".into(),
+            replicas,
+        });
+    };
+
+    let mut local = design_harness(BOARD_SIZE);
+    scale(&mut local, 40, 2);
+    scale(&mut local, 20, 4);
+    local.state_mut().ui_state.clock = WallClock::Fixed(now.to_offset(east));
+    local.run();
+    open_notifications(&mut local);
+    settle_blades(&mut local);
+    local.get_by_label("TODAY");
+    local.get_by_label("EARLIER");
+
+    // The same instants read in UTC are all one day.
+    let mut utc = design_harness(BOARD_SIZE);
+    scale(&mut utc, 40, 2);
+    scale(&mut utc, 20, 4);
+    utc.state_mut().ui_state.clock = WallClock::Fixed(now);
+    utc.run();
+    open_notifications(&mut utc);
+    settle_blades(&mut utc);
+    utc.get_by_label("TODAY");
+    assert!(utc.query_by_label("EARLIER").is_none());
+}

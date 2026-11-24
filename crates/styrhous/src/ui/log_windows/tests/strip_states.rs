@@ -18,7 +18,7 @@ fn summary(errors: usize, warnings: usize, span_seconds: Option<u64>) -> Option<
     }))
 }
 
-fn utc_times() -> LogDisplayOptions {
+fn times_shown() -> LogDisplayOptions {
     LogDisplayOptions {
         show_timestamps: true,
         ..LogDisplayOptions::default()
@@ -69,22 +69,22 @@ fn the_strip_meta_names_the_match_the_backfill_and_the_time_zone() {
     let mut window = log_window(&["one"]);
     assert_eq!(strip_meta(&window, &LogDisplayOptions::default()), None);
     assert_eq!(
-        strip_meta(&window, &utc_times()).as_deref(),
-        Some("UTC"),
-        "times are UTC"
+        strip_meta(&window, &times_shown()).as_deref(),
+        Some("local time"),
+        "times are local"
     );
 
     window.search.query = "one".to_owned();
     window.search.search_complete = true;
     window.search.match_count = 23;
     assert_eq!(
-        strip_meta(&window, &utc_times()).as_deref(),
-        Some("23 matches · UTC")
+        strip_meta(&window, &times_shown()).as_deref(),
+        Some("23 matches · local time")
     );
     window.search.active_match = Some(6);
     assert_eq!(
-        strip_meta(&window, &utc_times()).as_deref(),
-        Some("7 of 23 matches · UTC")
+        strip_meta(&window, &times_shown()).as_deref(),
+        Some("7 of 23 matches · local time")
     );
     window.search.error = Some("bad pattern".to_owned());
     assert_eq!(strip_meta(&window, &LogDisplayOptions::default()), None);
@@ -97,12 +97,12 @@ fn the_strip_meta_names_the_match_the_backfill_and_the_time_zone() {
 
     window.backfill_lines = Some(1_250_000);
     assert_eq!(
-        strip_meta(&window, &utc_times()).as_deref(),
-        Some("7 of 23 matches · backfill 1.2M · UTC")
+        strip_meta(&window, &times_shown()).as_deref(),
+        Some("7 of 23 matches · backfill 1.2M · local time")
     );
 
     assert_eq!(
-        strip_meta(&log_window(&[]), &utc_times()),
+        strip_meta(&log_window(&[]), &times_shown()),
         None,
         "an empty log has nothing to say"
     );

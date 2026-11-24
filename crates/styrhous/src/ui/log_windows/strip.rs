@@ -87,7 +87,7 @@ pub(super) fn strip_meta(
         ));
     }
     if display_options.show_timestamps {
-        parts.push("UTC".to_owned());
+        parts.push("local time".to_owned());
     }
     (!parts.is_empty()).then(|| parts.join(" · "))
 }

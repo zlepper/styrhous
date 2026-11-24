@@ -288,3 +288,32 @@ mod tests {
         assert_eq!(render_button(false).cursor_icon, CursorIcon::Default);
     }
 }
+
+/// The frame in which a text field last held the keyboard focus.
+#[derive(Clone, Copy)]
+struct TextFocusFrame(u64);
+
+/// Where a viewport's [`TextFocusFrame`] is kept: frame numbers count per
+/// viewport, so each keeps its own.
+fn text_focus_id(ctx: &egui::Context) -> egui::Id {
+    egui::Id::new(("text-focus-frame", ctx.viewport_id()))
+}
+
+/// Record that a text field has the focus in this frame, so that
+/// [`escape_left_text_field`] can tell what an Esc press left.
+pub(crate) fn note_text_focus(ctx: &egui::Context) {
+    let frame = TextFocusFrame(ctx.cumulative_frame_nr());
+    let id = text_focus_id(ctx);
+    ctx.data_mut(|data| data.insert_temp(id, frame));
+}
+
+/// Whether Esc is pressed in this frame and a text field had the focus in the
+/// one before: egui drops the focus on Esc before any widget runs, so that
+/// press only left the field and must not also cancel what holds the field.
+pub fn escape_left_text_field(ctx: &egui::Context) -> bool {
+    let id = text_focus_id(ctx);
+    ctx.input(|input| input.key_pressed(egui::Key::Escape))
+        && ctx
+            .data(|data| data.get_temp::<TextFocusFrame>(id))
+            .is_some_and(|frame| frame.0 + 1 >= ctx.cumulative_frame_nr())
+}

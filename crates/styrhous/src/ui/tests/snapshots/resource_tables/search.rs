@@ -196,3 +196,107 @@ fn the_resource_search_is_disabled_until_a_resource_is_selected() {
     assert!(search.accesskit_node().is_disabled());
     assert!(!search.is_focused());
 }
+
+/// A blade, a log window or a YAML window in front of the list owns the
+/// keyboard, so `/` does not reach the list's search pill behind it.
+#[test]
+fn slash_does_nothing_while_a_blade_or_window_is_in_front() {
+    let pods = fixture_api_resource("core", "Pod", "pods");
+    type Open = fn(&mut UiState, &egui::Context);
+    let opened: [(&str, Open); 3] = [
+        ("a blade", |state, _| {
+            let pods = fixture_api_resource("core", "Pod", "pods");
+            state.open_resource_detail(
+                2,
+                pods,
+                "coredns-66bc5c9577-ffw2s".into(),
+                Some("kube-system".into()),
+                "coredns-uid".into(),
+                &mut Vec::new(),
+            );
+        }),
+        ("a log window", |state, _| {
+            state.open_pod_log_window(
+                2,
+                "coredns-66bc5c9577-ffw2s".into(),
+                Some("kube-system".into()),
+                PodLogContainer {
+                    name: "coredns".into(),
+                    kind: ContainerKind::App,
+                    image: None,
+                },
+                &mut Vec::new(),
+            );
+        }),
+        ("a YAML window", |state, ctx| {
+            state.open_yaml_editor(
+                ctx,
+                2,
+                fixture_api_resource("core", "Pod", "pods"),
+                Some("kube-system".into()),
+                "coredns-66bc5c9577-ffw2s".into(),
+                &mut Vec::new(),
+            );
+        }),
+    ];
+    for (surface, open) in opened {
+        let mut harness = application_harness::<MockWorker>();
+        harness.state_mut().ui_state = oracle_resource_table_state();
+        harness.run();
+        let ctx = harness.ctx.clone();
+        open(&mut harness.state_mut().ui_state, &ctx);
+        harness.run();
+
+        press_slash(&mut harness);
+        harness.run();
+        assert!(
+            !harness.get_by_label("Search resources").is_focused(),
+            "`/` focused the search behind {surface}"
+        );
+        assert_eq!(
+            harness.state().ui_state.clusters[&2]
+                .resource_searches
+                .get(&pods)
+                .map_or("", |search| search.query.as_str()),
+            "",
+            "`/` was typed into the search behind {surface}"
+        );
+
+        // Closing the surface gives `/` back to the list.
+        let ui_state = &mut harness.state_mut().ui_state;
+        let _ = ui_state.global_blades.clear();
+        ui_state.log_windows.clear();
+        ui_state.yaml_editors.clear();
+        harness.run();
+        press_slash(&mut harness);
+        assert!(
+            harness.get_by_label("Search resources").is_focused(),
+            "`/` stays dead after {surface} closed"
+        );
+    }
+}
+
+/// Esc in the list's search only leaves the field: the query stays and the
+/// rows stay filtered.
+#[test]
+fn escape_leaves_the_resource_search_without_clearing_it() {
+    let pods = fixture_api_resource("core", "Pod", "pods");
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness.run();
+    harness.get_by_label("Search resources").click();
+    harness.run();
+    harness.event(egui::Event::Text("c66z".into()));
+    harness.run();
+    harness.get_by_label("7 resources hidden by search");
+
+    harness.key_press(egui::Key::Escape);
+    harness.run();
+    harness.run();
+    assert!(!harness.get_by_label("Search resources").is_focused());
+    assert_eq!(
+        harness.state().ui_state.clusters[&2].resource_searches[&pods].query,
+        "c66z"
+    );
+    harness.get_by_label("7 resources hidden by search");
+}
