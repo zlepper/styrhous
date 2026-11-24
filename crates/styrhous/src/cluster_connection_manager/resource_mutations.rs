@@ -245,7 +245,7 @@ pub(crate) async fn apply_resource_yaml(
             }
         })
         .await?;
-    let error = match replacement {
+    let (error, current_resource_version) = match replacement {
         resource_yaml::EditorReplacement::Sent(mut updated) => {
             let (yaml, resource_version, resource_uid) = resource_yaml::editor_yaml(&mut updated)?;
             return Ok(Ok(ResourceApplyCompleted {
@@ -259,8 +259,13 @@ pub(crate) async fn apply_resource_yaml(
                 resource_uid,
             }));
         }
-        resource_yaml::EditorReplacement::Conflict => resource_version_conflict_error(),
-        resource_yaml::EditorReplacement::Rejected(status) => resource_api_error(&status),
+        resource_yaml::EditorReplacement::Conflict {
+            current_resource_version,
+        } => (
+            resource_version_conflict_error(),
+            Some(current_resource_version),
+        ),
+        resource_yaml::EditorReplacement::Rejected(status) => (resource_api_error(&status), None),
     };
     Ok(Err(ResourceApplyFailed {
         editor_id,
@@ -269,6 +274,7 @@ pub(crate) async fn apply_resource_yaml(
         namespace,
         resource_name,
         error,
+        current_resource_version,
     }))
 }
 

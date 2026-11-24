@@ -26,28 +26,24 @@ Window state=[focused] rect=<none>
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="YAML" rect=(x=1480.2 y=995.5 width=31.8 height=16.0 center_x=1496.1 center_y=1003.5)
-                TextRun value="YAML" rect=(x=1480.2 y=995.5 width=31.8 height=16.0 center_x=1496.1 center_y=1003.5)
+              Label value="YAML" rect=(x=1430.4 y=994.5 width=31.8 height=16.0 center_x=1446.2 center_y=1002.5)
+                TextRun value="YAML" rect=(x=1430.4 y=994.5 width=31.8 height=16.0 center_x=1446.2 center_y=1002.5)
+              Label value="UTF-8" rect=(x=1478.1 y=994.5 width=33.9 height=16.0 center_x=1495.1 center_y=1002.5)
+                TextRun value="UTF-8" rect=(x=1478.1 y=994.5 width=33.9 height=16.0 center_x=1495.1 center_y=1002.5)
             GenericContainer rect=<none>
-              Label value="Changes apply directly to the cluster" rect=(x=54.0 y=995.5 width=197.6 height=16.0 center_x=152.8 center_y=1003.5)
-                TextRun value="Changes apply directly to the cluster" rect=(x=54.0 y=995.5 width=197.6 height=16.0 center_x=152.8 center_y=1003.5)
+              Label value="Changes apply directly to the cluster" rect=(x=54.0 y=994.5 width=197.6 height=16.0 center_x=152.8 center_y=1002.5)
+                TextRun value="Changes apply directly to the cluster" rect=(x=54.0 y=994.5 width=197.6 height=16.0 center_x=152.8 center_y=1002.5)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Label value="1\n2\n3\n4\n5\n6" rect=(x=24.0 y=130.0 width=7.8 height=102.0 center_x=27.9 center_y=181.0)
-                      TextRun value="1\n" rect=(x=24.0 y=130.0 width=7.8 height=17.0 center_x=27.9 center_y=138.5)
-                      TextRun value="2\n" rect=(x=24.0 y=147.0 width=7.8 height=17.0 center_x=27.9 center_y=155.5)
-                      TextRun value="3\n" rect=(x=24.0 y=164.0 width=7.8 height=17.0 center_x=27.9 center_y=172.5)
-                      TextRun value="4\n" rect=(x=24.0 y=181.0 width=7.8 height=17.0 center_x=27.9 center_y=189.5)
-                      TextRun value="5\n" rect=(x=24.0 y=198.0 width=7.8 height=17.0 center_x=27.9 center_y=206.5)
-                      TextRun value="6" rect=(x=24.0 y=215.0 width=7.8 height=17.0 center_x=27.9 center_y=223.5)
-                  MultilineTextInput name="Kubernetes resource manifest" value="apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: settings\ndata:\n  mode: development" rect=(x=82.0 y=128.0 width=1430.0 height=106.0 center_x=797.0 center_y=181.0)
-                    TextRun value="apiVersion: v1\n" rect=(x=86.0 y=130.0 width=109.2 height=17.0 center_x=140.6 center_y=138.5)
-                    TextRun value="kind: ConfigMap\n" rect=(x=86.0 y=147.0 width=117.0 height=17.0 center_x=144.5 center_y=155.5)
-                    TextRun value="metadata:\n" rect=(x=86.0 y=164.0 width=70.2 height=17.0 center_x=121.1 center_y=172.5)
-                    TextRun value="  name: settings\n" rect=(x=86.0 y=181.0 width=124.8 height=17.0 center_x=148.4 center_y=189.5)
-                    TextRun value="data:\n" rect=(x=86.0 y=198.0 width=39.0 height=17.0 center_x=105.5 center_y=206.5)
-                    TextRun value="  mode: development" rect=(x=86.0 y=215.0 width=148.2 height=17.0 center_x=160.1 center_y=223.5)
+                    Label value="1\n2\n3\n4\n5\n6" rect=(x=40.0 y=125.0 width=8.0 height=120.0 center_x=44.0 center_y=185.0)
+                  MultilineTextInput name="Kubernetes resource manifest" value="apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: settings\ndata:\n  mode: development" rect=(x=64.0 y=125.0 width=1464.0 height=120.0 center_x=796.0 center_y=185.0)
+                    TextRun value="apiVersion: v1\n" rect=(x=64.0 y=125.0 width=109.2 height=20.0 center_x=118.6 center_y=135.0)
+                    TextRun value="kind: ConfigMap\n" rect=(x=64.0 y=145.0 width=117.0 height=20.0 center_x=122.5 center_y=155.0)
+                    TextRun value="metadata:\n" rect=(x=64.0 y=165.0 width=70.2 height=20.0 center_x=99.1 center_y=175.0)
+                    TextRun value="  name: settings\n" rect=(x=64.0 y=185.0 width=124.8 height=20.0 center_x=126.4 center_y=195.0)
+                    TextRun value="data:\n" rect=(x=64.0 y=205.0 width=39.0 height=20.0 center_x=83.5 center_y=215.0)
+                    TextRun value="  mode: development" rect=(x=64.0 y=225.0 width=148.2 height=20.0 center_x=138.1 center_y=235.0)

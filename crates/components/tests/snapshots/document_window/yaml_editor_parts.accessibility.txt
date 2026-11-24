@@ -1,0 +1,47 @@
+viewport: width=560.0 height=330.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Label value="Valid" rect=<none>
+            TextRun value="Valid" rect=(x=323.3 y=14.5 width=26.4 height=16.0 center_x=336.5 center_y=22.5)
+          Label value="Ln 12, Col 19" rect=(x=365.7 y=14.5 width=72.7 height=16.0 center_x=402.0 center_y=22.5)
+            TextRun value="Ln 12, Col 19" rect=(x=365.7 y=14.5 width=72.7 height=16.0 center_x=402.0 center_y=22.5)
+          Label value="YAML" rect=(x=454.4 y=14.5 width=31.8 height=16.0 center_x=470.2 center_y=22.5)
+            TextRun value="YAML" rect=(x=454.4 y=14.5 width=31.8 height=16.0 center_x=470.2 center_y=22.5)
+          Label value="UTF-8" rect=(x=502.1 y=14.5 width=33.9 height=16.0 center_x=519.1 center_y=22.5)
+            TextRun value="UTF-8" rect=(x=502.1 y=14.5 width=33.9 height=16.0 center_x=519.1 center_y=22.5)
+        GenericContainer rect=<none>
+          Label value="Changes apply directly to the cluster" rect=(x=24.0 y=14.5 width=197.6 height=16.0 center_x=122.8 center_y=22.5)
+            TextRun value="Changes apply directly to the cluster" rect=(x=24.0 y=14.5 width=197.6 height=16.0 center_x=122.8 center_y=22.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="enum" rect=(x=20.0 y=56.0 width=46.0 height=20.0 center_x=43.0 center_y=66.0)
+                TextRun value="enum" rect=(x=29.0 y=58.0 width=28.0 height=16.0 center_x=43.0 center_y=66.0)
+              Label value="IfNotPresent" rect=(x=74.0 y=56.0 width=86.4 height=20.0 center_x=117.2 center_y=66.0)
+                TextRun value="IfNotPresent" rect=(x=74.0 y=56.0 width=86.4 height=20.0 center_x=117.2 center_y=66.0)
+            Label value="Pull the image only if it isn’t already present on the node. Default when the tag isn’t latest." rect=(x=20.0 y=82.0 width=235.0 height=48.0 center_x=137.5 center_y=106.0)
+              TextRun value="Pull the image only if it isn’t already present " rect=(x=20.0 y=82.0 width=235.0 height=16.0 center_x=137.5 center_y=90.0)
+              TextRun value="on the node. Default when the tag isn’t " rect=(x=20.0 y=98.0 width=210.0 height=16.0 center_x=125.0 center_y=106.0)
+              TextRun value="latest." rect=(x=20.0 y=114.0 width=42.5 height=16.0 center_x=41.2 center_y=122.0)
+        Button name="Problems 2" state=[toggled=True] rect=(x=8.0 y=150.0 width=492.0 height=32.0 center_x=254.0 center_y=166.0)
+        GenericContainer rect=<none>
+          Label value="Problems" rect=(x=46.0 y=157.5 width=50.9 height=16.0 center_x=71.5 center_y=165.5)
+            TextRun value="Problems" rect=(x=46.0 y=157.5 width=50.9 height=16.0 center_x=71.5 center_y=165.5)
+          GenericContainer rect=<none>
+            Button name="Collapse" rect=(x=508.0 y=151.5 width=28.0 height=28.0 center_x=522.0 center_y=165.5)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Button name="Ln 7 spec.replicas: expected integer, got string “three”" rect=(x=8.0 y=182.0 width=544.0 height=28.0 center_x=280.0 center_y=196.0)
+                Label value="Ln 7" rect=(x=46.0 y=186.0 width=28.8 height=20.0 center_x=60.4 center_y=196.0)
+                  TextRun value="Ln 7" rect=(x=46.0 y=186.0 width=28.8 height=20.0 center_x=60.4 center_y=196.0)
+                Label value="spec.replicas: expected integer, got string “three”" rect=(x=102.0 y=188.0 width=264.3 height=16.0 center_x=234.1 center_y=196.0)
+                  TextRun value="spec.replicas: expected integer, got string “three”" rect=(x=102.0 y=188.0 width=264.3 height=16.0 center_x=234.1 center_y=196.0)
+              Button name="Ln 19 imagePullPolicy: “If” is not one of Always, IfNotPresent, Never" rect=(x=8.0 y=210.0 width=544.0 height=28.0 center_x=280.0 center_y=224.0)
+                Label value="Ln 19" rect=(x=46.0 y=214.0 width=36.0 height=20.0 center_x=64.0 center_y=224.0)
+                  TextRun value="Ln 19" rect=(x=46.0 y=214.0 width=36.0 height=20.0 center_x=64.0 center_y=224.0)
+                Label value="imagePullPolicy: “If” is not one of Always, IfNotPresent, Never" rect=(x=102.0 y=216.0 width=329.1 height=16.0 center_x=266.5 center_y=224.0)
+                  TextRun value="imagePullPolicy: “If” is not one of Always, IfNotPresent, Never" rect=(x=102.0 y=216.0 width=329.1 height=16.0 center_x=266.5 center_y=224.0)

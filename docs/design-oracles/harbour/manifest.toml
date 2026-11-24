@@ -521,16 +521,16 @@ snapshot = ""
 id = "Y01"
 title = "YAML editor — modified, searching"
 oracle = "docs/design-oracles/harbour/Y01.png"
-snapshot = ""
+snapshot = "crates/styrhous/tests/snapshots/boards/y01_editor_modified_searching.png"
 
 [[board]]
 id = "Y02"
 title = "YAML editor — completion and problems"
 oracle = "docs/design-oracles/harbour/Y02.png"
-snapshot = ""
+snapshot = "crates/styrhous/tests/snapshots/boards/y02_editor_completion_problems.png"
 
 [[board]]
 id = "Y03"
 title = "YAML editor — apply conflict and discard dialog"
 oracle = "docs/design-oracles/harbour/Y03.png"
-snapshot = ""
+snapshot = "crates/styrhous/tests/snapshots/boards/y03_editor_conflict_discard.png"

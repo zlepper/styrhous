@@ -418,6 +418,34 @@ pub fn status_icon(ui: &mut Ui, icon: Icon) -> Response {
     response
 }
 
+/// A status bar item that reports success: a check in `success-fill` before muted
+/// words ("Valid").
+pub fn status_ok(ui: &mut Ui, text: &str) -> Response {
+    let theme = ui.tokens();
+    let galley = STATUS_TEXT.galley(ui.ctx(), text, theme.text.muted, f32::INFINITY);
+    let size = vec2(
+        size::ICON_SM + PROBLEMS_GAP + galley.rect.width(),
+        galley.rect.height(),
+    );
+    let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
+    if ui.is_rect_visible(rect) {
+        let icon = Rect::from_min_size(
+            pos2(rect.left(), rect.center().y - size::ICON_SM / 2.0),
+            Vec2::splat(size::ICON_SM),
+        );
+        Icon::CheckCircle.paint(ui, icon, theme.success.fill);
+    }
+    type_scale::paint_text_as(
+        ui,
+        &response,
+        pos2(rect.left() + size::ICON_SM + PROBLEMS_GAP, rect.top()),
+        galley,
+        theme.text.muted,
+        egui::accesskit::Role::Label,
+    );
+    response
+}
+
 /// The problems count of the status bar, in `danger-text` with its icon.
 /// Clicking it toggles the Problems panel.
 pub fn problems_toggle(ui: &mut Ui, count: usize) -> Response {

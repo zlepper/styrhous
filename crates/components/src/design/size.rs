@@ -324,6 +324,8 @@ pub const SQUIGGLE_OFFSET: f32 = 6.5;
 pub const COMPLETION_WIDTH: f32 = 264.0;
 /// The completion documentation popover beside it.
 pub const COMPLETION_DOC_WIDTH: f32 = 216.0;
+/// The documentation popover beside the YAML editor's completion (Y02).
+pub const COMPLETION_DOC_WIDTH_EDITOR: f32 = 260.0;
 /// Gap between the completion popover and its documentation popover.
 pub const COMPLETION_DOC_GAP: f32 = 8.0;
 /// A completion option row.
@@ -338,6 +340,10 @@ pub const PROBLEMS_ROW: f32 = 28.0;
 pub const PROBLEMS_MAX_HEIGHT: f32 = 160.0;
 /// The "Ln n" column of a Problems row.
 pub const PROBLEMS_LINE_COLUMN: f32 = 44.0;
+/// The YAML editor's Problems panel is roomier (Y02): its horizontal padding.
+pub const PROBLEMS_PADDING_EDITOR: f32 = 16.0;
+/// The width of the "Ln n" column of the YAML editor's Problems panel.
+pub const PROBLEMS_LINE_COLUMN_EDITOR: f32 = 48.0;
 
 /// The width Chromium paints a CSS `border` of `width` points at
 /// `pixels_per_point`: border widths are snapped down to whole device pixels

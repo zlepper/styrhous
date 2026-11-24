@@ -150,7 +150,7 @@ pub mod empty_state;
 pub mod mini_button;
 pub mod toast;
 
-pub use banner::{Banner, BannerResponse};
+pub use banner::{Banner, BannerButton, BannerResponse};
 pub use empty_state::{EMPTY_STATE_MAX_WIDTH, EmptyState};
 pub use mini_button::{MINI_BUTTON, MiniButton};
 pub use toast::{
@@ -170,7 +170,7 @@ pub use usage_chart::{UsageChart, UsageResource};
 // C14
 pub use window_chrome::{
     StatusBar, Toolbar, WindowHeader, WindowHeaderResponse, problems_toggle, status_icon,
-    status_number, status_text, toolbar_activity, toolbar_divider,
+    status_number, status_ok, status_text, toolbar_activity, toolbar_divider,
 };
 
 // C15

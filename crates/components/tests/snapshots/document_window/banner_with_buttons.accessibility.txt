@@ -1,0 +1,26 @@
+viewport: width=640.0 height=120.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        Status name="This ConfigMap changed on the cluster after you opened it (resource version 1834 → 1902). Your edits can’t be applied." rect=<none>
+          GenericContainer rect=<none>
+            Button name="Discard and reload" rect=(x=490.7 y=11.5 width=125.3 height=28.0 center_x=553.4 center_y=25.5)
+            Button name="Copy my edits" rect=(x=357.8 y=11.5 width=123.0 height=28.0 center_x=419.2 center_y=25.5)
+          GenericContainer rect=<none>
+            Label value="This ConfigMap changed on the cluster after you opened it (resource version 1834 → 1902). Your edits can’t be applied." rect=(x=50.0 y=16.0 width=295.0 height=20.0 center_x=197.5 center_y=26.0)
+              TextRun value="This ConfigMap changed on the cluster after you …" rect=(x=50.0 y=16.0 width=295.0 height=20.0 center_x=197.5 center_y=26.0)
+        Status name="Your edits can’t be applied." rect=<none>
+          GenericContainer rect=<none>
+            Button name="Discard and reload" rect=(x=490.7 y=47.5 width=125.3 height=28.0 center_x=553.4 center_y=61.5)
+            Button name="Copy my edits" rect=(x=357.8 y=47.5 width=123.0 height=28.0 center_x=419.2 center_y=61.5)
+          GenericContainer rect=<none>
+            Label value="Your edits can’t be applied." rect=(x=50.0 y=52.0 width=156.0 height=20.0 center_x=128.0 center_y=62.0)
+              TextRun value="Your edits can’t be applied." rect=(x=50.0 y=52.0 width=156.0 height=20.0 center_x=128.0 center_y=62.0)
+        Status name="Short message" rect=<none>
+          GenericContainer rect=<none>
+            Button name="Discard and reload" rect=(x=456.7 y=83.5 width=125.3 height=28.0 center_x=519.4 center_y=97.5)
+          GenericContainer rect=<none>
+            Label value="Short message" rect=(x=50.0 y=88.0 width=86.9 height=20.0 center_x=93.5 center_y=98.0)
+              TextRun value="Short message" rect=(x=50.0 y=88.0 width=86.9 height=20.0 center_x=93.5 center_y=98.0)
+          Button name="Dismiss" rect=(x=592.0 y=85.5 width=24.0 height=24.0 center_x=604.0 center_y=97.5)

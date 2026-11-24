@@ -50,6 +50,7 @@ pub(super) fn show_code_editor(
 
     let theme = ui.tokens();
     let line_count = editor.edited_yaml.lines().count().max(1);
+    let gutter = components::CodeSurface::gutter_width(ui, line_count);
     let mut changed = false;
     let mut cursor_byte = None;
     let mut text_edit_id = None;
@@ -74,18 +75,25 @@ pub(super) fn show_code_editor(
         .id_salt(("yaml-editor-scroll", editor.id))
         .auto_shrink([false, false])
         .show(ui, |ui| {
+            ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
+            // egui's glyphs sit at the top of their rows; the shift puts them where CSS does.
+            let row_shift = type_scale::MONO.row_shift(ui.ctx());
+            ui.add_space(size::CODE_PADDING_TOP + row_shift);
+            // Painted once the caret's row is known, but behind the text.
+            let line_highlight = ui.painter().add(egui::Shape::Noop);
+            // The rule scrolls with the line numbers; it spans the visible height.
+            let rule_x =
+                ui.min_rect().left() + gutter - (size::CODE_GUTTER - size::CODE_GUTTER_RULE);
+            ui.painter().add(egui::Shape::rect_filled(
+                egui::Rect::from_x_y_ranges(
+                    rule_x..=rule_x + size::HAIRLINE,
+                    ui.clip_rect().y_range(),
+                ),
+                0,
+                theme.code.divider,
+            ));
             ui.horizontal_top(|ui| {
-                ui.vertical(|ui| {
-                    ui.set_min_width(36.0);
-                    ui.add_space(2.0);
-                    ui.label(line_number_layout_job(
-                        ui.ctx(),
-                        line_count,
-                        &editor.diagnostics,
-                        &theme,
-                    ));
-                });
-                ui.separator();
+                show_line_numbers(ui, line_count, &editor.diagnostics, &theme, gutter);
                 let mut layouter =
                     |ui: &egui::Ui, buffer: &dyn egui::TextBuffer, wrap_width: f32| {
                         let mut layout_job = yaml_editor_layout_job(
@@ -106,9 +114,9 @@ pub(super) fn show_code_editor(
                     .id(yaml_editor_text_edit_id(editor.id))
                     .font(type_scale::MONO.font_id(ui.ctx()))
                     .code_editor()
-                    .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(4, 2)))
+                    .frame(egui::Frame::new())
                     .text_color(theme.code.text)
-                    .background_color(theme.code.surface)
+                    .background_color(egui::Color32::TRANSPARENT)
                     .desired_width(f32::INFINITY)
                     .desired_rows(line_count)
                     .layouter(&mut layouter)
@@ -121,19 +129,28 @@ pub(super) fn show_code_editor(
                 cursor_byte = output
                     .cursor_range
                     .map(|range| byte_index(&editor.edited_yaml, range.primary.index.into()));
-                caret_rect = output.cursor_range.map(|range| {
-                    egui::text_selection::text_cursor_state::cursor_rect(
-                        &output.galley,
-                        &range.primary,
-                        output
-                            .galley
-                            .rows
-                            .first()
-                            .map_or(type_scale::MONO.size(), |row| row.rect().height()),
-                    )
-                    .translate(output.galley_pos.to_vec2())
-                });
                 text_edit_id = Some(output.response.id);
+                // The caret's line stays highlighted while a dialog has the focus.
+                let caret = output
+                    .cursor_range
+                    .or_else(|| output.state.cursor.range(&output.galley));
+                if let Some(range) = caret {
+                    let row = output.galley.pos_from_cursor(range.primary);
+                    let row =
+                        row.translate(output.galley_pos.to_vec2() - egui::vec2(0.0, row_shift));
+                    caret_rect = Some(egui::Rect::from_min_size(
+                        row.left_top() + egui::vec2(0.0, size::CODE_CARET_INSET),
+                        size::CODE_CARET,
+                    ));
+                    let highlight = egui::Rect::from_x_y_ranges(
+                        ui.clip_rect().x_range(),
+                        row.top()..=row.top() + type_scale::MONO.line_height(),
+                    );
+                    ui.painter().set(
+                        line_highlight,
+                        egui::Shape::rect_filled(highlight, 0, theme.code.line_highlight),
+                    );
+                }
                 show_diagnostic_underlines(
                     ui,
                     editor.id,

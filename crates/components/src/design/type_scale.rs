@@ -447,6 +447,13 @@ impl TextRole {
         ((line_height - ascent - descent) / 2.0 + ascent).floor() / pixels_per_point
     }
 
+    /// How far egui's glyphs must move down from the top of an egui row (whose height is
+    /// the line height) to sit where Chromium puts them in a line box, for text laid out
+    /// by egui itself (an editable [`egui::TextEdit`]) rather than with [`Self::galley`].
+    pub fn row_shift(&self, ctx: &Context) -> f32 {
+        self.half_leading_shift(ctx)
+    }
+
     /// How far egui's glyphs must move down from the top of an egui row
     /// ([`Self::text_format`] sets the row height to the line height) to sit
     /// on [`Self::css_baseline`].

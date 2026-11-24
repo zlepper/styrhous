@@ -2,6 +2,7 @@ use super::*;
 
 pub(super) fn refresh_local_validation(editor: &mut YamlEditorWindowState) {
     editor.validation_revision += 1;
+    editor.revalidate = false;
     editor.validation_due = None;
     editor.server_validation = ValidationState::Idle;
     editor.diagnostics.clear();
@@ -10,14 +11,14 @@ pub(super) fn refresh_local_validation(editor: &mut YamlEditorWindowState) {
             Ok(diagnostics) => {
                 editor.diagnostics = diagnostics;
                 if editor.diagnostics.is_empty() {
-                    editor.validation_due = Some(Instant::now() + VALIDATION_DEBOUNCE);
+                    editor.validation_due = Some(ValidationDue::Debounce);
                 }
             }
             Err(message) if message.starts_with("Unable to compile the Kubernetes schema:") => {
                 // A malformed or unsupported OpenAPI extension must not prevent the API server
                 // from validating the document. Treat the local schema as unavailable.
                 editor.server_validation = ValidationState::Failed(message);
-                editor.validation_due = Some(Instant::now() + VALIDATION_DEBOUNCE);
+                editor.validation_due = Some(ValidationDue::Debounce);
             }
             Err(message) => editor.diagnostics.push(YamlDiagnostic {
                 range: yaml_error_range(&editor.edited_yaml, &message),
@@ -27,7 +28,7 @@ pub(super) fn refresh_local_validation(editor: &mut YamlEditorWindowState) {
             }),
         },
         None => match serde_yaml::from_str::<serde_yaml::Value>(&editor.edited_yaml) {
-            Ok(_) => editor.validation_due = Some(Instant::now() + VALIDATION_DEBOUNCE),
+            Ok(_) => editor.validation_due = Some(ValidationDue::Debounce),
             Err(error) => editor.diagnostics.push(YamlDiagnostic {
                 range: error.location().and_then(|location| {
                     SourceRange::at_yaml_location(
@@ -59,13 +60,22 @@ pub(super) fn yaml_error_range(yaml: &str, message: &str) -> Option<SourceRange>
     SourceRange::at_yaml_location(yaml, line.parse().ok()?, column.parse().ok()?)
 }
 
+/// Start the debounce of an edit that armed it, from `now` (egui's frame time in seconds).
+pub(super) fn start_validation_debounce(editor: &mut YamlEditorWindowState, now: f64) {
+    if editor.validation_due == Some(ValidationDue::Debounce) {
+        editor.validation_due = Some(ValidationDue::At(now + VALIDATION_DEBOUNCE.as_secs_f64()));
+    }
+}
+
+/// Send the server validation once its debounce has elapsed at `now` (egui's frame time).
 pub(super) fn maybe_request_server_validation(
     editor: &mut YamlEditorWindowState,
+    now: f64,
     commands_to_send: &mut Vec<WorkerCommandBox>,
 ) {
     if editor
         .validation_due
-        .is_some_and(|due| due <= Instant::now())
+        .is_some_and(|due| matches!(due, ValidationDue::At(at) if at <= now))
     {
         editor.validation_due = None;
         editor.server_validation = ValidationState::Pending;
@@ -84,23 +94,32 @@ pub(super) fn maybe_request_server_validation(
     }
 }
 
-/// What the toolbar says about validation: the words and whether work is
-/// still in progress.
-pub(super) fn validation_status(editor: &YamlEditorWindowState) -> Option<(&'static str, bool)> {
-    let (diagnostics, showing_retained_diagnostics) = diagnostics_to_display(editor);
-    if showing_retained_diagnostics {
-        return Some(("Validating updated YAML…", true));
-    }
-    if !diagnostics.is_empty() {
-        return None;
+/// What the toolbar says while validation is still in progress.
+pub(super) fn validation_activity(editor: &YamlEditorWindowState) -> Option<String> {
+    if diagnostics_to_display(editor).1 {
+        return Some("Validating updated YAML…".into());
     }
     match &editor.server_validation {
-        ValidationState::Pending => Some(("Validating with cluster…", true)),
-        ValidationState::Valid => Some(("Validated by cluster", false)),
-        ValidationState::Failed(_) => None,
-        ValidationState::Idle => editor
-            .schema_loading
-            .then_some(("Loading Kubernetes schema…", true)),
+        ValidationState::Pending => Some(format!(
+            "Validating against {} schema…",
+            api_version(&editor.api_resource)
+        )),
+        ValidationState::Idle if editor.schema_loading => Some("Loading Kubernetes schema…".into()),
+        _ => None,
+    }
+}
+
+/// Whether the cluster has validated the edited document, which has no problems.
+pub(super) fn is_valid(editor: &YamlEditorWindowState) -> bool {
+    editor.server_validation == ValidationState::Valid
+        && diagnostics_to_display(editor).0.is_empty()
+}
+
+/// The `apiVersion` of the resource: `v1`, `apps/v1`.
+fn api_version(api_resource: &crate::api_resource::ApiResource) -> String {
+    match api_resource.kube_group() {
+        "" => api_resource.version.clone(),
+        group => format!("{group}/{}", api_resource.version),
     }
 }
 
@@ -146,6 +165,14 @@ pub(super) fn show_diagnostics(
     ui: &mut egui::Ui,
     editor: &mut YamlEditorWindowState,
 ) {
+    // The panel sits under a divider of its own, apart from the code surface.
+    let divider = egui::Rect::from_min_size(
+        ui.cursor().min,
+        egui::vec2(ui.available_width(), size::HAIRLINE),
+    );
+    ui.painter()
+        .rect_filled(divider, 0, ui.tokens().divider.base);
+    ui.add_space(size::HAIRLINE);
     let (diagnostics, showing_retained_diagnostics) = diagnostics_to_display(editor);
     let problems: Vec<Problem<'_>> = diagnostics
         .iter()
@@ -159,7 +186,17 @@ pub(super) fn show_diagnostics(
     let mut open = ctx
         .data(|data| data.get_temp::<bool>(open_id))
         .unwrap_or(true);
+    let active_id = egui::Id::new(("yaml-editor-active-problem", editor.id));
+    let active = ctx
+        .data(|data| data.get_temp::<usize>(active_id))
+        .unwrap_or(0)
+        .min(problems.len().saturating_sub(1));
     let response = ProblemsPanel::new(("yaml-editor", editor.id), &problems)
+        .spacing(
+            size::PROBLEMS_PADDING_EDITOR,
+            size::PROBLEMS_LINE_COLUMN_EDITOR,
+        )
+        .active((!problems.is_empty()).then_some(active))
         .stale(showing_retained_diagnostics)
         .row_tooltip(if showing_retained_diagnostics {
             "Validating the updated YAML before this diagnostic can be located"
@@ -168,6 +205,9 @@ pub(super) fn show_diagnostics(
         })
         .show(ui, &mut open);
     ctx.data_mut(|data| data.insert_temp(open_id, open));
+    if let Some(clicked) = response.clicked {
+        ctx.data_mut(|data| data.insert_temp(active_id, clicked));
+    }
     let range_to_focus = response
         .clicked
         .and_then(|index| diagnostics[index].range.clone());
@@ -267,26 +307,189 @@ pub(super) fn show_discard_confirmation(ctx: &egui::Context, editor: &mut YamlEd
     if !editor.confirm_discard {
         return;
     }
-    match (ConfirmationDialog {
-        id: egui::Id::new(("discard-yaml-changes", editor.id)),
-        icon: components::icons::Icon::ExclamationTriangle,
-        title: "Discard changes?",
-        message: "Your unsaved edits will be lost.".into(),
-        unavailable_message: None,
-        cancel_label: "Keep editing",
-        confirm_label: "Discard changes",
-        kind: ConfirmationDialogKind::Destructive,
-        confirm_enabled: true,
-        warning: None,
-        acknowledgement: None,
-    })
-    .show(ctx)
-    {
+    match confirm_discarding(
+        ctx,
+        egui::Id::new(("discard-yaml-changes", editor.id)),
+        "Discard changes?",
+        Prose::new().plain("Your unsaved edits will be lost."),
+        "Discard changes",
+    ) {
         ConfirmationDialogAction::Confirm => {
             editor.close_requested = true;
             editor.confirm_discard = false;
         }
         ConfirmationDialogAction::Cancel => editor.confirm_discard = false,
         ConfirmationDialogAction::None => {}
+    }
+}
+
+/// The destructive "throw the edits away" confirmation both dialogs share.
+fn confirm_discarding(
+    ctx: &egui::Context,
+    id: egui::Id,
+    title: &str,
+    message: Prose<'_>,
+    confirm_label: &str,
+) -> ConfirmationDialogAction {
+    ConfirmationDialog {
+        id,
+        icon: icons::Icon::ExclamationTriangle,
+        title,
+        message,
+        unavailable_message: None,
+        cancel_label: "Keep editing",
+        confirm_label,
+        kind: ConfirmationDialogKind::Destructive,
+        confirm_enabled: true,
+        warning: None,
+        acknowledgement: None,
+    }
+    .show(ctx)
+}
+
+/// The banner under the toolbar that says the resource changed on the cluster since the editor
+/// opened it, with the two ways out: keep the edits elsewhere, or start over from the cluster.
+pub(super) fn show_conflict_banner(
+    ctx: &egui::Context,
+    ui: &mut egui::Ui,
+    editor: &mut YamlEditorWindowState,
+) {
+    let Some(conflict) = &editor.conflict else {
+        return;
+    };
+    let versions = match &conflict.current_resource_version {
+        Some(current) => format!("{} → {current}", editor.resource_version),
+        None => editor.resource_version.clone(),
+    };
+    let message = format!(
+        "This {} changed on the cluster after you opened it (resource version {versions}). \
+         Your edits can’t be applied.",
+        editor.api_resource.kind
+    );
+    let buttons = [
+        BannerButton {
+            label: "Copy my edits",
+            icon: Some(icons::Icon::ClipboardDocument),
+            variant: ButtonVariant::Secondary,
+        },
+        BannerButton {
+            label: "Discard and reload",
+            icon: None,
+            variant: ButtonVariant::DangerQuiet,
+        },
+    ];
+    match Banner::new(Tone::Danger, &message)
+        .buttons(&buttons)
+        .show(ui)
+        .button
+    {
+        Some(0) => ctx.copy_text(editor.edited_yaml.clone()),
+        Some(1) => editor.confirm_reload = true,
+        _ => {}
+    }
+}
+
+/// Confirm throwing the edits away for the version on the cluster, and fetch that version.
+pub(super) fn show_reload_confirmation(
+    ctx: &egui::Context,
+    editor: &mut YamlEditorWindowState,
+    commands_to_send: &mut Vec<WorkerCommandBox>,
+) {
+    if !editor.confirm_reload {
+        return;
+    }
+    match confirm_discarding(
+        ctx,
+        egui::Id::new(("reload-yaml-changes", editor.id)),
+        "Discard your edits?",
+        Prose::new()
+            .plain("Your changes to ")
+            .strong(editor.resource_name.as_str())
+            .plain(" will be lost and the latest version from the cluster will be loaded."),
+        "Discard and reload",
+    ) {
+        ConfirmationDialogAction::Confirm => reload_editor(editor, commands_to_send),
+        ConfirmationDialogAction::Cancel => editor.confirm_reload = false,
+        ConfirmationDialogAction::None => {}
+    }
+}
+
+/// Drop the edits and fetch the resource again; the fetched document is validated like a
+/// freshly opened one.
+pub(super) fn reload_editor(
+    editor: &mut YamlEditorWindowState,
+    commands_to_send: &mut Vec<WorkerCommandBox>,
+) {
+    editor.confirm_reload = false;
+    // The conflict stays until the fetched version replaces the document, so a failed fetch
+    // cannot re-enable Apply over the stale version.
+    editor.error = None;
+    editor.loading = true;
+    editor.revalidate = true;
+    // Results for the document being dropped must not match the fetched one.
+    editor.validation_revision += 1;
+    editor.validation_due = None;
+    editor.server_validation = ValidationState::Idle;
+    editor.diagnostics.clear();
+    editor.retained_diagnostics.clear();
+    editor.suggestions_visible = false;
+    commands_to_send.push(Box::new(GetResourceYaml {
+        editor_id: editor.id,
+        cluster_key: editor.cluster_key,
+        api_resource: editor.api_resource.clone(),
+        namespace: editor.namespace.clone(),
+        resource_name: editor.resource_name.clone(),
+    }));
+}
+
+#[cfg(test)]
+mod status_tests {
+    use super::super::tests::editor;
+    use super::*;
+
+    #[test]
+    fn valid_needs_the_cluster_to_have_validated_a_document_without_problems() {
+        let mut editor = editor("kind: ConfigMap");
+        for state in [
+            ValidationState::Idle,
+            ValidationState::Pending,
+            ValidationState::Failed("no".into()),
+        ] {
+            editor.server_validation = state;
+            assert!(!is_valid(&editor));
+        }
+        editor.server_validation = ValidationState::Valid;
+        assert!(is_valid(&editor));
+        editor.diagnostics = vec![YamlDiagnostic {
+            range: None,
+            line: Some(1),
+            path: String::new(),
+            message: "bad".into(),
+        }];
+        assert!(!is_valid(&editor));
+    }
+
+    #[test]
+    fn the_toolbar_names_the_api_version_being_validated_against() {
+        let mut editor = editor("kind: ConfigMap");
+        assert_eq!(validation_activity(&editor), None);
+        editor.server_validation = ValidationState::Pending;
+        assert_eq!(
+            validation_activity(&editor).as_deref(),
+            Some("Validating against v1 schema…"),
+            "the core group is just the version"
+        );
+        editor.api_resource.group = "apps".into();
+        editor.api_resource.version = "v1".into();
+        assert_eq!(
+            validation_activity(&editor).as_deref(),
+            Some("Validating against apps/v1 schema…")
+        );
+        editor.server_validation = ValidationState::Idle;
+        editor.schema_loading = true;
+        assert_eq!(
+            validation_activity(&editor).as_deref(),
+            Some("Loading Kubernetes schema…")
+        );
     }
 }

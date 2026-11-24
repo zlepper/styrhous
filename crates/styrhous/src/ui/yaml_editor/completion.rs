@@ -11,7 +11,7 @@ pub(super) fn show_completion_documentation(
     let position = components::completion_doc_position(
         surface,
         completion,
-        egui::vec2(size::COMPLETION_DOC_WIDTH, 0.0),
+        egui::vec2(size::COMPLETION_DOC_WIDTH_EDITOR, 0.0),
     );
     egui::Area::new(egui::Id::new((
         "yaml-editor-suggestion-documentation",
@@ -29,6 +29,7 @@ pub(super) fn show_completion_documentation(
                 .as_deref()
                 .unwrap_or("No schema documentation is available."),
         )
+        .width(size::COMPLETION_DOC_WIDTH_EDITOR)
         .show(ui);
     });
 }

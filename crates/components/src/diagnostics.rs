@@ -74,6 +74,14 @@ pub struct ProblemsPanel<'p, 'a> {
     stale: bool,
     row_tooltip: Option<&'a str>,
     corner_radius: CornerRadius,
+    layout: RowLayout,
+}
+
+/// The horizontal metrics of the panel's header and rows.
+#[derive(Clone, Copy)]
+struct RowLayout {
+    padding_x: f32,
+    line_column: f32,
 }
 
 impl<'p, 'a> ProblemsPanel<'p, 'a> {
@@ -88,6 +96,10 @@ impl<'p, 'a> ProblemsPanel<'p, 'a> {
             stale: false,
             row_tooltip: None,
             corner_radius: CornerRadius::ZERO,
+            layout: RowLayout {
+                padding_x: PADDING_X,
+                line_column: size::PROBLEMS_LINE_COLUMN,
+            },
         }
     }
 
@@ -108,6 +120,16 @@ impl<'p, 'a> ProblemsPanel<'p, 'a> {
     /// The tooltip of every row ("Jump to the highlighted YAML location").
     pub fn row_tooltip(mut self, tooltip: &'a str) -> Self {
         self.row_tooltip = Some(tooltip);
+        self
+    }
+
+    /// Inset the header and rows by `padding_x` and give the "Ln n" column `line_column`
+    /// (the editor's panel is roomier than the component board's).
+    pub fn spacing(mut self, padding_x: f32, line_column: f32) -> Self {
+        self.layout = RowLayout {
+            padding_x,
+            line_column,
+        };
         self
     }
 
@@ -157,7 +179,8 @@ impl<'p, 'a> ProblemsPanel<'p, 'a> {
                 .show(&mut rows_ui, |ui| {
                     for (index, problem) in self.problems.iter().enumerate() {
                         let active = self.active == Some(index);
-                        let (mut row, elided) = problem_row(ui, problem, active);
+                        let (mut row, elided) =
+                            problem_row(ui, index, problem, active, self.layout);
                         // One tooltip: the full message when elided, then the hint.
                         let tooltip = match (elided, self.row_tooltip) {
                             (true, Some(hint)) => Some(format!("{}\n{hint}", problem.message)),
@@ -190,7 +213,7 @@ impl<'p, 'a> ProblemsPanel<'p, 'a> {
         // The collapse button at the right end of an open panel is not part
         // of the toggle.
         let toggle_right = if open {
-            header.right() - PADDING_X - ButtonSize::Sm.height() - GAP
+            header.right() - self.layout.padding_x - ButtonSize::Sm.height() - GAP
         } else {
             header.right()
         };
@@ -212,8 +235,11 @@ impl<'p, 'a> ProblemsPanel<'p, 'a> {
             );
         }
         let content = Rect::from_min_max(
-            pos2(header.left() + PADDING_X, header.top()),
-            pos2(header.right() - PADDING_X, header.bottom() - size::HAIRLINE),
+            pos2(header.left() + self.layout.padding_x, header.top()),
+            pos2(
+                header.right() - self.layout.padding_x,
+                header.bottom() - size::HAIRLINE,
+            ),
         );
         let mut row = ui.new_child(
             UiBuilder::new()
@@ -252,7 +278,13 @@ impl<'p, 'a> ProblemsPanel<'p, 'a> {
 }
 
 /// One Problems row: a button read as its line and message.
-fn problem_row(ui: &mut Ui, problem: &Problem<'_>, active: bool) -> (Response, bool) {
+fn problem_row(
+    ui: &mut Ui,
+    index: usize,
+    problem: &Problem<'_>,
+    active: bool,
+    layout: RowLayout,
+) -> (Response, bool) {
     let line = problem
         .line
         .map(|line| format!("Ln {line}"))
@@ -263,10 +295,10 @@ fn problem_row(ui: &mut Ui, problem: &Problem<'_>, active: bool) -> (Response, b
         format!("{line} {}", problem.message)
     };
     let size = vec2(ui.available_width(), size::PROBLEMS_ROW);
-    let layout = Layout::left_to_right(Align::Center);
-    let inner = clickable_scope(ui, size, layout, &name, |row, _| {
+    let direction = Layout::left_to_right(Align::Center);
+    let inner = clickable_scope(ui, size, direction, &name, |row, _| {
         let rect = row.max_rect();
-        problem_row_contents(row, rect, problem, &line, active)
+        problem_row_contents(row, rect, index, problem, &line, active, layout)
     });
     (inner.response, inner.inner)
 }
@@ -276,15 +308,17 @@ fn problem_row(ui: &mut Ui, problem: &Problem<'_>, active: bool) -> (Response, b
 fn problem_row_contents(
     row: &mut Ui,
     rect: Rect,
+    index: usize,
     problem: &Problem<'_>,
     line: &str,
     active: bool,
+    layout: RowLayout,
 ) -> bool {
     let theme = row.tokens();
     if active && row.is_rect_visible(rect) {
         row.painter().rect_filled(rect, 0, theme.control.fill);
     }
-    row.add_space(PADDING_X);
+    row.add_space(layout.padding_x);
     row.spacing_mut().item_spacing = vec2(GAP, 0.0);
     let (icon, _) = row.allocate_exact_size(Vec2::splat(size::ICON_SM), Sense::hover());
     let icon_color = match problem.severity {
@@ -292,20 +326,20 @@ fn problem_row_contents(
         Severity::Warning => theme.warning.fill,
     };
     problem.severity.icon().paint(row, icon, icon_color);
-    let column = vec2(size::PROBLEMS_LINE_COLUMN, LINE.line_height());
+    let column = vec2(layout.line_column, LINE.line_height());
     let (column, _) = row.allocate_exact_size(column, Sense::hover());
     if !line.is_empty() {
         let galley = LINE.galley(row.ctx(), line, theme.text.muted, f32::INFINITY);
         type_scale::text_at(
             row,
-            row.id().with("line"),
+            row.id().with(("line", index)),
             column.min,
             galley,
             line,
             theme.text.muted,
         );
     }
-    let width = (rect.right() - PADDING_X - row.cursor().left()).max(0.0);
+    let width = (rect.right() - layout.padding_x - row.cursor().left()).max(0.0);
     let galley =
         type_scale::META.galley_elided(row.ctx(), problem.message, theme.text.primary, width, 1);
     let elided = galley.elided;
@@ -373,6 +407,24 @@ mod tests {
 
     fn harness_stale() -> Harness<'static, (Option<usize>, bool)> {
         harness(true)
+    }
+
+    #[test]
+    fn every_row_exposes_its_own_line_label() {
+        let mut harness = Harness::new_ui(|ui| {
+            let problems = [4, 7, 19].map(|line| Problem {
+                severity: Severity::Error,
+                line: Some(line),
+                message: "message",
+            });
+            let mut open = true;
+            let _ = ProblemsPanel::new("labels", &problems).show(ui, &mut open);
+        });
+        setup_egui(&mut harness);
+        harness.run();
+        for line in [4, 7, 19] {
+            harness.get_by_label(&format!("Ln {line}"));
+        }
     }
 
     #[test]

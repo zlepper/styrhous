@@ -1,0 +1,123 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Button name="Discard" rect=(x=1315.8 y=11.5 width=74.6 height=32.0 center_x=1353.1 center_y=27.5)
+                Button name="Apply changes" rect=(x=1402.4 y=11.5 width=117.6 height=32.0 center_x=1461.2 center_y=27.5)
+              GenericContainer rect=<none>
+                Label value="api" rect=(x=56.0 y=9.5 width=19.2 height=20.0 center_x=65.6 center_y=19.5)
+                  TextRun value="api" rect=(x=56.0 y=9.5 width=19.2 height=20.0 center_x=65.6 center_y=19.5)
+                Label value="Deployment · payments" rect=(x=56.0 y=29.5 width=127.7 height=16.0 center_x=119.8 center_y=37.5)
+                  TextRun value="Deployment · payments" rect=(x=56.0 y=29.5 width=127.7 height=16.0 center_x=119.8 center_y=37.5)
+                Label value="Modified" rect=(x=195.7 y=16.5 width=80.6 height=22.0 center_x=236.0 center_y=27.5)
+                  TextRun value="Modified" rect=(x=218.7 y=19.5 width=48.6 height=16.0 center_x=243.0 center_y=27.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  ProgressIndicator name="Loading" rect=(x=1309.8 y=73.5 width=12.0 height=12.0 center_x=1315.8 center_y=79.5)
+                  Label value="Validating against apps/v1 schema…" rect=(x=1327.8 y=71.5 width=192.2 height=16.0 center_x=1423.9 center_y=79.5)
+                    TextRun value="Validating against apps/v1 schema…" rect=(x=1327.8 y=71.5 width=192.2 height=16.0 center_x=1423.9 center_y=79.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  TextInput name="Search YAML" value="" rect=(x=16.0 y=63.5 width=219.0 height=32.0 center_x=125.5 center_y=79.5)
+                    TextRun value="" rect=(x=52.0 y=71.5 width=0.0 height=20.0 center_x=52.0 center_y=81.5)
+                Button name="Previous match" state=[disabled] rect=(x=248.0 y=67.5 width=24.0 height=24.0 center_x=260.0 center_y=79.5)
+                Button name="Next match" state=[disabled] rect=(x=278.0 y=67.5 width=24.0 height=24.0 center_x=290.0 center_y=79.5)
+                CheckBox name="Regular expression" state=[toggled=False] rect=(x=308.0 y=67.5 width=24.0 height=24.0 center_x=320.0 center_y=79.5)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Button name="2 problems" rect=(x=1255.9 y=1002.5 width=77.8 height=16.0 center_x=1294.8 center_y=1010.5)
+                  TextRun value="2 problems" rect=(x=1273.9 y=1002.5 width=59.8 height=16.0 center_x=1303.8 center_y=1010.5)
+                Label value="Ln 19, Col 30" rect=(x=1349.7 y=1002.5 width=72.7 height=16.0 center_x=1386.0 center_y=1010.5)
+                  TextRun value="Ln 19, Col 30" rect=(x=1349.7 y=1002.5 width=72.7 height=16.0 center_x=1386.0 center_y=1010.5)
+                Label value="YAML" rect=(x=1438.4 y=1002.5 width=31.8 height=16.0 center_x=1454.2 center_y=1010.5)
+                  TextRun value="YAML" rect=(x=1438.4 y=1002.5 width=31.8 height=16.0 center_x=1454.2 center_y=1010.5)
+                Label value="UTF-8" rect=(x=1486.1 y=1002.5 width=33.9 height=16.0 center_x=1503.1 center_y=1010.5)
+                  TextRun value="UTF-8" rect=(x=1486.1 y=1002.5 width=33.9 height=16.0 center_x=1503.1 center_y=1010.5)
+              GenericContainer rect=<none>
+                Label value="Changes apply directly to the cluster" rect=(x=46.0 y=1002.5 width=197.6 height=16.0 center_x=144.8 center_y=1010.5)
+                  TextRun value="Changes apply directly to the cluster" rect=(x=46.0 y=1002.5 width=197.6 height=16.0 center_x=144.8 center_y=1010.5)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Button name="Problems 2" state=[toggled=True] rect=(x=0.0 y=908.0 width=1484.0 height=32.0 center_x=742.0 center_y=924.0)
+              GenericContainer rect=<none>
+                Label value="Problems" rect=(x=38.0 y=915.5 width=50.9 height=16.0 center_x=63.5 center_y=923.5)
+                  TextRun value="Problems" rect=(x=38.0 y=915.5 width=50.9 height=16.0 center_x=63.5 center_y=923.5)
+                GenericContainer rect=<none>
+                  Button name="Collapse" rect=(x=1492.0 y=909.5 width=28.0 height=28.0 center_x=1506.0 center_y=923.5)
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    Button name="Ln 7 spec.replicas: expected integer, got string “three”" rect=(x=0.0 y=940.0 width=1536.0 height=28.0 center_x=768.0 center_y=954.0)
+                      Label value="Ln 7" rect=(x=38.0 y=944.0 width=28.8 height=20.0 center_x=52.4 center_y=954.0)
+                        TextRun value="Ln 7" rect=(x=38.0 y=944.0 width=28.8 height=20.0 center_x=52.4 center_y=954.0)
+                      Label value="spec.replicas: expected integer, got string “three”" rect=(x=94.0 y=946.0 width=264.3 height=16.0 center_x=226.1 center_y=954.0)
+                        TextRun value="spec.replicas: expected integer, got string “three”" rect=(x=94.0 y=946.0 width=264.3 height=16.0 center_x=226.1 center_y=954.0)
+                    Button name="Ln 19 imagePullPolicy: “If” is not one of Always, IfNotPresent, Never" rect=(x=0.0 y=968.0 width=1536.0 height=28.0 center_x=768.0 center_y=982.0)
+                      Label value="Ln 19" rect=(x=38.0 y=972.0 width=36.0 height=20.0 center_x=56.0 center_y=982.0)
+                        TextRun value="Ln 19" rect=(x=38.0 y=972.0 width=36.0 height=20.0 center_x=56.0 center_y=982.0)
+                      Label value="imagePullPolicy: “If” is not one of Always, IfNotPresent, Never" rect=(x=94.0 y=974.0 width=329.1 height=16.0 center_x=258.5 center_y=982.0)
+                        TextRun value="imagePullPolicy: “If” is not one of Always, IfNotPresent, Never" rect=(x=94.0 y=974.0 width=329.1 height=16.0 center_x=258.5 center_y=982.0)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      Label value="1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21" rect=(x=25.0 y=117.0 width=15.0 height=420.0 center_x=32.5 center_y=327.0)
+                    MultilineTextInput name="Kubernetes resource manifest" value="apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: api\n  namespace: payments\nspec:\n  replicas: three\n  selector:\n    matchLabels:\n      app: api\n  template:\n    metadata:\n      labels:\n        app: api\n    spec:\n      containers:\n        - name: api\n          image: registry.example.com/api:v1.2.3\n          imagePullPolicy: If\n          ports:\n            - containerPort: 8080" state=[focused] rect=(x=56.0 y=117.0 width=1480.0 height=420.0 center_x=796.0 center_y=327.0)
+                      TextRun value="apiVersion: apps/v1\n" rect=(x=56.0 y=117.0 width=148.2 height=20.0 center_x=130.1 center_y=127.0)
+                      TextRun value="kind: Deployment\n" rect=(x=56.0 y=137.0 width=124.8 height=20.0 center_x=118.4 center_y=147.0)
+                      TextRun value="metadata:\n" rect=(x=56.0 y=157.0 width=70.2 height=20.0 center_x=91.1 center_y=167.0)
+                      TextRun value="  name: api\n" rect=(x=56.0 y=177.0 width=85.8 height=20.0 center_x=98.9 center_y=187.0)
+                      TextRun value="  namespace: payments\n" rect=(x=56.0 y=197.0 width=163.8 height=20.0 center_x=137.9 center_y=207.0)
+                      TextRun value="spec:\n" rect=(x=56.0 y=217.0 width=39.0 height=20.0 center_x=75.5 center_y=227.0)
+                      TextRun value="  replicas: three\n" rect=(x=56.0 y=237.0 width=132.6 height=20.0 center_x=122.3 center_y=247.0)
+                      TextRun value="  selector:\n" rect=(x=56.0 y=257.0 width=85.8 height=20.0 center_x=98.9 center_y=267.0)
+                      TextRun value="    matchLabels:\n" rect=(x=56.0 y=277.0 width=124.8 height=20.0 center_x=118.4 center_y=287.0)
+                      TextRun value="      app: api\n" rect=(x=56.0 y=297.0 width=109.2 height=20.0 center_x=110.6 center_y=307.0)
+                      TextRun value="  template:\n" rect=(x=56.0 y=317.0 width=85.8 height=20.0 center_x=98.9 center_y=327.0)
+                      TextRun value="    metadata:\n" rect=(x=56.0 y=337.0 width=101.4 height=20.0 center_x=106.7 center_y=347.0)
+                      TextRun value="      labels:\n" rect=(x=56.0 y=357.0 width=101.4 height=20.0 center_x=106.7 center_y=367.0)
+                      TextRun value="        app: api\n" rect=(x=56.0 y=377.0 width=124.8 height=20.0 center_x=118.4 center_y=387.0)
+                      TextRun value="    spec:\n" rect=(x=56.0 y=397.0 width=70.2 height=20.0 center_x=91.1 center_y=407.0)
+                      TextRun value="      containers:\n" rect=(x=56.0 y=417.0 width=132.6 height=20.0 center_x=122.3 center_y=427.0)
+                      TextRun value="        - name: api\n" rect=(x=56.0 y=437.0 width=148.2 height=20.0 center_x=130.1 center_y=447.0)
+                      TextRun value="          image: registry.example.com/api:v1.2.3\n" rect=(x=56.0 y=457.0 width=374.4 height=20.0 center_x=243.2 center_y=467.0)
+                      TextRun value="          imagePullPolicy: If\n" rect=(x=56.0 y=477.0 width=226.2 height=20.0 center_x=169.1 center_y=487.0)
+                      TextRun value="          ports:\n" rect=(x=56.0 y=497.0 width=124.8 height=20.0 center_x=118.4 center_y=507.0)
+                      TextRun value="            - containerPort: 8080" rect=(x=56.0 y=517.0 width=257.4 height=20.0 center_x=184.7 center_y=527.0)
+                    Label value="Validation error: spec.replicas: expected integer, got string “three”" rect=(x=149.0 y=234.0 width=39.6 height=26.0 center_x=168.8 center_y=247.0)
+                    Label value="Validation error: imagePullPolicy: “If” is not one of Always, IfNotPresent, Never" rect=(x=266.0 y=474.0 width=16.2 height=26.0 center_x=274.1 center_y=487.0)
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      Label value="Expects value" rect=(x=294.0 y=508.0 width=88.8 height=16.0 center_x=338.4 center_y=516.0)
+        TextRun value="EXPECTS VALUE" rect=(x=294.0 y=508.0 width=87.7 height=16.0 center_x=337.8 center_y=516.0)
+      Label value="string · enum" rect=(x=388.8 y=508.0 width=69.8 height=16.0 center_x=423.7 center_y=516.0)
+        TextRun value="string · enum" rect=(x=388.8 y=508.0 width=69.8 height=16.0 center_x=423.7 center_y=516.0)
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          ListBoxOption name="Insert YAML completion: IfNotPresent" state=[toggled=True] rect=(x=286.0 y=530.0 width=256.0 height=28.0 center_x=414.0 center_y=544.0)
+            TextRun value="IfNotPresent" rect=(x=296.0 y=534.0 width=86.4 height=20.0 center_x=339.2 center_y=544.0)
+          ListBoxOption name="Insert YAML completion: Always" state=[toggled=False] rect=(x=286.0 y=558.0 width=256.0 height=28.0 center_x=414.0 center_y=572.0)
+            TextRun value="Always" rect=(x=296.0 y=562.0 width=43.2 height=20.0 center_x=317.6 center_y=572.0)
+          ListBoxOption name="Insert YAML completion: Never" state=[toggled=False] rect=(x=286.0 y=586.0 width=256.0 height=28.0 center_x=414.0 center_y=600.0)
+            TextRun value="Never" rect=(x=296.0 y=590.0 width=36.0 height=20.0 center_x=314.0 center_y=600.0)
+      Label value="↑ ↓ move · Enter apply · Esc dismiss" rect=(x=286.0 y=618.0 width=256.0 height=28.0 center_x=414.0 center_y=632.0)
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Label value="enum" rect=(x=566.0 y=512.0 width=46.0 height=20.0 center_x=589.0 center_y=522.0)
+            TextRun value="enum" rect=(x=575.0 y=514.0 width=28.0 height=16.0 center_x=589.0 center_y=522.0)
+          Label value="IfNotPresent" rect=(x=620.0 y=512.0 width=86.4 height=20.0 center_x=663.2 center_y=522.0)
+            TextRun value="IfNotPresent" rect=(x=620.0 y=512.0 width=86.4 height=20.0 center_x=663.2 center_y=522.0)
+        Label value="Pull the image only if it isn’t already present on the node. Default when the tag isn’t latest." rect=(x=566.0 y=538.0 width=235.0 height=48.0 center_x=683.5 center_y=562.0)
+          TextRun value="Pull the image only if it isn’t already present " rect=(x=566.0 y=538.0 width=235.0 height=16.0 center_x=683.5 center_y=546.0)
+          TextRun value="on the node. Default when the tag isn’t " rect=(x=566.0 y=554.0 width=210.0 height=16.0 center_x=671.0 center_y=562.0)
+          TextRun value="latest." rect=(x=566.0 y=570.0 width=42.5 height=16.0 center_x=587.2 center_y=578.0)

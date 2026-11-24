@@ -7,6 +7,7 @@ pub(super) fn show_editor_window_inner(
     #[cfg(any(test, feature = "benchmarks"))] scroll_metrics: Option<&mut YamlEditorScrollMetrics>,
 ) {
     let ctx = ui.ctx().clone();
+    let now = ctx.input(|input| input.time);
     if ctx.input(|input| input.viewport().close_requested()) {
         request_close(&ctx, editor);
     }
@@ -15,13 +16,24 @@ pub(super) fn show_editor_window_inner(
     reconcile_search_state(editor, search_matches.as_ref().ok());
 
     egui::Panel::top("yaml-editor-header")
-        .exact_size(size::HEADER_BAR + size::TOOLBAR)
+        .show_separator_line(false)
+        .exact_size(
+            size::HEADER_BAR
+                + size::TOOLBAR
+                + if editor.conflict.is_some() {
+                    size::BANNER
+                } else {
+                    0.0
+                },
+        )
         .frame(egui::Frame::NONE)
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
             let scope = resource_scope(editor);
             let status = if editor.saving {
                 Some(("Applying…", Tone::Neutral))
+            } else if editor.conflict.is_some() {
+                Some(("Conflict", Tone::Danger))
             } else if editor.is_modified() {
                 Some(("Modified", Tone::Warning))
             } else {
@@ -45,9 +57,13 @@ pub(super) fn show_editor_window_inner(
                     };
                     let close = Button::secondary(close_label).show(ui).clicked();
                     let apply = Button::primary("Apply changes")
-                        .enabled(editor.is_modified() && !editor.saving)
+                        .enabled(
+                            editor.is_modified() && !editor.saving && editor.conflict.is_none(),
+                        )
                         .disabled_reason(if editor.saving {
                             "Applying the changes…"
+                        } else if editor.conflict.is_some() {
+                            "The resource changed on the cluster"
                         } else {
                             "No changes to apply"
                         })
@@ -62,23 +78,21 @@ pub(super) fn show_editor_window_inner(
             if close {
                 request_close(&ctx, editor);
             }
-            let validation = validation_status(editor);
+            let validation = validation_activity(editor);
             Toolbar::new(("yaml-editor", editor.id)).show(
                 ui,
                 |ui| show_search_controls(&ctx, ui, editor, &search_matches),
                 |ui| {
-                    if let Some((text, in_progress)) = validation {
-                        if in_progress {
-                            toolbar_activity(ui, text);
-                        } else {
-                            status_indicator(ui, Tone::Success, text);
-                        }
+                    if let Some(text) = &validation {
+                        toolbar_activity(ui, text);
                     }
                 },
             );
+            show_conflict_banner(&ctx, ui, editor);
         });
 
     egui::Panel::bottom("yaml-editor-footer")
+        .show_separator_line(false)
         .exact_size(size::STATUS_BAR)
         .frame(egui::Frame::NONE)
         .show(ui, |ui| {
@@ -95,10 +109,14 @@ pub(super) fn show_editor_window_inner(
                     |ui| {
                         let toggled =
                             problem_count > 0 && problems_toggle(ui, problem_count).clicked();
+                        if is_valid(editor) {
+                            status_ok(ui, "Valid");
+                        }
                         if let Some((line, column)) = position {
                             status_number(ui, &format!("Ln {line}, Col {column}"));
                         }
                         status_text(ui, "YAML");
+                        status_text(ui, "UTF-8");
                         toggled
                     },
                 )
@@ -110,16 +128,13 @@ pub(super) fn show_editor_window_inner(
 
     if !diagnostics_to_display(editor).0.is_empty() {
         egui::Panel::bottom("yaml-editor-diagnostics")
+            .show_separator_line(false)
             .frame(egui::Frame::NONE)
             .show(ui, |ui| show_diagnostics(&ctx, ui, editor));
     }
 
     egui::CentralPanel::default()
-        .frame(
-            egui::Frame::new()
-                .fill(theme.code.surface)
-                .inner_margin(egui::Margin::same(space::S16 as i8)),
-        )
+        .frame(egui::Frame::new().fill(theme.code.surface))
         .show(ui, |ui| {
             if editor.loading {
                 ui.centered_and_justified(|ui| {
@@ -131,7 +146,9 @@ pub(super) fn show_editor_window_inner(
                     editor.error.as_deref().unwrap_or("Unable to load resource"),
                 );
             } else {
-                if editor.validation_revision == 0 && !editor.edited_yaml.is_empty() {
+                if (editor.validation_revision == 0 || editor.revalidate)
+                    && !editor.edited_yaml.is_empty()
+                {
                     refresh_local_validation(editor);
                 }
                 if let Some(error) = &editor.error {
@@ -153,10 +170,11 @@ pub(super) fn show_editor_window_inner(
             }
         });
 
-    maybe_request_server_validation(editor, commands_to_send);
-    #[cfg(not(test))]
-    if let Some(due) = editor.validation_due {
-        ctx.request_repaint_after(due.saturating_duration_since(Instant::now()));
+    start_validation_debounce(editor, now);
+    maybe_request_server_validation(editor, now, commands_to_send);
+    if let Some(ValidationDue::At(due)) = editor.validation_due {
+        ctx.request_repaint_after_secs((due - now).max(0.0) as f32);
     }
     show_discard_confirmation(&ctx, editor);
+    show_reload_confirmation(&ctx, editor, commands_to_send);
 }

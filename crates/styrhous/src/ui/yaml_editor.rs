@@ -1,27 +1,28 @@
 use super::state::{
-    OperationOutcome, UiState, ValidationState, YamlEditorHighlightCache,
-    YamlEditorHighlightCacheKey, YamlEditorWindowState, api_error_message,
-    diagnostics_from_api_error, set_editor_diagnostics,
+    EditorConflict, OperationOutcome, UiState, ValidationDue, ValidationState,
+    YamlEditorHighlightCache, YamlEditorHighlightCacheKey, YamlEditorWindowState,
+    api_error_message, diagnostics_from_api_error, set_editor_diagnostics,
 };
 use crate::resource_schema::{CompletionContextKind, SourceRange, YamlDiagnostic};
 use crate::worker::{
-    ApplyResourceYaml, ResourceApplyCompleted, ResourceApplyFailed, ResourceSchemaLoadFailed,
-    ResourceSchemaLoaded, ResourceYamlApplyCommandFailed, ResourceYamlFetchFailed,
-    ResourceYamlFetched, ResourceYamlValidated, ResourceYamlValidationCommandFailed,
-    ResourceYamlValidationFailed, ValidateResourceYaml, WorkerCommandBox, WorkerResult,
+    ApplyResourceYaml, GetResourceYaml, ResourceApplyCompleted, ResourceApplyFailed,
+    ResourceSchemaLoadFailed, ResourceSchemaLoaded, ResourceYamlApplyCommandFailed,
+    ResourceYamlFetchFailed, ResourceYamlFetched, ResourceYamlValidated,
+    ResourceYamlValidationCommandFailed, ResourceYamlValidationFailed, ValidateResourceYaml,
+    WorkerCommandBox, WorkerResult,
 };
 use components::design::theme::{Theme, ThemeExt, Tone};
 use components::design::{size, space, type_scale};
 use components::{
-    Button, Completion, CompletionDoc, CompletionExpects, ConfirmationDialog,
-    ConfirmationDialogAction, ConfirmationDialogKind, Problem, ProblemsPanel, SearchField,
-    SearchStatus, Severity, StatusBar, Toolbar, WindowHeader, icons, problems_toggle, status_icon,
-    status_number, status_text, toolbar_activity,
+    Banner, BannerButton, Button, ButtonVariant, Completion, CompletionDoc, CompletionExpects,
+    ConfirmationDialog, ConfirmationDialogAction, ConfirmationDialogKind, Problem, ProblemsPanel,
+    Prose, SearchField, SearchStatus, Severity, StatusBar, Toolbar, WindowHeader, icons,
+    problems_toggle, status_icon, status_number, status_ok, status_text, toolbar_activity,
 };
 use egui::text::{CCursor, CCursorRange};
 use std::collections::HashSet;
 use std::ops::Range;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 const VALIDATION_DEBOUNCE: Duration = Duration::from_millis(500);
 const COMPLETION_LIST_MAX_HEIGHT: f32 = 260.0;
@@ -100,6 +101,8 @@ impl WorkerResult for ResourceYamlFetched {
             editor.resource_uid = resource_uid;
             editor.loading = false;
             editor.error = None;
+            editor.conflict = None;
+            editor.revalidate = true;
         }
     }
 }
@@ -120,7 +123,7 @@ impl WorkerResult for ResourceSchemaLoaded {
         {
             editor.schema = Some(schema);
             editor.schema_loading = false;
-            editor.validation_revision = 0;
+            editor.revalidate = true;
         }
     }
 }
@@ -161,7 +164,19 @@ impl WorkerResult for ResourceYamlValidationFailed {
         {
             let message = api_error_message(&error);
             let diagnostics = diagnostics_from_api_error(&error, &editor.edited_yaml);
-            editor.server_validation = ValidationState::Failed(message);
+            if error.status_code == 409 {
+                // The cluster's copy changed: the banner says so, like a rejected apply.
+                let known = editor
+                    .conflict
+                    .take()
+                    .and_then(|conflict| conflict.current_resource_version);
+                editor.conflict = Some(EditorConflict {
+                    current_resource_version: known,
+                });
+                editor.server_validation = ValidationState::Idle;
+            } else {
+                editor.server_validation = ValidationState::Failed(message);
+            }
             set_editor_diagnostics(editor, diagnostics);
         }
     }
@@ -196,6 +211,7 @@ impl WorkerResult for ResourceApplyCompleted {
             editor.resource_uid = resource_uid;
             editor.saving = false;
             editor.error = None;
+            editor.conflict = None;
             refresh_local_validation(editor);
         }
     }
@@ -210,6 +226,7 @@ impl WorkerResult for ResourceApplyFailed {
             namespace,
             resource_name,
             error,
+            current_resource_version,
         } = self;
         let details = ui.record_resource_operation_failure(
             cluster_key,
@@ -223,7 +240,14 @@ impl WorkerResult for ResourceApplyFailed {
             && editor.resource_matches(cluster_key, &api_resource, &namespace, &resource_name)
         {
             editor.saving = false;
-            editor.error = Some(details);
+            if error.status_code == 409 {
+                editor.conflict = Some(EditorConflict {
+                    current_resource_version,
+                });
+                editor.error = None;
+            } else {
+                editor.error = Some(details);
+            }
             let diagnostics = diagnostics_from_api_error(&error, &editor.edited_yaml);
             set_editor_diagnostics(editor, diagnostics);
         }

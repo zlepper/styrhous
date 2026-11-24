@@ -165,6 +165,8 @@ impl UiState {
                 error: None,
                 close_requested: false,
                 confirm_discard: false,
+                confirm_reload: false,
+                conflict: None,
                 focus_requested: false,
                 schema: self
                     .resource_schemas
@@ -178,6 +180,7 @@ impl UiState {
                 scroll_to_diagnostic: None,
                 server_validation: ValidationState::Idle,
                 validation_revision: 0,
+                revalidate: false,
                 validation_due: None,
                 suggestions: Vec::new(),
                 completion_context: None,

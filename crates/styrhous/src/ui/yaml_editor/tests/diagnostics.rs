@@ -60,7 +60,7 @@ fn yaml_editor_retained_diagnostics_snapshot() {
 fn diagnostics_remain_visible_while_the_updated_yaml_is_validating() {
     let mut editor = diagnostic_editor();
     editor.diagnostics.clear();
-    editor.validation_due = Some(Instant::now() + VALIDATION_DEBOUNCE);
+    editor.validation_due = Some(ValidationDue::Debounce);
 
     let (diagnostics, showing_retained_diagnostics) = diagnostics_to_display(&editor);
     assert!(showing_retained_diagnostics);

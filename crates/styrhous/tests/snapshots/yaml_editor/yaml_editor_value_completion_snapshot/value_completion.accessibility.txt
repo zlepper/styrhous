@@ -24,21 +24,22 @@ Window state=[focused] rect=<none>
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="YAML" rect=(x=1480.2 y=995.5 width=31.8 height=16.0 center_x=1496.1 center_y=1003.5)
-                TextRun value="YAML" rect=(x=1480.2 y=995.5 width=31.8 height=16.0 center_x=1496.1 center_y=1003.5)
+              Label value="YAML" rect=(x=1430.4 y=994.5 width=31.8 height=16.0 center_x=1446.2 center_y=1002.5)
+                TextRun value="YAML" rect=(x=1430.4 y=994.5 width=31.8 height=16.0 center_x=1446.2 center_y=1002.5)
+              Label value="UTF-8" rect=(x=1478.1 y=994.5 width=33.9 height=16.0 center_x=1495.1 center_y=1002.5)
+                TextRun value="UTF-8" rect=(x=1478.1 y=994.5 width=33.9 height=16.0 center_x=1495.1 center_y=1002.5)
             GenericContainer rect=<none>
-              Label value="Changes apply directly to the cluster" rect=(x=54.0 y=995.5 width=197.6 height=16.0 center_x=152.8 center_y=1003.5)
-                TextRun value="Changes apply directly to the cluster" rect=(x=54.0 y=995.5 width=197.6 height=16.0 center_x=152.8 center_y=1003.5)
+              Label value="Changes apply directly to the cluster" rect=(x=54.0 y=994.5 width=197.6 height=16.0 center_x=152.8 center_y=1002.5)
+                TextRun value="Changes apply directly to the cluster" rect=(x=54.0 y=994.5 width=197.6 height=16.0 center_x=152.8 center_y=1002.5)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
                   GenericContainer rect=<none>
-                    Label value="1" rect=(x=24.0 y=130.0 width=7.8 height=17.0 center_x=27.9 center_y=138.5)
-                      TextRun value="1" rect=(x=24.0 y=130.0 width=7.8 height=17.0 center_x=27.9 center_y=138.5)
-                  MultilineTextInput name="Kubernetes resource manifest" value="mode: Read" rect=(x=82.0 y=128.0 width=1430.0 height=21.0 center_x=797.0 center_y=138.5)
-                    TextRun value="mode: Read" rect=(x=86.0 y=130.0 width=78.0 height=17.0 center_x=125.0 center_y=138.5)
+                    Label value="1" rect=(x=40.0 y=125.0 width=8.0 height=20.0 center_x=44.0 center_y=135.0)
+                  MultilineTextInput name="Kubernetes resource manifest" value="mode: Read" rect=(x=64.0 y=125.0 width=1464.0 height=20.0 center_x=796.0 center_y=135.0)
+                    TextRun value="mode: Read" rect=(x=64.0 y=125.0 width=78.0 height=20.0 center_x=103.0 center_y=135.0)
   GenericContainer rect=<none>
     GenericContainer rect=<none>
       Label value="Expects value" rect=(x=94.0 y=188.0 width=88.8 height=16.0 center_x=138.4 center_y=196.0)

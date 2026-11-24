@@ -1,0 +1,91 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Button name="Discard" rect=(x=1315.8 y=11.5 width=74.6 height=32.0 center_x=1353.1 center_y=27.5)
+                Button name="Apply changes" state=[disabled] rect=(x=1402.4 y=11.5 width=117.6 height=32.0 center_x=1461.2 center_y=27.5)
+              GenericContainer rect=<none>
+                Label value="settings" rect=(x=56.0 y=9.5 width=51.5 height=20.0 center_x=81.8 center_y=19.5)
+                  TextRun value="settings" rect=(x=56.0 y=9.5 width=51.5 height=20.0 center_x=81.8 center_y=19.5)
+                Label value="ConfigMap · kube-system" rect=(x=56.0 y=29.5 width=138.8 height=16.0 center_x=125.4 center_y=37.5)
+                  TextRun value="ConfigMap · kube-system" rect=(x=56.0 y=29.5 width=138.8 height=16.0 center_x=125.4 center_y=37.5)
+                Label value="Conflict" rect=(x=206.8 y=16.5 width=76.1 height=22.0 center_x=244.8 center_y=27.5)
+                  TextRun value="Conflict" rect=(x=229.8 y=19.5 width=44.1 height=16.0 center_x=251.8 center_y=27.5)
+              GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  TextInput name="Search YAML" value="" rect=(x=16.0 y=63.5 width=219.0 height=32.0 center_x=125.5 center_y=79.5)
+                    TextRun value="" rect=(x=52.0 y=71.5 width=0.0 height=20.0 center_x=52.0 center_y=81.5)
+                Button name="Previous match" state=[disabled] rect=(x=248.0 y=67.5 width=24.0 height=24.0 center_x=260.0 center_y=79.5)
+                Button name="Next match" state=[disabled] rect=(x=278.0 y=67.5 width=24.0 height=24.0 center_x=290.0 center_y=79.5)
+                CheckBox name="Regular expression" state=[toggled=False] rect=(x=308.0 y=67.5 width=24.0 height=24.0 center_x=320.0 center_y=79.5)
+              Status name="This ConfigMap changed on the cluster after you opened it (resource version 1834 → 1902). Your edits can’t be applied." rect=<none>
+                GenericContainer rect=<none>
+                  Button name="Discard and reload" rect=(x=1394.7 y=107.5 width=125.3 height=28.0 center_x=1457.4 center_y=121.5)
+                  Button name="Copy my edits" rect=(x=1261.8 y=107.5 width=123.0 height=28.0 center_x=1323.2 center_y=121.5)
+                GenericContainer rect=<none>
+                  Label value="This ConfigMap changed on the cluster after you opened it (resource version 1834 → 1902). Your edits can’t be applied." rect=(x=42.0 y=112.0 width=689.4 height=20.0 center_x=386.7 center_y=122.0)
+                    TextRun value="This ConfigMap changed on the cluster after you opened it (resource version 1834 → 1902). Your edits can’t be applied." rect=(x=42.0 y=112.0 width=689.4 height=20.0 center_x=386.7 center_y=122.0)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Valid" rect=<none>
+                  TextRun value="Valid" rect=(x=1307.3 y=1002.5 width=26.4 height=16.0 center_x=1320.5 center_y=1010.5)
+                Label value="Ln 12, Col 19" rect=(x=1349.7 y=1002.5 width=72.7 height=16.0 center_x=1386.0 center_y=1010.5)
+                  TextRun value="Ln 12, Col 19" rect=(x=1349.7 y=1002.5 width=72.7 height=16.0 center_x=1386.0 center_y=1010.5)
+                Label value="YAML" rect=(x=1438.4 y=1002.5 width=31.8 height=16.0 center_x=1454.2 center_y=1010.5)
+                  TextRun value="YAML" rect=(x=1438.4 y=1002.5 width=31.8 height=16.0 center_x=1454.2 center_y=1010.5)
+                Label value="UTF-8" rect=(x=1486.1 y=1002.5 width=33.9 height=16.0 center_x=1503.1 center_y=1010.5)
+                  TextRun value="UTF-8" rect=(x=1486.1 y=1002.5 width=33.9 height=16.0 center_x=1503.1 center_y=1010.5)
+              GenericContainer rect=<none>
+                Label value="Changes apply directly to the cluster" rect=(x=46.0 y=1002.5 width=197.6 height=16.0 center_x=144.8 center_y=1010.5)
+                  TextRun value="Changes apply directly to the cluster" rect=(x=46.0 y=1002.5 width=197.6 height=16.0 center_x=144.8 center_y=1010.5)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      Label value="1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19" rect=(x=25.0 y=153.0 width=15.0 height=380.0 center_x=32.5 center_y=343.0)
+                    MultilineTextInput name="Kubernetes resource manifest" value="apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: settings\n  namespace: kube-system\n  labels:\n    app.kubernetes.io/name: settings\n    app.kubernetes.io/part-of: api\n  annotations:\n    styrhous.dev/edited-by: ada\ndata:\n  mode: production\n  log-level: info\n  feature-flags: |\n    widgets.featured=true\n    orders.async=false\n  config-map-ref: map-config\n  replicas: 3\n  enable-metrics: true\n" rect=(x=56.0 y=153.0 width=1480.0 height=400.0 center_x=796.0 center_y=353.0)
+                      TextRun value="apiVersion: v1\n" rect=(x=56.0 y=153.0 width=109.2 height=20.0 center_x=110.6 center_y=163.0)
+                      TextRun value="kind: ConfigMap\n" rect=(x=56.0 y=173.0 width=117.0 height=20.0 center_x=114.5 center_y=183.0)
+                      TextRun value="metadata:\n" rect=(x=56.0 y=193.0 width=70.2 height=20.0 center_x=91.1 center_y=203.0)
+                      TextRun value="  name: settings\n" rect=(x=56.0 y=213.0 width=124.8 height=20.0 center_x=118.4 center_y=223.0)
+                      TextRun value="  namespace: kube-system\n" rect=(x=56.0 y=233.0 width=187.2 height=20.0 center_x=149.6 center_y=243.0)
+                      TextRun value="  labels:\n" rect=(x=56.0 y=253.0 width=70.2 height=20.0 center_x=91.1 center_y=263.0)
+                      TextRun value="    app.kubernetes.io/name: settings\n" rect=(x=56.0 y=273.0 width=280.8 height=20.0 center_x=196.4 center_y=283.0)
+                      TextRun value="    app.kubernetes.io/part-of: api\n" rect=(x=56.0 y=293.0 width=265.2 height=20.0 center_x=188.6 center_y=303.0)
+                      TextRun value="  annotations:\n" rect=(x=56.0 y=313.0 width=109.2 height=20.0 center_x=110.6 center_y=323.0)
+                      TextRun value="    styrhous.dev/edited-by: ada\n" rect=(x=56.0 y=333.0 width=241.8 height=20.0 center_x=176.9 center_y=343.0)
+                      TextRun value="data:\n" rect=(x=56.0 y=353.0 width=39.0 height=20.0 center_x=75.5 center_y=363.0)
+                      TextRun value="  mode: production\n" rect=(x=56.0 y=373.0 width=140.4 height=20.0 center_x=126.2 center_y=383.0)
+                      TextRun value="  log-level: info\n" rect=(x=56.0 y=393.0 width=132.6 height=20.0 center_x=122.3 center_y=403.0)
+                      TextRun value="  feature-flags: |\n" rect=(x=56.0 y=413.0 width=140.4 height=20.0 center_x=126.2 center_y=423.0)
+                      TextRun value="    widgets.featured=true\n" rect=(x=56.0 y=433.0 width=195.0 height=20.0 center_x=153.5 center_y=443.0)
+                      TextRun value="    orders.async=false\n" rect=(x=56.0 y=453.0 width=171.6 height=20.0 center_x=141.8 center_y=463.0)
+                      TextRun value="  config-map-ref: map-config\n" rect=(x=56.0 y=473.0 width=218.4 height=20.0 center_x=165.2 center_y=483.0)
+                      TextRun value="  replicas: 3\n" rect=(x=56.0 y=493.0 width=101.4 height=20.0 center_x=106.7 center_y=503.0)
+                      TextRun value="  enable-metrics: true\n" rect=(x=56.0 y=513.0 width=171.6 height=20.0 center_x=141.8 center_y=523.0)
+                      TextRun value="" rect=(x=56.0 y=533.0 width=0.0 height=20.0 center_x=56.0 center_y=543.0)
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        AlertDialog name="Discard your edits?" rect=(x=548.0 y=422.0 width=440.0 height=181.0 center_x=768.0 center_y=512.5)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              Label value="Discard your edits?" rect=(x=628.0 y=446.0 width=149.0 height=24.0 center_x=702.5 center_y=458.0)
+                TextRun value="Discard your edits?" rect=(x=628.0 y=446.0 width=149.0 height=24.0 center_x=702.5 center_y=458.0)
+              Label value="Your changes to settings will be lost and the latest version from the cluster will be loaded." rect=(x=628.0 y=474.0 width=318.5 height=40.0 center_x=787.2 center_y=494.0)
+                TextRun value="Your changes to settings will be lost and the latest " rect=(x=628.0 y=474.0 width=318.5 height=20.0 center_x=787.2 center_y=484.0)
+                TextRun value="version from the cluster will be loaded." rect=(x=628.0 y=494.0 width=240.9 height=20.0 center_x=748.5 center_y=504.0)
+            GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            Button name="Discard and reload" rect=(x=824.3 y=555.0 width=139.7 height=32.0 center_x=894.1 center_y=571.0)
+            Button name="Keep editing" state=[focused] rect=(x=711.4 y=555.0 width=104.8 height=32.0 center_x=763.9 center_y=571.0)

@@ -19,6 +19,10 @@ pub(crate) struct YamlEditorWindowState {
     pub(crate) error: Option<String>,
     pub(crate) close_requested: bool,
     pub(crate) confirm_discard: bool,
+    /// Whether the "discard your edits and reload" confirmation is open.
+    pub(crate) confirm_reload: bool,
+    /// Set when applying failed because the resource changed on the cluster.
+    pub(crate) conflict: Option<EditorConflict>,
     pub(crate) focus_requested: bool,
     pub(crate) schema: Option<ResourceSchema>,
     pub(crate) schema_loading: bool,
@@ -30,7 +34,10 @@ pub(crate) struct YamlEditorWindowState {
     pub(crate) scroll_to_diagnostic: Option<SourceRange>,
     pub(crate) server_validation: ValidationState,
     pub(crate) validation_revision: u64,
-    pub(crate) validation_due: Option<Instant>,
+    /// The document or schema changed under the editor: validate it locally again on the next
+    /// frame (which bumps the revision, so results for the old document are ignored).
+    pub(crate) revalidate: bool,
+    pub(crate) validation_due: Option<ValidationDue>,
     pub(crate) suggestions: Vec<CompletionSuggestion>,
     pub(crate) completion_context: Option<CompletionContext>,
     pub(crate) completion_cursor: Option<usize>,
@@ -104,6 +111,23 @@ pub(crate) struct YamlEditorSearchState {
     pub(crate) active_match: Option<usize>,
     /// The next rendered editor frame scrolls this match into view, then clears it.
     pub(crate) scroll_to_match: Option<usize>,
+}
+
+/// When the debounced server validation of the edited document is due.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum ValidationDue {
+    /// Armed by an edit; the next frame that shows the editor starts the debounce from its
+    /// time (egui's frame time, so that tests drive it deterministically).
+    Debounce,
+    /// Due once egui's frame time, in seconds, reaches this.
+    At(f64),
+}
+
+/// An apply rejected because the resource changed on the cluster after the editor opened it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct EditorConflict {
+    /// The version on the cluster, when the worker could tell.
+    pub(crate) current_resource_version: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

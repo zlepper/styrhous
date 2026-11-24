@@ -163,9 +163,9 @@ fn completion_documentation_sits_beside_the_list_without_overlapping_it() {
     let position = components::completion_doc_position(
         viewport.shrink(space::S12),
         completion_popup,
-        egui::vec2(size::COMPLETION_DOC_WIDTH, 0.0),
+        egui::vec2(size::COMPLETION_DOC_WIDTH_EDITOR, 0.0),
     );
 
     assert_eq!(position.y, completion_popup.top());
-    assert!(position.x + size::COMPLETION_DOC_WIDTH <= completion_popup.left());
+    assert!(position.x + size::COMPLETION_DOC_WIDTH_EDITOR <= completion_popup.left());
 }

@@ -62,7 +62,10 @@ pub(super) fn yaml_layout_job(
         job.sections.push(egui::text::LayoutSection {
             leading_space: 0.0,
             byte_range: egui::text::ByteIndex(range.start)..egui::text::ByteIndex(range.end),
-            format: egui::TextFormat::simple(font_id.clone(), token.color(theme)),
+            format: egui::TextFormat {
+                line_height: Some(components::design::type_scale::MONO.line_height()),
+                ..egui::TextFormat::simple(font_id.clone(), token.color(theme))
+            },
         });
     }
     job

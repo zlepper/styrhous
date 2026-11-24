@@ -52,6 +52,7 @@ fn api_status_causes_become_editor_diagnostics_for_validation_and_apply() {
                 error: api_error.clone(),
             }) as WorkerResultBox,
             Box::new(ResourceApplyFailed {
+                current_resource_version: None,
                 editor_id: 1,
                 cluster_key: 7,
                 api_resource,
@@ -113,6 +114,7 @@ fn secret_mutation_failures_redact_notification_details() {
     let mut commands = Vec::new();
 
     ResourceApplyFailed {
+        current_resource_version: None,
         editor_id: 1,
         cluster_key: 7,
         api_resource: secret.clone(),

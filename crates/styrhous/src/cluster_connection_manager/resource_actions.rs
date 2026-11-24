@@ -235,7 +235,7 @@ pub(crate) async fn validate_resource_yaml(
                 resource_name,
             }));
         }
-        resource_yaml::EditorReplacement::Conflict => resource_version_conflict_error(),
+        resource_yaml::EditorReplacement::Conflict { .. } => resource_version_conflict_error(),
         resource_yaml::EditorReplacement::Rejected(status) => resource_api_error(&status),
     };
     Ok(Err(ResourceYamlValidationFailed {

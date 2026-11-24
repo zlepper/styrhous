@@ -5,14 +5,15 @@
 
 use egui::{Align, Layout, Rect, Response, Sense, Ui, UiBuilder, Vec2, pos2, vec2};
 
-use crate::PointingHand;
 use crate::a11y::{Name, describe_container};
 use crate::callout::tone_icon;
 use crate::design::theme::{ThemeExt, Tone};
 use crate::design::type_scale;
 use crate::design::{size, space};
+use crate::icons::Icon;
 use crate::mini_button::MiniButton;
 use crate::tooltip::TooltipExt;
+use crate::{Button, ButtonSize, ButtonVariant, PointingHand};
 
 /// Horizontal padding of a banner.
 const PADDING_X: f32 = space::S16;
@@ -31,6 +32,8 @@ const ACTION_ROLE: type_scale::TextRole = type_scale::UI_STRONG;
 pub struct BannerResponse {
     /// The action link was clicked.
     pub action: bool,
+    /// The index of the [`Banner::buttons`] button that was clicked.
+    pub button: Option<usize>,
     /// The dismiss button was clicked.
     pub dismissed: bool,
 }
@@ -44,7 +47,16 @@ pub struct Banner<'a> {
     tone: Tone,
     message: &'a str,
     action: Option<&'a str>,
+    buttons: &'a [BannerButton<'a>],
     dismissible: bool,
+}
+
+/// A button at the right of a [`Banner`], for conditions with two ways out.
+#[derive(Clone, Copy, Debug)]
+pub struct BannerButton<'a> {
+    pub label: &'a str,
+    pub icon: Option<Icon>,
+    pub variant: ButtonVariant,
 }
 
 impl<'a> Banner<'a> {
@@ -54,6 +66,7 @@ impl<'a> Banner<'a> {
             tone,
             message,
             action: None,
+            buttons: &[],
             dismissible: false,
         }
     }
@@ -61,6 +74,13 @@ impl<'a> Banner<'a> {
     /// An underlined action after the message ("Manage license", "Retry").
     pub fn action(mut self, label: &'a str) -> Self {
         self.action = Some(label);
+        self
+    }
+
+    /// Small buttons at the right, first to last (an alternative to the underlined
+    /// [`action`](Self::action)).
+    pub fn buttons(mut self, buttons: &'a [BannerButton<'a>]) -> Self {
+        self.buttons = buttons;
         self
     }
 
@@ -127,9 +147,13 @@ impl<'a> Banner<'a> {
                 .width()
                 + GAP
         });
+        let mut response = BannerResponse::default();
+        let buttons_rect =
+            Rect::from_min_max(row.min, pos2(row.right() - dismiss_width, row.bottom()));
+        let buttons_width = self.show_buttons(ui, buttons_rect, &mut response);
         let text_rect = Rect::from_min_max(
             pos2(icon_rect.right() + GAP, row.top()),
-            pos2(row.right() - dismiss_width, row.bottom()),
+            pos2(row.right() - dismiss_width - buttons_width, row.bottom()),
         );
         let mut text_ui = ui.new_child(
             UiBuilder::new()
@@ -161,7 +185,6 @@ impl<'a> Banner<'a> {
         } else {
             message
         };
-        let mut response = BannerResponse::default();
         if let Some(action) = self.action {
             response.action =
                 underlined_action(&mut text_ui, action, colors.text_on_tint, baseline).clicked();
@@ -177,6 +200,31 @@ impl<'a> Banner<'a> {
                 .clicked();
         }
         (response, message.id)
+    }
+
+    /// The buttons right-aligned in `rect`; the width they take, with the gap before them.
+    fn show_buttons(&self, ui: &mut Ui, rect: Rect, response: &mut BannerResponse) -> f32 {
+        if self.buttons.is_empty() {
+            return 0.0;
+        }
+        let mut buttons_ui = ui.new_child(
+            UiBuilder::new()
+                .max_rect(rect)
+                .layout(Layout::right_to_left(Align::Center)),
+        );
+        buttons_ui.spacing_mut().item_spacing = vec2(GAP, 0.0);
+        for (index, banner_button) in self.buttons.iter().enumerate().rev() {
+            let mut button = Button::new(banner_button.label)
+                .variant(banner_button.variant)
+                .size(ButtonSize::Sm);
+            if let Some(icon) = banner_button.icon {
+                button = button.leading_icon(icon);
+            }
+            if button.show(&mut buttons_ui).clicked() {
+                response.button = Some(index);
+            }
+        }
+        rect.right() - buttons_ui.min_rect().left() + GAP
     }
 }
 

@@ -29,6 +29,8 @@ const HEADER_GAP: f32 = space::S6;
 const DOC_GAP: f32 = space::S8;
 /// Gap between the documentation's name row and its description.
 const DOC_DESCRIPTION_GAP: f32 = space::S6;
+/// The size of code in the documentation's description.
+const DOC_CODE_SIZE: f32 = 11.0;
 
 /// What the completion offers at the caret.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -298,6 +300,7 @@ pub struct CompletionDoc<'a> {
     kind: &'a str,
     name: &'a str,
     description: &'a str,
+    width: f32,
 }
 
 impl<'a> CompletionDoc<'a> {
@@ -307,11 +310,18 @@ impl<'a> CompletionDoc<'a> {
             kind,
             name,
             description,
+            width: size::COMPLETION_DOC_WIDTH,
         }
     }
 
+    /// Set the popover `width` (the editor's is wider than the board's).
+    pub fn width(mut self, width: f32) -> Self {
+        self.width = width;
+        self
+    }
+
     pub fn show(self, ui: &mut Ui) -> Rect {
-        popover(ui, size::COMPLETION_DOC_WIDTH, |ui| {
+        popover(ui, self.width, |ui| {
             let theme = ui.tokens();
             egui::Frame::new()
                 .inner_margin(space::S8 as i8)
@@ -324,10 +334,38 @@ impl<'a> CompletionDoc<'a> {
                         DOC_NAME.label(ui, self.name, theme.text.primary);
                     });
                     ui.add_space(DOC_DESCRIPTION_GAP);
-                    type_scale::META.label(ui, self.description, theme.text.secondary);
+                    if self.description.contains('`') {
+                        let mut job =
+                            description_job(ui.ctx(), self.description, theme.text.secondary);
+                        job.wrap.max_width = ui.available_width();
+                        let galley = type_scale::META.galley_from_job(ui.ctx(), job);
+                        let (rect, label) =
+                            type_scale::allocate_text(ui, galley.rect.size(), galley.text());
+                        type_scale::paint_text(ui, &label, rect.min, galley, theme.text.secondary);
+                    } else {
+                        type_scale::META.label(ui, self.description, theme.text.secondary);
+                    }
                 });
         })
     }
+}
+
+/// The description as a paragraph, its `code` runs (between backticks) in mono 11.
+fn description_job(
+    ctx: &egui::Context,
+    description: &str,
+    color: egui::Color32,
+) -> egui::text::LayoutJob {
+    let plain = type_scale::META.text_format(ctx, color);
+    let code = type_scale::MONO
+        .with_size(DOC_CODE_SIZE, type_scale::META.line_height())
+        .text_format(ctx, color);
+    let mut job = egui::text::LayoutJob::default();
+    for (index, run) in description.split('`').enumerate() {
+        let format = if index % 2 == 1 { &code } else { &plain };
+        job.append(run, 0.0, format.clone());
+    }
+    job
 }
 
 /// A raised popover `width` wide at the cursor, its contents in

@@ -1,0 +1,71 @@
+viewport: width=1536.0 height=1024.0 points, pixels_per_point=1.0
+Window rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Button name="Discard" rect=(x=1315.8 y=11.5 width=74.6 height=32.0 center_x=1353.1 center_y=27.5)
+                Button name="Apply changes" rect=(x=1402.4 y=11.5 width=117.6 height=32.0 center_x=1461.2 center_y=27.5)
+              GenericContainer rect=<none>
+                Label value="settings" rect=(x=56.0 y=9.5 width=51.5 height=20.0 center_x=81.8 center_y=19.5)
+                  TextRun value="settings" rect=(x=56.0 y=9.5 width=51.5 height=20.0 center_x=81.8 center_y=19.5)
+                Label value="ConfigMap · kube-system" rect=(x=56.0 y=29.5 width=138.8 height=16.0 center_x=125.4 center_y=37.5)
+                  TextRun value="ConfigMap · kube-system" rect=(x=56.0 y=29.5 width=138.8 height=16.0 center_x=125.4 center_y=37.5)
+                Label value="Modified" rect=(x=206.8 y=16.5 width=80.6 height=22.0 center_x=247.1 center_y=27.5)
+                  TextRun value="Modified" rect=(x=229.8 y=19.5 width=48.6 height=16.0 center_x=254.1 center_y=27.5)
+              GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  TextInput name="Search YAML" value="map" rect=(x=16.0 y=63.5 width=150.0 height=32.0 center_x=91.0 center_y=79.5)
+                    TextRun value="map" rect=(x=52.0 y=71.5 width=25.4 height=20.0 center_x=64.7 center_y=81.5)
+                Label value="2 / 3" rect=(x=172.0 y=69.5 width=33.0 height=20.0 center_x=188.5 center_y=79.5)
+                  TextRun value="2 / 3" rect=(x=172.0 y=69.5 width=33.0 height=20.0 center_x=188.5 center_y=79.5)
+                Button name="Clear search" rect=(x=211.0 y=67.5 width=24.0 height=24.0 center_x=223.0 center_y=79.5)
+                Button name="Previous match" rect=(x=248.0 y=67.5 width=24.0 height=24.0 center_x=260.0 center_y=79.5)
+                Button name="Next match" rect=(x=278.0 y=67.5 width=24.0 height=24.0 center_x=290.0 center_y=79.5)
+                CheckBox name="Regular expression" state=[toggled=False] rect=(x=308.0 y=67.5 width=24.0 height=24.0 center_x=320.0 center_y=79.5)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Label value="Valid" rect=<none>
+                  TextRun value="Valid" rect=(x=1307.3 y=1002.5 width=26.4 height=16.0 center_x=1320.5 center_y=1010.5)
+                Label value="Ln 12, Col 19" rect=(x=1349.7 y=1002.5 width=72.7 height=16.0 center_x=1386.0 center_y=1010.5)
+                  TextRun value="Ln 12, Col 19" rect=(x=1349.7 y=1002.5 width=72.7 height=16.0 center_x=1386.0 center_y=1010.5)
+                Label value="YAML" rect=(x=1438.4 y=1002.5 width=31.8 height=16.0 center_x=1454.2 center_y=1010.5)
+                  TextRun value="YAML" rect=(x=1438.4 y=1002.5 width=31.8 height=16.0 center_x=1454.2 center_y=1010.5)
+                Label value="UTF-8" rect=(x=1486.1 y=1002.5 width=33.9 height=16.0 center_x=1503.1 center_y=1010.5)
+                  TextRun value="UTF-8" rect=(x=1486.1 y=1002.5 width=33.9 height=16.0 center_x=1503.1 center_y=1010.5)
+              GenericContainer rect=<none>
+                Label value="Changes apply directly to the cluster" rect=(x=46.0 y=1002.5 width=197.6 height=16.0 center_x=144.8 center_y=1010.5)
+                  TextRun value="Changes apply directly to the cluster" rect=(x=46.0 y=1002.5 width=197.6 height=16.0 center_x=144.8 center_y=1010.5)
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+                      Label value="1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19" rect=(x=25.0 y=117.0 width=15.0 height=380.0 center_x=32.5 center_y=307.0)
+                    MultilineTextInput name="Kubernetes resource manifest" value="apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: settings\n  namespace: kube-system\n  labels:\n    app.kubernetes.io/name: settings\n    app.kubernetes.io/part-of: api\n  annotations:\n    styrhous.dev/edited-by: ada\ndata:\n  mode: production\n  log-level: info\n  feature-flags: |\n    widgets.featured=true\n    orders.async=false\n  config-map-ref: map-config\n  replicas: 3\n  enable-metrics: true\n" state=[focused] rect=(x=56.0 y=117.0 width=1480.0 height=400.0 center_x=796.0 center_y=317.0)
+                      TextRun value="apiVersion: v1\n" rect=(x=56.0 y=117.0 width=109.2 height=20.0 center_x=110.6 center_y=127.0)
+                      TextRun value="kind: ConfigMap\n" rect=(x=56.0 y=137.0 width=117.0 height=20.0 center_x=114.5 center_y=147.0)
+                      TextRun value="metadata:\n" rect=(x=56.0 y=157.0 width=70.2 height=20.0 center_x=91.1 center_y=167.0)
+                      TextRun value="  name: settings\n" rect=(x=56.0 y=177.0 width=124.8 height=20.0 center_x=118.4 center_y=187.0)
+                      TextRun value="  namespace: kube-system\n" rect=(x=56.0 y=197.0 width=187.2 height=20.0 center_x=149.6 center_y=207.0)
+                      TextRun value="  labels:\n" rect=(x=56.0 y=217.0 width=70.2 height=20.0 center_x=91.1 center_y=227.0)
+                      TextRun value="    app.kubernetes.io/name: settings\n" rect=(x=56.0 y=237.0 width=280.8 height=20.0 center_x=196.4 center_y=247.0)
+                      TextRun value="    app.kubernetes.io/part-of: api\n" rect=(x=56.0 y=257.0 width=265.2 height=20.0 center_x=188.6 center_y=267.0)
+                      TextRun value="  annotations:\n" rect=(x=56.0 y=277.0 width=109.2 height=20.0 center_x=110.6 center_y=287.0)
+                      TextRun value="    styrhous.dev/edited-by: ada\n" rect=(x=56.0 y=297.0 width=241.8 height=20.0 center_x=176.9 center_y=307.0)
+                      TextRun value="data:\n" rect=(x=56.0 y=317.0 width=39.0 height=20.0 center_x=75.5 center_y=327.0)
+                      TextRun value="  mode: production\n" rect=(x=56.0 y=337.0 width=140.4 height=20.0 center_x=126.2 center_y=347.0)
+                      TextRun value="  log-level: info\n" rect=(x=56.0 y=357.0 width=132.6 height=20.0 center_x=122.3 center_y=367.0)
+                      TextRun value="  feature-flags: |\n" rect=(x=56.0 y=377.0 width=140.4 height=20.0 center_x=126.2 center_y=387.0)
+                      TextRun value="    widgets.featured=true\n" rect=(x=56.0 y=397.0 width=195.0 height=20.0 center_x=153.5 center_y=407.0)
+                      TextRun value="    orders.async=false\n" rect=(x=56.0 y=417.0 width=171.6 height=20.0 center_x=141.8 center_y=427.0)
+                      TextRun value="  config-map-ref: map-config\n" rect=(x=56.0 y=437.0 width=218.4 height=20.0 center_x=165.2 center_y=447.0)
+                      TextRun value="  replicas: 3\n" rect=(x=56.0 y=457.0 width=101.4 height=20.0 center_x=106.7 center_y=467.0)
+                      TextRun value="  enable-metrics: true\n" rect=(x=56.0 y=477.0 width=171.6 height=20.0 center_x=141.8 center_y=487.0)
+                      TextRun value="" rect=(x=56.0 y=497.0 width=0.0 height=20.0 center_x=56.0 center_y=507.0)

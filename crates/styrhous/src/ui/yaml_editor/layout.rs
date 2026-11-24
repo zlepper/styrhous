@@ -37,10 +37,12 @@ pub(super) fn line_number_layout_job(
         .iter()
         .filter_map(|diagnostic| diagnostic.line)
         .collect();
-    let normal_format =
-        egui::text::TextFormat::simple(type_scale::MONO.font_id(ctx), theme.code.gutter);
-    let diagnostic_format =
-        egui::text::TextFormat::simple(type_scale::MONO.font_id(ctx), theme.code.error);
+    let format = |color| egui::text::TextFormat {
+        line_height: Some(type_scale::MONO.line_height()),
+        ..egui::text::TextFormat::simple(type_scale::MONO.font_id(ctx), color)
+    };
+    let normal_format = format(theme.code.gutter);
+    let diagnostic_format = format(theme.code.error);
     let mut job = egui::text::LayoutJob::default();
     for line in 1..=line_count {
         let format = if diagnostic_lines.contains(&line) {
@@ -227,4 +229,27 @@ fn show_diagnostic_tooltip(ui: &egui::Ui, response: &egui::Response, message: &s
                 components::tooltip::TooltipContent::Text(message),
             );
         });
+}
+
+/// The line numbers in a column `gutter` points wide: right-aligned, `size::CODE_GUTTER_PADDING`
+/// before the code, with the numbers of lines that have problems in the error colour.
+pub(super) fn show_line_numbers(
+    ui: &mut egui::Ui,
+    line_count: usize,
+    diagnostics: &[YamlDiagnostic],
+    theme: &Theme,
+    gutter: f32,
+) {
+    let mut job = line_number_layout_job(ui.ctx(), line_count, diagnostics, theme);
+    job.halign = egui::Align::RIGHT;
+    let numbers = gutter - size::CODE_GUTTER_PADDING;
+    ui.allocate_ui_with_layout(
+        egui::vec2(numbers, 0.0),
+        egui::Layout::top_down(egui::Align::Max),
+        |ui| {
+            ui.set_width(numbers);
+            ui.add(egui::Label::new(job).selectable(false));
+        },
+    );
+    ui.add_space(size::CODE_GUTTER_PADDING);
 }

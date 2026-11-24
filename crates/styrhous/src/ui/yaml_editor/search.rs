@@ -19,7 +19,7 @@ pub(super) fn show_search_controls(
     let match_count = search_matches.as_ref().map_or(0, Vec::len);
     let response = SearchField::new(&mut editor.search.query)
         .regex(&mut editor.search.regex_mode)
-        .placeholder("Search…")
+        .placeholder("Find in document…")
         .id_salt(("yaml-editor-search", editor.id))
         .accessibility_label("Search YAML")
         .status(status)
@@ -117,20 +117,20 @@ pub(super) fn resource_scope(editor: &YamlEditorWindowState) -> String {
     )
 }
 
-/// Status words with their lamp in `tone`, set like the surrounding body text.
-pub(super) fn status_indicator(ui: &mut egui::Ui, tone: Tone, label: &str) {
-    let label_color = ui.tokens().text.secondary;
-    components::StatusLabel::new(label, tone)
-        .role(type_scale::BODY)
-        .color(label_color)
-        .show(ui);
-}
-
+/// An error above the code, inset from the window like the code surface's own content.
 pub(super) fn error_strip(ui: &mut egui::Ui, error: &str) {
-    components::Callout::new(Tone::Danger, error)
-        .alert()
-        .show(ui);
-    ui.add_space(space::S8);
+    egui::Frame::new()
+        .inner_margin(egui::Margin {
+            left: space::S16 as i8,
+            right: space::S16 as i8,
+            top: space::S16 as i8,
+            bottom: space::S8 as i8,
+        })
+        .show(ui, |ui| {
+            components::Callout::new(Tone::Danger, error)
+                .alert()
+                .show(ui);
+        });
 }
 
 pub(super) fn editor_error(ui: &mut egui::Ui, error: &str) {

@@ -17,12 +17,13 @@ fn completion_popup_max_size() -> egui::Vec2 {
 }
 
 mod basic;
+mod boards;
 mod completion_basics;
 mod completion_navigation;
 mod diagnostics;
 mod windows;
 
-fn editor(yaml: &str) -> YamlEditorWindowState {
+pub(super) fn editor(yaml: &str) -> YamlEditorWindowState {
     YamlEditorWindowState {
         id: 1,
         cluster_key: 7,
@@ -44,6 +45,8 @@ fn editor(yaml: &str) -> YamlEditorWindowState {
         error: None,
         close_requested: false,
         confirm_discard: false,
+        confirm_reload: false,
+        conflict: None,
         focus_requested: false,
         schema: None,
         schema_loading: false,
@@ -52,6 +55,7 @@ fn editor(yaml: &str) -> YamlEditorWindowState {
         scroll_to_diagnostic: None,
         server_validation: ValidationState::Idle,
         validation_revision: 0,
+        revalidate: false,
         validation_due: None,
         suggestions: Vec::new(),
         completion_context: None,

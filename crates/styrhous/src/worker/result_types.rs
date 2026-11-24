@@ -390,6 +390,8 @@ pub(crate) struct ResourceApplyFailed {
     pub(crate) namespace: Option<String>,
     pub(crate) resource_name: String,
     pub(crate) error: ResourceApiError,
+    /// The version of the live object, when the apply conflicted with it.
+    pub(crate) current_resource_version: Option<String>,
 }
 #[derive(Debug)]
 pub(crate) struct DeploymentRestartCompleted {
