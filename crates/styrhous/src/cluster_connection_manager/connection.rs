@@ -156,6 +156,17 @@ impl Debug for ClusterConnection {
 }
 
 impl ClusterConnection {
+    /// A connection to a fake API server, without watchers.
+    #[cfg(test)]
+    pub(crate) fn for_test(cluster_key: i32, config: kube::Config) -> Self {
+        Self {
+            client: kube::Client::try_from(config.clone()).expect("test client builds"),
+            log_client: LazyLogClient::new(&config),
+            join_handles: Vec::new(),
+            cluster_key,
+        }
+    }
+
     /// Get a clone of the kube client for starting additional watchers.
     pub fn client(&self) -> kube::Client {
         self.client.clone()

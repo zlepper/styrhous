@@ -5,35 +5,50 @@ use crate::cluster_connection_manager::{
     DrainOptions, drain_node, set_node_unschedulable, watch_node_pod_counts,
 };
 
+impl CordonNode {
+    fn failure(&self) -> NodeCordonFailed {
+        NodeCordonFailed {
+            cluster_key: self.cluster_key,
+            operation_id: self.operation_id,
+            node_name: self.node_name.clone(),
+            cordon: self.cordon,
+            error: String::new(),
+        }
+    }
+}
+
 #[async_trait]
 impl WorkerCommand for CordonNode {
     type Output = Result<NodeCordonCompleted, NodeCordonFailed>;
 
     async fn execute(self, state: &WorkerState) -> Self::Output {
-        let outcome = async {
-            let client = state.client_for_cluster(self.cluster_key).await?;
-            set_node_unschedulable(client, &self.node_name, self.cordon).await
-        }
-        .await;
-        match outcome {
-            Ok(()) => Ok(NodeCordonCompleted {
+        let failure = self.failure();
+        state
+            .api_call(
+                self.cluster_key,
+                ApiCall::mutation("Updating the Node"),
+                |client| set_node_unschedulable(client, &self.node_name, self.cordon),
+            )
+            .await
+            .map(|()| NodeCordonCompleted {
                 cluster_key: self.cluster_key,
                 operation_id: self.operation_id,
                 node_name: self.node_name,
                 cordon: self.cordon,
-            }),
-            Err(error) => Err(NodeCordonFailed {
-                cluster_key: self.cluster_key,
-                operation_id: self.operation_id,
-                node_name: self.node_name,
-                cordon: self.cordon,
+            })
+            .map_err(|error| NodeCordonFailed {
                 error: format!("{error:#}"),
-            }),
-        }
+                ..failure
+            })
     }
 
     fn cluster_key(&self) -> Option<i32> {
         Some(self.cluster_key)
+    }
+
+    fn failure_if_abandoned(&self) -> Option<AbandonedFailure> {
+        let failure = self.failure();
+        abandoned_failure(move |error| NodeCordonFailed { error, ..failure })
     }
 }
 
@@ -124,6 +139,15 @@ impl WorkerCommand for StartNodePodCountWatch {
 
     fn cluster_key(&self) -> Option<i32> {
         Some(self.cluster_key)
+    }
+
+    fn failure_if_abandoned(&self) -> Option<AbandonedFailure> {
+        let (cluster_key, generation) = (self.cluster_key, self.generation);
+        abandoned_failure(move |error| NodePodCountsWatchFailed {
+            cluster_key,
+            generation,
+            error,
+        })
     }
 }
 

@@ -154,3 +154,42 @@ fn secret_mutation_failures_redact_notification_details() {
                 && !detail.contains("sentinel-data-secret-value"))
     );
 }
+
+#[test]
+fn a_yaml_fetch_that_the_api_never_answered_stops_the_editor_loading() {
+    let ctx = egui::Context::default();
+    let api_resource = ApiResource {
+        group: "apps".into(),
+        version: "v1".into(),
+        kind: "Deployment".into(),
+        name: "deployments".into(),
+        namespaced: true,
+    };
+    let mut state = UiState::default();
+    let mut commands = Vec::new();
+    state.open_yaml_editor(
+        &ctx,
+        7,
+        api_resource,
+        Some("default".into()),
+        "api".into(),
+        &mut commands,
+    );
+    assert!(state.yaml_editors[&1].loading);
+
+    let timeout = "Getting YAML got no response from the Kubernetes API within 45s";
+    let mut worker = MockWorker {
+        results: VecDeque::from([
+            Box::new(Err::<ResourceYamlFetched, _>(ResourceYamlFetchFailed {
+                editor_id: 1,
+                error: timeout.into(),
+            })) as WorkerResultBox,
+        ]),
+        commands: Vec::new(),
+    };
+    state.update(&mut worker);
+
+    let editor = &state.yaml_editors[&1];
+    assert!(!editor.loading, "the editor must leave its Loading state");
+    assert_eq!(editor.error.as_deref(), Some(timeout));
+}

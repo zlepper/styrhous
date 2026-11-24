@@ -29,7 +29,15 @@ pub(crate) struct WorkerState {
     /// The bounded, disk-backed ingress for pod logs. A Kubernetes stream
     /// awaits this directly rather than routing log data through the UI.
     pub(super) log_store_appender: Option<LogStoreAppender>,
+    /// How long a request/response command may wait for the Kubernetes API before it
+    /// reports a failure instead of leaving its UI element loading forever.
+    pub(super) request_deadline: Duration,
 }
+
+/// The kube client only times out a connection that is idle for 295 s, and a request that
+/// waits for an HTTP/2 stream or a response is never abandoned before that. This is how
+/// long the UI waits for one answer from the API server.
+pub(super) const REQUEST_DEADLINE: Duration = Duration::from_secs(45);
 
 impl WorkerState {
     pub(super) fn new(
@@ -48,7 +56,47 @@ impl WorkerState {
             log_streams: Arc::new(TaskRegistry::default()),
             watch_initialization_slots: Arc::new(Mutex::new(HashMap::new())),
             log_store_appender,
+            request_deadline: REQUEST_DEADLINE,
         }
+    }
+
+    /// Bound one Kubernetes API exchange. A request the server never answers turns into an
+    /// error naming the call (dropping the request future abandons it), so the command that
+    /// awaits it still sends its failure result.
+    pub(super) async fn within_deadline<T>(
+        &self,
+        call: ApiCall,
+        request: impl Future<Output = anyhow::Result<T>>,
+    ) -> anyhow::Result<T> {
+        let deadline = self.request_deadline * call.patience;
+        tokio::time::timeout(deadline, request)
+            .await
+            .unwrap_or_else(|_| {
+                anyhow::bail!(
+                    "{} got no response from the Kubernetes API within {deadline:?}.{}",
+                    call.label,
+                    if call.mutates {
+                        " The change may or may not have been applied; reload before retrying."
+                    } else {
+                        ""
+                    }
+                )
+            })
+    }
+
+    /// Run one Kubernetes API call for `cluster_key` with the session's client. Both a
+    /// missing session and a failed or unanswered call come back as the error.
+    pub(super) async fn api_call<T, Fut>(
+        &self,
+        cluster_key: i32,
+        call: ApiCall,
+        request: impl FnOnce(kube::Client) -> Fut,
+    ) -> anyhow::Result<T>
+    where
+        Fut: Future<Output = anyhow::Result<T>>,
+    {
+        let client = self.client_for_cluster(cluster_key).await?;
+        self.within_deadline(call, request(client)).await
     }
 }
 
@@ -294,4 +342,39 @@ pub(super) async fn abort_task(task: JoinHandle<()>) {
     // A watcher may be in a synchronous result-channel send when cancellation
     // is requested. Bound the join so teardown cannot stall the command loop.
     let _ = tokio::time::timeout(Duration::from_millis(100), task).await;
+}
+
+/// What a command asks of the Kubernetes API, for its deadline and its timeout message.
+#[derive(Clone, Copy)]
+pub(super) struct ApiCall {
+    label: &'static str,
+    /// Whether giving up leaves it unknown if the change happened.
+    mutates: bool,
+    /// Multiple of the request deadline.
+    patience: u32,
+}
+
+impl ApiCall {
+    pub(super) const fn read(label: &'static str) -> Self {
+        Self {
+            label,
+            mutates: false,
+            patience: 1,
+        }
+    }
+
+    pub(super) const fn mutation(label: &'static str) -> Self {
+        Self {
+            mutates: true,
+            ..Self::read(label)
+        }
+    }
+
+    /// For responses that are legitimately large, such as OpenAPI documents.
+    pub(super) const fn patient(self) -> Self {
+        Self {
+            patience: 3,
+            ..self
+        }
+    }
 }

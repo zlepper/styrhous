@@ -58,6 +58,14 @@ impl WorkerCommand for StartPodLogStream {
     fn dispatch_in_order(&self) -> bool {
         true
     }
+
+    fn failure_if_abandoned(&self) -> Option<AbandonedFailure> {
+        let log_window_id = self.log_window_id;
+        abandoned_failure(move |error| PodLogStreamFailed {
+            log_window_id,
+            error,
+        })
+    }
 }
 
 #[async_trait]

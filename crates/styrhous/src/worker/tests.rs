@@ -35,5 +35,6 @@ fn pod_resource() -> ApiResource {
 }
 
 mod commands;
+mod deadlines;
 mod flow;
 mod watches;

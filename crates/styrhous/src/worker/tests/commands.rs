@@ -108,3 +108,26 @@ fn watch_initialization_slots_are_limited_per_cluster() {
         assert!(first.try_acquire().is_ok());
     });
 }
+
+#[test]
+fn watch_starts_and_stops_that_must_not_overtake_each_other_are_dispatched_in_order() {
+    let start: WorkerCommandBox = Box::new(StartNodePodCountWatch {
+        cluster_key: 1,
+        generation: 2,
+    });
+    let stop: WorkerCommandBox = Box::new(StopNodePodCountWatch { cluster_key: 1 });
+    let get_yaml: WorkerCommandBox = Box::new(GetResourceYaml {
+        editor_id: 1,
+        cluster_key: 1,
+        api_resource: pod_resource(),
+        namespace: None,
+        resource_name: "pod".to_owned(),
+    });
+
+    assert!(start.dispatch_in_order() && stop.dispatch_in_order());
+    assert!(
+        !get_yaml.dispatch_in_order(),
+        "requests never queue behind them"
+    );
+    assert!(start.failure_if_abandoned().is_some());
+}

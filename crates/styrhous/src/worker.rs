@@ -66,6 +66,24 @@ pub(crate) trait WorkerCommand: Send + std::fmt::Debug + 'static {
     fn cluster_key(&self) -> Option<i32> {
         None
     }
+
+    /// How to answer the UI when `execute` panics or is abandoned for taking too long, for
+    /// commands whose UI element would otherwise wait for a result forever. Called before
+    /// `execute`, which consumes the command.
+    fn failure_if_abandoned(&self) -> Option<AbandonedFailure> {
+        None
+    }
+}
+
+/// Builds the typed failure result from the reason a command was abandoned.
+pub(crate) type AbandonedFailure = Box<dyn FnOnce(String) -> WorkerResultBox + Send>;
+
+/// The abandoned-command answer for a command's typed failure, built from the base failure
+/// the command already uses, e.g. `abandoned_failure(move |error| Failed { error, ..base })`.
+pub(crate) fn abandoned_failure<R: WorkerResult>(
+    build: impl FnOnce(String) -> R + Send + 'static,
+) -> Option<AbandonedFailure> {
+    Some(Box::new(move |error| Box::new(build(error))))
 }
 
 /// The channel-only, object-safe adapter for concrete commands.
@@ -75,6 +93,9 @@ pub(crate) trait ErasedWorkerCommand: AsAny + Send + std::fmt::Debug {
     fn serializes_session_lifecycle(&self) -> bool;
     fn dispatch_in_order(&self) -> bool;
     fn cluster_key(&self) -> Option<i32>;
+    fn failure_if_abandoned(&self) -> Option<AbandonedFailure>;
+    /// The command's type name, for logs.
+    fn command_name(&self) -> &'static str;
 }
 
 #[async_trait]
@@ -93,6 +114,14 @@ impl<C: WorkerCommand> ErasedWorkerCommand for C {
 
     fn cluster_key(&self) -> Option<i32> {
         WorkerCommand::cluster_key(self)
+    }
+
+    fn failure_if_abandoned(&self) -> Option<AbandonedFailure> {
+        WorkerCommand::failure_if_abandoned(self)
+    }
+
+    fn command_name(&self) -> &'static str {
+        std::any::type_name::<C>()
     }
 }
 

@@ -211,11 +211,16 @@ impl LiveUpdates {
         }
     }
 
-    fn publish_live(&self, window_id: u64, summary: AppendSummary) {
-        let mut updates = self
-            .updates
+    /// The pending updates. A panic while holding the lock cannot leave the map
+    /// half-updated, so a poisoned lock is recovered instead of panicking every later caller.
+    fn locked(&self) -> std::sync::MutexGuard<'_, HashMap<u64, PendingLiveUpdate>> {
+        self.updates
             .lock()
-            .expect("live update lock is not poisoned");
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn publish_live(&self, window_id: u64, summary: AppendSummary) {
+        let mut updates = self.locked();
         let update = updates.entry(window_id).or_default();
         update.total_lines = summary.total_lines;
         update.completed_search = summary.completed_search;
@@ -229,10 +234,7 @@ impl LiveUpdates {
     }
 
     fn publish_backfill(&self, window_id: u64, total_lines: usize, backfill_lines: usize) {
-        let mut updates = self
-            .updates
-            .lock()
-            .expect("live update lock is not poisoned");
+        let mut updates = self.locked();
         let update = updates.entry(window_id).or_default();
         update.total_lines = total_lines;
         update.backfill_lines = Some(backfill_lines);
@@ -249,10 +251,7 @@ impl LiveUpdates {
     }
 
     fn take_next(&self) -> Option<LogStoreResult> {
-        let mut updates = self
-            .updates
-            .lock()
-            .expect("live update lock is not poisoned");
+        let mut updates = self.locked();
         let window_id = updates.keys().next().copied()?;
         let update = updates
             .remove(&window_id)
@@ -272,10 +271,7 @@ impl LiveUpdates {
     }
 
     fn remove(&self, window_id: u64) {
-        let mut updates = self
-            .updates
-            .lock()
-            .expect("live update lock is not poisoned");
+        let mut updates = self.locked();
         updates.remove(&window_id);
         if updates.is_empty() {
             self.repaint_requested.store(false, Ordering::Release);
