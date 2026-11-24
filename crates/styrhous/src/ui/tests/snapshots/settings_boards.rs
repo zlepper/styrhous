@@ -9,26 +9,16 @@ use crate::ui::clock::WallClock;
 use crate::ui::state::{BulkDeleteProgress, BulkDeleteTarget};
 use time::Duration;
 
-/// The board size of the main-window screens.
-const BOARD: egui::Vec2 = egui::vec2(1536.0, 1024.0);
-
-/// Take the pointer off the window, so no hover state or pointer shows in a
-/// snapshot.
-fn rest_pointer(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) {
-    harness.event(egui::Event::PointerGone);
-    harness.run();
-}
-
 /// Let a blade finish sliding in, so the blades behind it have taken their
 /// resting places.
-fn settle_blades(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) {
+fn settle_blades(harness: &mut AppHarness) {
     harness.run_steps(40);
 }
 
 /// A08: the Settings blade over the Pods table.
 #[test]
 fn a08_settings_blade() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     harness
         .state_mut()
         .licensing
@@ -56,10 +46,7 @@ fn notifications_now() -> time::OffsetDateTime {
 
 /// Set the UI clock `minutes` before "now" on A12, so outcomes recorded
 /// next read as that old when the board is drawn.
-fn set_clock_minutes_before_now(
-    harness: &mut Harness<'static, MyEguiApp<MockWorker>>,
-    minutes: i64,
-) {
+fn set_clock_minutes_before_now(harness: &mut AppHarness, minutes: i64) {
     harness.state_mut().ui_state.clock =
         WallClock::Fixed(notifications_now() - Duration::minutes(minutes));
 }
@@ -67,7 +54,7 @@ fn set_clock_minutes_before_now(
 /// A12's session: five outcomes on `kind-kind` and a discovery warning on
 /// `dev-eu`, recorded at the times the board reads (1 h, 21, 14, 6 and 2 min
 /// before "now"). Only the last two are unread.
-fn deliver_notification_history(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) {
+fn deliver_notification_history(harness: &mut AppHarness) {
     // `dev-eu`: one API group did not load.
     set_clock_minutes_before_now(harness, 60);
     harness.deliver_worker_result(KubernetesApiDiscoveryCompleted {
@@ -165,14 +152,14 @@ fn deliver_notification_history(harness: &mut Harness<'static, MyEguiApp<MockWor
     harness.run();
 }
 
-fn open_notifications(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) {
+fn open_notifications(harness: &mut AppHarness) {
     click_label(harness, "Notifications");
 }
 
 /// A12: the Notifications blade over the Pods table.
 #[test]
 fn a12_notifications() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     deliver_notification_history(&mut harness);
     assert_eq!(harness.state().ui_state.unread_operation_count(), 2);
     open_notifications(&mut harness);
@@ -184,7 +171,7 @@ fn a12_notifications() {
 /// debug image's profile menu open.
 #[test]
 fn a14_application_settings() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     harness.state_mut().terminal_launch_settings.custom_template =
         Some("alacritty -e {command}".into());
     harness.run();
@@ -209,7 +196,7 @@ fn a14_application_settings() {
 /// A09: Edit context, opened from Contexts, after a save that failed.
 #[test]
 fn a09_edit_context() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     // The board edits a context of another name.
     harness
         .state_mut()
@@ -266,7 +253,7 @@ fn a09_edit_context() {
 /// clusters, one already in the kubeconfig.
 #[test]
 fn a10_cluster_discovery() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     open_settings(&mut harness);
     click_label(
         &mut harness,
@@ -326,7 +313,7 @@ fn a10_cluster_discovery() {
 /// A11: License & account in a grace period, under the warning banner.
 #[test]
 fn a11_license_and_account_in_grace_period() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     let licensing = &mut harness.state_mut().licensing;
     licensing.set_status_for_test(LicenseStatus::Licensed(fixed_lease(
         "grace",
@@ -349,7 +336,7 @@ fn a11_license_and_account_in_grace_period() {
 /// back, and "Mark all read" clears the unread lamps and then disables itself.
 #[test]
 fn notifications_filter_problems_and_mark_everything_read() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     deliver_notification_history(&mut harness);
     open_notifications(&mut harness);
     click_label(&mut harness, "Problems");
@@ -383,7 +370,7 @@ fn notifications_filter_problems_and_mark_everything_read() {
 /// With nothing recorded the blade says so, and "Problems" has nothing to list.
 #[test]
 fn notifications_say_when_there_is_nothing_to_show() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     open_notifications(&mut harness);
     harness.get_by_label("Resource operation outcomes will appear here.");
     assert!(
@@ -398,7 +385,7 @@ fn notifications_say_when_there_is_nothing_to_show() {
 /// the default, Save keeps it.
 #[test]
 fn application_settings_keep_the_update_choice_until_saved() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     open_settings(&mut harness);
     click_label(&mut harness, OPEN_APPLICATION_SETTINGS);
     settle_blades(&mut harness);
@@ -434,7 +421,7 @@ fn application_settings_keep_the_update_choice_until_saved() {
 /// save; picking it again returns to the automatic colour.
 #[test]
 fn context_colour_is_picked_saved_and_cleared_by_picking_it_again() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     open_settings(&mut harness);
     click_label(
         &mut harness,

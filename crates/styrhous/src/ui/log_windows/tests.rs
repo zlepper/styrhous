@@ -48,7 +48,7 @@ fn window_harness(
     (harness, window, display_options)
 }
 
-const WIDE: egui::Vec2 = egui::vec2(1536.0, 1024.0);
+const WIDE: egui::Vec2 = components::test_support::BOARD_SIZE;
 const NARROW: egui::Vec2 = egui::vec2(1024.0, 1024.0);
 /// An app container of `pod`.
 fn log_target(namespace: &str, pod: &str, container: &str) -> PodLogStreamTarget {

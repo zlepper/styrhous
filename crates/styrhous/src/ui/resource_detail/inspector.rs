@@ -4,6 +4,7 @@
 use super::*;
 use crate::minimal_resource::PodLogContainer;
 use crate::resource_table::ContainerKind;
+use crate::ui::clock::frame_age;
 use components::design::theme::Tone as ThemeTone;
 use components::{
     BladeNavigation, CodeBlock, Disclosure, InspectorBody, InspectorHeader, InspectorStatus,
@@ -1152,11 +1153,7 @@ fn show_events(
                         ))
                         .copyable(),
                         DetailTableCell::new(DetailValue::Text(
-                            format!(
-                                "{} ago",
-                                format_age(event.last_timestamp, crate::ui::clock::now(ui.ctx()))
-                            )
-                            .into(),
+                            format!("{} ago", frame_age(ui.ctx(), event.last_timestamp)).into(),
                         )),
                     ])
                 })

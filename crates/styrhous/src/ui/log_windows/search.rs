@@ -101,7 +101,7 @@ pub(super) fn show_log_toolbar(
             egui::Layout::right_to_left(egui::Align::Center),
         )
     };
-    let actions = FloatingToolbar::show_floating_sized(ctx, window_id, width, layout, |ui| {
+    let actions = FloatingToolbar::show_floating(ctx, window_id, width, layout, |ui| {
         let mut actions = ToolbarActions::default();
         let mut search_field = |ui: &mut egui::Ui, width: f32, actions: &mut ToolbarActions| {
             ui.add_enabled_ui(!unavailable, |ui| {

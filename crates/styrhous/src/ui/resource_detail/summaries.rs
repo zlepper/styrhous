@@ -322,25 +322,31 @@ pub(super) fn show_data_conflict_dialog(
     if editor.pending_external_values.is_none() {
         return;
     }
-    let mut use_external = false;
-    let mut keep_local = false;
-    egui::Window::new("Data changed on cluster")
-        .collapsible(false)
-        .resizable(false)
-        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
-        .show(ctx, |ui| {
-            ui.set_min_width(360.0);
-            ui.label("This resource changed on the cluster while you have unsaved data edits.");
-            ui.add_space(12.0);
-            ui.horizontal(|ui| {
-                if Button::secondary("Use cluster version").show(ui).clicked() {
-                    use_external = true;
-                }
-                if Button::secondary("Keep my edits").show(ui).clicked() {
-                    keep_local = true;
-                }
-            });
-        });
+    use components::design::theme::Tone;
+    use components::icons::Icon;
+    use components::{Dialog, Prose};
+    let response = Dialog::new(
+        egui::Id::new("resource-data-conflict-dialog"),
+        Icon::ArrowPath,
+        Tone::Warning,
+        "Data changed on cluster",
+    )
+    .description(
+        Prose::new()
+            .plain("This resource changed on the cluster while you have unsaved data edits."),
+    )
+    .show(
+        ctx,
+        |_| {},
+        |ui| {
+            let keep = Button::primary("Keep my edits").show(ui).clicked();
+            let use_cluster = Button::secondary("Use cluster version").show(ui).clicked();
+            (use_cluster, keep)
+        },
+    );
+    // Escape or a click on the scrim keeps the edits: the non-destructive choice.
+    let (use_external, keep) = response.inner;
+    let keep_local = keep || response.dismissed;
     if use_external {
         editor.use_external_values();
     } else if keep_local {

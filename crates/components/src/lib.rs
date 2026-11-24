@@ -42,6 +42,7 @@ pub mod inspector_details;
 pub mod interaction;
 pub mod keycap;
 pub mod loading;
+pub mod measured;
 pub mod more_button;
 pub mod number_field;
 mod popover_footer;
@@ -58,6 +59,7 @@ pub mod tabs;
 pub mod test_support;
 pub mod text_input;
 pub mod textarea;
+pub mod title_stack;
 pub mod toggle;
 pub mod workspace;
 
@@ -119,10 +121,7 @@ pub use selection::{
     BoxLook, CheckState, Checkbox, Radio, RadioCard, RadioCardResponse, Switch, paint_box,
     paint_checkbox, paint_radio, paint_switch,
 };
-pub use sidebar::{
-    ClusterCard, ExpandableResponse, FloatingSidebar, NarrowSidebar, NarrowSidebarContent,
-    SideItem, WideSidebar, WideSidebarContent, kind_filter, side_caption, side_footer,
-};
+pub use sidebar::{ClusterCard, FloatingSidebar, SideItem, kind_filter, side_caption, side_footer};
 pub use status::{StatusLabel, container_square, paint_status_dot, status_dot};
 pub use table::{
     BulkSelectionBar, BulkSelectionResponse, CellAlign, ColumnVisibilityResponse, HeaderState,
@@ -135,7 +134,7 @@ pub use toggle::{ButtonGroup, Segmented, SegmentedSize, ToggleButton};
 // C07
 pub use menu::{Menu, MenuItem, MenuLook};
 pub use tooltip::{TooltipContent, TooltipExt};
-pub use workspace::{WorkspaceDrawer, WorkspacePage, workspace_section_header};
+pub use workspace::WorkspacePage;
 
 // C11
 pub mod callout;

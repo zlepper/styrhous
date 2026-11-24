@@ -7,21 +7,13 @@ use super::super::design_fixtures::{
 use super::*;
 use egui_kittest::kittest::By;
 
-/// The board size of the main-window screens.
-const BOARD: egui::Vec2 = egui::vec2(1536.0, 1024.0);
-
-fn rest_pointer(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) {
-    harness.event(egui::Event::PointerGone);
-    harness.run();
-}
-
-fn press_command(harness: &mut Harness<'static, MyEguiApp<MockWorker>>, key: egui::Key) {
+fn press_command(harness: &mut AppHarness, key: egui::Key) {
     harness.key_press_modifiers(egui::Modifiers::COMMAND, key);
     harness.run();
 }
 
-fn switcher_harness() -> Harness<'static, MyEguiApp<MockWorker>> {
-    let mut harness = design_harness(BOARD);
+fn switcher_harness() -> AppHarness {
+    let mut harness = design_harness(BOARD_SIZE);
     click_label(&mut harness, "Workloads");
     deliver_design_outcomes(&mut harness);
     seed_design_clusters(&mut harness);
@@ -48,7 +40,7 @@ fn a16_cluster_switcher() {
 /// A01: the landing page, every context a tile with its ⌘ key.
 #[test]
 fn a01_choose_a_cluster() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     seed_design_clusters(&mut harness);
     harness.state_mut().ui_state.selected_cluster = None;
     harness.run();
@@ -56,7 +48,7 @@ fn a01_choose_a_cluster() {
     harness.ui_harness("boards/a01_choose_a_cluster");
 }
 
-fn tile_centre(harness: &Harness<'static, MyEguiApp<MockWorker>>, name: &str) -> egui::Pos2 {
+fn tile_centre(harness: &AppHarness, name: &str) -> egui::Pos2 {
     harness
         .get(
             By::new()
@@ -67,7 +59,7 @@ fn tile_centre(harness: &Harness<'static, MyEguiApp<MockWorker>>, name: &str) ->
         .center()
 }
 
-fn has_tile(harness: &Harness<'static, MyEguiApp<MockWorker>>, name: &str) -> bool {
+fn has_tile(harness: &AppHarness, name: &str) -> bool {
     harness
         .query(
             By::new()
@@ -77,11 +69,11 @@ fn has_tile(harness: &Harness<'static, MyEguiApp<MockWorker>>, name: &str) -> bo
         .is_some()
 }
 
-fn is_open(harness: &Harness<'static, MyEguiApp<MockWorker>>) -> bool {
+fn is_open(harness: &AppHarness) -> bool {
     harness.state().ui_state.cluster_switcher.is_some()
 }
 
-fn connects_to(harness: &Harness<'static, MyEguiApp<MockWorker>>, cluster_key: i32) -> bool {
+fn connects_to(harness: &AppHarness, cluster_key: i32) -> bool {
     harness.state().worker.commands.iter().any(|command| {
         command_is::<ConnectToCluster>(command).is_some_and(|c| c.cluster_key == cluster_key)
     })
@@ -215,7 +207,7 @@ fn opening_in_a_new_window_says_it_is_not_implemented() {
 /// its buttons open cluster discovery and the kubeconfig settings.
 #[test]
 fn the_landing_page_switches_clusters_and_finds_more() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     seed_design_clusters(&mut harness);
     harness.state_mut().ui_state.selected_cluster = None;
     harness.run();
@@ -269,7 +261,7 @@ fn clicking_the_scrim_closes_the_switcher() {
 #[test]
 fn an_empty_kubeconfig_has_a_landing_page_and_an_empty_switcher() {
     let mut harness = application_harness::<MockWorker>();
-    harness.set_size(BOARD);
+    harness.set_size(BOARD_SIZE);
     harness.run();
     harness.get_by_label("No contexts in your kubeconfig. Find clusters in your cloud accounts.");
     press_command(&mut harness, egui::Key::Num1);

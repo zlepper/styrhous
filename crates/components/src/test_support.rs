@@ -16,6 +16,9 @@ use egui_kittest::{Harness, Node, SnapshotError, SnapshotOptions};
 /// The deterministic viewport used by all egui tests and snapshots.
 pub const EGUI_TEST_SIZE: Vec2 = Vec2::new(1536.0, 1024.0);
 
+/// The size of every Harbour board (`docs/design-oracles/harbour`), in points.
+pub const BOARD_SIZE: Vec2 = EGUI_TEST_SIZE;
+
 /// The project-wide per-pixel color tolerance for UI screenshots.
 ///
 /// This accepts the measured WGPU anti-aliasing variance at transformed shadow edges while still
@@ -497,6 +500,24 @@ mod tests;
 pub fn primary_click<State>(harness: &mut Harness<'_, State>, position: Pos2) {
     primary_press(harness, position);
     primary_release(harness, position);
+}
+
+/// Click the centre of the node labelled `label` with the pointer (through the
+/// hit test, not AccessKit), then let the frame settle.
+///
+/// Not for tests with a live worker (Kind): its results keep repainting, so the
+/// frame never settles. Wait for the control there, then `get_by_label(..).click()`.
+pub fn click_label<State>(harness: &mut Harness<'_, State>, label: &str) {
+    use egui_kittest::kittest::Queryable as _;
+    let position = harness.get_by_label(label).rect().center();
+    primary_click(harness, position);
+    harness.run();
+}
+
+/// Take the pointer off the window, so no hover state shows in a snapshot.
+pub fn rest_pointer<State>(harness: &mut Harness<'_, State>) {
+    harness.event(egui::Event::PointerGone);
+    harness.run();
 }
 
 /// Move the pointer to `position` and press the primary button there.

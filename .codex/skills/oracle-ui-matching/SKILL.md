@@ -1,114 +1,93 @@
 ---
 name: oracle-ui-matching
-description: Match a deterministic UI snapshot to an approved raster design oracle using image generation, Kineprism comparison reports and artifacts, and accessibility snapshots. Use for pixel-conscious UI implementation work, not ordinary UI changes.
+description: Match a deterministic egui snapshot to a Harbour design oracle (a PNG rendered from the design HTML) with the scripts/design-oracles pipeline, Kineprism reports and accessibility snapshots. Use for pixel-conscious UI implementation work, not ordinary UI changes.
 ---
 
 # Oracle UI Matching
 
-Use this skill when a UI must closely match an approved raster oracle. It is
-particularly suited to a design oracle derived from an existing deterministic
-snapshot with the `imagegen` skill, where full-screen comparison would include
-irrelevant application layers.
+Use this skill when a screen or component must match a Harbour board closely. The oracles are not
+generated images: `scripts/design-oracles/` renders the design's HTML boards
+(`docs/design-oracles/harbour/src/<ID>.html` plus `harbour.css`) with Chromium into
+`docs/design-oracles/harbour/<ID>.png`, using the same static fonts the app embeds. The pipeline,
+its commands and the font handling are described in `scripts/design-oracles/README.md`.
 
-## Establish the oracle
+## The pipeline
 
-1. Start from the closest existing deterministic snapshot. Inspect it before
-   editing with `view_image` so its canvas size, background, blade placement,
-   typography, and visible surrounding layers are preserved.
-2. If a new design is needed, use the `imagegen` skill to edit that snapshot.
-   Give exact visible strings and list invariants. Change one design concern at
-   a time. Do not generate a replacement oracle merely because the code is
-   currently mismatched.
-3. Get approval for generated variants before treating them as an oracle. Copy
-   approved artifacts into the project using a non-destructive name, unless the
-   user explicitly authorizes replacement.
+1. **Board and test.** Every board has a `[[board]]` entry in
+   `docs/design-oracles/harbour/manifest.toml`. Its `snapshot` names the PNG written by the
+   board's own egui_kittest test (`crates/components/tests/c*.rs` for component boards,
+   `crates/styrhous/src/ui/tests/snapshots/` for the A screens). A board without a test has
+   `snapshot = ""` and is skipped. Write the test with the project's `harness.ui_harness(...)` so
+   the pixel and accessibility snapshots stay together, and keep it deterministic: screen tests
+   inject state and `WorkerResult`s through `MockWorker`, using the shared design dataset
+   (`ui/tests/design_fixtures.rs`) and a fixed `WallClock`.
+2. **Measure, don't eyeball.** Take geometry from the HTML/CSS (computed values via the
+   Playwright probe in `scripts/design-oracles`), then express it with `design::{space, radius,
+   size, elevation, stroke}` and `design::type_scale` roles. If the design needs a measurement
+   that is missing, add it to `design::size` (or the owning component) rather than a literal in
+   a screen.
+3. **Compare.** `scripts/design-oracles/compare.sh [ID ...]` runs Kineprism per board (and per
+   `[[board.regions]]` crop) and writes `target/design-oracles/scoreboard.md` plus, per board,
+   `report.json`, `diff.png` and a `non-aa/` pass. A pending `<snapshot>.new.png` is compared in
+   place of the accepted fixture, so you can iterate before accepting anything.
+4. **Read the report.** Raw MAE (`metrics.raw.mae`) is the acceptance metric; lower is better and
+   it is only meaningful for equal canvases. The `non-aa/` pass ignores antialiased edges: its
+   "Changed (non-AA)" regions are the worklist, because they exclude the glyph and curve noise that
+   Chromium and egui rasterise differently. Moved, resized, added and removed regions mean real
+   layout differences; fix those first.
+5. **Know the floor.** The `CAL` calibration board (`src/CAL.html`, painted by
+   `crates/components/tests/calibration.rs`) is the irreducible Chromium/egui difference
+   (raw MAE about 0.00047). Component boards reach 0.00026 to 0.00056. Do not chase a board
+   below that bar, and do not accept a board that regresses against its earlier score.
+6. **Regions.** When a board mixes finished and unfinished parts, or one part is noisy, add
+   `[[board.regions]]` entries (name, x, y, width, height in board pixels) to the manifest so
+   each part has its own score and an unfinished one does not hide progress in another.
 
-## Measurement loop
+Run `compare.sh` for all boards before and after a change that touches shared components or
+design constants, and report any score that moved.
 
-Keep the UI test deterministic, with a snapshot for every relevant state—for
-example, the normal blade and its expanded editor. Regenerate a snapshot only
-after reaching a consistent implementation state, then inspect both its pixel
-and accessibility output before accepting it.
+## Reducing mismatch efficiently
 
-For each state:
+Work from shared geometry to detail:
 
-1. Select equivalent UI content. Compare the complete screenshots when their
-   surrounding layers are relevant. For one common rectangle, use the
-   `region: { x, y, width, height }` parameter of `compare_ui_images`.
-2. When equivalent content begins at different origins, crop each source
-   independently to the same final dimensions, reset page geometry, and pass
-   those crops to `compare_ui_images`. See [iteration commands](references/iteration.md).
-3. Call `compare_ui_images` with absolute `expected_path` and `actual_path`
-   PNG paths and an ignored `target/visual-diffs/<state>` `output_dir`. Set
-   `force: true` on repeated iterations for the same state.
-4. Inspect `report.json` and all generated artifacts: annotated `expected.png`,
-   `actual.png`, and `diff.png`. Use reported changed, moved, added, removed,
-   and resized regions to locate the largest repeated mismatch.
-5. Correct that mismatch, regenerate the targeted snapshot, and compare again.
-   Keep a before/after metric record and visually inspect the report artifacts.
+1. **Topology:** the same controls, grouping and rows exist. A missing or detached group
+   dominates the error.
+2. **Vertical anchors:** header dividers, section titles, card bounds, row heights, footers.
+3. **Horizontal anchors:** insets, handles, titles, input starts, action buttons. Reuse the
+   anchor values across rows.
+4. **Control treatment:** padding, fixed height, border, radius, fill, and the vertical centring
+   of text and icons. Prefer components in `crates/components` and theme roles over per-screen
+   styling; extend a component rather than painting a one-off.
+5. **Text:** the type role's line box and baseline (`role.label`, `role.label_on_baseline`).
 
-Use `region` only for a rectangle that represents the same UI content in both
-sources; otherwise crop the sources independently first. See [iteration
-commands](references/iteration.md) for the input-selection examples.
-
-## How to reduce mismatch efficiently
-
-Work from shared geometry to detail. A useful order is:
-
-1. **Topology:** ensure the same controls, grouping, editor placement, and
-   fallback rows exist. A missing or detached group dominates pixel error.
-2. **Vertical anchors:** align the header divider, section titles, card bounds,
-   row heights, dividers, preview, and footer. Change shared spacing or row
-   geometry, not each child independently.
-3. **Horizontal anchors:** align the card inset, drag handle, main title,
-   chip/input start, and action buttons. Reuse those anchor values across rows.
-4. **Control treatment:** tune padding, fixed control height, border, radius,
-   fill, and the vertical centering of text/icons. Prefer established design
-   components and semantic tokens over per-screen colors.
-5. **State-specific layout:** an expanded row can require a separate rendering
-   path when a fixed-height reorder table cannot contain it. Keep controls
-   interactive and preserve drag behavior in the non-expanded state.
-
-Use Kineprism's report artifacts and findings to distinguish a uniform offset
-from a local styling mismatch. A single shared offset should be fixed at its
-layout primitive. Do not compensate for it with one-off per-label spacing.
-
-Treat `metrics.raw.mae` as the primary fidelity target for coordinate-aligned
-inputs: lower is better. Zero is exact only when both coverage fields are 1.0
-and the canvases match; otherwise unmatched image area may be omitted from the
-score. Record it with the state and bounds, and compare the same metric over
-equivalent inputs only. For independent crops, record both source rectangles
-and their equal final dimensions. When Kineprism finds a global translation,
-record `metrics.global_aligned.mae` as diagnostic context; it explains
-displacement but must not replace the raw MAE target. Likewise, use any
-structural-alignment metric to understand residual styling differences, not to
-hide a layout regression. Different rasterizers, antialiasing, or a generated
-oracle can prevent literal zero, so use MAE alongside artifact and
-accessibility review rather than optimizing it in isolation.
+A single shared offset belongs in its layout primitive; do not compensate with per-label
+spacing. If a change worsens raw MAE and the diff shows no compensating gain, revert it.
 
 ## Verification and accessibility
 
-- Use the project's snapshot harness so pixel and accessibility snapshots are
-  checked together. Never accept a snapshot just to make a test pass.
-- Read every changed accessibility snapshot. Check that grouped controls share
-  expected centers/heights, text is vertically centered in inputs, buttons have
-  adequate hit targets, and no meaningful same-layer overlaps are introduced.
-- Preserve behavior while matching pixels: labels for custom controls should be
-  clickable, reordering must not leave focus on the wrong row, and an expanded
-  state must not silently disable unrelated actions without an intentional
-  design decision.
-- Run the focused snapshot test after each substantive visual iteration, then
-  run the relevant broader suite once the final snapshot is accepted.
+- Read every changed accessibility snapshot. Check that items in a row share a centre and
+  height, icons and text are centred in their boxes, margins are consistent, and no same-layer
+  overlap is introduced. Never accept a snapshot just to make a test pass; accept with
+  `UPDATE_SNAPSHOTS=1` only after reviewing the `.new` files.
+- Drive interaction with real pointer or keyboard input, never `accesskit_click`.
+- A button the design shows whose action does not exist is `Button::not_implemented()`.
+- Run the focused test after each iteration, then the whole `components` and `styrhous` suites
+  once the snapshot is final. Leave no `*.new.*`, `*.diff.png` or `*.old.png` files behind.
+
+## Supplementary tooling
+
+`compare_ui_images` (Kineprism MCP tool) is the primary comparison for ad-hoc crops; see
+[iteration commands](references/iteration.md). `scripts/compare-oracle-snapshot.sh` and
+`scripts/review-oracle-diff.sh` add ImageMagick and Codex CLI visual review; their numbers never
+replace the Kineprism score as the acceptance criterion.
 
 ## Guardrails
 
-- Keep generated oracles and deterministic snapshots distinct. Do not edit an
-  approved oracle to conceal an implementation mismatch.
-- Do not make global palette or component changes solely to improve one crop
-  unless the component is genuinely shared and the broader snapshot suite is
-  reviewed.
-- Preserve unrelated work in a dirty worktree. Put temporary crops and diffs
-  under an ignored build/output directory when possible.
-- Stop when the requested visual fidelity is reached or further changes no
-  longer improve a meaningful metric or visual defect. Report the final scope,
-  raw MAE, relevant aligned metric (if any), report artifacts, and tests run.
+- Oracles are generated from the design HTML. Never edit an oracle PNG to hide a mismatch;
+  change the design source and re-render (`npm run extract`, `npm run render`) only when the
+  design itself changed.
+- Do not make global palette or component changes to improve one crop unless the component is
+  genuinely shared and every board score is rechecked.
+- Preserve unrelated work in a dirty worktree and keep temporary crops and diffs under `target/`.
+- Stop when the board is at the calibration bar or further changes stop improving a meaningful
+  metric or visible defect. Report raw MAE, region counts, residuals, report artifacts and tests.

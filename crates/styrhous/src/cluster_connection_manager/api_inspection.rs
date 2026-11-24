@@ -743,6 +743,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fake_kube_api::{FakeKubeApi, Reply};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
@@ -1084,124 +1085,50 @@ mod tests {
         ]))
     }
 
-    #[derive(Default)]
-    struct Recorder {
-        paths: std::sync::Mutex<Vec<String>>,
-        accept_headers: std::sync::Mutex<Vec<String>>,
-        in_flight: AtomicUsize,
-        max_in_flight: AtomicUsize,
-    }
-
-    impl Recorder {
-        fn paths(&self) -> Vec<String> {
-            self.paths.lock().unwrap().clone()
-        }
-    }
-
-    /// Serves the scripted replies by request path until the returned task is dropped,
+    /// Serves the scripted replies by request path until the returned server is dropped,
     /// recording what was requested.
-    async fn scripted_api_server(
-        replies: Vec<(&'static str, ScriptedReply)>,
-    ) -> (kube::Client, tokio::task::JoinHandle<()>, Arc<Recorder>) {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-            .await
-            .expect("test server should bind");
-        let address = listener.local_addr().expect("test server has an address");
-        let replies = Arc::new(replies);
-        let recorder = Arc::new(Recorder::default());
-        let recorded = Arc::clone(&recorder);
-        let server = tokio::spawn(async move {
-            while let Ok((mut socket, _)) = listener.accept().await {
-                let replies = Arc::clone(&replies);
-                let recorder = Arc::clone(&recorded);
-                tokio::spawn(async move {
-                    let mut request = Vec::new();
-                    let mut buffer = [0_u8; 1_024];
-                    while !request.windows(4).any(|window| window == b"\r\n\r\n") {
-                        match socket.read(&mut buffer).await {
-                            Ok(0) | Err(_) => return,
-                            Ok(read) => request.extend_from_slice(&buffer[..read]),
-                        }
+    async fn scripted_api_server(replies: Vec<(&'static str, ScriptedReply)>) -> FakeKubeApi {
+        FakeKubeApi::start(move |request| {
+            let wants_aggregated = request.accept.contains("g=apidiscovery.k8s.io");
+            let json = |status: &str, body: &str| {
+                let code = status
+                    .split_whitespace()
+                    .next()
+                    .and_then(|code| code.parse().ok());
+                Reply::json(code.expect("scripted statuses start with their code"), body)
+            };
+            match replies.iter().find(|(route, _)| *route == request.path) {
+                Some((_, ScriptedReply::Json(status, body))) => json(status, body),
+                Some((_, ScriptedReply::RefusesAggregated(legacy))) => {
+                    if wants_aggregated {
+                        json("406", NOT_ACCEPTABLE)
+                    } else {
+                        json("200", legacy)
                     }
-                    let request = String::from_utf8_lossy(&request);
-                    let path = request
-                        .split_whitespace()
-                        .nth(1)
-                        .and_then(|target| target.split('?').next())
-                        .unwrap_or_default()
-                        .to_owned();
-                    let accept = request
-                        .lines()
-                        .find_map(|line| line.strip_prefix("accept: "))
-                        .unwrap_or_default()
-                        .to_owned();
-                    recorder.paths.lock().unwrap().push(path.clone());
-                    let wants_aggregated = accept.contains("g=apidiscovery.k8s.io");
-                    recorder.accept_headers.lock().unwrap().push(accept);
-                    let in_flight = recorder.in_flight.fetch_add(1, Ordering::SeqCst) + 1;
-                    recorder
-                        .max_in_flight
-                        .fetch_max(in_flight, Ordering::SeqCst);
-                    let (status, body) = match replies.iter().find(|(route, _)| *route == path) {
-                        Some((_, ScriptedReply::Json(status, body))) => (*status, *body),
-                        Some((_, ScriptedReply::RefusesAggregated(legacy))) => {
-                            if wants_aggregated {
-                                ("406 Not Acceptable", NOT_ACCEPTABLE)
-                            } else {
-                                ("200 OK", *legacy)
-                            }
-                        }
-                        Some((_, ScriptedReply::ByAccept { aggregated, legacy })) => (
-                            "200 OK",
-                            if wants_aggregated {
-                                *aggregated
-                            } else {
-                                *legacy
-                            },
-                        ),
-                        Some((_, ScriptedReply::Delayed(delay, body))) => {
-                            tokio::time::sleep(*delay).await;
-                            ("200 OK", *body)
-                        }
-                        Some((
-                            _,
-                            ScriptedReply::FailsFirst {
-                                failures,
-                                served,
-                                body,
-                            },
-                        )) => {
-                            if served.fetch_add(1, Ordering::SeqCst) < *failures {
-                                ("503 Service Unavailable", API_FAILURE)
-                            } else {
-                                ("200 OK", *body)
-                            }
-                        }
-                        Some((_, ScriptedReply::Hang)) => {
-                            std::future::pending::<()>().await;
-                            return;
-                        }
-                        None => ("404 Not Found", API_FAILURE),
-                    };
-                    recorder.in_flight.fetch_sub(1, Ordering::SeqCst);
-                    let response = format!(
-                        "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                        body.len()
-                    );
-                    let _ = socket.write_all(response.as_bytes()).await;
-                    let _ = socket.shutdown().await;
-                });
+                }
+                Some((_, ScriptedReply::ByAccept { aggregated, legacy })) => {
+                    json("200", if wants_aggregated { aggregated } else { legacy })
+                }
+                Some((_, ScriptedReply::Delayed(delay, body))) => json("200", body).after(*delay),
+                Some((
+                    _,
+                    ScriptedReply::FailsFirst {
+                        failures,
+                        served,
+                        body,
+                    },
+                )) => {
+                    if served.fetch_add(1, Ordering::SeqCst) < *failures {
+                        json("503", API_FAILURE)
+                    } else {
+                        json("200", body)
+                    }
+                }
+                Some((_, ScriptedReply::Hang)) => Reply::Stalled,
+                None => json("404", API_FAILURE),
             }
-        });
-        let config = kube::Config::new(
-            format!("http://{address}")
-                .parse()
-                .expect("test server URL is valid"),
-        );
-        let client = kube::Client::try_from(config).expect("test client should build");
-        (client, server, recorder)
+        })
+        .await
     }
 
     fn leak(text: String) -> &'static str {
@@ -1298,7 +1225,7 @@ mod tests {
     async fn run_discovery(
         replies: Vec<(&'static str, ScriptedReply)>,
         max: usize,
-    ) -> (Vec<Reported>, Vec<WorkerResultBox>, Arc<Recorder>) {
+    ) -> (Vec<Reported>, Vec<WorkerResultBox>, FakeKubeApi) {
         run_discovery_with(replies, max, FAST_TIMEOUTS).await
     }
 
@@ -1306,8 +1233,9 @@ mod tests {
         replies: Vec<(&'static str, ScriptedReply)>,
         max: usize,
         timeouts: DiscoveryTimeouts,
-    ) -> (Vec<Reported>, Vec<WorkerResultBox>, Arc<Recorder>) {
-        let (client, _server, recorder) = scripted_api_server(replies).await;
+    ) -> (Vec<Reported>, Vec<WorkerResultBox>, FakeKubeApi) {
+        let recorder = scripted_api_server(replies).await;
+        let client = recorder.client();
         let (sender, mut receiver) = tokio::sync::mpsc::channel(64);
         let discovery = tokio::spawn(discover_cluster_api_with(
             7,
@@ -1363,18 +1291,12 @@ mod tests {
         let mut paths = recorder.paths();
         paths.sort();
         assert_eq!(paths, vec!["/api", "/apis"], "no per-group or CRD requests");
-        assert_eq!(
-            recorder.max_in_flight.load(Ordering::SeqCst),
-            2,
-            "requested concurrently"
-        );
+        assert_eq!(recorder.max_in_flight(), 2, "requested concurrently");
         assert!(
             recorder
-                .accept_headers
-                .lock()
-                .unwrap()
+                .requests()
                 .iter()
-                .all(|accept| accept.contains("g=apidiscovery.k8s.io;v=v2")),
+                .all(|request| request.accept.contains("g=apidiscovery.k8s.io;v=v2")),
             "aggregated discovery is requested"
         );
         let scalable = results
@@ -1606,7 +1528,11 @@ mod tests {
             "{reported:?}"
         );
         assert_eq!(reported[2], Reported::Completed(Vec::new()));
-        let accepts = recorder.accept_headers.lock().unwrap().clone();
+        let accepts = recorder
+            .requests()
+            .into_iter()
+            .map(|request| request.accept)
+            .collect::<Vec<_>>();
         let paths = recorder.paths();
         let apis_accepts = paths
             .iter()
@@ -1761,8 +1687,9 @@ mod tests {
         const CRD: &str =
             "/apis/apiextensions.k8s.io/v1/customresourcedefinitions/widgets.example.com";
         for status in ["403 Forbidden", "500 Internal Server Error"] {
-            let (client, _server, recorder) =
+            let recorder =
                 scripted_api_server(vec![(CRD, ScriptedReply::Json(status, API_FAILURE))]).await;
+            let client = recorder.client();
 
             let columns = crd_printer_columns(client, &widgets("v1")).await;
 
@@ -1789,7 +1716,7 @@ mod tests {
 
     #[tokio::test]
     async fn crd_printer_columns_reads_the_one_crd_for_the_requested_version() {
-        let (client, _server, recorder) = scripted_api_server(vec![(
+        let recorder = scripted_api_server(vec![(
             "/apis/apiextensions.k8s.io/v1/customresourcedefinitions/widgets.example.com",
             ScriptedReply::Json(
                 "200 OK",
@@ -1797,6 +1724,7 @@ mod tests {
             ),
         )])
         .await;
+        let client = recorder.client();
 
         let columns = crd_printer_columns(client.clone(), &widgets("v1")).await;
         let other_version = crd_printer_columns(client, &widgets("v1alpha1")).await;
@@ -1821,7 +1749,8 @@ mod tests {
 
     #[tokio::test]
     async fn crd_printer_columns_are_empty_for_resources_that_are_not_crds() {
-        let (client, _server, recorder) = scripted_api_server(Vec::new()).await;
+        let recorder = scripted_api_server(Vec::new()).await;
+        let client = recorder.client();
 
         let aggregated = crd_printer_columns(client.clone(), &widgets("v1")).await;
         let built_in = crd_printer_columns(

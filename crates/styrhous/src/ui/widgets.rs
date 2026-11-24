@@ -1,4 +1,4 @@
-use crate::minimal_resource::format_age;
+use super::clock::frame_age;
 use crate::resource_table::{
     CONTAINERS_COLUMN, CPU_COLUMN, CellValue, ContainerIndicator, MEMORY_COLUMN, PODS_COLUMN,
     ROLES_COLUMN,
@@ -67,10 +67,9 @@ pub(super) fn show_resource_cell(ui: &mut egui::Ui, column_id: &str, cell: Optio
             label,
             permille.map(|permille| f32::from(permille) / 1000.0),
         ),
-        CellValue::Timestamp(value) => TableRowBuilder::number(
-            ui,
-            &format_age(Some(*value), crate::ui::clock::now(ui.ctx())),
-        ),
+        CellValue::Timestamp(value) => {
+            TableRowBuilder::number(ui, &frame_age(ui.ctx(), Some(*value)))
+        }
         CellValue::Status { label, tone } => {
             TableRowBuilder::problem_status(ui, label, *tone);
         }
@@ -364,10 +363,7 @@ pub(super) fn key_value_chips<'a>(
 /// Kubernetes reported no creation time.
 pub(super) fn age_cell(ui: &mut egui::Ui, creation_timestamp: Option<time::OffsetDateTime>) {
     match creation_timestamp {
-        Some(_) => TableRowBuilder::number(
-            ui,
-            &format_age(creation_timestamp, crate::ui::clock::now(ui.ctx())),
-        ),
+        Some(_) => TableRowBuilder::number(ui, &frame_age(ui.ctx(), creation_timestamp)),
         None => TableRowBuilder::missing(ui, "No creation time reported"),
     }
 }

@@ -552,7 +552,8 @@ fn resource_name_opens_and_closes_a_live_detail_inspector() {
     harness
         .ctx
         .global_style_mut(|style| style.animation_time = 1.0);
-    harness.get_by_label("Close blade").click_accesskit();
+    let close = harness.get_by_label("Close blade").rect().center();
+    primary_click(&mut harness, close);
     harness.run_steps(2);
 
     assert!(

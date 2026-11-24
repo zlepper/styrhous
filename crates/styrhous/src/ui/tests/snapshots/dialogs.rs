@@ -8,20 +8,9 @@ use super::super::design_fixtures::{
 use super::*;
 use components::test_support::primary_click;
 
-/// The board size of the main-window screens.
-const BOARD: egui::Vec2 = egui::vec2(1536.0, 1024.0);
-
-type AppHarness = Harness<'static, MyEguiApp<MockWorker>>;
-
-/// Take the pointer off the window, so no hover state shows in a snapshot.
-fn rest_pointer(harness: &mut AppHarness) {
-    harness.event(egui::Event::PointerGone);
-    harness.run();
-}
-
 /// The Deployments of `kube-system`, with Workloads expanded as on A06.
 fn deployments_harness() -> AppHarness {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     deliver_design_unread_failure(&mut harness);
     click_label(&mut harness, "Dismiss");
     click_label(&mut harness, "Deployments");
@@ -40,7 +29,7 @@ fn open_restart_confirmation(harness: &mut AppHarness) {
 /// The Pods of `kube-system` with `job-nightly-report-28xk2` stuck deleting,
 /// and its force delete confirmation open, as on A07, past its delay.
 fn open_force_delete_confirmation() -> AppHarness {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     deliver_design_unread_failure(&mut harness);
     click_label(&mut harness, "Dismiss");
     click_label(&mut harness, "Workloads");

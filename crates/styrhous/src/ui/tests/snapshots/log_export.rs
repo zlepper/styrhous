@@ -11,8 +11,6 @@ use egui::accesskit::Role;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-type AppHarness = Harness<'static, MyEguiApp<MockWorker>>;
-
 const LINES: [&str; 3] = [
     "2026-08-10T12:00:00Z \u{1b}[32mINFO\u{1b}[0m server ready",
     "2026-08-10T12:00:01Z WARN slow request",

@@ -247,7 +247,7 @@ fn a_sized_floating_toolbar_gives_the_last_control_the_room_left() {
     let seen = widths.clone();
     let mut harness = harness(vec2(900.0, 200.0), move |ui| {
         let seen = seen.clone();
-        FloatingToolbar::show_floating_sized(
+        FloatingToolbar::show_floating(
             ui.ctx(),
             "sized",
             640.0,

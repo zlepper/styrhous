@@ -3,10 +3,7 @@
 //! the worker results the editor really receives, then driven with keys and pointer clicks.
 
 use super::*;
-use components::test_support::primary_click;
-
-/// The board size of the main-window screens.
-const BOARD: egui::Vec2 = egui::vec2(1536.0, 1024.0);
+use components::test_support::{BOARD_SIZE, click_label, rest_pointer};
 
 /// The UI state holding one editor, rendered the way its window renders it.
 struct BoardState {
@@ -20,7 +17,7 @@ const EDITOR_ID: u64 = 1;
 fn board_harness(editor: YamlEditorWindowState) -> Harness<'static, BoardState> {
     let mut ui = UiState::default();
     ui.yaml_editors.insert(editor.id, editor);
-    let mut harness = Harness::builder().with_size(BOARD).build_ui_state(
+    let mut harness = Harness::builder().with_size(BOARD_SIZE).build_ui_state(
         |ctx, state: &mut BoardState| {
             state.ctx = Some(ctx.clone());
             let editor = state
@@ -52,18 +49,6 @@ fn board_editor<'a>(harness: &'a Harness<'_, BoardState>) -> &'a YamlEditorWindo
 fn put_caret(harness: &mut Harness<'_, BoardState>, character_index: usize) {
     let ctx = harness.state().ctx.clone().expect("a frame has run");
     set_editor_caret(&ctx, yaml_editor_text_edit_id(EDITOR_ID), character_index);
-    harness.run();
-}
-
-fn click_label(harness: &mut Harness<'_, BoardState>, label: &str) {
-    let position = harness.get_by_label(label).rect().center();
-    primary_click(harness, position);
-    harness.run();
-}
-
-/// Take the pointer off the window, so no hover state shows in a snapshot.
-fn rest_pointer(harness: &mut Harness<'_, BoardState>) {
-    harness.event(egui::Event::PointerGone);
     harness.run();
 }
 

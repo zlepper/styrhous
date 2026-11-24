@@ -118,7 +118,7 @@ fn partial_api_discovery_shows_a_toast_naming_the_failed_groups() {
 }
 
 /// Applies the queued results, then keeps their toasts from expiring on a slow machine.
-fn run_with_pinned_toasts(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) {
+fn run_with_pinned_toasts(harness: &mut AppHarness) {
     harness.step();
     for cluster in harness.state_mut().ui_state.clusters.values_mut() {
         for toast in &mut cluster.transient_operation_toasts {
@@ -413,7 +413,7 @@ pub(super) fn fixed_lease(state: &str, reason_code: &str) -> VerifiedLease {
     }
 }
 
-fn licensing_harness(status: LicenseStatus) -> Harness<'static, MyEguiApp<MockWorker>> {
+fn licensing_harness(status: LicenseStatus) -> AppHarness {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = oracle_resource_table_state();
     harness

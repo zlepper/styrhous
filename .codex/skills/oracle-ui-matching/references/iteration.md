@@ -1,6 +1,7 @@
 # Kineprism comparison workflow
 
-Use `compare_ui_images` for every oracle comparison. The expected and actual
+Board-level comparisons run through `scripts/design-oracles/compare.sh` (see SKILL.md). Use
+`compare_ui_images` directly for ad-hoc comparisons such as an arbitrary crop. The expected and actual
 input paths must be absolute PNG paths under an MCP workspace root; `output_dir`
 must be an absolute directory path under the ignored `target/visual-diffs/` tree.
 

@@ -10,6 +10,7 @@ use crate::design::theme::{ThemeExt, Tone};
 use crate::design::type_scale::{self, TextRole, Weight};
 use crate::design::{size, space};
 use crate::interaction::PointingHand;
+use crate::measured::{remember_width, remembered_width};
 use crate::readout::{Readout, ReadoutRow};
 use crate::status::StatusLabel;
 use crate::tooltip::{TooltipExt, elided_label};
@@ -150,9 +151,7 @@ impl<'a> InspectorHeader<'a> {
         // from the previous pass (egui lays a widget out before its size).
         let close_width = close_width();
         let actions_id = response.id.with("actions-width");
-        let actions_width = ui
-            .data(|data| data.get_temp::<f32>(actions_id))
-            .unwrap_or(0.0);
+        let actions_width = remembered_width(ui, actions_id).unwrap_or(0.0);
         let actions_right = row.right() - close_width - ROW_GAP;
         let actions_left = actions_right - actions_width;
         let title_left = row_ui.cursor().left();
@@ -172,12 +171,12 @@ impl<'a> InspectorHeader<'a> {
         );
         actions_ui.spacing_mut().item_spacing = vec2(ROW_GAP, 0.0);
         add_actions(&mut actions_ui);
-        let measured = actions_ui.min_rect().width().max(0.0);
-        if (measured - actions_width).abs() > 0.01 {
-            ui.data_mut(|data| data.insert_temp(actions_id, measured));
-            ui.ctx()
-                .request_discard("inspector header actions changed width");
-        }
+        remember_width(
+            ui,
+            actions_id,
+            actions_ui.min_rect().width().max(0.0),
+            "inspector header actions changed width",
+        );
 
         result.close = close_button_at_end(ui, row, self.navigation.close_label);
         result

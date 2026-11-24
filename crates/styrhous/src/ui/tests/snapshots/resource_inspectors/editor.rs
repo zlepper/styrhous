@@ -235,11 +235,9 @@ fn deployment_editor_completes_match_labels_in_a_selector() {
     harness.state_mut().ui_state = oracle_resource_table_state();
     open_typed_detail(&mut harness, deployment.clone(), detail);
 
-    harness
-        .get_by_label("More actions for coredns")
-        .click_accesskit();
+    click_label(&mut harness, "More actions for coredns");
     harness.run();
-    harness.get_by_label("Edit YAML").click_accesskit();
+    click_label(&mut harness, "Edit YAML");
     harness.run();
 
     let editor_id = harness

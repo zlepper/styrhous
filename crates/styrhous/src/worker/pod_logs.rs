@@ -1130,10 +1130,10 @@ async fn append_batch(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fake_kube_api::{FakeKubeApi, Reply};
     use crate::log_store::{LogStoreResult, LogStoreService};
     use crate::resource_table::ContainerKind;
     use crate::worker::WorkerResultBox;
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     struct FailingReader;
 
@@ -1170,91 +1170,21 @@ mod tests {
         LogRecord::from_source(text.to_owned(), source.to_owned())
     }
 
-    async fn serve_scripted_http_response(
-        listener: &tokio::net::TcpListener,
-        content_type: &str,
-        body: impl AsRef<[u8]>,
-    ) -> std::io::Result<String> {
-        serve_scripted_http_response_with_status(listener, "200 OK", content_type, body).await
-    }
-
-    async fn serve_scripted_http_response_with_status(
-        listener: &tokio::net::TcpListener,
-        status: &str,
-        content_type: &str,
-        body: impl AsRef<[u8]>,
-    ) -> std::io::Result<String> {
-        let (mut socket, request) = receive_scripted_http_request(listener).await?;
-        send_scripted_http_response(&mut socket, status, content_type, body).await?;
-        Ok(request)
-    }
-
-    async fn receive_scripted_http_request(
-        listener: &tokio::net::TcpListener,
-    ) -> std::io::Result<(tokio::net::TcpStream, String)> {
-        let (mut socket, _) = listener.accept().await?;
-        let mut request = Vec::new();
-        let mut buffer = [0_u8; 1_024];
-        loop {
-            let read = socket.read(&mut buffer).await?;
-            if read == 0 {
-                break;
-            }
-            request.extend_from_slice(&buffer[..read]);
-            if request.windows(4).any(|window| window == b"\r\n\r\n") {
-                break;
-            }
-        }
-        Ok((socket, String::from_utf8_lossy(&request).into_owned()))
-    }
-
-    async fn send_scripted_http_response(
-        socket: &mut tokio::net::TcpStream,
-        status: &str,
-        content_type: &str,
-        body: impl AsRef<[u8]>,
-    ) -> std::io::Result<()> {
-        let body = body.as_ref();
-        let head = format!(
-            "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-            body.len()
-        );
-        socket.write_all(head.as_bytes()).await?;
-        socket.write_all(body).await?;
-        socket.shutdown().await?;
-        Ok(())
-    }
-
     #[tokio::test]
     async fn previous_logs_are_finite_and_keep_available_sources() -> anyhow::Result<()> {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
-        let address = listener.local_addr()?;
-        let server = tokio::spawn(async move {
-            let mut requests = Vec::new();
-            for _ in 0..2 {
-                // The requests are concurrent, so respond according to the selected container.
-                let (mut socket, request) = receive_scripted_http_request(&listener).await?;
-                let (status, content_type, body) = if request.contains("container=worker") {
-                    (
-                        "400 Bad Request",
-                        "application/json",
-                        r#"{"kind":"Status","apiVersion":"v1","status":"Failure","message":"previous terminated container not found","reason":"BadRequest","code":400}"#,
-                    )
-                } else {
-                    (
-                        "200 OK",
-                        "text/plain",
-                        "2026-09-14T09:00:00Z previous crash\n",
-                    )
-                };
-                send_scripted_http_response(&mut socket, status, content_type, body).await?;
-                requests.push(request);
+        // The requests are concurrent, so respond according to the selected container.
+        let server = FakeKubeApi::start(|request| {
+            if request.target.contains("container=worker") {
+                Reply::json(
+                    400,
+                    r#"{"kind":"Status","apiVersion":"v1","status":"Failure","message":"previous terminated container not found","reason":"BadRequest","code":400}"#,
+                )
+            } else {
+                Reply::text("2026-09-14T09:00:00Z previous crash\n")
             }
-            Ok::<_, std::io::Error>(requests)
-        });
-
-        let config = kube::Config::new(format!("http://{address}").parse()?);
-        let client = kube::Client::try_from(config)?;
+        })
+        .await;
+        let client = server.client();
         let service = LogStoreService::default();
         assert!(service.open(1));
         let (result_sender, mut result_receiver) = tokio::sync::mpsc::channel(8);
@@ -1281,7 +1211,7 @@ mod tests {
         )
         .await?;
 
-        let requests = server.await??;
+        let requests = server.targets();
         assert_eq!(requests.len(), 2);
         assert!(
             requests
@@ -1338,12 +1268,12 @@ mod tests {
     async fn unavailable_previous_logs_report_a_finished_failure() -> anyhow::Result<()> {
         for (status, body, source_error) in [
             (
-                "400 Bad Request",
+                400,
                 r#"{"kind":"Status","apiVersion":"v1","status":"Failure","message":"previous terminated container not found","reason":"BadRequest","code":400}"#,
                 "previous terminated container not found",
             ),
             (
-                "403 Forbidden",
+                403,
                 r#"{"kind":"Status","apiVersion":"v1","status":"Failure","message":"logs access denied","reason":"Forbidden","code":403}"#,
                 "logs access denied",
             ),
@@ -1354,18 +1284,12 @@ mod tests {
     }
 
     async fn assert_previous_log_request_failure(
-        status: &'static str,
+        status: u16,
         body: &'static str,
         source_error: &str,
     ) -> anyhow::Result<()> {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
-        let address = listener.local_addr()?;
-        let server = tokio::spawn(async move {
-            serve_scripted_http_response_with_status(&listener, status, "application/json", body)
-                .await
-        });
-        let config = kube::Config::new(format!("http://{address}").parse()?);
-        let client = kube::Client::try_from(config)?;
+        let server = FakeKubeApi::start(move |_| Reply::json(status, body)).await;
+        let client = server.client();
         let service = LogStoreService::default();
         assert!(service.open(1));
         let (result_sender, mut result_receiver) = tokio::sync::mpsc::channel(8);
@@ -1387,8 +1311,7 @@ mod tests {
             ),
         )
         .await?;
-        let request = server.await??;
-        assert!(request.contains("previous=true"));
+        assert!(server.targets()[0].contains("previous=true"));
         let results = std::iter::from_fn(|| result_receiver.try_recv().ok()).collect::<Vec<_>>();
         let source_failure = results
             .iter()
@@ -1540,8 +1463,6 @@ mod tests {
     #[tokio::test]
     async fn live_follower_reconnects_resumes_deduplicates_and_stops_at_terminal_status()
     -> anyhow::Result<()> {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
-        let address = listener.local_addr()?;
         let running_pod = serde_json::json!({
             "apiVersion": "v1",
             "kind": "Pod",
@@ -1561,35 +1482,17 @@ mod tests {
         })
         .to_string();
         let terminal_pod = terminal_pod_json();
-        let server = tokio::spawn(async move {
-            let mut requests = Vec::new();
-            for (content_type, body) in [
-                (
-                    "text/plain",
-                    "2026-09-14T09:00:00Z first record\n".to_owned(),
-                ),
-                ("application/json", running_pod),
-                (
-                    "text/plain",
-                    concat!(
-                        "2026-09-14T09:00:00Z first record\n",
-                        "2026-09-14T09:00:01Z second record\n"
-                    )
-                    .to_owned(),
-                ),
-                ("application/json", terminal_pod),
-            ] {
-                requests.push(
-                    serve_scripted_http_response(&listener, content_type, &body)
-                        .await
-                        .expect("scripted Kubernetes response succeeds"),
-                );
-            }
-            requests
-        });
-
-        let config = kube::Config::new(format!("http://{address}").parse()?);
-        let client = kube::Client::try_from(config)?;
+        let server = FakeKubeApi::start_sequence(vec![
+            Reply::text("2026-09-14T09:00:00Z first record\n"),
+            Reply::ok_json(running_pod),
+            Reply::text(concat!(
+                "2026-09-14T09:00:00Z first record\n",
+                "2026-09-14T09:00:01Z second record\n"
+            )),
+            Reply::ok_json(terminal_pod),
+        ])
+        .await;
+        let client = server.client();
         let service = LogStoreService::default();
         assert!(service.open(1));
         let ingest = Arc::new(LogTimelineAppender::new(service.appender(), 1, 1)?);
@@ -1628,7 +1531,7 @@ mod tests {
                 .iter()
                 .any(|event| { event.as_ref().as_any().is::<PodLogSourceRecovered>() })
         );
-        let requests = server.await?;
+        let requests = server.targets();
         assert!(requests[0].contains("tailLines=0"));
         assert!(requests[2].contains("sinceTime="));
         Ok(())
@@ -2196,28 +2099,12 @@ mod tests {
 
     #[tokio::test]
     async fn live_follow_reads_past_a_non_utf8_line_without_reconnecting() -> anyhow::Result<()> {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
-        let address = listener.local_addr()?;
-        let server = tokio::spawn(async move {
-            let mut requests = Vec::new();
-            for (content_type, body) in [
-                (
-                    "text/plain",
-                    b"2026-09-14T09:00:00Z a\n2026-09-14T09:00:01Z \xff\xfe\n2026-09-14T09:00:02Z after\n".to_vec(),
-                ),
-                ("application/json", terminal_pod_json().into_bytes()),
-            ] {
-                requests.push(
-                    serve_scripted_http_response(&listener, content_type, body)
-                        .await
-                        .expect("scripted Kubernetes response succeeds"),
-                );
-            }
-            requests
-        });
-
-        let config = kube::Config::new(format!("http://{address}").parse()?);
-        let client = kube::Client::try_from(config)?;
+        let server = FakeKubeApi::start_sequence(vec![
+            Reply::text(b"2026-09-14T09:00:00Z a\n2026-09-14T09:00:01Z \xff\xfe\n2026-09-14T09:00:02Z after\n".to_vec()),
+            Reply::ok_json(terminal_pod_json()),
+        ])
+        .await;
+        let client = server.client();
         let service = LogStoreService::default();
         assert!(service.open(1));
         let ingest = Arc::new(LogTimelineAppender::new(service.appender(), 1, 1)?);
@@ -2251,7 +2138,7 @@ mod tests {
                 .iter()
                 .any(|event| event.as_ref().as_any().is::<PodLogSourceReconnecting>())
         );
-        let requests = server.await?;
+        let requests = server.targets();
         assert_eq!(requests.len(), 2);
         assert!(requests[0].contains("/log"));
         Ok(())

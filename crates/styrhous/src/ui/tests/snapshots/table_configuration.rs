@@ -224,7 +224,7 @@ fn delete_confirmation_can_be_cancelled_without_sending_a_command() {
     };
 
     harness.run();
-    harness.get_by_label("Cancel").click_accesskit();
+    click_label(&mut harness, "Cancel");
     harness.run();
 
     assert!(harness.state().worker.commands.is_empty());
@@ -281,9 +281,7 @@ fn delete_confirmation_waits_before_enabling_the_destructive_action() {
     };
 
     harness.run_steps(1);
-    harness
-        .get_by_label("Delete important-config")
-        .click_accesskit();
+    click_label(&mut harness, "Delete important-config");
     harness.run_steps(1);
     assert!(harness.state().worker.commands.is_empty());
     assert!(
@@ -305,9 +303,7 @@ fn delete_confirmation_waits_before_enabling_the_destructive_action() {
         confirmation_available_at: std::time::Instant::now(),
     });
     harness.run();
-    harness
-        .get_by_label("Delete important-config")
-        .click_accesskit();
+    click_label(&mut harness, "Delete important-config");
     harness.run();
     assert!(matches!(
         harness.state().worker.commands.as_slice(),

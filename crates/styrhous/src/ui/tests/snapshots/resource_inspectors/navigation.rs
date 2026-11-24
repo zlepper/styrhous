@@ -192,7 +192,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
     harness.run();
     harness.ui_harness("resource_inspectors/managed_resource_tables_navigate_with_back_and_forward_history/replica_set_inspector_with_back_history");
 
-    harness.get_by_label("Back").click_accesskit();
+    click_label(&mut harness, "Back");
     harness.run_steps(1);
     let navigator = harness.state().ui_state.global_blades.navigator().unwrap();
     assert_eq!(
@@ -214,11 +214,12 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .unwrap()
         .clear_transition();
     harness.run();
+    rest_pointer(&mut harness);
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "resource_inspectors/managed_resource_tables_navigate_with_back_and_forward_history/deployment_inspector_with_forward_history",
     ));
 
-    harness.get_by_label("Forward").click_accesskit();
+    click_label(&mut harness, "Forward");
     harness.run_steps(1);
     assert_eq!(
         harness
@@ -305,6 +306,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
             .len(),
         2
     );
+    rest_pointer(&mut harness);
     harness.ui_harness("resource_inspectors/managed_resource_tables_navigate_with_back_and_forward_history/pod_inspector_with_two_back_history_blades");
 
     let detail_watch_starts_before_back = harness
@@ -314,7 +316,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .iter()
         .filter(|command| command_is::<StartResourceDetailWatch>(command).is_some())
         .count();
-    harness.get_by_label("Back").click_accesskit();
+    click_label(&mut harness, "Back");
     harness.run_steps(1);
     assert_eq!(
         harness
@@ -335,7 +337,7 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
         .unwrap()
         .clear_transition();
     harness.run();
-    harness.get_by_label("Forward").click_accesskit();
+    click_label(&mut harness, "Forward");
     harness.run_steps(1);
     assert_eq!(
         harness
@@ -422,5 +424,6 @@ fn managed_resource_tables_navigate_with_back_and_forward_history() {
             .len(),
         3
     );
+    rest_pointer(&mut harness);
     harness.ui_harness("resource_inspectors/managed_resource_tables_navigate_with_back_and_forward_history/pod_inspector_with_three_back_history_entries");
 }

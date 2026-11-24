@@ -24,11 +24,9 @@ fn deployment_inspector_exposes_the_shared_restart_action() {
     harness.state_mut().ui_state = oracle_resource_table_state();
     open_typed_detail(&mut harness, deployment, detail);
 
-    harness
-        .get_by_label("More actions for coredns")
-        .click_accesskit();
+    click_label(&mut harness, "More actions for coredns");
     harness.run();
-    harness.get_by_label("Restart rollout").click_accesskit();
+    click_label(&mut harness, "Restart rollout");
     harness.run();
     assert!(
         harness.state().ui_state.clusters[&2]
@@ -112,7 +110,7 @@ fn config_map_inspector_saves_only_changed_existing_data_values() {
         .draft_values
         .insert("mode".into(), "production".into());
     harness.run();
-    harness.get_by_label("Save data").click_accesskit();
+    click_label(&mut harness, "Save data");
     harness.run();
 
     assert!(
@@ -159,14 +157,13 @@ fn resource_detail_more_actions_use_the_shared_resource_menu() {
     let detail = config_map_detail(BTreeMap::from([("mode".into(), "development".into())]));
     open_typed_detail(&mut harness, detail.api_resource.clone(), detail);
 
-    harness
-        .get_by_label("More actions for settings")
-        .click_accesskit();
+    click_label(&mut harness, "More actions for settings");
     harness.run();
+    rest_pointer(&mut harness);
     harness.ui_harness(HarnessSnapshotOptions::one_pixel(
         "resource_actions/resource_detail_more_actions_use_the_shared_resource_menu/config_map_resource_detail_actions",
     ));
-    harness.get_by_label("Edit YAML").click_accesskit();
+    click_label(&mut harness, "Edit YAML");
     harness.run();
     assert!(
         harness
@@ -195,11 +192,9 @@ fn resource_detail_more_actions_use_the_shared_resource_menu() {
                 .is_some())
     );
 
-    harness
-        .get_by_label("More actions for settings")
-        .click_accesskit();
+    click_label(&mut harness, "More actions for settings");
     harness.run();
-    harness.get_by_label("Delete").click_accesskit();
+    click_label(&mut harness, "Delete");
     harness.run();
     assert!(
         harness.state().ui_state.clusters[&2]
@@ -250,7 +245,7 @@ fn secret_inspector_masks_values_and_prompts_for_a_real_external_change() {
     };
     open_typed_detail(&mut harness, secrets, detail);
 
-    harness.get_by_label("Reveal").click_accesskit();
+    click_label(&mut harness, "Reveal");
     harness.run();
     harness.get_by_label("Hide");
     harness.get_by_label("Binary data");
@@ -291,7 +286,9 @@ fn secret_inspector_masks_values_and_prompts_for_a_real_external_change() {
         }) as WorkerResultBox);
     harness.run();
     harness.get_by_label("Data changed on cluster");
-    harness.get_by_label("Keep my edits").click_accesskit();
+    rest_pointer(&mut harness);
+    harness.ui_harness("resource_details/secret_inspector_masks_values_and_prompts_for_a_real_external_change/data_changed_on_cluster_dialog");
+    click_label(&mut harness, "Keep my edits");
     harness.run();
     assert_eq!(
         harness

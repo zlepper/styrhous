@@ -29,7 +29,9 @@ use crate::design::{size, space, stroke};
 use crate::icons::Icon;
 use crate::interaction::PointingHand;
 use crate::loading::Spinner;
+use crate::measured::{remember_width, remembered_width};
 use crate::tile::{Tile, TileSize};
+use crate::title_stack::TitleStack;
 use crate::tooltip::TooltipExt;
 
 /// The window title (14/20 · 600).
@@ -101,7 +103,7 @@ fn split_row<L, T>(
     trailing: impl FnOnce(&mut Ui) -> T,
 ) -> (L, T) {
     let width_id = id.with("trailing-width");
-    let remembered: f32 = ui.data(|data| data.get_temp(width_id)).unwrap_or(0.0);
+    let remembered = remembered_width(ui, width_id).unwrap_or(0.0);
     let mut trailing_ui = ui.new_child(
         UiBuilder::new()
             .id_salt(id.with("trailing"))
@@ -126,10 +128,7 @@ fn split_row<L, T>(
     } else {
         0.0
     };
-    if (width - remembered).abs() > 0.01 {
-        ui.data_mut(|data| data.insert_temp(width_id, width));
-        ui.ctx().request_discard("bar trailing width changed");
-    }
+    remember_width(ui, width_id, width, "bar trailing width changed");
 
     let leading_right = if width > 0.0 {
         (content.right() - width - gap).max(content.left() + size::BAR_MIN_LEADING)
@@ -243,7 +242,6 @@ impl<'a> WindowHeader<'a> {
 
     /// The tile, title and meta, and pill.
     fn show_identity(&self, ui: &mut Ui) -> Option<Response> {
-        let theme = ui.tokens();
         let row = ui.max_rect();
         Tile::new(self.icon).size(TileSize::Sm).show(ui);
 
@@ -255,48 +253,11 @@ impl<'a> WindowHeader<'a> {
             .as_ref()
             .map_or(0.0, |pill| pill.size(ui).x + HEADER_GAP);
         let max_width = (row.right() - ui.cursor().left() - pill_width).max(0.0);
-        let one_row = |role: TextRole, text: &str, color| {
-            role.galley_elided(ui.ctx(), text, color, max_width, 1)
-        };
-        let title = one_row(TITLE, self.title, theme.text.primary);
-        let meta = self
-            .meta
-            .map(|meta| (meta, one_row(type_scale::META, meta, theme.text.muted)));
-        let width = title
-            .rect
-            .width()
-            .max(meta.as_ref().map_or(0.0, |(_, galley)| galley.rect.width()));
-        let height = TITLE.line_height()
-            + meta
-                .as_ref()
-                .map_or(0.0, |_| type_scale::META.line_height());
-        let (column, _) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
-        let title_elided = title.elided;
-        let title_label = type_scale::text_at(
-            ui,
-            self.id.with("title"),
-            column.min,
-            title,
-            self.title,
-            theme.text.primary,
-        );
-        if title_elided {
-            title_label.tooltip(self.title);
+        let mut stack = TitleStack::new(self.id, self.title, TITLE);
+        if let Some(meta) = self.meta {
+            stack = stack.meta(meta, type_scale::META);
         }
-        if let Some((text, galley)) = meta {
-            let elided = galley.elided;
-            let label = type_scale::text_at(
-                ui,
-                self.id.with("meta"),
-                pos2(column.left(), column.top() + TITLE.line_height()),
-                galley,
-                text,
-                theme.text.muted,
-            );
-            if elided {
-                label.tooltip(text);
-            }
-        }
+        stack.show(ui, max_width);
         pill.map(|pill| pill.show(ui))
     }
 }

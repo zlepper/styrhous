@@ -160,7 +160,6 @@ pub struct ComboboxUi<'a> {
     enter_pressed: bool,
     space_pressed: bool,
     scroll_to_focused: bool,
-    item_height: f32,
     multi_select: bool,
 }
 
@@ -227,7 +226,7 @@ impl ComboboxUi<'_> {
         let height = if content.detail.is_some() {
             size::OPTION_TWO_LINE
         } else {
-            self.item_height
+            size::OPTION
         };
         let (rect, response) = self
             .ui
@@ -413,7 +412,6 @@ pub struct Combobox<Filter> {
     popup_width: Option<f32>,
     size: FieldSize,
     select_all: Option<SelectAll>,
-    item_height: f32,
     searchable: bool,
     multi_select: bool,
     noun: String,

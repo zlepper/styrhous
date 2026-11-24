@@ -15,9 +15,6 @@ use egui::{Shadow, Stroke};
 
 use super::palette::PaletteKey;
 
-/// Flat surfaces: tone only, no shadow and no border.
-pub const FLAT: Shadow = Shadow::NONE;
-
 /// A raised elevation level, mirroring a CSS `--shadow-*` token.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Elevation {

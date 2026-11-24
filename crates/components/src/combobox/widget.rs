@@ -17,7 +17,6 @@ impl Combobox<NoFilter> {
             popup_width: None,
             size: FieldSize::Md,
             select_all: None,
-            item_height: size::OPTION,
             searchable: true,
             multi_select: false,
             noun: "options".to_owned(),
@@ -59,7 +58,6 @@ impl Combobox<NoFilter> {
             popup_width: self.popup_width,
             size: self.size,
             select_all: self.select_all,
-            item_height: self.item_height,
             searchable: self.searchable,
             multi_select: self.multi_select,
             noun: self.noun,
@@ -174,12 +172,6 @@ impl<Filter> Combobox<Filter> {
         self
     }
 
-    /// Use two-line rows (44 points) for options with a detail line.
-    pub fn multiline_items(mut self) -> Self {
-        self.item_height = size::OPTION_TWO_LINE;
-        self
-    }
-
     /// Show the search row (on by default). A plain list suits short fixed
     /// choices.
     pub fn searchable(mut self, searchable: bool) -> Self {
@@ -281,7 +273,6 @@ impl<F> Combobox<WithFilter<F>> {
             popup_width,
             size,
             select_all,
-            item_height,
             searchable,
             multi_select,
             noun,
@@ -487,7 +478,7 @@ impl<F> Combobox<WithFilter<F>> {
                     }
                 }
                 state.focused_index = highlight.unwrap_or(focused_index);
-                let content_height = item_count as f32 * item_height
+                let content_height = item_count as f32 * size::OPTION
                     + if select_all_visible {
                         size::OPTION_SEPARATOR
                     } else {
@@ -523,7 +514,6 @@ impl<F> Combobox<WithFilter<F>> {
                                 enter_pressed: keyboard.enter_pressed,
                                 space_pressed: keyboard.space_pressed,
                                 scroll_to_focused,
-                                item_height,
                                 multi_select,
                             };
 

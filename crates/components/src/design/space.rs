@@ -15,13 +15,8 @@ pub const S32: f32 = 32.0;
 pub const S40: f32 = 40.0;
 pub const S48: f32 = 48.0;
 
-/// Every step of the scale, smallest first.
-pub const SCALE: [f32; 11] = [S2, S4, S6, S8, S12, S16, S20, S24, S32, S40, S48];
-
 /// Gap between a field label and its control.
 pub const LABEL_TO_CONTROL: f32 = S6;
-/// Spacing between sections inside a blade.
-pub const BLADE_SECTION: f32 = S24;
 /// Inset of a blade from the window edge.
 pub const BLADE_INSET: f32 = S8;
 

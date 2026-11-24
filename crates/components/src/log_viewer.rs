@@ -12,6 +12,7 @@ use crate::design::theme::{self, Theme, ThemeExt, ThemeScope, Tone};
 use crate::design::type_scale::{self, TextRole, Weight};
 use crate::design::{elevation, radius, size, space};
 use crate::frames::{raised_frame, show_elevated};
+use crate::title_stack::TitleStack;
 use crate::tooltip::TooltipExt;
 
 /// The title of a log window (`.lhead .lt`): Bricolage 28/34.
@@ -867,28 +868,9 @@ impl<'a> LogHeader<'a> {
         let pill_width = pill.size(&row).x;
         let left = row.cursor().left();
         let title_room = (trailing_left - HEADER_GAP - pill_width - HEADER_GAP - left).max(0.0);
-        let title =
-            TITLE_ROLE.galley_elided(row.ctx(), self.title, theme.text.primary, title_room, 1);
-        let caption =
-            CAPTION_ROLE.galley_elided(row.ctx(), self.caption, theme.text.muted, title_room, 1);
-        let width = title.rect.width().max(caption.rect.width());
-        let (block, _) = row.allocate_exact_size(vec2(width, height), Sense::hover());
-        type_scale::text_at(
-            &row,
-            response.id.with("title"),
-            block.min,
-            title,
-            self.title,
-            theme.text.primary,
-        );
-        type_scale::text_at(
-            &row,
-            response.id.with("caption"),
-            pos2(block.left(), block.top() + TITLE_ROLE.line_height()),
-            caption,
-            self.caption,
-            theme.text.muted,
-        );
+        TitleStack::new(response.id, self.title, TITLE_ROLE)
+            .meta(self.caption, CAPTION_ROLE)
+            .show(&mut row, title_room);
         let status = pill.show(&mut row);
         LogHeaderResponse { response, status }
     }
@@ -926,10 +908,11 @@ impl FloatingToolbar {
         .inner
     }
 
-    /// [`Self::show_floating`] with a toolbar `width` points wide whose
-    /// controls are laid out by `layout`: with a right-to-left layout the
+    /// Float the toolbar centred over the bottom of the window,
+    /// [`size::FLOATING_TOOLBAR_INSET`] above it, `width` points wide, its
+    /// controls laid out by `layout`: with a right-to-left layout the
     /// last control added (a search field) takes the room the others leave.
-    pub fn show_floating_sized<R>(
+    pub fn show_floating<R>(
         ctx: &egui::Context,
         id_salt: impl std::hash::Hash + std::fmt::Debug,
         width: f32,
@@ -964,42 +947,5 @@ impl FloatingToolbar {
                 .inner
             })
             .inner
-    }
-
-    /// Float the toolbar over the bottom of the window, centred and
-    /// [`size::FLOATING_TOOLBAR_INSET`] above it, as wide as its controls.
-    pub fn show_floating<R>(
-        ctx: &egui::Context,
-        id_salt: impl std::hash::Hash + std::fmt::Debug,
-        add_contents: impl FnOnce(&mut Ui) -> R,
-    ) -> R {
-        egui::Area::new(egui::Id::new(("floating-toolbar", id_salt)))
-            .order(egui::Order::Foreground)
-            .anchor(
-                egui::Align2::CENTER_BOTTOM,
-                vec2(0.0, -size::FLOATING_TOOLBAR_INSET),
-            )
-            .show(ctx, |ui| Self::show(ui, add_contents))
-            .inner
-    }
-
-    /// Float the toolbar centred over the bottom of `window`
-    /// ([`size::FLOATING_TOOLBAR_INSET`] above it), as wide as `width`.
-    pub fn show_over<R>(
-        ui: &mut Ui,
-        window: Rect,
-        width: f32,
-        add_contents: impl FnOnce(&mut Ui) -> R,
-    ) -> R {
-        let height = size::CONTROL_LG + 2.0 * size::FLOATING_TOOLBAR_PADDING;
-        let rect = Rect::from_center_size(
-            pos2(
-                window.center().x,
-                window.bottom() - size::FLOATING_TOOLBAR_INSET - height / 2.0,
-            ),
-            vec2(width, height),
-        );
-        let mut child = ui.new_child(UiBuilder::new().max_rect(rect));
-        Self::show(&mut child, add_contents)
     }
 }

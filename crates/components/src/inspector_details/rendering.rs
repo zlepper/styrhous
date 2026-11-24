@@ -22,30 +22,6 @@ pub(super) fn show_property_rows(
     }
 }
 
-pub(super) fn show_group_title(ui: &mut Ui, group_rect: Rect, title: &str) {
-    let tokens = ui.tokens();
-    let title_galley = ui.painter().layout_no_wrap(
-        title.to_owned(),
-        type_scale::TITLE.font_id(ui.ctx()),
-        tokens.text.primary,
-    );
-    let title_rect = Rect::from_min_size(
-        egui::pos2(
-            group_rect.left() + space::S12,
-            group_rect.top() - title_galley.size().y / 2.0,
-        ),
-        title_galley.size(),
-    );
-    // Cut the title into the card's border, like a fieldset legend.
-    ui.painter().rect_filled(
-        title_rect.expand2(egui::vec2(space::S4, 2.0)),
-        0.0,
-        tokens.card_fill(),
-    );
-    ui.painter()
-        .galley(title_rect.min, title_galley, tokens.text.primary);
-}
-
 pub(super) fn show_property_row(
     ui: &mut Ui,
     row: &DetailRow<'_>,

@@ -6,8 +6,6 @@ use crate::cluster_connection_manager::{
 };
 use crate::ui::state::DeploymentRevisionsLoad;
 
-type AppHarness = Harness<'static, MyEguiApp<MockWorker>>;
-
 fn deployments_state() -> UiState {
     let deployment = fixture_api_resource("apps", "Deployment", "deployments");
     let mut state = oracle_resource_table_state();

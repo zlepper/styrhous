@@ -136,12 +136,8 @@ pub const TOOLBAR: f32 = 48.0;
 /// Status bars.
 pub const STATUS_BAR: f32 = 28.0;
 
-/// Width of the workspace navigation rail.
-pub const RAIL_WIDTH: f32 = 64.0;
 /// Rail buttons and avatars (`.rbtn`, `.av`).
 pub const RAIL_BUTTON: f32 = 40.0;
-/// Width of the workspace navigator panel.
-pub const NAVIGATOR_WIDTH: f32 = 240.0;
 
 /// Hairline strokes: dividers and borders.
 pub const HAIRLINE: f32 = 1.0;
@@ -230,10 +226,6 @@ pub const AVATAR_STATUS: f32 = 11.0;
 pub const AVATAR_STATUS_BORDER: f32 = 2.0;
 /// How far the status square hangs past the avatar's bottom-right corner.
 pub const AVATAR_STATUS_OVERHANG: f32 = 3.0;
-/// Gap between a selected avatar and its ring.
-pub const AVATAR_RING_GAP: f32 = FOCUS_RING_GAP;
-/// Width of the selected avatar ring.
-pub const AVATAR_RING: f32 = FOCUS_RING;
 
 // A09
 /// A colour swatch's side (`Swatches`).
@@ -310,9 +302,6 @@ pub const CODE_PADDING_TOP: f32 = 12.0;
 pub const CODE_CARET: egui::Vec2 = egui::vec2(2.0, 18.0);
 /// Gap between the caret's line box top and the caret.
 pub const CODE_CARET_INSET: f32 = 1.0;
-/// Width of a code surface's source-label column padding (the space after
-/// the longest label).
-pub const CODE_SOURCE_PADDING: f32 = 16.0;
 /// Half the height of a diagnostic's wavy underline.
 pub const SQUIGGLE_AMPLITUDE: f32 = 1.0;
 /// Length of one wave of a diagnostic's underline.

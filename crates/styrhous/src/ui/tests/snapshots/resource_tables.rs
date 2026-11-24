@@ -240,15 +240,14 @@ fn deployment_restart_action_opens_a_confirmation_and_sends_a_worker_command() {
     harness.run();
     harness.get_by_label("Deployments").click();
     harness.run();
-    harness
-        .get_by_label("More actions for coredns")
-        .click_accesskit();
+    click_label(&mut harness, "More actions for coredns");
     harness.run();
-    harness.get_by_label("Restart rollout").click_accesskit();
+    click_label(&mut harness, "Restart rollout");
     harness.run();
 
+    rest_pointer(&mut harness);
     harness.ui_harness("resource_actions/deployment_restart_action_opens_a_confirmation_and_sends_a_worker_command/deployment_restart_confirmation");
-    harness.get_by_label("Restart rollout").click_accesskit();
+    click_label(&mut harness, "Restart rollout");
     harness.run();
     assert!(
         harness
@@ -304,8 +303,7 @@ fn cron_job_run_action_opens_a_confirmation_and_sends_a_worker_command() {
     harness.run();
     harness.get_by_label("Run now").click();
     harness.run();
-    harness.event(egui::Event::PointerGone);
-    harness.run();
+    rest_pointer(&mut harness);
 
     harness.ui_harness("resource_actions/cron_job_run_action_opens_a_confirmation_and_sends_a_worker_command/cron_job_run_confirmation");
     harness.get_by_label("Run now").click();
@@ -327,16 +325,14 @@ fn cron_job_run_action_opens_a_confirmation_and_sends_a_worker_command() {
         vec![1]
     );
 
-    harness.event(egui::Event::PointerGone);
-    harness.run();
+    rest_pointer(&mut harness);
     harness
         .get_by_label("More actions for nightly-report")
         .click();
     harness.run();
     harness.get_by_label("Run now").click();
     harness.run();
-    harness.event(egui::Event::PointerGone);
-    harness.run();
+    rest_pointer(&mut harness);
     harness.get_by_label("Run now").click();
     harness.run();
 
@@ -435,13 +431,11 @@ fn overlapping_cron_job_runs_started_from_the_ui_keep_the_earlier_failure_visibl
         harness.run();
         harness.get_by_label("Run now").click();
         harness.run();
-        harness.event(egui::Event::PointerGone);
-        harness.run();
+        rest_pointer(&mut harness);
         // The confirmation dialog's primary button.
         harness.get_by_label("Run now").click();
         harness.run();
-        harness.event(egui::Event::PointerGone);
-        harness.run();
+        rest_pointer(&mut harness);
     }
 
     let runs = harness

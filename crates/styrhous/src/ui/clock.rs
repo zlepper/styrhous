@@ -52,6 +52,11 @@ pub(crate) fn now(ctx: &egui::Context) -> OffsetDateTime {
         .map_or_else(OffsetDateTime::now_utc, |time| time.0)
 }
 
+/// A resource's age at the time of the frame being drawn ("220d", "3h"), or "Unknown".
+pub(crate) fn frame_age(ctx: &egui::Context, created: Option<OffsetDateTime>) -> String {
+    crate::minimal_resource::format_age(created, now(ctx))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -62,6 +67,15 @@ mod tests {
         let fixed = OffsetDateTime::UNIX_EPOCH + time::Duration::days(220);
         publish(&ctx, WallClock::Fixed(fixed));
         assert_eq!(now(&ctx), fixed);
+    }
+
+    #[test]
+    fn frame_age_reads_the_published_clock() {
+        let ctx = egui::Context::default();
+        let created = OffsetDateTime::UNIX_EPOCH;
+        publish(&ctx, WallClock::Fixed(created + time::Duration::days(220)));
+        assert_eq!(frame_age(&ctx, Some(created)), "220d");
+        assert_eq!(frame_age(&ctx, None), "Unknown");
     }
 
     #[test]

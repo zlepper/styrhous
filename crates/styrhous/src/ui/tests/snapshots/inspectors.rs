@@ -8,14 +8,11 @@ use super::super::design_fixtures::{
 };
 use super::*;
 
-/// The board size of the main-window screens.
-const BOARD: egui::Vec2 = egui::vec2(1536.0, 1024.0);
-
 /// A05: the pod `coredns-66bc5c9577-ffw2s` inspector over Deployment `coredns`
 /// and its ReplicaSet, which show as peeks behind it.
 #[test]
 fn a05_pod_inspector_with_history() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     deliver_design_unread_failure(&mut harness);
     click_label(&mut harness, "Dismiss");
     click_label(&mut harness, "Workloads");
@@ -28,7 +25,7 @@ fn a05_pod_inspector_with_history() {
 /// A13: the Helm release `demo` inspector, opened from the Helm releases list.
 #[test]
 fn a13_helm_release_inspector() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     deliver_design_unread_failure(&mut harness);
     click_label(&mut harness, "Dismiss");
     click_label(&mut harness, "Helm releases");
@@ -47,7 +44,7 @@ fn a13_helm_release_inspector() {
 /// pod's Events section says its normal events are hidden.
 #[test]
 fn a05_pod_inspector_rail_scrolls_to_the_events_section() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     deliver_design_unread_failure(&mut harness);
     click_label(&mut harness, "Dismiss");
     open_coredns_inspector_stack(&mut harness);
@@ -68,7 +65,7 @@ fn a05_pod_inspector_rail_scrolls_to_the_events_section() {
 /// L opens the pod's logs and V its YAML, while no text field has the keys.
 #[test]
 fn pod_inspector_keys_open_logs_and_yaml() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     open_coredns_inspector_stack(&mut harness);
 
     harness.key_press(egui::Key::L);
@@ -98,7 +95,7 @@ fn pod_inspector_keys_open_logs_and_yaml() {
 /// Warning events show in a table; the normal ones wait behind a link.
 #[test]
 fn pod_inspector_shows_warning_events_and_hides_normal_ones_until_asked() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     open_coredns_inspector_stack(&mut harness);
     let mut events = coredns_pod_events();
     events.push(ResourceEvent {
@@ -130,7 +127,7 @@ fn pod_inspector_shows_warning_events_and_hides_normal_ones_until_asked() {
     assert!(harness.query_by_label("Scheduled").is_none());
 }
 
-fn current_inspector_name(harness: &Harness<'static, MyEguiApp<MockWorker>>) -> String {
+fn current_inspector_name(harness: &AppHarness) -> String {
     harness
         .state()
         .ui_state
@@ -145,7 +142,7 @@ fn current_inspector_name(harness: &Harness<'static, MyEguiApp<MockWorker>>) -> 
 /// them disabled, and a Deployment has neither.
 #[test]
 fn logs_and_shell_follow_the_pods_containers() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     open_coredns_inspector_stack(&mut harness);
     for label in ["Logs", "Shell"] {
         assert!(
@@ -184,7 +181,7 @@ fn logs_and_shell_follow_the_pods_containers() {
 /// The node in the status line opens the node's inspector.
 #[test]
 fn the_status_line_node_opens_the_node_inspector() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     open_coredns_inspector_stack(&mut harness);
     let link = harness
         .get_all_by_label("kind-control-plane")
@@ -215,7 +212,7 @@ fn the_status_line_node_opens_the_node_inspector() {
 /// A peek returns to its blade, and Escape closes the stack.
 #[test]
 fn a_peek_click_goes_back_and_escape_closes_the_stack() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     open_coredns_inspector_stack(&mut harness);
     harness.get_by_label("Go back one blade").click();
     harness.run_steps(4);
@@ -232,7 +229,7 @@ fn a_peek_click_goes_back_and_escape_closes_the_stack() {
 /// The inline YAML stops at 300 lines and says so.
 #[test]
 fn long_yaml_is_cut_at_the_line_limit_and_says_so() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     open_coredns_inspector_stack(&mut harness);
     let mut detail = coredns_pod_detail();
     detail.yaml = Some(
@@ -271,7 +268,7 @@ fn long_yaml_is_cut_at_the_line_limit_and_says_so() {
 /// V, like the Values button, jumps to the release's Values section.
 #[test]
 fn the_helm_v_key_jumps_to_the_values_section() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     click_label(&mut harness, "Helm releases");
     harness.deliver_worker_result(HelmReleasesReplaced {
         cluster_key: KIND_KIND,
@@ -279,7 +276,7 @@ fn the_helm_v_key_jumps_to_the_values_section() {
         releases: demo_helm_releases(),
     });
     click_label(&mut harness, "Inspect Helm release demo");
-    let values_lit = |harness: &Harness<'static, MyEguiApp<MockWorker>>| {
+    let values_lit = |harness: &AppHarness| {
         harness
             .get_all_by_label("Values")
             .find(|node| node.rect().left() < 990.0 && node.rect().left() > 800.0)

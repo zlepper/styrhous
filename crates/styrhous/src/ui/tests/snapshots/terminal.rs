@@ -188,9 +188,9 @@ fn shell_action_launches_the_selected_context_pod_and_application_container() {
     harness.run();
 
     let action_label = format!("More actions for {pod_name}");
-    harness.get_by_label(&action_label).click_accesskit();
+    click_label(&mut harness, &action_label);
     harness.run();
-    harness.get_by_label("Shell").click_accesskit();
+    click_label(&mut harness, "Shell");
     harness.run();
 
     assert_eq!(
@@ -431,9 +431,9 @@ fn shell_launch_failure_uses_the_styled_error_modal_and_opens_terminal_settings(
     harness.run();
 
     let action_label = format!("More actions for {pod_name}");
-    harness.get_by_label(&action_label).click_accesskit();
+    click_label(&mut harness, &action_label);
     harness.run();
-    harness.get_by_label("Shell").click_accesskit();
+    click_label(&mut harness, "Shell");
     harness.run_steps(2);
 
     harness.get_by_label("Couldn’t open a terminal");
@@ -444,9 +444,10 @@ fn shell_launch_failure_uses_the_styled_error_modal_and_opens_terminal_settings(
     harness.get_by_label("Close");
     assert!(harness.state().ui_state.terminal_launch_error.is_some());
     harness.run_steps(2);
+    rest_pointer(&mut harness);
     harness.ui_harness(HarnessSnapshotOptions::one_pixel("terminal/shell_launch_failure_uses_the_styled_error_modal_and_opens_terminal_settings/terminal_launch_error"));
 
-    harness.get_by_label("Open settings").click_accesskit();
+    click_label(&mut harness, "Open settings");
     harness.run_steps(2);
 
     assert!(harness.state().ui_state.terminal_launch_error.is_none());
@@ -462,7 +463,7 @@ fn terminal_launch_error_dismisses_without_opening_settings() {
     harness.state_mut().ui_state = state;
     harness.run();
 
-    harness.get_by_label("Close").click_accesskit();
+    click_label(&mut harness, "Close");
     harness.run();
 
     assert!(harness.state().ui_state.terminal_launch_error.is_none());

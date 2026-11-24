@@ -380,7 +380,7 @@ fn show_log_lines(
         })
         .or_else(|| tail_scroll_row.map(|row| egui::vec2(horizontal_offset, row as f32 * row_step)))
         .or(caret_scroll_offset);
-    let mut scroll_area = components::scroll::both()
+    let mut scroll_area = components::scroll::both_clear_of_corner(ui)
         .id_salt(scroll_area_salt)
         .auto_shrink([false, false])
         // A wide page can arrive after placeholders have already been

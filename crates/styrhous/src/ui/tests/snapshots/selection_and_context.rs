@@ -9,10 +9,9 @@ fn resource_table_more_actions_snapshot() {
     harness.run();
     click_label(&mut harness, "Workloads");
     harness.run();
-    harness
-        .get_by_label("More actions for coredns-66bc5c9577-ffw2s")
-        .click_accesskit();
+    click_label(&mut harness, "More actions for coredns-66bc5c9577-ffw2s");
     harness.run();
+    rest_pointer(&mut harness);
     harness.ui_harness(
         "resource_tables/resource_table_more_actions_snapshot/oracle_resource_table_actions",
     );

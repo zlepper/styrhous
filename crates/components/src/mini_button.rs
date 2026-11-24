@@ -97,12 +97,6 @@ impl MiniButton {
         }
     }
 
-    /// Add the button at the cursor.
-    pub fn show_here(self, ui: &mut Ui) -> Response {
-        let (rect, slot) = ui.allocate_exact_size(Vec2::splat(MINI_BUTTON), Sense::hover());
-        self.show(ui, rect, slot.id.with("mini"))
-    }
-
     /// Show the button in `rect` (already inside allocated space) as `id`.
     pub fn show(self, ui: &mut Ui, rect: Rect, id: Id) -> Response {
         let enabled = self.enabled && ui.is_enabled();

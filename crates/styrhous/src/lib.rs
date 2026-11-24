@@ -3,6 +3,7 @@ mod api_resource;
 mod cluster_connection_manager;
 mod cluster_provider;
 mod context_presentation;
+mod fake_kube_api;
 mod helm_release;
 mod helpers;
 mod licensing;

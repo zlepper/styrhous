@@ -44,7 +44,8 @@ ansi-blue = "sky-300"
 - `extends` names the built-in theme the file starts from. Only `harbour-dark` exists, and it is
   the default. A theme file cannot extend another theme file.
 
-The colours are defined in three layers. Each layer may only refer to the layer below it:
+The colours are defined in layers, and each layer refers only to the one below it (palette, then
+roles and terminal, then components):
 
 - **`[palette]`**: the raw colours. Assign a hex colour: `#RGB`, `#RGBA`, `#RRGGBB` or
   `#RRGGBBAA`. Changing a palette entry changes every role that uses it.

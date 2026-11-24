@@ -44,7 +44,9 @@ use crate::terminal_launcher::{
 };
 use crate::updater::UpdateStatus;
 use crate::worker::*;
-use components::test_support::{HarnessSnapshotOptions, UiHarnessSnapshot};
+use components::test_support::{
+    BOARD_SIZE, HarnessSnapshotOptions, UiHarnessSnapshot, click_label, primary_click, rest_pointer,
+};
 use egui::text::{CCursor, CCursorRange};
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT, Queryable};
@@ -54,6 +56,9 @@ use time::OffsetDateTime;
 
 mod context_settings;
 mod flows;
+
+/// The application under test, driven by a scripted worker.
+type AppHarness = Harness<'static, MyEguiApp<MockWorker>>;
 
 const OPEN_APPLICATION_SETTINGS: &str =
     "Open application settings: Terminal, debug images and updates";
@@ -228,33 +233,6 @@ fn secondary_click(harness: &mut Harness<MyEguiApp<MockWorker>>, position: egui:
         pressed: false,
         modifiers: egui::Modifiers::default(),
     });
-}
-
-fn primary_click<L: TerminalLauncher>(
-    harness: &mut Harness<MyEguiApp<MockWorker, L>>,
-    position: egui::Pos2,
-) {
-    harness.event(egui::Event::PointerMoved(position));
-    harness.event(egui::Event::PointerButton {
-        pos: position,
-        button: egui::PointerButton::Primary,
-        pressed: true,
-        modifiers: egui::Modifiers::default(),
-    });
-    harness.event(egui::Event::PointerButton {
-        pos: position,
-        button: egui::PointerButton::Primary,
-        pressed: false,
-        modifiers: egui::Modifiers::default(),
-    });
-}
-
-/// Click the centre of the node labelled `label` with the pointer, then
-/// let the frame settle.
-fn click_label<L: TerminalLauncher>(harness: &mut Harness<MyEguiApp<MockWorker, L>>, label: &str) {
-    let position = harness.get_by_label(label).rect().center();
-    primary_click(harness, position);
-    harness.run();
 }
 
 fn open_settings(harness: &mut Harness<MyEguiApp<MockWorker>>) {

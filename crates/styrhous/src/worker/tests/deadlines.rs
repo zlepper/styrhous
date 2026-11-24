@@ -1,33 +1,17 @@
 //! A Kubernetes API that accepts a request and never answers must still end in a result.
 
 use super::*;
-use std::net::SocketAddr;
+use crate::fake_kube_api::FakeKubeApi;
 
-/// Accepts connections and swallows requests without ever responding, like an API
-/// server whose connection has stalled.
-async fn stalled_api_server() -> (SocketAddr, JoinHandle<()>) {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .expect("the fake API server binds");
-    let address = listener.local_addr().expect("the listener has an address");
-    let server = tokio::spawn(async move {
-        let mut held_open = Vec::new();
-        while let Ok((socket, _)) = listener.accept().await {
-            held_open.push(socket);
-        }
-    });
-    (address, server)
-}
-
-/// A worker state connected as cluster 1 to `address`, plus the receiving end of its results.
+/// A worker state connected as cluster 1 to `api`, plus the receiving end of its results.
 async fn connected_state(
-    address: SocketAddr,
+    api: &FakeKubeApi,
     request_deadline: Duration,
 ) -> (WorkerState, mpsc::Receiver<WorkerResultBox>) {
     let (sender, receiver) = mpsc::channel(8);
     let mut state = WorkerState::new(WorkerResultSender::new(sender, None), None);
     state.request_deadline = request_deadline;
-    let config = kube::Config::new(format!("http://{address}").parse().expect("valid URL"));
+    let config = api.config();
     state
         .connections
         .lock()
@@ -344,10 +328,11 @@ fn cases() -> Vec<Case> {
 
 #[tokio::test]
 async fn every_wrapped_command_reports_a_typed_failure_when_the_api_never_answers() {
-    let (address, server) = stalled_api_server().await;
+    // An API server that accepts requests and never answers, like one whose connection stalled.
+    let api = FakeKubeApi::start_stalled().await;
     for case in cases() {
         let name = case.command.command_name();
-        let (state, receiver) = connected_state(address, Duration::from_millis(100)).await;
+        let (state, receiver) = connected_state(&api, Duration::from_millis(100)).await;
 
         let result = result_of(case.command, state, receiver, Duration::from_secs(5)).await;
 
@@ -359,7 +344,6 @@ async fn every_wrapped_command_reports_a_typed_failure_when_the_api_never_answer
             "{name}: {error}"
         );
     }
-    server.abort();
 }
 
 #[tokio::test]

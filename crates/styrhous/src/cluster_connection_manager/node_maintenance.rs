@@ -321,10 +321,10 @@ async fn pod_was_replaced(pods: &Api<Pod>, pod: &DrainPod) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fake_kube_api::{FakeKubeApi, Reply};
     use k8s_openapi::api::core::v1::{EmptyDirVolumeSource, PodSpec, PodStatus, Volume};
     use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, OwnerReference};
     use std::collections::BTreeMap;
-    use std::sync::{Arc, Mutex};
 
     fn pod(name: &str, controller: Option<&str>) -> Pod {
         Pod {
@@ -476,83 +476,6 @@ mod tests {
         );
     }
 
-    /// What the scripted API server was asked: `METHOD path` and the request body.
-    type Requests = Arc<Mutex<Vec<(String, String)>>>;
-
-    /// Serves `reply(route, n)` for the `n`th (from 0) request of each `METHOD path` route until
-    /// the returned task is dropped, recording what was requested.
-    async fn scripted_api_server(
-        reply: impl Fn(&str, usize) -> (u16, String) + Send + Sync + 'static,
-    ) -> (kube::Client, tokio::task::JoinHandle<()>, Requests) {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-            .await
-            .expect("test server should bind");
-        let address = listener.local_addr().expect("test server has an address");
-        let reply = Arc::new(reply);
-        let requests = Requests::default();
-        let recorded = Arc::clone(&requests);
-        let server = tokio::spawn(async move {
-            while let Ok((mut socket, _)) = listener.accept().await {
-                let reply = Arc::clone(&reply);
-                let recorded = Arc::clone(&recorded);
-                tokio::spawn(async move {
-                    let mut request = Vec::new();
-                    let mut buffer = [0_u8; 4_096];
-                    let (head_end, length) = loop {
-                        if let Some(head_end) =
-                            request.windows(4).position(|window| window == b"\r\n\r\n")
-                        {
-                            let head = String::from_utf8_lossy(&request[..head_end]).to_lowercase();
-                            let length = head
-                                .lines()
-                                .find_map(|line| line.strip_prefix("content-length: "))
-                                .and_then(|length| length.trim().parse::<usize>().ok())
-                                .unwrap_or(0);
-                            if request.len() >= head_end + 4 + length {
-                                break (head_end + 4, length);
-                            }
-                        }
-                        match socket.read(&mut buffer).await {
-                            Ok(0) | Err(_) => return,
-                            Ok(read) => request.extend_from_slice(&buffer[..read]),
-                        }
-                    };
-                    let text = String::from_utf8_lossy(&request[..head_end]).into_owned();
-                    let mut start_line = text.split_whitespace();
-                    let method = start_line.next().unwrap_or_default();
-                    let path = start_line
-                        .next()
-                        .and_then(|target| target.split('?').next())
-                        .unwrap_or_default();
-                    let route = format!("{method} {path}");
-                    let body =
-                        String::from_utf8_lossy(&request[head_end..head_end + length]).into_owned();
-                    let nth = {
-                        let mut recorded = recorded.lock().unwrap();
-                        recorded.push((route.clone(), body));
-                        recorded.iter().filter(|(seen, _)| *seen == route).count() - 1
-                    };
-                    let (status, body) = reply(&route, nth);
-                    let response = format!(
-                        "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                        body.len()
-                    );
-                    let _ = socket.write_all(response.as_bytes()).await;
-                    let _ = socket.shutdown().await;
-                });
-            }
-        });
-        let config = kube::Config::new(
-            format!("http://{address}")
-                .parse()
-                .expect("test server URL is valid"),
-        );
-        let client = kube::Client::try_from(config).expect("test client should build");
-        (client, server, requests)
-    }
-
     const EVICT: &str = "POST /api/v1/namespaces/apps/pods/api/eviction";
     const DELETE: &str = "DELETE /api/v1/namespaces/apps/pods/api";
     const GET: &str = "GET /api/v1/namespaces/apps/pods/api";
@@ -598,11 +521,19 @@ mod tests {
     async fn evict(
         reply: impl Fn(&str, usize) -> (u16, String) + Send + Sync + 'static,
     ) -> (std::result::Result<(), String>, Vec<(String, String)>) {
-        let (client, _server, requests) = scripted_api_server(reply).await;
+        let api = FakeKubeApi::start(move |request| {
+            let (status, body) = reply(&request.route(), request.nth);
+            Reply::json(status, body)
+        })
+        .await;
         let options = quick_options();
         let deadline = Instant::now() + options.eviction_timeout;
-        let outcome = evict_pod(client, &api_pod(), deadline, options).await;
-        let requests = requests.lock().unwrap().clone();
+        let outcome = evict_pod(api.client(), &api_pod(), deadline, options).await;
+        let requests = api
+            .requests()
+            .into_iter()
+            .map(|request| (request.route(), request.body))
+            .collect();
         (outcome, requests)
     }
 

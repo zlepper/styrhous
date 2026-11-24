@@ -216,6 +216,7 @@ fn editable_value(object: &mut DynamicObject) -> Result<k8s_openapi::serde_json:
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fake_kube_api::{FakeKubeApi, Reply, Request};
 
     #[test]
     fn strips_server_managed_fields_from_both_metadata_representations() {
@@ -481,72 +482,14 @@ data:
         .to_string()
     }
 
-    /// Each request's start line and body, as the scripted API server received them.
-    type ReceivedRequests = std::sync::Arc<std::sync::Mutex<Vec<(String, String)>>>;
-
-    /// Answers one request per connection with the scripted responses, in order, recording each
-    /// request in `requests`.
-    async fn serve_scripted_api(
-        listener: tokio::net::TcpListener,
-        responses: Vec<(&'static str, String)>,
-        requests: ReceivedRequests,
-    ) -> std::io::Result<()> {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-        for (status, body) in responses {
-            let (mut socket, _) = listener.accept().await?;
-            let mut received = Vec::new();
-            let mut buffer = [0_u8; 4_096];
-            let header_end = loop {
-                let read = socket.read(&mut buffer).await?;
-                received.extend_from_slice(&buffer[..read]);
-                if let Some(end) = received.windows(4).position(|window| window == b"\r\n\r\n") {
-                    break end + 4;
-                }
-                if read == 0 {
-                    return Err(std::io::ErrorKind::UnexpectedEof.into());
-                }
-            };
-            let head = String::from_utf8_lossy(&received[..header_end]).into_owned();
-            let content_length = head
-                .lines()
-                .find_map(|line| {
-                    let (name, value) = line.split_once(':')?;
-                    name.eq_ignore_ascii_case("content-length")
-                        .then(|| value.trim().parse::<usize>().ok())?
-                })
-                .unwrap_or(0);
-            while received.len() < header_end + content_length {
-                let read = socket.read(&mut buffer).await?;
-                if read == 0 {
-                    return Err(std::io::ErrorKind::UnexpectedEof.into());
-                }
-                received.extend_from_slice(&buffer[..read]);
-            }
-            requests.lock().unwrap().push((
-                head.lines().next().unwrap_or_default().to_owned(),
-                String::from_utf8_lossy(&received[header_end..]).into_owned(),
-            ));
-            let response = format!(
-                "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                body.len()
-            );
-            socket.write_all(response.as_bytes()).await?;
-            socket.shutdown().await?;
-        }
-        Ok(())
-    }
-
     /// Sends the editor's `data.mode: maintenance` edit of the ConfigMap fetched at version 1
     /// to a fake API server that answers with `responses`.
     async fn replace_settings(
-        responses: Vec<(&'static str, String)>,
-    ) -> (EditorReplacement<DynamicObject>, Vec<(String, String)>) {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let address = listener.local_addr().unwrap();
-        let requests = ReceivedRequests::default();
-        let server = tokio::spawn(serve_scripted_api(listener, responses, requests.clone()));
-        let config = kube::Config::new(format!("http://{address}").parse().unwrap());
-        let client = kube::Client::try_from(config).unwrap();
+        responses: Vec<Reply>,
+    ) -> (EditorReplacement<DynamicObject>, Vec<Request>) {
+        // Responses the replacement does not ask for are left unserved.
+        let server = FakeKubeApi::start_sequence(responses).await;
+        let client = server.client();
         let api: kube::Api<DynamicObject> = kube::Api::namespaced_with(
             client,
             "default",
@@ -571,19 +514,16 @@ data:
         })
         .await
         .unwrap();
-        // Responses the replacement did not ask for are left unserved.
-        server.abort();
-        let requests = std::mem::take(&mut *requests.lock().unwrap());
-        (replacement, requests)
+        (replacement, server.requests())
     }
 
     #[tokio::test]
     async fn a_status_update_that_races_the_replacement_is_rebased_and_sent_again() {
         let (replacement, requests) = replace_settings(vec![
-            ("200 OK", live_settings("2", "production", 2)),
-            ("409 Conflict", conflict_status()),
-            ("200 OK", live_settings("3", "production", 3)),
-            ("200 OK", live_settings("4", "maintenance", 3)),
+            Reply::ok_json(live_settings("2", "production", 2)),
+            Reply::json(409, conflict_status()),
+            Reply::ok_json(live_settings("3", "production", 3)),
+            Reply::ok_json(live_settings("4", "maintenance", 3)),
         ])
         .await;
 
@@ -593,10 +533,10 @@ data:
         assert_eq!(replaced.metadata.resource_version.as_deref(), Some("4"));
         let methods = requests
             .iter()
-            .map(|(line, _)| line.split(' ').next().unwrap())
+            .map(|request| request.method.as_str())
             .collect::<Vec<_>>();
         assert_eq!(methods, ["GET", "PUT", "GET", "PUT"]);
-        let resent: DynamicObject = k8s_openapi::serde_json::from_str(&requests[3].1).unwrap();
+        let resent: DynamicObject = k8s_openapi::serde_json::from_str(&requests[3].body).unwrap();
         assert_eq!(resent.metadata.resource_version.as_deref(), Some("3"));
         assert_eq!(resent.data["data"]["mode"], "maintenance");
         assert_eq!(resent.data["status"]["observed"], 3);
@@ -605,9 +545,9 @@ data:
     #[tokio::test]
     async fn an_editable_change_that_races_the_replacement_is_a_conflict() {
         let (replacement, requests) = replace_settings(vec![
-            ("200 OK", live_settings("2", "production", 2)),
-            ("409 Conflict", conflict_status()),
-            ("200 OK", live_settings("3", "standby", 2)),
+            Reply::ok_json(live_settings("2", "production", 2)),
+            Reply::json(409, conflict_status()),
+            Reply::ok_json(live_settings("3", "standby", 2)),
         ])
         .await;
 
@@ -636,8 +576,8 @@ data:
         })
         .to_string();
         let (replacement, requests) = replace_settings(vec![
-            ("200 OK", live_settings("2", "production", 2)),
-            ("422 Unprocessable Entity", invalid),
+            Reply::ok_json(live_settings("2", "production", 2)),
+            Reply::json(422, invalid),
         ])
         .await;
 
@@ -652,11 +592,12 @@ data:
     async fn a_replacement_that_keeps_being_rejected_reports_the_rejection() {
         let mut responses = Vec::new();
         for version in 2..2 + EDITOR_REPLACEMENT_ATTEMPTS {
-            responses.push((
-                "200 OK",
-                live_settings(&version.to_string(), "production", 2),
-            ));
-            responses.push(("409 Conflict", conflict_status()));
+            responses.push(Reply::ok_json(live_settings(
+                &version.to_string(),
+                "production",
+                2,
+            )));
+            responses.push(Reply::json(409, conflict_status()));
         }
         let (replacement, requests) = replace_settings(responses).await;
 

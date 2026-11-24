@@ -8,6 +8,7 @@ use crate::worker::WorkerCommandBox;
 use components::design::theme::ThemeExt;
 use components::design::{size, space, type_scale};
 use components::icons::Icon;
+use components::measured::{remember_width, remembered_width};
 use components::{Button, ClusterTile, Keycap, ScopePill, SearchPill, TopBar};
 use egui::{Align, Key, Layout, Modifiers, Rect, Sense, Ui, UiBuilder, pos2, vec2};
 
@@ -212,7 +213,7 @@ fn tiles<'a>(ui: &mut Ui, choices: &'a [ClusterChoice], left: f32) -> Option<&'a
 /// pass and the row laid out again once it is known.
 fn centred_row<R>(ui: &mut Ui, gap: f32, height: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     let id = ui.id().with(("centred-row", ui.cursor().top() as i32));
-    let width = ui.data(|data| data.get_temp::<f32>(id)).unwrap_or(0.0);
+    let width = remembered_width(ui, id).unwrap_or(0.0);
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
     let mut row = ui.new_child(
         UiBuilder::new()
@@ -224,10 +225,6 @@ fn centred_row<R>(ui: &mut Ui, gap: f32, height: f32, add: impl FnOnce(&mut Ui) 
     );
     row.spacing_mut().item_spacing = vec2(gap, 0.0);
     let result = add(&mut row);
-    let measured = row.min_rect().width();
-    if (measured - width).abs() > 0.01 {
-        ui.data_mut(|data| data.insert_temp(id, measured));
-        ui.ctx().request_discard("landing row changed width");
-    }
+    remember_width(ui, id, row.min_rect().width(), "landing row changed width");
     result
 }

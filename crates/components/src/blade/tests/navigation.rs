@@ -1,5 +1,6 @@
 use super::super::transforms::{active_transform, history_transform, transformed_rect};
 use super::*;
+use crate::test_support::click_label;
 
 #[test]
 fn navigator_restores_entries_and_discards_forward_history() {
@@ -242,15 +243,15 @@ fn shared_header_controls_navigate_and_close_the_active_blade() {
         "back: {back:?}, close: {close:?}"
     );
 
-    harness.get_by_label("Back").click_accesskit();
+    click_label(&mut harness, "Back");
     harness.run();
     assert_eq!(navigator.borrow().current().id, 1);
 
-    harness.get_by_label("Forward").click_accesskit();
+    click_label(&mut harness, "Forward");
     harness.run();
     assert_eq!(navigator.borrow().current().id, 2);
 
-    harness.get_by_label("Close blade").click_accesskit();
+    click_label(&mut harness, "Close blade");
     harness.run();
     assert!(*close_finished.borrow());
 }

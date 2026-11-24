@@ -8,12 +8,10 @@ use super::super::design_fixtures::{
 use super::*;
 use components::design::size;
 
-/// The board size of the main-window screens.
-const BOARD: egui::Vec2 = egui::vec2(1536.0, 1024.0);
 /// A15's narrow window.
 const NARROW_BOARD: egui::Vec2 = egui::vec2(1024.0, 1024.0);
 
-fn expand_workloads(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) {
+fn expand_workloads(harness: &mut AppHarness) {
     click_label(harness, "Workloads");
 }
 
@@ -21,7 +19,7 @@ fn expand_workloads(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) {
 /// operation toasts.
 #[test]
 fn a02_pods_table_with_toasts() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     expand_workloads(&mut harness);
     deliver_design_outcomes(&mut harness);
     rest_pointer(&mut harness);
@@ -32,7 +30,7 @@ fn a02_pods_table_with_toasts() {
 /// selector open and searched for "mo".
 #[test]
 fn a03_namespace_selector_open() {
-    let mut harness = design_namespaces_harness(BOARD);
+    let mut harness = design_namespaces_harness(BOARD_SIZE);
     deliver_design_unread_failure(&mut harness);
     click_label(&mut harness, "Dismiss");
     expand_workloads(&mut harness);
@@ -52,7 +50,7 @@ fn a03_namespace_selector_open() {
 /// menu of `kind-worker` open on its Shell submenu of debug images.
 #[test]
 fn a04_nodes() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     deliver_design_unread_failure(&mut harness);
     click_label(&mut harness, "Dismiss");
     expand_workloads(&mut harness);
@@ -86,18 +84,11 @@ fn a15_pods_narrow_window() {
     harness.ui_harness("boards/a15_pods_narrow_window");
 }
 
-/// Take the pointer off the window, so no hover state or pointer shows in a
-/// snapshot.
-fn rest_pointer(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) {
-    harness.event(egui::Event::PointerGone);
-    harness.run();
-}
-
-fn center_of(harness: &Harness<'static, MyEguiApp<MockWorker>>, label: &str) -> egui::Pos2 {
+fn center_of(harness: &AppHarness, label: &str) -> egui::Pos2 {
     harness.get_by_label(label).rect().center()
 }
 
-fn top_of(harness: &Harness<'static, MyEguiApp<MockWorker>>, label: &str) -> f32 {
+fn top_of(harness: &AppHarness, label: &str) -> f32 {
     harness.get_by_label(label).rect().top()
 }
 
@@ -105,7 +96,7 @@ fn top_of(harness: &Harness<'static, MyEguiApp<MockWorker>>, label: &str) -> f32
 /// unreachable one explains why on hover.
 #[test]
 fn cluster_card_reports_a_connecting_or_unreachable_cluster() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     harness
         .state_mut()
         .ui_state
@@ -140,7 +131,7 @@ fn cluster_card_reports_a_connecting_or_unreachable_cluster() {
 /// and Enter opens the best match.
 #[test]
 fn kind_filter_focuses_on_g_and_opens_the_best_match_on_enter() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     harness.key_press(egui::Key::G);
     harness.run();
     assert!(
@@ -211,7 +202,7 @@ fn kind_filter_focuses_on_g_and_opens_the_best_match_on_enter() {
 /// it back into its group.
 #[test]
 fn pinning_a_kind_moves_it_between_pinned_and_its_group() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     expand_workloads(&mut harness);
     let jobs = center_of(&harness, "Jobs");
     secondary_click(&mut harness, jobs);
@@ -248,15 +239,14 @@ fn pinning_a_kind_moves_it_between_pinned_and_its_group() {
 /// namespaces; a kind not opened this session has none.
 #[test]
 fn kind_counts_show_only_what_watches_have_listed() {
-    let mut harness = design_harness(BOARD);
-    let description =
-        |harness: &Harness<'static, MyEguiApp<MockWorker>>, label: &str| -> Option<String> {
-            harness
-                .get_by_label(label)
-                .accesskit_node()
-                .description()
-                .map(|description| description.to_string())
-        };
+    let mut harness = design_harness(BOARD_SIZE);
+    let description = |harness: &AppHarness, label: &str| -> Option<String> {
+        harness
+            .get_by_label(label)
+            .accesskit_node()
+            .description()
+            .map(|description| description.to_string())
+    };
     assert_eq!(description(&harness, "Pods").as_deref(), Some("12"));
     assert_eq!(description(&harness, "Deployments").as_deref(), Some("4"));
     assert_eq!(description(&harness, "Nodes").as_deref(), Some("3"));
@@ -272,8 +262,8 @@ fn kind_counts_show_only_what_watches_have_listed() {
 /// Settings and Notifications show selected while their blade is open.
 #[test]
 fn footer_items_show_selected_while_their_blade_is_open() {
-    let mut harness = design_harness(BOARD);
-    let selected = |harness: &Harness<'static, MyEguiApp<MockWorker>>, label: &str| {
+    let mut harness = design_harness(BOARD_SIZE);
+    let selected = |harness: &AppHarness, label: &str| {
         harness
             .get_all_by_label(label)
             .find(|node| node.rect().right() <= size::WORKSPACE_LEFT)
@@ -294,7 +284,7 @@ fn footer_items_show_selected_while_their_blade_is_open() {
 /// description; a three-digit count grows the badge left.
 #[test]
 fn notifications_count_unread_outcomes() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     for index in 0..120 {
         harness.state_mut().ui_state.record_operation_outcome(
             KIND_KIND,
@@ -321,7 +311,7 @@ fn notifications_count_unread_outcomes() {
 /// licence needs attention.
 #[test]
 fn settings_shows_its_update_status() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     harness
         .state_mut()
         .updater
@@ -336,7 +326,7 @@ fn settings_shows_its_update_status() {
 /// footer stays put.
 #[test]
 fn footer_stays_clear_of_an_overflowing_kind_list() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     for group in [
         "Workloads",
         "Network",
@@ -354,7 +344,7 @@ fn footer_stays_clear_of_an_overflowing_kind_list() {
     let settings = harness.get_by_label("Settings").rect();
     assert_eq!(
         settings.bottom(),
-        BOARD.y - size::SIDEBAR_INSET - size::SIDEBAR_PADDING,
+        BOARD_SIZE.y - size::SIDEBAR_INSET - size::SIDEBAR_PADDING,
         "the footer stays at the bottom of the sidebar"
     );
     harness.ui_harness("shell/footer_stays_clear_of_an_overflowing_kind_list");
@@ -368,7 +358,7 @@ fn grace_lease() -> VerifiedLease {
 /// workspace; blades open below it; dismissing it hides it for the session.
 #[test]
 fn license_banner_spans_the_window_until_dismissed() {
-    let mut harness = design_harness(BOARD);
+    let mut harness = design_harness(BOARD_SIZE);
     harness
         .state_mut()
         .licensing

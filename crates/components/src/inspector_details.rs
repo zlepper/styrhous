@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 
-use egui::{Align, Id, Label, Layout, Rect, RichText, Ui, UiBuilder, WidgetInfo, WidgetType};
+use egui::{Align, Id, Label, Layout, RichText, Ui, WidgetInfo, WidgetType};
 
 use crate::PointingHand;
 use crate::design::theme::{ThemeExt, Tone};
@@ -220,45 +220,6 @@ impl InspectorDetails {
     pub fn show_properties(ui: &mut Ui, rows: &[DetailRow<'_>]) -> InspectorDetailsResponse {
         let mut response = InspectorDetailsResponse::default();
         show_property_rows(ui, rows, &mut response);
-        response
-    }
-
-    /// Render property rows as one titled group with a fieldset-style border.
-    pub fn show_titled_properties(
-        ui: &mut Ui,
-        title: &str,
-        rows: &[DetailRow<'_>],
-    ) -> InspectorDetailsResponse {
-        let mut response = InspectorDetailsResponse::default();
-        let title_galley = ui.painter().layout_no_wrap(
-            title.to_owned(),
-            type_scale::TITLE.font_id(ui.ctx()),
-            ui.tokens().text.primary,
-        );
-        ui.add_space(title_galley.size().y / 2.0);
-        let title_rect = Rect::from_min_size(
-            egui::pos2(
-                ui.cursor().left() + space::S12,
-                ui.cursor().top() - title_galley.size().y / 2.0,
-            ),
-            title_galley.size(),
-        );
-        let mut title_semantics_ui = ui.new_child(
-            UiBuilder::new()
-                .max_rect(title_rect)
-                .layout(Layout::top_down(Align::LEFT)),
-        );
-        title_semantics_ui.add(Label::new(
-            RichText::new(title)
-                .font(type_scale::TITLE.font_id(ui.ctx()))
-                .color(egui::Color32::TRANSPARENT),
-        ));
-        // The title sits in the border, so this card keeps a visible one.
-        let frame = crate::Card::new()
-            .padding(space::S12 as i8)
-            .stroke(crate::design::stroke::divider(&ui.tokens()))
-            .show_inner(ui, |ui| show_property_rows(ui, rows, &mut response));
-        show_group_title(ui, frame.response.rect, title);
         response
     }
 

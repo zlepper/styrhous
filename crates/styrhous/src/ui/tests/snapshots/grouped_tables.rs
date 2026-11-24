@@ -5,8 +5,6 @@ use super::super::design_fixtures::{design_namespaces_harness, pods};
 use super::*;
 use components::test_support::primary_click;
 
-type AppHarness = Harness<'static, MyEguiApp<MockWorker>>;
-
 /// A window short enough that the third group's rows are off screen.
 const SHORT_WINDOW: egui::Vec2 = egui::vec2(1536.0, 420.0);
 /// A window big enough for every row, but not the board.

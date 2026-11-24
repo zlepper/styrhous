@@ -1,6 +1,6 @@
 //! Shared scrolling behavior for application surfaces.
 
-use egui::{Context, ScrollArea, Vec2};
+use egui::{Context, ScrollArea, Ui, Vec2};
 
 /// Logical points moved by a line-based mouse-wheel event.
 pub const LINE_SCROLL_SPEED: f32 = 80.0;
@@ -17,6 +17,19 @@ pub fn configure_input(ctx: &Context) {
 /// A scroll area with the application's standard touchpad and wheel behavior.
 pub fn both() -> ScrollArea {
     with_standard_scroll_speed(ScrollArea::both())
+}
+
+/// [`both`] whose vertical bar stops above the horizontal one.
+///
+/// egui lets the two bars of a `ScrollArea::both` run to the same corner, so
+/// when both are enlarged (hovered or dragged) they overlap in a
+/// `bar_width` square. The area is the space `ui` has left, which a
+/// non-shrinking scroll area fills.
+pub fn both_clear_of_corner(ui: &Ui) -> ScrollArea {
+    let scroll = ui.spacing().scroll;
+    let area = ui.available_rect_before_wrap();
+    let bars = area.with_max_y(area.max.y - scroll.bar_width - scroll.bar_outer_margin);
+    both().scroll_bar_rect(bars)
 }
 
 /// A vertically scrolling area with the application's standard scroll behavior.
@@ -36,6 +49,67 @@ fn with_standard_scroll_speed(scroll_area: ScrollArea) -> ScrollArea {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The two bars of a `ScrollArea::both` must not share the corner square.
+    #[test]
+    fn both_clear_of_corner_stops_the_vertical_bar_above_the_horizontal_one() {
+        let ctx = Context::default();
+        let bar_width = 10.0;
+        ctx.all_styles_mut(|style| {
+            // Floating bars that are always full width: when egui lets them overlap.
+            style.spacing.scroll = egui::style::ScrollStyle {
+                floating_width: bar_width,
+                bar_outer_margin: 2.0,
+                ..egui::style::ScrollStyle::floating()
+            };
+        });
+
+        let mut shapes = Vec::new();
+        for frame in 0..2 {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(320.0, 200.0),
+                )),
+                time: Some(f64::from(frame) * 0.1),
+                ..Default::default()
+            };
+            let mut output = ctx.run_ui(input, |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    both_clear_of_corner(ui)
+                        .id_salt("corner-test")
+                        .auto_shrink([false, false])
+                        .scroll_bar_visibility(
+                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                        )
+                        .show(ui, |ui| ui.set_min_size(egui::vec2(1_000.0, 1_000.0)));
+                });
+            });
+            output.textures_delta.clear();
+            shapes = output.shapes;
+        }
+
+        let bars: Vec<egui::Rect> = shapes
+            .iter()
+            .filter_map(|clipped| match &clipped.shape {
+                egui::Shape::Rect(rect) => Some(rect.rect),
+                _ => None,
+            })
+            .collect();
+        let vertical = bars
+            .iter()
+            .find(|rect| (rect.width() - bar_width).abs() < 0.01 && rect.height() > bar_width * 2.0)
+            .expect("vertical bar was painted");
+        let horizontal = bars
+            .iter()
+            .find(|rect| (rect.height() - bar_width).abs() < 0.01 && rect.width() > bar_width * 2.0)
+            .expect("horizontal bar was painted");
+
+        assert!(
+            vertical.max.y <= horizontal.min.y,
+            "vertical={vertical:?}, horizontal={horizontal:?}"
+        );
+    }
 
     #[test]
     fn standard_scroll_area_doubles_touchpad_scroll_distance() {

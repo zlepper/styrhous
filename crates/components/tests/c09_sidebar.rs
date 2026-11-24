@@ -534,8 +534,7 @@ fn menu_below_a_trigger_opens_and_closes_on_click() {
         first.top() > card.bottom(),
         "the menu opens below its trigger"
     );
-    harness.event(egui::Event::PointerGone);
-    harness.run();
+    components::test_support::rest_pointer(&mut harness);
     harness.ui_harness("c09_sidebar/menu_below_cluster_card");
 
     harness

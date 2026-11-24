@@ -609,9 +609,7 @@ fn set_helm_releases(state: &mut UiState, releases: Vec<HelmRelease>) {
 }
 
 /// The demo release inspector (revisions 2 and 1) with revision 1 selected.
-fn helm_rollback_harness(
-    customize: impl FnOnce(&mut UiState),
-) -> Harness<'static, MyEguiApp<MockWorker>> {
+fn helm_rollback_harness(customize: impl FnOnce(&mut UiState)) -> AppHarness {
     let mut harness = application_harness::<MockWorker>();
     let mut state = oracle_resource_table_state();
     let mut releases = fixture_helm_release_revisions();
@@ -626,7 +624,7 @@ fn helm_rollback_harness(
     harness
 }
 
-fn open_rollback_confirmation(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) {
+fn open_rollback_confirmation(harness: &mut AppHarness) {
     harness.get_by_label("Roll back to revision 1").click();
     harness.run();
     harness.event(egui::Event::PointerGone);
@@ -634,7 +632,7 @@ fn open_rollback_confirmation(harness: &mut Harness<'static, MyEguiApp<MockWorke
     harness.get_by_label("Roll back demo to revision 1?");
 }
 
-fn confirm_rollback(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) -> u64 {
+fn confirm_rollback(harness: &mut AppHarness) -> u64 {
     harness.get_by_label("Roll back").click();
     harness.run();
     harness.event(egui::Event::PointerGone);
@@ -647,9 +645,7 @@ fn confirm_rollback(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) -> u6
         .operation_id
 }
 
-fn history(
-    harness: &Harness<'static, MyEguiApp<MockWorker>>,
-) -> Vec<(String, String, Option<String>)> {
+fn history(harness: &AppHarness) -> Vec<(String, String, Option<String>)> {
     harness.state().ui_state.clusters[&2]
         .operation_history
         .iter()
@@ -683,7 +679,7 @@ fn rollback_failed(operation_id: u64, error: &str, helm_missing: bool) -> HelmRo
     }
 }
 
-fn rollback_button_enabled(harness: &Harness<'static, MyEguiApp<MockWorker>>) -> bool {
+fn rollback_button_enabled(harness: &AppHarness) -> bool {
     !harness
         .get_by_label("Roll back to revision 1")
         .accesskit_node()

@@ -202,7 +202,8 @@ fn test_deployment_match_labels_completion_integration() {
     let actions_label = format!("More actions for {deployment_name}");
     harness.get_by_label(&actions_label).click();
     harness.run_steps(1);
-    harness.get_by_label("Edit YAML").click_accesskit();
+    wait_for_settled_clickable(&mut harness, "Edit YAML", 5_000);
+    harness.get_by_label("Edit YAML").click();
     harness.run_steps(1);
     let (schema, yaml) = wait_for_yaml_editor_with_schema(&mut harness, &deployment_name, 10_000);
 
@@ -265,11 +266,11 @@ fn test_coredns_deployment_property_completion_integration() {
         Some("kube-system"),
     );
 
-    harness
-        .get_by_label("More actions for coredns")
-        .click_accesskit();
+    wait_for_settled_clickable(&mut harness, "More actions for coredns", 5_000);
+    harness.get_by_label("More actions for coredns").click();
     harness.run_steps(1);
-    harness.get_by_label("Edit YAML").click_accesskit();
+    wait_for_settled_clickable(&mut harness, "Edit YAML", 5_000);
+    harness.get_by_label("Edit YAML").click();
     harness.run_steps(1);
     let (schema, yaml) = wait_for_yaml_editor_with_schema(&mut harness, "coredns", 10_000);
 

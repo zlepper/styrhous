@@ -353,8 +353,7 @@ pub(crate) fn show_cell<R>(
             egui::Layout::right_to_left(egui::Align::Center),
         ),
         CellAlign::Center => {
-            let width = ui
-                .data(|data| data.get_temp::<f32>(width_id))
+            let width = crate::measured::remembered_width(ui, width_id)
                 .unwrap_or(size::CONTROL_SM)
                 .min(rect.width());
             (
@@ -378,11 +377,13 @@ pub(crate) fn show_cell<R>(
     let inner = add_contents(&mut child);
     if align == CellAlign::Center {
         let width = child.min_rect().width();
-        let previous = ui.data(|data| data.get_temp::<f32>(width_id));
-        if width > 0.0 && previous != Some(width) {
-            ui.data_mut(|data| data.insert_temp(width_id, width));
-            ui.ctx()
-                .request_discard("a centred table cell changed width");
+        if width > 0.0 {
+            crate::measured::remember_width(
+                ui,
+                width_id,
+                width,
+                "a centred table cell changed width",
+            );
         }
     }
     inner

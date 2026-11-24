@@ -193,35 +193,6 @@ fn inspector_details_copy_hover_preserves_narrow_value_layout() {
 }
 
 #[test]
-fn inspector_details_titled_group_keeps_its_label_in_the_border() {
-    let mut harness = Harness::new_ui(|ui| {
-        ui.painter()
-            .rect_filled(ui.max_rect(), 0.0, ui.tokens().surface.canvas);
-        ui.add_space(32.0);
-        ui.add_space(32.0);
-        ui.allocate_ui_with_layout(
-            egui::vec2(420.0, 0.0),
-            egui::Layout::top_down(egui::Align::LEFT),
-            |ui| {
-                InspectorDetails::show_titled_properties(
-                    ui,
-                    "Spec",
-                    &[DetailRow::new([
-                        DetailCell::status("Scheduling", "Schedulable", Tone::Success),
-                        DetailCell::new("Provider ID", "kind://docker/kind/kind-control-plane"),
-                        DetailCell::new("Pod CIDRs", "10.244.0.0/24, fd00:10:244::/56"),
-                        DetailCell::new("Taints", "None"),
-                    ])],
-                );
-            },
-        );
-    });
-    setup_egui(&mut harness);
-    harness.run();
-    harness.ui_harness("inspector_details/titled_group");
-}
-
-#[test]
 fn inspector_details_copy_button_emits_the_full_uid() {
     let mut harness = Harness::new_ui_state(
         |ui, copied| {

@@ -23,7 +23,7 @@ fn node(name: &str, cordoned: bool) -> MinimalResource {
 
 /// The Nodes table of the kind-kind fixture cluster with a schedulable and a
 /// cordoned worker.
-fn nodes_harness() -> Harness<'static, MyEguiApp<MockWorker>> {
+fn nodes_harness() -> AppHarness {
     let nodes = fixture_cluster_scoped_api_resource("core", "Node", "nodes");
     let mut state = oracle_resource_table_state();
     let cluster = state.clusters.get_mut(&2).expect("kind fixture exists");

@@ -16,6 +16,7 @@ use crate::frames::show_elevated;
 use crate::interaction::{ControlState, Interaction, consume_key_with_text};
 use crate::keycap::Keycap;
 use crate::log_viewer::{VolumeBar, VolumeBars};
+use crate::measured::{remember_width, remembered_width};
 use crate::readout::{Readout, ReadoutRow};
 use crate::search::{SearchField, SearchStatus};
 use crate::toggle::ToggleButton;
@@ -657,9 +658,7 @@ fn filter_row(
         .collect();
     // The chips' width from the previous pass: the search pill fills the rest.
     let chips_id = ui.id().with("cluster-switcher-chips");
-    let chips_width = ui
-        .data(|data| data.get_temp::<f32>(chips_id))
-        .unwrap_or(0.0);
+    let chips_width = remembered_width(ui, chips_id).unwrap_or(0.0);
     let (rect, _) = ui.allocate_exact_size(vec2(width, size::TOP_BAR_CONTROL), Sense::hover());
     let mut row = ui.new_child(
         UiBuilder::new()
@@ -689,11 +688,12 @@ fn filter_row(
         }
     }
     let measured = (row.min_rect().right() - chips_left).max(0.0);
-    if (measured - chips_width).abs() > 0.01 {
-        ui.data_mut(|data| data.insert_temp(chips_id, measured));
-        ui.ctx()
-            .request_discard("cluster switcher chips changed width");
-    }
+    remember_width(
+        ui,
+        chips_id,
+        measured,
+        "cluster switcher chips changed width",
+    );
 }
 
 /// "Pinned 2": the heading with its count on one baseline.

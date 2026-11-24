@@ -79,13 +79,9 @@ fn force_delete_is_available_from_a_deleting_resource_inspector() {
     detail.finalizers = vec!["example.com/cleanup".into()];
     open_typed_detail(&mut harness, detail.api_resource.clone(), detail);
 
-    harness
-        .get_by_label("More actions for settings")
-        .click_accesskit();
+    click_label(&mut harness, "More actions for settings");
     harness.run();
-    harness
-        .get_by_label("Force delete (remove finalizers)")
-        .click_accesskit();
+    click_label(&mut harness, "Force delete (remove finalizers)");
     harness.run();
 
     assert!(
@@ -381,7 +377,7 @@ fn test_ui_flow() {
     harness.get_by_label("Unable to load resources");
     harness.get_by_label(watch_error);
     harness.ui_harness("cluster_connection/test_ui_flow/resource_watch_error");
-    harness.get_by_label("Retry").click_accesskit();
+    click_label(&mut harness, "Retry");
     harness.run_steps(1);
     assert_eq!(
         harness
@@ -540,7 +536,7 @@ fn pending_scale_for(name: &str, desired: &str) -> crate::ui::state::PendingScal
     }
 }
 
-fn request_scale(harness: &mut Harness<'static, MyEguiApp<MockWorker>>, name: &str) -> u64 {
+fn request_scale(harness: &mut AppHarness, name: &str) -> u64 {
     harness
         .state_mut()
         .ui_state
@@ -711,7 +707,7 @@ fn connected_cluster() -> crate::ui::state::ClusterState {
     cluster
 }
 
-fn harness_with_scalable_inspector() -> Harness<'static, MyEguiApp<MockWorker>> {
+fn harness_with_scalable_inspector() -> AppHarness {
     let config_maps = fixture_api_resource("core", "ConfigMap", "configmaps");
     let mut state = oracle_resource_table_state();
     state
@@ -730,7 +726,7 @@ fn harness_with_scalable_inspector() -> Harness<'static, MyEguiApp<MockWorker>> 
     harness
 }
 
-fn click_scale_in_inspector(harness: &mut Harness<'static, MyEguiApp<MockWorker>>) -> u64 {
+fn click_scale_in_inspector(harness: &mut AppHarness) -> u64 {
     harness.get_by_label("More actions for settings").click();
     harness.run();
     harness.get_by_label("Scale…").click();

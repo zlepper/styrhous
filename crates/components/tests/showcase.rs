@@ -13,7 +13,7 @@ use components::test_support::UiHarnessSnapshot;
 use components::test_support::board::{BoardHeader, board, cell, column, row};
 use components::{
     Button, ButtonSize, ButtonVariant, CheckState, Combobox, SortDirection, SortState, Table,
-    TableRowBuilder, Tabs, WideSidebar,
+    TableRowBuilder, Tabs,
 };
 use egui::{Align, Layout, Ui, Vec2};
 use egui_kittest::{Harness, kittest::Queryable};
@@ -264,45 +264,6 @@ fn showcase_comboboxes() {
         .click();
     harness.run();
     harness.ui_harness("showcase/showcase_comboboxes/comboboxes");
-}
-
-#[test]
-fn showcase_sidebars() {
-    let mut harness = Harness::new_ui(|ui| {
-        showcase_title(ui, "Sidebars");
-        ui.horizontal_top(|ui| {
-            ui.vertical(|ui| {
-                ui.label(egui::RichText::new("Narrow").strong());
-                components::NarrowSidebar::new().show(ui, |sidebar| {
-                    sidebar.item("Dashboard", Icon::Home.image(), true);
-                    sidebar.item("People", Icon::Users.image(), false);
-                    sidebar.separator();
-                    sidebar.avatar_item("Tailwind Labs", "T", false);
-                    sidebar.avatar_item("Acme", "A", false);
-                });
-            });
-
-            ui.add_space(24.0);
-
-            ui.vertical(|ui| {
-                ui.label(egui::RichText::new("Wide").strong());
-                WideSidebar::new().width(280.0).show(ui, |sidebar| {
-                    sidebar.item("Dashboard", Icon::Home.image(), true);
-                    sidebar.item("Calendar", Icon::Calendar.image(), false);
-                    sidebar.section_header("Workspace");
-                    sidebar.expandable("Projects", Icon::Folder.image(), true, |sidebar| {
-                        sidebar.child_item("Platform", false);
-                        sidebar.child_item("Kubernetes UI", true);
-                    });
-                    sidebar.item("Documents", Icon::Document.image(), false);
-                });
-            });
-        });
-    });
-
-    apply_reference_theme(&mut harness);
-    harness.run();
-    harness.ui_harness("showcase/showcase_sidebars/sidebars");
 }
 
 #[test]

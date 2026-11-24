@@ -129,7 +129,8 @@ Use a real `Worker` only when testing the Kind integration path.
   popovers, cards and sidebars in `theme::scope(ui, ThemeScope::…, …)` so overrides re-point.
   Change the theme only with `theme::switch(ctx, theme)`, which updates egui's visuals too.
   Use `Theme::tone(Tone::…)` for status colours, `design::stroke` for strokes, and
-  `raised_frame`/`overlay_frame`/`popover_frame`/`WorkspaceCard` for elevated surfaces and cards.
+  `raised_frame`/`overlay_frame`/`popover_frame` for elevated surfaces and `Card` (and `Tile` for
+  icon squares) for cards.
   In tests that assert which role something paints with, install
   `test_support::distinct_role_theme()` so roles that share a palette entry are told apart.
 - Set text with `design::type_scale` roles (`BODY`, `UI`, `META`, `CAPTION`, `TITLE`, `MONO`, …):
@@ -140,6 +141,21 @@ Use a real `Worker` only when testing the Kind integration path.
   Mono and IBM Plex Sans Condensed (`design::fonts`); never synthesise bold.
   DejaVu Sans (Mono) is the fallback for other symbols and scripts; `tests/glyph_guard.rs` fails
   on a literal character no family can draw.
+- Tooltips go through `components::tooltip::TooltipExt` (`.tooltip(…)`, `.disabled_tooltip(…)`);
+  egui's own tooltip methods are rejected by `tests/tooltip_guard.rs`. A button the design shows
+  whose behaviour does not exist yet is `Button::not_implemented()` (or
+  `interaction::not_implemented(response)` for other controls): it renders as designed, never
+  acts, and carries the tooltip "Not yet implemented". Grep `not_implemented` for the open list.
+- Size and place things with the design's measurements: `design::size` holds the component and
+  layout constants (control heights, `TILE*`, `STATUS_BAR`, …), named after the board that
+  introduced them. Leave a constant out of `size` only when it is private to one component.
+- Oracle tests for the A boards build the screen with the shared design dataset
+  (`ui/tests/design_fixtures.rs`: the 12 kube-system pods, nodes, the contexts dev-eu, kind-kind,
+  kind-legacy and prod-eu) and a fixed `WallClock` (`UiState::clock`), so ages read "220d", "3h".
+  UI code reads the time through `ui::clock::now(ctx)`, never `OffsetDateTime::now_utc()`.
+- Every board in `docs/design-oracles/harbour/manifest.toml` that has a test names its snapshot;
+  `[[board.regions]]` crops compare parts of a board separately (sidebar, top bar, …) so an
+  unfinished part does not hide progress in another. New region = new `[[board.regions]]` entry.
 - Users can theme the app with an optional `theme.toml` in the eframe data directory
   (`~/.local/share/styrhous/theme.toml` on Linux), polled once a second by
   `ui/theme_file.rs`. It extends a built-in theme and overrides `[palette]` hex colours,
