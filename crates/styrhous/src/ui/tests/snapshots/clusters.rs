@@ -363,3 +363,93 @@ fn a_cluster_added_from_the_switcher_is_switched_to() {
     assert_eq!(harness.cluster(selected).name, "payments");
     assert!(connects_to(&harness, selected));
 }
+
+/// Esc in the switcher's focused search closes the palette (S18) at once,
+/// without a first press that only leaves the field, and switches nothing.
+#[test]
+fn escape_in_the_switchers_search_closes_it_without_switching() {
+    let mut harness = switcher_harness();
+    press_command(&mut harness, egui::Key::K);
+    harness.event(egui::Event::Text("legacy".into()));
+    harness.run();
+    assert!(harness.get_by_label("Find a cluster").is_focused());
+    assert!(
+        !has_tile(&harness, "kind-kind"),
+        "the query narrows the tiles"
+    );
+
+    harness.key_press(egui::Key::Escape);
+    harness.run();
+    assert!(!is_open(&harness));
+    assert_eq!(harness.state().ui_state.selected_cluster, Some(KIND_KIND));
+}
+
+/// The landing page's search pill is a disabled stand-in for the list's
+/// (A01): `/` and typed text never reach it, and Esc has nothing to leave.
+#[test]
+fn escape_on_the_landing_page_leaves_its_search_pill_alone() {
+    let mut harness = design_harness(BOARD_SIZE);
+    seed_design_clusters(&mut harness);
+    harness.state_mut().ui_state.selected_cluster = None;
+    harness.run();
+
+    harness.key_press(egui::Key::Slash);
+    harness.event(egui::Event::Text("zzz".into()));
+    harness.run();
+    assert!(harness.ctx.memory(|memory| memory.focused()).is_none());
+    harness.key_press(egui::Key::Escape);
+    harness.run();
+    assert!(harness.ctx.memory(|memory| memory.focused()).is_none());
+    assert!(has_tile(&harness, "kind-kind"), "no tile was filtered out");
+    assert!(harness.state().ui_state.selected_cluster.is_none());
+}
+
+/// Ctrl/Cmd+1…9 do nothing while a blade is in front, and reach the pinned
+/// clusters again once it has closed.
+#[test]
+fn the_digit_shortcuts_wait_for_the_blade_in_front_to_close() {
+    let digits = [
+        egui::Key::Num1,
+        egui::Key::Num2,
+        egui::Key::Num3,
+        egui::Key::Num4,
+        egui::Key::Num5,
+        egui::Key::Num6,
+        egui::Key::Num7,
+        egui::Key::Num8,
+        egui::Key::Num9,
+    ];
+    let mut harness = switcher_harness();
+    harness.state_mut().ui_state.cluster_roster.pinned =
+        vec!["kind-legacy".into(), "prod-eu".into()];
+    open_terminal_settings(
+        &mut harness.state_mut().ui_state,
+        TerminalLaunchSettings::default(),
+    );
+    harness.run();
+    assert!(harness.state().ui_state.terminal_settings_blade().is_some());
+
+    for key in digits {
+        press_command(&mut harness, key);
+        assert_eq!(
+            harness.state().ui_state.selected_cluster,
+            Some(KIND_KIND),
+            "Ctrl+{key:?} switched cluster behind the blade"
+        );
+    }
+    assert!(
+        harness
+            .state()
+            .worker
+            .commands
+            .iter()
+            .all(|command| { command_is::<ConnectToCluster>(command).is_none() })
+    );
+
+    harness.key_press(egui::Key::Escape);
+    harness.run();
+    harness.run();
+    assert!(harness.state().ui_state.terminal_settings_blade().is_none());
+    press_command(&mut harness, egui::Key::Num1);
+    assert_eq!(harness.state().ui_state.selected_cluster, Some(3));
+}

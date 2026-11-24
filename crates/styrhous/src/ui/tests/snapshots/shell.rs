@@ -409,3 +409,23 @@ fn license_banner_spans_the_window_until_dismissed() {
     harness.run();
     harness.get_by_role_and_label(egui::accesskit::Role::Link, "Manage license");
 }
+
+/// Esc in the kind filter only leaves the field: the text stays and so does
+/// the narrowing of the list.
+#[test]
+fn escape_leaves_the_kind_filter_without_clearing_it() {
+    let mut harness = design_harness(BOARD_SIZE);
+    harness.key_press(egui::Key::G);
+    harness.run();
+    harness.event(egui::Event::Text("set".into()));
+    harness.run();
+    assert!(harness.get_by_label("Filter kinds").is_focused());
+
+    harness.key_press(egui::Key::Escape);
+    harness.run();
+    harness.run();
+    assert!(!harness.get_by_label("Filter kinds").is_focused());
+    assert_eq!(harness.state().ui_state.kind_filter, "set");
+    harness.get_by_label("StatefulSets");
+    assert!(harness.query_by_label("Pods").is_none());
+}

@@ -287,3 +287,56 @@ fn a_five_digit_count_neither_wraps_nor_overlaps_the_query() {
         );
     }
 }
+
+#[test]
+fn stepping_lines_does_not_wrap_while_a_filtering_search_is_still_running() {
+    let mut window = fully_loaded_log_window(512);
+    window.search.query = "line".to_owned();
+    window.search.filter_matches = true;
+    window.search.search_complete = false;
+    window.search.match_count = 3;
+    let (mut harness, window, _) = window_harness(
+        window,
+        LogDisplayOptions::default(),
+        WIDE,
+        Rc::new(LogStoreService::default()),
+    );
+    // More matches may still arrive, so the last known one is not the end.
+    for expected in [0, 1, 2, 2, 2] {
+        harness.get_by_label("Next line").click();
+        harness.run_steps(2);
+        assert_eq!(active_row(&window), Some(expected));
+    }
+    for expected in [1, 0, 0] {
+        harness.get_by_label("Previous line").click();
+        harness.run_steps(2);
+        assert_eq!(active_row(&window), Some(expected));
+    }
+
+    // Once the search has finished the ends are known and stepping wraps.
+    window.borrow_mut().search.search_complete = true;
+    harness.run_steps(2);
+    harness.get_by_label("Previous line").click();
+    harness.run_steps(2);
+    assert_eq!(active_row(&window), Some(2));
+}
+
+#[test]
+fn stepping_lines_still_wraps_during_an_unfiltered_search() {
+    let mut window = fully_loaded_log_window(512);
+    window.search.query = "line".to_owned();
+    window.search.filter_matches = false;
+    window.search.search_complete = false;
+    let (mut harness, window, _) = window_harness(
+        window,
+        LogDisplayOptions::default(),
+        WIDE,
+        Rc::new(LogStoreService::default()),
+    );
+    harness.get_by_label("Previous line").click();
+    harness.run_steps(2);
+    assert_eq!(active_row(&window), Some(511));
+    harness.get_by_label("Next line").click();
+    harness.run_steps(2);
+    assert_eq!(active_row(&window), Some(0), "all lines are shown: wrap");
+}

@@ -144,6 +144,10 @@ pub(super) fn show_input_scrim(
     viewport: Rect,
     active: Rect,
     history: &[(Id, Rect, usize)],
+    // Whether the back blades can be navigated to now. While the blades move
+    // a click on one is swallowed: it neither dismisses nor navigates, and the
+    // blades are not offered as buttons.
+    navigable: bool,
     promote: bool,
 ) -> (bool, Option<usize>) {
     let mut clicked = false;
@@ -191,7 +195,7 @@ pub(super) fn show_input_scrim(
                 let mut selection = None;
                 for (index, (content_id, rect, steps)) in history.iter().enumerate() {
                     let target = history_navigation_rect(active, history, *rect).intersect(region);
-                    if !target.is_positive() {
+                    if !navigable || !target.is_positive() {
                         continue;
                     }
                     let response = ui.interact(
@@ -221,7 +225,10 @@ pub(super) fn show_input_scrim(
                         })
                     });
                 }
-                (dismissed.clicked() && selection.is_none(), selection)
+                (
+                    dismissed.clicked() && selection.is_none(),
+                    selection.filter(|_| navigable),
+                )
             })
             .inner;
         clicked |= dismissed;

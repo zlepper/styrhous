@@ -287,6 +287,64 @@ mod tests {
         assert_eq!(render_button(true).cursor_icon, CursorIcon::PointingHand);
         assert_eq!(render_button(false).cursor_icon, CursorIcon::Default);
     }
+
+    fn escape_input(pressed: bool) -> egui::RawInput {
+        let events = pressed
+            .then(|| egui::Event::Key {
+                key: egui::Key::Escape,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            })
+            .into_iter()
+            .collect();
+        egui::RawInput {
+            events,
+            ..Default::default()
+        }
+    }
+
+    /// Run one frame, with Esc pressed or not and a text field holding the
+    /// focus or not, and report what [`escape_left_text_field`] says.
+    fn escape_left_field_in_frame(ctx: &egui::Context, escape: bool, field_focused: bool) -> bool {
+        let mut answer = false;
+        let mut output = ctx.run_ui(escape_input(escape), |ui| {
+            answer = escape_left_text_field(ui.ctx());
+            if field_focused {
+                note_text_focus(ui.ctx());
+            }
+        });
+        output.textures_delta.clear();
+        answer
+    }
+
+    #[test]
+    fn escape_left_a_text_field_only_right_after_the_field_had_focus() {
+        let ctx = egui::Context::default();
+        // No field was ever focused: Esc has nothing to leave.
+        assert!(!escape_left_field_in_frame(&ctx, true, false));
+
+        // The field held the focus last frame; this frame has Esc (egui has
+        // already dropped the focus, so the field notes nothing now).
+        assert!(!escape_left_field_in_frame(&ctx, false, true));
+        assert!(escape_left_field_in_frame(&ctx, true, false));
+
+        // A frame without Esc never reports it.
+        assert!(!escape_left_field_in_frame(&ctx, false, true));
+        assert!(!escape_left_field_in_frame(&ctx, false, false));
+
+        // Focus noted two frames ago is stale: this Esc is not the one
+        // that left the field.
+        assert!(!escape_left_field_in_frame(&ctx, false, true));
+        assert!(!escape_left_field_in_frame(&ctx, false, false));
+        assert!(!escape_left_field_in_frame(&ctx, true, false));
+
+        // A field that keeps noting the focus through the Esc frame (a focus
+        // it took back at once) still counts as left.
+        assert!(!escape_left_field_in_frame(&ctx, false, true));
+        assert!(escape_left_field_in_frame(&ctx, true, true));
+    }
 }
 
 /// The frame in which a text field last held the keyboard focus.

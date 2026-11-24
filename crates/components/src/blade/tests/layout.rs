@@ -3,6 +3,7 @@ use super::transforms::{
     transformed_rect,
 };
 use super::*;
+use crate::test_support::primary_click;
 
 const WIDE_ROW_WIDTH: f32 = 600.0;
 const WIDE_ROW_LABEL: &str = "Wide row action with a label long enough to straddle the blade edge";
@@ -81,8 +82,12 @@ fn flatten<'a>(shape: &'a egui::Shape, out: &mut Vec<&'a egui::Shape>) {
 /// Accessibility bounds ignore visual transforms, so the painted shapes are the
 /// only observable record of where a history blade is drawn.
 fn drawn_blade_frames(harness: &Harness<'_>) -> Vec<Rect> {
-    let min_height =
-        height(harness.ctx.content_rect()) * HISTORY_SCALES[HISTORY_SCALES.len() - 1] - 1.0;
+    drawn_blade_frames_in(harness, harness.ctx.content_rect())
+}
+
+/// [`drawn_blade_frames`] for blades laid out in `viewport`.
+fn drawn_blade_frames_in(harness: &Harness<'_>, viewport: Rect) -> Vec<Rect> {
+    let min_height = height(viewport) * HISTORY_SCALES[HISTORY_SCALES.len() - 1] - 1.0;
     let tokens = harness.ctx.tokens();
     let mut frames = Vec::new();
     for clipped in &harness.output().shapes {
@@ -153,17 +158,8 @@ fn click_nearest_history_strip(harness: &mut Harness<'_>) {
         (active.left() - 4.0).max(viewport.left() + 1.0),
         viewport.center().y,
     );
-    harness.event(egui::Event::PointerMoved(position));
+    primary_click(harness, position);
     harness.run();
-    for pressed in [true, false] {
-        harness.event(egui::Event::PointerButton {
-            pos: position,
-            button: egui::PointerButton::Primary,
-            pressed,
-            modifiers: egui::Modifiers::default(),
-        });
-        harness.run();
-    }
 }
 
 #[test]
@@ -270,46 +266,46 @@ fn only_the_visible_part_of_an_overflowing_widget_is_clickable() {
     let button = harness.get_by_label(WIDE_ROW_LABEL).rect();
     assert!(button.left() < frame.right() && button.right() > viewport.right() - 4.0);
 
-    click_at(
+    primary_click(
         &mut harness,
         egui::pos2(frame.right() + 4.0, button.center().y),
     );
+    harness.run();
     assert_eq!(clicks.get(), 0, "the clipped part must not receive clicks");
-    click_at(
+    primary_click(
         &mut harness,
         egui::pos2(button.left() + 10.0, button.center().y),
     );
-    assert_eq!(clicks.get(), 1, "the visible part must receive clicks");
-}
-
-fn click_at(harness: &mut Harness<'_>, position: egui::Pos2) {
-    harness.event(egui::Event::PointerMoved(position));
     harness.run();
-    for pressed in [true, false] {
-        harness.event(egui::Event::PointerButton {
-            pos: position,
-            button: egui::PointerButton::Primary,
-            pressed,
-            modifiers: egui::Modifiers::default(),
-        });
-        harness.run();
-    }
+    assert_eq!(clicks.get(), 1, "the visible part must receive clicks");
 }
 
 /// Click in the part of the blade `depth` steps back that the blades in front
 /// of it leave visible, halfway between its left edge and the next blade's.
 fn click_history_blade(harness: &mut Harness<'_>, depth: usize) {
     let viewport = harness.ctx.content_rect();
+    click_history_blade_in(harness, viewport, depth);
+}
+
+/// [`click_history_blade`] for blades laid out in `viewport`, which is the
+/// window less any top inset.
+fn click_history_blade_in(harness: &mut Harness<'_>, viewport: Rect, depth: usize) {
+    primary_click(harness, history_blade_click_position(viewport, depth));
+    harness.run();
+}
+
+/// Where [`click_history_blade`] clicks: in the visible strip of the blade
+/// `depth` steps back, which starts at the window's left edge when the fan
+/// reaches past it.
+fn history_blade_click_position(viewport: Rect, depth: usize) -> egui::Pos2 {
     let this = transformed_rect(viewport, history_transform(viewport, depth));
     let in_front = if depth == 0 {
         transformed_rect(viewport, active_transform(viewport))
     } else {
         transformed_rect(viewport, history_transform(viewport, depth - 1))
     };
-    click_at(
-        harness,
-        egui::pos2((this.left() + in_front.left()) / 2.0, this.center().y),
-    );
+    let left = this.left().max(viewport.left());
+    egui::pos2((left + in_front.left()) / 2.0, this.center().y)
 }
 
 #[test]
@@ -540,4 +536,194 @@ fn only_the_two_nearest_of_many_back_blades_are_drawn_and_clickable() {
         3,
         "the second visible back blade is two steps back"
     );
+}
+
+/// A stack of plain test blades `size` large, with `inset` points of window
+/// chrome above it, and whether the stack reported a dismissal.
+#[allow(clippy::type_complexity)]
+fn fan_harness(
+    id: &'static str,
+    titles: &[&'static str],
+    size: egui::Vec2,
+    inset: f32,
+) -> (
+    Rc<RefCell<BladeNavigator<TestBlade>>>,
+    Rc<std::cell::Cell<bool>>,
+    Harness<'static>,
+) {
+    let mut titles = titles.iter().copied().enumerate();
+    let (_, first) = titles.next().expect("at least one blade");
+    let navigator = Rc::new(RefCell::new(BladeNavigator::new(TestBlade {
+        id: 1,
+        title: first,
+    })));
+    for (index, title) in titles {
+        navigator.borrow_mut().push(TestBlade {
+            id: index as u64 + 1,
+            title,
+        });
+    }
+    navigator.borrow_mut().clear_transition();
+    let dismissed = Rc::new(std::cell::Cell::new(false));
+    let mut stack = BladeStack::new(id);
+    stack.set_top_inset(inset);
+    let navigator_for_ui = Rc::clone(&navigator);
+    let dismissed_for_ui = Rc::clone(&dismissed);
+    let mut harness = Harness::new_ui(move |ui| {
+        let response = stack.show_with_title(
+            ui.ctx(),
+            &mut navigator_for_ui.borrow_mut(),
+            |blade| blade.title.to_owned(),
+            render_test_blade,
+        );
+        if response.dismissed {
+            dismissed_for_ui.set(true);
+        }
+    });
+    crate::test_support::setup_egui(&mut harness);
+    harness.set_size(size);
+    crate::test_support::install_distinct_role_theme(&harness.ctx);
+    harness.run();
+    harness.run();
+    (navigator, dismissed, harness)
+}
+
+#[test]
+fn a_top_inset_keeps_the_fanned_back_blades_below_the_banner() {
+    const BANNER: f32 = 40.0;
+    let (navigator, dismissed, mut harness) = fan_harness(
+        "blade-inset-fan",
+        &["First", "Second", "Third"],
+        crate::test_support::EGUI_TEST_SIZE,
+        BANNER,
+    );
+    let window = harness.ctx.content_rect();
+    let viewport = Rect::from_min_max(egui::pos2(window.left(), window.top() + BANNER), window.max);
+
+    let mut expected = expected_frames(viewport, 2);
+    expected.sort_by(|a, b| a.min.x.total_cmp(&b.min.x));
+    let drawn = drawn_blade_frames_in(&harness, viewport);
+    assert_eq!(drawn.len(), expected.len(), "drawn frames: {drawn:?}");
+    for (drawn, expected) in drawn.iter().zip(&expected) {
+        assert_rect_close(*drawn, *expected, "blade frame under the banner");
+        assert!(
+            drawn.top() >= window.top() + BANNER + INSET - 1.0,
+            "a blade must stay below the banner: {drawn:?}"
+        );
+    }
+
+    // The fanned blades are still reachable below the banner...
+    click_history_blade_in(&mut harness, viewport, 1);
+    assert_eq!(navigator.borrow().current().id, 1);
+    assert!(!dismissed.get());
+
+    // ...and the strip of the banner above them is not a blade.
+    let (navigator, dismissed, mut harness) = fan_harness(
+        "blade-inset-fan-banner-click",
+        &["First", "Second"],
+        crate::test_support::EGUI_TEST_SIZE,
+        BANNER,
+    );
+    let back = transformed_rect(viewport, history_transform(viewport, 0));
+    primary_click(&mut harness, egui::pos2(back.left() + 8.0, BANNER / 2.0));
+    harness.run();
+    assert_eq!(
+        navigator.borrow().current().id,
+        2,
+        "the banner is not part of a back blade"
+    );
+    assert!(!dismissed.get(), "a click on the banner must not dismiss");
+}
+
+#[test]
+fn clicking_a_back_blade_while_the_stack_is_sliding_does_nothing() {
+    // While blades move, `active_interactable` is false: back blades get no
+    // click target and a click on one is swallowed (it neither goes back a
+    // second time nor dismisses the stack).
+    let (navigator, dismissed, mut harness) = fan_harness(
+        "blade-click-mid-transition",
+        &["First", "Second", "Third"],
+        crate::test_support::EGUI_TEST_SIZE,
+        0.0,
+    );
+    harness
+        .ctx
+        .global_style_mut(|style| style.animation_time = 1.0);
+    harness.input_mut().time = Some(100.0);
+    harness.step();
+    let viewport = harness.ctx.content_rect();
+
+    // The first click goes back once and starts the slide.
+    primary_click(&mut harness, history_blade_click_position(viewport, 0));
+    harness.step();
+    harness.step();
+    assert_eq!(navigator.borrow().current().id, 2);
+    assert_eq!(navigator.borrow().transition(), Some(BladeTransition::Back));
+
+    harness.input_mut().time = Some(100.0 + f64::from(TRANSITION_DURATION / 2.0));
+    harness.step();
+    assert!(
+        navigator.borrow().transition().is_some(),
+        "the slide is still running"
+    );
+    for _ in 0..2 {
+        primary_click(&mut harness, history_blade_click_position(viewport, 0));
+        harness.step();
+        harness.step();
+    }
+    let navigator = navigator.borrow();
+    assert_eq!(navigator.current().id, 2, "no second step back");
+    assert_eq!(navigator.back_stack().len(), 1);
+    assert_eq!(navigator.forward_stack().len(), 1);
+    assert!(!dismissed.get(), "the click must not dismiss the stack");
+}
+
+#[test]
+fn forward_history_survives_going_back_by_clicking_a_back_blade() {
+    let (navigator, _, mut harness) = fan_harness(
+        "blade-forward-after-click-back",
+        &["First", "Second", "Third"],
+        crate::test_support::EGUI_TEST_SIZE,
+        0.0,
+    );
+    click_history_blade(&mut harness, 0);
+    assert_eq!(navigator.borrow().current().id, 2);
+    assert!(navigator.borrow().can_go_forward());
+    navigator.borrow_mut().clear_transition();
+    harness.run();
+
+    crate::test_support::click_label(&mut harness, "Forward");
+    let navigator = navigator.borrow();
+    assert_eq!(navigator.current().id, 3);
+    assert_eq!(
+        navigator
+            .back_stack()
+            .iter()
+            .map(|blade| blade.id)
+            .collect::<Vec<_>>(),
+        [1, 2]
+    );
+    assert!(!navigator.can_go_forward());
+}
+
+/// Below roughly 755 points the fan reaches past the window's left edge so far
+/// that the depth-1 blade has no visible strip at all.
+#[test]
+fn the_second_back_blade_stays_clickable_as_blades_shrink_toward_their_minimum() {
+    for width in [1000.0, 900.0, 800.0] {
+        let (navigator, _, mut harness) = fan_harness(
+            "blade-narrow-second-back",
+            &["First", "Second", "Third"],
+            egui::vec2(width, 600.0),
+            0.0,
+        );
+        let viewport = harness.ctx.content_rect();
+        assert!(blade_width(viewport) < WIDTH, "{width} must shrink blades");
+        click_history_blade(&mut harness, 1);
+        assert_eq!(
+            navigator.borrow().current().id,
+            1,
+            "depth-1 back blade at width {width}"
+        );
+    }
 }

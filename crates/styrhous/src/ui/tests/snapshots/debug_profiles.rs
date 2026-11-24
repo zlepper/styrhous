@@ -326,3 +326,87 @@ fn debug_image_preset_profile_menu_stays_within_the_settings_blade() {
         "terminal/node_shell_preset_profile_menu_stays_within_the_settings_blade/profile_menu",
     ));
 }
+
+/// A menu opened from the front blade of a stack with back blades draws and
+/// takes clicks above the whole fan, not under the back blades or the scrims.
+#[test]
+fn a_menu_from_the_front_blade_draws_above_the_whole_stack() {
+    let mut harness = application_harness::<MockWorker>();
+    let mut state = oracle_resource_table_state();
+    let mut commands = Vec::new();
+    state.open_resource_detail(
+        2,
+        fixture_api_resource("apps", "Deployment", "deployments"),
+        "api".into(),
+        Some("kube-system".into()),
+        "deployment-uid".into(),
+        &mut commands,
+    );
+    let settings = crate::ui::settings::TerminalSettingsBlade::new(TerminalLaunchSettings {
+        custom_template: None,
+        debug_image_presets: vec![DebugImagePreset {
+            name: "Ops".into(),
+            image: "registry.example/debug-tools:v1".into(),
+            profile: DebugProfile::General,
+        }],
+        ..Default::default()
+    });
+    assert!(state.global_blades.push(Box::new(settings)).is_empty());
+    harness.state_mut().ui_state = state;
+    harness.run();
+    let navigator = harness.state().ui_state.global_blades.navigator().unwrap();
+    assert!(
+        !navigator.back_stack().is_empty(),
+        "the settings blade has a back blade behind it"
+    );
+
+    let profile_position = harness
+        .get_by_role_and_label(
+            egui::accesskit::Role::ComboBox,
+            "Debug image 1 debug profile",
+        )
+        .rect()
+        .center();
+    primary_click(&mut harness, profile_position);
+    harness.run();
+    let item = harness.get_by_label("System admin").rect().center();
+    let layer = harness.ctx.layer_id_at(item).expect("a layer at the item");
+    // The topmost layer at the item belongs to the menu: none of the stack's
+    // blades or scrims covers it.
+    let stack = egui::Id::new("global-blade-stack");
+    let stack_layers: Vec<egui::Id> = (0..=2)
+        .map(|index| stack.with(("blade", index)))
+        .chain([stack.with("scrim")])
+        .chain(
+            ["left", "top", "bottom", "right", "full"]
+                .map(|name| stack.with(("input-scrim", name))),
+        )
+        .collect();
+    assert!(
+        !stack_layers.contains(&layer.id),
+        "a layer of the blade stack covers the menu: {layer:?}"
+    );
+
+    primary_click(&mut harness, item);
+    harness.run();
+    assert_eq!(
+        harness
+            .state()
+            .ui_state
+            .terminal_settings_blade()
+            .unwrap()
+            .draft
+            .debug_image_presets[0]
+            .profile,
+        DebugProfile::Sysadmin
+    );
+    assert!(
+        harness
+            .state()
+            .ui_state
+            .global_blades
+            .navigator()
+            .is_some_and(|navigator| !navigator.back_stack().is_empty()),
+        "choosing in the menu neither dismissed the stack nor went back"
+    );
+}

@@ -144,6 +144,29 @@ impl BladeStack {
             egui::pos2(window.left(), window.top() + self.top_inset),
             window.max,
         );
+        // A blade behind the active one: never interactable, never in front.
+        let mut show_background = |entry: &mut T,
+                                   stack_index: usize,
+                                   transform: Transform,
+                                   can_go_back: bool,
+                                   can_go_forward: bool| {
+            let layer = BladeLayer {
+                content_id: self.content_id(stack_index),
+                is_foreground: false,
+                can_go_back,
+                can_go_forward,
+            };
+            show_layer(
+                ctx,
+                self.layer_id(stack_index),
+                viewport,
+                transform,
+                false,
+                |ui| {
+                    let _ = show_entry(ui, entry, layer);
+                },
+            );
+        };
         navigator.seed_transition(ctx);
         let transition = navigator
             .transition
@@ -171,23 +194,12 @@ impl BladeStack {
         {
             // The blade pushed out of the fan slides in behind it.
             let stack_index = first_history - 1;
-            let content_id = self.content_id(stack_index);
-            let entry = &mut navigator.back_stack_mut()[stack_index];
-            show_layer(
-                ctx,
-                self.layer_id(stack_index),
-                viewport,
+            show_background(
+                &mut navigator.back_stack_mut()[stack_index],
+                stack_index,
                 history_transform(viewport, HISTORY_SCALES.len() - 1),
-                false,
-                |ui| {
-                    let layer = BladeLayer {
-                        content_id,
-                        is_foreground: false,
-                        can_go_back: stack_index > 0,
-                        can_go_forward: true,
-                    };
-                    let _ = show_entry(ui, entry, layer);
-                },
+                stack_index > 0,
+                true,
             );
         }
 
@@ -200,27 +212,12 @@ impl BladeStack {
             let depth = history_len - first_history - index - 1;
             let transform =
                 history_layer_transform(viewport, depth, transition, transition_back_steps);
-            let content_id = self.content_id(stack_index);
-            let steps = depth + 1;
-            if active_interactable {
-                history_targets.push((content_id, transformed_rect(viewport, transform), steps));
-            }
-            show_layer(
-                ctx,
-                self.layer_id(stack_index),
-                viewport,
-                transform,
-                false,
-                |ui| {
-                    let layer = BladeLayer {
-                        content_id,
-                        is_foreground: false,
-                        can_go_back: stack_index > 0,
-                        can_go_forward: true,
-                    };
-                    let _ = show_entry(ui, entry, layer);
-                },
-            );
+            history_targets.push((
+                self.content_id(stack_index),
+                transformed_rect(viewport, transform),
+                depth + 1,
+            ));
+            show_background(entry, stack_index, transform, stack_index > 0, true);
         }
 
         if let Some((BladeTransition::Back, value)) = transition
@@ -235,27 +232,17 @@ impl BladeStack {
                 .enumerate()
             {
                 let stack_index = history_len + 1 + index;
-                let content_id = self.content_id(stack_index);
                 let start = if index + 1 < transition_back_steps {
                     history_transform(viewport, index)
                 } else {
                     active_transform(viewport)
                 };
-                show_layer(
-                    ctx,
-                    self.layer_id(stack_index),
-                    viewport,
+                show_background(
+                    entry,
+                    stack_index,
                     closing_transform(viewport, start, value),
-                    false,
-                    |ui| {
-                        let layer = BladeLayer {
-                            content_id,
-                            is_foreground: false,
-                            can_go_back: true,
-                            can_go_forward,
-                        };
-                        let _ = show_entry(ui, entry, layer);
-                    },
+                    true,
+                    can_go_forward,
                 );
             }
         }
@@ -286,6 +273,7 @@ impl BladeStack {
             viewport,
             active_rect,
             &history_targets,
+            active_interactable,
             !popup_was_open,
         );
         let opening_popup = ctx.input(|input| input.pointer.any_click());
