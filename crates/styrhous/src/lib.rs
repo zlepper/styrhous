@@ -6,6 +6,7 @@ mod context_presentation;
 mod helm_release;
 mod helpers;
 mod licensing;
+mod log_level;
 mod log_store;
 mod minimal_namespace;
 mod minimal_resource;

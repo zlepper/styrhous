@@ -59,6 +59,32 @@ pub enum CodeColor {
     SyntaxComment,
     /// A colour of the line's own (ANSI styling), already resolved.
     Custom(Color32),
+    /// A run that carries its own look (ANSI styling): colours and text
+    /// decorations, already resolved.
+    Decorated(CodeDecoration),
+}
+
+/// The look of a run that styles itself (ANSI escapes in a log line).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CodeDecoration {
+    pub color: Color32,
+    pub background: Option<Color32>,
+    pub italics: bool,
+    pub underline: bool,
+    pub strikethrough: bool,
+}
+
+impl CodeDecoration {
+    /// A plain run in `color`.
+    pub const fn new(color: Color32) -> Self {
+        Self {
+            color,
+            background: None,
+            italics: false,
+            underline: false,
+            strikethrough: false,
+        }
+    }
 }
 
 impl CodeColor {
@@ -79,6 +105,7 @@ impl CodeColor {
             Self::SyntaxPunctuation => theme.syntax.punctuation,
             Self::SyntaxComment => theme.syntax.comment,
             Self::Custom(color) => color,
+            Self::Decorated(decoration) => decoration.color,
         }
     }
 }
@@ -401,7 +428,18 @@ pub(crate) fn paint_spans(
             Some(CodeMark::ActiveMatch) => theme.code.match_active_text,
             _ => span.color.resolve(theme),
         };
-        job.append(&span.text, 0.0, role.text_format(ui.ctx(), color));
+        let mut format = role.text_format(ui.ctx(), color);
+        if let CodeColor::Decorated(decoration) = span.color {
+            format.background = decoration.background.unwrap_or(Color32::TRANSPARENT);
+            format.italics = decoration.italics;
+            if decoration.underline {
+                format.underline = egui::Stroke::new(size::HAIRLINE, color);
+            }
+            if decoration.strikethrough {
+                format.strikethrough = egui::Stroke::new(size::HAIRLINE, color);
+            }
+        }
+        job.append(&span.text, 0.0, format);
         let count = span.text.chars().count();
         ranges.push(chars..chars + count);
         chars += count;

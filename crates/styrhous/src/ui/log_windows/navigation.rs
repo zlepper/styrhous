@@ -25,20 +25,56 @@ pub(super) fn advance_log_match(
     true
 }
 
-pub(super) fn advance_log_line(window: &mut PodLogWindowState, forward: bool) -> bool {
-    let count = displayed_line_count(window);
-    if count == 0 {
-        return false;
-    }
-    let current = window.search.active_display_row;
-    let next = match (current, forward) {
-        (Some(row), true) => (row + 1) % count,
-        (Some(row), false) => (row + count - 1) % count,
-        (None, true) => 0,
-        (None, false) => count - 1,
+/// Make display row `row` the active one and scroll to it.
+pub(super) fn jump_to_display_row(window: &mut PodLogWindowState, row: usize) {
+    window.search.active_display_row = Some(row);
+    window.search.scroll_to_display_row = Some(row);
+    window.tail.release();
+}
+
+/// The error and warning rows of what the window displays, as the log
+/// store last counted them (none while its answer is about something else).
+pub(super) fn problem_rows(window: &PodLogWindowState) -> &[(usize, Problem)] {
+    let Some(summary) = &window.summary else {
+        return &[];
     };
-    window.search.active_display_row = Some(next);
-    window.search.scroll_to_display_row = Some(next);
+    let current = match (window.filter_is_active(), summary.filtered_by) {
+        (false, None) => true,
+        (true, Some((generation, _))) => generation == window.search.generation,
+        _ => false,
+    };
+    if current { &summary.problems } else { &[] }
+}
+
+/// Step to the next or previous error or warning row from the active row
+/// (the top of the screen without one), wrapping at the ends. Returns
+/// whether there was a problem to go to.
+pub(super) fn step_problem(window: &mut PodLogWindowState, forward: bool) -> bool {
+    let rows = problem_rows(window);
+    let active = window.search.active_display_row;
+    let from = active.unwrap_or(window.visible_top_display_row);
+    let next = if forward {
+        rows.iter()
+            .map(|(row, _)| *row)
+            .find(|row| {
+                if active.is_some() {
+                    *row > from
+                } else {
+                    *row >= from
+                }
+            })
+            .or_else(|| rows.first().map(|(row, _)| *row))
+    } else {
+        rows.iter()
+            .map(|(row, _)| *row)
+            .rev()
+            .find(|row| *row < from)
+            .or_else(|| rows.last().map(|(row, _)| *row))
+    };
+    let Some(row) = next else {
+        return false;
+    };
+    jump_to_display_row(window, row);
     true
 }
 
@@ -67,38 +103,12 @@ pub(super) fn status_label(window: &PodLogWindowState) -> String {
         }
     };
     if let Some(backfill_lines) = window.backfill_lines {
-        format!("{status} · backfill {}", compact_line_count(backfill_lines))
+        format!(
+            "{status} · backfill {}",
+            components::search::format_compact_count(backfill_lines)
+        )
     } else {
         status
-    }
-}
-
-/// The words of the window's status pill: [`status_label`] up to any error
-/// detail ("Stream failed: …" reads "Stream failed"), which the pill shows
-/// as its tooltip instead.
-pub(super) fn status_headline(label: &str) -> &str {
-    label
-        .split_once(": ")
-        .map_or(label, |(headline, _)| headline)
-}
-
-pub(super) fn compact_line_count(lines: usize) -> String {
-    match lines {
-        0..=999 => lines.to_string(),
-        1_000..=999_999 => format!("{:.1}k", lines as f64 / 1_000.0),
-        _ => format!("{:.1}M", lines as f64 / 1_000_000.0),
-    }
-}
-
-/// The tone of the window's status dot.
-pub(super) fn status_tone(window: &PodLogWindowState) -> Tone {
-    if all_sources_are_reconnecting(window) {
-        return Tone::Warning;
-    }
-    match &window.status {
-        PodLogStatus::Connecting | PodLogStatus::Loading | PodLogStatus::Finished => Tone::Neutral,
-        PodLogStatus::Following => Tone::Success,
-        PodLogStatus::Failed(_) => Tone::Danger,
     }
 }
 

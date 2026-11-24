@@ -66,7 +66,7 @@ fn pod_log_viewer_rebase_keeps_scrolled_wide_text_in_place() {
     harness
         .input_mut()
         .events
-        .push(egui::Event::PointerMoved(egui::pos2(400.0, 180.0)));
+        .push(egui::Event::PointerMoved(egui::pos2(400.0, 400.0)));
     harness.step();
     harness.input_mut().events.push(egui::Event::MouseWheel {
         unit: egui::MouseWheelUnit::Point,
@@ -193,7 +193,7 @@ fn pod_log_viewer_rebase_keeps_scrolled_wide_text_in_place() {
     harness
         .input_mut()
         .events
-        .push(egui::Event::PointerMoved(egui::pos2(400.0, 180.0)));
+        .push(egui::Event::PointerMoved(egui::pos2(400.0, 400.0)));
     harness.step();
     harness.input_mut().events.push(egui::Event::MouseWheel {
         unit: egui::MouseWheelUnit::Point,

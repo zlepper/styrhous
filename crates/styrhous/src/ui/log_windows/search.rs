@@ -15,44 +15,8 @@ pub(super) fn initial_spool_is_pending(window: &PodLogWindowState) -> bool {
     window.total_lines > 0
         && !window.initial_page_loaded
         && window.live_rows.is_empty()
-        && !filter_is_active(window)
+        && !window.filter_is_active()
         && !matches!(window.status, PodLogStatus::Failed(_))
-}
-
-pub(super) fn show_initial_spool_state(ui: &mut egui::Ui, total_lines: usize) {
-    let theme = ui.tokens();
-    let state_rect = egui::Rect::from_center_size(
-        ui.available_rect_before_wrap().center(),
-        egui::vec2(280.0, 64.0),
-    );
-    ui.scope_builder(
-        egui::UiBuilder::new()
-            .max_rect(state_rect)
-            .layout(egui::Layout::top_down(egui::Align::Center)),
-        |ui| {
-            ui.horizontal_centered(|ui| {
-                components::Spinner::new()
-                    .size(components::design::size::SPINNER_LG)
-                    .neutral(theme.code.text_muted)
-                    .show(ui);
-                ui.add_space(space::S8);
-                ui.label(
-                    egui::RichText::new("Spooling logs…")
-                        .font(type_scale::TITLE.font_id(ui.ctx()))
-                        .color(theme.code.text_muted),
-                );
-            });
-            ui.add_space(space::S8);
-            ui.label(
-                egui::RichText::new(format!(
-                    "{total_lines} {} received",
-                    if total_lines == 1 { "line" } else { "lines" }
-                ))
-                .font(type_scale::BODY.font_id(ui.ctx()))
-                .color(theme.text.muted),
-            );
-        },
-    );
 }
 
 pub(super) fn request_page_for_display_row(
@@ -63,7 +27,7 @@ pub(super) fn request_page_for_display_row(
     let page_start = display_row / window.page_size * window.page_size;
     let key = LogPageKey {
         generation: window.search.generation,
-        filter_matches: filter_is_active(window),
+        filter_matches: window.filter_is_active(),
         page_start,
     };
     if (!window.pages.contains_key(&key) || window.pages_needing_refresh.contains(&key))
@@ -79,93 +43,236 @@ pub(super) fn request_page_for_display_row(
     }
 }
 
-pub(super) fn show_log_search_controls(
+/// Seconds a typed query settles before the search starts.
+const SEARCH_DEBOUNCE: f64 = 0.15;
+/// Seconds before a search the store was too busy to take is offered again.
+const SEARCH_RETRY: f64 = 0.1;
+
+/// What the toolbar asked for this frame.
+#[derive(Default)]
+struct ToolbarActions {
+    search: Option<components::SearchFieldResponse>,
+    filter: bool,
+    line_numbers: bool,
+    timestamps: bool,
+    ansi: bool,
+    source_labels: bool,
+    follow: bool,
+}
+
+/// The floating toolbar: search, the view toggles and Follow. In a narrow
+/// window the toggles fold into a "View options" menu.
+pub(super) fn show_log_toolbar(
     ctx: &egui::Context,
-    ui: &mut egui::Ui,
     window: &mut PodLogWindowState,
     display_options: &mut LogDisplayOptions,
     log_store: &LogStoreService,
 ) {
     let focus_search =
         ctx.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::F));
+    let narrow = ctx.content_rect().width() < NARROW_WINDOW_WIDTH;
     let status = log_search_status(&window.search);
-    let filter_active = filter_is_active(window);
+    let query = window.search.query.clone();
+    let toggles = ViewToggles {
+        filter: window.filter_is_active(),
+        line_numbers: display_options.show_line_numbers,
+        timestamps: display_options.show_timestamps,
+        ansi: display_options.render_ansi,
+        source_labels: window.show_source_labels,
+        multiple_sources: window.has_multiple_sources(),
+    };
     let following = window.tail.is_following();
-    let show_source_labels = window.show_source_labels;
+    let unavailable = log_is_unavailable(window);
     let window_id = window.id;
     let search = &mut window.search;
-    // Search → filter | view options … navigation → Follow (C14 toolbar order).
-    let (
-        (search_response, filter, [line_numbers, timestamps, ansi, source_labels]),
-        ([previous_line, previous_match, next_match, next_line], tail_lock),
-    ) = Toolbar::new(("pod-log", window_id)).show(
-        ui,
-        |ui| {
-            // Match navigation stays on the toolbar's line navigation group.
-            let search_response = SearchField::new(&mut search.query)
-                .regex(&mut search.regex_mode)
-                .placeholder("Search logs…")
-                .id_salt(("pod-log-search", window_id))
-                .accessibility_label("Search logs")
-                .status(status)
-                .navigation(false)
-                .request_focus(focus_search)
-                .show(ui);
-            let filter = filter_button(ui, filter_active);
-            toolbar_divider(ui);
-            let view_options = ButtonGroup::new("View options")
-                .toggle(ToggleButton::icon(
-                    icons::Icon::NumberedList,
-                    "Show log line numbers",
-                    display_options.show_line_numbers,
-                ))
-                .toggle(ToggleButton::icon(
-                    icons::Icon::Clock,
-                    "Show Kubernetes log timestamps",
-                    display_options.show_timestamps,
-                ))
-                .toggle(ToggleButton::icon(
-                    icons::Icon::Swatch,
-                    "Render ANSI styling",
-                    display_options.render_ansi,
-                ))
-                .toggle(ToggleButton::icon(
-                    icons::Icon::Tag,
-                    "Show log source labels",
-                    show_source_labels,
-                ))
-                .show(ui);
-            (search_response, filter, clicked::<4>(&view_options))
-        },
-        |ui| {
-            let navigation = ButtonGroup::new("Log navigation")
-                .toggle(ToggleButton::action(
-                    icons::Icon::ArrowUp,
-                    "Previous displayed line",
-                ))
-                .toggle(ToggleButton::action(
-                    icons::Icon::ArrowLeft,
-                    "Previous matching line",
-                ))
-                .toggle(ToggleButton::action(
-                    icons::Icon::ArrowRight,
-                    "Next matching line",
-                ))
-                .toggle(ToggleButton::action(
-                    icons::Icon::ArrowDown,
-                    "Next displayed line",
-                ))
-                .show(ui);
-            let tail_lock = ToggleButton::text("Follow", following)
-                .leading_icon(icons::Icon::ChevronDoubleDown)
+    let (width, layout) = if narrow {
+        (
+            size::LOG_TOOLBAR_NARROW,
+            egui::Layout::left_to_right(egui::Align::Center),
+        )
+    } else if toggles.multiple_sources {
+        (
+            size::LOG_TOOLBAR_INTERLEAVED,
+            egui::Layout::right_to_left(egui::Align::Center),
+        )
+    } else {
+        (
+            size::LOG_TOOLBAR,
+            egui::Layout::right_to_left(egui::Align::Center),
+        )
+    };
+    let actions = FloatingToolbar::show_floating_sized(ctx, window_id, width, layout, |ui| {
+        let mut actions = ToolbarActions::default();
+        let mut search_field = |ui: &mut egui::Ui, width: f32, actions: &mut ToolbarActions| {
+            ui.add_enabled_ui(!unavailable, |ui| {
+                actions.search = Some(
+                    SearchField::pill(&mut search.query)
+                        .navigation(true)
+                        .height(size::CONTROL_LG)
+                        .width(width)
+                        .regex(&mut search.regex_mode)
+                        .placeholder("Search logs…")
+                        .id_salt(("pod-log-search", window_id))
+                        .accessibility_label("Search logs")
+                        .status(status.clone())
+                        .request_focus(focus_search)
+                        .show(ui),
+                );
+            });
+        };
+        let follow = |ui: &mut egui::Ui| {
+            ToggleButton::text("Follow", following)
+                .leading_small_icon(icons::Icon::ChevronDoubleDown)
                 .accessibility_label("Lock to bottom")
                 .tooltip("Lock to bottom")
+                .enabled(!unavailable)
                 .show(ui)
-                .clicked();
-            (clicked::<4>(&navigation), tail_lock)
-        },
-    );
-    if search_response.changed {
+                .clicked()
+        };
+        if narrow {
+            search_field(ui, size::LOG_SEARCH_NARROW, &mut actions);
+            view_options_menu(ui, &toggles, unavailable, &mut actions);
+            actions.follow = follow(ui);
+        } else {
+            // Laid out from the end, so the search field takes the rest.
+            actions.follow = follow(ui);
+            view_toggles(ui, &toggles, unavailable, &mut actions);
+            let room = ui.available_width() - ui.spacing().item_spacing.x;
+            search_field(ui, search_width(ui, room, &query, &status), &mut actions);
+        }
+        actions
+    });
+    apply_toolbar_actions(ctx, window, display_options, log_store, actions);
+}
+
+/// The width of the search field: the room the toggles leave it, or more when
+/// the query and the count would not fit (up to its 300 point design width).
+fn search_width(ui: &egui::Ui, room: f32, query: &str, status: &SearchStatus) -> f32 {
+    let measure = |role: components::design::type_scale::TextRole, text: &str| {
+        role.galley(ui.ctx(), text, egui::Color32::PLACEHOLDER, f32::INFINITY)
+            .rect
+            .width()
+    };
+    let count = status
+        .count_text()
+        .map_or(0.0, |count| measure(type_scale::MONO_COUNT, &count));
+    let needed = size::LOG_SEARCH_CHROME + count + measure(type_scale::UI, query);
+    room.max(needed.min(300.0))
+}
+
+/// The view toggles' state.
+struct ViewToggles {
+    filter: bool,
+    line_numbers: bool,
+    timestamps: bool,
+    ansi: bool,
+    source_labels: bool,
+    multiple_sources: bool,
+}
+
+/// The view toggles side by side, added from the end of a right-to-left
+/// toolbar: Colours (Source in an interleaved window), Time, Line no. and
+/// Only matches read left to right.
+fn view_toggles(
+    ui: &mut egui::Ui,
+    toggles: &ViewToggles,
+    unavailable: bool,
+    actions: &mut ToolbarActions,
+) {
+    if toggles.multiple_sources {
+        actions.source_labels = ToggleButton::text("Source", toggles.source_labels)
+            .accessibility_label("Show log source labels")
+            .tooltip("Show log source labels")
+            .show(ui)
+            .clicked();
+    } else {
+        actions.ansi = ToggleButton::text("Colours", toggles.ansi)
+            .accessibility_label("Render ANSI styling")
+            .tooltip("Render ANSI styling")
+            .show(ui)
+            .clicked();
+    }
+    actions.timestamps = ToggleButton::text("Time", toggles.timestamps)
+        .accessibility_label("Show Kubernetes log timestamps")
+        .tooltip("Show Kubernetes log timestamps")
+        .show(ui)
+        .clicked();
+    actions.line_numbers = ToggleButton::text("Line no.", toggles.line_numbers)
+        .accessibility_label("Show log line numbers")
+        .tooltip("Show log line numbers")
+        .show(ui)
+        .clicked();
+    actions.filter = ToggleButton::text("Only matches", toggles.filter)
+        .accessibility_label("Filter to matching lines")
+        .tooltip("Filter to matching lines")
+        .enabled(!unavailable)
+        .show(ui)
+        .clicked();
+}
+
+/// The view toggles folded into one "View options" menu, for a narrow
+/// window.
+fn view_options_menu(
+    ui: &mut egui::Ui,
+    toggles: &ViewToggles,
+    unavailable: bool,
+    actions: &mut ToolbarActions,
+) {
+    let trigger_id = ui.next_auto_id();
+    let open = egui::Popup::is_id_open(ui.ctx(), trigger_id.with("popup"));
+    let trigger = ToggleButton::text("View options", open)
+        .leading_small_icon(icons::Icon::AdjustmentsHorizontal)
+        .trailing_icon(icons::Icon::ChevronDown)
+        .show(ui);
+    let state = |on| {
+        if on {
+            components::CheckState::On
+        } else {
+            components::CheckState::Off
+        }
+    };
+    components::MoreButton::show_menu_below(&trigger, "View options", |menu| {
+        if !unavailable
+            && menu
+                .checkbox("Only matches", state(toggles.filter))
+                .clicked()
+        {
+            actions.filter = true;
+        }
+        if menu
+            .checkbox("Line numbers", state(toggles.line_numbers))
+            .clicked()
+        {
+            actions.line_numbers = true;
+        }
+        if menu.checkbox("Time", state(toggles.timestamps)).clicked() {
+            actions.timestamps = true;
+        }
+        if toggles.multiple_sources {
+            if menu
+                .checkbox("Source", state(toggles.source_labels))
+                .clicked()
+            {
+                actions.source_labels = true;
+            }
+        } else if menu.checkbox("Colours", state(toggles.ansi)).clicked() {
+            actions.ansi = true;
+        }
+    });
+}
+
+fn apply_toolbar_actions(
+    ctx: &egui::Context,
+    window: &mut PodLogWindowState,
+    display_options: &mut LogDisplayOptions,
+    log_store: &LogStoreService,
+    actions: ToolbarActions,
+) {
+    let (changed, previous, next) = actions.search.map_or((false, false, false), |response| {
+        (response.changed, response.previous, response.next)
+    });
+    if changed {
+        let now = ctx.input(|input| input.time);
         window.search.generation += 1;
         window.search.match_count = 0;
         window.search.scanned_lines = 0;
@@ -175,22 +282,16 @@ pub(super) fn show_log_search_controls(
         window.search.active_match = None;
         window.search.scroll_to_display_row = None;
         window.clear_pages();
-        window.search.search_deadline = Some(Instant::now() + Duration::from_millis(150));
-        ctx.request_repaint_after(Duration::from_millis(150));
+        window.search.search_deadline = Some(now + SEARCH_DEBOUNCE);
+        ctx.request_repaint_after(std::time::Duration::from_secs_f64(SEARCH_DEBOUNCE));
     }
     let mut navigated = false;
     // Shift+Enter and Enter in the search field move like the match buttons.
-    if previous_match || search_response.previous {
+    if previous {
         navigated |= advance_log_match(window, log_store, false);
     }
-    if next_match || search_response.next {
+    if next {
         navigated |= advance_log_match(window, log_store, true);
-    }
-    if previous_line {
-        navigated |= advance_log_line(window, false);
-    }
-    if next_line {
-        navigated |= advance_log_line(window, true);
     }
     if navigated && window.tail.release() {
         // The active indicator was rendered before the navigation click was
@@ -198,25 +299,25 @@ pub(super) fn show_log_search_controls(
         // visible and no physical scroll was needed.
         ctx.request_repaint();
     }
-    if filter {
+    if actions.filter {
         window.search.filter_matches = !window.search.filter_matches;
         window.search.active_display_row = None;
         window.search.scroll_to_display_row = None;
         window.clear_pages();
     }
-    if line_numbers {
+    if actions.line_numbers {
         display_options.show_line_numbers = !display_options.show_line_numbers;
     }
-    if timestamps {
+    if actions.timestamps {
         display_options.show_timestamps = !display_options.show_timestamps;
     }
-    if ansi {
+    if actions.ansi {
         display_options.render_ansi = !display_options.render_ansi;
     }
-    if source_labels {
+    if actions.source_labels {
         window.show_source_labels = !window.show_source_labels;
     }
-    if tail_lock {
+    if actions.follow {
         if window.tail.toggle() {
             window.search.scroll_to_display_row = None;
             window.search.rebase_scroll_row_delta = None;
@@ -237,8 +338,9 @@ pub(super) fn sync_search(
     let Some(deadline) = window.search.search_deadline else {
         return;
     };
-    if Instant::now() < deadline {
-        ctx.request_repaint_after(deadline.saturating_duration_since(Instant::now()));
+    let now = ctx.input(|input| input.time);
+    if now < deadline {
+        ctx.request_repaint_after(std::time::Duration::from_secs_f64(deadline - now));
         return;
     }
     window.search.search_deadline = None;
@@ -260,32 +362,13 @@ pub(super) fn sync_search(
         window.search.query.clone(),
         window.search.regex_mode,
     ) {
-        window.search.search_deadline = Some(Instant::now() + Duration::from_millis(100));
-        ctx.request_repaint_after(Duration::from_millis(100));
+        window.search.search_deadline = Some(now + SEARCH_RETRY);
+        ctx.request_repaint_after(std::time::Duration::from_secs_f64(SEARCH_RETRY));
     }
 }
 
-/// The standalone "Filter to matching lines" toggle; true when clicked.
-pub(super) fn filter_button(ui: &mut egui::Ui, active: bool) -> bool {
-    ToggleButton::text("Matches only", active)
-        .leading_icon(icons::Icon::Funnel)
-        .accessibility_label("Filter to matching lines")
-        .tooltip("Filter to matching lines")
-        .show(ui)
-        .clicked()
-}
-
-/// Whether each of the first `N` responses of a button group was clicked.
-fn clicked<const N: usize>(responses: &[egui::Response]) -> [bool; N] {
-    std::array::from_fn(|index| responses.get(index).is_some_and(egui::Response::clicked))
-}
-
-pub(super) fn filter_is_active(window: &PodLogWindowState) -> bool {
-    window.filter_is_active()
-}
-
 pub(super) fn displayed_line_count(window: &PodLogWindowState) -> usize {
-    if filter_is_active(window) {
+    if window.filter_is_active() {
         window.search.match_count
     } else {
         window.total_lines
@@ -314,7 +397,7 @@ pub(super) fn request_copy(
         window.id,
         window.selection_generation,
         window.search.generation,
-        filter_is_active(window),
+        window.filter_is_active(),
         start.display_row,
         start.byte_offset,
         end.display_row,

@@ -8,7 +8,7 @@ use crate::design::type_scale::{self, TextRole};
 use crate::design::{size, space};
 use crate::icons::Icon;
 use crate::loading::Spinner;
-use crate::tile::Tile;
+use crate::tile::{Tile, TileSize};
 use crate::{Button, ButtonSize};
 
 /// The widest an empty state's text runs before wrapping.
@@ -19,6 +19,12 @@ const GAP: f32 = space::S4;
 const SPACING: f32 = space::S8;
 /// The title (`.w6` at 13/20).
 const TITLE: TextRole = type_scale::UI_STRONG;
+/// Extra space under a tile and under a spinner on a code surface
+/// (`margin-top` 12 and 10).
+const CODE_TILE_SPACING: f32 = space::S12;
+const CODE_SPINNER_SPACING: f32 = 10.0;
+/// The widest an empty state's text runs on a code surface.
+const CODE_MAX_WIDTH: f32 = 440.0;
 
 /// What leads an empty state.
 enum Media {
@@ -29,8 +35,9 @@ enum Media {
 }
 
 impl Media {
-    fn height(&self) -> f32 {
+    fn height(&self, code_surface: bool) -> f32 {
         match self {
+            Self::Tile(..) if code_surface => size::TILE_LG,
             Self::Tile(..) => size::TILE,
             Self::Spinner(_) => size::SPINNER_LG,
             Self::Glyph(_) => size::ICON_LG,
@@ -39,9 +46,11 @@ impl Media {
 
     /// Extra space between the media and the title: 8 points under a tile
     /// or spinner, 4 under a bare glyph.
-    fn title_spacing(&self) -> f32 {
+    fn title_spacing(&self, code_surface: bool) -> f32 {
         match self {
             Self::Glyph(_) => GAP,
+            Self::Tile(..) if code_surface => CODE_TILE_SPACING,
+            Self::Spinner(_) if code_surface => CODE_SPINNER_SPACING,
             Self::Tile(..) | Self::Spinner(_) => SPACING,
         }
     }
@@ -61,6 +70,7 @@ pub struct EmptyState<'a> {
     title: &'a str,
     description: Option<&'a str>,
     action: Option<(Option<Icon>, &'a str)>,
+    code_surface: Option<f32>,
 }
 
 impl<'a> EmptyState<'a> {
@@ -75,6 +85,7 @@ impl<'a> EmptyState<'a> {
             title,
             description: None,
             action: None,
+            code_surface: None,
         }
     }
 
@@ -119,11 +130,25 @@ impl<'a> EmptyState<'a> {
         self
     }
 
+    /// Set the state for a code surface (the log viewer, L03 and L04): a
+    /// large tinted tile or spinner, a Bricolage title, code text colours
+    /// and a medium action, starting `top` points below the area's top
+    /// instead of being centred in it.
+    pub fn on_code_surface(mut self, top: f32) -> Self {
+        self.code_surface = Some(top);
+        self
+    }
+
     /// Fill the available space and centre the state in it. Returns the
     /// action button's response, if there is one.
     pub fn show(self, ui: &mut Ui) -> Option<Response> {
         let area = ui.available_rect_before_wrap();
-        let width = area.width().min(EMPTY_STATE_MAX_WIDTH);
+        let code = self.code_surface.is_some();
+        let width = area.width().min(if code {
+            CODE_MAX_WIDTH
+        } else {
+            EMPTY_STATE_MAX_WIDTH
+        });
         let theme = ui.tokens();
         let ctx = ui.ctx().clone();
         // A single line is laid out as is and centred by its width, as CSS
@@ -137,13 +162,34 @@ impl<'a> EmptyState<'a> {
             job.halign = Align::Center;
             role.galley_from_job(&ctx, job)
         };
-        let title = centred(TITLE, self.title, theme.text.primary);
+        let (title_role, title_color, description_role, description_color) = if code {
+            let description_role = match self.media {
+                Media::Tile(..) => type_scale::BODY,
+                _ => type_scale::META,
+            };
+            (
+                type_scale::TITLE,
+                theme.code.text,
+                description_role,
+                theme.code.text_muted,
+            )
+        } else {
+            (
+                TITLE,
+                theme.text.primary,
+                type_scale::META,
+                theme.text.muted,
+            )
+        };
+        let title = centred(title_role, self.title, title_color);
         let description = self
             .description
-            .map(|text| centred(type_scale::META, text, theme.text.muted));
-        let media_height = self.media.height();
-        let title_spacing = self.media.title_spacing();
-        let action_height = ButtonSize::Sm.height();
+            .map(|text| centred(description_role, text, description_color));
+        let media_height = self.media.height(code);
+        let title_spacing = self.media.title_spacing(code);
+        let button_size = if code { ButtonSize::Md } else { ButtonSize::Sm };
+        let action_spacing = if code { CODE_TILE_SPACING } else { SPACING };
+        let action_height = button_size.height();
         let height = media_height
             + GAP
             + title_spacing
@@ -151,16 +197,26 @@ impl<'a> EmptyState<'a> {
             + description
                 .as_ref()
                 .map_or(0.0, |galley| GAP + galley.rect.height())
-            + self.action.map_or(0.0, |_| GAP + SPACING + action_height);
+            + self
+                .action
+                .map_or(0.0, |_| GAP + action_spacing + action_height);
 
         // Centred, but never above the area when the text is tall.
-        let top = (area.center().y - height / 2.0).max(area.top());
+        let top = match self.code_surface {
+            Some(inset) => area.top() + inset,
+            None => (area.center().y - height / 2.0).max(area.top()),
+        };
         let centre_x = area.center().x;
         let media_rect = Rect::from_center_size(
             pos2(centre_x, top + media_height / 2.0),
             Vec2::splat(media_height),
         );
         match self.media {
+            Media::Tile(icon, tone) if code => Tile::new(icon)
+                .tone(tone)
+                .size(TileSize::Lg)
+                .tinted()
+                .paint(ui, media_rect),
             Media::Tile(icon, tone) => Tile::new(icon).tone(tone).paint(ui, media_rect),
             Media::Glyph(icon) => icon.paint(ui, media_rect, theme.text.muted),
             Media::Spinner(spinner) => {
@@ -187,20 +243,20 @@ impl<'a> EmptyState<'a> {
             type_scale::paint_text(ui, &response, pos, galley, color);
             y = rect.bottom() + GAP;
         };
-        text(ui, title, theme.text.primary);
+        text(ui, title, title_color);
         if let Some(description) = description {
-            text(ui, description, theme.text.muted);
+            text(ui, description, description_color);
         }
         let action = self.action.map(|(icon, label)| {
-            let mut button = Button::secondary(label).size(ButtonSize::Sm);
+            let mut button = Button::secondary(label).size(button_size);
             if let Some(icon) = icon {
                 button = button.leading_icon(icon);
             }
             let mut row = ui.new_child(
                 UiBuilder::new()
                     .max_rect(Rect::from_min_max(
-                        pos2(area.left(), y + SPACING),
-                        pos2(area.right(), y + SPACING + action_height),
+                        pos2(area.left(), y + action_spacing),
+                        pos2(area.right(), y + action_spacing + action_height),
                     ))
                     .layout(Layout::top_down(Align::Center)),
             );

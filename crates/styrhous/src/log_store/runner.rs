@@ -223,6 +223,26 @@ pub(super) fn run_store(store_thread: StoreThread) {
                     Err(error) => send_failure(&result_sender, window_id, error),
                 }
             }
+            Command::Summary {
+                window_id,
+                bars,
+                filter,
+            } => {
+                let Some(store) = stores.get_mut(&window_id) else {
+                    continue;
+                };
+                // A summary only decorates the window: failing to take one must
+                // not fail the log, so the window keeps its last.
+                if let Ok(summary) = store.summary(bars, filter) {
+                    send_result(
+                        &result_sender,
+                        LogStoreResult::Summary {
+                            window_id,
+                            summary: Arc::new(summary),
+                        },
+                    );
+                }
+            }
             Command::Close { window_id } => {
                 stores.remove(&window_id);
                 closed.insert(window_id);

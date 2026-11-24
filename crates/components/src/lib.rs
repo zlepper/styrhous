@@ -112,7 +112,9 @@ pub use more_button::MoreButton;
 pub use number_field::{NumberField, NumberFieldResponse};
 pub use progress_checklist::{ChecklistStep, ChecklistStepState, ProgressChecklist};
 pub use reorderable_table::{ReorderHandle, ReorderableTable, move_item};
-pub use search::{SEARCH_FIELD_WIDTH, SearchField, SearchFieldResponse, SearchStatus, counted};
+pub use search::{
+    SEARCH_FIELD_WIDTH, SearchField, SearchFieldResponse, SearchStatus, counted, format_exact_count,
+};
 pub use selection::{
     BoxLook, CheckState, Checkbox, Radio, RadioCard, RadioCardResponse, Switch, paint_box,
     paint_checkbox, paint_radio, paint_switch,
@@ -175,7 +177,9 @@ pub use window_chrome::{
 
 // C15
 pub use badge::small_kind_badge;
-pub use code_surface::{CodeColor, CodeLine, CodeMark, CodeSpan, CodeSurface, CodeSurfaceResponse};
+pub use code_surface::{
+    CodeColor, CodeDecoration, CodeLine, CodeMark, CodeSpan, CodeSurface, CodeSurfaceResponse,
+};
 pub use completion::{
     Completion, CompletionDoc, CompletionExpects, CompletionResponse, completion_doc_position,
     completion_position,
@@ -212,8 +216,9 @@ pub use section_rail::{InspectorBody, Section, SectionRail, inspector_section_he
 pub mod log_viewer;
 
 pub use log_viewer::{
-    FloatingToolbar, LevelBadge, LogHeader, LogLevel, LogLine, LogSource, LogStream, SourcePill,
-    SourceState, VolumeBar, VolumeBars, VolumeBarsResponse, VolumeStrip, VolumeStripResponse,
+    FloatingToolbar, LevelBadge, LogHeader, LogHeaderResponse, LogLevel, LogLine, LogLineResponse,
+    LogSource, LogStream, SourcePill, SourceState, VolumeBar, VolumeBars, VolumeBarsResponse,
+    VolumeStrip, VolumeStripResponse,
 };
 
 // C18

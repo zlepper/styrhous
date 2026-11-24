@@ -6,52 +6,47 @@ Window state=[focused] rect=<none>
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="Container start" rect=(x=1180.0 y=27.5 width=80.8 height=16.0 center_x=1220.4 center_y=35.5)
-                TextRun value="Container start" rect=(x=1180.0 y=27.5 width=80.8 height=16.0 center_x=1220.4 center_y=35.5)
               Group name="Log instance" rect=<none>
-                Button name="Current" state=[toggled=True] rect=(x=1274.8 y=21.5 width=69.2 height=28.0 center_x=1309.3 center_y=35.5)
-                Button name="Previous" state=[toggled=False] rect=(x=1345.9 y=21.5 width=73.9 height=28.0 center_x=1382.9 center_y=35.5)
-              Button name="Export logs" rect=(x=1433.8 y=19.5 width=78.2 height=32.0 center_x=1472.9 center_y=35.5)
+                Button name="Current" state=[toggled=True] rect=(x=1352.9 y=40.0 width=69.2 height=28.0 center_x=1387.5 center_y=54.0)
+                Button name="Previous" state=[toggled=False] rect=(x=1424.1 y=40.0 width=73.9 height=28.0 center_x=1461.0 center_y=54.0)
+              Button name="Container start" rect=(x=1230.4 y=40.0 width=106.6 height=28.0 center_x=1283.7 center_y=54.0)
+              Button name="Export logs" rect=(x=1147.9 y=40.0 width=68.5 height=28.0 center_x=1182.1 center_y=54.0)
             GenericContainer rect=<none>
-              Label value="api-0" rect=(x=64.0 y=17.5 width=34.0 height=20.0 center_x=81.0 center_y=27.5)
-                TextRun value="api-0" rect=(x=64.0 y=17.5 width=34.0 height=20.0 center_x=81.0 center_y=27.5)
-              Label value="Pod logs · container api" rect=(x=64.0 y=37.5 width=124.8 height=16.0 center_x=126.4 center_y=45.5)
-                TextRun value="Pod logs · container api" rect=(x=64.0 y=37.5 width=124.8 height=16.0 center_x=126.4 center_y=45.5)
-              Label value="Spooling… 100 lines" rect=(x=200.8 y=24.5 width=139.3 height=22.0 center_x=270.5 center_y=35.5)
-                TextRun value="Spooling… 100 lines" rect=(x=223.8 y=27.5 width=107.3 height=16.0 center_x=277.5 center_y=35.5)
+              Label value="Pod" rect=(x=36.0 y=43.0 width=37.3 height=22.0 center_x=54.7 center_y=54.0)
+                TextRun value="Pod" rect=(x=45.0 y=46.0 width=19.3 height=16.0 center_x=54.7 center_y=54.0)
+              Label value="api-0" rect=(x=87.3 y=30.0 width=69.3 height=34.0 center_x=122.0 center_y=47.0)
+                TextRun value="api-0" rect=(x=87.3 y=30.0 width=69.3 height=34.0 center_x=122.0 center_y=47.0)
+              Label value="container api · default" rect=(x=87.3 y=64.0 width=144.2 height=14.0 center_x=159.4 center_y=71.0)
+                TextRun value="CONTAINER API · DEFAULT" rect=(x=87.3 y=64.0 width=143.3 height=14.0 center_x=159.0 center_y=71.0)
+              Label value="Spooling…" rect=(x=245.5 y=43.0 width=92.2 height=22.0 center_x=291.6 center_y=54.0)
+                TextRun value="Spooling…" rect=(x=272.5 y=46.0 width=56.2 height=16.0 center_x=300.6 center_y=54.0)
+            Label value="Volume · spooling" rect=(x=54.0 y=122.0 width=115.1 height=16.0 center_x=111.6 center_y=130.0)
+              TextRun value="VOLUME · SPOOLING" rect=(x=54.0 y=122.0 width=114.0 height=16.0 center_x=111.0 center_y=130.0)
             GenericContainer rect=<none>
-              Group name="Log navigation" rect=<none>
-                Button name="Previous displayed line" rect=(x=1299.8 y=73.5 width=28.0 height=28.0 center_x=1313.8 center_y=87.5)
-                Button name="Previous matching line" rect=(x=1329.8 y=73.5 width=28.0 height=28.0 center_x=1343.8 center_y=87.5)
-                Button name="Next matching line" rect=(x=1359.8 y=73.5 width=28.0 height=28.0 center_x=1373.8 center_y=87.5)
-                Button name="Next displayed line" rect=(x=1389.8 y=73.5 width=28.0 height=28.0 center_x=1403.8 center_y=87.5)
-              Button name="Lock to bottom" state=[toggled=True] rect=(x=1427.8 y=71.5 width=84.2 height=32.0 center_x=1469.9 center_y=87.5)
+              Button name="api-0 · 100" rect=(x=1394.2 y=118.0 width=87.8 height=24.0 center_x=1438.1 center_y=130.0)
             GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                TextInput name="Search logs" value="" rect=(x=24.0 y=71.5 width=279.0 height=32.0 center_x=163.5 center_y=87.5)
-                  TextRun value="" rect=(x=60.0 y=79.5 width=0.0 height=20.0 center_x=60.0 center_y=89.5)
-              CheckBox name="Regular expression" state=[toggled=False] rect=(x=316.0 y=75.5 width=24.0 height=24.0 center_x=328.0 center_y=87.5)
-              Button name="Filter to matching lines" state=[toggled=False] rect=(x=352.0 y=71.5 width=124.2 height=32.0 center_x=414.1 center_y=87.5)
-              Group name="View options" rect=<none>
-                Button name="Show log line numbers" state=[toggled=True] rect=(x=495.2 y=73.5 width=28.0 height=28.0 center_x=509.2 center_y=87.5)
-                Button name="Show Kubernetes log timestamps" state=[toggled=False] rect=(x=525.2 y=73.5 width=28.0 height=28.0 center_x=539.2 center_y=87.5)
-                Button name="Render ANSI styling" state=[toggled=True] rect=(x=555.2 y=73.5 width=28.0 height=28.0 center_x=569.2 center_y=87.5)
-                Button name="Show log source labels" state=[toggled=False] rect=(x=585.2 y=73.5 width=28.0 height=28.0 center_x=599.2 center_y=87.5)
-        GenericContainer rect=<none>
-          GenericContainer rect=<none>
+              Unknown name="Log volume" rect=(x=54.0 y=156.0 width=0.0 height=36.0 center_x=54.0 center_y=174.0)
             GenericContainer rect=<none>
-            GenericContainer rect=<none>
-              Label value="100 lines" rect=(x=24.0 y=995.5 width=49.7 height=16.0 center_x=48.8 center_y=1003.5)
-                TextRun value="100 lines" rect=(x=24.0 y=995.5 width=49.7 height=16.0 center_x=48.8 center_y=1003.5)
-        GenericContainer rect=<none>
-          GenericContainer rect=<none>
-            GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                ProgressIndicator name="Loading" rect=(x=628.0 y=540.5 width=20.0 height=20.0 center_x=638.0 center_y=550.5)
-                Label value="Spooling logs…" rect=(x=664.0 y=541.0 width=116.8 height=19.0 center_x=722.4 center_y=550.5)
-                  TextRun value="Spooling logs…" rect=(x=664.0 y=541.0 width=116.8 height=19.0 center_x=722.4 center_y=550.5)
-              Label value="100 lines received" rect=(x=711.9 y=593.5 width=112.2 height=17.0 center_x=768.0 center_y=602.0)
-                TextRun value="100 lines received" rect=(x=712.0 y=593.5 width=112.2 height=17.0 center_x=768.1 center_y=602.0)
-            GenericContainer rect=<none>
+              ProgressIndicator name="Loading" rect=(x=758.0 y=464.0 width=20.0 height=20.0 center_x=768.0 center_y=474.0)
+              Label value="Spooling logs…" rect=(x=709.6 y=498.0 width=116.8 height=24.0 center_x=768.0 center_y=510.0)
+                TextRun value="Spooling logs…" rect=(x=709.6 y=498.0 width=116.8 height=24.0 center_x=768.0 center_y=510.0)
+              Label value="100 lines received · newest shown when complete" rect=(x=633.5 y=526.0 width=269.1 height=16.0 center_x=768.0 center_y=534.0)
+                TextRun value="100 lines received · newest shown when complete" rect=(x=633.5 y=526.0 width=269.1 height=16.0 center_x=768.0 center_y=534.0)
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        Button name="Lock to bottom" state=[toggled=True] rect=(x=1069.8 y=962.0 width=82.2 height=32.0 center_x=1110.9 center_y=978.0)
+        Button name="Render ANSI styling" state=[toggled=True] rect=(x=994.5 y=962.0 width=69.3 height=32.0 center_x=1029.2 center_y=978.0)
+        Button name="Show Kubernetes log timestamps" state=[toggled=False] rect=(x=935.8 y=962.0 width=52.7 height=32.0 center_x=962.2 center_y=978.0)
+        Button name="Show log line numbers" state=[toggled=True] rect=(x=860.7 y=962.0 width=69.2 height=32.0 center_x=895.2 center_y=978.0)
+        Button name="Filter to matching lines" state=[toggled=False] rect=(x=749.8 y=962.0 width=104.9 height=32.0 center_x=802.2 center_y=978.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            TextInput name="Search logs" value="" rect=(x=530.0 y=960.0 width=103.8 height=36.0 center_x=581.9 center_y=978.0)
+              TextRun value="" rect=(x=566.0 y=970.0 width=0.0 height=20.0 center_x=566.0 center_y=980.0)
+          Button name="Previous match" state=[disabled] rect=(x=641.8 y=966.0 width=24.0 height=24.0 center_x=653.8 center_y=978.0)
+          Button name="Next match" state=[disabled] rect=(x=673.8 y=966.0 width=24.0 height=24.0 center_x=685.8 center_y=978.0)
+          CheckBox name="Regular expression" state=[toggled=False] rect=(x=705.8 y=966.0 width=24.0 height=24.0 center_x=717.8 center_y=978.0)

@@ -125,14 +125,10 @@ fn clicking_a_prefixed_log_row_places_the_caret_in_its_message() {
     components::test_support::setup_egui(&mut harness);
     harness.run_steps(2);
     let label = harness.get_by_label_contains("focused caret line");
-    let character_width = label.rect().width()
-        / "       0  2026-08-11T10:00:00Z  focused caret line"
-            .chars()
-            .count() as f32;
-    let prefix_width = "       0  2026-08-11T10:00:00Z  ".chars().count() as f32 * character_width;
+    let character_width = label.rect().width() / "focused caret line".chars().count() as f32;
     let clicked_column = 7;
     let click_position = egui::pos2(
-        label.rect().left() + prefix_width + clicked_column as f32 * character_width,
+        label.rect().left() + clicked_column as f32 * character_width,
         label.rect().center().y,
     );
     harness.event(egui::Event::PointerMoved(click_position));
@@ -177,8 +173,7 @@ fn dragging_right_to_left_in_a_prefixed_log_row_keeps_the_caret_at_the_released_
     let log_store = LogStoreService::default();
     let mut close_requested = false;
     let mut harness = Harness::builder().build_ui(move |ctx| {
-        *character_width_for_ui.borrow_mut() =
-            ctx.fonts_mut(|fonts| fonts.glyph_width(&egui::FontId::monospace(LOG_FONT_SIZE), '0'));
+        *character_width_for_ui.borrow_mut() = log_character_width(ctx.ctx());
         show_log_window(
             ctx,
             &mut window_for_ui.borrow_mut(),
@@ -313,8 +308,7 @@ fn dragging_between_prefixed_log_rows_tracks_the_message_columns() {
     let log_store = LogStoreService::default();
     let mut close_requested = false;
     let mut harness = Harness::builder().build_ui(move |ctx| {
-        *character_width_for_ui.borrow_mut() =
-            ctx.fonts_mut(|fonts| fonts.glyph_width(&egui::FontId::monospace(LOG_FONT_SIZE), '0'));
+        *character_width_for_ui.borrow_mut() = log_character_width(ctx.ctx());
         show_log_window(
             ctx,
             &mut window_for_ui.borrow_mut(),
@@ -326,24 +320,16 @@ fn dragging_between_prefixed_log_rows_tracks_the_message_columns() {
     components::test_support::setup_egui(&mut harness);
     harness.run_steps(2);
     let character_width = *character_width.borrow();
-    let first_prefix = format!("{:>6}  {first_timestamp}  ", 0);
-    let second_prefix = format!("{:>6}  {second_timestamp}  ", 1);
-    let first_label_text = format!("{first_prefix}{first_message}");
-    let second_label_text = format!("{second_prefix}{second_message}");
-    let first_label = harness.get_by_label(&first_label_text);
-    let second_label = harness.get_by_label(&second_label_text);
+    let first_label = harness.get_by_label(first_message);
+    let second_label = harness.get_by_label(second_message);
     let start_column = 2;
     let end_column = 9;
     let start = egui::pos2(
-        first_label.rect().left()
-            + first_prefix.chars().count() as f32 * character_width
-            + start_column as f32 * character_width,
+        first_label.rect().left() + start_column as f32 * character_width,
         first_label.rect().center().y,
     );
     let end = egui::pos2(
-        second_label.rect().left()
-            + second_prefix.chars().count() as f32 * character_width
-            + end_column as f32 * character_width,
+        second_label.rect().left() + end_column as f32 * character_width,
         second_label.rect().center().y,
     );
 
@@ -396,8 +382,7 @@ fn clicking_a_horizontally_scrolled_log_row_uses_the_original_text_column() {
     let log_store = LogStoreService::default();
     let mut close_requested = false;
     let mut harness = Harness::builder().build_ui(move |ctx| {
-        *character_width_for_ui.borrow_mut() =
-            ctx.fonts_mut(|fonts| fonts.glyph_width(&egui::FontId::monospace(LOG_FONT_SIZE), '0'));
+        *character_width_for_ui.borrow_mut() = log_character_width(ctx.ctx());
         let output = show_log_window_with_scroll_state(
             ctx,
             &mut window_for_ui.borrow_mut(),
@@ -432,9 +417,10 @@ fn clicking_a_horizontally_scrolled_log_row_uses_the_original_text_column() {
         "the log view was horizontally scrolled"
     );
     let click_position = egui::pos2(viewport.left() + 160.0, viewport.top() + 8.0);
-    let expected_column = ((scroll_offset.x + click_position.x - viewport.left())
-        / *character_width.borrow())
-    .round() as usize;
+    let expected_column =
+        ((scroll_offset.x + click_position.x - viewport.left() - size::LOG_ROW_PADDING_X)
+            / *character_width.borrow())
+        .round() as usize;
     harness.event(egui::Event::PointerMoved(click_position));
     harness.event(egui::Event::PointerButton {
         pos: click_position,

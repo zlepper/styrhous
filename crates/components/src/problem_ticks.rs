@@ -23,6 +23,10 @@ pub struct ProblemTicksResponse {
     pub response: Response,
     /// The tick that was clicked: scroll its row into view.
     pub clicked: Option<usize>,
+    /// Where the track was dragged (or clicked, with no tick to jump to) to,
+    /// as a fraction of its height: scroll the list there. Only for
+    /// [`ProblemTicks::draggable`] tracks.
+    pub scrubbed_to: Option<f32>,
 }
 
 /// A [`size::PROBLEM_TRACK`] wide track on `surface-raised` with a
@@ -38,6 +42,7 @@ pub struct ProblemTicks<'a> {
     ticks: &'a [ProblemTick],
     thumb: Option<(f32, f32)>,
     id_salt: Id,
+    draggable: bool,
 }
 
 impl<'a> ProblemTicks<'a> {
@@ -46,12 +51,20 @@ impl<'a> ProblemTicks<'a> {
             ticks,
             thumb: None,
             id_salt: Id::new("problem-ticks"),
+            draggable: false,
         }
     }
 
     /// A stable ID salt for the track (one per track in a `Ui`).
     pub fn id_salt(mut self, id_salt: impl std::hash::Hash + std::fmt::Debug) -> Self {
         self.id_salt = Id::new(id_salt);
+        self
+    }
+
+    /// Make the track a scroll bar too: dragging it reports where to scroll
+    /// to ([`ProblemTicksResponse::scrubbed_to`]).
+    pub fn draggable(mut self) -> Self {
+        self.draggable = true;
         self
     }
 
@@ -70,7 +83,12 @@ impl<'a> ProblemTicks<'a> {
 
     /// Show the track in `rect` (already allocated).
     pub fn show_in(self, ui: &mut Ui, rect: Rect) -> ProblemTicksResponse {
-        let response = ui.interact(rect, ui.id().with(self.id_salt), Sense::click());
+        let sense = if self.draggable {
+            Sense::click_and_drag()
+        } else {
+            Sense::click()
+        };
+        let response = ui.interact(rect, ui.id().with(self.id_salt), sense);
         let count = self.ticks.len();
         let label = crate::search::counted(count, "problem", "problems");
         response.widget_info(|| {
@@ -80,6 +98,18 @@ impl<'a> ProblemTicks<'a> {
             .interact_pointer_pos()
             .filter(|_| response.clicked())
             .and_then(|pointer| self.nearest(rect, pointer.y));
+        let pointer_fraction = || {
+            response
+                .interact_pointer_pos()
+                .map(|pointer| ((pointer.y - rect.top()) / rect.height()).clamp(0.0, 1.0))
+        };
+        let scrubbed_to = if !self.draggable {
+            None
+        } else if response.dragged() || (response.clicked() && clicked.is_none()) {
+            pointer_fraction()
+        } else {
+            None
+        };
         if ui.is_rect_visible(rect) {
             self.paint(ui, rect);
         }
@@ -88,7 +118,11 @@ impl<'a> ProblemTicks<'a> {
         } else {
             response
         };
-        ProblemTicksResponse { response, clicked }
+        ProblemTicksResponse {
+            response,
+            clicked,
+            scrubbed_to,
+        }
     }
 
     /// The index of the tick nearest `y`.

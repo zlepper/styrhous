@@ -1,5 +1,5 @@
 use super::*;
-use crate::log_store::{LOG_PAGE_SIZE, LogPageRow, LogStoreConfig, LogStoreResult};
+use crate::log_store::{LOG_PAGE_SIZE, LogPageRow, LogStoreConfig, LogStoreResult, LogSummary};
 use crate::resource_table::ContainerKind;
 use crate::ui::log_state::apply_store_result;
 use crate::worker::{MockWorker, PodLogStreamTarget};
@@ -8,19 +8,61 @@ use egui_kittest::{Harness, kittest::Queryable};
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::rc::Rc;
+use std::time::{Duration, Instant};
+
+type Shared<T> = Rc<RefCell<T>>;
+
+/// A harness showing `window` in a window of `size`, sharing the window and
+/// the display options with the test.
+fn window_harness(
+    window: PodLogWindowState,
+    display_options: LogDisplayOptions,
+    size: egui::Vec2,
+    log_store: Rc<LogStoreService>,
+) -> (
+    Harness<'static>,
+    Shared<PodLogWindowState>,
+    Shared<LogDisplayOptions>,
+) {
+    let window = Rc::new(RefCell::new(window));
+    let display_options = Rc::new(RefCell::new(display_options));
+    let (window_for_ui, options_for_ui) = (window.clone(), display_options.clone());
+    let store_for_ui = log_store.clone();
+    let mut harness = Harness::builder()
+        .with_size(size)
+        .with_step_dt(0.05)
+        .build_ui(move |ui| {
+            let screen = ui.ctx().content_rect();
+            let mut board = ui.new_child(egui::UiBuilder::new().max_rect(screen));
+            show_log_window(
+                &mut board,
+                &mut window_for_ui.borrow_mut(),
+                &mut options_for_ui.borrow_mut(),
+                &store_for_ui,
+                &mut false,
+            );
+        });
+    components::test_support::setup_egui(&mut harness);
+    harness.set_size(size);
+    harness.run_steps(3);
+    (harness, window, display_options)
+}
+
+const WIDE: egui::Vec2 = egui::vec2(1536.0, 1024.0);
+const NARROW: egui::Vec2 = egui::vec2(1024.0, 1024.0);
+/// An app container of `pod`.
+fn log_target(namespace: &str, pod: &str, container: &str) -> PodLogStreamTarget {
+    PodLogStreamTarget {
+        namespace: namespace.to_owned(),
+        pod_name: pod.to_owned(),
+        container: container.to_owned(),
+        kind: ContainerKind::App,
+    }
+}
 
 fn log_window(lines: &[&str]) -> PodLogWindowState {
-    let mut window = PodLogWindowState::new(
-        1,
-        1,
-        vec![PodLogStreamTarget {
-            namespace: "default".to_owned(),
-            pod_name: "api-0".to_owned(),
-            container: "api".to_owned(),
-            kind: ContainerKind::App,
-        }],
-    )
-    .expect("test log window has one source");
+    let mut window = PodLogWindowState::new(1, 1, vec![log_target("default", "api-0", "api")])
+        .expect("test log window has one source");
     window.total_lines = lines.len();
     window.initial_page_loaded = true;
     window.store_opened = true;
@@ -285,22 +327,11 @@ fn show_wide_test_scroll_area(
         .id_salt("wide-log-scroll-test")
         .auto_shrink([false, false])
         .show_rows(ui, row_height, 1, |ui, _| {
-            ui.add(
-                egui::Label::new(log_line_layout_job(
-                    0,
-                    None,
-                    None,
-                    wide_line,
-                    &[],
-                    &[],
-                    LogDisplayOptions::default(),
-                    &Theme::default(),
-                ))
-                .extend(),
-            );
+            ui.add(egui::Label::new(egui::RichText::new(wide_line).monospace()).extend());
         })
 }
 
+mod boards;
 mod caret_snapshots;
 mod display;
 mod export;
@@ -311,6 +342,8 @@ mod layout;
 mod navigation;
 mod pointer;
 mod rebase;
+mod strip_states;
+mod viewer_parts;
 
 fn add_match_ranges(window: &mut PodLogWindowState, filter_matches: bool) {
     let key = LogPageKey {
@@ -395,7 +428,7 @@ fn snapshot_window_after_horizontal_scroll_with_display_options(
     });
     components::test_support::setup_egui(&mut harness);
     if settle {
-        harness.run();
+        harness.run_steps(6);
     } else {
         // The spinner repaints continuously. A fixed frame is sufficient
         // for this visual regression without asking the harness to settle.
@@ -405,7 +438,7 @@ fn snapshot_window_after_horizontal_scroll_with_display_options(
         harness
             .input_mut()
             .events
-            .push(egui::Event::PointerMoved(egui::pos2(400.0, 100.0)));
+            .push(egui::Event::PointerMoved(egui::pos2(400.0, 400.0)));
         harness.step();
         harness.input_mut().events.push(egui::Event::MouseWheel {
             unit: egui::MouseWheelUnit::Point,

@@ -1,6 +1,8 @@
+use super::summary::LogSummary;
 use crate::ansi::AnsiStyleSpan;
 use std::io::{Read, Write};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 pub(crate) const LOG_PAGE_SIZE: usize = 256;
 
@@ -187,6 +189,11 @@ pub(crate) enum LogStoreResult {
         generation: u64,
         match_row: usize,
         line_index: usize,
+    },
+    /// How busy the log was and where its problems are.
+    Summary {
+        window_id: u64,
+        summary: Arc<LogSummary>,
     },
     Copied {
         window_id: u64,

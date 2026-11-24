@@ -12,7 +12,6 @@ use crate::design::theme::{self, Theme, ThemeExt, ThemeScope, Tone};
 use crate::design::type_scale::{self, TextRole, Weight};
 use crate::design::{elevation, radius, size, space};
 use crate::frames::{raised_frame, show_elevated};
-use crate::search::format_count;
 use crate::tooltip::TooltipExt;
 
 /// The title of a log window (`.lhead .lt`): Bricolage 28/34.
@@ -120,6 +119,8 @@ pub enum SourceState {
     Reconnecting,
     /// Offline: a neutral lamp, the name muted.
     Offline,
+    /// Spooling its history: the accent lamp and the lines received.
+    Spooling,
 }
 
 /// A source pill (`.srcp`): lamp, the source's name and its line count or
@@ -129,6 +130,7 @@ pub struct SourcePill<'a> {
     name: &'a str,
     state: SourceState,
     detail: String,
+    unbuilt: bool,
 }
 
 impl<'a> SourcePill<'a> {
@@ -137,7 +139,8 @@ impl<'a> SourcePill<'a> {
         Self {
             name,
             state: SourceState::Live,
-            detail: format_count(lines),
+            detail: crate::search::format_exact_count(lines),
+            unbuilt: false,
         }
     }
 
@@ -147,6 +150,7 @@ impl<'a> SourcePill<'a> {
             name,
             state: SourceState::Reconnecting,
             detail: "reconnecting".to_owned(),
+            unbuilt: false,
         }
     }
 
@@ -156,7 +160,29 @@ impl<'a> SourcePill<'a> {
             name,
             state: SourceState::Offline,
             detail: "offline".to_owned(),
+            unbuilt: false,
         }
+    }
+
+    /// A source spooling its history, `lines` received so far.
+    pub fn spooling(name: &'a str, lines: usize) -> Self {
+        Self {
+            state: SourceState::Spooling,
+            ..Self::live(name, lines)
+        }
+    }
+
+    /// Replace the pill's detail words ("no data").
+    pub fn detail(mut self, detail: impl Into<String>) -> Self {
+        self.detail = detail.into();
+        self
+    }
+
+    /// Clicking the pill is designed but not built yet: it never acts and
+    /// its tooltip says so ([`crate::not_implemented`]).
+    pub fn not_implemented(mut self) -> Self {
+        self.unbuilt = true;
+        self
     }
 
     fn widths(&self, ui: &Ui) -> (f32, f32) {
@@ -181,13 +207,23 @@ impl<'a> SourcePill<'a> {
     pub fn show(self, ui: &mut Ui) -> Response {
         let theme = ui.tokens();
         let (name_width, _) = self.widths(ui);
-        let (rect, response) =
-            ui.allocate_exact_size(vec2(self.width(ui), size::SOURCE_PILL), Sense::click());
+        let (rect, response) = ui.allocate_exact_size(
+            vec2(self.width(ui), size::SOURCE_PILL),
+            if self.unbuilt {
+                Sense::hover()
+            } else {
+                Sense::click()
+            },
+        );
         let label = format!("{} · {}", self.name, self.detail);
         response.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), &label)
         });
-        let response = response.tooltip("Hide or show this source");
+        let response = if self.unbuilt {
+            crate::not_implemented(response)
+        } else {
+            response.tooltip("Hide or show this source")
+        };
         if !ui.is_rect_visible(rect.expand(size::LAMP_RING + elevation::GLOW_BLUR)) {
             return response;
         }
@@ -204,11 +240,16 @@ impl<'a> SourcePill<'a> {
             SourceState::Offline => {
                 crate::status::paint_status_dot(ui.painter(), &theme, lamp, Tone::Neutral);
             }
+            SourceState::Spooling => {
+                crate::status::paint_status_dot(ui.painter(), &theme, lamp, Tone::Accent);
+            }
         }
         left += size::STATUS_DOT + SOURCE_GAP;
         let name_color = match self.state {
             SourceState::Offline => theme.text.muted,
-            SourceState::Live | SourceState::Reconnecting => theme.text.primary,
+            SourceState::Live | SourceState::Reconnecting | SourceState::Spooling => {
+                theme.text.primary
+            }
         };
         let name = SOURCE_ROLE.galley(ui.ctx(), self.name, name_color, f32::INFINITY);
         let top = center_y - SOURCE_ROLE.line_height() / 2.0;
@@ -364,6 +405,8 @@ impl<'a> VolumeBars<'a> {
 pub struct VolumeStrip<'a> {
     caption: &'a str,
     sources: Vec<SourcePill<'a>>,
+    meta: Option<&'a str>,
+    height: Option<f32>,
     bars: VolumeBars<'a>,
 }
 
@@ -380,8 +423,23 @@ impl<'a> VolumeStrip<'a> {
         Self {
             caption,
             sources: Vec::new(),
+            meta: None,
+            height: None,
             bars,
         }
+    }
+
+    /// Make the strip `height` tall (its natural height at least), the
+    /// extra space below the bars.
+    pub fn height(mut self, height: f32) -> Self {
+        self.height = Some(height);
+        self
+    }
+
+    /// Muted words before the source pills ("7 of 23 matches · UTC").
+    pub fn meta(mut self, meta: &'a str) -> Self {
+        self.meta = Some(meta);
+        self
     }
 
     pub fn source(mut self, source: SourcePill<'a>) -> Self {
@@ -393,7 +451,8 @@ impl<'a> VolumeStrip<'a> {
     pub fn show(self, ui: &mut Ui) -> VolumeStripResponse {
         let theme = ui.tokens();
         let padding = size::VOLUME_STRIP_PADDING;
-        let height = padding.sum().y + size::SOURCE_PILL + STRIP_BARS_GAP + self.bars.height;
+        let height = (padding.sum().y + size::SOURCE_PILL + STRIP_BARS_GAP + self.bars.height)
+            .max(self.height.unwrap_or_default());
         let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
         if ui.is_rect_visible(rect) {
             ui.painter()
@@ -425,9 +484,12 @@ impl<'a> VolumeStrip<'a> {
                 source_clicked = Some(index);
             }
         }
-        let bars_rect = Rect::from_min_max(
+        if let Some(meta) = self.meta {
+            type_scale::META.label(&mut pills, meta, theme.text.muted);
+        }
+        let bars_rect = Rect::from_min_size(
             pos2(content.left(), row.bottom() + STRIP_BARS_GAP),
-            content.max,
+            vec2(content.width(), self.bars.height),
         );
         let mut bars_ui = ui.new_child(UiBuilder::new().max_rect(bars_rect));
         let bars = self.bars.show(&mut bars_ui);
@@ -459,6 +521,21 @@ pub struct LogLine<'a> {
     level: Option<LogLevel>,
     message: Vec<CodeSpan<'a>>,
     current: bool,
+    number_width: f32,
+    time_width: f32,
+    reserve_level: bool,
+    source_width: f32,
+    message_dx: f32,
+    caret: Option<usize>,
+}
+
+/// Where a [`LogLine`] painted itself.
+pub struct LogLineResponse {
+    pub response: Response,
+    /// Where the message's first character is (after any `message_offset`).
+    pub message_left: f32,
+    /// The caret, if the line has one.
+    pub caret: Option<Rect>,
 }
 
 impl<'a> LogLine<'a> {
@@ -470,6 +547,12 @@ impl<'a> LogLine<'a> {
             level: None,
             message: message.into_iter().collect(),
             current: false,
+            number_width: size::LOG_LINE_NUMBER,
+            time_width: 0.0,
+            reserve_level: false,
+            source_width: size::LOG_SOURCE_MIN_WIDTH,
+            message_dx: 0.0,
+            caret: None,
         }
     }
 
@@ -499,14 +582,88 @@ impl<'a> LogLine<'a> {
         self
     }
 
+    /// Make the line number column at least `width` wide, for numbers that
+    /// do not fit [`size::LOG_LINE_NUMBER`].
+    pub fn number_width(mut self, width: f32) -> Self {
+        self.number_width = width.max(size::LOG_LINE_NUMBER);
+        self
+    }
+
+    /// Make the time column at least `width` wide, so lines without a time
+    /// (`time("")`) keep their messages in line with the others.
+    pub fn time_width(mut self, width: f32) -> Self {
+        self.time_width = width;
+        self
+    }
+
+    /// Leave room for the level badge on a line without one.
+    pub fn reserve_level(mut self, reserve: bool) -> Self {
+        self.reserve_level = reserve;
+        self
+    }
+
+    /// Make the source pill at least `width` wide, so the messages of all
+    /// lines start in one column.
+    pub fn source_width(mut self, width: f32) -> Self {
+        self.source_width = width.max(size::LOG_SOURCE_MIN_WIDTH);
+        self
+    }
+
+    /// The message is a fragment of a longer line scrolled `dx` points in.
+    pub fn message_offset(mut self, dx: f32) -> Self {
+        self.message_dx = dx;
+        self
+    }
+
+    /// A caret before character `column` of the message.
+    pub fn caret(mut self, column: usize) -> Self {
+        self.caret = Some(column);
+        self
+    }
+
+    /// The width the line's parts before the message take.
+    pub fn prefix_width(&self, ui: &Ui) -> f32 {
+        let mut width = size::LOG_ROW_PADDING_X;
+        if self.number.is_some() {
+            width += self.number_width + LINE_GAP;
+        }
+        if let Some(time) = self.time {
+            let galley =
+                type_scale::LOG.galley(ui.ctx(), time, Color32::PLACEHOLDER, f32::INFINITY);
+            width += galley.rect.width().max(self.time_width) + LINE_GAP;
+        }
+        if let Some(source) = self.source {
+            width += self.source_pill_width(ui, source.name) + LINE_GAP;
+        }
+        if self.level.is_some() || self.reserve_level {
+            width += size::LEVEL_BADGE + LINE_GAP;
+        }
+        width
+    }
+
+    /// The width a source pill needs to hold `name`.
+    pub fn source_name_width(ui: &Ui, name: &str) -> f32 {
+        let name = type_scale::BADGE.galley(ui.ctx(), name, Color32::PLACEHOLDER, f32::INFINITY);
+        name.rect.width() + 2.0 * size::LOG_SOURCE_PADDING_X
+    }
+
+    fn source_pill_width(&self, ui: &Ui, name: &str) -> f32 {
+        Self::source_name_width(ui, name).max(self.source_width)
+    }
+
     /// Add the line across the available width.
-    pub fn show(self, ui: &mut Ui) -> Response {
+    pub fn show(self, ui: &mut Ui) -> LogLineResponse {
         let theme = ui.tokens();
         let role = type_scale::LOG;
         let (rect, response) =
             ui.allocate_exact_size(vec2(ui.available_width(), size::LOG_ROW), Sense::hover());
+        let message_left = rect.left() + self.prefix_width(ui) + self.message_dx;
         if !ui.is_rect_visible(rect) {
-            return response;
+            return LogLineResponse {
+                response,
+                message_left,
+                caret: None,
+            };
         }
         let tint = if self.current {
             Some(theme.code.line_highlight)
@@ -525,31 +682,27 @@ impl<'a> LogLine<'a> {
         if let Some(number) = self.number {
             let text = number.to_string();
             let galley = role.galley(ui.ctx(), &text, theme.code.gutter, f32::INFINITY);
-            let pos = pos2(
-                left + size::LOG_LINE_NUMBER - galley.rect.width(),
-                rect.top(),
-            );
+            let pos = pos2(left + self.number_width - galley.rect.width(), rect.top());
             type_scale::text_at(ui, id.with("number"), pos, galley, &text, theme.code.gutter);
-            left += size::LOG_LINE_NUMBER + LINE_GAP;
+            left += self.number_width + LINE_GAP;
         }
         if let Some(time) = self.time {
             let galley = role.galley(ui.ctx(), time, theme.code.text_muted, f32::INFINITY);
-            let width = galley.rect.width();
-            type_scale::text_at(
-                ui,
-                id.with("time"),
-                pos2(left, rect.top()),
-                galley,
-                time,
-                theme.code.text_muted,
-            );
+            let width = galley.rect.width().max(self.time_width);
+            if !time.is_empty() {
+                type_scale::text_at(
+                    ui,
+                    id.with("time"),
+                    pos2(left, rect.top()),
+                    galley,
+                    time,
+                    theme.code.text_muted,
+                );
+            }
             left += width + LINE_GAP;
         }
         if let Some(source) = self.source {
-            let name =
-                type_scale::BADGE.galley(ui.ctx(), source.name, theme.text.on_fill, f32::INFINITY);
-            let width = (name.rect.width() + 2.0 * size::LOG_SOURCE_PADDING_X)
-                .max(size::LOG_SOURCE_MIN_WIDTH);
+            let width = self.source_pill_width(ui, source.name);
             let pill = Rect::from_min_size(
                 pos2(left, center_y - size::LOG_PILL / 2.0),
                 vec2(width, size::LOG_PILL),
@@ -575,45 +728,71 @@ impl<'a> LogLine<'a> {
             let label = type_scale::interact_text(ui, badge, id.with("level"), level.word());
             LevelBadge(level).paint(ui, badge, &label);
             left += size::LEVEL_BADGE + LINE_GAP;
+        } else if self.reserve_level {
+            left += size::LEVEL_BADGE + LINE_GAP;
         }
         let style = SpanStyle {
             role,
             match_radius: radius::LOG_MATCH,
         };
-        paint_spans(
+        let caret = paint_spans(
             ui,
             &painter,
             &style,
             &self.message,
-            None,
-            pos2(left, rect.top()),
+            self.caret,
+            pos2(left + self.message_dx, rect.top()),
             id.with("message"),
         );
-        response
+        LogLineResponse {
+            response,
+            message_left,
+            caret,
+        }
     }
 }
 
 /// How a log window's stream is doing, shown as the header's pill.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LogStream {
     /// Following new lines.
     Following,
-    /// Spooling the history before following.
+    /// Spooling the history before following: a neutral pill with a spinner.
     Spooling,
     /// `live` of `total` sources streaming.
     Streaming { live: usize, total: usize },
     /// No stream (the container has no logs, or they cannot be read).
     Unavailable,
+    /// `down` of `total` sources are reconnecting.
+    Reconnecting { down: usize, total: usize },
+    /// Work in progress, in the words given ("Connecting…"): a neutral pill
+    /// with a spinner.
+    Working(String),
+    /// Any other state in its own words and tone ("Stream finished").
+    Custom(String, Tone),
 }
 
 impl LogStream {
+    /// Whether the pill shows a spinner in place of its lamp.
+    pub fn is_busy(&self) -> bool {
+        matches!(self, Self::Spooling | Self::Working(_))
+    }
+
     /// The pill's words and tone.
-    pub fn pill(self) -> (String, Tone) {
+    pub fn pill(&self) -> (String, Tone) {
         match self {
             Self::Following => ("Following".to_owned(), Tone::Success),
-            Self::Spooling => ("Spooling".to_owned(), Tone::Info),
+            Self::Spooling => ("Spooling…".to_owned(), Tone::Neutral),
+            Self::Reconnecting { down, total } if down >= total => {
+                ("Reconnecting…".to_owned(), Tone::Warning)
+            }
+            Self::Reconnecting { down, total } => {
+                (format!("{down} of {total} reconnecting"), Tone::Warning)
+            }
+            Self::Working(words) => (words.clone(), Tone::Neutral),
+            Self::Custom(words, tone) => (words.clone(), *tone),
             // Every source streaming, and at least one.
-            Self::Streaming { live, total } if total > 0 && live >= total => {
+            Self::Streaming { live, total } if *total > 0 && live >= total => {
                 (format!("{live} of {total} streaming"), Tone::Success)
             }
             Self::Streaming { live, total } => {
@@ -655,7 +834,7 @@ impl<'a> LogHeader<'a> {
 
     /// Add the header across the available width, `add_trailing` laying
     /// the window's controls out from its end.
-    pub fn show(self, ui: &mut Ui, add_trailing: impl FnOnce(&mut Ui)) -> Response {
+    pub fn show(self, ui: &mut Ui, add_trailing: impl FnOnce(&mut Ui)) -> LogHeaderResponse {
         let theme = ui.tokens();
         let height = TITLE_ROLE.line_height() + CAPTION_ROLE.line_height();
         let (rect, response) =
@@ -665,6 +844,8 @@ impl<'a> LogHeader<'a> {
                 .max_rect(rect)
                 .layout(Layout::right_to_left(Align::Center)),
         );
+        // The controls stand a header gap apart, as the rest of the row does.
+        trailing.spacing_mut().item_spacing = vec2(HEADER_GAP, 0.0);
         add_trailing(&mut trailing);
         let trailing_left = trailing.min_rect().left().min(rect.right());
 
@@ -678,6 +859,11 @@ impl<'a> LogHeader<'a> {
         kind_badge_on(&mut row, self.kind, fill);
         let (text, tone) = self.stream.pill();
         let pill = Pill::new(&text, tone);
+        let pill = if self.stream.is_busy() {
+            pill.busy()
+        } else {
+            pill
+        };
         let pill_width = pill.size(&row).x;
         let left = row.cursor().left();
         let title_room = (trailing_left - HEADER_GAP - pill_width - HEADER_GAP - left).max(0.0);
@@ -703,9 +889,17 @@ impl<'a> LogHeader<'a> {
             self.caption,
             theme.text.muted,
         );
-        pill.show(&mut row);
-        response
+        let status = pill.show(&mut row);
+        LogHeaderResponse { response, status }
     }
+}
+
+/// What a [`LogHeader`] did this frame.
+pub struct LogHeaderResponse {
+    /// The header.
+    pub response: Response,
+    /// The stream pill, for a tooltip with details.
+    pub status: Response,
 }
 
 /// A floating toolbar (`.ftool`): a pill bar on `surface-raised` with the
@@ -730,6 +924,63 @@ impl FloatingToolbar {
             })
         })
         .inner
+    }
+
+    /// [`Self::show_floating`] with a toolbar `width` points wide whose
+    /// controls are laid out by `layout`: with a right-to-left layout the
+    /// last control added (a search field) takes the room the others leave.
+    pub fn show_floating_sized<R>(
+        ctx: &egui::Context,
+        id_salt: impl std::hash::Hash + std::fmt::Debug,
+        width: f32,
+        layout: Layout,
+        add_contents: impl FnOnce(&mut Ui) -> R,
+    ) -> R {
+        egui::Area::new(egui::Id::new(("floating-toolbar", id_salt)))
+            .order(egui::Order::Foreground)
+            .anchor(
+                egui::Align2::CENTER_BOTTOM,
+                vec2(0.0, -size::FLOATING_TOOLBAR_INSET),
+            )
+            .show(ctx, |ui| {
+                let theme = ui.tokens();
+                let frame = raised_frame(&theme)
+                    .corner_radius(radius::FULL)
+                    .inner_margin(egui::Margin::same(size::FLOATING_TOOLBAR_PADDING as i8));
+                show_elevated(ui, frame, theme.shadow.raised, |ui| {
+                    theme::scope(ui, ThemeScope::FloatingToolbar, |ui| {
+                        let inner = vec2(
+                            width - 2.0 * size::FLOATING_TOOLBAR_PADDING,
+                            size::CONTROL_LG,
+                        );
+                        ui.allocate_ui_with_layout(inner, layout, |ui| {
+                            ui.set_min_size(inner);
+                            ui.spacing_mut().item_spacing = Vec2::new(space::S6, 0.0);
+                            add_contents(ui)
+                        })
+                        .inner
+                    })
+                })
+                .inner
+            })
+            .inner
+    }
+
+    /// Float the toolbar over the bottom of the window, centred and
+    /// [`size::FLOATING_TOOLBAR_INSET`] above it, as wide as its controls.
+    pub fn show_floating<R>(
+        ctx: &egui::Context,
+        id_salt: impl std::hash::Hash + std::fmt::Debug,
+        add_contents: impl FnOnce(&mut Ui) -> R,
+    ) -> R {
+        egui::Area::new(egui::Id::new(("floating-toolbar", id_salt)))
+            .order(egui::Order::Foreground)
+            .anchor(
+                egui::Align2::CENTER_BOTTOM,
+                vec2(0.0, -size::FLOATING_TOOLBAR_INSET),
+            )
+            .show(ctx, |ui| Self::show(ui, add_contents))
+            .inner
     }
 
     /// Float the toolbar centred over the bottom of `window`

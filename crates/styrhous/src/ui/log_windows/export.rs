@@ -255,15 +255,21 @@ pub(super) fn show_export_controls(
     ui: &mut egui::Ui,
     window: &mut PodLogWindowState,
     display_options: &LogDisplayOptions,
+    compact: bool,
 ) {
     // Asking again while a dialog is open is allowed (a dialog that never
     // returns must not lock exporting); only one file is written at a time.
     let theme = ui.tokens();
     let writing = window.export.writing_export_id().is_some();
-    let trigger = Button::secondary("Export…")
-        .accessibility_label("Export logs")
-        .enabled(!writing)
-        .show(ui);
+    let trigger = if compact {
+        Button::icon(icons::Icon::ArrowDownTray, "Export logs")
+            .variant(components::ButtonVariant::Ghost)
+    } else {
+        Button::ghost("Export…").accessibility_label("Export logs")
+    }
+    .size(ButtonSize::Sm)
+    .enabled(!writing)
+    .show(ui);
     let popup_id = egui::Popup::default_response_id(&trigger);
     if trigger.clicked() && !egui::Popup::is_id_open(ui.ctx(), popup_id) {
         // Start from what the window currently shows.

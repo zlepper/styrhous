@@ -497,25 +497,25 @@ snapshot = "crates/styrhous/tests/snapshots/boards/a16_cluster_switcher.png"
 id = "L01"
 title = "Logs — following with search"
 oracle = "docs/design-oracles/harbour/L01.png"
-snapshot = ""
+snapshot = "crates/styrhous/tests/snapshots/boards/l01_logs_following_with_search.png"
 
 [[board]]
 id = "L02"
 title = "Logs — two sources, filtered, reconnecting"
 oracle = "docs/design-oracles/harbour/L02.png"
-snapshot = ""
+snapshot = "crates/styrhous/tests/snapshots/boards/l02_logs_two_sources_filtered_reconnecting.png"
 
 [[board]]
 id = "L03"
 title = "Logs — previous instance unavailable"
 oracle = "docs/design-oracles/harbour/L03.png"
-snapshot = ""
+snapshot = "crates/styrhous/tests/snapshots/boards/l03_logs_previous_instance_unavailable.png"
 
 [[board]]
 id = "L04"
 title = "Logs — spooling, narrow window"
 oracle = "docs/design-oracles/harbour/L04.png"
-snapshot = ""
+snapshot = "crates/styrhous/tests/snapshots/boards/l04_logs_spooling_in_a_narrow_window.png"
 
 [[board]]
 id = "Y01"

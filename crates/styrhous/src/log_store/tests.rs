@@ -6,6 +6,7 @@ use std::time::Duration;
 mod export;
 mod ingestion;
 mod storage;
+mod summary;
 
 fn wait_for(
     service: &LogStoreService,

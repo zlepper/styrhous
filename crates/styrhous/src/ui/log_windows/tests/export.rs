@@ -23,7 +23,7 @@ fn window_harness(window: PodLogWindowState, display_options: LogDisplayOptions)
         (window, display_options),
     );
     components::test_support::setup_egui(&mut harness);
-    harness.run();
+    harness.run_steps(6);
     harness
 }
 
@@ -35,9 +35,9 @@ fn checkbox_state(harness: &WindowHarness, label: &str) -> (bool, bool) {
 
 fn open_popover(harness: &mut WindowHarness) {
     harness.get_by_label("Export logs").click();
-    harness.run();
+    harness.run_steps(6);
     harness.event(egui::Event::PointerGone);
-    harness.run();
+    harness.run_steps(6);
 }
 
 #[test]
@@ -73,7 +73,7 @@ fn export_options_start_from_what_the_window_shows() {
     harness.ui_harness("pod_logs/export_options_start_from_what_the_window_shows/export_options");
 
     harness.key_press(egui::Key::Escape);
-    harness.run();
+    harness.run_steps(6);
     assert!(harness.query_by_label("Export options").is_none());
 
     // A filter that is off, or whose pattern is invalid, cannot be followed.
@@ -112,14 +112,14 @@ fn export_outcomes_are_shown_in_the_window_header() {
     harness.state_mut().0.export.status = Some(LogExportStatus::Failed(
         "Could not write to /mnt/readonly: Read-only file system (os error 30)".to_owned(),
     ));
-    harness.run();
+    harness.run_steps(6);
     harness.ui_harness("pod_logs/export_outcomes_are_shown_in_the_window_header/failed");
 
     harness.state_mut().0.export.status = Some(LogExportStatus::Writing {
         export_id: 1,
         path: PathBuf::from("/tmp/api.log"),
     });
-    harness.run();
+    harness.run_steps(6);
     harness.get_by_label("Exporting to api.log…");
     assert!(
         harness

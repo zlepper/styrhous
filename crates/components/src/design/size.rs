@@ -523,6 +523,8 @@ pub const VOLUME_STRIP_PADDING: egui::Margin = egui::Margin {
     top: 14,
     bottom: 12,
 };
+/// The height of the volume strip in a log window (`.vstrip` at 104).
+pub const VOLUME_STRIP: f32 = 104.0;
 /// Padding of a floating toolbar around its controls (`.ftool`).
 pub const FLOATING_TOOLBAR_PADDING: f32 = 6.0;
 /// How far a floating toolbar floats above the bottom of its window.
@@ -545,6 +547,47 @@ pub const CLUSTER_STRIP_PADDING: egui::Vec2 = egui::vec2(16.0, 12.0);
 pub const CLUSTER_STRIP_NAME: f32 = 180.0;
 /// The latency history of the switcher's readout strip.
 pub const CLUSTER_LATENCY: egui::Vec2 = egui::vec2(140.0, 28.0);
+
+// L01–L04 · log window
+/// Space left and right of a log window's contents.
+pub const LOG_WINDOW_PADDING_X: f32 = 28.0;
+/// Space above a log window's header.
+pub const LOG_WINDOW_PADDING_TOP: f32 = 22.0;
+/// Between a log window's header and its volume strip.
+pub const LOG_HEADER_GAP: f32 = 26.0;
+/// Between a log window's volume strip and its lines.
+pub const LOG_STRIP_GAP: f32 = 16.0;
+/// Space above the first row of a log window's lines panel (`.lpanel`).
+pub const LOG_PANEL_PADDING_TOP: f32 = 12.0;
+/// Where the problem ticks stand from the lines panel's right edge, top and
+/// bottom (`.sticks`).
+pub const LOG_TICKS_INSET: f32 = 12.0;
+/// How far down the panel the empty state of an unavailable log starts.
+pub const LOG_UNAVAILABLE_TOP: f32 = 208.0;
+/// How far down the panel the empty state of a spooling log starts.
+pub const LOG_SPOOLING_TOP: f32 = 228.0;
+/// The search field of a narrow log window's toolbar.
+pub const LOG_SEARCH_NARROW: f32 = 220.0;
+/// How wide a log window's toolbar floats: the search field takes what the
+/// toggles leave, up to the 300 points of its design.
+pub const LOG_TOOLBAR: f32 = 640.0;
+/// The toolbar of an interleaved log, which has one more toggle.
+pub const LOG_TOOLBAR_INTERLEAVED: f32 = 664.0;
+/// The toolbar of a narrow window, which folds the toggles away.
+pub const LOG_TOOLBAR_NARROW: f32 = 500.0;
+/// What the search field needs besides its query and count: the magnifier,
+/// the match and expression buttons and their gaps and margins.
+pub const LOG_SEARCH_CHROME: f32 = 154.0;
+/// Height of an empty volume bar, as a fraction of the chart.
+pub const VOLUME_BAR_EMPTY: f32 = 0.06;
+/// Height of the quietest ordinary volume bar, as a fraction of the chart.
+pub const VOLUME_BAR_QUIET: f32 = 6.0 / 36.0;
+/// Height of the busiest ordinary volume bar, as a fraction of the chart.
+pub const VOLUME_BAR_BUSY: f32 = 22.0 / 36.0;
+/// Where bars holding errors or warnings start, above the ordinary ones.
+pub const VOLUME_BAR_PROBLEM: f32 = 0.5;
+/// How much taller than that the busiest problem bar stands.
+pub const VOLUME_BAR_PROBLEM_SPAN: f32 = 0.4;
 
 #[cfg(test)]
 mod tests {

@@ -1,3 +1,4 @@
+use super::super::summary::{ProblemCache, RecordFacts, SegmentSummary, SummaryCounts};
 use super::super::*;
 use super::io::{read_record_from, write_record};
 use std::fs::File;
@@ -6,6 +7,12 @@ use tempfile::NamedTempFile;
 
 pub(crate) struct LogStore {
     pub(crate) data: Option<NamedTempFile>,
+    /// What the live segment holds, for the volume strip and problem ticks.
+    pub(crate) live_summary: SegmentSummary,
+    /// What the live segment and the history have in common, once rebased.
+    pub(crate) overlap: Option<SummaryCounts>,
+    /// The problems among the matches of the search, found so far.
+    pub(crate) problem_cache: Option<ProblemCache>,
     pub(crate) offsets: Option<NamedTempFile>,
     pub(crate) backfill: Option<BackfillStore>,
     pub(crate) rebase: Option<LogRebase>,
@@ -18,6 +25,7 @@ pub(crate) struct LogStore {
 /// A rebase joins it with the live segment logically, without copying either
 /// log body through memory or rewriting the live spool.
 pub(crate) struct BackfillStore {
+    pub(crate) summary: SegmentSummary,
     pub(crate) data: NamedTempFile,
     pub(crate) offsets: NamedTempFile,
     pub(crate) total_lines: usize,
@@ -74,6 +82,7 @@ pub(crate) struct AppendSummary {
 impl BackfillStore {
     pub(crate) fn new() -> anyhow::Result<Self> {
         Ok(Self {
+            summary: SegmentSummary::default(),
             data: NamedTempFile::new()?,
             offsets: NamedTempFile::new()?,
             total_lines: 0,
@@ -85,8 +94,12 @@ impl BackfillStore {
         let mut data = self.data.reopen()?;
         let mut offsets = self.offsets.reopen()?;
         let mut line_offsets = Vec::with_capacity(records.len());
-        for record in records {
+        for (relative_line, record) in records.into_iter().enumerate() {
             line_offsets.push(write_record(&mut data, &record)?);
+            self.summary.record(
+                self.total_lines + relative_line,
+                &RecordFacts::of_record(&record),
+            );
         }
         data.flush()?;
         offsets.seek(SeekFrom::End(0))?;

@@ -1,8 +1,37 @@
-use crate::log_store::{LOG_PAGE_SIZE, LogPageRow, LogStoreResult};
+use crate::log_store::{LOG_PAGE_SIZE, LogPageRow, LogStoreResult, LogSummary};
 use crate::worker::{PodLogInstance, PodLogStreamTarget};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
-use std::time::Instant;
+use std::sync::Arc;
+
+/// A search deadline that has already passed.
+pub(super) const SEARCH_DUE_NOW: f64 = f64::MIN;
+
+/// A summary asked of the log store.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct SummaryRequest {
+    /// The egui time it was asked at.
+    pub(super) at: f64,
+    pub(super) bars: usize,
+    pub(super) filter: Option<u64>,
+    /// What the log held when it was asked, so a changed log asks again.
+    pub(super) total_lines: usize,
+    pub(super) match_count: usize,
+    pub(super) answered: bool,
+}
+
+impl SummaryRequest {
+    /// Both ask for the same summary of the same log.
+    pub(super) fn same_question(&self, other: &Self) -> bool {
+        (self.bars, self.filter, self.total_lines, self.match_count)
+            == (
+                other.bars,
+                other.filter,
+                other.total_lines,
+                other.match_count,
+            )
+    }
+}
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub(super) struct LogDisplayOptions {
@@ -21,19 +50,6 @@ impl Default for LogDisplayOptions {
     }
 }
 
-pub(super) fn source_label_columns(source: &str) -> usize {
-    source.chars().count() + 4
-}
-
-pub(super) fn source_label_prefix(source: Option<&str>, source_columns: usize) -> String {
-    if source_columns == 0 {
-        return String::new();
-    }
-    let mut prefix = source.map_or_else(String::new, |source| format!("[{source}]  "));
-    prefix.push_str(&" ".repeat(source_columns.saturating_sub(prefix.chars().count())));
-    prefix
-}
-
 #[derive(Debug, Clone)]
 pub(super) struct PodLogWindowState {
     /// Unique stream/store ID. A mode switch replaces it to isolate late results.
@@ -48,9 +64,10 @@ pub(super) struct PodLogWindowState {
     pub(super) show_source_labels: bool,
     /// The compact source labels keyed by the full, stable source identity stored with each row.
     pub(super) source_labels: HashMap<String, String>,
-    pub(super) max_source_label_columns: usize,
     pub(super) source_failures: HashMap<PodLogStreamTarget, String>,
     pub(super) source_reconnects: HashMap<PodLogStreamTarget, String>,
+    /// How many times each source has been reconnecting since it last streamed.
+    pub(super) source_reconnect_attempts: HashMap<PodLogStreamTarget, usize>,
     pub(super) total_lines: usize,
     /// Older records written by the background history request but not yet
     /// merged into the logical log stream.
@@ -74,6 +91,8 @@ pub(super) struct PodLogWindowState {
     /// The first visible logical row, captured by the renderer so a spool
     /// rebase can preserve the rendered record rather than its old row number.
     pub(super) visible_top_display_row: usize,
+    /// How many rows the viewport shows, captured by the renderer.
+    pub(super) visible_rows: usize,
     pub(super) store_opened: bool,
     pub(super) status: PodLogStatus,
     pub(super) close_requested: bool,
@@ -90,6 +109,17 @@ pub(super) struct PodLogWindowState {
     /// Make the next rendered caret visible in the horizontal scroll viewport.
     pub(super) ensure_caret_visible: bool,
     pub(super) copied_text: Option<String>,
+    /// How busy the log was and where its errors are, as last summarised by
+    /// the log store.
+    pub(super) summary: Option<Arc<LogSummary>>,
+    /// The summary asked for and not yet received.
+    pub(super) summary_request: Option<SummaryRequest>,
+    /// Some line of the log states its level, so every line reserves room
+    /// for a level badge.
+    pub(super) level_column: bool,
+    /// The position of each source (by its stable identity) in the window,
+    /// which fixes its colour.
+    pub(super) source_order: HashMap<String, usize>,
     pub(super) export: super::log_windows::LogExportState,
 }
 
@@ -236,7 +266,9 @@ pub(super) struct LogSearchState {
     pub(super) match_count: usize,
     pub(super) search_complete: bool,
     pub(super) scanned_lines: usize,
-    pub(super) search_deadline: Option<Instant>,
+    /// When the debounced search starts, in egui input time (seconds), so
+    /// it follows the frame clock rather than the wall clock.
+    pub(super) search_deadline: Option<f64>,
     pub(super) active_display_row: Option<usize>,
     pub(super) active_match: Option<usize>,
     pub(super) scroll_to_display_row: Option<usize>,
@@ -374,11 +406,11 @@ impl PodLogWindowState {
                 (source, label)
             })
             .collect::<HashMap<_, _>>();
-        let max_source_label_columns = source_labels
-            .values()
-            .map(|label| source_label_columns(label))
-            .max()
-            .unwrap_or_default();
+        let source_order = targets
+            .iter()
+            .enumerate()
+            .map(|(index, target)| (target.display_name(), index))
+            .collect::<HashMap<_, _>>();
         (!targets.is_empty()).then(|| Self {
             id,
             viewport_id: id,
@@ -388,9 +420,9 @@ impl PodLogWindowState {
             targets,
             show_source_labels,
             source_labels,
-            max_source_label_columns,
             source_failures: HashMap::new(),
             source_reconnects: HashMap::new(),
+            source_reconnect_attempts: HashMap::new(),
             total_lines: 0,
             backfill_lines: None,
             live_rows: BTreeMap::new(),
@@ -403,6 +435,7 @@ impl PodLogWindowState {
             pages_needing_refresh: HashSet::new(),
             initial_page_loaded: false,
             visible_top_display_row: 0,
+            visible_rows: 0,
             store_opened: false,
             status: PodLogStatus::Connecting,
             close_requested: false,
@@ -415,24 +448,16 @@ impl PodLogWindowState {
             pending_caret: None,
             ensure_caret_visible: false,
             copied_text: None,
+            summary: None,
+            summary_request: None,
+            level_column: false,
+            source_order,
             export: Default::default(),
         })
     }
 
     pub(super) fn has_multiple_sources(&self) -> bool {
         self.targets.len() > 1
-    }
-
-    pub(super) fn source_prefix_columns(&self) -> usize {
-        if self.show_source_labels {
-            self.max_source_label_columns
-        } else {
-            0
-        }
-    }
-
-    pub(super) fn source_prefix(&self, source: Option<&str>) -> String {
-        source_label_prefix(self.source_label(source), self.source_prefix_columns())
     }
 
     pub(super) fn source_label<'source>(
@@ -605,7 +630,7 @@ pub(super) fn apply_store_result(
                     window.search.match_count = 0;
                     window.search.search_complete = false;
                     window.search.scanned_lines = 0;
-                    window.search.search_deadline = Some(Instant::now());
+                    window.search.search_deadline = Some(SEARCH_DUE_NOW);
                 }
             }
         }
@@ -684,6 +709,16 @@ pub(super) fn apply_store_result(
                 };
                 window.search.active_display_row = Some(display_row);
                 window.search.scroll_to_display_row = Some(display_row);
+            }
+        }
+        LogStoreResult::Summary {
+            window_id, summary, ..
+        } => {
+            if let Some(window) = windows.get_mut(&window_id) {
+                window.summary = Some(summary);
+                if let Some(request) = &mut window.summary_request {
+                    request.answered = true;
+                }
             }
         }
         LogStoreResult::Copied {

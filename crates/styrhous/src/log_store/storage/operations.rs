@@ -1,5 +1,6 @@
 use super::super::export::LogExport;
 use super::super::scan::{SearchScan, scan_records};
+use super::super::summary::{RecordFacts, SegmentSummary, SummaryCounts};
 use super::super::*;
 use super::core::{BackfillStore, LogRebase, LogStore, LogicalReader, SearchState};
 use super::io::{floor_char_boundary, read_u64_at, write_record};
@@ -15,6 +16,9 @@ impl LogStore {
         match (NamedTempFile::new(), NamedTempFile::new()) {
             (Ok(data), Ok(offsets)) => Self {
                 data: Some(data),
+                live_summary: SegmentSummary::default(),
+                overlap: None,
+                problem_cache: None,
                 offsets: Some(offsets),
                 backfill: None,
                 rebase: None,
@@ -24,6 +28,9 @@ impl LogStore {
             },
             (data, offsets) => Self {
                 data: None,
+                live_summary: SegmentSummary::default(),
+                overlap: None,
+                problem_cache: None,
                 offsets: None,
                 backfill: None,
                 rebase: None,
@@ -102,9 +109,13 @@ impl LogStore {
             return Ok(None);
         }
 
+        let history_lines = backfill.total_lines;
         let overlap = self.find_backfill_overlap(backfill)?;
+        let mut shared = SummaryCounts::default();
+        shared.record_all((0..overlap).map(|line| self.read_live_record(line)))?;
+        self.overlap = Some(shared);
         let rebase = LogRebase {
-            history_lines: backfill.total_lines,
+            history_lines,
             live_start: overlap,
         };
         if let Some(search) = &self.search {
@@ -160,6 +171,14 @@ impl LogStore {
         for (relative_line_index, record) in records.iter().enumerate() {
             line_offsets.push(write_record(&mut data, record)?);
             let visible_line = parse_kubernetes_log_line(&record.text);
+            self.live_summary.record(
+                self.total_lines + relative_line_index,
+                &RecordFacts::new(
+                    record.source.as_deref(),
+                    visible_line.timestamp.as_deref(),
+                    &visible_line.line.text,
+                ),
+            );
             let match_ranges = completed_matcher.as_ref().map_or_else(Vec::new, |matcher| {
                 matcher
                     .find_iter(&visible_line.line.text)

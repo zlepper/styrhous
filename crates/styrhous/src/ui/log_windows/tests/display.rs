@@ -1,35 +1,36 @@
 use super::*;
-use crate::ui::log_state::{source_label_columns, source_label_prefix};
+use crate::ansi::AnsiStyleSpan;
 use crate::worker::PodLogStreamTarget;
+use components::LogStream;
 use components::test_support::distinct_role_theme;
 
 #[test]
-fn layout_toggles_metadata_and_ansi_styling_independently() {
+fn ansi_styling_is_rendered_or_left_plain_by_the_colours_toggle() {
     let theme = distinct_role_theme();
     let style = Style::new().fg_color(Some(AnsiColor::Red.into()));
-    let job = log_line_layout_job(
-        4,
-        Some("2026-08-08T15:22:17.143Z"),
-        None,
-        "error",
-        &[AnsiStyleSpan {
-            range: (0, 5),
-            style,
-        }],
-        &[],
-        LogDisplayOptions {
-            show_line_numbers: true,
-            show_timestamps: true,
-            render_ansi: false,
-        },
-        &theme,
-    );
+    let style_spans = [AnsiStyleSpan {
+        range: (0, 5),
+        style,
+    }];
+    let spans = |render_ansi| {
+        message_spans(
+            "error",
+            0..5,
+            &MessageMarks {
+                style_spans: &style_spans,
+                matches: &[],
+                active: None,
+                selection: None,
+                render_ansi,
+            },
+            &theme,
+        )
+    };
 
-    assert_eq!(job.text, "     4  2026-08-08T15:22:17.143Z  error");
-    assert_eq!(
-        job.sections.last().expect("message section").format.color,
-        theme.code.text
-    );
+    let styled = spans(true);
+    assert_eq!(styled.len(), 1);
+    assert_eq!(styled[0].color.resolve(&theme), theme.ansi.red);
+    assert_eq!(spans(false)[0].color.resolve(&theme), theme.code.text);
 }
 
 #[test]
@@ -50,16 +51,18 @@ fn display_toggles_update_the_shared_options() {
         )
     });
     components::test_support::setup_egui(&mut harness);
-    harness.run();
+    // The floating toolbar sizes itself in its first frames.
+    harness.run_steps(3);
 
-    harness.get_by_label("Show log line numbers").click();
-    harness
-        .get_by_label("Show Kubernetes log timestamps")
-        .click();
-    harness.get_by_label("Render ANSI styling").click();
-    harness.get_by_label("Show log source labels").click();
-    harness.get_by_label("Lock to bottom").click();
-    harness.run();
+    for label in [
+        "Show log line numbers",
+        "Show Kubernetes log timestamps",
+        "Render ANSI styling",
+        "Lock to bottom",
+    ] {
+        harness.get_by_label(label).click();
+        harness.run();
+    }
 
     assert_eq!(
         *display_options.borrow(),
@@ -69,7 +72,10 @@ fn display_toggles_update_the_shared_options() {
             render_ansi: false,
         }
     );
-    assert!(window.borrow().show_source_labels);
+    assert!(
+        harness.query_by_label("Show log source labels").is_none(),
+        "a single source has no source column to toggle"
+    );
     assert!(!window.borrow().tail.is_following());
     let pressed = |harness: &Harness<'_>, label: &str| {
         use egui_kittest::kittest::NodeT as _;
@@ -82,7 +88,6 @@ fn display_toggles_update_the_shared_options() {
         ("Show log line numbers", true),
         ("Show Kubernetes log timestamps", true),
         ("Render ANSI styling", false),
-        ("Show log source labels", true),
         ("Lock to bottom", false),
     ] {
         assert_eq!(pressed(&harness, label), expected, "{label}");
@@ -94,7 +99,7 @@ fn display_toggles_update_the_shared_options() {
     harness.run();
     assert!(pressed(&harness, "Lock to bottom"));
 
-    harness.get_by_label("Previous matching line").click();
+    harness.get_by_label("Previous match").click();
     harness.run();
     assert!(
         window.borrow().tail.is_following(),
@@ -103,51 +108,50 @@ fn display_toggles_update_the_shared_options() {
 }
 
 #[test]
-fn source_labels_are_rendered_as_metadata_and_can_be_hidden() {
-    let short_source = "payments/api-0 · server";
-    let long_source = "payments/worker-0 · worker";
-    let source_columns = source_label_columns(long_source);
-    let short_prefix = source_label_prefix(Some(short_source), source_columns);
-    let long_prefix = source_label_prefix(Some(long_source), source_columns);
-    let shown = log_line_layout_job(
-        0,
-        None,
-        Some(&short_prefix),
-        "ready",
-        &[],
-        &[],
-        LogDisplayOptions::default(),
-        &Theme::default(),
-    );
-    let long = log_line_layout_job(
-        1,
-        None,
-        Some(&long_prefix),
-        "accepted",
-        &[],
-        &[],
-        LogDisplayOptions::default(),
-        &Theme::default(),
-    );
-    let hidden = log_line_layout_job(
-        0,
-        None,
-        None,
-        "ready",
-        &[],
-        &[],
-        LogDisplayOptions::default(),
-        &Theme::default(),
-    );
+fn source_columns_line_the_messages_of_all_sources_up() {
+    let sources = vec![
+        PodLogStreamTarget {
+            namespace: "payments".to_owned(),
+            pod_name: "api-0".to_owned(),
+            container: "server".to_owned(),
+            kind: ContainerKind::App,
+        },
+        PodLogStreamTarget {
+            namespace: "payments".to_owned(),
+            pod_name: "a-much-longer-worker-name-0".to_owned(),
+            container: "worker".to_owned(),
+            kind: ContainerKind::App,
+        },
+    ];
+    let window = Rc::new(RefCell::new(
+        PodLogWindowState::new(1, 1, sources).expect("test log window has two sources"),
+    ));
+    let measured = Rc::new(RefCell::new(None));
+    let (window_for_ui, measured_for_ui) = (window.clone(), measured.clone());
+    let mut harness = Harness::builder().build_ui(move |ui| {
+        let layout = RowLayout::new(ui, &window_for_ui.borrow(), LogDisplayOptions::default());
+        let longest = components::LogLine::source_name_width(ui, "a-much-longer-worker-name-0");
+        let shortest = components::LogLine::source_name_width(ui, "api-0");
+        *measured_for_ui.borrow_mut() = Some((layout, longest, shortest));
+    });
+    components::test_support::setup_egui(&mut harness);
+    harness.run_steps(2);
 
-    assert_eq!(shown.text, format!("{short_prefix}ready"));
-    assert_eq!(
-        shown.text.find("ready"),
-        long.text.find("accepted"),
-        "messages begin in the same column after padded source labels"
+    let (layout, longest, shortest) = measured.borrow().expect("the layout was measured");
+    let width = layout
+        .source_width
+        .expect("source labels are shown in an interleaved window");
+    assert!(longest > shortest);
+    assert_eq!(width, longest, "the column fits the longest source name");
+    assert!(
+        (layout.prefix_width(true)
+            - layout.prefix_width(false)
+            - width
+            - components::design::space::S8)
+            .abs()
+            < 0.01,
+        "the source column and its gap sit before every message"
     );
-    assert_eq!(hidden.text, "ready");
-    assert_eq!(source_label_prefix(Some(short_source), 0), "");
 }
 
 #[test]
@@ -186,10 +190,6 @@ fn source_labels_omit_redundant_namespace_and_container_details() {
         same_namespace_window.source_label(Some(&worker.display_name())),
         Some("worker-0")
     );
-    assert_eq!(
-        same_namespace_window.max_source_label_columns,
-        source_label_columns("api-0 · sidecar")
-    );
 
     let operations_api = PodLogStreamTarget {
         namespace: "operations".to_owned(),
@@ -213,10 +213,6 @@ fn source_labels_omit_redundant_namespace_and_container_details() {
     assert_eq!(
         single_source_window.source_label(Some(&worker.display_name())),
         Some("worker-0")
-    );
-    assert_eq!(
-        single_source_window.max_source_label_columns,
-        source_label_columns("worker-0")
     );
 }
 
@@ -275,6 +271,7 @@ fn source_label_visibility_is_per_window() {
     first_harness.run();
     second_harness.run();
 
+    first_harness.run_steps(3);
     first_harness.get_by_label("Show log source labels").click();
     first_harness.run();
 
@@ -417,10 +414,6 @@ fn interleaved_pod_log_viewer_snapshot() {
             }
         })
         .collect(),
-    );
-    assert_eq!(
-        window.max_source_label_columns,
-        source_label_columns("worker-0")
     );
     window
         .source_failures
@@ -645,24 +638,42 @@ fn status_label_compacts_history_spool_progress() {
 }
 
 #[test]
-fn the_status_pill_reads_the_headline_and_keeps_error_detail_for_its_tooltip() {
+fn the_status_pill_follows_the_stream_and_keeps_error_detail_for_its_tooltip() {
+    let mut window = log_window(&[]);
+    assert_eq!(log_stream(&window), LogStream::Following);
+    window.status = PodLogStatus::Failed("connection reset".into());
     assert_eq!(
-        status_headline("Stream failed: connection reset"),
-        "Stream failed"
+        log_stream(&window),
+        LogStream::Custom("Stream failed".into(), Tone::Danger)
     );
+    assert_eq!(status_label(&window), "Stream failed: connection reset");
     assert_eq!(
-        status_headline("Following · backfill 12.3k"),
-        "Following · backfill 12.3k"
+        status_details(&window).as_deref(),
+        Some("Stream failed: connection reset")
+    );
+    window.instance = PodLogInstance::Previous;
+    assert_eq!(
+        log_stream(&window),
+        LogStream::Custom("Previous logs unavailable".into(), Tone::Danger)
+    );
+    window.status = PodLogStatus::Loading;
+    assert_eq!(
+        log_stream(&window),
+        LogStream::Working("Loading previous logs…".into())
     );
 }
 
 #[test]
-fn status_label_and_color_reflect_when_every_source_is_reconnecting() {
+fn the_status_pill_counts_the_reconnecting_sources() {
     let mut window = log_window(&[]);
     window
         .source_reconnects
         .insert(window.targets[0].clone(), "connection reset".into());
 
     assert_eq!(status_label(&window), "Reconnecting…");
-    assert_eq!(status_tone(&window), Tone::Warning);
+    assert_eq!(
+        log_stream(&window),
+        LogStream::Reconnecting { down: 1, total: 1 }
+    );
+    assert_eq!(log_stream(&window).pill().1, Tone::Warning);
 }

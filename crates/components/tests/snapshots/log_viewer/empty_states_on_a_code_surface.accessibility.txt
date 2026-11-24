@@ -1,0 +1,18 @@
+viewport: width=720.0 height=360.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          Label value="No previous logs for api-0" rect=(x=83.7 y=104.0 width=200.7 height=24.0 center_x=184.0 center_y=116.0)
+            TextRun value="No previous logs for api-0" rect=(x=83.7 y=104.0 width=200.7 height=24.0 center_x=184.0 center_y=116.0)
+          Label value="The container hasn’t restarted, so there are none." rect=(x=31.2 y=132.0 width=305.7 height=20.0 center_x=184.0 center_y=142.0)
+            TextRun value="The container hasn’t restarted, so there are none." rect=(x=31.1 y=132.0 width=305.7 height=20.0 center_x=184.0 center_y=142.0)
+          GenericContainer rect=<none>
+            Button name="Show current logs" rect=(x=104.3 y=168.0 width=159.3 height=32.0 center_x=184.0 center_y=184.0)
+        GenericContainer rect=<none>
+          ProgressIndicator name="Loading" rect=(x=526.0 y=68.0 width=20.0 height=20.0 center_x=536.0 center_y=78.0)
+          Label value="Spooling logs…" rect=(x=477.6 y=102.0 width=116.8 height=24.0 center_x=536.0 center_y=114.0)
+            TextRun value="Spooling logs…" rect=(x=477.6 y=102.0 width=116.8 height=24.0 center_x=536.0 center_y=114.0)
+          Label value="18,400 lines received · newest shown when complete" rect=(x=392.7 y=130.0 width=286.6 height=16.0 center_x=536.0 center_y=138.0)
+            TextRun value="18,400 lines received · newest shown when complete" rect=(x=392.7 y=130.0 width=286.6 height=16.0 center_x=536.0 center_y=138.0)

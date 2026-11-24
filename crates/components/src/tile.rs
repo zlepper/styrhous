@@ -55,6 +55,7 @@ pub struct Tile {
     icon: Icon,
     tone: Tone,
     size: TileSize,
+    tinted: bool,
 }
 
 impl Tile {
@@ -64,11 +65,19 @@ impl Tile {
             icon,
             tone: Tone::Accent,
             size: TileSize::Md,
+            tinted: false,
         }
     }
 
     pub fn tone(mut self, tone: Tone) -> Self {
         self.tone = tone;
+        self
+    }
+
+    /// Tint the tile in its tone with a coloured glyph, whatever the tone
+    /// (a danger tile on a code surface).
+    pub fn tinted(mut self) -> Self {
+        self.tinted = true;
         self
     }
 
@@ -89,7 +98,13 @@ impl Tile {
         if !ui.is_rect_visible(rect) {
             return;
         }
-        let (fill, glyph) = tile_colors(&ui.tokens(), self.tone);
+        let theme = ui.tokens();
+        let (fill, glyph) = if self.tinted {
+            let colors = theme.tone(self.tone);
+            (colors.tint, colors.text)
+        } else {
+            tile_colors(&theme, self.tone)
+        };
         ui.painter().rect_filled(rect, self.size.radius(), fill);
         let glyph_rect = Rect::from_center_size(rect.center(), Vec2::splat(self.size.glyph()));
         self.icon.paint(ui, glyph_rect, glyph);

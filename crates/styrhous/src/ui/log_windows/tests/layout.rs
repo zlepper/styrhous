@@ -1,4 +1,5 @@
 use super::*;
+use crate::ansi::AnsiStyleSpan;
 use components::test_support::distinct_role_theme;
 
 #[test]
@@ -23,22 +24,6 @@ fn pointer_position_excludes_metadata_prefix_and_restores_fragment_offset() {
         byte_offset_at_response_x(text, 30.0, 10.0, 30.0, 10.0),
         5,
         "a horizontally clipped fragment restores its omitted character columns",
-    );
-}
-
-#[test]
-fn caret_origin_does_not_repeat_the_prefix_for_the_first_clipped_fragment() {
-    let text = "x".repeat(512);
-    let fragment = visible_text_fragment(&text, 0.0, 50.0, 10.0);
-    let response_rect = egui::Rect::from_min_size(egui::pos2(100.0, 0.0), egui::vec2(50.0, 16.0));
-
-    assert_eq!(fragment.byte_range.start, 0);
-    assert!(fragment.byte_range.end < text.len());
-
-    assert_eq!(
-        rendered_log_text_left(response_rect, &fragment.byte_range, text.len(), 80.0),
-        response_rect.left(),
-        "a clipped fragment already rendered its line-number prefix separately",
     );
 }
 
@@ -95,53 +80,61 @@ fn wide_log_window_exposes_a_horizontal_scroll_range() {
 }
 
 #[test]
-fn layout_highlights_only_matching_segments() {
-    let job = log_line_layout_job(
-        4,
-        None,
-        None,
+fn messages_mark_only_the_matching_segments() {
+    let spans = message_spans(
         "http http",
-        &[],
-        &[(0, 4), (5, 9)],
-        LogDisplayOptions {
-            show_line_numbers: true,
-            ..Default::default()
+        0..9,
+        &MessageMarks {
+            style_spans: &[],
+            matches: &[(0, 4), (5, 9)],
+            active: None,
+            selection: None,
+            render_ansi: true,
         },
         &Theme::default(),
     );
-    assert_eq!(job.sections.len(), 4);
-    assert_eq!(job.text, "     4  http http");
+    let marks: Vec<_> = spans.iter().map(|span| span.mark).collect();
+    assert_eq!(
+        marks,
+        [
+            Some(components::CodeMark::Underline),
+            None,
+            Some(components::CodeMark::Underline)
+        ]
+    );
 }
 
 #[test]
-fn layout_preserves_ansi_style_while_highlighting_matches() {
+fn messages_preserve_ansi_style_while_marking_matches() {
     let theme = distinct_role_theme();
     let style = Style::new()
         .fg_color(Some(AnsiColor::Red.into()))
         .underline();
-    let job = log_line_layout_job(
-        0,
-        None,
-        None,
+    let spans = message_spans(
         "error",
-        &[AnsiStyleSpan {
-            range: (0, 5),
-            style,
-        }],
-        &[(1, 4)],
-        LogDisplayOptions {
-            show_line_numbers: true,
-            ..Default::default()
+        0..5,
+        &MessageMarks {
+            style_spans: &[AnsiStyleSpan {
+                range: (0, 5),
+                style,
+            }],
+            matches: &[(1, 4)],
+            active: None,
+            selection: None,
+            render_ansi: true,
         },
         &theme,
     );
 
-    assert_eq!(job.text, "     0  error");
-    assert_eq!(job.sections.len(), 4);
-    assert_eq!(job.sections[1].format.color, theme.ansi.red);
-    assert!(!job.sections[1].format.underline.is_empty());
-    assert_eq!(job.sections[2].format.background, theme.code.match_bg);
-    assert_eq!(job.sections[2].format.color, theme.ansi.red);
+    assert_eq!(spans.len(), 3);
+    let middle = &spans[1];
+    assert_eq!(middle.text, "rro");
+    assert_eq!(middle.mark, Some(components::CodeMark::Underline));
+    assert_eq!(middle.color.resolve(&theme), theme.ansi.red);
+    let components::CodeColor::Decorated(look) = middle.color else {
+        panic!("an ANSI run carries its own look");
+    };
+    assert!(look.underline);
 }
 
 #[test]

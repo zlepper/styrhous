@@ -115,6 +115,7 @@ pub struct ToggleButton {
     pressed: Option<bool>,
     icon: Option<Icon>,
     lead: Option<Leading>,
+    trailing: Option<Icon>,
     label: Option<String>,
     name: String,
     tooltip: Option<String>,
@@ -129,6 +130,7 @@ impl ToggleButton {
             pressed,
             icon: None,
             lead: None,
+            trailing: None,
             label: None,
             name,
             tooltip: None,
@@ -187,6 +189,13 @@ impl ToggleButton {
     /// Lead the label with a 14 point `icon` (`.ic.s14`, the Follow toggle).
     pub fn leading_small_icon(mut self, icon: Icon) -> Self {
         self.lead = Some(Leading::SmallIcon(icon));
+        self
+    }
+
+    // C20
+    /// End the label with a chevron `icon` (a toggle that opens a menu).
+    pub fn trailing_icon(mut self, icon: Icon) -> Self {
+        self.trailing = Some(icon);
         self
     }
 
@@ -249,7 +258,7 @@ impl ToggleButton {
                 .label
                 .as_deref()
                 .map(|label| Content::label(ui, type_scale::UI_CONTROL, label)),
-            trailing: None,
+            trailing: self.trailing.map(control::Trailing::Icon),
             gap: size::BUTTON_GAP,
         }
     }

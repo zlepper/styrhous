@@ -56,6 +56,11 @@ enum Command {
     Close {
         window_id: u64,
     },
+    Summary {
+        window_id: u64,
+        bars: usize,
+        filter: Option<u64>,
+    },
     Export {
         window_id: u64,
         export_id: u64,
@@ -405,6 +410,17 @@ impl LogStoreService {
         })
     }
 
+    /// Asks for the window's volume and problem summary, its volume in at
+    /// most `bars` bars; the result arrives as `Summary`. With `filter` (a
+    /// search generation) the problems are those of the matching lines.
+    pub(crate) fn summarize(&self, window_id: u64, bars: usize, filter: Option<u64>) -> bool {
+        self.send(Command::Summary {
+            window_id,
+            bars,
+            filter,
+        })
+    }
+
     pub(crate) fn close(&self, window_id: u64) -> bool {
         self.send(Command::Close { window_id })
     }
@@ -477,6 +493,7 @@ mod matching;
 mod runner;
 mod scan;
 mod storage;
+mod summary;
 mod types;
 
 pub(crate) use matching::{log_matcher, searchable_message};
@@ -486,6 +503,7 @@ use runner::{LogStoreResultSender, StoreThread, run_store};
 use storage::AppendSummary;
 #[cfg(test)]
 use storage::LogStore;
+pub(crate) use summary::{LogSummary, Problem, VolumeBucket};
 pub(crate) use types::*;
 
 #[cfg(test)]

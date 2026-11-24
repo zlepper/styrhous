@@ -105,18 +105,32 @@ pub fn counted(count: usize, singular: &str, plural: &str) -> String {
     format!("{} {noun}", format_count(count))
 }
 
+/// A count in full with its thousands grouped: 18,400.
+pub fn format_exact_count(count: usize) -> String {
+    let digits = count.to_string();
+    let mut grouped = String::with_capacity(digits.len() + digits.len() / 3);
+    for (index, digit) in digits.chars().enumerate() {
+        if index > 0 && (digits.len() - index).is_multiple_of(3) {
+            grouped.push(',');
+        }
+        grouped.push(digit);
+    }
+    grouped
+}
+
 /// A count as S04 formats it: exact up to 9,999, then abbreviated (12.4k).
 pub fn format_count(count: usize) -> String {
     if count <= EXACT_COUNT_LIMIT {
-        let digits = count.to_string();
-        let mut grouped = String::with_capacity(digits.len() + 1);
-        for (index, digit) in digits.chars().enumerate() {
-            if index > 0 && (digits.len() - index).is_multiple_of(3) {
-                grouped.push(',');
-            }
-            grouped.push(digit);
-        }
-        grouped
+        format_exact_count(count)
+    } else {
+        format_compact_count(count)
+    }
+}
+
+/// A count abbreviated from 1,000 on: 999, 2.1k, 1.2M.
+pub fn format_compact_count(count: usize) -> String {
+    if count < 1_000 {
+        count.to_string()
     } else if count < 999_950 {
         format!("{:.1}k", count as f64 / 1_000.0)
     } else {
@@ -893,6 +907,9 @@ mod tests {
         assert_eq!(format_count(999_949), "999.9k");
         assert_eq!(format_count(999_950), "1.0M");
         assert_eq!(format_count(2_500_000), "2.5M");
+        assert_eq!(format_compact_count(999), "999");
+        assert_eq!(format_compact_count(2_100), "2.1k");
+        assert_eq!(format_compact_count(999_950), "1.0M");
     }
 
     #[test]

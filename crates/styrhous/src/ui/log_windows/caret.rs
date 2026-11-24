@@ -1,13 +1,14 @@
 use super::*;
+use crate::log_level::parse_log_level;
 
-fn log_row_for_display_row(
+pub(super) fn log_row_for_display_row(
     window: &PodLogWindowState,
     display_row: usize,
 ) -> Option<&crate::log_store::LogPageRow> {
     let page_start = display_row / window.page_size * window.page_size;
     let key = LogPageKey {
         generation: window.search.generation,
-        filter_matches: filter_is_active(window),
+        filter_matches: window.filter_is_active(),
         page_start,
     };
     window
@@ -15,7 +16,7 @@ fn log_row_for_display_row(
         .get(&key)
         .and_then(|page| page.rows.get(display_row - page_start))
         .or_else(|| {
-            (!filter_is_active(window))
+            (!window.filter_is_active())
                 .then(|| window.live_rows.get(&display_row))
                 .flatten()
         })
@@ -299,25 +300,18 @@ pub(super) fn byte_offset_at_character_column(text: &str, character_column: usiz
 
 pub(super) fn caret_horizontal_offset(
     window: &PodLogWindowState,
-    display_options: LogDisplayOptions,
+    layout: &RowLayout,
     horizontal_offset: f32,
     viewport_width: f32,
-    character_width: f32,
 ) -> Option<f32> {
     let focus = window.selection?.focus;
     let row = log_row_for_display_row(window, focus.display_row)?;
-    let source_prefix = window.source_prefix(row.source.as_deref());
-    let prefix_width = log_line_prefix(
-        row.line_index,
-        row.timestamp.as_deref(),
-        (!source_prefix.is_empty()).then_some(source_prefix.as_str()),
-        display_options,
-    )
-    .chars()
-    .count() as f32
-        * character_width;
+    let character_width = layout.character_width;
+    let prefix_width = layout.prefix_width(row.source.is_some() && layout.source_width.is_some());
+    let hidden = hidden_level_bytes(row, parse_log_level(&row.text));
     let caret_x = prefix_width
-        + character_column_at_byte(&row.text, focus.byte_offset) as f32 * character_width;
+        + character_column_at_byte(&row.text, focus.byte_offset).saturating_sub(hidden) as f32
+            * character_width;
     if caret_x < horizontal_offset {
         Some(caret_x)
     } else if caret_x + character_width > horizontal_offset + viewport_width {
@@ -347,6 +341,26 @@ pub(super) fn caret_vertical_offset(
     }
 }
 
+/// Where the caret stands horizontally, `focus` being its place in `text`:
+/// `None` when it is outside the `byte_range` on screen. A caret inside the
+/// `hidden` bytes a level badge replaces is shown at the start of the
+/// message, beside the badge, as it has no place of its own.
+pub(super) fn caret_x(
+    text: &str,
+    byte_range: &std::ops::Range<usize>,
+    hidden: usize,
+    focus: usize,
+    text_left: f32,
+    character_width: f32,
+) -> Option<f32> {
+    let focus = if focus < hidden { hidden } else { focus };
+    if focus < byte_range.start || focus > byte_range.end {
+        return None;
+    }
+    let column = character_column_at_byte(&text[byte_range.clone()], focus - byte_range.start);
+    Some(text_left + column as f32 * character_width)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn paint_log_caret(
     ui: &egui::Ui,
@@ -356,6 +370,7 @@ pub(super) fn paint_log_caret(
     display_row: usize,
     text: &str,
     byte_range: &std::ops::Range<usize>,
+    hidden: usize,
     response_rect: egui::Rect,
     text_left: f32,
     character_width: f32,
@@ -367,16 +382,19 @@ pub(super) fn paint_log_caret(
     let Some(focus) = window.selection.map(|selection| selection.focus) else {
         return;
     };
-    if focus.display_row != display_row
-        || focus.byte_offset < byte_range.start
-        || focus.byte_offset > byte_range.end
-    {
+    if focus.display_row != display_row {
         return;
     }
-    let relative_byte_offset = focus.byte_offset.saturating_sub(byte_range.start);
-    let x = text_left
-        + character_column_at_byte(&text[byte_range.clone()], relative_byte_offset) as f32
-            * character_width;
+    let Some(x) = caret_x(
+        text,
+        byte_range,
+        hidden,
+        focus.byte_offset,
+        text_left,
+        character_width,
+    ) else {
+        return;
+    };
     let cursor_rect = egui::Rect::from_min_max(
         egui::pos2(x, response_rect.top()),
         egui::pos2(x, response_rect.top() + row_height),
@@ -385,19 +403,6 @@ pub(super) fn paint_log_caret(
         [cursor_rect.center_top(), cursor_rect.center_bottom()],
         egui::Stroke::new(2.0, ui.tokens().code.caret),
     );
-}
-
-pub(super) fn rendered_log_text_left(
-    response_rect: egui::Rect,
-    byte_range: &std::ops::Range<usize>,
-    text_len: usize,
-    prefix_width: f32,
-) -> f32 {
-    if *byte_range == (0..text_len) {
-        response_rect.left() + prefix_width
-    } else {
-        response_rect.left()
-    }
 }
 
 pub(super) fn selection_position(
@@ -453,4 +458,38 @@ pub(super) fn byte_offset_at_x(text: &str, x: f32, character_width: f32) -> usiz
     text.char_indices()
         .nth(column)
         .map_or(text.len(), |(byte_offset, _)| byte_offset)
+}
+
+#[cfg(test)]
+mod caret_x_tests {
+    use super::caret_x;
+
+    #[test]
+    fn a_caret_in_a_hidden_level_word_stands_beside_the_badge() {
+        // "INFO server" with "INFO " replaced by a badge: the message is
+        // "server", starting at byte 5 and drawn at x = 100.
+        let (text, shown) = ("INFO server", 5..11);
+        for focus in 0..=5 {
+            assert_eq!(
+                caret_x(text, &shown, 5, focus, 100.0, 8.0),
+                Some(100.0),
+                "byte {focus} is at or before the message"
+            );
+        }
+        assert_eq!(caret_x(text, &shown, 5, 8, 100.0, 8.0), Some(124.0));
+        assert_eq!(caret_x(text, &shown, 5, 11, 100.0, 8.0), Some(148.0));
+    }
+
+    #[test]
+    fn a_caret_outside_the_fragment_on_screen_is_not_shown() {
+        let (text, shown) = ("0123456789", 3..6);
+        assert_eq!(caret_x(text, &shown, 0, 2, 0.0, 8.0), None);
+        assert_eq!(caret_x(text, &shown, 0, 7, 0.0, 8.0), None);
+        assert_eq!(caret_x(text, &shown, 0, 4, 0.0, 8.0), Some(8.0));
+        assert_eq!(
+            caret_x(text, &(7..10), 5, 2, 0.0, 8.0),
+            None,
+            "scrolled past the message start, the caret scrolls away too"
+        );
+    }
 }

@@ -6,74 +6,73 @@ Window state=[focused] rect=<none>
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             GenericContainer rect=<none>
-              Label value="Container start" rect=(x=1180.0 y=27.5 width=80.8 height=16.0 center_x=1220.4 center_y=35.5)
-                TextRun value="Container start" rect=(x=1180.0 y=27.5 width=80.8 height=16.0 center_x=1220.4 center_y=35.5)
               Group name="Log instance" rect=<none>
-                Button name="Current" state=[toggled=True] rect=(x=1274.8 y=21.5 width=69.2 height=28.0 center_x=1309.3 center_y=35.5)
-                Button name="Previous" state=[toggled=False] rect=(x=1345.9 y=21.5 width=73.9 height=28.0 center_x=1382.9 center_y=35.5)
-              Button name="Export logs" rect=(x=1433.8 y=19.5 width=78.2 height=32.0 center_x=1472.9 center_y=35.5)
+                Button name="Current" state=[toggled=True] rect=(x=1352.9 y=40.0 width=69.2 height=28.0 center_x=1387.5 center_y=54.0)
+                Button name="Previous" state=[toggled=False] rect=(x=1424.1 y=40.0 width=73.9 height=28.0 center_x=1461.0 center_y=54.0)
+              Button name="Container start" rect=(x=1230.4 y=40.0 width=106.6 height=28.0 center_x=1283.7 center_y=54.0)
+              Button name="Export logs" rect=(x=1147.9 y=40.0 width=68.5 height=28.0 center_x=1182.1 center_y=54.0)
             GenericContainer rect=<none>
-              Label value="api-0" rect=(x=64.0 y=17.5 width=34.0 height=20.0 center_x=81.0 center_y=27.5)
-                TextRun value="api-0" rect=(x=64.0 y=17.5 width=34.0 height=20.0 center_x=81.0 center_y=27.5)
-              Label value="Pod logs · container api" rect=(x=64.0 y=37.5 width=124.8 height=16.0 center_x=126.4 center_y=45.5)
-                TextRun value="Pod logs · container api" rect=(x=64.0 y=37.5 width=124.8 height=16.0 center_x=126.4 center_y=45.5)
-              Label value="Following" rect=(x=200.8 y=24.5 width=96.0 height=22.0 center_x=248.8 center_y=35.5)
-                TextRun value="Following" rect=(x=229.5 y=27.5 width=52.6 height=16.0 center_x=255.8 center_y=35.5)
+              Label value="Pod" rect=(x=36.0 y=43.0 width=37.3 height=22.0 center_x=54.7 center_y=54.0)
+                TextRun value="Pod" rect=(x=45.0 y=46.0 width=19.3 height=16.0 center_x=54.7 center_y=54.0)
+              Label value="api-0" rect=(x=87.3 y=30.0 width=69.3 height=34.0 center_x=122.0 center_y=47.0)
+                TextRun value="api-0" rect=(x=87.3 y=30.0 width=69.3 height=34.0 center_x=122.0 center_y=47.0)
+              Label value="container api · default · 3 lines" rect=(x=87.3 y=64.0 width=197.4 height=14.0 center_x=186.0 center_y=71.0)
+                TextRun value="CONTAINER API · DEFAULT · 3 LINES" rect=(x=87.3 y=64.0 width=196.6 height=14.0 center_x=185.6 center_y=71.0)
+              Label value="Following" rect=(x=298.8 y=43.0 width=84.6 height=22.0 center_x=341.0 center_y=54.0)
+                TextRun value="Following" rect=(x=321.8 y=46.0 width=52.6 height=16.0 center_x=348.0 center_y=54.0)
+            Label value="Volume" rect=(x=54.0 y=122.0 width=45.4 height=16.0 center_x=76.7 center_y=130.0)
+              TextRun value="VOLUME" rect=(x=54.0 y=122.0 width=44.3 height=16.0 center_x=76.1 center_y=130.0)
             GenericContainer rect=<none>
-              Group name="Log navigation" rect=<none>
-                Button name="Previous displayed line" rect=(x=1299.8 y=73.5 width=28.0 height=28.0 center_x=1313.8 center_y=87.5)
-                Button name="Previous matching line" rect=(x=1329.8 y=73.5 width=28.0 height=28.0 center_x=1343.8 center_y=87.5)
-                Button name="Next matching line" rect=(x=1359.8 y=73.5 width=28.0 height=28.0 center_x=1373.8 center_y=87.5)
-                Button name="Next displayed line" rect=(x=1389.8 y=73.5 width=28.0 height=28.0 center_x=1403.8 center_y=87.5)
-              Button name="Lock to bottom" state=[toggled=True] rect=(x=1427.8 y=71.5 width=84.2 height=32.0 center_x=1469.9 center_y=87.5)
+              Button name="api-0 · 3" rect=(x=1406.8 y=118.0 width=75.2 height=24.0 center_x=1444.4 center_y=130.0)
+              Label value="UTC" rect=(x=1375.2 y=122.0 width=23.7 height=16.0 center_x=1387.0 center_y=130.0)
+                TextRun value="UTC" rect=(x=1375.2 y=122.0 width=23.7 height=16.0 center_x=1387.0 center_y=130.0)
             GenericContainer rect=<none>
-              GenericContainer rect=<none>
-                TextInput name="Search logs" value="server" rect=(x=24.0 y=71.5 width=183.6 height=32.0 center_x=115.8 center_y=87.5)
-                  TextRun value="server" rect=(x=60.0 y=79.5 width=35.7 height=20.0 center_x=77.8 center_y=89.5)
-              Label value="0 results" rect=(x=213.6 y=77.5 width=59.4 height=20.0 center_x=243.3 center_y=87.5)
-                TextRun value="0 results" rect=(x=213.6 y=77.5 width=59.4 height=20.0 center_x=243.3 center_y=87.5)
-              Button name="Clear search" rect=(x=279.0 y=75.5 width=24.0 height=24.0 center_x=291.0 center_y=87.5)
-              CheckBox name="Regular expression" state=[toggled=False] rect=(x=316.0 y=75.5 width=24.0 height=24.0 center_x=328.0 center_y=87.5)
-              Button name="Filter to matching lines" state=[toggled=True] rect=(x=352.0 y=71.5 width=124.2 height=32.0 center_x=414.1 center_y=87.5)
-              Group name="View options" rect=<none>
-                Button name="Show log line numbers" state=[toggled=False] rect=(x=495.2 y=73.5 width=28.0 height=28.0 center_x=509.2 center_y=87.5)
-                Button name="Show Kubernetes log timestamps" state=[toggled=True] rect=(x=525.2 y=73.5 width=28.0 height=28.0 center_x=539.2 center_y=87.5)
-                Button name="Render ANSI styling" state=[toggled=True] rect=(x=555.2 y=73.5 width=28.0 height=28.0 center_x=569.2 center_y=87.5)
-                Button name="Show log source labels" state=[toggled=False] rect=(x=585.2 y=73.5 width=28.0 height=28.0 center_x=599.2 center_y=87.5)
-        GenericContainer rect=<none>
-          GenericContainer rect=<none>
+              Unknown name="Log volume" rect=(x=54.0 y=156.0 width=0.0 height=36.0 center_x=54.0 center_y=174.0)
             GenericContainer rect=<none>
-              Label value="UTC" rect=(x=1488.3 y=995.5 width=23.7 height=16.0 center_x=1500.2 center_y=1003.5)
-                TextRun value="UTC" rect=(x=1488.3 y=995.5 width=23.7 height=16.0 center_x=1500.2 center_y=1003.5)
-            GenericContainer rect=<none>
-              Label value="3 lines" rect=(x=24.0 y=995.5 width=34.7 height=16.0 center_x=41.4 center_y=1003.5)
-                TextRun value="3 lines" rect=(x=24.0 y=995.5 width=34.7 height=16.0 center_x=41.4 center_y=1003.5)
-              Label value="0 matches" rect=(x=74.7 y=995.5 width=56.6 height=16.0 center_x=103.0 center_y=1003.5)
-                TextRun value="0 matches" rect=(x=74.7 y=995.5 width=56.6 height=16.0 center_x=103.0 center_y=1003.5)
-        GenericContainer rect=<none>
-          GenericContainer rect=<none>
-            Unknown name="Pod log text" rect=(x=24.0 y=128.0 width=1488.0 height=845.0 center_x=768.0 center_y=550.5)
-            GenericContainer rect=<none>
+              Unknown name="Pod log text" rect=(x=36.0 y=236.0 width=1464.0 height=684.0 center_x=768.0 center_y=578.0)
               GenericContainer rect=<none>
                 GenericContainer rect=<none>
-            ScrollBar rect=(x=24.0 y=973.0 width=1488.0 height=6.0 center_x=768.0 center_y=976.0)
-            ScrollBar rect=(x=1512.0 y=128.0 width=6.0 height=845.0 center_x=1515.0 center_y=550.5)
-  Unknown rect=(x=1212.0 y=55.5 width=300.0 height=217.0 center_x=1362.0 center_y=164.0)
+                  GenericContainer rect=<none>
+              ScrollBar rect=(x=36.0 y=910.0 width=1464.0 height=10.0 center_x=768.0 center_y=915.0)
+              ScrollBar rect=(x=1490.0 y=236.0 width=10.0 height=684.0 center_x=1495.0 center_y=578.0)
+              GenericContainer rect=<none>
+                Label value="Showing 0 matching lines of 3" rect=(x=76.0 y=247.0 width=162.0 height=16.0 center_x=157.0 center_y=255.0)
+                  TextRun value="Showing 0 matching lines of 3" rect=(x=76.0 y=247.0 width=162.0 height=16.0 center_x=157.0 center_y=255.0)
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        Button name="Lock to bottom" state=[toggled=True] rect=(x=986.8 y=962.0 width=82.2 height=32.0 center_x=1027.9 center_y=978.0)
+        Button name="Render ANSI styling" state=[toggled=True] rect=(x=911.5 y=962.0 width=69.3 height=32.0 center_x=946.2 center_y=978.0)
+        Button name="Show Kubernetes log timestamps" state=[toggled=True] rect=(x=852.8 y=962.0 width=52.7 height=32.0 center_x=879.2 center_y=978.0)
+        Button name="Show log line numbers" state=[toggled=False] rect=(x=777.7 y=962.0 width=69.2 height=32.0 center_x=812.2 center_y=978.0)
+        Button name="Filter to matching lines" state=[toggled=True] rect=(x=666.8 y=962.0 width=104.9 height=32.0 center_x=719.2 center_y=978.0)
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            TextInput name="Search logs" value="server" rect=(x=414.4 y=960.0 width=63.5 height=36.0 center_x=446.2 center_y=978.0)
+              TextRun value="server" rect=(x=450.4 y=970.0 width=35.7 height=20.0 center_x=468.3 center_y=980.0)
+          Label value="0 results" rect=(x=486.0 y=970.0 width=64.8 height=16.0 center_x=518.4 center_y=978.0)
+            TextRun value="0 results" rect=(x=486.0 y=970.0 width=64.8 height=16.0 center_x=518.4 center_y=978.0)
+          Button name="Previous match" state=[disabled] rect=(x=558.8 y=966.0 width=24.0 height=24.0 center_x=570.8 center_y=978.0)
+          Button name="Next match" state=[disabled] rect=(x=590.8 y=966.0 width=24.0 height=24.0 center_x=602.8 center_y=978.0)
+          CheckBox name="Regular expression" state=[toggled=False] rect=(x=622.8 y=966.0 width=24.0 height=24.0 center_x=634.8 center_y=978.0)
+  Unknown rect=(x=916.4 y=72.0 width=300.0 height=217.0 center_x=1066.4 center_y=180.5)
     GenericContainer rect=<none>
       GenericContainer rect=<none>
         GenericContainer rect=<none>
-          Label value="Export options" rect=(x=1228.0 y=72.0 width=268.0 height=17.0 center_x=1362.0 center_y=80.5)
-            TextRun value="Export options" rect=(x=1228.0 y=72.0 width=93.5 height=17.0 center_x=1274.8 center_y=80.5)
-          Label value="Saves the loaded lines from disk." rect=(x=1228.0 y=96.0 width=268.0 height=14.0 center_x=1362.0 center_y=103.0)
-            TextRun value="Saves the loaded lines from disk." rect=(x=1228.0 y=96.0 width=173.5 height=14.0 center_x=1314.8 center_y=103.0)
+          Label value="Export options" rect=(x=932.0 y=88.0 width=268.0 height=17.0 center_x=1066.0 center_y=96.5)
+            TextRun value="Export options" rect=(x=932.0 y=88.0 width=93.5 height=17.0 center_x=978.8 center_y=96.5)
+          Label value="Saves the loaded lines from disk." rect=(x=932.0 y=112.0 width=268.0 height=14.0 center_x=1066.0 center_y=119.0)
+            TextRun value="Saves the loaded lines from disk." rect=(x=932.0 y=112.0 width=173.5 height=14.0 center_x=1018.8 center_y=119.0)
           GenericContainer rect=<none>
-            CheckBox name="Only lines matching the filter" state=[toggled=True] rect=(x=1228.0 y=125.0 width=268.0 height=20.0 center_x=1362.0 center_y=135.0)
-              TextRun value="Only lines matching the filter" rect=(x=1252.0 y=125.0 width=167.2 height=20.0 center_x=1335.6 center_y=135.0)
-          CheckBox name="Include source labels" state=[toggled=False] rect=(x=1228.0 y=148.0 width=268.0 height=20.0 center_x=1362.0 center_y=158.0)
-            TextRun value="Include source labels" rect=(x=1252.0 y=148.0 width=121.6 height=20.0 center_x=1312.8 center_y=158.0)
-          CheckBox name="Include timestamps" state=[toggled=True] rect=(x=1228.0 y=171.0 width=268.0 height=20.0 center_x=1362.0 center_y=181.0)
-            TextRun value="Include timestamps" rect=(x=1252.0 y=171.0 width=114.3 height=20.0 center_x=1309.2 center_y=181.0)
-          CheckBox name="Keep ANSI colour codes" state=[toggled=False] rect=(x=1228.0 y=194.0 width=268.0 height=20.0 center_x=1362.0 center_y=204.0)
-            TextRun value="Keep ANSI colour codes" rect=(x=1252.0 y=194.0 width=141.7 height=20.0 center_x=1322.8 center_y=204.0)
+            CheckBox name="Only lines matching the filter" state=[toggled=True] rect=(x=932.0 y=141.0 width=268.0 height=20.0 center_x=1066.0 center_y=151.0)
+              TextRun value="Only lines matching the filter" rect=(x=956.0 y=141.0 width=167.2 height=20.0 center_x=1039.6 center_y=151.0)
+          CheckBox name="Include source labels" state=[toggled=False] rect=(x=932.0 y=164.0 width=268.0 height=20.0 center_x=1066.0 center_y=174.0)
+            TextRun value="Include source labels" rect=(x=956.0 y=164.0 width=121.6 height=20.0 center_x=1016.8 center_y=174.0)
+          CheckBox name="Include timestamps" state=[toggled=True] rect=(x=932.0 y=187.0 width=268.0 height=20.0 center_x=1066.0 center_y=197.0)
+            TextRun value="Include timestamps" rect=(x=956.0 y=187.0 width=114.3 height=20.0 center_x=1013.2 center_y=197.0)
+          CheckBox name="Keep ANSI colour codes" state=[toggled=False] rect=(x=932.0 y=210.0 width=268.0 height=20.0 center_x=1066.0 center_y=220.0)
+            TextRun value="Keep ANSI colour codes" rect=(x=956.0 y=210.0 width=141.7 height=20.0 center_x=1026.8 center_y=220.0)
           GenericContainer rect=<none>
-            Button name="Save…" rect=(x=1437.5 y=229.0 width=58.5 height=28.0 center_x=1466.8 center_y=243.0)
+            Button name="Save…" rect=(x=1141.5 y=245.0 width=58.5 height=28.0 center_x=1170.8 center_y=259.0)
+  GenericContainer rect=<none>
+    Button name="0 problems" rect=(x=1482.0 y=236.0 width=6.0 height=672.0 center_x=1485.0 center_y=572.0)

@@ -1,9 +1,11 @@
+use super::log_state::{SEARCH_DUE_NOW, SummaryRequest};
 use super::state::{
     LogDisplayOptions, LogPageKey, LogTextPosition, LogTextSelection, PendingLogCaret,
     PodLogStatus, PodLogWindowState, UiState,
 };
-use crate::ansi::AnsiStyleSpan;
+
 use crate::log_store::LogStoreService;
+use crate::log_store::{LogPageRow, Problem};
 use crate::worker::{
     PodLogInstance, PodLogSourceFailed, PodLogSourceReconnecting, PodLogSourceRecovered,
     PodLogStreamEnded, PodLogStreamFailed, PodLogStreamStarted, StartPodLogStream,
@@ -14,12 +16,9 @@ use components::design::size;
 use components::design::theme::{self, AnsiRoles, Theme, ThemeExt, ThemeScope, Tone};
 use components::design::{space, type_scale};
 use components::{
-    ButtonGroup, SearchField, SearchStatus, Segmented, StatusBar, ToggleButton, Toolbar,
-    WindowHeader, icons, status_number, status_text, toolbar_divider,
+    FloatingToolbar, LogLevel, SearchField, SearchStatus, Segmented, ToggleButton, icons,
 };
-use std::time::{Duration, Instant};
 
-const LOG_FONT_SIZE: f32 = 14.0;
 const HORIZONTAL_OVERSCAN_POINTS: f32 = 120.0;
 /// Scroll offsets are rasterized, so use one logical point when comparing the
 /// rendered offset with the calculated end position.
@@ -45,6 +44,7 @@ impl WorkerResult for PodLogStreamEnded {
         {
             window.status = PodLogStatus::Finished;
             window.source_reconnects.clear();
+            window.source_reconnect_attempts.clear();
         }
     }
 }
@@ -54,6 +54,7 @@ impl WorkerResult for PodLogStreamFailed {
         if let Some(window) = ui.log_windows.get_mut(&self.log_window_id) {
             window.status = PodLogStatus::Failed(self.error);
             window.source_reconnects.clear();
+            window.source_reconnect_attempts.clear();
         }
     }
 }
@@ -62,6 +63,7 @@ impl WorkerResult for PodLogSourceFailed {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         if let Some(window) = ui.log_windows.get_mut(&self.log_window_id) {
             window.source_reconnects.remove(&self.target);
+            window.source_reconnect_attempts.remove(&self.target);
             window
                 .source_failures
                 .entry(self.target)
@@ -79,6 +81,10 @@ impl WorkerResult for PodLogSourceFailed {
 impl WorkerResult for PodLogSourceReconnecting {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         if let Some(window) = ui.log_windows.get_mut(&self.log_window_id) {
+            *window
+                .source_reconnect_attempts
+                .entry(self.target.clone())
+                .or_default() += 1;
             window.source_reconnects.insert(self.target, self.error);
         }
     }
@@ -87,6 +93,7 @@ impl WorkerResult for PodLogSourceReconnecting {
 impl WorkerResult for PodLogSourceRecovered {
     fn apply(self, ui: &mut UiState, _commands: &mut Vec<WorkerCommandBox>) {
         if let Some(window) = ui.log_windows.get_mut(&self.log_window_id) {
+            window.source_reconnect_attempts.remove(&self.target);
             window.source_reconnects.remove(&self.target);
         }
     }
@@ -218,7 +225,7 @@ impl UiState {
         replacement.search.regex_mode = old.search.regex_mode;
         replacement.search.filter_matches = old.search.filter_matches;
         if !replacement.search.query.is_empty() {
-            replacement.search.search_deadline = Some(Instant::now());
+            replacement.search.search_deadline = Some(SEARCH_DUE_NOW);
             replacement.search.search_complete = false;
         }
 
@@ -250,10 +257,13 @@ pub(super) fn show_log_window(
 
 mod caret;
 mod export;
+mod header;
 mod layout;
 mod navigation;
+mod rows;
 #[path = "log_windows/search.rs"]
 mod search_controls;
+mod strip;
 mod viewer;
 
 use caret::*;
@@ -261,9 +271,12 @@ use caret::*;
 pub(super) use export::LogExportStatus;
 use export::show_export_controls;
 pub(super) use export::{LogExportNotification, LogExportState};
+use header::*;
 use layout::*;
 use navigation::*;
+use rows::*;
 use search_controls::*;
+use strip::*;
 use viewer::*;
 
 #[cfg(test)]

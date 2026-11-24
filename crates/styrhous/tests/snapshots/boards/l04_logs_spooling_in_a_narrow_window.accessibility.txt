@@ -1,0 +1,49 @@
+viewport: width=1024.0 height=1024.0 points, pixels_per_point=1.0
+Window state=[focused] rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            GenericContainer rect=<none>
+              GenericContainer rect=<none>
+                Group name="Log instance" rect=<none>
+                  Button name="Current" state=[toggled=True] rect=(x=848.9 y=32.0 width=69.2 height=28.0 center_x=883.5 center_y=46.0)
+                  Button name="Previous" state=[toggled=False] rect=(x=920.1 y=32.0 width=73.9 height=28.0 center_x=957.0 center_y=46.0)
+                Button name="Export logs" rect=(x=804.9 y=32.0 width=28.0 height=28.0 center_x=818.9 center_y=46.0)
+              GenericContainer rect=<none>
+                Label value="Pod" rect=(x=28.0 y=35.0 width=37.3 height=22.0 center_x=46.7 center_y=46.0)
+                  TextRun value="Pod" rect=(x=37.0 y=38.0 width=19.3 height=16.0 center_x=46.7 center_y=46.0)
+                Label value="kube-controller-manager-kind-control-plane" rect=(x=79.3 y=22.0 width=596.9 height=34.0 center_x=377.8 center_y=39.0)
+                  TextRun value="kube-controller-manager-kind-control-plane" rect=(x=79.3 y=22.0 width=596.9 height=34.0 center_x=377.8 center_y=39.0)
+                Label value="container kube-controller-manager · kube-system" rect=(x=79.3 y=56.0 width=317.5 height=14.0 center_x=238.0 center_y=63.0)
+                  TextRun value="CONTAINER KUBE-CONTROLLER-MANAGER · KUBE-SYSTEM" rect=(x=79.3 y=56.0 width=316.6 height=14.0 center_x=237.6 center_y=63.0)
+                Label value="Spooling…" rect=(x=690.2 y=35.0 width=92.2 height=22.0 center_x=736.3 center_y=46.0)
+                  TextRun value="Spooling…" rect=(x=717.2 y=38.0 width=56.2 height=16.0 center_x=745.3 center_y=46.0)
+              Label value="Volume · spooling" rect=(x=46.0 y=114.0 width=115.1 height=16.0 center_x=103.6 center_y=122.0)
+                TextRun value="VOLUME · SPOOLING" rect=(x=46.0 y=114.0 width=114.0 height=16.0 center_x=103.0 center_y=122.0)
+              GenericContainer rect=<none>
+                Button name="kube-controller-manager-kind-control-plane · 18,400" rect=(x=658.8 y=110.0 width=319.2 height=24.0 center_x=818.4 center_y=122.0)
+              GenericContainer rect=<none>
+                Unknown name="Log volume" rect=(x=46.0 y=148.0 width=637.0 height=36.0 center_x=364.5 center_y=166.0)
+              GenericContainer rect=<none>
+                ProgressIndicator name="Loading" rect=(x=502.0 y=456.0 width=20.0 height=20.0 center_x=512.0 center_y=466.0)
+                Label value="Spooling logs…" rect=(x=453.6 y=490.0 width=116.8 height=24.0 center_x=512.0 center_y=502.0)
+                  TextRun value="Spooling logs…" rect=(x=453.6 y=490.0 width=116.8 height=24.0 center_x=512.0 center_y=502.0)
+                Label value="18,400 lines received · newest shown when complete" rect=(x=368.7 y=518.0 width=286.6 height=16.0 center_x=512.0 center_y=526.0)
+                  TextRun value="18,400 lines received · newest shown when complete" rect=(x=368.7 y=518.0 width=286.6 height=16.0 center_x=512.0 center_y=526.0)
+                GenericContainer rect=<none>
+                  GenericContainer rect=<none>
+                    GenericContainer rect=<none>
+  GenericContainer rect=<none>
+    GenericContainer rect=<none>
+      GenericContainer rect=<none>
+        GenericContainer rect=<none>
+          GenericContainer rect=<none>
+            TextInput name="Search logs" value="" rect=(x=268.0 y=960.0 width=110.0 height=36.0 center_x=323.0 center_y=978.0)
+              TextRun value="" rect=(x=304.0 y=970.0 width=0.0 height=20.0 center_x=304.0 center_y=980.0)
+          Button name="Previous match" state=[disabled] rect=(x=386.0 y=966.0 width=24.0 height=24.0 center_x=398.0 center_y=978.0)
+          Button name="Next match" state=[disabled] rect=(x=418.0 y=966.0 width=24.0 height=24.0 center_x=430.0 center_y=978.0)
+          CheckBox name="Regular expression" state=[toggled=False] rect=(x=450.0 y=966.0 width=24.0 height=24.0 center_x=462.0 center_y=978.0)
+        Button name="View options" state=[toggled=False] rect=(x=494.0 y=962.0 width=141.0 height=32.0 center_x=564.5 center_y=978.0)
+        Button name="Lock to bottom" state=[toggled=True] rect=(x=641.0 y=962.0 width=82.2 height=32.0 center_x=682.0 center_y=978.0)

@@ -16,6 +16,7 @@ use egui::{
 use crate::design::theme::{Theme, ThemeExt, Tone};
 use crate::design::type_scale::{self, TextRole};
 use crate::design::{radius, size, space};
+use crate::loading::Spinner;
 use crate::status::{lamp_rect, paint_status_dot};
 use crate::tooltip::TooltipExt;
 
@@ -27,6 +28,8 @@ pub(crate) struct Capsule {
     pub(crate) fill: Color32,
     pub(crate) centred: bool,
     pub(crate) dot: Option<Tone>,
+    /// A small spinner leads instead of a lamp (work in progress).
+    pub(crate) spinner: bool,
     pub(crate) text: Arc<Galley>,
 }
 
@@ -40,12 +43,16 @@ impl Capsule {
             fill,
             centred: false,
             dot: None,
+            spinner: false,
             text,
         }
     }
 
     /// The width of the lamp and its gap before the text, if any.
     fn dot_width(&self) -> f32 {
+        if self.spinner {
+            return size::SPINNER_SM + size::STATUS_DOT_GAP;
+        }
         self.dot
             .map_or(0.0, |_| size::STATUS_DOT + size::STATUS_DOT_GAP)
     }
@@ -96,7 +103,13 @@ impl Capsule {
         } else {
             rect.left() + self.padding_x
         };
-        if let Some(tone) = self.dot {
+        if self.spinner {
+            let lead = Rect::from_center_size(
+                pos2(left + size::SPINNER_SM / 2.0, rect.center().y),
+                Vec2::splat(size::SPINNER_SM),
+            );
+            Spinner::new().size(size::SPINNER_SM).paint(ui, lead);
+        } else if let Some(tone) = self.dot {
             paint_status_dot(
                 painter,
                 &ui.tokens(),
@@ -132,6 +145,7 @@ pub struct Pill<'a> {
     text: &'a str,
     tone: Tone,
     dot: bool,
+    busy: bool,
     min_width: f32,
 }
 
@@ -142,8 +156,16 @@ impl<'a> Pill<'a> {
             text,
             tone,
             dot: true,
+            busy: false,
             min_width: 0.0,
         }
+    }
+
+    /// Show a small spinner in place of the lamp: the state is work in
+    /// progress ("Spooling…").
+    pub fn busy(mut self) -> Self {
+        self.busy = true;
+        self
     }
 
     /// Leave out the lamp.
@@ -172,6 +194,7 @@ impl<'a> Pill<'a> {
             // A live pill wider than its words keeps them centred.
             centred: self.min_width > 0.0,
             dot: self.dot.then_some(self.tone),
+            spinner: self.busy,
             ..Capsule::pill(
                 colors.tint,
                 galley(ui, type_scale::PILL, self.text, colors.text),
@@ -294,6 +317,7 @@ impl CountBadge {
             fill,
             centred: true,
             dot: None,
+            spinner: false,
             text: galley(ui, type_scale::COUNT, &self.text(), color),
         }
     }

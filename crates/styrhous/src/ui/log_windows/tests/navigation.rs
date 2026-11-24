@@ -35,7 +35,7 @@ fn completed_fully_loaded_logs_do_not_oscillate_at_the_bottom() {
         harness
             .input_mut()
             .events
-            .push(egui::Event::PointerMoved(egui::pos2(400.0, 100.0)));
+            .push(egui::Event::PointerMoved(egui::pos2(400.0, 400.0)));
         harness.input_mut().events.push(egui::Event::MouseWheel {
             unit: egui::MouseWheelUnit::Point,
             delta: egui::vec2(0.0, -120.0),
@@ -597,8 +597,17 @@ fn new_log_window_requests_initial_tail_attachment() {
 }
 
 #[test]
-fn displayed_line_navigation_scrolls_the_viewer_and_snapshots_the_destination() {
+fn problem_navigation_scrolls_the_viewer_and_snapshots_the_destination() {
     let window = Rc::new(RefCell::new(fully_loaded_log_window(512)));
+    window.borrow_mut().summary = Some(std::sync::Arc::new(LogSummary {
+        total_lines: 512,
+        problems: vec![
+            (0, Problem::Error),
+            (400, Problem::Warning),
+            (510, Problem::Error),
+        ],
+        ..LogSummary::default()
+    }));
     let window_for_ui = window.clone();
     let display_options = Rc::new(RefCell::new(LogDisplayOptions::default()));
     let display_options_for_ui = display_options.clone();
@@ -619,7 +628,7 @@ fn displayed_line_navigation_scrolls_the_viewer_and_snapshots_the_destination() 
     harness.run_steps(2);
 
     window.borrow_mut().search.active_display_row = Some(511);
-    harness.get_by_label("Previous displayed line").click();
+    harness.key_press(egui::Key::OpenBracket);
     harness.run_steps(2);
     assert_eq!(window.borrow().search.active_display_row, Some(510));
     assert!(
@@ -668,8 +677,15 @@ fn displayed_line_navigation_scrolls_the_viewer_and_snapshots_the_destination() 
         "incoming rows must not move the viewport after visible-bottom navigation"
     );
 
-    window.borrow_mut().search.active_display_row = Some(0);
-    harness.get_by_label("Previous displayed line").click();
+    {
+        let mut window = window.borrow_mut();
+        window.search.active_display_row = Some(0);
+        let summary =
+            std::sync::Arc::make_mut(window.summary.as_mut().expect("the summary was injected"));
+        summary.total_lines = 513;
+        summary.problems.push((512, Problem::Error));
+    }
+    harness.key_press(egui::Key::OpenBracket);
     harness.run_steps(2);
     assert_eq!(window.borrow().search.active_display_row, Some(512));
     assert!(
@@ -687,7 +703,7 @@ fn displayed_line_navigation_scrolls_the_viewer_and_snapshots_the_destination() 
     );
 
     window.borrow_mut().search.active_display_row = Some(399);
-    harness.get_by_label("Next displayed line").click();
+    harness.key_press(egui::Key::CloseBracket);
     harness.run_steps(2);
 
     let scroll_state = scroll_state.borrow();
@@ -705,9 +721,7 @@ fn displayed_line_navigation_scrolls_the_viewer_and_snapshots_the_destination() 
             .intersects(output.inner_rect),
         "the requested line must be visible after navigation"
     );
-    harness.ui_harness(
-        "pod_logs/pod_log_viewer_displayed_line_navigation_snapshot/next_displayed_line",
-    );
+    harness.ui_harness("pod_logs/pod_log_viewer_problem_navigation_snapshot/next_problem");
 }
 
 #[test]
@@ -749,11 +763,11 @@ fn resolved_match_navigation_scrolls_the_viewer_and_snapshots_the_destination() 
         window.search.match_count = 2;
         window.search.active_match = Some(0);
     }
-    harness.get_by_label("Previous matching line").click();
+    harness.get_by_label("Previous match").click();
     harness.step();
     assert_eq!(window.borrow().search.active_match, Some(1));
     window.borrow_mut().search.active_match = Some(0);
-    harness.get_by_label("Next matching line").click();
+    harness.get_by_label("Next match").click();
     harness.step();
     assert_eq!(window.borrow().search.active_match, Some(1));
     // The store resolves the selected match asynchronously. State-level
@@ -789,10 +803,17 @@ fn log_navigation_wraps_at_both_ends() {
     let mut window = log_window(&["zero", "one", "two"]);
     window.search.match_count = 3;
 
-    advance_log_line(&mut window, false);
+    window.summary = Some(std::sync::Arc::new(LogSummary {
+        total_lines: 3,
+        problems: vec![(0, Problem::Warning), (2, Problem::Error)],
+        ..LogSummary::default()
+    }));
+    assert!(step_problem(&mut window, false));
     assert_eq!(window.search.active_display_row, Some(2));
-    advance_log_line(&mut window, true);
+    assert!(step_problem(&mut window, true));
     assert_eq!(window.search.active_display_row, Some(0));
+    assert!(step_problem(&mut window, true));
+    assert_eq!(window.search.active_display_row, Some(2));
 
     advance_log_match(&mut window, &log_store, false);
     assert_eq!(window.search.active_match, Some(2));
