@@ -13,7 +13,8 @@ repository_root="$(cd "$script_directory/.." && pwd)"
 readonly repository_root
 readonly destination_directory="$1"
 
-while IFS=$'\t' read -r repository_path packaged_filename release_asset; do
+while IFS=$'\t' read -r repository_path packaged_filename release_asset ||
+    [[ -n "$repository_path" ]]; do
     if [[ -z "$repository_path" ]] || [[ "$repository_path" == \#* ]] ||
         [[ "$release_asset" != "yes" ]]; then
         continue

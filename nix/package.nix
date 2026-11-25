@@ -42,6 +42,13 @@ rustPlatform.buildRustPackage {
   postPatch = ''
     rsvg-convert -w 512 -h 512 assets/icons/kubernetes-dev-ui.svg \
       -o assets/icons/kubernetes-dev-ui.png
+
+    # The fonts are compiled in with include_bytes!, and egui panics at startup on a pointer.
+    if lfs_pointers=$(grep -rl --include='*.ttf' '^version https://git-lfs' crates/components/assets/fonts); then
+      echo "Git LFS pointers instead of fonts:" >&2
+      echo "$lfs_pointers" >&2
+      exit 1
+    fi
   '';
 
   desktopItems = [
@@ -63,10 +70,17 @@ rustPlatform.buildRustPackage {
     install -Dm644 assets/icons/kubernetes-dev-ui.png \
       "$out/share/icons/hicolor/512x512/apps/styrhous.png"
     install -Dm644 LICENSE.md "$out/share/licenses/styrhous/LICENSE.md"
-    install -Dm644 legal/THIRD_PARTY_NOTICES.md \
-      "$out/share/doc/styrhous/THIRD_PARTY_NOTICES.md"
-    install -Dm644 crates/components/assets/fonts/inter/LICENSE.txt \
-      "$out/share/doc/styrhous/Inter-OFL-1.1.txt"
+
+    # Same manifest as the release packages. The target/ rows come from
+    # scripts/generate-third-party-legal.sh, which needs network access.
+    while IFS=$'\t' read -r repository_path packaged_filename _ ||
+      [[ -n "$repository_path" ]]; do
+      if [[ -z "$repository_path" || "$repository_path" == \#* ||
+        "$repository_path" == target/* ]]; then
+        continue
+      fi
+      install -Dm644 "$repository_path" "$out/share/doc/styrhous/$packaged_filename"
+    done <legal/resources.tsv
   '';
 
   postFixup = ''

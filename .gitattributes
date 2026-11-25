@@ -3,3 +3,5 @@
 *.ttf filter=lfs diff=lfs merge=lfs -text
 # Fonts the licensing portal deploys: Cloudflare Workers Builds may not fetch LFS objects.
 licensing/**/*.ttf -filter binary
+# Fonts the app embeds: GitHub's source archives, which Nix flake inputs fetch, hold LFS pointers.
+crates/components/assets/fonts/**/*.ttf -filter binary

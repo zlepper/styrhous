@@ -13,7 +13,8 @@ readonly script_directory
 repository_root="$(cd "$script_directory/.." && pwd)"
 readonly repository_root
 
-while IFS=$'\t' read -r repository_path packaged_filename _release_asset; do
+while IFS=$'\t' read -r repository_path packaged_filename _release_asset ||
+    [[ -n "$repository_path" ]]; do
     if [[ -z "$repository_path" ]] || [[ "$repository_path" == \#* ]]; then
         continue
     fi
