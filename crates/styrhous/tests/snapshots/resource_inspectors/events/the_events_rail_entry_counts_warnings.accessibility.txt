@@ -468,7 +468,7 @@ Window state=[focused] rect=<none>
           Label value="Restarts: 0" rect=(x=965.6 y=76.0 width=129.6 height=55.0 center_x=1030.4 center_y=103.5)
           Label value="CPU: — / 100m" rect=(x=1103.2 y=76.0 width=129.6 height=55.0 center_x=1168.0 center_y=103.5)
           Label value="Memory: — / 170Mi" rect=(x=1240.8 y=76.0 width=129.6 height=55.0 center_x=1305.6 center_y=103.5)
-          Label value="Age: 396d" rect=(x=1378.4 y=76.0 width=129.6 height=55.0 center_x=1443.2 center_y=103.5)
+          Label value="Age: 220d" rect=(x=1378.4 y=76.0 width=129.6 height=55.0 center_x=1443.2 center_y=103.5)
         GenericContainer rect=<none>
           GenericContainer rect=<none>
             Label value="On this pod" rect=(x=828.0 y=162.0 width=73.8 height=16.0 center_x=864.9 center_y=170.0)

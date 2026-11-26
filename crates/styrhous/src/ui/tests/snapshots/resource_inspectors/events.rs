@@ -101,6 +101,18 @@ fn the_events_rail_entry_counts_the_warning_events_beside_the_total() {
         .ctx
         .global_style_mut(|style| style.animation_time = 0.0);
     harness.state_mut().ui_state = oracle_resource_table_state();
+    // The table rows are aged against the real clock, the detail against the
+    // design day: put both on the design day so the ages in the snapshot hold.
+    let design_now = crate::ui::tests::design_fixtures::design_now();
+    let ui_state = &mut harness.state_mut().ui_state;
+    ui_state.clock = crate::ui::clock::WallClock::Fixed(design_now);
+    for cluster in ui_state.clusters.values_mut() {
+        for watch in cluster.resource_cache.values_mut() {
+            for resource in watch.resources.values_mut() {
+                resource.creation_timestamp = Some(design_now - time::Duration::days(220));
+            }
+        }
+    }
     harness.run();
     harness.get_by_label("Workloads").click();
     harness.run();
