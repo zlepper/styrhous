@@ -120,23 +120,121 @@ pub(in crate::ui) fn listed_count(
     cluster: &ClusterState,
     api_resource: &ApiResource,
 ) -> Option<usize> {
-    if selected_watches_are_loading(cluster, api_resource) {
+    let entries = sorted_entries(
+        cluster
+            .resource_cache
+            .iter()
+            .filter(|((resource, _), _)| resource == api_resource),
+    );
+    count_listed(cluster, api_resource, KindWatches(&entries))
+}
+
+/// [`listed_count`] of every kind, from one pass over the cache. The sidebar
+/// counts dozens of kinds each frame; looking each up on its own scans the
+/// whole cache once per kind when watching every namespace.
+pub(in crate::ui) struct ListedCounts<'a> {
+    cluster: &'a ClusterState,
+    /// Every cache entry, by kind and then namespace.
+    entries: Vec<CacheEntry<'a>>,
+}
+
+impl<'a> ListedCounts<'a> {
+    pub(in crate::ui) fn new(cluster: &'a ClusterState) -> Self {
+        Self {
+            cluster,
+            entries: sorted_entries(cluster.resource_cache.iter()),
+        }
+    }
+
+    /// [`listed_count`] of `api_resource`.
+    pub(in crate::ui) fn get(&self, api_resource: &ApiResource) -> Option<usize> {
+        let start = self
+            .entries
+            .partition_point(|(resource, ..)| *resource < api_resource);
+        let end = start
+            + self.entries[start..].partition_point(|(resource, ..)| *resource == api_resource);
+        count_listed(
+            self.cluster,
+            api_resource,
+            KindWatches(&self.entries[start..end]),
+        )
+    }
+}
+
+/// A cache entry: its kind, namespace and watch.
+type CacheEntry<'a> = (&'a ApiResource, Option<&'a str>, &'a ResourceWatchState);
+
+/// `entries` sorted by kind and then namespace (the entry without one first).
+fn sorted_entries<'a>(
+    entries: impl Iterator<Item = (&'a ResourceWatchKey, &'a ResourceWatchState)>,
+) -> Vec<CacheEntry<'a>> {
+    let mut entries: Vec<CacheEntry<'a>> = entries
+        .map(|((resource, namespace), watch)| (resource, namespace.as_deref(), watch))
+        .collect();
+    entries.sort_unstable_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
+    entries
+}
+
+/// The cache entries of one kind, by namespace: the entry without a
+/// namespace (a cluster-scoped kind, or a watch across every namespace) first.
+#[derive(Clone, Copy)]
+struct KindWatches<'e, 'a>(&'e [CacheEntry<'a>]);
+
+impl<'a> KindWatches<'_, 'a> {
+    fn unscoped(self) -> Option<&'a ResourceWatchState> {
+        match self.0.first() {
+            Some((_, None, watch)) => Some(watch),
+            _ => None,
+        }
+    }
+
+    fn namespaced(self) -> impl Iterator<Item = &'a ResourceWatchState> {
+        self.0
+            .iter()
+            .filter(|(_, namespace, _)| namespace.is_some())
+            .map(|(.., watch)| *watch)
+    }
+
+    fn in_namespace(self, namespace: &str) -> Option<&'a ResourceWatchState> {
+        self.0
+            .binary_search_by(|(_, entry, _)| entry.cmp(&Some(namespace)))
+            .ok()
+            .map(|index| self.0[index].2)
+    }
+}
+
+/// [`listed_count`] of `api_resource`, whose cache entries are `watches`.
+/// Mirrors what the table shows: [`selected_watches_are_loading`] and
+/// [`resource_watch_namespaces`].
+fn count_listed(
+    cluster: &ClusterState,
+    api_resource: &ApiResource,
+    watches: KindWatches<'_, '_>,
+) -> Option<usize> {
+    fn synced(watch: Option<&ResourceWatchState>) -> Option<&ResourceWatchState> {
+        watch.filter(|watch| watch.is_synced)
+    }
+    if !api_resource.namespaced {
+        return synced(watches.unscoped()).map(|watch| watch.resources.len());
+    }
+    if cluster.watches_every_namespace(api_resource) {
+        // The watch's own entry carries its sync state; it shows every namespace it has rows for.
+        synced(watches.unscoped())?;
+        let mut namespaces = watches.namespaced().peekable();
+        namespaces.peek()?;
+        return Some(namespaces.map(|watch| watch.resources.len()).sum());
+    }
+    if cluster.awaited_namespace_list() == NamespaceListWait::Loading {
         return None;
     }
-    let namespaces = resource_watch_namespaces(cluster, api_resource);
+    let scope = cluster.namespace_scope();
     // No namespace selected: nothing is listed, which is not a count of zero.
-    if namespaces.is_empty() {
+    if scope.is_empty() {
         return None;
     }
     let mut total = 0;
-    for namespace in namespaces {
-        let Some(watch) = cluster
-            .resource_cache
-            .get(&(api_resource.clone(), namespace))
-        else {
-            continue;
-        };
-        total += watch.resources.len();
+    for namespace in scope.iter() {
+        total += synced(watches.in_namespace(namespace))?.resources.len();
     }
     Some(total)
 }

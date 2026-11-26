@@ -3,7 +3,7 @@
 
 use super::super::persistence::PinnedKinds;
 use super::super::state::{ClusterLoadState, ClusterState, ResourceNavigationExpansion};
-use super::super::workspace::listed_count;
+use super::super::workspace::ListedCounts;
 use crate::api_resource::ApiResource;
 use crate::resource_catalog::{CuratedNavigationEntry, kind_category};
 use components::fuzzy::normalize_for_search;
@@ -79,11 +79,12 @@ impl KindList {
         filter: &str,
     ) -> Self {
         let navigation = &cluster.resource_navigation;
+        let counts = ListedCounts::new(cluster);
         let row = |api_resource: &ApiResource| KindRow {
             api_resource: api_resource.clone(),
             label: api_resource.display_name(),
             category: kind_category(api_resource),
-            count: kind_count(cluster, api_resource),
+            count: kind_count(cluster, &counts, api_resource),
             pinned: pinned.contains(api_resource),
         };
         let kubernetes_kinds = navigation
@@ -241,7 +242,11 @@ fn filtered(
 }
 
 /// What the app knows of `api_resource`'s objects in the selected namespaces.
-fn kind_count(cluster: &ClusterState, api_resource: &ApiResource) -> Option<usize> {
+fn kind_count(
+    cluster: &ClusterState,
+    counts: &ListedCounts<'_>,
+    api_resource: &ApiResource,
+) -> Option<usize> {
     if api_resource.is_helm_releases() {
         let scope = cluster.namespace_scope();
         let mut total = 0;
@@ -259,5 +264,5 @@ fn kind_count(cluster: &ClusterState, api_resource: &ApiResource) -> Option<usiz
         return matches!(cluster.namespaces_load, ClusterLoadState::Ready)
             .then(|| cluster.namespaces.len());
     }
-    listed_count(cluster, api_resource)
+    counts.get(api_resource)
 }

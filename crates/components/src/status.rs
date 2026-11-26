@@ -202,13 +202,16 @@ mod tests {
             .collect()
     }
 
-    /// The colours of the glow meshes among `shapes`, one set per mesh.
-    fn glow_colours(shapes: &[egui::epaint::ClippedShape]) -> Vec<Vec<Color32>> {
+    /// The glow meshes among `shapes`: textured quads (the glow mask) and
+    /// the colour they are tinted with.
+    fn glow_tints(shapes: &[egui::epaint::ClippedShape]) -> Vec<Color32> {
         shapes
             .iter()
             .filter_map(|clipped| match &clipped.shape {
-                Shape::Mesh(mesh) => {
-                    Some(mesh.vertices.iter().map(|vertex| vertex.color).collect())
+                Shape::Mesh(mesh) if mesh.texture_id != egui::TextureId::default() => {
+                    let tint = mesh.vertices.first()?.color;
+                    assert!(mesh.vertices.iter().all(|vertex| vertex.color == tint));
+                    Some(tint)
                 }
                 _ => None,
             })
@@ -228,23 +231,13 @@ mod tests {
         let theme = harness.ctx.tokens();
         let output = harness.output();
         let fills = rect_fills(&output.shapes);
-        let glows = glow_colours(&output.shapes);
-        assert_eq!(glows.len(), 1, "only the success lamp glows");
-        let brightest = glows[0]
-            .iter()
-            .copied()
-            .max_by_key(|colour| colour.a())
-            .expect("glow vertices");
-        let glow = theme.success.glow;
-        assert!(brightest.a() > 0 && brightest.a() < glow.a());
-        let scale = f32::from(brightest.a()) / f32::from(glow.a());
-        let expected = glow.gamma_multiply(scale);
-        for (channel, reference) in brightest.to_array().into_iter().zip(expected.to_array()) {
-            assert!(
-                channel.abs_diff(reference) <= 1,
-                "{brightest:?} is not a fainter {glow:?}"
-            );
-        }
+        // The falloff lives in the glow texture (see `design::elevation`);
+        // the quad carries the tone's glow colour.
+        assert_eq!(
+            glow_tints(&output.shapes),
+            [theme.success.glow],
+            "only the success lamp glows, in its glow colour"
+        );
         assert!(fills.iter().any(|(_, fill)| *fill == theme.success.fill));
         assert!(fills.iter().any(|(_, fill)| *fill == theme.status.neutral));
     }

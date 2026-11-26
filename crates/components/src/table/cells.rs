@@ -164,8 +164,10 @@ impl TableRowBuilder<'_> {
         ui: &mut Ui,
         containers: impl IntoIterator<Item = (Tone, &'s str, TooltipContent<'s>)>,
     ) {
-        ui.scope(|ui| {
-            ui.spacing_mut().item_spacing.x = size::CONTAINER_SQUARE_GAP;
+        // Every row has these: share one style rather than copy it per row.
+        let spacing = egui::vec2(size::CONTAINER_SQUARE_GAP, ui.spacing().item_spacing.y);
+        let style = super::layout::spaced_style(ui, spacing);
+        ui.scope_builder(egui::UiBuilder::new().style(style), |ui| {
             for (tone, label, tooltip) in containers {
                 crate::container_square(ui, tone, label).tooltip_content(tooltip);
             }

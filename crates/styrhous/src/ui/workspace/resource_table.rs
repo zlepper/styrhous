@@ -556,12 +556,17 @@ pub(super) fn show_resource_table(
             if !options.actions.enabled {
                 return;
             }
+            let opens_details = column_id != ACTIONS_COLUMN_ID && row_response.clicked();
+            // Runs for every cell each frame: find the resource only when it is acted on.
+            if !opens_details && !MoreButton::context_menu_active(row_response) {
+                return;
+            }
             let Some(resource) =
                 resolve_prepared_resource(options.resource_cache, prepared, identity)
             else {
                 return;
             };
-            if column_id != ACTIONS_COLUMN_ID && row_response.clicked() {
+            if opens_details {
                 queue(ResourceAction::open_details(resource));
             }
             MoreButton::show_context_menu_with(row_response, MenuLook::ROW, |menu| {

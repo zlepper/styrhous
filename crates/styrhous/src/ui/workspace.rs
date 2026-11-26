@@ -811,8 +811,8 @@ mod toolbar;
 
 use connection_progress::show_connection_progress;
 use helm::*;
-pub(super) use resource_data::listed_count;
 use resource_data::*;
+pub(super) use resource_data::{ListedCounts, listed_count};
 use resource_table::*;
 use toolbar::*;
 

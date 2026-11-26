@@ -13,7 +13,7 @@ mod watches;
 pub(super) use metrics::resolved_resource_cell;
 use preparation::prepare_resource_table;
 pub(super) use preparation::{CLUSTER_GROUP, resolve_prepared_resource};
-pub(in crate::ui) use watches::listed_count;
+pub(in crate::ui) use watches::{ListedCounts, listed_count};
 pub(super) use watches::{
     awaited_namespace_list, selected_resources, selected_watch_error, selected_watches_are_loading,
 };

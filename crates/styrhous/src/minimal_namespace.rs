@@ -19,7 +19,7 @@ impl From<Namespace> for MinimalNamespace {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "benchmarks"))]
 impl MinimalNamespace {
     /// A namespace without labels or annotations.
     pub(crate) fn named(name: &str) -> Self {

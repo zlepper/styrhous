@@ -1291,3 +1291,72 @@ fn a_shift_click_range_follows_the_anchor_row_when_the_groups_reorder() {
         "the range runs from the anchor row, wherever its group went"
     );
 }
+
+#[test]
+fn cells_share_one_style_that_follows_their_table_and_theme_scope() {
+    use crate::design::theme::{self, ThemeExt, ThemeScope};
+    use std::sync::Arc;
+
+    /// What a cell saw: its style, and the scope's field background.
+    type Seen = Vec<(Arc<egui::Style>, egui::Color32)>;
+    let root_cells = Rc::new(RefCell::new(Seen::new()));
+    let scoped_cells = Rc::new(RefCell::new(Seen::new()));
+    let users = test_users();
+    let (root, scoped) = (Rc::clone(&root_cells), Rc::clone(&scoped_cells));
+    let mut harness = Harness::new_ui(move |ui| {
+        root.borrow_mut().clear();
+        scoped.borrow_mut().clear();
+        let table = |ui: &mut egui::Ui, id: &str, seen: &Rc<RefCell<Seen>>| {
+            Table::new(id)
+                .column("name", "Name", |col| col.initial_width(150.0))
+                .column("role", "Role", |col| col.initial_width(100.0))
+                .show(ui, &users, |ui, user, col_index| {
+                    seen.borrow_mut()
+                        .push((Arc::clone(ui.style()), ui.tokens().components.field_bg));
+                    TableRowBuilder::text(
+                        ui,
+                        if col_index == 0 {
+                            &user.name
+                        } else {
+                            &user.role
+                        },
+                        false,
+                    );
+                });
+        };
+        ui.allocate_ui(egui::vec2(400.0, 160.0), |ui| {
+            table(ui, "root-table", &root)
+        });
+        theme::scope(ui, ThemeScope::Popover, |ui| {
+            ui.allocate_ui(egui::vec2(400.0, 160.0), |ui| {
+                table(ui, "popover-table", &scoped)
+            });
+        });
+    });
+    crate::test_support::install_distinct_role_theme(&harness.ctx);
+    harness.run();
+
+    let theme = harness.ctx.tokens();
+    let popover = theme.scoped(ThemeScope::Popover);
+    assert_ne!(theme.components.field_bg, popover.components.field_bg);
+    for (cells, field_bg) in [
+        (root_cells.borrow(), theme.components.field_bg),
+        (scoped_cells.borrow(), popover.components.field_bg),
+    ] {
+        assert!(cells.len() >= 2, "every cell of the table was laid out");
+        let (first, _) = &cells[0];
+        for (style, cell_field_bg) in cells.iter() {
+            assert!(
+                Arc::ptr_eq(style, first),
+                "the cells of a table share one style"
+            );
+            assert_eq!(
+                style.spacing.item_spacing,
+                egui::vec2(layout::CELL_GAP, 0.0)
+            );
+            assert_eq!(*cell_field_bg, field_bg);
+            // Stock text edits in a cell use the scope's field background.
+            assert_eq!(style.visuals.extreme_bg_color, field_bg);
+        }
+    }
+}

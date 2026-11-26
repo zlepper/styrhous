@@ -88,6 +88,13 @@ const BLUR_SAMPLES_PER_SIGMA: f32 = 4.0;
 ///
 /// egui's [`Shadow`] fades linearly, which is far too tight around an 8
 /// point lamp; this paints the CSS profile ([`blurred_rect`]).
+///
+/// Every lamp of a size casts the same glow, and a table shows dozens, so
+/// the profile is rasterised once into a white texture (one texel per device
+/// pixel, holding exactly the samples [`blurred_rect`] would put on its
+/// vertices) and each glow is a single tinted quad of it. Snap `rect` to the
+/// device pixel grid (as lamps are): a glow at a new sub-pixel offset needs a
+/// texture of its own.
 pub fn paint_glow(
     painter: &egui::Painter,
     rect: egui::Rect,
@@ -95,14 +102,190 @@ pub fn paint_glow(
     color: egui::Color32,
     blur: f32,
 ) {
-    painter.add(blurred_rect(
-        painter.ctx(),
-        painter.pixels_per_point(),
-        rect,
-        corner_radius,
+    if blur <= 0.0 {
+        // No blur: the rounded rect itself.
+        painter.rect_filled(rect, corner_radius, color);
+        return;
+    }
+    let pixels_per_point = painter.pixels_per_point();
+    let (anchor, local) = device_anchor(rect, pixels_per_point);
+    let geometry = BlurGeometry::new(local, corner_radius, blur, pixels_per_point);
+    let (texture, covered) = glow_texture(painter.ctx(), geometry);
+    let mut mesh = egui::Mesh::with_texture(texture);
+    mesh.add_rect_with_uv(
+        covered.translate(anchor),
+        egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
         color,
-        blur,
-    ));
+    );
+    painter.add(mesh);
+}
+
+/// The device pixel corner at or before `rect`'s top left, and `rect`
+/// relative to it, its offset rounded to [`SUB_PIXEL_STEPS`] first so float
+/// noise around a pixel boundary picks the same corner.
+fn device_anchor(rect: egui::Rect, pixels_per_point: f32) -> (egui::Vec2, egui::Rect) {
+    let steps = (rect.min.to_vec2() * pixels_per_point * SUB_PIXEL_STEPS).round();
+    let unit = pixels_per_point * SUB_PIXEL_STEPS;
+    let whole = egui::vec2(
+        steps.x.div_euclid(SUB_PIXEL_STEPS),
+        steps.y.div_euclid(SUB_PIXEL_STEPS),
+    );
+    let offset = egui::vec2(
+        steps.x.rem_euclid(SUB_PIXEL_STEPS),
+        steps.y.rem_euclid(SUB_PIXEL_STEPS),
+    );
+    let anchor = whole / pixels_per_point;
+    let local = egui::Rect::from_min_size((offset / unit).to_pos2(), rect.size());
+    (anchor, local)
+}
+
+/// How finely the position of a blurred rect within its device pixel is
+/// told apart, in steps per device pixel. Finer differences are invisible,
+/// and coarser keys keep float noise (a lamp snapped to the pixel grid at a
+/// fractional scale) from building a new blur every frame.
+const SUB_PIXEL_STEPS: f32 = 64.0;
+
+/// What a blur's geometry depends on: the rect relative to its device pixel
+/// anchor and its size (both quantised to [`SUB_PIXEL_STEPS`]), the corner
+/// radius, blur and scale.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct BlurGeometry {
+    offset: [i32; 2],
+    size: [i32; 2],
+    shape: [u32; 3],
+}
+
+impl BlurGeometry {
+    fn new(local: egui::Rect, corner_radius: f32, blur: f32, pixels_per_point: f32) -> Self {
+        let step =
+            |coordinate: f32| (coordinate * pixels_per_point * SUB_PIXEL_STEPS).round() as i32;
+        Self {
+            offset: [step(local.min.x), step(local.min.y)],
+            size: [step(local.width()), step(local.height())],
+            shape: [corner_radius, blur, pixels_per_point].map(f32::to_bits),
+        }
+    }
+
+    fn pixels_per_point(&self) -> f32 {
+        f32::from_bits(self.shape[2])
+    }
+
+    /// The rect relative to its anchor, at the quantised offset.
+    fn rect(&self) -> egui::Rect {
+        let unit = self.pixels_per_point() * SUB_PIXEL_STEPS;
+        let [width, height] = self.size.map(|steps| steps as f32 / unit);
+        egui::Rect::from_min_size(
+            egui::pos2(self.offset[0] as f32 / unit, self.offset[1] as f32 / unit),
+            egui::vec2(width, height),
+        )
+    }
+
+    fn corner_radius(&self) -> f32 {
+        f32::from_bits(self.shape[0])
+    }
+
+    fn blur(&self) -> f32 {
+        f32::from_bits(self.shape[1])
+    }
+}
+
+/// A rasterised glow: its texture and where the texture goes relative to the
+/// lamp's device pixel anchor. A glow texture depends on the geometry alone;
+/// the quad tints it.
+#[derive(Clone)]
+struct GlowTexture {
+    texture: egui::TextureHandle,
+    rect: egui::Rect,
+    last_used: u64,
+}
+
+/// Glow textures by geometry. Few exist (a lamp size per scale), and a
+/// frame without lamps (a hidden table) should not reupload them, so one is
+/// freed only once it has gone unused for [`GLOW_TEXTURE_IDLE_PASSES`];
+/// egui's frame caches drop what the last frame did not use.
+#[derive(Clone, Default)]
+struct GlowTextures {
+    textures: std::collections::HashMap<BlurGeometry, GlowTexture>,
+    swept: u64,
+}
+
+/// Passes a glow texture may go unused before it is freed.
+const GLOW_TEXTURE_IDLE_PASSES: u64 = 600;
+
+fn glow_textures_id() -> egui::Id {
+    egui::Id::new("components::design::elevation::glow_textures")
+}
+
+/// The texture of the glow of `geometry` and the rect it covers relative to
+/// the anchor, rasterised on first use.
+fn glow_texture(ctx: &egui::Context, geometry: BlurGeometry) -> (egui::TextureId, egui::Rect) {
+    let pass = ctx.cumulative_pass_nr();
+    let cached = ctx.data_mut(|data| {
+        let cache = data.get_temp_mut_or_default::<GlowTextures>(glow_textures_id());
+        let textures = &mut cache.textures;
+        if cache.swept != pass {
+            cache.swept = pass;
+            textures.retain(|_, glow| pass - glow.last_used <= GLOW_TEXTURE_IDLE_PASSES);
+        }
+        textures.get_mut(&geometry).map(|glow| {
+            glow.last_used = pass;
+            (glow.texture.id(), glow.rect)
+        })
+    });
+    if let Some(cached) = cached {
+        return cached;
+    }
+    // Loading a texture locks the context, so it happens outside `data_mut`.
+    let (image, rect) = glow_image(geometry);
+    let texture = ctx.load_texture("status-lamp-glow", image, egui::TextureOptions::LINEAR);
+    let id = texture.id();
+    ctx.data_mut(|data| {
+        let cache = data.get_temp_mut_or_default::<GlowTextures>(glow_textures_id());
+        cache.textures.insert(
+            geometry,
+            GlowTexture {
+                texture,
+                rect,
+                last_used: pass,
+            },
+        );
+    });
+    (id, rect)
+}
+
+/// The white glow of `geometry` with one texel per device pixel, and the
+/// rect (relative to the anchor) it covers. Each texel holds the sample
+/// [`blurred_rect_mesh`] takes at that device pixel's centre, so a quad of
+/// it tinted with a colour paints what the mesh in that colour does.
+fn glow_image(geometry: BlurGeometry) -> (egui::ColorImage, egui::Rect) {
+    let pixels_per_point = geometry.pixels_per_point();
+    let rect = geometry.rect();
+    let blur = geometry.blur();
+    let profile = BlurProfile::new(rect, geometry.corner_radius(), blur);
+    let outer = rect.expand(profile.extent);
+    let first = (outer.min.to_vec2() * pixels_per_point).floor();
+    let last = (outer.max.to_vec2() * pixels_per_point).ceil();
+    let [columns, rows] = [(last.x - first.x) as usize, (last.y - first.y) as usize];
+    let centre = |index: usize, first: f32| (first + index as f32 + 0.5) / pixels_per_point;
+    let xs: Vec<f32> = (0..columns)
+        .map(|column| profile.x(centre(column, first.x)))
+        .collect();
+    let ys: Vec<f32> = (0..rows)
+        .map(|row| profile.y(centre(row, first.y)))
+        .collect();
+    // colour-guard: allow-begin (a coverage mask: the quad tints it with the theme's glow role)
+    let mask = egui::Color32::WHITE;
+    // colour-guard: allow-end
+    let pixels = ys
+        .iter()
+        .flat_map(|y| xs.iter().map(move |x| mask.gamma_multiply(x * y)))
+        .collect();
+    let image = egui::ColorImage::new([columns, rows], pixels);
+    let covered = egui::Rect::from_min_max(
+        (first / pixels_per_point).to_pos2(),
+        (last / pixels_per_point).to_pos2(),
+    );
+    (image, covered)
 }
 
 /// `rect` with `corner_radius` filled in `color` and blurred as CSS blurs a
@@ -126,11 +309,9 @@ pub fn blurred_rect(
     color: egui::Color32,
     blur: f32,
 ) -> egui::Mesh {
-    let anchor = (rect.min.to_vec2() * pixels_per_point).floor() / pixels_per_point;
-    let local = rect.translate(-anchor);
+    let (anchor, local) = device_anchor(rect, pixels_per_point);
     let key = BlurKey {
-        rect: [local.min.x, local.min.y, local.width(), local.height()].map(f32::to_bits),
-        shape: [corner_radius, blur, pixels_per_point].map(f32::to_bits),
+        geometry: BlurGeometry::new(local, corner_radius, blur, pixels_per_point),
         color,
     };
     // A frame cache: meshes no surface used last frame are dropped, so sizes
@@ -148,12 +329,10 @@ pub fn blurred_rect(
     mesh
 }
 
-/// What a [`blurred_rect`] mesh depends on: the rect within its device
-/// pixel and its size, the corner radius, blur and scale, and the colour.
+/// What a [`blurred_rect`] mesh depends on: its geometry and colour.
 #[derive(Clone, Copy, Hash)]
 struct BlurKey {
-    rect: [u32; 4],
-    shape: [u32; 3],
+    geometry: BlurGeometry,
     color: egui::Color32,
 }
 
@@ -163,15 +342,58 @@ struct BlurMesher;
 
 impl egui::cache::ComputerMut<BlurKey, std::sync::Arc<egui::Mesh>> for BlurMesher {
     fn compute(&mut self, key: BlurKey) -> std::sync::Arc<egui::Mesh> {
-        let [x, y, width, height] = key.rect.map(f32::from_bits);
-        let [corner_radius, blur, pixels_per_point] = key.shape.map(f32::from_bits);
+        let geometry = key.geometry;
         std::sync::Arc::new(blurred_rect_mesh(
-            egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(width, height)),
-            corner_radius,
+            geometry.rect(),
+            geometry.corner_radius(),
             key.color,
-            blur,
-            pixels_per_point,
+            geometry.blur(),
+            geometry.pixels_per_point(),
         ))
+    }
+}
+
+/// The CSS blur of a rounded rect (a Gaussian of standard deviation
+/// `blur / 2`), as two separable profiles; the vertical one also carries the
+/// share of the rect the rounded corners leave.
+struct BlurProfile {
+    centre: egui::Pos2,
+    half: egui::Vec2,
+    sigma: f32,
+    coverage: f32,
+    /// How far past the rect the blur is painted.
+    extent: f32,
+}
+
+impl BlurProfile {
+    fn new(rect: egui::Rect, corner_radius: f32, blur: f32) -> Self {
+        let sigma = blur.max(0.0) / 2.0;
+        let area = rect.area();
+        // Corners round at most to a pill, as egui and CSS clamp them.
+        let corner_radius = corner_radius.min(rect.width().min(rect.height()) / 2.0);
+        let corner_loss = (4.0 - std::f32::consts::PI) * corner_radius * corner_radius;
+        let coverage = if area > 0.0 {
+            ((area - corner_loss) / area).max(0.0)
+        } else {
+            0.0
+        };
+        Self {
+            centre: rect.center(),
+            half: rect.size() / 2.0,
+            sigma,
+            coverage,
+            extent: BLUR_EXTENT_SIGMAS * sigma,
+        }
+    }
+
+    /// The horizontal profile at `x`.
+    fn x(&self, x: f32) -> f32 {
+        blurred_box(x - self.centre.x, self.half.x, self.sigma)
+    }
+
+    /// The vertical profile at `y`, scaled by the corner coverage.
+    fn y(&self, y: f32) -> f32 {
+        blurred_box(y - self.centre.y, self.half.y, self.sigma) * self.coverage
     }
 }
 
@@ -230,26 +452,18 @@ fn blurred_rect_mesh(
         mesh.add_colored_rect(rect, color);
         return mesh;
     }
-    let sigma = blur / 2.0;
+    let profile = BlurProfile::new(rect, corner_radius, blur);
     let pixel = 1.0 / pixels_per_point;
-    let area = rect.area();
-    // Corners round at most to a pill, as egui and CSS clamp them.
-    let corner_radius = corner_radius.min(rect.width().min(rect.height()) / 2.0);
-    let corner_loss = (4.0 - std::f32::consts::PI) * corner_radius * corner_radius;
-    let coverage = if area > 0.0 {
-        ((area - corner_loss) / area).max(0.0)
-    } else {
-        0.0
-    };
-    let extent = BLUR_EXTENT_SIGMAS * sigma;
-    let outer = rect.expand(extent);
-    let step = ((sigma / BLUR_SAMPLES_PER_SIGMA) / pixel).floor().max(1.0) as usize;
+    let outer = rect.expand(profile.extent);
+    let step = ((profile.sigma / BLUR_SAMPLES_PER_SIGMA) / pixel)
+        .floor()
+        .max(1.0) as usize;
     let xs = blur_samples(
         outer.left(),
         outer.right(),
         rect.left(),
         rect.right(),
-        extent,
+        profile.extent,
         pixel,
         step,
     );
@@ -258,20 +472,12 @@ fn blurred_rect_mesh(
         outer.bottom(),
         rect.top(),
         rect.bottom(),
-        extent,
+        profile.extent,
         pixel,
         step,
     );
-    let center = rect.center();
-    let half = rect.size() / 2.0;
-    let profile_x: Vec<f32> = xs
-        .iter()
-        .map(|x| blurred_box(x - center.x, half.x, sigma))
-        .collect();
-    let profile_y: Vec<f32> = ys
-        .iter()
-        .map(|y| blurred_box(y - center.y, half.y, sigma) * coverage)
-        .collect();
+    let profile_x: Vec<f32> = xs.iter().map(|x| profile.x(*x)).collect();
+    let profile_y: Vec<f32> = ys.iter().map(|y| profile.y(*y)).collect();
 
     // The profile is separable and peaks in the middle, so every coloured
     // vertex lies in the rows and columns that are coloured at their peak:
@@ -472,6 +678,7 @@ impl ShadowRole {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use egui::emath::GuiRounding as _;
 
     #[test]
     fn erf_matches_reference_values() {
@@ -495,17 +702,33 @@ mod tests {
 
     /// The glow meshes painted for lamps at each of `rects`.
     fn glow_meshes(rects: &[egui::Rect]) -> Vec<egui::Mesh> {
-        let ctx = egui::Context::default();
+        glow_meshes_at(&egui::Context::default(), rects, 1.0)
+    }
+
+    /// The glow meshes `ctx` paints for lamps at each of `rects` (snapped to
+    /// the pixel grid, as lamps are) on a display scaled `pixels_per_point`.
+    fn glow_meshes_at(
+        ctx: &egui::Context,
+        rects: &[egui::Rect],
+        pixels_per_point: f32,
+    ) -> Vec<egui::Mesh> {
         let rects = rects.to_vec();
-        let mut output = ctx.run_ui(Default::default(), |ui| {
+        let input = egui::RawInput {
+            viewports: std::iter::once((
+                egui::ViewportId::ROOT,
+                egui::ViewportInfo {
+                    native_pixels_per_point: Some(pixels_per_point),
+                    ..Default::default()
+                },
+            ))
+            .collect(),
+            ..Default::default()
+        };
+        let mut output = ctx.run_ui(input, |ui| {
+            let pixels_per_point = ui.pixels_per_point();
             for rect in &rects {
-                paint_glow(
-                    ui.painter(),
-                    *rect,
-                    3.0,
-                    egui::Color32::from_rgba_unmultiplied(110, 231, 183, 140),
-                    GLOW_BLUR,
-                );
+                let snapped = rect.round_to_pixels(pixels_per_point);
+                paint_glow(ui.painter(), snapped, 3.0, GLOW, GLOW_BLUR);
             }
         });
         output.textures_delta.clear();
@@ -569,36 +792,123 @@ mod tests {
         );
     }
 
+    const GLOW: egui::Color32 = egui::Color32::from_rgba_premultiplied(61, 127, 101, 140);
+
+    fn lamp(x: f32, y: f32) -> egui::Rect {
+        egui::Rect::from_min_size(egui::pos2(x, y), egui::Vec2::splat(8.0))
+    }
+
     #[test]
-    fn glows_are_one_trimmed_mesh_moved_to_each_lamp() {
-        let lamp =
-            |x: f32, y: f32| egui::Rect::from_min_size(egui::pos2(x, y), egui::Vec2::splat(8.0));
+    fn glows_are_one_shared_texture_quad_per_lamp() {
         let meshes = glow_meshes(&[lamp(20.0, 20.0), lamp(120.0, 57.0)]);
         assert_eq!(meshes.len(), 2);
         let (first, second) = (&meshes[0], &meshes[1]);
-        assert_eq!(first.indices, second.indices);
+        assert_eq!(first.vertices.len(), 4);
+        assert_ne!(first.texture_id, egui::TextureId::default());
+        assert_eq!(first.texture_id, second.texture_id);
         for (a, b) in first.vertices.iter().zip(&second.vertices) {
-            assert_eq!(a.color, b.color);
+            assert_eq!(a.color, GLOW);
+            assert_eq!(a.uv, b.uv);
             assert_eq!(b.pos - a.pos, egui::vec2(100.0, 37.0));
         }
-        // Untrimmed, the 3σ grid around an 8 point lamp is 33 × 33 vertices.
-        assert!(
-            first.vertices.len() < 33 * 33,
-            "{} vertices",
-            first.vertices.len()
-        );
-        // The border of the trimmed grid is transparent, so nothing is cut off.
-        let left = first
-            .vertices
-            .iter()
-            .map(|v| v.pos.x)
-            .fold(f32::INFINITY, f32::min);
-        assert!(
-            first
-                .vertices
-                .iter()
-                .filter(|v| v.pos.x == left)
-                .all(|v| v.color == egui::Color32::TRANSPARENT)
-        );
+    }
+
+    #[test]
+    fn the_glow_texture_holds_the_samples_the_mesh_takes() {
+        for (rect, pixels_per_point) in [(lamp(20.0, 20.0), 1.0), (lamp(13.6, 7.2), 1.25)] {
+            let (anchor, local) = device_anchor(rect, pixels_per_point);
+            let geometry = BlurGeometry::new(local, 3.0, GLOW_BLUR, pixels_per_point);
+            let (image, covered) = glow_image(geometry);
+            let mesh = blurred_rect_mesh(
+                geometry.rect(),
+                3.0,
+                egui::Color32::WHITE,
+                GLOW_BLUR,
+                pixels_per_point,
+            );
+            assert!(!mesh.vertices.is_empty());
+            for vertex in &mesh.vertices {
+                // The texel whose centre is the vertex.
+                let texel = (vertex.pos - covered.min) * pixels_per_point - egui::vec2(0.5, 0.5);
+                let [column, row] = [texel.x.round() as usize, texel.y.round() as usize];
+                assert!((texel - egui::vec2(column as f32, row as f32)).length() < 1e-3);
+                assert_eq!(
+                    image.pixels[row * image.size[0] + column],
+                    vertex.color,
+                    "texel {column},{row} @{pixels_per_point}× (anchor {anchor:?})"
+                );
+            }
+            // The texture covers whole device pixels.
+            for coordinate in [covered.min.x, covered.min.y, covered.max.x, covered.max.y] {
+                let device = coordinate * pixels_per_point;
+                assert!((device - device.round()).abs() < 1e-3);
+            }
+        }
+    }
+
+    #[test]
+    fn float_noise_in_a_lamp_position_reuses_its_glow() {
+        // A lamp snapped to the pixel grid at 1.25× lands a hair off it.
+        let snapped = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::Vec2::splat(8.0));
+        let noisy = snapped.translate(egui::vec2(1e-5, -1e-5));
+        let key = |rect: egui::Rect| {
+            let (_, local) = device_anchor(rect, 1.25);
+            BlurGeometry::new(local, 3.0, GLOW_BLUR, 1.25)
+        };
+        assert_eq!(key(snapped), key(noisy));
+        assert_ne!(key(snapped), key(snapped.translate(egui::vec2(0.4, 0.0))));
+    }
+
+    #[test]
+    fn glows_sit_on_the_device_pixel_grid_centred_on_their_lamp_at_fractional_scales() {
+        for pixels_per_point in [1.25, 1.5] {
+            let ctx = egui::Context::default();
+            let lamps = [lamp(13.6, 7.2), lamp(101.3, 44.9)];
+            let meshes = glow_meshes_at(&ctx, &lamps, pixels_per_point);
+            assert_eq!(meshes.len(), lamps.len());
+            for (mesh, lamp) in meshes.iter().zip(lamps) {
+                let lamp = lamp.round_to_pixels(pixels_per_point);
+                let quad = egui::Rect::from_points(
+                    &mesh
+                        .vertices
+                        .iter()
+                        .map(|vertex| vertex.pos)
+                        .collect::<Vec<_>>(),
+                );
+                for coordinate in [quad.min.x, quad.min.y, quad.max.x, quad.max.y] {
+                    let device = coordinate * pixels_per_point;
+                    assert!(
+                        (device - device.round()).abs() < 1e-3,
+                        "@{pixels_per_point}×: {quad:?} is off the pixel grid"
+                    );
+                }
+                // The glow reaches as far past the lamp on every side, to the pixel.
+                let pixel = 1.0 / pixels_per_point;
+                let left = lamp.left() - quad.left();
+                for reach in [
+                    quad.right() - lamp.right(),
+                    lamp.top() - quad.top(),
+                    quad.bottom() - lamp.bottom(),
+                ] {
+                    assert!(
+                        (reach - left).abs() <= pixel + 1e-3,
+                        "@{pixels_per_point}×: {quad:?} is not centred on {lamp:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn each_scale_rasterises_its_glow_once_and_keeps_it() {
+        let ctx = egui::Context::default();
+        let lamps = [lamp(20.0, 20.0)];
+        let texture =
+            |pixels_per_point| glow_meshes_at(&ctx, &lamps, pixels_per_point)[0].texture_id;
+        let at_one = texture(1.0);
+        let at_two = texture(2.0);
+        assert_ne!(at_one, at_two, "a scale has a texture of its own");
+        assert_eq!(texture(1.0), at_one, "going back reuses the first texture");
+        assert_eq!(texture(2.0), at_two);
     }
 }

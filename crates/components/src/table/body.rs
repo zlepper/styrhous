@@ -217,7 +217,7 @@ where
         if let Some(on_header) = header.on_header.as_mut() {
             let response =
                 ui.interact(rect, table.id.with("selection-header-menu"), Sense::click());
-            set_label(ui, &response, "Selection column");
+            set_label(ui, &response, || "Selection column");
             on_header(&response, "selection", "Selection", false);
         }
         let keys: Vec<K> = items.filter_map(|item| (selection.key)(item)).collect();
@@ -293,7 +293,7 @@ pub(crate) fn show_column_headers(
             if sorts && response.clicked() {
                 sort_clicked = Some(column.id.clone());
             }
-            set_label(ui, &response, format!("{} column", column.name()));
+            set_label(ui, &response, || format!("{} column", column.name()));
             response
         } else if header.click_to_sort && column.sortable {
             let response = ui
@@ -472,11 +472,9 @@ pub(super) fn show_row<'a, T, K>(
             table.id.with(("row-context-menu", index, column_index)),
             Sense::click(),
         );
-        set_label(
-            ui,
-            &response,
-            format!("{}, row {}", column.name(), index + 1),
-        );
+        set_label(ui, &response, || {
+            format!("{}, row {}", column.name(), index + 1)
+        });
         show_cell(
             ui,
             rect,
@@ -547,10 +545,11 @@ fn checkbox_width_id(table: &Table) -> Id {
     table.id.with("checkbox-width")
 }
 
-fn set_label(ui: &Ui, response: &Response, label: impl Into<String>) {
-    let label = label.into();
+/// Read `response` as `label`. The label is only built while AccessKit is on,
+/// as every cell of every row carries one each frame.
+fn set_label<L: Into<String>>(ui: &Ui, response: &Response, label: impl FnOnce() -> L) {
     ui.ctx()
-        .accesskit_node_builder(response.id, |builder| builder.set_label(label));
+        .accesskit_node_builder(response.id, |builder| builder.set_label(label().into()));
 }
 
 /// Show `table`'s header over `rows` loading rows of skeleton bars, read as

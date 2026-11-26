@@ -100,5 +100,6 @@ fn pod_usage(cpu_nanocores: i64) -> crate::pod_metrics::PodUsage {
 mod every_namespace;
 mod grouping;
 mod invalidation;
+mod listed_counts;
 mod metrics;
 mod preparation;

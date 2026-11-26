@@ -2,7 +2,8 @@
 //! [`crate::ReorderableTable`]: column positions, header cells, row tiles
 //! and the child `Ui` a cell's contents are laid out in.
 
-use egui::{Color32, CornerRadius, Pos2, Rect, Response, Shape, Stroke, Ui, pos2, vec2};
+use egui::{Color32, CornerRadius, Pos2, Rect, Response, Shape, Stroke, Ui, Vec2, pos2, vec2};
+use std::sync::Arc;
 
 pub(crate) use super::CellAlign;
 use super::SortDirection;
@@ -17,6 +18,8 @@ pub(crate) const HEADER_ROLE: TextRole = type_scale::CAPTION.with_letter_spacing
 pub(crate) const CELL_PADDING_X: f32 = space::S12;
 /// Gap between the items of a cell (`.td` gap 6).
 pub(crate) const CELL_GAP: f32 = space::S6;
+/// The spacing between the items of a cell: the cell gap across, none down.
+const CELL_SPACING: Vec2 = vec2(CELL_GAP, 0.0);
 /// The sort chevron in a header (`.ic.s12`).
 const SORT_ICON: f32 = size::ICON_XS;
 /// Inset of a column separator from the top and bottom of the header.
@@ -370,10 +373,10 @@ pub(crate) fn show_cell<R>(
         egui::UiBuilder::new()
             .max_rect(content)
             .layout(layout)
-            .ui_stack_info(info),
+            .ui_stack_info(info)
+            .style(spaced_style(ui, CELL_SPACING)),
     );
     child.set_clip_rect(rect.intersect(ui.clip_rect()));
-    child.spacing_mut().item_spacing = vec2(CELL_GAP, 0.0);
     let inner = add_contents(&mut child);
     if align == CellAlign::Center {
         let width = child.min_rect().width();
@@ -387,4 +390,45 @@ pub(crate) fn show_cell<R>(
         }
     }
     inner
+}
+
+/// `ui`'s style with `item_spacing` between its items, for a child `Ui`
+/// ([`egui::UiBuilder::style`]).
+///
+/// Changing a [`Ui`]'s spacing copies its whole style, and a table lays out
+/// hundreds of cells a frame, so the children of one parent that want the
+/// same spacing share a single copy, kept until the parent's style changes
+/// (once a frame for a table body).
+pub(crate) fn spaced_style(ui: &Ui, item_spacing: Vec2) -> Arc<egui::Style> {
+    #[derive(Clone)]
+    struct SpacedStyle {
+        parent: Arc<egui::Style>,
+        spaced: Arc<egui::Style>,
+    }
+    let parent = ui.style();
+    if parent.spacing.item_spacing == item_spacing {
+        return Arc::clone(parent);
+    }
+    let id = egui::Id::new((
+        "components::table::spaced_style",
+        item_spacing.x.to_bits(),
+        item_spacing.y.to_bits(),
+    ));
+    let cached = ui.data(|data| data.get_temp::<SpacedStyle>(id));
+    if let Some(cached) = cached.filter(|cached| Arc::ptr_eq(&cached.parent, parent)) {
+        return cached.spaced;
+    }
+    let mut spaced = (**parent).clone();
+    spaced.spacing.item_spacing = item_spacing;
+    let spaced = Arc::new(spaced);
+    ui.data_mut(|data| {
+        data.insert_temp(
+            id,
+            SpacedStyle {
+                parent: Arc::clone(parent),
+                spaced: Arc::clone(&spaced),
+            },
+        );
+    });
+    spaced
 }

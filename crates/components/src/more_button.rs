@@ -104,12 +104,25 @@ impl MoreButton {
         Self::show_context_menu_with(response, MenuLook::default(), add_contents);
     }
 
+    /// Whether `response`'s context menu is open or opening this frame.
+    ///
+    /// Every cell of every table row carries a context menu, so callers that
+    /// prepare the menu's contents check this first; a closed one that is not
+    /// being opened costs only this check.
+    pub fn context_menu_active(response: &Response) -> bool {
+        response.secondary_clicked()
+            || Popup::is_id_open(&response.ctx, Popup::default_response_id(response))
+    }
+
     /// [`Self::show_context_menu`] of a given `look`.
     pub fn show_context_menu_with(
         response: &Response,
         look: MenuLook,
         add_contents: impl FnOnce(&mut Menu<'_>),
     ) {
+        if !Self::context_menu_active(response) {
+            return;
+        }
         let set_open = if response.secondary_clicked() {
             Some(SetOpenCommand::Bool(true))
         } else if response.clicked() {

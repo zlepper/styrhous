@@ -349,6 +349,66 @@ fn resource_table_row_context_menu_opens_when_right_clicking_resource_text() {
 }
 
 #[test]
+fn resource_table_row_context_menu_closes_on_escape_moves_between_rows_and_closes_on_a_click_outside()
+ {
+    let mut harness = application_harness::<MockWorker>();
+    harness.state_mut().ui_state = oracle_resource_table_state();
+    harness.run();
+    click_label(&mut harness, "Workloads");
+    harness.run();
+    let row = |harness: &Harness<MyEguiApp<MockWorker>>, name: &str| {
+        harness
+            .get_by_label(&format!("Open details for {name}"))
+            .rect()
+            .center()
+    };
+    let first = row(&harness, "coredns-66bc5c9577-ffw2s");
+    let last = row(&harness, "kube-scheduler-kind-control-plane");
+
+    secondary_click(&mut harness, first);
+    harness.run();
+    harness.get_by_label("Edit YAML");
+    harness.key_press(egui::Key::Escape);
+    harness.run();
+    assert!(
+        harness.query_by_label("Edit YAML").is_none(),
+        "Escape closes the menu"
+    );
+
+    secondary_click(&mut harness, first);
+    harness.run();
+    secondary_click(&mut harness, last);
+    harness.run();
+    // One menu, now at the last row.
+    let menu = harness.get_by_label("Edit YAML").rect();
+    assert!(
+        (menu.top() - last.y).abs() < (menu.top() - first.y).abs(),
+        "the menu moved to the row right-clicked last: {menu:?}"
+    );
+
+    let outside = egui::pos2(first.x, first.y);
+    assert!(!menu.contains(outside));
+    harness.event(egui::Event::PointerMoved(outside));
+    harness.event(egui::Event::PointerButton {
+        pos: outside,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::default(),
+    });
+    harness.event(egui::Event::PointerButton {
+        pos: outside,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::default(),
+    });
+    harness.run();
+    assert!(
+        harness.query_by_label("Edit YAML").is_none(),
+        "a click outside the menu closes it"
+    );
+}
+
+#[test]
 fn context_menu_action_does_not_activate_the_overlapped_resource_button() {
     let mut harness = application_harness::<MockWorker>();
     harness.state_mut().ui_state = oracle_resource_table_state();

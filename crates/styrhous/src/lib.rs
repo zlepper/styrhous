@@ -28,7 +28,7 @@ use ui::MyEguiApp;
 pub use ui::log_viewer_profile::LogViewerProfile;
 #[cfg(any(test, feature = "benchmarks"))]
 #[doc(hidden)]
-pub use ui::resource_table_profile::ResourceTableProfile;
+pub use ui::resource_table_profile::{FrameStats, ResourceTableProfile};
 #[cfg(any(test, feature = "benchmarks"))]
 #[doc(hidden)]
 pub use ui::yaml_editor_profile::YamlEditorProfile;
