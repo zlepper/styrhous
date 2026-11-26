@@ -1,4 +1,4 @@
-//! The user theme file switching the theme of the running application.
+//! The user theme file switching the theme of the application.
 
 use super::*;
 use components::design::theme::{EXAMPLE_THEME_FILE, ThemeExt};
@@ -22,7 +22,8 @@ fn theme_switch_recolours_workspace_and_blade() {
     assert_eq!(harness.ctx.tokens().name(), "Harbour Dark");
 
     let (_dir, path) = theme_file(EXAMPLE_THEME_FILE);
-    harness.state_mut().watch_theme_file(path);
+    let ctx = harness.ctx.clone();
+    harness.state_mut().apply_theme_file(&ctx, &path);
     harness.run();
 
     assert_eq!(harness.ctx.tokens().name(), "Harbour Dark · high contrast");
@@ -46,7 +47,8 @@ fn an_invalid_theme_file_keeps_the_theme_and_shows_why() {
     harness.run();
 
     let (_dir, path) = theme_file("name = \"Typo\"\n[roles]\ntext-mutted = \"sand-200\"\n");
-    harness.state_mut().watch_theme_file(path);
+    let ctx = harness.ctx.clone();
+    harness.state_mut().apply_theme_file(&ctx, &path);
     harness.run();
 
     assert_eq!(harness.ctx.tokens().name(), "Harbour Dark");

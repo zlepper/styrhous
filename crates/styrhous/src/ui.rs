@@ -61,7 +61,6 @@ use state::{
     ResourceNavigationExpansion, UiState,
 };
 use table_preferences::PersistedResourceTablePreferences;
-use theme_file::{ThemeFileChange, ThemeFileWatcher};
 
 const CLUSTER_SELECTIONS_STORAGE_KEY: &str = "cluster_selections";
 const API_DISCOVERY_CACHE_STORAGE_KEY: &str = "api_discovery_cache";
@@ -85,9 +84,6 @@ pub struct MyEguiApp<W: WorkerTrait = Worker, L: TerminalLauncher = SystemTermin
     log_store: LogStoreService,
     updater: crate::updater::UpdaterService,
     licensing: LicensingService,
-    /// The user theme file, or `None` in tests and on platforms without a
-    /// data directory.
-    theme_file: Option<ThemeFileWatcher>,
 }
 
 impl<W: WorkerTrait, L: TerminalLauncher> Default for MyEguiApp<W, L> {
@@ -106,7 +102,6 @@ impl<W: WorkerTrait, L: TerminalLauncher> Default for MyEguiApp<W, L> {
             log_store,
             updater: crate::updater::UpdaterService::default(),
             licensing: LicensingService::default(),
-            theme_file: None,
         }
     }
 }
@@ -124,7 +119,12 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
                 )
             })
             .is_none_or(|settings| settings.check_for_updates);
-        Self::new_with_updater(cc, crate::updater::UpdaterService::start(check_for_updates))
+        let mut app =
+            Self::new_with_updater(cc, crate::updater::UpdaterService::start(check_for_updates));
+        if let Some(path) = theme_file::path_in_data_dir(crate::APP_NAME) {
+            app.apply_theme_file(&cc.egui_ctx, &path);
+        }
+        app
     }
 
     #[cfg(test)]
@@ -143,8 +143,6 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
                 save_file_dialog::SaveFileChoice::Cancelled,
             ),
         );
-        // Never read the user's theme file from a test.
-        app.theme_file = None;
         app.licensing
             .set_status_for_test(crate::licensing::LicenseStatus::Licensed(
                 test_commercial_lease(),
@@ -177,7 +175,6 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
             log_store,
             updater,
             licensing: LicensingService::start(licensing_settings, cc.egui_ctx.clone()),
-            theme_file: ThemeFileWatcher::in_data_dir(crate::APP_NAME),
         };
         app.ui_state.kubeconfig_source =
             crate::cluster_connection_manager::kubeconfig::kubeconfig_source_label();
@@ -254,26 +251,16 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
 const THEME_FILE_ERROR_TOAST_DURATION: std::time::Duration = std::time::Duration::from_secs(12);
 
 impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
-    /// Apply changes to the user theme file, and keep polling it.
-    fn poll_theme_file(&mut self, ctx: &egui::Context) {
-        let Some(watcher) = &mut self.theme_file else {
-            return;
-        };
-        let now = std::time::Instant::now();
-        match watcher.poll(now) {
-            Some(ThemeFileChange::Loaded(loaded) | ThemeFileChange::Removed(loaded)) => {
-                tracing::info!(
-                    "Using theme \"{}\" from {}",
-                    loaded.name(),
-                    watcher.path().display()
-                );
+    /// Switch to the theme in the user theme file at `path`, if there is
+    /// one, or keep the current theme and say why the file cannot be used.
+    pub(crate) fn apply_theme_file(&mut self, ctx: &egui::Context, path: &std::path::Path) {
+        match theme_file::load(path) {
+            Some(Ok(loaded)) => {
+                tracing::info!("Using theme \"{}\" from {}", loaded.name(), path.display());
                 theme::switch(ctx, loaded);
             }
-            Some(ThemeFileChange::Failed(message)) => {
-                tracing::warn!(
-                    "Ignoring theme file {}: {message}",
-                    watcher.path().display()
-                );
+            Some(Err(message)) => {
+                tracing::warn!("Ignoring theme file {}: {message}", path.display());
                 self.ui_state.push_application_toast(
                     state::OperationOutcome::Failure,
                     "Couldn’t apply the theme file",
@@ -283,12 +270,6 @@ impl<W: WorkerTrait, L: TerminalLauncher> MyEguiApp<W, L> {
             }
             None => {}
         }
-        ctx.request_repaint_after(watcher.time_until_next_check(now));
-    }
-
-    #[cfg(test)]
-    pub(crate) fn watch_theme_file(&mut self, path: impl Into<std::path::PathBuf>) {
-        self.theme_file = Some(ThemeFileWatcher::new(path));
     }
 }
 
@@ -301,7 +282,6 @@ fn configure_egui_context(ctx: &egui::Context) {
 
 impl<W: WorkerTrait, L: TerminalLauncher> eframe::App for MyEguiApp<W, L> {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.poll_theme_file(ctx);
         self.updater.poll();
         self.licensing.poll(ctx);
         self.worker.start();

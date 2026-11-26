@@ -13,9 +13,9 @@ Styrhous reads one optional file, `theme.toml`, from its data directory:
 | macOS | `~/Library/Application Support/Styrhous/theme.toml` |
 | Windows | `%APPDATA%\Styrhous\data\theme.toml` |
 
-Styrhous checks the file about once a second, so saving it updates the running application.
-If the file is invalid, Styrhous keeps the current colours and shows the errors in a toast.
-Delete the file to go back to Harbour Dark.
+Styrhous reads the file when it starts, so restart it after changing the file.
+If the file is invalid, Styrhous keeps Harbour Dark and shows the errors in a toast.
+Delete the file and restart to go back to Harbour Dark.
 
 ## Format
 

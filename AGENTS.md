@@ -157,7 +157,7 @@ Use a real `Worker` only when testing the Kind integration path.
   `[[board.regions]]` crops compare parts of a board separately (sidebar, top bar, …) so an
   unfinished part does not hide progress in another. New region = new `[[board.regions]]` entry.
 - Users can theme the app with an optional `theme.toml` in the eframe data directory
-  (`~/.local/share/styrhous/theme.toml` on Linux), polled once a second by
+  (`~/.local/share/styrhous/theme.toml` on Linux), read once at startup by
   `ui/theme_file.rs`. It extends a built-in theme and overrides `[palette]` hex colours,
   `[roles]`/`[terminal]` palette names and `[components]` role names; see `docs/theming.md`,
   whose key reference is generated and checked by a test. The design's example is
